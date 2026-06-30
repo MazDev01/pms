@@ -1,0 +1,1427 @@
+[     593ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:14537
+[  109278ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5956
+[  109305ms] [LOG] [Fast Refresh] done in 71ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5816
+[  115724ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  115754ms] [LOG] {file: Object} @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_a9cb0712.js:16058
+[  115802ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5956
+[  115824ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  115846ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  115907ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  115970ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116034ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116095ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116158ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116222ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116284ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116346ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116412ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116475ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116535ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116597ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116656ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116717ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116780ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116847ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116910ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  116968ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117031ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117093ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117155ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117219ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117281ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117343ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117406ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117469ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117528ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117593ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117653ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117716ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117776ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117841ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117902ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  117965ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118028ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118089ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118153ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118214ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118274ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118335ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118399ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118463ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118524ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118585ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118648ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118713ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118773ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118835ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118897ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  118959ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119024ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119085ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119146ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119211ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119270ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119333ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119394ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119458ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119522ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119584ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119644ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119707ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119770ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119834ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119896ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  119961ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  120019ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  120082ms] [ERROR] ./src/components/ui/LineChart.tsx:152:1
+Parsing ecmascript source code failed
+  150 |     </div>
+  151 |   );
+> 152 | }
+      | ^
+  153 |
+
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+
+Import traces:
+  Client Component Browser:
+    ./src/components/ui/LineChart.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component Browser]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/ui/LineChart.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Client Component SSR]
+    ./src/app/(app)/hq/dashboard/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_b0daae9a._.js:2405
+[  120124ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5956
+[  120281ms] [LOG] [Fast Refresh] done in 60ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5816

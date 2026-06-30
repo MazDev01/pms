@@ -1,0 +1,155 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Benjamin" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: BENJAMIN
+            - generic [ref=e10]: PRE-ENGINEERED BUILDING
+        - button "HQ · สำนักงานใหญ่" [ref=e12] [cursor=pointer]:
+          - generic [ref=e14]: HQ · สำนักงานใหญ่
+          - img [ref=e15]
+      - navigation [ref=e18]:
+        - generic [ref=e19]:
+          - paragraph [ref=e20]: งานหลัก
+          - link "แดชบอร์ด" [ref=e21] [cursor=pointer]:
+            - /url: /hq/dashboard
+            - img [ref=e23]
+            - generic [ref=e28]: แดชบอร์ด
+          - link "ลีดส่วนกลาง 3" [ref=e29] [cursor=pointer]:
+            - /url: /hq/lead-pool
+            - img [ref=e31]
+            - generic [ref=e34]: ลีดส่วนกลาง
+            - generic [ref=e35]: "3"
+          - link "รออนุมัติ 2" [ref=e36] [cursor=pointer]:
+            - /url: /hq/approvals
+            - img [ref=e38]
+            - generic [ref=e41]: รออนุมัติ
+            - generic [ref=e42]: "2"
+          - link "สาขา" [ref=e43] [cursor=pointer]:
+            - /url: /hq/dealers
+            - img [ref=e45]
+            - generic [ref=e50]: สาขา
+          - link "โครงการทั้งเครือ" [ref=e51] [cursor=pointer]:
+            - /url: /hq/projects
+            - img [ref=e53]
+            - generic [ref=e58]: โครงการทั้งเครือ
+          - link "งาน" [ref=e59] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e61]
+            - generic [ref=e64]: งาน
+        - generic [ref=e65]:
+          - paragraph [ref=e66]: วิเคราะห์
+          - link "Pipeline การขาย" [ref=e67] [cursor=pointer]:
+            - /url: /hq/pipeline
+            - img [ref=e69]
+            - generic [ref=e73]: Pipeline การขาย
+          - link "การเงิน" [ref=e74] [cursor=pointer]:
+            - /url: /hq/finance
+            - img [ref=e76]
+            - generic [ref=e78]: การเงิน
+        - generic [ref=e79]:
+          - paragraph [ref=e80]: จัดการ
+          - link "ราคากลาง" [ref=e81] [cursor=pointer]:
+            - /url: /hq/master
+            - img [ref=e83]
+            - generic [ref=e87]: ราคากลาง
+          - link "ตั้งค่า" [ref=e88] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e90]
+            - generic [ref=e93]: ตั้งค่า
+    - generic [ref=e95]:
+      - banner [ref=e96]:
+        - button [ref=e97] [cursor=pointer]:
+          - img [ref=e98]
+        - button "5" [ref=e102] [cursor=pointer]:
+          - img [ref=e103]
+          - generic [ref=e106]: "5"
+        - button "ว วิชัย ประสิทธิ์ ผู้บริหาร HQ" [ref=e108] [cursor=pointer]:
+          - generic [ref=e109]: ว
+          - generic [ref=e110]:
+            - generic [ref=e111]: วิชัย ประสิทธิ์
+            - generic [ref=e112]: ผู้บริหาร HQ
+          - img [ref=e113]
+      - main [ref=e115]:
+        - generic [ref=e116]:
+          - link "← กลับ" [ref=e118] [cursor=pointer]:
+            - /url: /customers
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - generic [ref=e121]: สช
+              - generic [ref=e122]:
+                - heading "คุณสมชาย ใจดี" [level=1] [ref=e123]
+                - generic [ref=e124]: บจ. ไทยสตีล
+                - generic [ref=e125]:
+                  - generic [ref=e126]: VIP
+                  - generic [ref=e127]: สัญญาใหม่
+                  - generic [ref=e128]: EASYBUILD
+              - button "แก้ไขข้อมูล" [ref=e129] [cursor=pointer]
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - generic [ref=e132]: โทรศัพท์
+                - generic [ref=e134]:
+                  - img [ref=e135]
+                  - text: 081-234-5678
+              - generic [ref=e137]:
+                - generic [ref=e138]: อีเมล
+                - generic [ref=e140]:
+                  - img [ref=e141]
+                  - text: somchai@thaisteel.co.th
+              - generic [ref=e144]:
+                - generic [ref=e145]: จังหวัด
+                - generic [ref=e147]:
+                  - img [ref=e148]
+                  - text: นนทบุรี
+              - generic [ref=e151]:
+                - generic [ref=e152]: มูลค่ารวม
+                - generic [ref=e153]: ฿1,800,000
+          - generic [ref=e154]:
+            - button "โครงการ (2)" [ref=e155] [cursor=pointer]
+            - button "ใบเสนอราคา (1)" [ref=e156] [cursor=pointer]
+            - button "การติดต่อ (4)" [active] [ref=e157] [cursor=pointer]
+          - generic [ref=e197]:
+            - generic [ref=e198]:
+              - generic [ref=e199]: บันทึกการติดต่อใหม่
+              - generic [ref=e200]:
+                - button [ref=e201] [cursor=pointer]:
+                  - img [ref=e202]
+                - button [ref=e204] [cursor=pointer]:
+                  - img [ref=e205]
+                - button [ref=e208] [cursor=pointer]:
+                  - img [ref=e209]
+                - button [ref=e213] [cursor=pointer]:
+                  - img [ref=e214]
+                - button [ref=e217] [cursor=pointer]:
+                  - img [ref=e218]
+                - button [ref=e221] [cursor=pointer]:
+                  - img [ref=e222]
+              - generic [ref=e225]:
+                - textbox "รายละเอียดการติดต่อ..." [ref=e226]
+                - button "บันทึก" [ref=e227] [cursor=pointer]
+            - generic [ref=e228]:
+              - generic [ref=e229]:
+                - img [ref=e232]
+                - generic [ref=e234]:
+                  - generic [ref=e235]: โทรติดตามสถานะโครงการ — ได้รับการยืนยัน
+                  - generic [ref=e236]: 20 มิ.ย. 2569
+              - generic [ref=e237]:
+                - img [ref=e240]
+                - generic [ref=e243]:
+                  - generic [ref=e244]: ส่งอีเมลเอกสารสัญญาฉบับปรับปรุง
+                  - generic [ref=e245]: 12 มิ.ย. 2569
+              - generic [ref=e246]:
+                - img [ref=e249]
+                - generic [ref=e253]:
+                  - generic [ref=e254]: ประชุมหน้างาน — ตกลงเงื่อนไขการส่งมอบ
+                  - generic [ref=e255]: 5 มิ.ย. 2569
+              - generic [ref=e256]:
+                - img [ref=e258]
+                - generic [ref=e261]:
+                  - generic [ref=e262]: ส่งใบเสนอราคาเพิ่มเติม
+                  - generic [ref=e263]: 28 พ.ค. 2569
+  - button "Open Next.js Dev Tools" [ref=e192] [cursor=pointer]:
+    - img [ref=e193]
+  - alert [ref=e196]

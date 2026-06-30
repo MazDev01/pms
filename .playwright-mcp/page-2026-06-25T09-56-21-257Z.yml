@@ -1,0 +1,315 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Benjamin" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: BENJAMIN
+            - generic [ref=e10]: PRE-ENGINEERED BUILDING
+        - button "HQ · สำนักงานใหญ่" [ref=e12] [cursor=pointer]:
+          - generic [ref=e14]: HQ · สำนักงานใหญ่
+          - img [ref=e15]
+      - navigation [ref=e18]:
+        - generic [ref=e19]:
+          - paragraph [ref=e20]: งานหลัก
+          - link "แดชบอร์ด" [ref=e21] [cursor=pointer]:
+            - /url: /hq/dashboard
+            - img [ref=e23]
+            - generic [ref=e28]: แดชบอร์ด
+          - link "ลีดส่วนกลาง 3" [ref=e29] [cursor=pointer]:
+            - /url: /hq/lead-pool
+            - img [ref=e31]
+            - generic [ref=e34]: ลีดส่วนกลาง
+            - generic [ref=e35]: "3"
+          - link "รออนุมัติ 2" [ref=e36] [cursor=pointer]:
+            - /url: /hq/approvals
+            - img [ref=e38]
+            - generic [ref=e41]: รออนุมัติ
+            - generic [ref=e42]: "2"
+          - link "สาขา" [ref=e43] [cursor=pointer]:
+            - /url: /hq/dealers
+            - img [ref=e45]
+            - generic [ref=e50]: สาขา
+          - link "โครงการทั้งเครือ" [ref=e51] [cursor=pointer]:
+            - /url: /hq/projects
+            - img [ref=e53]
+            - generic [ref=e58]: โครงการทั้งเครือ
+        - generic [ref=e59]:
+          - paragraph [ref=e60]: วิเคราะห์
+          - link "Pipeline การขาย" [ref=e61] [cursor=pointer]:
+            - /url: /hq/pipeline
+            - img [ref=e63]
+            - generic [ref=e67]: Pipeline การขาย
+          - link "การเงิน" [ref=e68] [cursor=pointer]:
+            - /url: /hq/finance
+            - img [ref=e70]
+            - generic [ref=e72]: การเงิน
+        - generic [ref=e73]:
+          - paragraph [ref=e74]: จัดการ
+          - link "ราคากลาง" [ref=e75] [cursor=pointer]:
+            - /url: /hq/master
+            - img [ref=e77]
+            - generic [ref=e81]: ราคากลาง
+          - link "ตั้งค่า" [ref=e82] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e84]
+            - generic [ref=e87]: ตั้งค่า
+    - generic [ref=e89]:
+      - banner [ref=e90]:
+        - button [ref=e91] [cursor=pointer]:
+          - img [ref=e92]
+        - button "5" [ref=e96] [cursor=pointer]:
+          - img [ref=e97]
+          - generic [ref=e100]: "5"
+        - button "ว วิชัย ประสิทธิ์ ผู้บริหาร HQ" [ref=e102] [cursor=pointer]:
+          - generic [ref=e103]: ว
+          - generic [ref=e104]:
+            - generic [ref=e105]: วิชัย ประสิทธิ์
+            - generic [ref=e106]: ผู้บริหาร HQ
+          - img [ref=e107]
+      - main [ref=e109]:
+        - generic [ref=e110]:
+          - generic [ref=e111]:
+            - heading "สาขา" [level=1] [ref=e112]
+            - paragraph [ref=e113]: จัดการและติดตามผลการดำเนินงานของทุกสาขา
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - generic [ref=e116]: สาขาทั้งหมด
+              - generic [ref=e117]: 6 สาขา
+              - generic [ref=e118]: เปิดใช้งาน 5 สาขา
+            - generic [ref=e119]:
+              - generic [ref=e120]: รายได้รวม
+              - generic [ref=e121]: ฿19.3M
+              - generic [ref=e122]: 60% ของเป้า ฿32M
+            - generic [ref=e123]:
+              - generic [ref=e124]: โครงการทั้งหมด
+              - generic [ref=e125]: 21 โครงการ
+              - generic [ref=e126]: 5 สาขามีงาน
+            - generic [ref=e127]:
+              - generic [ref=e128]: ส่งมอบตรงเวลา
+              - generic [ref=e129]: 77%
+              - generic [ref=e130]: — พอใช้ เฉลี่ยทุกสาขา
+          - generic [ref=e131]:
+            - generic [ref=e132]:
+              - generic [ref=e133]:
+                - generic [ref=e134]:
+                  - img [ref=e135]
+                  - textbox "ค้นหาสาขา..." [ref=e138]
+                - combobox [ref=e139] [cursor=pointer]:
+                  - option "ทั้งหมด" [selected]
+                  - option "เหนือ"
+                  - option "กลาง"
+                  - option "ตะวันออก"
+                  - option "ตะวันตก"
+                  - option "ใต้"
+                  - option "อีสาน"
+                - combobox [ref=e140] [cursor=pointer]:
+                  - option "ทั้งหมด" [selected]
+                  - option "ใช้งาน"
+                  - option "ปิดใช้งาน"
+              - button "เพิ่มสาขา" [ref=e141] [cursor=pointer]:
+                - img [ref=e142]
+                - text: เพิ่มสาขา
+            - table [ref=e144]:
+              - rowgroup [ref=e145]:
+                - row "# รหัส ชื่อสาขา ภาค ยอด / เป้า โครงการ ส่งตรงเวลา สถานะ" [ref=e146]:
+                  - columnheader "#" [ref=e147]
+                  - columnheader "รหัส" [ref=e148]
+                  - columnheader "ชื่อสาขา" [ref=e149]
+                  - columnheader "ภาค" [ref=e150]
+                  - columnheader "ยอด / เป้า" [ref=e151]
+                  - columnheader "โครงการ" [ref=e152]
+                  - columnheader "ส่งตรงเวลา" [ref=e153]
+                  - columnheader "สถานะ" [ref=e154]
+                  - columnheader [ref=e155]
+              - rowgroup [ref=e156]:
+                - row "1 RYG Benjamin สาขาระยอง ตะวันออก ฿5.4M 90% เป้า ฿6M 6 โครงการ 91% ใช้งาน เข้าระบบ" [ref=e157] [cursor=pointer]:
+                  - cell "1" [ref=e158]
+                  - cell "RYG" [ref=e159]
+                  - cell "Benjamin สาขาระยอง" [ref=e160]
+                  - cell "ตะวันออก" [ref=e161]:
+                    - generic [ref=e162]: ตะวันออก
+                  - cell "฿5.4M 90% เป้า ฿6M" [ref=e163]:
+                    - generic [ref=e164]:
+                      - generic [ref=e165]:
+                        - generic [ref=e166]: ฿5.4M
+                        - generic [ref=e167]: 90%
+                      - generic [ref=e170]: เป้า ฿6M
+                  - cell "6 โครงการ" [ref=e171]:
+                    - generic [ref=e172]: 6 โครงการ
+                  - cell "91%" [ref=e173]:
+                    - generic [ref=e174]: 91%
+                  - cell "ใช้งาน" [ref=e175]:
+                    - generic [ref=e176]: ใช้งาน
+                  - cell "เข้าระบบ" [ref=e177]:
+                    - generic [ref=e178]:
+                      - button "เข้าระบบ" [ref=e179]:
+                        - img [ref=e180]
+                        - text: เข้าระบบ
+                      - button "รหัสเข้าระบบ" [ref=e183]:
+                        - img [ref=e184]
+                      - button "แก้ไข" [ref=e188]:
+                        - img [ref=e189]
+                      - button "ปิดใช้งาน" [ref=e192]:
+                        - img [ref=e193]
+                      - button "ลบ" [ref=e198]:
+                        - img [ref=e199]
+                - row "2 CNX Benjamin สาขาเชียงใหม่ เหนือ ฿4.2M 68% เป้า ฿6M 5 โครงการ 78% ใช้งาน เข้าระบบ" [ref=e202] [cursor=pointer]:
+                  - cell "2" [ref=e203]
+                  - cell "CNX" [ref=e204]
+                  - cell "Benjamin สาขาเชียงใหม่" [ref=e205]
+                  - cell "เหนือ" [ref=e206]:
+                    - generic [ref=e207]: เหนือ
+                  - cell "฿4.2M 68% เป้า ฿6M" [ref=e208]:
+                    - generic [ref=e209]:
+                      - generic [ref=e210]:
+                        - generic [ref=e211]: ฿4.2M
+                        - generic [ref=e212]: 68%
+                      - generic [ref=e215]: เป้า ฿6M
+                  - cell "5 โครงการ" [ref=e216]:
+                    - generic [ref=e217]: 5 โครงการ
+                  - cell "78%" [ref=e218]:
+                    - generic [ref=e219]: 78%
+                  - cell "ใช้งาน" [ref=e220]:
+                    - generic [ref=e221]: ใช้งาน
+                  - cell "เข้าระบบ" [ref=e222]:
+                    - generic [ref=e223]:
+                      - button "เข้าระบบ" [ref=e224]:
+                        - img [ref=e225]
+                        - text: เข้าระบบ
+                      - button "รหัสเข้าระบบ" [ref=e228]:
+                        - img [ref=e229]
+                      - button "แก้ไข" [ref=e233]:
+                        - img [ref=e234]
+                      - button "ปิดใช้งาน" [ref=e237]:
+                        - img [ref=e238]
+                      - button "ลบ" [ref=e243]:
+                        - img [ref=e244]
+                - row "3 MST Benjamin สาขาแม่สอด ตะวันตก ฿3.8M 76% เป้า ฿5M 4 โครงการ 85% ใช้งาน เข้าระบบ" [ref=e247] [cursor=pointer]:
+                  - cell "3" [ref=e248]
+                  - cell "MST" [ref=e249]
+                  - cell "Benjamin สาขาแม่สอด" [ref=e250]
+                  - cell "ตะวันตก" [ref=e251]:
+                    - generic [ref=e252]: ตะวันตก
+                  - cell "฿3.8M 76% เป้า ฿5M" [ref=e253]:
+                    - generic [ref=e254]:
+                      - generic [ref=e255]:
+                        - generic [ref=e256]: ฿3.8M
+                        - generic [ref=e257]: 76%
+                      - generic [ref=e260]: เป้า ฿5M
+                  - cell "4 โครงการ" [ref=e261]:
+                    - generic [ref=e262]: 4 โครงการ
+                  - cell "85%" [ref=e263]:
+                    - generic [ref=e264]: 85%
+                  - cell "ใช้งาน" [ref=e265]:
+                    - generic [ref=e266]: ใช้งาน
+                  - cell "เข้าระบบ" [ref=e267]:
+                    - generic [ref=e268]:
+                      - button "เข้าระบบ" [ref=e269]:
+                        - img [ref=e270]
+                        - text: เข้าระบบ
+                      - button "รหัสเข้าระบบ" [ref=e273]:
+                        - img [ref=e274]
+                      - button "แก้ไข" [ref=e278]:
+                        - img [ref=e279]
+                      - button "ปิดใช้งาน" [ref=e282]:
+                        - img [ref=e283]
+                      - button "ลบ" [ref=e288]:
+                        - img [ref=e289]
+                - row "4 CRI Benjamin สาขาเชียงราย เหนือ ฿3.1M 53% เป้า ฿6M 3 โครงการ 72% ใช้งาน เข้าระบบ" [ref=e292] [cursor=pointer]:
+                  - cell "4" [ref=e293]
+                  - cell "CRI" [ref=e294]
+                  - cell "Benjamin สาขาเชียงราย" [ref=e295]
+                  - cell "เหนือ" [ref=e296]:
+                    - generic [ref=e297]: เหนือ
+                  - cell "฿3.1M 53% เป้า ฿6M" [ref=e298]:
+                    - generic [ref=e299]:
+                      - generic [ref=e300]:
+                        - generic [ref=e301]: ฿3.1M
+                        - generic [ref=e302]: 53%
+                      - generic [ref=e305]: เป้า ฿6M
+                  - cell "3 โครงการ" [ref=e306]:
+                    - generic [ref=e307]: 3 โครงการ
+                  - cell "72%" [ref=e308]:
+                    - generic [ref=e309]: 72%
+                  - cell "ใช้งาน" [ref=e310]:
+                    - generic [ref=e311]: ใช้งาน
+                  - cell "เข้าระบบ" [ref=e312]:
+                    - generic [ref=e313]:
+                      - button "เข้าระบบ" [ref=e314]:
+                        - img [ref=e315]
+                        - text: เข้าระบบ
+                      - button "รหัสเข้าระบบ" [ref=e318]:
+                        - img [ref=e319]
+                      - button "แก้ไข" [ref=e323]:
+                        - img [ref=e324]
+                      - button "ปิดใช้งาน" [ref=e327]:
+                        - img [ref=e328]
+                      - button "ลบ" [ref=e333]:
+                        - img [ref=e334]
+                - row "5 NSN Benjamin สาขานครสวรรค์ กลาง ฿1.9M 38% เป้า ฿5M 2 โครงการ 61% ใช้งาน เข้าระบบ" [ref=e337] [cursor=pointer]:
+                  - cell "5" [ref=e338]
+                  - cell "NSN" [ref=e339]
+                  - cell "Benjamin สาขานครสวรรค์" [ref=e340]
+                  - cell "กลาง" [ref=e341]:
+                    - generic [ref=e342]: กลาง
+                  - cell "฿1.9M 38% เป้า ฿5M" [ref=e343]:
+                    - generic [ref=e344]:
+                      - generic [ref=e345]:
+                        - generic [ref=e346]: ฿1.9M
+                        - generic [ref=e347]: 38%
+                      - generic [ref=e350]: เป้า ฿5M
+                  - cell "2 โครงการ" [ref=e351]:
+                    - generic [ref=e352]: 2 โครงการ
+                  - cell "61%" [ref=e353]:
+                    - generic [ref=e354]: 61%
+                  - cell "ใช้งาน" [ref=e355]:
+                    - generic [ref=e356]: ใช้งาน
+                  - cell "เข้าระบบ" [ref=e357]:
+                    - generic [ref=e358]:
+                      - button "เข้าระบบ" [ref=e359]:
+                        - img [ref=e360]
+                        - text: เข้าระบบ
+                      - button "รหัสเข้าระบบ" [ref=e363]:
+                        - img [ref=e364]
+                      - button "แก้ไข" [ref=e368]:
+                        - img [ref=e369]
+                      - button "ปิดใช้งาน" [ref=e372]:
+                        - img [ref=e373]
+                      - button "ลบ" [ref=e378]:
+                        - img [ref=e379]
+                - row "6 HYI Benjamin สาขาหาดใหญ่ ใต้ ฿0.9M 23% เป้า ฿4M 1 โครงการ — ปิดใช้งาน เข้าระบบ" [ref=e382] [cursor=pointer]:
+                  - cell "6" [ref=e383]
+                  - cell "HYI" [ref=e384]
+                  - cell "Benjamin สาขาหาดใหญ่" [ref=e385]
+                  - cell "ใต้" [ref=e386]:
+                    - generic [ref=e387]: ใต้
+                  - cell "฿0.9M 23% เป้า ฿4M" [ref=e388]:
+                    - generic [ref=e389]:
+                      - generic [ref=e390]:
+                        - generic [ref=e391]: ฿0.9M
+                        - generic [ref=e392]: 23%
+                      - generic [ref=e395]: เป้า ฿4M
+                  - cell "1 โครงการ" [ref=e396]:
+                    - generic [ref=e397]: 1 โครงการ
+                  - cell "—" [ref=e398]
+                  - cell "ปิดใช้งาน" [ref=e399]:
+                    - generic [ref=e400]: ปิดใช้งาน
+                  - cell "เข้าระบบ" [ref=e401]:
+                    - generic [ref=e402]:
+                      - button "เข้าระบบ" [ref=e403]:
+                        - img [ref=e404]
+                        - text: เข้าระบบ
+                      - button "รหัสเข้าระบบ" [ref=e407]:
+                        - img [ref=e408]
+                      - button "แก้ไข" [ref=e412]:
+                        - img [ref=e413]
+                      - button "เปิดใช้งาน" [ref=e416]:
+                        - img [ref=e417]
+                      - button "ลบ" [ref=e420]:
+                        - img [ref=e421]
+            - generic [ref=e425]: แสดง 6 จาก 6 สาขา Benjamin
+  - button "Open Next.js Dev Tools" [ref=e431] [cursor=pointer]:
+    - img [ref=e432]
+  - alert [ref=e435]

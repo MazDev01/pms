@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Benjamin PMS — Module Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --blue:    #003366;
+    --steel:   #2d2d2d;
+    --silver:  #c0c0c0;
+    --bg:      #f7f8fa;
+    --surface: #ffffff;
+    --line:    #e2e5ea;
+    --muted:   #6b7280;
+    --success: #1f8a4c;
+    --warning: #c98a00;
+    --danger:  #c0392b;
+    --blue-lt: #e6edf3;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans Thai', system-ui, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: var(--steel);
+    background: var(--bg);
+  }
+
+  /* ─── COVER ─────────────────────────────── */
+  .cover {
+    min-height: 100vh;
+    background: var(--blue);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    page-break-after: always;
+    text-align: center;
+    position: relative;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 40px,
+      rgba(255,255,255,0.015) 40px,
+      rgba(255,255,255,0.015) 80px
+    );
+  }
+  .cover-logo {
+    width: 80px; height: 80px;
+    background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; font-weight: 900; color: #fff;
+    letter-spacing: 2px;
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .cover h1 {
+    font-size: 42pt; font-weight: 900;
+    color: #fff; letter-spacing: 10px;
+    margin-bottom: 8px; position: relative;
+  }
+  .cover .sub {
+    font-size: 11pt; color: rgba(255,255,255,0.55);
+    letter-spacing: 4px; text-transform: uppercase;
+    margin-bottom: 48px; position: relative;
+  }
+  .cover-divider {
+    width: 60px; height: 3px;
+    background: rgba(255,255,255,0.3);
+    margin: 0 auto 48px;
+    position: relative;
+  }
+  .cover-title {
+    font-size: 22pt; font-weight: 700; color: #fff;
+    margin-bottom: 12px; position: relative;
+  }
+  .cover-subtitle {
+    font-size: 13pt; color: rgba(255,255,255,0.65);
+    margin-bottom: 60px; position: relative;
+  }
+  .cover-meta {
+    display: flex; gap: 48px;
+    position: relative;
+  }
+  .cover-meta-item { text-align: center; }
+  .cover-meta-item .num {
+    font-size: 28pt; font-weight: 800; color: #fff;
+  }
+  .cover-meta-item .lbl {
+    font-size: 9pt; color: rgba(255,255,255,0.5);
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .cover-footer {
+    position: absolute; bottom: 32px;
+    font-size: 9pt; color: rgba(255,255,255,0.3);
+    letter-spacing: 1px;
+  }
+
+  /* ─── TOC ────────────────────────────────── */
+  .toc-page {
+    min-height: 100vh;
+    padding: 60px 60px;
+    page-break-after: always;
+    background: var(--surface);
+  }
+  .toc-header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 40px; padding-bottom: 20px;
+    border-bottom: 2px solid var(--blue);
+  }
+  .toc-header h2 {
+    font-size: 22pt; font-weight: 800; color: var(--blue);
+    letter-spacing: 2px;
+  }
+  .toc-badge {
+    background: var(--blue); color: #fff;
+    font-size: 8pt; font-weight: 700; letter-spacing: 2px;
+    padding: 4px 12px; border-radius: 20px;
+    text-transform: uppercase;
+  }
+  .toc-section { margin-bottom: 28px; }
+  .toc-section-title {
+    font-size: 9pt; font-weight: 700; color: var(--muted);
+    letter-spacing: 3px; text-transform: uppercase;
+    margin-bottom: 10px; padding-left: 4px;
+    border-left: 3px solid var(--silver);
+    padding-left: 10px;
+  }
+  .toc-row {
+    display: flex; align-items: center;
+    padding: 8px 12px; border-radius: 8px;
+    margin-bottom: 3px; transition: background 0.1s;
+  }
+  .toc-row:nth-child(odd) { background: var(--bg); }
+  .toc-num {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--blue); color: #fff;
+    font-size: 9pt; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-right: 14px;
+  }
+  .toc-num.hq { background: var(--steel); }
+  .toc-num.sys { background: var(--muted); }
+  .toc-label { flex: 1; font-size: 11pt; font-weight: 600; color: var(--steel); }
+  .toc-label small { font-weight: 400; color: var(--muted); font-size: 9pt; margin-left: 6px; }
+  .toc-status {
+    font-size: 8pt; font-weight: 700; padding: 3px 10px;
+    border-radius: 12px; letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .toc-status.done   { background: #e6f4ec; color: var(--success); }
+  .toc-status.partial { background: #fbf3e0; color: var(--warning); }
+  .toc-status.todo   { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  .toc-time {
+    font-size: 9pt; color: var(--muted); margin-left: 10px;
+    flex-shrink: 0; min-width: 60px; text-align: right;
+  }
+
+  /* ─── MODULE PAGES ───────────────────────── */
+  .module-page {
+    min-height: 100vh;
+    padding: 50px 60px;
+    page-break-before: always;
+    background: var(--surface);
+  }
+
+  /* Module header */
+  .mod-header {
+    display: flex; align-items: flex-start; gap: 20px;
+    margin-bottom: 32px; padding-bottom: 24px;
+    border-bottom: 2px solid var(--line);
+  }
+  .mod-icon {
+    width: 56px; height: 56px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; flex-shrink: 0;
+  }
+  .mod-icon.blue  { background: var(--blue);    color: #fff; }
+  .mod-icon.steel { background: var(--steel);   color: #fff; }
+  .mod-icon.green { background: var(--success); color: #fff; }
+  .mod-icon.warn  { background: var(--warning); color: #fff; }
+  .mod-icon.gray  { background: var(--muted);   color: #fff; }
+  .mod-icon.red   { background: var(--danger);  color: #fff; }
+
+  .mod-header-text { flex: 1; }
+  .mod-num {
+    font-size: 8pt; font-weight: 700; color: var(--muted);
+    letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px;
+  }
+  .mod-title {
+    font-size: 20pt; font-weight: 800; color: var(--blue);
+    margin-bottom: 6px; line-height: 1.2;
+  }
+  .mod-desc { font-size: 10pt; color: var(--muted); }
+  .mod-badges { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .mod-badge {
+    font-size: 8pt; font-weight: 700; padding: 3px 10px;
+    border-radius: 20px; letter-spacing: 0.5px;
+  }
+  .badge-done    { background: #e6f4ec; color: var(--success); }
+  .badge-partial { background: #fbf3e0; color: var(--warning); }
+  .badge-todo    { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+  .badge-blue    { background: var(--blue-lt); color: var(--blue); }
+  .badge-days    { background: var(--steel); color: #fff; }
+
+  /* Section heading inside module */
+  .sec-title {
+    font-size: 9pt; font-weight: 700; color: var(--blue);
+    letter-spacing: 3px; text-transform: uppercase;
+    margin: 24px 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .sec-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--line);
+  }
+
+  /* Tables */
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 9.5pt; margin-bottom: 16px;
+  }
+  th {
+    background: var(--blue); color: #fff;
+    padding: 8px 12px; text-align: left;
+    font-weight: 700; font-size: 8.5pt;
+    letter-spacing: 0.5px;
+  }
+  th:first-child { border-radius: 6px 0 0 0; }
+  th:last-child  { border-radius: 0 6px 0 0; }
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  tr:nth-child(even) td { background: var(--bg); }
+  tr:last-child td { border-bottom: none; }
+  td code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    background: var(--blue-lt);
+    color: var(--blue);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .method {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+    display: inline-block; margin-right: 4px;
+  }
+  .method.get    { background: #e6f4ec; color: var(--success); }
+  .method.post   { background: #e6edf3; color: var(--blue); }
+  .method.patch  { background: #fbf3e0; color: var(--warning); }
+  .method.delete { background: #fbeae8; color: var(--danger); }
+
+  .status-done    { color: var(--success); font-weight: 700; }
+  .status-todo    { color: var(--muted); }
+  .status-partial { color: var(--warning); font-weight: 700; }
+
+  /* Info callout */
+  .callout {
+    border-left: 4px solid var(--blue);
+    background: var(--blue-lt);
+    padding: 12px 16px; border-radius: 0 8px 8px 0;
+    font-size: 9.5pt; color: var(--blue);
+    margin: 12px 0;
+  }
+  .callout.warn {
+    border-color: var(--warning);
+    background: #fbf3e0; color: #7a5300;
+  }
+
+  /* ─── TIMELINE PAGE ──────────────────────── */
+  .timeline-page {
+    min-height: 100vh;
+    padding: 50px 60px;
+    page-break-before: always;
+    background: var(--surface);
+  }
+  .timeline-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 0 24px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .timeline-row::before {
+    content: '';
+    position: absolute;
+    left: 59px; top: 40px; bottom: -24px;
+    width: 2px; background: var(--line);
+  }
+  .timeline-row:last-child::before { display: none; }
+  .timeline-phase-label {
+    text-align: right;
+    padding-top: 8px;
+  }
+  .phase-week {
+    font-size: 8pt; color: var(--muted); letter-spacing: 1px;
+  }
+  .phase-num {
+    font-size: 18pt; font-weight: 800; color: var(--blue);
+    line-height: 1;
+  }
+  .phase-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--blue); border: 3px solid #fff;
+    box-shadow: 0 0 0 2px var(--blue);
+    position: absolute; left: 52px; top: 12px;
+  }
+  .phase-card {
+    background: var(--bg); border-radius: 12px;
+    padding: 14px 18px; border: 1px solid var(--line);
+    margin-left: 20px;
+  }
+  .phase-card-title {
+    font-size: 12pt; font-weight: 700; color: var(--steel);
+    margin-bottom: 6px;
+  }
+  .phase-items {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .phase-item {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 6px; padding: 3px 10px;
+    font-size: 8.5pt; color: var(--muted);
+  }
+  .phase-days {
+    margin-top: 8px; font-size: 9pt; color: var(--blue);
+    font-weight: 700;
+  }
+
+  /* Summary table */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 16px; margin-top: 32px;
+  }
+  .summary-card {
+    background: var(--bg); border-radius: 12px;
+    padding: 16px; border: 1px solid var(--line);
+    text-align: center;
+  }
+  .summary-card .big {
+    font-size: 26pt; font-weight: 800; color: var(--blue);
+    line-height: 1;
+  }
+  .summary-card .lbl {
+    font-size: 8pt; color: var(--muted);
+    letter-spacing: 1px; text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ─── PAGE HEADER (running) ──────────────── */
+  .page-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 12px; border-bottom: 1px solid var(--line);
+    margin-bottom: 24px;
+    font-size: 8pt; color: var(--muted); letter-spacing: 1px;
+  }
+  .page-header strong { color: var(--blue); }
+
+  /* ─── PRINT ──────────────────────────────── */
+  @media print {
+    body { background: #fff; font-size: 10pt; }
+    .cover, .toc-page, .module-page, .timeline-page {
+      min-height: 0;
+    }
+    @page {
+      size: A4;
+      margin: 0;
+    }
+    .cover { min-height: 297mm; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════ COVER ══════════ -->
+<div class="cover">
+  <div class="cover-logo">B</div>
+  <h1>BENJAMIN</h1>
+  <p class="sub">PEB Steel Co., Ltd.</p>
+  <div class="cover-divider"></div>
+  <div class="cover-title">Project Management System</div>
+  <div class="cover-subtitle">Module Reference — ทุกโมดูล ทุกฟังก์ชัน</div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="num">16</div>
+      <div class="lbl">Modules</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="num">82+</div>
+      <div class="lbl">Functions</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="num">77+</div>
+      <div class="lbl">API Routes</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="num">18</div>
+      <div class="lbl">DB Models</div>
+    </div>
+  </div>
+  <div class="cover-footer">Benjamin PMS · มิถุนายน 2026 · Frontend: Next.js 15 · Backend: Prisma + PostgreSQL</div>
+</div>
+
+<!-- ══════════ TABLE OF CONTENTS ══════════ -->
+<div class="toc-page">
+  <div class="toc-header">
+    <h2>สารบัญ</h2>
+    <span class="toc-badge">16 Modules</span>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Core System</div>
+    <div class="toc-row">
+      <div class="toc-num">1</div>
+      <div class="toc-label">Auth <small>การล็อกอิน + Session</small></div>
+      <span class="toc-status partial">บางส่วน</span>
+      <span class="toc-time">1 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">2</div>
+      <div class="toc-label">Role & Permission <small>RBAC + Tenant Guard</small></div>
+      <span class="toc-status partial">บางส่วน</span>
+      <span class="toc-time">1.5 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">3</div>
+      <div class="toc-label">Dashboard <small>Dealer + HQ</small></div>
+      <span class="toc-status done">✓ เสร็จแล้ว</span>
+      <span class="toc-time">—</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">16</div>
+      <div class="toc-label">Layout Shell <small>Sidebar + Topbar + Layouts</small></div>
+      <span class="toc-status done">✓ เสร็จแล้ว</span>
+      <span class="toc-time">—</span>
+    </div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">CRM & Sales</div>
+    <div class="toc-row">
+      <div class="toc-num">4</div>
+      <div class="toc-label">CRM / Leads <small>Kanban + Activity Log</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">5 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">5</div>
+      <div class="toc-label">Customer <small>โปรไฟล์ลูกค้า</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">2 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">6</div>
+      <div class="toc-label">Quotation / BOQ <small>ใบเสนอราคา + Approval</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">6 วัน</span>
+    </div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Project Execution</div>
+    <div class="toc-row">
+      <div class="toc-num">7</div>
+      <div class="toc-label">Project <small>6 Phases + Tasks + Milestones</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">8 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">8</div>
+      <div class="toc-label">QC <small>Checklist + Punch List</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">3 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">9</div>
+      <div class="toc-label">Site Operations <small>Daily Report + Photos + Documents</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">3 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num">10</div>
+      <div class="toc-label">Handover & Warranty <small>ส่งมอบงาน + รับประกัน</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">2 วัน</span>
+    </div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">HQ & Analytics</div>
+    <div class="toc-row">
+      <div class="toc-num hq">11</div>
+      <div class="toc-label">HQ Operations <small>Lead Pool + Approvals + Dealer Mgmt</small></div>
+      <span class="toc-status partial">บางส่วน</span>
+      <span class="toc-time">4 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num hq">12</div>
+      <div class="toc-label">Master Data <small>Products + Materials</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">2 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num hq">13</div>
+      <div class="toc-label">Report & Analytics <small>กราฟ + สรุปยอดขาย</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">4 วัน</span>
+    </div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">System</div>
+    <div class="toc-row">
+      <div class="toc-num sys">14</div>
+      <div class="toc-label">Notification <small>แจ้งเตือน In-app + LINE</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">3 วัน</span>
+    </div>
+    <div class="toc-row">
+      <div class="toc-num sys">15</div>
+      <div class="toc-label">Audit Log <small>ประวัติการแก้ไขทุก Entity</small></div>
+      <span class="toc-status todo">ยังไม่ได้สร้าง</span>
+      <span class="toc-time">1 วัน</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODULE 1 — AUTH ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 1</strong> — Auth</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon blue">🔐</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 01</div>
+      <div class="mod-title">Auth — การล็อกอิน</div>
+      <div class="mod-desc">จัดการ session, login แยกตาม role, middleware ป้องกัน route</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-done">✓ UI เสร็จแล้ว</span>
+        <span class="mod-badge badge-todo">🔲 Backend ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">1 วัน (backend)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Pages &amp; Components (✓ เสร็จแล้ว)</div>
+  <table>
+    <tr><th>Component</th><th>ไฟล์</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>DealerLoginPage</code></td><td>(auth)/login/page.tsx</td><td>handleLogin() — mock switchSession("dealer") → redirect /dashboard · toggle showPass · loading spinner</td></tr>
+    <tr><td><code>HQLoginPage</code></td><td>(auth)/login/hq/page.tsx</td><td>handleLogin() — mock switchSession("hq") → redirect /hq/dashboard · Restricted Access stripe header</td></tr>
+    <tr><td><code>AuthLayout</code></td><td>(auth)/layout.tsx</td><td>Centered flex wrapper — ไม่มี Sidebar/Topbar</td></tr>
+  </table>
+
+  <div class="sec-title">Backend Functions (🔲 ยังไม่ได้สร้าง)</div>
+  <table>
+    <tr><th>ฟังก์ชัน</th><th>ไฟล์</th><th>คำอธิบาย</th></tr>
+    <tr><td><code>authorize(credentials)</code></td><td>lib/auth.ts</td><td>query User by email · bcrypt.compare() password · return {id, role, dealerId, scopeAll}</td></tr>
+    <tr><td><code>jwt({ token, user })</code></td><td>lib/auth.ts</td><td>แปะ role / dealerId / scopeAll ลง JWT token</td></tr>
+    <tr><td><code>session({ session, token })</code></td><td>lib/auth.ts</td><td>ส่ง role / dealerId / scopeAll ออก session object</td></tr>
+    <tr><td><code>middleware(req)</code></td><td>middleware.ts</td><td>ไม่มี session → redirect /login · dealer เข้า /hq/* → redirect /dashboard</td></tr>
+  </table>
+
+  <div class="sec-title">API Routes (🔲 ยังไม่ได้สร้าง)</div>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>คำอธิบาย</th></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/auth/[...nextauth]</td><td>Auth.js handler — credentials login</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/auth/signout</td><td>ออกจากระบบ + ล้าง session cookie</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 2 — ROLE ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 2</strong> — Role &amp; Permission</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon steel">🛡</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 02</div>
+      <div class="mod-title">Role &amp; Permission — RBAC</div>
+      <div class="mod-desc">6 roles · tenant isolation · HQ act-on-behalf · route guard</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-done">✓ Frontend เสร็จแล้ว</span>
+        <span class="mod-badge badge-todo">🔲 Service Layer ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">1.5 วัน (backend)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Context &amp; Components (✓ เสร็จแล้ว)</div>
+  <table>
+    <tr><th>Export</th><th>ไฟล์</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>RoleProvider</code></td><td>context/RoleContext.tsx</td><td>จัดการ currentKey state · ส่ง session / isHQ / role ผ่าน React Context</td></tr>
+    <tr><td><code>useRole()</code></td><td>context/RoleContext.tsx</td><td>return { session, isHQ, role, switchSession, currentKey } · throw ถ้าใช้นอก Provider</td></tr>
+    <tr><td><code>switchSession(key)</code></td><td>context/RoleContext.tsx</td><td>setCurrentKey("hq" | "dealer") — Dev mock เท่านั้น</td></tr>
+    <tr><td><code>HQLayout</code></td><td>(app)/hq/layout.tsx</td><td>useEffect: ถ้า !isHQ → router.replace("/dashboard") ทันที · render 🔒 ระหว่างรอ</td></tr>
+    <tr><td><code>RoleSwitcher</code></td><td>layout/RoleSwitcher.tsx</td><td>Dev-only pill — toggle dealer / HQ session สำหรับ test</td></tr>
+  </table>
+
+  <div class="sec-title">Service Layer (🔲 ยังไม่ได้สร้าง)</div>
+  <table>
+    <tr><th>ฟังก์ชัน</th><th>ไฟล์</th><th>คำอธิบาย</th></tr>
+    <tr><td><code>tenantWhere(ctx)</code></td><td>services/tenant.ts</td><td>scopeAll=true → {} (HQ ไม่กรอง) · else → { dealerId: ctx.dealerId }</td></tr>
+    <tr><td><code>requireHQ(ctx)</code></td><td>services/tenant.ts</td><td>throw ForbiddenError ถ้า !ctx.scopeAll</td></tr>
+    <tr><td><code>requireRole(ctx, ...roles)</code></td><td>services/tenant.ts</td><td>throw ถ้า ctx.role ไม่อยู่ใน roles[]</td></tr>
+    <tr><td><code>getAuthContext(req)</code></td><td>services/tenant.ts</td><td>แกะ JWT → return AuthContext { userId, dealerId, role, scopeAll }</td></tr>
+  </table>
+
+  <div class="callout">
+    <strong>RBAC Matrix:</strong> SUPER_ADMIN / HQ_MANAGEMENT ทำได้ทุกอย่าง · DEALER_ADMIN สร้าง Lead/Quotation/Project ได้ · DEALER_SALES สร้าง Lead/Quote ได้ · DEALER_SITE อัปเดต Project/รายงานหน้างาน/ภาพถ่าย
+  </div>
+</div>
+
+<!-- ══════════ MODULE 3 — DASHBOARD ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 3</strong> — Dashboard</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon green">📊</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 03</div>
+      <div class="mod-title">Dashboard — Dealer &amp; HQ</div>
+      <div class="mod-desc">KPI cards · SVG charts · Leaderboard · Lead Pool · Approval Queue</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-done">✓ เสร็จสมบูรณ์</span>
+        <span class="mod-badge badge-blue">Dealer + HQ แยกกัน</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Pages (✓ เสร็จแล้ว)</div>
+  <table>
+    <tr><th>Page</th><th>Route</th><th>Layout</th></tr>
+    <tr><td><code>DashboardPage</code></td><td>/dashboard</td><td>KPI ×4 · LineChart · DonutChart · ActionItems · SchedulePanel · LeadTable</td></tr>
+    <tr><td><code>HQDashboardPage</code></td><td>/hq/dashboard</td><td>hqKpis ×4 · LineChart(HQ) · LeaderboardCard · LeadPoolTable · ApprovalQueue</td></tr>
+  </table>
+
+  <div class="sec-title">UI Components (✓ เสร็จแล้ว)</div>
+  <table>
+    <tr><th>Component</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>KpiCard</code></td><td>props: label, value, delta, icon(key) · render icon box + large value + green/red delta badge</td></tr>
+    <tr><td><code>LineChartCard</code></td><td>props: data?, title?, subtitle? · คำนวณ points x,y ใน SVG viewBox 480×120 · render polyline + area fill + grid + dots + labels</td></tr>
+    <tr><td><code>DonutChart</code></td><td>polarToXY(cx,cy,r,deg) · slicePath(cx,cy,outerR,innerR,start,end) · render SVG donut + legend · hardcoded pipelineBreakdown</td></tr>
+    <tr><td><code>SchedulePanel</code></td><td>render week strip Mon–Fri · highlight วันนี้ด้วย brand-blue · today schedule list · upcoming milestones</td></tr>
+    <tr><td><code>LeadTable</code></td><td>useState search · filter leads by name/province/id · render 8 columns พร้อม StatusBadge · pagination mock</td></tr>
+    <tr><td><code>StatusBadge</code></td><td>props: status: LeadStatus · map 7 statuses → Thai label + Tailwind color class</td></tr>
+    <tr><td><code>LeaderboardCard</code></td><td>map dealerLeaderboard → rank medal (gold/silver/bronze/gray) + progress bar (green/blue/warning ตาม %) + winRate</td></tr>
+    <tr><td><code>LeadPoolTable</code></td><td>useState assigned(Set) · handleAssign(id) · channelIcon(ch) · channelColor(ch) · render assign button → toggle "มอบหมายแล้ว"</td></tr>
+    <tr><td><code>ApprovalQueue</code></td><td>useState actions(Record) · act(id, "approved"|"rejected") · discount color rule (≥15% red) · render approve/reject buttons</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 4 — LEADS ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 4</strong> — CRM / Leads</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon blue">🎯</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 04</div>
+      <div class="mod-title">CRM / Leads — ลีดลูกค้า</div>
+      <div class="mod-desc">Kanban board · Activity log · Lead Pool · Status flow NEW→WON/LOST</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">5 วัน</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Pages (🔲)</div>
+  <table>
+    <tr><th>Route</th><th>คำอธิบาย</th></tr>
+    <tr><td>/leads</td><td>Lead list — Kanban view + List view toggle · filter by status/province/assignee</td></tr>
+    <tr><td>/leads/new</td><td>ฟอร์มสร้าง Lead ใหม่ — customer, channel, product, estValue, province</td></tr>
+    <tr><td>/leads/[id]</td><td>Lead detail — ข้อมูลทั้งหมด + Activity timeline + ปุ่มเปลี่ยน status + Quotation links</td></tr>
+  </table>
+
+  <div class="sec-title">Components (🔲)</div>
+  <table>
+    <tr><th>Component</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>LeadKanbanBoard</code></td><td>7 columns ตาม LeadStatus · drag card ข้าม column → PATCH status · counter per column</td></tr>
+    <tr><td><code>LeadCard</code></td><td>name, province, product badge, estValue, assignee avatar, StatusBadge · click → /leads/[id]</td></tr>
+    <tr><td><code>LeadForm</code></td><td>create/edit form — customerId select, channel dropdown, productInterest, estValue, province</td></tr>
+    <tr><td><code>ActivityLog</code></td><td>timeline vertical — icon ตาม ActivityType · note · scheduledAt/doneAt · ผู้บันทึก</td></tr>
+    <tr><td><code>ActivityForm</code></td><td>type dropdown (CALL/VISIT/QUOTE/NOTE/SURVEY), note textarea, scheduledAt picker</td></tr>
+    <tr><td><code>LeadStatusStepper</code></td><td>แถบ flow 7 ขั้น · highlight ขั้นปัจจุบัน · ปุ่ม advance status</td></tr>
+  </table>
+
+  <div class="sec-title">API Routes (🔲)</div>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>Service Function</th></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/leads</td><td>listLeads(ctx, filters?) — tenantWhere · filter status/province/assigneeId</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/leads</td><td>createLead(ctx, data) — dealerId=ctx.dealerId · status=NEW · AuditLog CREATE</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/leads/[id]</td><td>getLead(ctx, id) — include activities[], quotations[], customer, assignedTo</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/leads/[id]</td><td>updateLead(ctx, id, data) — AuditLog before/after · ถ้า HQ แก้แทน → onBehalfOfDealerId</td></tr>
+    <tr><td><span class="method delete">DELETE</span></td><td>/api/leads/[id]</td><td>deleteLead(ctx, id) — soft delete (deletedAt = now())</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/leads/pool</td><td>getLeadPool(ctx) — HQ only · WHERE dealerId IS NULL</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/leads/[id]/assign</td><td>assignLead(ctx, id, dealerId) — HQ only · set dealerId + assignedToId</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/leads/[id]/activities</td><td>listActivities(ctx, leadId) — ORDER BY createdAt DESC</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/leads/[id]/activities</td><td>createActivity(ctx, leadId, data) — type, note, scheduledAt</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 5 — CUSTOMER ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 5</strong> — Customer</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon blue">👥</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 05</div>
+      <div class="mod-title">Customer — ลูกค้า</div>
+      <div class="mod-desc">บุคคล/นิติบุคคล · โปรไฟล์ลูกค้า · ประวัติ Lead/Quote/Project</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">2 วัน</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Pages (🔲)</div>
+  <table>
+    <tr><th>Route</th><th>คำอธิบาย</th></tr>
+    <tr><td>/customers</td><td>รายชื่อลูกค้า — search name · filter INDIVIDUAL/COMPANY · sort by createdAt</td></tr>
+    <tr><td>/customers/new</td><td>ฟอร์มเพิ่มลูกค้า — name, type, taxId, phone, email, address, province</td></tr>
+    <tr><td>/customers/[id]</td><td>โปรไฟล์ลูกค้า — ข้อมูล + leads[], quotations[], projects[] ที่เกี่ยวข้อง</td></tr>
+  </table>
+
+  <div class="sec-title">API Routes (🔲)</div>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>Service Function</th></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/customers</td><td>listCustomers(ctx, q?) — tenantWhere + search name · filter type</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/customers</td><td>createCustomer(ctx, data) — dealerId=ctx.dealerId</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/customers/[id]</td><td>getCustomer(ctx, id) — include leads[], quotations[], projects[]</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/customers/[id]</td><td>updateCustomer(ctx, id, data) — AuditLog</td></tr>
+    <tr><td><span class="method delete">DELETE</span></td><td>/api/customers/[id]</td><td>deleteCustomer(ctx, id) — soft delete (deletedAt)</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 6 — QUOTATION ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 6</strong> — Quotation / BOQ</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon warn">📋</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 06</div>
+      <div class="mod-title">Quotation / BOQ — ใบเสนอราคา</div>
+      <div class="mod-desc">BOQ Builder · Approval flow · auto-generate Project เมื่อ WON</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">6 วัน (ซับซ้อนสุด)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Pages (🔲)</div>
+  <table>
+    <tr><th>Route</th><th>คำอธิบาย</th></tr>
+    <tr><td>/quotations</td><td>รายการ quotation · filter status · sort by updatedAt</td></tr>
+    <tr><td>/quotations/new</td><td>BOQ Builder — เลือก customer/lead · เพิ่ม line items · auto-calc totals</td></tr>
+    <tr><td>/quotations/[id]</td><td>ดู quotation · ปุ่ม submit/approve/reject/win ตาม role + status</td></tr>
+    <tr><td>/quotations/[id]/edit</td><td>แก้ BOQ — revision++ อัตโนมัติถ้า status=SENT</td></tr>
+  </table>
+
+  <div class="sec-title">Components (🔲)</div>
+  <table>
+    <tr><th>Component</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>BOQItemRow</code></td><td>product/material dropdown · qty input · unitPrice · amount = qty×price (auto) · sortOrder drag</td></tr>
+    <tr><td><code>BOQSummary</code></td><td>subtotal · discountPct slider → discountAmt · vatAmt (7%) · total (auto-calc realtime)</td></tr>
+    <tr><td><code>QuotationStatusBadge</code></td><td>DRAFT/PENDING_APPROVAL/APPROVED/SENT/WON/LOST/EXPIRED → color badge</td></tr>
+    <tr><td><code>ApprovalBanner</code></td><td>แสดง banner เมื่อ status=PENDING_APPROVAL · ปุ่ม Approve/Reject สำหรับ HQ</td></tr>
+  </table>
+
+  <div class="sec-title">API Routes (🔲)</div>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>Service Function</th></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/quotations</td><td>listQuotations(ctx, filters?) — tenantWhere</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/quotations</td><td>createQuotation(ctx, data) — auto quoteNo "Q-{year}-{seq}" · calc subtotal/vatAmt/total</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/quotations/[id]</td><td>getQuotation(ctx, id) — include items[], lead, customer</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/quotations/[id]</td><td>updateQuotation(ctx, id, data) — recalc totals · revision++ ถ้า SENT</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/quotations/[id]/submit</td><td>submitForApproval(ctx, id) — status→PENDING_APPROVAL · ถ้า discount≤threshold → skip approval</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/quotations/[id]/approve</td><td>approveQuotation(ctx, id) — HQ only · approvalStatus→APPROVED · AuditLog</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/quotations/[id]/reject</td><td>rejectQuotation(ctx, id, reason) — HQ only · AuditLog</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/quotations/[id]/win</td><td>markWon(ctx, id) — status→WON · createProject() → สร้าง 6 ProjectPhases อัตโนมัติ</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 7 — PROJECT ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 7</strong> — Project</span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon blue">🏗</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 07</div>
+      <div class="mod-title">Project — โครงการก่อสร้าง</div>
+      <div class="mod-desc">6 Phases · Tasks · Milestones · auto-advance phases</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">8 วัน (ใหญ่สุด)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">6 Phases ของทุกโครงการ</div>
+  <table>
+    <tr><th>#</th><th>ชื่อ Phase</th><th>กิจกรรมหลัก</th></tr>
+    <tr><td>1</td><td>สำรวจหน้างาน (Survey)</td><td>วัดพื้นที่ · ถ่ายรูป GPS · บันทึกสภาพพื้นที่</td></tr>
+    <tr><td>2</td><td>ออกแบบ (Design)</td><td>Shop Drawing · ส่งลูกค้าอนุมัติ · เก็บไฟล์ BOQ</td></tr>
+    <tr><td>3</td><td>ผลิต (Manufacturing)</td><td>ตัดเหล็ก · Roll Form · QC โรงงาน</td></tr>
+    <tr><td>4</td><td>ขนส่ง &amp; ติดตั้ง (Install)</td><td>จัดส่งวัสดุ · ติดตั้งโครง · หลังคา · ผนัง</td></tr>
+    <tr><td>5</td><td>ตรวจสอบคุณภาพ (QC)</td><td>QC Checklist · Punch List · แก้ไขงาน</td></tr>
+    <tr><td>6</td><td>ส่งมอบ &amp; รับประกัน (Handover)</td><td>Handover Doc · ลูกค้าเซ็น · เริ่มประกัน</td></tr>
+  </table>
+
+  <div class="sec-title">Pages (🔲)</div>
+  <table>
+    <tr><th>Route</th><th>คำอธิบาย</th></tr>
+    <tr><td>/projects</td><td>รายการโครงการ — filter status/phase/province · sort by dueDate</td></tr>
+    <tr><td>/projects/[id]</td><td>Overview — 6-phase tracker + progress + tasks + milestones + PM</td></tr>
+    <tr><td>/projects/[id]/tasks</td><td>Task board Kanban แยกตาม phase — TODO/DOING/DONE</td></tr>
+    <tr><td>/projects/[id]/documents</td><td>Document list — filter DocType · upload · version history</td></tr>
+    <tr><td>/projects/[id]/photos</td><td>Photo gallery แยก phase · lightbox · GPS tag</td></tr>
+    <tr><td>/projects/[id]/reports</td><td>Daily site report list + ฟอร์มบันทึกวันใหม่</td></tr>
+  </table>
+
+  <div class="sec-title">Components (🔲)</div>
+  <table>
+    <tr><th>Component</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>ProjectPhaseTracker</code></td><td>แถบ 6 phases horizontal · สีตาม PENDING/ACTIVE/DONE/BLOCKED · progressPct bar</td></tr>
+    <tr><td><code>PhaseCard</code></td><td>1 phase — task count done/total · photo count · status toggle · startDate/endDate</td></tr>
+    <tr><td><code>TaskBoard</code></td><td>3-column Kanban TODO/DOING/DONE · drag card · filter by phase · assignee</td></tr>
+    <tr><td><code>TaskCard</code></td><td>title · assignee avatar · priority badge · dueDate · status</td></tr>
+    <tr><td><code>MilestoneList</code></td><td>timeline vertical · PENDING/REACHED/MISSED · dueDate countdown</td></tr>
+    <tr><td><code>ProjectStatusBadge</code></td><td>PLANNING/IN_PROGRESS/QC/HANDOVER/COMPLETED/ON_HOLD → color</td></tr>
+  </table>
+
+  <div class="sec-title">API Routes (🔲)</div>
+  <table>
+    <tr><th>Method</th><th>Route</th><th>Service Function</th></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/projects</td><td>listProjects(ctx, filters?) — tenantWhere</td></tr>
+    <tr><td><span class="method get">GET</span></td><td>/api/projects/[id]</td><td>getProject(ctx, id) — include phases, tasks, milestones, pm</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/projects/[id]</td><td>updateProject(ctx, id, data)</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/projects/[id]/phases/[phaseNo]</td><td>updatePhase(ctx, ...) — progressPct · ถ้า DONE → auto activate phase+1</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/projects/[id]/tasks</td><td>createTask(ctx, projectId, data) — phaseId, title, assigneeId, priority</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/projects/[id]/tasks/[id]</td><td>updateTask(ctx, taskId, data) — status, assigneeId</td></tr>
+    <tr><td><span class="method delete">DELETE</span></td><td>/api/projects/[id]/tasks/[id]</td><td>deleteTask(ctx, taskId)</td></tr>
+    <tr><td><span class="method post">POST</span></td><td>/api/projects/[id]/milestones</td><td>createMilestone(ctx, projectId, data)</td></tr>
+    <tr><td><span class="method patch">PATCH</span></td><td>/api/projects/[id]/milestones/[id]</td><td>updateMilestone(ctx, id, status) — PENDING→REACHED/MISSED</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 8-10 ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 8–10</strong> — QC · Site · Handover</span><span>Benjamin PMS · Module Reference</span></div>
+
+  <!-- QC -->
+  <div class="mod-header">
+    <div class="mod-icon red">✅</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 08</div>
+      <div class="mod-title">QC — ตรวจสอบคุณภาพ</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">3 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Component / Route</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>QCChecklistForm</code></td><td>สร้าง checklist + เพิ่ม items · phaseNo select</td></tr>
+    <tr><td><code>QCItemRow</code></td><td>item text · result toggle PASS/FAIL/NA · note · photoUrl</td></tr>
+    <tr><td><code>QCResultSummary</code></td><td>PASS/FAIL/NA count · % pass ratio · ปุ่ม complete checklist</td></tr>
+    <tr><td><code>PunchItemCard</code></td><td>description · OPEN→FIXED→VERIFIED flow · assignee · dueDate</td></tr>
+    <tr><td><span class="method post">POST</span> /api/projects/[id]/qc</td><td>createChecklist(ctx, projectId, { name, phaseNo, items[] })</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/projects/[id]/qc/[id]</td><td>recordQCResult(ctx, checklistId, items[{ item, result, note }])</td></tr>
+    <tr><td><span class="method post">POST</span> /api/projects/[id]/punch</td><td>createPunchItem(ctx, projectId, { description, assigneeId, dueDate })</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/projects/[id]/punch/[id]</td><td>updatePunchStatus(ctx, id, status) — OPEN→FIXED→VERIFIED</td></tr>
+  </table>
+
+  <!-- Site Ops -->
+  <div class="mod-header" style="margin-top:28px">
+    <div class="mod-icon warn">📸</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 09</div>
+      <div class="mod-title">Site Operations — หน้างาน</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">3 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Component / Route</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>DailyReportForm</code></td><td>date picker · weather · manpower count · workDone textarea · issues textarea</td></tr>
+    <tr><td><code>PhotoGallery</code></td><td>grid แยก phase · lightbox · GPS badge · caption</td></tr>
+    <tr><td><code>PhotoUploader</code></td><td>drag-drop upload · auto-attach GPS · caption input · phaseId select</td></tr>
+    <tr><td><code>DocumentList</code></td><td>ตาราง documents · DocType badge · version chip · download link</td></tr>
+    <tr><td><span class="method post">POST</span> /api/projects/[id]/reports</td><td>createDailyReport(ctx, projectId, { date, weather, manpower, workDone, issues })</td></tr>
+    <tr><td><span class="method post">POST</span> /api/projects/[id]/photos</td><td>uploadPhoto(ctx, projectId, { url, phaseId, caption, gps, takenAt })</td></tr>
+    <tr><td><span class="method post">POST</span> /api/projects/[id]/documents</td><td>uploadDocument(ctx, projectId, { type, name, fileUrl, version })</td></tr>
+  </table>
+
+  <!-- Handover -->
+  <div class="mod-header" style="margin-top:28px">
+    <div class="mod-icon green">🏁</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 10</div>
+      <div class="mod-title">Handover &amp; Warranty — ส่งมอบ</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">2 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Component / Route</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>HandoverForm</code></td><td>handoverDate · customerSignedBy · note · documentUrl upload</td></tr>
+    <tr><td><code>WarrantyForm</code></td><td>type STRUCTURE/ROOF/OTHER · startDate · durationMonths → auto endDate · terms</td></tr>
+    <tr><td><span class="method post">POST</span> /api/projects/[id]/handover</td><td>createHandover(ctx, projectId, data) — สร้าง Handover + Warranty · Project status→COMPLETED</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/projects/[id]/handover</td><td>updateHandover(ctx, projectId, data) — แก้ไขเอกสารส่งมอบ</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 11-13 ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 11–13</strong> — HQ · Master · Reports</span><span>Benjamin PMS · Module Reference</span></div>
+
+  <!-- HQ Ops -->
+  <div class="mod-header">
+    <div class="mod-icon steel">🏢</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 11</div>
+      <div class="mod-title">HQ Operations — สำนักงานใหญ่</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-partial">⚠ Dashboard เสร็จ</span>
+        <span class="mod-badge badge-todo">🔲 Full Pages ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">4 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Route / Component</th><th>สถานะ</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>LeaderboardCard</code></td><td class="status-done">✓ เสร็จ</td><td>rank + progress bar + revenue + winRate</td></tr>
+    <tr><td><code>LeadPoolTable</code></td><td class="status-done">✓ เสร็จ</td><td>handleAssign(id) · channelIcon · channelColor</td></tr>
+    <tr><td><code>ApprovalQueue</code></td><td class="status-done">✓ เสร็จ</td><td>act(id, "approved"|"rejected") · discount color rule</td></tr>
+    <tr><td>/hq/lead-pool</td><td class="status-todo">🔲</td><td>Lead Pool full page + filter province/channel + bulk assign</td></tr>
+    <tr><td>/hq/approvals</td><td class="status-todo">🔲</td><td>Approval list + history (approved/rejected) + filter</td></tr>
+    <tr><td>/hq/dealers</td><td class="status-todo">🔲</td><td>รายชื่อดีลเลอร์ + ยอดขายเดือนนี้ + status</td></tr>
+    <tr><td>/hq/dealers/new</td><td class="status-todo">🔲</td><td>สร้างดีลเลอร์ + auto-create DEALER_ADMIN user</td></tr>
+    <tr><td>/hq/dealers/[id]</td><td class="status-todo">🔲</td><td>โปรไฟล์ดีลเลอร์ — users list + KPIs + projects</td></tr>
+    <tr><td><span class="method post">POST</span> /api/dealers</td><td class="status-todo">🔲</td><td>createDealer(ctx, data) + สร้าง User(DEALER_ADMIN) อัตโนมัติ</td></tr>
+  </table>
+
+  <!-- Master Data -->
+  <div class="mod-header" style="margin-top:28px">
+    <div class="mod-icon gray">📦</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 12</div>
+      <div class="mod-title">Master Data — ราคากลาง</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">2 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Route / API</th><th>ฟังก์ชัน</th></tr>
+    <tr><td>/hq/master</td><td>tabs: Products · Materials · HQ only</td></tr>
+    <tr><td><span class="method get">GET</span> /api/products</td><td>listProducts(activeOnly?) — ไม่มี tenantWhere (ใช้ร่วมกันทุก dealer)</td></tr>
+    <tr><td><span class="method post">POST</span> /api/products</td><td>createProduct(ctx, data) — HQ only · code unique</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/products/[id]</td><td>updateProduct(ctx, id) — แก้ basePrice / spec / active</td></tr>
+    <tr><td><span class="method get">GET</span> /api/materials</td><td>listMaterials(activeOnly?)</td></tr>
+    <tr><td><span class="method post">POST</span> /api/materials</td><td>createMaterial(ctx, data) — HQ only</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/materials/[id]</td><td>updateMaterial(ctx, id) — แก้ basePrice / active</td></tr>
+  </table>
+
+  <!-- Reports -->
+  <div class="mod-header" style="margin-top:28px">
+    <div class="mod-icon blue">📈</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 13</div>
+      <div class="mod-title">Report &amp; Analytics — รายงาน</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">4 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Route / API</th><th>ฟังก์ชัน</th></tr>
+    <tr><td>/reports/analytics</td><td>กราฟ trend · funnel · win rate · by province</td></tr>
+    <tr><td>/reports/finance</td><td>ยอดขาย · margin · WON vs LOST ใบเสนอราคา</td></tr>
+    <tr><td>/reports/sales</td><td>ยอดขายแยก salesperson / dealer / product category</td></tr>
+    <tr><td><span class="method get">GET</span> /api/reports/network</td><td>ยอดรวมทุก dealer — revenue, pipeline, active projects, on-time %</td></tr>
+    <tr><td><span class="method get">GET</span> /api/reports/leaderboard</td><td>GROUP BY dealerId ORDER BY total DESC + winRate</td></tr>
+    <tr><td><span class="method get">GET</span> /api/reports/pipeline</td><td>COUNT leads GROUP BY status → funnel data</td></tr>
+    <tr><td><span class="method get">GET</span> /api/reports/sales</td><td>SUM quotation.total WHERE status=WON GROUP BY month/dealer/product</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ MODULE 14-15 ══════════ -->
+<div class="module-page">
+  <div class="page-header"><span><strong>MODULE 14–15</strong> — Notification · Audit</span><span>Benjamin PMS · Module Reference</span></div>
+
+  <!-- Notifications -->
+  <div class="mod-header">
+    <div class="mod-icon warn">🔔</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 14</div>
+      <div class="mod-title">Notification — การแจ้งเตือน</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-days">3 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Component / Route</th><th>ฟังก์ชัน</th></tr>
+    <tr><td><code>NotificationBell</code></td><td>icon + unread count badge (stub มีใน Topbar แล้ว · ยังไม่ connect)</td></tr>
+    <tr><td><code>NotificationDropdown</code></td><td>list ล่าสุด 10 รายการ · markAllRead button · link ไป entity</td></tr>
+    <tr><td><code>NotificationItem</code></td><td>title · body · timestamp · refType icon · readAt styling</td></tr>
+    <tr><td><span class="method get">GET</span> /api/notifications</td><td>listNotifications(ctx) — WHERE userId=ctx.userId ORDER BY createdAt DESC LIMIT 50</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/notifications/[id]/read</td><td>markRead(ctx, id) — set readAt=now()</td></tr>
+    <tr><td><span class="method patch">PATCH</span> /api/notifications/read-all</td><td>markAllRead(ctx) — UPDATE WHERE userId=ctx.userId AND readAt IS NULL</td></tr>
+  </table>
+
+  <div class="sec-title">Notification Triggers (🔲)</div>
+  <table>
+    <tr><th>เหตุการณ์</th><th>ส่งถึง</th><th>ช่องทาง</th></tr>
+    <tr><td>Lead ถูกมอบหมายให้ dealer</td><td>DEALER_ADMIN + DEALER_SALES</td><td>INAPP + LINE</td></tr>
+    <tr><td>Quotation ส่งขออนุมัติ</td><td>HQ_MANAGEMENT + HQ_STAFF</td><td>INAPP + EMAIL</td></tr>
+    <tr><td>Quotation ถูก approve / reject</td><td>DEALER_ADMIN + creator</td><td>INAPP + LINE</td></tr>
+    <tr><td>Project phase เปลี่ยนสถานะ</td><td>PM + DEALER_ADMIN</td><td>INAPP</td></tr>
+    <tr><td>Punch item ถูก assign</td><td>assignee</td><td>INAPP</td></tr>
+    <tr><td>โครงการใกล้ dueDate (3 วัน)</td><td>PM + DEALER_ADMIN</td><td>INAPP + LINE</td></tr>
+  </table>
+
+  <!-- Audit -->
+  <div class="mod-header" style="margin-top:28px">
+    <div class="mod-icon steel">📋</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Module 15</div>
+      <div class="mod-title">Audit Log — ประวัติการแก้ไข</div>
+      <div class="mod-badges">
+        <span class="mod-badge badge-todo">🔲 ยังไม่ได้สร้าง</span>
+        <span class="mod-badge badge-blue">Prisma model พร้อมแล้ว</span>
+        <span class="mod-badge badge-days">1 วัน</span>
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+    <tr><td><code>auditLog(params)</code></td><td>บันทึก AuditLog — entity, entityId, action, before(JSON), after(JSON), userId, actedByRole, onBehalfOfDealerId</td></tr>
+    <tr><td><span class="method get">GET</span> /api/audit</td><td>listAuditLogs(ctx, { entity, entityId }) — HQ only · ORDER BY createdAt DESC</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Act-on-behalf:</strong> เมื่อ HQ แก้ข้อมูลแทน dealer → บันทึก <code>onBehalfOfDealerId = lead.dealerId</code> ใน AuditLog เพื่อ compliance
+  </div>
+</div>
+
+<!-- ══════════ TIMELINE ══════════ -->
+<div class="timeline-page">
+  <div class="page-header"><span><strong>Timeline</strong></span><span>Benjamin PMS · Module Reference</span></div>
+  <div class="mod-header">
+    <div class="mod-icon blue">🗓</div>
+    <div class="mod-header-text">
+      <div class="mod-num">Development Timeline</div>
+      <div class="mod-title">แผนเวลาพัฒนา — คนเดียว + AI</div>
+      <div class="mod-desc">วันละ 6–8 ชั่วโมง productive · ที่เสร็จแล้ว ~20% (Dashboard + Auth UI + Layout)</div>
+    </div>
+  </div>
+
+  <div class="timeline-row">
+    <div class="timeline-phase-label">
+      <div class="phase-week">สัปดาห์ 1</div>
+      <div class="phase-num">P0</div>
+    </div>
+    <div class="phase-dot"></div>
+    <div class="phase-card">
+      <div class="phase-card-title">Backend Foundation</div>
+      <div class="phase-items">
+        <span class="phase-item">PostgreSQL + Prisma migrate</span>
+        <span class="phase-item">Seed data</span>
+        <span class="phase-item">Auth.js credentials</span>
+        <span class="phase-item">JWT + session typing</span>
+        <span class="phase-item">middleware.ts</span>
+        <span class="phase-item">tenantWhere()</span>
+      </div>
+      <div class="phase-days">⏱ 3.5 วัน</div>
+    </div>
+  </div>
+
+  <div class="timeline-row">
+    <div class="timeline-phase-label">
+      <div class="phase-week">สัปดาห์ 2–3</div>
+      <div class="phase-num">P1</div>
+    </div>
+    <div class="phase-dot"></div>
+    <div class="phase-card">
+      <div class="phase-card-title">CRM — Leads + Customer</div>
+      <div class="phase-items">
+        <span class="phase-item">Lead List + Kanban</span>
+        <span class="phase-item">Lead Detail + Activity Log</span>
+        <span class="phase-item">Lead API 9 routes</span>
+        <span class="phase-item">Customer pages</span>
+        <span class="phase-item">Customer API 5 routes</span>
+      </div>
+      <div class="phase-days">⏱ 7 วัน</div>
+    </div>
+  </div>
+
+  <div class="timeline-row">
+    <div class="timeline-phase-label">
+      <div class="phase-week">สัปดาห์ 3–5</div>
+      <div class="phase-num">P2</div>
+    </div>
+    <div class="phase-dot"></div>
+    <div class="phase-card">
+      <div class="phase-card-title">Sales — Quotation + Master Data</div>
+      <div class="phase-items">
+        <span class="phase-item">BOQ Builder (ซับซ้อน)</span>
+        <span class="phase-item">Approval flow</span>
+        <span class="phase-item">Quotation API 8 routes</span>
+        <span class="phase-item">Master Products + Materials</span>
+      </div>
+      <div class="phase-days">⏱ 8 วัน</div>
+    </div>
+  </div>
+
+  <div class="timeline-row">
+    <div class="timeline-phase-label">
+      <div class="phase-week">สัปดาห์ 5–8</div>
+      <div class="phase-num">P3</div>
+    </div>
+    <div class="phase-dot"></div>
+    <div class="phase-card">
+      <div class="phase-card-title">Project Execution (ใหญ่สุด)</div>
+      <div class="phase-items">
+        <span class="phase-item">6-Phase Tracker</span>
+        <span class="phase-item">Task Board</span>
+        <span class="phase-item">QC Checklist</span>
+        <span class="phase-item">Punch List</span>
+        <span class="phase-item">Daily Report + Photos</span>
+        <span class="phase-item">Documents</span>
+        <span class="phase-item">Handover + Warranty</span>
+      </div>
+      <div class="phase-days">⏱ 16 วัน</div>
+    </div>
+  </div>
+
+  <div class="timeline-row">
+    <div class="timeline-phase-label">
+      <div class="phase-week">สัปดาห์ 9</div>
+      <div class="phase-num">P4</div>
+    </div>
+    <div class="phase-dot"></div>
+    <div class="phase-card">
+      <div class="phase-card-title">HQ Full Pages + Analytics</div>
+      <div class="phase-items">
+        <span class="phase-item">Dealer Management</span>
+        <span class="phase-item">Lead Pool full page</span>
+        <span class="phase-item">Approval full page</span>
+        <span class="phase-item">Analytics charts</span>
+        <span class="phase-item">Finance report</span>
+      </div>
+      <div class="phase-days">⏱ 8 วัน</div>
+    </div>
+  </div>
+
+  <div class="timeline-row">
+    <div class="timeline-phase-label">
+      <div class="phase-week">สัปดาห์ 10</div>
+      <div class="phase-num">P5</div>
+    </div>
+    <div class="phase-dot"></div>
+    <div class="phase-card">
+      <div class="phase-card-title">System Features + Polish</div>
+      <div class="phase-items">
+        <span class="phase-item">Notifications + triggers</span>
+        <span class="phase-item">Audit Log viewer</span>
+        <span class="phase-item">Auth backend (bcrypt)</span>
+        <span class="phase-item">Deploy + DevOps</span>
+      </div>
+      <div class="phase-days">⏱ 5 วัน</div>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="big">~52</div>
+      <div class="lbl">Working Days รวม</div>
+    </div>
+    <div class="summary-card">
+      <div class="big">10–12</div>
+      <div class="lbl">สัปดาห์ (Realistic)</div>
+    </div>
+    <div class="summary-card">
+      <div class="big">20%</div>
+      <div class="lbl">เสร็จแล้ว</div>
+    </div>
+    <div class="summary-card">
+      <div class="big">M7</div>
+      <div class="lbl">Module ที่เสี่ยงสุด</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

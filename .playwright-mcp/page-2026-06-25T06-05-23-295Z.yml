@@ -1,0 +1,53 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img "Benjamin Pre-Engineered Building" [ref=e5]
+    - paragraph [ref=e6]: Sales Management System
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - heading "เข้าสู่ระบบ — ดีลเลอร์" [level=2] [ref=e9]
+      - paragraph [ref=e10]: สำหรับตัวแทนจำหน่าย Benjamin ทั่วประเทศ
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]: อีเมล / รหัสผู้ใช้
+        - generic [ref=e14]:
+          - img
+          - textbox "dealer@example.com" [ref=e15]
+      - generic [ref=e16]:
+        - generic [ref=e17]: รหัสผ่าน
+        - generic [ref=e18]:
+          - img
+          - textbox "••••••••" [ref=e19]
+          - button [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+      - button "ลืมรหัสผ่าน?" [ref=e25] [cursor=pointer]
+      - button "เข้าสู่ระบบ" [ref=e26] [cursor=pointer]:
+        - generic [ref=e27]: เข้าสู่ระบบ
+        - img [ref=e28]
+  - generic [ref=e30]:
+    - generic [ref=e33]: Demo — เข้าระบบด่วน
+    - generic [ref=e35]:
+      - button "HQ HQ Admin Benjamin HQ Management · admin@benjamin.com" [ref=e36] [cursor=pointer]:
+        - generic [ref=e38]: HQ
+        - generic [ref=e39]:
+          - generic [ref=e40]: HQ Admin
+          - generic [ref=e41]: Benjamin HQ Management · admin@benjamin.com
+      - button "D Dealer เชียงใหม่ PEB Dealer CNX · cnx@dealer.com" [ref=e42] [cursor=pointer]:
+        - generic [ref=e44]: D
+        - generic [ref=e45]:
+          - generic [ref=e46]: Dealer เชียงใหม่
+          - generic [ref=e47]: PEB Dealer CNX · cnx@dealer.com
+      - button "D Dealer ระยอง สตีล Dealer RYG · ryg@dealer.com" [ref=e48] [cursor=pointer]:
+        - generic [ref=e50]: D
+        - generic [ref=e51]:
+          - generic [ref=e52]: Dealer ระยอง สตีล
+          - generic [ref=e53]: Dealer RYG · ryg@dealer.com
+      - button "D Dealer เชียงราย เมทัล Dealer CRI · cri@dealer.com" [ref=e54] [cursor=pointer]:
+        - generic [ref=e56]: D
+        - generic [ref=e57]:
+          - generic [ref=e58]: Dealer เชียงราย เมทัล
+          - generic [ref=e59]: Dealer CRI · cri@dealer.com
+  - paragraph [ref=e60]:
+    - text: เป็นทีม HQ?
+    - link "เข้าสู่ระบบ HQ →" [ref=e61] [cursor=pointer]:
+      - /url: /login/hq
+  - paragraph [ref=e62]: © 2026 Benjamin PEB Steel Co., Ltd.

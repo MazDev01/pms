@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+<title>วิเคราะห์ — BENJAMIN PMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared-v2.css">
+<style>
+.sc-row{grid-template-columns:repeat(4,1fr)}
+.rpt-grid{display:grid;grid-template-columns:1fr 260px;gap:14px}
+.rpt-l{display:flex;flex-direction:column;gap:14px}
+.gw-row{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.gw-item{display:flex;align-items:center;gap:10px;font-size:.78rem}
+.gw-name{min-width:90px;color:var(--sub)}
+.gw-bar{flex:1;height:8px;background:#f0eeff;border-radius:99px;overflow:hidden}
+.gw-fill{height:100%;border-radius:99px;background:var(--pr)}
+.gw-val{min-width:56px;text-align:right;font-weight:700;font-size:.76rem}
+.rev-table{width:100%;border-collapse:collapse}
+.rev-table th{font-size:.68rem;font-weight:700;color:var(--sub);text-transform:uppercase;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);background:#fdfcff}
+.rev-table td{font-size:.78rem;padding:9px 10px;border-bottom:1px solid #f4f2ff}
+.rev-table tr:last-child td{border-bottom:none}
+.rev-table tr:hover td{background:#f9f8ff}
+.status-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.status-row:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-icon">B</div>
+    <div><div class="sb-name">BENJAMIN</div><div class="sb-role">Project Management</div></div>
+  </div>
+  <nav class="sb-nav">
+    <a href="dashboard.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>แผงควบคุม</a>
+    <a href="projects.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>โครงการ</a>
+    <a href="tasks.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>งาน</a>
+    <a href="calendar.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ปฏิทิน</a>
+    <a href="clients.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>ลูกค้า</a>
+    <a href="team.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>ทีมงาน</a>
+    <a href="goals.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>เป้าหมาย</a>
+    <a href="budget.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>งบประมาณ</a>
+    <a href="reports.html" class="si active"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>วิเคราะห์</a>
+    <div class="sb-div"></div>
+    <a href="settings.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M1 12h2M21 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>ตั้งค่า</a>
+  </nav>
+  <div class="sb-bot">
+    <div class="sb-div" style="margin-top:0"></div>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>ช่วยเหลือ</button>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>ออกจากระบบ</button>
+    <button class="sb-website"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>เยี่ยมชมเว็บไซต์</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="ptb">
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="ptb-badge">3</span></button>
+    <div class="ptb-user"><div class="ptb-av">A</div><div><div class="ptb-uname">Admin Benjamin</div><div class="ptb-uemail">admin@benjamin.th</div></div></div>
+  </div>
+
+  <div class="pcontent">
+    <div class="pg-title">วิเคราะห์</div>
+    <div class="pg-sub">ภาพรวมทางการเงินและประสิทธิภาพโครงการ</div>
+
+    <div class="fr">
+      <div class="fr-l">
+        <button class="fr-pill"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>เดือนนี้</button>
+        <button class="fr-pill"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M9 18h6"/></svg>ปีนี้</button>
+      </div>
+      <div class="fr-r">
+        <button class="fr-sec"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>ดาวน์โหลด PDF</button>
+        <button class="fr-add"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>สร้างรายงาน</button>
+      </div>
+    </div>
+
+    <div class="sc-row">
+      <div class="sc">
+        <div class="sc-ico" style="background:#e5faf0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
+        <div><div class="sc-val" style="color:#22c55e">฿1.24M</div><div class="sc-lbl">รายได้รวม</div><div class="sc-trend up">↑ 18.3% เดือนนี้</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#fdeaed"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#f04d6a" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></div>
+        <div><div class="sc-val" style="color:#f04d6a">฿890K</div><div class="sc-lbl">ค่าใช้จ่าย</div><div class="sc-trend dn">↑ 5.2% เดือนนี้</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#ede9fe"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#6c62f5" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+        <div><div class="sc-val" style="color:#6c62f5">฿347K</div><div class="sc-lbl">กำไรสุทธิ</div><div class="sc-trend up">↑ 28.0% ปีนี้</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#fff3e0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#f59e0b" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+        <div><div class="sc-val" style="color:#f59e0b">18</div><div class="sc-lbl">ใบแจ้งหนี้</div><div class="sc-trend up">↑ 3 รายการใหม่</div></div>
+      </div>
+    </div>
+
+    <!-- Area Chart -->
+    <div class="cc">
+      <div class="cc-hd">
+        <div class="cc-title">ภาพรวมรายได้รายเดือน</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="cc-leg">
+            <div class="cc-li"><div class="cc-dot" style="background:#6c62f5"></div>รายได้</div>
+            <div class="cc-li"><div class="cc-dash"></div>ค่าใช้จ่าย</div>
+          </div>
+          <button class="cc-sel">ปีนี้ ▾</button>
+        </div>
+      </div>
+      <svg width="100%" height="200" viewBox="0 0 760 200" preserveAspectRatio="xMidYMid meet" style="min-width:480px">
+        <defs>
+          <linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#6c62f5" stop-opacity=".2"/>
+            <stop offset="100%" stop-color="#6c62f5" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="30" x2="760" y2="30" stroke="#f0eeff" stroke-width="1.5"/>
+        <line x1="0" y1="72" x2="760" y2="72" stroke="#f0eeff" stroke-width="1.5"/>
+        <line x1="0" y1="114" x2="760" y2="114" stroke="#f0eeff" stroke-width="1.5"/>
+        <line x1="0" y1="156" x2="760" y2="156" stroke="#f0eeff" stroke-width="1.5"/>
+        <text x="2" y="28" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">฿400K</text>
+        <text x="2" y="70" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">฿300K</text>
+        <text x="2" y="112" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">฿200K</text>
+        <text x="2" y="154" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">฿100K</text>
+        <!-- Area (revenue) -->
+        <path d="M 40,148 C 80,140 110,122 150,118 C 190,114 225,100 265,94 C 305,88 340,104 380,98 C 420,92 455,72 495,66 C 535,60 575,78 615,72 C 645,68 690,80 730,74" fill="none" stroke="#6c62f5" stroke-width="2.5"/>
+        <path d="M 40,148 C 80,140 110,122 150,118 C 190,114 225,100 265,94 C 305,88 340,104 380,98 C 420,92 455,72 495,66 C 535,60 575,78 615,72 C 645,68 690,80 730,74 L 730,180 L 40,180 Z" fill="url(#ag2)"/>
+        <!-- Expense line (dashed) -->
+        <path d="M 40,156 C 80,150 110,136 150,132 C 190,128 225,118 265,114 C 305,110 340,120 380,116 C 420,112 455,96 495,90 C 535,86 575,100 615,96 C 645,92 690,102 730,98" fill="none" stroke="#c4bdf8" stroke-width="1.8" stroke-dasharray="6,4"/>
+        <!-- Tooltip -->
+        <circle cx="495" cy="66" r="5" fill="#6c62f5" stroke="#fff" stroke-width="2.5"/>
+        <rect x="440" y="36" width="108" height="26" rx="8" fill="#1a1535"/>
+        <polygon points="490,62 498,62 494,67" fill="#1a1535"/>
+        <text x="494" y="53" text-anchor="middle" font-size="11" fill="#fff" font-weight="700" font-family="'Noto Sans Thai',sans-serif">฿347,300</text>
+        <!-- X labels -->
+        <text x="40" y="196" text-anchor="middle" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">ม.ค.</text>
+        <text x="150" y="196" text-anchor="middle" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">ก.พ.</text>
+        <text x="265" y="196" text-anchor="middle" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">มี.ค.</text>
+        <text x="380" y="196" text-anchor="middle" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">เม.ย.</text>
+        <text x="495" y="196" text-anchor="middle" font-size="9" fill="#6c62f5" font-weight="700" font-family="'Noto Sans Thai',sans-serif">พ.ค.</text>
+        <text x="615" y="196" text-anchor="middle" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">มิ.ย.</text>
+        <text x="730" y="196" text-anchor="middle" font-size="9" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">ก.ค.</text>
+      </svg>
+    </div>
+
+    <!-- Bottom: 2-col -->
+    <div class="rpt-grid">
+      <!-- Left: Bar chart + table -->
+      <div>
+        <!-- Bar chart -->
+        <div class="cc">
+          <div class="cc-hd">
+            <div class="cc-title">เปรียบเทียบแผน vs จริง</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="cc-leg">
+                <div class="cc-li"><div class="cc-dot" style="background:#6c62f5"></div>จริง</div>
+                <div class="cc-li"><div class="cc-dot" style="background:#c4bdf8"></div>แผน</div>
+              </div>
+              <button class="cc-sel">ปีนี้ ▾</button>
+            </div>
+          </div>
+          <svg width="100%" height="170" viewBox="0 0 600 170" preserveAspectRatio="xMidYMid meet" style="min-width:360px">
+            <line x1="28" y1="20" x2="596" y2="20" stroke="#f0eeff" stroke-width="1.5"/>
+            <line x1="28" y1="65" x2="596" y2="65" stroke="#f0eeff" stroke-width="1.5"/>
+            <line x1="28" y1="110" x2="596" y2="110" stroke="#f0eeff" stroke-width="1.5"/>
+            <line x1="28" y1="130" x2="596" y2="130" stroke="#dddaf5" stroke-width="1.5"/>
+            <text x="24" y="23" text-anchor="end" font-size="8" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">400K</text>
+            <text x="24" y="68" text-anchor="end" font-size="8" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">200K</text>
+            <text x="24" y="113" text-anchor="end" font-size="8" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">100K</text>
+            <!-- Bars per month, 7 months -->
+            <!-- Jan -->
+            <rect x="38" y="110" width="20" height="20" rx="5" fill="#6c62f5"/>
+            <rect x="62" y="106" width="20" height="24" rx="5" fill="#c4bdf8"/>
+            <text x="60" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">ม.ค.</text>
+            <!-- Feb (exceeded) -->
+            <rect x="120" y="84" width="20" height="46" rx="5" fill="#6c62f5" opacity=".4"/>
+            <rect x="120" y="84" width="20" height="46" rx="5" fill="none" stroke="#6c62f5" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <rect x="144" y="94" width="20" height="36" rx="5" fill="#c4bdf8"/>
+            <text x="142" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">ก.พ.</text>
+            <!-- Tooltip Feb -->
+            <rect x="86" y="62" width="100" height="22" rx="7" fill="#1a1535"/>
+            <polygon points="124,84 132,84 128,89" fill="#1a1535"/>
+            <text x="136" y="77" text-anchor="middle" font-size="8.5" fill="#fff" font-family="'Noto Sans Thai',sans-serif">เกิน 20% · ฿17.8K</text>
+            <!-- Mar -->
+            <rect x="204" y="96" width="20" height="34" rx="5" fill="#6c62f5"/>
+            <rect x="228" y="90" width="20" height="40" rx="5" fill="#c4bdf8"/>
+            <text x="224" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">มี.ค.</text>
+            <!-- Apr -->
+            <rect x="288" y="100" width="20" height="30" rx="5" fill="#6c62f5"/>
+            <rect x="312" y="96" width="20" height="34" rx="5" fill="#c4bdf8"/>
+            <text x="306" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">เม.ย.</text>
+            <!-- May (peak) -->
+            <rect x="370" y="30" width="20" height="100" rx="5" fill="#6c62f5"/>
+            <rect x="394" y="44" width="20" height="86" rx="5" fill="#c4bdf8"/>
+            <text x="390" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">พ.ค.</text>
+            <!-- Jun -->
+            <rect x="452" y="112" width="20" height="18" rx="5" fill="#6c62f5"/>
+            <rect x="476" y="108" width="20" height="22" rx="5" fill="#c4bdf8"/>
+            <text x="474" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">มิ.ย.</text>
+            <!-- Jul (current, partial) -->
+            <rect x="534" y="120" width="20" height="10" rx="5" fill="#6c62f5" opacity=".5"/>
+            <rect x="558" y="116" width="20" height="14" rx="5" fill="#c4bdf8" opacity=".5"/>
+            <text x="556" y="148" text-anchor="middle" font-size="8.5" fill="#b0b0d0" font-family="'Noto Sans Thai',sans-serif">ก.ค.</text>
+          </svg>
+        </div>
+
+        <!-- Monthly table -->
+        <div class="card" style="margin-top:0">
+          <div style="padding:14px 16px;font-size:.84rem;font-weight:700;border-bottom:1px solid var(--border)">รายได้รายเดือน</div>
+          <table class="rev-table">
+            <thead><tr><th>เดือน</th><th>แผน</th><th>จริง</th><th>ผลต่าง</th><th>สถานะ</th></tr></thead>
+            <tbody>
+              <tr><td>มกราคม</td><td>฿120,000</td><td>฿95,000</td><td style="color:#f04d6a">-฿25,000</td><td><span class="bdg bdg-red">ต่ำกว่าแผน</span></td></tr>
+              <tr><td>กุมภาพันธ์</td><td>฿150,000</td><td>฿167,800</td><td style="color:#22c55e">+฿17,800</td><td><span class="bdg bdg-green">เกินแผน</span></td></tr>
+              <tr><td>มีนาคม</td><td>฿180,000</td><td>฿162,000</td><td style="color:#f04d6a">-฿18,000</td><td><span class="bdg bdg-red">ต่ำกว่าแผน</span></td></tr>
+              <tr><td>เมษายน</td><td>฿160,000</td><td>฿148,400</td><td style="color:#f04d6a">-฿11,600</td><td><span class="bdg bdg-orange">ใกล้เคียง</span></td></tr>
+              <tr><td>พฤษภาคม</td><td>฿320,000</td><td>฿347,300</td><td style="color:#22c55e">+฿27,300</td><td><span class="bdg bdg-green">เกินแผน</span></td></tr>
+              <tr><td>มิถุนายน</td><td>฿100,000</td><td>฿88,500</td><td style="color:#f04d6a">-฿11,500</td><td><span class="bdg bdg-orange">ใกล้เคียง</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right: Stats breakdown -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <!-- Project status -->
+        <div class="card" style="padding:16px">
+          <div style="font-size:.84rem;font-weight:700;margin-bottom:12px">สถานะโครงการ</div>
+          <svg width="100%" height="140" viewBox="0 0 200 140">
+            <circle cx="100" cy="70" r="55" fill="none" stroke="#f0eeff" stroke-width="20"/>
+            <circle cx="100" cy="70" r="55" fill="none" stroke="#6c62f5" stroke-width="20" stroke-dasharray="138 208" transform="rotate(-90 100 70)"/>
+            <circle cx="100" cy="70" r="55" fill="none" stroke="#c4bdf8" stroke-width="20" stroke-dasharray="1 138 104 62" transform="rotate(-90 100 70)"/>
+            <circle cx="100" cy="70" r="55" fill="none" stroke="#3d3580" stroke-width="20" stroke-dasharray="1 242 69 34" transform="rotate(-90 100 70)"/>
+            <circle cx="100" cy="70" r="55" fill="none" stroke="#e5faf0" stroke-width="20" stroke-dasharray="1 311 7 27" transform="rotate(-90 100 70)" style="stroke:#22c55e"/>
+            <text x="100" y="65" text-anchor="middle" font-size="10" fill="#8b8eb3" font-family="'Noto Sans Thai',sans-serif">โครงการ</text>
+            <text x="100" y="82" text-anchor="middle" font-size="18" fill="#1a1535" font-weight="800" font-family="'Noto Sans Thai',sans-serif">8</text>
+          </svg>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div class="status-row"><div style="display:flex;align-items:center;gap:7px;font-size:.75rem"><div style="width:8px;height:8px;border-radius:50%;background:#6c62f5"></div>กำลังดำเนินการ</div><span style="font-weight:700;font-size:.78rem">4</span></div>
+            <div class="status-row"><div style="display:flex;align-items:center;gap:7px;font-size:.75rem"><div style="width:8px;height:8px;border-radius:50%;background:#c4bdf8"></div>รอดำเนินการ</div><span style="font-weight:700;font-size:.78rem">1</span></div>
+            <div class="status-row"><div style="display:flex;align-items:center;gap:7px;font-size:.75rem"><div style="width:8px;height:8px;border-radius:50%;background:#3d3580"></div>พักไว้</div><span style="font-weight:700;font-size:.78rem">1</span></div>
+            <div class="status-row"><div style="display:flex;align-items:center;gap:7px;font-size:.75rem"><div style="width:8px;height:8px;border-radius:50%;background:#22c55e"></div>สมบูรณ์</div><span style="font-weight:700;font-size:.78rem">3</span></div>
+          </div>
+        </div>
+
+        <!-- Revenue by client -->
+        <div class="card" style="padding:16px">
+          <div style="font-size:.84rem;font-weight:700;margin-bottom:4px">รายได้ตามลูกค้า</div>
+          <div class="gw-row">
+            <div class="gw-item"><div class="gw-name">ABC จำกัด</div><div class="gw-bar"><div class="gw-fill" style="width:100%"></div></div><div class="gw-val" style="color:#6c62f5">฿570K</div></div>
+            <div class="gw-item"><div class="gw-name">GHI Company</div><div class="gw-bar"><div class="gw-fill" style="width:62%;background:#c4bdf8"></div></div><div class="gw-val" style="color:#9b91f8">฿352K</div></div>
+            <div class="gw-item"><div class="gw-name">DEF Limited</div><div class="gw-bar"><div class="gw-fill" style="width:55%;background:#a89cf8"></div></div><div class="gw-val" style="color:#a89cf8">฿310K</div></div>
+            <div class="gw-item"><div class="gw-name">MNO Corp</div><div class="gw-bar"><div class="gw-fill" style="width:40%;background:#c4bdf8"></div></div><div class="gw-val" style="color:#b0abf5">฿227K</div></div>
+            <div class="gw-item"><div class="gw-name">XYZ Corp</div><div class="gw-bar"><div class="gw-fill" style="width:32%;background:#d8d4fc"></div></div><div class="gw-val" style="color:#c0bbf8">฿180K</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

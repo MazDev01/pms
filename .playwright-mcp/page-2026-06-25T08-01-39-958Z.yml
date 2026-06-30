@@ -1,0 +1,220 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e7] [cursor=pointer]:
+    - img [ref=e8]
+  - alert [ref=e11]
+  - generic [ref=e12]:
+    - complementary [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - img "Benjamin" [ref=e17]
+          - generic [ref=e18]:
+            - generic [ref=e19]: BENJAMIN
+            - generic [ref=e20]: PRE-ENGINEERED BUILDING
+        - button "HQ · สำนักงานใหญ่" [ref=e22] [cursor=pointer]:
+          - generic [ref=e24]: HQ · สำนักงานใหญ่
+          - img [ref=e25]
+      - navigation [ref=e28]:
+        - generic [ref=e29]:
+          - paragraph [ref=e30]: งานหลัก
+          - link "แดชบอร์ด" [ref=e31] [cursor=pointer]:
+            - /url: /hq/dashboard
+            - img [ref=e33]
+            - generic [ref=e38]: แดชบอร์ด
+          - link "ลีดส่วนกลาง 3" [ref=e39] [cursor=pointer]:
+            - /url: /hq/lead-pool
+            - img [ref=e41]
+            - generic [ref=e44]: ลีดส่วนกลาง
+            - generic [ref=e45]: "3"
+          - link "รออนุมัติ 2" [ref=e46] [cursor=pointer]:
+            - /url: /hq/approvals
+            - img [ref=e48]
+            - generic [ref=e51]: รออนุมัติ
+            - generic [ref=e52]: "2"
+          - link "สาขา" [ref=e53] [cursor=pointer]:
+            - /url: /hq/dealers
+            - img [ref=e55]
+            - generic [ref=e60]: สาขา
+        - generic [ref=e61]:
+          - paragraph [ref=e62]: รายงาน
+          - link "วิเคราะห์" [ref=e63] [cursor=pointer]:
+            - /url: /reports/analytics
+            - img [ref=e65]
+            - generic [ref=e66]: วิเคราะห์
+          - link "การเงิน" [ref=e67] [cursor=pointer]:
+            - /url: /reports/finance
+            - img [ref=e69]
+            - generic [ref=e71]: การเงิน
+          - link "ยอดขาย" [ref=e72] [cursor=pointer]:
+            - /url: /reports/sales
+            - img [ref=e74]
+            - generic [ref=e77]: ยอดขาย
+        - generic [ref=e78]:
+          - paragraph [ref=e79]: จัดการ
+          - link "ราคากลาง" [ref=e80] [cursor=pointer]:
+            - /url: /hq/master
+            - img [ref=e82]
+            - generic [ref=e86]: ราคากลาง
+          - link "ตั้งค่า" [ref=e87] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e89]
+            - generic [ref=e92]: ตั้งค่า
+    - generic [ref=e94]:
+      - banner [ref=e95]:
+        - button [ref=e96] [cursor=pointer]:
+          - img [ref=e97]
+        - button "5" [ref=e101] [cursor=pointer]:
+          - img [ref=e102]
+          - generic [ref=e105]: "5"
+        - button "ว วิชัย ประสิทธิ์ ผู้บริหาร HQ" [ref=e107] [cursor=pointer]:
+          - generic [ref=e108]: ว
+          - generic [ref=e109]:
+            - generic [ref=e110]: วิชัย ประสิทธิ์
+            - generic [ref=e111]: ผู้บริหาร HQ
+          - img [ref=e112]
+      - main [ref=e114]:
+        - generic [ref=e115]:
+          - generic [ref=e116]:
+            - heading "รออนุมัติ" [level=1] [ref=e117]
+            - paragraph [ref=e118]: ใบเสนอราคาที่ส่วนลดเกินเกณฑ์ — รอการอนุมัติจาก HQ
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - generic [ref=e121]: รออนุมัติ
+              - generic [ref=e122]: "2"
+            - generic [ref=e123]:
+              - generic [ref=e124]: มูลค่ารวม
+              - generic [ref=e125]: ฿50.0M
+            - generic [ref=e126]:
+              - generic [ref=e127]: ส่วนลดสูงสุด
+              - generic [ref=e128]: 15%
+          - generic [ref=e131]: มีใบเสนอราคา 2 รายการรอการพิจารณาจาก HQ
+          - generic [ref=e132]:
+            - generic [ref=e133]:
+              - generic [ref=e134]:
+                - paragraph [ref=e135]: รออนุมัติใบเสนอราคา
+                - paragraph [ref=e136]: ส่วนลดเกินเกณฑ์ 10% — ต้องผ่าน HQ
+              - generic [ref=e137]: 2 รายการ
+            - generic [ref=e138]:
+              - generic [ref=e140]:
+                - img [ref=e141]
+                - generic [ref=e143]:
+                  - generic [ref=e144]:
+                    - generic [ref=e145]: Q-2026-0089
+                    - generic [ref=e146]: · สาขาเชียงใหม่
+                  - paragraph [ref=e147]: บจ. ไทยสตีล
+                  - generic [ref=e148]:
+                    - generic [ref=e149]: "มูลค่า: ฿3.2M"
+                    - generic [ref=e150]: ส่วนลด 15% · เกินเกณฑ์ 5%
+                    - generic [ref=e151]:
+                      - img [ref=e152]
+                      - text: กำไร ~12% ⚠
+                    - generic [ref=e155]:
+                      - img [ref=e156]
+                      - text: 2 ชม. ที่แล้ว
+                - generic [ref=e159]:
+                  - button "ดูรายละเอียด" [active] [ref=e160] [cursor=pointer]:
+                    - img [ref=e161]
+                    - text: ดูรายละเอียด
+                  - button [ref=e164] [cursor=pointer]:
+                    - img [ref=e165]
+                  - button [ref=e169] [cursor=pointer]:
+                    - img [ref=e170]
+              - generic [ref=e174]:
+                - img [ref=e175]
+                - generic [ref=e177]:
+                  - generic [ref=e178]:
+                    - generic [ref=e179]: Q-2026-0091
+                    - generic [ref=e180]: · สาขาระยอง
+                  - paragraph [ref=e181]: หจก. ราชบุรีโลหะ
+                  - generic [ref=e182]:
+                    - generic [ref=e183]: "มูลค่า: ฿1.8M"
+                    - generic [ref=e184]: ส่วนลด 12% · เกินเกณฑ์ 2%
+                    - generic [ref=e185]:
+                      - img [ref=e186]
+                      - text: กำไร ~15% ⚠
+                    - generic [ref=e189]:
+                      - img [ref=e190]
+                      - text: 5 ชม. ที่แล้ว
+                - generic [ref=e193]:
+                  - button "ดูรายละเอียด" [ref=e194] [cursor=pointer]:
+                    - img [ref=e195]
+                    - text: ดูรายละเอียด
+                  - button [ref=e198] [cursor=pointer]:
+                    - img [ref=e199]
+                  - button [ref=e203] [cursor=pointer]:
+                    - img [ref=e204]
+          - generic [ref=e208]:
+            - generic [ref=e209]:
+              - generic [ref=e210]:
+                - generic [ref=e211]:
+                  - heading "Q-2026-0089" [level=2] [ref=e212]
+                  - generic [ref=e213]: รออนุมัติ
+                - paragraph [ref=e214]: บจ. ไทยสตีล · สาขาเชียงใหม่ · โกดังสินค้า EASYBUILD 1200 ตร.ม.
+              - button [ref=e215] [cursor=pointer]:
+                - img [ref=e216]
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - paragraph [ref=e221]: วิเคราะห์กำไร
+                - generic [ref=e222]:
+                  - generic [ref=e223]:
+                    - paragraph [ref=e224]: ราคากลาง
+                    - paragraph [ref=e225]: ฿3.76M
+                  - generic [ref=e226]:
+                    - paragraph [ref=e227]: ส่วนลด
+                    - paragraph [ref=e228]: −฿564,706 (15%)
+                  - generic [ref=e229]:
+                    - paragraph [ref=e230]: ราคาเสนอ
+                    - paragraph [ref=e231]: ฿3.20M
+                  - generic [ref=e232]:
+                    - paragraph [ref=e233]: ต้นทุนประมาณ
+                    - paragraph [ref=e234]: ฿2.82M
+                  - generic [ref=e235]:
+                    - paragraph [ref=e236]: กำไรขั้นต้น
+                    - paragraph [ref=e237]: ฿376,471
+                  - generic [ref=e238]:
+                    - paragraph [ref=e239]: Gross Margin
+                    - paragraph [ref=e240]: 12%
+                - generic [ref=e241]: ⚠ กำไร 12% ต่ำกว่าเกณฑ์ขั้นต่ำ 18% · ปกติสาขานี้ทำได้ 25%
+              - generic [ref=e242]:
+                - paragraph [ref=e243]: รายการในใบเสนอ
+                - generic [ref=e244]:
+                  - generic [ref=e245]:
+                    - generic [ref=e246]: โครงสร้างเหล็ก PEB
+                    - generic [ref=e247]: ฿1.92M
+                  - generic [ref=e248]:
+                    - generic [ref=e249]: แผ่นหลังคา + ผนัง
+                    - generic [ref=e250]: ฿680,000
+                  - generic [ref=e251]:
+                    - generic [ref=e252]: งานฐานราก คอนกรีต
+                    - generic [ref=e253]: ฿350,000
+                  - generic [ref=e254]:
+                    - generic [ref=e255]: งานระบบไฟฟ้า + สาธารณูปโภค
+                    - generic [ref=e256]: ฿250,000
+                  - generic [ref=e257]:
+                    - generic [ref=e258]: รวมหลังส่วนลด 15%
+                    - generic [ref=e259]: ฿3.20M
+              - generic [ref=e260]:
+                - paragraph [ref=e261]: เหตุผลที่สาขาขอส่วนลด
+                - generic [ref=e262]: "\"ลูกค้า VIP ต้องการต่อสัญญาระยะยาว 3 ปี คาดว่าจะมีโครงการเพิ่มอีก 2 แห่งในปีหน้า\""
+              - generic [ref=e263]:
+                - paragraph [ref=e264]:
+                  - text: ประวัติขอ Exception · สาขาเชียงใหม่ (90 วันล่าสุด)
+                  - generic [ref=e265]: 3 ครั้ง
+                - generic [ref=e266]:
+                  - generic [ref=e267]:
+                    - generic [ref=e268]: ✓ อนุมัติ
+                    - generic [ref=e269]: Q-2026-0078
+                    - generic [ref=e270]: −12%
+                    - generic [ref=e271]: 15 เม.ย. 2026
+                  - generic [ref=e272]:
+                    - generic [ref=e273]: ✗ ปฏิเสธ
+                    - generic [ref=e274]: Q-2026-0063
+                    - generic [ref=e275]: −18%
+                    - generic [ref=e276]: 02 มี.ค. 2026
+                  - generic [ref=e277]:
+                    - generic [ref=e278]: ✓ อนุมัติ
+                    - generic [ref=e279]: Q-2026-0051
+                    - generic [ref=e280]: −11%
+                    - generic [ref=e281]: 20 ม.ค. 2026
+            - generic [ref=e282]:
+              - button "✗ ปฏิเสธ" [ref=e283] [cursor=pointer]
+              - button "✓ อนุมัติ" [ref=e284] [cursor=pointer]

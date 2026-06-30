@@ -1,0 +1,9 @@
+- generic [active] [ref=e1]:
+  - option "มิ.ย. 2026" [selected]
+  - option "พ.ค. 2026"
+  - option "Q2/2026"
+  - option "Q1/2026"
+  - option "YTD 2026"
+  - option "ปี 2025"
+  - option "รายเดือน" [selected]
+  - option "รายไตรมาส"

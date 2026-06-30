@@ -1,0 +1,392 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img "Benjamin" [ref=e7]
+        - generic [ref=e8]:
+          - generic [ref=e9]: BENJAMIN
+          - generic [ref=e10]: PRE-ENGINEERED BUILDING
+      - button "Dealer · สาขา" [ref=e12] [cursor=pointer]:
+        - generic [ref=e14]: Dealer · สาขา
+        - img [ref=e15]
+    - navigation [ref=e18]:
+      - link "แผงควบคุม" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e21]
+        - generic [ref=e26]: แผงควบคุม
+      - link "ผู้สนใจ 6" [ref=e27] [cursor=pointer]:
+        - /url: /leads
+        - img [ref=e29]
+        - generic [ref=e31]: ผู้สนใจ
+        - generic [ref=e32]: "6"
+      - link "ลูกค้า" [ref=e33] [cursor=pointer]:
+        - /url: /customers
+        - img [ref=e35]
+        - generic [ref=e40]: ลูกค้า
+      - link "ผู้ติดต่อ" [ref=e41] [cursor=pointer]:
+        - /url: /contacts
+        - img [ref=e43]
+        - generic [ref=e47]: ผู้ติดต่อ
+      - generic [ref=e48]: เอกสาร
+      - link "ใบเสนอราคา" [ref=e49] [cursor=pointer]:
+        - /url: /quotations
+        - img [ref=e51]
+        - generic [ref=e54]: ใบเสนอราคา
+      - link "สัญญา" [ref=e55] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e57]
+        - generic [ref=e60]: สัญญา
+      - link "ใบแจ้งหนี้" [ref=e61] [cursor=pointer]:
+        - /url: /invoices
+        - img [ref=e63]
+        - generic [ref=e66]: ใบแจ้งหนี้
+      - link "การชำระเงิน" [ref=e67] [cursor=pointer]:
+        - /url: /payments
+        - img [ref=e69]
+        - generic [ref=e71]: การชำระเงิน
+      - generic [ref=e72]: โครงการ
+      - link "โครงการ" [ref=e73] [cursor=pointer]:
+        - /url: /projects
+        - img [ref=e75]
+        - generic [ref=e78]: โครงการ
+      - link "รายงาน" [ref=e79] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e81]
+        - generic [ref=e82]: รายงาน
+  - generic [ref=e84]:
+    - banner [ref=e85]:
+      - button [ref=e86] [cursor=pointer]:
+        - img [ref=e87]
+      - button "5" [ref=e91] [cursor=pointer]:
+        - img [ref=e92]
+        - generic [ref=e95]: "5"
+      - button "ส สมชาย เชียงใหม่ ผู้จัดการสาขา" [ref=e97] [cursor=pointer]:
+        - generic [ref=e98]: ส
+        - generic [ref=e99]:
+          - generic [ref=e100]: สมชาย เชียงใหม่
+          - generic [ref=e101]: ผู้จัดการสาขา
+        - img [ref=e102]
+    - main [ref=e104]:
+      - generic [ref=e105]:
+        - generic [ref=e106]:
+          - heading "แดชบอร์ด HQ" [level=1] [ref=e107]
+          - paragraph [ref=e108]: สรุปภาพรวมทั้งเครือ · มิถุนายน 2026
+        - generic [ref=e109]:
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - img [ref=e113]
+              - generic [ref=e115]:
+                - paragraph [ref=e116]: ยอดขายรวมเดือนนี้
+                - generic [ref=e117]:
+                  - paragraph [ref=e118]: ฿18.4M
+                  - generic [ref=e119]: ↑ 12.3%
+            - generic [ref=e121]:
+              - generic [ref=e122]: เป้าหมาย ฿22M
+              - generic [ref=e123]: 84%
+          - generic [ref=e126]:
+            - generic [ref=e127]:
+              - img [ref=e129]
+              - generic [ref=e132]:
+                - paragraph [ref=e133]: Pipeline รวม
+                - generic [ref=e134]:
+                  - paragraph [ref=e135]: ฿54.2M
+                  - generic [ref=e136]: ↑ 6.8%
+            - generic [ref=e138]:
+              - generic [ref=e139]: เป้าหมาย ฿60M
+              - generic [ref=e140]: 90%
+          - generic [ref=e143]:
+            - generic [ref=e144]:
+              - img [ref=e146]
+              - generic [ref=e150]:
+                - paragraph [ref=e151]: โครงการ Active
+                - generic [ref=e152]:
+                  - paragraph [ref=e153]: "23"
+                  - generic [ref=e154]: ↑ 16.4%
+            - generic [ref=e156]:
+              - generic [ref=e157]: เป้าหมาย 25 โครงการ
+              - generic [ref=e158]: 92%
+          - generic [ref=e161]:
+            - generic [ref=e162]:
+              - img [ref=e164]
+              - generic [ref=e167]:
+                - paragraph [ref=e168]: On-time %
+                - generic [ref=e169]:
+                  - paragraph [ref=e170]: 87%
+                  - generic [ref=e171]: ↓ 3.2%
+            - generic [ref=e173]:
+              - generic [ref=e174]: เป้าหมาย 90%
+              - generic [ref=e175]: 97%
+        - generic [ref=e178]:
+          - generic [ref=e179]: ⚠ ต้องดำเนินการ
+          - button "2 ใบเสนอรออนุมัติ →" [ref=e180] [cursor=pointer]
+          - link "5 ลีดรอมอบหมาย →" [ref=e181] [cursor=pointer]:
+            - /url: /hq/lead-pool
+          - generic [ref=e182]: 2 โครงการเกินกำหนด
+        - generic [ref=e183]:
+          - generic [ref=e184]:
+            - generic [ref=e185]:
+              - generic [ref=e186]:
+                - generic [ref=e187]: ยอดขายรวมทั้งเครือ รายเดือน
+                - generic [ref=e188]: มูลค่าทุกสาขารวมกัน (หมื่นบาท)
+              - generic [ref=e189]:
+                - generic [ref=e190]:
+                  - generic [ref=e191]: เดือนนี้
+                  - generic [ref=e193]: เดือนก่อน
+                - combobox [ref=e195]:
+                  - option "รายเดือน" [selected]
+                  - option "รายไตรมาส"
+            - img [ref=e196]:
+              - generic [ref=e216]: ม.ค.
+              - generic [ref=e217]: ก.พ.
+              - generic [ref=e218]: มี.ค.
+              - generic [ref=e219]: เม.ย.
+              - generic [ref=e220]: พ.ค.
+              - generic [ref=e221]: มิ.ย.
+              - generic [ref=e222]: ก.ค.
+              - generic [ref=e223]: ส.ค.
+          - generic [ref=e224]:
+            - generic [ref=e225]:
+              - generic [ref=e226]:
+                - paragraph [ref=e227]: 🏆 อันดับสาขา
+                - paragraph [ref=e228]: เดือนมิถุนายน 2026
+              - link "ดูทั้งหมด →" [ref=e229] [cursor=pointer]:
+                - /url: /hq/dealers
+            - generic [ref=e230]:
+              - generic [ref=e231]:
+                - generic [ref=e232]: "1"
+                - generic [ref=e233]:
+                  - paragraph [ref=e235]: Benjamin สาขาระยอง
+                  - paragraph [ref=e236]: ตะวันออก · 6 โครงการ
+                - generic [ref=e238]:
+                  - generic [ref=e239]: เป้า
+                  - generic [ref=e240]: 90%
+                - generic [ref=e243]:
+                  - paragraph [ref=e244]: ฿5.4M
+                  - paragraph [ref=e245]:
+                    - img [ref=e246]
+                    - text: 48% ปิดการขาย
+              - generic [ref=e249]:
+                - generic [ref=e250]: "2"
+                - generic [ref=e251]:
+                  - generic [ref=e252]:
+                    - paragraph [ref=e253]: Benjamin สาขาเชียงใหม่
+                    - generic [ref=e254]: ⚠ ระวัง
+                  - paragraph [ref=e255]: เหนือ · 5 โครงการ
+                - generic [ref=e257]:
+                  - generic [ref=e258]: เป้า
+                  - generic [ref=e259]: 68%
+                - generic [ref=e262]:
+                  - paragraph [ref=e263]: ฿4.2M
+                  - paragraph [ref=e264]:
+                    - img [ref=e265]
+                    - text: 35% ปิดการขาย
+              - generic [ref=e268]:
+                - generic [ref=e269]: "3"
+                - generic [ref=e270]:
+                  - paragraph [ref=e272]: Benjamin สาขาแม่สอด
+                  - paragraph [ref=e273]: ตะวันตก · 4 โครงการ
+                - generic [ref=e275]:
+                  - generic [ref=e276]: เป้า
+                  - generic [ref=e277]: 76%
+                - generic [ref=e280]:
+                  - paragraph [ref=e281]: ฿3.8M
+                  - paragraph [ref=e282]:
+                    - img [ref=e283]
+                    - text: 52% ปิดการขาย
+              - generic [ref=e286]:
+                - generic [ref=e287]: "4"
+                - generic [ref=e288]:
+                  - generic [ref=e289]:
+                    - paragraph [ref=e290]: Benjamin สาขาเชียงราย
+                    - generic [ref=e291]: ⚠ ระวัง
+                  - paragraph [ref=e292]: เหนือ · 3 โครงการ
+                - generic [ref=e294]:
+                  - generic [ref=e295]: เป้า
+                  - generic [ref=e296]: 53%
+                - generic [ref=e299]:
+                  - paragraph [ref=e300]: ฿3.1M
+                  - paragraph [ref=e301]:
+                    - img [ref=e302]
+                    - text: 41% ปิดการขาย
+              - generic [ref=e305]:
+                - generic [ref=e307]: "5"
+                - generic [ref=e308]:
+                  - generic [ref=e309]:
+                    - paragraph [ref=e310]: Benjamin สาขานครสวรรค์
+                    - generic [ref=e311]: 🔴 ล้าหลัง
+                  - paragraph [ref=e312]: กลาง · 2 โครงการ
+                - generic [ref=e314]:
+                  - generic [ref=e315]: เป้า
+                  - generic [ref=e316]: 38%
+                - generic [ref=e319]:
+                  - paragraph [ref=e320]: ฿1.9M
+                  - paragraph [ref=e321]:
+                    - img [ref=e322]
+                    - text: 29% ปิดการขาย
+        - generic [ref=e325]:
+          - generic [ref=e326]:
+            - generic [ref=e327]:
+              - generic [ref=e328]:
+                - paragraph [ref=e329]: ลีดส่วนกลาง
+                - generic [ref=e330]:
+                  - generic [ref=e331]: ⛔ 1 เกิน SLA
+                  - generic [ref=e332]: 5 รอ
+              - paragraph [ref=e333]:
+                - text: มูลค่ารวม
+                - strong [ref=e334]: ฿9.8M
+            - generic [ref=e335]:
+              - generic [ref=e336]:
+                - generic [ref=e337]: ⛔
+                - generic [ref=e338]:
+                  - paragraph [ref=e339]: หจก. ชลบุรีคลังสินค้า
+                  - paragraph [ref=e340]:
+                    - generic [ref=e341]: ชลบุรี · RANBUILD
+                    - generic [ref=e342]: 2 วัน 8 ชม.
+                - generic [ref=e343]: ฿1.9M
+              - generic [ref=e344]:
+                - generic [ref=e345]: ⚠
+                - generic [ref=e346]:
+                  - paragraph [ref=e347]: บจ. โคราชอุตสาหกรรม
+                  - paragraph [ref=e348]:
+                    - generic [ref=e349]: นครราชสีมา · EASYBUILD
+                    - generic [ref=e350]: 1 วัน 21 ชม.
+                - generic [ref=e351]: ฿3.4M
+              - generic [ref=e352]:
+                - generic [ref=e353]: ⚠
+                - generic [ref=e354]:
+                  - paragraph [ref=e355]: หจก. พะเยาก่อสร้าง
+                  - paragraph [ref=e356]:
+                    - generic [ref=e357]: พะเยา · PREFAB
+                    - generic [ref=e358]: 1 วัน 4 ชม.
+                - generic [ref=e359]: ฿1.1M
+            - link "จัดการลีดทั้งหมด →" [ref=e361] [cursor=pointer]:
+              - /url: /hq/lead-pool
+          - generic [ref=e362]:
+            - generic [ref=e363]:
+              - generic [ref=e364]:
+                - paragraph [ref=e365]: รออนุมัติ
+                - generic [ref=e366]: 2 รายการ
+              - paragraph [ref=e367]:
+                - text: "รายการเก่าสุด:"
+                - strong [ref=e368]: 5 ชม. ที่แล้ว
+            - generic [ref=e369]:
+              - generic [ref=e370]:
+                - generic [ref=e371]: 📋
+                - generic [ref=e372]:
+                  - paragraph [ref=e373]: Q-2026-0089 · บจ. ไทยสตีล
+                  - paragraph [ref=e374]: สาขาเชียงใหม่ · ส่วนลด 15%
+                - generic [ref=e375]:
+                  - paragraph [ref=e376]: ฿3.2M
+                  - paragraph [ref=e377]: 2 ชม. ที่แล้ว
+              - generic [ref=e378]:
+                - generic [ref=e379]: 📋
+                - generic [ref=e380]:
+                  - paragraph [ref=e381]: Q-2026-0091 · หจก. ราชบุรีโลหะ
+                  - paragraph [ref=e382]: สาขาระยอง · ส่วนลด 12%
+                - generic [ref=e383]:
+                  - paragraph [ref=e384]: ฿1.8M
+                  - paragraph [ref=e385]: 5 ชม. ที่แล้ว
+            - link "ไปหน้าอนุมัติ →" [ref=e387] [cursor=pointer]:
+              - /url: /hq/approvals
+          - generic [ref=e388]:
+            - generic [ref=e389]:
+              - generic [ref=e390]:
+                - paragraph [ref=e391]: สุขภาพโครงการ
+                - generic [ref=e392]: 23 โครงการทั้งหมด
+              - paragraph [ref=e393]: รวมทุกสาขา · มิถุนายน 2026
+            - generic [ref=e394]:
+              - generic [ref=e396]:
+                - generic [ref=e397]: กำลังดำเนินการ
+                - generic [ref=e398]:
+                  - generic [ref=e399]: "14"
+                  - generic [ref=e400]: 61%
+              - generic [ref=e404]:
+                - generic [ref=e405]: ยังไม่เริ่ม
+                - generic [ref=e406]:
+                  - generic [ref=e407]: "4"
+                  - generic [ref=e408]: 17%
+              - generic [ref=e412]:
+                - generic [ref=e413]: หยุดชั่วคราว
+                - generic [ref=e414]:
+                  - generic [ref=e415]: "3"
+                  - generic [ref=e416]: 13%
+              - generic [ref=e420]:
+                - generic [ref=e421]: เกินกำหนด
+                - generic [ref=e422]:
+                  - generic [ref=e423]: "2"
+                  - generic [ref=e424]: 9%
+        - generic [ref=e427]:
+          - generic [ref=e428]:
+            - generic [ref=e429]:
+              - generic [ref=e430]:
+                - paragraph [ref=e431]: รายได้ตามสายบริการ
+                - generic [ref=e432]: YTD 2026
+              - paragraph [ref=e433]:
+                - text: รวม
+                - strong [ref=e434]: ฿25.5M
+            - generic [ref=e435]:
+              - generic [ref=e437]:
+                - generic [ref=e440]: RANBUILD
+                - generic [ref=e441]: ฿8.9M
+              - generic [ref=e445]:
+                - generic [ref=e448]: CUSTOM
+                - generic [ref=e449]: ฿6.2M
+              - generic [ref=e453]:
+                - generic [ref=e456]: EASYBUILD
+                - generic [ref=e457]: ฿4.8M
+              - generic [ref=e461]:
+                - generic [ref=e464]: PREFAB
+                - generic [ref=e465]: ฿3.2M
+              - generic [ref=e469]:
+                - generic [ref=e472]: TURNKEY
+                - generic [ref=e473]: ฿1.8M
+              - generic [ref=e477]:
+                - generic [ref=e480]: CONSULTANT
+                - generic [ref=e481]: ฿0.6M
+          - generic [ref=e484]:
+            - generic [ref=e485]:
+              - paragraph [ref=e486]: กิจกรรมล่าสุด
+              - paragraph [ref=e487]: ทั้งเครือ · อัปเดตอัตโนมัติ
+            - generic [ref=e488]:
+              - generic [ref=e489]:
+                - generic [ref=e490]: 🏆
+                - generic [ref=e491]:
+                  - paragraph [ref=e492]: ปิดงาน โกดัง VCS Asia ฿6.2M
+                  - generic [ref=e493]:
+                    - generic [ref=e494]: ระยอง
+                    - generic [ref=e495]: 30 นาที
+              - generic [ref=e496]:
+                - generic [ref=e497]: 📥
+                - generic [ref=e498]:
+                  - paragraph [ref=e499]: "ลีดใหม่: หจก. ชลบุรีคลังสินค้า ฿1.9M"
+                  - generic [ref=e500]:
+                    - generic [ref=e501]: ส่วนกลาง
+                    - generic [ref=e502]: 2 ชม.
+              - generic [ref=e503]:
+                - generic [ref=e504]: ✅
+                - generic [ref=e505]:
+                  - paragraph [ref=e506]: อนุมัติ Q-2026-0097 สมุทรปราการ ฿2.0M
+                  - generic [ref=e507]:
+                    - generic [ref=e508]: เชียงใหม่
+                    - generic [ref=e509]: 3 ชม.
+              - generic [ref=e510]:
+                - generic [ref=e511]: 🔀
+                - generic [ref=e512]:
+                  - paragraph [ref=e513]: มอบหมาย LP-004 โคราช → สาขาระยอง
+                  - generic [ref=e514]:
+                    - generic [ref=e515]: ส่วนกลาง
+                    - generic [ref=e516]: 5 ชม.
+              - generic [ref=e517]:
+                - generic [ref=e518]: 🏗
+                - generic [ref=e519]:
+                  - paragraph [ref=e520]: EASYBUILD แม่สอด อัปเดตความก้าวหน้า 82%
+                  - generic [ref=e521]:
+                    - generic [ref=e522]: แม่สอด
+                    - generic [ref=e523]: เมื่อวาน
+              - generic [ref=e524]:
+                - generic [ref=e525]: 🏆
+                - generic [ref=e526]:
+                  - paragraph [ref=e527]: ปิดงาน RANBUILD นครสวรรค์ ฿5.4M
+                  - generic [ref=e528]:
+                    - generic [ref=e529]: นครสวรรค์
+                    - generic [ref=e530]: 2 วัน

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+<title>งบประมาณ — BENJAMIN PMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared-v2.css">
+<style>
+.sc-row{grid-template-columns:repeat(4,1fr)}
+.bg-grid{display:grid;grid-template-columns:1fr 340px;gap:14px}
+.bgt-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden}
+.bc-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.bc-title{font-size:.86rem;font-weight:700}
+.bgt-body{padding:0}
+.bg-cat{border-bottom:1px solid var(--border)}
+.bg-cat:last-child{border-bottom:none}
+.bg-cat-hd{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;transition:background .1s}
+.bg-cat-hd:hover{background:#fdfcff}
+.bg-cat-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.bg-cat-name{font-size:.82rem;font-weight:600;flex:1}
+.bg-cat-bar{flex:2;max-width:200px}
+.bg-cat-vals{display:flex;gap:16px;min-width:200px;justify-content:flex-end}
+.bcv{text-align:right}
+.bcv-lbl{font-size:.6rem;color:var(--sub);text-transform:uppercase;letter-spacing:.05em}
+.bcv-val{font-size:.78rem;font-weight:700;margin-top:1px}
+.bg-cat-pct{min-width:40px;text-align:right;font-size:.76rem;font-weight:700}
+/* Right panel */
+.side-panel{display:flex;flex-direction:column;gap:14px}
+.sum-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);padding:16px}
+.sum-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.sum-row:last-child{border-bottom:none}
+.sum-lbl{font-size:.76rem;font-weight:600;color:var(--sub)}
+.sum-val{font-size:.82rem;font-weight:800}
+.donut-wrap{display:flex;flex-direction:column;align-items:center;padding:14px 0}
+.donut-legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:14px;width:100%}
+.dl-item{display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:600}
+.dl-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.dl-val{margin-left:auto;font-weight:700;color:var(--text)}
+/* Month comparison bar chart (SVG inline) */
+.chart-wrap{padding:16px 18px}
+.act-btn{width:29px;height:29px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:#fff;color:var(--sub);cursor:pointer;transition:all .12s}
+.act-btn:hover{background:var(--pr-llt);border-color:var(--pr);color:var(--pr)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-icon">B</div>
+    <div><div class="sb-name">BENJAMIN</div><div class="sb-role">Project Management</div></div>
+  </div>
+  <nav class="sb-nav">
+    <a href="dashboard.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>แผงควบคุม</a>
+    <a href="projects.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>โครงการ</a>
+    <a href="tasks.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>งาน</a>
+    <a href="calendar.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ปฏิทิน</a>
+    <a href="clients.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>ลูกค้า</a>
+    <a href="team.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>ทีมงาน</a>
+    <a href="goals.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>เป้าหมาย</a>
+    <a href="budget.html" class="si active"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>งบประมาณ</a>
+    <a href="reports.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>วิเคราะห์</a>
+    <div class="sb-div"></div>
+    <a href="settings.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M1 12h2M21 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>ตั้งค่า</a>
+  </nav>
+  <div class="sb-bot">
+    <div class="sb-div" style="margin-top:0"></div>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>ช่วยเหลือ</button>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>ออกจากระบบ</button>
+    <button class="sb-website"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>เยี่ยมชมเว็บไซต์</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="ptb">
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="ptb-badge">3</span></button>
+    <div class="ptb-user"><div class="ptb-av">A</div><div><div class="ptb-uname">Admin Benjamin</div><div class="ptb-uemail">admin@benjamin.th</div></div></div>
+  </div>
+
+  <div class="pcontent">
+    <div class="pg-title">งบประมาณ</div>
+    <div class="pg-sub">ติดตามการใช้งบประมาณเทียบกับแผน</div>
+
+    <div class="fr">
+      <div class="fr-l">
+        <button class="fr-pill on">Q2 2569</button>
+        <button class="fr-pill">Q3 2569</button>
+        <button class="fr-pill">ทั้งปี</button>
+      </div>
+      <div class="fr-r">
+        <button class="fr-sec"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>ส่งออก</button>
+        <button class="fr-add"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>เพิ่มรายการ</button>
+      </div>
+    </div>
+
+    <div class="sc-row">
+      <div class="sc"><div class="sc-ico" style="background:#ede9fe"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#6c62f5" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><div class="sc-val" style="color:#6c62f5">฿2.4M</div><div class="sc-lbl">งบประมาณรวม</div></div></div>
+      <div class="sc"><div class="sc-ico" style="background:#fdeaed"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#f04d6a" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div><div><div class="sc-val" style="color:#f04d6a">฿1.76M</div><div class="sc-lbl">ใช้ไปแล้ว</div></div></div>
+      <div class="sc"><div class="sc-ico" style="background:#e5faf0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="sc-val" style="color:#22c55e">฿640K</div><div class="sc-lbl">คงเหลือ</div></div></div>
+      <div class="sc"><div class="sc-ico" style="background:#fff3e0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#f59e0b" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><div><div class="sc-val" style="color:#f59e0b">73%</div><div class="sc-lbl">ใช้งบแล้ว</div></div></div>
+    </div>
+
+    <div class="bg-grid">
+      <!-- Main budget breakdown -->
+      <div>
+        <!-- Monthly bar chart -->
+        <div class="bgt-card" style="margin-bottom:14px">
+          <div class="bc-hd">
+            <span class="bc-title">รายจ่ายรายเดือน</span>
+            <div style="display:flex;align-items:center;gap:14px;font-size:.72rem;font-weight:600">
+              <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#6c62f5;display:inline-block"></span>จริง</span>
+              <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#e5e1f8;display:inline-block;border:1.5px dashed #b0a8f0"></span>แผน</span>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 560 160" width="100%" height="160" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+                  <line x1="0" y1="0" x2="0" y2="5" stroke="#f04d6a" stroke-width="1.5" opacity=".4"/>
+                </pattern>
+              </defs>
+              <!-- Grid lines -->
+              <line x1="50" y1="10" x2="550" y2="10" stroke="#f0eefb" stroke-width="1"/>
+              <line x1="50" y1="45" x2="550" y2="45" stroke="#f0eefb" stroke-width="1"/>
+              <line x1="50" y1="80" x2="550" y2="80" stroke="#f0eefb" stroke-width="1"/>
+              <line x1="50" y1="115" x2="550" y2="115" stroke="#f0eefb" stroke-width="1"/>
+              <!-- Y labels -->
+              <text x="44" y="13" font-size="9" fill="#b0b0d0" text-anchor="end">600K</text>
+              <text x="44" y="48" font-size="9" fill="#b0b0d0" text-anchor="end">450K</text>
+              <text x="44" y="83" font-size="9" fill="#b0b0d0" text-anchor="end">300K</text>
+              <text x="44" y="118" font-size="9" fill="#b0b0d0" text-anchor="end">150K</text>
+              <!-- Jan: actual 220K=88px, budget 280K=112px -->
+              <rect x="60" y="42" width="28" height="88" rx="5" fill="#6c62f5" opacity=".85"/>
+              <rect x="90" y="18" width="28" height="112" rx="5" fill="none" stroke="#b0a8f0" stroke-dasharray="3,2" stroke-width="1.5"/>
+              <text x="89" y="140" font-size="9" fill="#8b8eb3" text-anchor="middle">ม.ค.</text>
+              <!-- Feb: 260K=104px, 280K=112px -->
+              <rect x="138" y="26" width="28" height="104" rx="5" fill="#6c62f5" opacity=".85"/>
+              <rect x="168" y="18" width="28" height="112" rx="5" fill="none" stroke="#b0a8f0" stroke-dasharray="3,2" stroke-width="1.5"/>
+              <text x="167" y="140" font-size="9" fill="#8b8eb3" text-anchor="middle">ก.พ.</text>
+              <!-- Mar: 300K=120px, 280K=112px — over budget -->
+              <rect x="216" y="10" width="28" height="120" rx="5" fill="url(#hatch)"/>
+              <rect x="216" y="10" width="28" height="120" rx="5" fill="#f04d6a" opacity=".7"/>
+              <rect x="246" y="18" width="28" height="112" rx="5" fill="none" stroke="#b0a8f0" stroke-dasharray="3,2" stroke-width="1.5"/>
+              <text x="245" y="140" font-size="9" fill="#8b8eb3" text-anchor="middle">มี.ค.</text>
+              <!-- Apr: 240K=96px, 280K=112px -->
+              <rect x="294" y="34" width="28" height="96" rx="5" fill="#6c62f5" opacity=".85"/>
+              <rect x="324" y="18" width="28" height="112" rx="5" fill="none" stroke="#b0a8f0" stroke-dasharray="3,2" stroke-width="1.5"/>
+              <text x="323" y="140" font-size="9" fill="#8b8eb3" text-anchor="middle">เม.ย.</text>
+              <!-- May: 280K=112px, 280K=112px -->
+              <rect x="372" y="18" width="28" height="112" rx="5" fill="#6c62f5" opacity=".85"/>
+              <rect x="402" y="18" width="28" height="112" rx="5" fill="none" stroke="#b0a8f0" stroke-dasharray="3,2" stroke-width="1.5"/>
+              <text x="401" y="140" font-size="9" fill="#8b8eb3" text-anchor="middle">พ.ค.</text>
+              <!-- Jun: 200K=80px (this month, not done), 280K=112px -->
+              <rect x="450" y="50" width="28" height="80" rx="5" fill="#9b8ff8" opacity=".7"/>
+              <rect x="480" y="18" width="28" height="112" rx="5" fill="none" stroke="#b0a8f0" stroke-dasharray="3,2" stroke-width="1.5"/>
+              <text x="479" y="140" font-size="9" fill="#8b8eb3" text-anchor="middle">มิ.ย.</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Category breakdown table -->
+        <div class="bgt-card">
+          <div class="bc-hd">
+            <span class="bc-title">รายละเอียดตามหมวดหมู่</span>
+            <button class="fr-add" style="font-size:.72rem;padding:5px 12px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>เพิ่มหมวดหมู่</button>
+          </div>
+          <div style="display:grid;grid-template-columns:2fr 3fr 1fr 1fr 1fr;gap:0;padding:10px 16px;background:#fafafe;border-bottom:1px solid var(--border)">
+            <div style="font-size:.68rem;font-weight:700;color:var(--sub);text-transform:uppercase">หมวดหมู่</div>
+            <div style="font-size:.68rem;font-weight:700;color:var(--sub);text-transform:uppercase">ความคืบหน้า</div>
+            <div style="font-size:.68rem;font-weight:700;color:var(--sub);text-transform:uppercase;text-align:right">แผน</div>
+            <div style="font-size:.68rem;font-weight:700;color:var(--sub);text-transform:uppercase;text-align:right">จริง</div>
+            <div style="font-size:.68rem;font-weight:700;color:var(--sub);text-transform:uppercase;text-align:right">%</div>
+          </div>
+          <div class="bg-cat">
+            <div class="bg-cat-hd">
+              <div class="bg-cat-dot" style="background:#6c62f5"></div>
+              <div class="bg-cat-name">บุคลากร (เงินเดือน)</div>
+              <div style="flex:2;max-width:200px"><div class="pbar"><div class="pbar-f" style="width:72%"></div></div></div>
+              <div class="bg-cat-vals">
+                <div class="bcv"><div class="bcv-lbl">แผน</div><div class="bcv-val">฿1.20M</div></div>
+                <div class="bcv"><div class="bcv-lbl">จริง</div><div class="bcv-val" style="color:#6c62f5">฿860K</div></div>
+              </div>
+              <div class="bg-cat-pct" style="color:#6c62f5">72%</div>
+            </div>
+          </div>
+          <div class="bg-cat">
+            <div class="bg-cat-hd">
+              <div class="bg-cat-dot" style="background:#22c55e"></div>
+              <div class="bg-cat-name">ซอฟต์แวร์และลายเซ็น</div>
+              <div style="flex:2;max-width:200px"><div class="pbar"><div class="pbar-f pbar-green" style="width:55%"></div></div></div>
+              <div class="bg-cat-vals">
+                <div class="bcv"><div class="bcv-lbl">แผน</div><div class="bcv-val">฿360K</div></div>
+                <div class="bcv"><div class="bcv-lbl">จริง</div><div class="bcv-val" style="color:#22c55e">฿198K</div></div>
+              </div>
+              <div class="bg-cat-pct" style="color:#22c55e">55%</div>
+            </div>
+          </div>
+          <div class="bg-cat">
+            <div class="bg-cat-hd">
+              <div class="bg-cat-dot" style="background:#f59e0b"></div>
+              <div class="bg-cat-name">การตลาดและโฆษณา</div>
+              <div style="flex:2;max-width:200px"><div class="pbar"><div class="pbar-f pbar-orange" style="width:89%"></div></div></div>
+              <div class="bg-cat-vals">
+                <div class="bcv"><div class="bcv-lbl">แผน</div><div class="bcv-val">฿240K</div></div>
+                <div class="bcv"><div class="bcv-lbl">จริง</div><div class="bcv-val" style="color:#f59e0b">฿214K</div></div>
+              </div>
+              <div class="bg-cat-pct" style="color:#f59e0b">89%</div>
+            </div>
+          </div>
+          <div class="bg-cat">
+            <div class="bg-cat-hd">
+              <div class="bg-cat-dot" style="background:#f04d6a"></div>
+              <div class="bg-cat-name">อุปกรณ์และฮาร์ดแวร์</div>
+              <div style="flex:2;max-width:200px"><div class="pbar"><div class="pbar-f pbar-red" style="width:115%"></div></div></div>
+              <div class="bg-cat-vals">
+                <div class="bcv"><div class="bcv-lbl">แผน</div><div class="bcv-val">฿120K</div></div>
+                <div class="bcv"><div class="bcv-lbl">จริง</div><div class="bcv-val" style="color:#f04d6a">฿138K</div></div>
+              </div>
+              <div class="bg-cat-pct" style="color:#f04d6a">115%<svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-left:2px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
+            </div>
+          </div>
+          <div class="bg-cat">
+            <div class="bg-cat-hd">
+              <div class="bg-cat-dot" style="background:#0891b2"></div>
+              <div class="bg-cat-name">ค่าเดินทางและสัมมนา</div>
+              <div style="flex:2;max-width:200px"><div class="pbar"><div class="pbar-f" style="width:45%;background:#0891b2"></div></div></div>
+              <div class="bg-cat-vals">
+                <div class="bcv"><div class="bcv-lbl">แผน</div><div class="bcv-val">฿80K</div></div>
+                <div class="bcv"><div class="bcv-lbl">จริง</div><div class="bcv-val" style="color:#0891b2">฿36K</div></div>
+              </div>
+              <div class="bg-cat-pct" style="color:#0891b2">45%</div>
+            </div>
+          </div>
+          <div class="bg-cat" style="border-bottom:none">
+            <div class="bg-cat-hd">
+              <div class="bg-cat-dot" style="background:#7c3aed"></div>
+              <div class="bg-cat-name">เบ็ดเตล็ดอื่นๆ</div>
+              <div style="flex:2;max-width:200px"><div class="pbar"><div class="pbar-f" style="width:68%;background:#7c3aed"></div></div></div>
+              <div class="bg-cat-vals">
+                <div class="bcv"><div class="bcv-lbl">แผน</div><div class="bcv-val">฿60K</div></div>
+                <div class="bcv"><div class="bcv-lbl">จริง</div><div class="bcv-val" style="color:#7c3aed">฿41K</div></div>
+              </div>
+              <div class="bg-cat-pct" style="color:#7c3aed">68%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right panel -->
+      <div class="side-panel">
+        <!-- Summary card -->
+        <div class="sum-card">
+          <div style="font-size:.84rem;font-weight:700;margin-bottom:12px">สรุปงบประมาณ Q2 2569</div>
+          <div class="sum-row"><span class="sum-lbl">งบประมาณรวม</span><span class="sum-val">฿2,400,000</span></div>
+          <div class="sum-row"><span class="sum-lbl">ใช้ไปแล้ว</span><span class="sum-val" style="color:#f04d6a">฿1,760,000</span></div>
+          <div class="sum-row"><span class="sum-lbl">คงเหลือ</span><span class="sum-val" style="color:#22c55e">฿640,000</span></div>
+          <div class="sum-row" style="border-bottom:none"><span class="sum-lbl">การใช้จ่าย</span><span class="sum-val" style="color:#f59e0b">73.3%</span></div>
+        </div>
+
+        <!-- Donut chart -->
+        <div class="sum-card">
+          <div style="font-size:.84rem;font-weight:700;margin-bottom:4px">สัดส่วนงบประมาณ</div>
+          <div class="donut-wrap">
+            <svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#f0eefb" stroke-width="18"/>
+              <!-- Personnel: 50% = 163.36 of 326.73 circumference -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#6c62f5" stroke-width="18" stroke-dasharray="163 164" transform="rotate(-90 70 70)"/>
+              <!-- Software: 11.3% = 36.9 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#22c55e" stroke-width="18" stroke-dasharray="37 290" transform="rotate(73 70 70)"/>
+              <!-- Marketing: 12.5% = 40.8 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#f59e0b" stroke-width="18" stroke-dasharray="41 286" transform="rotate(110 70 70)"/>
+              <!-- Hardware: 8% = 26 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#f04d6a" stroke-width="18" stroke-dasharray="26 301" transform="rotate(151 70 70)"/>
+              <!-- Travel: 3.3% = 10.8 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#0891b2" stroke-width="18" stroke-dasharray="11 316" transform="rotate(177 70 70)"/>
+              <!-- Other: 2.5% = 8.2 -->
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#7c3aed" stroke-width="18" stroke-dasharray="8 319" transform="rotate(188 70 70)"/>
+              <text x="70" y="66" text-anchor="middle" font-size="14" font-weight="800" fill="#1a1535">73%</text>
+              <text x="70" y="80" text-anchor="middle" font-size="9" fill="#8b8eb3">ใช้ไป</text>
+            </svg>
+            <div class="donut-legend">
+              <div class="dl-item"><div class="dl-dot" style="background:#6c62f5"></div>บุคลากร<span class="dl-val">50%</span></div>
+              <div class="dl-item"><div class="dl-dot" style="background:#22c55e"></div>ซอฟต์แวร์<span class="dl-val">11%</span></div>
+              <div class="dl-item"><div class="dl-dot" style="background:#f59e0b"></div>การตลาด<span class="dl-val">13%</span></div>
+              <div class="dl-item"><div class="dl-dot" style="background:#f04d6a"></div>ฮาร์ดแวร์<span class="dl-val">8%</span></div>
+              <div class="dl-item"><div class="dl-dot" style="background:#0891b2"></div>เดินทาง<span class="dl-val">3%</span></div>
+              <div class="dl-item"><div class="dl-dot" style="background:#7c3aed"></div>เบ็ดเตล็ด<span class="dl-val">2%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alerts -->
+        <div class="sum-card" style="border-color:#fde8ec">
+          <div style="font-size:.84rem;font-weight:700;margin-bottom:10px;color:var(--danger);display:flex;align-items:center;gap:5px"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>แจ้งเตือนงบประมาณ</div>
+          <div style="padding:8px 10px;background:#fff9fa;border-radius:9px;margin-bottom:6px;border-left:3px solid #f04d6a">
+            <div style="font-size:.76rem;font-weight:700;color:#f04d6a">เกินงบ — อุปกรณ์และฮาร์ดแวร์</div>
+            <div style="font-size:.68rem;color:var(--sub);margin-top:2px">ใช้ไป 115% (฿138K / ฿120K)</div>
+          </div>
+          <div style="padding:8px 10px;background:#fffbf0;border-radius:9px;border-left:3px solid #f59e0b">
+            <div style="font-size:.76rem;font-weight:700;color:#f59e0b">ใกล้ขีดจำกัด — การตลาด</div>
+            <div style="font-size:.68rem;color:var(--sub);margin-top:2px">ใช้ไป 89% (฿214K / ฿240K)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

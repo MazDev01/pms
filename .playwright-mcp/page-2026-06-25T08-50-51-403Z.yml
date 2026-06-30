@@ -1,0 +1,308 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Benjamin" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: BENJAMIN
+            - generic [ref=e10]: PRE-ENGINEERED BUILDING
+        - button "HQ · สำนักงานใหญ่" [ref=e531] [cursor=pointer]:
+          - generic [ref=e14]: HQ · สำนักงานใหญ่
+          - img [ref=e15]
+      - navigation [ref=e18]:
+        - generic [ref=e532]:
+          - paragraph [ref=e533]: งานหลัก
+          - link "แดชบอร์ด" [ref=e534] [cursor=pointer]:
+            - /url: /hq/dashboard
+            - img [ref=e536]
+            - generic [ref=e541]: แดชบอร์ด
+          - link "ลีดส่วนกลาง 3" [ref=e542] [cursor=pointer]:
+            - /url: /hq/lead-pool
+            - img [ref=e544]
+            - generic [ref=e547]: ลีดส่วนกลาง
+            - generic [ref=e548]: "3"
+          - link "รออนุมัติ 2" [ref=e549] [cursor=pointer]:
+            - /url: /hq/approvals
+            - img [ref=e551]
+            - generic [ref=e554]: รออนุมัติ
+            - generic [ref=e555]: "2"
+          - link "สาขา" [ref=e556] [cursor=pointer]:
+            - /url: /hq/dealers
+            - img [ref=e558]
+            - generic [ref=e563]: สาขา
+        - generic [ref=e564]:
+          - paragraph [ref=e565]: วิเคราะห์
+          - link "Pipeline" [ref=e566] [cursor=pointer]:
+            - /url: /hq/pipeline
+            - img [ref=e568]
+            - generic [ref=e572]: Pipeline
+          - link "การเงิน" [active] [ref=e573] [cursor=pointer]:
+            - /url: /hq/finance
+            - img [ref=e575]
+            - generic [ref=e577]: การเงิน
+          - link "ยอดขาย" [ref=e578] [cursor=pointer]:
+            - /url: /hq/sales
+            - img [ref=e580]
+            - generic [ref=e583]: ยอดขาย
+        - generic [ref=e584]:
+          - paragraph [ref=e585]: จัดการ
+          - link "ราคากลาง" [ref=e586] [cursor=pointer]:
+            - /url: /hq/master
+            - img [ref=e588]
+            - generic [ref=e592]: ราคากลาง
+          - link "ตั้งค่า" [ref=e593] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e595]
+            - generic [ref=e598]: ตั้งค่า
+    - generic [ref=e84]:
+      - banner [ref=e85]:
+        - button [ref=e86] [cursor=pointer]:
+          - img [ref=e87]
+        - button "5" [ref=e91] [cursor=pointer]:
+          - img [ref=e92]
+          - generic [ref=e95]: "5"
+        - button "ว วิชัย ประสิทธิ์ ผู้บริหาร HQ" [ref=e599] [cursor=pointer]:
+          - generic [ref=e98]: ว
+          - generic [ref=e99]:
+            - generic [ref=e100]: วิชัย ประสิทธิ์
+            - generic [ref=e101]: ผู้บริหาร HQ
+          - img [ref=e102]
+      - main [ref=e104]:
+        - generic [ref=e600]:
+          - generic [ref=e601]:
+            - heading "แผงควบคุม" [level=1] [ref=e602]
+            - paragraph [ref=e603]: ยินดีต้อนรับ — ภาพรวมระบบ Benjamin PMS วันที่ 24 มิถุนายน 2569
+          - generic [ref=e604]:
+            - link "รายได้รวม ฿2.6M ยืนยันชำระแล้ว" [ref=e605] [cursor=pointer]:
+              - /url: /payments
+              - generic [ref=e606]:
+                - img [ref=e608]
+                - generic [ref=e610]:
+                  - generic [ref=e611]: รายได้รวม
+                  - generic [ref=e612]: ฿2.6M
+                  - generic [ref=e613]: ยืนยันชำระแล้ว
+            - link "ลีดทั้งหมด 6 5 กำลังดำเนินการ" [ref=e614] [cursor=pointer]:
+              - /url: /leads
+              - generic [ref=e615]:
+                - img [ref=e617]
+                - generic [ref=e619]:
+                  - generic [ref=e620]: ลีดทั้งหมด
+                  - generic [ref=e621]: "6"
+                  - generic [ref=e622]: 5 กำลังดำเนินการ
+            - link "โครงการ 8 3 กำลังดำเนินการ" [ref=e623] [cursor=pointer]:
+              - /url: /projects
+              - generic [ref=e624]:
+                - img [ref=e626]
+                - generic [ref=e628]:
+                  - generic [ref=e629]: โครงการ
+                  - generic [ref=e630]: "8"
+                  - generic [ref=e631]: 3 กำลังดำเนินการ
+            - link "ลูกค้า 8 ทั้งหมดในระบบ" [ref=e632] [cursor=pointer]:
+              - /url: /customers
+              - generic [ref=e633]:
+                - img [ref=e635]
+                - generic [ref=e639]:
+                  - generic [ref=e640]: ลูกค้า
+                  - generic [ref=e641]: "8"
+                  - generic [ref=e642]: ทั้งหมดในระบบ
+          - generic [ref=e643]:
+            - generic [ref=e644]:
+              - generic [ref=e645]:
+                - generic [ref=e646]:
+                  - generic [ref=e647]: ยอดขายรายเดือน
+                  - generic [ref=e648]: แผนงาน เทียบ ยอดขายจริง (K฿)
+                - generic [ref=e649]:
+                  - generic [ref=e650]: ยอดจริง
+                  - generic [ref=e652]: แผน
+                  - generic [ref=e654] [cursor=pointer]:
+                    - text: "2569"
+                    - generic [ref=e655]: ▾
+              - img [ref=e657]:
+                - generic [ref=e659]: "200"
+                - generic [ref=e661]: "500"
+                - generic [ref=e663]: "700"
+                - generic [ref=e665]: 1K
+                - generic [ref=e669] [cursor=pointer]: ม.ค.
+                - generic [ref=e673] [cursor=pointer]: ก.พ.
+                - generic [ref=e677] [cursor=pointer]: มี.ค.
+                - generic [ref=e681] [cursor=pointer]: เม.ย.
+                - generic [ref=e685] [cursor=pointer]: พ.ค.
+                - generic [ref=e689] [cursor=pointer]: มิ.ย.
+                - generic [ref=e692] [cursor=pointer]: ก.ค.
+                - generic [ref=e695] [cursor=pointer]: ส.ค.
+                - generic [ref=e698] [cursor=pointer]: ก.ย.
+                - generic [ref=e701] [cursor=pointer]: ต.ค.
+                - generic [ref=e704] [cursor=pointer]: พ.ย.
+                - generic [ref=e707] [cursor=pointer]: ธ.ค.
+            - generic [ref=e708]:
+              - generic [ref=e709]:
+                - generic [ref=e710]: ปฏิทินนัดหมาย
+                - link "ดูทั้งหมด →" [ref=e711] [cursor=pointer]:
+                  - /url: /appointments
+              - generic [ref=e712] [cursor=pointer]:
+                - generic [ref=e713]:
+                  - generic [ref=e714]: "24"
+                  - generic [ref=e715]: มิ.ย.
+                - generic [ref=e716]:
+                  - generic [ref=e717]: บจ. ไทยสตีล
+                  - generic [ref=e718]: สำรวจพื้นที่ • 09:00
+                - generic [ref=e719]: ›
+              - generic [ref=e720] [cursor=pointer]:
+                - generic [ref=e721]:
+                  - generic [ref=e722]: "24"
+                  - generic [ref=e723]: มิ.ย.
+                - generic [ref=e724]:
+                  - generic [ref=e725]: บจ. ซีซีเอส
+                  - generic [ref=e726]: ประชุมออกแบบ • 13:30
+                - generic [ref=e727]: ›
+              - generic [ref=e729]:
+                - button "‹" [ref=e730] [cursor=pointer]
+                - generic [ref=e731]: มิถุนายน 2569
+                - button "›" [ref=e732] [cursor=pointer]
+              - generic [ref=e733]:
+                - generic [ref=e734]:
+                  - generic [ref=e735]: อา
+                  - generic [ref=e736]: จ
+                  - generic [ref=e737]: อ
+                  - generic [ref=e738]: พ
+                  - generic [ref=e739]: พฤ
+                  - generic [ref=e740]: ศ
+                  - generic [ref=e741]: ส
+                - generic [ref=e742]:
+                  - generic [ref=e746] [cursor=pointer]: "1"
+                  - generic [ref=e749] [cursor=pointer]: "2"
+                  - generic [ref=e752] [cursor=pointer]: "3"
+                  - generic [ref=e755] [cursor=pointer]: "4"
+                  - generic [ref=e758] [cursor=pointer]: "5"
+                  - generic [ref=e761] [cursor=pointer]: "6"
+                  - generic [ref=e764] [cursor=pointer]: "7"
+                  - generic [ref=e767] [cursor=pointer]: "8"
+                  - generic [ref=e770] [cursor=pointer]: "9"
+                  - generic [ref=e773] [cursor=pointer]: "10"
+                  - generic [ref=e776] [cursor=pointer]: "11"
+                  - generic [ref=e779] [cursor=pointer]: "12"
+                  - generic [ref=e782] [cursor=pointer]: "13"
+                  - generic [ref=e785] [cursor=pointer]: "14"
+                  - generic [ref=e788] [cursor=pointer]: "15"
+                  - generic [ref=e792] [cursor=pointer]: "16"
+                  - generic [ref=e795] [cursor=pointer]: "17"
+                  - generic [ref=e798] [cursor=pointer]: "18"
+                  - generic [ref=e801] [cursor=pointer]: "19"
+                  - generic [ref=e804] [cursor=pointer]: "20"
+                  - generic [ref=e807] [cursor=pointer]: "21"
+                  - generic [ref=e810] [cursor=pointer]: "22"
+                  - generic [ref=e813] [cursor=pointer]: "23"
+                  - generic [ref=e816] [cursor=pointer]: "24"
+                  - generic [ref=e819] [cursor=pointer]: "25"
+                  - generic [ref=e822] [cursor=pointer]: "26"
+                  - generic [ref=e826] [cursor=pointer]: "27"
+                  - generic [ref=e829] [cursor=pointer]: "28"
+                  - generic [ref=e832] [cursor=pointer]: "29"
+                  - generic [ref=e835] [cursor=pointer]: "30"
+          - generic [ref=e837]:
+            - generic [ref=e838]:
+              - generic [ref=e839]:
+                - generic [ref=e840]: ลีดยอดเยี่ยม
+                - generic [ref=e841]:
+                  - button "สัปดาห์" [ref=e842] [cursor=pointer]
+                  - button "เดือน" [ref=e843] [cursor=pointer]
+                  - button "ปี" [ref=e844] [cursor=pointer]
+              - table [ref=e846]:
+                - rowgroup [ref=e847]:
+                  - row "ลูกค้า สินค้า มูลค่า จังหวัด สถานะ" [ref=e848]:
+                    - columnheader "ลูกค้า" [ref=e849]
+                    - columnheader "สินค้า" [ref=e850]
+                    - columnheader "มูลค่า" [ref=e851]
+                    - columnheader "จังหวัด" [ref=e852]
+                    - columnheader "สถานะ" [ref=e853]
+                - rowgroup [ref=e854]:
+                  - row "บ บจ. ทีทีวาย RANBUILD ฿5.4M นครสวรรค์ ชำระเงินแล้ว" [ref=e855] [cursor=pointer]:
+                    - cell "บ บจ. ทีทีวาย" [ref=e856]:
+                      - generic [ref=e857]:
+                        - generic [ref=e858]: บ
+                        - generic [ref=e859]: บจ. ทีทีวาย
+                    - cell "RANBUILD" [ref=e860]
+                    - cell "฿5.4M" [ref=e861]
+                    - cell "นครสวรรค์" [ref=e862]
+                    - cell "ชำระเงินแล้ว" [ref=e863]
+                  - row "ห หจก. ราชบุรีโลหะ RANBUILD ฿3.1M ราชบุรี เสนอบูเลท" [ref=e864] [cursor=pointer]:
+                    - cell "ห หจก. ราชบุรีโลหะ" [ref=e865]:
+                      - generic [ref=e866]:
+                        - generic [ref=e867]: ห
+                        - generic [ref=e868]: หจก. ราชบุรีโลหะ
+                    - cell "RANBUILD" [ref=e869]
+                    - cell "฿3.1M" [ref=e870]
+                    - cell "ราชบุรี" [ref=e871]
+                    - cell "เสนอบูเลท" [ref=e872]
+                  - row "บ บจ. สมุทรโกดัง EASYBUILD ฿2.0M สมุทรปราการ กำลังรอรายละเอียด" [ref=e873] [cursor=pointer]:
+                    - cell "บ บจ. สมุทรโกดัง" [ref=e874]:
+                      - generic [ref=e875]:
+                        - generic [ref=e876]: บ
+                        - generic [ref=e877]: บจ. สมุทรโกดัง
+                    - cell "EASYBUILD" [ref=e878]
+                    - cell "฿2.0M" [ref=e879]
+                    - cell "สมุทรปราการ" [ref=e880]
+                    - cell "กำลังรอรายละเอียด" [ref=e881]
+                  - row "บ บจ. ไทยสตีล EASYBUILD ฿1.2M นนทบุรี ออกใบเสนอราคา" [ref=e882] [cursor=pointer]:
+                    - cell "บ บจ. ไทยสตีล" [ref=e883]:
+                      - generic [ref=e884]:
+                        - generic [ref=e885]: บ
+                        - generic [ref=e886]: บจ. ไทยสตีล
+                    - cell "EASYBUILD" [ref=e887]
+                    - cell "฿1.2M" [ref=e888]
+                    - cell "นนทบุรี" [ref=e889]
+                    - cell "ออกใบเสนอราคา" [ref=e890]
+                  - row "บ บจ. นครสวรรค์โลหะ Custom ฿760K นครสวรรค์ กำลังรอรายละเอียด" [ref=e891] [cursor=pointer]:
+                    - cell "บ บจ. นครสวรรค์โลหะ" [ref=e892]:
+                      - generic [ref=e893]:
+                        - generic [ref=e894]: บ
+                        - generic [ref=e895]: บจ. นครสวรรค์โลหะ
+                    - cell "Custom" [ref=e896]
+                    - cell "฿760K" [ref=e897]
+                    - cell "นครสวรรค์" [ref=e898]
+                    - cell "กำลังรอรายละเอียด" [ref=e899]
+                  - row "บ บจ. ซีซีเอส PREFAB ฿480K เชียงใหม่ ใหม่" [ref=e900] [cursor=pointer]:
+                    - cell "บ บจ. ซีซีเอส" [ref=e901]:
+                      - generic [ref=e902]:
+                        - generic [ref=e903]: บ
+                        - generic [ref=e904]: บจ. ซีซีเอส
+                    - cell "PREFAB" [ref=e905]
+                    - cell "฿480K" [ref=e906]
+                    - cell "เชียงใหม่" [ref=e907]
+                    - cell "ใหม่" [ref=e908]
+            - generic [ref=e909]:
+              - generic [ref=e910]:
+                - generic [ref=e911]: สถานะลีด
+                - generic [ref=e912]: Pipeline ภาพรวม
+              - generic [ref=e914]:
+                - img [ref=e915]:
+                  - generic [ref=e920]: ลีดทั้งหมด
+                  - generic [ref=e921]: "6"
+                - generic [ref=e922]:
+                  - generic [ref=e923]:
+                    - generic [ref=e924]: ชำระแล้ว
+                    - generic [ref=e925]: 17%
+                  - generic [ref=e926]:
+                    - generic [ref=e927]: กำลังดำเนินการ
+                    - generic [ref=e928]: 83%
+            - generic [ref=e930]:
+              - generic [ref=e931]: BENJAMIN PMS
+              - generic [ref=e932]:
+                - text: เพิ่มข้อมูล
+                - text: เข้าระบบ
+              - generic [ref=e933]:
+                - text: จัดการลีด โครงการ และ
+                - text: เอกสารได้ทันที
+              - generic [ref=e934]:
+                - link "+ เพิ่มลีดใหม่" [ref=e935] [cursor=pointer]:
+                  - /url: /leads
+                  - generic [ref=e936]: +
+                  - text: เพิ่มลีดใหม่
+                - link "+ สร้างโครงการ" [ref=e937] [cursor=pointer]:
+                  - /url: /projects
+                  - generic [ref=e938]: +
+                  - text: สร้างโครงการ
+  - button "Open Next.js Dev Tools" [ref=e944] [cursor=pointer]:
+    - img [ref=e945]
+  - alert [ref=e948]

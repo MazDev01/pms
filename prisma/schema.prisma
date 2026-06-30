@@ -1,0 +1,428 @@
+// Benjamin PMS — Prisma Schema (โครงสร้างฐานข้อมูล)
+// Multi-tenant: ทุกตารางธุรกรรมผูก dealerId. HQ (Dealer.type=HQ) เห็นทุก tenant ผ่าน service layer.
+// อ้างอิง docs/DATABASE-SCHEMA.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── ENUMS ─────────────
+enum DealerType { HQ DEALER }
+enum UserRole { SUPER_ADMIN HQ_MANAGEMENT HQ_STAFF DEALER_ADMIN DEALER_SALES DEALER_SITE }
+enum EntityStatus { ACTIVE INACTIVE }
+enum CustomerType { INDIVIDUAL COMPANY }
+enum LeadStatus { NEW CONTACTED SURVEYED QUOTED NEGOTIATING WON LOST }
+enum LeadChannel { WEB LINE PHONE WALKIN OTHER }
+enum ActivityType { CALL VISIT QUOTE NOTE SURVEY }
+enum ProductCategory { EASYBUILD RANBUILD PREFAB CUSTOM }
+enum MaterialCategory { STEEL ROOF INSULATION WALL SYSTEM OTHER }
+enum QuotationStatus { DRAFT PENDING_APPROVAL APPROVED SENT WON LOST EXPIRED }
+enum ApprovalStatus { NOT_REQUIRED PENDING APPROVED REJECTED }
+enum ProjectStatus { PLANNING IN_PROGRESS QC HANDOVER COMPLETED ON_HOLD }
+enum PhaseStatus { PENDING ACTIVE DONE BLOCKED }
+enum TaskStatus { TODO DOING DONE }
+enum MilestoneStatus { PENDING REACHED MISSED }
+enum DocType { DRAWING BOQ CONTRACT PERMIT HANDOVER OTHER }
+enum QCResult { PASS FAIL NA }
+enum PunchStatus { OPEN FIXED VERIFIED }
+enum WarrantyType { STRUCTURE ROOF OTHER }
+enum NotifChannel { INAPP EMAIL LINE }
+enum AuditAction { CREATE UPDATE DELETE }
+
+// ───────────── TENANT & AUTH ─────────────
+model Dealer {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  type          DealerType   @default(DEALER)
+  region        String?
+  provinces     String[]     // จังหวัดที่รับผิดชอบ (สำหรับ auto-routing)
+  address       String?
+  phone         String?
+  email         String?
+  targetRevenue Decimal?     @db.Decimal(15, 2)
+  status        EntityStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  users      User[]
+  customers  Customer[]
+  leads      Lead[]
+  quotations Quotation[]
+  projects   Project[]
+}
+
+model User {
+  id           String       @id @default(cuid())
+  dealerId     String
+  dealer       Dealer       @relation(fields: [dealerId], references: [id])
+  email        String       @unique
+  name         String
+  phone        String?
+  role         UserRole
+  passwordHash String
+  status       EntityStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  assignedLeads Lead[]     @relation("LeadAssignee")
+  activities    Activity[]
+  managedProjects Project[] @relation("ProjectPM")
+  tasks         Task[]
+  notifications Notification[]
+
+  @@index([dealerId])
+}
+
+// ───────────── CRM ─────────────
+model Customer {
+  id         String       @id @default(cuid())
+  dealerId   String
+  dealer     Dealer       @relation(fields: [dealerId], references: [id])
+  name       String
+  type       CustomerType @default(COMPANY)
+  taxId      String?
+  phone      String?
+  email      String?
+  address    String?
+  province   String?
+  createdById String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  deletedAt  DateTime?
+
+  leads      Lead[]
+  quotations Quotation[]
+  projects   Project[]
+
+  @@index([dealerId])
+}
+
+model Lead {
+  id              String      @id @default(cuid())
+  dealerId        String?     // null = ยังไม่ถูกมอบหมายให้ดีลเลอร์
+  dealer          Dealer?     @relation(fields: [dealerId], references: [id])
+  customerId      String?
+  customer        Customer?   @relation(fields: [customerId], references: [id])
+  source          String?
+  channel         LeadChannel @default(WEB)
+  status          LeadStatus  @default(NEW)
+  assignedToId    String?
+  assignedTo      User?       @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  productInterest String?
+  estValue        Decimal?    @db.Decimal(15, 2)
+  province        String?
+  lostReason      String?
+  createdById     String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  activities Activity[]
+  quotations Quotation[]
+
+  @@index([dealerId, status])
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  leadId      String?
+  lead        Lead?        @relation(fields: [leadId], references: [id])
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  type        ActivityType
+  note        String?
+  scheduledAt DateTime?
+  doneAt      DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@index([leadId])
+}
+
+// ───────────── CATALOG / MASTER ─────────────
+model Product {
+  id        String          @id @default(cuid())
+  code      String          @unique
+  category  ProductCategory
+  name      String
+  unit      String          @default("ตร.ม.")
+  basePrice Decimal         @db.Decimal(15, 2)
+  spec      Json?
+  active    Boolean         @default(true)
+
+  items QuotationItem[]
+}
+
+model Material {
+  id        String           @id @default(cuid())
+  code      String           @unique
+  name      String
+  category  MaterialCategory
+  unit      String
+  basePrice Decimal          @db.Decimal(15, 2)
+  active    Boolean          @default(true)
+
+  items QuotationItem[]
+}
+
+// ───────────── SALES (QUOTATION / BOQ) ─────────────
+model Quotation {
+  id             String          @id @default(cuid())
+  dealerId       String
+  dealer         Dealer          @relation(fields: [dealerId], references: [id])
+  customerId     String
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  leadId         String?
+  lead           Lead?           @relation(fields: [leadId], references: [id])
+  quoteNo        String          @unique
+  revision       Int             @default(1)
+  status         QuotationStatus @default(DRAFT)
+  subtotal       Decimal         @default(0) @db.Decimal(15, 2)
+  discountPct    Decimal         @default(0) @db.Decimal(5, 2)
+  discountAmt    Decimal         @default(0) @db.Decimal(15, 2)
+  vatAmt         Decimal         @default(0) @db.Decimal(15, 2)
+  total          Decimal         @default(0) @db.Decimal(15, 2)
+  validUntil     DateTime?
+  approvalStatus ApprovalStatus  @default(NOT_REQUIRED)
+  approvedById   String?
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  items   QuotationItem[]
+  project Project?
+
+  @@index([dealerId, status])
+}
+
+model QuotationItem {
+  id          String   @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id])
+  materialId  String?
+  material    Material? @relation(fields: [materialId], references: [id])
+  description String
+  qty         Decimal   @db.Decimal(12, 2)
+  unit        String
+  unitPrice   Decimal   @db.Decimal(15, 2)
+  amount      Decimal   @db.Decimal(15, 2)
+  sortOrder   Int       @default(0)
+
+  @@index([quotationId])
+}
+
+// ───────────── PROJECT ─────────────
+model Project {
+  id            String        @id @default(cuid())
+  dealerId      String
+  dealer        Dealer        @relation(fields: [dealerId], references: [id])
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  quotationId   String?       @unique
+  quotation     Quotation?    @relation(fields: [quotationId], references: [id])
+  projectNo     String        @unique
+  name          String
+  buildingType  String?
+  province      String?
+  siteAddress   String?
+  gps           String?
+  contractValue Decimal?      @db.Decimal(15, 2)
+  startDate     DateTime?
+  dueDate       DateTime?
+  status        ProjectStatus @default(PLANNING)
+  currentPhase  Int           @default(1)
+  pmId          String?
+  pm            User?         @relation("ProjectPM", fields: [pmId], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  phases     ProjectPhase[]
+  tasks      Task[]
+  milestones Milestone[]
+  documents  Document[]
+  photos     SitePhoto[]
+  checklists QCChecklist[]
+  punchItems PunchItem[]
+  reports    DailySiteReport[]
+  handover   Handover?
+
+  @@index([dealerId, status])
+}
+
+model ProjectPhase {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseNo     Int         // 1..6
+  name        String
+  status      PhaseStatus @default(PENDING)
+  progressPct Int         @default(0)
+  startDate   DateTime?
+  endDate     DateTime?
+
+  tasks  Task[]
+  photos SitePhoto[]
+
+  @@unique([projectId, phaseNo])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseId     String?
+  phase       ProjectPhase? @relation(fields: [phaseId], references: [id])
+  title       String
+  description String?
+  assigneeId  String?
+  assignee    User?      @relation(fields: [assigneeId], references: [id])
+  status      TaskStatus @default(TODO)
+  priority    Int        @default(2)
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([projectId])
+}
+
+model Milestone {
+  id        String          @id @default(cuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  dueDate   DateTime?
+  status    MilestoneStatus @default(PENDING)
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type         DocType  @default(OTHER)
+  name         String
+  fileUrl      String
+  version      Int      @default(1)
+  uploadedById String?
+  createdAt    DateTime @default(now())
+}
+
+model SitePhoto {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseId      String?
+  phase        ProjectPhase? @relation(fields: [phaseId], references: [id])
+  url          String
+  caption      String?
+  gps          String?
+  takenAt      DateTime?
+  uploadedById String?
+  createdAt    DateTime      @default(now())
+}
+
+model QCChecklist {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name          String
+  phaseNo       Int?
+  inspectedById String?
+  inspectedAt   DateTime?
+  items         QCItem[]
+}
+
+model QCItem {
+  id          String   @id @default(cuid())
+  checklistId String
+  checklist   QCChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  item        String
+  result      QCResult @default(NA)
+  note        String?
+  photoUrl    String?
+}
+
+model PunchItem {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  description String
+  status      PunchStatus @default(OPEN)
+  assigneeId  String?
+  dueDate     DateTime?
+}
+
+model DailySiteReport {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date         DateTime
+  weather      String?
+  manpower     Int?
+  workDone     String?
+  issues       String?
+  reportedById String?
+  createdAt    DateTime @default(now())
+}
+
+model Handover {
+  id              String    @id @default(cuid())
+  projectId       String    @unique
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  handoverDate    DateTime?
+  customerSignedBy String?
+  note            String?
+  documentUrl     String?
+  warranty        Warranty?
+}
+
+model Warranty {
+  id             String       @id @default(cuid())
+  handoverId     String       @unique
+  handover       Handover     @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  type           WarrantyType @default(STRUCTURE)
+  startDate      DateTime?
+  endDate        DateTime?
+  durationMonths Int?
+  terms          String?
+}
+
+// ───────────── SYSTEM ─────────────
+model Notification {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String?
+  channel   NotifChannel @default(INAPP)
+  refType   String?
+  refId     String?
+  readAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id                 String      @id @default(cuid())
+  dealerId           String?     // ดีลเลอร์เจ้าของข้อมูล (record ที่ถูกแก้)
+  userId             String?     // ผู้ลงมือทำ
+  actedByRole        UserRole?   // บทบาทของผู้ทำ (ใช้ตรวจ act-on-behalf)
+  onBehalfOfDealerId String?     // ตั้งเมื่อ HQ แก้แทนดีลเลอร์ = dealerId ของเจ้าของ
+  action             AuditAction
+  entity             String
+  entityId           String
+  before             Json?
+  after              Json?
+  createdAt          DateTime    @default(now())
+
+  @@index([entity, entityId])
+  @@index([dealerId])
+}

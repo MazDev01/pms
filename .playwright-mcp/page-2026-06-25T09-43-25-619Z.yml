@@ -1,0 +1,636 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "Benjamin" [ref=e7]
+          - generic [ref=e8]:
+            - generic [ref=e9]: BENJAMIN
+            - generic [ref=e10]: PRE-ENGINEERED BUILDING
+        - button "HQ · สำนักงานใหญ่" [ref=e12] [cursor=pointer]:
+          - generic [ref=e14]: HQ · สำนักงานใหญ่
+          - img [ref=e15]
+      - navigation [ref=e18]:
+        - generic [ref=e19]:
+          - paragraph [ref=e20]: งานหลัก
+          - link "แดชบอร์ด" [ref=e21] [cursor=pointer]:
+            - /url: /hq/dashboard
+            - img [ref=e23]
+            - generic [ref=e28]: แดชบอร์ด
+          - link "ลีดส่วนกลาง 3" [ref=e29] [cursor=pointer]:
+            - /url: /hq/lead-pool
+            - img [ref=e31]
+            - generic [ref=e34]: ลีดส่วนกลาง
+            - generic [ref=e35]: "3"
+          - link "รออนุมัติ 2" [ref=e36] [cursor=pointer]:
+            - /url: /hq/approvals
+            - img [ref=e38]
+            - generic [ref=e41]: รออนุมัติ
+            - generic [ref=e42]: "2"
+          - link "สาขา" [ref=e43] [cursor=pointer]:
+            - /url: /hq/dealers
+            - img [ref=e45]
+            - generic [ref=e50]: สาขา
+          - link "โครงการทั้งเครือ" [ref=e51] [cursor=pointer]:
+            - /url: /hq/projects
+            - img [ref=e53]
+            - generic [ref=e58]: โครงการทั้งเครือ
+        - generic [ref=e59]:
+          - paragraph [ref=e60]: วิเคราะห์
+          - link "Pipeline การขาย" [ref=e61] [cursor=pointer]:
+            - /url: /hq/pipeline
+            - img [ref=e63]
+            - generic [ref=e67]: Pipeline การขาย
+          - link "การเงิน" [ref=e68] [cursor=pointer]:
+            - /url: /hq/finance
+            - img [ref=e70]
+            - generic [ref=e72]: การเงิน
+        - generic [ref=e73]:
+          - paragraph [ref=e74]: จัดการ
+          - link "ราคากลาง" [ref=e75] [cursor=pointer]:
+            - /url: /hq/master
+            - img [ref=e77]
+            - generic [ref=e81]: ราคากลาง
+          - link "ตั้งค่า" [ref=e82] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e84]
+            - generic [ref=e87]: ตั้งค่า
+    - generic [ref=e89]:
+      - banner [ref=e90]:
+        - button [ref=e91] [cursor=pointer]:
+          - img [ref=e92]
+        - button "5" [ref=e96] [cursor=pointer]:
+          - img [ref=e97]
+          - generic [ref=e100]: "5"
+        - button "ว วิชัย ประสิทธิ์ ผู้บริหาร HQ" [ref=e102] [cursor=pointer]:
+          - generic [ref=e103]: ว
+          - generic [ref=e104]:
+            - generic [ref=e105]: วิชัย ประสิทธิ์
+            - generic [ref=e106]: ผู้บริหาร HQ
+          - img [ref=e107]
+      - main [ref=e109]:
+        - generic [ref=e110]:
+          - generic [ref=e643]:
+            - generic [ref=e644]:
+              - generic [ref=e645]:
+                - generic [ref=e646]:
+                  - generic [ref=e647]: PRJ-004
+                  - generic [ref=e648]:
+                    - img [ref=e649]
+                    - text: เกินกำหนด
+                - heading "หอพักพนักงาน นิคมอุตสาหกรรม" [level=2] [ref=e651]
+                - paragraph [ref=e652]: สาขาระยอง · บ.เอสทีพี โฮลดิ้ง
+              - button [ref=e653] [cursor=pointer]:
+                - img [ref=e654]
+            - generic [ref=e657]:
+              - generic [ref=e658]:
+                - generic [ref=e659]:
+                  - paragraph [ref=e660]: มูลค่าโครงการ
+                  - paragraph [ref=e661]: ฿1.9M
+                - generic [ref=e662]:
+                  - paragraph [ref=e663]: ผู้จัดการโครงการ
+                  - paragraph [ref=e664]: ประภาส ร.
+                - generic [ref=e665]:
+                  - paragraph [ref=e666]: สายบริการ
+                  - paragraph [ref=e667]: PREFAB
+                - generic [ref=e668]:
+                  - paragraph [ref=e669]: ภูมิภาค
+                  - paragraph [ref=e670]: ตะวันออก
+              - generic [ref=e671]:
+                - paragraph [ref=e672]: ไทม์ไลน์
+                - generic [ref=e673]:
+                  - generic [ref=e674]: 1 มี.ค. 2026
+                  - generic [ref=e677]: 30 พ.ค. 2026
+                - generic [ref=e678]:
+                  - generic [ref=e679]: วันเริ่ม
+                  - generic [ref=e680]: 30% เสร็จแล้ว · เกิน 25 วัน
+                  - generic [ref=e681]: กำหนดส่ง
+              - generic [ref=e682]:
+                - paragraph [ref=e683]: ปัญหา / อุปสรรค
+                - generic [ref=e684]:
+                  - generic [ref=e685]:
+                    - img [ref=e686]
+                    - generic [ref=e688]: งานเทฐานรากล่าช้า 3 สัปดาห์ เนื่องจากฝนตกต่อเนื่อง
+                  - generic [ref=e689]:
+                    - img [ref=e690]
+                    - generic [ref=e692]: ผู้รับเหมาย่อย (ประตู-หน้าต่าง) ยังไม่ส่งวัสดุ
+              - generic [ref=e693]:
+                - paragraph [ref=e694]: อัพเดทล่าสุด
+                - generic [ref=e695]:
+                  - generic [ref=e696]:
+                    - img [ref=e697]
+                    - generic [ref=e699]:
+                      - paragraph [ref=e700]: ประชุมลูกค้า — ขอขยายเวลา 30 วัน อยู่ระหว่างรออนุมัติ
+                      - paragraph [ref=e701]: 20 มิ.ย. 2026
+                  - generic [ref=e702]:
+                    - img [ref=e703]
+                    - generic [ref=e705]:
+                      - paragraph [ref=e706]: งานโครงสร้างเสร็จ 30% ช้ากว่าแผน 2 สัปดาห์
+                      - paragraph [ref=e707]: 10 มิ.ย. 2026
+            - generic [ref=e708]:
+              - button "บันทึกหมายเหตุ" [ref=e709] [cursor=pointer]:
+                - img [ref=e710]
+                - text: บันทึกหมายเหตุ
+              - button "ติดตาม PM" [ref=e712] [cursor=pointer]:
+                - img [ref=e713]
+                - text: ติดตาม PM
+          - generic [ref=e111]:
+            - generic [ref=e112]:
+              - heading "โครงการทั้งเครือ" [level=1] [ref=e113]
+              - paragraph [ref=e114]: ติดตามสถานะโครงการทุกสาขา · มิถุนายน 2026
+            - generic [ref=e115]:
+              - generic [ref=e116]:
+                - img [ref=e117]
+                - combobox [ref=e119] [cursor=pointer]:
+                  - option "มิ.ย. 2026" [selected]
+                  - option "พ.ค. 2026"
+                  - option "Q2/2026"
+                  - option "Q1/2026"
+                  - option "YTD 2026"
+                  - option "ปี 2025"
+                - img [ref=e120]
+              - button "ส่งออก" [ref=e123] [cursor=pointer]:
+                - img [ref=e124]
+                - text: ส่งออก
+          - generic [ref=e127]:
+            - generic [ref=e128]:
+              - paragraph [ref=e129]: โครงการทั้งหมด
+              - paragraph [ref=e130]: 23 โครงการ
+              - paragraph [ref=e131]: มูลค่า ฿71.5M
+            - generic [ref=e132]:
+              - paragraph [ref=e133]: กำลังดำเนินการ
+              - paragraph [ref=e134]: 10 โครงการ
+              - paragraph [ref=e135]: 43% ของทั้งหมด
+            - generic [ref=e136]:
+              - paragraph [ref=e137]: เกินกำหนด
+              - paragraph [ref=e138]: 4 โครงการ
+              - paragraph [ref=e139]: ต้องติดตามด่วน
+            - generic [ref=e140]:
+              - paragraph [ref=e141]: เสร็จแล้ว (YTD)
+              - paragraph [ref=e142]: 3 โครงการ
+              - paragraph [ref=e143]: 13% complete rate
+            - generic [ref=e144]:
+              - paragraph [ref=e145]: ส่งตรงเวลา
+              - paragraph [ref=e146]: 83%
+              - paragraph [ref=e147]: ของโครงการทั้งหมด
+          - generic [ref=e148]:
+            - img [ref=e149]
+            - generic [ref=e151]: มี 4 โครงการเกินกำหนด —
+            - generic [ref=e152]: RYG · หอพักพนักงาน นิคมอุตสาหก… (25 วันหลัง)
+            - generic [ref=e153]: CNX · อาคารแสดงสินค้า OTOP เชี… (26 วันหลัง)
+            - generic [ref=e154]: CRI · โกดังรับฝากสินค้า Golden… (25 วันหลัง)
+            - generic [ref=e155]: NSN · ศาลาอเนกประสงค์เทศบาล NS… (56 วันหลัง)
+          - generic [ref=e156]:
+            - combobox [ref=e157] [cursor=pointer]:
+              - option "ทั้งหมด" [selected]
+              - option "สาขาระยอง"
+              - option "สาขาเชียงใหม่"
+              - option "สาขาแม่สอด"
+              - option "สาขาเชียงราย"
+              - option "สาขานครสวรรค์"
+              - option "สาขาหาดใหญ่"
+            - generic [ref=e158]:
+              - button "ทุกสถานะ" [ref=e159] [cursor=pointer]
+              - button "กำลังทำ" [ref=e160] [cursor=pointer]
+              - button "เกินกำหนด" [ref=e161] [cursor=pointer]
+              - button "พักโครงการ" [ref=e162] [cursor=pointer]
+              - button "เสร็จแล้ว" [ref=e163] [cursor=pointer]
+              - button "ยังไม่เริ่ม" [ref=e164] [cursor=pointer]
+            - generic [ref=e165]: แสดง 23 / 23 โครงการ
+          - table [ref=e168]:
+            - rowgroup [ref=e169]:
+              - row "รหัส ชื่อโครงการ สาขา ลูกค้า มูลค่า สถานะ ความคืบหน้า กำหนดส่ง PM" [ref=e170]:
+                - columnheader "รหัส" [ref=e171]
+                - columnheader "ชื่อโครงการ" [ref=e172]
+                - columnheader "สาขา" [ref=e173]
+                - columnheader "ลูกค้า" [ref=e174]
+                - columnheader "มูลค่า" [ref=e175]
+                - columnheader "สถานะ" [ref=e176]
+                - columnheader "ความคืบหน้า" [ref=e177]
+                - columnheader "กำหนดส่ง" [ref=e178]
+                - columnheader "PM" [ref=e179]
+            - rowgroup [ref=e180]:
+              - row "PRJ-001 โกดังสินค้า บ.อุตสาหกรรมไทย จก. RANBUILD RYG ตะวันออก บ.อุตสาหกรรมไทย จก. ฿4.2M กำลังดำเนินการ 65% 30 ก.ค. 2026 สมชาย ว." [ref=e181] [cursor=pointer]:
+                - cell "PRJ-001" [ref=e182]
+                - cell "โกดังสินค้า บ.อุตสาหกรรมไทย จก. RANBUILD" [ref=e183]:
+                  - generic [ref=e184]: โกดังสินค้า บ.อุตสาหกรรมไทย จก.
+                  - text: RANBUILD
+                - cell "RYG ตะวันออก" [ref=e185]:
+                  - text: RYG
+                  - generic [ref=e186]: ตะวันออก
+                - cell "บ.อุตสาหกรรมไทย จก." [ref=e187]
+                - cell "฿4.2M" [ref=e188]
+                - cell "กำลังดำเนินการ" [ref=e189]:
+                  - generic [ref=e190]:
+                    - img [ref=e191]
+                    - text: กำลังดำเนินการ
+                - cell "65%" [ref=e194]:
+                  - generic [ref=e198]: 65%
+                - cell "30 ก.ค. 2026" [ref=e199]
+                - cell "สมชาย ว." [ref=e200]
+              - row "PRJ-002 โรงงานผลิตชิ้นส่วน ABC EASYBUILD RYG ตะวันออก บ.เอบีซี แมนูแฟคเจอริ่ง ฿2.8M กำลังดำเนินการ 42% 15 ส.ค. 2026 ประภาส ร." [ref=e201] [cursor=pointer]:
+                - cell "PRJ-002" [ref=e202]
+                - cell "โรงงานผลิตชิ้นส่วน ABC EASYBUILD" [ref=e203]:
+                  - generic [ref=e204]: โรงงานผลิตชิ้นส่วน ABC
+                  - text: EASYBUILD
+                - cell "RYG ตะวันออก" [ref=e205]:
+                  - text: RYG
+                  - generic [ref=e206]: ตะวันออก
+                - cell "บ.เอบีซี แมนูแฟคเจอริ่ง" [ref=e207]
+                - cell "฿2.8M" [ref=e208]
+                - cell "กำลังดำเนินการ" [ref=e209]:
+                  - generic [ref=e210]:
+                    - img [ref=e211]
+                    - text: กำลังดำเนินการ
+                - cell "42%" [ref=e214]:
+                  - generic [ref=e218]: 42%
+                - cell "15 ส.ค. 2026" [ref=e219]
+                - cell "ประภาส ร." [ref=e220]
+              - row "PRJ-003 ศูนย์กระจายสินค้า WMS ระยอง RANBUILD RYG ตะวันออก หจก. ไอซ์โลจิสติกส์ ฿6.8M เสร็จแล้ว 100% 31 พ.ค. 2026 สมชาย ว." [ref=e221] [cursor=pointer]:
+                - cell "PRJ-003" [ref=e222]
+                - cell "ศูนย์กระจายสินค้า WMS ระยอง RANBUILD" [ref=e223]:
+                  - generic [ref=e224]: ศูนย์กระจายสินค้า WMS ระยอง
+                  - text: RANBUILD
+                - cell "RYG ตะวันออก" [ref=e225]:
+                  - text: RYG
+                  - generic [ref=e226]: ตะวันออก
+                - cell "หจก. ไอซ์โลจิสติกส์" [ref=e227]
+                - cell "฿6.8M" [ref=e228]
+                - cell "เสร็จแล้ว" [ref=e229]:
+                  - generic [ref=e230]:
+                    - img [ref=e231]
+                    - text: เสร็จแล้ว
+                - cell "100%" [ref=e234]:
+                  - generic [ref=e238]: 100%
+                - cell "31 พ.ค. 2026" [ref=e239]
+                - cell "สมชาย ว." [ref=e240]
+              - row "PRJ-004 หอพักพนักงาน นิคมอุตสาหกรรม PREFAB RYG ตะวันออก บ.เอสทีพี โฮลดิ้ง ฿1.9M เกินกำหนด 30% 30 พ.ค. 2026 เกิน 25 วัน ประภาส ร." [ref=e241] [cursor=pointer]:
+                - cell "PRJ-004" [ref=e242]
+                - cell "หอพักพนักงาน นิคมอุตสาหกรรม PREFAB" [ref=e243]:
+                  - generic [ref=e244]: หอพักพนักงาน นิคมอุตสาหกรรม
+                  - text: PREFAB
+                - cell "RYG ตะวันออก" [ref=e245]:
+                  - text: RYG
+                  - generic [ref=e246]: ตะวันออก
+                - cell "บ.เอสทีพี โฮลดิ้ง" [ref=e247]
+                - cell "฿1.9M" [ref=e248]
+                - cell "เกินกำหนด" [ref=e249]:
+                  - generic [ref=e250]:
+                    - img [ref=e251]
+                    - text: เกินกำหนด
+                - cell "30%" [ref=e253]:
+                  - generic [ref=e257]: 30%
+                - cell "30 พ.ค. 2026 เกิน 25 วัน" [ref=e258]:
+                  - text: 30 พ.ค. 2026
+                  - generic [ref=e259]: เกิน 25 วัน
+                - cell "ประภาส ร." [ref=e260]
+              - row "PRJ-005 อาคารสำนักงาน EPC ชลบุรี CUSTOM RYG ตะวันออก บ.พีซีบี คอนสตรัคชั่น ฿3.5M กำลังดำเนินการ 78% 31 ก.ค. 2026 สมชาย ว." [ref=e261] [cursor=pointer]:
+                - cell "PRJ-005" [ref=e262]
+                - cell "อาคารสำนักงาน EPC ชลบุรี CUSTOM" [ref=e263]:
+                  - generic [ref=e264]: อาคารสำนักงาน EPC ชลบุรี
+                  - text: CUSTOM
+                - cell "RYG ตะวันออก" [ref=e265]:
+                  - text: RYG
+                  - generic [ref=e266]: ตะวันออก
+                - cell "บ.พีซีบี คอนสตรัคชั่น" [ref=e267]
+                - cell "฿3.5M" [ref=e268]
+                - cell "กำลังดำเนินการ" [ref=e269]:
+                  - generic [ref=e270]:
+                    - img [ref=e271]
+                    - text: กำลังดำเนินการ
+                - cell "78%" [ref=e274]:
+                  - generic [ref=e278]: 78%
+                - cell "31 ก.ค. 2026" [ref=e279]
+                - cell "สมชาย ว." [ref=e280]
+              - row "PRJ-006 โรงเก็บวัตถุดิบ บ.ปิโตรเคม RANBUILD RYG ตะวันออก บ.ปิโตรเคม (ไทย) ฿5.1M ยังไม่เริ่ม ยังไม่เริ่ม 31 ต.ค. 2026 ประภาส ร." [ref=e281] [cursor=pointer]:
+                - cell "PRJ-006" [ref=e282]
+                - cell "โรงเก็บวัตถุดิบ บ.ปิโตรเคม RANBUILD" [ref=e283]:
+                  - generic [ref=e284]: โรงเก็บวัตถุดิบ บ.ปิโตรเคม
+                  - text: RANBUILD
+                - cell "RYG ตะวันออก" [ref=e285]:
+                  - text: RYG
+                  - generic [ref=e286]: ตะวันออก
+                - cell "บ.ปิโตรเคม (ไทย)" [ref=e287]
+                - cell "฿5.1M" [ref=e288]
+                - cell "ยังไม่เริ่ม" [ref=e289]:
+                  - generic [ref=e290]:
+                    - img [ref=e291]
+                    - text: ยังไม่เริ่ม
+                - cell "ยังไม่เริ่ม" [ref=e296]
+                - cell "31 ต.ค. 2026" [ref=e297]
+                - cell "ประภาส ร." [ref=e298]
+              - row "PRJ-007 โกดังเกษตร สหกรณ์ลำพูน EASYBUILD CNX เหนือ สหกรณ์ลำพูน จก. ฿2.2M กำลังดำเนินการ 55% 15 ก.ค. 2026 วิภา ป." [ref=e299] [cursor=pointer]:
+                - cell "PRJ-007" [ref=e300]
+                - cell "โกดังเกษตร สหกรณ์ลำพูน EASYBUILD" [ref=e301]:
+                  - generic [ref=e302]: โกดังเกษตร สหกรณ์ลำพูน
+                  - text: EASYBUILD
+                - cell "CNX เหนือ" [ref=e303]:
+                  - text: CNX
+                  - generic [ref=e304]: เหนือ
+                - cell "สหกรณ์ลำพูน จก." [ref=e305]
+                - cell "฿2.2M" [ref=e306]
+                - cell "กำลังดำเนินการ" [ref=e307]:
+                  - generic [ref=e308]:
+                    - img [ref=e309]
+                    - text: กำลังดำเนินการ
+                - cell "55%" [ref=e312]:
+                  - generic [ref=e316]: 55%
+                - cell "15 ก.ค. 2026" [ref=e317]
+                - cell "วิภา ป." [ref=e318]
+              - row "PRJ-008 อาคารแสดงสินค้า OTOP เชียงใหม่ CUSTOM CNX เหนือ อบจ.เชียงใหม่ ฿4.6M เกินกำหนด 48% 30 พ.ค. 2026 เกิน 26 วัน สุรชัย ท." [ref=e319] [cursor=pointer]:
+                - cell "PRJ-008" [ref=e320]
+                - cell "อาคารแสดงสินค้า OTOP เชียงใหม่ CUSTOM" [ref=e321]:
+                  - generic [ref=e322]: อาคารแสดงสินค้า OTOP เชียงใหม่
+                  - text: CUSTOM
+                - cell "CNX เหนือ" [ref=e323]:
+                  - text: CNX
+                  - generic [ref=e324]: เหนือ
+                - cell "อบจ.เชียงใหม่" [ref=e325]
+                - cell "฿4.6M" [ref=e326]
+                - cell "เกินกำหนด" [ref=e327]:
+                  - generic [ref=e328]:
+                    - img [ref=e329]
+                    - text: เกินกำหนด
+                - cell "48%" [ref=e331]:
+                  - generic [ref=e335]: 48%
+                - cell "30 พ.ค. 2026 เกิน 26 วัน" [ref=e336]:
+                  - text: 30 พ.ค. 2026
+                  - generic [ref=e337]: เกิน 26 วัน
+                - cell "สุรชัย ท." [ref=e338]
+              - row "PRJ-009 โรงงานแปรรูปอาหาร CNX Food RANBUILD CNX เหนือ บ.ซีเอ็นเอ็กซ์ ฟูด ฿3.8M กำลังดำเนินการ 22% 30 ก.ย. 2026 วิภา ป." [ref=e339] [cursor=pointer]:
+                - cell "PRJ-009" [ref=e340]
+                - cell "โรงงานแปรรูปอาหาร CNX Food RANBUILD" [ref=e341]:
+                  - generic [ref=e342]: โรงงานแปรรูปอาหาร CNX Food
+                  - text: RANBUILD
+                - cell "CNX เหนือ" [ref=e343]:
+                  - text: CNX
+                  - generic [ref=e344]: เหนือ
+                - cell "บ.ซีเอ็นเอ็กซ์ ฟูด" [ref=e345]
+                - cell "฿3.8M" [ref=e346]
+                - cell "กำลังดำเนินการ" [ref=e347]:
+                  - generic [ref=e348]:
+                    - img [ref=e349]
+                    - text: กำลังดำเนินการ
+                - cell "22%" [ref=e352]:
+                  - generic [ref=e356]: 22%
+                - cell "30 ก.ย. 2026" [ref=e357]
+                - cell "วิภา ป." [ref=e358]
+              - row "PRJ-010 ศูนย์บริการยานยนต์ Bigbike PREFAB CNX เหนือ บ.บิ๊กไบค์เซ็นเตอร์ ฿1.4M เสร็จแล้ว 100% 30 เม.ย. 2026 สุรชัย ท." [ref=e359] [cursor=pointer]:
+                - cell "PRJ-010" [ref=e360]
+                - cell "ศูนย์บริการยานยนต์ Bigbike PREFAB" [ref=e361]:
+                  - generic [ref=e362]: ศูนย์บริการยานยนต์ Bigbike
+                  - text: PREFAB
+                - cell "CNX เหนือ" [ref=e363]:
+                  - text: CNX
+                  - generic [ref=e364]: เหนือ
+                - cell "บ.บิ๊กไบค์เซ็นเตอร์" [ref=e365]
+                - cell "฿1.4M" [ref=e366]
+                - cell "เสร็จแล้ว" [ref=e367]:
+                  - generic [ref=e368]:
+                    - img [ref=e369]
+                    - text: เสร็จแล้ว
+                - cell "100%" [ref=e372]:
+                  - generic [ref=e376]: 100%
+                - cell "30 เม.ย. 2026" [ref=e377]
+                - cell "สุรชัย ท." [ref=e378]
+              - row "PRJ-011 โรงเรือนผักไฮโดรโปนิกส์ขนาดใหญ่ CUSTOM CNX เหนือ กลุ่มเกษตรลำพูน ฿2.9M พักโครงการ 15% 31 ส.ค. 2026 วิภา ป." [ref=e379] [cursor=pointer]:
+                - cell "PRJ-011" [ref=e380]
+                - cell "โรงเรือนผักไฮโดรโปนิกส์ขนาดใหญ่ CUSTOM" [ref=e381]:
+                  - generic [ref=e382]: โรงเรือนผักไฮโดรโปนิกส์ขนาดใหญ่
+                  - text: CUSTOM
+                - cell "CNX เหนือ" [ref=e383]:
+                  - text: CNX
+                  - generic [ref=e384]: เหนือ
+                - cell "กลุ่มเกษตรลำพูน" [ref=e385]
+                - cell "฿2.9M" [ref=e386]
+                - cell "พักโครงการ" [ref=e387]:
+                  - generic [ref=e388]:
+                    - img [ref=e389]
+                    - text: พักโครงการ
+                - cell "15%" [ref=e391]:
+                  - generic [ref=e395]: 15%
+                - cell "31 ส.ค. 2026" [ref=e396]
+                - cell "วิภา ป." [ref=e397]
+              - row "PRJ-012 โกดังส่งออกชายแดน SEZ แม่สอด RANBUILD MST ตะวันตก บ.ทีดีเค ลอจิสติกส์ ฿5.8M กำลังดำเนินการ 72% 15 ก.ค. 2026 อนันต์ ส." [ref=e398] [cursor=pointer]:
+                - cell "PRJ-012" [ref=e399]
+                - cell "โกดังส่งออกชายแดน SEZ แม่สอด RANBUILD" [ref=e400]:
+                  - generic [ref=e401]: โกดังส่งออกชายแดน SEZ แม่สอด
+                  - text: RANBUILD
+                - cell "MST ตะวันตก" [ref=e402]:
+                  - text: MST
+                  - generic [ref=e403]: ตะวันตก
+                - cell "บ.ทีดีเค ลอจิสติกส์" [ref=e404]
+                - cell "฿5.8M" [ref=e405]
+                - cell "กำลังดำเนินการ" [ref=e406]:
+                  - generic [ref=e407]:
+                    - img [ref=e408]
+                    - text: กำลังดำเนินการ
+                - cell "72%" [ref=e411]:
+                  - generic [ref=e415]: 72%
+                - cell "15 ก.ค. 2026" [ref=e416]
+                - cell "อนันต์ ส." [ref=e417]
+              - row "PRJ-013 อาคารพาณิชย์ย่านการค้า MST CUSTOM MST ตะวันตก หจก. แม่สอดพาณิชย์ ฿2.1M กำลังดำเนินการ 88% 30 มิ.ย. 2026 เหลือ 5 วัน อนันต์ ส." [ref=e418] [cursor=pointer]:
+                - cell "PRJ-013" [ref=e419]
+                - cell "อาคารพาณิชย์ย่านการค้า MST CUSTOM" [ref=e420]:
+                  - generic [ref=e421]: อาคารพาณิชย์ย่านการค้า MST
+                  - text: CUSTOM
+                - cell "MST ตะวันตก" [ref=e422]:
+                  - text: MST
+                  - generic [ref=e423]: ตะวันตก
+                - cell "หจก. แม่สอดพาณิชย์" [ref=e424]
+                - cell "฿2.1M" [ref=e425]
+                - cell "กำลังดำเนินการ" [ref=e426]:
+                  - generic [ref=e427]:
+                    - img [ref=e428]
+                    - text: กำลังดำเนินการ
+                - cell "88%" [ref=e431]:
+                  - generic [ref=e435]: 88%
+                - cell "30 มิ.ย. 2026 เหลือ 5 วัน" [ref=e436]:
+                  - text: 30 มิ.ย. 2026
+                  - generic [ref=e437]: เหลือ 5 วัน
+                - cell "อนันต์ ส." [ref=e438]
+              - row "PRJ-014 คลังสินค้าเย็น อาหารสด RANBUILD MST ตะวันตก บ.เฟรชโลจิส ฿3.2M เสร็จแล้ว 100% 28 ก.พ. 2026 พิมพ์ ท." [ref=e439] [cursor=pointer]:
+                - cell "PRJ-014" [ref=e440]
+                - cell "คลังสินค้าเย็น อาหารสด RANBUILD" [ref=e441]:
+                  - generic [ref=e442]: คลังสินค้าเย็น อาหารสด
+                  - text: RANBUILD
+                - cell "MST ตะวันตก" [ref=e443]:
+                  - text: MST
+                  - generic [ref=e444]: ตะวันตก
+                - cell "บ.เฟรชโลจิส" [ref=e445]
+                - cell "฿3.2M" [ref=e446]
+                - cell "เสร็จแล้ว" [ref=e447]:
+                  - generic [ref=e448]:
+                    - img [ref=e449]
+                    - text: เสร็จแล้ว
+                - cell "100%" [ref=e452]:
+                  - generic [ref=e456]: 100%
+                - cell "28 ก.พ. 2026" [ref=e457]
+                - cell "พิมพ์ ท." [ref=e458]
+              - row "PRJ-015 โรงงานตัดเย็บเสื้อผ้าส่งออก PREFAB MST ตะวันตก บ.เอ็มเอสที การ์เม้นต์ ฿1.8M ยังไม่เริ่ม ยังไม่เริ่ม 30 พ.ย. 2026 อนันต์ ส." [ref=e459] [cursor=pointer]:
+                - cell "PRJ-015" [ref=e460]
+                - cell "โรงงานตัดเย็บเสื้อผ้าส่งออก PREFAB" [ref=e461]:
+                  - generic [ref=e462]: โรงงานตัดเย็บเสื้อผ้าส่งออก
+                  - text: PREFAB
+                - cell "MST ตะวันตก" [ref=e463]:
+                  - text: MST
+                  - generic [ref=e464]: ตะวันตก
+                - cell "บ.เอ็มเอสที การ์เม้นต์" [ref=e465]
+                - cell "฿1.8M" [ref=e466]
+                - cell "ยังไม่เริ่ม" [ref=e467]:
+                  - generic [ref=e468]:
+                    - img [ref=e469]
+                    - text: ยังไม่เริ่ม
+                - cell "ยังไม่เริ่ม" [ref=e474]
+                - cell "30 พ.ย. 2026" [ref=e475]
+                - cell "อนันต์ ส." [ref=e476]
+              - row "PRJ-016 ศูนย์แปรรูปชา-กาแฟ CRI CUSTOM CRI เหนือ วิสาหกิจชุมชนดอยอินทนนท์ ฿3.1M กำลังดำเนินการ 35% 30 ก.ย. 2026 เกรียงไกร จ." [ref=e477] [cursor=pointer]:
+                - cell "PRJ-016" [ref=e478]
+                - cell "ศูนย์แปรรูปชา-กาแฟ CRI CUSTOM" [ref=e479]:
+                  - generic [ref=e480]: ศูนย์แปรรูปชา-กาแฟ CRI
+                  - text: CUSTOM
+                - cell "CRI เหนือ" [ref=e481]:
+                  - text: CRI
+                  - generic [ref=e482]: เหนือ
+                - cell "วิสาหกิจชุมชนดอยอินทนนท์" [ref=e483]
+                - cell "฿3.1M" [ref=e484]
+                - cell "กำลังดำเนินการ" [ref=e485]:
+                  - generic [ref=e486]:
+                    - img [ref=e487]
+                    - text: กำลังดำเนินการ
+                - cell "35%" [ref=e490]:
+                  - generic [ref=e494]: 35%
+                - cell "30 ก.ย. 2026" [ref=e495]
+                - cell "เกรียงไกร จ." [ref=e496]
+              - row "PRJ-017 โกดังรับฝากสินค้า Golden Triangle RANBUILD CRI เหนือ บ.โกลเด้น ทรี โลจิส ฿2.4M เกินกำหนด 60% 31 พ.ค. 2026 เกิน 25 วัน เกรียงไกร จ." [ref=e497] [cursor=pointer]:
+                - cell "PRJ-017" [ref=e498]
+                - cell "โกดังรับฝากสินค้า Golden Triangle RANBUILD" [ref=e499]:
+                  - generic [ref=e500]: โกดังรับฝากสินค้า Golden Triangle
+                  - text: RANBUILD
+                - cell "CRI เหนือ" [ref=e501]:
+                  - text: CRI
+                  - generic [ref=e502]: เหนือ
+                - cell "บ.โกลเด้น ทรี โลจิส" [ref=e503]
+                - cell "฿2.4M" [ref=e504]
+                - cell "เกินกำหนด" [ref=e505]:
+                  - generic [ref=e506]:
+                    - img [ref=e507]
+                    - text: เกินกำหนด
+                - cell "60%" [ref=e509]:
+                  - generic [ref=e513]: 60%
+                - cell "31 พ.ค. 2026 เกิน 25 วัน" [ref=e514]:
+                  - text: 31 พ.ค. 2026
+                  - generic [ref=e515]: เกิน 25 วัน
+                - cell "เกรียงไกร จ." [ref=e516]
+              - row "PRJ-018 อาคารเรียนมหาวิทยาลัย CRI CUSTOM CRI เหนือ ม.ราชภัฏเชียงราย ฿4.9M พักโครงการ 5% 30 พ.ย. 2026 สุชาติ ม." [ref=e517] [cursor=pointer]:
+                - cell "PRJ-018" [ref=e518]
+                - cell "อาคารเรียนมหาวิทยาลัย CRI CUSTOM" [ref=e519]:
+                  - generic [ref=e520]: อาคารเรียนมหาวิทยาลัย CRI
+                  - text: CUSTOM
+                - cell "CRI เหนือ" [ref=e521]:
+                  - text: CRI
+                  - generic [ref=e522]: เหนือ
+                - cell "ม.ราชภัฏเชียงราย" [ref=e523]
+                - cell "฿4.9M" [ref=e524]
+                - cell "พักโครงการ" [ref=e525]:
+                  - generic [ref=e526]:
+                    - img [ref=e527]
+                    - text: พักโครงการ
+                - cell "5%" [ref=e529]:
+                  - generic [ref=e533]: 5%
+                - cell "30 พ.ย. 2026" [ref=e534]
+                - cell "สุชาติ ม." [ref=e535]
+              - row "PRJ-019 โกดังสินค้าเกษตร NSN EASYBUILD NSN กลาง สหกรณ์การเกษตรนครสวรรค์ ฿1.6M กำลังดำเนินการ 50% 31 ส.ค. 2026 ธีรพล อ." [ref=e536] [cursor=pointer]:
+                - cell "PRJ-019" [ref=e537]
+                - cell "โกดังสินค้าเกษตร NSN EASYBUILD" [ref=e538]:
+                  - generic [ref=e539]: โกดังสินค้าเกษตร NSN
+                  - text: EASYBUILD
+                - cell "NSN กลาง" [ref=e540]:
+                  - text: NSN
+                  - generic [ref=e541]: กลาง
+                - cell "สหกรณ์การเกษตรนครสวรรค์" [ref=e542]
+                - cell "฿1.6M" [ref=e543]
+                - cell "กำลังดำเนินการ" [ref=e544]:
+                  - generic [ref=e545]:
+                    - img [ref=e546]
+                    - text: กำลังดำเนินการ
+                - cell "50%" [ref=e549]:
+                  - generic [ref=e553]: 50%
+                - cell "31 ส.ค. 2026" [ref=e554]
+                - cell "ธีรพล อ." [ref=e555]
+              - row "PRJ-020 ศาลาอเนกประสงค์เทศบาล NSN PREFAB NSN กลาง เทศบาลเมืองนครสวรรค์ ฿900K เกินกำหนด 40% 30 เม.ย. 2026 เกิน 56 วัน ธีรพล อ." [ref=e556] [cursor=pointer]:
+                - cell "PRJ-020" [ref=e557]
+                - cell "ศาลาอเนกประสงค์เทศบาล NSN PREFAB" [ref=e558]:
+                  - generic [ref=e559]: ศาลาอเนกประสงค์เทศบาล NSN
+                  - text: PREFAB
+                - cell "NSN กลาง" [ref=e560]:
+                  - text: NSN
+                  - generic [ref=e561]: กลาง
+                - cell "เทศบาลเมืองนครสวรรค์" [ref=e562]
+                - cell "฿900K" [ref=e563]
+                - cell "เกินกำหนด" [ref=e564]:
+                  - generic [ref=e565]:
+                    - img [ref=e566]
+                    - text: เกินกำหนด
+                - cell "40%" [ref=e568]:
+                  - generic [ref=e572]: 40%
+                - cell "30 เม.ย. 2026 เกิน 56 วัน" [ref=e573]:
+                  - text: 30 เม.ย. 2026
+                  - generic [ref=e574]: เกิน 56 วัน
+                - cell "ธีรพล อ." [ref=e575]
+              - row "PRJ-021 ซ่อมหลังคาโรงงานเดิม CUSTOM HYI ใต้ บ.หาดใหญ่อุตสาหกรรม ฿480K พักโครงการ 0% 31 ก.ค. 2026 -" [ref=e576] [cursor=pointer]:
+                - cell "PRJ-021" [ref=e577]
+                - cell "ซ่อมหลังคาโรงงานเดิม CUSTOM" [ref=e578]:
+                  - generic [ref=e579]: ซ่อมหลังคาโรงงานเดิม
+                  - text: CUSTOM
+                - cell "HYI ใต้" [ref=e580]:
+                  - text: HYI
+                  - generic [ref=e581]: ใต้
+                - cell "บ.หาดใหญ่อุตสาหกรรม" [ref=e582]
+                - cell "฿480K" [ref=e583]
+                - cell "พักโครงการ" [ref=e584]:
+                  - generic [ref=e585]:
+                    - img [ref=e586]
+                    - text: พักโครงการ
+                - cell "0%" [ref=e588]:
+                  - generic [ref=e591]: 0%
+                - cell "31 ก.ค. 2026" [ref=e592]
+                - cell "-" [ref=e593]
+              - row "PRJ-022 คลังสินค้า บ.แอลอาร์เอส อีสาน RANBUILD NSN กลาง บ.แอลอาร์เอส จก. ฿2.7M ยังไม่เริ่ม ยังไม่เริ่ม 31 ธ.ค. 2026 ธีรพล อ." [ref=e594] [cursor=pointer]:
+                - cell "PRJ-022" [ref=e595]
+                - cell "คลังสินค้า บ.แอลอาร์เอส อีสาน RANBUILD" [ref=e596]:
+                  - generic [ref=e597]: คลังสินค้า บ.แอลอาร์เอส อีสาน
+                  - text: RANBUILD
+                - cell "NSN กลาง" [ref=e598]:
+                  - text: NSN
+                  - generic [ref=e599]: กลาง
+                - cell "บ.แอลอาร์เอส จก." [ref=e600]
+                - cell "฿2.7M" [ref=e601]
+                - cell "ยังไม่เริ่ม" [ref=e602]:
+                  - generic [ref=e603]:
+                    - img [ref=e604]
+                    - text: ยังไม่เริ่ม
+                - cell "ยังไม่เริ่ม" [ref=e609]
+                - cell "31 ธ.ค. 2026" [ref=e610]
+                - cell "ธีรพล อ." [ref=e611]
+              - row "PRJ-023 อาคารโชว์รูมรถยนต์ RYG CUSTOM RYG ตะวันออก บ.ระยองยานยนต์ ฿3.3M กำลังดำเนินการ 18% 30 ก.ย. 2026 สมชาย ว." [ref=e612] [cursor=pointer]:
+                - cell "PRJ-023" [ref=e613]
+                - cell "อาคารโชว์รูมรถยนต์ RYG CUSTOM" [ref=e614]:
+                  - generic [ref=e615]: อาคารโชว์รูมรถยนต์ RYG
+                  - text: CUSTOM
+                - cell "RYG ตะวันออก" [ref=e616]:
+                  - text: RYG
+                  - generic [ref=e617]: ตะวันออก
+                - cell "บ.ระยองยานยนต์" [ref=e618]
+                - cell "฿3.3M" [ref=e619]
+                - cell "กำลังดำเนินการ" [ref=e620]:
+                  - generic [ref=e621]:
+                    - img [ref=e622]
+                    - text: กำลังดำเนินการ
+                - cell "18%" [ref=e625]:
+                  - generic [ref=e629]: 18%
+                - cell "30 ก.ย. 2026" [ref=e630]
+                - cell "สมชาย ว." [ref=e631]
+  - button "Open Next.js Dev Tools" [ref=e637] [cursor=pointer]:
+    - img [ref=e638]
+  - alert [ref=e641]

@@ -1,0 +1,14 @@
+- generic [active] [ref=e1]:
+  - option "มิ.ย. 2026" [selected]
+  - option "พ.ค. 2026"
+  - option "Q2/2026"
+  - option "Q1/2026"
+  - option "YTD 2026"
+  - option "ปี 2025"
+  - option "ทั้งหมด" [selected]
+  - option "สาขาระยอง"
+  - option "สาขาเชียงใหม่"
+  - option "สาขาแม่สอด"
+  - option "สาขาเชียงราย"
+  - option "สาขานครสวรรค์"
+  - option "สาขาหาดใหญ่"

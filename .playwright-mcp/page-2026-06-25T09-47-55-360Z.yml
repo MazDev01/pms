@@ -1,0 +1,11 @@
+- generic [active] [ref=e1]:
+  - option "ทั้งหมด" [selected]
+  - option "เหนือ"
+  - option "กลาง"
+  - option "ตะวันออก"
+  - option "ตะวันตก"
+  - option "ใต้"
+  - option "อีสาน"
+  - option "ทั้งหมด" [selected]
+  - option "ใช้งาน"
+  - option "ปิดใช้งาน"

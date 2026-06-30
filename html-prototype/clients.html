@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+<title>ลูกค้า — BENJAMIN PMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared-v2.css">
+<style>
+.sc-row{grid-template-columns:repeat(3,1fr)}
+.cl-contact{font-size:.7rem;color:var(--sub);display:flex;align-items:center;gap:4px;margin-top:1px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-icon">B</div>
+    <div><div class="sb-name">BENJAMIN</div><div class="sb-role">Project Management</div></div>
+  </div>
+  <nav class="sb-nav">
+    <a href="dashboard.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>แผงควบคุม</a>
+    <a href="projects.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>โครงการ</a>
+    <a href="tasks.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>งาน</a>
+    <a href="calendar.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ปฏิทิน</a>
+    <a href="clients.html" class="si active"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>ลูกค้า</a>
+    <a href="team.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>ทีมงาน</a>
+    <a href="goals.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>เป้าหมาย</a>
+    <a href="budget.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>งบประมาณ</a>
+    <a href="reports.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>วิเคราะห์</a>
+    <div class="sb-div"></div>
+    <a href="settings.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M1 12h2M21 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>ตั้งค่า</a>
+  </nav>
+  <div class="sb-bot">
+    <div class="sb-div" style="margin-top:0"></div>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>ช่วยเหลือ</button>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>ออกจากระบบ</button>
+    <button class="sb-website"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>เยี่ยมชมเว็บไซต์</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="ptb">
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="ptb-badge">3</span></button>
+    <div class="ptb-user"><div class="ptb-av">A</div><div><div class="ptb-uname">Admin Benjamin</div><div class="ptb-uemail">admin@benjamin.th</div></div></div>
+  </div>
+
+  <div class="pcontent">
+    <div class="pg-title">ลูกค้า</div>
+    <div class="pg-sub">จัดการข้อมูลลูกค้าและความสัมพันธ์ทางธุรกิจ</div>
+
+    <div class="fr">
+      <div class="fr-l">
+        <button class="fr-pill"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ทั้งหมด</button>
+        <button class="fr-pill"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>ตัวกรอง</button>
+      </div>
+      <div class="fr-r">
+        <button class="fr-sec"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>ส่งออก</button>
+        <button class="fr-add"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>เพิ่มลูกค้า</button>
+      </div>
+    </div>
+
+    <div class="sc-row">
+      <div class="sc">
+        <div class="sc-ico" style="background:#ede9fe"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#6c62f5" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
+        <div><div class="sc-val" style="color:#6c62f5">12</div><div class="sc-lbl">ลูกค้าทั้งหมด</div><div class="sc-trend up">↑ 2 รายใหม่เดือนนี้</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#e5faf0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div><div class="sc-val" style="color:#22c55e">9</div><div class="sc-lbl">ใช้งานอยู่</div><div class="sc-trend up">↑ 75% ของทั้งหมด</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#f1f5f9"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div>
+        <div><div class="sc-val" style="color:#64748b">3</div><div class="sc-lbl">ไม่ใช้งาน</div><div class="sc-trend" style="color:#94a3b8">— ไม่เปลี่ยนแปลง</div></div>
+      </div>
+    </div>
+
+    <div class="tbar">
+      <div class="tbar-l">
+        <div class="t-search"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#b0b0d0" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="ค้นหาลูกค้า..."></div>
+        <button class="t-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>ตัวกรอง</button>
+        <button class="t-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M9 18h6"/></svg>เรียงลำดับ</button>
+      </div>
+      <div class="tbar-r">
+        <button class="t-btn on"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>การ์ด</button>
+        <button class="t-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>ตาราง</button>
+        <button class="t-add"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+    </div>
+
+    <div class="cl-grid">
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#6c62f5">A</div><div class="cl-name">บริษัท ABC จำกัด</div><div class="cl-cat">เทคโนโลยี</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-111-2222</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">3 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#7c3aed">X</div><div class="cl-name">XYZ Corporation</div><div class="cl-cat">การผลิต</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-333-4444</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">2 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#0d9488">D</div><div class="cl-name">DEF Limited</div><div class="cl-cat">ก่อสร้าง</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-555-6666</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">1 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#ea580c">G</div><div class="cl-name">GHI Company</div><div class="cl-cat">อสังหาริมทรัพย์</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-777-8888</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">4 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#e11d48">J</div><div class="cl-name">JKL Inc</div><div class="cl-cat">การเงิน</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-123-4560</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">1 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#d97706">M</div><div class="cl-name">MNO Corp</div><div class="cl-cat">สุขภาพ</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-987-6543</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">2 โครงการ</span></div></div>
+
+      <div class="cl-card inactive"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#64748b">P</div><div class="cl-name">PQR Ltd</div><div class="cl-cat">โลจิสติกส์</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-111-9999</div><div class="cl-badges"><span class="bdg bdg-gray" style="font-size:.62rem">ไม่ใช้งาน</span><span class="bdg bdg-gray" style="font-size:.62rem">0 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#0891b2">S</div><div class="cl-name">STU Group</div><div class="cl-cat">ค้าปลีก</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-456-7890</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">1 โครงการ</span></div></div>
+
+      <div class="cl-card inactive"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#64748b">V</div><div class="cl-name">VWX Thailand</div><div class="cl-cat">อาหารและเครื่องดื่ม</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-200-3333</div><div class="cl-badges"><span class="bdg bdg-gray" style="font-size:.62rem">ไม่ใช้งาน</span><span class="bdg bdg-gray" style="font-size:.62rem">0 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#7c3aed">Y</div><div class="cl-name">YZA Services</div><div class="cl-cat">บริการ</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-678-9012</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">2 โครงการ</span></div></div>
+
+      <div class="cl-card"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#6c62f5">B</div><div class="cl-name">Beta Systems</div><div class="cl-cat">IT &amp; Software</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-345-6789</div><div class="cl-badges"><span class="bdg bdg-green" style="font-size:.62rem">ใช้งาน</span><span class="bdg bdg-blue" style="font-size:.62rem">3 โครงการ</span></div></div>
+
+      <div class="cl-card inactive"><button class="cl-menu"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button><div class="cl-av" style="background:#64748b">G</div><div class="cl-name">Gamma Solutions</div><div class="cl-cat">ที่ปรึกษา</div><div class="cl-contact"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.02 1.22 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-.34a2 2 0 012.11.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>02-999-0000</div><div class="cl-badges"><span class="bdg bdg-gray" style="font-size:.62rem">ไม่ใช้งาน</span><span class="bdg bdg-gray" style="font-size:.62rem">0 โครงการ</span></div></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - option "ทั้งหมด" [selected]
+  - option "สาขาระยอง"
+  - option "สาขาเชียงใหม่"
+  - option "สาขาแม่สอด"
+  - option "สาขาเชียงราย"
+  - option "สาขานครสวรรค์"
+  - option "สาขาหาดใหญ่"

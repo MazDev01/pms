@@ -1,0 +1,13 @@
+- generic [active] [ref=e1]:
+  - option "ทุกโครงการ" [selected]
+  - option "EASYBUILD แม่สอด"
+  - option "ระบบ ERP บจ. ซ…"
+  - option "โกดัง PEB ราชบ…"
+  - option "โกดังระยอง VCS…"
+  - option "โกดังสำเร็จรูป…"
+  - option "โรงงาน RANBUIL…"
+  - option "ทุกผู้รับผิดชอบ" [selected]
+  - option "กาญจนา"
+  - option "วิชัย"
+  - option "วิภา"
+  - option "สมชาย"

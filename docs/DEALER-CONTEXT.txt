@@ -1,0 +1,344 @@
+========================================================
+BENJAMIN PMS — Dealer Context (สำหรับอธิบายให้ AI อื่น)
+========================================================
+
+--------------------------------------------------------
+BENJAMIN คือใคร ขายอะไร?
+--------------------------------------------------------
+Benjamin PEB Steel Co., Ltd. คือบริษัทผู้ผลิตและจำหน่ายโครงสร้างอาคารเหล็กสำเร็จรูป
+ประเภท Pre-Engineered Building (PEB) ในประเทศไทย
+
+สินค้าหลักที่ขาย (4 ประเภท):
+  EASYBUILD  — อาคารเหล็กสำเร็จรูปขนาดเล็ก-กลาง ติดตั้งง่าย รวดเร็ว
+               เหมาะกับโกดัง โรงงานขนาดเล็ก ร้านค้า
+  RANBUILD   — อาคารเหล็กออกแบบพิเศษ (Rigid Frame) ขนาดใหญ่
+               เหมาะกับโรงงานอุตสาหกรรม คลังสินค้า ศูนย์กระจายสินค้า
+  PREFAB     — อาคารสำเร็จรูปโมดูลาร์ ส่งมอบได้เร็ว
+               เหมาะกับสำนักงานชั่วคราว บ้านพัก ห้องน้ำสนาม
+  CUSTOM     — งานออกแบบพิเศษตามความต้องการลูกค้า
+               รองรับโครงสร้างขนาดใหญ่พิเศษ หรือรูปทรงไม่มาตรฐาน
+
+กระบวนการขาย (end-to-end):
+  ลูกค้าติดต่อ Dealer → Dealer สำรวจหน้างาน → ออกแบบ → เสนอราคา (BOQ)
+  → HQ อนุมัติราคา → ลูกค้าตกลง → Benjamin ผลิตที่โรงงาน
+  → ขนส่ง + ติดตั้งหน้างาน → ตรวจ QC → ส่งมอบ + รับประกัน
+
+--------------------------------------------------------
+ใครเป็น "ผู้ใช้" ระบบนี้ และใครเป็นแค่ "ผู้รับผิดชอบ"?
+--------------------------------------------------------
+ผู้ใช้ระบบจริง (มี account login) มีเพียง 2 กลุ่ม:
+
+  1. DEALER — ตัวแทนจำหน่ายทั่วประเทศ (ผู้ใช้หลักของระบบ)
+     เป็นบริษัทแยกที่ได้รับสิทธิ์ขาย Benjamin products ในพื้นที่
+     Login เข้าใช้งานทุกวัน เพื่อจัดการ Lead / Quote / Project ของตัวเอง
+
+  2. HQ — ทีมสำนักงานใหญ่ Benjamin
+     ดูแล network ภาพรวม อนุมัติราคา มอบหมาย Lead ให้ Dealer
+
+สิ่งที่ไม่ใช่ผู้ใช้ระบบ (ไม่มี account):
+  - ลูกค้า (Customer) — เป็นแค่ข้อมูลในระบบ ไม่ได้ login
+  - ช่างหน้างาน / แรงงาน — บันทึกเป็นตัวเลข manpower ในรายงาน ไม่มี account
+  - ผู้รับเหมาช่วง — ไม่มี account ในระบบ
+  - ผู้จัดการโครงการ (PM) — เป็นแค่ field "pmId" ใน Project ที่ชี้ไปยัง User ใน Dealer
+    (PM คือ DEALER_ADMIN หรือ DEALER_SALES ที่ถูก assign ให้ดูแล Project นั้น ไม่ใช่ role แยก)
+
+สรุปสั้น: ระบบนี้ออกแบบให้ **Dealer คือผู้ใช้หลัก** ส่วนคนอื่น (ลูกค้า, ช่าง, ผู้รับเหมา)
+เป็นแค่ข้อมูลที่ Dealer บันทึกเข้าไป ไม่ได้ login ใช้งานเอง
+
+ระบบนี้คือ Project Management System สำหรับบริษัท Benjamin PEB Steel (โรงงานเหล็กสำเร็จรูป)
+มีผู้ใช้ที่ login ได้ 2 ประเภท: HQ (สำนักงานใหญ่) และ Dealer (ตัวแทนจำหน่าย)
+เอกสารนี้อธิบายเฉพาะ **Dealer** ว่าทำอะไรได้บ้าง
+
+--------------------------------------------------------
+ใคร คือ Dealer?
+--------------------------------------------------------
+- Dealer คือบริษัทตัวแทนจำหน่ายทั่วประเทศไทย แต่ละ Dealer มี dealerId ของตัวเอง
+- Dealer เห็นและแก้ไขได้เฉพาะข้อมูลของตัวเอง (multi-tenant isolation)
+- Dealer ไม่มีสิทธิ์เข้าถึง /hq/* routes เลย ถ้าพยายามเข้าจะ redirect กลับ /dashboard
+- มี 3 roles ภายใน Dealer:
+    DEALER_ADMIN  — หัวหน้าสาขา สร้างได้ทุกอย่าง
+    DEALER_SALES  — ทีมขาย สร้าง Lead + Quotation ได้
+    DEALER_SITE   — ทีมหน้างาน อัปเดต Project/รายงาน/ภาพถ่ายได้
+
+--------------------------------------------------------
+สิ่งที่ Dealer ทำไม่ได้ (ห้ามสนิท)
+--------------------------------------------------------
+- เห็นข้อมูลของ Dealer สาขาอื่น
+- เข้า /hq/dashboard, /hq/lead-pool, /hq/approvals, /hq/dealers
+- อนุมัติ Quotation ตัวเอง (ต้องรอ HQ อนุมัติ)
+- สร้าง/แก้ไข Products หรือ Materials ราคากลาง (read-only)
+- ดู Audit Log ของระบบ
+- มอบหมาย Lead ให้ Dealer สาขาอื่น
+
+========================================================
+MODULE 1 — Dashboard (หน้าหลัก)
+========================================================
+Route: /dashboard
+
+ฟังก์ชันที่ Dealer เห็น:
+1. KPI Cards (4 ตัว)
+   - ยอดขายเดือนนี้ (บาท) + % เทียบเดือนก่อน
+   - Lead ที่กำลัง active
+   - โครงการที่กำลังดำเนินการ
+   - Win Rate (%)
+
+2. กราฟยอดขายรายเดือน (Line Chart)
+   - ข้อมูล 6 เดือนย้อนหลัง
+   - เฉพาะยอดขายของ Dealer ตัวเอง
+
+3. Action Items — งานที่รอดำเนินการ
+   - Lead ที่ยังไม่ได้ติดต่อ
+   - Quotation ที่รอส่ง
+   - งานที่ใกล้ครบกำหนด
+
+4. Schedule Panel — ตารางงานสัปดาห์นี้
+
+5. Lead Table — ตารางรายการ Lead ล่าสุด
+   - ค้นหาชื่อ/จังหวัด/รหัส
+   - กรอง status
+   - คลิกดูรายละเอียดได้
+
+========================================================
+MODULE 2 — Lead / CRM (ลีดลูกค้า)
+========================================================
+Routes: /leads, /leads/new, /leads/[id]
+
+Dealer สามารถ:
+
+สร้าง Lead ใหม่:
+- กรอกข้อมูล: ชื่อลูกค้า, ช่องทางที่มา (WEB/LINE/PHONE/WALKIN/OTHER)
+- ประเภทสินค้าที่สนใจ (EASYBUILD/RANBUILD/PREFAB/CUSTOM)
+- มูลค่าประมาณ, จังหวัด, ผู้รับผิดชอบ
+
+ดู Lead List:
+- Kanban Board แสดงตาม status (ลาก card ข้าม column ได้)
+- List View สำหรับค้นหา/กรอง
+- เห็นเฉพาะ Lead ของ Dealer ตัวเอง
+
+Status Flow ของ Lead (เปลี่ยนได้ตามลำดับ):
+  NEW → CONTACTED → SURVEYED → QUOTED → NEGOTIATING → WON / LOST
+
+Lead Detail Page:
+- แก้ไขข้อมูล Lead ได้
+- บันทึก Activity ได้ 5 ประเภท:
+    CALL   — บันทึกการโทรหาลูกค้า
+    VISIT  — บันทึกการเยี่ยมหน้างาน
+    QUOTE  — บันทึกการส่งใบเสนอราคา
+    NOTE   — โน้ตทั่วไป
+    SURVEY — บันทึกการสำรวจหน้างาน
+- ดู Activity timeline ย้อนหลังทั้งหมด
+- Link ไปยัง Quotation ที่เกี่ยวข้อง
+
+Lead ที่ HQ มอบหมายมา (Lead Pool):
+- Lead ที่ยังไม่มี dealerId จะอยู่ใน Pool
+- เมื่อ HQ assign ให้ Dealer นั้นแล้ว จะปรากฏใน Lead List ของ Dealer
+
+========================================================
+MODULE 3 — Customer (ลูกค้า)
+========================================================
+Routes: /customers, /customers/new, /customers/[id]
+
+Dealer สามารถ:
+
+สร้างลูกค้าใหม่:
+- ประเภท: INDIVIDUAL (บุคคลธรรมดา) หรือ COMPANY (นิติบุคคล)
+- ชื่อ, เลขภาษี, เบอร์โทร, อีเมล, ที่อยู่, จังหวัด
+
+ดูรายชื่อลูกค้า:
+- ค้นหาชื่อ, กรองประเภท
+- เห็นเฉพาะลูกค้าของ Dealer ตัวเอง
+
+Customer Profile:
+- แก้ไขข้อมูลลูกค้าได้
+- ดู Lead, Quotation, Project ทั้งหมดที่เกี่ยวข้องกับลูกค้านี้
+
+========================================================
+MODULE 4 — Quotation / BOQ (ใบเสนอราคา)
+========================================================
+Routes: /quotations, /quotations/new, /quotations/[id], /quotations/[id]/edit
+
+Dealer สามารถ:
+
+สร้างใบเสนอราคา (DRAFT):
+- เลือกลูกค้าและ Lead ที่เชื่อมโยง
+- BOQ Builder — เพิ่ม line items:
+    - เลือก Product หรือ Material จากราคากลาง HQ
+    - ใส่จำนวน (qty) + ราคาต่อหน่วย
+    - ระบบคำนวณ amount = qty × unitPrice อัตโนมัติ
+    - ลาก-วาง เรียงลำดับ items ได้
+- กำหนดส่วนลด (discountPct) — ระบบคำนวณ discountAmt อัตโนมัติ
+- ระบบคำนวณ VAT 7% และยอดรวมสุทธิ อัตโนมัติ
+- กำหนดวันหมดอายุ (validUntil)
+
+Status Flow ของ Quotation:
+  DRAFT → (ส่งขออนุมัติ) → PENDING_APPROVAL → (HQ อนุมัติ) → APPROVED
+  → (ส่งให้ลูกค้า) → SENT → WON / LOST / EXPIRED
+
+กฎการขออนุมัติ:
+- ถ้าส่วนลดไม่เกิน threshold ที่กำหนด → ไม่ต้องรอ HQ (auto APPROVED)
+- ถ้าส่วนลดเกิน threshold → ต้องรอ HQ_MANAGEMENT อนุมัติก่อน
+- Dealer เห็นสถานะ approve/reject ใน real-time
+
+เมื่อ Quotation ถูก Mark as WON:
+- ระบบสร้าง Project ใหม่อัตโนมัติ
+- สร้าง 6 ProjectPhase อัตโนมัติ (Survey/Design/Manufacturing/Install/QC/Handover)
+- Dealer ไม่ต้องสร้าง Project เอง
+
+แก้ไข Quotation:
+- DRAFT → แก้ได้อิสระ
+- ถ้า status = SENT แล้วแก้ → revision++ อัตโนมัติ
+
+========================================================
+MODULE 5 — Project (โครงการก่อสร้าง)
+========================================================
+Routes: /projects, /projects/[id], /projects/[id]/tasks
+        /projects/[id]/documents, /projects/[id]/photos, /projects/[id]/reports
+
+Project ถูกสร้างอัตโนมัติเมื่อ Quotation = WON
+
+6 Phases ของทุก Project (ตามลำดับ):
+  Phase 1: สำรวจหน้างาน (Survey)
+  Phase 2: ออกแบบ (Design)
+  Phase 3: ผลิต (Manufacturing)
+  Phase 4: ขนส่ง + ติดตั้ง (Transport & Installation)
+  Phase 5: ตรวจสอบคุณภาพ (QC)
+  Phase 6: ส่งมอบ + รับประกัน (Handover & Warranty)
+
+Dealer สามารถ (Project Overview):
+- ดู 6-Phase tracker — progress แต่ละ phase
+- อัปเดต progressPct ของแต่ละ phase (0–100%)
+- เมื่อ phase ครบ 100% → phase ถัดไปเปิดอัตโนมัติ
+- Project Status: PLANNING / IN_PROGRESS / QC / HANDOVER / COMPLETED / ON_HOLD
+- มอบหมาย Project Manager (PM) ให้กับ User ใน Dealer เดียวกัน
+
+Task Board (/projects/[id]/tasks):
+- สร้าง Task ได้ ระบุ phaseId, ชื่องาน, ผู้รับผิดชอบ, priority, dueDate
+- Kanban 3 columns: TODO → DOING → DONE
+- ลาก Task ข้าม column เพื่อเปลี่ยน status
+- กรอง Task ตาม phase หรือ assignee
+
+Milestone:
+- สร้าง Milestone (จุดสำคัญของโครงการ)
+- ระบุ dueDate
+- Mark: PENDING / REACHED / MISSED
+
+Documents (/projects/[id]/documents):
+- อัปโหลดเอกสาร ระบุประเภท:
+    DRAWING — แบบก่อสร้าง
+    BOQ     — Bill of Quantities
+    CONTRACT — สัญญา
+    PERMIT  — ใบอนุญาต
+    HANDOVER — เอกสารส่งมอบ
+    OTHER   — อื่นๆ
+- ดาวน์โหลดเอกสาร, ดู version history
+
+Photos (/projects/[id]/photos):
+- อัปโหลดรูปหน้างาน
+- ระบุ phase ที่ถ่าย, caption, GPS coordinates, วันที่ถ่าย
+- ดู photo gallery แยกตาม phase
+- รองรับ lightbox
+
+Daily Site Report (/projects/[id]/reports):
+- บันทึกรายงานประจำวัน:
+    - วันที่
+    - สภาพอากาศ
+    - จำนวนแรงงาน
+    - งานที่ทำวันนี้
+    - ปัญหาที่พบ
+
+========================================================
+MODULE 6 — QC (ตรวจสอบคุณภาพ)
+========================================================
+อยู่ภายใต้ Project (Phase 5 เป็นหลัก)
+
+Dealer สามารถ:
+
+QC Checklist:
+- สร้าง Checklist ตั้งชื่อ, ระบุ phase
+- เพิ่ม QC Items (รายการตรวจสอบ)
+- บันทึกผลแต่ละรายการ: PASS / FAIL / NA
+- ใส่ note และแนบรูปประกอบแต่ละรายการ
+- ดูสรุป: PASS/FAIL/NA count + % pass ratio
+
+Punch List (รายการแก้ไข):
+- สร้าง Punch Item เมื่อพบงานที่ต้องแก้ไข
+- มอบหมายให้ผู้รับผิดชอบ ระบุ dueDate
+- Status flow: OPEN → FIXED → VERIFIED
+
+========================================================
+MODULE 7 — Handover & Warranty (ส่งมอบงาน)
+========================================================
+Route: /projects/[id]/handover (Phase 6)
+
+Dealer สามารถ:
+
+บันทึกการส่งมอบ:
+- วันที่ส่งมอบ
+- ชื่อผู้รับมอบฝ่ายลูกค้า
+- หมายเหตุ
+- แนบเอกสารส่งมอบ (PDF)
+
+บันทึกการรับประกัน:
+- ประเภทการรับประกัน: STRUCTURE / ROOF / OTHER
+- วันที่เริ่มรับประกัน
+- ระยะเวลา (เดือน) → ระบบคำนวณวันหมดอายุอัตโนมัติ
+- เงื่อนไขการรับประกัน
+
+เมื่อบันทึก Handover → Project status เปลี่ยนเป็น COMPLETED อัตโนมัติ
+
+========================================================
+MODULE 8 — Notification (การแจ้งเตือน)
+========================================================
+
+Dealer ได้รับการแจ้งเตือนเมื่อ:
+- HQ มอบหมาย Lead มาให้ (DEALER_ADMIN + DEALER_SALES)
+- Quotation ถูก HQ อนุมัติ หรือ ปฏิเสธ
+- Phase ของ Project เปลี่ยนสถานะ
+- Punch Item ถูก assign ให้ตัวเอง
+- โครงการใกล้ครบกำหนด (3 วันก่อน dueDate)
+
+ช่องทางแจ้งเตือน: In-app (กระดิ่งใน Topbar) / LINE / Email
+Dealer มาร์คอ่านแต่ละรายการหรือมาร์คอ่านทั้งหมดได้
+
+========================================================
+สิ่งที่ Dealer เห็นแบบ Read-Only (แก้ไขไม่ได้)
+========================================================
+
+Master Data (ราคากลาง HQ):
+- Products — รายการสินค้า Benjamin (EASYBUILD/RANBUILD/PREFAB/CUSTOM)
+  ใช้เลือกใน BOQ Builder เท่านั้น
+- Materials — รายการวัสดุ (STEEL/ROOF/INSULATION/WALL/SYSTEM)
+  ใช้เลือกใน BOQ Builder เท่านั้น
+- Dealer แก้ไขราคา Products/Materials ไม่ได้ → ต้องใช้ราคากลาง HQ
+
+========================================================
+ข้อมูลที่ถูก scope ตาม dealerId (Tenant Isolation)
+========================================================
+ทุก query ที่ Dealer ทำจะมี WHERE dealerId = [Dealer นั้น] โดยอัตโนมัติ
+Dealer ไม่มีทางเห็นข้อมูลของ Dealer อื่นได้เลย แม้จะ guess URL
+
+ตาราง DB ที่ผูก dealerId:
+- Dealer (ตัวเอง)
+- User (พนักงานใน Dealer นั้น)
+- Customer
+- Lead
+- Quotation
+- Project
+- (Project ย่อยทั้งหมด: Task, Milestone, Document, SitePhoto, QCChecklist, PunchItem, DailySiteReport, Handover)
+- Notification (WHERE userId = user ใน Dealer นั้น)
+
+========================================================
+Tech Stack (ถ้า AI อื่นต้องเขียน Code)
+========================================================
+Frontend : Next.js 15 App Router, TypeScript, Tailwind CSS v4
+State    : React useState / useContext (RoleContext)
+Auth     : Auth.js v5 (credentials) — JWT มี role, dealerId, scopeAll
+Route    : (app)/[dealer pages] | (app)/hq/[hq pages] | (auth)/login
+Guard    : hq/layout.tsx เช็ค isHQ ถ้าไม่ใช่ → redirect /dashboard
+DB       : PostgreSQL + Prisma ORM
+Tenant   : tenantWhere(ctx) → { dealerId: ctx.dealerId } | {} ถ้า HQ
+Mock     : src/lib/mock.ts (ยังไม่ connect DB จริง)
+
+========================================================
+END OF DEALER CONTEXT
+========================================================

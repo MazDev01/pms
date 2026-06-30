@@ -1,0 +1,285 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img "Benjamin" [ref=e7]
+        - generic [ref=e8]:
+          - generic [ref=e9]: BENJAMIN
+          - generic [ref=e10]: PRE-ENGINEERED BUILDING
+      - button "Dealer · สาขา" [ref=e12] [cursor=pointer]:
+        - generic [ref=e14]: Dealer · สาขา
+        - img [ref=e15]
+    - navigation [ref=e18]:
+      - link "แผงควบคุม" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e21]
+        - generic [ref=e26]: แผงควบคุม
+      - link "ผู้สนใจ 6" [ref=e27] [cursor=pointer]:
+        - /url: /leads
+        - img [ref=e29]
+        - generic [ref=e31]: ผู้สนใจ
+        - generic [ref=e32]: "6"
+      - link "ลูกค้า" [ref=e33] [cursor=pointer]:
+        - /url: /customers
+        - img [ref=e35]
+        - generic [ref=e40]: ลูกค้า
+      - link "ผู้ติดต่อ" [ref=e41] [cursor=pointer]:
+        - /url: /contacts
+        - img [ref=e43]
+        - generic [ref=e47]: ผู้ติดต่อ
+      - generic [ref=e48]: เอกสาร
+      - link "ใบเสนอราคา" [ref=e49] [cursor=pointer]:
+        - /url: /quotations
+        - img [ref=e51]
+        - generic [ref=e54]: ใบเสนอราคา
+      - link "สัญญา" [ref=e55] [cursor=pointer]:
+        - /url: /contracts
+        - img [ref=e57]
+        - generic [ref=e60]: สัญญา
+      - link "ใบแจ้งหนี้" [ref=e61] [cursor=pointer]:
+        - /url: /invoices
+        - img [ref=e63]
+        - generic [ref=e66]: ใบแจ้งหนี้
+      - link "การชำระเงิน" [ref=e67] [cursor=pointer]:
+        - /url: /payments
+        - img [ref=e69]
+        - generic [ref=e71]: การชำระเงิน
+      - generic [ref=e72]: โครงการ
+      - link "โครงการ" [ref=e73] [cursor=pointer]:
+        - /url: /projects
+        - img [ref=e75]
+        - generic [ref=e78]: โครงการ
+      - link "รายงาน" [ref=e79] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e81]
+        - generic [ref=e82]: รายงาน
+  - generic [ref=e84]:
+    - banner [ref=e85]:
+      - button [ref=e86] [cursor=pointer]:
+        - img [ref=e87]
+      - button "5" [ref=e91] [cursor=pointer]:
+        - img [ref=e92]
+        - generic [ref=e95]: "5"
+      - button "ส สมชาย เชียงใหม่ ผู้จัดการสาขา" [ref=e97] [cursor=pointer]:
+        - generic [ref=e98]: ส
+        - generic [ref=e99]:
+          - generic [ref=e100]: สมชาย เชียงใหม่
+          - generic [ref=e101]: ผู้จัดการสาขา
+        - img [ref=e102]
+    - main [ref=e104]:
+      - generic [ref=e105]:
+        - generic [ref=e106]:
+          - generic [ref=e107]:
+            - heading "ภาพรวมการเงิน" [level=1] [ref=e108]
+            - paragraph [ref=e109]: รายรับ · ใบแจ้งหนี้ · การชำระเงิน · กำไร · มิถุนายน 2026
+          - button "ส่งออก" [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+            - text: ส่งออก
+        - generic [ref=e115]:
+          - generic [ref=e116]:
+            - paragraph [ref=e117]: ยอดขาย YTD
+            - paragraph [ref=e118]: ฿85.2M
+            - paragraph [ref=e119]: 65% ของเป้า ฿132.0M
+          - generic [ref=e120]:
+            - paragraph [ref=e121]: ยอดขายเดือนนี้
+            - paragraph [ref=e122]: ฿18.4M
+            - paragraph [ref=e123]: 84% ของเป้า ฿22.0M
+          - generic [ref=e124]:
+            - paragraph [ref=e125]: ค้างชำระทั้งหมด
+            - paragraph [ref=e126]: ฿12.4M
+            - paragraph [ref=e127]: เกินกำหนด ฿1.9M
+          - generic [ref=e128]:
+            - paragraph [ref=e129]: Gross Margin
+            - paragraph [ref=e130]: 23.4%
+            - paragraph [ref=e131]: หลังหักต้นทุนประมาณ
+        - generic [ref=e132]:
+          - generic [ref=e133]:
+            - paragraph [ref=e134]: รายรับรายเดือน vs เป้าหมาย
+            - generic [ref=e135]:
+              - img [ref=e136]:
+                - generic [ref=e137]:
+                  - generic [ref=e140]: 38%
+                  - generic [ref=e141]: ม.ค.
+                - generic [ref=e142]:
+                  - generic [ref=e145]: 89%
+                  - generic [ref=e146]: ก.พ.
+                - generic [ref=e147]:
+                  - generic [ref=e150]: 105%
+                  - generic [ref=e151]: มี.ค.
+                - generic [ref=e152]:
+                  - generic [ref=e155]: 95%
+                  - generic [ref=e156]: เม.ย.
+                - generic [ref=e157]:
+                  - generic [ref=e160]: 84%
+                  - generic [ref=e161]: พ.ค.
+                - generic [ref=e162]:
+                  - generic [ref=e165]: 84%
+                  - generic [ref=e166]: มิ.ย.
+              - generic [ref=e167]:
+                - generic [ref=e170]: ยอดขาย (แท่ง)
+                - generic [ref=e173]: เก็บได้ (จุดเขียว)
+                - generic [ref=e176]: เป้าหมาย (เส้นประ)
+          - generic [ref=e177]:
+            - paragraph [ref=e178]: อายุใบแจ้งหนี้ค้างชำระ
+            - generic [ref=e179]:
+              - generic [ref=e180]:
+                - generic [ref=e181]:
+                  - generic [ref=e182]: ยังไม่ถึงกำหนด
+                  - generic [ref=e183]: ฿8.6M
+                - generic [ref=e186]: 69% ของยอดค้าง
+              - generic [ref=e187]:
+                - generic [ref=e188]:
+                  - generic [ref=e189]: 1–30 วัน
+                  - generic [ref=e190]: ฿1.9M
+                - generic [ref=e193]: 15% ของยอดค้าง
+              - generic [ref=e194]:
+                - generic [ref=e195]:
+                  - generic [ref=e196]: 31–60 วัน
+                  - generic [ref=e197]: ฿950K
+                - generic [ref=e200]: 8% ของยอดค้าง
+              - generic [ref=e201]:
+                - generic [ref=e202]:
+                  - generic [ref=e203]: 61+ วัน (เสี่ยง)
+                  - generic [ref=e204]: ฿950K
+                - generic [ref=e207]: 8% ของยอดค้าง
+              - generic [ref=e208]:
+                - generic [ref=e209]: รวมค้างชำระ
+                - generic [ref=e210]: ฿12.4M
+        - generic [ref=e211]:
+          - generic [ref=e212]:
+            - paragraph [ref=e213]: รายได้ตามสายบริการ (YTD)
+            - generic [ref=e214]:
+              - generic [ref=e215]:
+                - generic [ref=e216]: RANBUILD
+                - generic [ref=e219]: ฿8.9M
+                - generic [ref=e220]: 35%
+              - generic [ref=e221]:
+                - generic [ref=e222]: CUSTOM
+                - generic [ref=e225]: ฿6.2M
+                - generic [ref=e226]: 24%
+              - generic [ref=e227]:
+                - generic [ref=e228]: EASYBUILD
+                - generic [ref=e231]: ฿4.8M
+                - generic [ref=e232]: 19%
+              - generic [ref=e233]:
+                - generic [ref=e234]: PREFAB
+                - generic [ref=e237]: ฿3.2M
+                - generic [ref=e238]: 13%
+              - generic [ref=e239]:
+                - generic [ref=e240]: TURNKEY
+                - generic [ref=e243]: ฿1.8M
+                - generic [ref=e244]: 7%
+              - generic [ref=e245]:
+                - generic [ref=e246]: CONSULTANT
+                - generic [ref=e249]: ฿600K
+                - generic [ref=e250]: 2%
+            - generic [ref=e251]:
+              - generic [ref=e252]: รวม YTD
+              - generic [ref=e253]: ฿25.5M
+          - generic [ref=e254]:
+            - paragraph [ref=e256]: ตารางรายรับรายเดือน
+            - table [ref=e258]:
+              - rowgroup [ref=e259]:
+                - row "เดือน ยอดขาย เป้า % เป้า เก็บได้ ค่าใช้จ่าย กำไรขั้นต้น" [ref=e260]:
+                  - columnheader "เดือน" [ref=e261]
+                  - columnheader "ยอดขาย" [ref=e262]
+                  - columnheader "เป้า" [ref=e263]
+                  - columnheader "% เป้า" [ref=e264]
+                  - columnheader "เก็บได้" [ref=e265]
+                  - columnheader "ค่าใช้จ่าย" [ref=e266]
+                  - columnheader "กำไรขั้นต้น" [ref=e267]
+              - rowgroup [ref=e268]:
+                - row "ม.ค. ฿4.2M ฿11.0M 38% ฿3.8M (฿820K) ฿3.4M(80%)" [ref=e269]:
+                  - cell "ม.ค." [ref=e270]
+                  - cell "฿4.2M" [ref=e271]
+                  - cell "฿11.0M" [ref=e272]
+                  - cell "38%" [ref=e273]:
+                    - generic [ref=e274]: 38%
+                  - cell "฿3.8M" [ref=e275]
+                  - cell "(฿820K)" [ref=e276]
+                  - cell "฿3.4M(80%)" [ref=e277]:
+                    - text: ฿3.4M
+                    - generic [ref=e278]: (80%)
+                - row "ก.พ. ฿9.8M ฿11.0M 89% ฿9.2M (฿740K) ฿9.1M(92%)" [ref=e279]:
+                  - cell "ก.พ." [ref=e280]
+                  - cell "฿9.8M" [ref=e281]
+                  - cell "฿11.0M" [ref=e282]
+                  - cell "89%" [ref=e283]:
+                    - generic [ref=e284]: 89%
+                  - cell "฿9.2M" [ref=e285]
+                  - cell "(฿740K)" [ref=e286]
+                  - cell "฿9.1M(92%)" [ref=e287]:
+                    - text: ฿9.1M
+                    - generic [ref=e288]: (92%)
+                - row "มี.ค. ฿11.6M ฿11.0M 105% ฿10.9M (฿950K) ฿10.7M(92%)" [ref=e289]:
+                  - cell "มี.ค." [ref=e290]
+                  - cell "฿11.6M" [ref=e291]
+                  - cell "฿11.0M" [ref=e292]
+                  - cell "105%" [ref=e293]:
+                    - generic [ref=e294]: 105%
+                  - cell "฿10.9M" [ref=e295]
+                  - cell "(฿950K)" [ref=e296]
+                  - cell "฿10.7M(92%)" [ref=e297]:
+                    - text: ฿10.7M
+                    - generic [ref=e298]: (92%)
+                - row "เม.ย. ฿14.2M ฿15.0M 95% ฿13.4M (฿1.1M) ฿13.1M(92%)" [ref=e299]:
+                  - cell "เม.ย." [ref=e300]
+                  - cell "฿14.2M" [ref=e301]
+                  - cell "฿15.0M" [ref=e302]
+                  - cell "95%" [ref=e303]:
+                    - generic [ref=e304]: 95%
+                  - cell "฿13.4M" [ref=e305]
+                  - cell "(฿1.1M)" [ref=e306]
+                  - cell "฿13.1M(92%)" [ref=e307]:
+                    - text: ฿13.1M
+                    - generic [ref=e308]: (92%)
+                - row "พ.ค. ฿12.6M ฿15.0M 84% ฿11.8M (฿980K) ฿11.6M(92%)" [ref=e309]:
+                  - cell "พ.ค." [ref=e310]
+                  - cell "฿12.6M" [ref=e311]
+                  - cell "฿15.0M" [ref=e312]
+                  - cell "84%" [ref=e313]:
+                    - generic [ref=e314]: 84%
+                  - cell "฿11.8M" [ref=e315]
+                  - cell "(฿980K)" [ref=e316]
+                  - cell "฿11.6M(92%)" [ref=e317]:
+                    - text: ฿11.6M
+                    - generic [ref=e318]: (92%)
+                - row "มิ.ย. (ปัจจุบัน) ฿18.4M ฿22.0M 84% ฿15.2M (฿1.4M) ฿17.0M(92%)" [ref=e319]:
+                  - cell "มิ.ย. (ปัจจุบัน)" [ref=e320]
+                  - cell "฿18.4M" [ref=e321]
+                  - cell "฿22.0M" [ref=e322]
+                  - cell "84%" [ref=e323]:
+                    - generic [ref=e324]: 84%
+                  - cell "฿15.2M" [ref=e325]
+                  - cell "(฿1.4M)" [ref=e326]
+                  - cell "฿17.0M(92%)" [ref=e327]:
+                    - text: ฿17.0M
+                    - generic [ref=e328]: (92%)
+                - row "YTD รวม ฿70.8M ฿85.0M 83% ฿64.3M (฿6.0M) ฿64.8M(92%)" [ref=e329]:
+                  - cell "YTD รวม" [ref=e330]
+                  - cell "฿70.8M" [ref=e331]
+                  - cell "฿85.0M" [ref=e332]
+                  - cell "83%" [ref=e333]:
+                    - generic [ref=e334]: 83%
+                  - cell "฿64.3M" [ref=e335]
+                  - cell "(฿6.0M)" [ref=e336]
+                  - cell "฿64.8M(92%)" [ref=e337]:
+                    - text: ฿64.8M
+                    - generic [ref=e338]: (92%)
+        - generic [ref=e340]:
+          - generic [ref=e341]:
+            - paragraph [ref=e342]: เก็บได้เดือนนี้
+            - paragraph [ref=e343]: ฿15.2M
+            - paragraph [ref=e344]: 83% ของยอดขาย
+          - generic [ref=e345]:
+            - paragraph [ref=e346]: ค้างชำระ
+            - paragraph [ref=e347]: ฿12.4M
+            - paragraph [ref=e348]: รวมทุกอายุ
+          - generic [ref=e349]:
+            - paragraph [ref=e350]: เกินกำหนด
+            - paragraph [ref=e351]: ฿1.9M
+            - paragraph [ref=e352]: ต้องติดตามด่วน
+          - generic [ref=e353]:
+            - paragraph [ref=e354]: ค่าใช้จ่าย YTD
+            - paragraph [ref=e355]: ฿8.6M
+            - paragraph [ref=e356]: 10% ของรายรับ

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+<title>ตั้งค่า — BENJAMIN PMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared-v2.css">
+<style>
+.set-shell{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:4px 0}
+.set-nav{background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);padding:12px;height:fit-content}
+.sn-section{font-size:.66rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;padding:10px 10px 6px;margin-top:4px}
+.sn-section:first-child{margin-top:0}
+.sn-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;font-size:.81rem;font-weight:500;color:var(--sub);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+.sn-item:hover{background:var(--pr-llt);color:var(--text)}
+.sn-item.active{background:var(--pr);color:#fff;font-weight:700}
+.sn-item.active svg{opacity:1}
+.sn-item svg{flex-shrink:0;opacity:.7}
+.set-content{display:flex;flex-direction:column;gap:14px}
+.set-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden}
+.sc-hd{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sc-hd-title{font-size:.9rem;font-weight:700}
+.sc-hd-sub{font-size:.72rem;color:var(--sub);margin-top:2px}
+.sc-body{padding:20px}
+.fg{margin-bottom:18px}
+.fg:last-child{margin-bottom:0}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+.fg-row:last-child{margin-bottom:0}
+label{display:block;font-size:.76rem;font-weight:600;color:var(--text);margin-bottom:6px}
+input[type="text"],input[type="email"],input[type="password"],select,textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font-size:.82rem;color:var(--text);font-family:inherit;background:#fff;transition:all .15s;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--pr);box-shadow:0 0 0 3px rgba(108,98,245,.1)}
+input::placeholder,textarea::placeholder{color:var(--sub)}
+textarea{resize:vertical;min-height:80px}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%238b8eb3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:36px}
+.fg-hint{font-size:.68rem;color:var(--sub);margin-top:4px}
+/* Toggle switch */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.tr-text{flex:1}
+.tr-label{font-size:.82rem;font-weight:600}
+.tr-hint{font-size:.7rem;color:var(--sub);margin-top:2px}
+.toggle{position:relative;width:42px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-sl{position:absolute;inset:0;background:#e5e1f8;border-radius:99px;cursor:pointer;transition:all .2s}
+.toggle-sl::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+input:checked + .toggle-sl{background:var(--pr)}
+input:checked + .toggle-sl::before{transform:translateX(18px)}
+/* Avatar upload */
+.av-upload{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.av-preview{width:72px;height:72px;border-radius:18px;background:linear-gradient(135deg,var(--pr),#9b8ff8);display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;color:#fff;flex-shrink:0}
+.av-btns{display:flex;flex-direction:column;gap:6px}
+.av-btn{padding:7px 16px;border-radius:9px;font-size:.76rem;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:#fff;color:var(--text);transition:all .12s}
+.av-btn:hover{background:var(--pr-llt);border-color:var(--pr);color:var(--pr)}
+/* Danger zone */
+.dz{border:1px solid #fde8ec;border-radius:var(--r);padding:16px 18px;background:#fff9fa}
+.dz-title{font-size:.82rem;font-weight:700;color:var(--danger);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.dz-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #fde8ec}
+.dz-item:last-child{border-bottom:none;padding-bottom:0}
+.dz-item-text{font-size:.8rem;font-weight:600}
+.dz-item-hint{font-size:.7rem;color:var(--sub);margin-top:2px}
+.btn-danger{padding:7px 14px;border-radius:9px;font-size:.76rem;font-weight:700;cursor:pointer;border:1px solid var(--danger);background:#fff;color:var(--danger);font-family:inherit;transition:all .12s}
+.btn-danger:hover{background:var(--danger);color:#fff}
+/* Save bar */
+.save-bar{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--sh)}
+.sb-text{font-size:.78rem;color:var(--sub)}
+.sb-btns{display:flex;gap:8px}
+.btn-cancel{padding:8px 18px;border-radius:10px;font-size:.78rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text);font-family:inherit;transition:all .12s}
+.btn-cancel:hover{background:var(--pr-llt)}
+.btn-save{padding:8px 18px;border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;border:none;background:var(--pr);color:#fff;font-family:inherit;box-shadow:0 4px 12px rgba(108,98,245,.28);transition:all .15s}
+.btn-save:hover{background:var(--pr-d);transform:translateY(-1px)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-icon">B</div>
+    <div><div class="sb-name">BENJAMIN</div><div class="sb-role">Project Management</div></div>
+  </div>
+  <nav class="sb-nav">
+    <a href="dashboard.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>แผงควบคุม</a>
+    <a href="projects.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>โครงการ</a>
+    <a href="tasks.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>งาน</a>
+    <a href="calendar.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ปฏิทิน</a>
+    <a href="clients.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>ลูกค้า</a>
+    <a href="team.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>ทีมงาน</a>
+    <a href="goals.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>เป้าหมาย</a>
+    <a href="budget.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>งบประมาณ</a>
+    <a href="reports.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>วิเคราะห์</a>
+    <div class="sb-div"></div>
+    <a href="settings.html" class="si active"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M1 12h2M21 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>ตั้งค่า</a>
+  </nav>
+  <div class="sb-bot">
+    <div class="sb-div" style="margin-top:0"></div>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>ช่วยเหลือ</button>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>ออกจากระบบ</button>
+    <button class="sb-website"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>เยี่ยมชมเว็บไซต์</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="ptb">
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="ptb-badge">3</span></button>
+    <div class="ptb-user"><div class="ptb-av">A</div><div><div class="ptb-uname">Admin Benjamin</div><div class="ptb-uemail">admin@benjamin.th</div></div></div>
+  </div>
+
+  <div class="pcontent">
+    <div class="pg-title">ตั้งค่า</div>
+    <div class="pg-sub">จัดการการตั้งค่าบัญชีและระบบ</div>
+
+    <div class="set-shell">
+      <!-- Settings nav -->
+      <div class="set-nav">
+        <div class="sn-section">บัญชี</div>
+        <button class="sn-item active"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>ข้อมูลโปรไฟล์</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ความปลอดภัย</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>การแจ้งเตือน</button>
+        <div class="sn-section">ระบบ</div>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>ทั่วไป</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>ภาษาและรูปแบบ</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>อีเมลและ SMTP</button>
+        <div class="sn-section">โครงการ</div>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>หมวดหมู่งาน</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>บทบาทและสิทธิ์</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>การเชื่อมต่อ API</button>
+        <div class="sn-section">ข้อมูล</div>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>สำรองข้อมูล</button>
+        <button class="sn-item"><svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>ล้างข้อมูล</button>
+      </div>
+
+      <!-- Settings content -->
+      <div class="set-content">
+        <!-- Profile -->
+        <div class="set-card">
+          <div class="sc-hd">
+            <div>
+              <div class="sc-hd-title">ข้อมูลโปรไฟล์</div>
+              <div class="sc-hd-sub">จัดการข้อมูลส่วนตัวและรูปโปรไฟล์</div>
+            </div>
+          </div>
+          <div class="sc-body">
+            <div class="av-upload">
+              <div class="av-preview">A</div>
+              <div class="av-btns">
+                <button class="av-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> อัปโหลดรูปภาพ</button>
+                <div style="font-size:.66rem;color:var(--sub)">JPG, PNG ขนาดสูงสุด 2MB</div>
+              </div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>ชื่อ</label><input type="text" value="Admin"></div>
+              <div class="fg"><label>นามสกุล</label><input type="text" value="Benjamin"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>อีเมล</label><input type="email" value="admin@benjamin.th"></div>
+              <div class="fg"><label>เบอร์โทรศัพท์</label><input type="text" value="081-234-5678"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>ตำแหน่ง</label><input type="text" value="System Administrator"></div>
+              <div class="fg"><label>แผนก</label><select><option>บริหารระบบ</option><option>บริหารโครงการ</option><option>พัฒนาซอฟต์แวร์</option></select></div>
+            </div>
+            <div class="fg"><label>เกี่ยวกับฉัน</label><textarea placeholder="แนะนำตัวเองสั้นๆ...">ผู้ดูแลระบบ BENJAMIN PMS รับผิดชอบดูแลโครงการและทีมงาน</textarea></div>
+          </div>
+        </div>
+
+        <!-- Company info -->
+        <div class="set-card">
+          <div class="sc-hd">
+            <div>
+              <div class="sc-hd-title">ข้อมูลบริษัท</div>
+              <div class="sc-hd-sub">ข้อมูลที่ปรากฏบนใบแจ้งหนี้และเอกสาร</div>
+            </div>
+          </div>
+          <div class="sc-body">
+            <div class="fg-row">
+              <div class="fg"><label>ชื่อบริษัท</label><input type="text" value="BENJAMIN Co., Ltd."></div>
+              <div class="fg"><label>เลขที่ผู้เสียภาษี</label><input type="text" value="0105565012345"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>เว็บไซต์</label><input type="text" value="www.benjamin.th"></div>
+              <div class="fg"><label>เบอร์โทรศัพท์บริษัท</label><input type="text" value="02-123-4567"></div>
+            </div>
+            <div class="fg"><label>ที่อยู่</label><textarea placeholder="ที่อยู่บริษัท...">99/1 อาคารเบนจามิน ชั้น 5 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพมหานคร 10110</textarea></div>
+            <div class="fg-row">
+              <div class="fg"><label>สกุลเงิน</label><select><option>THB — บาท</option><option>USD — ดอลลาร์</option><option>EUR — ยูโร</option></select></div>
+              <div class="fg"><label>รูปแบบวันที่</label><select><option>วว/ดด/ปปปป</option><option>ดด/วว/ปปปป</option><option>ปปปป-ดด-วว</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="set-card">
+          <div class="sc-hd">
+            <div>
+              <div class="sc-hd-title">การแจ้งเตือน</div>
+              <div class="sc-hd-sub">เลือกประเภทการแจ้งเตือนที่ต้องการรับ</div>
+            </div>
+          </div>
+          <div class="sc-body" style="padding:0 20px">
+            <div class="toggle-row">
+              <div class="tr-text"><div class="tr-label">งานถูกมอบหมาย</div><div class="tr-hint">แจ้งเตือนเมื่อมีงานถูกมอบหมายให้คุณ</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-sl"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="tr-text"><div class="tr-label">กำหนดส่งใกล้ถึง</div><div class="tr-hint">แจ้งเตือน 24 ชั่วโมงก่อนกำหนดส่ง</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-sl"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="tr-text"><div class="tr-label">โครงการมีการอัปเดต</div><div class="tr-hint">แจ้งเตือนเมื่อมีความคืบหน้าในโครงการ</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-sl"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="tr-text"><div class="tr-label">สมาชิกใหม่เข้าร่วม</div><div class="tr-hint">แจ้งเตือนเมื่อมีสมาชิกใหม่เข้าร่วมทีม</div></div>
+              <label class="toggle"><input type="checkbox"><span class="toggle-sl"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="tr-text"><div class="tr-label">รายงานรายสัปดาห์</div><div class="tr-hint">รับสรุปรายงานทุกวันจันทร์เช้า</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-sl"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="tr-text"><div class="tr-label">การแจ้งเตือนทางอีเมล</div><div class="tr-hint">ส่งสรุปการแจ้งเตือนผ่านอีเมล</div></div>
+              <label class="toggle"><input type="checkbox" checked><span class="toggle-sl"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Danger zone -->
+        <div class="set-card">
+          <div class="sc-hd" style="border-bottom-color:#fde8ec">
+            <div>
+              <div class="sc-hd-title" style="color:var(--danger)">โซนอันตราย</div>
+              <div class="sc-hd-sub">การกระทำเหล่านี้ไม่สามารถย้อนกลับได้</div>
+            </div>
+          </div>
+          <div class="sc-body">
+            <div class="dz">
+              <div class="dz-title">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                โซนอันตราย
+              </div>
+              <div class="dz-item">
+                <div><div class="dz-item-text">ส่งออกข้อมูลทั้งหมด</div><div class="dz-item-hint">ดาวน์โหลดข้อมูลทั้งหมดในรูปแบบ JSON</div></div>
+                <button class="btn-danger">ส่งออก</button>
+              </div>
+              <div class="dz-item">
+                <div><div class="dz-item-text">รีเซ็ตข้อมูลตัวอย่าง</div><div class="dz-item-hint">ล้างข้อมูลทั้งหมดและโหลดข้อมูลตัวอย่างใหม่</div></div>
+                <button class="btn-danger">รีเซ็ต</button>
+              </div>
+              <div class="dz-item" style="border-bottom:none;padding-bottom:0">
+                <div><div class="dz-item-text">ลบบัญชีนี้</div><div class="dz-item-hint">ลบบัญชีและข้อมูลทั้งหมดอย่างถาวร</div></div>
+                <button class="btn-danger" style="background:var(--danger);color:#fff">ลบบัญชี</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Save bar -->
+        <div class="save-bar">
+          <div class="sb-text"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2" style="vertical-align:middle;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg>มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</div>
+          <div class="sb-btns">
+            <button class="btn-cancel">ยกเลิก</button>
+            <button class="btn-save"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>บันทึกการเปลี่ยนแปลง</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

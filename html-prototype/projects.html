@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+<title>โครงการ — BENJAMIN PMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared-v2.css">
+<style>
+.sc-row{grid-template-columns:repeat(4,1fr)}
+.act-btn{width:29px;height:29px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);background:#fff;color:var(--sub);cursor:pointer;transition:all .12s}
+.act-btn:hover{background:var(--pr-llt);border-color:var(--pr);color:var(--pr)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-icon">B</div>
+    <div><div class="sb-name">BENJAMIN</div><div class="sb-role">Project Management</div></div>
+  </div>
+  <nav class="sb-nav">
+    <a href="dashboard.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>แผงควบคุม</a>
+    <a href="projects.html" class="si active"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>โครงการ</a>
+    <a href="tasks.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>งาน</a>
+    <a href="calendar.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ปฏิทิน</a>
+    <a href="clients.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>ลูกค้า</a>
+    <a href="team.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>ทีมงาน</a>
+    <a href="goals.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>เป้าหมาย</a>
+    <a href="budget.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>งบประมาณ</a>
+    <a href="reports.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>วิเคราะห์</a>
+    <div class="sb-div"></div>
+    <a href="settings.html" class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M1 12h2M21 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>ตั้งค่า</a>
+  </nav>
+  <div class="sb-bot">
+    <div class="sb-div" style="margin-top:0"></div>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>ช่วยเหลือ</button>
+    <button class="si"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>ออกจากระบบ</button>
+    <button class="sb-website"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>เยี่ยมชมเว็บไซต์</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="ptb">
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+    <button class="ptb-ico"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="ptb-badge">3</span></button>
+    <div class="ptb-user"><div class="ptb-av">A</div><div><div class="ptb-uname">Admin Benjamin</div><div class="ptb-uemail">admin@benjamin.th</div></div></div>
+  </div>
+
+  <div class="pcontent">
+    <div class="pg-title">โครงการ</div>
+    <div class="pg-sub">จัดการและติดตามโครงการทั้งหมดของคุณ</div>
+
+    <div class="fr">
+      <div class="fr-l">
+        <button class="fr-pill"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>เดือนนี้</button>
+        <button class="fr-pill"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>ทั้งหมด</button>
+      </div>
+      <div class="fr-r">
+        <button class="fr-sec"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>ส่งออก</button>
+        <button class="fr-add"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>เพิ่มโครงการ</button>
+      </div>
+    </div>
+
+    <div class="sc-row">
+      <div class="sc">
+        <div class="sc-ico" style="background:#ede9fe"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#6c62f5" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        <div><div class="sc-val" style="color:#6c62f5">8</div><div class="sc-lbl">ทั้งหมด</div><div class="sc-trend up">↑ 12.1% เดือนนี้</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#fff3e0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <div><div class="sc-val" style="color:#f59e0b">4</div><div class="sc-lbl">กำลังดำเนินการ</div><div class="sc-trend up">↑ 2 โครงการใหม่</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#f1f5f9"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div>
+        <div><div class="sc-val" style="color:#64748b">1</div><div class="sc-lbl">พักไว้</div><div class="sc-trend" style="color:#94a3b8">— ไม่เปลี่ยนแปลง</div></div>
+      </div>
+      <div class="sc">
+        <div class="sc-ico" style="background:#e5faf0"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div><div class="sc-val" style="color:#22c55e">3</div><div class="sc-lbl">สมบูรณ์</div><div class="sc-trend up">↑ 1 โครงการเพิ่ม</div></div>
+      </div>
+    </div>
+
+    <div class="tbar">
+      <div class="tbar-l">
+        <div class="t-search"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#b0b0d0" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="ค้นหาโครงการ..."></div>
+        <button class="t-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>ตัวกรอง</button>
+        <button class="t-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M9 18h6"/></svg>เรียงลำดับ</button>
+      </div>
+      <div class="tbar-r">
+        <button class="t-btn on"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/></svg>ตาราง</button>
+        <button class="t-add"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th style="width:36px">#</th>
+            <th>ชื่อโครงการ</th>
+            <th>ลูกค้า</th>
+            <th>สถานะ</th>
+            <th style="min-width:120px">ความคืบหน้า</th>
+            <th>วันสิ้นสุด</th>
+            <th>งบประมาณ</th>
+            <th style="width:72px"></th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td class="td-num">1</td>
+              <td><div class="name">พัฒนาระบบ CRM</div><div class="sub2">เริ่ม 1 เม.ย. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">บริษัท ABC จำกัด</td>
+              <td><span class="bdg bdg-blue">กำลังดำเนินการ</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar" style="flex:1"><div class="pbar-f" style="width:65%"></div></div><span style="font-size:.72rem;font-weight:700;color:#6c62f5;white-space:nowrap">65%</span></div></td>
+              <td><span class="due due-soon">30 มิ.ย. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿350,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">2</td>
+              <td><div class="name">ออกแบบเว็บไซต์ใหม่</div><div class="sub2">เริ่ม 15 เม.ย. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">XYZ Corporation</td>
+              <td><span class="bdg bdg-blue">กำลังดำเนินการ</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar" style="flex:1"><div class="pbar-f" style="width:40%"></div></div><span style="font-size:.72rem;font-weight:700;color:#6c62f5;white-space:nowrap">40%</span></div></td>
+              <td><span class="due due-ok">15 ก.ค. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿180,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">3</td>
+              <td><div class="name">พัฒนาแอป Mobile</div><div class="sub2">เริ่ม 1 มี.ค. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">DEF Limited</td>
+              <td><span class="bdg bdg-blue">กำลังดำเนินการ</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar pbar-green" style="flex:1"><div class="pbar-f" style="width:78%"></div></div><span style="font-size:.72rem;font-weight:700;color:#22c55e;white-space:nowrap">78%</span></div></td>
+              <td><span class="due due-over">25 มิ.ย. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿520,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">4</td>
+              <td><div class="name">ระบบ ERP</div><div class="sub2">เริ่ม 1 ก.พ. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">GHI Company</td>
+              <td><span class="bdg bdg-gray">พักไว้</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar pbar-red" style="flex:1"><div class="pbar-f" style="width:28%"></div></div><span style="font-size:.72rem;font-weight:700;color:#f04d6a;white-space:nowrap">28%</span></div></td>
+              <td><span class="due due-ok">30 ส.ค. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿850,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">5</td>
+              <td><div class="name">ระบบ HR Online</div><div class="sub2">เริ่ม 1 ม.ค. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">บริษัท ABC จำกัด</td>
+              <td><span class="bdg bdg-green">สมบูรณ์</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar pbar-green" style="flex:1"><div class="pbar-f" style="width:100%"></div></div><span style="font-size:.72rem;font-weight:700;color:#22c55e;white-space:nowrap">100%</span></div></td>
+              <td><span class="due due-ok">1 มิ.ย. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿220,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">6</td>
+              <td><div class="name">วิเคราะห์ข้อมูลตลาด</div><div class="sub2">เริ่ม 10 พ.ค. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">MNO Corp</td>
+              <td><span class="bdg bdg-blue">กำลังดำเนินการ</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar" style="flex:1"><div class="pbar-f" style="width:55%"></div></div><span style="font-size:.72rem;font-weight:700;color:#6c62f5;white-space:nowrap">55%</span></div></td>
+              <td><span class="due due-ok">10 ก.ค. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿140,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">7</td>
+              <td><div class="name">ระบบจัดการคลังสินค้า</div><div class="sub2">เริ่ม 1 ก.พ. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">STU Group</td>
+              <td><span class="bdg bdg-green">สมบูรณ์</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar pbar-green" style="flex:1"><div class="pbar-f" style="width:100%"></div></div><span style="font-size:.72rem;font-weight:700;color:#22c55e;white-space:nowrap">100%</span></div></td>
+              <td><span class="due due-ok">15 พ.ค. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿310,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="td-num">8</td>
+              <td><div class="name">ปรับปรุงระบบ Legacy</div><div class="sub2">เริ่ม 1 มี.ค. 69</div></td>
+              <td style="font-size:.8rem;font-weight:600">Beta Systems</td>
+              <td><span class="bdg bdg-green">สมบูรณ์</span></td>
+              <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar pbar-green" style="flex:1"><div class="pbar-f" style="width:100%"></div></div><span style="font-size:.72rem;font-weight:700;color:#22c55e;white-space:nowrap">100%</span></div></td>
+              <td><span class="due due-ok">5 พ.ค. 69</span></td>
+              <td style="font-size:.8rem;font-weight:600">฿95,000</td>
+              <td><div style="display:flex;gap:5px">
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="act-btn"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              </div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pg-bar">
+        <div class="pg-info">แสดง 1–8 จากทั้งหมด 8 รายการ</div>
+        <div class="pg-btns">
+          <button class="pg-b">‹</button><button class="pg-b cur">1</button><button class="pg-b">›</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>
