@@ -3,21 +3,20 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
-  GitMerge, Store, Package, Building2, Shield, LayoutTemplate,
+  GitMerge, Store, Package, Building2, Shield,
   ChevronUp, ChevronDown, Plus, Trash2, Upload, Check, Save,
   Lock, ArrowRight,
 } from "lucide-react";
 import { dealerLeaderboard } from "@/lib/mock";
 
-type HQSettingTab = "dealers" | "products" | "sales-journey" | "company" | "users" | "templates";
+type HQSettingTab = "company" | "users" | "dealers" | "products" | "sales-journey";
 
 const TABS: { key: HQSettingTab; label: string; icon: React.ReactNode }[] = [
-  { key: "dealers",       label: "จัดการตัวแทน",    icon: <Store        size={15} /> },
-  { key: "products",      label: "แคตตาล็อกสินค้า", icon: <Package      size={15} /> },
-  { key: "sales-journey", label: "เส้นทางการขาย",  icon: <GitMerge     size={15} /> },
-  { key: "company",       label: "บริษัท",          icon: <Building2     size={15} /> },
-  { key: "users",         label: "ผู้ใช้งาน",       icon: <Shield        size={15} /> },
-  { key: "templates",     label: "เทมเพลต",         icon: <LayoutTemplate size={15} /> },
+  { key: "company",       label: "บริษัท",          icon: <Building2 size={15} /> },
+  { key: "users",         label: "ผู้ใช้งาน",       icon: <Shield    size={15} /> },
+  { key: "dealers",       label: "ตัวแทนจำหน่าย",   icon: <Store     size={15} /> },
+  { key: "products",      label: "สินค้า",          icon: <Package   size={15} /> },
+  { key: "sales-journey", label: "เส้นทางการขาย",   icon: <GitMerge  size={15} /> },
 ];
 
 const HQ_PROFILE_KEY = "hq_company_profile";
@@ -634,7 +633,7 @@ function ProductCatalogTab() {
             </div>
             <div>
               <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#2D2D2D" }}>หน้าแคตตาล็อกสินค้าเต็มรูปแบบ</div>
-              <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 2 }}>รายการสินค้า ราคา ระยะเวลาผลิต และการจัดการสถานะ</div>
+              <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 2 }}>รายการสินค้า ราคากลาง ระยะเวลารอสินค้า และการจัดการสถานะ</div>
             </div>
           </div>
           <Link href="/hq/master" className="btn btn-primary btn-md" style={{ gap: 7 }}>
@@ -651,7 +650,7 @@ function ProductCatalogTab() {
 }
 
 export default function HQSettingsPage() {
-  const [activeTab, setActiveTab] = useState<HQSettingTab>("dealers");
+  const [activeTab, setActiveTab] = useState<HQSettingTab>("company");
 
   return (
     <div className="erp">
@@ -694,13 +693,6 @@ export default function HQSettingsPage() {
             icon={<Shield size={20} color="#fff" />}
             panelTitle="หน้าจัดการผู้ใช้และสิทธิ์" panelDesc="ตารางผู้ใช้ บทบาท และเมทริกซ์สิทธิ์ตามโมดูล"
             href="/hq/users" />
-        )}
-        {activeTab === "templates"     && (
-          <LinkTab title="เทมเพลต" desc="แม่แบบเอกสารและการสื่อสารมาตรฐาน"
-            items={["ใบเสนอราคา", "ข้อเสนอ", "อีเมล / LINE", "สัญญา"]}
-            icon={<LayoutTemplate size={20} color="#fff" />}
-            panelTitle="หน้าจัดการเทมเพลต" panelDesc="แม่แบบใบเสนอราคา ข้อเสนอ อีเมล LINE และสัญญา"
-            href="/templates" />
         )}
       </div>
     </div>

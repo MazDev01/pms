@@ -159,10 +159,19 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title">ลีดที่ได้รับมอบหมาย</div>
+        <div className="card-title">ผู้สนใจที่ได้รับมอบหมาย</div>
       </div>
       <div className="table-wrap">
         <table>
+          <colgroup>
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "14%" }} />
+          </colgroup>
           <thead>
             <tr>
               {["รหัสลีด", "ลูกค้า", "จังหวัด", "สินค้า", "มูลค่า", "สถานะ", "มอบหมายเมื่อ"].map(h => (
@@ -212,15 +221,9 @@ function ProjectsTab({ projects }: { projects: DealerProjectItem[] }) {
                   <span className="badge" style={BADGE(st.bg, st.color)}>{st.label}</span>
                   <span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{p.product}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
-                  <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>กำหนดส่ง: {p.dueDate}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>คาดปิดการขาย: {p.dueDate}</span>
                   <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#003366" }}>{fmtM(p.valueNum)}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, height: 6, background: "#f0f0f5", borderRadius: 99, overflow: "hidden" }}>
-                    <div className="top5-bar" style={{ height: "100%", width: `${p.progress}%`, background: st.bar, borderRadius: 99 }} />
-                  </div>
-                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: st.color, minWidth: 36 }}>{p.progress}%</span>
                 </div>
               </div>
             </div>
@@ -239,6 +242,15 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
       </div>
       <div className="table-wrap">
         <table>
+          <colgroup>
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "26%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "14%" }} />
+          </colgroup>
           <thead>
             <tr>
               {["เลขที่", "ลูกค้า", "สินค้า", "มูลค่า", "ส่วนลด", "สถานะ", "วันที่"].map(h => (

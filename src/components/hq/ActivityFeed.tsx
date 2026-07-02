@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy, Inbox, CheckCircle2, ArrowRightLeft, Building2, Receipt } from "lucide-react";
+import { Trophy, Inbox, CheckCircle2, ArrowRightLeft } from "lucide-react";
 import { hqRecentActivity, ActivityKind } from "@/lib/mock";
 
 const KIND_ICON: Record<ActivityKind, React.ElementType> = {
@@ -8,8 +8,6 @@ const KIND_ICON: Record<ActivityKind, React.ElementType> = {
   lead:    Inbox,
   approve: CheckCircle2,
   assign:  ArrowRightLeft,
-  project: Building2,
-  invoice: Receipt,
 };
 
 const KIND_COLOR: Record<ActivityKind, { bg: string; color: string }> = {
@@ -17,8 +15,6 @@ const KIND_COLOR: Record<ActivityKind, { bg: string; color: string }> = {
   lead:    { bg: "#dce5f0", color: "#003366" },
   approve: { bg: "#dce5f0", color: "#003366" },
   assign:  { bg: "#dce5f0", color: "#003366" },
-  project: { bg: "#dce5f0", color: "#003366" },
-  invoice: { bg: "#dce5f0", color: "#003366" },
 };
 
 export function ActivityFeed() {

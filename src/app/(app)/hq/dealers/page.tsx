@@ -5,11 +5,41 @@ import { dealerLeaderboard, type DealerRow, type DealerCredentials } from "@/lib
 import { useRole } from "@/context/RoleContext";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
 import { Plus, Search, X, Copy, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock } from "lucide-react";
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,0,0,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
+
+// ── Dealer status (LOCAL to this page) ──────────────────────────
+// mock's DealerRow.status is only "active" | "inactive". เพิ่มสถานะที่ 3 ("suspended")
+// แบบ deterministic โดยไม่แก้ mock: override ตามรหัสสาขา (ไม่ใช้ random)
+type DealerStatus = "active" | "inactive" | "suspended";
+const STATUS_OVERRIDE: Record<string, DealerStatus> = {
+  CRI: "suspended", // สาขาเชียงราย — ระงับใช้งาน (ตัวอย่างสถานะ "ระงับ")
+};
+// derive สถานะที่แสดงผลจากข้อมูล dealer: ให้ inactive จาก mock/แก้ไข ชนะ override เสมอ
+function dealerStatus(d: { code: string; status: "active" | "inactive" }): DealerStatus {
+  if (d.status === "inactive") return "inactive";
+  return STATUS_OVERRIDE[d.code] ?? "active";
+}
+const STATUS_META: Record<DealerStatus, { label: string; color: string; bg: string }> = {
+  active:    { label: "ใช้งาน",    color: "#059669", bg: "#e5faf0" },
+  inactive:  { label: "ไม่ใช้งาน", color: "#6b7280", bg: "#f0f0f5" },
+  suspended: { label: "ระงับ",     color: "#dc2626", bg: "#fee2e2" },
+};
+const STATUS_PILLS: { value: DealerStatus | "all"; label: string }[] = [
+  { value: "all",       label: "ทั้งหมด" },
+  { value: "active",    label: "ใช้งาน" },
+  { value: "inactive",  label: "ไม่ใช้งาน" },
+  { value: "suspended", label: "ระงับ" },
+];
+
+function StatusBadge({ status }: { status: DealerStatus }) {
+  const m = STATUS_META[status];
+  return <span className="badge" style={{ background: m.bg, color: m.color }}>{m.label}</span>;
+}
 
 // ── Sub-components ──────────────────────────────────────────────
 
@@ -86,6 +116,7 @@ export default function HQDealersPage() {
   const [dealers, setDealers] = useState<DealerRow[]>(dealerLeaderboard);
   const [q, setQ] = useState("");
   const [regionFilter, setRegionFilter] = useState("ทั้งหมด");
+  const [statusFilter, setStatusFilter] = useState<DealerStatus | "all">("all");
 
   // Modals
   const [showForm, setShowForm] = useState(false);
@@ -100,6 +131,7 @@ export default function HQDealersPage() {
   // Filter + sort — กรองจริงด้วย FilterBar (dealer/status) + search/region ในหน้า
   const filtered = dealers.filter(d => {
     if (!passes({ dealer: d.code, status: d.status })) return false;
+    if (statusFilter !== "all" && dealerStatus(d) !== statusFilter) return false;
     if (regionFilter !== "ทั้งหมด" && d.region !== regionFilter) return false;
     if (q && !`${d.code} ${d.name} ${d.region}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
@@ -165,6 +197,9 @@ export default function HQDealersPage() {
             dims={["dealer", "status"]}
             statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
           />
+          <ExportMenu filename="dealers" title="ตัวแทนจำหน่าย (ทั้งเครือ)"
+            headers={["รหัส","สาขา","ภาค","รายได้จริง","เป้า","Win Rate %","ดีลกำลังทำ","สถานะ"]}
+            rows={filtered.map(d=>[d.code,d.name,d.region,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,STATUS_META[dealerStatus(d)].label])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มสาขา
           </button>
@@ -213,11 +248,40 @@ export default function HQDealersPage() {
             <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={selectStyle}>
               {["ทั้งหมด", ...REGIONS].map(r => <option key={r} value={r}>{r}</option>)}
             </select>
+            {/* Status filter pills — active / inactive / suspended */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 10, padding: 3 }}>
+              {STATUS_PILLS.map(p => {
+                const on = statusFilter === p.value;
+                const accent = p.value === "all" ? "#003366" : STATUS_META[p.value].color;
+                return (
+                  <button key={p.value} type="button" onClick={() => setStatusFilter(p.value)}
+                    style={{
+                      border: "none", cursor: "pointer", borderRadius: 8, padding: "5px 11px",
+                      fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap",
+                      background: on ? accent : "transparent",
+                      color: on ? "#fff" : "#6b7280",
+                    }}>
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         <div className="table-wrap">
           <table>
+            <colgroup>
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "12%" }} />
+            </colgroup>
             <thead>
               <tr>
                 {["#", "รหัส", "ชื่อสาขา", "ภาค", "ยอด / เป้า", "โอกาสการขาย", "ส่งตรงเวลา", "สถานะ", ""].map((h, i) => (
@@ -229,7 +293,7 @@ export default function HQDealersPage() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} style={{ padding: "32px", textAlign: "center", fontSize: "0.82rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
               ) : filtered.map((d, i) => (
-                <tr key={d.id} className="clickable" style={{ opacity: d.status === "inactive" ? 0.55 : 1 }}
+                <tr key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
                   onClick={() => setSelectedDealer(d)}>
                   <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{i + 1}</td>
                   <td>
@@ -249,9 +313,7 @@ export default function HQDealersPage() {
                   </td>
                   <td><OnTimeBadge pct={d.onTimePct} /></td>
                   <td>
-                    {d.status === "active"
-                      ? <span className="badge" style={{ background: "#e5faf0", color: "#059669" }}>ใช้งาน</span>
-                      : <span className="badge" style={{ background: "#f0f0f5", color: "#6b7280" }}>ปิดใช้งาน</span>}
+                    <StatusBadge status={dealerStatus(d)} />
                   </td>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -394,7 +456,7 @@ export default function HQDealersPage() {
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 900, fontSize: "0.82rem", color: "#003366", background: "#dce5f0", padding: "3px 10px", borderRadius: 8, letterSpacing: "0.06em" }}>{d.code}</span>
-                    <span className="badge" style={{ background: d.status === "active" ? "#e5faf0" : "#f0f0f5", color: d.status === "active" ? "#059669" : "#6b7280" }}>{d.status === "active" ? "ใช้งาน" : "ปิดใช้งาน"}</span>
+                    <StatusBadge status={dealerStatus(d)} />
                     <span className="badge" style={{ background: tier.bg, color: tier.color }}>{tier.label}</span>
                   </div>
                   <button onClick={() => setSelectedDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>

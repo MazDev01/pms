@@ -99,14 +99,78 @@ function PermCell({ level }: { level: PermLevel }) {
   );
 }
 
+// ── Add-user modal ────────────────────────────────────────────
+type UserForm = { name: string; email: string; role: RoleKey; status: UserStatus };
+const BLANK_USER: UserForm = { name: "", email: "", role: "dealer_sales", status: "active" };
+
+function AddUserModal({ onClose, onAdd }: { onClose: () => void; onAdd: (f: UserForm) => void }) {
+  const [form, setForm] = useState<UserForm>(BLANK_USER);
+  const valid = form.name.trim() !== "" && /\S+@\S+\.\S+/.test(form.email);
+
+  function submit() {
+    if (!valid) return;
+    onAdd({ ...form, name: form.name.trim(), email: form.email.trim() });
+    onClose();
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 440, background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+        {/* header */}
+        <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>เพิ่มผู้ใช้ใหม่</h2>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} /></button>
+        </div>
+        {/* body */}
+        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label className="form-label">ชื่อ-นามสกุล</label>
+            <input className="form-input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="เช่น สมชาย ใจดี" />
+          </div>
+          <div>
+            <label className="form-label">อีเมล</label>
+            <input className="form-input" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="name@benjamin.co.th" />
+          </div>
+          <div>
+            <label className="form-label">บทบาท</label>
+            <select className="form-select" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as RoleKey }))}>
+              {ROLES.map((r) => <option key={r.key} value={r.key}>{r.en} · {r.th}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">สถานะ</label>
+            <select className="form-select" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as UserStatus }))}>
+              <option value="active">ใช้งาน</option>
+              <option value="inactive">ปิดใช้งาน</option>
+            </select>
+          </div>
+        </div>
+        {/* footer */}
+        <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button className="btn btn-secondary btn-md" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-primary btn-md" onClick={submit} disabled={!valid} style={!valid ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
+            <Plus size={14} /> เพิ่มผู้ใช้
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────
 export default function HQUsersPage() {
   const [users, setUsers] = useState<AppUser[]>(USERS_INIT);
+  const [showAdd, setShowAdd] = useState(false);
 
   function toggleStatus(id: number) {
     setUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, status: u.status === "active" ? "inactive" : "active" } : u))
     );
+  }
+
+  function addUser(form: UserForm) {
+    const maxId = users.reduce((m, u) => Math.max(m, u.id), 0);
+    setUsers((prev) => [{ id: maxId + 1, ...form }, ...prev]);
   }
 
   const activeCount = users.filter((u) => u.status === "active").length;
@@ -119,10 +183,12 @@ export default function HQUsersPage() {
           <h2>ผู้ใช้งาน</h2>
           <p>จัดการผู้ใช้ บทบาท และสิทธิ์การเข้าถึง</p>
         </div>
-        <button className="btn" style={{ background: PRIMARY, color: "#fff", display: "inline-flex", alignItems: "center", gap: 7 }}>
+        <button onClick={() => setShowAdd(true)} className="btn" style={{ background: PRIMARY, color: "#fff", display: "inline-flex", alignItems: "center", gap: 7 }}>
           <Plus size={16} /> เพิ่มผู้ใช้
         </button>
       </div>
+
+      {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onAdd={addUser} />}
 
       {/* Users card */}
       <div className="card" style={{ marginBottom: 22 }}>
@@ -136,6 +202,13 @@ export default function HQUsersPage() {
         <div className="card-body" style={{ padding: 0 }}>
           <div className="table-wrap">
             <table>
+              <colgroup>
+                <col style={{ width: "26%" }} />
+                <col style={{ width: "26%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "20%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>ชื่อ</th>
@@ -221,6 +294,13 @@ export default function HQUsersPage() {
         <div className="card-body" style={{ padding: 0 }}>
           <div className="table-wrap">
             <table>
+              <colgroup>
+                <col style={{ width: "24%" }} />
+                <col style={{ width: "19%" }} />
+                <col style={{ width: "19%" }} />
+                <col style={{ width: "19%" }} />
+                <col style={{ width: "19%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th style={{ minWidth: 130 }}>โมดูล</th>

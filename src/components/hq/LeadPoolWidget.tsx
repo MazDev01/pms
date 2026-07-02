@@ -29,7 +29,7 @@ export function LeadPoolWidget() {
     <div className="card" style={{ display: "flex", flexDirection: "column" }}>
       <div className="card-header" style={{ alignItems: "flex-start" }}>
         <div>
-          <div className="card-title">ลีดส่วนกลาง</div>
+          <div className="card-title">ผู้สนใจส่วนกลาง</div>
           <div className="card-desc">
             มูลค่ารวม <strong style={{ color: "#003366" }}>{totalLabel}</strong>
           </div>
@@ -83,7 +83,7 @@ export function LeadPoolWidget() {
           fontSize: "0.72rem", fontWeight: 700, color: "#003366", textDecoration: "none",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          จัดการลีดทั้งหมด →
+          จัดการผู้สนใจทั้งหมด →
         </Link>
       </div>
     </div>

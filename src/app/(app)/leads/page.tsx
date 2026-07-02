@@ -3,9 +3,11 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  leads as initialLeads, leadStatusLabel, leadStatusColor,
+  leadStatusLabel, leadStatusColor,
   responsiblePersons, RP_STORAGE_KEY,
-  type LeadStatus, type LeadRow, type ResponsiblePerson,
+  quotationStatusLabel, quotationStatusColor,
+  solutionProducts,
+  type LeadStatus, type LeadRow, type ResponsiblePerson, type QuotationMock,
 } from "@/lib/mock";
 import {
   Plus, Search, X, Phone, Mail,
@@ -13,7 +15,13 @@ import {
   MessageSquare, Paperclip, CheckSquare, Trash2, Bell,
   Check, ChevronDown, Zap, LayoutList, Columns3,
   ArrowUpDown, ArrowUp, ArrowDown, Filter, Globe,
+  FileText,
 } from "lucide-react";
+import { ExportMenu } from "@/components/ui/ExportMenu";
+import { useSales } from "@/context/SalesContext";
+import { DrawerSection, DrawerRow } from "@/components/ui/RightDrawer";
+import { useTableLayout } from "@/components/ui/TableTools";
+import { useFilters } from "@/context/FilterContext";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
 const CARD: React.CSSProperties = {
@@ -22,20 +30,44 @@ const CARD: React.CSSProperties = {
 };
 
 const ALL_STATUSES: LeadStatus[] = [
-  "NEW","WAITING","BULLET","QUOTED","PAID","CANCELLED"
+  "NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"
 ];
+// ความคืบหน้าตามขั้นตอน (module-level เพื่อใช้ใน OverviewEditor) — PAID=100, CANCELLED=0
+function leadProgressPct(status: LeadStatus): number {
+  if (status === "PAID") return 100;
+  if (status === "CANCELLED") return 0;
+  const stages: LeadStatus[] = ["NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO"];
+  const idx = stages.indexOf(status);
+  if (idx < 0) return 0;
+  return Math.round(((idx + 1) / (stages.length + 1)) * 100);
+}
 const DEFAULT_PERSONS = responsiblePersons.filter(p => p.active).map(p => p.name);
-const SOURCES = ["โทรเข้า","เว็บไซต์","อ้างอิง","งานแสดง","Social Media","Line","อื่นๆ"];
+// Lead Source ตามสเปก: Facebook / Website / LINE / Walk-in / Referral / Exhibition / Other
+const SOURCES = ["Facebook","เว็บไซต์","LINE","Walk-in","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
 const PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","นครสวรรค์","ราชบุรี","ขอนแก่น","อื่นๆ"];
-const AVAILABLE_TAGS = ["VIP","ลูกค้าประจำ","ติดตามด่วน","โอกาสการขายใหญ่","รอเสนอราคา","ส่งใบเสนอแล้ว"];
-const TAG_COLORS: Record<string,string> = {
-  "VIP":"#f59e0b","ลูกค้าประจำ":"#059669","ติดตามด่วน":"#dc2626",
-  "โอกาสการขายใหญ่":"#003366","รอเสนอราคา":"#6b7280","ส่งใบเสนอแล้ว":"#003366",
-};
 
 // ─── Types ────────────────────────────────────────────────────────────────
-type ChecklistItem = { id: string; text: string; done: boolean };
-type SortKey = "id"|"company"|"value"|"status"|"province"|"assigned";
+type ChecklistItem = { id: string; text: string; done: boolean; locked?: boolean };
+
+// รายการตรวจสอบพื้นฐาน (preset เริ่มต้น — ทุกลีดมีอัตโนมัติ แต่แก้/ลบ/เพิ่มได้ ไม่ล็อก)
+// ข้อความตรงกับ DEFAULT_TASKS ใน SalesContext เพื่อให้ไหลไปเป็น tasks ของดีลตรงกัน
+const BASE_CHECKLIST: ChecklistItem[] = [
+  "ติดต่อลูกค้าและแนะนำตัว",
+  "ส่งแคตตาล็อกและข้อมูลผลิตภัณฑ์",
+  "นัดประชุมนำเสนอ",
+  "สำรวจความต้องการลูกค้า",
+  "จัดทำใบเสนอราคา",
+  "ส่งใบเสนอราคาให้ลูกค้า",
+  "ติดตามผลใบเสนอราคา",
+].map((text, i) => ({ id: `base-${i}`, text, done: false }));
+type SortKey = "company"|"value"|"status"|"assigned"|"priority";
+
+// คอลัมน์ที่ซ่อน/แสดงได้ (optional) สำหรับ TableTools — key ตรงกับ th/td/col ในตาราง
+const COLS: { key: string; label: string }[] = [
+  { key: "source",   label: "แหล่งที่มา" },
+  { key: "priority", label: "ความสำคัญ" },
+  { key: "value",    label: "มูลค่า" },
+];
 type AddressData = {
   company: string; position: string; street: string;
   city: string; state: string; postalCode: string;
@@ -44,13 +76,86 @@ type AddressData = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 function parseValue(v: string) {
-  const n = parseFloat(v.replace(/[฿,]/g,""));
-  return v.includes("M") ? n*1e6 : v.includes("K") ? n*1e3 : n;
+  const n = parseFloat(String(v).replace(/[฿,\s]/g,""));
+  if (!isFinite(n)) return 0;
+  if (/T/i.test(v)) return n*1e12;
+  if (/B/i.test(v)) return n*1e9;
+  if (/M/i.test(v)) return n*1e6;
+  if (/K/i.test(v)) return n*1e3;
+  return n;
 }
 function fmtM(n: number) {
+  if (!isFinite(n) || n <= 0) return "฿0";
+  if (n >= 1e12) return "฿"+(n/1e12).toFixed(1)+"T";
+  if (n >= 1e9)  return "฿"+(n/1e9).toFixed(1)+"B";
   if (n >= 1e6) return "฿"+(n/1e6).toFixed(1)+"M";
-  if (n >= 1e3) return "฿"+(n/1e3).toFixed(0)+"K";
+  if (n >= 1e3) return "฿"+Math.round(n/1e3)+"K";
   return "฿"+n.toLocaleString();
+}
+// ฟอร์แมตมูลค่าจากสตริงดิบ/มีหน่วย → ดูง่าย (฿1.2B / ฿1.2M / ฿480K)
+function fmtVal(v: string) { return fmtM(parseValue(v)); }
+
+// ─── Priority (ความสำคัญ) — deterministic by value tier ──────────────────────
+type Priority = "HIGH" | "MEDIUM" | "LOW";
+const PRIORITIES: Priority[] = ["HIGH", "MEDIUM", "LOW"];
+const priorityLabel: Record<Priority, string> = { HIGH: "สูง", MEDIUM: "กลาง", LOW: "ต่ำ" };
+const priorityColor: Record<Priority, { text: string; bg: string }> = {
+  HIGH:   { text: "#dc2626", bg: "#fee2e2" },
+  MEDIUM: { text: "#d97706", bg: "#fff3cd" },
+  LOW:    { text: "#6b7280", bg: "#f0f0f5" },
+};
+const priorityRank: Record<Priority, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+// value≥3M → สูง, ≥1M → กลาง, ต่ำกว่า → ต่ำ (deterministic, ไม่มีการสุ่ม)
+function leadPriority(lead: LeadRow): Priority {
+  const v = parseValue(lead.value);
+  if (v >= 3e6) return "HIGH";
+  if (v >= 1e6) return "MEDIUM";
+  return "LOW";
+}
+
+// ─── Next Follow-up Date (วันติดตามถัดไป) — deterministic per lead ────────────
+// อ้างอิงฐานคงที่ + ออฟเซ็ตจาก numId (คงเดิมทุกครั้ง ไม่มีการสุ่ม)
+const FOLLOWUP_BASE = Date.UTC(2026, 5, 1); // 2026-06-01
+function leadFollowupDate(lead: LeadRow): string {
+  const offsetDays = ((lead.numId * 7) % 60); // 0..59 วัน — deterministic
+  const d = new Date(FOLLOWUP_BASE + offsetDays * 86400000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// ─── Deterministic drawer seeds (no randomness) ───────────────────────────
+// วันที่แบบคงที่จากฐาน + ออฟเซ็ตตาม numId → เดิมทุกครั้งที่เปิด
+function seedDate(numId: number, offsetDays: number): string {
+  const d = new Date(FOLLOWUP_BASE - offsetDays * 86400000 - (numId % 5) * 86400000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+// กิจกรรมย่อ (Activities) — deterministic ตามลีด
+function seedActivities(lead: LeadRow): { date: string; text: string }[] {
+  return [
+    { date: seedDate(lead.numId, 2),  text: `โทรติดต่อ ${lead.contact} เพื่อแนะนำผลิตภัณฑ์` },
+    { date: seedDate(lead.numId, 8),  text: `ส่งแคตตาล็อกและข้อมูล ${lead.product}` },
+    { date: seedDate(lead.numId, 15), text: `บันทึกความสนใจจากแหล่งที่มา ${lead.source ?? "—"}` },
+    { date: seedDate(lead.numId, 21), text: `สร้างผู้สนใจในระบบ (${lead.id})` },
+  ];
+}
+// ประวัติสถานะ (History) — ไล่ตามลำดับขั้นตอนจนถึงสถานะปัจจุบัน (deterministic)
+function seedStatusHistory(lead: LeadRow): { date: string; status: LeadStatus }[] {
+  const stages: LeadStatus[] = ["NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID"];
+  const endIdx = lead.status === "CANCELLED"
+    ? 1
+    : Math.max(0, stages.indexOf(lead.status));
+  const seq = stages.slice(0, endIdx + 1);
+  if (lead.status === "CANCELLED") seq.push("CANCELLED");
+  return seq.map((status, i) => ({ date: seedDate(lead.numId, (seq.length - i) * 6), status }));
+}
+// รายการไฟล์เริ่มต้น (Files) — seed คงที่ (แสดง empty state เมื่อไม่มี)
+function seedFiles(lead: LeadRow): string[] {
+  return lead.numId % 3 === 0 ? [] : [`ใบเสนอราคา-${lead.id}.pdf`, `ข้อมูลสินค้า-${lead.product}.pdf`];
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────
@@ -78,20 +183,156 @@ function SortIcon({ field, sortKey, sortDir }: { field:string; sortKey:string; s
   return sortDir === "asc" ? <ArrowUp size={11} color="#003366" /> : <ArrowDown size={11} color="#003366" />;
 }
 
-// ─── ADD LEAD FORM ────────────────────────────────────────────────────────
-function AddLeadModal({ onClose, onAdd, persons }: { onClose:()=>void; onAdd:(l:LeadRow)=>void; persons:string[] }) {
-  const [form, setForm] = useState({
-    company:"", contact:"", phone:"", email:"",
-    province:"กรุงเทพฯ", product:"โกดังสินค้า",
-    value:"฿1.2M", status:"NEW" as LeadStatus,
-    assigned: persons[0] ?? "สมชาย เชียงใหม่", source:"โทรเข้า", note:"",
+// ─── ภาพรวม (แก้ไขในตัว) — ฟอร์มแก้ไขข้อมูลผู้สนใจในแท็บภาพรวมของโมดัลรายละเอียด ─────
+function OverviewEditor({ lead, persons, onSave }: {
+  lead: LeadRow; persons: string[]; onSave: (l: LeadRow) => void;
+}) {
+  const seed = () => ({
+    company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
+    email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
+    product: lead.product ?? solutionProducts[0].name, status: lead.status,
+    assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
+    note: lead.note ?? "", logo: lead.logo ?? "",
   });
+  const [f, setF] = useState(seed);
+  const logoRef = useRef<HTMLInputElement>(null);
+  // reseed เมื่อสลับผู้สนใจ
+  useEffect(() => { setF(seed()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [lead.id]);
+  const set = (k: keyof ReturnType<typeof seed>, v: string) => setF(p => ({ ...p, [k]: v }));
+  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => set("logo", (ev.target?.result as string) ?? "");
+    reader.readAsDataURL(file);
+  }
+
+  const dirty =
+    f.company !== (lead.company ?? "") || f.contact !== (lead.contact ?? "") ||
+    f.phone !== (lead.phone ?? "") || f.email !== (lead.email ?? "") ||
+    f.province !== (lead.province ?? "") || f.source !== (lead.source ?? "") ||
+    f.product !== (lead.product ?? "") || f.status !== lead.status ||
+    f.assigned !== (lead.assigned ?? "") || f.value !== (lead.value ?? "") ||
+    f.note !== (lead.note ?? "") || f.logo !== (lead.logo ?? "");
+  const pct = leadProgressPct(f.status);
+
+  const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
+  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.82rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff" };
+
+  function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: f.product, value: fmtVal(f.value) }); }
+
+  return (
+    <div>
+      <div style={{ fontSize:"0.68rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:12, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
+        ภาพรวม · แก้ไขได้ในหน้านี้
+      </div>
+      {/* เปลี่ยนรูป/โลโก้ลูกค้า */}
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
+        <div style={{ width:60, height:60, borderRadius:14, flexShrink:0, overflow:"hidden",
+          border:`2px dashed ${f.logo ? "transparent" : "#e5e7eb"}`, background:f.logo ? "#fff" : "#f8fafc",
+          display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {f.logo
+            ? <img src={f.logo} alt="โลโก้" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+            : <User size={24} color="#9ca3af" />}
+        </div>
+        <div>
+          <label style={lbl}>รูป / โลโก้ลูกค้า</label>
+          <input ref={logoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
+          <div style={{ display:"flex", gap:8 }}>
+            <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
+              <Paperclip size={13} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+            </button>
+            {f.logo && (
+              <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
+                <X size={13} /> ลบรูป
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={lbl}>บริษัท *</label>
+          <input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} />
+        </div>
+        <div><label style={lbl}>ผู้ติดต่อ *</label><input value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></div>
+        <div><label style={lbl}>โทรศัพท์</label><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></div>
+        <div><label style={lbl}>อีเมล</label><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" placeholder="email@company.com" style={inp} /></div>
+        <div><label style={lbl}>จังหวัด</label>
+          <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
+        </div>
+        <div><label style={lbl}>แม่แบบที่สนใจ</label>
+          <select value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
+            {!solutionProducts.some(p=>p.name===f.product) && <option value={f.product}>{f.product}</option>}
+            {solutionProducts.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
+          </select>
+        </div>
+        <div><label style={lbl}>มูลค่าประเมิน</label>
+          <input value={f.value} onChange={e=>set("value",e.target.value)} onBlur={()=>{ if(f.value.trim()) set("value",fmtVal(f.value)); }} placeholder="เช่น 1200000 หรือ ฿1.2M" style={inp} />
+        </div>
+        <div><label style={lbl}>ขั้นตอน</label>
+          <select value={f.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inp}>{ALL_STATUSES.map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}</select>
+        </div>
+        <div><label style={lbl}>ผู้รับผิดชอบ</label>
+          <select value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>{persons.map(t=><option key={t}>{t}</option>)}</select>
+        </div>
+        <div><label style={lbl}>แหล่งที่มา</label>
+          <select value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(s=><option key={s}>{s}</option>)}</select>
+        </div>
+        <div style={{ gridColumn:"1/-1" }}><label style={lbl}>หมายเหตุ</label>
+          <textarea value={f.note} onChange={e=>set("note",e.target.value)} rows={3} placeholder="รายละเอียดเพิ่มเติม..."
+            style={{ ...inp, resize:"vertical", fontFamily:"inherit", lineHeight:1.6 }} />
+        </div>
+      </div>
+
+      {/* ความคืบหน้า (อ่านอย่างเดียว) */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:14, fontSize:"0.76rem", color:"#374151" }}>
+        <span style={{ fontWeight:600 }}>ความคืบหน้า</span>
+        <span style={{ flex:1, height:6, borderRadius:99, background:"#f0f4f8", overflow:"hidden" }}>
+          <span className="bar-grow" style={{ display:"block", height:"100%", width:`${pct}%`, background:f.status==="CANCELLED"?"#dc2626":f.status==="PAID"?"#059669":"#003366" }} />
+        </span>
+        <span style={{ fontWeight:800, color:"#003366" }}>{pct}%</span>
+      </div>
+
+      {/* ปุ่มบันทึก */}
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:16 }}>
+        {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
+        <button onClick={save} disabled={!dirty} className="btn btn-primary btn-sm"
+          style={{ opacity: dirty ? 1 : 0.5, cursor: dirty ? "pointer" : "default" }}>
+          <Check size={13} /> บันทึกการแก้ไข
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD / EDIT LEAD FORM ─────────────────────────────────────────────────
+// ฟอร์มเดียวใช้ได้ทั้งเพิ่ม (initial ว่าง) และแก้ไข (มี initial) — อัปเดต local state ผ่าน onSave
+function LeadFormModal({ onClose, onSave, persons, initial }: {
+  onClose:()=>void; onSave:(l:LeadRow)=>void; persons:string[]; initial?:LeadRow|null;
+}) {
+  const isEdit = !!initial;
+  const [form, setForm] = useState({
+    company: initial?.company ?? "", contact: initial?.contact ?? "",
+    phone: initial?.phone ?? "", email: initial?.email ?? "",
+    province: initial?.province ?? "กรุงเทพฯ", product: initial?.product ?? solutionProducts[0].name,
+    value: initial?.value ?? "", status: (initial?.status ?? "NEW") as LeadStatus,
+    assigned: initial?.assigned ?? persons[0] ?? "สมชาย เชียงใหม่",
+    source: initial?.source ?? "โทรเข้า", note: initial?.note ?? "",
+    logo: initial?.logo ?? "",
+  });
+  const logoInputRef = useRef<HTMLInputElement>(null);
   function set(k: keyof typeof form, v: string) { setForm(p=>({...p,[k]:v})); }
+  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => set("logo", (ev.target?.result as string) ?? "");
+    reader.readAsDataURL(file);
+  }
   function submit() {
     if (!form.company.trim() || !form.contact.trim()) return;
-    const id = "L-"+(Math.floor(Math.random()*900)+100);
-    onAdd({
-      id, numId: Math.floor(Math.random()*900)+100,
+    const base = {
       name: form.company,
       company: form.company, contact: form.contact,
       phone: form.phone, email: form.email,
@@ -99,7 +340,14 @@ function AddLeadModal({ onClose, onAdd, persons }: { onClose:()=>void; onAdd:(l:
       category: form.product, value: form.value,
       status: form.status, assigned: form.assigned,
       source: form.source, note: form.note,
-    });
+      logo: form.logo || undefined,
+    };
+    if (initial) {
+      onSave({ ...initial, ...base });
+    } else {
+      const rnd = Math.floor(Math.random()*900)+100;
+      onSave({ id: "L-"+rnd, numId: rnd, ...base });
+    }
     onClose();
   }
 
@@ -114,8 +362,8 @@ function AddLeadModal({ onClose, onAdd, persons }: { onClose:()=>void; onAdd:(l:
 
   return (
     <>
-      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:60 }} />
-      <div style={{ position:"fixed", inset:0, zIndex:70, display:"flex", alignItems:"center", justifyContent:"center", padding:24, pointerEvents:"none" }}>
+      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:1100 }} />
+      <div style={{ position:"fixed", inset:0, zIndex:1110, display:"flex", alignItems:"center", justifyContent:"center", padding:24, pointerEvents:"none" }}>
         <div onClick={e=>e.stopPropagation()}
           style={{ width:"100%", maxWidth:600, background:"#fff", borderRadius:20,
             border:"1px solid #e5e7eb", boxShadow:"0 24px 80px rgba(0,0,0,.2)",
@@ -125,8 +373,8 @@ function AddLeadModal({ onClose, onAdd, persons }: { onClose:()=>void; onAdd:(l:
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
             padding:"18px 24px", borderBottom:"1px solid #e5e7eb", background:"#003366" }}>
             <div>
-              <div style={{ fontSize:"1rem", fontWeight:800, color:"#fff" }}>เพิ่มผู้สนใจใหม่</div>
-              <div style={{ fontSize:"0.7rem", color:"#374151" }}>กรอกข้อมูลผู้สนใจ</div>
+              <div style={{ fontSize:"1rem", fontWeight:800, color:"#fff" }}>{isEdit ? "แก้ไขผู้สนใจ" : "เพิ่มผู้สนใจใหม่"}</div>
+              <div style={{ fontSize:"0.7rem", color:"#374151" }}>{isEdit ? `แก้ไขข้อมูล ${initial?.id}` : "กรอกข้อมูลผู้สนใจ"}</div>
             </div>
             <button onClick={onClose}
               style={{ width:32, height:32, borderRadius:9, border:"1px solid rgba(255,255,255,.2)",
@@ -139,6 +387,30 @@ function AddLeadModal({ onClose, onAdd, persons }: { onClose:()=>void; onAdd:(l:
           {/* Body */}
           <div style={{ padding:"24px", overflowY:"auto", maxHeight:"65vh" }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+              {/* อัปโหลดรูป/โลโก้ลูกค้า */}
+              <div style={{ gridColumn:"1/-1", display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:64, height:64, borderRadius:14, flexShrink:0, overflow:"hidden",
+                  border:`2px dashed ${form.logo ? "transparent" : "#e5e7eb"}`, background:form.logo ? "#fff" : "#f8fafc",
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {form.logo
+                    ? <img src={form.logo} alt="โลโก้" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                    : <User size={26} color="#9ca3af" />}
+                </div>
+                <div>
+                  <label style={labelStyle}>รูป / โลโก้ลูกค้า</label>
+                  <input ref={logoInputRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button type="button" onClick={()=>logoInputRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
+                      <Paperclip size={13} /> {form.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+                    </button>
+                    {form.logo && (
+                      <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
+                        <X size={13} /> ลบรูป
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div style={{ gridColumn:"1/-1" }}>
                 <label style={labelStyle}>บริษัท *</label>
                 <input value={form.company} onChange={e=>set("company",e.target.value)}
@@ -166,18 +438,23 @@ function AddLeadModal({ onClose, onAdd, persons }: { onClose:()=>void; onAdd:(l:
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>หมวดหมู่</label>
+                <label style={labelStyle}>แม่แบบที่สนใจ</label>
                 <select value={form.product} onChange={e=>set("product",e.target.value)} style={inputStyle}>
-                  {["โกดังสินค้า","โรงงาน","อาคารพาณิชย์","อาคารเกษตร","อาคารการศึกษา","อื่นๆ"].map(p=><option key={p}>{p}</option>)}
+                  {/* คงค่าที่มีอยู่เดิมไว้ถ้าไม่ตรงกับแคตตาล็อก (กันข้อมูลเก่าเพี้ยน) */}
+                  {!solutionProducts.some(p=>p.name===form.product) && <option value={form.product}>{form.product}</option>}
+                  {solutionProducts.map(p=>(
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label style={labelStyle}>มูลค่าประเมิน</label>
                 <input value={form.value} onChange={e=>set("value",e.target.value)}
-                  placeholder="฿1.5M" style={inputStyle} />
+                  onBlur={()=>{ if(form.value.trim()) set("value", fmtVal(form.value)); }}
+                  placeholder="เช่น 1200000 หรือ ฿1.2M" style={inputStyle} />
               </div>
               <div>
-                <label style={labelStyle}>สถานะ</label>
+                <label style={labelStyle}>ขั้นตอน</label>
                 <select value={form.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inputStyle}>
                   {ALL_STATUSES.map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}
                 </select>
@@ -246,7 +523,7 @@ function KanbanCard({ lead, onClick, isDragging, onDragStart, onDragEnd }: {
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <span style={{ padding:"3px 9px", borderRadius:99, fontSize:"0.65rem", fontWeight:700,
           background:"#dce5f0", color:"#003366" }}>{lead.product}</span>
-        <span style={{ fontSize:"0.78rem", fontWeight:800, color:"#003366" }}>{lead.value}</span>
+        <span style={{ fontSize:"0.78rem", fontWeight:800, color:"#003366" }}>{fmtVal(lead.value)}</span>
       </div>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:10 }}>
         <span style={{ fontSize:"0.65rem", color:"#374151" }}>{lead.province}</span>
@@ -269,14 +546,26 @@ export default function LeadsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // List state
-  const [leadsData, setLeadsData] = useState<LeadRow[]>(initialLeads);
+  const {
+    leads: leadsData, addLead, updateLead, deleteLead: removeLead, updateLeadStatus, openDealFromLead,
+    quotations, convertLeadToCustomer, addQuotation,
+  } = useSales();
+  // Global Responsible Person filter (FilterBar dim "person")
+  const { person } = useFilters();
+  // Table toolbar: density + column show/hide (localStorage-backed)
+  const { density, setDensity, hiddenCols, toggleCol } = useTableLayout("leads");
   const [view, setView] = useState<"list"|"kanban">("list");
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<LeadStatus|"ALL">("ALL");
-  const [sortKey, setSortKey] = useState<SortKey>("id");
+  const [sortKey, setSortKey] = useState<SortKey>("company");
   const [sortDir, setSortDir] = useState<"asc"|"desc">("asc");
   const [showFilters, setShowFilters] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingLead, setEditingLead] = useState<LeadRow|null>(null);
+
+  // List pagination (LIST view only)
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
 
   // Advanced filters
   const [fAssignee, setFAssignee] = useState("");
@@ -284,11 +573,12 @@ export default function LeadsPage() {
   const [fValueMax, setFValueMax] = useState("");
   const [fProvince, setFProvince] = useState("");
   const [fSource, setFSource] = useState("");
+  const [fPriority, setFPriority] = useState<Priority|"">("");
 
   // Panel state
   const [selectedLead, setSelectedLead] = useState<LeadRow|null>(null);
   const [converted, setConverted] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"lead"|"address">("lead");
+  const [activeTab, setActiveTab] = useState<"overview"|"activities"|"quotation"|"files">("overview");
   const [editingField, setEditingField] = useState<string|null>(null);
   const [draft, setDraft] = useState<LeadRow|null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -300,10 +590,6 @@ export default function LeadsPage() {
 
   // Files
   const [leadFiles, setLeadFiles] = useState<Record<string,string[]>>({});
-
-  // Tags
-  const [leadTags, setLeadTags] = useState<Record<string,string[]>>({});
-  const [showTagEditor, setShowTagEditor] = useState(false);
 
   // Persons registry (loaded from localStorage, fallback to mock)
   const [personsList, setPersonsList] = useState<string[]>(DEFAULT_PERSONS);
@@ -350,6 +636,15 @@ export default function LeadsPage() {
   // Inline status dropdown (table view)
   const [openStatusId, setOpenStatusId] = useState<string|null>(null);
 
+  // Inline convert menu (table view) + success toast
+  const [openConvertId, setOpenConvertId] = useState<string|null>(null);
+  const [toast, setToast] = useState<string|null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // Reminder
   const [showReminderForm, setShowReminderForm] = useState(false);
   const [reminderDate, setReminderDate] = useState("");
@@ -366,32 +661,50 @@ export default function LeadsPage() {
         || l.province.toLowerCase().includes(q)
         || l.id.toLowerCase().includes(q);
       const matchS = filterStatus === "ALL" || l.status === filterStatus;
+      // Global Responsible Person filter (FilterBar): drop leads not owned by selected person
+      const matchPerson = person === "all" || l.assigned === person;
       const matchA = !fAssignee || l.assigned === fAssignee;
       const matchP = !fProvince || l.province === fProvince;
       const matchSrc = !fSource || (l.source ?? "") === fSource;
+      const matchPri = !fPriority || leadPriority(l) === fPriority;
       const val = parseValue(l.value);
       const matchMin = !fValueMin || val >= parseFloat(fValueMin.replace(/[฿,M]/g,""))*1e6;
       const matchMax = !fValueMax || val <= parseFloat(fValueMax.replace(/[฿,M]/g,""))*1e6;
-      return matchQ && matchS && matchA && matchP && matchSrc && matchMin && matchMax;
+      return matchQ && matchS && matchPerson && matchA && matchP && matchSrc && matchPri && matchMin && matchMax;
     });
 
     arr = [...arr].sort((a,b) => {
       let av: string|number = 0, bv: string|number = 0;
       if (sortKey === "value") { av = parseValue(a.value); bv = parseValue(b.value); }
-      else if (sortKey === "id") { av = a.numId; bv = b.numId; }
+      else if (sortKey === "priority") { av = priorityRank[leadPriority(a)]; bv = priorityRank[leadPriority(b)]; }
       else { av = (a[sortKey] as string) ?? ""; bv = (b[sortKey] as string) ?? ""; }
+      // เรียงข้อความไทยตามพยัญชนะ (locale "th") — เรียงด้วย < > ตรงๆ จะได้ลำดับ Unicode ที่ไม่ตรงตามตัวอักษรไทย
+      if (typeof av === "string" && typeof bv === "string") {
+        const cmp = av.localeCompare(bv, "th");
+        return sortDir === "asc" ? cmp : -cmp;
+      }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
     return arr;
-  }, [leadsData, query, filterStatus, fAssignee, fProvince, fSource, fValueMin, fValueMax, sortKey, sortDir]);
+  }, [leadsData, query, filterStatus, person, fAssignee, fProvince, fSource, fPriority, fValueMin, fValueMax, sortKey, sortDir]);
+
+  // ─── List pagination (LIST view only) ──────────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Reset to page 1 whenever filters / search / sort change the result set
+  useEffect(() => { setPage(1); }, [query, filterStatus, person, fAssignee, fProvince, fSource, fPriority, fValueMin, fValueMax, sortKey, sortDir]);
+  // Clamp page into range if the list shrinks
+  useEffect(() => { setPage(p => Math.min(p, totalPages)); }, [totalPages]);
+  const paged = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  const pageStart = filtered.length === 0 ? 0 : (page-1)*PAGE_SIZE + 1;
+  const pageEnd = Math.min(page*PAGE_SIZE, filtered.length);
 
   const totalValue = leadsData.reduce((s,l) => s + parseValue(l.value), 0);
   const wonLeads = leadsData.filter(l => l.status === "PAID").length;
   const nonLost = leadsData.filter(l => l.status !== "CANCELLED").length;
   const winRate = nonLost ? Math.round((wonLeads / nonLost)*100) : 0;
-  const hasActiveFilters = !!(fAssignee || fProvince || fSource || fValueMin || fValueMax);
+  const hasActiveFilters = !!(fAssignee || fProvince || fSource || fPriority || fValueMin || fValueMax);
 
   function onSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -408,7 +721,7 @@ export default function LeadsPage() {
     setEditingField(null); setShowDeleteConfirm(false);
     setShowAssigneePicker(false);
     setShowReminderForm(false); setShowChecklistInput(false);
-    setActiveTab("lead");
+    setActiveTab("overview");
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
     setEditingAddress(false);
@@ -424,50 +737,102 @@ export default function LeadsPage() {
   }
   function commitDraft() {
     if (!draft) return;
-    setLeadsData(prev => prev.map(l => l.id === draft.id ? draft : l));
+    updateLead(draft);
     setSelectedLead(draft); setEditingField(null);
   }
   function patchDraft(field: string, value: string) {
     setDraft(prev => prev ? {...prev, [field]: value} : prev);
   }
   function deleteLead() {
-    setLeadsData(prev => prev.filter(l => l.id !== selectedLead!.id));
+    removeLead(selectedLead!.id);
     closePanel();
   }
   function handleStatusChange(val: string) {
     if (!draft) return;
     const next = {...draft, status: val as LeadStatus};
-    setLeadsData(prev => prev.map(l => l.id === next.id ? next : l));
+    updateLead(next);
     setSelectedLead(next); setDraft(next);
   }
 
+  // ── Convert actions (per spec) ─────────────────────────────────────────
+  // เปิดเป็นดีล: สร้างดีลใน pipeline จากลีด แล้วไปหน้า Pipeline
+  function convertToDeal(lead: LeadRow) {
+    openDealFromLead(lead);
+    setOpenConvertId(null);
+    closePanel();
+    router.push("/pipeline");
+  }
+  // เพิ่มเป็นลูกค้า: สร้างลูกค้าจริงใน context แล้วไปหน้าโปรไฟล์ลูกค้า
+  function convertToCustomer(lead: LeadRow) {
+    // เปลี่ยนลีดเป็นลูกค้า (removeLead=true) → ลีดออกจากรายการผู้สนใจ
+    const newCustomer = convertLeadToCustomer(lead, true);
+    setConverted(p => new Set([...p, lead.id]));
+    setOpenConvertId(null);
+    closePanel();
+    router.push(`/customers/${newCustomer.id}`);
+  }
+  // สร้างใบเสนอราคา (ร่าง) จากลีด — แปลง/หาลูกค้าให้ก่อน แล้ว prefill ลูกค้า+มูลค่าประเมิน
+  function createQuotationFromLead(lead: LeadRow) {
+    const customer = convertLeadToCustomer(lead);
+    const est = parseValue(lead.value);
+    const nums = quotations.map(q => parseInt(q.id.split("-")[2] ?? "") || 0);
+    const newId = `Q-2026-${String(Math.max(...nums, 100) + 1).padStart(4, "0")}`;
+    const newQ: QuotationMock = {
+      id: newId,
+      customer: customer.company,
+      project: `${lead.product} — ${lead.company}`,
+      total: "฿" + est.toLocaleString("th-TH"),
+      totalValue: est,
+      materialCost: est,
+      province: lead.province,
+      buildingType: "โกดังสินค้า",
+      area: 0,
+      status: "draft",
+      date: "2026-06-30",
+      items: 0,
+      customerId: customer.id,
+      projectId: 0,
+      revision: "V1",
+      expiry: "",
+    };
+    addQuotation(newQ);
+    setConverted(p => new Set([...p, lead.id]));
+    setOpenConvertId(null);
+    closePanel();
+    router.push("/quotations");
+  }
+
+  // ความคืบหน้า (Progress) จากลำดับขั้นตอน — PAID=100%, CANCELLED=0% (ใช้ใน drawer)
+  function leadProgress(status: LeadStatus): number {
+    if (status === "PAID") return 100;
+    if (status === "CANCELLED") return 0;
+    const stages: LeadStatus[] = ["NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO"];
+    const idx = stages.indexOf(status);
+    if (idx < 0) return 0;
+    return Math.round(((idx + 1) / (stages.length + 1)) * 100);
+  }
+
   // Checklist
-  const items: ChecklistItem[] = checklists[lid] ?? [];
+  const items: ChecklistItem[] = checklists[lid] ?? BASE_CHECKLIST;
   const doneCount = items.filter(i=>i.done).length;
   function addChecklistItem() {
     if (!newCheckText.trim() || !lid) return;
-    setChecklists(p=>({...p,[lid]:[...(p[lid]??[]),{id:Math.random().toString(36).slice(2),text:newCheckText.trim(),done:false}]}));
+    setChecklists(p=>({...p,[lid]:[...(p[lid]??BASE_CHECKLIST),{id:Math.random().toString(36).slice(2),text:newCheckText.trim(),done:false}]}));
     setNewCheckText(""); setShowChecklistInput(false);
   }
   function toggleChecklistItem(id:string) {
-    setChecklists(p=>({...p,[lid]:(p[lid]??[]).map(i=>i.id===id?{...i,done:!i.done}:i)}));
+    setChecklists(p=>({...p,[lid]:(p[lid]??BASE_CHECKLIST).map(i=>i.id===id?{...i,done:!i.done}:i)}));
   }
   function deleteChecklistItem(id:string) {
-    setChecklists(p=>({...p,[lid]:(p[lid]??[]).filter(i=>i.id!==id)}));
+    setChecklists(p=>({...p,[lid]:(p[lid]??BASE_CHECKLIST).filter(i=>i.id!==id)}));
   }
 
   // Files
   const myFiles: string[] = leadFiles[lid] ?? [];
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !lid) return;
-    setLeadFiles(p=>({...p,[lid]:[...(p[lid]??[]),f.name]}));
+    setLeadFiles(p=>({...p,[lid]:[...(p[lid]??BASE_CHECKLIST),f.name]}));
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  // Tags
-  const myTags: string[] = leadTags[lid] ?? [];
-  function toggleTag(tag:string) {
-    setLeadTags(p=>{const c=p[lid]??[];return{...p,[lid]:c.includes(tag)?c.filter(t=>t!==tag):[...c,tag]};});
   }
 
   // Status dropdown
@@ -516,10 +881,25 @@ export default function LeadsPage() {
   function commitFieldPopup() {
     if (!draft || !popupField) return;
     const updated = { ...draft, [popupField]: editPopupVal };
-    setLeadsData(prev => prev.map(l => l.id === updated.id ? updated : l));
+    updateLead(updated);
     setSelectedLead(updated); setDraft(updated);
     closeFieldPopup();
   }
+
+  // Escape closes the detail modal (or the topmost nested overlay first)
+  useEffect(() => {
+    if (!selectedLead) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showDeleteConfirm) setShowDeleteConfirm(false);
+      else if (editingLead) setEditingLead(null);
+      else if (popupField) closeFieldPopup();
+      else closePanel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLead, showDeleteConfirm, editingLead, popupField]);
 
   // ─── RENDER ────────────────────────────────────────────────────────────
   return (
@@ -530,37 +910,40 @@ export default function LeadsPage() {
         <div className="page-head">
           <div>
             <h2>ผู้สนใจ</h2>
-            <p>ทั้งหมด {leadsData.length} ราย · ปิดการขาย {winRate}%</p>
+            <p>อัตราปิดการขาย {winRate}%</p>
           </div>
-          <button onClick={() => setShowAddForm(true)} className="btn btn-primary btn-md">
-            <Plus size={15} /> เพิ่มผู้สนใจ
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Global Responsible Person filter (ผู้รับผิดชอบ) */}
+            <ExportMenu filename="leads" title="รายชื่อผู้สนใจ"
+              headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","สินค้า","ความสำคัญ","สถานะ","วันติดตามถัดไป","มูลค่า","ผู้รับผิดชอบ"]}
+              rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.product,priorityLabel[leadPriority(l)],leadStatusLabel[l.status],leadFollowupDate(l),fmtVal(l.value),l.assigned])} />
+            <button onClick={() => setShowAddForm(true)} className="btn btn-primary btn-md">
+              <Plus size={15} /> เพิ่มผู้สนใจ
+            </button>
+          </div>
         </div>
 
-        {/* Stat pills */}
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
-          {[
-            { label:"ทั้งหมด", value:leadsData.length, color:"#003366", bg:"#dce5f0", key:"ALL" as const },
-            { label:"ใหม่", value:leadsData.filter(l=>l.status==="NEW").length, color:"#6b7280", bg:"#f0f0f5", key:"NEW" as const },
-            { label:"ชำระเงินแล้ว", value:wonLeads, color:"#059669", bg:"#e5faf0", key:"PAID" as const },
-            { label:"ยกเลิก", value:leadsData.filter(l=>l.status==="CANCELLED").length, color:"#dc2626", bg:"#fee2e2", key:"CANCELLED" as const },
-          ].map(s=>(
-            <button key={s.key} onClick={()=>setFilterStatus(s.key)}
-              style={{ display:"flex", alignItems:"center", gap:8,
-                background:filterStatus===s.key?s.bg:"#fff",
-                border:`1px solid ${filterStatus===s.key?s.color:"#e5e7eb"}`,
-                borderRadius:99, padding:"7px 16px", fontSize:"0.78rem", fontWeight:600,
-                color:filterStatus===s.key?s.color:"#374151", cursor:"pointer" }}>
-              {s.label} <strong>{s.value}</strong>
-            </button>
-          ))}
-          <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700,
+        {/* สรุปรวม (ไม่ซ้ำกับ funnel ด้านล่าง — funnel คุมการนับ/กรองตามสถานะ) */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700,
+            background:"#fff", border:"1px solid #e5e7eb", borderRadius:99, padding:"7px 16px" }}>
+            ผู้สนใจทั้งหมด: <span style={{ color:"#003366" }}>{leadsData.length}</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700,
             background:"#fff", border:"1px solid #e5e7eb", borderRadius:99, padding:"7px 16px" }}>
             มูลค่ารวม: <span style={{ color:"#003366" }}>{fmtM(totalValue)}</span>
           </div>
+          {filterStatus!=="ALL" && (
+            <button onClick={()=>setFilterStatus("ALL")}
+              style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.76rem", fontWeight:600,
+                background:"#f0f4f8", border:"1px solid #e5e7eb", borderRadius:99, padding:"7px 14px",
+                color:"#374151", cursor:"pointer" }}>
+              แสดงทั้งหมด
+            </button>
+          )}
         </div>
 
-        {/* Status funnel */}
+        {/* Status funnel — นับ+กรองตามขั้นตอนเส้นทางการขาย */}
         <div className="card" style={{ padding:"12px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap" }}>
           {ALL_STATUSES.map(p=>{
             const c = leadsData.filter(l=>l.status===p).length;
@@ -581,7 +964,7 @@ export default function LeadsPage() {
                   {leadStatusLabel[p]}
                 </div>
                 <span style={{ fontSize:"0.62rem", color:active?col.text:"#C0C0C0", fontWeight:500 }}>
-                  {val >= 1e6 ? "฿"+(val/1e6).toFixed(1)+"M" : val>0?"฿"+(val/1e3).toFixed(0)+"K":"—"}
+                  {val>0 ? fmtM(val) : "—"}
                 </span>
               </button>
             );
@@ -614,21 +997,7 @@ export default function LeadsPage() {
             </button>
 
             <div style={{ flex:1 }} />
-
-            {/* View toggle */}
-            <div style={{ display:"flex", background:"#fafafa", borderRadius:10, padding:3, gap:2 }}>
-              {([["list","รายการ",<LayoutList size={13}/>],["kanban","คัมบัง",<Columns3 size={13}/>]] as const).map(([v,label,icon])=>(
-                <button key={v} onClick={()=>setView(v as "list"|"kanban")}
-                  style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px",
-                    borderRadius:8, border:"none", fontSize:"0.73rem", fontWeight:600,
-                    background:view===v?"#fff":"transparent",
-                    color:view===v?"#003366":"#6b7280",
-                    boxShadow:view===v?"0 1px 4px rgba(0,0,0,.08)":"none",
-                    cursor:"pointer" }}>
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
+            {/* หน้าผู้สนใจแสดงเป็นตารางอย่างเดียว — มุมมองคัมบัง (ลากขั้น) อยู่ที่หน้า "เส้นทางการขาย" */}
           </div>
 
           {/* Advanced filters panel */}
@@ -663,6 +1032,15 @@ export default function LeadsPage() {
                 </select>
               </div>
               <div>
+                <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151", marginBottom:4 }}>ความสำคัญ</div>
+                <select value={fPriority} onChange={e=>setFPriority(e.target.value as Priority|"")}
+                  style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:8,
+                    padding:"7px 10px", fontSize:"0.78rem", outline:"none", color:"#2D2D2D" }}>
+                  <option value="">ทั้งหมด</option>
+                  {PRIORITIES.map(p=><option key={p} value={p}>{priorityLabel[p]}</option>)}
+                </select>
+              </div>
+              <div>
                 <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151", marginBottom:4 }}>มูลค่าขั้นต่ำ (M฿)</div>
                 <input value={fValueMin} onChange={e=>setFValueMin(e.target.value)}
                   placeholder="เช่น 1" type="number"
@@ -678,7 +1056,7 @@ export default function LeadsPage() {
               </div>
               {hasActiveFilters && (
                 <div style={{ display:"flex", alignItems:"flex-end" }}>
-                  <button onClick={()=>{ setFAssignee(""); setFProvince(""); setFSource(""); setFValueMin(""); setFValueMax(""); }}
+                  <button onClick={()=>{ setFAssignee(""); setFProvince(""); setFSource(""); setFPriority(""); setFValueMin(""); setFValueMax(""); }}
                     style={{ width:"100%", padding:"7px 10px", borderRadius:8, border:"1px solid #fca5a5",
                       background:"#fee2e2", color:"#dc2626", fontSize:"0.73rem", fontWeight:600, cursor:"pointer" }}>
                     ล้างทั้งหมด
@@ -692,16 +1070,31 @@ export default function LeadsPage() {
         {/* ── LIST VIEW ── */}
         {view === "list" && (
           <div className="card">
-            <div className="table-wrap">
+            <div className={`table-wrap${density === "compact" ? " dense" : ""}`}>
               <table>
+                <colgroup>
+                  <col style={{width:"24%"}} />
+                  {!hiddenCols.includes("source")   && <col style={{width:"13%"}} />}
+                  <col style={{width:"17%"}} />
+                  {!hiddenCols.includes("priority") && <col style={{width:"11%"}} />}
+                  {!hiddenCols.includes("value")    && <col style={{width:"12%"}} />}
+                  <col style={{width:"11%"}} />
+                  <col style={{width:"12%"}} />
+                </colgroup>
                 <thead>
                   <tr>
                     {([
-                      ["id","รหัส"],["company","บริษัท / ผู้ติดต่อ"],
-                      [null,"หมวดหมู่"],[null,"แหล่งที่มา"],["province","จังหวัด"],
-                      ["status","สถานะ"],["value","มูลค่า"],["assigned","ผู้รับผิดชอบ"],[null,""],
-                    ] as [SortKey|null,string][]).map(([key,label])=>(
-                      <th key={label} style={key ? { cursor:"pointer", userSelect:"none" } : undefined}
+                      ["company","บริษัท / ผู้ติดต่อ",null],
+                      [null,"แหล่งที่มา","source"],
+                      ["status","ขั้นตอน",null],
+                      ["priority","ความสำคัญ","priority"],
+                      ["value","มูลค่า","value"],
+                      ["assigned","ผู้รับผิดชอบ",null],
+                      [null,"",null],
+                    ] as [SortKey|null,string,string|null][])
+                      .filter(([,,colKey]) => !colKey || !hiddenCols.includes(colKey))
+                      .map(([key,label])=>(
+                      <th key={label || "actions"} style={key ? { cursor:"pointer", userSelect:"none" } : undefined}
                         onClick={key ? ()=>onSort(key) : undefined}>
                         <span style={{ display:"flex", alignItems:"center", gap:4 }}>
                           {label} {key && <SortIcon field={key} sortKey={sortKey} sortDir={sortDir} />}
@@ -711,26 +1104,21 @@ export default function LeadsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(l => {
+                  {paged.map(l => {
                     const sc = leadStatusColor[l.status];
                     const done = converted.has(l.id) || !!l.customerId;
                     const isSel = selectedLead?.id === l.id;
                     return (
                       <tr key={l.id} onClick={()=>openPanel(l)} className="clickable"
                         style={{ background:isSel?"#f0f4f8":undefined }}>
-                        <td style={{ fontSize:"0.73rem", color:"#374151", fontWeight:600 }}>{l.id}</td>
-                        <td>
-                          <div style={{ fontSize:"0.84rem", fontWeight:700, color:"#2D2D2D" }}>{l.company}</div>
-                          <div style={{ fontSize:"0.68rem", color:"#374151", marginTop:1 }}>{l.contact}</div>
+                        <td style={{ minWidth:0 }}>
+                          <div style={{ fontSize:"0.84rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
+                          <div style={{ fontSize:"0.68rem", color:"#374151", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.contact}>{l.contact}</div>
                         </td>
-                        <td>
-                          <span className="badge" style={{ background:"#dce5f0", color:"#003366" }}>
-                            {l.product}
-                          </span>
-                        </td>
-                        <td style={{ fontSize:"0.75rem", color:"#374151" }}>{l.source || "—"}</td>
-                        <td style={{ fontSize:"0.82rem", color:"#374151" }}>{l.province}</td>
-                        <td style={{ position:"relative" }}
+                        {!hiddenCols.includes("source") && (
+                          <td style={{ fontSize:"0.75rem", color:"#374151" }}>{l.source || "—"}</td>
+                        )}
+                        <td className="ovf-visible" style={{ position:"relative" }}
                           onClick={e => { e.stopPropagation(); setOpenStatusId(openStatusId === l.id ? null : l.id); }}>
                           <button className="badge" style={{ background:sc.bg, color:sc.text, border:"none", cursor:"pointer" }}>
                             {leadStatusLabel[l.status]} ▾
@@ -746,7 +1134,7 @@ export default function LeadsPage() {
                                   const c = leadStatusColor[s];
                                   return (
                                     <button key={s}
-                                      onClick={e => { e.stopPropagation(); setLeadsData(prev=>prev.map(r=>r.id===l.id?{...r,status:s}:r)); setOpenStatusId(null); }}
+                                      onClick={e => { e.stopPropagation(); updateLeadStatus(l.id, s); setOpenStatusId(null); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 14px",
                                         border:"none", background:s===l.status?"#f0f4f8":"transparent",
                                         cursor:"pointer", textAlign:"left" }}>
@@ -762,7 +1150,22 @@ export default function LeadsPage() {
                             </>
                           )}
                         </td>
-                        <td className="num" style={{ fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D" }}>{l.value}</td>
+                        {!hiddenCols.includes("priority") && (
+                          <td>
+                            {(() => {
+                              const pri = leadPriority(l);
+                              const pc = priorityColor[pri];
+                              return (
+                                <span className="badge" style={{ background:pc.bg, color:pc.text }}>
+                                  {priorityLabel[pri]}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {!hiddenCols.includes("value") && (
+                          <td className="num" style={{ fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D" }}>{fmtVal(l.value)}</td>
+                        )}
                         <td>
                           <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                             <div style={{ width:26, height:26, borderRadius:"50%", background:"#003366",
@@ -772,116 +1175,101 @@ export default function LeadsPage() {
                             <span style={{ fontSize:"0.75rem", color:"#374151" }}>{l.assigned}</span>
                           </div>
                         </td>
-                        <td onClick={e => e.stopPropagation()}>
+                        {/* ── Row actions: แปลง ▾ menu (Convert to Deal / Customer) + View ── */}
+                        <td className="ovf-visible" onClick={e => e.stopPropagation()} style={{ position:"relative" }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            {done && l.status==="PAID" && (
+                            {done && l.status==="PAID" ? (
                               <span style={{ display:"inline-flex", alignItems:"center", gap:4,
                                 fontSize:"0.65rem", fontWeight:700, color:"#059669" }}>
                                 <CheckCircle2 size={11} /> ลูกค้าแล้ว
                               </span>
+                            ) : (
+                              <button
+                                onClick={e => { e.stopPropagation(); setOpenConvertId(openConvertId === l.id ? null : l.id); }}
+                                className="badge"
+                                style={{ background:"#dce5f0", color:"#003366", border:"none", cursor:"pointer",
+                                  display:"inline-flex", alignItems:"center", gap:3 }}>
+                                แปลง <ChevronDown size={11} />
+                              </button>
                             )}
-                            <button onClick={() => router.push(`/leads/${l.numId}`)}
-                              className="btn btn-secondary btn-sm" style={{ color:"#003366" }}>
-                              ดู →
-                            </button>
                           </div>
+                          {openConvertId === l.id && (
+                            <>
+                              <div onClick={e => { e.stopPropagation(); setOpenConvertId(null); }}
+                                style={{ position:"fixed", inset:0, zIndex:19 }}/>
+                              <div style={{ position:"absolute", top:"calc(100% - 4px)", right:10, zIndex:20,
+                                background:"#fff", border:"1px solid #e5e7eb", borderRadius:12,
+                                boxShadow:"0 8px 24px rgba(0,0,0,.14)", minWidth:190, overflow:"hidden" }}>
+                                <button
+                                  onClick={e => { e.stopPropagation(); convertToDeal(l); }}
+                                  style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 14px",
+                                    border:"none", background:"transparent", cursor:"pointer", textAlign:"left" }}
+                                  onMouseEnter={e=>(e.currentTarget.style.background="#f0f4f8")}
+                                  onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                                  <Zap size={13} color="#003366" />
+                                  <span style={{ fontSize:"0.78rem", fontWeight:600, color:"#003366" }}>เปิดเป็นดีล</span>
+                                </button>
+                                <button
+                                  onClick={e => { e.stopPropagation(); convertToCustomer(l); }}
+                                  style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 14px",
+                                    border:"none", borderTop:"1px solid #f0f4f8", background:"transparent", cursor:"pointer", textAlign:"left" }}
+                                  onMouseEnter={e=>(e.currentTarget.style.background="#e5faf0")}
+                                  onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                                  <CheckCircle2 size={13} color="#059669" />
+                                  <span style={{ fontSize:"0.78rem", fontWeight:600, color:"#059669" }}>เพิ่มเป็นลูกค้า</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding:"40px", textAlign:"center", color:"#374151", fontSize:"0.82rem" }}>
+                    <tr><td colSpan={7 - COLS.filter(c => hiddenCols.includes(c.key)).length} style={{ padding:"40px", textAlign:"center", color:"#374151", fontSize:"0.82rem" }}>
                       ไม่พบข้อมูล
                     </td></tr>
                   )}
                 </tbody>
               </table>
             </div>
-            <div style={{ padding:"11px 16px", borderTop:"1px solid #e5e7eb", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <span style={{ fontSize:"0.73rem", color:"#374151" }}>แสดง {filtered.length} จาก {leadsData.length} รายการ</span>
-              {filtered.length > 0 && (
-                <span style={{ fontSize:"0.73rem", color:"#003366", fontWeight:700 }}>
-                  มูลค่ารวม {fmtM(filtered.reduce((s,l)=>s+parseValue(l.value),0))}
-                </span>
-              )}
+            <div style={{ padding:"11px 16px", borderTop:"1px solid #e5e7eb", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+              {/* Left: range summary */}
+              <span style={{ fontSize:"0.73rem", color:"#374151" }}>
+                แสดง {pageStart}–{pageEnd} จาก {filtered.length} รายการ
+              </span>
+              {/* Right: pagination controls */}
+              <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <button
+                    onClick={()=>setPage(p=>Math.max(1, p-1))}
+                    disabled={page<=1}
+                    style={{ display:"flex", alignItems:"center", gap:3, padding:"5px 11px", borderRadius:8,
+                      border:"1px solid #e5e7eb", fontSize:"0.72rem", fontWeight:600,
+                      background: page<=1 ? "#fafafa" : "#fff",
+                      color: page<=1 ? "#C0C0C0" : "#003366",
+                      cursor: page<=1 ? "not-allowed" : "pointer" }}>
+                    <ChevronDown size={12} style={{ transform:"rotate(90deg)" }} /> ก่อนหน้า
+                  </button>
+                  <span style={{ fontSize:"0.72rem", fontWeight:700, color:"#374151", padding:"0 4px", whiteSpace:"nowrap" }}>
+                    หน้า {page} / {totalPages}
+                  </span>
+                  <button
+                    onClick={()=>setPage(p=>Math.min(totalPages, p+1))}
+                    disabled={page>=totalPages}
+                    style={{ display:"flex", alignItems:"center", gap:3, padding:"5px 11px", borderRadius:8,
+                      border:"1px solid #e5e7eb", fontSize:"0.72rem", fontWeight:600,
+                      background: page>=totalPages ? "#fafafa" : "#fff",
+                      color: page>=totalPages ? "#C0C0C0" : "#003366",
+                      cursor: page>=totalPages ? "not-allowed" : "pointer" }}>
+                    ถัดไป <ChevronDown size={12} style={{ transform:"rotate(-90deg)" }} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── KANBAN VIEW ── */}
-        {view === "kanban" && (
-          <div style={{ display:"flex", gap:12, overflowX:"auto", paddingBottom:8 }}>
-            {ALL_STATUSES.map(status => {
-              const col = leadStatusColor[status];
-              const cards = filtered.filter(l=>l.status===status);
-              const colVal = cards.reduce((s,l)=>s+parseValue(l.value),0);
-              const isDropTarget = dragOverStatus === status && dragLeadId !== null;
-              const draggedCard = leadsData.find(l=>l.id===dragLeadId);
-              const canDrop = isDropTarget && draggedCard?.status !== status;
-              return (
-                <div key={status}
-                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverStatus(status); }}
-                  onDragLeave={e => {
-                    // only clear if leaving the column entirely (not entering a child)
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverStatus(null);
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    if (dragLeadId && draggedCard?.status !== status) {
-                      setLeadsData(prev => prev.map(l => l.id === dragLeadId ? {...l, status} : l));
-                    }
-                    setDragLeadId(null); setDragOverStatus(null);
-                  }}
-                  style={{ minWidth:220, maxWidth:240, flexShrink:0, display:"flex", flexDirection:"column", gap:8,
-                    borderRadius:14, transition:"background .15s",
-                    padding:canDrop ? 4 : 0,
-                    background: canDrop ? col.bg : "transparent",
-                    outline: canDrop ? `2px dashed ${col.text}` : "2px dashed transparent",
-                  }}>
-                  {/* Column header */}
-                  <div style={{ padding:"10px 14px", borderRadius:12, background:col.bg, border:`1px solid ${col.text}22` }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:3 }}>
-                      <span style={{ fontSize:"0.78rem", fontWeight:700, color:col.text }}>{leadStatusLabel[status]}</span>
-                      <span style={{ width:22, height:22, borderRadius:"50%", background:col.text+"22",
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        fontSize:"0.65rem", fontWeight:800, color:col.text }}>{cards.length}</span>
-                    </div>
-                    <div style={{ fontSize:"0.65rem", color:col.text, opacity:0.8, fontWeight:600 }}>
-                      {colVal >= 1e6 ? "฿"+(colVal/1e6).toFixed(1)+"M" : colVal>0?"฿"+(colVal/1e3).toFixed(0)+"K":"ไม่มีมูลค่า"}
-                    </div>
-                  </div>
-                  {/* Cards */}
-                  <div style={{ display:"flex", flexDirection:"column", gap:7, maxHeight:"60vh", overflowY:"auto" }}>
-                    {cards.map(l=>(
-                      <KanbanCard
-                        key={l.id} lead={l} onClick={()=>{ if(!dragLeadId) openPanel(l); }}
-                        isDragging={dragLeadId===l.id}
-                        onDragStart={()=>setDragLeadId(l.id)}
-                        onDragEnd={()=>{ setDragLeadId(null); setDragOverStatus(null); }}
-                      />
-                    ))}
-                    {cards.length === 0 && (
-                      <div style={{ padding:"24px 12px", textAlign:"center", fontSize:"0.72rem",
-                        color: canDrop ? col.text : "#C0C0C0",
-                        border:`2px dashed ${canDrop ? col.text : "#f0f4f8"}`,
-                        borderRadius:12, transition:"border-color .15s, color .15s",
-                        fontWeight: canDrop ? 700 : 400 }}>
-                        {canDrop ? `วาง "${draggedCard?.company}" ที่นี่` : "ไม่มีรายการ"}
-                      </div>
-                    )}
-                    {canDrop && cards.length > 0 && (
-                      <div style={{ height:48, borderRadius:10, border:`2px dashed ${col.text}`,
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        fontSize:"0.7rem", fontWeight:700, color:col.text, background:col.bg+"88" }}>
-                        วางที่นี่ →
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* hidden file input */}
@@ -935,672 +1323,268 @@ export default function LeadsPage() {
 
       {/* Add lead modal */}
       {showAddForm && (
-        <AddLeadModal
+        <LeadFormModal
           onClose={()=>setShowAddForm(false)}
-          onAdd={l=>setLeadsData(p=>[l,...p])}
+          onSave={addLead}
           persons={personsList}
         />
       )}
 
-      {/* ═══ DETAIL PANEL ════════════════════════════════════════════ */}
-      {selectedLead && current && (
+      {/* แก้ไขข้อมูลผู้สนใจทำได้ในแท็บ "ภาพรวม" ของโมดัลรายละเอียดโดยตรง (ไม่มีฟอร์มแก้ไขแยก) */}
+
+      {/* Delete confirm dialog */}
+      {showDeleteConfirm && selectedLead && (
         <>
-          <div onClick={closePanel}
-            style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.4)", zIndex:40 }} />
+          <div onClick={()=>setShowDeleteConfirm(false)}
+            style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:1120 }} />
+          <div style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)", zIndex:1121,
+            background:"#fff", borderRadius:16, border:"1px solid #e5e7eb",
+            boxShadow:"0 24px 80px rgba(0,0,0,.2)", width:"100%", maxWidth:380, padding:24 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+              <span style={{ width:38, height:38, borderRadius:"50%", background:"#fee2e2",
+                display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <Trash2 size={17} color="#dc2626" />
+              </span>
+              <div style={{ fontSize:"1rem", fontWeight:800, color:"#2D2D2D" }}>ลบผู้สนใจ</div>
+            </div>
+            <p style={{ fontSize:"0.82rem", color:"#6b7280", lineHeight:1.6, margin:"0 0 20px" }}>
+              ต้องการลบ <strong style={{ color:"#2D2D2D" }}>{selectedLead.company}</strong> ({selectedLead.id}) หรือไม่?
+              การลบไม่สามารถย้อนกลับได้
+            </p>
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <button onClick={()=>setShowDeleteConfirm(false)}
+                style={{ padding:"9px 20px", borderRadius:9, border:"1px solid #e5e7eb",
+                  background:"#fff", color:"#374151", fontSize:"0.8rem", fontWeight:600, cursor:"pointer" }}>
+                ยกเลิก
+              </button>
+              <button onClick={deleteLead}
+                style={{ padding:"9px 22px", borderRadius:9, border:"none",
+                  background:"#dc2626", color:"#fff", fontSize:"0.8rem", fontWeight:700, cursor:"pointer",
+                  display:"flex", alignItems:"center", gap:6 }}>
+                <Trash2 size={13} /> ลบ
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
-            <div onClick={e=>e.stopPropagation()}
-              style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
-                width:760, maxWidth:"calc(100vw - 32px)", maxHeight:"calc(100vh - 48px)",
-                zIndex:50, background:"#fff", borderRadius:18, boxShadow:"0 24px 80px rgba(0,0,0,.22)",
-                display:"flex", flexDirection:"column", overflow:"hidden" }}>
+      {/* ═══ DETAIL MODAL (2-column, navy header — same as customers) ═══ */}
+      {selectedLead && current && (() => {
+        const c = current;
+        const sc = leadStatusColor[c.status];
+        const pri = leadPriority(c);
+        const pc = priorityColor[pri];
+        const cInitials = (c.company || c.name).replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
+        const relatedQuotes = c.customerId != null
+          ? quotations.filter(q => q.customerId === c.customerId)
+          : [];
+        const activities = seedActivities(c);
+        const drawerFiles = myFiles.length > 0 ? myFiles : seedFiles(c);
+        const isCustomer = converted.has(c.id) || c.status === "PAID" || !!c.customerId;
 
-              {/* Drawer header (CI navy) — รูปแบบเดียวกับลิ้นชักลูกค้า */}
-              <div style={{ background:"#003366", padding:"16px 18px 14px", flexShrink:0 }}>
-                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:11, minWidth:0 }}>
-                    <div style={{ width:44, height:44, borderRadius:13, background:"rgba(255,255,255,.18)", border:"2px solid rgba(255,255,255,.25)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:"0.95rem", flexShrink:0 }}>
-                      {(current.company || current.name || "?").trim().slice(0,2)}
+        const detailTabs = [
+          { key: "overview",   label: "ภาพรวม" },
+          { key: "activities", label: "กิจกรรม" },
+          { key: "quotation",  label: "ใบเสนอราคา" },
+          { key: "files",      label: "ไฟล์" },
+        ] as const;
+
+        // ── Tab: ภาพรวม (Overview) — แก้ไขข้อมูลได้ในตัว ──
+        const tabOverview = (
+          <OverviewEditor lead={c} persons={personsList} onSave={updateLead} />
+        );
+
+        // ── Tab: กิจกรรม (Activities) ──
+        const tabActivities = (
+          <DrawerSection title="กิจกรรม">
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {activities.map((a,i) => (
+                <div key={i} style={{ display:"flex", gap:10, padding:"8px 10px", borderRadius:9,
+                  background:"#f8f9fb", border:"1px solid #f0f4f8" }}>
+                  <MessageSquare size={14} color="#003366" style={{ flexShrink:0, marginTop:2 }} />
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:"0.8rem", color:"#2D2D2D", fontWeight:600 }}>{a.text}</div>
+                    <div style={{ fontSize:"0.68rem", color:"#6b7280", marginTop:2 }}>{a.date}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DrawerSection>
+        );
+
+        // ── Tab: ใบเสนอราคา (Quotation) ──
+        const tabQuotation = (
+          <DrawerSection title="ใบเสนอราคา">
+            {relatedQuotes.length === 0 ? (
+              <div style={{ color:"#9aa2ad", fontSize:"0.82rem", padding:"18px 0", textAlign:"center" }}>
+                ยังไม่มีใบเสนอราคา
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {relatedQuotes.map(q => {
+                  const qc = quotationStatusColor[q.status];
+                  return (
+                    <div key={q.id} onClick={()=>{ closePanel(); router.push("/quotations"); }}
+                      style={{ padding:"10px 12px", borderRadius:10, background:"#f8f9fb",
+                        border:"1px solid #f0f4f8", cursor:"pointer" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                        <span style={{ fontSize:"0.78rem", fontWeight:700, color:"#2D2D2D" }}>{q.id}</span>
+                        <span style={{ padding:"2px 9px", borderRadius:99, fontSize:"0.66rem", fontWeight:700,
+                          background:qc.bg, color:qc.text }}>{quotationStatusLabel[q.status]}</span>
+                      </div>
+                      <div style={{ fontSize:"0.7rem", color:"#6b7280", marginTop:3 }}>{q.project}</div>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginTop:5 }}>
+                        <span style={{ fontSize:"0.68rem", color:"#6b7280" }}>{q.date}</span>
+                        <span style={{ fontSize:"0.76rem", fontWeight:700, color:"#003366" }}>{q.total}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </DrawerSection>
+        );
+
+        // ── Tab: ไฟล์ (Files) ──
+        const tabFiles = (
+          <DrawerSection title="ไฟล์">
+            {drawerFiles.length === 0 ? (
+              <div style={{ color:"#9aa2ad", fontSize:"0.82rem", padding:"18px 0", textAlign:"center" }}>
+                ยังไม่มีไฟล์แนบ
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                {drawerFiles.map(fname => (
+                  <div key={fname} style={{ display:"flex", alignItems:"center", gap:8,
+                    padding:"8px 10px", borderRadius:8, background:"#fafafa", border:"1px solid #f0f4f8" }}>
+                    <Paperclip size={13} color="#C0C0C0" />
+                    <span style={{ flex:1, fontSize:"0.78rem", color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fname}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={()=>fileInputRef.current?.click()}
+              style={{ fontSize:"0.75rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:10 }}>
+              + เพิ่มไฟล์แนบ
+            </button>
+          </DrawerSection>
+        );
+
+        return (
+          <>
+            {/* Backdrop */}
+            <div onClick={closePanel}
+              style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:200 }} />
+
+            {/* Centered container — fixed height, internal scroll */}
+            <div style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
+              width:760, maxWidth:"calc(100vw - 32px)", height:"min(660px, calc(100vh - 48px))",
+              zIndex:210, background:"#fff", borderRadius:18, boxShadow:"0 24px 80px rgba(0,0,0,.22)",
+              display:"flex", flexDirection:"column", overflow:"hidden" }}>
+
+              {/* Navy header */}
+              <div style={{ background:"#003366", padding:"16px 18px 12px", flexShrink:0 }}>
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:44, height:44, borderRadius:13, background:"rgba(255,255,255,.18)",
+                      display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", overflow:"hidden",
+                      fontWeight:800, fontSize:"1rem", border:"2px solid rgba(255,255,255,.25)", flexShrink:0 }}>
+                      {c.logo
+                        ? <img src={c.logo} alt="โลโก้" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                        : cInitials}
                     </div>
                     <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:"0.92rem", fontWeight:800, color:"#fff", lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{current.company || current.name}</div>
-                      <div style={{ fontSize:"0.68rem", color:"rgba(255,255,255,.65)", marginTop:2 }}>{current.category} · {current.province}</div>
+                      <div style={{ fontSize:"0.92rem", fontWeight:800, color:"#fff", lineHeight:1.2 }}>{c.company || c.name}</div>
+                      <div style={{ fontSize:"0.68rem", color:"rgba(255,255,255,.65)", marginTop:2 }}>{c.contact} · {c.province}</div>
                     </div>
                   </div>
                   <button onClick={closePanel}
-                    style={{ width:30, height:30, borderRadius:8, border:"1px solid rgba(255,255,255,.2)", background:"rgba(255,255,255,.12)", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <X size={15} />
+                    style={{ background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, width:28, height:28,
+                      cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <X size={14} />
                   </button>
                 </div>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12 }}>
-                  <span style={{ padding:"3px 11px", borderRadius:99, fontSize:"0.68rem", fontWeight:700, background:leadStatusColor[current.status].bg, color:leadStatusColor[current.status].text }}>
-                    {leadStatusLabel[current.status]}
-                  </span>
-                  <button onClick={() => router.push(`/leads/${current.numId}`)}
-                    style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 11px", borderRadius:99, border:"1px solid rgba(255,255,255,.25)", background:"rgba(255,255,255,.12)", color:"#fff", fontSize:"0.68rem", fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-                    เปิดหน้าเต็ม →
-                  </button>
+                {/* Badge row: status · priority · source */}
+                <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.64rem", fontWeight:700,
+                    background:sc.bg, color:sc.text }}>{leadStatusLabel[c.status]}</span>
+                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.64rem", fontWeight:700,
+                    background:pc.bg, color:pc.text }}>{priorityLabel[pri]}</span>
+                  {c.source && (
+                    <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.64rem", fontWeight:700,
+                      background:"rgba(255,255,255,.18)", color:"#fff" }}>{c.source}</span>
+                  )}
                 </div>
               </div>
 
-              {/* Tabs bar */}
-              <div className="tab-bar" style={{ padding:"0 24px", flexShrink:0 }}>
-                {[{key:"lead",label:"ผู้สนใจ"},{key:"address",label:"ที่อยู่"}].map(t=>(
-                  <button key={t.key} onClick={()=>setActiveTab(t.key as "lead"|"address")}
-                    className={`tab-item${activeTab===t.key?" active":""}`}
-                    style={{ padding:"12px 18px", fontSize:"0.82rem" }}>
+              {/* Tab bar */}
+              <div className="tab-bar" style={{ flexShrink:0 }}>
+                {detailTabs.map(t => (
+                  <button key={t.key} className={`tab-item${activeTab===t.key?" active":""}`}
+                    onClick={()=>setActiveTab(t.key)}>
                     {t.label}
                   </button>
                 ))}
               </div>
 
-              {/* Body — 760px 2 คอลัมน์ */}
+              {/* Two-column body */}
               <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
-
-                {/* ── LEFT ── */}
-                <div style={{ flex:1, padding:"24px 28px", overflowY:"auto", borderRight:"1px solid #f0f4f8" }}>
-                  {activeTab === "lead" && (
-                    <>
-                      {editingField === "title"
-                        ? <input value={draft?.category??""} onChange={e=>patchDraft("category",e.target.value)}
-                            onBlur={commitDraft} autoFocus
-                            style={{ fontSize:"1.6rem", fontWeight:800, color:"#2D2D2D", border:"none",
-                              outline:"none", width:"100%", borderBottom:"2px solid #003366", paddingBottom:2, marginBottom:6 }} />
-                        : <h2 onClick={()=>setEditingField("title")} title="คลิกแก้ไข"
-                            style={{ fontSize:"1.6rem", fontWeight:800, color:"#2D2D2D", marginBottom:6, cursor:"text" }}>
-                            {current.category} — {current.province}
-                          </h2>
-                      }
-                      <p style={{ fontSize:"0.8rem", color:"#374151", marginBottom:2 }}>
-                        ผู้ติดต่อ: <strong style={{ color:"#2D2D2D" }}>{current.contact}</strong>
-                      </p>
-                      <p style={{ fontSize:"0.8rem", color:"#374151", marginBottom:24 }}>
-                        บริษัท: <strong style={{ color:"#2D2D2D" }}>{current.company}</strong>
-                      </p>
-
-                      <div style={{ height:1, background:"#f0f4f8", marginBottom:22 }} />
-
-                      {/* คำอธิบาย */}
-                      <div style={{ marginBottom:24 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                          <MessageSquare size={15} color="#2D2D2D" />
-                          <span style={{ fontSize:"0.88rem", fontWeight:700, color:"#2D2D2D" }}>คำอธิบาย</span>
-                        </div>
-                        {editingField === "note" ? (
-                          <>
-                            <textarea value={draft?.note??""} onChange={e=>patchDraft("note",e.target.value)}
-                              rows={4} autoFocus
-                              style={{ width:"100%", border:"1px solid #003366", borderRadius:10,
-                                padding:"10px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none",
-                                resize:"vertical", fontFamily:"inherit", lineHeight:1.7 }} />
-                            <div style={{ display:"flex", gap:6, marginTop:6 }}>
-                              <button onClick={commitDraft}
-                                style={{ padding:"7px 14px", borderRadius:8, background:"#003366",
-                                  border:"none", color:"#fff", fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>บันทึก</button>
-                              <button onClick={()=>{ setDraft({...selectedLead}); setEditingField(null); }}
-                                style={{ padding:"7px 14px", borderRadius:8, background:"#fff",
-                                  border:"1px solid #e5e7eb", color:"#374151", fontSize:"0.72rem", cursor:"pointer" }}>ยกเลิก</button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <p onClick={()=>setEditingField("note")}
-                              style={{ fontSize:"0.82rem", color:current.note?"#2D2D2D":"#9ca3af",
-                                lineHeight:1.8, cursor:"text", minHeight:50 }}>
-                              {current.note || "คลิกเพื่อเพิ่มคำอธิบาย..."}
-                            </p>
-                            <button onClick={()=>setEditingField("note")}
-                              style={{ fontSize:"0.73rem", color:"#003366", background:"none",
-                                border:"none", cursor:"pointer", padding:0, marginTop:4 }}>
-                              แก้ไขคำอธิบาย
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      <div style={{ height:1, background:"#f0f4f8", marginBottom:22 }} />
-
-                      {/* รายการตรวจสอบ */}
-                      <div style={{ marginBottom:24 }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                            <CheckSquare size={15} color="#2D2D2D" />
-                            <span style={{ fontSize:"0.88rem", fontWeight:700, color:"#2D2D2D" }}>รายการตรวจสอบ</span>
-                          </div>
-                          <span style={{ fontSize:"0.7rem",
-                            color:doneCount===items.length&&items.length>0?"#059669":"#C0C0C0", fontWeight:600 }}>
-                            {doneCount}/{items.length}
-                          </span>
-                        </div>
-                        {items.length > 0 && (
-                          <div style={{ height:4, borderRadius:99, background:"#f0f4f8", marginBottom:10, overflow:"hidden" }}>
-                            <div className="top5-bar" style={{ height:"100%", width:`${(doneCount/items.length)*100}%`,
-                              background:"#059669", borderRadius:99 }} />
-                          </div>
-                        )}
-                        <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
-                          {items.map(item=>(
-                            <div key={item.id} style={{ display:"flex", alignItems:"center", gap:8,
-                              padding:"7px 10px", borderRadius:8,
-                              background:item.done?"#f0f7f0":"#fafafa", border:"1px solid #f0f4f8" }}>
-                              <button onClick={()=>toggleChecklistItem(item.id)}
-                                style={{ width:18, height:18, borderRadius:5,
-                                  border:`2px solid ${item.done?"#059669":"#e5e7eb"}`,
-                                  background:item.done?"#059669":"#fff",
-                                  display:"flex", alignItems:"center", justifyContent:"center",
-                                  cursor:"pointer", flexShrink:0, padding:0 }}>
-                                {item.done&&<Check size={11} color="#fff"/>}
-                              </button>
-                              <span style={{ flex:1, fontSize:"0.8rem",
-                                color:item.done?"#6b7280":"#2D2D2D",
-                                textDecoration:item.done?"line-through":"none" }}>
-                                {item.text}
-                              </span>
-                              <button onClick={()=>deleteChecklistItem(item.id)}
-                                style={{ background:"none", border:"none", cursor:"pointer",
-                                  color:"#e5e7eb", padding:0, display:"flex" }}
-                                onMouseEnter={e=>(e.currentTarget.style.color="#dc2626")}
-                                onMouseLeave={e=>(e.currentTarget.style.color="#e5e7eb")}>
-                                <X size={12}/>
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        {showChecklistInput ? (
-                          <div style={{ display:"flex", gap:6 }}>
-                            <input value={newCheckText} onChange={e=>setNewCheckText(e.target.value)}
-                              onKeyDown={e=>{ if(e.key==="Enter")addChecklistItem(); if(e.key==="Escape"){setShowChecklistInput(false);setNewCheckText("");} }}
-                              placeholder="พิมพ์รายการ..." autoFocus
-                              style={{ flex:1, border:"1px solid #003366", borderRadius:8,
-                                padding:"7px 11px", fontSize:"0.8rem", outline:"none", color:"#2D2D2D" }} />
-                            <button onClick={addChecklistItem}
-                              style={{ padding:"7px 12px", borderRadius:8, background:"#003366",
-                                border:"none", color:"#fff", fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>เพิ่ม</button>
-                            <button onClick={()=>{setShowChecklistInput(false);setNewCheckText("");}}
-                              style={{ padding:"7px 10px", borderRadius:8, background:"#fff",
-                                border:"1px solid #e5e7eb", color:"#374151", fontSize:"0.72rem", cursor:"pointer" }}>ยกเลิก</button>
-                          </div>
-                        ) : (
-                          <button onClick={()=>setShowChecklistInput(true)}
-                            style={{ fontSize:"0.75rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                            + สร้างรายการใหม่
-                          </button>
-                        )}
-                      </div>
-
-                      <div style={{ height:1, background:"#f0f4f8", marginBottom:22 }} />
-
-                      {/* ไฟล์แนบ */}
-                      <div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                          <Paperclip size={15} color="#2D2D2D" />
-                          <span style={{ fontSize:"0.88rem", fontWeight:700, color:"#2D2D2D" }}>ไฟล์แนบ</span>
-                          {myFiles.length>0&&<span style={{ fontSize:"0.65rem", background:"#003366",
-                            color:"#fff", borderRadius:99, padding:"1px 7px", fontWeight:700 }}>{myFiles.length}</span>}
-                        </div>
-                        {myFiles.length>0&&(
-                          <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
-                            {myFiles.map(fname=>(
-                              <div key={fname} style={{ display:"flex", alignItems:"center", gap:8,
-                                padding:"7px 10px", borderRadius:8, background:"#fafafa", border:"1px solid #f0f4f8" }}>
-                                <Paperclip size={13} color="#C0C0C0"/>
-                                <span style={{ flex:1, fontSize:"0.78rem", color:"#2D2D2D" }}>{fname}</span>
-                                <button onClick={()=>setLeadFiles(p=>({...p,[lid]:(p[lid]??[]).filter(n=>n!==fname)}))}
-                                  style={{ background:"none", border:"none", cursor:"pointer",
-                                    color:"#e5e7eb", padding:0, display:"flex" }}
-                                  onMouseEnter={e=>(e.currentTarget.style.color="#dc2626")}
-                                  onMouseLeave={e=>(e.currentTarget.style.color="#e5e7eb")}>
-                                  <X size={12}/>
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <button onClick={()=>fileInputRef.current?.click()}
-                          style={{ fontSize:"0.75rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                          + เพิ่มไฟล์แนบ
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === "address" && (() => {
-                    const addr = getAddress(lid, current);
-                    const fields: [string, keyof AddressData][] = [
-                      ["ชื่อ บริษัท", "company"],
-                      ["ตำแหน่งงาน", "position"],
-                      ["ถนน", "street"],
-                      ["เมือง", "city"],
-                      ["สถานะ", "state"],
-                      ["รหัสไปรษณีย์", "postalCode"],
-                      ["ประเทศ", "country"],
-                      ["เว็บไซต์", "website"],
-                    ];
-                    return (
-                      <div>
-                        {/* Company header */}
-                        <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:28 }}>
-                          <div style={{ width:48, height:48, borderRadius:13, background:"#003366", flexShrink:0,
-                            display:"flex", alignItems:"center", justifyContent:"center" }}>
-                            <span style={{ color:"#fff", fontWeight:900, fontSize:"1rem" }}>{current.company.charAt(0)}</span>
-                          </div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:"0.95rem", fontWeight:800, color:"#2D2D2D" }}>{current.company}</div>
-                            <div style={{ fontSize:"0.72rem", color:"#374151", marginTop:2 }}>{current.contact}</div>
-                          </div>
-                          {!editingAddress ? (
-                            <button onClick={()=>{ setEditingAddress(true); setAddressDraft(addr); }}
-                              style={{ padding:"7px 16px", borderRadius:9, border:"1px solid #e5e7eb",
-                                background:"#fff", color:"#374151", fontSize:"0.75rem", fontWeight:600,
-                                cursor:"pointer", display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                              แก้ไข
-                            </button>
-                          ) : (
-                            <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-                              <button onClick={()=>setEditingAddress(false)}
-                                style={{ padding:"7px 12px", borderRadius:9, border:"1px solid #e5e7eb",
-                                  background:"#fff", color:"#374151", fontSize:"0.73rem", fontWeight:600, cursor:"pointer" }}>ยกเลิก</button>
-                              <button onClick={saveAddress}
-                                style={{ padding:"7px 14px", borderRadius:9, border:"none",
-                                  background:"#003366", color:"#fff", fontSize:"0.73rem", fontWeight:700, cursor:"pointer" }}>บันทึก</button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Section: องค์กร */}
-                        <div style={{ marginBottom:24 }}>
-                          <div style={{ fontSize:"0.67rem", fontWeight:700, color:"#374151",
-                            textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>ข้อมูลองค์กร</div>
-                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                            {(["company","position"] as (keyof AddressData)[]).map(key => {
-                              const labels: Record<string,string> = { company:"ชื่อ บริษัท", position:"ตำแหน่งงาน" };
-                              return (
-                                <div key={key}>
-                                  <div style={{ fontSize:"0.65rem", fontWeight:600, color:"#374151", marginBottom:5 }}>{labels[key]}</div>
-                                  {editingAddress
-                                    ? <input value={addressDraft[key]??""} onChange={e=>setAddressDraft(p=>({...p,[key]:e.target.value}))}
-                                        style={{ width:"100%", border:"none", borderBottom:"1.5px solid #003366", outline:"none",
-                                          fontSize:"0.82rem", fontWeight:600, color:"#2D2D2D", background:"transparent", padding:"3px 0", boxSizing:"border-box" as const }} />
-                                    : <div style={{ fontSize:"0.82rem", fontWeight:600, color:addr[key]?"#2D2D2D":"#6b7280" }}>{addr[key]||"—"}</div>
-                                  }
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div style={{ height:1, background:"#f0f4f8", marginBottom:20 }}/>
-
-                        {/* Section: ที่อยู่ */}
-                        <div style={{ marginBottom:24 }}>
-                          <div style={{ fontSize:"0.67rem", fontWeight:700, color:"#374151",
-                            textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>ที่อยู่</div>
-                          {/* ถนน full-width */}
-                          <div style={{ marginBottom:14 }}>
-                            <div style={{ fontSize:"0.65rem", fontWeight:600, color:"#374151", marginBottom:5 }}>ถนน</div>
-                            {editingAddress
-                              ? <input value={addressDraft.street??""} onChange={e=>setAddressDraft(p=>({...p,street:e.target.value}))}
-                                  style={{ width:"100%", border:"none", borderBottom:"1.5px solid #003366", outline:"none",
-                                    fontSize:"0.82rem", fontWeight:600, color:"#2D2D2D", background:"transparent", padding:"3px 0", boxSizing:"border-box" as const }} />
-                              : <div style={{ fontSize:"0.82rem", fontWeight:600, color:addr.street?"#2D2D2D":"#6b7280" }}>{addr.street||"—"}</div>
-                            }
-                          </div>
-                          {/* 2-col grid */}
-                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                            {(["city","state","postalCode","country"] as (keyof AddressData)[]).map(key => {
-                              const labels: Record<string,string> = { city:"เมือง", state:"สถานะ/จังหวัด", postalCode:"รหัสไปรษณีย์", country:"ประเทศ" };
-                              return (
-                                <div key={key}>
-                                  <div style={{ fontSize:"0.65rem", fontWeight:600, color:"#374151", marginBottom:5 }}>{labels[key]}</div>
-                                  {editingAddress
-                                    ? <input value={addressDraft[key]??""} onChange={e=>setAddressDraft(p=>({...p,[key]:e.target.value}))}
-                                        style={{ width:"100%", border:"none", borderBottom:"1.5px solid #003366", outline:"none",
-                                          fontSize:"0.82rem", fontWeight:600, color:"#2D2D2D", background:"transparent", padding:"3px 0", boxSizing:"border-box" as const }} />
-                                    : <div style={{ fontSize:"0.82rem", fontWeight:600, color:addr[key]?"#2D2D2D":"#6b7280" }}>{addr[key]||"—"}</div>
-                                  }
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div style={{ height:1, background:"#f0f4f8", marginBottom:20 }}/>
-
-                        {/* เว็บไซต์ */}
-                        <div>
-                          <div style={{ fontSize:"0.65rem", fontWeight:600, color:"#374151", marginBottom:5, display:"flex", alignItems:"center", gap:5 }}>
-                            <Globe size={11}/> เว็บไซต์
-                          </div>
-                          {editingAddress
-                            ? <input value={addressDraft.website??""} onChange={e=>setAddressDraft(p=>({...p,website:e.target.value}))}
-                                placeholder="https://..."
-                                style={{ width:"100%", border:"none", borderBottom:"1.5px solid #003366", outline:"none",
-                                  fontSize:"0.82rem", fontWeight:600, color:"#2D2D2D", background:"transparent", padding:"3px 0", boxSizing:"border-box" as const }} />
-                            : addr.website
-                              ? <a href={addr.website} target="_blank" rel="noreferrer"
-                                  style={{ fontSize:"0.82rem", fontWeight:600, color:"#003366", textDecoration:"none" }}>
-                                  {addr.website}
-                                </a>
-                              : <div style={{ fontSize:"0.82rem", fontWeight:600, color:"#374151" }}>—</div>
-                          }
-                        </div>
-                      </div>
-                    );
-                  })()}
+                {/* Left: active tab content */}
+                <div style={{ flex:1, minWidth:0, overflowY:"auto", borderRight:"1px solid #f0f4f8", padding:"16px 20px" }}>
+                  {activeTab==="overview"   && tabOverview}
+                  {activeTab==="activities" && tabActivities}
+                  {activeTab==="quotation"  && tabQuotation}
+                  {activeTab==="files"      && tabFiles}
                 </div>
 
-                {/* ── RIGHT SIDEBAR ── */}
-                <div style={{ width:292, flexShrink:0, padding:"24px 20px",
-                  overflowY:"auto", display:"flex", flexDirection:"column", gap:18 }}>
-
-                  {/* Assignees */}
-                  <div style={{ position:"relative" }}>
-                    <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151",
-                      textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10 }}>ผู้รับผิดชอบ</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:0, flexWrap:"wrap" }}>
-                      {getAssignees().map((name,i)=>(
-                        <div key={name} title={name}
-                          style={{ width:34, height:34, borderRadius:"50%", background:"#003366",
-                            display:"flex", alignItems:"center", justifyContent:"center",
-                            marginLeft:i>0?-8:0, border:"2px solid #fff", position:"relative", zIndex:getAssignees().length-i }}>
-                          <span style={{ color:"#374151", fontSize:"0.7rem", fontWeight:800 }}>{name.charAt(0)}</span>
-                        </div>
-                      ))}
-                      <button onClick={()=>setShowAssigneePicker(p=>!p)}
-                        style={{ width:34, height:34, borderRadius:"50%", border:"2px dashed #e5e7eb",
-                          background:"#fff", display:"flex", alignItems:"center", justifyContent:"center",
-                          cursor:"pointer", color:"#374151", marginLeft:getAssignees().length>0?-8:0, zIndex:0 }}>
-                        <Plus size={14}/>
-                      </button>
-                    </div>
-                    {showAssigneePicker && (
-                      <div style={{ position:"absolute", top:"100%", left:0, zIndex:20,
-                        background:"#fff", border:"1px solid #e5e7eb", borderRadius:12,
-                        boxShadow:"0 8px 24px rgba(0,0,0,.12)", padding:8, minWidth:180, marginTop:4 }}>
-                        <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151",
-                          padding:"4px 8px 8px", borderBottom:"1px solid #f0f4f8", marginBottom:4 }}>เลือกผู้รับผิดชอบ</div>
-                        {personsList.map(name=>{
-                          const sel = getAssignees().includes(name);
-                          return (
-                            <button key={name} onClick={()=>toggleAssignee(name)}
-                              style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
-                                padding:"7px 10px", borderRadius:8, border:"none",
-                                background:sel?"#dce5f0":"transparent", cursor:"pointer" }}>
-                              <div style={{ width:26, height:26, borderRadius:"50%",
-                                background:sel?"#003366":"#e5e7eb",
-                                display:"flex", alignItems:"center", justifyContent:"center" }}>
-                                <span style={{ color:sel?"#C0C0C0":"#6b7280", fontSize:"0.65rem", fontWeight:800 }}>{name.charAt(0)}</span>
-                              </div>
-                              <span style={{ fontSize:"0.78rem", fontWeight:sel?700:500,
-                                color:sel?"#003366":"#2D2D2D", flex:1 }}>{name}</span>
-                              {sel && <Check size={13} color="#003366"/>}
-                            </button>
-                          );
-                        })}
-                        <button onClick={()=>setShowAssigneePicker(false)}
-                          style={{ display:"block", width:"100%", marginTop:4, padding:"7px", borderRadius:8,
-                            border:"none", background:"#f8f9fb", color:"#374151", fontSize:"0.73rem",
-                            cursor:"pointer", fontWeight:600 }}>เสร็จสิ้น</button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Detail rows */}
-                  <div>
-                    <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151",
-                      textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>รายละเอียด</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                      {([
-                        [<User size={13}/>, "ชื่อ", "contact", "text", null],
-                        [<span style={{fontSize:"0.78rem",fontWeight:700}}>฿</span>, "มูลค่า", "value", "text", null],
-                        [<Calendar size={13}/>, "หมวดหมู่", "category", "select", ["โกดังสินค้า","โรงงาน","อาคารพาณิชย์","อาคารเกษตร","อาคารการศึกษา","อื่นๆ"]],
-                        [<Phone size={13}/>, "โทรศัพท์", "phone", "tel", null],
-                        [<Mail size={13}/>, "อีเมล", "email", "email", null],
-                        [<Zap size={13}/>, "แหล่งที่มา", "source", "select", SOURCES],
-                        [<MessageSquare size={13}/>, "ติดต่อล่าสุด", "lastContact", "date", null],
-                      ] as [React.ReactNode,string,string,string,string[]|null][]).map(([icon,label,field,type,opts])=>(
-                        <div key={field} onClick={(e)=>openFieldPopup(field,label,type,e,opts??undefined)} style={{ cursor:"pointer" }}>
-                          <DetailRow icon={icon} label={label}
-                            value={(current as unknown as Record<string,string>)[field]} />
-                        </div>
-                      ))}
-
-                      {/* Status dropdown */}
-                      <div style={{ position:"relative" }}>
-                        <button onClick={()=>setShowStatusDropdown(p=>!p)}
-                          style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px",
-                            borderRadius:10, background:"#f8f9fb", border:"1px solid #f0f4f8",
-                            width:"100%", cursor:"pointer", textAlign:"left" }}>
-                          <span style={{ color:"#374151", flexShrink:0, display:"flex" }}><Tag size={13}/></span>
-                          <span style={{ fontSize:"0.7rem", color:"#374151", minWidth:72, flexShrink:0 }}>สถานะ</span>
-                          <span style={{ flex:1, fontSize:"0.78rem", fontWeight:700,
-                            color:leadStatusColor[current.status].text }}>
-                            {leadStatusLabel[current.status]}
-                          </span>
-                          <ChevronDown size={11} color="#C0C0C0" style={{
-                            transition:"transform .2s",
-                            transform: showStatusDropdown ? "rotate(180deg)" : "none",
-                            flexShrink:0,
-                          }}/>
-                        </button>
-
-                        {showStatusDropdown && (
-                          <>
-                            <div onClick={()=>setShowStatusDropdown(false)}
-                              style={{ position:"fixed", inset:0, zIndex:90 }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0,
-                              background:"#fff", border:"1px solid #e5e7eb", borderRadius:12,
-                              boxShadow:"0 8px 28px rgba(0,0,0,.15)", zIndex:100,
-                              overflow:"hidden", padding:"4px" }}>
-                              {ALL_STATUSES.map(s => {
-                                const sc = leadStatusColor[s];
-                                const active = current.status === s;
-                                return (
-                                  <button key={s}
-                                    onClick={() => { handleStatusChange(s); setShowStatusDropdown(false); }}
-                                    style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
-                                      padding:"8px 10px", borderRadius:8, border:"none",
-                                      background: active ? sc.bg : "transparent",
-                                      cursor:"pointer", textAlign:"left" }}>
-                                    <span style={{ width:8, height:8, borderRadius:"50%",
-                                      background: sc.text, flexShrink:0 }} />
-                                    <span style={{ fontSize:"0.78rem", fontWeight: active ? 700 : 500,
-                                      color: active ? sc.text : "#2D2D2D", flex:1 }}>
-                                      {leadStatusLabel[s]}
-                                    </span>
-                                    {active && <Check size={13} color={sc.text} />}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                    </div>
-                  </div>
-
-                  {/* Reminder */}
-                  <div>
-                    {myReminder ? (
-                      <div style={{ padding:"10px 12px", borderRadius:10, background:"#dce5f0", border:"1px solid #c5d4e8" }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.75rem", fontWeight:700, color:"#003366" }}>
-                            <Bell size={14}/> การเตือนความจำ
-                          </div>
-                          <button onClick={()=>setReminders(p=>{const n={...p};delete n[lid];return n;})}
-                            style={{ background:"none", border:"none", color:"#374151", cursor:"pointer", padding:0, display:"flex" }}>
-                            <X size={13}/>
-                          </button>
-                        </div>
-                        <div style={{ fontSize:"0.72rem", color:"#003366", fontWeight:600 }}>{myReminder.date}</div>
-                        {myReminder.note&&<div style={{ fontSize:"0.7rem", color:"#374151", marginTop:2 }}>{myReminder.note}</div>}
-                        <button onClick={()=>{setReminderDate(myReminder.date);setReminderNote(myReminder.note);setShowReminderForm(true);}}
-                          style={{ fontSize:"0.7rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:4 }}>แก้ไข</button>
-                      </div>
-                    ) : showReminderForm ? (
-                      <div style={{ padding:"12px", borderRadius:10, background:"#f8f9fb", border:"1px solid #e5e7eb" }}>
-                        <div style={{ fontSize:"0.7rem", fontWeight:700, color:"#2D2D2D", marginBottom:8 }}>ตั้งการเตือน</div>
-                        <input type="date" value={reminderDate} onChange={e=>setReminderDate(e.target.value)}
-                          style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:8,
-                            padding:"7px 10px", fontSize:"0.78rem", outline:"none", marginBottom:6, color:"#2D2D2D" }} />
-                        <input placeholder="หมายเหตุ (ไม่บังคับ)" value={reminderNote} onChange={e=>setReminderNote(e.target.value)}
-                          style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:8,
-                            padding:"7px 10px", fontSize:"0.78rem", outline:"none", marginBottom:8, color:"#2D2D2D" }} />
-                        <div style={{ display:"flex", gap:6 }}>
-                          <button onClick={saveReminder}
-                            style={{ flex:1, padding:"7px", borderRadius:8, background:"#003366",
-                              border:"none", color:"#fff", fontSize:"0.7rem", fontWeight:700, cursor:"pointer" }}>บันทึก</button>
-                          <button onClick={()=>setShowReminderForm(false)}
-                            style={{ flex:1, padding:"7px", borderRadius:8, background:"#fff",
-                              border:"1px solid #e5e7eb", color:"#374151", fontSize:"0.7rem", cursor:"pointer" }}>ยกเลิก</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button onClick={()=>setShowReminderForm(true)}
-                        style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px",
-                          borderRadius:10, background:"#dce5f0", border:"1px solid #c5d4e8",
-                          color:"#003366", fontSize:"0.75rem", fontWeight:600, cursor:"pointer", width:"100%" }}>
-                        <Bell size={14}/> เพิ่มการเตือนความจำ
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Tags */}
-                  <div>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                      <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151",
-                        textTransform:"uppercase", letterSpacing:"0.07em" }}>แท็ก</div>
-                      <button onClick={()=>setShowTagEditor(p=>!p)}
-                        style={{ fontSize:"0.65rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0, fontWeight:700 }}>
-                        {showTagEditor ? "เสร็จ" : "+ เพิ่ม"}
-                      </button>
-                    </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom: showTagEditor ? 8 : 0 }}>
-                      {myTags.length > 0
-                        ? myTags.map(tag => (
-                            <span key={tag} onClick={() => toggleTag(tag)}
-                              style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px",
-                                borderRadius:99, fontSize:"0.65rem", fontWeight:700, cursor:"pointer",
-                                background:(TAG_COLORS[tag]??"#6b7280")+"22",
-                                color:TAG_COLORS[tag]??"#6b7280",
-                                border:`1px solid ${TAG_COLORS[tag]??"#6b7280"}44` }}>
-                              {tag} <span style={{ fontSize:"0.6rem" }}>×</span>
-                            </span>
-                          ))
-                        : !showTagEditor && <span style={{ fontSize:"0.72rem", color:"#9ca3af" }}>ไม่มีแท็ก</span>
-                      }
-                    </div>
-                    {showTagEditor && (
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                        {AVAILABLE_TAGS.map(tag => {
-                          const active = myTags.includes(tag);
-                          return (
-                            <button key={tag} onClick={() => toggleTag(tag)}
-                              style={{ padding:"3px 9px", borderRadius:99, fontSize:"0.65rem", fontWeight:700,
-                                cursor:"pointer", border:`1px solid ${active ? TAG_COLORS[tag]??"#6b7280" : "#e5e7eb"}`,
-                                background: active ? (TAG_COLORS[tag]??"#6b7280")+"22" : "#fff",
-                                color: active ? TAG_COLORS[tag]??"#6b7280" : "#6b7280" }}>
-                              {active ? "✓ " : ""}{tag}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div>
-                    <div style={{ fontSize:"0.65rem", fontWeight:700, color:"#374151",
-                      textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>การกระทำ</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {/* Navigate to full lead page */}
-                      <button onClick={() => { closePanel(); router.push(`/leads/${current.numId}`); }}
-                        style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px",
-                          borderRadius:10, background:"#dce5f0", border:"1px solid #c5d4e8",
-                          cursor:"pointer", width:"100%", transition:"background .15s" }}
-                        onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.background="#ccd8ec"; }}
-                        onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.background="#dce5f0"; }}>
-                        <UserPlus size={15} color="#003366"/>
-                        <span style={{ fontSize:"0.78rem", fontWeight:700, color:"#003366" }}>ดูรายละเอียดเต็ม</span>
-                        <span style={{ marginLeft:"auto", fontSize:"0.72rem", color:"#003366" }}>→</span>
-                      </button>
-                      {/* สร้างใบเสนอราคา */}
-                      <button onClick={() => router.push("/quotations")}
-                        style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px",
-                          borderRadius:10, background:"#f8f9fb", border:"1px solid #e2e8f0",
-                          cursor:"pointer", width:"100%", transition:"background .15s" }}
-                        onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.background="#eef2f7"; }}
-                        onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.background="#f8f9fb"; }}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                        <span style={{ fontSize:"0.78rem", fontWeight:600, color:"#374151" }}>สร้างใบเสนอราคา</span>
-                      </button>
-                      {/* เพิ่มนัดหมาย */}
-                      <button onClick={() => router.push("/appointments")}
-                        style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px",
-                          borderRadius:10, background:"#f8f9fb", border:"1px solid #e2e8f0",
-                          cursor:"pointer", width:"100%", transition:"background .15s" }}
-                        onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.background="#eef2f7"; }}
-                        onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.background="#f8f9fb"; }}>
-                        <Calendar size={15} color="#6b7280"/>
-                        <span style={{ fontSize:"0.78rem", fontWeight:600, color:"#374151" }}>เพิ่มนัดหมาย</span>
-                      </button>
-                      {/* แปลงเป็นลูกค้า */}
-                      {(converted.has(current.id)||!!current.customerId) ? (
-                        <button
-                          onClick={()=>{ closePanel(); router.push(current.customerId ? `/customers/${current.customerId}` : "/customers"); }}
-                          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px",
-                            borderRadius:10, background:"#e5faf0", border:"1px solid #bbf1d8",
-                            cursor:"pointer", width:"100%", transition:"background .15s" }}
-                          onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.background="#d0f5e6"; }}
-                          onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.background="#e5faf0"; }}>
-                          <CheckCircle2 size={15} color="#059669"/>
-                          <span style={{ fontSize:"0.78rem", fontWeight:600, color:"#059669" }}>แปลงเป็นลูกค้าแล้ว</span>
-                          <span style={{ marginLeft:"auto", fontSize:"0.72rem", color:"#059669" }}>ดูข้อมูล →</span>
-                        </button>
-                      ) : (
-                        <button onClick={()=>setConverted(p=>new Set([...p,current.id]))}
-                          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px",
-                            borderRadius:10, background:"#f8f9fb", border:"1px solid #e2e8f0",
-                            cursor:"pointer", width:"100%", transition:"background .15s" }}
-                          onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.background="#eef2f7"; }}
-                          onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.background="#f8f9fb"; }}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 2v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 8"/>
-                          </svg>
-                          <span style={{ fontSize:"0.78rem", fontWeight:600, color:"#374151" }}>แปลงเป็นลูกค้า</span>
-                        </button>
-                      )}
-                      {!showDeleteConfirm ? (
-                        <button onClick={()=>setShowDeleteConfirm(true)}
-                          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px",
-                            borderRadius:10, background:"#fff", border:"1px solid #e5e7eb",
-                            color:"#dc2626", fontSize:"0.75rem", fontWeight:700, cursor:"pointer", width:"100%" }}>
-                          <Trash2 size={15}/> ลบ
-                        </button>
-                      ) : (
-                        <div style={{ borderRadius:10, border:"1px solid #fca5a5", overflow:"hidden" }}>
-                          <div style={{ padding:"8px 12px", background:"#fee2e2", fontSize:"0.7rem", color:"#dc2626", fontWeight:600 }}>
-                            ยืนยันลบ "{current.company}"?
-                          </div>
-                          <div style={{ display:"flex" }}>
-                            <button onClick={deleteLead}
-                              style={{ flex:1, padding:"8px", background:"#dc2626", border:"none",
-                                color:"#fff", fontSize:"0.7rem", fontWeight:700, cursor:"pointer" }}>ลบเลย</button>
-                            <button onClick={()=>setShowDeleteConfirm(false)}
-                              style={{ flex:1, padding:"8px", background:"#fff",
-                                border:"none", borderLeft:"1px solid #fca5a5",
-                                color:"#374151", fontSize:"0.7rem", cursor:"pointer" }}>ยกเลิก</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
+                {/* Right: action rail */}
+                <div style={{ width:210, flexShrink:0, padding:16, display:"flex", flexDirection:"column",
+                  gap:8, overflowY:"auto" }}>
+                  {c.status !== "PAID" && c.status !== "CANCELLED" && (
+                    <button className="btn btn-secondary btn-sm" onClick={()=>convertToDeal(c)}
+                      style={{ justifyContent:"center" }}>
+                      <Zap size={13} /> เปิดเป็นดีล
+                    </button>
+                  )}
+                  <button className="btn btn-secondary btn-sm" onClick={()=>createQuotationFromLead(c)}
+                    style={{ justifyContent:"center" }}>
+                    <FileText size={13} /> สร้างใบเสนอราคา
+                  </button>
+                  {isCustomer ? (
+                    <button className="btn btn-tint btn-sm"
+                      onClick={()=>{ closePanel(); router.push(c.customerId ? `/customers/${c.customerId}` : "/customers"); }}
+                      style={{ justifyContent:"center" }}>
+                      <CheckCircle2 size={13} /> ลูกค้าแล้ว
+                    </button>
+                  ) : (
+                    <button className="btn btn-tint btn-sm" onClick={()=>convertToCustomer(c)}
+                      style={{ justifyContent:"center" }}>
+                      <CheckCircle2 size={13} /> เพิ่มเป็นลูกค้า
+                    </button>
+                  )}
+                  <div style={{ flex:1 }} />
+                  {/* Destructive action pinned to bottom */}
+                  <button className="btn btn-danger btn-sm" onClick={()=>setShowDeleteConfirm(true)}
+                    style={{ justifyContent:"center" }}>
+                    <Trash2 size={13} /> ลบ
+                  </button>
                 </div>
               </div>
             </div>
-        </>
+          </>
+        );
+      })()}
+
+      {/* Success toast (Convert to Customer) */}
+      {toast && (
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
+          zIndex:300, display:"flex", alignItems:"center", gap:9,
+          background:"#003366", color:"#fff", borderRadius:12, padding:"12px 18px",
+          boxShadow:"0 10px 32px rgba(0,0,0,.25)", fontSize:"0.82rem", fontWeight:600,
+          maxWidth:"calc(100vw - 32px)" }}>
+          <CheckCircle2 size={17} color="#34d399" />
+          <span>{toast}</span>
+        </div>
       )}
     </>
   );

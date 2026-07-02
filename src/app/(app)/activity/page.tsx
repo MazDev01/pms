@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { pipelineDeals } from "@/lib/mock";
 import { Activity } from "lucide-react";
 
@@ -66,6 +67,7 @@ function dayLabel(key: string) {
 }
 
 export default function ActivityPage() {
+  const router = useRouter();
   const [filter, setFilter] = useState("all");
 
   const events = useMemo(() => {
@@ -116,7 +118,10 @@ export default function ActivityPage() {
             {items.map((e) => {
               const m = meta(e.type);
               return (
-                <div key={`${e.dealId}-${e.id}`} className="activity">
+                <div key={`${e.dealId}-${e.id}`} className="activity clickable"
+                  onClick={() => router.push("/pipeline")}
+                  title={`ดูโอกาสการขาย: ${e.project}`}
+                  style={{ cursor: "pointer" }}>
                   <div className="activity-icon" style={{ background: m.bg, color: m.color }}>{m.icon}</div>
                   <div className="activity-text">
                     <div className="activity-title">{e.text}</div>

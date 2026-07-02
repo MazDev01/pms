@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 
+type PriceHistoryEntry = {
+  price: number;
+  effectiveDate: string;
+  note?: string;
+};
+
 type Product = {
   code: string;
   name: string;
@@ -14,33 +20,35 @@ type Product = {
   lead: string;
   status: "active" | "draft" | "discontinued";
   tags: string[];
+  effectiveDate: string;
+  priceHistory: PriceHistoryEntry[];
 };
 
 const PRODUCTS: Product[] = [
   // โครงสร้างหลัก
-  { code:"PEB-S01", name:"อาคารเหล็กสำเร็จรูป 10×10 ม.", nameEn:"PEB Standard 10×10m", category:"structure", unit:"ชุด", price:"฿485,000", priceNum:485000, minOrder:"1 ชุด", lead:"45–60 วัน", status:"active", tags:["โกดัง","สำนักงาน"] },
-  { code:"PEB-S02", name:"อาคารเหล็กสำเร็จรูป 15×20 ม.", nameEn:"PEB Standard 15×20m", category:"structure", unit:"ชุด", price:"฿920,000", priceNum:920000, minOrder:"1 ชุด", lead:"60–75 วัน", status:"active", tags:["โกดัง","โรงงาน"] },
-  { code:"PEB-S03", name:"อาคารเหล็กสำเร็จรูป 20×30 ม.", nameEn:"PEB Standard 20×30m", category:"structure", unit:"ชุด", price:"฿1,650,000", priceNum:1650000, minOrder:"1 ชุด", lead:"60–75 วัน", status:"active", tags:["โรงงาน","คลังสินค้า"] },
-  { code:"PEB-S04", name:"อาคารเหล็กสำเร็จรูป 24×40 ม.", nameEn:"PEB Standard 24×40m", category:"structure", unit:"ชุด", price:"฿2,800,000", priceNum:2800000, minOrder:"1 ชุด", lead:"75–90 วัน", status:"active", tags:["โรงงาน","คลังสินค้า"] },
-  { code:"PEB-C01", name:"อาคารเหล็กออกแบบพิเศษ (Custom)", nameEn:"PEB Custom Design", category:"structure", unit:"ตร.ม.", price:"฿4,200–5,800", priceNum:4200, minOrder:"150 ตร.ม.", lead:"90+ วัน", status:"active", tags:["Custom","ออกแบบพิเศษ"] },
+  { code:"PEB-S01", name:"อาคารเหล็กสำเร็จรูป 10×10 ม.", nameEn:"PEB Standard 10×10m", category:"structure", unit:"ชุด", price:"฿485,000", priceNum:485000, minOrder:"1 ชุด", lead:"45–60 วัน", status:"active", tags:["โกดัง","สำนักงาน"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:465000, effectiveDate:"1 ม.ค. 2569", note:"ราคาต้นปี" }, { price:448000, effectiveDate:"1 ก.ค. 2568", note:"ราคาเดิม" } ] },
+  { code:"PEB-S02", name:"อาคารเหล็กสำเร็จรูป 15×20 ม.", nameEn:"PEB Standard 15×20m", category:"structure", unit:"ชุด", price:"฿920,000", priceNum:920000, minOrder:"1 ชุด", lead:"60–75 วัน", status:"active", tags:["โกดัง","โรงงาน"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:890000, effectiveDate:"1 ม.ค. 2569", note:"ปรับตามราคาเหล็ก" }, { price:865000, effectiveDate:"1 ก.ค. 2568" } ] },
+  { code:"PEB-S03", name:"อาคารเหล็กสำเร็จรูป 20×30 ม.", nameEn:"PEB Standard 20×30m", category:"structure", unit:"ชุด", price:"฿1,650,000", priceNum:1650000, minOrder:"1 ชุด", lead:"60–75 วัน", status:"active", tags:["โรงงาน","คลังสินค้า"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:1590000, effectiveDate:"1 ม.ค. 2569" } ] },
+  { code:"PEB-S04", name:"อาคารเหล็กสำเร็จรูป 24×40 ม.", nameEn:"PEB Standard 24×40m", category:"structure", unit:"ชุด", price:"฿2,800,000", priceNum:2800000, minOrder:"1 ชุด", lead:"75–90 วัน", status:"active", tags:["โรงงาน","คลังสินค้า"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:2720000, effectiveDate:"1 ม.ค. 2569", note:"ปรับตามราคาเหล็ก" }, { price:2650000, effectiveDate:"1 ก.ค. 2568", note:"ราคาเปิดตัว" } ] },
+  { code:"PEB-C01", name:"อาคารเหล็กออกแบบพิเศษ (Custom)", nameEn:"PEB Custom Design", category:"structure", unit:"ตร.ม.", price:"฿4,200–5,800", priceNum:4200, minOrder:"150 ตร.ม.", lead:"90+ วัน", status:"active", tags:["Custom","ออกแบบพิเศษ"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:4000, effectiveDate:"1 ม.ค. 2569", note:"ราคาเริ่มต้นเดิม" } ] },
   // ระบบหลังคา
-  { code:"RF-H01", name:"แผ่นหลังคา Hi-Rib 0.47mm", nameEn:"Hi-Rib Roofing Sheet", category:"roofing", unit:"ตร.ม.", price:"฿380", priceNum:380, minOrder:"50 ตร.ม.", lead:"7–14 วัน", status:"active", tags:["หลังคา","มาตรฐาน"] },
-  { code:"RF-L01", name:"แผ่นหลังคา Longrib 0.47mm", nameEn:"Longrib Roofing Sheet", category:"roofing", unit:"ตร.ม.", price:"฿420", priceNum:420, minOrder:"50 ตร.ม.", lead:"7–14 วัน", status:"active", tags:["หลังคา","พรีเมียม"] },
-  { code:"RF-I01", name:"แผ่นหลังคาพร้อมฉนวน Sandwich 50mm", nameEn:"Sandwich Panel Roof 50mm", category:"roofing", unit:"ตร.ม.", price:"฿680", priceNum:680, minOrder:"50 ตร.ม.", lead:"14–21 วัน", status:"active", tags:["ฉนวน","เก็บความเย็น"] },
-  { code:"RF-G01", name:"รางน้ำฝน Seamless Gutter", nameEn:"Seamless Gutter", category:"roofing", unit:"เมตร", price:"฿650", priceNum:650, minOrder:"20 เมตร", lead:"7 วัน", status:"active", tags:["อุปกรณ์"] },
+  { code:"RF-H01", name:"แผ่นหลังคา Hi-Rib 0.47mm", nameEn:"Hi-Rib Roofing Sheet", category:"roofing", unit:"ตร.ม.", price:"฿380", priceNum:380, minOrder:"50 ตร.ม.", lead:"7–14 วัน", status:"active", tags:["หลังคา","มาตรฐาน"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:365, effectiveDate:"1 ม.ค. 2569" }, { price:350, effectiveDate:"1 ก.ค. 2568", note:"ราคาเดิม" } ] },
+  { code:"RF-L01", name:"แผ่นหลังคา Longrib 0.47mm", nameEn:"Longrib Roofing Sheet", category:"roofing", unit:"ตร.ม.", price:"฿420", priceNum:420, minOrder:"50 ตร.ม.", lead:"7–14 วัน", status:"active", tags:["หลังคา","พรีเมียม"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:405, effectiveDate:"1 ม.ค. 2569" } ] },
+  { code:"RF-I01", name:"แผ่นหลังคาพร้อมฉนวน Sandwich 50mm", nameEn:"Sandwich Panel Roof 50mm", category:"roofing", unit:"ตร.ม.", price:"฿680", priceNum:680, minOrder:"50 ตร.ม.", lead:"14–21 วัน", status:"active", tags:["ฉนวน","เก็บความเย็น"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:655, effectiveDate:"1 ม.ค. 2569", note:"ปรับตามต้นทุนฉนวน" }, { price:630, effectiveDate:"1 ก.ค. 2568" } ] },
+  { code:"RF-G01", name:"รางน้ำฝน Seamless Gutter", nameEn:"Seamless Gutter", category:"roofing", unit:"เมตร", price:"฿650", priceNum:650, minOrder:"20 เมตร", lead:"7 วัน", status:"active", tags:["อุปกรณ์"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:620, effectiveDate:"1 ม.ค. 2569" } ] },
   // ระบบผนัง
-  { code:"WL-M01", name:"แผ่นผนัง Metal Sheet 0.35mm", nameEn:"Metal Wall Sheet 0.35mm", category:"wall", unit:"ตร.ม.", price:"฿280", priceNum:280, minOrder:"50 ตร.ม.", lead:"7–14 วัน", status:"active", tags:["ผนัง","มาตรฐาน"] },
-  { code:"WL-S01", name:"แผ่นผนัง Sandwich Panel 50mm", nameEn:"Sandwich Wall Panel 50mm", category:"wall", unit:"ตร.ม.", price:"฿720", priceNum:720, minOrder:"50 ตร.ม.", lead:"14–21 วัน", status:"active", tags:["ผนัง","ฉนวน"] },
-  { code:"WL-S02", name:"แผ่นผนัง Sandwich Panel 75mm", nameEn:"Sandwich Wall Panel 75mm", category:"wall", unit:"ตร.ม.", price:"฿820", priceNum:820, minOrder:"50 ตร.ม.", lead:"14–21 วัน", status:"active", tags:["ผนัง","เก็บความเย็น"] },
+  { code:"WL-M01", name:"แผ่นผนัง Metal Sheet 0.35mm", nameEn:"Metal Wall Sheet 0.35mm", category:"wall", unit:"ตร.ม.", price:"฿280", priceNum:280, minOrder:"50 ตร.ม.", lead:"7–14 วัน", status:"active", tags:["ผนัง","มาตรฐาน"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:270, effectiveDate:"1 ม.ค. 2569" }, { price:260, effectiveDate:"1 ก.ค. 2568", note:"ราคาเดิม" } ] },
+  { code:"WL-S01", name:"แผ่นผนัง Sandwich Panel 50mm", nameEn:"Sandwich Wall Panel 50mm", category:"wall", unit:"ตร.ม.", price:"฿720", priceNum:720, minOrder:"50 ตร.ม.", lead:"14–21 วัน", status:"active", tags:["ผนัง","ฉนวน"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:695, effectiveDate:"1 ม.ค. 2569" } ] },
+  { code:"WL-S02", name:"แผ่นผนัง Sandwich Panel 75mm", nameEn:"Sandwich Wall Panel 75mm", category:"wall", unit:"ตร.ม.", price:"฿820", priceNum:820, minOrder:"50 ตร.ม.", lead:"14–21 วัน", status:"active", tags:["ผนัง","เก็บความเย็น"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:790, effectiveDate:"1 ม.ค. 2569", note:"ปรับตามต้นทุน" }, { price:765, effectiveDate:"1 ก.ค. 2568" } ] },
   // อุปกรณ์เสริม
-  { code:"AC-D01", name:"ประตูม้วนเหล็ก 3×3 ม.", nameEn:"Rolling Steel Door 3×3m", category:"accessory", unit:"บาน", price:"฿28,000", priceNum:28000, minOrder:"1 บาน", lead:"14 วัน", status:"active", tags:["ประตู"] },
-  { code:"AC-D02", name:"ประตูบานสวิง คู่ 2×2.4 ม.", nameEn:"Swing Door 2×2.4m", category:"accessory", unit:"บาน", price:"฿12,500", priceNum:12500, minOrder:"1 บาน", lead:"14 วัน", status:"active", tags:["ประตู"] },
-  { code:"AC-W01", name:"หน้าต่างอลูมิเนียม 1.5×1.2 ม.", nameEn:"Aluminium Window 1.5×1.2m", category:"accessory", unit:"บาน", price:"฿4,800", priceNum:4800, minOrder:"4 บาน", lead:"14 วัน", status:"active", tags:["หน้าต่าง"] },
-  { code:"AC-V01", name:"ผ้าใบฉนวนกันความร้อน (Bubble Foil)", nameEn:"Bubble Foil Insulation", category:"accessory", unit:"ตร.ม.", price:"฿120", priceNum:120, minOrder:"100 ตร.ม.", lead:"7 วัน", status:"active", tags:["ฉนวน"] },
+  { code:"AC-D01", name:"ประตูม้วนเหล็ก 3×3 ม.", nameEn:"Rolling Steel Door 3×3m", category:"accessory", unit:"บาน", price:"฿28,000", priceNum:28000, minOrder:"1 บาน", lead:"14 วัน", status:"active", tags:["ประตู"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:26500, effectiveDate:"1 ม.ค. 2569" } ] },
+  { code:"AC-D02", name:"ประตูบานสวิง คู่ 2×2.4 ม.", nameEn:"Swing Door 2×2.4m", category:"accessory", unit:"บาน", price:"฿12,500", priceNum:12500, minOrder:"1 บาน", lead:"14 วัน", status:"active", tags:["ประตู"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:12000, effectiveDate:"1 ม.ค. 2569" }, { price:11500, effectiveDate:"1 ก.ค. 2568", note:"ราคาเดิม" } ] },
+  { code:"AC-W01", name:"หน้าต่างอลูมิเนียม 1.5×1.2 ม.", nameEn:"Aluminium Window 1.5×1.2m", category:"accessory", unit:"บาน", price:"฿4,800", priceNum:4800, minOrder:"4 บาน", lead:"14 วัน", status:"active", tags:["หน้าต่าง"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:4600, effectiveDate:"1 ม.ค. 2569" } ] },
+  { code:"AC-V01", name:"ผ้าใบฉนวนกันความร้อน (Bubble Foil)", nameEn:"Bubble Foil Insulation", category:"accessory", unit:"ตร.ม.", price:"฿120", priceNum:120, minOrder:"100 ตร.ม.", lead:"7 วัน", status:"active", tags:["ฉนวน"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:115, effectiveDate:"1 ม.ค. 2569" } ] },
   // แพ็กเกจ
-  { code:"PKG-W01", name:"แพ็กเกจโกดัง 10×20 ม. ครบชุด", nameEn:"Warehouse Package 10×20m", category:"package", unit:"แพ็กเกจ", price:"฿1,250,000", priceNum:1250000, minOrder:"1 แพ็กเกจ", lead:"60–75 วัน", status:"active", tags:["โกดัง","ครบชุด"] },
-  { code:"PKG-F01", name:"แพ็กเกจโรงงาน 20×40 ม. ครบชุด", nameEn:"Factory Package 20×40m", category:"package", unit:"แพ็กเกจ", price:"฿3,800,000", priceNum:3800000, minOrder:"1 แพ็กเกจ", lead:"90–120 วัน", status:"active", tags:["โรงงาน","ครบชุด"] },
-  { code:"PKG-O01", name:"แพ็กเกจสำนักงาน Prefab 6×9 ม.", nameEn:"Prefab Office 6×9m", category:"package", unit:"แพ็กเกจ", price:"฿620,000", priceNum:620000, minOrder:"1 แพ็กเกจ", lead:"30–45 วัน", status:"active", tags:["สำนักงาน","Prefab"] },
+  { code:"PKG-W01", name:"แพ็กเกจโกดัง 10×20 ม. ครบชุด", nameEn:"Warehouse Package 10×20m", category:"package", unit:"แพ็กเกจ", price:"฿1,250,000", priceNum:1250000, minOrder:"1 แพ็กเกจ", lead:"60–75 วัน", status:"active", tags:["โกดัง","ครบชุด"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:1200000, effectiveDate:"1 ม.ค. 2569", note:"ปรับตามราคาเหล็ก" }, { price:1160000, effectiveDate:"1 ก.ค. 2568" } ] },
+  { code:"PKG-F01", name:"แพ็กเกจโรงงาน 20×40 ม. ครบชุด", nameEn:"Factory Package 20×40m", category:"package", unit:"แพ็กเกจ", price:"฿3,800,000", priceNum:3800000, minOrder:"1 แพ็กเกจ", lead:"90–120 วัน", status:"active", tags:["โรงงาน","ครบชุด"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:3680000, effectiveDate:"1 ม.ค. 2569" } ] },
+  { code:"PKG-O01", name:"แพ็กเกจสำนักงาน Prefab 6×9 ม.", nameEn:"Prefab Office 6×9m", category:"package", unit:"แพ็กเกจ", price:"฿620,000", priceNum:620000, minOrder:"1 แพ็กเกจ", lead:"30–45 วัน", status:"active", tags:["สำนักงาน","Prefab"], effectiveDate:"1 มิ.ย. 2569", priceHistory:[ { price:598000, effectiveDate:"1 ม.ค. 2569", note:"ราคาเปิดตัว" } ] },
 ];
 
 type TabKey = "all" | "structure" | "roofing" | "wall" | "accessory" | "package";
@@ -70,6 +78,8 @@ const CAT_LABELS: Record<string, string> = {
   package:   "แพ็กเกจ",
 };
 
+function fmtBaht(v: number) { return "฿" + v.toLocaleString("th-TH"); }
+
 export default function HQMasterPage() {
   const [activeTab,    setActiveTab]    = useState<TabKey>("all");
   const [searchQ,      setSearchQ]      = useState("");
@@ -78,6 +88,15 @@ export default function HQMasterPage() {
   const [editPrice,    setEditPrice]    = useState("");
   const [editLead,     setEditLead]     = useState("");
   const [editMinOrder, setEditMinOrder] = useState("");
+
+  // ประวัติราคา (ดู)
+  const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
+
+  // ปรับราคา (update price)
+  const [repriceProduct,  setRepriceProduct]  = useState<Product | null>(null);
+  const [repricePrice,    setRepricePrice]    = useState("");
+  const [repriceDate,     setRepriceDate]     = useState("");
+  const [repriceNote,     setRepriceNote]     = useState("");
 
   const filtered = products.filter(p => {
     const matchTab = activeTab === "all" || p.category === activeTab;
@@ -107,6 +126,39 @@ export default function HQMasterPage() {
       )
     );
     setEditProduct(null);
+  }
+
+  function openReprice(p: Product) {
+    setRepriceProduct(p);
+    setRepricePrice("");
+    setRepriceDate("");
+    setRepriceNote("");
+  }
+
+  function saveReprice() {
+    if (!repriceProduct) return;
+    const newNum = Number(repricePrice.replace(/[^0-9.]/g, ""));
+    if (!newNum || !repriceDate.trim()) return;
+    const note = repriceNote.trim();
+    setProducts(prev =>
+      prev.map(p => {
+        if (p.code !== repriceProduct.code) return p;
+        // ดันราคาปัจจุบัน (+ note ถ้ามี) ลงประวัติ แล้วตั้งราคาใหม่เป็นราคาปัจจุบัน
+        const oldEntry: PriceHistoryEntry = {
+          price: p.priceNum,
+          effectiveDate: p.effectiveDate,
+          ...(note ? { note } : {}),
+        };
+        return {
+          ...p,
+          price: fmtBaht(newNum),
+          priceNum: newNum,
+          effectiveDate: repriceDate.trim(),
+          priceHistory: [oldEntry, ...p.priceHistory],
+        };
+      })
+    );
+    setRepriceProduct(null);
   }
 
   const activeCount = products.filter(p => p.status === "active").length;
@@ -169,6 +221,16 @@ export default function HQMasterPage() {
       <div className="card">
         <div className="table-wrap">
           <table>
+            <colgroup>
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "26%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "18%" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>รหัส</th>
@@ -176,7 +238,7 @@ export default function HQMasterPage() {
                 <th>หมวดหมู่</th>
                 <th>หน่วย</th>
                 <th className="num">ราคามาตรฐาน</th>
-                <th>ระยะเวลา</th>
+                <th>วันที่มีผล</th>
                 <th>สถานะ</th>
                 <th></th>
               </tr>
@@ -228,7 +290,9 @@ export default function HQMasterPage() {
                   </td>
                   <td style={{ color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>{p.unit}</td>
                   <td className="num" style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{p.price}</td>
-                  <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>{p.lead}</td>
+                  <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
+                    {p.effectiveDate}
+                  </td>
                   <td>
                     {p.status === "active" ? (
                       <span className="badge" style={{ background: "#e5faf0", color: "#059669" }}>เปิดใช้งาน</span>
@@ -239,7 +303,11 @@ export default function HQMasterPage() {
                     )}
                   </td>
                   <td>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}>แก้ไข</button>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setHistoryProduct(p)}>ประวัติราคา</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openReprice(p)}>ปรับราคา</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}>แก้ไข</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -320,6 +388,168 @@ export default function HQMasterPage() {
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn btn-secondary btn-md" onClick={() => setEditProduct(null)}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={saveEdit}>บันทึก</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ประวัติราคา modal (ดู) */}
+      {historyProduct && (
+        <>
+          <div
+            onClick={() => setHistoryProduct(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 200 }}
+          />
+          <div
+            className="card"
+            style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%,-50%)",
+              zIndex: 201, padding: "28px 32px", width: 480,
+              maxHeight: "80vh", overflowY: "auto",
+              boxShadow: "0 16px 48px rgba(0,0,0,.2)",
+            }}
+          >
+            <div style={{ marginBottom: 20 }}>
+              <div className="card-title" style={{ marginBottom: 2 }}>ประวัติราคา</div>
+              <div className="card-desc">{historyProduct.code} — {historyProduct.name}</div>
+            </div>
+
+            {/* ราคาปัจจุบัน */}
+            <div style={{
+              display: "flex", alignItems: "baseline", justifyContent: "space-between",
+              gap: 8, padding: "12px 14px", borderRadius: 10,
+              background: "#003366" + "0d", border: "1px solid #00336626", marginBottom: 16,
+            }}>
+              <div>
+                <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", fontWeight: 600 }}>ราคาปัจจุบัน</div>
+                <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366" }}>{historyProduct.price}</div>
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", textAlign: "right" }}>
+                มีผล {historyProduct.effectiveDate}
+              </div>
+            </div>
+
+            <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 8 }}>
+              ราคาก่อนหน้า
+            </div>
+            {historyProduct.priceHistory.length === 0 ? (
+              <div style={{ fontSize: "0.82rem", color: "var(--muted-foreground)", padding: "12px 0" }}>
+                ยังไม่มีประวัติราคา
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <colgroup>
+                    <col style={{ width: "32%" }} />
+                    <col style={{ width: "30%" }} />
+                    <col style={{ width: "38%" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="num">ราคา</th>
+                      <th>วันที่มีผล</th>
+                      <th>หมายเหตุ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyProduct.priceHistory.map((h, i) => (
+                      <tr key={i}>
+                        <td className="num" style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtBaht(h.price)}</td>
+                        <td style={{ whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>{h.effectiveDate}</td>
+                        <td style={{ fontSize: "0.78rem", color: "var(--muted-foreground)" }}>{h.note ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
+              <button className="btn btn-secondary btn-md" onClick={() => setHistoryProduct(null)}>ปิด</button>
+              <button
+                className="btn btn-primary btn-md"
+                onClick={() => { const p = historyProduct; setHistoryProduct(null); openReprice(p); }}
+              >
+                ปรับราคา
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ปรับราคา modal (update price) */}
+      {repriceProduct && (
+        <>
+          <div
+            onClick={() => setRepriceProduct(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 200 }}
+          />
+          <div
+            className="card"
+            style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%,-50%)",
+              zIndex: 201, padding: "28px 32px", width: 440,
+              boxShadow: "0 16px 48px rgba(0,0,0,.2)",
+            }}
+          >
+            <div style={{ marginBottom: 20 }}>
+              <div className="card-title" style={{ marginBottom: 2 }}>ปรับราคา</div>
+              <div className="card-desc">{repriceProduct.code} — {repriceProduct.name}</div>
+            </div>
+
+            <div style={{
+              padding: "10px 14px", borderRadius: 10, background: "var(--muted)",
+              marginBottom: 16, fontSize: "0.8rem", color: "var(--muted-foreground)",
+            }}>
+              ราคาปัจจุบัน <strong style={{ color: "var(--foreground)" }}>{repriceProduct.price}</strong>
+              {" · "}มีผล {repriceProduct.effectiveDate}
+              <div style={{ marginTop: 4 }}>
+                เมื่อบันทึก ราคาปัจจุบันจะถูกย้ายเข้า “ประวัติราคา” อัตโนมัติ
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
+              <div>
+                <label className="form-label">ราคาใหม่ (บาท)</label>
+                <input
+                  className="form-input"
+                  value={repricePrice}
+                  onChange={e => setRepricePrice(e.target.value)}
+                  placeholder="เช่น 500000"
+                  inputMode="numeric"
+                />
+              </div>
+              <div>
+                <label className="form-label">วันที่มีผล</label>
+                <input
+                  className="form-input"
+                  value={repriceDate}
+                  onChange={e => setRepriceDate(e.target.value)}
+                  placeholder="เช่น 1 ก.ค. 2569"
+                />
+              </div>
+              <div>
+                <label className="form-label">หมายเหตุ (ไม่บังคับ)</label>
+                <input
+                  className="form-input"
+                  value={repriceNote}
+                  onChange={e => setRepriceNote(e.target.value)}
+                  placeholder="เช่น ปรับตามราคาเหล็ก"
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary btn-md" onClick={() => setRepriceProduct(null)}>ยกเลิก</button>
+              <button
+                className="btn btn-primary btn-md"
+                onClick={saveReprice}
+                disabled={!Number(repricePrice.replace(/[^0-9.]/g, "")) || !repriceDate.trim()}
+              >
+                บันทึกราคาใหม่
+              </button>
             </div>
           </div>
         </>

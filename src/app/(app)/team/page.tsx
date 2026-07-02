@@ -223,27 +223,29 @@ function DetailPanel({m,onClose,onEdit,onChangeStatus,onDelete}:{
   const totalTasks=m.done+m.pending;
   const pct=totalTasks>0?Math.round((m.done/totalTasks)*100):0;
   return (
-    <div className="card" style={{width:320,minWidth:300,flexShrink:0,overflow:"hidden",overflowY:"auto",maxHeight:"calc(100vh - 140px)",alignSelf:"flex-start",position:"sticky",top:0}}>
+    <>
+      <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:760,maxWidth:"calc(100vw - 32px)",height:"min(660px, calc(100vh - 48px))",zIndex:210,background:"#fff",borderRadius:18,boxShadow:"0 24px 80px rgba(0,0,0,.22)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Header */}
-      <div style={{background:PRIMARY,padding:"16px 14px 12px"}}>
+      <div style={{background:PRIMARY,padding:"16px 18px 12px",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:42,height:42,borderRadius:12,flexShrink:0,background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem"}}>{m.initial}</div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:46,height:46,borderRadius:13,flexShrink:0,background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1.15rem"}}>{m.initial}</div>
             <div>
-              <div style={{fontSize:"0.88rem",fontWeight:800,color:"#fff",lineHeight:1.3}}>{m.name}</div>
-              <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,.75)",marginTop:2}}>{m.position}</div>
+              <div style={{fontSize:"1rem",fontWeight:800,color:"#fff",lineHeight:1.3}}>{m.name}</div>
+              <div style={{fontSize:"0.74rem",color:"rgba(255,255,255,.75)",marginTop:2}}>{m.position}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={14}/></button>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={15}/></button>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:"0.68rem",fontWeight:600,color:"rgba(255,255,255,.8)"}}>{m.dept}</span>
+          <span style={{fontSize:"0.7rem",fontWeight:600,color:"rgba(255,255,255,.85)",background:"rgba(255,255,255,.12)",padding:"3px 10px",borderRadius:99}}>{m.dept}</span>
           <span style={{color:"rgba(255,255,255,.4)"}}>·</span>
           <StatusDot status={m.status}/>
         </div>
       </div>
       {/* Tabs */}
-      <div className="tab-bar">
+      <div className="tab-bar" style={{flexShrink:0}}>
         {([["info","ข้อมูล"],["work","งาน/โอกาสการขาย"]] as [string,string][]).map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k as typeof tab)}
             className={`tab-item${tab===k?" active":""}`} style={{flex:1}}>
@@ -252,9 +254,12 @@ function DetailPanel({m,onClose,onEdit,onChangeStatus,onDelete}:{
         ))}
       </div>
 
+      {/* Two-column body */}
+      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        <div style={{flex:1,overflowY:"auto",borderRight:"1px solid #f0f4f8"}}>
       {/* Tab: ข้อมูล */}
       {tab==="info"&&(
-        <div style={{padding:"14px 14px"}}>
+        <div style={{padding:"16px 18px"}}>
           {/* Stats */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
             {[{l:"โอกาสการขาย",v:m.projects,c:"#003366"},{l:"งานเสร็จ",v:m.done,c:"#059669"},{l:"ค้างอยู่",v:m.pending,c:m.pending<=2?"#059669":m.pending<=3?"#f59e0b":"#dc2626"}].map((s,i)=>(
@@ -299,7 +304,7 @@ function DetailPanel({m,onClose,onEdit,onChangeStatus,onDelete}:{
                 {mProjects.map(p=>{
                   const pc=projectStatusColor[p.status];
                   return (
-                    <div key={p.id} onClick={()=>void 0} style={{padding:"9px 11px",borderRadius:10,background:"#f8f9fb",border:`1px solid ${BORDER}`,cursor:"pointer"}}
+                    <div key={p.id} onClick={()=>router.push("/pipeline")} style={{padding:"9px 11px",borderRadius:10,background:"#f8f9fb",border:`1px solid ${BORDER}`,cursor:"pointer"}}
                       onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.borderColor=PRIMARY;}}
                       onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.borderColor=BORDER;}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
@@ -347,38 +352,40 @@ function DetailPanel({m,onClose,onEdit,onChangeStatus,onDelete}:{
               <span style={{fontSize:"0.68rem"}}>ข้อมูลจากโอกาสการขายและงานใช้ชื่อย่อ</span>
             </div>
           )}
-          {/* Navigation */}
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <button onClick={()=>router.push("/tasks")} className="btn btn-tint btn-sm" style={{justifyContent:"center"}}>
-              <ExternalLink size={13}/> ดูงานทั้งหมด
-            </button>
-            <button onClick={()=>void 0} className="btn btn-secondary btn-sm" style={{justifyContent:"center"}}>
-              <ExternalLink size={13}/> ดูโอกาสการขายทั้งหมด
-            </button>
-          </div>
         </div>
       )}
+        </div>
 
-      {/* Footer */}
-      <div style={{padding:"12px 14px",borderTop:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",gap:6}}>
-        <button onClick={onEdit} className="btn btn-primary btn-sm" style={{justifyContent:"center"}}>
-          <Pencil size={13}/> แก้ไขข้อมูล
-        </button>
-        {!delConfirm?(
-          <button onClick={()=>setDelConfirm(true)} className="btn btn-danger btn-sm" style={{justifyContent:"center"}}>
-            <Trash2 size={12}/> ลบสมาชิก
+        {/* Action rail */}
+        <div style={{width:210,flexShrink:0,padding:"16px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+          <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>การจัดการ</div>
+          <button onClick={onEdit} className="btn btn-primary btn-sm" style={{justifyContent:"center"}}>
+            <Pencil size={13}/> แก้ไขข้อมูล
           </button>
-        ):(
-          <div style={{borderRadius:10,border:"1px solid #fca5a5",overflow:"hidden"}}>
-            <div style={{padding:"7px 12px",background:"#fee2e2",fontSize:"0.7rem",color:"#dc2626",fontWeight:600}}>ยืนยันลบ {m.name}?</div>
-            <div style={{display:"flex"}}>
-              <button onClick={onDelete} style={{flex:1,padding:"7px",background:"#dc2626",border:"none",color:"#fff",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>ลบ</button>
-              <button onClick={()=>setDelConfirm(false)} style={{flex:1,padding:"7px",background:"#fff",border:"none",borderLeft:"1px solid #fca5a5",color:STEEL,fontSize:"0.7rem",cursor:"pointer"}}>ยกเลิก</button>
+          <button onClick={()=>router.push("/tasks")} className="btn btn-tint btn-sm" style={{justifyContent:"center"}}>
+            <ExternalLink size={13}/> ดูงานทั้งหมด
+          </button>
+          <button onClick={()=>router.push("/pipeline")} className="btn btn-secondary btn-sm" style={{justifyContent:"center"}}>
+            <ExternalLink size={13}/> ดูโอกาสการขาย
+          </button>
+          <div style={{flex:1}}/>
+          {!delConfirm?(
+            <button onClick={()=>setDelConfirm(true)} className="btn btn-danger btn-sm" style={{justifyContent:"center"}}>
+              <Trash2 size={12}/> ลบสมาชิก
+            </button>
+          ):(
+            <div style={{borderRadius:10,border:"1px solid #fca5a5",overflow:"hidden"}}>
+              <div style={{padding:"7px 12px",background:"#fee2e2",fontSize:"0.7rem",color:"#dc2626",fontWeight:600}}>ยืนยันลบ {m.name}?</div>
+              <div style={{display:"flex"}}>
+                <button onClick={onDelete} style={{flex:1,padding:"7px",background:"#dc2626",border:"none",color:"#fff",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>ลบ</button>
+                <button onClick={()=>setDelConfirm(false)} style={{flex:1,padding:"7px",background:"#fff",border:"none",borderLeft:"1px solid #fca5a5",color:STEEL,fontSize:"0.7rem",cursor:"pointer"}}>ยกเลิก</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -487,8 +494,7 @@ export default function TeamPage(){
         ))}
       </div>
 
-      <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
-        <div style={{flex:1,minWidth:0}}>
+      <div style={{minWidth:0}}>
           {/* Toolbar */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,gap:10,flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -548,6 +554,16 @@ export default function TeamPage(){
             <div className="card" style={{overflow:"hidden",marginBottom:14}}>
               <div className="table-wrap" style={{borderTop:"none"}}>
                 <table>
+                  <colgroup>
+                    <col style={{width:"22%"}} />
+                    <col style={{width:"16%"}} />
+                    <col style={{width:"14%"}} />
+                    <col style={{width:"11%"}} />
+                    <col style={{width:"11%"}} />
+                    <col style={{width:"9%"}} />
+                    <col style={{width:"9%"}} />
+                    <col style={{width:"8%"}} />
+                  </colgroup>
                   <thead><tr>
                     {["สมาชิก","ตำแหน่ง","แผนก","สถานะ","โอกาสการขาย","งานเสร็จ","ค้างอยู่",""].map((h,i)=>(
                       <th key={i}>{h}</th>
@@ -592,6 +608,16 @@ export default function TeamPage(){
             </div>
             <div className="table-wrap">
               <table>
+                <colgroup>
+                  <col style={{width:"22%"}} />
+                  <col style={{width:"10%"}} />
+                  <col style={{width:"11%"}} />
+                  <col style={{width:"11%"}} />
+                  <col style={{width:"10%"}} />
+                  <col style={{width:"10%"}} />
+                  <col style={{width:"10%"}} />
+                  <col style={{width:"9%"}} />
+                </colgroup>
                 <thead><tr>
                   {["บทบาท","สมาชิก","โอกาสการขาย","งานขาย","ลูกค้า","รายงาน","ตั้งค่า",""].map((h,i)=>(
                     <th key={i}>{h}</th>
@@ -625,9 +651,8 @@ export default function TeamPage(){
               </table>
             </div>
           </div>
-        </div>
 
-        {/* Detail Panel */}
+        {/* Detail Modal */}
         {selectedMember&&(
           <DetailPanel
             m={selectedMember}

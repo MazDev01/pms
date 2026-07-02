@@ -195,64 +195,131 @@ function DetailPanel({task,allTasks,onClose,onEdit,onChangeStatus,onDelete}:{
   const sb=taskStatusBadge[task.status];
 
   return (
-    <div className="card" style={{width:330,minWidth:300,flexShrink:0,overflowY:"auto",maxHeight:"calc(100vh - 140px)",alignSelf:"flex-start",position:"sticky",top:0}}>
-      {/* Header */}
-      <div style={{background:PRIMARY,padding:"16px 14px 12px"}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:"0.86rem",fontWeight:800,color:"#fff",lineHeight:1.35,textDecoration:isDone?"line-through":"none",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{task.title}</div>
+    <>
+      <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:760,maxWidth:"calc(100vw - 32px)",height:"min(660px, calc(100vh - 48px))",zIndex:210,background:"#fff",borderRadius:18,boxShadow:"0 24px 80px rgba(0,0,0,.22)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{background:PRIMARY,padding:"16px 18px 12px",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10,gap:12}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:"1.02rem",fontWeight:800,color:"#fff",lineHeight:1.35,textDecoration:isDone?"line-through":"none"}}>{task.title}</div>
+              <div style={{fontSize:"0.74rem",color:"rgba(255,255,255,.72)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {relProject?relProject.title:"งานทั่วไป · ไม่อยู่ในโอกาสการขาย"}
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={15}/></button>
           </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:8}}><X size={14}/></button>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span className="badge" style={{background:sb.bg,color:sb.text}}>{taskStatusLabel[task.status]}</span>
+            <PriorityBadge priority={task.priority}/>
+          </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <span className="badge" style={{background:sb.bg,color:sb.text}}>{taskStatusLabel[task.status]}</span>
-          <PriorityBadge priority={task.priority}/>
-        </div>
-      </div>
-      {/* Tabs */}
-      <div className="tab-bar">
-        {([["info","ข้อมูล"],["project","โอกาสการขาย"]] as [string,string][]).map(([k,l])=>(
-          <button key={k} className={`tab-item${tab===k?" active":""}`} style={{flex:1}} onClick={()=>setTab(k as typeof tab)}>
-            {l}
-          </button>
-        ))}
-      </div>
 
-      {/* Tab: ข้อมูล */}
-      {tab==="info"&&(
-        <div style={{padding:"14px 14px"}}>
-          {/* Meta */}
-          <div style={{display:"flex",flexDirection:"column",gap:0,marginBottom:14}}>
-            {[
-              {l:"สถานะ",   v:<StatusBadge status={task.status}/>},
-              {l:"ความสำคัญ",v:<PriorityBadge priority={task.priority}/>},
-              {l:"กำหนดส่ง", v:<span style={{fontSize:"0.78rem",fontWeight:700,color:overdue?"#dc2626":STEEL}}>{overdue&&"⚠ "}{formatDue(task.due)}</span>},
-            ].map((r,i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid #f0f4f8`}}>
-                <span style={{fontSize:"0.7rem",color:MUTED,fontWeight:600}}>{r.l}</span>
-                {r.v}
+        {/* Tabs */}
+        <div className="tab-bar" style={{flexShrink:0}}>
+          {([["info","ข้อมูล"],["project","โอกาสการขาย"]] as [string,string][]).map(([k,l])=>(
+            <button key={k} className={`tab-item${tab===k?" active":""}`} style={{flex:1}} onClick={()=>setTab(k as typeof tab)}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Body: left content + right action rail */}
+        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+          {/* Left scrollable content */}
+          <div style={{flex:1,overflowY:"auto",borderRight:"1px solid #f0f4f8"}}>
+            {/* Tab: ข้อมูล */}
+            {tab==="info"&&(
+              <div style={{padding:"16px 18px"}}>
+                {/* Meta */}
+                <div style={{display:"flex",flexDirection:"column",gap:0,marginBottom:16}}>
+                  {[
+                    {l:"สถานะ",   v:<StatusBadge status={task.status}/>},
+                    {l:"ความสำคัญ",v:<PriorityBadge priority={task.priority}/>},
+                    {l:"กำหนดเสร็จ", v:<span style={{fontSize:"0.8rem",fontWeight:700,color:overdue?"#dc2626":STEEL}}>{overdue&&"⚠ "}{formatDue(task.due)}</span>},
+                  ].map((r,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid #f0f4f8`}}>
+                      <span style={{fontSize:"0.74rem",color:MUTED,fontWeight:600}}>{r.l}</span>
+                      {r.v}
+                    </div>
+                  ))}
+                </div>
+                {/* Assigned */}
+                {task.assigned.length>0&&(
+                  <>
+                    <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>ผู้รับผิดชอบ</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+                      {task.assigned.map((a,i)=>(
+                        <div key={a} style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{width:24,height:24,borderRadius:"50%",background:AVATAR_COLORS[i%AVATAR_COLORS.length],display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"0.6rem",fontWeight:700}}>{a.substring(0,1)}</div>
+                          <span style={{fontSize:"0.76rem",color:STEEL,fontWeight:600}}>{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {task.assigned.length===0&&(
+                  <div style={{fontSize:"0.76rem",color:MUTED}}>ยังไม่มีผู้รับผิดชอบ</div>
+                )}
               </div>
-            ))}
+            )}
+
+            {/* Tab: โอกาสการขาย */}
+            {tab==="project"&&(
+              <div style={{padding:"16px 18px"}}>
+                {relProject?(
+                  <>
+                    <button onClick={()=>router.push("/pipeline")}
+                      style={{display:"flex",alignItems:"flex-start",gap:12,width:"100%",padding:"12px",borderRadius:12,background:"#f8f9fb",border:`1px solid ${BORDER}`,cursor:"pointer",textAlign:"left",marginBottom:14}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:"0.84rem",fontWeight:800,color:PRIMARY,marginBottom:4}}>{relProject.title}</div>
+                        <div style={{fontSize:"0.72rem",color:MUTED,marginBottom:6}}>{relProject.client}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span className="badge" style={{background:projectStatusColor[relProject.status].bg,color:projectStatusColor[relProject.status].text}}>{projectStatusLabel[relProject.status]}</span>
+                          <span style={{fontSize:"0.72rem",color:MUTED}}>{relProject.progress}%</span>
+                        </div>
+                      </div>
+                      <ExternalLink size={13} color={MUTED} style={{flexShrink:0,marginTop:3}}/>
+                    </button>
+                    {sibling.length>0&&(
+                      <>
+                        <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>งานอื่นในโอกาสการขาย ({sibling.length})</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {sibling.map(t=>{
+                            const b=taskStatusBadge[t.status];
+                            return (
+                              <div key={t.id} style={{padding:"8px 10px",borderRadius:9,background:"#f8f9fb",border:`1px solid ${BORDER}`}}>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                                  <div style={{fontSize:"0.76rem",fontWeight:600,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                                  <span className="badge" style={{background:b.bg,color:b.text,flexShrink:0}}>{taskStatusLabel[t.status]}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ):(
+                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.8rem"}}>งานนี้ไม่ได้อยู่ในโอกาสการขายใด</div>
+                )}
+              </div>
+            )}
           </div>
-          {/* Assigned */}
-          {task.assigned.length>0&&(
-            <>
-              <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>ผู้รับผิดชอบ</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
-                {task.assigned.map((a,i)=>(
-                  <div key={a} style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{width:24,height:24,borderRadius:"50%",background:AVATAR_COLORS[i%AVATAR_COLORS.length],display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"0.6rem",fontWeight:700}}>{a.substring(0,1)}</div>
-                    <span style={{fontSize:"0.74rem",color:STEEL,fontWeight:600}}>{a}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-          {/* Status workflow */}
-          {STATUS_ACTIONS[task.status].length>0&&(
-            <>
-              <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>เปลี่ยนสถานะ</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+
+          {/* Right action rail */}
+          <div style={{width:210,flexShrink:0,padding:"16px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+            <button className="btn btn-primary btn-sm" onClick={onEdit} style={{justifyContent:"center"}}>
+              <Pencil size={13}/> แก้ไขงาน
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={()=>onChangeStatus(isDone?"in_progress":"done")} style={{justifyContent:"center"}}>
+              {isDone?"เปิดงานอีกครั้ง":"ทำเครื่องหมายเสร็จ"}
+            </button>
+
+            {/* Status workflow */}
+            {STATUS_ACTIONS[task.status].length>0&&(
+              <>
+                <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",margin:"6px 0 2px"}}>เปลี่ยนสถานะ</div>
                 {STATUS_ACTIONS[task.status].map(a=>(
                   <button key={a.next} onClick={()=>onChangeStatus(a.next)}
                     style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:10,background:a.bg,border:"none",cursor:"pointer",width:"100%"}}>
@@ -260,75 +327,39 @@ function DetailPanel({task,allTasks,onClose,onEdit,onChangeStatus,onDelete}:{
                     <ArrowRight size={13} color={a.color}/>
                   </button>
                 ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+              </>
+            )}
 
-      {/* Tab: โอกาสการขาย */}
-      {tab==="project"&&(
-        <div style={{padding:"14px 14px"}}>
-          {relProject?(
-            <>
-              <button onClick={()=>void 0}
-                style={{display:"flex",alignItems:"flex-start",gap:12,width:"100%",padding:"12px",borderRadius:12,background:"#f8f9fb",border:`1px solid ${BORDER}`,cursor:"pointer",textAlign:"left",marginBottom:14}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:"0.8rem",fontWeight:800,color:PRIMARY,marginBottom:4}}>{relProject.title}</div>
-                  <div style={{fontSize:"0.7rem",color:MUTED,marginBottom:6}}>{relProject.client}</div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span className="badge" style={{background:projectStatusColor[relProject.status].bg,color:projectStatusColor[relProject.status].text}}>{projectStatusLabel[relProject.status]}</span>
-                    <span style={{fontSize:"0.7rem",color:MUTED}}>{relProject.progress}%</span>
+            {/* Related link */}
+            {relProject&&(
+              <>
+                <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",margin:"6px 0 2px"}}>ที่เกี่ยวข้อง</div>
+                <button className="btn btn-secondary btn-sm" onClick={()=>router.push("/pipeline")} style={{justifyContent:"center"}}>
+                  <ExternalLink size={12}/> ไปที่ Pipeline
+                </button>
+              </>
+            )}
+
+            {/* Delete */}
+            <div style={{marginTop:"auto",paddingTop:8}}>
+              {!delConfirm?(
+                <button className="btn btn-danger btn-sm" onClick={()=>setDelConfirm(true)} style={{justifyContent:"center",width:"100%"}}>
+                  <Trash2 size={12}/> ลบงาน
+                </button>
+              ):(
+                <div style={{borderRadius:10,border:"1px solid #fca5a5",overflow:"hidden"}}>
+                  <div style={{padding:"7px 12px",background:"#fee2e2",fontSize:"0.7rem",color:"#dc2626",fontWeight:600}}>ยืนยันลบงานนี้?</div>
+                  <div style={{display:"flex"}}>
+                    <button onClick={onDelete} style={{flex:1,padding:"7px",background:"#dc2626",border:"none",color:"#fff",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>ลบ</button>
+                    <button onClick={()=>setDelConfirm(false)} style={{flex:1,padding:"7px",background:"#fff",border:"none",borderLeft:"1px solid #fca5a5",color:STEEL,fontSize:"0.7rem",cursor:"pointer"}}>ยกเลิก</button>
                   </div>
                 </div>
-                <ExternalLink size={12} color={MUTED} style={{flexShrink:0,marginTop:3}}/>
-              </button>
-              {sibling.length>0&&(
-                <>
-                  <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>งานอื่นในโอกาสการขาย ({sibling.length})</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    {sibling.slice(0,5).map(t=>{
-                      const b=taskStatusBadge[t.status];
-                      return (
-                        <div key={t.id} style={{padding:"8px 10px",borderRadius:9,background:"#f8f9fb",border:`1px solid ${BORDER}`}}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-                            <div style={{fontSize:"0.74rem",fontWeight:600,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-                            <span className="badge" style={{background:b.bg,color:b.text,flexShrink:0}}>{taskStatusLabel[t.status]}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {sibling.length>5&&<div style={{fontSize:"0.68rem",color:MUTED,textAlign:"center",padding:4}}>และอีก {sibling.length-5} งาน</div>}
-                  </div>
-                </>
               )}
-            </>
-          ):(
-            <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.78rem"}}>งานนี้ไม่ได้อยู่ในโอกาสการขายใด</div>
-          )}
-        </div>
-      )}
-
-      {/* Footer */}
-      <div style={{padding:"12px 14px",borderTop:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",gap:6}}>
-        <button className="btn btn-primary btn-sm" onClick={onEdit} style={{justifyContent:"center"}}>
-          <Pencil size={13}/> แก้ไขงาน
-        </button>
-        {!delConfirm?(
-          <button className="btn btn-danger btn-sm" onClick={()=>setDelConfirm(true)} style={{justifyContent:"center"}}>
-            <Trash2 size={12}/> ลบงาน
-          </button>
-        ):(
-          <div style={{borderRadius:10,border:"1px solid #fca5a5",overflow:"hidden"}}>
-            <div style={{padding:"7px 12px",background:"#fee2e2",fontSize:"0.7rem",color:"#dc2626",fontWeight:600}}>ยืนยันลบงานนี้?</div>
-            <div style={{display:"flex"}}>
-              <button onClick={onDelete} style={{flex:1,padding:"7px",background:"#dc2626",border:"none",color:"#fff",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>ลบ</button>
-              <button onClick={()=>setDelConfirm(false)} style={{flex:1,padding:"7px",background:"#fff",border:"none",borderLeft:"1px solid #fca5a5",color:STEEL,fontSize:"0.7rem",cursor:"pointer"}}>ยกเลิก</button>
             </div>
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -531,14 +562,23 @@ export default function TasksPage(){
       </div>
 
       {/* Content area */}
-      <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
-        <div style={{flex:1,minWidth:0}}>
+      <div style={{minWidth:0}}>
 
           {/* TABLE VIEW */}
           {view==="list"&&(
             <div className="card">
               <div className="table-wrap" style={{borderTop:"none"}}>
                 <table>
+                  <colgroup>
+                    <col style={{width:"5%"}} />
+                    <col style={{width:"26%"}} />
+                    <col style={{width:"14%"}} />
+                    <col style={{width:"13%"}} />
+                    <col style={{width:"10%"}} />
+                    <col style={{width:"11%"}} />
+                    <col style={{width:"12%"}} />
+                    <col style={{width:"9%"}} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th style={{width:40}}></th>
@@ -546,7 +586,7 @@ export default function TasksPage(){
                       <SortTH col="project">โอกาสการขาย</SortTH>
                       <th>ผู้รับผิดชอบ</th>
                       <SortTH col="priority">ลำดับ</SortTH>
-                      <SortTH col="due">กำหนดส่ง</SortTH>
+                      <SortTH col="due">กำหนดเสร็จ</SortTH>
                       <SortTH col="status">สถานะ</SortTH>
                       <th style={{width:70}}></th>
                     </tr>
@@ -653,7 +693,6 @@ export default function TasksPage(){
               })}
             </div>
           )}
-        </div>
 
         {/* Detail Panel */}
         {selectedTask&&(

@@ -1,4 +1,4 @@
-﻿// Mock data สำหรับ frontend (ยังไม่เชื่อม backend)
+// Mock data สำหรับ frontend (ยังไม่เชื่อม backend)
 // ─── ROLE / SESSION ───────────────────────────────────────────
 export type UserRole =
   | "SUPER_ADMIN"
@@ -56,21 +56,26 @@ export const responsiblePersons: ResponsiblePerson[] = [
 
 // โครงสร้างอ้างอิง prisma/schema.prisma
 
+// Sales Journey — 8 ขั้นมาตรฐานเดียวทั้งระบบ (Lead → Contact → Requirement → Quotation → Follow-up → Negotiation → Won / Lost)
 export type LeadStatus =
-  | "NEW"
-  | "WAITING"
-  | "BULLET"
-  | "QUOTED"
-  | "PAID"
-  | "CANCELLED";
+  | "NEW"        // Lead
+  | "WAITING"    // Contact
+  | "BULLET"     // Requirement
+  | "QUOTED"     // Quotation
+  | "FOLLOWUP"   // Follow-up
+  | "NEGO"       // Negotiation
+  | "PAID"       // Won
+  | "CANCELLED"; // Lost
 
 export const leadStatusLabel: Record<LeadStatus, string> = {
-  NEW:       "รับลีดใหม่",
-  WAITING:   "สำรวจหน้างาน",
-  BULLET:    "ออกแบบ & คิดราคา",
-  QUOTED:    "เสนอราคาแล้ว",
-  PAID:      "ปิดการขาย",
-  CANCELLED: "เสียโอกาสการขาย",
+  NEW:       "ผู้สนใจใหม่",
+  WAITING:   "ติดต่อแล้ว",
+  BULLET:    "รวบรวมความต้องการ",
+  QUOTED:    "เสนอราคา",
+  FOLLOWUP:  "ติดตามผล",
+  NEGO:      "เจรจาต่อรอง",
+  PAID:      "ปิดการขาย (ได้งาน)",
+  CANCELLED: "ไม่ได้งาน",
 };
 
 export const leadStatusColor: Record<LeadStatus, { bg: string; text: string }> = {
@@ -78,9 +83,26 @@ export const leadStatusColor: Record<LeadStatus, { bg: string; text: string }> =
   WAITING:   { bg: "#dce5f0",  text: "#003366" },
   BULLET:    { bg: "#dce5f0",  text: "#003366" },
   QUOTED:    { bg: "#dce5f0",  text: "#003366" },
+  FOLLOWUP:  { bg: "#fff3cd",  text: "#d97706" },
+  NEGO:      { bg: "#fde8cd",  text: "#b45309" },
   PAID:      { bg: "#e5faf0",  text: "#059669" },
   CANCELLED: { bg: "#fee2e2",  text: "#dc2626" },
 };
+
+// ─── Global: Tags (มาตรฐานเดียวทั้งระบบ) ───────────────────────────
+export type TagKey = "VIP" | "HOT" | "Urgent" | "Government" | "Private";
+export const TAGS: { key: TagKey; label: string; bg: string; color: string }[] = [
+  { key: "VIP",        label: "VIP",    bg: "#fef3cd", color: "#b45309" },
+  { key: "HOT",        label: "HOT",    bg: "#fee2e2", color: "#dc2626" },
+  { key: "Urgent",     label: "ด่วน",   bg: "#fde8cd", color: "#c2410c" },
+  { key: "Government", label: "ภาครัฐ", bg: "#e5faf0", color: "#065f46" },
+  { key: "Private",    label: "เอกชน",  bg: "#dce5f0", color: "#003366" },
+];
+export const tagMeta = (t: string) => TAGS.find(x => x.key === t || x.label === t);
+
+// ─── Global: Lost Reasons (เหตุผลที่เสียโอกาสการขาย) ────────────────
+export const LOST_REASONS = ["ราคา", "คู่แข่ง", "งบประมาณ", "ลูกค้าเลื่อน", "ติดต่อไม่ได้", "อื่นๆ"] as const;
+export type LostReason = typeof LOST_REASONS[number];
 
 export const kpis = [
   { key: "target", label: "เป้า vs ยอดขาย", value: "68%", delta: 10.4, icon: "target" },
@@ -108,16 +130,6 @@ export const pipelineBreakdown = [
   { label: "อื่นๆ", value: 18, color: "var(--color-steel)" },
 ];
 
-export const schedule = [
-  { title: "สำรวจความต้องการ — โกดังแม่สอด", time: "10:00 - 11:00", place: "แม่สอด, ตาก", kind: "survey" },
-  { title: "นัดลูกค้า — CCS บางใหญ่", time: "13:30 - 14:30", place: "บางใหญ่, นนทบุรี", kind: "meet" },
-];
-
-export const upcoming = [
-  { title: "เซ็นสัญญา/ปิดการขาย — โอกาสการขาย CCS-02", date: "30 มิ.ย. 2026", who: "บจ. ซีซีเอส", kind: "handover" },
-  { title: "นัดนำเสนอ — โกดังปากน้ำ", date: "3 ก.ค. 2026", who: "คุณสมชาย", kind: "install" },
-];
-
 export type LeadRow = {
   id: string;
   numId: number;
@@ -135,15 +147,16 @@ export type LeadRow = {
   source?: string;
   note?: string;
   customerId?: number;
+  logo?: string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลดในฟอร์มเพิ่มผู้สนใจ
 };
 
 export const leads: LeadRow[] = [
-  { id: "#L-40322", numId: 1, name: "บจ. ไทยสตีล", company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", email: "somchai@thaisteel.co.th", province: "นนทบุรี", product: "โกดัง / โชว์รูม", category: "โกดังสินค้า", status: "QUOTED", value: "฿1.2M", assigned: "สมชาย เชียงใหม่", source: "โทรเข้า", note: "ต้องการโกดัง 1,200 ตร.ม. พร้อมสำนักงาน", customerId: 1 },
-  { id: "#L-40323", numId: 2, name: "บจ. ซีซีเอส", company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", email: "kanchana@ccs.co.th", province: "เชียงใหม่", product: "อาคารสำเร็จรูป", category: "โรงงาน", status: "NEW", value: "฿480K", assigned: "วิภา รัตนกุล", source: "เว็บไซต์", customerId: 2 },
-  { id: "#L-40324", numId: 3, name: "หจก. ราชบุรีโลหะ", company: "หจก. ราชบุรีโลหะ", contact: "คุณประยุทธ ร.", phone: "083-456-7890", email: "prayut@rajburimetal.com", province: "ราชบุรี", product: "โกดัง / โชว์รูม", category: "โกดังสินค้า", status: "BULLET", value: "฿3.1M", assigned: "วิภา รัตนกุล", source: "แนะนำ", note: "ขอต่อรองราคาในใบเสนอราคา", customerId: 3 },
-  { id: "#L-40325", numId: 4, name: "บจ. สมุทรโกดัง", company: "บจ. สมุทรโกดัง", contact: "คุณดารัล ส.", phone: "084-567-8901", email: "daran@samutwarehouse.co.th", province: "สมุทรปราการ", product: "โกดัง / โชว์รูม", category: "โกดังสินค้า", status: "WAITING", value: "฿2.0M", assigned: "สมชาย เชียงใหม่", source: "งานแสดงสินค้า", customerId: 4 },
-  { id: "#L-40326", numId: 5, name: "บจ. นครสวรรค์โลหะ", company: "บจ. นครสวรรค์โลหะ", contact: "คุณวิชัย น.", phone: "085-678-9012", email: "wichai@nsmetal.co.th", province: "นครสวรรค์", product: "Main Contractor", category: "Main Contractor", status: "WAITING", value: "฿760K", assigned: "กาญจนา มีสุข", source: "Facebook", customerId: 8 },
-  { id: "#L-40327", numId: 6, name: "บจ. ทีทีวาย", company: "บจ. ทีทีวาย อินเตอร์", contact: "คุณวิทยา ท.", phone: "086-789-0123", email: "wittaya@ttyinter.com", province: "นครสวรรค์", product: "โกดัง / โชว์รูม", category: "โกดังสินค้า", status: "PAID", value: "฿5.4M", assigned: "สมชาย เชียงใหม่", source: "แนะนำ", note: "ปิดการขายแล้ว รอทำสัญญา" },
+  { id: "#L-40322", numId: 1, name: "บจ. ไทยสตีล", company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", email: "somchai@thaisteel.co.th", province: "นนทบุรี", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "QUOTED", value: "฿1.2M", assigned: "สมชาย เชียงใหม่", source: "โทรเข้า", note: "ต้องการโกดัง 1,200 ตร.ม. พร้อมสำนักงาน", customerId: 1 },
+  { id: "#L-40323", numId: 2, name: "บจ. ซีซีเอส", company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", email: "kanchana@ccs.co.th", province: "เชียงใหม่", product: "อาคารสำเร็จรูปทุกประเภท", category: "อาคารสำเร็จรูปทุกประเภท", status: "NEW", value: "฿480K", assigned: "วิภา รัตนกุล", source: "เว็บไซต์", customerId: 2 },
+  { id: "#L-40324", numId: 3, name: "หจก. ราชบุรีโลหะ", company: "หจก. ราชบุรีโลหะ", contact: "คุณประยุทธ ร.", phone: "083-456-7890", email: "prayut@rajburimetal.com", province: "ราชบุรี", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "BULLET", value: "฿3.1M", assigned: "วิภา รัตนกุล", source: "แนะนำ", note: "ขอต่อรองราคาในใบเสนอราคา", customerId: 3 },
+  { id: "#L-40325", numId: 4, name: "บจ. สมุทรโกดัง", company: "บจ. สมุทรโกดัง", contact: "คุณดารัล ส.", phone: "084-567-8901", email: "daran@samutwarehouse.co.th", province: "สมุทรปราการ", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "WAITING", value: "฿2.0M", assigned: "สมชาย เชียงใหม่", source: "งานแสดงสินค้า", customerId: 4 },
+  { id: "#L-40326", numId: 5, name: "บจ. นครสวรรค์โลหะ", company: "บจ. นครสวรรค์โลหะ", contact: "คุณวิชัย น.", phone: "085-678-9012", email: "wichai@nsmetal.co.th", province: "นครสวรรค์", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "WAITING", value: "฿760K", assigned: "กาญจนา มีสุข", source: "Facebook", customerId: 8 },
+  { id: "#L-40327", numId: 6, name: "บจ. ทีทีวาย", company: "บจ. ทีทีวาย อินเตอร์", contact: "คุณวิทยา ท.", phone: "086-789-0123", email: "wittaya@ttyinter.com", province: "นครสวรรค์", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "PAID", value: "฿5.4M", assigned: "สมชาย เชียงใหม่", source: "แนะนำ", note: "ปิดการขายแล้ว รอทำสัญญา" },
 ];
 
 // ─── PROJECTS ─────────────────────────────────────────────────
@@ -170,12 +183,12 @@ export const projectStatusColor: Record<ProjectStatus, { bg: string; text: strin
 
 export const projects: ProjectMock[] = [
   { id: 1, title: "โกดังสำเร็จรูป บจ. ไทยสตีล", client: "บจ. ไทยสตีล", status: "in_progress", progress: 65, start: "2026-04-01", due: "2026-07-31", assigned: ["สมชาย", "วิภา"], value: "฿1.8M", customerId: 1, quotationId: "Q-2026-0089" },
-  { id: 2, title: "ระบบ ERP บจ. ซีซีเอส", client: "บจ. ซีซีเอส", status: "in_progress", progress: 28, start: "2026-05-15", due: "2026-08-15", assigned: ["วิชัย"], value: "฿3.2M", customerId: 2, quotationId: "Q-2026-0095" },
+  { id: 2, title: "โรงงานสำเร็จรูป บจ. ซีซีเอส", client: "บจ. ซีซีเอส", status: "in_progress", progress: 28, start: "2026-05-15", due: "2026-08-15", assigned: ["วิชัย"], value: "฿3.2M", customerId: 2, quotationId: "Q-2026-0095" },
   { id: 3, title: "โกดังปากน้ำ พระปราชญ์", client: "คุณสมชาย", status: "not_started", progress: 0, start: "2026-07-01", due: "2026-10-31", assigned: [], value: "฿2.0M", customerId: 1, quotationId: "Q-2026-0097" },
-  { id: 4, title: "โรงงาน RANBUILD นครสวรรค์", client: "บจ. นครสวรรค์โลหะ", status: "completed", progress: 100, start: "2026-01-01", due: "2026-03-31", assigned: ["สมชาย", "กาญจนา"], value: "฿5.4M", customerId: 8 },
-  { id: 5, title: "โกดัง PEB ราชบุรี", client: "หจก. ราชบุรีโลหะ", status: "on_hold", progress: 40, start: "2026-03-01", due: "2026-09-01", assigned: ["วิภา"], value: "฿760K", customerId: 3, quotationId: "Q-2026-0091" },
-  { id: 6, title: "EASYBUILD แม่สอด", client: "บจ. แม่สอดโลหะ", status: "in_progress", progress: 82, start: "2026-02-01", due: "2026-06-30", assigned: ["สมชาย"], value: "฿4.1M", customerId: 6 },
-  { id: 7, title: "PREFAB อุตรดิตถ์", client: "บจ. อุตรดิตถ์โลหะ", status: "not_started", progress: 0, start: "2026-08-01", due: "2026-12-31", assigned: [], value: "฿2.8M", customerId: 7, quotationId: "Q-2026-0098" },
+  { id: 4, title: "โรงงานสำเร็จรูป นครสวรรค์", client: "บจ. นครสวรรค์โลหะ", status: "completed", progress: 100, start: "2026-01-01", due: "2026-03-31", assigned: ["สมชาย", "กาญจนา"], value: "฿5.4M", customerId: 8 },
+  { id: 5, title: "โกดังสำเร็จรูป ราชบุรี", client: "หจก. ราชบุรีโลหะ", status: "on_hold", progress: 40, start: "2026-03-01", due: "2026-09-01", assigned: ["วิภา"], value: "฿760K", customerId: 3, quotationId: "Q-2026-0091" },
+  { id: 6, title: "อาคารสำเร็จรูป แม่สอด", client: "บจ. แม่สอดโลหะ", status: "in_progress", progress: 82, start: "2026-02-01", due: "2026-06-30", assigned: ["สมชาย"], value: "฿4.1M", customerId: 6 },
+  { id: 7, title: "อาคารสำเร็จรูป อุตรดิตถ์", client: "บจ. อุตรดิตถ์โลหะ", status: "not_started", progress: 0, start: "2026-08-01", due: "2026-12-31", assigned: [], value: "฿2.8M", customerId: 7, quotationId: "Q-2026-0098" },
   { id: 8, title: "โกดังระยอง VCS Asia", client: "VCS Asia", status: "completed", progress: 100, start: "2025-11-01", due: "2026-02-28", assigned: ["วิชัย", "กาญจนา"], value: "฿6.2M", customerId: 5, quotationId: "Q-2026-0092" },
 ];
 
@@ -211,16 +224,16 @@ export const tasks: TaskMock[] = [
   { id: 1,  title: "สำรวจความต้องการ บจ. ไทยสตีล",       project: "โกดังสำเร็จรูป บจ. ไทยสตีล", projectId: 1, priority: "urgent", status: "done",        statusTitle: "เสร็จแล้ว",      statusColor: "#059669", due: "2026-06-10", assigned: ["สมชาย"] },
   { id: 2,  title: "จัดทำใบเสนอราคา เฟส 1",       project: "โกดังสำเร็จรูป บจ. ไทยสตีล", projectId: 1, priority: "high",   status: "in_progress", statusTitle: "กำลังทำ",       statusColor: "#003366", due: "2026-06-30", assigned: ["วิภา", "สมชาย"] },
   { id: 3,  title: "นำเสนอใบเสนอราคา",         project: "โกดังสำเร็จรูป บจ. ไทยสตีล", projectId: 1, priority: "high",   status: "todo",        statusTitle: "รอดำเนินการ", statusColor: "#6b7280", due: "2026-07-05", assigned: [] },
-  { id: 4,  title: "นำเสนอพิมพ์เขียว ERP",            project: "ระบบ ERP บจ. ซีซีเอส",        projectId: 2, priority: "urgent", status: "review",      statusTitle: "กำลังรีวิว",   statusColor: "#f59e0b", due: "2026-06-25", assigned: ["วิชัย"] },
-  { id: 5,  title: "ทดสอบระบบ module HR",             project: "ระบบ ERP บจ. ซีซีเอส",        projectId: 2, priority: "normal", status: "todo",        statusTitle: "รอดำเนินการ", statusColor: "#6b7280", due: "2026-07-15", assigned: ["วิชัย"] },
-  { id: 6,  title: "ปิดการขาย RANBUILD",          project: "โรงงาน RANBUILD นครสวรรค์",   projectId: 4, priority: "normal", status: "done",        statusTitle: "เสร็จแล้ว",      statusColor: "#059669", due: "2026-03-31", assigned: ["สมชาย", "กาญจนา"] },
-  { id: 7,  title: "โทรติดตามผู้สนใจ เฟส 3",       project: "โกดัง PEB ราชบุรี",            projectId: 5, priority: "high",   status: "in_progress", statusTitle: "กำลังทำ",       statusColor: "#003366", due: "2026-07-01", assigned: ["วิภา"] },
-  { id: 8,  title: "ประชุมลูกค้า แม่สอด",            project: "EASYBUILD แม่สอด",             projectId: 6, priority: "normal", status: "done",        statusTitle: "เสร็จแล้ว",      statusColor: "#059669", due: "2026-06-15", assigned: ["สมชาย"] },
-  { id: 9,  title: "ติดตามใบเสนอราคา EASYBUILD",   project: "EASYBUILD แม่สอด",             projectId: 6, priority: "high",   status: "in_progress", statusTitle: "กำลังทำ",       statusColor: "#003366", due: "2026-06-28", assigned: ["สมชาย"] },
+  { id: 4,  title: "นำเสนอแบบโรงงานสำเร็จรูป",            project: "โรงงานสำเร็จรูป บจ. ซีซีเอส",        projectId: 2, priority: "urgent", status: "review",      statusTitle: "กำลังรีวิว",   statusColor: "#f59e0b", due: "2026-06-25", assigned: ["วิชัย"] },
+  { id: 5,  title: "ตรวจสเปกโครงสร้างสำเร็จรูป",             project: "โรงงานสำเร็จรูป บจ. ซีซีเอส",        projectId: 2, priority: "normal", status: "todo",        statusTitle: "รอดำเนินการ", statusColor: "#6b7280", due: "2026-07-15", assigned: ["วิชัย"] },
+  { id: 6,  title: "ปิดการขายโรงงานสำเร็จรูป",          project: "โรงงานสำเร็จรูป นครสวรรค์",   projectId: 4, priority: "normal", status: "done",        statusTitle: "เสร็จแล้ว",      statusColor: "#059669", due: "2026-03-31", assigned: ["สมชาย", "กาญจนา"] },
+  { id: 7,  title: "โทรติดตามผู้สนใจ เฟส 3",       project: "โกดังสำเร็จรูป ราชบุรี",            projectId: 5, priority: "high",   status: "in_progress", statusTitle: "กำลังทำ",       statusColor: "#003366", due: "2026-07-01", assigned: ["วิภา"] },
+  { id: 8,  title: "ประชุมลูกค้า แม่สอด",            project: "อาคารสำเร็จรูป แม่สอด",             projectId: 6, priority: "normal", status: "done",        statusTitle: "เสร็จแล้ว",      statusColor: "#059669", due: "2026-06-15", assigned: ["สมชาย"] },
+  { id: 9,  title: "ติดตามใบเสนอราคาอาคารสำเร็จรูป",   project: "อาคารสำเร็จรูป แม่สอด",             projectId: 6, priority: "high",   status: "in_progress", statusTitle: "กำลังทำ",       statusColor: "#003366", due: "2026-06-28", assigned: ["สมชาย"] },
   { id: 10, title: "ปิดการขาย VCS Asia ระยอง",          project: "โกดังระยอง VCS Asia",          projectId: 8, priority: "normal", status: "done",        statusTitle: "เสร็จแล้ว",      statusColor: "#059669", due: "2026-02-28", assigned: ["วิชัย", "กาญจนา"] },
   { id: 11, title: "อัปเดตรายงานความคืบหน้าการขาย",        project: null,                            projectId: null, priority: "low", status: "todo",       statusTitle: "รอดำเนินการ", statusColor: "#6b7280", due: "2026-06-30", assigned: [] },
   { id: 12, title: "ประชุมทีมรายสัปดาห์",            project: null,                            projectId: null, priority: "normal", status: "in_progress", statusTitle: "กำลังทำ", statusColor: "#003366", due: "2026-06-22", assigned: ["สมชาย", "วิภา", "วิชัย"] },
-  { id: 13, title: "ทบทวนสัญญา CRM",                project: "ระบบ ERP บจ. ซีซีเอส",        projectId: 2, priority: "urgent", status: "cancelled",   statusTitle: "ยกเลิก",        statusColor: "#dc2626", due: "2026-06-18", assigned: [] },
+  { id: 13, title: "ทบทวนเงื่อนไขใบเสนอราคา",                project: "โรงงานสำเร็จรูป บจ. ซีซีเอส",        projectId: 2, priority: "urgent", status: "cancelled",   statusTitle: "ยกเลิก",        statusColor: "#dc2626", due: "2026-06-18", assigned: [] },
   { id: 14, title: "สรุปผลงาน Q2 2026",              project: null,                            projectId: null, priority: "high", status: "todo",       statusTitle: "รอดำเนินการ", statusColor: "#6b7280", due: "2026-06-30", assigned: [] },
 ];
 
@@ -242,8 +255,46 @@ export const customers: CustomerMock[] = [
   { id: 8, name: "บจ. นครสวรรค์โลหะ", company: "บจ. นครสวรรค์โลหะ", phone: "088-901-2345", email: "nakhon@nsloha.co.th", province: "นครสวรรค์", category: "Custom", initials: "นส", color: "#059669", tags: ["ลูกค้าเดิม", "VIP"], projectCount: 2 },
 ];
 
+// ─── CUSTOMER ROWS (rich, shared app-wide via SalesContext) ───
+// แหล่งความจริงเดียวของ "ลูกค้า" ที่ใช้ทั้งหน้า ลูกค้า / ใบเสนอราคา / การแปลงจากลีด
+export type CustomerStatus = "active" | "inactive";
+export type CustomerType   = "บุคคล" | "บริษัท";
+export type CustomerRow = {
+  id:number; name:string; company:string; type:CustomerType; email:string; phone:string;
+  province:string; category:string; status:CustomerStatus; projects:number;
+  joinDate:string; owner:string; initials:string; color:string;
+  totalValue:number;
+};
+
+export const initialCustomers: CustomerRow[] = [
+  { id:1, name:"คุณสมชาย ใจดี",      company:"บจ. ไทยสตีล",          type:"บริษัท", email:"somchai@thaisteel.co.th",  phone:"081-234-5678", province:"นนทบุรี",       category:"โกดัง/คลังสินค้า",  status:"active",   projects:2, joinDate:"2025-09-15", owner:"สมชาย เชียงใหม่",  initials:"สช", color:"#003366", totalValue:1800000 },
+  { id:2, name:"คุณกาญจนา ม.",        company:"บจ. ซีซีเอส",           type:"บริษัท", email:"kanjana@ccs.co.th",        phone:"082-345-6789", province:"เชียงใหม่",    category:"โรงงาน", status:"active",   projects:1, joinDate:"2025-11-03", owner:"วิภา รัตนกุล",    initials:"กม", color:"#059669", totalValue:3200000 },
+  { id:3, name:"คุณประยุทธ ร.",        company:"หจก. ราชบุรีโลหะ",      type:"บริษัท", email:"prayuth@rajburi.co.th",    phone:"083-456-7890", province:"ราชบุรี",      category:"โรงงาน", status:"active",   projects:1, joinDate:"2026-01-20", owner:"วิภา รัตนกุล",    initials:"ปร", color:"#f59e0b", totalValue:760000 },
+  { id:4, name:"คุณดารัล ส.",          company:"บจ. สมุทรโกดัง",        type:"บริษัท", email:"darat@smgodown.co.th",     phone:"084-567-8901", province:"สมุทรปราการ", category:"โกดัง/คลังสินค้า",  status:"active",   projects:2, joinDate:"2026-02-10", owner:"สมชาย เชียงใหม่",  initials:"ดส", color:"#dc2626", totalValue:2000000 },
+  { id:5, name:"VCS Asia (ระยอง)",     company:"VCS Asia Co., Ltd.",     type:"บริษัท", email:"vcs@vcsasia.com",           phone:"085-678-9012", province:"ระยอง",        category:"โรงงาน", status:"inactive", projects:3, joinDate:"2025-08-01", owner:"วิชัย ประสิทธิ์",  initials:"VC", color:"#002244", totalValue:6200000 },
+  { id:6, name:"คุณสุรัตน์ ล.",        company:"บจ. แม่สอดโลหะ",       type:"บริษัท", email:"surat@maesot.co.th",       phone:"086-789-0123", province:"ตาก",           category:"โกดัง/คลังสินค้า",  status:"active",   projects:1, joinDate:"2025-12-01", owner:"สมชาย เชียงใหม่",  initials:"สล", color:"#8fa3b8", totalValue:4100000 },
+  { id:7, name:"บจ. อุตรดิตถ์โลหะ",   company:"บจ. อุตรดิตถ์โลหะ",    type:"บริษัท", email:"info@uttaradit.co.th",      phone:"087-890-1234", province:"อุตรดิตถ์",    category:"เกษตรกรรม",status:"inactive", projects:0, joinDate:"2026-06-01", owner:"วิภา รัตนกุล",    initials:"อต", color:"#8fa3b8", totalValue:0 },
+  { id:8, name:"บจ. นครสวรรค์โลหะ",   company:"บจ. นครสวรรค์โลหะ",    type:"บริษัท", email:"nakhon@nsloha.co.th",      phone:"088-901-2345", province:"นครสวรรค์",    category:"อื่นๆ", status:"active",   projects:2, joinDate:"2025-07-15", owner:"กาญจนา มีสุข",    initials:"นส", color:"#059669", totalValue:5400000 },
+];
+
+// ─── แม่แบบอาคาร (Building Templates — กำหนดโดย HQ, ดีลเลอร์ดูอย่างเดียว) ───
+// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "แม่แบบที่สนใจ" ในฟอร์มผู้สนใจ
+export type SolutionPriceHistory = { price: number; effectiveDate: string; note?: string };
+export type SolutionProduct = {
+  id: string; name: string; spec: string;
+  price: number; unit: string; effectiveDate: string; priceHistory: SolutionPriceHistory[];
+};
+export const solutionProducts: SolutionProduct[] = [
+  { id: "tpl-1", name: "โกดังสำเร็จรูป", spec: "โครงสร้างเหล็กระบบข้อต่อสลักเกลียว ไม่มีเสากลาง เพิ่มพื้นที่ใช้สอย · เหมาะคลังสินค้า โกดังเก็บสินค้าเกษตร และโกดังอุตสาหกรรม", price: 5100, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4950, effectiveDate: "1 ม.ค. 2569", note: "ปรับตามราคาเหล็ก" }, { price: 4800, effectiveDate: "1 ก.ค. 2568" } ] },
+  { id: "tpl-2", name: "โรงงาน", spec: "รองรับมาตรฐานโรงงานผลิตคุณภาพสูง และโรงงานอัจฉริยะที่เชื่อมต่อระบบอัตโนมัติได้ · ช่วงเสากว้าง รับน้ำหนักเครนได้", price: 6800, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6600, effectiveDate: "1 ม.ค. 2569" }, { price: 6400, effectiveDate: "1 ก.ค. 2568" } ] },
+  { id: "tpl-3", name: "อาคารสำเร็จรูปทุกประเภท", spec: "ปรับผังใช้งานได้หลายรูปแบบ เช่น สำนักงาน โรงเรียน สถานพยาบาล และอาคารพาณิชย์ · โครงเหล็กมาตรฐาน ติดตั้งเร็ว", price: 6200, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6000, effectiveDate: "1 ม.ค. 2569" } ] },
+  { id: "tpl-4", name: "งานตามแบบของลูกค้า", spec: "ออกแบบผังตามความต้องการเฉพาะโครงการของลูกค้า · ปรับผนัง ประตู และช่องเปิดได้ตามแบบ", price: 7000, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6800, effectiveDate: "1 ม.ค. 2569", note: "ราคาเริ่มต้นแบบพิเศษ" } ] },
+  { id: "tpl-5", name: "งานรีโนเวท", spec: "ปรับปรุงและต่อเติมอาคารระบบสำเร็จรูปเดิมให้ใช้งานได้ดีขึ้น ประหยัดกว่าสร้างใหม่ · ประเมินหน้างานก่อนเสนอราคา", price: 4500, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4300, effectiveDate: "1 ม.ค. 2569" } ] },
+  { id: "tpl-6", name: "สนามกีฬาในร่ม", spec: "โครงสร้างช่วงกว้างไม่มีเสากลางขวางกั้น เพดานสูง เหมาะสนามกีฬาในร่มทุกรูปแบบ", price: 7400, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 7150, effectiveDate: "1 ม.ค. 2569" } ] },
+];
+
 // ─── QUOTATIONS ───────────────────────────────────────────────
-export type QuotationStatus = "draft" | "sent_to_client" | "won" | "lost" | "expired";
+export type QuotationStatus = "draft" | "sent_to_client" | "viewed" | "won" | "lost" | "expired";
 
 export type QuotationMock = {
   id: string; customer: string; project: string;
@@ -253,15 +304,19 @@ export type QuotationMock = {
   status: QuotationStatus; date: string; items: number;
   customerId: number;
   projectId: number;
+  revision?: string; // เวอร์ชันใบเสนอราคา V1/V2/V3
+  expiry?: string;   // วันหมดอายุใบเสนอราคา (Expiry Date)
 };
 
+// สถานะใบเสนอราคาตามสเปก: Draft / Sent / Viewed / Accepted / Rejected / Expired
 export const quotationStatusLabel: Record<QuotationStatus, string> = {
-  draft: "ร่าง", sent_to_client: "ส่งลูกค้าแล้ว",
-  won: "ปิดการขาย", lost: "ไม่ได้งาน", expired: "หมดอายุ",
+  draft: "ร่าง", sent_to_client: "ส่งแล้ว", viewed: "เปิดอ่านแล้ว",
+  won: "ตอบรับ", lost: "ปฏิเสธ", expired: "หมดอายุ",
 };
 export const quotationStatusColor: Record<QuotationStatus, { bg: string; text: string }> = {
   draft:          { bg: "#f0f0f5", text: "#6b7280" },
   sent_to_client: { bg: "#dce5f0", text: "#003366" },
+  viewed:         { bg: "#e0e7ff", text: "#4338ca" },
   won:            { bg: "#e5faf0", text: "#059669" },
   lost:           { bg: "#f5f5f5", text: "#9ca3af" },
   expired:        { bg: "#f5f5f5", text: "#9ca3af" },
@@ -269,11 +324,11 @@ export const quotationStatusColor: Record<QuotationStatus, { bg: string; text: s
 
 export const quotations: QuotationMock[] = [
   { id: "Q-2026-0089", customer: "บจ. ไทยสตีล", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", total: "฿1,800,000", totalValue: 1800000, materialCost: 1800000, province: "นนทบุรี", buildingType: "โกดังสินค้า", area: 960, status: "won", date: "2026-05-15", items: 8, customerId: 1, projectId: 1 },
-  { id: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ", project: "โกดัง PEB ราชบุรี", total: "฿760,000", totalValue: 760000, materialCost: 760000, province: "ราชบุรี", buildingType: "โกดังสินค้า", area: 480, status: "sent_to_client", date: "2026-06-01", items: 5, customerId: 3, projectId: 5 },
+  { id: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ", project: "โกดังสำเร็จรูป ราชบุรี", total: "฿760,000", totalValue: 760000, materialCost: 760000, province: "ราชบุรี", buildingType: "โกดังสินค้า", area: 480, status: "sent_to_client", date: "2026-06-01", items: 5, customerId: 3, projectId: 5 },
   { id: "Q-2026-0092", customer: "VCS Asia", project: "โกดังระยอง VCS Asia", total: "฿6,200,000", totalValue: 6200000, materialCost: 6200000, province: "ระยอง", buildingType: "โรงงาน", area: 3200, status: "won", date: "2025-11-10", items: 15, customerId: 5, projectId: 8 },
   { id: "Q-2026-0095", customer: "บจ. ซีซีเอส", project: "โรงงาน PREFAB เชียงใหม่", total: "฿3,200,000", totalValue: 3200000, materialCost: 3200000, province: "เชียงใหม่", buildingType: "โรงงาน", area: 1800, status: "sent_to_client", date: "2026-06-10", items: 12, customerId: 2, projectId: 2 },
   { id: "Q-2026-0097", customer: "บจ. สมุทรโกดัง", project: "โกดังปากน้ำ พระปราชญ์", total: "฿2,000,000", totalValue: 2000000, materialCost: 2000000, province: "สมุทรปราการ", buildingType: "โกดังสินค้า", area: 1200, status: "sent_to_client", date: "2026-06-18", items: 7, customerId: 4, projectId: 3 },
-  { id: "Q-2026-0098", customer: "บจ. อุตรดิตถ์โลหะ", project: "PREFAB อุตรดิตถ์", total: "฿2,800,000", totalValue: 2800000, materialCost: 2800000, province: "อุตรดิตถ์", buildingType: "โรงงาน", area: 1600, status: "draft", date: "2026-06-20", items: 9, customerId: 7, projectId: 7 },
+  { id: "Q-2026-0098", customer: "บจ. อุตรดิตถ์โลหะ", project: "อาคารสำเร็จรูป อุตรดิตถ์", total: "฿2,800,000", totalValue: 2800000, materialCost: 2800000, province: "อุตรดิตถ์", buildingType: "โรงงาน", area: 1600, status: "draft", date: "2026-06-20", items: 9, customerId: 7, projectId: 7 },
   { id: "Q-2026-0099", customer: "บจ. นครสวรรค์โลหะ", project: "โรงงาน Custom นครสวรรค์", total: "฿5,400,000", totalValue: 5400000, materialCost: 5400000, province: "นครสวรรค์", buildingType: "โรงงาน", area: 2800, status: "won", date: "2026-04-05", items: 18, customerId: 8, projectId: 6 },
   { id: "Q-2026-0100", customer: "บจ. เชียงรายเมทัล", project: "โกดัง EASYBUILD เชียงราย", total: "฿1,500,000", totalValue: 1500000, materialCost: 1500000, province: "เชียงราย", buildingType: "โกดังสินค้า", area: 720, status: "lost", date: "2026-05-28", items: 6, customerId: 9, projectId: 9 },
 ];
@@ -285,15 +340,15 @@ export type TeamMock = {
 };
 
 export const teamRoleLabel: Record<string, string> = {
-  DEALER_ADMIN: "ผู้จัดการ", DEALER_SALES: "เซลส์", DEALER_SITE: "ช่างหน้างาน",
+  DEALER_ADMIN: "ผู้จัดการ", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม",
 };
 
 export const team: TeamMock[] = [
   { id: 1, name: "สมชาย เชียงใหม่",  role: "DEALER_ADMIN", dept: "บริหาร",    initials: "สช", color: "#003366", tasks: 5, projects: 4, phone: "081-234-5678" },
   { id: 2, name: "วิภา รัตนกุล",      role: "DEALER_SALES", dept: "ขาย",       initials: "วร", color: "#059669", tasks: 3, projects: 3, phone: "082-345-6789" },
-  { id: 3, name: "วิชัย ประสิทธิ์",   role: "DEALER_SITE",  dept: "ไซต์งาน",  initials: "วป", color: "#f59e0b", tasks: 4, projects: 2, phone: "083-456-7890" },
+  { id: 3, name: "วิชัย ประสิทธิ์",   role: "DEALER_SITE",  dept: "ขายภาคสนาม",  initials: "วป", color: "#f59e0b", tasks: 4, projects: 2, phone: "083-456-7890" },
   { id: 4, name: "กาญจนา มีสุข",      role: "DEALER_SALES", dept: "ขาย",       initials: "กม", color: "#8fa3b8", tasks: 2, projects: 2, phone: "084-567-8901" },
-  { id: 5, name: "ประสิทธิ์ ดีงาน",   role: "DEALER_SITE",  dept: "ไซต์งาน",  initials: "ปด", color: "#002244", tasks: 1, projects: 1, phone: "085-678-9012" },
+  { id: 5, name: "ประสิทธิ์ ดีงาน",   role: "DEALER_SITE",  dept: "ขายภาคสนาม",  initials: "ปด", color: "#002244", tasks: 1, projects: 1, phone: "085-678-9012" },
   { id: 6, name: "สุดาวรรณ สวยงาม",   role: "DEALER_SALES", dept: "ขาย",       initials: "สส", color: "#8fa3b8", tasks: 2, projects: 2, phone: "086-789-0123" },
 ];
 
@@ -349,7 +404,7 @@ export type LeadPoolRow = {
 export const leadPool: LeadPoolRow[] = [
   { id: "#LP-001", name: "บจ. อุตรดิตถ์โลหะ",      province: "อุตรดิตถ์",    channel: "เว็บไซต์", product: "RANBUILD",  value: "฿2.8M", valueNum: 2800000, createdAt: "วันนี้ 09:14",    waitHours: 4  },
   { id: "#LP-002", name: "คุณพรทิพย์ ว.",            province: "ลำปาง",        channel: "LINE OA",  product: "EASYBUILD", value: "฿650K", valueNum:  650000, createdAt: "วันนี้ 08:32",    waitHours: 5  },
-  { id: "#LP-003", name: "หจก. พะเยาก่อสร้าง",       province: "พะเยา",        channel: "เว็บไซต์", product: "PREFAB",    value: "฿1.1M", valueNum: 1100000, createdAt: "เมื่อวาน 17:05",  waitHours: 28 },
+  { id: "#LP-003", name: "หจก. พะเยาสตีล",       province: "พะเยา",        channel: "เว็บไซต์", product: "PREFAB",    value: "฿1.1M", valueNum: 1100000, createdAt: "เมื่อวาน 17:05",  waitHours: 28 },
   { id: "#LP-004", name: "บจ. โคราชอุตสาหกรรม",      province: "นครราชสีมา",   channel: "เว็บไซต์", product: "EASYBUILD", value: "฿3.4M", valueNum: 3400000, createdAt: "เมื่อวาน 14:20",  waitHours: 45 },
   { id: "#LP-005", name: "หจก. ชลบุรีคลังสินค้า",    province: "ชลบุรี",       channel: "LINE OA",  product: "RANBUILD",  value: "฿1.9M", valueNum: 1900000, createdAt: "2 วันก่อน",       waitHours: 56 },
 ];
@@ -391,27 +446,8 @@ export const hqSalesByMonth = [
   { month: "ส.ค.",  value: 22.2, prevValue: 19.0 },
 ];
 
-// สรุปสุขภาพโครงการ HQ (ทั้งเครือ)
-export const hqProjectSummary = {
-  total: 23,
-  inProgress: 14,
-  onHold: 3,
-  notStarted: 4,
-  overdue: 2,
-};
-
-// รายได้ตามประเภทโครงการ (YTD รวมทั้งเครือ)
-// ประเภทงานตามจริง: โกดัง/โชว์รูม · อาคารสำเร็จรูป · สนามกีฬา + งาน Main Contractor
-export const hqServiceLineRevenue = [
-  { line: "โกดัง / โชว์รูม",     value: 8900000, color: "#003366" },
-  { line: "อาคารสำเร็จรูป",      value: 6200000, color: "#0a4f8c" },
-  { line: "สนามกีฬา",            value: 4800000, color: "#1e6fbf" },
-  { line: "Main Contractor",     value: 3200000, color: "#8fa3b8" },
-  { line: "Turnkey (ครบวงจร)",   value: 1800000, color: "#82b4e3" },
-];
-
 // กิจกรรมล่าสุดทั้งเครือ
-export type ActivityKind = "win" | "lead" | "approve" | "assign" | "project" | "invoice";
+export type ActivityKind = "win" | "lead" | "approve" | "assign";
 export type ActivityItem = {
   kind: ActivityKind;
   text: string;
@@ -424,29 +460,29 @@ export const hqRecentActivity: ActivityItem[] = [
   { kind: "lead",    text: "ลีดใหม่: หจก. ชลบุรีคลังสินค้า ฿1.9M",       branch: "ส่วนกลาง",  time: "2 ชม." },
   { kind: "lead",    text: "ส่งใบเสนอราคา Q-2026-0097 สมุทรปราการ ฿2.0M", branch: "เชียงใหม่",  time: "3 ชม." },
   { kind: "assign",  text: "มอบหมาย LP-004 โคราช → สาขาระยอง",           branch: "ส่วนกลาง",  time: "5 ชม." },
-  { kind: "project", text: "EASYBUILD แม่สอด อัปเดตความคืบหน้าการขาย 82%",    branch: "แม่สอด",    time: "เมื่อวาน" },
+  { kind: "win",     text: "ปิดการขาย EASYBUILD แม่สอด ฿4.1M",    branch: "แม่สอด",    time: "เมื่อวาน" },
   { kind: "win",     text: "ปิดงาน RANBUILD นครสวรรค์ ฿5.4M",           branch: "นครสวรรค์", time: "2 วัน" },
 ];
 
 // ─── APPOINTMENTS ─────────────────────────────────────────────
-export type ApptType = "survey" | "design_meet" | "presentation" | "contract_sign" | "handover" | "follow_up";
+export type ApptType = "visit" | "design_meet" | "presentation" | "contract_sign" | "close" | "follow_up";
 export type ApptStatus = "upcoming" | "done" | "cancelled";
 
 export const apptTypeLabel: Record<ApptType, string> = {
-  survey: "นัดพบลูกค้า",
+  visit: "นัดพบลูกค้า",
   design_meet: "นัดนำเสนอสินค้า",
   presentation: "นำเสนอราคา",
   contract_sign: "เซ็นสัญญาซื้อขาย",
-  handover: "ปิดการขาย",
+  close: "ปิดการขาย",
   follow_up: "โทรติดตาม",
 };
 
 export const apptTypeColor: Record<ApptType, { bg: string; text: string }> = {
-  survey:        { bg: "#dce5f0", text: "#003366" },
+  visit:         { bg: "#dce5f0", text: "#003366" },
   design_meet:   { bg: "#f0f4f8", text: "#2D2D2D" },
   presentation:  { bg: "#fef3cd", text: "#f59e0b" },
   contract_sign: { bg: "#dce5f0", text: "#003366" },
-  handover:      { bg: "#e5faf0", text: "#059669" },
+  close:         { bg: "#e5faf0", text: "#059669" },
   follow_up:     { bg: "#f0f0f5", text: "#6b7280" },
 };
 
@@ -467,150 +503,16 @@ export type AppointmentMock = {
 };
 
 export const appointments: AppointmentMock[] = [
-  { id: 1, company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", buildingType: "EASYBUILD", area: 1200, province: "นนทบุรี", date: "2026-06-24", time: "09:00", type: "survey", assigned: "สมชาย", status: "upcoming", note: "นัดพบลูกค้าคุยความต้องการโกดังสินค้า" },
-  { id: 2, company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", project: "ระบบ ERP บจ. ซีซีเอส", buildingType: "PREFAB", area: 800, province: "เชียงใหม่", date: "2026-06-24", time: "13:30", type: "design_meet", assigned: "วิภา", status: "upcoming", note: "นำเสนอแบบและสเปกสินค้า" },
-  { id: 3, company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", buildingType: "EASYBUILD", area: 1200, province: "นนทบุรี", date: "2026-06-26", time: "09:00", type: "contract_sign", assigned: "สมชาย", status: "upcoming", note: "เซ็นสัญญาซื้อขาย" },
-  { id: 4, company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", project: "ระบบ ERP บจ. ซีซีเอส", buildingType: "PREFAB", area: 800, province: "เชียงใหม่", date: "2026-06-30", time: "13:00", type: "follow_up", assigned: "สมชาย", status: "upcoming", note: "ติดตามผลใบเสนอราคา" },
-  { id: 5, company: "บจ. สมุทรโกดัง", contact: "คุณดารัล ส.", phone: "084-567-8901", project: "โกดังปากน้ำ พระปราชญ์", buildingType: "EASYBUILD", area: 2000, province: "สมุทรปราการ", date: "2026-07-03", time: "08:00", type: "survey", assigned: "วิชัย", status: "upcoming", note: "นัดพบลูกค้าสำรวจความต้องการ" },
-  { id: 6, company: "หจก. ราชบุรีโลหะ", contact: "คุณประยุทธ ร.", phone: "083-456-7890", project: "โกดัง PEB ราชบุรี", buildingType: "RANBUILD", area: 3100, province: "ราชบุรี", date: "2026-07-05", time: "10:00", type: "presentation", assigned: "วิภา", status: "upcoming", note: "นำเสนอใบเสนอราคาฉบับปรับปรุง" },
-  { id: 7, company: "บจ. แม่สอดโลหะ", contact: "คุณสุรัตน์ ล.", phone: "086-789-0123", project: "EASYBUILD แม่สอด", buildingType: "EASYBUILD", area: 4100, province: "ตาก", date: "2026-06-15", time: "10:00", type: "survey", assigned: "สมชาย", status: "done", note: "พบลูกค้าเรียบร้อย รอติดตามผล" },
-  { id: 8, company: "VCS Asia", contact: "VCS Asia (ระยอง)", phone: "085-678-9012", project: "โกดังระยอง VCS Asia", buildingType: "RANBUILD", area: 6200, province: "ระยอง", date: "2026-02-25", time: "13:00", type: "handover", assigned: "วิชัย", status: "done", note: "ปิดการขายเรียบร้อย" },
-  { id: 9, company: "บจ. นครสวรรค์โลหะ", contact: "บจ. นครสวรรค์โลหะ", phone: "088-901-2345", project: "โรงงาน RANBUILD นครสวรรค์", buildingType: "RANBUILD", area: 5400, province: "นครสวรรค์", date: "2026-03-15", time: "14:00", type: "follow_up", assigned: "กาญจนา", status: "done", note: "โทรติดตามหลังปิดการขาย" },
-  { id: 10, company: "บจ. อุตรดิตถ์โลหะ", contact: "บจ. อุตรดิตถ์โลหะ", phone: "087-890-1234", project: "PREFAB อุตรดิตถ์", buildingType: "PREFAB", area: 2800, province: "อุตรดิตถ์", date: "2026-07-10", time: "10:00", type: "presentation", assigned: "วิภา", status: "cancelled", note: "ลูกค้าขอเลื่อน" },
-];
-
-// ─── CONTRACTS ────────────────────────────────────────────────
-export type ContractStatus = "draft" | "active" | "completed" | "cancelled";
-
-export const contractStatusLabel: Record<ContractStatus, string> = {
-  draft: "ร่าง", active: "มีผล", completed: "เสร็จสิ้น", cancelled: "ยกเลิก",
-};
-export const contractStatusColor: Record<ContractStatus, { bg: string; text: string }> = {
-  draft:     { bg: "#f0f0f5", text: "#6b7280" },
-  active:    { bg: "#dce5f0", text: "#003366" },
-  completed: { bg: "#e5faf0", text: "#059669" },
-  cancelled: { bg: "#fee2e2", text: "#dc2626" },
-};
-
-export type ContractMock = {
-  id: string; client: string; contact: string; phone: string;
-  project: string; value: number; deposit: number; remaining: number;
-  agentName: string; signDate: string; transferDate: string;
-  status: ContractStatus; quotationRef?: string;
-};
-
-export const contracts: ContractMock[] = [
-  { id: "C-2026-001", client: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", value: 1800000, deposit: 540000, remaining: 1260000, agentName: "สมชาย", signDate: "2026-04-01", transferDate: "2026-07-31", status: "active", quotationRef: "Q-2026-0089" },
-  { id: "C-2026-002", client: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", project: "ระบบ ERP บจ. ซีซีเอส", value: 3200000, deposit: 960000, remaining: 2240000, agentName: "วิภา", signDate: "2026-05-15", transferDate: "2026-08-15", status: "active", quotationRef: "Q-2026-0095" },
-  { id: "C-2026-003", client: "บจ. นครสวรรค์โลหะ", contact: "บจ. นครสวรรค์โลหะ", phone: "088-901-2345", project: "โรงงาน RANBUILD นครสวรรค์", value: 5400000, deposit: 5400000, remaining: 0, agentName: "สมชาย", signDate: "2026-01-01", transferDate: "2026-03-31", status: "completed" },
-  { id: "C-2026-004", client: "VCS Asia", contact: "VCS Asia (ระยอง)", phone: "085-678-9012", project: "โกดังระยอง VCS Asia", value: 6200000, deposit: 6200000, remaining: 0, agentName: "วิชัย", signDate: "2025-11-01", transferDate: "2026-02-28", status: "completed", quotationRef: "Q-2026-0092" },
-  { id: "C-2026-005", client: "คุณสมชาย", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", project: "โกดังปากน้ำ พระปราชญ์", value: 2000000, deposit: 0, remaining: 2000000, agentName: "สมชาย", signDate: "—", transferDate: "—", status: "draft", quotationRef: "Q-2026-0097" },
-];
-
-// ─── INVOICES ─────────────────────────────────────────────────
-export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
-
-export const invoiceStatusLabel: Record<InvoiceStatus, string> = {
-  draft: "ร่าง", sent: "ส่งแล้ว", paid: "ชำระแล้ว", overdue: "เกินกำหนด", cancelled: "ยกเลิก",
-};
-export const invoiceStatusColor: Record<InvoiceStatus, { bg: string; text: string }> = {
-  draft:     { bg: "#f0f0f5", text: "#6b7280" },
-  sent:      { bg: "#dce5f0", text: "#003366" },
-  paid:      { bg: "#e5faf0", text: "#059669" },
-  overdue:   { bg: "#fee2e2", text: "#dc2626" },
-  cancelled: { bg: "#f5f5f5", text: "#9ca3af" },
-};
-
-export type InvoiceMock = {
-  id: string; client: string; project: string; contractRef: string;
-  issueDate: string; dueDate: string;
-  subtotal: number; vatRate: number; vatAmount: number; total: number;
-  status: InvoiceStatus; milestone: string; note: string;
-};
-
-export const invoices: InvoiceMock[] = [
-  { id: "INV-2026-0041", client: "บจ. ไทยสตีล", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", contractRef: "C-2026-001", issueDate: "2026-05-01", dueDate: "2026-05-30", subtotal: 504673, vatRate: 7, vatAmount: 35327, total: 540000, status: "paid", milestone: "งวดที่ 1 (30%)", note: "มัดจำหลังเซ็นสัญญา" },
-  { id: "INV-2026-0055", client: "VCS Asia", project: "โกดังระยอง VCS Asia", contractRef: "C-2026-004", issueDate: "2026-02-20", dueDate: "2026-03-15", subtotal: 1158879, vatRate: 7, vatAmount: 81121, total: 1240000, status: "paid", milestone: "งวดสุดท้าย", note: "ชำระครบตามสัญญา" },
-  { id: "INV-2026-0062", client: "บจ. ซีซีเอส", project: "ระบบ ERP บจ. ซีซีเอส", contractRef: "C-2026-002", issueDate: "2026-06-01", dueDate: "2026-06-30", subtotal: 747664, vatRate: 7, vatAmount: 52336, total: 800000, status: "sent", milestone: "งวดที่ 2 (30%)", note: "งวดที่ 2 ตามสัญญา" },
-  { id: "INV-2026-0068", client: "หจก. ราชบุรีโลหะ", project: "โกดัง PEB ราชบุรี", contractRef: "C-2026-001", issueDate: "2026-05-20", dueDate: "2026-06-15", subtotal: 177570, vatRate: 7, vatAmount: 12430, total: 190000, status: "overdue", milestone: "งวดที่ 1", note: "มัดจำ 25%" },
-  { id: "INV-2026-0071", client: "คุณสมชาย", project: "โกดังปากน้ำ พระปราชญ์", contractRef: "C-2026-005", issueDate: "2026-07-01", dueDate: "2026-07-15", subtotal: 373832, vatRate: 7, vatAmount: 26168, total: 400000, status: "draft", milestone: "มัดจำ (20%)", note: "รอลูกค้าอนุมัติ" },
-];
-
-// ─── PAYMENTS ─────────────────────────────────────────────────
-export type PaymentMethod = "transfer" | "cheque" | "cash";
-export type PaymentStatus = "confirmed" | "pending" | "cancelled";
-
-export const paymentMethodLabel: Record<PaymentMethod, string> = {
-  transfer: "โอนเงิน", cheque: "เช็ค", cash: "เงินสด",
-};
-export const paymentMethodColor: Record<PaymentMethod, { bg: string; text: string }> = {
-  transfer: { bg: "#dce5f0", text: "#003366" },
-  cheque:   { bg: "#f0f4f8", text: "#2D2D2D" },
-  cash:     { bg: "#e5faf0", text: "#059669" },
-};
-export const paymentStatusLabel: Record<PaymentStatus, string> = {
-  confirmed: "ยืนยันแล้ว", pending: "รอยืนยัน", cancelled: "ยกเลิก",
-};
-export const paymentStatusColor: Record<PaymentStatus, { bg: string; text: string }> = {
-  confirmed: { bg: "#e5faf0", text: "#059669" },
-  pending:   { bg: "#fef3cd", text: "#f59e0b" },
-  cancelled: { bg: "#fee2e2", text: "#dc2626" },
-};
-
-export type PaymentMock = {
-  id: string; invoiceRef: string; client: string; amount: number;
-  method: PaymentMethod; paidDate: string; salesPerson: string;
-  status: PaymentStatus; note: string;
-};
-
-export const payments: PaymentMock[] = [
-  { id: "PAY-2026-001", invoiceRef: "INV-2026-0041", client: "บจ. ไทยสตีล", amount: 540000, method: "transfer", paidDate: "2026-05-28", salesPerson: "สมชาย", status: "confirmed", note: "งวดที่ 1 มัดจำตามสัญญา" },
-  { id: "PAY-2026-002", invoiceRef: "INV-2026-0055", client: "VCS Asia", amount: 1240000, method: "cheque", paidDate: "2026-03-14", salesPerson: "วิชัย", status: "confirmed", note: "งวดสุดท้าย ชำระครบแล้ว" },
-  { id: "PAY-2026-003", invoiceRef: "INV-2026-0062", client: "บจ. ซีซีเอส", amount: 800000, method: "transfer", paidDate: "2026-06-20", salesPerson: "วิภา", status: "confirmed", note: "งวดที่ 2 ตามสัญญา" },
-  { id: "PAY-2026-004", invoiceRef: "INV-2026-0071", client: "คุณสมชาย", amount: 400000, method: "cash", paidDate: "—", salesPerson: "สมชาย", status: "pending", note: "มัดจำ รอยืนยันสลิป" },
-];
-
-// ─── EXPENSES ─────────────────────────────────────────────────────
-export type ExpenseCategory = "travel" | "printing" | "testing" | "equipment" | "other";
-export type BillingStatus = "billable" | "not_billable" | "billed";
-
-export const expenseCategoryLabel: Record<ExpenseCategory, string> = {
-  travel: "เดินทาง", printing: "พิมพ์เอกสาร", testing: "ทดสอบ", equipment: "อุปกรณ์", other: "อื่นๆ",
-};
-export const billingStatusLabel: Record<BillingStatus, string> = {
-  billable: "เรียกเก็บได้", not_billable: "ไม่เรียกเก็บ", billed: "เรียกเก็บแล้ว",
-};
-export const billingStatusColor: Record<BillingStatus, { bg: string; text: string }> = {
-  billable: { bg: "#e5faf0", text: "#059669" },
-  not_billable: { bg: "#fee2e2", text: "#dc2626" },
-  billed: { bg: "#f0f0f5", text: "#6b7280" },
-};
-export type ExpenseMock = {
-  id: string; date: string; client: string; project: string;
-  category: ExpenseCategory; amount: number; description: string;
-  billingStatus: BillingStatus;
-};
-export const expenses: ExpenseMock[] = [
-  { id: "EXP-001", date: "2026-06-10", client: "บจ. ไทยสตีล", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", category: "travel", amount: 4800, description: "ค่าเดินทางสำรวจพื้นที่หน้างาน นนทบุรี", billingStatus: "billable" },
-  { id: "EXP-002", date: "2026-06-12", client: "บจ. ซีซีเอส", project: "โรงงาน PREFAB เชียงใหม่", category: "printing", amount: 1200, description: "พิมพ์เอกสารนำเสนอ A0 จำนวน 4 ชุด", billingStatus: "billed" },
-  { id: "EXP-003", date: "2026-06-14", client: "VCS Asia", project: "โกดังระยอง VCS Asia", category: "testing", amount: 32000, description: "ค่าจัดทำแบบนำเสนอลูกค้า", billingStatus: "billable" },
-  { id: "EXP-004", date: "2026-06-18", client: "บจ. สมุทรโกดัง", project: "โกดังปากน้ำ พระปราชญ์", category: "travel", amount: 2800, description: "ค่าน้ำมันและทางด่วน", billingStatus: "not_billable" },
-  { id: "EXP-005", date: "2026-06-20", client: "หจก. ราชบุรีโลหะ", project: "โกดัง PEB ราชบุรี", category: "equipment", amount: 8500, description: "ค่าจัดเตรียมอุปกรณ์นำเสนอลูกค้า", billingStatus: "billable" },
-];
-
-
-// ─── MILESTONES ───────────────────────────────────────────────────
-export type MilestoneMock = {
-  id: number; title: string; projectId: number; position: number;
-  type: "general" | "major"; dueDate: string; done: boolean;
-};
-export const milestones: MilestoneMock[] = [
-  { id: 1, title: "สำรวจความต้องการและพื้นที่หน้างาน", projectId: 1, position: 1, type: "general", dueDate: "2026-03-10", done: true },
-  { id: 2, title: "จัดทำใบเสนอราคา", projectId: 1, position: 2, type: "major", dueDate: "2026-04-15", done: true },
-  { id: 3, title: "นำเสนอใบเสนอราคา", projectId: 1, position: 3, type: "major", dueDate: "2026-05-20", done: false },
-  { id: 4, title: "เจรจาต่อรองเงื่อนไข", projectId: 2, position: 1, type: "major", dueDate: "2026-06-30", done: false },
-  { id: 5, title: "เซ็นสัญญา/ปิดการขาย", projectId: 2, position: 2, type: "major", dueDate: "2026-07-15", done: false },
-  { id: 6, title: "ยืนยันคำสั่งซื้อขั้นสุดท้าย", projectId: 3, position: 1, type: "major", dueDate: "2026-08-01", done: false },
+  { id: 1, company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", buildingType: "อาคารสำเร็จรูป", area: 1200, province: "นนทบุรี", date: "2026-06-24", time: "09:00", type: "visit", assigned: "สมชาย", status: "upcoming", note: "นัดพบลูกค้าคุยความต้องการโกดังสินค้า" },
+  { id: 2, company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", project: "โรงงานสำเร็จรูป บจ. ซีซีเอส", buildingType: "อาคารสำเร็จรูป", area: 800, province: "เชียงใหม่", date: "2026-06-24", time: "13:30", type: "design_meet", assigned: "วิภา", status: "upcoming", note: "นำเสนอแบบและสเปกสินค้า" },
+  { id: 3, company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", buildingType: "อาคารสำเร็จรูป", area: 1200, province: "นนทบุรี", date: "2026-06-26", time: "09:00", type: "contract_sign", assigned: "สมชาย", status: "upcoming", note: "เซ็นสัญญาซื้อขาย" },
+  { id: 4, company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", project: "โรงงานสำเร็จรูป บจ. ซีซีเอส", buildingType: "อาคารสำเร็จรูป", area: 800, province: "เชียงใหม่", date: "2026-06-30", time: "13:00", type: "follow_up", assigned: "สมชาย", status: "upcoming", note: "ติดตามผลใบเสนอราคา" },
+  { id: 5, company: "บจ. สมุทรโกดัง", contact: "คุณดารัล ส.", phone: "084-567-8901", project: "โกดังปากน้ำ พระปราชญ์", buildingType: "อาคารสำเร็จรูป", area: 2000, province: "สมุทรปราการ", date: "2026-07-03", time: "08:00", type: "visit", assigned: "วิชัย", status: "upcoming", note: "นัดพบลูกค้าเก็บความต้องการ" },
+  { id: 6, company: "หจก. ราชบุรีโลหะ", contact: "คุณประยุทธ ร.", phone: "083-456-7890", project: "โกดังสำเร็จรูป ราชบุรี", buildingType: "โกดังสำเร็จรูป", area: 3100, province: "ราชบุรี", date: "2026-07-05", time: "10:00", type: "presentation", assigned: "วิภา", status: "upcoming", note: "นำเสนอใบเสนอราคาฉบับปรับปรุง" },
+  { id: 7, company: "บจ. แม่สอดโลหะ", contact: "คุณสุรัตน์ ล.", phone: "086-789-0123", project: "อาคารสำเร็จรูป แม่สอด", buildingType: "อาคารสำเร็จรูป", area: 4100, province: "ตาก", date: "2026-06-15", time: "10:00", type: "visit", assigned: "สมชาย", status: "done", note: "พบลูกค้าเรียบร้อย รอติดตามผล" },
+  { id: 8, company: "VCS Asia", contact: "VCS Asia (ระยอง)", phone: "085-678-9012", project: "โกดังระยอง VCS Asia", buildingType: "โกดังสำเร็จรูป", area: 6200, province: "ระยอง", date: "2026-02-25", time: "13:00", type: "close", assigned: "วิชัย", status: "done", note: "ปิดการขายเรียบร้อย" },
+  { id: 9, company: "บจ. นครสวรรค์โลหะ", contact: "บจ. นครสวรรค์โลหะ", phone: "088-901-2345", project: "โรงงานสำเร็จรูป นครสวรรค์", buildingType: "โรงงานสำเร็จรูป", area: 5400, province: "นครสวรรค์", date: "2026-03-15", time: "14:00", type: "follow_up", assigned: "กาญจนา", status: "done", note: "โทรติดตามหลังปิดการขาย" },
+  { id: 10, company: "บจ. อุตรดิตถ์โลหะ", contact: "บจ. อุตรดิตถ์โลหะ", phone: "087-890-1234", project: "อาคารสำเร็จรูป อุตรดิตถ์", buildingType: "อาคารสำเร็จรูป", area: 2800, province: "อุตรดิตถ์", date: "2026-07-10", time: "10:00", type: "presentation", assigned: "วิภา", status: "cancelled", note: "ลูกค้าขอเลื่อน" },
 ];
 
 // ─── MESSAGES ─────────────────────────────────────────────────────
@@ -699,7 +601,7 @@ export const dealerDetails: Record<string, DealerDetail> = {
     ],
     leads: [
       { id: "LD-C01", name: "บจ. ไทยสตีล",          province: "เชียงใหม่",  product: "EASYBUILD", valueNum: 3200000, status: "quoted",    assignedAt: "5 วันก่อน" },
-      { id: "LD-C02", name: "หจก. สันทรายก่อสร้าง",  province: "เชียงใหม่",  product: "PREFAB",    valueNum: 1200000, status: "contacted", assignedAt: "1 สัปดาห์" },
+      { id: "LD-C02", name: "หจก. สันทรายเมทัล",  province: "เชียงใหม่",  product: "PREFAB",    valueNum: 1200000, status: "contacted", assignedAt: "1 สัปดาห์" },
       { id: "LD-C03", name: "บจ. ลำพูนโลหะ",         province: "ลำพูน",      product: "RANBUILD",  valueNum: 2800000, status: "new",       assignedAt: "1 วันก่อน" },
     ],
     projects: [
@@ -746,7 +648,7 @@ export const dealerDetails: Record<string, DealerDetail> = {
     ],
     leads: [
       { id: "LD-CR01", name: "บจ. เชียงรายอุตสาหกรรม", province: "เชียงราย", product: "RANBUILD",  valueNum: 3600000, status: "quoted",    assignedAt: "4 วันก่อน" },
-      { id: "LD-CR02", name: "หจก. พะเยาก่อสร้าง",    province: "พะเยา",    product: "PREFAB",    valueNum: 1100000, status: "new",       assignedAt: "1 วันก่อน" },
+      { id: "LD-CR02", name: "หจก. พะเยาสตีล",    province: "พะเยา",    product: "PREFAB",    valueNum: 1100000, status: "new",       assignedAt: "1 วันก่อน" },
     ],
     projects: [
       { id: "PRJ-CR01", name: "โรงงาน RANBUILD เชียงราย",     product: "RANBUILD",  valueNum: 3600000, progress: 40, status: "in_progress", dueDate: "30 ก.ย. 2026" },
@@ -755,7 +657,7 @@ export const dealerDetails: Record<string, DealerDetail> = {
     ],
     quotes: [
       { quoteNo: "Q-2026-0082", customer: "บจ. เชียงรายอุตฯ", product: "RANBUILD",  valueNum: 3600000, discountPct: 9,  status: "sent",  date: "3 วัน" },
-      { quoteNo: "Q-2026-0075", customer: "หจก. พะเยาก่อสร้าง", product: "PREFAB",  valueNum: 1100000, discountPct: 5,  status: "draft", date: "1 สัปดาห์" },
+      { quoteNo: "Q-2026-0075", customer: "หจก. พะเยาสตีล", product: "PREFAB",  valueNum: 1100000, discountPct: 5,  status: "draft", date: "1 สัปดาห์" },
       { quoteNo: "Q-2026-0070", customer: "บจ. เชียงรายอุตฯ", product: "EASYBUILD", valueNum: 1800000, discountPct: 6,  status: "won",   date: "3 สัปดาห์" },
     ],
   },
@@ -825,108 +727,6 @@ export const hqPipelineByProduct: PipelineByProduct[] = [
   { product: "PREFAB",     count: 5,  valueNum: 11200000, color: "#8fa3b8" },
   { product: "TURNKEY",    count: 2,  valueNum: 5800000,  color: "#82b4e3" },
   { product: "CONSULTANT", count: 1,  valueNum: 1300000,  color: "#b8d4f0" },
-];
-
-// ─── FINANCIAL OVERVIEW ───────────────────────────────────────
-export const hqFinanceSummary = {
-  ytdRevenue:       85200000,
-  ytdTarget:        132000000,
-  monthRevenue:     18400000,
-  monthTarget:      22000000,
-  outstanding:      12400000,
-  overdue:           1900000,
-  collectedMonth:   15200000,
-  ytdExpenses:       8600000,
-  grossMarginPct:    23.4,
-};
-
-export type FinanceMonthRow = {
-  month: string;
-  revenue: number;
-  target: number;
-  collected: number;
-  expenses: number;
-};
-export const hqFinanceByMonth: FinanceMonthRow[] = [
-  { month: "ม.ค.",  revenue: 4200000,  target: 11000000, collected: 3800000,  expenses: 820000  },
-  { month: "ก.พ.",  revenue: 9800000,  target: 11000000, collected: 9200000,  expenses: 740000  },
-  { month: "มี.ค.", revenue: 11600000, target: 11000000, collected: 10900000, expenses: 950000  },
-  { month: "เม.ย.", revenue: 14200000, target: 15000000, collected: 13400000, expenses: 1100000 },
-  { month: "พ.ค.",  revenue: 12600000, target: 15000000, collected: 11800000, expenses: 980000  },
-  { month: "มิ.ย.", revenue: 18400000, target: 22000000, collected: 15200000, expenses: 1420000 },
-];
-
-export type InvoiceAgingBucket = { label: string; amount: number; color: string };
-export const hqInvoiceAging: InvoiceAgingBucket[] = [
-  { label: "ยังไม่ถึงกำหนด",   amount: 8600000, color: "#059669" },
-  { label: "1–30 วัน",          amount: 1900000, color: "#f59e0b" },
-  { label: "31–60 วัน",         amount:  950000, color: "#f97316" },
-  { label: "61+ วัน (เสี่ยง)",  amount:  950000, color: "#dc2626" },
-];
-
-// ─── HQ PROJECTS (ทั้งเครือ) ──────────────────────────────────────────────
-
-export type HQProjectStatus = "in_progress" | "completed" | "overdue" | "on_hold" | "not_started";
-
-export type HQProject = {
-  id: string;
-  name: string;
-  dealerCode: string;
-  dealerName: string;
-  region: string;
-  customer: string;
-  product: string;
-  valueNum: number;
-  status: HQProjectStatus;
-  progressPct: number;
-  startDate: string;
-  deadline: string;
-  pm: string;
-  daysLeft: number;   // < 0 = เกินกำหนด
-  issues?: string[];
-  updates?: { date: string; note: string }[];
-};
-
-export const hqProjects: HQProject[] = [
-  // RYG — ระยอง (6 โครงการ)
-  { id: "PRJ-001", name: "โกดังสินค้า บ.อุตสาหกรรมไทย จก.",     dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "บ.อุตสาหกรรมไทย จก.",     product: "RANBUILD",  valueNum: 4200000,  status: "in_progress",  progressPct: 65, startDate: "1 เม.ย. 2026",   deadline: "30 ก.ค. 2026",  pm: "สมชาย ว.",    daysLeft: 35,
-    updates: [{ date: "23 มิ.ย. 2026", note: "ความคืบหน้าการขาย 65% — อยู่ในแผน ไม่มีปัญหา" }, { date: "10 มิ.ย. 2026", note: "ลูกค้าตอบรับใบเสนอราคารอบแรกแล้ว" }] },
-  { id: "PRJ-002", name: "โรงงานผลิตชิ้นส่วน ABC",                dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "บ.เอบีซี แมนูแฟคเจอริ่ง", product: "EASYBUILD", valueNum: 2800000,  status: "in_progress",  progressPct: 42, startDate: "15 เม.ย. 2026",  deadline: "15 ส.ค. 2026",  pm: "ประภาส ร.",   daysLeft: 51 },
-  { id: "PRJ-003", name: "ศูนย์กระจายสินค้า WMS ระยอง",           dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "หจก. ไอซ์โลจิสติกส์",     product: "RANBUILD",  valueNum: 6800000,  status: "completed",    progressPct: 100, startDate: "1 ม.ค. 2026",   deadline: "31 พ.ค. 2026",  pm: "สมชาย ว.",    daysLeft: 999 },
-  { id: "PRJ-004", name: "หอพักพนักงาน นิคมอุตสาหกรรม",           dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "บ.เอสทีพี โฮลดิ้ง",       product: "PREFAB",    valueNum: 1900000,  status: "overdue",      progressPct: 30, startDate: "1 มี.ค. 2026",   deadline: "30 พ.ค. 2026",  pm: "ประภาส ร.",   daysLeft: -25,
-    issues: ["ลูกค้าเลื่อนการตัดสินใจ 3 สัปดาห์ ขอเปรียบเทียบราคาเพิ่ม", "รออนุมัติงบประมาณจากฝ่ายจัดซื้อของลูกค้า"],
-    updates: [{ date: "20 มิ.ย. 2026", note: "ประชุมลูกค้า — ขอขยายเวลาตัดสินใจ 30 วัน อยู่ระหว่างรอคำตอบ" }, { date: "10 มิ.ย. 2026", note: "ความคืบหน้าการขาย 30% ช้ากว่าแผน 2 สัปดาห์" }] },
-  { id: "PRJ-005", name: "อาคารสำนักงาน EPC ชลบุรี",               dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "บ.พีซีบี คอนสตรัคชั่น",   product: "CUSTOM",    valueNum: 3500000,  status: "in_progress",  progressPct: 78, startDate: "1 มี.ค. 2026",   deadline: "31 ก.ค. 2026",  pm: "สมชาย ว.",    daysLeft: 36 },
-  { id: "PRJ-006", name: "โรงเก็บวัตถุดิบ บ.ปิโตรเคม",             dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "บ.ปิโตรเคม (ไทย)",        product: "RANBUILD",  valueNum: 5100000,  status: "not_started",  progressPct: 0,  startDate: "1 ก.ค. 2026",   deadline: "31 ต.ค. 2026",  pm: "ประภาส ร.",   daysLeft: 128 },
-  // CNX — เชียงใหม่ (5 โครงการ)
-  { id: "PRJ-007", name: "โกดังเกษตร สหกรณ์ลำพูน",                dealerCode: "CNX", dealerName: "สาขาเชียงใหม่",   region: "เหนือ",    customer: "สหกรณ์ลำพูน จก.",          product: "EASYBUILD", valueNum: 2200000,  status: "in_progress",  progressPct: 55, startDate: "15 มี.ค. 2026",  deadline: "15 ก.ค. 2026",  pm: "วิภา ป.",     daysLeft: 20 },
-  { id: "PRJ-008", name: "อาคารแสดงสินค้า OTOP เชียงใหม่",         dealerCode: "CNX", dealerName: "สาขาเชียงใหม่",   region: "เหนือ",    customer: "อบจ.เชียงใหม่",             product: "CUSTOM",    valueNum: 4600000,  status: "overdue",      progressPct: 48, startDate: "1 ก.พ. 2026",   deadline: "30 พ.ค. 2026",  pm: "สุรชัย ท.",   daysLeft: -26,
-    issues: ["ลูกค้า (อบจ.) ขอเพิ่ม spec ระบบไฟฟ้า ทำให้มูลค่าโอกาสการขายเพิ่ม 15%", "รอใบเสนอราคาฉบับแก้ไข ค้างมา 2 สัปดาห์"],
-    updates: [{ date: "22 มิ.ย. 2026", note: "ส่งใบเสนอราคาฉบับปรับปรุงให้ลูกค้าพิจารณา มูลค่าเพิ่มประมาณ ฿680K" }, { date: "5 มิ.ย. 2026", note: "ความคืบหน้าการขาย 48% แต่ชะลอรอลูกค้าปรับสเปก" }] },
-  { id: "PRJ-009", name: "โรงงานแปรรูปอาหาร CNX Food",             dealerCode: "CNX", dealerName: "สาขาเชียงใหม่",   region: "เหนือ",    customer: "บ.ซีเอ็นเอ็กซ์ ฟูด",      product: "RANBUILD",  valueNum: 3800000,  status: "in_progress",  progressPct: 22, startDate: "1 มิ.ย. 2026",   deadline: "30 ก.ย. 2026",  pm: "วิภา ป.",     daysLeft: 97 },
-  { id: "PRJ-010", name: "ศูนย์บริการยานยนต์ Bigbike",             dealerCode: "CNX", dealerName: "สาขาเชียงใหม่",   region: "เหนือ",    customer: "บ.บิ๊กไบค์เซ็นเตอร์",     product: "PREFAB",    valueNum: 1400000,  status: "completed",    progressPct: 100, startDate: "1 ก.พ. 2026",   deadline: "30 เม.ย. 2026", pm: "สุรชัย ท.",   daysLeft: 999 },
-  { id: "PRJ-011", name: "โรงเรือนผักไฮโดรโปนิกส์ขนาดใหญ่",       dealerCode: "CNX", dealerName: "สาขาเชียงใหม่",   region: "เหนือ",    customer: "กลุ่มเกษตรลำพูน",          product: "CUSTOM",    valueNum: 2900000,  status: "on_hold",      progressPct: 15, startDate: "1 พ.ค. 2026",   deadline: "31 ส.ค. 2026",  pm: "วิภา ป.",     daysLeft: 67 },
-  // MST — แม่สอด (4 โครงการ)
-  { id: "PRJ-012", name: "โกดังส่งออกชายแดน SEZ แม่สอด",          dealerCode: "MST", dealerName: "สาขาแม่สอด",      region: "ตะวันตก", customer: "บ.ทีดีเค ลอจิสติกส์",      product: "RANBUILD",  valueNum: 5800000,  status: "in_progress",  progressPct: 72, startDate: "15 ก.พ. 2026",  deadline: "15 ก.ค. 2026",  pm: "อนันต์ ส.",   daysLeft: 20 },
-  { id: "PRJ-013", name: "อาคารพาณิชย์ย่านการค้า MST",             dealerCode: "MST", dealerName: "สาขาแม่สอด",      region: "ตะวันตก", customer: "หจก. แม่สอดพาณิชย์",       product: "CUSTOM",    valueNum: 2100000,  status: "in_progress",  progressPct: 88, startDate: "1 ก.พ. 2026",   deadline: "30 มิ.ย. 2026", pm: "อนันต์ ส.",   daysLeft: 5 },
-  { id: "PRJ-014", name: "คลังสินค้าเย็น อาหารสด",                 dealerCode: "MST", dealerName: "สาขาแม่สอด",      region: "ตะวันตก", customer: "บ.เฟรชโลจิส",              product: "RANBUILD",  valueNum: 3200000,  status: "completed",    progressPct: 100, startDate: "1 ธ.ค. 2025",   deadline: "28 ก.พ. 2026", pm: "พิมพ์ ท.",    daysLeft: 999 },
-  { id: "PRJ-015", name: "โรงงานตัดเย็บเสื้อผ้าส่งออก",            dealerCode: "MST", dealerName: "สาขาแม่สอด",      region: "ตะวันตก", customer: "บ.เอ็มเอสที การ์เม้นต์",    product: "PREFAB",    valueNum: 1800000,  status: "not_started",  progressPct: 0,  startDate: "1 ส.ค. 2026",   deadline: "30 พ.ย. 2026",  pm: "อนันต์ ส.",   daysLeft: 158 },
-  // CRI — เชียงราย (3 โครงการ)
-  { id: "PRJ-016", name: "ศูนย์แปรรูปชา-กาแฟ CRI",                 dealerCode: "CRI", dealerName: "สาขาเชียงราย",    region: "เหนือ",    customer: "วิสาหกิจชุมชนดอยอินทนนท์",  product: "CUSTOM",    valueNum: 3100000,  status: "in_progress",  progressPct: 35, startDate: "1 เม.ย. 2026",   deadline: "30 ก.ย. 2026",  pm: "เกรียงไกร จ.", daysLeft: 97 },
-  { id: "PRJ-017", name: "โกดังรับฝากสินค้า Golden Triangle",       dealerCode: "CRI", dealerName: "สาขาเชียงราย",    region: "เหนือ",    customer: "บ.โกลเด้น ทรี โลจิส",      product: "RANBUILD",  valueNum: 2400000,  status: "overdue",      progressPct: 60, startDate: "1 มี.ค. 2026",   deadline: "31 พ.ค. 2026",  pm: "เกรียงไกร จ.", daysLeft: -25,
-    issues: ["ลูกค้าขอข้อมูลผลิตภัณฑ์ RANBUILD เพิ่มเติมก่อนตัดสินใจ"],
-    updates: [{ date: "18 มิ.ย. 2026", note: "ความคืบหน้าการขาย 60% รอลูกค้ายืนยันรอบสุดท้าย ETA 30 มิ.ย." }, { date: "1 มิ.ย. 2026", note: "ลูกค้าแจ้งว่าต้องการเริ่มงานภายใน ก.ค. — เร่งติดตามโอกาสการขาย" }] },
-  { id: "PRJ-018", name: "อาคารเรียนมหาวิทยาลัย CRI",               dealerCode: "CRI", dealerName: "สาขาเชียงราย",    region: "เหนือ",    customer: "ม.ราชภัฏเชียงราย",          product: "CUSTOM",    valueNum: 4900000,  status: "on_hold",      progressPct: 5,  startDate: "1 มิ.ย. 2026",   deadline: "30 พ.ย. 2026",  pm: "สุชาติ ม.",   daysLeft: 158 },
-  // NSN — นครสวรรค์ (2 โครงการ)
-  { id: "PRJ-019", name: "โกดังสินค้าเกษตร NSN",                    dealerCode: "NSN", dealerName: "สาขานครสวรรค์",   region: "กลาง",     customer: "สหกรณ์การเกษตรนครสวรรค์",  product: "EASYBUILD", valueNum: 1600000,  status: "in_progress",  progressPct: 50, startDate: "1 พ.ค. 2026",   deadline: "31 ส.ค. 2026",  pm: "ธีรพล อ.",    daysLeft: 67 },
-  { id: "PRJ-020", name: "ศาลาอเนกประสงค์เทศบาล NSN",               dealerCode: "NSN", dealerName: "สาขานครสวรรค์",   region: "กลาง",     customer: "เทศบาลเมืองนครสวรรค์",      product: "PREFAB",    valueNum: 900000,   status: "overdue",      progressPct: 40, startDate: "1 ก.พ. 2026",   deadline: "30 เม.ย. 2026", pm: "ธีรพล อ.",    daysLeft: -56,
-    issues: ["ลูกค้าขอปรับใบเสนอราคา 3 ครั้ง ทำให้เสียเวลารวม 6 สัปดาห์", "งบประมาณลูกค้าถูกตรวจสอบโดยสำนักงานตรวจเงินแผ่นดิน — ชำระเงินงวดถัดไปล่าช้า"],
-    updates: [{ date: "24 มิ.ย. 2026", note: "ประชุมเร่งด่วนกับเทศบาล — กำหนดปิดการขายใหม่ 31 ก.ค. 2026 รอทำ MOU แก้ไขสัญญา" }, { date: "15 พ.ค. 2026", note: "ใบเสนอราคาฉบับสุดท้ายได้รับอนุมัติแล้ว เริ่มดำเนินการขายต่อได้" }] },
-  // HYI — หาดใหญ่ (1 โครงการ inactive)
-  { id: "PRJ-021", name: "ซ่อมหลังคาโรงงานเดิม",                    dealerCode: "HYI", dealerName: "สาขาหาดใหญ่",    region: "ใต้",      customer: "บ.หาดใหญ่อุตสาหกรรม",      product: "CUSTOM",    valueNum: 480000,   status: "on_hold",      progressPct: 0,  startDate: "1 มิ.ย. 2026",   deadline: "31 ก.ค. 2026",  pm: "-",            daysLeft: 36 },
-  // เพิ่มให้ครบ 23
-  { id: "PRJ-022", name: "คลังสินค้า บ.แอลอาร์เอส อีสาน",          dealerCode: "NSN", dealerName: "สาขานครสวรรค์",   region: "กลาง",     customer: "บ.แอลอาร์เอส จก.",          product: "RANBUILD",  valueNum: 2700000,  status: "not_started",  progressPct: 0,  startDate: "1 ส.ค. 2026",   deadline: "31 ธ.ค. 2026",  pm: "ธีรพล อ.",    daysLeft: 189 },
-  { id: "PRJ-023", name: "อาคารโชว์รูมรถยนต์ RYG",                  dealerCode: "RYG", dealerName: "สาขาระยอง",       region: "ตะวันออก", customer: "บ.ระยองยานยนต์",            product: "CUSTOM",    valueNum: 3300000,  status: "in_progress",  progressPct: 18, startDate: "1 มิ.ย. 2026",   deadline: "30 ก.ย. 2026",  pm: "สมชาย ว.",    daysLeft: 97 },
 ];
 
 // ─── HQ SALES TARGETS ────────────────────────────────────────────────────────
@@ -1115,41 +915,6 @@ export const hqAnnouncements: HQAnnouncement[] = [
 ];
 
 
-// ─── DEALER COMMISSION (ported from pms-benjamin) ─────────────────────────────
-export type CommissionStatus = "pending" | "approved" | "paid";
-
-export const commissionStatusLabel: Record<CommissionStatus, string> = {
-  pending: "รอการอนุมัติ", approved: "อนุมัติแล้ว", paid: "จ่ายแล้ว",
-};
-export const commissionStatusColor: Record<CommissionStatus, { bg: string; text: string }> = {
-  pending:  { bg: "#fef3cd", text: "#f59e0b" },
-  approved: { bg: "#dbeafe", text: "#3b82f6" },
-  paid:     { bg: "#e5faf0", text: "#22c55e" },
-};
-
-export type CommissionMock = {
-  id: string;
-  quotationId: string;
-  projectTitle: string;
-  client: string;
-  closedDate: string;
-  dealValue: number;
-  commissionRate: number;
-  commissionAmount: number;
-  status: CommissionStatus;
-  paidDate?: string;
-  period: string;
-};
-
-export const commissions: CommissionMock[] = [
-  { id: "COM-2026-001", quotationId: "Q-2026-0089", projectTitle: "โกดังสินค้า บจ. ไทยสตีล",         client: "บจ. ไทยสตีล",          closedDate: "2026-05-15", dealValue: 1800000, commissionRate: 5, commissionAmount: 90000,  status: "paid",     paidDate: "2026-06-01", period: "พ.ค. 2569" },
-  { id: "COM-2026-002", quotationId: "Q-2026-0092", projectTitle: "อาคารโรงงาน ระยอง VCS Asia",      client: "VCS Asia Co., Ltd.",     closedDate: "2025-11-10", dealValue: 6200000, commissionRate: 5, commissionAmount: 310000, status: "paid",     paidDate: "2026-01-10", period: "พ.ย. 2568" },
-  { id: "COM-2026-003", quotationId: "Q-2026-0099", projectTitle: "อาคารโรงงาน นครสวรรค์",          client: "บจ. นครสวรรค์โลหะ",     closedDate: "2026-04-05", dealValue: 5400000, commissionRate: 5, commissionAmount: 270000, status: "approved", period: "เม.ย. 2569" },
-  { id: "COM-2026-004", quotationId: "Q-2026-0097", projectTitle: "โกดังสินค้า ปากน้ำ",             client: "บจ. สมุทรโกดัง",        closedDate: "2026-06-18", dealValue: 2000000, commissionRate: 5, commissionAmount: 100000, status: "pending",  period: "มิ.ย. 2569" },
-  { id: "COM-2026-005", quotationId: "Q-2026-0095", projectTitle: "อาคารโรงงาน บจ. ซีซีเอส เชียงใหม่", client: "บจ. ซีซีเอส",        closedDate: "2026-06-10", dealValue: 3200000, commissionRate: 5, commissionAmount: 160000, status: "pending",  period: "มิ.ย. 2569" },
-];
-
-
 // ─── DEALER PIPELINE (ported from pms-benjamin) ───────────────────────────────
 export type PipelineOutcome = "active" | "won" | "lost";
 export type PipelineTask = { id: number; text: string; done: boolean };
@@ -1180,6 +945,7 @@ export type PipelineDealMock = {
   files: PipelineFile[];
   outcome: PipelineOutcome;
   createdAt: string;
+  expectedClose?: string;   // วันคาดว่าจะปิดการขาย (Expected Closing Date)
   lostReason?: string;
   notes?: string;
   activities?: DealActivity[];
@@ -1200,51 +966,41 @@ export const PIPELINE_STAGE_PROGRESS: Record<number, number> = {
   1: 5, 2: 20, 4: 45, 5: 65, 6: 85, 7: 100, 8: 0,
 };
 
-export const LOST_REASONS = [
-  "ราคาสูงเกินไป",
-  "เลือกคู่แข่ง",
-  "โอกาสการขายถูกยกเลิก",
-  "ไม่มีงบประมาณ",
-  "ไม่มีการตอบสนอง",
-  "อื่นๆ",
-] as const;
-
-export type LostReason = typeof LOST_REASONS[number];
-
 export type DealStage = { id: number; name: string; color: string };
 
 export const pipelineStages: DealStage[] = [
   { id: 1, name: "ผู้สนใจใหม่",          color: "#6b7280" },
   { id: 2, name: "ติดต่อแล้ว",           color: "#003366" },
-  { id: 4, name: "นัดประชุม",            color: "#2D2D2D" },
+  { id: 4, name: "รวบรวมความต้องการ",   color: "#2D2D2D" },
   { id: 5, name: "เสนอราคา",            color: "#f59e0b" },
-  { id: 6, name: "เจรจา",               color: "#002244" },
-  { id: 7, name: "สำเร็จ",  color: "#059669" },
-  { id: 8, name: "ไม่สำเร็จ", color: "#dc2626" },
+  { id: 9, name: "ติดตามผล",            color: "#d97706" },
+  { id: 6, name: "เจรจาต่อรอง",         color: "#002244" },
+  { id: 7, name: "ปิดการขาย",           color: "#059669" },
+  { id: 8, name: "ไม่ได้งาน",           color: "#dc2626" },
 ];
 
 export const pipelineDeals: PipelineDealMock[] = [
   // ── สาขาเชียงใหม่ ──
   {
-    id: 1, customerId: 3, customer: "หจก. ราชบุรีโลหะ", project: "RANBUILD PEB ราชบุรี",
+    id: 1, customerId: 3, customer: "หจก. ราชบุรีโลหะ", project: "โกดังสำเร็จรูป ราชบุรี",
     value: 760000, stageId: 2, assigned: "วิภา", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "active", createdAt: "2026-06-20",
-    notes: "ลูกค้าสนใจระบบ PEB สำหรับโกดังขนาด 1,200 ตร.ม. ต้องการส่งของให้เร็วที่สุด",
+    notes: "ลูกค้าสนใจระบบอาคารสำเร็จรูป สำหรับโกดังขนาด 1,200 ตร.ม. ต้องการส่งของให้เร็วที่สุด",
     files: [],
     tasks: [
       { id: 1, text: "โทรหาลูกค้าครั้งแรก",    done: true  },
-      { id: 2, text: "ส่งแคตตาล็อก Benjamin",  done: true  },
+      { id: 2, text: "ส่งแคตตาล็อกสินค้า",  done: true  },
       { id: 3, text: "นัดประชุมออนไลน์",        done: false },
     ],
     activities: [
       { id: 1, type: "deal_created",  text: "สร้างโอกาสการขายใหม่", timestamp: "2026-06-20T09:00:00" },
       { id: 2, type: "task_done",     text: "เสร็จงาน: โทรหาลูกค้าครั้งแรก", timestamp: "2026-06-20T10:30:00" },
-      { id: 3, type: "task_done",     text: "เสร็จงาน: ส่งแคตตาล็อก Benjamin", timestamp: "2026-06-21T11:00:00" },
+      { id: 3, type: "task_done",     text: "เสร็จงาน: ส่งแคตตาล็อกสินค้า", timestamp: "2026-06-21T11:00:00" },
       { id: 4, type: "stage_change",  text: "ย้ายขั้นตอน → ติดต่อแล้ว", timestamp: "2026-06-21T11:05:00" },
     ],
   },
   {
-    id: 2, customerId: 7, customer: "บจ. อุตรดิตถ์โลหะ", project: "PREFAB อุตรดิตถ์",
+    id: 2, customerId: 7, customer: "บจ. อุตรดิตถ์โลหะ", project: "อาคารสำเร็จรูป อุตรดิตถ์",
     value: 2800000, stageId: 4, assigned: "วิภา", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "active", createdAt: "2026-06-15",
     files: [{ name: "presentation.pdf", size: "2.1MB" }],
@@ -1256,7 +1012,7 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 3, customerId: 6, customer: "บจ. แม่สอดโลหะ", project: "EASYBUILD แม่สอด",
+    id: 3, customerId: 6, customer: "บจ. แม่สอดโลหะ", project: "อาคารสำเร็จรูป แม่สอด",
     value: 4100000, stageId: 4, assigned: "สมชาย", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "active", createdAt: "2026-06-10",
     files: [],
@@ -1267,10 +1023,10 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 4, customerId: 2, customer: "บจ. ซีซีเอส", project: "PREFAB บจ. ซีซีเอส เชียงใหม่",
+    id: 4, customerId: 2, customer: "บจ. ซีซีเอส", project: "อาคารสำเร็จรูป บจ. ซีซีเอส เชียงใหม่",
     value: 3200000, stageId: 5, assigned: "กาญจนา", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "active", createdAt: "2026-05-28",
-    notes: "ลูกค้าต้องการ PREFAB 3 หลัง แต่ละหลัง 800 ตร.ม. ขอส่วนลดสั่งซื้อจำนวนมาก 5%",
+    notes: "ลูกค้าต้องการอาคารสำเร็จรูป 3 หลัง แต่ละหลัง 800 ตร.ม. ขอส่วนลดสั่งซื้อจำนวนมาก 5%",
     files: [{ name: "quotation_Q2026-0095.pdf", size: "1.4MB" }, { name: "specs.xlsx", size: "340KB" }],
     tasks: [
       { id: 11, text: "จัดทำใบเสนอราคา",        done: true  },
@@ -1288,7 +1044,7 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 5, customerId: 4, customer: "บจ. สมุทรโกดัง", project: "EASYBUILD ปากน้ำ",
+    id: 5, customerId: 4, customer: "บจ. สมุทรโกดัง", project: "อาคารสำเร็จรูป ปากน้ำ",
     value: 2000000, stageId: 6, assigned: "สมชาย", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "active", createdAt: "2026-05-20",
     files: [{ name: "contract_draft.docx", size: "520KB" }],
@@ -1299,7 +1055,7 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 6, customerId: 1, customer: "บจ. ไทยสตีล", project: "EASYBUILD บจ. ไทยสตีล",
+    id: 6, customerId: 1, customer: "บจ. ไทยสตีล", project: "อาคารสำเร็จรูป บจ. ไทยสตีล",
     value: 1800000, stageId: 6, assigned: "วิชัย", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "active", createdAt: "2026-05-01",
     files: [{ name: "signed_contract.pdf", size: "1.8MB" }],
@@ -1310,18 +1066,18 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 7, customerId: 5, customer: "VCS Asia Co., Ltd.", project: "RANBUILD ระยอง VCS Asia",
+    id: 7, customerId: 5, customer: "VCS Asia Co., Ltd.", project: "โกดังสำเร็จรูป ระยอง VCS Asia",
     value: 6200000, stageId: 7, assigned: "วิชัย", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "won", createdAt: "2025-11-10", files: [], tasks: [],
   },
   {
-    id: 8, customerId: 8, customer: "บจ. นครสวรรค์โลหะ", project: "RANBUILD นครสวรรค์",
+    id: 8, customerId: 8, customer: "บจ. นครสวรรค์โลหะ", project: "โรงงานสำเร็จรูป นครสวรรค์",
     value: 5400000, stageId: 7, assigned: "สมชาย", dealer: "สาขาเชียงใหม่", dealerColor: "#003366",
     outcome: "won", createdAt: "2026-04-05", files: [], tasks: [],
   },
   // ── สาขานนทบุรี ──
   {
-    id: 9, customerId: 1, customer: "บจ. ไทยสตีล", project: "EASYBUILD เฟส 2 นนทบุรี",
+    id: 9, customerId: 1, customer: "บจ. ไทยสตีล", project: "อาคารสำเร็จรูป เฟส 2 นนทบุรี",
     value: 3500000, stageId: 2, assigned: "ปรีดา", dealer: "สาขานนทบุรี", dealerColor: "#f59e0b",
     outcome: "active", createdAt: "2026-06-18",
     files: [],
@@ -1331,7 +1087,7 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 10, customerId: 2, customer: "บจ. ซีซีเอส", project: "PREFAB นนทบุรี",
+    id: 10, customerId: 2, customer: "บจ. ซีซีเอส", project: "อาคารสำเร็จรูป นนทบุรี",
     value: 5800000, stageId: 5, assigned: "สายชล", dealer: "สาขานนทบุรี", dealerColor: "#f59e0b",
     outcome: "active", createdAt: "2026-05-15",
     files: [{ name: "BOQ_NTB.xlsx", size: "512KB" }, { name: "quote_v2.pdf", size: "1.1MB" }],
@@ -1343,7 +1099,7 @@ export const pipelineDeals: PipelineDealMock[] = [
     ],
   },
   {
-    id: 11, customerId: 5, customer: "VCS Asia Co., Ltd.", project: "คลังสินค้า Nonthaburi",
+    id: 11, customerId: 5, customer: "VCS Asia Co., Ltd.", project: "คลังสินค้า นนทบุรี",
     value: 9200000, stageId: 6, assigned: "ปรีดา", dealer: "สาขานนทบุรี", dealerColor: "#f59e0b",
     outcome: "active", createdAt: "2026-04-20",
     files: [{ name: "contract_VCS_NTB.pdf", size: "2.3MB" }],
@@ -1355,7 +1111,7 @@ export const pipelineDeals: PipelineDealMock[] = [
   },
   // ── สาขาระยอง ──
   {
-    id: 12, customerId: 4, customer: "บจ. สมุทรโกดัง", project: "EASYBUILD Rayong Eastern",
+    id: 12, customerId: 4, customer: "บจ. สมุทรโกดัง", project: "อาคารสำเร็จรูป ระยองตะวันออก",
     value: 4400000, stageId: 4, assigned: "มานิตย์", dealer: "สาขาระยอง", dealerColor: "#22c55e",
     outcome: "active", createdAt: "2026-06-08",
     files: [{ name: "layout_Rayong.dwg", size: "6.1MB" }],
@@ -1481,7 +1237,7 @@ export const salesTemplates: SalesTemplateMock[] = [
       { id: 2,  text: "เลือกรุ่น ขนาด และตัวเลือกเสริม (ประตู/หน้าต่าง/สี)",  category: "requirement" },
       { id: 3,  text: "ตรวจสอบสถานที่และระบบสาธารณูปโภค",                      category: "requirement" },
       { id: 4,  text: "จัดทำใบเสนอราคาพร้อมรายละเอียดรุ่น",                  category: "quotation" },
-      { id: 5,  text: "ยืนยันระยะเวลาและกำหนดส่งมอบสินค้าให้ลูกค้า",       category: "quotation" },
+      { id: 5,  text: "ยืนยันระยะเวลาและเงื่อนไขในใบเสนอราคา",            category: "quotation" },
       { id: 6,  text: "ปิดการขาย / ลงนามสัญญา",                               category: "followup" },
     ],
     fileTypes: ["เอกสารยืนยันความต้องการ", "ภาพถ่ายพื้นที่", "BOQ เบื้องต้น"],
@@ -1571,7 +1327,7 @@ export const notes: NoteMock[] = [
   },
   {
     id: 6, title: "ติดตาม หจก. ราชบุรีโลหะ", category: "โอกาสการขาย", pinned: false,
-    content: "โอกาสการขายโกดัง PEB ราชบุรี 760K\nลูกค้ายังลังเลเรื่องราคา เปรียบเทียบกับคู่แข่ง\n\nจุดแข็งที่ต้องเน้น:\n- Benjamin มาตรฐาน ISO\n- รับประกัน 5 ปี\n- ส่งได้เร็วกว่า (8 สัปดาห์)\n\nวางแผนโทรติดตามอีกครั้ง 25 มิ.ย.",
+    content: "โอกาสการขายโกดังสำเร็จรูป ราชบุรี 760K\nลูกค้ายังลังเลเรื่องราคา เปรียบเทียบกับคู่แข่ง\n\nจุดแข็งที่ต้องเน้น:\n- Benjamin มาตรฐาน ISO\n- รับประกัน 5 ปี\n- ส่งได้เร็วกว่า (8 สัปดาห์)\n\nวางแผนโทรติดตามอีกครั้ง 25 มิ.ย.",
     customerId: 3, customerName: "หจก. ราชบุรีโลหะ",
     author: "วิภา", createdAt: "2026-06-17 09:30", updatedAt: "2026-06-17 09:30", color: "#b45309",
   },

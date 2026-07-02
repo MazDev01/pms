@@ -1,18 +1,20 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSales } from "@/context/SalesContext";
 import {
   Phone, Mail, MapPin, Users2, FileText, FilePlus, CalendarPlus,
   StickyNote, CheckCircle2, Paperclip, Upload, X, ChevronDown,
-  ArrowLeft, ArrowRight, XCircle, type LucideIcon,
+  ArrowLeft, ArrowRight, XCircle, Pencil, Trash2, type LucideIcon,
 } from "lucide-react";
 import {
-  leads, customers, quotations,
+  customers, quotations,
   leadStatusLabel, quotationStatusLabel, quotationStatusColor,
-  type LeadStatus,
+  type LeadStatus, type LeadRow,
 } from "@/lib/mock";
+import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -21,16 +23,31 @@ const SUCCESS = "#059669";
 const MUTED   = "#6b7280";
 
 // ─── Pipeline step definitions ──────────────────────────────────────────────
-const PIPELINE_STEPS: { key: LeadStatus; label: string; short: string; fileHint: string }[] = [
-  { key: "NEW",     label: "รับผู้สนใจใหม่",         short: "ผู้สนใจใหม่", fileHint: "ข้อมูลเบื้องต้น, แบบฟอร์ม" },
-  { key: "WAITING", label: "ติดต่อ & คัดกรอง",       short: "ติดต่อ",     fileHint: "บันทึกการคุย, ความต้องการลูกค้า" },
-  { key: "BULLET",  label: "ประเมินความต้องการ & คิดราคา", short: "ประเมินราคา", fileHint: "สเปกเบื้องต้น, ประมาณการราคา" },
-  { key: "QUOTED",  label: "เสนอราคาแล้ว",            short: "เสนอราคา",   fileHint: "ใบเสนอราคา PDF, เงื่อนไข" },
-  { key: "PAID",    label: "ปิดการขาย",              short: "ปิดการขาย",  fileHint: "เอกสารยืนยันการสั่งซื้อ" },
+// Sales Journey มาตรฐาน 6 ขั้น (ตรงกับ Pipeline + กฎการขาย): Lead → Contact → Requirement → Quotation → Negotiation → Won
+const PIPELINE_STEPS: { key: string; label: string; short: string; fileHint: string }[] = [
+  { key: "NEW",      label: "รับผู้สนใจใหม่",     short: "ผู้สนใจใหม่",     fileHint: "ข้อมูลเบื้องต้น, แบบฟอร์ม" },
+  { key: "WAITING",  label: "ติดต่อลูกค้า",        short: "ติดต่อ",         fileHint: "บันทึกการคุย, ช่องทางติดต่อ" },
+  { key: "BULLET",   label: "รวบรวมความต้องการ",   short: "รวบรวมความต้องการ", fileHint: "สเปกที่ต้องการ, พื้นที่, งบประมาณ" },
+  { key: "QUOTED",   label: "เสนอราคา",           short: "เสนอราคา",       fileHint: "ใบเสนอราคา PDF, เงื่อนไข" },
+  { key: "FOLLOWUP", label: "ติดตามผล",           short: "ติดตามผล",       fileHint: "บันทึกการติดตาม, นัดหมาย" },
+  { key: "NEGO",     label: "เจรจาต่อรอง",         short: "เจรจา",          fileHint: "ปรับราคา/เงื่อนไข, บันทึกการเจรจา" },
+  { key: "PAID",     label: "ปิดการขาย",          short: "ปิดการขาย",      fileHint: "เอกสารยืนยันการสั่งซื้อ" },
 ];
 
-const STEP_INDEX: Record<LeadStatus, number> = {
-  NEW: 0, WAITING: 1, BULLET: 2, QUOTED: 3, PAID: 4, CANCELLED: -1,
+// Sales Journey 7 ขั้น (+Lost แยกเป็นสถานะเสียโอกาส) — index ตามลำดับ PIPELINE_STEPS
+const STEP_INDEX: Record<string, number> = {
+  NEW: 0, WAITING: 1, BULLET: 2, QUOTED: 3, FOLLOWUP: 4, NEGO: 5, PAID: 6, CANCELLED: -1,
+};
+
+// งานมาตรฐานต่อขั้น — ความคืบหน้าคำนวณอัตโนมัติจากการติ๊ก (ไม่มี slider ปรับมือ)
+const STEP_TASKS: Record<string, string[]> = {
+  NEW:      ["บันทึกข้อมูลลูกค้าเข้าระบบ", "ระบุแหล่งที่มาของลีด", "มอบหมายผู้รับผิดชอบ"],
+  WAITING:  ["ติดต่อลูกค้าครั้งแรก", "แนะนำบริษัทและสินค้า", "ยืนยันช่องทางติดต่อ"],
+  BULLET:   ["สำรวจความต้องการลูกค้า", "ระบุสเปก/ขนาด/งบประมาณ", "ประเมินโอกาสปิดการขาย"],
+  QUOTED:   ["จัดทำใบเสนอราคา", "ส่งใบเสนอราคาให้ลูกค้า", "ยืนยันเงื่อนไข/ราคา"],
+  FOLLOWUP: ["ติดตามผลใบเสนอราคา", "สอบถามข้อสงสัยลูกค้า", "นัดหมายติดตามผล"],
+  NEGO:     ["เจรจาราคา/เงื่อนไข", "สรุปข้อตกลง"],
+  PAID:     ["ยืนยันการสั่งซื้อ", "ปิดการขายสำเร็จ"],
 };
 
 const ACT_ICON: Record<string, LucideIcon> = {
@@ -38,8 +55,14 @@ const ACT_ICON: Record<string, LucideIcon> = {
   note: StickyNote, visit: MapPin, doc: FileText,
 };
 
+// แปลง type ของกิจกรรมเดิม → type ของ ActivityTimeline (call/quote/meeting/open/status/note)
+const ACT_TO_TIMELINE: Record<string, string> = {
+  call: "call", doc: "quote", meeting: "meeting", visit: "meeting",
+  email: "open", note: "note", status: "status",
+};
+
 type ActivityEntry = { id: number; date: string; icon: string; text: string; type: string };
-type MockFile = { id: string; name: string; date: string; size: string; step: LeadStatus };
+type MockFile = { id: string; name: string; date: string; size: string; step: string };
 
 const INIT_ACTS: ActivityEntry[] = [
   { id: 1, date: "22 มิ.ย. 2569", icon: "call",  text: "โทรติดตามลูกค้า — ยืนยันนัดนำเสนอ", type: "call" },
@@ -54,6 +77,120 @@ const INIT_FILES: MockFile[] = [
   { id: "f3", name: "ใบเสนอราคา-ร่าง-v1.pdf",    date: "18 มิ.ย.", size: "1.8 MB", step: "BULLET"  },
 ];
 
+// ─── Edit form options ──────────────────────────────────────────────────────
+const EDIT_STATUSES: LeadStatus[] = ["NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"];
+const EDIT_PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","นครสวรรค์","ราชบุรี","ขอนแก่น","อื่นๆ"];
+const EDIT_PRODUCTS  = ["โกดังสินค้า","โรงงาน","อาคารพาณิชย์","อาคารเกษตร","อาคารการศึกษา","อื่นๆ"];
+const EDIT_SOURCES   = ["Facebook","เว็บไซต์","LINE","Walk-in","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
+
+// ─── EDIT LEAD MODAL ──────────────────────────────────────────────────────────
+// แก้ไขข้อมูลผู้สนใจรายนี้ → อัปเดต local state ที่แชร์ผ่าน SalesContext
+function LeadEditModal({ initial, onClose, onSave }: {
+  initial: LeadRow; onClose: () => void; onSave: (l: LeadRow) => void;
+}) {
+  const [form, setForm] = useState({
+    company: initial.company, contact: initial.contact,
+    phone: initial.phone ?? "", email: initial.email ?? "",
+    province: initial.province, product: initial.product,
+    value: initial.value, status: initial.status,
+    assigned: initial.assigned, source: initial.source ?? "", note: initial.note ?? "",
+  });
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) { setForm(p => ({ ...p, [k]: v })); }
+  function submit() {
+    if (!form.company.trim() || !form.contact.trim()) return;
+    onSave({
+      ...initial,
+      name: form.company, company: form.company, contact: form.contact,
+      phone: form.phone, email: form.email, province: form.province,
+      product: form.product, category: form.product, value: form.value,
+      status: form.status, assigned: form.assigned, source: form.source, note: form.note,
+    });
+    onClose();
+  }
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 100 }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 101,
+        background: "#fff", borderRadius: 20, border: `1px solid ${BORDER}`, boxShadow: "0 24px 80px rgba(0,0,0,.2)",
+        width: "100%", maxWidth: 560, overflow: "hidden",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", background: PRIMARY }}>
+          <div>
+            <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
+              <Pencil size={17} strokeWidth={2} /> แก้ไขผู้สนใจ
+            </div>
+            <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.65)", marginTop: 3 }}>{initial.id}</div>
+          </div>
+          <button onClick={onClose}
+            style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.1)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
+        </div>
+        <div style={{ padding: "22px 24px", overflowY: "auto", maxHeight: "68vh", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ gridColumn: "1/-1" }}>
+            <label className="form-label">บริษัท *</label>
+            <input className="form-input" value={form.company} onChange={e => set("company", e.target.value)} autoFocus />
+          </div>
+          <div>
+            <label className="form-label">ผู้ติดต่อ *</label>
+            <input className="form-input" value={form.contact} onChange={e => set("contact", e.target.value)} />
+          </div>
+          <div>
+            <label className="form-label">ผู้รับผิดชอบ</label>
+            <input className="form-input" value={form.assigned} onChange={e => set("assigned", e.target.value)} />
+          </div>
+          <div>
+            <label className="form-label">โทรศัพท์</label>
+            <input className="form-input" value={form.phone} onChange={e => set("phone", e.target.value)} />
+          </div>
+          <div>
+            <label className="form-label">อีเมล</label>
+            <input className="form-input" type="email" value={form.email} onChange={e => set("email", e.target.value)} />
+          </div>
+          <div>
+            <label className="form-label">จังหวัด</label>
+            <select className="form-select" value={form.province} onChange={e => set("province", e.target.value)}>
+              {EDIT_PROVINCES.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">ประเภทงาน</label>
+            <select className="form-select" value={form.product} onChange={e => set("product", e.target.value)}>
+              {EDIT_PRODUCTS.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">มูลค่าประเมิน</label>
+            <input className="form-input" value={form.value} onChange={e => set("value", e.target.value)} placeholder="เช่น ฿1.2M" />
+          </div>
+          <div>
+            <label className="form-label">แหล่งที่มา</label>
+            <select className="form-select" value={form.source} onChange={e => set("source", e.target.value)}>
+              <option value="">—</option>
+              {EDIT_SOURCES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">สถานะ</label>
+            <select className="form-select" value={form.status} onChange={e => set("status", e.target.value as LeadStatus)}>
+              {EDIT_STATUSES.map(s => <option key={s} value={s}>{leadStatusLabel[s]}</option>)}
+            </select>
+          </div>
+          <div style={{ gridColumn: "1/-1" }}>
+            <label className="form-label">หมายเหตุ</label>
+            <textarea className="form-textarea" value={form.note} onChange={e => set("note", e.target.value)} rows={3} style={{ resize: "vertical" }} />
+          </div>
+        </div>
+        <div style={{ padding: "16px 24px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
+          <button className="btn btn-secondary btn-md" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-primary btn-md" onClick={submit}>
+            <CheckCircle2 size={14} strokeWidth={2.5} /> บันทึกการแก้ไข
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 0", borderBottom: "1px solid #f0f4f8" }}>
@@ -65,9 +202,13 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function LeadDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { leads: allLeads, updateLeadStatus, updateLead, deleteLead, openDealFromLead } = useSales();
   const numId  = Number(params.id);
-  const lead   = leads.find(l => l.numId === numId);
+  const lead   = allLeads.find(l => l.numId === numId);
 
+  const [showEditModal,    setShowEditModal]    = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [status,         setStatus]         = useState<LeadStatus>(lead?.status ?? "NEW");
   const [showStatusDrop, setShowStatusDrop] = useState(false);
   const [activities,     setActivities]     = useState<ActivityEntry[]>(INIT_ACTS);
@@ -86,11 +227,15 @@ export default function LeadDetailPage() {
   const [qSaved,         setQSaved]         = useState(false);
 
   // Job Card state
-  const [activeStep,      setActiveStep]     = useState<LeadStatus>(
+  const [activeStep,      setActiveStep]     = useState<string>(
     lead?.status === "CANCELLED" || lead?.status === "PAID" ? "QUOTED" : (lead?.status ?? "NEW")
   );
-  const [stepProgress,    setStepProgress]   = useState<Record<LeadStatus, number>>({
-    NEW: 100, WAITING: 100, BULLET: 60, QUOTED: 0, PAID: 0, CANCELLED: 0,
+  // ติ๊กงานต่อขั้น — seed: ขั้นก่อนหน้าสถานะปัจจุบัน = ติ๊กครบ, ขั้นปัจจุบัน/ถัดไป = ยังไม่ติ๊ก
+  const [taskChecks, setTaskChecks] = useState<Record<string, boolean[]>>(() => {
+    const cur = STEP_INDEX[lead?.status ?? "NEW"] ?? 0;
+    const out: Record<string, boolean[]> = {};
+    PIPELINE_STEPS.forEach((s, idx) => { out[s.key] = (STEP_TASKS[s.key] ?? []).map(() => idx < cur); });
+    return out;
   });
   const [files,           setFiles]          = useState<MockFile[]>(INIT_FILES);
   const [uploadSuccess,   setUploadSuccess]  = useState(false);
@@ -112,6 +257,15 @@ export default function LeadDetailPage() {
   const currentStepIdx    = STEP_INDEX[status];
   const activeStepDef     = PIPELINE_STEPS.find(s => s.key === activeStep) ?? PIPELINE_STEPS[0];
   const stepFiles         = files.filter(f => f.step === activeStep);
+
+  // ความคืบหน้าขั้นนี้ = (ติ๊กเสร็จ ÷ งานทั้งหมด) × 100 — คำนวณอัตโนมัติ
+  const activeTasks       = STEP_TASKS[activeStep] ?? [];
+  const activeChecks      = taskChecks[activeStep] ?? [];
+  const stepDone          = activeChecks.filter(Boolean).length;
+  const stepPct           = activeTasks.length ? Math.round((stepDone / activeTasks.length) * 100) : 0;
+  function toggleStepTask(i: number) {
+    setTaskChecks(p => ({ ...p, [activeStep]: (p[activeStep] ?? []).map((v, idx) => idx === i ? !v : v) }));
+  }
 
   function addActivity() {
     if (!actText.trim()) return;
@@ -148,6 +302,19 @@ export default function LeadDetailPage() {
           <a href="/calendar" className="btn btn-secondary btn-md">
             <CalendarPlus size={14} strokeWidth={2} /> เพิ่มนัดหมาย
           </a>
+          <button className="btn btn-secondary btn-md" onClick={() => setShowEditModal(true)}>
+            <Pencil size={14} strokeWidth={2} /> แก้ไข
+          </button>
+          <button className="btn btn-secondary btn-md" style={{ borderColor: "#fca5a5", color: "#dc2626" }}
+            onClick={() => setShowDeleteConfirm(true)}>
+            <Trash2 size={14} strokeWidth={2} /> ลบ
+          </button>
+          {lead.status !== "PAID" && lead.status !== "CANCELLED" && (
+            <button className="btn btn-secondary btn-md" style={{ borderColor: "#003366", color: "#003366" }}
+              onClick={() => { openDealFromLead(lead); router.push("/pipeline"); }}>
+              <ArrowRight size={14} strokeWidth={2} /> เปิดโอกาสการขาย
+            </button>
+          )}
           <button className="btn btn-primary btn-md"
             onClick={() => { setQName(lead.name); setQValue(lead.value); setQProduct(lead.product); setQProvince(lead.province); setQNotes(""); setQSaved(false); setShowQuoteModal(true); }}>
             <FilePlus size={14} strokeWidth={2} /> สร้างใบเสนอราคา
@@ -183,6 +350,7 @@ export default function LeadDetailPage() {
                       {(["NEW","WAITING","BULLET","QUOTED","PAID","CANCELLED"] as LeadStatus[]).map(s => (
                         <button key={s} onClick={() => {
                           setStatus(s);
+                          if (lead) updateLeadStatus(lead.id, s);
                           setShowStatusDrop(false);
                           if (s !== "CANCELLED" && s !== "PAID") setActiveStep(s);
                         }} style={{
@@ -243,7 +411,7 @@ export default function LeadDetailPage() {
               const isActive = step.key === activeStep;
 
               return (
-                <div key={step.key} style={{ display: "flex", alignItems: "flex-start", flex: idx < 4 ? 1 : 0 }}>
+                <div key={step.key} style={{ display: "flex", alignItems: "flex-start", flex: idx < 5 ? 1 : 0 }}>
                   {/* Step node */}
                   <div
                     onClick={() => setActiveStep(step.key)}
@@ -262,7 +430,7 @@ export default function LeadDetailPage() {
                       transition: "all .2s",
                       flexShrink: 0,
                     }}>
-                      {done || (isPaid && idx < 5)
+                      {done || isPaid
                         ? <CheckCircle2 size={19} strokeWidth={2.5} />
                         : idx + 1}
                     </div>
@@ -290,13 +458,13 @@ export default function LeadDetailPage() {
                     )}
                     {isPaid && (
                       <span style={{ fontSize: "0.6rem", color: SUCCESS, fontWeight: 600, marginTop: -2, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                        {idx < 4 ? "เสร็จแล้ว" : <>ปิดการขาย <CheckCircle2 size={11} strokeWidth={2.5} /></>}
+                        {idx < 5 ? "เสร็จแล้ว" : <>ปิดการขาย <CheckCircle2 size={11} strokeWidth={2.5} /></>}
                       </span>
                     )}
                   </div>
 
                   {/* Connector */}
-                  {idx < 4 && (
+                  {idx < 5 && (
                     <div style={{
                       flex: 1, height: 3, borderRadius: 99, marginTop: 17,
                       background: done || isPaid ? PRIMARY : "#e5e7eb",
@@ -336,36 +504,41 @@ export default function LeadDetailPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
 
-            {/* Progress panel */}
+            {/* Progress panel — task-based (ติ๊กงาน → % อัตโนมัติ) */}
             <div style={{ background: "#f8f9fb", borderRadius: 14, padding: "16px 18px" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 700, color: MUTED, marginBottom: 12 }}>
-                ความคืบหน้าขั้นตอนนี้
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: MUTED }}>
+                  ความคืบหน้าขั้นตอนนี้ <span style={{ fontWeight: 500, color: "#9ca3af" }}>({stepDone}/{activeTasks.length} งาน)</span>
+                </div>
+                <span style={{ fontSize: "1.2rem", fontWeight: 900, color: stepPct === 100 ? SUCCESS : PRIMARY }}>{stepPct}%</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <input
-                  type="range" min={0} max={100} step={5}
-                  value={stepProgress[activeStep]}
-                  onChange={e => setStepProgress(p => ({ ...p, [activeStep]: Number(e.target.value) }))}
-                  style={{ flex: 1, accentColor: PRIMARY, cursor: "pointer", height: 4 }}
-                />
-                <span style={{ fontSize: "1.2rem", fontWeight: 900, color: PRIMARY, minWidth: 44, textAlign: "right" }}>
-                  {stepProgress[activeStep]}%
-                </span>
+              <div style={{ height: 8, background: "var(--muted)", borderRadius: 99, overflow: "hidden", marginBottom: 12 }}>
+                <div className="top5-bar" style={{ height: "100%", borderRadius: 99, width: `${stepPct}%`, background: stepPct === 100 ? SUCCESS : PRIMARY }} />
               </div>
-              <div style={{ height: 8, background: "var(--muted)", borderRadius: 99, overflow: "hidden" }}>
-                <div className="top5-bar" style={{
-                  height: "100%", borderRadius: 99,
-                  width: `${stepProgress[activeStep]}%`,
-                  background: stepProgress[activeStep] === 100 ? SUCCESS : PRIMARY,
-                }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {activeTasks.map((t, i) => {
+                  const done = activeChecks[i];
+                  return (
+                    <button key={i} onClick={() => toggleStepTask(i)}
+                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 9,
+                        border: "1px solid #eef1f5", background: done ? "#f0f7f0" : "#fff", cursor: "pointer", textAlign: "left", width: "100%" }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                        border: `2px solid ${done ? SUCCESS : "#d1d5db"}`, background: done ? SUCCESS : "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {done && <CheckCircle2 size={12} color="#fff" strokeWidth={3} />}
+                      </span>
+                      <span style={{ fontSize: "0.78rem", color: done ? MUTED : STEEL, textDecoration: done ? "line-through" : "none" }}>{t}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {stepProgress[activeStep] === 100 ? (
-                <div style={{ fontSize: "0.7rem", color: SUCCESS, fontWeight: 700, marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+              {stepPct === 100 ? (
+                <div style={{ fontSize: "0.7rem", color: SUCCESS, fontWeight: 700, marginTop: 10, display: "flex", alignItems: "center", gap: 4 }}>
                   <CheckCircle2 size={13} strokeWidth={2.5} /> ขั้นตอนนี้เสร็จสมบูรณ์
                 </div>
               ) : (
-                <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 8 }}>
-                  เลื่อนเพื่ออัปเดตความคืบหน้า
+                <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 10 }}>
+                  ติ๊กงานให้เสร็จ — ระบบคำนวณ % อัตโนมัติ
                 </div>
               )}
             </div>
@@ -526,21 +699,15 @@ export default function LeadDetailPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 0, maxHeight: 260, overflowY: "auto" }}>
-            {activities.map((a, i) => {
-              const Icon = ACT_ICON[a.icon] ?? FileText;
-              return (
-                <div key={a.id} className="activity" style={{ borderTop: i === 0 ? "none" : undefined }}>
-                  <div className="activity-icon" style={{ background: "#dce5f0", color: PRIMARY }}>
-                    <Icon size={15} strokeWidth={2} />
-                  </div>
-                  <div className="activity-text">
-                    <div className="activity-title">{a.text}</div>
-                    <div className="activity-meta">{a.date}</div>
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ maxHeight: 320, overflowY: "auto" }}>
+            <ActivityTimeline
+              items={activities.map<ActivityTimelineItem>(a => ({
+                id: a.id,
+                type: ACT_TO_TIMELINE[a.type] ?? "note",
+                text: a.text,
+                time: a.date,
+              }))}
+            />
           </div>
           </div>
         </div>
@@ -554,6 +721,13 @@ export default function LeadDetailPage() {
           </div>
           <div className="table-wrap">
             <table>
+              <colgroup>
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "42%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "12%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   {["เลขที่","โอกาสการขาย","มูลค่า","สถานะ","วันที่"].map(h => (
@@ -565,7 +739,7 @@ export default function LeadDetailPage() {
                 {relatedQuotations.map(q => {
                   const qc = quotationStatusColor[q.status];
                   return (
-                    <tr key={q.id}>
+                    <tr key={q.id} className="clickable" onClick={() => router.push("/quotations")}>
                       <td style={{ fontWeight: 700 }}>{q.id}</td>
                       <td style={{ color: MUTED }}>{q.project}</td>
                       <td className="num" style={{ fontWeight: 700 }}>{q.total}</td>
@@ -584,6 +758,51 @@ export default function LeadDetailPage() {
         </div>
       )}
 
+
+      {/* ─── Edit Lead Modal ──────────────────────────────────────── */}
+      {showEditModal && (
+        <LeadEditModal
+          initial={lead}
+          onClose={() => setShowEditModal(false)}
+          onSave={(l) => {
+            updateLead(l);
+            // sync local display state ให้สะท้อนทันที
+            setStatus(l.status);
+            setPhone(l.phone ?? "");
+            setEmail(l.email ?? "");
+          }}
+        />
+      )}
+
+      {/* ─── Delete Confirm ───────────────────────────────────────── */}
+      {showDeleteConfirm && (
+        <>
+          <div onClick={() => setShowDeleteConfirm(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 100 }} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 101,
+            background: "#fff", borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 80px rgba(0,0,0,.2)",
+            width: "100%", maxWidth: 380, padding: 24,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Trash2 size={17} color="#dc2626" />
+              </span>
+              <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL }}>ลบผู้สนใจ</div>
+            </div>
+            <p style={{ fontSize: "0.82rem", color: MUTED, lineHeight: 1.6, margin: "0 0 20px" }}>
+              ต้องการลบ <strong style={{ color: STEEL }}>{lead.company}</strong> ({lead.id}) หรือไม่? การลบไม่สามารถย้อนกลับได้
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary btn-md" onClick={() => setShowDeleteConfirm(false)}>ยกเลิก</button>
+              <button className="btn btn-md" style={{ background: "#dc2626", color: "#fff", border: "none" }}
+                onClick={() => { deleteLead(lead.id); router.push("/leads"); }}>
+                <Trash2 size={13} /> ลบ
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ─── Create Quotation Modal ───────────────────────────────── */}
       {showQuoteModal && (

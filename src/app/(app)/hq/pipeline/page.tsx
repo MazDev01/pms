@@ -205,6 +205,13 @@ function DealerPipeline() {
   return (
     <div className="table-wrap">
       <table>
+        <colgroup>
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "26%" }} />
+          <col style={{ width: "26%" }} />
+          <col style={{ width: "18%" }} />
+          <col style={{ width: "22%" }} />
+        </colgroup>
         <thead>
           <tr>
             <th>#</th>

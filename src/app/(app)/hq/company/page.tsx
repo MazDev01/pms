@@ -266,6 +266,12 @@ export default function HQCompanyPage() {
         </div>
         <div className="table-wrap">
           <table>
+            <colgroup>
+              <col style={{ width: "26%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "48%" }} />
+              <col style={{ width: "10%" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>ชื่อสาขา</th>

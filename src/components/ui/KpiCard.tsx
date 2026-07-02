@@ -1,77 +1,63 @@
 "use client";
 
+import Link from "next/link";
 import {
-  Target, TrendingUp, Award, Building2, DollarSign, Clock,
+  Target, TrendingUp, TrendingDown, Award, Building2, DollarSign, Phone, Users,
+  ScrollText, GitMerge, Handshake, Store, CheckCircle2, XCircle,
   type LucideIcon,
 } from "lucide-react";
 
-const iconMap: Record<string, LucideIcon> = {
-  target: Target,
-  trending: TrendingUp,
-  award: Award,
-  building: Building2,
-  dollar: DollarSign,
-  clock: Clock,
+const ICONS: Record<string, LucideIcon> = {
+  target: Target, trending: TrendingUp, trendingdown: TrendingDown, award: Award, building: Building2,
+  dollar: DollarSign, phone: Phone, users: Users, doc: ScrollText, deal: GitMerge,
+  handshake: Handshake, store: Store, check: CheckCircle2, x: XCircle,
 };
 
-type KpiCardProps = {
+export type KpiProps = {
   label: string;
   value: string;
-  delta: number;
+  unit?: string;
+  delta?: number;
   icon: string;
   sub?: string;
-  currentNum?: number;
-  targetNum?: number;
+  current?: number;
+  target?: number;
   targetLabel?: string;
+  href?: string;
 };
 
-export function KpiCard({ label, value, delta, icon, sub, currentNum, targetNum, targetLabel }: KpiCardProps) {
-  const Icon = iconMap[icon] ?? TrendingUp;
-  const positive = delta >= 0;
+export function KpiCard({ label, value, unit, delta, icon, sub, current, target, targetLabel, href }: KpiProps) {
+  const Icon = ICONS[icon] ?? TrendingUp;
+  const pct = current !== undefined && target ? Math.min(100, Math.round((current / target) * 100)) : null;
+  const barColor = pct === null ? "var(--pr)" : pct >= 80 ? "var(--success)" : pct >= 40 ? "var(--pr)" : pct >= 25 ? "var(--warning)" : "var(--danger)";
 
-  const pct = (currentNum !== undefined && targetNum && targetNum > 0)
-    ? Math.min(100, Math.round((currentNum / targetNum) * 100))
-    : null;
-
-  const barColor = pct === null ? "#003366"
-    : pct >= 80 ? "#059669"
-    : pct >= 50 ? "#003366"
-    : pct >= 30 ? "#d97706"
-    : "#dc2626";
-
-  return (
-    <div className="stat-card">
-      {/* Icon tile + label/value */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+  const inner = (
+    <>
+      <div className="kc-hd">
         <div style={{ minWidth: 0 }}>
-          <p className="stat-label">{label}</p>
-          <p className="stat-value">{value}</p>
+          <div className="kc-lbl">{label}</div>
+          <div className="kc-val" style={{ marginTop: 8 }}>{value}{unit && <span className="cents"> {unit}</span>}</div>
         </div>
-        <div className="stat-icon">
-          <Icon size={20} />
-        </div>
+        <div className="kc-ico"><Icon size={19} /></div>
       </div>
-
-      {/* Delta */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: pct !== null ? 4 : 0 }}>
-        <span className={`stat-delta ${positive ? "delta-up" : "delta-down"}`}>
-          {positive ? "▲" : "▼"} {Math.abs(delta)}%
-        </span>
-        {sub && <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>{sub}</span>}
+      <div className="kc-foot">
+        {delta !== undefined && (
+          <span className={delta >= 0 ? "bdg-up" : "bdg-dn"}>{delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%</span>
+        )}
+        {sub && <span className="kc-ct">{sub}</span>}
       </div>
-
-      {/* Target progress bar */}
       {pct !== null && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-            <span style={{ fontSize: "0.6rem", color: "var(--muted-foreground)" }}>เป้า {targetLabel}</span>
-            <span style={{ fontSize: "0.63rem", fontWeight: 700, color: barColor }}>{pct}%</span>
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, marginBottom: 4 }}>
+            <span style={{ fontSize: ".62rem", color: "var(--sub)" }}>เป้า {targetLabel}</span>
+            <span style={{ fontSize: ".64rem", fontWeight: 700, color: barColor }}>{pct}%</span>
           </div>
-          <div style={{ height: 6, borderRadius: 999, background: "var(--muted)", overflow: "hidden" }}>
-            <div className="top5-bar" style={{ height: "100%", width: `${pct}%`, borderRadius: 999, background: barColor }} />
-          </div>
-        </div>
+          <div className="mini-bar"><div className="mini-fill bar-grow" style={{ width: `${pct}%`, background: barColor }} /></div>
+        </>
       )}
-    </div>
+    </>
   );
+
+  if (href) return <Link href={href} className="kc clickable" style={{ display: "block" }}>{inner}</Link>;
+  return <div className="kc">{inner}</div>;
 }

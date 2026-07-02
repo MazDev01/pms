@@ -1,6 +1,7 @@
 "use client";
 
 import { LeadPoolTable } from "@/components/hq/LeadPoolTable";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import { leadPool } from "@/lib/mock";
 
 export default function HQLeadPoolPage() {
@@ -20,9 +21,12 @@ export default function HQLeadPoolPage() {
       {/* Header */}
       <div className="page-head">
         <div>
-          <h2>ลีดส่วนกลาง</h2>
-          <p>ลีดจากช่องทาง HQ ที่ยังไม่ได้มอบหมายสาขา</p>
+          <h2>ผู้สนใจส่วนกลาง</h2>
+          <p>ผู้สนใจจากช่องทาง HQ ที่ยังไม่ได้มอบหมายสาขา</p>
         </div>
+        <ExportMenu filename="hq-lead-pool" title="ผู้สนใจส่วนกลาง (รอมอบหมาย)"
+          headers={["รหัส","ชื่อ","จังหวัด","ช่องทาง","สินค้า","มูลค่า","เข้ามาเมื่อ","รอ (ชม.)"]}
+          rows={leadPool.map(l=>[l.id,l.name,l.province,l.channel,l.product,l.value,l.createdAt,l.waitHours])} />
       </div>
 
       {/* KPI counts */}

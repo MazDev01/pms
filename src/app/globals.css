@@ -406,15 +406,13 @@ body {
   font-size: 0.58rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 999px; line-height: 1.4;
 }
 
-/* ─── Topbar ─── */
+/* ─── Topbar — floats over page bg, everything right-aligned, NO bar/border (prototype look) ─── */
 .erp-topbar {
-  height: 56px; background: var(--card); border-bottom: 1px solid var(--border);
-  padding: 0 1.4rem; display: flex; align-items: center; gap: 1rem;
-  position: sticky; top: 0; z-index: 50; flex-shrink: 0;
+  background: transparent; border: none;
+  padding: 18px 1.4rem 0; display: flex; align-items: center; justify-content: flex-end; gap: 0.625rem;
+  flex-shrink: 0;
 }
-.erp-topbar .breadcrumb { font-size: 0.85rem; color: var(--muted-foreground); }
-.erp-topbar .breadcrumb strong { color: var(--foreground); font-weight: 700; }
-.erp-topbar .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+.erp-topbar .topbar-right { display: flex; align-items: center; gap: 0.625rem; }
 .icon-btn {
   width: 38px; height: 38px; border-radius: var(--radius-md);
   border: none; background: transparent; color: var(--foreground);
@@ -482,14 +480,72 @@ body {
 
 /* ─── Table (scoped to .table-wrap so other pages stay untouched) ─── */
 .table-wrap { border-top: 1px solid var(--border); overflow-x: auto; }
-.table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+/* table-layout:fixed => คอลัมน์กว้างคงที่ ไม่ยืด/หดตามข้อมูลที่โชว์ (เสถียรทุกหน้า) */
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
 .table-wrap thead { background: var(--muted); }
 .table-wrap th { padding: 0.6rem 1rem; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); white-space: nowrap; }
 .table-wrap td { padding: 0.72rem 1rem; border-top: 1px solid var(--border); vertical-align: middle; color: var(--foreground); }
+/* เนื้อหาที่ยาวเกินคอลัมน์ให้ตัดด้วย … แทนการดันคอลัมน์ให้กว้างขึ้นหรือล้นออกนอกกรอบ */
+/* white-space:nowrap จำเป็นคู่กับ text-overflow:ellipsis มิเช่นนั้นข้อความไทย (ไม่มีช่องว่างให้ตัดคำ) จะล้นออกนอกเซลล์แทนที่จะถูกตัด */
+.table-wrap th, .table-wrap td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* เซลล์ที่ตั้งใจให้ขึ้นบรรทัดใหม่ได้ (เช่น กล่องข้อความหลายบรรทัด) ให้ยกเลิก nowrap เฉพาะจุด */
+.table-wrap td.wrap { white-space: normal; }
+/* เซลล์ที่มีเมนู/ป็อปอัปลอย ต้องไม่ถูก clip */
+.table-wrap th.ovf-visible, .table-wrap td.ovf-visible { overflow: visible; }
 .table-wrap tbody tr { transition: background 0.12s; }
 .table-wrap tbody tr:hover td { background: rgba(0,51,102,0.04); }
 .table-wrap td.num, .table-wrap th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table-wrap tbody tr.clickable { cursor: pointer; }
+
+/* ── Table row entrance animation (opt-in via .anim-rows; runs when .in-view) ── */
+@keyframes tblRowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.anim-rows tbody tr { animation: tblRowIn 0.45s cubic-bezier(0.4, 0, 0.2, 1) both; animation-play-state: paused; }
+.anim-rows.in-view tbody tr { animation-play-state: running; }
+.anim-rows tbody tr:nth-child(1) { animation-delay: 40ms; }
+.anim-rows tbody tr:nth-child(2) { animation-delay: 95ms; }
+.anim-rows tbody tr:nth-child(3) { animation-delay: 150ms; }
+.anim-rows tbody tr:nth-child(4) { animation-delay: 205ms; }
+.anim-rows tbody tr:nth-child(5) { animation-delay: 260ms; }
+.anim-rows tbody tr:nth-child(n+6) { animation-delay: 300ms; }
+@media (prefers-reduced-motion: reduce) { .anim-rows tbody tr { animation: none; } }
+/* Compact density — add class `dense` to a .table-wrap to shrink row height */
+.table-wrap.dense th, .table-wrap.dense td { padding: 0.4rem 0.7rem; font-size: 0.76rem; }
+
+/* ─── TableTools toolbar (component: src/components/ui/TableTools.tsx) ─── */
+.tt-bar { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.tt-cols { position: relative; display: inline-flex; }
+.tt-btn {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--border); background: #fff; color: var(--muted-foreground);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0; transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.tt-btn:hover { background: #f8f9fb; border-color: var(--primary); color: var(--primary); }
+.tt-btn-active { border-color: var(--primary); color: var(--primary); background: #eef3f8; }
+.tt-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  min-width: 190px; background: #fff; border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 6px 24px rgba(0,51,102,0.12); padding: 6px;
+}
+.tt-menu-hd {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted-foreground); padding: 6px 8px 4px;
+}
+.tt-menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  border: none; background: transparent; padding: 7px 8px; border-radius: 7px;
+  cursor: pointer; font-family: inherit; font-size: 0.78rem; color: #2D2D2D; transition: background 0.1s;
+}
+.tt-menu-item:hover { background: #f8f9fb; }
+.tt-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-check {
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--border);
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  color: #fff; transition: background 0.1s, border-color 0.1s;
+}
+.tt-check-on { background: var(--primary); border-color: var(--primary); }
+.tt-spin { animation: tt-spin 0.6s linear; }
+@keyframes tt-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ─── Activity list ─── */
 .activity { display: flex; gap: 0.75rem; padding: 0.75rem 1.2rem; border-top: 1px solid var(--border); }
@@ -547,8 +603,108 @@ body {
   animation: bar-rise 0.55s cubic-bezier(0.34,1.06,0.64,1) forwards; stroke: none; outline: none;
 }
 .top5-row { opacity: 1; }
-.top5-bar { transform-origin: left; }
+.top5-bar { transform-origin: left; animation: bar-grow 0.7s cubic-bezier(0.34, 1.06, 0.64, 1) both; }
 .chart-area-fill { opacity: 1; }
 .chart-dot-end { opacity: 1; }
 .margin-bar { height: 6px; background: var(--muted); border-radius: 999px; overflow: hidden; margin-top: 0.25rem; }
 .margin-fill { height: 100%; border-radius: 999px; background: var(--success); transform-origin: left; transform: scaleX(0); animation: bar-grow 0.6s cubic-bezier(0.34,1.06,0.64,1) forwards; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PMS1 DASHBOARD — ported from /pms1 (html-prototype look, Benjamin CI colors)
+   ALL classes scoped under .pms-dash so the rest of the app is untouched.
+   The CI variable ramp is redeclared locally so the ported markup works as-is.
+═══════════════════════════════════════════════════════════════════════════ */
+.pms-dash {
+  --pr:#003366; --pr-d:#002244; --pr-lt:#dce5f0; --pr-llt:#eef2f7;
+  --silver:#C0C0C0; --gold:#ECC94B;
+  --sub:#6b7280; --text:#2D2D2D; --border:#e3e7ee;
+  --success:#059669; --success-bg:#e5faf0; --danger:#dc2626; --danger-bg:#fdeaed;
+  --r:16px; --gap:24px;
+  --sh:0 2px 14px rgba(0,51,102,.06); --sh-md:0 6px 24px rgba(0,51,102,.10);
+}
+
+/* page head */
+.pms-dash .pg-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+.pms-dash .pg-title { font-size:1.6rem; font-weight:800; color:var(--text); line-height:1.2; margin:0 0 3px; }
+.pms-dash .pg-sub { font-size:.78rem; color:var(--sub); margin:0; }
+
+/* dashboard grid */
+.pms-dash .dg { display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; }
+.pms-dash .dg-l { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.pms-dash .dg-r { display:flex; flex-direction:column; gap:16px; min-width:0; }
+
+/* card (prototype) */
+.pms-dash .card { background:#fff; border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--sh); }
+.pms-dash .card-pad { padding:14px 16px; }
+.pms-dash .card.clickable { cursor:pointer; transition:transform .18s, box-shadow .18s; text-decoration:none; }
+.pms-dash .card.clickable:hover { transform:translateY(-2px); box-shadow:var(--sh-md); }
+
+/* KPI grid (HQ = 10 cards → 4 per row) */
+.pms-dash .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+.pms-dash .kc-ico { width:38px; height:38px; border-radius:11px; background:var(--pr-lt); color:var(--pr); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.pms-dash .kc-foot { display:flex; align-items:center; gap:8px; }
+
+/* KPI card — 3-card dual-row footer */
+.pms-dash .kc { background:#fff; border-radius:var(--r); padding:20px; border:1px solid var(--border); box-shadow:var(--sh); transition:all .2s; text-decoration:none; }
+.pms-dash .kc.clickable { cursor:pointer; }
+.pms-dash .kc.clickable:hover { transform:translateY(-2px); box-shadow:var(--sh-md); }
+.pms-dash .kc-hd { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; }
+.pms-dash .kc-lbl { font-size:.76rem; font-weight:600; color:var(--sub); }
+.pms-dash .kc-sel { font-size:.68rem; border:1px solid var(--border); border-radius:99px; padding:3px 10px; color:var(--sub); cursor:pointer; display:inline-flex; align-items:center; gap:4px; background:#fff; font-family:inherit; }
+.pms-dash .kc-sel:hover { border-color:var(--pr); color:var(--pr); }
+.pms-dash .kc-val { font-size:1.7rem; font-weight:800; color:var(--text); line-height:1; margin-bottom:8px; }
+.pms-dash .kc-val .cents { font-size:.95rem; font-weight:400; color:var(--sub); }
+.pms-dash .kc-row1 { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.pms-dash .kc-row2 { display:flex; align-items:flex-end; justify-content:space-between; }
+.pms-dash .kc-ct { display:flex; align-items:center; gap:5px; font-size:.7rem; color:var(--sub); }
+.pms-dash .kc-ct-icon { width:22px; height:22px; border-radius:6px; background:var(--pr-lt); color:var(--pr); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.pms-dash .kc-desc { font-size:.68rem; color:var(--sub); line-height:1.4; }
+.pms-dash .bdg-up { display:inline-flex; align-items:center; gap:3px; background:var(--success-bg); color:var(--success); border-radius:99px; padding:3px 9px; font-size:.66rem; font-weight:700; }
+.pms-dash .bdg-dn { display:inline-flex; align-items:center; gap:3px; background:var(--danger-bg); color:var(--danger); border-radius:99px; padding:3px 9px; font-size:.66rem; font-weight:700; }
+
+/* mini progress bar */
+.pms-dash .mini-bar { height:6px; border-radius:99px; background:var(--pr-llt); overflow:hidden; margin-top:10px; }
+.pms-dash .mini-fill { height:100%; border-radius:99px; background:var(--pr); }
+.pms-dash .bar-grow { transform-origin:left; animation:bar-grow .7s cubic-bezier(.34,1.06,.64,1) forwards; }
+
+/* ── Global progress-bar fill animation — มาตรฐาน: บาร์ทุกอันในระบบเติมจากซ้าย (ใช้ได้ทุก workspace) ── */
+.bar-grow { transform-origin: left; animation: bar-grow 0.7s cubic-bezier(0.34, 1.06, 0.64, 1) both; }
+@media (prefers-reduced-motion: reduce) { .bar-grow { animation: none; transform: none; } }
+
+/* chart card */
+.pms-dash .cc { background:#fff; border-radius:var(--r); padding:20px; border:1px solid var(--border); box-shadow:var(--sh); }
+.pms-dash .cc-hd { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.pms-dash .cc-title { font-size:.9rem; font-weight:700; color:var(--text); }
+.pms-dash .cc-legend { display:flex; align-items:center; gap:14px; }
+.pms-dash .cl-i { display:flex; align-items:center; gap:5px; font-size:.68rem; color:var(--sub); }
+.pms-dash .cl-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.pms-dash .cl-line { width:14px; height:0; border-top:2px dashed var(--silver); }
+.pms-dash .cc-sel { font-size:.72rem; border:1px solid var(--border); border-radius:99px; padding:5px 13px; color:var(--text); cursor:pointer; background:#fff; font-family:inherit; }
+
+/* stats panel */
+.pms-dash .stats { background:#fff; border-radius:var(--r); padding:18px; border:1px solid var(--border); box-shadow:var(--sh); }
+.pms-dash .stats-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.pms-dash .stats-title { font-size:.9rem; font-weight:700; color:var(--text); }
+.pms-dash .stats-controls { display:flex; align-items:center; gap:6px; }
+.pms-dash .sc-pill { font-size:.68rem; border:1px solid var(--border); border-radius:99px; padding:3px 10px; color:var(--sub); cursor:pointer; display:inline-flex; align-items:center; gap:3px; background:#fff; font-family:inherit; }
+.pms-dash .sc-det { font-size:.68rem; background:var(--pr-lt); color:var(--pr); border-radius:99px; padding:3px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-weight:600; text-decoration:none; }
+.pms-dash .stats-sub { font-size:.7rem; color:var(--sub); margin-bottom:16px; line-height:1.5; }
+
+/* donut + side tag */
+.pms-dash .donut-area { position:relative; display:flex; justify-content:center; align-items:center; }
+.pms-dash .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.pms-dash .dc-lbl { font-size:.62rem; color:var(--sub); }
+.pms-dash .dc-val { font-size:1.4rem; font-weight:800; color:var(--text); line-height:1; }
+.pms-dash .donut-tag { position:absolute; text-align:left; }
+.pms-dash .dt-pct { font-size:.9rem; font-weight:800; color:var(--text); }
+
+/* legend — 2 columns */
+.pms-dash .stats-legend { display:flex; flex-wrap:wrap; gap:0; margin-top:4px; }
+.pms-dash .sl { display:flex; align-items:center; gap:6px; padding:7px 0; width:50%; border-top:1px solid var(--border); font-size:.7rem; color:var(--sub); }
+.pms-dash .sl:nth-child(-n+2) { border-top:none; }
+.pms-dash .sl-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+@media (max-width:1100px){
+  .pms-dash .dg { grid-template-columns:1fr; }
+  .pms-dash .kpi-row { grid-template-columns:repeat(2,1fr); }
+}

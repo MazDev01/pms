@@ -2,12 +2,15 @@
 
 import { useState, useMemo } from "react";
 import { hqAllQuotations, HQQuotation } from "@/lib/mock";
+import { ExportMenu } from "@/components/ui/ExportMenu";
 import {
   Search,
   FileText,
   TrendingUp,
   CheckCircle2,
   Send,
+  Eye,
+  X,
 } from "lucide-react";
 
 const PRIMARY = "#003366";
@@ -62,6 +65,7 @@ export default function HQQuotationsPage() {
   const [dealerFilter, setDealerFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<HQQuotation["status"] | "all">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
+  const [viewQ, setViewQ] = useState<HQQuotation | null>(null); // View → เจาะดูใบเสนอราคา (HQ Data Ownership)
 
   const stats = useMemo(() => {
     const total = hqAllQuotations.length;
@@ -111,6 +115,9 @@ export default function HQQuotationsPage() {
           <h2>ใบเสนอราคาทั้งเครือ</h2>
           <p>ติดตามใบเสนอราคาทุกสาขาในเครือ</p>
         </div>
+        <ExportMenu filename="hq-quotations" title="ใบเสนอราคา (ทั้งเครือ)"
+          headers={["เลขที่","สาขา","ลูกค้า","มูลค่า","ส่วนลด %","สถานะ","เซลส์","สายผลิตภัณฑ์"]}
+          rows={filtered.map(q=>[q.quoteNo,q.dealerName,q.customer,q.valueNum,q.discountPct,({draft:"ร่าง",sent:"ส่งแล้ว",won:"ชนะ",lost:"เสีย"} as Record<string,string>)[q.status]??q.status,q.salesperson,q.productLine])} />
       </div>
 
       {/* Stat cards */}
@@ -239,6 +246,18 @@ export default function HQQuotationsPage() {
       <div className="card">
         <div className="table-wrap" style={{ borderTop: "none" }}>
           <table>
+            <colgroup>
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "21%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "9%" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>เลขที่</th>
@@ -250,13 +269,14 @@ export default function HQQuotationsPage() {
                 <th>พนักงานขาย</th>
                 <th>วันที่</th>
                 <th>สถานะ</th>
+                <th style={{ textAlign: "right" }}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     style={{ textAlign: "center", padding: "32px 14px", color: MUTED }}
                   >
                     ไม่พบข้อมูลที่ค้นหา
@@ -342,6 +362,12 @@ export default function HQQuotationsPage() {
                           {sm.label}
                         </span>
                       </td>
+                      {/* View — HQ เจาะดูใบเสนอราคา */}
+                      <td style={{ textAlign: "right" }}>
+                        <button onClick={() => setViewQ(q)} className="btn btn-secondary btn-sm" style={{ color: PRIMARY }}>
+                          <Eye size={13} /> ดู
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -350,6 +376,39 @@ export default function HQQuotationsPage() {
           </table>
         </div>
       </div>
+
+      {/* View detail modal — HQ Data Ownership */}
+      {viewQ && (
+        <div onClick={() => setViewQ(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+            <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewQ.quoteNo}</div>
+                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{viewQ.customer} · {viewQ.dealerName}</div>
+              </div>
+              <button onClick={() => setViewQ(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
+            </div>
+            <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {([
+                ["ลูกค้า", viewQ.customer],
+                ["สาขา", `${viewQ.dealerCode} · ${viewQ.dealerName}`],
+                ["สายผลิตภัณฑ์", viewQ.productLine],
+                ["พนักงานขาย", viewQ.salesperson],
+                ["มูลค่า", `฿${viewQ.valueNum.toLocaleString()}`],
+                ["ส่วนลด", `${viewQ.discountPct}%`],
+                ["สถานะ", STATUS_META[viewQ.status].label],
+                ["วันที่", viewQ.createdAt],
+              ] as [string, string][]).map(([k, v]) => (
+                <div key={k} style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ fontSize: "0.63rem", color: "#6b7280", marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D" }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูใบเสนอราคาได้ทุกสาขา (Data Ownership)</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

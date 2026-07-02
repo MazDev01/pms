@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import {
-  Plus, X, Check, Trash2, BellRing, Calendar, AlertTriangle, Clock, CheckCircle2,
+  Plus, X, Check, Trash2, BellRing, Calendar, AlertTriangle, Clock, CheckCircle2, Pencil,
 } from "lucide-react";
 
 // ── Tokens (HQ) ───────────────────────────────────────────────
@@ -64,6 +64,7 @@ export default function RemindersPage() {
   const [items, setItems] = useState<Reminder[]>(INIT);
   const [tab, setTab] = useState<"open" | "done">("open");
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(blank());
 
   const open = useMemo(() => items.filter(r => !r.done).sort((a, b) => a.dueDate.localeCompare(b.dueDate)), [items]);
@@ -73,11 +74,22 @@ export default function RemindersPage() {
 
   const list = tab === "open" ? open : done;
 
-  function add() {
+  function openAdd() { setEditId(null); setForm(blank()); setShowForm(true); }
+  function openEdit(r: Reminder) {
+    setEditId(r.id);
+    setForm({ title: r.title, note: r.note ?? "", dueDate: r.dueDate, dueTime: r.dueTime ?? "", priority: r.priority, relatedTo: r.relatedTo ?? "" });
+    setShowForm(true);
+  }
+  function closeForm() { setShowForm(false); setEditId(null); setForm(blank()); }
+  function save() {
     if (!form.title.trim()) return;
-    const id = Math.max(0, ...items.map(i => i.id)) + 1;
-    setItems(prev => [{ id, title: form.title.trim(), note: form.note || undefined, dueDate: form.dueDate, dueTime: form.dueTime || undefined, priority: form.priority, relatedTo: form.relatedTo || undefined, done: false }, ...prev]);
-    setForm(blank()); setShowForm(false);
+    if (editId != null) {
+      setItems(prev => prev.map(r => r.id === editId ? { ...r, title: form.title.trim(), note: form.note || undefined, dueDate: form.dueDate, dueTime: form.dueTime || undefined, priority: form.priority, relatedTo: form.relatedTo || undefined } : r));
+    } else {
+      const id = Math.max(0, ...items.map(i => i.id)) + 1;
+      setItems(prev => [{ id, title: form.title.trim(), note: form.note || undefined, dueDate: form.dueDate, dueTime: form.dueTime || undefined, priority: form.priority, relatedTo: form.relatedTo || undefined, done: false }, ...prev]);
+    }
+    closeForm();
   }
   function toggle(id: number) { setItems(prev => prev.map(r => r.id === id ? { ...r, done: !r.done } : r)); }
   function remove(id: number) { setItems(prev => prev.filter(r => r.id !== id)); }
@@ -90,7 +102,7 @@ export default function RemindersPage() {
           <h2>แจ้งเตือน</h2>
           <p>ติดตามงานและนัดหมายที่ต้องทำ ไม่ให้พลาดโอกาสการขายสำคัญ</p>
         </div>
-        <button className="btn btn-primary btn-md" onClick={() => setShowForm(true)}>
+        <button className="btn btn-primary btn-md" onClick={openAdd}>
           <Plus size={14} /> เพิ่มการแจ้งเตือน
         </button>
       </div>
@@ -147,7 +159,10 @@ export default function RemindersPage() {
                   {r.relatedTo && <span style={{ padding: "1px 8px", borderRadius: 6, background: "#f0f4f8", color: "#475569", fontWeight: 600 }}>{r.relatedTo}</span>}
                 </div>
               </div>
-              <button onClick={() => remove(r.id)} title="ลบ" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: DANGER, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={13} /></button>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <button onClick={() => openEdit(r)} title="แก้ไข" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Pencil size={13} /></button>
+                <button onClick={() => remove(r.id)} title="ลบ" style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: DANGER, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={13} /></button>
+              </div>
             </div>
           );
         })}
@@ -155,11 +170,11 @@ export default function RemindersPage() {
 
       {/* Add modal */}
       {showForm && (
-        <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.42)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+        <div onClick={closeForm} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.42)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div className="card" onClick={e => e.stopPropagation()} style={{ width: 480, maxWidth: "100%", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", background: PRIMARY }}>
-              <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#fff" }}>เพิ่มการแจ้งเตือน</div>
-              <button onClick={() => setShowForm(false)} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.1)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
+              <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#fff" }}>{editId != null ? "แก้ไขการแจ้งเตือน" : "เพิ่มการแจ้งเตือน"}</div>
+              <button onClick={closeForm} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.1)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
             </div>
             <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
@@ -196,8 +211,8 @@ export default function RemindersPage() {
               </div>
             </div>
             <div style={{ padding: "13px 22px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
-              <button className="btn btn-secondary btn-md" onClick={() => setShowForm(false)}>ยกเลิก</button>
-              <button className="btn btn-primary btn-md" onClick={add}>บันทึก</button>
+              <button className="btn btn-secondary btn-md" onClick={closeForm}>ยกเลิก</button>
+              <button className="btn btn-primary btn-md" onClick={save}>บันทึก</button>
             </div>
           </div>
         </div>

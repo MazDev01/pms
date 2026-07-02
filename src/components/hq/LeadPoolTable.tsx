@@ -95,8 +95,8 @@ export function LeadPoolTable() {
       {/* Header */}
       <div className="card-header" style={{ flexWrap: "wrap", gap: 8 }}>
         <div>
-          <div className="card-title">ลีดส่วนกลาง</div>
-          <div className="card-desc">ลีดจากช่องทาง HQ ยังไม่มีสาขารับผิดชอบ</div>
+          <div className="card-title">ผู้สนใจส่วนกลาง</div>
+          <div className="card-desc">ผู้สนใจจากช่องทาง HQ ยังไม่มีสาขารับผิดชอบ</div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {criticalCount > 0 && (
@@ -228,7 +228,7 @@ export function LeadPoolTable() {
                       <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                         <button
                           onClick={() => setRejectTarget(lead)}
-                          title="ปฏิเสธลีดนี้"
+                          title="ปฏิเสธผู้สนใจนี้"
                           className="btn btn-danger btn-sm"
                           style={{ width: 30, height: 30, padding: 0, justifyContent: "center" }}
                         >
@@ -289,14 +289,14 @@ export function LeadPoolTable() {
 
 function RejectModal({ lead, onClose, onConfirm }: { lead: LeadPoolRow; onClose: () => void; onConfirm: () => void }) {
   const [reason, setReason] = useState("");
-  const REASONS = ["ข้อมูลลีดไม่ครบถ้วน / ไม่สามารถติดต่อได้", "ลีดซ้ำกับที่มีอยู่แล้ว", "อยู่นอกพื้นที่บริการ", "ไม่ตรงกับสายบริการของเรา"];
+  const REASONS = ["ข้อมูลผู้สนใจไม่ครบถ้วน / ไม่สามารถติดต่อได้", "ผู้สนใจซ้ำกับที่มีอยู่แล้ว", "อยู่นอกพื้นที่บริการ", "ไม่ตรงกับสายบริการของเรา"];
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", width: 440, maxWidth: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.18)" }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "0.96rem", fontWeight: 800, color: "#2D2D2D" }}>ปฏิเสธลีดนี้</h2>
+            <h2 style={{ margin: 0, fontSize: "0.96rem", fontWeight: 800, color: "#2D2D2D" }}>ปฏิเสธผู้สนใจนี้</h2>
             <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "#6b7280" }}>{lead.id} · {lead.name}</p>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={17} /></button>
@@ -370,8 +370,8 @@ function RoutingModal({ lead, onClose, onConfirm }: { lead: LeadPoolRow; onClose
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>มอบหมายลีดให้สาขา</h2>
-            <p style={{ margin: "3px 0 0", fontSize: "0.72rem", color: "#6b7280" }}>{lead.id} · เลือกสาขาที่จะรับผิดชอบลีดนี้</p>
+            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>มอบหมายผู้สนใจให้สาขา</h2>
+            <p style={{ margin: "3px 0 0", fontSize: "0.72rem", color: "#6b7280" }}>{lead.id} · เลือกสาขาที่จะรับผิดชอบผู้สนใจนี้</p>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
         </div>

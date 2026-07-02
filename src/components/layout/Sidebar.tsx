@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Phone, BarChart2, Package,
   Settings, GitMerge, ScrollText, ChevronDown, Check, Users,
+  CalendarDays, FolderOpen, Inbox,
 } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 
@@ -18,16 +19,25 @@ type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: num
 type NavGroup = { group: string; items: NavItem[] };
 
 // Dealer = ฝ่ายขายล้วน (Sales-only)
+// ตามสเปก Dealer modules: Dashboard · Leads · Customers · Sales Journey · Quotations · Product Catalog · Calendar · Files · Reports · Settings
 const DEALER_NAV: NavGroup[] = [
   {
     group: "เมนูหลัก",
     items: [
       { label: "แดชบอร์ด",      href: "/dashboard",  icon: <LayoutDashboard size={16} /> },
-      { label: "ลีด",           href: "/leads",      icon: <Phone size={16} /> },
-      { label: "เส้นทางการขาย", href: "/pipeline",   icon: <GitMerge size={16} /> },
+      { label: "ผู้สนใจ",       href: "/leads",      icon: <Phone size={16} /> },
       { label: "ลูกค้า",        href: "/customers",  icon: <Users size={16} /> },
+      { label: "เส้นทางการขาย", href: "/pipeline",   icon: <GitMerge size={16} /> },
       { label: "ใบเสนอราคา",    href: "/quotations", icon: <ScrollText size={16} /> },
-      { label: "สินค้า",         href: "/products",   icon: <Package size={16} /> },
+      { label: "แม่แบบ",         href: "/products", icon: <Package size={16} /> },
+    ],
+  },
+  {
+    group: "เครื่องมือ",
+    items: [
+      { label: "ปฏิทิน", href: "/calendar", icon: <CalendarDays size={16} /> },
+      { label: "ไฟล์",   href: "/files",    icon: <FolderOpen size={16} /> },
+      { label: "รายงาน", href: "/reports",  icon: <BarChart2 size={16} /> },
     ],
   },
   {
@@ -38,15 +48,17 @@ const DEALER_NAV: NavGroup[] = [
   },
 ];
 
+// ตามสเปก HQ modules: Executive Dashboard · Dealer Management · Leads (ทุก Dealer) · Analytics · Product Catalog · Settings
 const HQ_NAV: NavGroup[] = [
   {
     group: "เมนูหลัก",
     items: [
       { label: "แดชบอร์ด",      href: "/hq/dashboard", icon: <LayoutDashboard size={16} /> },
       { label: "ตัวแทนจำหน่าย", href: "/hq/dealers",   icon: <Store size={16} /> },
+      { label: "ผู้สนใจ",       href: "/hq/lead-pool", icon: <Inbox size={16} /> },
       { label: "ลูกค้า",        href: "/hq/customers", icon: <Users size={16} /> },
       { label: "เส้นทางการขาย", href: "/hq/pipeline",  icon: <GitMerge size={16} /> },
-      { label: "สินค้า",         href: "/hq/master",    icon: <Package size={16} /> },
+      { label: "สินค้า",        href: "/hq/master",    icon: <Package size={16} /> },
       { label: "รายงาน",         href: "/reports",      icon: <BarChart2 size={16} /> },
     ],
   },
@@ -146,7 +158,7 @@ export function Sidebar() {
           <div key={group.group} className="nav-section">
             <div className="nav-label">{group.group}</div>
             {group.items.map(item => {
-              const active = pathname === item.href;
+              const active = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link key={item.href} href={item.href} className={`nav-item${active ? " active" : ""}`}>
                   {item.icon}

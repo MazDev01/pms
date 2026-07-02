@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<title>Benjamin PMS — คู่มือการใช้งาน: เส้นทางการขาย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--navy:#003366;--steel:#2D2D2D;--silver:#C0C0C0;--green:#059669;--amber:#d97706;--muted:#6b7280;--line:#e5e7eb}
+  body{font-family:'Sarabun','Tahoma',sans-serif;color:var(--steel);background:#eef1f4;font-size:13px;line-height:1.6}
+  .sheet{width:210mm;min-height:297mm;margin:14px auto;background:#fff;padding:18mm 16mm;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+  .page-break{page-break-before:always}
+  /* ปก */
+  .cover{border-bottom:3px solid var(--navy);padding-bottom:18px;margin-bottom:22px}
+  .cover .brand{font-size:22px;font-weight:800;color:var(--navy)}
+  .cover .brand span{display:block;font-size:10px;letter-spacing:2px;color:var(--muted);font-weight:600;margin-top:2px}
+  .cover h1{font-size:24px;color:var(--navy);margin-top:16px}
+  .cover .lead{font-size:13px;color:var(--muted);margin-top:6px}
+  .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:16px;font-size:12px;font-weight:700}
+  .flow .n{background:var(--navy);color:#fff;border-radius:8px;padding:6px 12px}
+  .flow .arw{color:var(--silver);font-weight:800}
+  h2{font-size:16px;color:var(--navy);margin:26px 0 4px;display:flex;align-items:center;gap:10px}
+  h2 .step{background:var(--navy);color:#fff;width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  h2 .where{margin-left:auto;font-size:11px;font-weight:600;color:var(--navy);background:#dce5f0;padding:3px 10px;border-radius:99px}
+  .goal{font-size:12.5px;color:var(--muted);margin:2px 0 10px 36px}
+  ol.steps{margin:0 0 6px 36px;padding-left:18px}
+  ol.steps li{margin-bottom:7px;font-size:12.5px}
+  .btn{display:inline-block;background:var(--navy);color:#fff;border-radius:6px;padding:1px 8px;font-size:11.5px;font-weight:700;white-space:nowrap}
+  .btn.ghost{background:#eef1f5;color:var(--navy);border:1px solid #dde3ea}
+  .btn.green{background:var(--green)}
+  .field{font-family:'Consolas',monospace;background:#f0f4f8;color:var(--navy);padding:0 5px;border-radius:4px;font-size:11.5px}
+  .result{margin:2px 0 0 36px;background:#e5faf0;border-left:3px solid var(--green);border-radius:8px;padding:8px 12px;font-size:12px;color:#0f7a52}
+  .result b{color:#0b6141}
+  .tip{margin:8px 0 0 36px;background:#fff8e6;border-left:3px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:#8a5a00}
+  .divider{height:1px;background:var(--line);margin:18px 0}
+  table.menu{width:100%;border-collapse:collapse;margin-top:8px}
+  table.menu td{padding:6px 10px;border-bottom:1px solid #eef1f4;font-size:12px;vertical-align:top}
+  table.menu td:first-child{font-weight:700;color:var(--navy);width:150px;white-space:nowrap}
+  .foot{margin-top:26px;padding-top:10px;border-top:1px solid var(--line);font-size:10px;color:#9ca3af;text-align:center}
+  .noprint{position:fixed;top:16px;right:16px}
+  .noprint button{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 4px 14px rgba(0,51,102,.3)}
+  @media print{@page{size:A4;margin:0}body{background:#fff}.sheet{margin:0;box-shadow:none}.noprint{display:none}}
+</style>
+</head>
+<body>
+<div class="noprint"><button onclick="window.print()">🖨️ บันทึกเป็น PDF</button></div>
+
+<!-- ───────── หน้า 1: ปก + ภาพรวม ───────── -->
+<div class="sheet">
+  <div class="cover">
+    <div class="brand">BENJAMIN PMS<span>PRE-ENGINEERED BUILDING · DEALER</span></div>
+    <h1>คู่มือการใช้งาน — เส้นทางการขาย</h1>
+    <div class="lead">ตั้งแต่ <b>รับผู้สนใจ</b> → <b>ออกใบเสนอราคา</b> → <b>ปิดการขาย</b> → กลายเป็นลูกค้า (สำหรับตัวแทนจำหน่าย)</div>
+    <div class="flow">
+      <span class="n">1 · รับผู้สนใจ</span><span class="arw">→</span>
+      <span class="n">2 · ติดตาม</span><span class="arw">→</span>
+      <span class="n">3 · เปิดเป็นดีล</span><span class="arw">→</span>
+      <span class="n">4 · ใบเสนอราคา</span><span class="arw">→</span>
+      <span class="n">5 · ปิดการขาย</span><span class="arw">→</span>
+      <span class="n">6 · เป็นลูกค้า</span>
+    </div>
+  </div>
+
+  <h2><span class="step">•</span> เมนูที่ใช้ในคู่มือนี้</h2>
+  <table class="menu">
+    <tr><td>แดชบอร์ด</td><td>ภาพรวมยอดขาย · KPI · กราฟ · ผู้สนใจล่าสุด</td></tr>
+    <tr><td>ผู้สนใจ</td><td>รับและจัดการผู้สนใจ (Lead) · เปลี่ยนขั้นตอน · แปลงเป็นดีล/ลูกค้า</td></tr>
+    <tr><td>เส้นทางการขาย</td><td>กระดานคัมบัง โอกาสการขาย · ลากเปลี่ยนขั้น · ปิดการขาย</td></tr>
+    <tr><td>ใบเสนอราคา</td><td>ออก/ส่ง/พิมพ์ใบเสนอราคา · ทำสำเนา · เวอร์ชันใหม่</td></tr>
+    <tr><td>แม่แบบ</td><td>แคตตาล็อกแม่แบบอาคาร (ราคากลางกำหนดโดยสำนักงานใหญ่ · ดูอย่างเดียว)</td></tr>
+    <tr><td>ลูกค้า</td><td>ลูกค้าที่ปิดการขายแล้ว · ประวัติ · ใบเสนอราคา</td></tr>
+  </table>
+
+  <div class="tip" style="margin-left:0">
+    <b>หลักการสำคัญ:</b> ข้อมูลทุกหน้าเชื่อมกันด้วยฐานข้อมูลกลาง — เพิ่มผู้สนใจ → เปิดเป็นดีล → ออกใบเสนอราคา → ปิดการขาย “ได้งาน” ระบบจะ<b>สร้างลูกค้าให้อัตโนมัติ</b> และเปลี่ยนสถานะใบเสนอราคาเป็น “ตอบรับ” ให้เอง
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- STEP 1 -->
+  <h2><span class="step">1</span> รับผู้สนใจใหม่ <span class="where">เมนู: ผู้สนใจ</span></h2>
+  <div class="goal">เป้าหมาย: บันทึกผู้ที่ติดต่อเข้ามาให้เป็น “ผู้สนใจ” พร้อมระบุแม่แบบที่สนใจและมูลค่าประเมิน</div>
+  <ol class="steps">
+    <li>ไปที่เมนู <b>ผู้สนใจ</b> แล้วกดปุ่ม <span class="btn">+ เพิ่มผู้สนใจ</span> (มุมขวาบน)</li>
+    <li>กรอกข้อมูลในฟอร์ม “เพิ่มผู้สนใจใหม่”: <span class="field">บริษัท*</span> <span class="field">ผู้ติดต่อ*</span> <span class="field">โทรศัพท์</span> <span class="field">จังหวัด</span></li>
+    <li>เลือก <span class="field">แม่แบบที่สนใจ</span> — รายการดึงจากแคตตาล็อก “แม่แบบ” (โกดังสำเร็จรูป / โรงงาน / อาคารสำเร็จรูปทุกประเภท / งานตามแบบของลูกค้า / งานรีโนเวท / สนามกีฬาในร่ม)</li>
+    <li>ใส่ <span class="field">มูลค่าประเมิน</span>, เลือก <span class="field">ผู้รับผิดชอบ</span> และ <span class="field">แหล่งที่มา</span> แล้วกด <span class="btn">บันทึก</span></li>
+  </ol>
+  <div class="result">ผลลัพธ์: ผู้สนใจใหม่แสดงบนสุดของตาราง สถานะเริ่มต้น <b>“ผู้สนใจใหม่”</b> ทันที</div>
+
+  <div class="foot">Benjamin PMS · คู่มือการใช้งาน เส้นทางการขาย · หน้า 1/3</div>
+</div>
+
+<!-- ───────── หน้า 2 ───────── -->
+<div class="sheet page-break">
+
+  <!-- STEP 2 -->
+  <h2><span class="step">2</span> ติดตามและเปลี่ยนขั้นตอน <span class="where">เมนู: ผู้สนใจ</span></h2>
+  <div class="goal">เป้าหมาย: เดินผู้สนใจไปตามเส้นทางการขาย ผู้สนใจใหม่ → ติดต่อแล้ว → รวบรวมความต้องการ → เสนอราคา → เจรจา</div>
+  <ol class="steps">
+    <li>คลิกแถวผู้สนใจเพื่อเปิดหน้ารายละเอียด หรือใช้ <b>มุมมองคัมบัง</b> (ปุ่มสลับมุมมอง มุมขวา)</li>
+    <li>เปลี่ยนสถานะได้ 2 วิธี: กดป้ายสถานะในตารางแล้วเลือกขั้นถัดไป <b>หรือ</b> ลากการ์ดข้ามคอลัมน์ในมุมมองคัมบัง</li>
+    <li>แถบสรุปด้านบนบอกจำนวนผู้สนใจแต่ละขั้น และมูลค่ารวม กดเพื่อกรองดูเฉพาะขั้นนั้นได้</li>
+  </ol>
+  <div class="result">ผลลัพธ์: สถานะอัปเดตทันทีและคงอยู่ข้ามหน้า</div>
+
+  <div class="divider"></div>
+
+  <!-- STEP 3 -->
+  <h2><span class="step">3</span> เปิดเป็นโอกาสการขาย (ดีล) <span class="where">ผู้สนใจ → เส้นทางการขาย</span></h2>
+  <div class="goal">เป้าหมาย: ยกผู้สนใจที่มีแนวโน้มปิดได้ ขึ้นเป็นดีลในกระดานเส้นทางการขาย</div>
+  <ol class="steps">
+    <li>เปิดรายละเอียดผู้สนใจ → ที่แถบปุ่มด้านขวา กด <span class="btn">⚡ เปิดเป็นดีล</span></li>
+    <li>ระบบสร้างดีลในเมนู <b>เส้นทางการขาย</b> โดยผูกกับผู้สนใจเดิม (กันสร้างซ้ำ) และพาไปที่หน้ากระดานอัตโนมัติ</li>
+  </ol>
+  <div class="result">ผลลัพธ์: มีการ์ดดีลใหม่บนกระดาน พร้อมมูลค่าและผู้รับผิดชอบที่ดึงมาจากผู้สนใจ</div>
+
+  <div class="divider"></div>
+
+  <!-- STEP 4 -->
+  <h2><span class="step">4</span> ออกใบเสนอราคา <span class="where">ผู้สนใจ / เมนู: ใบเสนอราคา</span></h2>
+  <div class="goal">เป้าหมาย: จัดทำใบเสนอราคาในนามบริษัทของสาขา แล้วส่งให้ลูกค้า</div>
+  <ol class="steps">
+    <li><b>วิธีที่ 1 (แนะนำ):</b> ในรายละเอียดผู้สนใจ กด <span class="btn">สร้างใบเสนอราคา</span> ระบบจะเติมชื่อลูกค้าและมูลค่าให้อัตโนมัติ</li>
+    <li><b>วิธีที่ 2:</b> ไปเมนู <b>ใบเสนอราคา</b> กด <span class="btn">+ เพิ่มใบเสนอราคา</span> แล้วเลือกลูกค้า/แม่แบบ/พื้นที่/มูลค่า</li>
+    <li>ใบเสนอราคาที่สร้างจะมีสถานะ <b>“ร่าง”</b> — ตรวจความถูกต้องแล้วกด <span class="btn" style="background:#d97706">ส่งลูกค้า</span> เพื่อเปลี่ยนเป็น “ส่งแล้ว”</li>
+    <li>พิมพ์เอกสาร: เปิดใบเสนอราคา → กด <span class="btn">พิมพ์ / ดาวน์โหลด PDF</span> (เอกสารออกในนามบริษัทของสาขา พร้อมเลขผู้เสียภาษี/ตราประทับ/ลายเซ็นจากหน้า “ตั้งค่า”)</li>
+  </ol>
+  <div class="tip"><b>เคล็ดลับ:</b> ตั้งค่าโลโก้ · เลขผู้เสียภาษี · ตราประทับ · ลายเซ็น ล่วงหน้าที่เมนู <b>ตั้งค่า → โปรไฟล์บริษัท / ตั้งค่าใบเสนอราคา</b> เพื่อให้เอกสารสมบูรณ์ทันทีที่พิมพ์</div>
+
+  <div class="foot">Benjamin PMS · คู่มือการใช้งาน เส้นทางการขาย · หน้า 2/3</div>
+</div>
+
+<!-- ───────── หน้า 3 ───────── -->
+<div class="sheet page-break">
+
+  <!-- STEP 5 -->
+  <h2><span class="step">5</span> ปิดการขาย <span class="where">เมนู: เส้นทางการขาย</span></h2>
+  <div class="goal">เป้าหมาย: บันทึกผลการขายเมื่อได้งาน (หรือไม่ได้งาน)</div>
+  <ol class="steps">
+    <li>ไปเมนู <b>เส้นทางการขาย</b> เปิดการ์ดดีลที่ลูกค้าตอบรับแล้ว</li>
+    <li>ที่แถบปุ่มด้านขวา กด <span class="btn">ปิดการขายนี้ →</span> แล้วเลือก <span class="btn green">✅ ปิดการขายสำเร็จ</span></li>
+    <li>หากไม่ได้งาน เลือก <b>❌ ปิดการขายไม่สำเร็จ</b> และระบุเหตุผล</li>
+  </ol>
+  <div class="result">
+    ผลลัพธ์เมื่อ <b>ปิดการขายสำเร็จ</b> ระบบทำให้อัตโนมัติในคราวเดียว:<br/>
+    • ดีล = <b>ปิดการขายสำเร็จ</b> · ผู้สนใจ = <b>ปิดการขาย (ได้งาน)</b><br/>
+    • <b>สร้างลูกค้าใหม่</b> ให้อัตโนมัติ · ใบเสนอราคาที่เกี่ยวข้องเปลี่ยนเป็น <b>“ตอบรับ”</b>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- STEP 6 -->
+  <h2><span class="step">6</span> ตรวจสอบลูกค้าที่ได้ <span class="where">เมนู: ลูกค้า</span></h2>
+  <div class="goal">เป้าหมาย: ยืนยันว่าผู้สนใจกลายเป็นลูกค้าเรียบร้อย และดูประวัติการขาย</div>
+  <ol class="steps">
+    <li>ไปเมนู <b>ลูกค้า</b> จะพบลูกค้ารายใหม่แสดงอยู่ สถานะ <b>“ใช้งานอยู่”</b></li>
+    <li>ลูกค้าที่มีใบเสนอราคาปิดการขายแล้วจะถูกจัดเป็น <b>“ลูกค้าเดิม”</b> โดยอัตโนมัติ</li>
+    <li>กด <span class="btn ghost">ดู →</span> หรือ “หน้าเต็ม” เพื่อดูรายละเอียด: ใบเสนอราคา · นัดหมาย · ไทม์ไลน์กิจกรรม</li>
+  </ol>
+  <div class="result">ครบวงจร: ผู้สนใจ → ดีล → ใบเสนอราคา → ปิดการขาย → <b>ลูกค้า</b> ข้อมูลไหลต่อเนื่องทุกหน้า</div>
+
+  <div class="divider"></div>
+
+  <h2><span class="step">✓</span> สรุปเส้นทางแบบย่อ</h2>
+  <ol class="steps">
+    <li><b>ผู้สนใจ</b> → + เพิ่มผู้สนใจ (เลือกแม่แบบที่สนใจ)</li>
+    <li><b>ผู้สนใจ</b> → เปลี่ยนขั้นตอน / ลากคัมบัง</li>
+    <li><b>ผู้สนใจ</b> → ⚡ เปิดเป็นดีล</li>
+    <li><b>ผู้สนใจ/ใบเสนอราคา</b> → สร้างใบเสนอราคา → ส่งลูกค้า → พิมพ์ PDF</li>
+    <li><b>เส้นทางการขาย</b> → ปิดการขายนี้ → ✅ ปิดการขายสำเร็จ</li>
+    <li><b>ลูกค้า</b> → ตรวจลูกค้าใหม่ (สร้างอัตโนมัติ)</li>
+  </ol>
+
+  <div class="tip"><b>หมายเหตุ:</b> ระบบเวอร์ชันปัจจุบันเป็นการสาธิต (ข้อมูลจำลอง) — ข้อมูลจะรีเซ็ตเมื่อรีเฟรชหน้า · ราคากลาง/แม่แบบกำหนดโดยสำนักงานใหญ่ ตัวแทนจำหน่ายดูได้อย่างเดียว</div>
+
+  <div class="foot">Benjamin PMS · คู่มือการใช้งาน เส้นทางการขาย · หน้า 3/3</div>
+</div>
+
+</body>
+</html>

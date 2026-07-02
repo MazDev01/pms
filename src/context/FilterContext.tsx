@@ -4,7 +4,7 @@ import {
   createContext, useContext, useState, useMemo, useCallback, useEffect,
   type ReactNode,
 } from "react";
-import { dealerLeaderboard, hqAllCustomers, customers, quotations } from "@/lib/mock";
+import { dealerLeaderboard, hqAllCustomers, customers, quotations, responsiblePersons } from "@/lib/mock";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -115,8 +115,12 @@ export const PROVINCE_OPTIONS: { value: string; label: string }[] = (() => {
   return [...set].sort((a, b) => a.localeCompare(b, "th")).map(p => ({ value: p, label: p }));
 })();
 
+// ผู้รับผิดชอบ (Responsible Person) — เฉพาะคนที่ยัง active
+export const PERSON_OPTIONS: { value: string; label: string }[] =
+  responsiblePersons.filter(p => p.active).map(p => ({ value: p.name, label: p.name }));
+
 // ── Filter state ──
-export type FilterDim = "dealer" | "province" | "product" | "status";
+export type FilterDim = "dealer" | "province" | "product" | "status" | "person";
 export const ALL = "all";
 
 type FilterState = {
@@ -127,11 +131,12 @@ type FilterState = {
   province: string;
   product: string;
   status: string;
+  person: string;
 };
 
 const DEFAULTS: FilterState = {
   preset: "last30", customStart: "", customEnd: "",
-  dealer: ALL, province: ALL, product: ALL, status: ALL,
+  dealer: ALL, province: ALL, product: ALL, status: ALL, person: ALL,
 };
 
 const STORAGE_KEY = "bpms_global_filters";
@@ -143,6 +148,7 @@ export type RecordFields = {
   province?: string | null;
   product?: string | null;
   status?: string | null;
+  person?: string | null;
 };
 
 type Ctx = {
@@ -151,12 +157,14 @@ type Ctx = {
   province: string;
   product: string;
   status: string;
+  person: string;
   setPreset: (p: TimePreset) => void;
   setCustomRange: (start: string, end: string) => void;
   setDealer: (v: string) => void;
   setProvince: (v: string) => void;
   setProduct: (v: string) => void;
   setStatus: (v: string) => void;
+  setPerson: (v: string) => void;
   setDim: (dim: FilterDim, v: string) => void;
   reset: () => void;
   activeCount: number;
@@ -192,6 +200,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const setProvince = useCallback((v: string) => setState(s => ({ ...s, province: v })), []);
   const setProduct = useCallback((v: string) => setState(s => ({ ...s, product: v })), []);
   const setStatus = useCallback((v: string) => setState(s => ({ ...s, status: v })), []);
+  const setPerson = useCallback((v: string) => setState(s => ({ ...s, person: v })), []);
   const setDim = useCallback((dim: FilterDim, v: string) => setState(s => ({ ...s, [dim]: v })), []);
   const reset = useCallback(() => setState(DEFAULTS), []);
 
@@ -209,17 +218,20 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     if (state.product !== ALL && f.product != null &&
         f.product.toUpperCase() !== state.product.toUpperCase()) return false;
     if (state.status !== ALL && f.status != null && f.status !== state.status) return false;
+    if (state.person !== ALL && f.person != null && f.person !== state.person) return false;
     return true;
-  }, [inRange, state.dealer, state.province, state.product, state.status]);
+  }, [inRange, state.dealer, state.province, state.product, state.status, state.person]);
 
   const activeCount =
     (state.dealer !== ALL ? 1 : 0) + (state.province !== ALL ? 1 : 0) +
-    (state.product !== ALL ? 1 : 0) + (state.status !== ALL ? 1 : 0);
+    (state.product !== ALL ? 1 : 0) + (state.status !== ALL ? 1 : 0) +
+    (state.person !== ALL ? 1 : 0);
 
   const value: Ctx = {
     timeRange,
     dealer: state.dealer, province: state.province, product: state.product, status: state.status,
-    setPreset, setCustomRange, setDealer, setProvince, setProduct, setStatus, setDim, reset,
+    person: state.person,
+    setPreset, setCustomRange, setDealer, setProvince, setProduct, setStatus, setPerson, setDim, reset,
     activeCount, passes, inRange,
   };
 

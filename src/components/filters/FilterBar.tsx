@@ -5,7 +5,7 @@ import { CalendarDays, ChevronDown, Check, X } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import {
   useFilters, TIME_PRESETS, type TimePreset, type FilterDim,
-  DEALER_OPTIONS, PROVINCE_OPTIONS, PRODUCT_OPTIONS, ALL,
+  DEALER_OPTIONS, PROVINCE_OPTIONS, PRODUCT_OPTIONS, PERSON_OPTIONS, ALL,
 } from "@/context/FilterContext";
 
 type Opt = { value: string; label: string };
@@ -197,16 +197,17 @@ export type FilterBarProps = {
   productOptions?: Opt[];
   provinceOptions?: Opt[];
   dealerOptions?: Opt[];
+  personOptions?: Opt[];
   style?: React.CSSProperties;
 };
 
 export function FilterBar({
-  dims, statusOptions, productOptions, provinceOptions, dealerOptions, style,
+  dims, statusOptions, productOptions, provinceOptions, dealerOptions, personOptions, style,
 }: FilterBarProps) {
   const { isHQ } = useRole();
   const {
-    dealer, province, product, status,
-    setDealer, setProvince, setProduct, setStatus,
+    dealer, province, product, status, person,
+    setDealer, setProvince, setProduct, setStatus, setPerson,
     activeCount, reset,
   } = useFilters();
 
@@ -237,6 +238,10 @@ export function FilterBar({
       {show.includes("status") && statusOptions && statusOptions.length > 0 && (
         <SelectFilter caption="สถานะ" value={status}
           options={statusOptions} onChange={setStatus} />
+      )}
+      {show.includes("person") && (
+        <SelectFilter caption="ผู้รับผิดชอบ" value={person}
+          options={personOptions ?? PERSON_OPTIONS} onChange={setPerson} />
       )}
 
       {activeCount > 0 && (

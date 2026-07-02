@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { hqAllCustomers, HQCustomer } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
-import { Search, Users, Building2, Landmark, User } from "lucide-react";
+import { ExportMenu } from "@/components/ui/ExportMenu";
+import { Search, Users, Building2, Landmark, User, Eye, X } from "lucide-react";
 
 const PRIMARY = "#003366";
 const GREEN = "#059669";
@@ -42,6 +43,7 @@ const segmentLabel: Record<HQCustomer["segment"], string> = {
 export default function HQCustomersPage() {
   const { timeRange, passes } = useFilters();
   const [search, setSearch] = useState("");
+  const [viewC, setViewC] = useState<HQCustomer | null>(null); // View → เจาะดูรายละเอียดลูกค้า (HQ Data Ownership)
 
   // กรองจริงด้วย FilterBar (time/dealer/province/status) + search ในหน้า
   const filtered = useMemo(() => {
@@ -80,10 +82,15 @@ export default function HQCustomersPage() {
           <h2>ลูกค้าทั้งเครือ</h2>
           <p>ฐานข้อมูลลูกค้าทุกสาขา · {timeRange.subtitle}</p>
         </div>
-        <FilterBar
-          dims={["dealer", "province", "status"]}
-          statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <FilterBar
+            dims={["dealer", "province", "status"]}
+            statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
+          />
+          <ExportMenu filename="hq-customers" title="ลูกค้าทั้งเครือ"
+            headers={["ลูกค้า","ประเภท","จังหวัด","สาขา","ดีลที่ปิด","รายได้รวม","สถานะ","ติดต่อล่าสุด"]}
+            rows={filtered.map(c=>[c.name,c.type,c.province,c.dealerName,c.dealsWon,c.totalRevenue,c.status==="active"?"ใช้งาน":"ไม่ใช้งาน",c.lastContact])} />
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -122,6 +129,18 @@ export default function HQCustomersPage() {
       <div className="card">
         <div className="table-wrap" style={{ borderTop: "none" }}>
           <table>
+            <colgroup>
+              <col style={{ width: "21%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>ลูกค้า</th>
@@ -133,12 +152,13 @@ export default function HQCustomersPage() {
                 <th className="num">มูลค่ารวม</th>
                 <th>ติดต่อล่าสุด</th>
                 <th>สถานะ</th>
+                <th style={{ textAlign: "right" }}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: "40px 14px", color: "#6b7280" }}>
+                  <td colSpan={10} style={{ textAlign: "center", padding: "40px 14px", color: "#6b7280" }}>
                     ไม่พบลูกค้า
                   </td>
                 </tr>
@@ -206,6 +226,12 @@ export default function HQCustomersPage() {
                           </span>
                         )}
                       </td>
+                      {/* View — HQ เจาะดูรายละเอียดลูกค้า */}
+                      <td style={{ textAlign: "right" }}>
+                        <button onClick={() => setViewC(c)} className="btn btn-secondary btn-sm" style={{ color: PRIMARY }}>
+                          <Eye size={13} /> ดู
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -228,6 +254,39 @@ export default function HQCustomersPage() {
           </div>
         )}
       </div>
+
+      {/* View detail modal — HQ Data Ownership */}
+      {viewC && (
+        <div onClick={() => setViewC(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+            <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewC.name}</div>
+                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{viewC.dealerName} · {viewC.province}</div>
+              </div>
+              <button onClick={() => setViewC(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
+            </div>
+            <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {([
+                ["ประเภท", viewC.type],
+                ["กลุ่มลูกค้า", segmentLabel[viewC.segment]],
+                ["จังหวัด", viewC.province],
+                ["สาขาที่ดูแล", `${viewC.dealerCode} · ${viewC.dealerName}`],
+                ["โอกาสการขายที่ชนะ", `${viewC.dealsWon}`],
+                ["มูลค่ารวม", viewC.totalRevenue > 0 ? fmtM(viewC.totalRevenue) : "-"],
+                ["ติดต่อล่าสุด", viewC.lastContact],
+                ["สถานะ", viewC.status === "active" ? "ใช้งาน" : "ไม่ใช้งาน"],
+              ] as [string, string][]).map(([k, v]) => (
+                <div key={k} style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ fontSize: "0.63rem", color: "#6b7280", marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D" }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูได้ทุกสาขา (Data Ownership)</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

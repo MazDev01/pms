@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Phone, Mail, MapPin, Users2, FileText, StickyNote,
-  ArrowLeft, Edit2, Building2, X, type LucideIcon,
+  ArrowLeft, Edit2, Building2, X, Trash2, type LucideIcon,
 } from "lucide-react";
 import {
-  customers, quotations,
   quotationStatusLabel, quotationStatusColor,
 } from "@/lib/mock";
+import { useSales } from "@/context/SalesContext";
+import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 
 const PRIMARY = "#003366"; const STEEL = "#2D2D2D"; const BORDER = "#e5e7eb"; const MUTED = "#6b7280";
 
@@ -28,14 +29,52 @@ type TabKey = "quotations" | "contacts";
 
 type EditCustomer = { name:string; phone:string; email:string; province:string; company:string };
 
+// วันที่ (พ.ศ.) แบบ deterministic — ไล่ย้อนหลังตาม index ไม่มีการสุ่ม
+const TH_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+function seedDate(customerId: number, order: number): string {
+  // เดินย้อนหลังจากวันฐาน 25 มิ.ย. 2569 (index 5) โดยเว้นช่วงคงที่ + offset ตาม id
+  const base = 175; // 25 มิ.ย. = วันที่สมมติแบบ absolute (เดือน*30 + วัน)
+  const total = base - order * 11 - (customerId % 4) * 2;
+  const day = ((total % 30) + 30) % 30 + 1;
+  const month = ((Math.floor(total / 30) % 12) + 12) % 12;
+  return `${day} ${TH_MONTHS[month]} 2569`;
+}
+
+// สร้างไทม์ไลน์กิจกรรมของลูกค้าแบบ deterministic (ตามใบเสนอราคา/สถานะ) — ไม่มี randomness
+function buildCustomerTimeline(
+  customerId: number,
+  quos: { id: string; project: string; status: string }[],
+): ActivityTimelineItem[] {
+  const firstQuo = quos[0];
+  const quoRef = firstQuo ? `${firstQuo.id} (${firstQuo.project})` : "ตามที่ร้องขอ";
+  // ลำดับตามสเปก: status → quote → meeting → open → call (ใหม่สุดอยู่บน)
+  const spec: { type: string; text: string }[] = [
+    { type: "status",  text: "เปลี่ยนสถานะเป็นลูกค้า" },
+    { type: "quote",   text: `ส่งใบเสนอราคา ${quoRef}` },
+    { type: "meeting", text: "นัดประชุมนำเสนอโครงการ" },
+    { type: "open",    text: "ลูกค้าเปิดอ่านอีเมล" },
+    { type: "call",    text: "โทรหาเพื่อแนะนำบริษัทและสินค้า" },
+  ];
+  return spec.map((s, i) => ({
+    id: `${customerId}-seed-${i}`,
+    type: s.type,
+    text: s.text,
+    time: seedDate(customerId, i),
+  }));
+}
+
 export default function CustomerDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const customerId = Number(params.id);
+  const { customers, quotations, updateCustomer, deleteCustomer: ctxDeleteCustomer } = useSales();
   const [tab, setTab]             = useState<TabKey>("quotations");
   const [contacts, setContacts]   = useState<ContactEntry[]>(INIT_CONTACTS);
   const [contactText, setContactText] = useState("");
   const [contactType, setContactType] = useState("call");
   const [showEdit, setShowEdit]   = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleted, setDeleted]     = useState(false);
 
   const base = customers.find(c => c.id === customerId);
   const [editForm, setEditForm]   = useState<EditCustomer|null>(null);
@@ -52,9 +91,21 @@ export default function CustomerDetailPage() {
     );
   }
 
+  if (deleted) {
+    return (
+      <div className="erp" style={{ padding:40, textAlign:"center" }}>
+        <p style={{ color:MUTED }}>ลบลูกค้าแล้ว กำลังกลับไปหน้ารายชื่อลูกค้า…</p>
+      </div>
+    );
+  }
+
   const customer = { ...base, ...saved };
   const relatedQuotations = quotations.filter(q => q.customerId === customer.id);
-  const totalValue = relatedQuotations.reduce((s,q) => s + parseInt((q.total||"0").replace(/[^0-9]/g,"")||"0"), 0);
+  // ยอดขายรวม = ผลรวมใบเสนอราคาที่ "ปิดการขายได้ (won)" เท่านั้น — ให้ตรงกับหน้าลูกค้า/โมดัล (totalSalesFor)
+  const totalValue = relatedQuotations.filter(q => q.status === "won").reduce((s,q) => s + q.totalValue, 0);
+
+  // ไทม์ไลน์กิจกรรม — deterministic seed ตามใบเสนอราคา/สถานะของลูกค้า (ไม่มีการสุ่ม)
+  const timelineItems = buildCustomerTimeline(customer.id, relatedQuotations);
 
   const tabs: { key:TabKey; label:string; icon:React.ReactNode }[] = [
     { key:"quotations", label:`ใบเสนอราคา (${relatedQuotations.length})`, icon:<FileText size={12}/> },
@@ -77,8 +128,19 @@ export default function CustomerDetailPage() {
   }
 
   function saveEdit() {
-    if (editForm) { setSaved({ name:editForm.name, phone:editForm.phone, email:editForm.email, province:editForm.province, company:editForm.company }); }
+    if (editForm && base) {
+      setSaved({ name:editForm.name, phone:editForm.phone, email:editForm.email, province:editForm.province, company:editForm.company });
+      updateCustomer({ ...base, ...editForm }); // persist กลับ context
+    }
     setShowEdit(false);
+  }
+
+  // ลบลูกค้า (context) → กลับไปหน้ารายชื่อลูกค้า
+  function deleteCustomer() {
+    ctxDeleteCustomer(customerId);
+    setDeleted(true);
+    setShowDelete(false);
+    router.push("/customers");
   }
 
   return (
@@ -100,18 +162,19 @@ export default function CustomerDetailPage() {
             <h2 style={{ marginBottom:4 }}>{customer.name}</h2>
             <p style={{ margin:0 }}>{customer.company}</p>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
-              {customer.tags.map((tag:string) => (
-                <span key={tag} className="badge" style={{ background:tag==="VIP"?"#fff3cd":tag==="Enterprise"?"#dce5f0":"#f0f0f5", color:tag==="VIP"?"#d97706":tag==="Enterprise"?PRIMARY:MUTED }}>
-                  {tag}
-                </span>
-              ))}
               <span className="badge" style={{ background:"#dce5f0", color:PRIMARY }}>{customer.category}</span>
+              <span className="badge" style={{ background:customer.status==="active"?"#e5faf0":"#f1f5f9", color:customer.status==="active"?"#059669":MUTED }}>{customer.status==="active"?"ใช้งาน":"ไม่ใช้งาน"}</span>
             </div>
           </div>
         </div>
-        <button className="btn btn-secondary btn-md" onClick={openEdit}>
-          <Edit2 size={13}/> แก้ไขข้อมูล
-        </button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button className="btn btn-secondary btn-md" onClick={openEdit}>
+            <Edit2 size={13}/> แก้ไขข้อมูล
+          </button>
+          <button className="btn btn-danger btn-md" onClick={() => setShowDelete(true)}>
+            <Trash2 size={13}/> ลบ
+          </button>
+        </div>
       </div>
 
       {/* Stat tiles */}
@@ -156,6 +219,13 @@ export default function CustomerDetailPage() {
           ) : (
             <div className="table-wrap">
               <table>
+                <colgroup>
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "36%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "12%" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     {["เลขที่ใบเสนอราคา","โอกาสการขาย","มูลค่า","สถานะ","วันที่"].map(h => (
@@ -167,7 +237,7 @@ export default function CustomerDetailPage() {
                   {relatedQuotations.map(q => {
                     const qc = quotationStatusColor[q.status];
                     return (
-                      <tr key={q.id}>
+                      <tr key={q.id} className="clickable" onClick={() => router.push("/quotations")}>
                         <td style={{ fontWeight:700 }}>{q.id}</td>
                         <td style={{ color:MUTED }}>{q.project}</td>
                         <td className="num" style={{ fontWeight:800 }}>{q.total}</td>
@@ -226,6 +296,16 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
+      {/* ─── Activity Timeline ────────────────────────────────────── */}
+      <div className="card" style={{ marginTop:16 }}>
+        <div className="card-header">
+          <div className="card-title" style={{ fontSize:"0.92rem" }}>ไทม์ไลน์กิจกรรม</div>
+        </div>
+        <div className="card-body">
+          <ActivityTimeline items={timelineItems} />
+        </div>
+      </div>
+
       {/* Edit modal */}
       {showEdit && editForm && (
         <>
@@ -257,6 +337,24 @@ export default function CustomerDetailPage() {
             <div style={{ padding:"14px 24px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8, justifyContent:"flex-end", background:"#fafafa" }}>
               <button className="btn btn-secondary btn-md" onClick={() => setShowEdit(false)}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={saveEdit}>บันทึก</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Delete confirm modal */}
+      {showDelete && (
+        <>
+          <div onClick={() => setShowDelete(false)} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:200 }}/>
+          <div style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)", zIndex:201,
+            width:340, maxWidth:"calc(100vw - 32px)", background:"#fff", borderRadius:16, border:`1px solid ${BORDER}`, boxShadow:"0 24px 80px rgba(0,0,0,.2)", overflow:"hidden" }}>
+            <div style={{ padding:"18px 22px 14px", borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ fontSize:"0.92rem", fontWeight:800, color:STEEL }}>ยืนยันการลบลูกค้า</div>
+              <div style={{ fontSize:"0.76rem", color:MUTED, marginTop:6 }}>ต้องการลบ &quot;{customer.company}&quot; ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้</div>
+            </div>
+            <div style={{ display:"flex", gap:8, padding:"14px 22px", background:"#fafafa" }}>
+              <button className="btn btn-secondary btn-md" onClick={() => setShowDelete(false)} style={{ flex:1, justifyContent:"center" }}>ยกเลิก</button>
+              <button className="btn btn-md" onClick={deleteCustomer} style={{ flex:1, justifyContent:"center", background:"#dc2626", color:"#fff", border:"none" }}>ลบลูกค้า</button>
             </div>
           </div>
         </>

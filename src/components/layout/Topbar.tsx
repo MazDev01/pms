@@ -1,31 +1,158 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
-import { leads, customers } from "@/lib/mock";
-import { MessageSquare, CheckCircle2, AlertTriangle, ClipboardList, Banknote, UserCircle, Settings } from "lucide-react";
+import { useSales } from "@/context/SalesContext";
+import {
+  leads, customers, quotations, dealerLeaderboard, apptTypeLabel,
+  type LeadRow, type CustomerMock, type QuotationMock, type DealerRow, type AppointmentMock,
+} from "@/lib/mock";
+import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock } from "lucide-react";
+
+// ── mock "วันนี้" (deterministic) ────────────────────────────────
+const MOCK_TODAY = "2026-06-30";
 
 const PRIMARY = "#003366";
 const BORDER   = "#e5e7eb";
 const STEEL    = "#2D2D2D";
 const BG       = "#fafafa";
 
-// ── mock notifications (แยกตาม role) ─────────────────────────────
-const HQ_NOTIFS = [
-  { id: 1, iconEl: <MessageSquare size={14} />, iconBg: "#dce5f0", iconColor: "#003366", title: "สาขาส่งลีดใหม่", body: "Master House — บจ. สมุทรโกดัง ต้องการโกดัง 1,200 ตร.ม.", time: "3 นาทีที่แล้ว", href: "/reports" },
-  { id: 2, iconEl: <CheckCircle2 size={14} />, iconBg: "#d1fae5", iconColor: "#059669", title: "ปิดการขายสำเร็จ", body: "EasyBuild แม่สอด — Q-2026-0092 มูลค่า ฿4.8M", time: "2 ชั่วโมงที่แล้ว", href: "/reports" },
-  { id: 3, iconEl: <AlertTriangle size={14} />, iconBg: "#fef3cd", iconColor: "#d97706", title: "ใบเสนอราคาหมดอายุ", body: "บจ. อุตรดิตถ์โลหะ — Q-2026-0088 เกินกำหนด 3 วัน", time: "ผ่านมา 2 ชั่วโมง", href: "/reports" },
-  { id: 4, iconEl: <Banknote size={14} />, iconBg: "#d1fae5", iconColor: "#059669", title: "สรุปยอดขายรวม", body: "4 สาขา รอบ มิ.ย. 69 — ฿24.6M", time: "เมื่อวาน", href: "/hq/dashboard" },
-];
+// ── notification shape ───────────────────────────────────────────
+type NotifBucket = "today" | "yesterday" | "older";
 
-// แจ้งเตือน/ติดตามงานขาย (ย้ายมาไว้บน Top Navigation)
-const DEALER_NOTIFS = [
-  { id: 1, iconEl: <AlertTriangle size={14} />, iconBg: "#fee2e2", iconColor: "#dc2626", title: "ครบกำหนดวันนี้: โทรติดตาม", body: "หจก. ราชบุรีโลหะ — โอกาสการขายโกดัง PEB ราชบุรี", time: "วันนี้ 10:00", href: "/pipeline" },
-  { id: 2, iconEl: <MessageSquare size={14} />, iconBg: "#dce5f0", iconColor: "#003366", title: "ลีดใหม่เข้ามา", body: "บจ. สมุทรโกดัง — ต้องการโกดัง 1,200 ตร.ม.", time: "3 นาทีที่แล้ว", href: "/leads" },
-  { id: 3, iconEl: <CheckCircle2 size={14} />, iconBg: "#fef3cd", iconColor: "#d97706", title: "ติดตามใบเสนอราคา", body: "Q-2026-0098 บจ. อุตรดิตถ์โลหะ — รอลูกค้าตอบกลับ", time: "1 ชั่วโมงที่แล้ว", href: "/quotations" },
-  { id: 4, iconEl: <ClipboardList size={14} />, iconBg: "#dce5f0", iconColor: "#003366", title: "นัดหมายพรุ่งนี้", body: "นัดนำเสนอใบเสนอราคา บจ. ไทยสตีล — 09:30 น.", time: "เมื่อวาน", href: "/calendar" },
-];
+type Notif = {
+  id: number;
+  iconEl: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  body: string;
+  time: string;
+  href: string;
+  sortDate: string;   // YYYY-MM-DD ใช้จัดกลุ่ม/เรียงลำดับ (deterministic)
+  bucket: NotifBucket;
+};
+
+// bucket ตามวันที่เทียบกับ mock วันนี้ = 2026-06-30 (deterministic)
+const MOCK_YESTERDAY = "2026-06-29";
+function bucketOf(date: string): NotifBucket {
+  if (date === MOCK_TODAY) return "today";
+  if (date === MOCK_YESTERDAY) return "yesterday";
+  return "older"; // ก่อนหน้า (วันที่อื่น/ไม่มีวันที่จริง)
+}
+const BUCKET_LABEL: Record<NotifBucket, string> = {
+  today: "วันนี้",
+  yesterday: "เมื่อวาน",
+  older: "ก่อนหน้า",
+};
+const BUCKET_ORDER: NotifBucket[] = ["today", "yesterday", "older"];
+
+// ── สร้างการแจ้งเตือนจาก mock (deterministic, mock วันนี้ = 2026-06-30) ──
+// ประเภท: ลีดใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายได้ · เสียโอกาส
+// รับ leads/quotations/appointments จาก SalesContext (ข้อมูลสดทั้งหมด)
+function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appointments: AppointmentMock[]): Notif[] {
+  const out: Notif[] = [];
+  let id = 1;
+
+  const push = (
+    n: Omit<Notif, "id" | "bucket"> & { sortDate: string },
+  ) => {
+    out.push({ ...n, id: id++, bucket: bucketOf(n.sortDate) });
+  };
+
+  // 1) ลีดใหม่ (New Lead) — leads status "NEW" → assign เป็น "วันนี้"
+  for (const l of leads.filter(l => l.status === "NEW")) {
+    push({
+      iconEl: <MessageSquare size={14} />, iconBg: "#dce5f0", iconColor: "#003366",
+      title: "ผู้สนใจใหม่",
+      body: `${l.company} — ${l.contact} · ${l.province} · ${l.value}`,
+      time: `${l.source ?? "ช่องทางออนไลน์"} · ผู้รับผิดชอบ ${l.assigned}`,
+      href: "/leads",
+      sortDate: MOCK_TODAY,
+    });
+  }
+
+  // 2) เตือนติดตาม (Follow-up Reminder) — leads status "FOLLOWUP" + นัดชนิด follow_up
+  for (const l of leads.filter(l => l.status === "FOLLOWUP")) {
+    push({
+      iconEl: <CalendarClock size={14} />, iconBg: "#fff3cd", iconColor: "#d97706",
+      title: "เตือนติดตาม",
+      body: `${l.company} — ${l.product} · ${l.value}`,
+      time: `ผู้รับผิดชอบ ${l.assigned}`,
+      href: "/leads",
+      sortDate: MOCK_TODAY,
+    });
+  }
+  for (const a of appointments.filter(a => a.type === "follow_up" && a.status === "upcoming")) {
+    push({
+      iconEl: <CalendarClock size={14} />, iconBg: "#fff3cd", iconColor: "#d97706",
+      title: "เตือนติดตาม",
+      body: `${a.company} — ${a.note}`,
+      time: `${a.date} ${a.time} น. · ${a.assigned}`,
+      href: "/quotations",
+      sortDate: a.date,
+    });
+  }
+
+  // 3) เตือนประชุม (Meeting Reminder) — นัดชนิดพบ/นำเสนอที่ยัง upcoming
+  const meetTypes: AppointmentMock["type"][] = ["visit", "design_meet", "presentation", "contract_sign"];
+  for (const a of appointments.filter(a => meetTypes.includes(a.type) && a.status === "upcoming")) {
+    push({
+      iconEl: <CalendarClock size={14} />, iconBg: "#dce5f0", iconColor: "#003366",
+      title: "เตือนประชุม",
+      body: `${apptTypeLabel[a.type]} — ${a.company} · ${a.province}`,
+      time: `${a.date} ${a.time} น. · ${a.assigned}`,
+      href: "/calendar",
+      sortDate: a.date,
+    });
+  }
+
+  // 4) ใบเสนอราคาใกล้หมดอายุ (Quotation Expiring) — expired + ส่งแล้วรอตอบรับ
+  for (const qt of quotations.filter(qt => qt.status === "expired" || qt.status === "sent_to_client")) {
+    push({
+      iconEl: <AlertTriangle size={14} />, iconBg: "#fef3cd", iconColor: "#d97706",
+      title: "ใบเสนอราคาใกล้หมดอายุ",
+      body: `${qt.id} · ${qt.customer} — ${qt.total}`,
+      time: `ออกเมื่อ ${qt.date}`,
+      href: "/quotations",
+      sortDate: qt.date,
+    });
+  }
+
+  // 5) ปิดการขายได้ (Deal Won) — quotations status "won"
+  for (const qt of quotations.filter(qt => qt.status === "won")) {
+    push({
+      iconEl: <CheckCircle2 size={14} />, iconBg: "#d1fae5", iconColor: "#059669",
+      title: "ปิดการขายได้",
+      body: `${qt.customer} — ${qt.id} มูลค่า ${qt.total}`,
+      time: `ปิดเมื่อ ${qt.date}`,
+      href: "/quotations",
+      sortDate: qt.date,
+    });
+  }
+
+  // 6) เสียโอกาส (Deal Lost) — quotations status "lost"
+  for (const qt of quotations.filter(qt => qt.status === "lost")) {
+    push({
+      iconEl: <AlertTriangle size={14} />, iconBg: "#fee2e2", iconColor: "#dc2626",
+      title: "เสียโอกาส",
+      body: `${qt.customer} — ${qt.id} มูลค่า ${qt.total}`,
+      time: `เมื่อ ${qt.date}`,
+      href: "/quotations",
+      sortDate: qt.date,
+    });
+  }
+
+  // เรียงตามกลุ่มวันนี้ → เมื่อวาน → ก่อนหน้า แล้ววันที่ใหม่สุดก่อนในแต่ละกลุ่ม (deterministic)
+  return out.sort((a, b) => {
+    const ba = BUCKET_ORDER.indexOf(a.bucket);
+    const bb = BUCKET_ORDER.indexOf(b.bucket);
+    if (ba !== bb) return ba - bb;
+    if (a.sortDate !== b.sortDate) return a.sortDate < b.sortDate ? 1 : -1;
+    return a.id - b.id;
+  });
+}
 
 type SearchResult = { type: string; label: string; sub: string; href: string };
 
@@ -43,27 +170,25 @@ const TITLE_MAP: { match: string; title: string }[] = [
   /* Dealer */
   { match: "/dashboard",       title: "แดชบอร์ด" },
   { match: "/pipeline",        title: "เส้นทางการขาย" },
-  { match: "/leads",           title: "ลีด" },
+  { match: "/leads",           title: "ผู้สนใจ" },
   { match: "/customers",       title: "ลูกค้า" },
   { match: "/quotations",      title: "ใบเสนอราคา" },
   { match: "/tasks",           title: "งาน" },
   { match: "/calendar",        title: "ปฏิทิน" },
   { match: "/files",           title: "เอกสาร" },
-  { match: "/products",        title: "สินค้า" },
-  { match: "/company-profile", title: "โปรไฟล์บริษัท" },
+  { match: "/products",        title: "แม่แบบ" },
   { match: "/settings",        title: "ตั้งค่า" },
   /* HQ */
   { match: "/hq/dashboard",      title: "แดชบอร์ด" },
   { match: "/hq/pipeline",       title: "เส้นทางการขาย" },
   { match: "/hq/dealers",        title: "ตัวแทนจำหน่าย" },
-  { match: "/hq/lead-pool",      title: "ลีด" },
+  { match: "/hq/lead-pool",      title: "ผู้สนใจ" },
   { match: "/hq/customers",      title: "ลูกค้า" },
   { match: "/hq/master",         title: "สินค้า" },
   { match: "/hq/company",        title: "บริษัท" },
   { match: "/hq/users",          title: "ผู้ใช้งาน" },
   { match: "/hq/settings",        title: "ตั้งค่า HQ" },
   { match: "/templates",         title: "เทมเพลต" },
-  { match: "/reports/analytics", title: "วิเคราะห์ข้อมูล" },
   { match: "/reports",           title: "รายงาน" },
 ];
 
@@ -78,8 +203,10 @@ export function Topbar() {
   const pathname = usePathname();
   const initial = session.name.charAt(0).toUpperCase();
   const roleLabel = isHQ ? "ผู้บริหาร HQ"
-    : ({ DEALER_ADMIN: "ผู้จัดการสาขา", DEALER_SALES: "เซลส์", DEALER_SITE: "ช่างหน้างาน" } as Record<string, string>)[session.role] ?? "สมาชิก";
-  const notifs = isHQ ? HQ_NOTIFS : DEALER_NOTIFS;
+    : ({ DEALER_ADMIN: "ผู้จัดการสาขา", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
+  // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
+  const { leads: liveLeads, quotations: liveQuotations, appointments: liveAppointments } = useSales();
+  const notifs = useMemo(() => buildNotifications(liveLeads, liveQuotations, liveAppointments), [liveLeads, liveQuotations, liveAppointments]);
 
   // ── states ──
   const [showSearch, setShowSearch]     = useState(false);
@@ -109,16 +236,55 @@ export function Topbar() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // ── search results ──
+  // ── dealer list derived from mock ──
+  const dealers = dealerLeaderboard;
+
+  // ── search results (grouped, ≥2 chars, up to 5 per group) ──
   const q = searchQ.trim().toLowerCase();
-  const results: SearchResult[] = q.length < 1 ? [] : [
-    ...leads.filter(l =>
-      l.name.toLowerCase().includes(q) || l.contact.toLowerCase().includes(q) || l.province.toLowerCase().includes(q)
-    ).slice(0, 4).map(l => ({ type: "ผู้สนใจ", label: l.name, sub: `${l.contact} · ${l.province} · ${l.value}`, href: `/leads/${l.numId}` })),
-    ...customers.filter(c =>
-      c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.province.toLowerCase().includes(q)
-    ).slice(0, 3).map(c => ({ type: "ลูกค้า", label: c.company, sub: `${c.name} · ${c.province}`, href: isHQ ? `/hq/lead-pool` : `/customers/${c.id}` })),
-  ];
+  const results: SearchResult[] = useMemo(() => {
+    if (q.length < 2) return [];
+    const has = (s?: string) => (s ?? "").toLowerCase().includes(q);
+    // ลูกค้าไม่มี owner field → หาผู้รับผิดชอบจากลีดที่ผูก customerId เดียวกัน
+    const ownerOfCustomer = (cid: number) => leads.find(l => l.customerId === cid)?.assigned;
+    return [
+      // ลีด — match company/contact/name/phone/ผู้รับผิดชอบ
+      ...leads
+        .filter((l: LeadRow) => has(l.name) || has(l.company) || has(l.contact) || has(l.phone) || has(l.assigned))
+        .slice(0, 5)
+        .map((l: LeadRow) => {
+          // แสดง secondary text ตามสิ่งที่ตรงกัน (เบอร์โทร / ผู้รับผิดชอบ)
+          const sub = has(l.phone)
+            ? `${l.contact} · ${l.phone ?? ""}`
+            : has(l.assigned)
+            ? `${l.contact} · ผู้รับผิดชอบ ${l.assigned}`
+            : `${l.contact} · ${l.province} · ${l.value}`;
+          return { type: "ผู้สนใจ", label: l.company, sub, href: "/leads" };
+        }),
+      // ลูกค้า — match company/name/province/phone/ผู้รับผิดชอบ (ผ่านลีดที่ผูกกัน)
+      ...customers
+        .filter((c: CustomerMock) => has(c.company) || has(c.name) || has(c.province) || has(c.phone) || has(ownerOfCustomer(c.id)))
+        .slice(0, 5)
+        .map((c: CustomerMock) => {
+          const owner = ownerOfCustomer(c.id);
+          const sub = has(c.phone)
+            ? `${c.name} · ${c.phone}`
+            : has(owner)
+            ? `${c.name} · ผู้รับผิดชอบ ${owner}`
+            : `${c.name} · ${c.province}`;
+          return { type: "ลูกค้า", label: c.company, sub, href: "/customers" };
+        }),
+      // ใบเสนอราคา — match id (เลขที่ใบเสนอราคา)/customer/project
+      ...quotations
+        .filter((qt: QuotationMock) => has(qt.id) || has(qt.customer) || has(qt.project))
+        .slice(0, 5)
+        .map((qt: QuotationMock) => ({ type: "ใบเสนอราคา", label: qt.id, sub: `${qt.customer} · ${qt.total}`, href: "/quotations" })),
+      // ตัวแทนจำหน่าย — match dealer name/code
+      ...dealers
+        .filter((d: DealerRow) => has(d.name) || has(d.code) || has(d.region))
+        .slice(0, 5)
+        .map((d: DealerRow) => ({ type: "ตัวแทนจำหน่าย", label: d.name, sub: `${d.code} · ${d.region}`, href: "/hq/dealers" })),
+    ];
+  }, [q, dealers]);
 
   const unreadCount = notifs.filter(n => !readIds.has(n.id)).length;
 
@@ -143,10 +309,12 @@ export function Topbar() {
     router.push(href);
   }
 
-  // ── type badge color ──
-  const typeColor: Record<string, { bg: string; text: string }> = {
-    ผู้สนใจ: { bg: "#dce5f0", text: PRIMARY },
-    ลูกค้า:  { bg: "#e5faf0", text: "#059669" },
+  // ── type badge color + icon per group ──
+  const typeMeta: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+    "ผู้สนใจ":         { bg: "#dce5f0", text: PRIMARY,   icon: <MessageSquare size={14} /> },
+    "ลูกค้า":         { bg: "#e5faf0", text: "#059669", icon: <Users size={14} /> },
+    "ใบเสนอราคา":     { bg: "#fef3cd", text: "#b45309", icon: <FileText size={14} /> },
+    "ตัวแทนจำหน่าย":  { bg: "#f0e5fa", text: "#7c3aed", icon: <Sparkles size={14} /> },
   };
 
   return (
@@ -179,24 +347,32 @@ export function Topbar() {
             {results.length > 0 ? (
               <div style={{ maxHeight:360, overflowY:"auto" }}>
                 {results.map((r, i) => {
-                  const tc = typeColor[r.type] ?? { bg:"#f0f0f5", text:"#6b7280" };
+                  const tc = typeMeta[r.type] ?? { bg:"#f0f0f5", text:"#6b7280", icon:null };
+                  const isGroupStart = i === 0 || results[i - 1].type !== r.type;
                   return (
-                    <button key={i} onClick={() => goTo(r.href)}
-                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"11px 16px",
+                    <div key={i}>
+                    {isGroupStart && (
+                      <div style={{ padding:"9px 16px 4px", fontSize:"0.62rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em", background:"#fff" }}>
+                        {r.type}
+                      </div>
+                    )}
+                    <button onClick={() => goTo(r.href)}
+                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 16px",
                         border:"none", borderBottom:`1px solid ${BG}`, background:"#fff", cursor:"pointer", textAlign:"left" }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = BG; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; }}>
-                      <span style={{ padding:"2px 8px", borderRadius:99, fontSize:"0.63rem", fontWeight:700, background:tc.bg, color:tc.text, flexShrink:0 }}>{r.type}</span>
+                      <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:"50%", background:tc.bg, color:tc.text, flexShrink:0 }}>{tc.icon}</span>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:"0.84rem", fontWeight:700, color:STEEL, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.label}</div>
                         <div style={{ fontSize:"0.7rem", color:"#6b7280", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.sub}</div>
                       </div>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
+                    </div>
                   );
                 })}
               </div>
-            ) : q.length > 0 ? (
+            ) : q.length >= 2 ? (
               <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.82rem", color:"#9ca3af" }}>
                 ไม่พบผลลัพธ์สำหรับ &ldquo;{searchQ}&rdquo;
               </div>
@@ -204,7 +380,7 @@ export function Topbar() {
               <div style={{ padding:"16px", display:"flex", flexDirection:"column", gap:6 }}>
                 <div style={{ fontSize:"0.68rem", color:"#9ca3af", fontWeight:700, marginBottom:4, letterSpacing:"0.05em" }}>ค้นหาด่วน</div>
                 {(isHQ
-                  ? [{ label:"วิเคราะห์ข้อมูล", href:"/reports" }, { label:"ตัวแทนจำหน่าย", href:"/hq/dealers" }, { label:"ลีด", href:"/hq/lead-pool" }]
+                  ? [{ label:"วิเคราะห์ข้อมูล", href:"/reports" }, { label:"ตัวแทนจำหน่าย", href:"/hq/dealers" }, { label:"ผู้สนใจ", href:"/hq/lead-pool" }]
                   : [{ label:"ผู้สนใจทั้งหมด", href:"/leads" }, { label:"ใบเสนอราคา", href:"/quotations" }, { label:"ลูกค้า", href:"/customers" }]
                 ).map(s => (
                   <button key={s.href} onClick={() => goTo(s.href)}
@@ -223,35 +399,31 @@ export function Topbar() {
       {/* ── Topbar (ERP look) ───────────────────────────────────── */}
       <header className="erp-topbar">
 
-        {/* Breadcrumb */}
-        <div className="breadcrumb">
-          {isHQ ? "HQ" : "สาขา"} · <strong>{pageTitle(pathname)}</strong>
-        </div>
+        <div className="topbar-right">
 
-        {/* Inline search (opens overlay) */}
-        <div className="erp-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        {/* Search icon (opens overlay) */}
+        <button className="icon-btn" aria-label="ค้นหา"
+          onClick={() => { setShowSearch(true); setShowNotifs(false); setShowUser(false); }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <input
-            readOnly
-            onFocus={() => setShowSearch(true)}
-            onClick={() => setShowSearch(true)}
-            placeholder={isHQ ? "ค้นหาผู้สนใจ โอกาสการขาย ลูกค้า…" : "ค้นหาผู้สนใจ ลูกค้า ใบเสนอราคา…"}
-            style={{ cursor: "pointer" }}
-          />
-        </div>
-
-        <div className="topbar-right">
+        </button>
 
         {/* Bell + dropdown */}
         <div ref={notifsRef} style={{ position:"relative" }}>
-          <button className="icon-btn"
+          <button className="icon-btn" aria-label="การแจ้งเตือน"
             onClick={() => { setShowNotifs(p => !p); setShowUser(false); }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-            {unreadCount > 0 && <span className="dot-notify" />}
+            <Bell size={18} strokeWidth={2} />
+            {unreadCount > 0 && (
+              <span style={{
+                position:"absolute", top:-2, right:-2, minWidth:16, height:16, padding:"0 4px",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                borderRadius:99, background:"#dc2626", color:"#fff",
+                fontSize:"0.6rem", fontWeight:800, lineHeight:1, border:"2px solid #fff",
+              }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {/* Notifications panel */}
@@ -262,10 +434,22 @@ export function Topbar() {
                 <button onClick={markAll} style={{ fontSize:"0.7rem", color:PRIMARY, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>อ่านทั้งหมด</button>
               </div>
               <div style={{ maxHeight:340, overflowY:"auto" }}>
-                {notifs.map(n => {
+                {notifs.length === 0 && (
+                  <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.8rem", color:"#9ca3af" }}>
+                    ไม่มีการแจ้งเตือน
+                  </div>
+                )}
+                {notifs.slice(0, 8).map((n, i, shown) => {
                   const isRead = readIds.has(n.id);
+                  const isBucketStart = i === 0 || shown[i - 1].bucket !== n.bucket;
                   return (
-                    <button key={n.id}
+                    <div key={n.id}>
+                    {isBucketStart && (
+                      <div style={{ padding:"9px 16px 4px", fontSize:"0.62rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em", background:"#fafafa", borderBottom:`1px solid ${BG}` }}>
+                        {BUCKET_LABEL[n.bucket]}
+                      </div>
+                    )}
+                    <button
                       onClick={() => { markOne(n.id); setShowNotifs(false); router.push(n.href); }}
                       style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"11px 16px", border:"none",
                         borderBottom:`1px solid ${BG}`, background:isRead ? "#fff" : "#f6f9ff",
@@ -282,13 +466,14 @@ export function Topbar() {
                         <div style={{ fontSize:"0.63rem", color:"#9ca3af", marginTop:3 }}>{n.time}</div>
                       </div>
                     </button>
+                    </div>
                   );
                 })}
               </div>
               <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
                 <button onClick={() => { setShowNotifs(false); router.push(isHQ ? "/tasks" : "/activity"); }}
                   style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.75rem", fontWeight:600, cursor:"pointer" }}>
-                  ดูทั้งหมด →
+                  {notifs.length > 8 ? `ดูทั้งหมด (${notifs.length}) →` : "ดูทั้งหมด →"}
                 </button>
               </div>
             </div>
