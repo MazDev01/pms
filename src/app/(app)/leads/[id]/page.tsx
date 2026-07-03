@@ -10,8 +10,7 @@ import {
   ArrowLeft, ArrowRight, XCircle, Pencil, Trash2, type LucideIcon,
 } from "lucide-react";
 import {
-  customers, quotations,
-  leadStatusLabel, quotationStatusLabel, quotationStatusColor,
+  leadStatusLabel, quotationStatusLabel, quotationStatusColor, solutionProducts, LOST_REASONS,
   type LeadStatus, type LeadRow,
 } from "@/lib/mock";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
@@ -41,7 +40,7 @@ const STEP_INDEX: Record<string, number> = {
 
 // งานมาตรฐานต่อขั้น — ความคืบหน้าคำนวณอัตโนมัติจากการติ๊ก (ไม่มี slider ปรับมือ)
 const STEP_TASKS: Record<string, string[]> = {
-  NEW:      ["บันทึกข้อมูลลูกค้าเข้าระบบ", "ระบุแหล่งที่มาของลีด", "มอบหมายผู้รับผิดชอบ"],
+  NEW:      ["บันทึกข้อมูลลูกค้าเข้าระบบ", "ระบุแหล่งที่มาของผู้สนใจ", "มอบหมายผู้รับผิดชอบ"],
   WAITING:  ["ติดต่อลูกค้าครั้งแรก", "แนะนำบริษัทและสินค้า", "ยืนยันช่องทางติดต่อ"],
   BULLET:   ["สำรวจความต้องการลูกค้า", "ระบุสเปก/ขนาด/งบประมาณ", "ประเมินโอกาสปิดการขาย"],
   QUOTED:   ["จัดทำใบเสนอราคา", "ส่งใบเสนอราคาให้ลูกค้า", "ยืนยันเงื่อนไข/ราคา"],
@@ -80,7 +79,8 @@ const INIT_FILES: MockFile[] = [
 // ─── Edit form options ──────────────────────────────────────────────────────
 const EDIT_STATUSES: LeadStatus[] = ["NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"];
 const EDIT_PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","นครสวรรค์","ราชบุรี","ขอนแก่น","อื่นๆ"];
-const EDIT_PRODUCTS  = ["โกดังสินค้า","โรงงาน","อาคารพาณิชย์","อาคารเกษตร","อาคารการศึกษา","อื่นๆ"];
+// แม่แบบ = แหล่งเดียวกับหน้าอื่นทั้งระบบ (solutionProducts)
+const EDIT_PRODUCTS  = solutionProducts.map(p => p.name);
 const EDIT_SOURCES   = ["Facebook","เว็บไซต์","LINE","Walk-in","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
 
 // ─── EDIT LEAD MODAL ──────────────────────────────────────────────────────────
@@ -203,7 +203,11 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { leads: allLeads, updateLeadStatus, updateLead, deleteLead, openDealFromLead } = useSales();
+  const {
+    leads: allLeads, customers, quotations,
+    updateLeadStatus, updateLead, deleteLead, openDealFromLead,
+    addQuotation, convertLeadToCustomer,
+  } = useSales();
   const numId  = Number(params.id);
   const lead   = allLeads.find(l => l.numId === numId);
 
@@ -225,6 +229,9 @@ export default function LeadDetailPage() {
   const [qProvince,      setQProvince]      = useState("");
   const [qNotes,         setQNotes]         = useState("");
   const [qSaved,         setQSaved]         = useState(false);
+  // เหตุผลที่ปิดการขายไม่ได้ (แสดง/บันทึกเมื่อเลือกสถานะ "ไม่ได้งาน")
+  const [lostPrompt,     setLostPrompt]     = useState(false);
+  const [lostReasonSel,  setLostReasonSel]  = useState<string>(lead?.lostReason ?? "");
 
   // Job Card state
   const [activeStep,      setActiveStep]     = useState<string>(
@@ -337,7 +344,7 @@ export default function LeadDetailPage() {
                   background: status === "PAID" ? "#d1fae5" : status === "CANCELLED" ? "#fee2e2" : "#dce5f0",
                   color:      status === "PAID" ? SUCCESS   : status === "CANCELLED" ? "#dc2626" : PRIMARY,
                 }}>
-                  {leadStatusLabel[status]} <ChevronDown size={12} />
+                  {leadStatusLabel[status]}{status === "CANCELLED" && lead.lostReason ? ` · ${lead.lostReason}` : ""} <ChevronDown size={12} />
                 </button>
                 {showStatusDrop && (
                   <>
@@ -347,12 +354,14 @@ export default function LeadDetailPage() {
                       background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12,
                       boxShadow: "0 8px 24px rgba(0,0,0,.12)", minWidth: 190, overflow: "hidden",
                     }}>
-                      {(["NEW","WAITING","BULLET","QUOTED","PAID","CANCELLED"] as LeadStatus[]).map(s => (
+                      {(["NEW","WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"] as LeadStatus[]).map(s => (
                         <button key={s} onClick={() => {
-                          setStatus(s);
-                          if (lead) updateLeadStatus(lead.id, s);
                           setShowStatusDrop(false);
-                          if (s !== "CANCELLED" && s !== "PAID") setActiveStep(s);
+                          // เลือก "ไม่ได้งาน" → เปิดหน้าต่างเลือกเหตุผลก่อนบันทึก
+                          if (s === "CANCELLED") { setLostReasonSel(lead?.lostReason ?? ""); setLostPrompt(true); return; }
+                          setStatus(s);
+                          if (lead) { updateLeadStatus(lead.id, s); updateLead({ ...lead, status: s, lostReason: undefined }); }
+                          if (s !== "PAID") setActiveStep(s);
                         }} style={{
                           display: "flex", alignItems: "center", gap: 8, width: "100%",
                           padding: "9px 14px", border: "none",
@@ -804,6 +813,46 @@ export default function LeadDetailPage() {
         </>
       )}
 
+      {/* ─── Lost Reason Modal (เหตุผลที่ปิดการขายไม่ได้) ───────────── */}
+      {lostPrompt && (
+        <div onClick={() => setLostPrompt(false)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+            <div style={{ background: "#dc2626", color: "#fff", padding: "16px 20px", fontSize: "1rem", fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
+              <XCircle size={18} /> ปิดการขายไม่สำเร็จ
+            </div>
+            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: "0.8rem", color: MUTED }}>ระบุเหตุผลที่ปิดการขายไม่ได้ เพื่อใช้วิเคราะห์ในรายงาน</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {LOST_REASONS.map(r => (
+                  <button key={r} onClick={() => setLostReasonSel(r)}
+                    style={{ padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
+                      border: `1px solid ${lostReasonSel === r ? "#dc2626" : "#e5e7eb"}`,
+                      background: lostReasonSel === r ? "#fee2e2" : "#fff",
+                      color: lostReasonSel === r ? "#dc2626" : STEEL, fontWeight: lostReasonSel === r ? 700 : 400 }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn btn-secondary btn-md" onClick={() => setLostPrompt(false)}>ยกเลิก</button>
+              <button className="btn btn-md" disabled={!lostReasonSel}
+                style={{ background: lostReasonSel ? "#dc2626" : "#f3f4f6", color: lostReasonSel ? "#fff" : "#9ca3af", cursor: lostReasonSel ? "pointer" : "not-allowed" }}
+                onClick={() => {
+                  if (!lostReasonSel || !lead) return;
+                  setStatus("CANCELLED");
+                  updateLeadStatus(lead.id, "CANCELLED");
+                  updateLead({ ...lead, status: "CANCELLED", lostReason: lostReasonSel });
+                  setActivities(prev => [{ id: Date.now(), date: "26 มิ.ย. 2569", icon: "note", text: `ปิดการขายไม่สำเร็จ — เหตุผล: ${lostReasonSel}`, type: "note" }, ...prev]);
+                  setLostPrompt(false);
+                }}>
+                ยืนยันปิดการขาย
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Create Quotation Modal ───────────────────────────────── */}
       {showQuoteModal && (
         <>
@@ -829,10 +878,13 @@ export default function LeadDetailPage() {
               <div style={{ textAlign: "center", padding: "32px 0" }}>
                 <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}><CheckCircle2 size={48} color={SUCCESS} strokeWidth={1.5} /></div>
                 <div style={{ fontSize: "1rem", fontWeight: 700, color: SUCCESS, marginBottom: 6 }}>สร้างใบเสนอราคาสำเร็จ</div>
-                <div style={{ fontSize: "0.78rem", color: MUTED, marginBottom: 20 }}>ระบบบันทึก {qName} เรียบร้อยแล้ว</div>
-                <button className="btn btn-primary btn-md" onClick={() => setShowQuoteModal(false)}>
-                  ปิด
-                </button>
+                <div style={{ fontSize: "0.78rem", color: MUTED, marginBottom: 20 }}>ระบบบันทึก {qName} เข้าหน้าใบเสนอราคาเรียบร้อยแล้ว</div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                  <button className="btn btn-secondary btn-md" onClick={() => setShowQuoteModal(false)}>ปิด</button>
+                  <button className="btn btn-primary btn-md" onClick={() => router.push("/quotations")}>
+                    <ArrowRight size={14} /> ไปที่ใบเสนอราคา
+                  </button>
+                </div>
               </div>
             ) : (
               <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -842,15 +894,11 @@ export default function LeadDetailPage() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div>
-                    <label className="form-label">ประเภทอาคาร</label>
+                    <label className="form-label">แม่แบบที่สนใจ</label>
                     <select className="form-select" value={qProduct} onChange={e => setQProduct(e.target.value)}>
-                      <option value="">เลือกประเภท</option>
-                      <option>โกดังสินค้า</option>
-                      <option>โรงงาน</option>
-                      <option>งานตามแบบ</option>
-                      <option>อาคารพาณิชย์</option>
-                      <option>สนามกีฬาในร่ม</option>
-                      <option>อื่นๆ</option>
+                      <option value="">เลือกแม่แบบ</option>
+                      {!solutionProducts.some(p => p.name === qProduct) && qProduct && <option value={qProduct}>{qProduct}</option>}
+                      {solutionProducts.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                   </div>
                   <div>
@@ -874,9 +922,30 @@ export default function LeadDetailPage() {
                   </button>
                   <button className="btn btn-primary btn-md" onClick={() => {
                     if (!qName.trim()) return;
+                    // แปลงผู้สนใจเป็นลูกค้า (หรือหาลูกค้าเดิม) แล้วสร้างใบเสนอราคาจริงเข้า SalesContext
+                    const parseBaht = (s: string) => {
+                      const n = parseFloat(s.replace(/[฿,\s]/g, "")) || 0;
+                      if (/B/i.test(s)) return n * 1e9;
+                      if (/M/i.test(s)) return n * 1e6;
+                      if (/K/i.test(s)) return n * 1e3;
+                      return n;
+                    };
+                    const cust = convertLeadToCustomer(lead);
+                    const est = parseBaht(qValue);
+                    const nums = quotations.map(q => parseInt(q.id.split("-")[2] ?? "") || 0);
+                    const newId = `Q-2026-${String(Math.max(...nums, 100) + 1).padStart(4, "0")}`;
+                    addQuotation({
+                      id: newId, customer: cust.company,
+                      project: qName.trim(),
+                      total: "฿" + est.toLocaleString("th-TH"), totalValue: est, materialCost: est,
+                      province: qProvince || lead.province,
+                      buildingType: qProduct || lead.product,
+                      area: 0, status: "draft", date: "2026-06-30", items: 0,
+                      customerId: cust.id, projectId: 0, revision: "V1", expiry: "",
+                    });
                     setActivities(prev => [{
                       id: Date.now(), date: "26 มิ.ย. 2569",
-                      icon: "doc", text: `สร้างใบเสนอราคา "${qName}" มูลค่า ${qValue}`, type: "doc",
+                      icon: "doc", text: `สร้างใบเสนอราคา ${newId} "${qName}" มูลค่า ${qValue}`, type: "doc",
                     }, ...prev]);
                     setQSaved(true);
                   }}>

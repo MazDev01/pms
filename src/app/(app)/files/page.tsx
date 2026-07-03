@@ -38,10 +38,10 @@ const MOCK_FILES: FileMock[] = [
   { id: 6,  name: "สัญญา_ลงนามแล้ว_ATC.pdf",              size: "1.8 MB", ext: "pdf",  category: "สัญญา",      project: "ATC Logistics",            uploadedBy: "ประสิทธิ์", uploadedAt: "2026-06-08" },
   { id: 7,  name: "รูปถ่ายพื้นที่_โอกาสการขายนนทบุรี.jpg",     size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "โกดัง Nonthaburi Corp",    uploadedBy: "วิภา",     uploadedAt: "2026-06-05", customerId: 1 },
   { id: 8,  name: "สรุปความต้องการ_ไทยเกษตร.pdf",       size: "920 KB", ext: "pdf",  category: "อื่นๆ",      project: "อาคารไทยเกษตรพัฒนา",      uploadedBy: "สุดาวรรณ", uploadedAt: "2026-06-03" },
-  { id: 9,  name: "รายละเอียดสินค้า_EASYBUILD.xlsx",         size: "512 KB", ext: "xlsx", category: "แบบแปลน",    project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", customerId: 2 },
+  { id: 9,  name: "รายละเอียดสินค้า_โกดังสำเร็จรูป.xlsx",         size: "512 KB", ext: "xlsx", category: "แบบแปลน",    project: "โรงงานสำเร็จรูป เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", customerId: 2 },
   { id: 10, name: "quotation_Q2026-0095.pdf",               size: "1.1 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-05-28", customerId: 5 },
-  { id: 11, name: "ร่างสัญญาซื้อขาย_PREFAB.docx",                size: "520 KB", ext: "docx", category: "สัญญา",      project: "โรงงาน PREFAB ซีซีเอส",              uploadedBy: "สมชาย",   uploadedAt: "2026-05-25", customerId: 2 },
-  { id: 12, name: "presentation_Benjamin_2026.pptx",        size: "12.4 MB",ext: "pptx", category: "นำเสนอ",     project: "—",                        uploadedBy: "วิภา",     uploadedAt: "2026-05-20" },
+  { id: 11, name: "ร่างสัญญาซื้อขาย_อาคารสำเร็จรูป.docx",                size: "520 KB", ext: "docx", category: "สัญญา",      project: "โรงงานสำเร็จรูป ซีซีเอส",              uploadedBy: "สมชาย",   uploadedAt: "2026-05-25", customerId: 2 },
+  { id: 12, name: "presentation_บริษัท_2026.pptx",        size: "12.4 MB",ext: "pptx", category: "นำเสนอ",     project: "—",                        uploadedBy: "วิภา",     uploadedAt: "2026-05-20" },
   { id: 13, name: "เอกสารประกอบการเสนอราคา_อาคารเกษตร_v3.pdf",            size: "6.8 MB", ext: "pdf",  category: "แบบแปลน",    project: "อาคารไทยเกษตรพัฒนา",      uploadedBy: "วิชัย",   uploadedAt: "2026-05-18" },
   { id: 14, name: "รายงานความคืบหน้า_Q2.pdf",              size: "2.8 MB", ext: "pdf",  category: "อื่นๆ",      project: "—",                        uploadedBy: "ประสิทธิ์", uploadedAt: "2026-05-15" },
   { id: 15, name: "signed_contract_ATC.pdf",                size: "1.9 MB", ext: "pdf",  category: "สัญญา",      project: "ATC Logistics",            uploadedBy: "สุดาวรรณ", uploadedAt: "2026-05-10" },
@@ -118,7 +118,7 @@ function guessExt(name: string): FileExt {
 // ดาวน์โหลดเอกสาร (ระบบ frontend/mock) — สร้างไฟล์สรุปข้อมูลให้ดาวน์โหลดจริง
 function downloadFile(f: { name: string; size: string; uploadedBy: string; uploadedAt: string }) {
   const content =
-    `Benjamin PMS — เอกสาร\r\n` +
+    `เอกสารบริษัท\r\n` +
     `====================\r\n` +
     `ชื่อไฟล์: ${f.name}\r\n` +
     `ขนาด: ${f.size}\r\n` +
@@ -337,7 +337,7 @@ function PreviewBody({ f }: { f: FileMock }) {
             letterSpacing: 6, pointerEvents: "none", userSelect: "none",
           }}>PDF</div>
           <div style={{ position: "relative" }}>
-            <div style={{ fontSize: "0.62rem", fontWeight: 800, color: PRIMARY, letterSpacing: 1, textTransform: "uppercase" }}>Benjamin PMS</div>
+            <div style={{ fontSize: "0.62rem", fontWeight: 800, color: PRIMARY, letterSpacing: 1, textTransform: "uppercase" }}>เอกสารบริษัท</div>
             <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL, marginTop: 10, lineHeight: 1.4, wordBreak: "break-word" }}>{f.name}</div>
             <div style={{ height: 3, width: 54, background: PRIMARY, borderRadius: 3, margin: "12px 0 20px" }} />
             {[92, 100, 78, 96, 64].map((w, i) => (

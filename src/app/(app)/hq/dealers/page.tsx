@@ -139,7 +139,7 @@ export default function HQDealersPage() {
 
   // Stats — คำนวณจากชุดที่กรองแล้ว; ตัวเลขสะสม (รายได้/โครงการ) สเกลด้วย timeRange.factor
   const f = timeRange.factor;
-  const active = filtered.filter(d => d.status === "active");
+  const active = filtered.filter(d => dealerStatus(d) === "active");
   const totalRevenue = Math.round(filtered.reduce((s, d) => s + d.revenueActual, 0) * f);
   const totalTarget = Math.round(filtered.reduce((s, d) => s + d.revenueTarget, 0) * f);
   const totalProjects = Math.round(filtered.reduce((s, d) => s + d.activeProjects, 0) * f);
@@ -198,7 +198,7 @@ export default function HQDealersPage() {
             statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
           />
           <ExportMenu filename="dealers" title="ตัวแทนจำหน่าย (ทั้งเครือ)"
-            headers={["รหัส","สาขา","ภาค","รายได้จริง","เป้า","Win Rate %","ดีลกำลังทำ","สถานะ"]}
+            headers={["รหัส","สาขา","ภาค","รายได้จริง","เป้า","Win Rate %","โอกาสการขาย","สถานะ"]}
             rows={filtered.map(d=>[d.code,d.name,d.region,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,STATUS_META[dealerStatus(d)].label])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มสาขา

@@ -12,7 +12,6 @@ import {
 import {
   salesByMonth, leadStatusLabel, leadStatusColor,
   quotationStatusLabel, quotationStatusColor,
-  solutionProducts,
   type LeadStatus, type QuotationStatus,
 } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
@@ -36,6 +35,10 @@ const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.get
 const daysInclusive = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
 const parseISO = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const dmLabel = (d: Date) => `${d.getDate()} ${monthsTH[d.getMonth() + 1]}`;
+const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// ผู้สนใจ (lead) ไม่มีฟิลด์วันที่ใน mock → สร้างวันที่แบบคงที่ (deterministic) กระจายภายใน ~150 วันล่าสุด
+// เพื่อให้ตัวกรองช่วงเวลาบนแดชบอร์ดกรอง KPI ได้จริงและผลไม่กระโดดสุ่มในแต่ละครั้ง
+const leadIsoOf = (numId: number, today: Date) => isoOf(addDays(today, -(((numId * 17) % 150))));
 
 // ยอดขายต่อวัน (ล้านบาท) — เฉลี่ยจากยอดเดือน + คลื่นในเดือนเพื่อให้เส้นดูเป็นธรรมชาติ
 function dayMillions(d: Date): number {
@@ -81,31 +84,63 @@ export default function DealerDashboard() {
   const [customStart, setCustomStart] = useState("2026-06-01");
   const [customEnd, setCustomEnd] = useState("2026-06-30");
 
-  // ─── Derived counts ──────────────────────────────────────────────
+  // ─── ช่วงเวลาที่เลือก [start, end] (อิงวันจำลอง 30 มิ.ย. 2026) — ให้ตรงกับหน้าต่างของกราฟ ──
+  const range = useMemo(() => {
+    const end = parseISO(MOCK_TODAY);
+    switch (chartRange) {
+      case "7d":     return { start: addDays(end, -6), end };
+      case "30d":    return { start: addDays(end, -29), end };
+      case "month":  return { start: new Date(2026, 5, 1), end: new Date(2026, 5, 30) };
+      case "quarter":return { start: new Date(2026, 3, 1), end: new Date(2026, 5, 30) };
+      case "year":   return { start: new Date(2026, 0, 1), end };
+      case "custom": { let s = parseISO(customStart), e = parseISO(customEnd); if (e < s) [s, e] = [e, s]; return { start: s, end: e }; }
+      default:       return { start: new Date(2026, 0, 1), end };
+    }
+  }, [chartRange, customStart, customEnd]);
+
+  // ─── ข้อมูลที่กรองตามช่วงเวลา (ผู้สนใจ/ใบเสนอราคา/ดีล) — ตัวกรองด้านบนคุมทั้งหน้า ──
+  const scoped = useMemo(() => {
+    const { start, end } = range;
+    const today = parseISO(MOCK_TODAY);
+    const within = (iso: string) => { const d = parseISO(iso); return d >= start && d <= end; };
+    return {
+      fLeads: leads.filter(l => within(leadIsoOf(l.numId, today))),
+      fQuotations: quotations.filter(q => within(q.date)),
+      fDeals: deals.filter(d => within(d.createdAt)),
+    };
+  }, [leads, quotations, deals, range]);
+
+  // ─── Derived counts (จากชุดที่กรองตามช่วงเวลา) ─────────────────────
   const m = useMemo(() => {
-    const leadStatusCount = (s: LeadStatus) => leads.filter(l => l.status === s).length;
-    const quoteStatusCount = (s: QuotationStatus) => quotations.filter(q => q.status === s).length;
-    const active = deals.filter(d => d.outcome === "active");
-    const won = deals.filter(d => d.outcome === "won");
-    const lostDeals = deals.filter(d => d.outcome === "lost");
-    const lostQ = quotations.filter(q => q.status === "lost");
-    const wonValue = won.reduce((s, d) => s + d.value, 0);
+    const { fLeads, fQuotations, fDeals } = scoped;
+    const leadStatusCount = (s: LeadStatus) => fLeads.filter(l => l.status === s).length;
+    const quoteStatusCount = (s: QuotationStatus) => fQuotations.filter(q => q.status === s).length;
+    const active = fDeals.filter(d => d.outcome === "active");
+    const won = fDeals.filter(d => d.outcome === "won");
+    const lostDeals = fDeals.filter(d => d.outcome === "lost");
+    // กันนับซ้ำ: ดีลที่ปิดแล้ว + ใบเสนอราคาที่ปิดแล้วซึ่ง "ไม่มีดีลของลูกค้าคนเดียวกัน" เท่านั้น
+    const wonDealCust = new Set(won.map(d => d.customerId));
+    const lostDealCust = new Set(lostDeals.map(d => d.customerId));
+    const extraWonQ = fQuotations.filter(q => q.status === "won" && !wonDealCust.has(q.customerId));
+    const extraLostQ = fQuotations.filter(q => q.status === "lost" && !lostDealCust.has(q.customerId));
+    const wonValue = won.reduce((s, d) => s + d.value, 0) + extraWonQ.reduce((s, q) => s + q.totalValue, 0);
+    const wonCount = won.length + extraWonQ.length;
     return {
       leadStatusCount, active, won, wonValue,
       newLeads: leadStatusCount("NEW"),
       activeDeals: active.length,
       quotationSent: quoteStatusCount("sent_to_client") + quoteStatusCount("viewed"),
-      wonDeals: won.length + quoteStatusCount("won"),
-      lostCount: lostDeals.length + lostQ.length,
+      wonDeals: wonCount,
+      lostCount: lostDeals.length + extraLostQ.length,
       expectedRevenue: active.reduce((s, d) => s + d.value, 0),
-      avgDealSize: won.length ? Math.round(wonValue / won.length) : 0,
-      leadToWon: leads.length ? Math.round((won.length / leads.length) * 100) : 0,
+      avgDealSize: wonCount ? Math.round(wonValue / wonCount) : 0,
+      leadToWon: fLeads.length ? Math.round((wonCount / fLeads.length) * 100) : 0,
     };
-  }, [leads, quotations, deals]);
+  }, [scoped]);
 
   // ─── KPI cards (2 rows × 3) ──────────────────────────────────────
   const kpis = [
-    { Icon: UserPlus, label: "ลีดใหม่", en: "New Leads", value: `${m.newLeads}`, accent: PRIMARY, href: "/leads" },
+    { Icon: UserPlus, label: "ผู้สนใจใหม่", en: "New Leads", value: `${m.newLeads}`, accent: PRIMARY, href: "/leads" },
     { Icon: TrendingUp, label: "ดีลที่กำลังดำเนินการ", en: "Active Deals", value: `${m.activeDeals}`, accent: PRIMARY, href: "/pipeline" },
     { Icon: Send, label: "ใบเสนอราคาที่ส่ง", en: "Quotation Sent", value: `${m.quotationSent}`, accent: AMBER, href: "/quotations" },
     { Icon: Trophy, label: "ปิดการขายได้", en: "Won Deals", value: `${m.wonDeals}`, accent: GREEN, href: "/pipeline" },
@@ -116,11 +151,11 @@ export default function DealerDashboard() {
   // ─── Sales Target ────────────────────────────────────────────────
   const target = useMemo(() => {
     const TARGET = 45_000_000;
-    const actual = deals.filter(d => d.outcome === "won").reduce((s, d) => s + d.value, 0)
-      + quotations.filter(q => q.status === "won").reduce((s, q) => s + q.totalValue, 0);
+    // ใช้ยอด won ที่ dedupe แล้วจาก m (ดีล + ใบเสนอราคาที่ไม่ซ้ำลูกค้า) กันนับซ้ำ
+    const actual = m.wonValue;
     const achievement = Math.round((actual / TARGET) * 100);
     return { TARGET, actual, achievement, remaining: Math.max(0, TARGET - actual), barWidth: Math.min(100, achievement) };
-  }, [deals, quotations]);
+  }, [m]);
 
   // ─── Today (Goal + Follow-up) ────────────────────────────────────
   const today = useMemo(() => {
@@ -147,31 +182,14 @@ export default function DealerDashboard() {
     return { goals, goalPct, follow };
   }, [quotations, appointments]);
 
-  // ─── Top Products (mini ranking) ─────────────────────────────────
-  // สินค้าขายดี — อ้างอิง 6 แม่แบบจริง (จับจากลีด/ใบเสนอราคา/ดีล ที่ตรงชื่อแม่แบบ) ไม่มีการสุ่ม
-  const topProducts = useMemo(() => {
-    const PALETTE = [PRIMARY, GREEN, AMBER, "#0369a1", "#7c3aed", "#dc2626"];
-    const parseVal = (v: string) => {
-      const n = parseFloat(v.replace(/[฿,\s]/g, "")) || 0;
-      if (/M/i.test(v)) return n * 1e6;
-      if (/K/i.test(v)) return n * 1e3;
-      return n;
-    };
-    const rows = solutionProducts.map((tpl, i) => {
-      const name = tpl.name;
-      let count = 0, value = 0;
-      leads.forEach(l => { if (l.product === name) { count++; value += parseVal(l.value); } });
-      quotations.forEach(q => { if (`${q.project} ${q.buildingType}`.includes(name)) { count++; value += q.totalValue; } });
-      deals.forEach(d => { if (d.project.includes(name)) { count++; value += d.value; } });
-      return { key: name, color: PALETTE[i % PALETTE.length], count, value };
-    });
-    return rows.filter(r => r.count > 0).sort((a, b) => b.value - a.value).slice(0, 5);
-  }, [leads, quotations, deals]);
+  // หมายเหตุ: อันดับแม่แบบ (Top Products) ย้ายไปเป็นเจ้าของเดียวที่หน้ารายงาน "ยอดขายตามสินค้า"
+  // เพื่อไม่ให้ Dashboard (actionable) ซ้ำกับ Reports (analytical)
 
-  const recentLeads = useMemo(() => [...leads].sort((a, b) => b.numId - a.numId).slice(0, 5), [leads]);
+  // ตาราง "ล่าสุด" ก็อิงช่วงเวลาที่เลือกด้วย (ตัวกรองคุมทั้งหน้า)
+  const recentLeads = useMemo(() => [...scoped.fLeads].sort((a, b) => b.numId - a.numId).slice(0, 5), [scoped]);
   const activeQuotations = useMemo(
-    () => quotations.filter(q => q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed")
-      .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5), [quotations]
+    () => scoped.fQuotations.filter(q => q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed")
+      .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5), [scoped]
   );
 
   // ── ข้อมูลกราฟตามช่วงเวลาที่เลือก (อิงวันจริง; วันนี้จำลอง = 30 มิ.ย. 2026) ──
@@ -214,7 +232,7 @@ export default function DealerDashboard() {
       <div className="page-head" style={{ marginBottom: 0 }}>
         <div>
           <h2>แดชบอร์ด</h2>
-          <p>ภาพรวมงานขายและโอกาสการขาย</p>
+          <p>ภาพรวมงานขายและโอกาสการขาย · {rangeDesc}</p>
         </div>
         <ChartRangePicker
           value={chartRange} onChange={setChartRange}
@@ -306,15 +324,15 @@ export default function DealerDashboard() {
         </div>
       </div>
 
-      {/* ── Compact row: Sales Target · Top Products ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1.4rem", alignItems: "stretch" }}>
+      {/* ── Sales Target (Top Products ย้ายไปหน้ารายงาน) ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.4rem", alignItems: "stretch" }}>
         {/* Sales Target — คลิกไปดูดีลที่ปิดการขาย (ที่มาของยอดจริง) */}
         <div className="card" role="button" tabIndex={0}
           onClick={() => router.push("/pipeline")}
           onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push("/pipeline"); } }}
           style={{ cursor: "pointer" }}>
           <div className="card-header">
-            <div><div className="card-title">เป้าหมายการขาย</div><div className="card-desc">เทียบเป้าหมายรายปี · คลิกดูที่มา</div></div>
+            <div><div className="card-title">เป้าหมายการขาย</div><div className="card-desc">เทียบเป้าหมาย (เป้าปี ฿45M) · ช่วงที่เลือก</div></div>
             <span className="badge" style={{ background: TINT[PRIMARY], color: PRIMARY, fontWeight: 800 }}>{target.achievement}%</span>
           </div>
           <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -328,38 +346,13 @@ export default function DealerDashboard() {
             </div>
           </div>
         </div>
-
-        {/* Top Products — mini ranking (แม่แบบยอดนิยม · คลิกดูที่มา) */}
-        <div className="card">
-          <div className="card-header"><div><div className="card-title">แม่แบบยอดนิยม</div><div className="card-desc">อันดับตามมูลค่ารวม · คลิกเพื่อดูรายการ</div></div></div>
-          <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 12 }}>
-            {topProducts.length === 0 && (
-              <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", padding: "16px 0", textAlign: "center" }}>ยังไม่มีข้อมูลแม่แบบ</div>
-            )}
-            {topProducts.map((p, i) => (
-              <div key={p.key} role="button" tabIndex={0}
-                onClick={() => router.push("/leads")}
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push("/leads"); } }}
-                style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", borderRadius: 8, padding: "2px 4px", transition: "background .12s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,51,102,.04)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
-                <span style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.78rem", color: i === 0 ? "#fff" : "var(--muted-foreground)", background: i === 0 ? PRIMARY : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.82rem", fontWeight: 800, color: p.color, letterSpacing: "0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.key}</div>
-                  <div style={{ fontSize: "0.64rem", color: "var(--muted-foreground)" }}>{p.count} รายการ</div>
-                </div>
-                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: STEEL, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(p.value)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* ── Recent Leads (5) + Active Quotations (5) ── */}
       <div className="row-2-eq">
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <div className="card-header">
-            <div><div className="card-title">ลีดล่าสุด</div><div className="card-desc">5 รายการล่าสุด</div></div>
+            <div><div className="card-title">ผู้สนใจล่าสุด</div><div className="card-desc">5 รายการล่าสุด</div></div>
             <Link href="/leads" className="btn btn-ghost btn-sm">ดูทั้งหมด <ArrowRight size={13} /></Link>
           </div>
           <div className="table-wrap">
@@ -375,7 +368,7 @@ export default function DealerDashboard() {
                       <td title={l.company} style={{ color: "var(--muted-foreground)" }}>{l.company}</td>
                       <td><span className="badge" style={{ background: c.bg, color: c.text }}>{leadStatusLabel[l.status]}</span></td>
                       <td title={l.assigned} style={{ color: "var(--muted-foreground)" }}>{l.assigned}</td>
-                      <td style={{ textAlign: "center", overflow: "visible" }}><Link href={`/leads/${l.numId}`} className="btn btn-ghost btn-sm" style={{ padding: 6 }} aria-label="ดูลีด"><Eye size={15} /></Link></td>
+                      <td style={{ textAlign: "center", overflow: "visible" }}><Link href={`/leads/${l.numId}`} className="btn btn-ghost btn-sm" style={{ padding: 6 }} aria-label="ดูผู้สนใจ"><Eye size={15} /></Link></td>
                     </tr>
                   );
                 })}

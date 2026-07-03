@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import {
   hqPipelineStages, hqPipelineLostReasons, hqPipelineByProduct,
-  dealerLeaderboard,
 } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -180,94 +179,6 @@ function ProductBreakdown() {
 }
 
 // ── Dealer table ──────────────────────────────────────────────────
-function DealerPipeline() {
-  const dealers = [...dealerLeaderboard]
-    .filter(d => d.status === "active")
-    .sort((a, b) => b.revenueActual - a.revenueActual);
-  const maxRev = Math.max(...dealers.map(d => d.revenueActual));
-
-  function RateTag({ value, hi, lo }: { value: number; hi: number; lo: number }) {
-    const color = value >= hi ? "#059669" : value >= lo ? "#f59e0b" : "#dc2626";
-    const bg    = value >= hi ? "#f0fdf4" : value >= lo ? "#fffbeb" : "#fef2f2";
-    return (
-      <span style={{ fontSize: "0.74rem", fontWeight: 700, color, background: bg, borderRadius: 8, padding: "3px 10px" }}>
-        {value}%
-      </span>
-    );
-  }
-
-  const RANK_STYLE = [
-    { bg: "#fff3cd", color: "#d97706" },
-    { bg: "#eceef0", color: "#475569" },
-    { bg: "#fff3cd", color: "#92400e" },
-  ];
-
-  return (
-    <div className="table-wrap">
-      <table>
-        <colgroup>
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "26%" }} />
-          <col style={{ width: "26%" }} />
-          <col style={{ width: "18%" }} />
-          <col style={{ width: "22%" }} />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>สาขา</th>
-            <th>ยอดขาย</th>
-            <th className="num">อัตราปิดการขาย</th>
-            <th className="num">โอกาสการขายที่กำลังดำเนินการ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dealers.map((d, i) => {
-            const revPct = Math.round((d.revenueActual / maxRev) * 100);
-            const rs = RANK_STYLE[i] ?? { bg: "#f4f6f9", color: "#9ca3af" };
-            return (
-              <tr key={d.code}>
-                <td style={{ width: 44 }}>
-                  <div style={{
-                    width: 26, height: 26, borderRadius: "50%",
-                    background: rs.bg, color: rs.color,
-                    fontWeight: 800, fontSize: "0.7rem",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{i + 1}</div>
-                </td>
-
-                <td>
-                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D" }}>
-                    {d.name.startsWith("Benjamin ") ? d.name.slice(9) : d.name}
-                  </div>
-                  <div style={{ fontSize: "0.63rem", color: "#9ca3af", marginTop: 1 }}>{d.region}</div>
-                </td>
-
-                <td style={{ minWidth: 160 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, height: 5, background: "#f4f6f9", borderRadius: 99, overflow: "hidden" }}>
-                      <div className="top5-bar" style={{ height: "100%", width: `${revPct}%`, background: "#003366", borderRadius: 99 }} />
-                    </div>
-                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#003366", minWidth: 52 }}>
-                      {fmtM(d.revenueActual)}
-                    </span>
-                  </div>
-                </td>
-
-                <td className="num">
-                  <RateTag value={d.winRate} hi={45} lo={30} />
-                </td>
-                <td className="num" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#475569" }}>
-                  {d.activeProjects}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 // ── Main ──────────────────────────────────────────────────────────
 export default function SalesOverviewPage() {
@@ -280,7 +191,6 @@ export default function SalesOverviewPage() {
   const first = hqPipelineStages[0];
   const last  = hqPipelineStages[hqPipelineStages.length - 1];
   const overallConv = Math.round((last.count / first.count) * 100);
-  const activeDealers = dealerLeaderboard.filter(d => d.status === "active").length;
 
   function doExport(fmt: string) {
     setShowExport(false);
@@ -304,7 +214,7 @@ export default function SalesOverviewPage() {
       icon: <Target size={16} />,
     },
     {
-      label: "อัตราปิดการขาย",
+      label: "อัตราแปลงทั้งกรวย",
       value: `${overallConv}%`,
       sub: "ผู้สนใจ → ปิดสำเร็จ",
       iconClass: overallConv >= 30 ? "kpi-green" : "kpi-amber",
@@ -320,10 +230,10 @@ export default function SalesOverviewPage() {
   ];
 
   const summaryStat = [
-    { label: "อัตราปิดการขายรวม", value: `${overallConv}%`,                                                     color: "#003366" },
+    { label: "อัตราแปลงทั้งกรวย", value: `${overallConv}%`,                                                     color: "#003366" },
     { label: "มูลค่าโอกาสการขาย", value: fmtM(first.valueNum),                                                  color: "#2D2D2D" },
     { label: "ปิดได้เดือนนี้", value: fmtM(last.valueNum),                                                      color: "#059669" },
-    { label: "รอปิด (เสนอราคาขึ้นไป)", value: fmtM(hqPipelineStages.slice(2).reduce((s, x) => s + x.valueNum, 0)), color: "#f59e0b" },
+    { label: "รอปิด (เสนอราคาขึ้นไป)", value: fmtM(hqPipelineStages.slice(2, -1).reduce((s, x) => s + x.valueNum, 0)), color: "#f59e0b" },
   ];
 
   return (
@@ -450,19 +360,7 @@ export default function SalesOverviewPage() {
         </div>
       </div>
 
-      {/* ── Dealer table ── */}
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-title">ผลงานต่อสาขา</div>
-            <div className="card-desc">ยอดขาย · อัตราปิดการขาย · โอกาสการขายที่กำลังดำเนินการ</div>
-          </div>
-          <span className="badge" style={{ background: "#f4f6f9", color: "#6b7280" }}>
-            {activeDealers} สาขา
-          </span>
-        </div>
-        <DealerPipeline />
-      </div>
+      {/* ตารางผลงานต่อสาขา (leaderboard) ย้ายไปเป็นเจ้าของเดียวที่ HQ Dashboard */}
     </div>
   );
 }

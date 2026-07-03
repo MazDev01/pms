@@ -10,10 +10,17 @@ export default function HQLeadPoolPage() {
     return s + (l.value.includes("M") ? v * 1000000 : l.value.includes("K") ? v * 1000 : v);
   }, 0);
 
+  // ช่องทางหลัก = ช่องทางที่พบบ่อยสุดในพูล (derive จริง ไม่ hardcode)
+  const topChannel = (() => {
+    const count = new Map<string, number>();
+    leadPool.forEach(l => count.set(l.channel, (count.get(l.channel) ?? 0) + 1));
+    return [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+  })();
+
   const KPIS = [
-    { label: "ลีดรอมอบหมาย", value: String(leadPool.length), icon: "kpi-amber", glyph: "⏳" },
+    { label: "ผู้สนใจรอมอบหมาย", value: String(leadPool.length), icon: "kpi-amber", glyph: "⏳" },
     { label: "มูลค่ารวม", value: `฿${(totalValue / 1000000).toFixed(1)}M`, icon: "kpi-navy", glyph: "฿" },
-    { label: "ช่องทางหลัก", value: "เว็บไซต์", icon: "kpi-green", glyph: "@" },
+    { label: "ช่องทางหลัก", value: topChannel, icon: "kpi-green", glyph: "@" },
   ];
 
   return (

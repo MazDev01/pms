@@ -19,7 +19,7 @@ function fmtM(n: number) {
 const BADGE = (bg: string, color: string): React.CSSProperties => ({ background: bg, color });
 
 const LEAD_STATUS: Record<DealerLeadItem["status"], { label: string; bg: string; color: string }> = {
-  new:       { label: "ลีดใหม่",    bg: "#dce5f0", color: "#003366" },
+  new:       { label: "ผู้สนใจใหม่",    bg: "#dce5f0", color: "#003366" },
   contacted: { label: "ติดต่อแล้ว", bg: "#fef3cd", color: "#d97706" },
   quoted:    { label: "ส่งใบเสนอ", bg: "#dce5f0", color: "#003366" },
   won:       { label: "ปิดได้",     bg: "#e5faf0", color: "#059669" },
@@ -111,7 +111,7 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
             )}
           </div>
           <div style={{ minWidth: 180 }}>
-            <MiniBarChart data={detail.monthlySales} />
+            {detail && <MiniBarChart data={detail.monthlySales} />}
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
         { label: "โอกาสการขายที่กำลังดำเนินการ", value: String(dealer.activeProjects),  unit: "โอกาสการขาย",     color: "#003366" },
         { label: "อัตราปิดการขาย",     value: String(dealer.winRate),         unit: "%",       color: dealer.winRate >= 40 ? "#059669" : "#dc2626" },
         { label: "ส่งตรงเวลา",         value: String(dealer.onTimePct),       unit: "%",       color: dealer.onTimePct >= 80 ? "#059669" : dealer.onTimePct >= 60 ? "#f59e0b" : "#dc2626" },
-        { label: "ใบเสนอราคา",         value: String(detail.quotes.length),   unit: "ใบ",      color: "#2D2D2D" },
+        { label: "ใบเสนอราคา",         value: String(detail?.quotes.length ?? 0),   unit: "ใบ",      color: "#2D2D2D" },
       ].map(s => (
         <div key={s.label} className="stat-card">
           <div className="stat-label">{s.label}</div>
@@ -136,7 +136,7 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
         <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>สินค้าที่ขาย</p>
         {(() => {
           const byProduct: Record<string, number> = {};
-          detail.projects.forEach(p => { byProduct[p.product] = (byProduct[p.product] || 0) + p.valueNum; });
+          (detail?.projects ?? []).forEach(p => { byProduct[p.product] = (byProduct[p.product] || 0) + p.valueNum; });
           const sorted = Object.entries(byProduct).sort((a, b) => b[1] - a[1]);
           const total = sorted.reduce((s, [, v]) => s + v, 0);
           const colors = ["#003366", "#0a4f8c", "#1e6fbf", "#4d94d4", "#82b4e3", "#b8d4f0"];
@@ -174,14 +174,14 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
           </colgroup>
           <thead>
             <tr>
-              {["รหัสลีด", "ลูกค้า", "จังหวัด", "สินค้า", "มูลค่า", "สถานะ", "มอบหมายเมื่อ"].map(h => (
+              {["รหัสผู้สนใจ", "ลูกค้า", "จังหวัด", "สินค้า", "มูลค่า", "สถานะ", "มอบหมายเมื่อ"].map(h => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {leads.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีลีด</td></tr>
+              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีผู้สนใจ</td></tr>
             )}
             {leads.map(l => {
               const st = LEAD_STATUS[l.status];
@@ -291,7 +291,7 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
 
 const TABS = [
   { key: "overview",  label: "ภาพรวม" },
-  { key: "leads",     label: "ลีด" },
+  { key: "leads",     label: "ผู้สนใจ" },
   { key: "projects",  label: "โอกาสการขาย" },
   { key: "quotes",    label: "ใบเสนอ" },
 ] as const;

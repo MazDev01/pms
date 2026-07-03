@@ -2,11 +2,7 @@
 
 import { useEffect, useState, type JSX, type ReactNode } from "react";
 import { X } from "lucide-react";
-
-// ── CI palette ──
-const PRIMARY = "#003366"; // navy
-const STEEL = "#2D2D2D";
-const SILVER = "#C0C0C0";
+import { PRIMARY, STEEL, SILVER } from "@/lib/theme";
 
 export type DrawerTab = { key: string; label: string; content: ReactNode };
 

@@ -85,6 +85,8 @@ export default function HQMasterPage() {
   const [searchQ,      setSearchQ]      = useState("");
   const [editProduct,  setEditProduct]  = useState<Product | null>(null);
   const [products,     setProducts]     = useState<Product[]>(PRODUCTS);
+  const [addOpen,      setAddOpen]      = useState(false);
+  const [naForm,       setNaForm]       = useState<{ code: string; name: string; category: Product["category"]; unit: string; price: string }>({ code: "", name: "", category: "structure", unit: "ชุด", price: "" });
   const [editPrice,    setEditPrice]    = useState("");
   const [editLead,     setEditLead]     = useState("");
   const [editMinOrder, setEditMinOrder] = useState("");
@@ -114,6 +116,21 @@ export default function HQMasterPage() {
     setEditPrice(p.price);
     setEditLead(p.lead);
     setEditMinOrder(p.minOrder);
+  }
+
+  function addProduct() {
+    if (!naForm.code.trim() || !naForm.name.trim()) return;
+    const priceNum = parseFloat(naForm.price.replace(/[^\d.]/g, "")) || 0;
+    const p: Product = {
+      code: naForm.code.trim(), name: naForm.name.trim(), nameEn: "",
+      category: naForm.category, unit: naForm.unit || "ชุด",
+      price: naForm.price.trim() || "-", priceNum,
+      minOrder: "-", lead: "-", status: "active", tags: [],
+      effectiveDate: "1 มิ.ย. 2569", priceHistory: [],
+    };
+    setProducts(prev => [p, ...prev]);
+    setAddOpen(false);
+    setNaForm({ code: "", name: "", category: "structure", unit: "ชุด", price: "" });
   }
 
   function saveEdit() {
@@ -180,7 +197,7 @@ export default function HQMasterPage() {
             onChange={e => setSearchQ(e.target.value)}
             style={{ width: 240 }}
           />
-          <button className="btn btn-primary btn-sm">+ เพิ่มสินค้า</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>+ เพิ่มสินค้า</button>
         </div>
       </div>
 
@@ -196,7 +213,7 @@ export default function HQMasterPage() {
         </div>
         <div className="stat-card">
           <div className="stat-label">หมวดหมู่</div>
-          <div className="stat-value">5</div>
+          <div className="stat-value">{new Set(products.map(p => p.category)).size}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">อัปเดตล่าสุด</div>
@@ -315,6 +332,38 @@ export default function HQMasterPage() {
           </table>
         </div>
       </div>
+
+      {/* Add product modal */}
+      {addOpen && (
+        <div onClick={() => setAddOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+            <div style={{ background: "#003366", color: "#fff", padding: "16px 20px", fontSize: "1rem", fontWeight: 800 }}>เพิ่มสินค้าใหม่</div>
+            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div><label className="form-label">รหัสสินค้า *</label><input className="form-input" value={naForm.code} onChange={e => setNaForm(f => ({ ...f, code: e.target.value }))} placeholder="เช่น PEB-S05" /></div>
+                <div><label className="form-label">หมวดหมู่</label>
+                  <select className="form-select" value={naForm.category} onChange={e => setNaForm(f => ({ ...f, category: e.target.value as Product["category"] }))}>
+                    {(["structure","roofing","wall","accessory","package"] as const).map(c => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div><label className="form-label">ชื่อสินค้า *</label><input className="form-input" value={naForm.name} onChange={e => setNaForm(f => ({ ...f, name: e.target.value }))} placeholder="เช่น อาคารเหล็กสำเร็จรูป 30×40 ม." /></div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div><label className="form-label">หน่วย</label><input className="form-input" value={naForm.unit} onChange={e => setNaForm(f => ({ ...f, unit: e.target.value }))} placeholder="ชุด / ตร.ม. / บาน" /></div>
+                <div><label className="form-label">ราคา</label><input className="form-input" value={naForm.price} onChange={e => setNaForm(f => ({ ...f, price: e.target.value }))} placeholder="เช่น ฿485,000" /></div>
+              </div>
+            </div>
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn btn-secondary btn-md" onClick={() => setAddOpen(false)}>ยกเลิก</button>
+              <button className="btn btn-primary btn-md" onClick={addProduct}
+                disabled={!naForm.code.trim() || !naForm.name.trim()}
+                style={(!naForm.code.trim() || !naForm.name.trim()) ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
+                เพิ่มสินค้า
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal */}
       {editProduct && (

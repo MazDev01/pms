@@ -1,10 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
-const NAVY = "#003366";
-const SILVER = "#C0C0C0";
-const STEEL = "#2D2D2D";
+import { NAVY, SILVER, STEEL } from "@/lib/theme";
 
 // เพดานแกน Y แบบ "nice number" — ปรับตามขนาดข้อมูลจริง เพื่อให้เส้นเต็มกราฟทั้งค่าน้อย (รายวัน) และค่ามาก (รายเดือน)
 function niceCeil(v: number): number {

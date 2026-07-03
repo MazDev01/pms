@@ -8,14 +8,13 @@ import {
   leads, customers, quotations, dealerLeaderboard, apptTypeLabel,
   type LeadRow, type CustomerMock, type QuotationMock, type DealerRow, type AppointmentMock,
 } from "@/lib/mock";
-import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock } from "lucide-react";
+import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu } from "lucide-react";
+import { PRIMARY, STEEL } from "@/lib/theme";
 
 // ── mock "วันนี้" (deterministic) ────────────────────────────────
 const MOCK_TODAY = "2026-06-30";
 
-const PRIMARY = "#003366";
 const BORDER   = "#e5e7eb";
-const STEEL    = "#2D2D2D";
 const BG       = "#fafafa";
 
 // ── notification shape ───────────────────────────────────────────
@@ -173,7 +172,6 @@ const TITLE_MAP: { match: string; title: string }[] = [
   { match: "/leads",           title: "ผู้สนใจ" },
   { match: "/customers",       title: "ลูกค้า" },
   { match: "/quotations",      title: "ใบเสนอราคา" },
-  { match: "/tasks",           title: "งาน" },
   { match: "/calendar",        title: "ปฏิทิน" },
   { match: "/files",           title: "เอกสาร" },
   { match: "/products",        title: "แม่แบบ" },
@@ -181,14 +179,14 @@ const TITLE_MAP: { match: string; title: string }[] = [
   /* HQ */
   { match: "/hq/dashboard",      title: "แดชบอร์ด" },
   { match: "/hq/pipeline",       title: "เส้นทางการขาย" },
-  { match: "/hq/dealers",        title: "ตัวแทนจำหน่าย" },
+  { match: "/hq/dealers",        title: "สาขา" },
   { match: "/hq/lead-pool",      title: "ผู้สนใจ" },
   { match: "/hq/customers",      title: "ลูกค้า" },
+  { match: "/hq/quotations",     title: "ใบเสนอราคา" },
   { match: "/hq/master",         title: "สินค้า" },
   { match: "/hq/company",        title: "บริษัท" },
   { match: "/hq/users",          title: "ผู้ใช้งาน" },
   { match: "/hq/settings",        title: "ตั้งค่า HQ" },
-  { match: "/templates",         title: "เทมเพลต" },
   { match: "/reports",           title: "รายงาน" },
 ];
 
@@ -197,8 +195,8 @@ function pageTitle(pathname: string): string {
   return hit?.title ?? "แดชบอร์ด";
 }
 
-export function Topbar() {
-  const { session, isHQ, currentKey, login, logout } = useRole();
+export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
+  const { session, isHQ, logout } = useRole();
   const router = useRouter();
   const pathname = usePathname();
   const initial = session.name.charAt(0).toUpperCase();
@@ -297,12 +295,6 @@ export function Topbar() {
     router.push("/login");
   }
 
-  function handleSwitch(key: "hq" | "dealer") {
-    setShowUser(false);
-    login(key);
-    router.push(key === "hq" ? "/hq/dashboard" : "/dashboard");
-  }
-
   function goTo(href: string) {
     setShowSearch(false);
     setSearchQ("");
@@ -399,6 +391,11 @@ export function Topbar() {
       {/* ── Topbar (ERP look) ───────────────────────────────────── */}
       <header className="erp-topbar">
 
+        {/* ปุ่มเมนู (มือถือ) */}
+        <button className="hamburger" onClick={onMenu} aria-label="เปิดเมนู">
+          <Menu size={20} />
+        </button>
+
         <div className="topbar-right">
 
         {/* Search icon (opens overlay) */}
@@ -471,7 +468,7 @@ export function Topbar() {
                 })}
               </div>
               <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
-                <button onClick={() => { setShowNotifs(false); router.push(isHQ ? "/tasks" : "/activity"); }}
+                <button onClick={() => { setShowNotifs(false); router.push("/activity"); }}
                   style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.75rem", fontWeight:600, cursor:"pointer" }}>
                   {notifs.length > 8 ? `ดูทั้งหมด (${notifs.length}) →` : "ดูทั้งหมด →"}
                 </button>
@@ -525,22 +522,6 @@ export function Topbar() {
                     <item.Icon size={15} color="#6b7280" strokeWidth={2} /> {item.label}
                   </button>
                 ))}
-
-                {/* Switch role */}
-                <div style={{ margin:"6px 12px", padding:"8px 10px", background:BG, borderRadius:9 }}>
-                  <div style={{ fontSize:"0.63rem", color:"#9ca3af", fontWeight:700, marginBottom:6, letterSpacing:"0.05em" }}>สลับบทบาท</div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    {(["dealer","hq"] as const).map(k => (
-                      <button key={k} onClick={() => handleSwitch(k)}
-                        style={{ flex:1, padding:"5px 0", borderRadius:8, border:"none", cursor:"pointer", fontSize:"0.72rem", fontWeight:700, transition:"all .12s",
-                          background: currentKey===k ? PRIMARY : "#fff",
-                          color: currentKey===k ? "#fff" : "#6b7280",
-                          boxShadow: currentKey===k ? "0 2px 8px rgba(0,0,0,.25)" : "none" }}>
-                        {k === "dealer" ? "ดีลเลอร์" : "HQ"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               {/* Logout */}
@@ -549,7 +530,7 @@ export function Topbar() {
                   style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"9px 16px", border:"none", background:"none", cursor:"pointer", color:"#dc2626", fontSize:"0.8rem", fontWeight:700, textAlign:"left" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fee2e2"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; }}>
-                  <span style={{ fontSize:"0.9rem" }}>🚪</span> ออกจากระบบ
+                  <LogOut size={15} strokeWidth={2} /> ออกจากระบบ
                 </button>
               </div>
             </div>

@@ -270,6 +270,15 @@ export default function CustomersPage(){
       setOwnersList(arr.filter(p => p.active).map(p => p.name));
     } catch {}
   }, []);
+  // โมดัลรายละเอียด: ปิดด้วย Esc + ล็อกสกรอลล์พื้นหลัง (parity กับ RightDrawer)
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSelected(null); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [selected]);
 
   const [view, setView]               = useState<"card"|"table">("card");
   const [showFilter, setShowFilter]   = useState(false);
@@ -958,7 +967,7 @@ export default function CustomersPage(){
 
             </div>
             {/* Actions (right rail) */}
-            <div style={{width:260,flexShrink:0,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{width:220,flexShrink:0,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:8}}>
               <div style={{display:"flex",gap:6}}>
                 <button className="btn btn-primary btn-sm" onClick={()=>setEditingRow(selected)} style={{flex:1,justifyContent:"center"}}>
                   <Edit2 size={13}/> แก้ไข

@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  quotationStatusLabel, quotationStatusColor,
+  quotationStatusLabel, quotationStatusColor, solutionProducts,
   type QuotationStatus, type QuotationMock, type CustomerRow,
 } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
@@ -73,23 +73,29 @@ type QForm = {
   revision:string; expiry:string;
 };
 
-const BUILDING_TYPES = ["โกดังสินค้า","โรงงาน","งานตามแบบ","อาคารพาณิชย์","สนามกีฬาในร่ม","อื่นๆ"];
+// แม่แบบ = แหล่งเดียวกับหน้าอื่นทั้งระบบ (solutionProducts)
+const BUILDING_TYPES = solutionProducts.map(p => p.name);
 
 // ── Dealer identity — ใบเสนอราคาออกในนามบริษัทของดีลเลอร์เอง (ไม่ใช่เบญจมินทร์) ──
 type Issuer = { company: string; address: string; phone: string; taxId: string };
-const DEFAULT_ISSUER: Issuer = { company: "", address: "", phone: "", taxId: "" };
-const ISSUER_KEY = "dealer_issuer_profile";
+// ค่าเริ่มต้น = โปรไฟล์บริษัทดีลเลอร์ (ตรงกับหน้าตั้งค่า) — ออกใบเสนอราคาในนามสาขาเอง ไม่ใช่ Benjamin
+const DEFAULT_ISSUER: Issuer = { company: "บริษัท เชียงใหม่สตีลบิลด์ จำกัด", address: "88/9 ถ.มหิดล ต.หายยา อ.เมือง จ.เชียงใหม่ 50100", phone: "053-112-233", taxId: "0505561001234" };
+const ISSUER_KEY = "dealer_issuer_profile_v2";
 // ตรา/ลายเซ็น มาจากหน้า ตั้งค่า → ตั้งค่าใบเสนอราคา (คนละคีย์กับโปรไฟล์บริษัท)
-type DocProfile = { stamp: string; signature: string };
-const DEFAULT_DOC: DocProfile = { stamp: "", signature: "" };
+// รวมการตั้งค่าเอกสารจากหน้า ตั้งค่า → ตั้งค่าใบเสนอราคา (คีย์เดียวกัน dealer_document_settings)
+type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number };
+const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-2026-", runningNumber: 1001 };
 const DOC_KEY = "dealer_document_settings";
 
 // ── Helpers ───────────────────────────────────────────────────
 function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
 function fmtDate(d:string){ if(!d||d==="—") return "—"; const [y,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]} ${parseInt(y)+543}`; }
-function nextQId(data:QuotationMock[]){
-  const nums = data.map(q=>parseInt(q.id.split("-")[2]??"")||0);
-  return `Q-2026-${String(Math.max(...nums,100)+1).padStart(4,"0")}`;
+function nextQId(data:QuotationMock[], doc:DocProfile=DEFAULT_DOC){
+  // เลขที่ถัดไป = อิงเลขท้ายสุดของเอกสารเดิม และเลขเริ่มต้นที่ตั้งไว้ในตั้งค่า (runningNumber)
+  const nums = data.map(q=>{ const mt=q.id.match(/(\d+)\s*$/); return mt?parseInt(mt[1]):0; });
+  const start = doc.runningNumber ? doc.runningNumber - 1 : 100;
+  const next = Math.max(start, ...nums, 0) + 1;
+  return `${doc.quotePrefix || "Q-2026-"}${String(next).padStart(4,"0")}`;
 }
 // เลื่อนเวอร์ชันถัดไป V1→V2→V3 (สูงสุด V3)
 function nextRevision(rev?:string){
@@ -117,7 +123,8 @@ type PrintCustomer = { company?:string; name?:string; phone?:string; province?:s
 function buildQuotationHTML(q:QuotationMock, issuer:Issuer, cust?:PrintCustomer, doc:DocProfile=DEFAULT_DOC){
   const n=(v:number)=>Number(v||0).toLocaleString("th-TH");
   const subtotal=q.totalValue;
-  const vat=Math.round(subtotal*0.07);
+  const vatPct=typeof doc.vatPercent==="number"?doc.vatPercent:7;
+  const vat=Math.round(subtotal*vatPct/100);
   const grand=subtotal+vat;
   const issuerMeta=[issuer.address, issuer.phone?("โทร. "+issuer.phone):"", issuer.taxId?("เลขผู้เสียภาษี "+issuer.taxId):""].filter(Boolean).join("\n");
   return `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
@@ -199,14 +206,14 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
     </tbody>
   </table>
   <div class="sum">
-    <div class="line"><span>มูลค่างาน</span><span>${n(subtotal)}</span></div>
-    <div class="line"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${n(vat)}</span></div>
+    <div class="line"><span>มูลค่างาน (ก่อน VAT)</span><span>${n(subtotal)}</span></div>
+    <div class="line"><span>ภาษีมูลค่าเพิ่ม ${vatPct}%</span><span>${n(vat)}</span></div>
     <div class="line grand"><span>รวมสุทธิ</span><span>฿${n(grand)}</span></div>
   </div>
   <div class="terms">
     <div class="h">เงื่อนไข</div>
     • ราคานี้ยืนยัน 30 วันนับจากวันที่ในเอกสาร<br/>
-    • ราคารวมภาษีมูลค่าเพิ่ม 7% แล้ว<br/>
+    • มูลค่างานยังไม่รวมภาษีมูลค่าเพิ่ม · ยอดรวมสุทธิรวม VAT ${vatPct}% แล้ว<br/>
     • เงื่อนไขการชำระเงินเป็นไปตามข้อตกลงระหว่างคู่สัญญา
   </div>
   <div class="signs">
@@ -411,7 +418,12 @@ function QuotationsPageInner(){
     const s = localStorage.getItem(ISSUER_KEY);
     if (s) { try { setIssuer({ ...DEFAULT_ISSUER, ...JSON.parse(s) }); } catch {} }
     const d = localStorage.getItem(DOC_KEY);
-    if (d) { try { const p = JSON.parse(d); setDocProfile({ stamp: p.stamp ?? "", signature: p.signature ?? "" }); } catch {} }
+    if (d) { try { const p = JSON.parse(d); setDocProfile({
+      stamp: p.stamp ?? "", signature: p.signature ?? "",
+      vatPercent: typeof p.vatPercent === "number" ? p.vatPercent : 7,
+      quotePrefix: p.quotePrefix || "Q-2026-",
+      runningNumber: typeof p.runningNumber === "number" ? p.runningNumber : 1001,
+    }); } catch {} }
   }, []);
 
   function handleSort(k:SortKey){ if(sortKey===k) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortKey(k);setSortDir("asc");} }
@@ -465,7 +477,7 @@ function QuotationsPageInner(){
       updateQuotation(updated);
       setSelected(p=>p?.id===editingQ.id?updated:p);
     } else {
-      const newQ:QuotationMock={...form,revision:form.revision,expiry:form.expiry,id:nextQId(data),total,totalValue:tv};
+      const newQ:QuotationMock={...form,revision:form.revision,expiry:form.expiry,id:nextQId(data, docProfile),total,totalValue:tv};
       addQuotation(newQ);
     }
   }
@@ -483,7 +495,7 @@ function QuotationsPageInner(){
   }
   // ทำสำเนา — คัดลอกทุกฟิลด์ ได้ id ใหม่ · สถานะ "ร่าง" · เวอร์ชัน V1
   function duplicateQ(q:QuotationMock){
-    const newId=nextQId(data);
+    const newId=nextQId(data, docProfile);
     const copy:QuotationMock={...q,id:newId,status:"draft",revision:"V1",date:TODAY};
     addQuotation(copy);
     setOpenCounts(p=>({...p,[newId]:0}));
@@ -493,7 +505,7 @@ function QuotationsPageInner(){
   }
   // สร้างเวอร์ชันใหม่ — คัดลอกใบปัจจุบัน เลื่อนเวอร์ชัน (สูงสุด V3) · สถานะ "ร่าง" · id ใหม่
   function createRevision(q:QuotationMock){
-    const newId=nextQId(data);
+    const newId=nextQId(data, docProfile);
     const rev=nextRevision(q.revision);
     const copy:QuotationMock={...q,id:newId,status:"draft",revision:rev,date:TODAY};
     addQuotation(copy);
@@ -774,7 +786,7 @@ function QuotationsPageInner(){
               </div>
               {selected.status==="won"&&(
                 <div style={{fontSize:"0.68rem",color:"rgba(255,255,255,.7)",marginTop:6}}>
-                  ลูกค้าตอบรับแล้ว — ไปปิดการขาย ที่เส้นทางการขาย/ลีด
+                  ลูกค้าตอบรับแล้ว — ไปปิดการขาย ที่เส้นทางการขาย/ผู้สนใจ
                 </div>
               )}
             </div>

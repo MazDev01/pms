@@ -27,7 +27,7 @@ export const sessions: Record<string, MockSession> = {
   dealer: {
     name: "สมชาย เชียงใหม่",
     role: "DEALER_ADMIN",
-    dealerName: "Benjamin สาขาเชียงใหม่",
+    dealerName: "เชียงใหม่สตีลบิลด์",
     dealerCode: "CNX",
     scopeAll: false,
   },
@@ -146,6 +146,7 @@ export type LeadRow = {
   assigned: string;
   source?: string;
   note?: string;
+  lostReason?: string;   // เหตุผลที่ปิดการขายไม่ได้ (เมื่อ status = CANCELLED)
   customerId?: number;
   logo?: string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลดในฟอร์มเพิ่มผู้สนใจ
 };
@@ -245,14 +246,14 @@ export type CustomerMock = {
 };
 
 export const customers: CustomerMock[] = [
-  { id: 1, name: "คุณสมชาย ใจดี", company: "บจ. ไทยสตีล", phone: "081-234-5678", email: "somchai@thaisteel.co.th", province: "นนทบุรี", category: "EASYBUILD", initials: "สช", color: "#003366", tags: ["VIP", "สัญญาใหม่"], projectCount: 2 },
-  { id: 2, name: "คุณกาญจนา ม.", company: "บจ. ซีซีเอส", phone: "082-345-6789", email: "kanjana@ccs.co.th", province: "เชียงใหม่", category: "PREFAB", initials: "กม", color: "#059669", tags: ["ต่อเนื่อง"], projectCount: 1 },
-  { id: 3, name: "คุณประยุทธ ร.", company: "หจก. ราชบุรีโลหะ", phone: "083-456-7890", email: "prayuth@rajburi.co.th", province: "ราชบุรี", category: "RANBUILD", initials: "ปร", color: "#f59e0b", tags: ["โซนตะวันตก"], projectCount: 1 },
-  { id: 4, name: "คุณดารัล ส.", company: "บจ. สมุทรโกดัง", phone: "084-567-8901", email: "darat@smgodown.co.th", province: "สมุทรปราการ", category: "EASYBUILD", initials: "ดส", color: "#002244", tags: ["ลูกค้าเดิม"], projectCount: 2 },
-  { id: 5, name: "VCS Asia (ระยอง)", company: "VCS Asia Co., Ltd.", phone: "085-678-9012", email: "vcs@vcsasia.com", province: "ระยอง", category: "RANBUILD", initials: "VC", color: "#002244", tags: ["Enterprise", "Contract"], projectCount: 3 },
-  { id: 6, name: "คุณสุรัตน์ ล.", company: "บจ. แม่สอดโลหะ", phone: "086-789-0123", email: "surat@maesot.co.th", province: "ตาก", category: "EASYBUILD", initials: "สล", color: "#C0C0C0", tags: ["โซนตะวันตก"], projectCount: 1 },
-  { id: 7, name: "บจ. อุตรดิตถ์โลหะ", company: "บจ. อุตรดิตถ์โลหะ", phone: "087-890-1234", email: "info@uttaradit.co.th", province: "อุตรดิตถ์", category: "RANBUILD", initials: "อต", color: "#8fa3b8", tags: ["ลีดใหม่"], projectCount: 0 },
-  { id: 8, name: "บจ. นครสวรรค์โลหะ", company: "บจ. นครสวรรค์โลหะ", phone: "088-901-2345", email: "nakhon@nsloha.co.th", province: "นครสวรรค์", category: "Custom", initials: "นส", color: "#059669", tags: ["ลูกค้าเดิม", "VIP"], projectCount: 2 },
+  { id: 1, name: "คุณสมชาย ใจดี", company: "บจ. ไทยสตีล", phone: "081-234-5678", email: "somchai@thaisteel.co.th", province: "นนทบุรี", category: "โกดังสำเร็จรูป", initials: "สช", color: "#003366", tags: ["VIP", "สัญญาใหม่"], projectCount: 2 },
+  { id: 2, name: "คุณกาญจนา ม.", company: "บจ. ซีซีเอส", phone: "082-345-6789", email: "kanjana@ccs.co.th", province: "เชียงใหม่", category: "อาคารสำเร็จรูป", initials: "กม", color: "#059669", tags: ["ต่อเนื่อง"], projectCount: 1 },
+  { id: 3, name: "คุณประยุทธ ร.", company: "หจก. ราชบุรีโลหะ", phone: "083-456-7890", email: "prayuth@rajburi.co.th", province: "ราชบุรี", category: "โรงงานสำเร็จรูป", initials: "ปร", color: "#f59e0b", tags: ["โซนตะวันตก"], projectCount: 1 },
+  { id: 4, name: "คุณดารัล ส.", company: "บจ. สมุทรโกดัง", phone: "084-567-8901", email: "darat@smgodown.co.th", province: "สมุทรปราการ", category: "โกดังสำเร็จรูป", initials: "ดส", color: "#002244", tags: ["ลูกค้าเดิม"], projectCount: 2 },
+  { id: 5, name: "VCS Asia (ระยอง)", company: "VCS Asia Co., Ltd.", phone: "085-678-9012", email: "vcs@vcsasia.com", province: "ระยอง", category: "โรงงานสำเร็จรูป", initials: "VC", color: "#002244", tags: ["Enterprise", "Contract"], projectCount: 3 },
+  { id: 6, name: "คุณสุรัตน์ ล.", company: "บจ. แม่สอดโลหะ", phone: "086-789-0123", email: "surat@maesot.co.th", province: "ตาก", category: "โกดังสำเร็จรูป", initials: "สล", color: "#C0C0C0", tags: ["โซนตะวันตก"], projectCount: 1 },
+  { id: 7, name: "บจ. อุตรดิตถ์โลหะ", company: "บจ. อุตรดิตถ์โลหะ", phone: "087-890-1234", email: "info@uttaradit.co.th", province: "อุตรดิตถ์", category: "โรงงานสำเร็จรูป", initials: "อต", color: "#8fa3b8", tags: ["ผู้สนใจใหม่"], projectCount: 0 },
+  { id: 8, name: "บจ. นครสวรรค์โลหะ", company: "บจ. นครสวรรค์โลหะ", phone: "088-901-2345", email: "nakhon@nsloha.co.th", province: "นครสวรรค์", category: "โรงงาน", initials: "นส", color: "#059669", tags: ["ลูกค้าเดิม", "VIP"], projectCount: 2 },
 ];
 
 // ─── CUSTOMER ROWS (rich, shared app-wide via SalesContext) ───
@@ -323,14 +324,14 @@ export const quotationStatusColor: Record<QuotationStatus, { bg: string; text: s
 };
 
 export const quotations: QuotationMock[] = [
-  { id: "Q-2026-0089", customer: "บจ. ไทยสตีล", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", total: "฿1,800,000", totalValue: 1800000, materialCost: 1800000, province: "นนทบุรี", buildingType: "โกดังสินค้า", area: 960, status: "won", date: "2026-05-15", items: 8, customerId: 1, projectId: 1 },
-  { id: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ", project: "โกดังสำเร็จรูป ราชบุรี", total: "฿760,000", totalValue: 760000, materialCost: 760000, province: "ราชบุรี", buildingType: "โกดังสินค้า", area: 480, status: "sent_to_client", date: "2026-06-01", items: 5, customerId: 3, projectId: 5 },
+  { id: "Q-2026-0089", customer: "บจ. ไทยสตีล", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", total: "฿1,800,000", totalValue: 1800000, materialCost: 1800000, province: "นนทบุรี", buildingType: "โกดังสำเร็จรูป", area: 960, status: "won", date: "2026-05-15", items: 8, customerId: 1, projectId: 1 },
+  { id: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ", project: "โกดังสำเร็จรูป ราชบุรี", total: "฿760,000", totalValue: 760000, materialCost: 760000, province: "ราชบุรี", buildingType: "โกดังสำเร็จรูป", area: 480, status: "sent_to_client", date: "2026-06-01", items: 5, customerId: 3, projectId: 5 },
   { id: "Q-2026-0092", customer: "VCS Asia", project: "โกดังระยอง VCS Asia", total: "฿6,200,000", totalValue: 6200000, materialCost: 6200000, province: "ระยอง", buildingType: "โรงงาน", area: 3200, status: "won", date: "2025-11-10", items: 15, customerId: 5, projectId: 8 },
-  { id: "Q-2026-0095", customer: "บจ. ซีซีเอส", project: "โรงงาน PREFAB เชียงใหม่", total: "฿3,200,000", totalValue: 3200000, materialCost: 3200000, province: "เชียงใหม่", buildingType: "โรงงาน", area: 1800, status: "sent_to_client", date: "2026-06-10", items: 12, customerId: 2, projectId: 2 },
-  { id: "Q-2026-0097", customer: "บจ. สมุทรโกดัง", project: "โกดังปากน้ำ พระปราชญ์", total: "฿2,000,000", totalValue: 2000000, materialCost: 2000000, province: "สมุทรปราการ", buildingType: "โกดังสินค้า", area: 1200, status: "sent_to_client", date: "2026-06-18", items: 7, customerId: 4, projectId: 3 },
+  { id: "Q-2026-0095", customer: "บจ. ซีซีเอส", project: "โรงงาน อาคารสำเร็จรูป เชียงใหม่", total: "฿3,200,000", totalValue: 3200000, materialCost: 3200000, province: "เชียงใหม่", buildingType: "โรงงาน", area: 1800, status: "sent_to_client", date: "2026-06-10", items: 12, customerId: 2, projectId: 2 },
+  { id: "Q-2026-0097", customer: "บจ. สมุทรโกดัง", project: "โกดังปากน้ำ พระปราชญ์", total: "฿2,000,000", totalValue: 2000000, materialCost: 2000000, province: "สมุทรปราการ", buildingType: "โกดังสำเร็จรูป", area: 1200, status: "sent_to_client", date: "2026-06-18", items: 7, customerId: 4, projectId: 3 },
   { id: "Q-2026-0098", customer: "บจ. อุตรดิตถ์โลหะ", project: "อาคารสำเร็จรูป อุตรดิตถ์", total: "฿2,800,000", totalValue: 2800000, materialCost: 2800000, province: "อุตรดิตถ์", buildingType: "โรงงาน", area: 1600, status: "draft", date: "2026-06-20", items: 9, customerId: 7, projectId: 7 },
-  { id: "Q-2026-0099", customer: "บจ. นครสวรรค์โลหะ", project: "โรงงาน Custom นครสวรรค์", total: "฿5,400,000", totalValue: 5400000, materialCost: 5400000, province: "นครสวรรค์", buildingType: "โรงงาน", area: 2800, status: "won", date: "2026-04-05", items: 18, customerId: 8, projectId: 6 },
-  { id: "Q-2026-0100", customer: "บจ. เชียงรายเมทัล", project: "โกดัง EASYBUILD เชียงราย", total: "฿1,500,000", totalValue: 1500000, materialCost: 1500000, province: "เชียงราย", buildingType: "โกดังสินค้า", area: 720, status: "lost", date: "2026-05-28", items: 6, customerId: 9, projectId: 9 },
+  { id: "Q-2026-0099", customer: "บจ. นครสวรรค์โลหะ", project: "โรงงานสำเร็จรูป นครสวรรค์", total: "฿5,400,000", totalValue: 5400000, materialCost: 5400000, province: "นครสวรรค์", buildingType: "โรงงาน", area: 2800, status: "won", date: "2026-04-05", items: 18, customerId: 8, projectId: 6 },
+  { id: "Q-2026-0100", customer: "บจ. เชียงรายเมทัล", project: "โกดังสำเร็จรูป เชียงราย", total: "฿1,500,000", totalValue: 1500000, materialCost: 1500000, province: "เชียงราย", buildingType: "โกดังสำเร็จรูป", area: 720, status: "lost", date: "2026-05-28", items: 6, customerId: 9, projectId: 9 },
 ];
 
 // ─── TEAM ─────────────────────────────────────────────────────
@@ -402,11 +403,11 @@ export type LeadPoolRow = {
 };
 
 export const leadPool: LeadPoolRow[] = [
-  { id: "#LP-001", name: "บจ. อุตรดิตถ์โลหะ",      province: "อุตรดิตถ์",    channel: "เว็บไซต์", product: "RANBUILD",  value: "฿2.8M", valueNum: 2800000, createdAt: "วันนี้ 09:14",    waitHours: 4  },
-  { id: "#LP-002", name: "คุณพรทิพย์ ว.",            province: "ลำปาง",        channel: "LINE OA",  product: "EASYBUILD", value: "฿650K", valueNum:  650000, createdAt: "วันนี้ 08:32",    waitHours: 5  },
-  { id: "#LP-003", name: "หจก. พะเยาสตีล",       province: "พะเยา",        channel: "เว็บไซต์", product: "PREFAB",    value: "฿1.1M", valueNum: 1100000, createdAt: "เมื่อวาน 17:05",  waitHours: 28 },
-  { id: "#LP-004", name: "บจ. โคราชอุตสาหกรรม",      province: "นครราชสีมา",   channel: "เว็บไซต์", product: "EASYBUILD", value: "฿3.4M", valueNum: 3400000, createdAt: "เมื่อวาน 14:20",  waitHours: 45 },
-  { id: "#LP-005", name: "หจก. ชลบุรีคลังสินค้า",    province: "ชลบุรี",       channel: "LINE OA",  product: "RANBUILD",  value: "฿1.9M", valueNum: 1900000, createdAt: "2 วันก่อน",       waitHours: 56 },
+  { id: "#LP-001", name: "บจ. อุตรดิตถ์โลหะ",      province: "อุตรดิตถ์",    channel: "เว็บไซต์", product: "โรงงานสำเร็จรูป",  value: "฿2.8M", valueNum: 2800000, createdAt: "วันนี้ 09:14",    waitHours: 4  },
+  { id: "#LP-002", name: "คุณพรทิพย์ ว.",            province: "ลำปาง",        channel: "LINE OA",  product: "โกดังสำเร็จรูป", value: "฿650K", valueNum:  650000, createdAt: "วันนี้ 08:32",    waitHours: 5  },
+  { id: "#LP-003", name: "หจก. พะเยาสตีล",       province: "พะเยา",        channel: "เว็บไซต์", product: "อาคารสำเร็จรูป",    value: "฿1.1M", valueNum: 1100000, createdAt: "เมื่อวาน 17:05",  waitHours: 28 },
+  { id: "#LP-004", name: "บจ. โคราชอุตสาหกรรม",      province: "นครราชสีมา",   channel: "เว็บไซต์", product: "โกดังสำเร็จรูป", value: "฿3.4M", valueNum: 3400000, createdAt: "เมื่อวาน 14:20",  waitHours: 45 },
+  { id: "#LP-005", name: "หจก. ชลบุรีคลังสินค้า",    province: "ชลบุรี",       channel: "LINE OA",  product: "โรงงานสำเร็จรูป",  value: "฿1.9M", valueNum: 1900000, createdAt: "2 วันก่อน",       waitHours: 56 },
 ];
 
 // แผนที่ จังหวัด → ภาค (ใช้แนะนำสาขาที่รับผิดชอบตอนมอบหมายลีด)
@@ -457,11 +458,11 @@ export type ActivityItem = {
 
 export const hqRecentActivity: ActivityItem[] = [
   { kind: "win",     text: "ปิดงาน โกดัง VCS Asia ฿6.2M",               branch: "ระยอง",     time: "30 นาที" },
-  { kind: "lead",    text: "ลีดใหม่: หจก. ชลบุรีคลังสินค้า ฿1.9M",       branch: "ส่วนกลาง",  time: "2 ชม." },
+  { kind: "lead",    text: "ผู้สนใจใหม่: หจก. ชลบุรีคลังสินค้า ฿1.9M",       branch: "ส่วนกลาง",  time: "2 ชม." },
   { kind: "lead",    text: "ส่งใบเสนอราคา Q-2026-0097 สมุทรปราการ ฿2.0M", branch: "เชียงใหม่",  time: "3 ชม." },
   { kind: "assign",  text: "มอบหมาย LP-004 โคราช → สาขาระยอง",           branch: "ส่วนกลาง",  time: "5 ชม." },
-  { kind: "win",     text: "ปิดการขาย EASYBUILD แม่สอด ฿4.1M",    branch: "แม่สอด",    time: "เมื่อวาน" },
-  { kind: "win",     text: "ปิดงาน RANBUILD นครสวรรค์ ฿5.4M",           branch: "นครสวรรค์", time: "2 วัน" },
+  { kind: "win",     text: "ปิดการขาย โกดังสำเร็จรูป แม่สอด ฿4.1M",    branch: "แม่สอด",    time: "เมื่อวาน" },
+  { kind: "win",     text: "ปิดงาน โรงงานสำเร็จรูป นครสวรรค์ ฿5.4M",           branch: "นครสวรรค์", time: "2 วัน" },
 ];
 
 // ─── APPOINTMENTS ─────────────────────────────────────────────
@@ -573,24 +574,24 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { month: "เม.ย.", value: 5600 }, { month: "พ.ค.", value: 7100 }, { month: "มิ.ย.", value: 5400 },
     ],
     leads: [
-      { id: "LD-R01", name: "บจ. แหลมฉบัง อุตสาหกรรม", province: "ชลบุรี",    product: "RANBUILD",  valueNum: 4200000, status: "quoted",    assignedAt: "3 วันก่อน" },
-      { id: "LD-R02", name: "หจก. มาบตาพุดโลหะ",       province: "ระยอง",     product: "EASYBUILD", valueNum: 1800000, status: "contacted", assignedAt: "1 สัปดาห์" },
-      { id: "LD-R03", name: "บจ. ชลอุตสาหกรรม",        province: "ชลบุรี",    product: "PREFAB",    valueNum: 2600000, status: "new",       assignedAt: "2 วันก่อน" },
-      { id: "LD-R04", name: "นาย อนันต์ ศ.",            province: "จันทบุรี",  product: "EASYBUILD", valueNum: 850000,  status: "won",       assignedAt: "2 สัปดาห์" },
+      { id: "LD-R01", name: "บจ. แหลมฉบัง อุตสาหกรรม", province: "ชลบุรี",    product: "โรงงานสำเร็จรูป",  valueNum: 4200000, status: "quoted",    assignedAt: "3 วันก่อน" },
+      { id: "LD-R02", name: "หจก. มาบตาพุดโลหะ",       province: "ระยอง",     product: "โกดังสำเร็จรูป", valueNum: 1800000, status: "contacted", assignedAt: "1 สัปดาห์" },
+      { id: "LD-R03", name: "บจ. ชลอุตสาหกรรม",        province: "ชลบุรี",    product: "อาคารสำเร็จรูป",    valueNum: 2600000, status: "new",       assignedAt: "2 วันก่อน" },
+      { id: "LD-R04", name: "นาย อนันต์ ศ.",            province: "จันทบุรี",  product: "โกดังสำเร็จรูป", valueNum: 850000,  status: "won",       assignedAt: "2 สัปดาห์" },
     ],
     projects: [
-      { id: "PRJ-R01", name: "โกดัง VCS Asia ระยอง",        product: "RANBUILD",  valueNum: 6200000, progress: 100, status: "completed",  dueDate: "28 ก.พ. 2026" },
-      { id: "PRJ-R02", name: "โรงงาน บจ. แหลมฉบัง",         product: "PREFAB",    valueNum: 3800000, progress: 62,  status: "in_progress", dueDate: "31 ส.ค. 2026" },
-      { id: "PRJ-R03", name: "โกดัง มาบตาพุดโลหะ",           product: "EASYBUILD", valueNum: 1800000, progress: 38,  status: "in_progress", dueDate: "15 ก.ย. 2026" },
-      { id: "PRJ-R04", name: "คลังสินค้า ชลบุรี เฟส 2",       product: "RANBUILD",  valueNum: 2400000, progress: 10,  status: "in_progress", dueDate: "30 ต.ค. 2026" },
-      { id: "PRJ-R05", name: "โกดัง จันทบุรี อนันต์",         product: "EASYBUILD", valueNum: 850000,  progress: 0,   status: "in_progress", dueDate: "15 พ.ย. 2026" },
-      { id: "PRJ-R06", name: "โรงงาน ตราด อุตสาหกรรม",        product: "RANBUILD",  valueNum: 3100000, progress: 0,   status: "in_progress", dueDate: "31 ธ.ค. 2026" },
+      { id: "PRJ-R01", name: "โกดัง VCS Asia ระยอง",        product: "โรงงานสำเร็จรูป",  valueNum: 6200000, progress: 100, status: "completed",  dueDate: "28 ก.พ. 2026" },
+      { id: "PRJ-R02", name: "โรงงาน บจ. แหลมฉบัง",         product: "อาคารสำเร็จรูป",    valueNum: 3800000, progress: 62,  status: "in_progress", dueDate: "31 ส.ค. 2026" },
+      { id: "PRJ-R03", name: "โกดัง มาบตาพุดโลหะ",           product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 38,  status: "in_progress", dueDate: "15 ก.ย. 2026" },
+      { id: "PRJ-R04", name: "คลังสินค้า ชลบุรี เฟส 2",       product: "โรงงานสำเร็จรูป",  valueNum: 2400000, progress: 10,  status: "in_progress", dueDate: "30 ต.ค. 2026" },
+      { id: "PRJ-R05", name: "โกดัง จันทบุรี อนันต์",         product: "โกดังสำเร็จรูป", valueNum: 850000,  progress: 0,   status: "in_progress", dueDate: "15 พ.ย. 2026" },
+      { id: "PRJ-R06", name: "โรงงาน ตราด อุตสาหกรรม",        product: "โรงงานสำเร็จรูป",  valueNum: 3100000, progress: 0,   status: "in_progress", dueDate: "31 ธ.ค. 2026" },
     ],
     quotes: [
-      { quoteNo: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ",      product: "RANBUILD",  valueNum: 1800000, discountPct: 12, status: "sent", date: "3 ชม." },
-      { quoteNo: "Q-2026-0086", customer: "บจ. แหลมฉบัง อุตฯ",     product: "PREFAB",    valueNum: 3800000, discountPct: 8,  status: "sent",     date: "2 วัน" },
-      { quoteNo: "Q-2026-0079", customer: "หจก. มาบตาพุดโลหะ",      product: "EASYBUILD", valueNum: 1800000, discountPct: 5,  status: "won",      date: "2 สัปดาห์" },
-      { quoteNo: "Q-2026-0065", customer: "VCS Asia",                product: "RANBUILD",  valueNum: 6200000, discountPct: 0,  status: "won",      date: "4 สัปดาห์" },
+      { quoteNo: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ",      product: "โรงงานสำเร็จรูป",  valueNum: 1800000, discountPct: 12, status: "sent", date: "3 ชม." },
+      { quoteNo: "Q-2026-0086", customer: "บจ. แหลมฉบัง อุตฯ",     product: "อาคารสำเร็จรูป",    valueNum: 3800000, discountPct: 8,  status: "sent",     date: "2 วัน" },
+      { quoteNo: "Q-2026-0079", customer: "หจก. มาบตาพุดโลหะ",      product: "โกดังสำเร็จรูป", valueNum: 1800000, discountPct: 5,  status: "won",      date: "2 สัปดาห์" },
+      { quoteNo: "Q-2026-0065", customer: "VCS Asia",                product: "โรงงานสำเร็จรูป",  valueNum: 6200000, discountPct: 0,  status: "won",      date: "4 สัปดาห์" },
     ],
   },
   CNX: {
@@ -600,21 +601,21 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { month: "เม.ย.", value: 4100 }, { month: "พ.ค.", value: 2600 }, { month: "มิ.ย.", value: 4200 },
     ],
     leads: [
-      { id: "LD-C01", name: "บจ. ไทยสตีล",          province: "เชียงใหม่",  product: "EASYBUILD", valueNum: 3200000, status: "quoted",    assignedAt: "5 วันก่อน" },
-      { id: "LD-C02", name: "หจก. สันทรายเมทัล",  province: "เชียงใหม่",  product: "PREFAB",    valueNum: 1200000, status: "contacted", assignedAt: "1 สัปดาห์" },
-      { id: "LD-C03", name: "บจ. ลำพูนโลหะ",         province: "ลำพูน",      product: "RANBUILD",  valueNum: 2800000, status: "new",       assignedAt: "1 วันก่อน" },
+      { id: "LD-C01", name: "บจ. ไทยสตีล",          province: "เชียงใหม่",  product: "โกดังสำเร็จรูป", valueNum: 3200000, status: "quoted",    assignedAt: "5 วันก่อน" },
+      { id: "LD-C02", name: "หจก. สันทรายเมทัล",  province: "เชียงใหม่",  product: "อาคารสำเร็จรูป",    valueNum: 1200000, status: "contacted", assignedAt: "1 สัปดาห์" },
+      { id: "LD-C03", name: "บจ. ลำพูนโลหะ",         province: "ลำพูน",      product: "โรงงานสำเร็จรูป",  valueNum: 2800000, status: "new",       assignedAt: "1 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-C01", name: "โกดัง บจ. ไทยสตีล เชียงใหม่",  product: "EASYBUILD", valueNum: 3200000, progress: 45, status: "in_progress", dueDate: "31 ก.ค. 2026" },
-      { id: "PRJ-C02", name: "โรงงาน PREFAB ซีซีเอส",          product: "PREFAB",    valueNum: 3200000, progress: 72, status: "in_progress", dueDate: "15 ส.ค. 2026" },
-      { id: "PRJ-C03", name: "คลังสินค้า ลำพูน อุตฯ",          product: "RANBUILD",  valueNum: 1600000, progress: 0,  status: "in_progress", dueDate: "30 ก.ย. 2026" },
-      { id: "PRJ-C04", name: "โกดัง เชียงใหม่-ลำปาง",          product: "EASYBUILD", valueNum: 2100000, progress: 25, status: "on_hold",     dueDate: "31 ต.ค. 2026" },
-      { id: "PRJ-C05", name: "โรงงาน น่าน CUSTOM",             product: "CUSTOM",    valueNum: 4800000, progress: 5,  status: "in_progress", dueDate: "28 ก.พ. 2027" },
+      { id: "PRJ-C01", name: "โกดัง บจ. ไทยสตีล เชียงใหม่",  product: "โกดังสำเร็จรูป", valueNum: 3200000, progress: 45, status: "in_progress", dueDate: "31 ก.ค. 2026" },
+      { id: "PRJ-C02", name: "โรงงาน อาคารสำเร็จรูป ซีซีเอส",          product: "อาคารสำเร็จรูป",    valueNum: 3200000, progress: 72, status: "in_progress", dueDate: "15 ส.ค. 2026" },
+      { id: "PRJ-C03", name: "คลังสินค้า ลำพูน อุตฯ",          product: "โรงงานสำเร็จรูป",  valueNum: 1600000, progress: 0,  status: "in_progress", dueDate: "30 ก.ย. 2026" },
+      { id: "PRJ-C04", name: "โกดัง เชียงใหม่-ลำปาง",          product: "โกดังสำเร็จรูป", valueNum: 2100000, progress: 25, status: "on_hold",     dueDate: "31 ต.ค. 2026" },
+      { id: "PRJ-C05", name: "โรงงาน น่าน (งานตามแบบ)",             product: "งานตามแบบ",    valueNum: 4800000, progress: 5,  status: "in_progress", dueDate: "28 ก.พ. 2027" },
     ],
     quotes: [
-      { quoteNo: "Q-2026-0089", customer: "บจ. ไทยสตีล",       product: "EASYBUILD", valueNum: 3200000, discountPct: 15, status: "sent", date: "2 ชม." },
-      { quoteNo: "Q-2026-0083", customer: "หจก. สันทราย",       product: "PREFAB",    valueNum: 1200000, discountPct: 6,  status: "sent",     date: "4 วัน" },
-      { quoteNo: "Q-2026-0074", customer: "บจ. ลำพูนโลหะ",     product: "RANBUILD",  valueNum: 2800000, discountPct: 4,  status: "draft",    date: "1 สัปดาห์" },
+      { quoteNo: "Q-2026-0089", customer: "บจ. ไทยสตีล",       product: "โกดังสำเร็จรูป", valueNum: 3200000, discountPct: 15, status: "sent", date: "2 ชม." },
+      { quoteNo: "Q-2026-0083", customer: "หจก. สันทราย",       product: "อาคารสำเร็จรูป",    valueNum: 1200000, discountPct: 6,  status: "sent",     date: "4 วัน" },
+      { quoteNo: "Q-2026-0074", customer: "บจ. ลำพูนโลหะ",     product: "โรงงานสำเร็จรูป",  valueNum: 2800000, discountPct: 4,  status: "draft",    date: "1 สัปดาห์" },
     ],
   },
   MST: {
@@ -624,20 +625,20 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { month: "เม.ย.", value: 4200 }, { month: "พ.ค.", value: 3600 }, { month: "มิ.ย.", value: 3800 },
     ],
     leads: [
-      { id: "LD-M01", name: "บจ. แม่สอดโลหะ",        province: "ตาก",    product: "EASYBUILD", valueNum: 4100000, status: "quoted",    assignedAt: "3 วันก่อน" },
-      { id: "LD-M02", name: "หจก. กาญจน์อุตฯ",       province: "กาญจนบุรี", product: "RANBUILD", valueNum: 2200000, status: "contacted", assignedAt: "5 วันก่อน" },
-      { id: "LD-M03", name: "นาย ธนกร ป.",            province: "ตาก",    product: "PREFAB",    valueNum: 980000,  status: "new",       assignedAt: "2 วันก่อน" },
+      { id: "LD-M01", name: "บจ. แม่สอดโลหะ",        province: "ตาก",    product: "โกดังสำเร็จรูป", valueNum: 4100000, status: "quoted",    assignedAt: "3 วันก่อน" },
+      { id: "LD-M02", name: "หจก. กาญจน์อุตฯ",       province: "กาญจนบุรี", product: "โรงงานสำเร็จรูป", valueNum: 2200000, status: "contacted", assignedAt: "5 วันก่อน" },
+      { id: "LD-M03", name: "นาย ธนกร ป.",            province: "ตาก",    product: "อาคารสำเร็จรูป",    valueNum: 980000,  status: "new",       assignedAt: "2 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-M01", name: "EASYBUILD แม่สอด บจ. แม่สอดโลหะ", product: "EASYBUILD", valueNum: 4100000, progress: 82, status: "in_progress", dueDate: "31 ก.ค. 2026" },
-      { id: "PRJ-M02", name: "โกดัง RANBUILD กาญจนบุรี",         product: "RANBUILD",  valueNum: 2200000, progress: 55, status: "in_progress", dueDate: "30 ส.ค. 2026" },
-      { id: "PRJ-M03", name: "โรงงาน PREFAB ตาก",                product: "PREFAB",    valueNum: 1600000, progress: 30, status: "in_progress", dueDate: "30 ก.ย. 2026" },
-      { id: "PRJ-M04", name: "คลังสินค้า ราชบุรี",               product: "EASYBUILD", valueNum: 1800000, progress: 0,  status: "in_progress", dueDate: "31 ต.ค. 2026" },
+      { id: "PRJ-M01", name: "โกดังสำเร็จรูป แม่สอด บจ. แม่สอดโลหะ", product: "โกดังสำเร็จรูป", valueNum: 4100000, progress: 82, status: "in_progress", dueDate: "31 ก.ค. 2026" },
+      { id: "PRJ-M02", name: "โกดัง โรงงานสำเร็จรูป กาญจนบุรี",         product: "โรงงานสำเร็จรูป",  valueNum: 2200000, progress: 55, status: "in_progress", dueDate: "30 ส.ค. 2026" },
+      { id: "PRJ-M03", name: "โรงงาน อาคารสำเร็จรูป ตาก",                product: "อาคารสำเร็จรูป",    valueNum: 1600000, progress: 30, status: "in_progress", dueDate: "30 ก.ย. 2026" },
+      { id: "PRJ-M04", name: "คลังสินค้า ราชบุรี",               product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 0,  status: "in_progress", dueDate: "31 ต.ค. 2026" },
     ],
     quotes: [
-      { quoteNo: "Q-2026-0085", customer: "บจ. แม่สอดโลหะ", product: "EASYBUILD", valueNum: 4100000, discountPct: 7,  status: "won",  date: "1 สัปดาห์" },
-      { quoteNo: "Q-2026-0080", customer: "หจก. กาญจน์อุตฯ", product: "RANBUILD",  valueNum: 2200000, discountPct: 5,  status: "sent", date: "2 สัปดาห์" },
-      { quoteNo: "Q-2026-0077", customer: "นาย ธนกร ป.",     product: "PREFAB",    valueNum: 980000,  discountPct: 3,  status: "draft", date: "2 สัปดาห์" },
+      { quoteNo: "Q-2026-0085", customer: "บจ. แม่สอดโลหะ", product: "โกดังสำเร็จรูป", valueNum: 4100000, discountPct: 7,  status: "won",  date: "1 สัปดาห์" },
+      { quoteNo: "Q-2026-0080", customer: "หจก. กาญจน์อุตฯ", product: "โรงงานสำเร็จรูป",  valueNum: 2200000, discountPct: 5,  status: "sent", date: "2 สัปดาห์" },
+      { quoteNo: "Q-2026-0077", customer: "นาย ธนกร ป.",     product: "อาคารสำเร็จรูป",    valueNum: 980000,  discountPct: 3,  status: "draft", date: "2 สัปดาห์" },
     ],
   },
   CRI: {
@@ -647,18 +648,18 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { month: "เม.ย.", value: 3100 }, { month: "พ.ค.", value: 2800 }, { month: "มิ.ย.", value: 3100 },
     ],
     leads: [
-      { id: "LD-CR01", name: "บจ. เชียงรายอุตสาหกรรม", province: "เชียงราย", product: "RANBUILD",  valueNum: 3600000, status: "quoted",    assignedAt: "4 วันก่อน" },
-      { id: "LD-CR02", name: "หจก. พะเยาสตีล",    province: "พะเยา",    product: "PREFAB",    valueNum: 1100000, status: "new",       assignedAt: "1 วันก่อน" },
+      { id: "LD-CR01", name: "บจ. เชียงรายอุตสาหกรรม", province: "เชียงราย", product: "โรงงานสำเร็จรูป",  valueNum: 3600000, status: "quoted",    assignedAt: "4 วันก่อน" },
+      { id: "LD-CR02", name: "หจก. พะเยาสตีล",    province: "พะเยา",    product: "อาคารสำเร็จรูป",    valueNum: 1100000, status: "new",       assignedAt: "1 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-CR01", name: "โรงงาน RANBUILD เชียงราย",     product: "RANBUILD",  valueNum: 3600000, progress: 40, status: "in_progress", dueDate: "30 ก.ย. 2026" },
-      { id: "PRJ-CR02", name: "โกดัง EASYBUILD พะเยา",        product: "EASYBUILD", valueNum: 1800000, progress: 60, status: "in_progress", dueDate: "31 ส.ค. 2026" },
-      { id: "PRJ-CR03", name: "PREFAB เชียงราย เฟส 1",        product: "PREFAB",    valueNum: 2100000, progress: 15, status: "overdue",     dueDate: "15 มิ.ย. 2026" },
+      { id: "PRJ-CR01", name: "โรงงาน โรงงานสำเร็จรูป เชียงราย",     product: "โรงงานสำเร็จรูป",  valueNum: 3600000, progress: 40, status: "in_progress", dueDate: "30 ก.ย. 2026" },
+      { id: "PRJ-CR02", name: "โกดัง โกดังสำเร็จรูป พะเยา",        product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 60, status: "in_progress", dueDate: "31 ส.ค. 2026" },
+      { id: "PRJ-CR03", name: "อาคารสำเร็จรูป เชียงราย เฟส 1",        product: "อาคารสำเร็จรูป",    valueNum: 2100000, progress: 15, status: "overdue",     dueDate: "15 มิ.ย. 2026" },
     ],
     quotes: [
-      { quoteNo: "Q-2026-0082", customer: "บจ. เชียงรายอุตฯ", product: "RANBUILD",  valueNum: 3600000, discountPct: 9,  status: "sent",  date: "3 วัน" },
-      { quoteNo: "Q-2026-0075", customer: "หจก. พะเยาสตีล", product: "PREFAB",  valueNum: 1100000, discountPct: 5,  status: "draft", date: "1 สัปดาห์" },
-      { quoteNo: "Q-2026-0070", customer: "บจ. เชียงรายอุตฯ", product: "EASYBUILD", valueNum: 1800000, discountPct: 6,  status: "won",   date: "3 สัปดาห์" },
+      { quoteNo: "Q-2026-0082", customer: "บจ. เชียงรายอุตฯ", product: "โรงงานสำเร็จรูป",  valueNum: 3600000, discountPct: 9,  status: "sent",  date: "3 วัน" },
+      { quoteNo: "Q-2026-0075", customer: "หจก. พะเยาสตีล", product: "อาคารสำเร็จรูป",  valueNum: 1100000, discountPct: 5,  status: "draft", date: "1 สัปดาห์" },
+      { quoteNo: "Q-2026-0070", customer: "บจ. เชียงรายอุตฯ", product: "โกดังสำเร็จรูป", valueNum: 1800000, discountPct: 6,  status: "won",   date: "3 สัปดาห์" },
     ],
   },
   NSN: {
@@ -668,16 +669,16 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { month: "เม.ย.", value: 400 }, { month: "พ.ค.", value: 500 }, { month: "มิ.ย.", value: 1900 },
     ],
     leads: [
-      { id: "LD-N01", name: "บจ. นครสวรรค์โกดัง", province: "นครสวรรค์", product: "EASYBUILD", valueNum: 2400000, status: "contacted", assignedAt: "6 วันก่อน" },
-      { id: "LD-N02", name: "หจก. สุโขทัยอุตฯ",  province: "สุโขทัย",   product: "RANBUILD",  valueNum: 1800000, status: "new",       assignedAt: "2 วันก่อน" },
+      { id: "LD-N01", name: "บจ. นครสวรรค์โกดัง", province: "นครสวรรค์", product: "โกดังสำเร็จรูป", valueNum: 2400000, status: "contacted", assignedAt: "6 วันก่อน" },
+      { id: "LD-N02", name: "หจก. สุโขทัยอุตฯ",  province: "สุโขทัย",   product: "โรงงานสำเร็จรูป",  valueNum: 1800000, status: "new",       assignedAt: "2 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-N01", name: "โรงงาน RANBUILD นครสวรรค์",    product: "RANBUILD",  valueNum: 5400000, progress: 100, status: "completed",  dueDate: "31 มี.ค. 2026" },
-      { id: "PRJ-N02", name: "โกดัง EASYBUILD นครสวรรค์",    product: "EASYBUILD", valueNum: 1900000, progress: 20,  status: "in_progress", dueDate: "31 ส.ค. 2026" },
+      { id: "PRJ-N01", name: "โรงงาน โรงงานสำเร็จรูป นครสวรรค์",    product: "โรงงานสำเร็จรูป",  valueNum: 5400000, progress: 100, status: "completed",  dueDate: "31 มี.ค. 2026" },
+      { id: "PRJ-N02", name: "โกดัง โกดังสำเร็จรูป นครสวรรค์",    product: "โกดังสำเร็จรูป", valueNum: 1900000, progress: 20,  status: "in_progress", dueDate: "31 ส.ค. 2026" },
     ],
     quotes: [
-      { quoteNo: "Q-2026-0087", customer: "บจ. นครสวรรค์โกดัง", product: "EASYBUILD", valueNum: 2400000, discountPct: 8, status: "sent", date: "4 วัน" },
-      { quoteNo: "Q-2026-0072", customer: "หจก. สุโขทัยอุตฯ",    product: "RANBUILD",  valueNum: 1800000, discountPct: 5, status: "draft", date: "1 สัปดาห์" },
+      { quoteNo: "Q-2026-0087", customer: "บจ. นครสวรรค์โกดัง", product: "โกดังสำเร็จรูป", valueNum: 2400000, discountPct: 8, status: "sent", date: "4 วัน" },
+      { quoteNo: "Q-2026-0072", customer: "หจก. สุโขทัยอุตฯ",    product: "โรงงานสำเร็จรูป",  valueNum: 1800000, discountPct: 5, status: "draft", date: "1 สัปดาห์" },
     ],
   },
 };
@@ -691,7 +692,7 @@ export type PipelineStage = {
   color: string;
 };
 export const hqPipelineStages: PipelineStage[] = [
-  { key: "lead",      label: "ลีดใหม่",         count: 42, valueNum: 94200000, color: "#dce5f0" },
+  { key: "lead",      label: "ผู้สนใจใหม่",         count: 42, valueNum: 94200000, color: "#dce5f0" },
   { key: "contacted", label: "รวบรวมความต้องการ", count: 28, valueNum: 62400000, color: "#8fa3c0" },
   { key: "quoted",    label: "ใบเสนอราคา",      count: 16, valueNum: 38600000, color: "#4d7aa8" },
   { key: "negotiation", label: "เจรจาต่อรอง",   count: 9, valueNum: 22100000, color: "#1a5b8f" },
@@ -721,12 +722,12 @@ export const hqPipelineLostReasons: PipelineLostReason[] = [
 
 export type PipelineByProduct = { product: string; count: number; valueNum: number; color: string };
 export const hqPipelineByProduct: PipelineByProduct[] = [
-  { product: "RANBUILD",   count: 14, valueNum: 32400000, color: "#003366" },
-  { product: "EASYBUILD",  count: 12, valueNum: 24600000, color: "#0a4f8c" },
-  { product: "CUSTOM",     count: 8,  valueNum: 18900000, color: "#1e6fbf" },
-  { product: "PREFAB",     count: 5,  valueNum: 11200000, color: "#8fa3b8" },
-  { product: "TURNKEY",    count: 2,  valueNum: 5800000,  color: "#82b4e3" },
-  { product: "CONSULTANT", count: 1,  valueNum: 1300000,  color: "#b8d4f0" },
+  { product: "โรงงานสำเร็จรูป",   count: 14, valueNum: 32400000, color: "#003366" },
+  { product: "โกดังสำเร็จรูป",  count: 12, valueNum: 24600000, color: "#0a4f8c" },
+  { product: "งานตามแบบ",     count: 8,  valueNum: 18900000, color: "#1e6fbf" },
+  { product: "อาคารสำเร็จรูป",     count: 5,  valueNum: 11200000, color: "#8fa3b8" },
+  { product: "งานครบวงจร",    count: 2,  valueNum: 5800000,  color: "#82b4e3" },
+  { product: "งานที่ปรึกษา", count: 1,  valueNum: 1300000,  color: "#b8d4f0" },
 ];
 
 // ─── HQ SALES TARGETS ────────────────────────────────────────────────────────
@@ -807,23 +808,23 @@ export type HQQuotation = {
 };
 
 export const hqAllQuotations: HQQuotation[] = [
-  { id:"HQ-Q01", quoteNo:"Q-2026-0089", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"บ.ไทยสตีล",              valueNum:3200000, discountPct:15, status:"sent"          , createdAt:"24 มิ.ย. 2026", salesperson:"วิภา ป.",      productLine:"RANBUILD"  },
-  { id:"HQ-Q02", quoteNo:"Q-2026-0091", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"หจก. ราชบุรีโลหะ",       valueNum:1800000, discountPct:12, status:"sent"          , createdAt:"22 มิ.ย. 2026", salesperson:"สมชาย ว.",     productLine:"EASYBUILD" },
-  { id:"HQ-Q03", quoteNo:"Q-2026-0085", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.อุตสาหกรรมไทย จก.",    valueNum:4200000, discountPct:5,  status:"won",              createdAt:"10 มิ.ย. 2026", salesperson:"สมชาย ว.",     productLine:"RANBUILD"  },
-  { id:"HQ-Q04", quoteNo:"Q-2026-0086", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"สหกรณ์ลำพูน จก.",        valueNum:2200000, discountPct:7,  status:"won",              createdAt:"8 มิ.ย. 2026",  salesperson:"วิภา ป.",      productLine:"EASYBUILD" },
-  { id:"HQ-Q05", quoteNo:"Q-2026-0082", dealerCode:"MST", dealerName:"สาขาแม่สอด",    customer:"บ.ทีดีเค ลอจิสติกส์",    valueNum:5800000, discountPct:4,  status:"sent",             createdAt:"5 มิ.ย. 2026",  salesperson:"อนันต์ ส.",    productLine:"RANBUILD"  },
-  { id:"HQ-Q06", quoteNo:"Q-2026-0080", dealerCode:"CRI", dealerName:"สาขาเชียงราย",  customer:"วิสาหกิจชุมชนดอยอินทนนท์",valueNum:3100000, discountPct:6,  status:"sent",             createdAt:"3 มิ.ย. 2026",  salesperson:"เกรียงไกร จ.", productLine:"CUSTOM"    },
-  { id:"HQ-Q07", quoteNo:"Q-2026-0078", dealerCode:"NSN", dealerName:"สาขานครสวรรค์", customer:"สหกรณ์การเกษตรนครสวรรค์",valueNum:1600000, discountPct:3,  status:"won",              createdAt:"1 มิ.ย. 2026",  salesperson:"ธีรพล อ.",    productLine:"EASYBUILD" },
-  { id:"HQ-Q08", quoteNo:"Q-2026-0077", dealerCode:"CRI", dealerName:"สาขาเชียงราย",  customer:"บ.โกลเด้น ทรี โลจิส",    valueNum:2400000, discountPct:8,  status:"won",              createdAt:"28 พ.ค. 2026",  salesperson:"เกรียงไกร จ.", productLine:"RANBUILD"  },
-  { id:"HQ-Q09", quoteNo:"Q-2026-0075", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.ปิโตรเคม (ไทย)",       valueNum:5100000, discountPct:5,  status:"won",              createdAt:"25 พ.ค. 2026",  salesperson:"สมชาย ว.",     productLine:"RANBUILD"  },
-  { id:"HQ-Q10", quoteNo:"Q-2026-0073", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"บ.ซีเอ็นเอ็กซ์ ฟูด",    valueNum:3800000, discountPct:6,  status:"sent",             createdAt:"20 พ.ค. 2026",  salesperson:"สุรชัย ท.",    productLine:"RANBUILD"  },
-  { id:"HQ-Q11", quoteNo:"Q-2026-0070", dealerCode:"MST", dealerName:"สาขาแม่สอด",    customer:"หจก. แม่สอดพาณิชย์",    valueNum:2100000, discountPct:5,  status:"won",              createdAt:"15 พ.ค. 2026",  salesperson:"อนันต์ ส.",    productLine:"CUSTOM"    },
-  { id:"HQ-Q12", quoteNo:"Q-2026-0068", dealerCode:"HYI", dealerName:"สาขาหาดใหญ่",  customer:"บ.หาดใหญ่อุตสาหกรรม",   valueNum:480000,  discountPct:0,  status:"draft",            createdAt:"10 พ.ค. 2026",  salesperson:"พิมพ์ ท.",     productLine:"CUSTOM"    },
-  { id:"HQ-Q13", quoteNo:"Q-2026-0065", dealerCode:"NSN", dealerName:"สาขานครสวรรค์", customer:"เทศบาลเมืองนครสวรรค์",  valueNum:900000,  discountPct:0,  status:"sent",             createdAt:"5 พ.ค. 2026",   salesperson:"ธีรพล อ.",    productLine:"PREFAB"    },
-  { id:"HQ-Q14", quoteNo:"Q-2026-0062", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.เอสทีพี โฮลดิ้ง",     valueNum:1900000, discountPct:4,  status:"won",              createdAt:"1 พ.ค. 2026",   salesperson:"ประภาส ร.",    productLine:"PREFAB"    },
-  { id:"HQ-Q15", quoteNo:"Q-2026-0058", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"กลุ่มเกษตรลำพูน",       valueNum:2900000, discountPct:9,  status:"lost",             createdAt:"20 เม.ย. 2026", salesperson:"วิภา ป.",      productLine:"CUSTOM"    },
-  { id:"HQ-Q16", quoteNo:"Q-2026-0055", dealerCode:"CRI", dealerName:"สาขาเชียงราย",  customer:"ม.ราชภัฏเชียงราย",       valueNum:4900000, discountPct:7,  status:"draft",            createdAt:"15 เม.ย. 2026", salesperson:"สุชาติ ม.",    productLine:"CUSTOM"    },
-  { id:"HQ-Q17", quoteNo:"Q-2026-0092", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.ระยองยานยนต์",         valueNum:3300000, discountPct:6,  status:"sent",             createdAt:"25 มิ.ย. 2026", salesperson:"สมชาย ว.",     productLine:"CUSTOM"    },
+  { id:"HQ-Q01", quoteNo:"Q-2026-0089", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"บ.ไทยสตีล",              valueNum:3200000, discountPct:15, status:"sent"          , createdAt:"24 มิ.ย. 2026", salesperson:"วิภา ป.",      productLine:"โรงงานสำเร็จรูป"  },
+  { id:"HQ-Q02", quoteNo:"Q-2026-0091", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"หจก. ราชบุรีโลหะ",       valueNum:1800000, discountPct:12, status:"sent"          , createdAt:"22 มิ.ย. 2026", salesperson:"สมชาย ว.",     productLine:"โกดังสำเร็จรูป" },
+  { id:"HQ-Q03", quoteNo:"Q-2026-0085", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.อุตสาหกรรมไทย จก.",    valueNum:4200000, discountPct:5,  status:"won",              createdAt:"10 มิ.ย. 2026", salesperson:"สมชาย ว.",     productLine:"โรงงานสำเร็จรูป"  },
+  { id:"HQ-Q04", quoteNo:"Q-2026-0086", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"สหกรณ์ลำพูน จก.",        valueNum:2200000, discountPct:7,  status:"won",              createdAt:"8 มิ.ย. 2026",  salesperson:"วิภา ป.",      productLine:"โกดังสำเร็จรูป" },
+  { id:"HQ-Q05", quoteNo:"Q-2026-0082", dealerCode:"MST", dealerName:"สาขาแม่สอด",    customer:"บ.ทีดีเค ลอจิสติกส์",    valueNum:5800000, discountPct:4,  status:"sent",             createdAt:"5 มิ.ย. 2026",  salesperson:"อนันต์ ส.",    productLine:"โรงงานสำเร็จรูป"  },
+  { id:"HQ-Q06", quoteNo:"Q-2026-0080", dealerCode:"CRI", dealerName:"สาขาเชียงราย",  customer:"วิสาหกิจชุมชนดอยอินทนนท์",valueNum:3100000, discountPct:6,  status:"sent",             createdAt:"3 มิ.ย. 2026",  salesperson:"เกรียงไกร จ.", productLine:"งานตามแบบ"    },
+  { id:"HQ-Q07", quoteNo:"Q-2026-0078", dealerCode:"NSN", dealerName:"สาขานครสวรรค์", customer:"สหกรณ์การเกษตรนครสวรรค์",valueNum:1600000, discountPct:3,  status:"won",              createdAt:"1 มิ.ย. 2026",  salesperson:"ธีรพล อ.",    productLine:"โกดังสำเร็จรูป" },
+  { id:"HQ-Q08", quoteNo:"Q-2026-0077", dealerCode:"CRI", dealerName:"สาขาเชียงราย",  customer:"บ.โกลเด้น ทรี โลจิส",    valueNum:2400000, discountPct:8,  status:"won",              createdAt:"28 พ.ค. 2026",  salesperson:"เกรียงไกร จ.", productLine:"โรงงานสำเร็จรูป"  },
+  { id:"HQ-Q09", quoteNo:"Q-2026-0075", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.ปิโตรเคม (ไทย)",       valueNum:5100000, discountPct:5,  status:"won",              createdAt:"25 พ.ค. 2026",  salesperson:"สมชาย ว.",     productLine:"โรงงานสำเร็จรูป"  },
+  { id:"HQ-Q10", quoteNo:"Q-2026-0073", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"บ.ซีเอ็นเอ็กซ์ ฟูด",    valueNum:3800000, discountPct:6,  status:"sent",             createdAt:"20 พ.ค. 2026",  salesperson:"สุรชัย ท.",    productLine:"โรงงานสำเร็จรูป"  },
+  { id:"HQ-Q11", quoteNo:"Q-2026-0070", dealerCode:"MST", dealerName:"สาขาแม่สอด",    customer:"หจก. แม่สอดพาณิชย์",    valueNum:2100000, discountPct:5,  status:"won",              createdAt:"15 พ.ค. 2026",  salesperson:"อนันต์ ส.",    productLine:"งานตามแบบ"    },
+  { id:"HQ-Q12", quoteNo:"Q-2026-0068", dealerCode:"HYI", dealerName:"สาขาหาดใหญ่",  customer:"บ.หาดใหญ่อุตสาหกรรม",   valueNum:480000,  discountPct:0,  status:"draft",            createdAt:"10 พ.ค. 2026",  salesperson:"พิมพ์ ท.",     productLine:"งานตามแบบ"    },
+  { id:"HQ-Q13", quoteNo:"Q-2026-0065", dealerCode:"NSN", dealerName:"สาขานครสวรรค์", customer:"เทศบาลเมืองนครสวรรค์",  valueNum:900000,  discountPct:0,  status:"sent",             createdAt:"5 พ.ค. 2026",   salesperson:"ธีรพล อ.",    productLine:"อาคารสำเร็จรูป"    },
+  { id:"HQ-Q14", quoteNo:"Q-2026-0062", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.เอสทีพี โฮลดิ้ง",     valueNum:1900000, discountPct:4,  status:"won",              createdAt:"1 พ.ค. 2026",   salesperson:"ประภาส ร.",    productLine:"อาคารสำเร็จรูป"    },
+  { id:"HQ-Q15", quoteNo:"Q-2026-0058", dealerCode:"CNX", dealerName:"สาขาเชียงใหม่", customer:"กลุ่มเกษตรลำพูน",       valueNum:2900000, discountPct:9,  status:"lost",             createdAt:"20 เม.ย. 2026", salesperson:"วิภา ป.",      productLine:"งานตามแบบ"    },
+  { id:"HQ-Q16", quoteNo:"Q-2026-0055", dealerCode:"CRI", dealerName:"สาขาเชียงราย",  customer:"ม.ราชภัฏเชียงราย",       valueNum:4900000, discountPct:7,  status:"draft",            createdAt:"15 เม.ย. 2026", salesperson:"สุชาติ ม.",    productLine:"งานตามแบบ"    },
+  { id:"HQ-Q17", quoteNo:"Q-2026-0092", dealerCode:"RYG", dealerName:"สาขาระยอง",     customer:"บ.ระยองยานยนต์",         valueNum:3300000, discountPct:6,  status:"sent",             createdAt:"25 มิ.ย. 2026", salesperson:"สมชาย ว.",     productLine:"งานตามแบบ"    },
 ];
 
 // ─── HQ ANNOUNCEMENTS ────────────────────────────────────────────────────────
@@ -844,8 +845,8 @@ export type HQAnnouncement = {
 export const hqAnnouncements: HQAnnouncement[] = [
   {
     id: 1,
-    title: "ปรับราคากลาง RANBUILD และ EASYBUILD มีผล 1 ก.ค. 2026",
-    body: "แจ้งให้ทุกสาขาทราบ ราคากลางผลิตภัณฑ์ RANBUILD ปรับขึ้น 3.5% และ EASYBUILD ปรับขึ้น 2.8% มีผลตั้งแต่ 1 กรกฎาคม 2569 เป็นต้นไป ใบเสนอราคาที่ออกก่อนวันดังกล่าวยังคงใช้ราคาเดิมได้ไม่เกิน 30 วัน กรุณาอัปเดตระบบก่อนออกใบเสนอราคาใหม่",
+    title: "ปรับราคากลาง โรงงานสำเร็จรูป และ โกดังสำเร็จรูป มีผล 1 ก.ค. 2026",
+    body: "แจ้งให้ทุกสาขาทราบ ราคากลางผลิตภัณฑ์ โรงงานสำเร็จรูป ปรับขึ้น 3.5% และ โกดังสำเร็จรูป ปรับขึ้น 2.8% มีผลตั้งแต่ 1 กรกฎาคม 2569 เป็นต้นไป ใบเสนอราคาที่ออกก่อนวันดังกล่าวยังคงใช้ราคาเดิมได้ไม่เกิน 30 วัน กรุณาอัปเดตระบบก่อนออกใบเสนอราคาใหม่",
     category: "ราคา",
     publishedAt: "25 มิ.ย. 2026",
     author: "วิชัย ประสิทธิ์ (GM)",
@@ -953,7 +954,7 @@ export type PipelineDealMock = {
 
 // ─── Unified Sales Pipeline Statuses ──────────────────────────────
 export const PIPELINE_STATUSES = {
-  new_lead:    "ลีดใหม่",
+  new_lead:    "ผู้สนใจใหม่",
   contacted:   "ติดต่อแล้ว",
   meeting:     "นัดประชุม",
   quotation:   "เสนอราคา",
@@ -1261,7 +1262,7 @@ export const salesTemplates: SalesTemplateMock[] = [
   },
   {
     id: 6,
-    name: "งานพิเศษ / Custom",
+    name: "งานตามแบบของลูกค้า",
     description: "สำหรับโอกาสการขายที่ไม่อยู่ในหมวดหมู่มาตรฐาน ต้องการออกแบบเฉพาะ",
     dealerCompany: "สาขาเชียงใหม่",
     isDefault: false,
@@ -1305,12 +1306,12 @@ export const notes: NoteMock[] = [
   },
   {
     id: 2, title: "ประชุมทีมขาย ประจำสัปดาห์", category: "ประชุม", pinned: true,
-    content: "ประชุมวันจันทร์ที่ 23 มิ.ย. 2569\n\nสรุปประเด็น:\n1. โอกาสการขายรวม ฿14.6M (กำลังดำเนินการ 6 รายการ)\n2. เป้าหมาย Q2 ต้องปิด 2 deals เพิ่ม\n3. ลีดใหม่จาก นิคมฯ อมตะ 3 ราย\n\nAction items:\n- วิภา: follow up บจ. อุตรดิตถ์โลหะ ภายใน 3 วัน\n- วิชัย: นำเสนอ spec ให้ VCS Asia รอบ 2",
+    content: "ประชุมวันจันทร์ที่ 23 มิ.ย. 2569\n\nสรุปประเด็น:\n1. โอกาสการขายรวม ฿14.6M (กำลังดำเนินการ 6 รายการ)\n2. เป้าหมาย Q2 ต้องปิด 2 deals เพิ่ม\n3. ผู้สนใจใหม่จาก นิคมฯ อมตะ 3 ราย\n\nAction items:\n- วิภา: follow up บจ. อุตรดิตถ์โลหะ ภายใน 3 วัน\n- วิชัย: นำเสนอ spec ให้ VCS Asia รอบ 2",
     author: "กาญจนา", createdAt: "2026-06-23 10:00", updatedAt: "2026-06-23 10:45", color: "#15803d",
   },
   {
     id: 3, title: "ข้อเสนอพิเศษ บจ. ซีซีเอส", category: "โอกาสการขาย", pinned: false,
-    content: "ลูกค้าขอส่วนลดเพิ่ม 5% สำหรับโอกาสการขาย PREFAB เชียงใหม่\n\nพิจารณา:\n- มูลค่าโอกาสการขาย ฿3.2M\n- ส่วนลด 5% = ฿160,000\n- อัตรากำไรยังคุ้มอยู่ถ้าได้ออเดอร์ครั้งถัดไป\n\nตัดสินใจ: อนุมัติส่วนลด 3% เป็นพิเศษ รอยืนยัน",
+    content: "ลูกค้าขอส่วนลดเพิ่ม 5% สำหรับโอกาสการขาย อาคารสำเร็จรูป เชียงใหม่\n\nพิจารณา:\n- มูลค่าโอกาสการขาย ฿3.2M\n- ส่วนลด 5% = ฿160,000\n- อัตรากำไรยังคุ้มอยู่ถ้าได้ออเดอร์ครั้งถัดไป\n\nตัดสินใจ: อนุมัติส่วนลด 3% เป็นพิเศษ รอยืนยัน",
     customerId: 2, customerName: "บจ. ซีซีเอส",
     author: "กาญจนา", createdAt: "2026-06-18 16:00", updatedAt: "2026-06-19 09:00", color: "#b45309",
   },
@@ -1321,8 +1322,8 @@ export const notes: NoteMock[] = [
     author: "วิชัย", createdAt: "2026-06-22 11:15", updatedAt: "2026-06-22 11:15", color: "#003366",
   },
   {
-    id: 5, title: "รายการตรวจปิดการขาย RANBUILD", category: "ทั่วไป", pinned: false,
-    content: "สิ่งที่ต้องทำก่อนปิดการขาย RANBUILD นครสวรรค์:\n\n☑ ยืนยันรายละเอียดใบเสนอราคาครบ\n☑ ตรวจสอบเงื่อนไขการชำระเงิน\n☑ ส่งเอกสารสัญญาให้ลูกค้า\n☑ ทบทวนเงื่อนไขร่วมกับลูกค้า\n☐ รับเงินงวดสุดท้าย\n☐ ออกใบรับประกัน",
+    id: 5, title: "รายการตรวจปิดการขาย โรงงานสำเร็จรูป", category: "ทั่วไป", pinned: false,
+    content: "สิ่งที่ต้องทำก่อนปิดการขาย โรงงานสำเร็จรูป นครสวรรค์:\n\n☑ ยืนยันรายละเอียดใบเสนอราคาครบ\n☑ ตรวจสอบเงื่อนไขการชำระเงิน\n☑ ส่งเอกสารสัญญาให้ลูกค้า\n☑ ทบทวนเงื่อนไขร่วมกับลูกค้า\n☐ รับเงินงวดสุดท้าย\n☐ ออกใบรับประกัน",
     author: "สมชาย", createdAt: "2026-06-15 08:00", updatedAt: "2026-06-21 13:00", color: "#6b7280",
   },
   {

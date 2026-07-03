@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Phone, BarChart2, Package,
   Settings, GitMerge, ScrollText, ChevronDown, Check, Users,
-  CalendarDays, FolderOpen, Inbox,
+  CalendarDays, FolderOpen, Inbox, Building2,
 } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 
@@ -54,10 +54,11 @@ const HQ_NAV: NavGroup[] = [
     group: "เมนูหลัก",
     items: [
       { label: "แดชบอร์ด",      href: "/hq/dashboard", icon: <LayoutDashboard size={16} /> },
-      { label: "ตัวแทนจำหน่าย", href: "/hq/dealers",   icon: <Store size={16} /> },
+      { label: "สาขา", href: "/hq/dealers",   icon: <Store size={16} /> },
       { label: "ผู้สนใจ",       href: "/hq/lead-pool", icon: <Inbox size={16} /> },
       { label: "ลูกค้า",        href: "/hq/customers", icon: <Users size={16} /> },
       { label: "เส้นทางการขาย", href: "/hq/pipeline",  icon: <GitMerge size={16} /> },
+      { label: "ใบเสนอราคา",    href: "/hq/quotations", icon: <ScrollText size={16} /> },
       { label: "สินค้า",        href: "/hq/master",    icon: <Package size={16} /> },
       { label: "รายงาน",         href: "/reports",      icon: <BarChart2 size={16} /> },
     ],
@@ -70,16 +71,26 @@ const HQ_NAV: NavGroup[] = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boolean; onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const { isHQ, currentKey, switchSession } = useRole();
   const [roleOpen, setRoleOpen] = useState(false);
+  // แบรนด์ฝั่ง Dealer = ชื่อบริษัทจากโปรไฟล์บริษัท (แก้ในหน้าตั้งค่า) → ชื่อในแอปตรงกับโปรไฟล์เสมอ
+  const [dealerBrand, setDealerBrand] = useState("เชียงใหม่สตีลบิลด์");
 
   useEffect(() => {
     router.prefetch("/hq/dashboard");
     router.prefetch("/dashboard");
   }, [router]);
+
+  useEffect(() => {
+    if (isHQ) return;
+    try {
+      const s = localStorage.getItem("dealer_issuer_profile_v2");
+      if (s) { const p = JSON.parse(s); if (p.company) setDealerBrand(String(p.company).replace(/^บริษัท\s*/, "").replace(/\s*จำกัด$/, "").trim()); }
+    } catch {}
+  }, [isHQ]);
 
   function handleSwitch(key: "hq" | "dealer") {
     setRoleOpen(false);
@@ -92,17 +103,18 @@ export function Sidebar() {
   const nav = isHQ ? HQ_NAV : DEALER_NAV;
 
   return (
-    <aside className="erp-sidebar">
-      {/* Brand */}
+    <aside className={`erp-sidebar${mobileOpen ? " open" : ""}`}>
+      {/* Brand — HQ = Benjamin (สำนักงานใหญ่) · Dealer = แบรนด์บริษัทของสาขาเอง (จากโปรไฟล์บริษัท) */}
       <div className="sidebar-brand">
         <div className="brand-mark">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/benjamin-logo-white.png" alt="Benjamin"
-            style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
+          {isHQ
+            /* eslint-disable-next-line @next/next/no-img-element */
+            ? <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
+            : <Building2 size={20} color="#fff" strokeWidth={2.2} />}
         </div>
         <div className="brand-text">
-          <h1>BENJAMIN</h1>
-          <span>PRE-ENGINEERED BUILDING</span>
+          <h1>{isHQ ? "BENJAMIN" : dealerBrand}</h1>
+          <span>{isHQ ? "PRE-ENGINEERED BUILDING" : "อาคารเหล็กสำเร็จรูป"}</span>
         </div>
       </div>
 
@@ -160,7 +172,7 @@ export function Sidebar() {
             {group.items.map(item => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
-                <Link key={item.href} href={item.href} className={`nav-item${active ? " active" : ""}`}>
+                <Link key={item.href} href={item.href} onClick={onNavigate} className={`nav-item${active ? " active" : ""}`}>
                   {item.icon}
                   <span style={{ flex: 1 }}>{item.label}</span>
                   {item.badge ? <span className="badge-mini">{item.badge}</span> : null}

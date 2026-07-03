@@ -43,7 +43,7 @@ const PERM_META: Record<PermLevel, { label: string; bg: string; color: string; i
 
 // ── Permission matrix: module → per-role level ────────────────
 const MODULES: { name: string; perms: Record<RoleKey, PermLevel> }[] = [
-  { name: "ลีด",            perms: { hq_admin: "all", hq_manager: "all",  dealer_admin: "view", dealer_sales: "own"  } },
+  { name: "ผู้สนใจ",            perms: { hq_admin: "all", hq_manager: "all",  dealer_admin: "view", dealer_sales: "own"  } },
   { name: "ลูกค้า",          perms: { hq_admin: "all", hq_manager: "all",  dealer_admin: "view", dealer_sales: "own"  } },
   { name: "เส้นทางการขาย",  perms: { hq_admin: "all", hq_manager: "all",  dealer_admin: "view", dealer_sales: "own"  } },
   { name: "ใบเสนอราคา",     perms: { hq_admin: "all", hq_manager: "all",  dealer_admin: "all",  dealer_sales: "own"  } },
@@ -103,8 +103,9 @@ function PermCell({ level }: { level: PermLevel }) {
 type UserForm = { name: string; email: string; role: RoleKey; status: UserStatus };
 const BLANK_USER: UserForm = { name: "", email: "", role: "dealer_sales", status: "active" };
 
-function AddUserModal({ onClose, onAdd }: { onClose: () => void; onAdd: (f: UserForm) => void }) {
-  const [form, setForm] = useState<UserForm>(BLANK_USER);
+function AddUserModal({ onClose, onAdd, initial }: { onClose: () => void; onAdd: (f: UserForm) => void; initial?: UserForm }) {
+  const [form, setForm] = useState<UserForm>(initial ?? BLANK_USER);
+  const isEdit = !!initial;
   const valid = form.name.trim() !== "" && /\S+@\S+\.\S+/.test(form.email);
 
   function submit() {
@@ -118,7 +119,7 @@ function AddUserModal({ onClose, onAdd }: { onClose: () => void; onAdd: (f: User
       <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 440, background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
         {/* header */}
         <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>เพิ่มผู้ใช้ใหม่</h2>
+          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>{isEdit ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้ใหม่"}</h2>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} /></button>
         </div>
         {/* body */}
@@ -149,7 +150,7 @@ function AddUserModal({ onClose, onAdd }: { onClose: () => void; onAdd: (f: User
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button className="btn btn-secondary btn-md" onClick={onClose}>ยกเลิก</button>
           <button className="btn btn-primary btn-md" onClick={submit} disabled={!valid} style={!valid ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
-            <Plus size={14} /> เพิ่มผู้ใช้
+            <Plus size={14} /> {isEdit ? "บันทึก" : "เพิ่มผู้ใช้"}
           </button>
         </div>
       </div>
@@ -161,6 +162,7 @@ function AddUserModal({ onClose, onAdd }: { onClose: () => void; onAdd: (f: User
 export default function HQUsersPage() {
   const [users, setUsers] = useState<AppUser[]>(USERS_INIT);
   const [showAdd, setShowAdd] = useState(false);
+  const [editUser, setEditUser] = useState<AppUser | null>(null);
 
   function toggleStatus(id: number) {
     setUsers((prev) =>
@@ -171,6 +173,11 @@ export default function HQUsersPage() {
   function addUser(form: UserForm) {
     const maxId = users.reduce((m, u) => Math.max(m, u.id), 0);
     setUsers((prev) => [{ id: maxId + 1, ...form }, ...prev]);
+  }
+
+  function updateUser(form: UserForm) {
+    if (!editUser) return;
+    setUsers((prev) => prev.map((u) => (u.id === editUser.id ? { ...u, ...form } : u)));
   }
 
   const activeCount = users.filter((u) => u.status === "active").length;
@@ -189,6 +196,7 @@ export default function HQUsersPage() {
       </div>
 
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onAdd={addUser} />}
+      {editUser && <AddUserModal initial={{ name: editUser.name, email: editUser.email, role: editUser.role, status: editUser.status }} onClose={() => setEditUser(null)} onAdd={updateUser} />}
 
       {/* Users card */}
       <div className="card" style={{ marginBottom: 22 }}>
@@ -242,6 +250,7 @@ export default function HQUsersPage() {
                     <td>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                         <button
+                          onClick={() => setEditUser(u)}
                           className="btn"
                           style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", fontSize: "0.78rem" }}
                         >

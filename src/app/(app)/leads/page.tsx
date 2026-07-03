@@ -6,7 +6,7 @@ import {
   leadStatusLabel, leadStatusColor,
   responsiblePersons, RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
-  solutionProducts,
+  solutionProducts, LOST_REASONS,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type QuotationMock,
 } from "@/lib/mock";
 import {
@@ -192,7 +192,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
     product: lead.product ?? solutionProducts[0].name, status: lead.status,
     assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
-    note: lead.note ?? "", logo: lead.logo ?? "",
+    note: lead.note ?? "", lostReason: lead.lostReason ?? "", logo: lead.logo ?? "",
   });
   const [f, setF] = useState(seed);
   const logoRef = useRef<HTMLInputElement>(null);
@@ -213,13 +213,13 @@ function OverviewEditor({ lead, persons, onSave }: {
     f.province !== (lead.province ?? "") || f.source !== (lead.source ?? "") ||
     f.product !== (lead.product ?? "") || f.status !== lead.status ||
     f.assigned !== (lead.assigned ?? "") || f.value !== (lead.value ?? "") ||
-    f.note !== (lead.note ?? "") || f.logo !== (lead.logo ?? "");
+    f.note !== (lead.note ?? "") || f.lostReason !== (lead.lostReason ?? "") || f.logo !== (lead.logo ?? "");
   const pct = leadProgressPct(f.status);
 
   const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
   const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.82rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff" };
 
-  function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: f.product, value: fmtVal(f.value) }); }
+  function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: f.product, value: fmtVal(f.value), lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined }); }
 
   return (
     <div>
@@ -273,6 +273,14 @@ function OverviewEditor({ lead, persons, onSave }: {
         <div><label style={lbl}>ขั้นตอน</label>
           <select value={f.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inp}>{ALL_STATUSES.map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}</select>
         </div>
+        {f.status==="CANCELLED" && (
+          <div><label style={{...lbl, color:"#dc2626"}}>เหตุผลที่เสีย</label>
+            <select value={f.lostReason} onChange={e=>set("lostReason",e.target.value)} style={{...inp, borderColor:"#fecaca"}}>
+              <option value="">— เลือกเหตุผล —</option>
+              {LOST_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        )}
         <div><label style={lbl}>ผู้รับผิดชอบ</label>
           <select value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>{persons.map(t=><option key={t}>{t}</option>)}</select>
         </div>
@@ -345,8 +353,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     if (initial) {
       onSave({ ...initial, ...base });
     } else {
-      const rnd = Math.floor(Math.random()*900)+100;
-      onSave({ id: "L-"+rnd, numId: rnd, ...base });
+      // id/numId ถูกกำหนดจริงในหน้า (handleAddLead) แบบ max+1 กันชนกัน
+      onSave({ id: "", numId: 0, ...base });
     }
     onClose();
   }
@@ -583,6 +591,17 @@ export default function LeadsPage() {
   const [draft, setDraft] = useState<LeadRow|null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // โมดัลรายละเอียด: ปิดด้วย Esc + ล็อกสกรอลล์พื้นหลัง (ให้พฤติกรรมเท่ากับ RightDrawer)
+  useEffect(() => {
+    if (!selectedLead) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closePanel(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLead]);
+
   // Checklist
   const [checklists, setChecklists] = useState<Record<string,ChecklistItem[]>>({});
   const [showChecklistInput, setShowChecklistInput] = useState(false);
@@ -785,7 +804,7 @@ export default function LeadsPage() {
       totalValue: est,
       materialCost: est,
       province: lead.province,
-      buildingType: "โกดังสินค้า",
+      buildingType: lead.product,
       area: 0,
       status: "draft",
       date: "2026-06-30",
@@ -831,7 +850,7 @@ export default function LeadsPage() {
   const myFiles: string[] = leadFiles[lid] ?? [];
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !lid) return;
-    setLeadFiles(p=>({...p,[lid]:[...(p[lid]??BASE_CHECKLIST),f.name]}));
+    setLeadFiles(p=>({...p,[lid]:[...(p[lid]??[]),f.name]}));
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -1325,7 +1344,11 @@ export default function LeadsPage() {
       {showAddForm && (
         <LeadFormModal
           onClose={()=>setShowAddForm(false)}
-          onSave={addLead}
+          onSave={(l)=>{
+            // กำหนด id/numId แบบ max+1 กันชนกับลีดเดิม (แทน Math.random)
+            const nid = Math.max(0, ...leadsData.map(x=>x.numId)) + 1;
+            addLead({ ...l, numId: nid, id: `#L-${40321 + nid}` });
+          }}
           persons={personsList}
         />
       )}
@@ -1538,7 +1561,7 @@ export default function LeadsPage() {
                 </div>
 
                 {/* Right: action rail */}
-                <div style={{ width:210, flexShrink:0, padding:16, display:"flex", flexDirection:"column",
+                <div style={{ width:220, flexShrink:0, padding:16, display:"flex", flexDirection:"column",
                   gap:8, overflowY:"auto" }}>
                   {c.status !== "PAID" && c.status !== "CANCELLED" && (
                     <button className="btn btn-secondary btn-sm" onClick={()=>convertToDeal(c)}

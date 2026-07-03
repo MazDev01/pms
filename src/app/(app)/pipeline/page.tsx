@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { pipelineStages, LOST_REASONS, quotationStatusLabel, quotationStatusColor, type PipelineDealMock, type DealActivity } from "@/lib/mock";
+import { parseBaht } from "@/lib/format";
 import { useSales } from "@/context/SalesContext";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -139,7 +140,8 @@ function StageSelector({ stageId, onMove, onClose }: {
         background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12,
         boxShadow: "0 8px 24px rgba(0,51,102,.15)", minWidth: 200, overflow: "hidden",
       }}>
-        {pipelineStages.filter(s => s.id !== 8).map(s => {
+        {/* ซ่อนสถานะปลายทาง (7 ปิดการขาย / 8 ไม่ได้งาน) — ต้องปิดผ่านปุ่มปิดการขายที่เรียก closeDeal เท่านั้น กันดีลค้างสถานะ won โดยไม่ตั้ง outcome */}
+        {pipelineStages.filter(s => s.id !== 7 && s.id !== 8).map(s => {
           const sc = stageColor(s.id);
           return (
             <button key={s.id} onClick={() => { onMove(s.id); onClose(); }}
@@ -185,7 +187,7 @@ function DealFormModal({ onClose, onSubmit, initial }: {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const val = parseFloat(form.value.replace(/[฿,]/g, "")) || 0;
+    const val = parseBaht(form.value);
     onSubmit({
       customer: form.customer,
       project: form.project,

@@ -194,7 +194,9 @@ export default function HQCompanyPage() {
                   : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.3rem", letterSpacing: "0.04em" }}>{initials}</span>}
               </div>
               <div>
-                <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
+                <button className="btn btn-secondary btn-sm" disabled={!logo}
+                  style={!logo ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                  onClick={() => { if (!logo) return; const a = document.createElement("a"); a.href = logo; a.download = "brand-logo"; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}>
                   <Download size={13} /> ดาวน์โหลดโลโก้
                 </button>
                 <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 6, lineHeight: 1.5 }}>

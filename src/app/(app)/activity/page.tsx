@@ -2,7 +2,7 @@
 
 import { useState, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { pipelineDeals } from "@/lib/mock";
+import { useSales } from "@/context/SalesContext";
 import { Activity } from "lucide-react";
 
 // ── Activity type → icon (clean SVG) + tint ───────────────────
@@ -68,14 +68,15 @@ function dayLabel(key: string) {
 
 export default function ActivityPage() {
   const router = useRouter();
+  const { deals } = useSales();
   const [filter, setFilter] = useState("all");
 
   const events = useMemo(() => {
-    const all = pipelineDeals.flatMap(d =>
+    const all = deals.flatMap(d =>
       (d.activities ?? []).map(a => ({ ...a, customer: d.customer, project: d.project, dealId: d.id }))
     );
     return all.sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? ""));
-  }, []);
+  }, [deals]);
 
   const filtered = filter === "all" ? events : events.filter(e => e.type === filter);
 

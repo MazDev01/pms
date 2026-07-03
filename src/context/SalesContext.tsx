@@ -12,6 +12,7 @@ import {
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock,
 } from "@/lib/mock";
+import { parseBaht } from "@/lib/format";
 
 // ─── Types ─────────────────────────────────────────────────────────
 export type DealSource = "pipeline" | "lead";
@@ -284,7 +285,7 @@ export function SalesProvider({
       createdAt:  "2026-06-30", // ตรึงตามวัน "ปัจจุบัน" ของ mock เพื่อให้ดีลใหม่อยู่ในช่วงตัวกรองเริ่มต้น
       notes:      "",
       activities: [
-        { id: Date.now(), type: "deal_created", text: `สร้างโอกาสการขายจากลีด: ${lead.company}`, timestamp: now },
+        { id: Date.now(), type: "deal_created", text: `สร้างโอกาสการขายจากผู้สนใจ: ${lead.company}`, timestamp: now },
       ],
     };
 
@@ -395,10 +396,7 @@ function deriveInitials(name: string): string {
 }
 
 function parseLeadValue(v: string): number {
-  const n = parseFloat(v.replace(/[฿,]/g, ""));
-  if (v.includes("M")) return n * 1e6;
-  if (v.includes("K")) return n * 1e3;
-  return n || 0;
+  return parseBaht(v);
 }
 
 const DEFAULT_TASKS = [

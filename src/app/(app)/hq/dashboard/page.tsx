@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  DollarSign, TrendingUp, Award, Target, MapPin, Trophy, Filter,
+  DollarSign, TrendingUp, Award, Target, MapPin, Trophy,
 } from "lucide-react";
 import {
   hqSalesByMonth, dealerLeaderboard, hqDealSummary, hqPipelineStages,
@@ -18,6 +19,7 @@ const PRIMARY = "#003366";
 const RAMP = ["#003366", "#1a4f80", "#33699a", "#4d84b3", "#6699cc", "#8fb3d9"];
 
 export default function HQDashboard() {
+  const router = useRouter();
   const { timeRange } = useFilters();
   const f = timeRange.factor;
   const scale = (n: number) => Math.round(n * f);
@@ -39,8 +41,6 @@ export default function HQDashboard() {
   // ข้อมูลรายเดือน (ล้านบาท) ป้อนกราฟแนวโน้ม — กราฟมีปุ่มช่วงเวลาในตัว ไม่ใช้ factor
   const trendMonthly = hqSalesByMonth.map(d => ({ month: d.month, value: Math.round(d.value * 10) / 10 }));
 
-  // Sales funnel (ทั้งเครือ)
-  const funnelMax = Math.max(...hqPipelineStages.map(s => s.count), 1);
 
   // Regional performance
   const regions = useMemo(() => {
@@ -71,7 +71,8 @@ export default function HQDashboard() {
           <h2>แดชบอร์ด HQ</h2>
           <p>ศูนย์ควบคุมเครือข่าย · สรุปภาพรวมทุกสาขาแบบเรียลไทม์ · {timeRange.subtitle}</p>
         </div>
-        <FilterBar dims={["dealer", "province"]} />
+        {/* เหลือเฉพาะตัวกรองช่วงเวลา (ทำงานกับ scale จริง) — เอา dealer/province ที่ยังไม่ผูกตรรกะออกกัน dead control */}
+        <FilterBar dims={[]} />
       </div>
 
       {/* Executive scorecard */}
@@ -90,32 +91,10 @@ export default function HQDashboard() {
       </div>
 
       {/* Row 1 — network revenue trend + sales funnel */}
-      <div className="row-2">
-        <div className="card">
-          <div className="card-body">
-            <SalesTrendChart title="ยอดขายรวมทั้งเครือ รายเดือน" desc="มูลค่าทุกสาขารวมกัน (ล้านบาท)" monthly={trendMonthly} />
-          </div>
-        </div>
-
-        {/* Sales funnel */}
-        <div className="card">
-          <div className="card-header"><div><div className="card-title">Sales Funnel</div><div className="card-desc">ไปป์ไลน์ทั้งเครือ</div></div><Filter size={16} color="#9ca3af" /></div>
-          <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
-            {hqPipelineStages.map((s, i) => {
-              const w = 40 + (s.count / funnelMax) * 60; // 40%–100% width
-              return (
-                <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 96, fontSize: "0.73rem", fontWeight: 600, flexShrink: 0, textAlign: "right", color: "var(--muted-foreground)" }}>{s.label}</div>
-                  <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-                    <div className="top5-bar" style={{ width: `${w}%`, height: 34, background: RAMP[i % RAMP.length], borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", color: "#fff" }}>
-                      <span style={{ fontSize: "0.8rem", fontWeight: 800 }}>{s.count}</span>
-                      <span style={{ fontSize: "0.64rem", opacity: 0.85 }}>{fmtBaht(s.valueNum)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* กราฟแนวโน้ม (Sales Funnel ย้ายไปเป็นเจ้าของเดียวที่หน้า เส้นทางการขาย HQ) */}
+      <div className="card">
+        <div className="card-body">
+          <SalesTrendChart title="ยอดขายรวมทั้งเครือ รายเดือน" desc="มูลค่าทุกสาขารวมกัน (ล้านบาท)" monthly={trendMonthly} />
         </div>
       </div>
 
@@ -200,7 +179,7 @@ export default function HQDashboard() {
               {ranked.map((d, i) => {
                 const tpct = Math.round((d.revenueActual / d.revenueTarget) * 100);
                 return (
-                  <tr key={d.code} className="clickable" onClick={() => { window.location.href = "/hq/dealers"; }}>
+                  <tr key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)}>
                     <td><span style={{ display: "inline-flex", width: 24, height: 24, borderRadius: 7, alignItems: "center", justifyContent: "center", fontSize: "0.72rem", fontWeight: 800, background: i === 0 ? PRIMARY : "#f0f4f8", color: i === 0 ? "#fff" : "#6b7280" }}>{i + 1}</span></td>
                     <td style={{ fontWeight: 700 }}>{d.name.replace("Benjamin ", "")}</td>
                     <td style={{ color: "var(--muted-foreground)" }}>{d.region}</td>

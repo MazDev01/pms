@@ -35,7 +35,7 @@ export default function DealerProductsPage() {
         .row{display:flex;border-bottom:1px solid #eef1f5;padding:9px 0;font-size:13px}
         .k{width:150px;color:#6b7280;font-weight:600}.v{font-weight:700}
         .price{color:#003366;font-size:18px;font-weight:800}</style></head>
-      <body><h1>${p.name}</h1><div class="sub">แม่แบบอาคาร เบนจามิน</div>
+      <body><h1>${p.name}</h1><div class="sub">แม่แบบอาคารสำเร็จรูป</div>
       <div class="row"><div class="k">รายละเอียด</div><div class="v">${p.spec}</div></div>
       <div class="row"><div class="k">ราคากลาง</div><div class="v price">${fmtMoney(p.price)} / ${p.unit}</div></div>
       <p style="margin-top:24px;font-size:11px;color:#9ca3af">ราคากลางกำหนดโดยสำนักงานใหญ่ · ใช้อ้างอิงในการนำเสนอ</p>
@@ -54,7 +54,7 @@ export default function DealerProductsPage() {
       <div className="page-head" style={{ flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
           <h2>แม่แบบ</h2>
-          <p>แม่แบบอาคารสำเร็จรูปของเบนจามิน · ราคากลางกำหนดโดยสำนักงานใหญ่</p>
+          <p>แม่แบบอาคารสำเร็จรูป · ราคากลางกำหนดโดยสำนักงานใหญ่</p>
         </div>
         <div style={{ position: "relative", width: 280, maxWidth: "100%" }}>
           <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: MUTED }} />

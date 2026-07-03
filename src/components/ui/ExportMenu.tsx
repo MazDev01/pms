@@ -73,7 +73,7 @@ export function ExportMenu({ filename, title, headers, rows, small }: ExportMenu
         tr:nth-child(even) td{background:#f8f9fb}
       </style></head><body>
       <h1>${esc(title ?? filename)}</h1>
-      <div class="sub">Benjamin PMS · ${rows.length} รายการ</div>
+      <div class="sub">ระบบ PMS · ${rows.length} รายการ</div>
       <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
       <script>window.onload=function(){window.print()}</script>
       </body></html>`);

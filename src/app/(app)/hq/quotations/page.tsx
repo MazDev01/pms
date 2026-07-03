@@ -32,7 +32,7 @@ const STATUS_META: Record<
   draft: { label: "ร่าง", bg: "#f0f0f5", color: "#6b7280" },
   sent: { label: "ส่งแล้ว", bg: "#dce5f0", color: "#003366" },
   won: { label: "ชนะ ✓", bg: "#e5faf0", color: "#059669" },
-  lost: { label: "แพ้", bg: "#fee2e2", color: "#dc2626" },
+  lost: { label: "เสีย", bg: "#fee2e2", color: "#dc2626" },
 };
 
 const STATUS_ORDER: Record<HQQuotation["status"], number> = {
@@ -57,7 +57,7 @@ const STATUS_OPTIONS: { value: HQQuotation["status"] | "all"; label: string }[] 
   { value: "draft", label: "ร่าง" },
   { value: "sent", label: "ส่งแล้ว" },
   { value: "won", label: "ชนะ" },
-  { value: "lost", label: "แพ้" },
+  { value: "lost", label: "เสีย" },
 ];
 
 export default function HQQuotationsPage() {
@@ -347,13 +347,9 @@ export default function HQQuotationsPage() {
                       {/* Salesperson */}
                       <td style={{ whiteSpace: "nowrap" }}>{q.salesperson}</td>
 
-                      {/* Date */}
+                      {/* Date — createdAt เป็นสตริงไทย (เช่น "24 มิ.ย. 2026") ใช้ new Date() ไม่ได้ จึงแสดงดิบ */}
                       <td style={{ color: MUTED, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
-                        {new Date(q.createdAt).toLocaleDateString("th-TH", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "2-digit",
-                        })}
+                        {q.createdAt}
                       </td>
 
                       {/* Status Badge */}

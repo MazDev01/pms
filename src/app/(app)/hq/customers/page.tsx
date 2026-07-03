@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { hqAllCustomers, HQCustomer } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
+import { useSales } from "@/context/SalesContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { Search, Users, Building2, Landmark, User, Eye, X } from "lucide-react";
@@ -42,13 +43,33 @@ const segmentLabel: Record<HQCustomer["segment"], string> = {
 
 export default function HQCustomersPage() {
   const { timeRange, passes } = useFilters();
+  const { customers: ctxCustomers, quotations: ctxQuotations } = useSales();
   const [search, setSearch] = useState("");
   const [viewC, setViewC] = useState<HQCustomer | null>(null); // View → เจาะดูรายละเอียดลูกค้า (HQ Data Ownership)
+
+  // รวมลูกค้าที่ Dealer สร้างจริง (SalesContext) เข้ากับชุดข้อมูล HQ → HQ เห็นข้อมูลที่ปลายทางสร้าง
+  const source: HQCustomer[] = useMemo(() => {
+    const live: HQCustomer[] = ctxCustomers.map((c) => ({
+      id: 10000 + c.id,
+      name: c.company,
+      dealerCode: "LIVE",
+      dealerName: "สาขาปัจจุบัน (ระบบ)",
+      type: c.type as HQCustomer["type"],
+      province: c.province,
+      dealsWon: ctxQuotations.filter((q) => q.customerId === c.id && q.status === "won").length,
+      totalRevenue: c.totalValue,
+      status: c.status === "inactive" ? "inactive" : "active",
+      lastContact: "30 มิ.ย. 2026",
+      segment: "sme",
+    }));
+    const liveNames = new Set(live.map((l) => l.name));
+    return [...live, ...hqAllCustomers.filter((h) => !liveNames.has(h.name))];
+  }, [ctxCustomers, ctxQuotations]);
 
   // กรองจริงด้วย FilterBar (time/dealer/province/status) + search ในหน้า
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return hqAllCustomers
+    return source
       .filter((c) => {
         if (q && !c.name.toLowerCase().includes(q) && !c.province.toLowerCase().includes(q))
           return false;
@@ -60,7 +81,7 @@ export default function HQCustomersPage() {
         });
       })
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [search, passes]);
+  }, [search, passes, source]);
 
   // KPI สรุปคำนวณจากชุดที่กรองแล้ว
   const enterpriseCount = filtered.filter((c) => c.segment === "enterprise").length;
@@ -88,7 +109,7 @@ export default function HQCustomersPage() {
             statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
           />
           <ExportMenu filename="hq-customers" title="ลูกค้าทั้งเครือ"
-            headers={["ลูกค้า","ประเภท","จังหวัด","สาขา","ดีลที่ปิด","รายได้รวม","สถานะ","ติดต่อล่าสุด"]}
+            headers={["ลูกค้า","ประเภท","จังหวัด","สาขา","โอกาสการขายที่ชนะ","รายได้รวม","สถานะ","ติดต่อล่าสุด"]}
             rows={filtered.map(c=>[c.name,c.type,c.province,c.dealerName,c.dealsWon,c.totalRevenue,c.status==="active"?"ใช้งาน":"ไม่ใช้งาน",c.lastContact])} />
         </div>
       </div>

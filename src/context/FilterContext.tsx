@@ -4,7 +4,7 @@ import {
   createContext, useContext, useState, useMemo, useCallback, useEffect,
   type ReactNode,
 } from "react";
-import { dealerLeaderboard, hqAllCustomers, customers, quotations, responsiblePersons } from "@/lib/mock";
+import { dealerLeaderboard, hqAllCustomers, customers, quotations, responsiblePersons, solutionProducts } from "@/lib/mock";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -99,13 +99,9 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
 export const DEALER_OPTIONS: { value: string; label: string }[] =
   dealerLeaderboard.map(d => ({ value: d.code, label: d.name }));
 
-export const PRODUCT_OPTIONS: { value: string; label: string }[] = [
-  { value: "EASYBUILD", label: "EASYBUILD" },
-  { value: "RANBUILD",  label: "RANBUILD" },
-  { value: "PREFAB",    label: "PREFAB" },
-  { value: "PEB",       label: "PEB" },
-  { value: "CUSTOM",    label: "Custom" },
-];
+// แหล่งเดียว (single source): ตัวเลือกสินค้า = 6 แม่แบบจาก solutionProducts — ตรงกับฟอร์มผู้สนใจ/ใบเสนอราคาทั้งระบบ
+export const PRODUCT_OPTIONS: { value: string; label: string }[] =
+  solutionProducts.map(p => ({ value: p.name, label: p.name }));
 
 export const PROVINCE_OPTIONS: { value: string; label: string }[] = (() => {
   const set = new Set<string>();

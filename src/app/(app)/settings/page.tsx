@@ -19,20 +19,28 @@ const TABS: { key: SettingTab; label: string; icon: React.ReactNode }[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPANY PROFILE TAB
 // ─────────────────────────────────────────────────────────────────────────────
-const COMPANY_KEY = "dealer_issuer_profile";
-const LOGO_KEY    = "dealer_company_logo";
+const COMPANY_KEY = "dealer_issuer_profile_v2"; // v2 = รีเซ็ตข้อมูลเดโมเดิม
+const LOGO_KEY    = "dealer_company_logo_v2";
 type CompanyProfile = { company: string; address: string; phone: string; email: string; website: string; taxId: string };
-const COMPANY_EMPTY: CompanyProfile = { company: "", address: "", phone: "", email: "", website: "", taxId: "" };
+// ข้อมูลบริษัทดีลเลอร์เริ่มต้น (ตัวอย่างสมจริง — ไม่ใช่ Benjamin)
+const COMPANY_DEFAULT: CompanyProfile = {
+  company: "บริษัท เชียงใหม่สตีลบิลด์ จำกัด",
+  address: "88/9 ถ.มหิดล ต.หายยา อ.เมือง จ.เชียงใหม่ 50100",
+  phone:   "053-112-233",
+  email:   "sales@cmsteelbuild.co.th",
+  website: "www.cmsteelbuild.co.th",
+  taxId:   "0505561001234",
+};
 
 function CompanyTab() {
-  const [form, setForm] = useState<CompanyProfile>(COMPANY_EMPTY);
+  const [form, setForm] = useState<CompanyProfile>(COMPANY_DEFAULT);
   const [logo, setLogo] = useState<string>("");
   const [saved, setSaved]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const s = localStorage.getItem(COMPANY_KEY);
-    if (s) try { setForm({ ...COMPANY_EMPTY, ...JSON.parse(s) }); } catch {}
+    if (s) try { setForm({ ...COMPANY_DEFAULT, ...JSON.parse(s) }); } catch {}
     const l = localStorage.getItem(LOGO_KEY);
     if (l) setLogo(l);
   }, []);
@@ -73,7 +81,7 @@ function CompanyTab() {
           <Info size={18} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: "0.76rem", color: "#374151", lineHeight: 1.6 }}>
             เอกสารและใบเสนอราคาจะใช้<strong style={{ color: "#003366" }}>ข้อมูลบริษัทของสาขา</strong>นี้เท่านั้น —
-            ข้อมูลบริษัทเบนจามิน (HQ) จะ<strong style={{ color: "#003366" }}>ไม่ปรากฏ</strong>บนใบเสนอราคาของสาขา
+            ข้อมูลบริษัทของสำนักงานใหญ่ (HQ) จะ<strong style={{ color: "#003366" }}>ไม่ปรากฏ</strong>บนใบเสนอราคาของสาขา
           </div>
         </div>
 
@@ -167,7 +175,7 @@ const DOC_DEFAULT: DocumentSettings = {
     "บริษัทขอสงวนสิทธิ์เปลี่ยนแปลงราคาโดยไม่แจ้งล่วงหน้า\n" +
     "การยืนยันการสั่งซื้อจะมีผลเมื่อได้รับเงินมัดจำเท่านั้น",
   header:    "",
-  footer:    "ขอบคุณที่ไว้วางใจ Benjamin Pre-Engineered Building",
+  footer:    "ขอบคุณที่ไว้วางใจบริษัทของเรา",
   stamp:     "",
   signature: "",
 };
@@ -525,7 +533,7 @@ function PersonsTab() {
           </table>
         </div>
         <p style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 10 }}>
-          ผู้รับผิดชอบ <strong>ไม่ใช่ผู้ใช้ระบบ · Login ไม่ได้</strong> — ใช้สำหรับเลือกตอนสร้างลีดเท่านั้น
+          ผู้รับผิดชอบ <strong>ไม่ใช่ผู้ใช้ระบบ · Login ไม่ได้</strong> — ใช้สำหรับเลือกตอนสร้างผู้สนใจเท่านั้น
         </p>
       </div>
     </>
@@ -558,9 +566,9 @@ const CORE_STAGES = ["ผู้สนใจใหม่", "ติดต่อแ
 // กติกาที่ HQ กำหนดตายตัว (อ่านอย่างเดียว)
 const LOCKED_RULES = [
   "เส้นทางการขายจบที่ Won / Lost เท่านั้น — ไม่มีขั้นตอนก่อสร้าง/ผลิต/ติดตั้ง",
-  "ใบเสนอราคาออกในนามบริษัทของ Dealer (ห้ามใช้ชื่อ Benjamin)",
+  "ใบเสนอราคาออกในนามบริษัทของสาขาเอง (ห้ามใช้ชื่อสำนักงานใหญ่)",
   "ราคากลาง/แคตตาล็อกสินค้ากำหนดโดย HQ — Dealer ดูได้ แก้ไม่ได้",
-  "ข้อมูลทั้งหมดเป็นทรัพย์สินของ Benjamin และ Sync ไป HQ อัตโนมัติ",
+  "ข้อมูลทั้งหมด Sync ไปสำนักงานใหญ่ (HQ) อัตโนมัติ",
   "Responsible Person เป็นรายชื่อเซลส์ ไม่ใช่ผู้ใช้ระบบ (Login ไม่ได้)",
 ];
 
@@ -602,7 +610,7 @@ function RulesTab() {
   const editable: { k: "quoteValidityDays" | "leadSlaHours" | "maxSelfDiscountPct" | "followUpDays"; label: string; hint: string; unit: string; max?: number }[] = [
     { k: "quoteValidityDays",  label: "อายุใบเสนอราคาเริ่มต้น (วัน)", hint: "จำนวนวันที่ราคามีผลนับจากวันออกเอกสาร", unit: "วัน" },
     { k: "followUpDays",       label: "จำนวนวันติดตามเริ่มต้น",       hint: "ระยะเวลาก่อนติดตามลูกค้าครั้งถัดไป",     unit: "วัน" },
-    { k: "leadSlaHours",       label: "SLA ติดตามลีดใหม่",         hint: "ต้องติดต่อลีดใหม่ภายในกี่ชั่วโมง",       unit: "ชั่วโมง" },
+    { k: "leadSlaHours",       label: "SLA ติดตามผู้สนใจใหม่",         hint: "ต้องติดต่อผู้สนใจใหม่ภายในกี่ชั่วโมง",       unit: "ชั่วโมง" },
     { k: "maxSelfDiscountPct", label: "ส่วนลดที่อนุมัติเองได้",     hint: "ส่วนลดสูงสุดที่เซลส์ให้ได้โดยไม่ต้องขออนุมัติ", unit: "%", max: 100 },
   ];
 
@@ -671,7 +679,7 @@ function RulesTab() {
                 <option key={p.id} value={p.id}>{p.name}{p.title ? ` · ${p.title}` : ""}</option>
               ))}
             </select>
-            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ลีดใหม่โดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
+            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ผู้สนใจใหม่โดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
           </div>
         </div>
 

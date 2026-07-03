@@ -708,3 +708,51 @@ body {
   .pms-dash .dg { grid-template-columns:1fr; }
   .pms-dash .kpi-row { grid-template-columns:repeat(2,1fr); }
 }
+
+/* ── Keyboard focus ring (a11y) — ทุก control ที่โฟกัสด้วยคีย์บอร์ดเห็นชัด ── */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible,
+.btn:focus-visible,
+.nav-item:focus-visible,
+.tab-item:focus-visible,
+.icon-btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary, #003366);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── Responsive: ยุบกริดหลายคอลัมน์บนจอแคบ (แท็บเล็ต/มือถือ) ── */
+@media (max-width:1024px){
+  .stat-grid { grid-template-columns:repeat(2,1fr); }
+  .kpi-bar   { grid-template-columns:repeat(2,1fr); }
+  .row-3     { grid-template-columns:1fr; }
+  .row-2, .row-2-eq { grid-template-columns:1fr; }
+}
+@media (max-width:640px){
+  .stat-grid, .kpi-bar { grid-template-columns:1fr; }
+}
+
+/* ── Mobile nav: hamburger + slide-in drawer (≤768px) ── */
+.hamburger { display:none; }
+.nav-overlay { display:none; }
+@media (max-width:768px){
+  /* แถบข้างกลายเป็น drawer เลื่อนเข้า/ออก */
+  .app { grid-template-columns:1fr; }
+  .erp-sidebar {
+    position:fixed; top:0; left:0; height:100dvh; width:248px; z-index:120;
+    transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 40px rgba(0,0,0,.18);
+  }
+  .erp-sidebar.open { transform:translateX(0); }
+  .nav-overlay { display:block; position:fixed; inset:0; background:rgba(0,0,0,.42); z-index:110; }
+  /* ปุ่มเมนู แสดงเฉพาะมือถือ ดันเนื้อหาขวาไปทางขวา */
+  .hamburger {
+    display:flex; align-items:center; justify-content:center; margin-right:auto;
+    width:40px; height:40px; border-radius:10px; border:1px solid var(--border,#e5e7eb);
+    background:#fff; color:var(--primary,#003366); cursor:pointer;
+  }
+}

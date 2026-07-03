@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   GitMerge, Store, Package, Building2, Shield,
-  ChevronUp, ChevronDown, Plus, Trash2, Upload, Check, Save,
+  ChevronUp, ChevronDown, Plus, Trash2, Check, Save,
   Lock, ArrowRight,
 } from "lucide-react";
 import { dealerLeaderboard } from "@/lib/mock";
@@ -19,134 +19,6 @@ const TABS: { key: HQSettingTab; label: string; icon: React.ReactNode }[] = [
   { key: "sales-journey", label: "เส้นทางการขาย",   icon: <GitMerge  size={15} /> },
 ];
 
-const HQ_PROFILE_KEY = "hq_company_profile";
-const HQ_LOGO_KEY    = "hq_company_logo";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPANY (ข้อมูลบริษัท Benjamin HQ)
-// ─────────────────────────────────────────────────────────────────────────────
-type CompanyProfile = { name: string; address: string; phone: string; email: string; website: string; taxId: string };
-const PROFILE_DEFAULT: CompanyProfile = {
-  name: "บริษัท เบนจามิน พรี-เอนจิเนียร์ บิลดิ้ง จำกัด",
-  address: "123 ถ.รัชดาภิเษก แขวงห้วยขวาง เขตห้วยขวาง กรุงเทพมหานคร 10310",
-  phone: "02-XXX-XXXX", email: "info@benjamin.co.th",
-  website: "www.benjamin.co.th", taxId: "0105XXXXXXXXX",
-};
-
-function CompanyTab() {
-  const [form,  setForm]  = useState<CompanyProfile>(PROFILE_DEFAULT);
-  const [logo,  setLogo]  = useState("");
-  const [saved, setSaved] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const s = localStorage.getItem(HQ_PROFILE_KEY);
-    if (s) try { setForm({ ...PROFILE_DEFAULT, ...JSON.parse(s) }); } catch {}
-    const l = localStorage.getItem(HQ_LOGO_KEY);
-    if (l) setLogo(l);
-  }, []);
-
-  function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
-    setForm(p => ({ ...p, [k]: v }));
-    setSaved(false);
-  }
-  function save() {
-    localStorage.setItem(HQ_PROFILE_KEY, JSON.stringify(form));
-    if (logo) localStorage.setItem(HQ_LOGO_KEY, logo);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  }
-  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => { setLogo(ev.target?.result as string); setSaved(false); };
-    reader.readAsDataURL(file);
-  }
-  const initials = form.name.trim().slice(0, 2).toUpperCase() || "BJ";
-
-  return (
-    <>
-      <div className="card-header">
-        <div>
-          <div className="card-title">ข้อมูลบริษัท</div>
-          <div className="card-desc">ข้อมูลองค์กรของเบนจามิน HQ สำหรับใช้อ้างอิงในเอกสารและระบบ</div>
-        </div>
-      </div>
-      <div className="card-body">
-
-        {/* Logo */}
-        <div style={{ marginBottom: 24 }}>
-          <label className="form-label">โลโก้บริษัท</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{
-              width: 80, height: 80, borderRadius: 12, flexShrink: 0,
-              background: logo ? "transparent" : "#003366",
-              border: "2px dashed #e5e7eb",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              overflow: "hidden",
-            }}>
-              {logo
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
-            </div>
-            <div>
-              <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
-                <Upload size={13} /> อัปโหลดโลโก้
-              </button>
-              {logo && (
-                <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
-                  onClick={() => { setLogo(""); localStorage.removeItem(HQ_LOGO_KEY); }}>
-                  ลบ
-                </button>
-              )}
-              <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 5 }}>PNG, JPG · แนะนำ 400×400 px</div>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
-            </div>
-          </div>
-        </div>
-
-        {/* Fields */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-          <div style={{ gridColumn: "1/-1" }}>
-            <label className="form-label">ชื่อบริษัท (ภาษาไทย)</label>
-            <input className="form-input" value={form.name} onChange={e => set("name", e.target.value)} />
-          </div>
-          <div>
-            <label className="form-label">เลขประจำตัวผู้เสียภาษี</label>
-            <input className="form-input" value={form.taxId} onChange={e => set("taxId", e.target.value)} placeholder="0105XXXXXXXXX" />
-          </div>
-          <div>
-            <label className="form-label">โทรศัพท์</label>
-            <input className="form-input" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="02-000-0000" />
-          </div>
-          <div>
-            <label className="form-label">อีเมล</label>
-            <input className="form-input" value={form.email} onChange={e => set("email", e.target.value)} placeholder="info@example.co.th" />
-          </div>
-          <div>
-            <label className="form-label">เว็บไซต์</label>
-            <input className="form-input" value={form.website} onChange={e => set("website", e.target.value)} placeholder="www.example.co.th" />
-          </div>
-        </div>
-        <div style={{ marginBottom: 28 }}>
-          <label className="form-label">ที่อยู่</label>
-          <textarea className="form-textarea" value={form.address} rows={3}
-            onChange={e => set("address", e.target.value)}
-            placeholder="ที่อยู่เต็ม รวมจังหวัดและรหัสไปรษณีย์"
-            style={{ resize: "vertical" }} />
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
-          <button className="btn btn-primary btn-md" onClick={save}>
-            {saved ? <><Check size={14} /> บันทึกแล้ว</> : <><Save size={14} /> บันทึก</>}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. SALES JOURNEY
@@ -157,7 +29,7 @@ type Reason = { id: number; label: string };
 const STAGE_COLORS = ["#6b7280", "#d97706", "#003366", "#7c3aed", "#059669", "#0ea5e9", "#ec4899", "#dc2626"];
 
 const INIT_STAGES: Stage[] = [
-  { id: 1, code: "NEW",       label: "ลีดใหม่",          color: "#6b7280", isDefault: true,  locked: false },
+  { id: 1, code: "NEW",       label: "ผู้สนใจใหม่",          color: "#6b7280", isDefault: true,  locked: false },
   { id: 2, code: "WAITING",   label: "รวบรวมความต้องการ", color: "#d97706", isDefault: false, locked: false },
   { id: 3, code: "QUOTED",    label: "ใบเสนอราคา",       color: "#7c3aed", isDefault: false, locked: false },
   { id: 4, code: "BULLET",    label: "เจรจาต่อรอง",      color: "#003366", isDefault: false, locked: false },
@@ -583,9 +455,9 @@ function DealerManagementTab() {
 // 4. PRODUCT CATALOG (overview → ลิงก์หน้าแคตตาล็อกเต็ม)
 // ─────────────────────────────────────────────────────────────────────────────
 const PRODUCT_LINES = [
-  { code: "EASYBUILD", label: "EASYBUILD", desc: "อาคารสำเร็จรูปมาตรฐาน พร้อมใช้งานไว", tone: "#003366" },
-  { code: "RANBUILD",  label: "RANBUILD",  desc: "โครงสร้างเหล็กสำหรับโรงงาน/คลังสินค้า", tone: "#0284c7" },
-  { code: "PREFAB",    label: "PREFAB",    desc: "อาคารพรีแฟบ สำนักงาน/อาคารเฉพาะกิจ", tone: "#7c3aed" },
+  { code: "โกดังสำเร็จรูป",  label: "โกดังสำเร็จรูป",  desc: "อาคารสำเร็จรูปมาตรฐาน พร้อมใช้งานไว", tone: "#003366" },
+  { code: "โรงงานสำเร็จรูป", label: "โรงงานสำเร็จรูป", desc: "โครงสร้างเหล็กสำหรับโรงงาน/คลังสินค้า", tone: "#0284c7" },
+  { code: "อาคารสำเร็จรูป",  label: "อาคารสำเร็จรูป",  desc: "อาคารพรีแฟบ สำนักงาน/อาคารเฉพาะกิจ", tone: "#7c3aed" },
 ];
 
 function ProductCatalogTab() {

@@ -67,7 +67,7 @@ export default function DealerLoginPage() {
         <div style={{ padding: "24px 28px 0 28px", marginBottom: 20 }}>
           <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>เข้าสู่ระบบ — ดีลเลอร์</h2>
           <p style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: 4 }}>
-            สำหรับตัวแทนจำหน่าย Benjamin ทั่วประเทศ
+            สำหรับตัวแทนจำหน่ายทั่วประเทศ
           </p>
         </div>
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { leads, quotations, salesByMonth, team, quotationStatusLabel, type QuotationStatus } from "@/lib/mock";
+import { salesByMonth, team, quotationStatusLabel, type QuotationStatus } from "@/lib/mock";
+import { useSales } from "@/context/SalesContext";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -42,13 +43,19 @@ export default function ReportsPage() {
 }
 
 function ReportsPageInner() {
+  // ข้อมูลสด: อ่านผู้สนใจ/ใบเสนอราคาจาก SalesContext → รายงานสะท้อนสิ่งที่ผู้ใช้สร้างจริง
+  const { leads: allLeads, quotations: allQuotations } = useSales();
   const { timeRange } = useFilters();
-  const f = timeRange.factor;
-  const scale = (n: number) => Math.round(n * f);
+
+  // ── กรองตามช่วงเวลาจริง (แทนการคูณ factor) — ใบเสนอราคาใช้ field date, ผู้สนใจสร้างวันที่คงที่จาก numId ──
+  const within = (iso: string) => { const t = new Date(iso).getTime(); return t >= timeRange.start.getTime() && t <= timeRange.end.getTime(); };
+  const leadIso = (numId: number) => { const d = new Date(2026, 5, 30); d.setDate(d.getDate() - ((numId * 17) % 150)); return d.toISOString().slice(0, 10); };
+  const leads = useMemo(() => allLeads.filter(l => within(leadIso(l.numId))), [allLeads, timeRange]);
+  const quotations = useMemo(() => allQuotations.filter(q => within(q.date)), [allQuotations, timeRange]);
 
   // ── สรุปตัวเลข (KPI row — ใช้ทั้งสองบทบาท) ──
-  const leadValue = useMemo(() => leads.reduce((s, l) => s + parseBaht(l.value), 0), []);
-  const sentValue = useMemo(() => quotations.filter(q => q.status === "sent_to_client" || q.status === "won").reduce((s, q) => s + q.totalValue, 0), []);
+  const leadValue = useMemo(() => leads.reduce((s, l) => s + parseBaht(l.value), 0), [leads]);
+  const sentValue = useMemo(() => quotations.filter(q => q.status === "sent_to_client" || q.status === "won").reduce((s, q) => s + q.totalValue, 0), [quotations]);
   const wonCount = quotations.filter(q => q.status === "won").length;
   const lostCount = quotations.filter(q => q.status === "lost").length;
   const closedCount = wonCount + lostCount;
@@ -56,8 +63,8 @@ function ReportsPageInner() {
   const avgDeal = wonCount ? quotations.filter(q => q.status === "won").reduce((s, q) => s + q.totalValue, 0) / wonCount : 0;
 
   const kpis = [
-    { label: "มูลค่าลีดรวม", value: fmtBaht(scale(leadValue)), icon: "phone", delta: 12.4, current: scale(leadValue) / 1e6, target: 15, targetLabel: "฿15M", href: "/leads" },
-    { label: "ใบเสนอราคาที่ส่ง", value: fmtBaht(scale(sentValue)), icon: "doc", delta: 8.1, current: scale(sentValue) / 1e6, target: 20, targetLabel: "฿20M", href: "/quotations" },
+    { label: "มูลค่าผู้สนใจรวม", value: fmtBaht(leadValue), icon: "phone", delta: 12.4, current: leadValue / 1e6, target: 15, targetLabel: "฿15M", href: "/leads" },
+    { label: "ใบเสนอราคาที่ส่ง", value: fmtBaht(sentValue), icon: "doc", delta: 8.1, current: sentValue / 1e6, target: 20, targetLabel: "฿20M", href: "/quotations" },
     { label: "อัตราปิดการขาย", value: `${winRate}%`, icon: "target", delta: 4.2, current: winRate, target: 50, targetLabel: "50%", href: "/pipeline" },
     { label: "มูลค่าดีลเฉลี่ย", value: fmtBaht(avgDeal), icon: "award", delta: 6.5, current: avgDeal / 1e6, target: 5, targetLabel: "฿5M", href: "/quotations" },
   ];
@@ -65,12 +72,12 @@ function ReportsPageInner() {
   // ข้อมูลรายเดือนหน่วยล้านบาท ป้อนให้กราฟแนวโน้ม (กราฟมีปุ่มช่วงเวลาในตัว ไม่ใช้ factor)
   const trendMonthly = useMemo(() => salesByMonth.map(d => ({ month: d.month, value: Math.round(d.value / 200 * 10) / 10 })), []);
 
-  // ── แหล่งที่มาของลีด (โดนัท) ──
+  // ── แหล่งที่มาของผู้สนใจ (โดนัท) ──
   const sources = useMemo(() => {
     const m = new Map<string, number>();
     leads.forEach(l => { const k = l.source ?? "อื่น ๆ"; m.set(k, (m.get(k) ?? 0) + 1); });
     return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([label, value], i) => ({ label, value, color: SOURCE_COLORS[i % SOURCE_COLORS.length] }));
-  }, []);
+  }, [leads]);
 
   // ── อัตราการแปลงการขาย (Conversion Funnel) — จากสถานะลีดตามลำดับเส้นทางการขาย ──
   const funnel = useMemo(() => {
@@ -82,7 +89,7 @@ function ReportsPageInner() {
     const stages = [
       { label: "ผู้สนใจทั้งหมด", count: total },
       { label: "เสนอราคา", count: atLeast(rank.QUOTED) },
-      { label: "เจรจา", count: atLeast(rank.FOLLOWUP) },
+      { label: "เจรจา", count: atLeast(rank.NEGO) },
       { label: "ปิดการขาย", count: atLeast(rank.PAID) },
     ];
     return stages.map(s => ({
@@ -90,7 +97,7 @@ function ReportsPageInner() {
       count: s.count,
       pct: total ? Math.round((s.count / total) * 100) : 0,
     }));
-  }, []);
+  }, [leads]);
 
   // ── ยอดขายตามสินค้า (leads.product + fallback quotations.buildingType) ──
   const byProduct = useMemo(() => {
@@ -100,7 +107,7 @@ function ReportsPageInner() {
     const arr = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
     const max = arr.length ? arr[0][1] : 1;
     return arr.map(([label, value], i) => ({ label, value, pct: Math.round((value / max) * 100), color: SOURCE_COLORS[i % SOURCE_COLORS.length] }));
-  }, []);
+  }, [leads, quotations]);
 
   // ── รายงานใบเสนอราคา — จำนวน+มูลค่า ต่อสถานะ ──
   const quoteByStatus = useMemo(() => {
@@ -115,7 +122,7 @@ function ReportsPageInner() {
     }).filter(r => r.count > 0);
     const max = rows.reduce((m, r) => Math.max(m, r.count), 1);
     return { rows, max, total: quotations.length };
-  }, []);
+  }, [quotations]);
 
   // ── ปิดได้ / ปิดไม่ได้ (Dealer — จากใบเสนอราคา won/lost) ──
   const wonLostDonut = useMemo(() => ([
@@ -134,7 +141,7 @@ function ReportsPageInner() {
       })
       .filter(t => t.leads > 0)
       .sort((a, b) => b.value - a.value);
-  }, []);
+  }, [leads]);
   const perfMax = salesPerf.length ? salesPerf[0].value : 1;
 
   // ── Export CSV — ส่งออก "ตรงกับทุกส่วนที่แสดงบนหน้ารายงาน" (deterministic via Blob) ──
@@ -151,10 +158,10 @@ function ReportsPageInner() {
     kpis.forEach(k => add("KPI สรุป", k.label, k.value));
     // ยอดขายตามสินค้า
     byProduct.forEach(p => add("ยอดขายตามสินค้า", p.label, fmtBaht(p.value)));
-    // แหล่งที่มาของลีด
-    sources.forEach(s => add("แหล่งที่มาของลีด", s.label, `${s.value} ลีด`));
+    // แหล่งที่มาของผู้สนใจ
+    sources.forEach(s => add("แหล่งที่มาของผู้สนใจ", s.label, `${s.value} ราย`));
     // ผลงานทีมขาย
-    salesPerf.forEach(t => add("ผลงานทีมขาย", t.name, `${t.leads} ลีด · ปิดได้ ${t.won}`, fmtBaht(t.value)));
+    salesPerf.forEach(t => add("ผลงานทีมขาย", t.name, `${t.leads} ราย · ปิดได้ ${t.won}`, fmtBaht(t.value)));
     // รายงานใบเสนอราคา (ตามสถานะ)
     quoteByStatus.rows.forEach(r => add("รายงานใบเสนอราคา", r.label, `${r.count} ใบ`, fmtBaht(r.value)));
     // อัตราการแปลงการขาย
@@ -175,7 +182,7 @@ function ReportsPageInner() {
     URL.revokeObjectURL(url);
   };
 
-  const subtitle = `ยอดขายตามสินค้า · แหล่งลีด · อัตราการแปลง · ปิดการขาย · ${timeRange.subtitle}`;
+  const subtitle = `ยอดขายตามสินค้า · แหล่งผู้สนใจ · อัตราการแปลง · ปิดการขาย · ${timeRange.subtitle}`;
 
   return (
     <div className="pms-dash anim-rise">
@@ -216,7 +223,9 @@ function ReportsPageInner() {
           <div className="cc">
             <div className="cc-hd"><div className="cc-title">ยอดขายตามสินค้า</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{byProduct.length} กลุ่ม</span></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {byProduct.map(p => <BarRow key={p.label} label={p.label} value={p.value} pct={p.pct} />)}
+              {byProduct.length === 0
+                ? <div style={{ fontSize: ".78rem", color: "var(--sub)", textAlign: "center", padding: "20px 0" }}>ไม่มีข้อมูลในช่วงเวลานี้</div>
+                : byProduct.map(p => <BarRow key={p.label} label={p.label} value={p.value} pct={p.pct} />)}
             </div>
           </div>
 
@@ -226,8 +235,9 @@ function ReportsPageInner() {
             <div className="table-wrap" style={{ borderTop: "none" }}>
               <table>
                 <colgroup><col style={{ width: "34%" }} /><col style={{ width: "16%" }} /><col style={{ width: "16%" }} /><col style={{ width: "34%" }} /></colgroup>
-                <thead><tr><th>เซลส์</th><th className="num">ลีด</th><th className="num">ปิดได้</th><th className="num">มูลค่ารวม</th></tr></thead>
+                <thead><tr><th>เซลส์</th><th className="num">ผู้สนใจ</th><th className="num">ปิดได้</th><th className="num">มูลค่ารวม</th></tr></thead>
                 <tbody>
+                  {salesPerf.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: "20px 0", color: "var(--sub)", fontSize: ".78rem" }}>ไม่มีข้อมูลในช่วงเวลานี้</td></tr>}
                   {salesPerf.map(s => (
                     <tr key={s.name}>
                       <td>
@@ -255,6 +265,7 @@ function ReportsPageInner() {
           <div className="cc">
             <div className="cc-hd"><div className="cc-title">รายงานใบเสนอราคา</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{quoteByStatus.total} ใบ</span></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {quoteByStatus.rows.length === 0 && <div style={{ fontSize: ".78rem", color: "var(--sub)", textAlign: "center", padding: "20px 0" }}>ไม่มีใบเสนอราคาในช่วงเวลานี้</div>}
               {quoteByStatus.rows.map(r => (
                 <div key={r.status}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5, fontSize: ".76rem" }}>
@@ -276,11 +287,12 @@ function ReportsPageInner() {
         <div className="dg-r" style={{ minWidth: 0 }}>
           {/* Lead source donut */}
           <div className="cc">
-            <div className="cc-hd"><div className="cc-title">แหล่งที่มาของลีด</div></div>
+            <div className="cc-hd"><div className="cc-title">แหล่งที่มาของผู้สนใจ</div></div>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-              <Donut segments={sources} centerLabel="ลีดทั้งหมด" centerValue={`${leads.length}`} />
+              <Donut segments={sources} centerLabel="ผู้สนใจทั้งหมด" centerValue={`${leads.length}`} />
             </div>
             <div className="stats-legend">
+              {sources.length === 0 && <div style={{ fontSize: ".78rem", color: "var(--sub)", textAlign: "center", padding: "12px 0", width: "100%" }}>ไม่มีข้อมูลในช่วงเวลานี้</div>}
               {sources.map(s => (
                 <div key={s.label} className="sl">
                   <span className="sl-dot" style={{ background: s.color }} />
