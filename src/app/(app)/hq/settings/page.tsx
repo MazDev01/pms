@@ -17,7 +17,7 @@ import { usePersistentState } from "@/lib/usePersistentState";
 type Stage  = { id: number; code: string; label: string; color: string; isDefault: boolean; locked: boolean; terminal?: "won" | "lost" };
 type Reason = { id: number; label: string };
 
-const STAGE_COLORS = ["#6b7280", "#d97706", "#003366", "#7c3aed", "#059669", "#0ea5e9", "#ec4899", "#dc2626"];
+const STAGE_COLORS = ["#6b7280", "#d97706", "#003366", "#4338ca", "#059669", "#0ea5e9", "#0891b2", "#dc2626"];
 
 const INIT_STAGES: Stage[] = [
   { id: 2, code: "WAITING",   label: "ติดต่อแล้ว",         color: "#475569", isDefault: true,  locked: false },
@@ -378,7 +378,7 @@ function TargetsTab() {
 type NotifyPrefs = Record<string, boolean>;
 const NOTIFY_ITEMS: { key: string; label: string; desc: string }[] = [
   { key: "newQuote",    label: "ใบเสนอราคาใหม่จากตัวแทน",       desc: "แจ้งทันทีเมื่อตัวแทนออกใบเสนอราคาใหม่" },
-  { key: "won",         label: "ปิดการขายสำเร็จ",                desc: "แจ้งเมื่อตัวแทนปิดดีลได้" },
+  { key: "won",         label: "ปิดการขายสำเร็จ",                desc: "แจ้งเมื่อตัวแทนปิดการขายได้" },
   { key: "belowTarget", label: "ตัวแทนต่ำกว่าเป้า",              desc: "แจ้งเมื่อยอดสะสมของตัวแทนต่ำกว่า 50% ของเป้า" },
   { key: "expiring",    label: "ใบเสนอราคาใกล้หมดอายุ",          desc: "แจ้งล่วงหน้า 7 วันก่อนใบเสนอราคาหมดอายุ" },
   { key: "weekly",      label: "สรุปผลงานรายสัปดาห์ (อีเมล)",    desc: "ส่งสรุปยอดขายทุกตัวแทนทางอีเมลทุกวันจันทร์" },

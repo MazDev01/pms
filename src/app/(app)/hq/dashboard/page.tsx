@@ -4,13 +4,15 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  DollarSign, TrendingUp, Award, Target, MapPin, Trophy,
+  DollarSign, Award, MapPin, Trophy,
 } from "lucide-react";
 import {
-  hqSalesByMonth, dealerLeaderboard, hqDealSummary, hqPipelineStages, hqPipelineByProduct, dealerDetails,
-  type DealerRow,
+  hqSalesByMonth, dealerLeaderboard, hqPipelineByProduct, dealerDetails,
+  hqAllQuotations, type DealerRow,
 } from "@/lib/mock";
 import { Donut } from "@/components/ui/Charts";
+import { StatCard } from "@/components/ui/StatCard";
+import { FileText } from "lucide-react";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar, SelectFilter } from "@/components/filters/FilterBar";
@@ -34,31 +36,47 @@ export default function HQDashboard() {
   );
   const selDealer = dealerSel === "all" ? null : dealers[0] ?? null;
 
-  const { won, lost, negotiating, annualTarget, ytdActual } = hqDealSummary;
-  const conv = won.count + lost.count ? Math.round((won.count / (won.count + lost.count)) * 100) : 0;
-  const pipeVal = useMemo(() => hqPipelineStages.reduce((s, x) => s + x.valueNum, 0), []);
-  const pct = Math.round((ytdActual / annualTarget) * 100);
-  const totalRevenue = useMemo(() => dealers.reduce((s, d) => s + d.revenueActual, 0), [dealers]);
 
-  // executive scorecard (4) — ทั้งเครือ = ตัวเลขสะสมจริง / ตัวแทนเดียว = ตัวเลขจริงของตัวแทนนั้น
-  const stats = selDealer
-    ? [
-        { Icon: DollarSign, label: `รายได้ ${selDealer.name.replace("Benjamin ", "")}`, value: fmtBaht(selDealer.revenueActual), delta: "", tone: "success" as const, sub: `ภาค${selDealer.region}` },
-        { Icon: Target, label: "% ของเป้าตัวแทน", value: `${Math.round((selDealer.revenueActual / selDealer.revenueTarget) * 100)}%`, delta: "", tone: "muted" as const, sub: `เป้า ${fmtBaht(selDealer.revenueTarget)}` },
-        { Icon: TrendingUp, label: "ดีลกำลังทำ", value: `${selDealer.activeProjects}`, delta: "", tone: "success" as const, sub: `ติดตามตรงเวลา ${selDealer.onTimePct}%` },
-        { Icon: Award, label: "อัตราปิดการขาย", value: `${selDealer.winRate}%`, delta: "", tone: "muted" as const, sub: selDealer.status === "active" ? "ตัวแทนใช้งานอยู่" : "ตัวแทนระงับ" },
-      ]
-    : [
-        { Icon: DollarSign, label: "รายได้รวมทั้งเครือ", value: fmtBaht(totalRevenue), delta: "", tone: "success" as const, sub: `${dealers.length} ตัวแทน` },
-        { Icon: TrendingUp, label: "โอกาสการขายรวม", value: fmtBaht(pipeVal), delta: "", tone: "success" as const, sub: `${negotiating.count} กำลังเจรจา` },
-        { Icon: Award, label: "ปิดการขาย (YTD)", value: `${won.count}`, delta: "", tone: "success" as const, sub: `เสียดีล ${lost.count}` },
-        { Icon: Target, label: "อัตราปิดการขายรวม", value: `${conv}%`, delta: `เป้ารายปี ${pct}%`, tone: "muted" as const, sub: `${fmtBaht(ytdActual)} / ${fmtBaht(annualTarget)}` },
-      ];
+  // ── Scorecard (statistics cards) — กิจกรรมใบเสนอราคาในช่วง N วัน (คำนวณจาก createdAt จริง) ──
+  // ทั้งเครือ = ทุกตัวแทน · เลือกตัวแทน = เฉพาะรายนั้น · trend = เทียบ N วันก่อนหน้า
+  const TH_MONTH: Record<string, number> = { "ม.ค.": 0, "ก.พ.": 1, "มี.ค.": 2, "เม.ย.": 3, "พ.ค.": 4, "มิ.ย.": 5, "ก.ค.": 6, "ส.ค.": 7, "ก.ย.": 8, "ต.ค.": 9, "พ.ย.": 10, "ธ.ค.": 11 };
+  const parseThaiDate = (s: string): Date | null => {
+    const mt = /^(\d{1,2})\s+(\S+)\s+(\d{4})/.exec(s.trim());
+    if (!mt || !(mt[2] in TH_MONTH)) return null;
+    const y = +mt[3] > 2500 ? +mt[3] - 543 : +mt[3];
+    return new Date(y, TH_MONTH[mt[2]], +mt[1]);
+  };
+  const addDaysD = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 
-  // ข้อมูลรายเดือน (ล้านบาท) ป้อนกราฟแนวโน้ม — ทั้งเครือ หรือยอดจริงรายตัวแทนจาก dealerDetails
+  const hqStatsForDays = (days: number) => {
+    const today = new Date(2026, 5, 30);
+    const cs = addDaysD(today, -days), ps = addDaysD(today, -2 * days);
+    const src = selDealer ? hqAllQuotations.filter(q => q.dealerCode === selDealer.code) : hqAllQuotations;
+    const inR = (createdAt: string, a: Date, b: Date) => { const d = parseThaiDate(createdAt); return !!d && d > a && d <= b; };
+    const cur = src.filter(q => inR(q.createdAt, cs, today));
+    const prev = src.filter(q => inR(q.createdAt, ps, cs));
+    const pctf = (c: number, p: number) => p > 0 ? Math.round(((c - p) / p) * 100) : (c > 0 ? 100 : 0);
+    const val = (a: typeof src) => a.reduce((s, q) => s + q.valueNum, 0);
+    const wonN = (a: typeof src) => a.filter(q => q.status === "won").length;
+    const wonV = (a: typeof src) => a.filter(q => q.status === "won").reduce((s, q) => s + q.valueNum, 0);
+    return {
+      quotes:   { value: `${cur.length}`, trend: pctf(cur.length, prev.length) },
+      quoteVal: { value: fmtBaht(val(cur)), trend: pctf(val(cur), val(prev)) },
+      won:      { value: `${wonN(cur)}`, trend: pctf(wonN(cur), wonN(prev)) },
+      wonVal:   { value: fmtBaht(wonV(cur)), trend: pctf(wonV(cur), wonV(prev)) },
+    };
+  };
+  const hqCards: { icon: React.ReactNode; label: string; key: "quotes" | "quoteVal" | "won" | "wonVal" }[] = [
+    { icon: <FileText size={16} />, label: "ใบเสนอราคาใหม่", key: "quotes" },
+    { icon: <DollarSign size={16} />, label: "มูลค่าเสนอราคา", key: "quoteVal" },
+    { icon: <Trophy size={16} />, label: "ปิดการขายได้", key: "won" },
+    { icon: <Award size={16} />, label: "ยอดขายที่ปิดได้", key: "wonVal" },
+  ];
+
+  // ข้อมูลรายเดือน (ล้านบาท) ป้อนกราฟแนวโน้ม — ทั้งเครือ (hqSalesByMonth = ล้านแล้ว) หรือรายตัวแทน (monthlySales = พันบาท → ÷1000)
   const selDetail = selDealer ? dealerDetails[selDealer.code] : null;
   const trendMonthly = selDetail
-    ? selDetail.monthlySales.map(d => ({ month: d.month, value: Math.round(d.value * 10) / 10 }))
+    ? selDetail.monthlySales.map(d => ({ month: d.month, value: Math.round(d.value / 1000 * 10) / 10 }))
     : hqSalesByMonth.map(d => ({ month: d.month, value: Math.round(d.value * 10) / 10 }));
   const trendTitle = selDealer ? `ยอดขาย ${selDealer.name.replace("Benjamin ", "")} รายเดือน` : "ยอดขายรวมทั้งเครือ รายเดือน";
   const trendDesc = selDealer ? `เฉพาะตัวแทน ${selDealer.code} (ล้านบาท)` : "มูลค่าทุกตัวแทนรวมกัน (ล้านบาท)";
@@ -101,18 +119,11 @@ export default function HQDashboard() {
         </div>
       </div>
 
-      {/* Executive scorecard */}
+      {/* Executive scorecard — statistics cards (icon + label + dropdown ช่วงวัน + ค่า + trend) · กดเพื่อดูข้อมูล */}
       <div className="stat-grid">
-        {stats.map(s => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-icon"><s.Icon size={18} /></div>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-              {s.delta && <span className="badge" style={s.tone === "success" ? { background: "#e5faf0", color: "#059669" } : { background: "#f0f4f8", color: "#6b7280" }}>{s.delta}</span>}
-              <span style={{ fontSize: "0.64rem", color: "var(--muted-foreground)" }}>{s.sub}</span>
-            </div>
-          </div>
+        {hqCards.map(c => (
+          <StatCard key={c.label} icon={c.icon} label={c.label} metric={d => hqStatsForDays(d)[c.key]}
+            onClick={() => router.push(selDealer ? `/hq/quotations?dealer=${selDealer.code}` : "/hq/quotations")} />
         ))}
       </div>
 
@@ -146,7 +157,7 @@ export default function HQDashboard() {
                 {[
                   { k: "รายได้", v: fmtBaht(best.revenueActual) },
                   { k: "เป้า", v: `${Math.round((best.revenueActual / best.revenueTarget) * 100)}%` },
-                  { k: "ดีลกำลังทำ", v: `${best.activeProjects}` },
+                  { k: "โอกาสกำลังทำ", v: `${best.activeProjects}` },
                   { k: "ตรงเวลา", v: `${best.onTimePct}%` },
                 ].map(m => (
                   <div key={m.k} style={{ background: "var(--muted)", borderRadius: 10, padding: "10px 12px" }}>

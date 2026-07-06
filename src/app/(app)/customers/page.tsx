@@ -3,9 +3,9 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  appointments, notes,
-  quotationStatusLabel, quotationStatusColor, noteCategoryColor,
-  type QuotationMock, type PipelineDealMock,
+  notes,
+  quotationStatusLabel, quotationStatusColor, noteCategoryColor, apptTypeLabel,
+  type QuotationMock, type PipelineDealMock, type ApptType,
   type CustomerRow, type CustomerStatus, type CustomerType,
 } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
@@ -14,7 +14,8 @@ import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useTableLayout, type Col } from "@/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
-import { PersonPicker } from "@/components/ui/PersonPicker";
+import { PersonPicker, AssigneeAvatars } from "@/components/ui/PersonPicker";
+import { fileToResizedDataURL } from "@/lib/imageResize";
 import {
   Plus, Search, X, ChevronUp, ChevronDown,
   Phone, Building2, ExternalLink,
@@ -27,6 +28,8 @@ const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
 const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
+const apptLbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:5 };
+const apptInp: React.CSSProperties = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"8px 11px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" };
 
 // ── Types ────────────────────────────────────────────────────
 // CustomerRow / CustomerStatus / CustomerType imported from mock (shared app-wide)
@@ -59,7 +62,7 @@ const COLS: Col[] = [
   { key: "owner",          label: "ผู้รับผิดชอบ" },
   { key: "lastActivity",   label: "กิจกรรมล่าสุด" },
   { key: "quotationCount", label: "จำนวนใบเสนอราคา" },
-  { key: "currentDeal",    label: "ดีลปัจจุบัน" },
+  { key: "currentDeal",    label: "โอกาสการขายปัจจุบัน" },
 ];
 
 // ── Derived (deterministic) per-customer values ──────────────
@@ -110,7 +113,7 @@ function activityItemsFor(customerId:number, joinDate:string, qs:QuotationMock[]
   });
   // จากดีลใน pipeline
   deals.filter(d=>d.customerId===customerId).forEach(d=>{
-    items.push({ id:`d-${d.id}`, type:"status", text:`ดีล: ${d.project} · ${fmtMoney(d.value)}`, time:fmtDate(d.createdAt) });
+    items.push({ id:`d-${d.id}`, type:"status", text:`โอกาสการขาย: ${d.project} · ${fmtMoney(d.value)}`, time:fmtDate(d.createdAt) });
   });
   // จุดเริ่มต้น: วันที่เพิ่มลูกค้า
   items.push({ id:"joined", type:"note", text:"เพิ่มลูกค้าเข้าระบบ", time:fmtDate(joinDate) });
@@ -132,7 +135,7 @@ function historyItemsFor(customerId:number, joinDate:string, qs:QuotationMock[],
     if(q.status==="won") rows.push({ label:`ปิดการขาย ${q.id}`, date:q.date });
   });
   deals.filter(d=>d.customerId===customerId).forEach(d=>{
-    rows.push({ label:`สร้างดีล ${d.project}`, date:d.createdAt });
+    rows.push({ label:`สร้างโอกาสการขาย ${d.project}`, date:d.createdAt });
   });
   return rows.filter(r=>r.date && r.date!=="—").sort((a,b)=>a.date<b.date?1:-1);
 }
@@ -259,12 +262,10 @@ function CustomerOverviewEditor({ customer, onSave }:{
   const logoRef = useRef<HTMLInputElement>(null);
   useEffect(()=>{ setF(seed()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [customer.id]);
   const set = <K extends keyof CustomerForm>(k:K,v:CustomerForm[K])=>setF(p=>({...p,[k]:v}));
-  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>){
+  async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>){
     const file = e.target.files?.[0];
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => set("logo", (ev.target?.result as string) ?? "");
-    reader.readAsDataURL(file);
+    set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
   }
   const dirty = (Object.keys(f) as (keyof CustomerForm)[]).some(k => (f[k] ?? "") !== ((customer as unknown as CustomerForm)[k] ?? ""));
 
@@ -346,6 +347,7 @@ export default function CustomersPage(){
   const router = useRouter();
   const {
     customers: data, quotations, deals, leads,
+    appointments, addAppointment,
     addCustomer: ctxAddCustomer, updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
@@ -384,6 +386,22 @@ export default function CustomersPage(){
   const [showAdd, setShowAdd]         = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailTab, setDetailTab]     = useState<"info"|"quotes"|"appts"|"notes">("info");
+  // ฟอร์มเพิ่มนัดหมายในแท็บนัดหมายของลูกค้า
+  const [apptAdding, setApptAdding]   = useState(false);
+  const [apptForm, setApptForm]       = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
+  function resetApptForm() { setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" }); setApptAdding(false); }
+  function saveAppt() {
+    if (!selected) return;
+    addAppointment({
+      id: Math.max(0, ...appointments.map(a => a.id)) + 1,
+      company: selected.company, contact: selected.name, phone: selected.phone,
+      project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
+      buildingType: selected.category || "", area: 0, province: selected.province,
+      date: apptForm.date, time: apptForm.time, type: apptForm.type,
+      assigned: selected.owner, status: "upcoming", note: apptForm.note.trim(),
+    });
+    resetApptForm();
+  }
 
 
   // Table layout (density + hidden columns) จาก TableTools
@@ -518,7 +536,7 @@ export default function CustomersPage(){
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <FilterBar dims={[]} />
             <ExportMenu filename="customers" title="รายชื่อลูกค้า"
-              headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ดีลปัจจุบัน","มูลค่าดีล"]}
+              headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","โอกาสการขายปัจจุบัน","มูลค่าโอกาสการขาย"]}
               rows={filtered.map(c=>{
                 const deal=currentDealFor(c.id,deals);
                 return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),deal?deal.project:"—",deal?fmtMoney(deal.value):"—"];
@@ -739,7 +757,7 @@ export default function CustomersPage(){
                           <span style={{display:"inline-flex",alignItems:"center"}}>{col.label}<SortIcon k={col.key}/></span>
                         </th>
                     ))}
-                    {!hiddenCols.includes("currentDeal") && <th>ดีลปัจจุบัน</th>}
+                    {!hiddenCols.includes("currentDeal") && <th>โอกาสการขายปัจจุบัน</th>}
                     <th/>
                   </tr>
                 </thead>
@@ -780,7 +798,7 @@ export default function CustomersPage(){
                         <td style={{color:MUTED}}>{c.province}</td>
                         {/* ผู้รับผิดชอบ */}
                         {!hiddenCols.includes("owner") && (
-                          <td style={{color:STEEL,fontWeight:600,fontSize:"0.76rem"}}>{c.owner}</td>
+                          <td><AssigneeAvatars value={c.owner} size={24} /></td>
                         )}
                         {/* กิจกรรมล่าสุด */}
                         {!hiddenCols.includes("lastActivity") && (
@@ -896,7 +914,7 @@ export default function CustomersPage(){
                     {[
                       {label:"ยอดขายรวม",       val:fmtMoney(totalSalesFor(selected.id,quotations)),          accent:PRIMARY,   bg:"#dce5f0"},
                       {label:"ใบเสนอราคา",      val:quotationCountFor(selected.id,quotations).toString(),      accent:STEEL,     bg:"#f0f4f8"},
-                      {label:"ดีลที่ดำเนินการ",  val:activeDealsCountFor(selected.id,deals).toString(),    accent:"#059669", bg:"#e5faf0"},
+                      {label:"โอกาสที่ดำเนินการ",  val:activeDealsCountFor(selected.id,deals).toString(),    accent:"#059669", bg:"#e5faf0"},
                     ].map((item,i)=>(
                       <div key={i} style={{background:item.bg,borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
                         <div style={{fontSize:"0.86rem",fontWeight:800,color:item.accent,lineHeight:1.2}}>{item.val}</div>
@@ -906,7 +924,7 @@ export default function CustomersPage(){
                   </div>
                   <div style={{display:"flex",gap:14,marginTop:8,fontSize:"0.56rem",color:"#9ca3af",fontWeight:500}}>
                     <span>ยอดขายรวม = ผลรวมใบเสนอราคาที่ปิดการขาย</span>
-                    <span>ดีล = pipeline ที่กำลังดำเนินการ</span>
+                    <span>โอกาสการขาย = รายการที่กำลังดำเนินการใน pipeline</span>
                   </div>
                 </div>
 
@@ -964,6 +982,37 @@ export default function CustomersPage(){
             {/* Tab: นัดหมาย */}
             {detailTab==="appts"&&(
               <div style={{padding:"12px 16px"}}>
+                {/* ปุ่มเพิ่มนัดหมาย */}
+                {!apptAdding ? (
+                  <button onClick={()=>setApptAdding(true)} className="btn btn-primary btn-sm" style={{marginBottom:12}}>
+                    <Plus size={13}/> เพิ่มนัดหมาย
+                  </button>
+                ) : (
+                  <div style={{border:`1px solid ${BORDER}`,borderRadius:12,padding:14,marginBottom:12,background:"#fafbfc"}}>
+                    <div style={{fontSize:"0.8rem",fontWeight:800,color:STEEL,marginBottom:12}}>นัดหมายใหม่ · {selected.company}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div style={{gridColumn:"1/-1"}}>
+                        <label style={apptLbl}>ประเภทนัดหมาย</label>
+                        <select value={apptForm.type} onChange={e=>setApptForm(f=>({...f,type:e.target.value as ApptType}))} style={apptInp}>
+                          {(Object.keys(apptTypeLabel) as ApptType[]).map(t=><option key={t} value={t}>{apptTypeLabel[t]}</option>)}
+                        </select>
+                      </div>
+                      <div><label style={apptLbl}>วันที่</label>
+                        <input type="date" value={apptForm.date} onChange={e=>setApptForm(f=>({...f,date:e.target.value}))} style={apptInp}/></div>
+                      <div><label style={apptLbl}>เวลา</label>
+                        <input type="time" value={apptForm.time} onChange={e=>setApptForm(f=>({...f,time:e.target.value}))} style={apptInp}/></div>
+                      <div style={{gridColumn:"1/-1"}}><label style={apptLbl}>หัวข้อ</label>
+                        <input value={apptForm.title} onChange={e=>setApptForm(f=>({...f,title:e.target.value}))} placeholder={apptTypeLabel[apptForm.type]} style={apptInp}/></div>
+                      <div style={{gridColumn:"1/-1"}}><label style={apptLbl}>รายละเอียด</label>
+                        <input value={apptForm.note} onChange={e=>setApptForm(f=>({...f,note:e.target.value}))} placeholder="บันทึกเพิ่มเติม" style={apptInp}/></div>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:12}}>
+                      <button onClick={resetApptForm} className="btn btn-secondary btn-sm">ยกเลิก</button>
+                      <button onClick={saveAppt} className="btn btn-primary btn-sm"><Check size={13}/> บันทึกนัดหมาย</button>
+                    </div>
+                    <div style={{fontSize:"0.64rem",color:"#9ca3af",marginTop:8}}>ผู้รับผิดชอบ: {selected.owner} · นัดหมายจะแสดงในปฏิทินด้วย</div>
+                  </div>
+                )}
                 {relatedAppointments.length===0?(
                   <div style={{fontSize:"0.78rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีนัดหมาย</div>
                 ):(

@@ -20,6 +20,35 @@ export function PersonAvatar({ name, avatar, size = 26 }: { name: string; avatar
   );
 }
 
+// แสดงผู้รับผิดชอบแบบอ่านอย่างเดียว — อวตารซ้อน (สูงสุด max) + ชื่อ · รองรับหลายคน (คั่นด้วย ",")
+export function AssigneeAvatars({ value, size = 22, showName = true, max = 3 }: {
+  value: string; size?: number; showName?: boolean; max?: number;
+}) {
+  const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
+  useEffect(() => { setPersons(loadResponsiblePersons()); }, []);
+  const names = value ? value.split(",").map(s => s.trim()).filter(Boolean) : [];
+  if (names.length === 0) return <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>—</span>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      <span style={{ display: "flex", flexShrink: 0 }}>
+        {names.slice(0, max).map((n, i) => (
+          <span key={n} title={n} style={{ marginLeft: i === 0 ? 0 : -8, borderRadius: "50%", border: "2px solid #fff", display: "flex" }}>
+            <PersonAvatar name={n} avatar={persons.find(p => p.name === n)?.avatar} size={size} />
+          </span>
+        ))}
+        {names.length > max && (
+          <span style={{ marginLeft: -8, width: size, height: size, borderRadius: "50%", border: "2px solid #fff", background: "#e5e7eb", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.4, fontWeight: 800 }}>+{names.length - max}</span>
+        )}
+      </span>
+      {showName && (
+        <span style={{ fontSize: "0.75rem", color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ตัวเลือกผู้รับผิดชอบแบบมีรูป + ชื่อ (แทน <select> ที่โชว์รูปไม่ได้)
 // multiple = true → เลือกได้หลายคน · value เก็บเป็นชื่อคั่นด้วย ", " (string เดิม ไม่เปลี่ยน type)
 export function PersonPicker({ value, onChange, style, placeholder = "เลือกผู้รับผิดชอบ", multiple = false }: {

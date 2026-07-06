@@ -34,6 +34,24 @@ export const sessions: Record<string, MockSession> = {
 };
 
 
+// ─── โปรไฟล์ผู้ใช้ที่ล็อกอิน (แก้ได้ในหน้า /profile · persist ต่อ workspace) ──
+export type UserProfile = { name: string; email: string; phone: string; avatar?: string };
+export const PROFILE_KEY_PREFIX = "bpms_profile_";
+export const PROFILE_UPDATED_EVENT = "bpms-profile-updated";
+export function profileKey(dealerCode: string) { return PROFILE_KEY_PREFIX + (dealerCode || "hq"); }
+export function defaultProfileEmail(dealerCode: string) {
+  return dealerCode ? `${dealerCode.toLowerCase()}@dealer.com` : "admin@benjamin.com";
+}
+export function loadUserProfile(dealerCode: string, fallbackName: string): UserProfile {
+  const base: UserProfile = { name: fallbackName, email: defaultProfileEmail(dealerCode), phone: "" };
+  if (typeof window === "undefined") return base;
+  try {
+    const s = localStorage.getItem(profileKey(dealerCode));
+    if (s) { const p = JSON.parse(s); if (p && typeof p === "object") return { ...base, ...p }; }
+  } catch {}
+  return base;
+}
+
 // ─── RESPONSIBLE PERSONS ──────────────────────────────────────
 export const RP_STORAGE_KEY = "bpms_responsible_persons";
 
@@ -183,7 +201,7 @@ export const LEAD_TASK_TEMPLATE: { key: string; label: string; stage: LeadStatus
   { key: "contact",     label: "ติดต่อครั้งแรก",      stage: "WAITING"  },
   { key: "collect",     label: "เก็บข้อมูลลูกค้า",     stage: "WAITING"  },
   { key: "requirement", label: "รวบรวมความต้องการ",   stage: "BULLET"   },
-  { key: "catalog",     label: "ส่งแคตตาล็อก",        stage: "BULLET"   },
+  { key: "catalog",     label: "ส่งแม่แบบให้ลูกค้า",   stage: "BULLET"   },
   { key: "appointment", label: "นัดหมาย",            stage: "BULLET"   },
   { key: "makeQuote",   label: "จัดทำใบเสนอราคา",     stage: "QUOTED"   },
   { key: "sendQuote",   label: "ส่งใบเสนอราคา",       stage: "QUOTED"   },
@@ -219,6 +237,24 @@ export function taskProgress(tasks: LeadTask[] = []): number {
 }
 
 // สถานะจาก task ที่ทำล่าสุด (ไม่รวม "ปิดการขาย" ซึ่งแยกเป็น Won/Lost) — ฐานเริ่มที่ "ติดต่อแล้ว"
+// ปรับ Checklist ให้ "ตรงกับสเตจเป๊ะ" — ไปข้างหน้าติ๊กงานถึงสเตจนั้น · ย้อนกลับเอาติ๊กที่เกินสเตจออก
+// (คง doneAt/doneBy ของงานที่ยังอยู่ในสเตจไว้) ใช้ตอนลากการ์ดเปลี่ยนสถานะบนบอร์ด
+export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStatus, doneBy: string): LeadTask[] {
+  const base = (tasks && tasks.length) ? tasks : buildLeadTasks();
+  if (status === "CANCELLED") return base; // ปิดการขายไม่สำเร็จ — ไม่แตะ Checklist
+  const rank = STAGE_RANK[status];
+  const stamp = "30 มิ.ย. 2569 · 10:30";
+  return LEAD_TASK_TEMPLATE.map(def => {
+    const existing = base.find(t => t.key === def.key);
+    const shouldDone = def.key === "close" ? status === "PAID" : STAGE_RANK[def.stage] <= rank;
+    if (shouldDone) {
+      // อยู่ในสเตจ → ติ๊ก (ถ้าติ๊กแล้วเก็บ doneAt/doneBy เดิม)
+      return existing?.done ? existing : { key: def.key, label: def.label, done: true, doneAt: stamp, doneBy };
+    }
+    // เกินสเตจ → เอาติ๊กออก
+    return { key: def.key, label: def.label, done: false };
+  });
+}
 export function stageFromTasks(tasks: LeadTask[] = []): LeadStatus {
   let stage: LeadStatus = "WAITING";
   for (const def of LEAD_TASK_TEMPLATE) {
@@ -259,18 +295,18 @@ export function buildLeadReport(lead: Partial<LeadRow>, dateStr = ""): string {
 export const leads: LeadRow[] = [
   { id: "#L-40322", numId: 1, name: "บจ. ไทยสตีล", company: "บจ. ไทยสตีล", contact: "คุณสมชาย ใจดี", phone: "081-234-5678", email: "somchai@thaisteel.co.th", province: "นนทบุรี", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "QUOTED", value: "฿1.2M", assigned: "สมชาย เชียงใหม่", source: "โทรเข้า", note: "ต้องการโกดัง 1,200 ตร.ม. พร้อมสำนักงาน", customerId: 1, tasks: seedLeadTasks("QUOTED", "สมชาย เชียงใหม่", 10), activities: [ { id: 1, date: "22 มิ.ย. 2569", icon: "doc", text: "ส่งใบเสนอราคา Q-2026-0089 ให้ลูกค้า", type: "doc" }, { id: 2, date: "18 มิ.ย. 2569", icon: "meeting", text: "ประชุมเก็บความต้องการโกดัง 1,200 ตร.ม.", type: "meeting" }, { id: 3, date: "12 มิ.ย. 2569", icon: "call", text: "โทรแนะนำบริษัทและแม่แบบโกดังสำเร็จรูป", type: "call" } ] },
   { id: "#L-40323", numId: 2, name: "บจ. ซีซีเอส", company: "บจ. ซีซีเอส", contact: "คุณกาญจนา ม.", phone: "082-345-6789", email: "kanchana@ccs.co.th", province: "เชียงใหม่", product: "อาคารสำเร็จรูปทุกประเภท", category: "อาคารสำเร็จรูปทุกประเภท", status: "WAITING", value: "฿480K", assigned: "วิภา รัตนกุล", source: "เว็บไซต์", customerId: 2, tasks: seedLeadTasks("WAITING", "วิภา รัตนกุล", 24), activities: [ { id: 1, date: "26 มิ.ย. 2569", icon: "call", text: "ติดต่อครั้งแรก — ลูกค้าสนใจอาคารสำนักงานสำเร็จรูป", type: "call" } ] },
-  { id: "#L-40324", numId: 3, name: "หจก. ราชบุรีโลหะ", company: "หจก. ราชบุรีโลหะ", contact: "คุณประยุทธ ร.", phone: "083-456-7890", email: "prayut@rajburimetal.com", province: "ราชบุรี", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "BULLET", value: "฿3.1M", assigned: "วิภา รัตนกุล", source: "แนะนำ", note: "ขอต่อรองราคาในใบเสนอราคา", customerId: 3, tasks: seedLeadTasks("BULLET", "วิภา รัตนกุล", 16), activities: [ { id: 1, date: "24 มิ.ย. 2569", icon: "email", text: "ส่งแคตตาล็อกโกดังสำเร็จรูปให้ลูกค้า", type: "email" }, { id: 2, date: "20 มิ.ย. 2569", icon: "call", text: "โทรสอบถามขนาดพื้นที่และงบประมาณ", type: "call" } ] },
+  { id: "#L-40324", numId: 3, name: "หจก. ราชบุรีโลหะ", company: "หจก. ราชบุรีโลหะ", contact: "คุณประยุทธ ร.", phone: "083-456-7890", email: "prayut@rajburimetal.com", province: "ราชบุรี", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "BULLET", value: "฿3.1M", assigned: "วิภา รัตนกุล", source: "แนะนำ", note: "ขอต่อรองราคาในใบเสนอราคา", customerId: 3, tasks: seedLeadTasks("BULLET", "วิภา รัตนกุล", 16), activities: [ { id: 1, date: "24 มิ.ย. 2569", icon: "email", text: "ส่งแม่แบบโกดังสำเร็จรูปให้ลูกค้า", type: "email" }, { id: 2, date: "20 มิ.ย. 2569", icon: "call", text: "โทรสอบถามขนาดพื้นที่และงบประมาณ", type: "call" } ] },
   { id: "#L-40325", numId: 4, name: "บจ. สมุทรโกดัง", company: "บจ. สมุทรโกดัง", contact: "คุณดารัล ส.", phone: "084-567-8901", email: "daran@samutwarehouse.co.th", province: "สมุทรปราการ", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "WAITING", value: "฿2.0M", assigned: "สมชาย เชียงใหม่", source: "งานแสดงสินค้า", customerId: 4, tasks: seedLeadTasks("WAITING", "สมชาย เชียงใหม่", 25), activities: [ { id: 1, date: "25 มิ.ย. 2569", icon: "meeting", text: "พบลูกค้าที่บูธงานแสดงสินค้า — แลกนามบัตร", type: "meeting" } ] },
   { id: "#L-40326", numId: 5, name: "บจ. นครสวรรค์โลหะ", company: "บจ. นครสวรรค์โลหะ", contact: "คุณวิชัย น.", phone: "085-678-9012", email: "wichai@nsmetal.co.th", province: "นครสวรรค์", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "WAITING", value: "฿760K", assigned: "กาญจนา มีสุข", source: "Facebook", customerId: 8, tasks: seedLeadTasks("WAITING", "กาญจนา มีสุข", 26), activities: [ { id: 1, date: "27 มิ.ย. 2569", icon: "note", text: "ทักมาจากเพจ Facebook — ขอข้อมูลโกดังขนาดเล็ก", type: "note" } ] },
-  { id: "#L-40328", numId: 7,  name: "บจ. ลำปางแพ็คเกจจิ้ง", company: "บจ. ลำปางแพ็คเกจจิ้ง", contact: "คุณอรทัย พ.", phone: "089-111-2233", email: "orathai@lpkg.co.th", province: "ลำปาง", product: "โรงงาน", category: "โรงงาน", status: "PAID", value: "฿3.6M", assigned: "วิภา รัตนกุล", source: "แนะนำ", note: "ปิดการขายแล้ว — โรงงานบรรจุภัณฑ์ 1,800 ตร.ม.", customerId: 10, tasks: seedLeadTasks("PAID", "วิภา รัตนกุล", 2), activities: [ { id: 1, date: "20 มิ.ย. 2569", icon: "doc", text: "ปิดการขายสำเร็จ — เซ็นสัญญา ฿3.6M", type: "doc" }, { id: 2, date: "14 มิ.ย. 2569", icon: "meeting", text: "เจรจาส่วนลดรอบสุดท้าย 3%", type: "meeting" } ] },
+  { id: "#L-40328", numId: 7,  name: "บจ. ลำปางแพ็คเกจจิ้ง", company: "บจ. ลำปางแพ็คเกจจิ้ง", contact: "คุณอรทัย พ.", phone: "089-111-2233", email: "orathai@lpkg.co.th", province: "ลำปาง", product: "โรงงานอาหาร", category: "โรงงาน", status: "PAID", value: "฿3.6M", assigned: "วิภา รัตนกุล", source: "แนะนำ", note: "ปิดการขายแล้ว — โรงงานบรรจุภัณฑ์ 1,800 ตร.ม.", customerId: 10, tasks: seedLeadTasks("PAID", "วิภา รัตนกุล", 2), activities: [ { id: 1, date: "20 มิ.ย. 2569", icon: "doc", text: "ปิดการขายสำเร็จ — เซ็นสัญญา ฿3.6M", type: "doc" }, { id: 2, date: "14 มิ.ย. 2569", icon: "meeting", text: "เจรจาส่วนลดรอบสุดท้าย 3%", type: "meeting" } ] },
   { id: "#L-40329", numId: 8,  name: "บจ. พิษณุโลกฟาร์ม", company: "บจ. พิษณุโลกฟาร์ม", contact: "คุณธนา ก.", phone: "089-222-3344", email: "thana@plkfarm.co.th", province: "พิษณุโลก", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "NEGO", value: "฿2.7M", assigned: "สมชาย เชียงใหม่", source: "เว็บไซต์", note: "ต่อรองราคาโกดังเก็บข้าว 1,400 ตร.ม.", tasks: seedLeadTasks("NEGO", "สมชาย เชียงใหม่", 8), activities: [ { id: 1, date: "26 มิ.ย. 2569", icon: "call", text: "โทรเจรจาราคา — ลูกค้าขอส่วนลดเพิ่ม 5%", type: "call" }, { id: 2, date: "19 มิ.ย. 2569", icon: "doc", text: "ส่งใบเสนอราคา Q-2026-0101", type: "doc" } ] },
-  { id: "#L-40330", numId: 9,  name: "หจก. เชียงใหม่ค้าวัสดุ", company: "หจก. เชียงใหม่ค้าวัสดุ", contact: "คุณมานพ ว.", phone: "089-333-4455", email: "manop@cmmaterial.co.th", province: "เชียงใหม่", product: "งานรีโนเวท", category: "งานรีโนเวท", status: "NEGO", value: "฿890K", assigned: "กาญจนา มีสุข", source: "LINE", note: "รีโนเวทโกดังเดิม เพิ่มชั้นลอย", tasks: seedLeadTasks("NEGO", "กาญจนา มีสุข", 9), activities: [ { id: 1, date: "27 มิ.ย. 2569", icon: "meeting", text: "ประชุมสรุปขอบเขตงานรีโนเวท", type: "meeting" } ] },
-  { id: "#L-40331", numId: 10, name: "บจ. ลำพูนอิเล็กทรอนิกส์", company: "บจ. ลำพูนอิเล็กทรอนิกส์", contact: "คุณศิริพร บ.", phone: "089-444-5566", email: "siriporn@lpelec.co.th", province: "ลำพูน", product: "โรงงาน", category: "โรงงาน", status: "FOLLOWUP", value: "฿4.8M", assigned: "วิภา รัตนกุล", source: "งานแสดงสินค้า", note: "โรงงานชิ้นส่วนอิเล็กทรอนิกส์ นิคมลำพูน", tasks: seedLeadTasks("FOLLOWUP", "วิภา รัตนกุล", 12), activities: [ { id: 1, date: "25 มิ.ย. 2569", icon: "call", text: "โทรติดตามใบเสนอราคา — ลูกค้ากำลังเทียบผู้รับเหมา", type: "call" }, { id: 2, date: "17 มิ.ย. 2569", icon: "doc", text: "ส่งใบเสนอราคา Q-2026-0102", type: "doc" } ] },
-  { id: "#L-40332", numId: 11, name: "โรงเรียนนานาชาติเชียงใหม่", company: "โรงเรียนนานาชาติเชียงใหม่", contact: "คุณเดวิด ล.", phone: "089-555-6677", email: "david@cmis.ac.th", province: "เชียงใหม่", product: "สนามกีฬาในร่ม", category: "สนามกีฬาในร่ม", status: "FOLLOWUP", value: "฿6.5M", assigned: "สมชาย เชียงใหม่", source: "แนะนำ", note: "โรงยิมอเนกประสงค์ 2,000 ตร.ม.", tasks: seedLeadTasks("FOLLOWUP", "สมชาย เชียงใหม่", 11), activities: [ { id: 1, date: "24 มิ.ย. 2569", icon: "email", text: "ส่งข้อมูลเพิ่มเรื่องระบบระบายอากาศ", type: "email" } ] },
+  { id: "#L-40330", numId: 9,  name: "หจก. เชียงใหม่ค้าวัสดุ", company: "หจก. เชียงใหม่ค้าวัสดุ", contact: "คุณมานพ ว.", phone: "089-333-4455", email: "manop@cmmaterial.co.th", province: "เชียงใหม่", product: "ต่อเติมอาคาร", category: "งานรีโนเวท", status: "NEGO", value: "฿890K", assigned: "กาญจนา มีสุข", source: "LINE", note: "รีโนเวทโกดังเดิม เพิ่มชั้นลอย", tasks: seedLeadTasks("NEGO", "กาญจนา มีสุข", 9), activities: [ { id: 1, date: "27 มิ.ย. 2569", icon: "meeting", text: "ประชุมสรุปขอบเขตงานรีโนเวท", type: "meeting" } ] },
+  { id: "#L-40331", numId: 10, name: "บจ. ลำพูนอิเล็กทรอนิกส์", company: "บจ. ลำพูนอิเล็กทรอนิกส์", contact: "คุณศิริพร บ.", phone: "089-444-5566", email: "siriporn@lpelec.co.th", province: "ลำพูน", product: "โรงงานอิเล็กทรอนิกส์", category: "โรงงาน", status: "FOLLOWUP", value: "฿4.8M", assigned: "วิภา รัตนกุล", source: "งานแสดงสินค้า", note: "โรงงานชิ้นส่วนอิเล็กทรอนิกส์ นิคมลำพูน", tasks: seedLeadTasks("FOLLOWUP", "วิภา รัตนกุล", 12), activities: [ { id: 1, date: "25 มิ.ย. 2569", icon: "call", text: "โทรติดตามใบเสนอราคา — ลูกค้ากำลังเทียบผู้รับเหมา", type: "call" }, { id: 2, date: "17 มิ.ย. 2569", icon: "doc", text: "ส่งใบเสนอราคา Q-2026-0102", type: "doc" } ] },
+  { id: "#L-40332", numId: 11, name: "โรงเรียนนานาชาติเชียงใหม่", company: "โรงเรียนนานาชาติเชียงใหม่", contact: "คุณเดวิด ล.", phone: "089-555-6677", email: "david@cmis.ac.th", province: "เชียงใหม่", product: "โรงยิมอเนกประสงค์", category: "สนามกีฬาในร่ม", status: "FOLLOWUP", value: "฿6.5M", assigned: "สมชาย เชียงใหม่", source: "แนะนำ", note: "โรงยิมอเนกประสงค์ 2,000 ตร.ม.", tasks: seedLeadTasks("FOLLOWUP", "สมชาย เชียงใหม่", 11), activities: [ { id: 1, date: "24 มิ.ย. 2569", icon: "email", text: "ส่งข้อมูลเพิ่มเรื่องระบบระบายอากาศ", type: "email" } ] },
   { id: "#L-40333", numId: 12, name: "บจ. แพร่วู้ดโปรดักส์", company: "บจ. แพร่วู้ดโปรดักส์", contact: "คุณสมบัติ จ.", phone: "089-666-7788", email: "sombat@phraewood.co.th", province: "แพร่", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "QUOTED", value: "฿1.9M", assigned: "กาญจนา มีสุข", source: "Facebook", note: "โกดังเก็บไม้แปรรูป 1,000 ตร.ม.", tasks: seedLeadTasks("QUOTED", "กาญจนา มีสุข", 15), activities: [ { id: 1, date: "23 มิ.ย. 2569", icon: "doc", text: "จัดทำใบเสนอราคา Q-2026-0103", type: "doc" } ] },
-  { id: "#L-40334", numId: 13, name: "สหกรณ์การเกษตรเชียงดาว", company: "สหกรณ์การเกษตรเชียงดาว", contact: "คุณบุญมี ส.", phone: "089-777-8899", email: "boonmee@cdcoop.or.th", province: "เชียงใหม่", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "BULLET", value: "฿1.4M", assigned: "วิภา รัตนกุล", source: "Walk-in", note: "ไซโลและโกดังเก็บข้าวโพด", tasks: seedLeadTasks("BULLET", "วิภา รัตนกุล", 20), activities: [ { id: 1, date: "25 มิ.ย. 2569", icon: "meeting", text: "ลงพื้นที่ดูหน้างานที่เชียงดาว", type: "meeting" } ] },
+  { id: "#L-40334", numId: 13, name: "สหกรณ์การเกษตรเชียงดาว", company: "สหกรณ์การเกษตรเชียงดาว", contact: "คุณบุญมี ส.", phone: "089-777-8899", email: "boonmee@cdcoop.or.th", province: "เชียงใหม่", product: "โกดังเก็บสินค้าเกษตร", category: "โกดังสำเร็จรูป", status: "BULLET", value: "฿1.4M", assigned: "วิภา รัตนกุล", source: "Walk-in", note: "ไซโลและโกดังเก็บข้าวโพด", tasks: seedLeadTasks("BULLET", "วิภา รัตนกุล", 20), activities: [ { id: 1, date: "25 มิ.ย. 2569", icon: "meeting", text: "ลงพื้นที่ดูหน้างานที่เชียงดาว", type: "meeting" } ] },
   { id: "#L-40335", numId: 14, name: "บจ. น่านโลจิสติกส์", company: "บจ. น่านโลจิสติกส์", contact: "คุณพงศกร น.", phone: "089-888-9900", email: "pongsakorn@nanlogis.co.th", province: "น่าน", product: "งานตามแบบของลูกค้า", category: "งานตามแบบของลูกค้า", status: "WAITING", value: "฿3.3M", assigned: "สมชาย เชียงใหม่", source: "โทรเข้า", note: "ศูนย์กระจายสินค้าตามแบบเฉพาะ", tasks: seedLeadTasks("WAITING", "สมชาย เชียงใหม่", 27), activities: [ { id: 1, date: "28 มิ.ย. 2569", icon: "call", text: "ลูกค้าโทรเข้ามาสอบถาม — นัดเก็บความต้องการสัปดาห์หน้า", type: "call" } ] },
-  { id: "#L-40336", numId: 15, name: "บจ. เชียงรายฟู้ดส์", company: "บจ. เชียงรายฟู้ดส์", contact: "คุณรัชนี ก.", phone: "089-999-0011", email: "ratchanee@crfoods.co.th", province: "เชียงราย", product: "โรงงาน", category: "โรงงาน", status: "CANCELLED", value: "฿2.2M", assigned: "กาญจนา มีสุข", source: "เว็บไซต์", lostReason: "ราคา", note: "เลือกผู้รับเหมาท้องถิ่น ราคาต่ำกว่า 12%", tasks: seedLeadTasks("CANCELLED", "กาญจนา มีสุข", 5), activities: [ { id: 1, date: "18 มิ.ย. 2569", icon: "note", text: "ลูกค้าแจ้งเลือกเจ้าอื่น — เหตุผลด้านราคา", type: "note" } ] },
+  { id: "#L-40336", numId: 15, name: "บจ. เชียงรายฟู้ดส์", company: "บจ. เชียงรายฟู้ดส์", contact: "คุณรัชนี ก.", phone: "089-999-0011", email: "ratchanee@crfoods.co.th", province: "เชียงราย", product: "โรงงานอาหาร", category: "โรงงาน", status: "CANCELLED", value: "฿2.2M", assigned: "กาญจนา มีสุข", source: "เว็บไซต์", lostReason: "ราคา", note: "เลือกผู้รับเหมาท้องถิ่น ราคาต่ำกว่า 12%", tasks: seedLeadTasks("CANCELLED", "กาญจนา มีสุข", 5), activities: [ { id: 1, date: "18 มิ.ย. 2569", icon: "note", text: "ลูกค้าแจ้งเลือกเจ้าอื่น — เหตุผลด้านราคา", type: "note" } ] },
   { id: "#L-40337", numId: 16, name: "หจก. แม่ฮ่องสอนพาณิชย์", company: "หจก. แม่ฮ่องสอนพาณิชย์", contact: "คุณอนุชา ม.", phone: "089-000-1122", email: "anucha@mhscon.co.th", province: "แม่ฮ่องสอน", product: "อาคารสำเร็จรูปทุกประเภท", category: "อาคารสำเร็จรูปทุกประเภท", status: "CANCELLED", value: "฿950K", assigned: "วิภา รัตนกุล", source: "แนะนำ", lostReason: "งบประมาณ", note: "โครงการถูกพับ — งบไม่อนุมัติ", tasks: seedLeadTasks("CANCELLED", "วิภา รัตนกุล", 3), activities: [ { id: 1, date: "10 มิ.ย. 2569", icon: "call", text: "ลูกค้าแจ้งพับโครงการ งบประมาณไม่ผ่าน", type: "call" } ] },
   { id: "#L-40327", numId: 6, name: "บจ. ทีทีวาย", company: "บจ. ทีทีวาย อินเตอร์", contact: "คุณวิทยา ท.", phone: "086-789-0123", email: "wittaya@ttyinter.com", province: "นครสวรรค์", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "PAID", value: "฿5.4M", assigned: "สมชาย เชียงใหม่", source: "แนะนำ", note: "ปิดการขายแล้ว รอทำสัญญา", customerId: 9, tasks: seedLeadTasks("PAID", "สมชาย เชียงใหม่", 4), activities: [ { id: 1, date: "28 มิ.ย. 2569", icon: "doc", text: "ปิดการขายสำเร็จ — ลูกค้ายืนยันสั่งซื้อ ฿5.4M", type: "doc" }, { id: 2, date: "21 มิ.ย. 2569", icon: "meeting", text: "เจรจาราคารอบสุดท้าย ตกลงเงื่อนไขชำระเงิน", type: "meeting" } ] },
 ];
@@ -311,28 +347,53 @@ export type SolutionPriceHistory = { price: number; effectiveDate: string; note?
 export type SolutionProduct = {
   id: string; name: string; spec: string;
   price: number; unit: string; effectiveDate: string; priceHistory: SolutionPriceHistory[];
+  subtypes?: string[];   // แม่แบบย่อยภายใต้แม่แบบหลัก (เช่น "โรงงาน" → "โรงงานอาหาร") · เลือกได้ในฟอร์ม
 };
 
 // ─── Master Catalog (แหล่งเดียว) ─────────────────────────────────
 // HQ (หน้า /hq/master) เป็นผู้แก้ไขแม่แบบ/ราคากลาง → persist ลง localStorage คีย์นี้
 // Dealer (/products + dropdown ในฟอร์ม) อ่านจากคีย์เดียวกัน — fallback = solutionProducts
-export const MASTER_CATALOG_KEY = "master_catalog";
+export const MASTER_CATALOG_KEY = "master_catalog_v2";   // v2: เพิ่มแม่แบบย่อย (subtypes)
 export function loadMasterCatalog(): SolutionProduct[] {
   if (typeof window === "undefined") return solutionProducts;
   try {
     const s = localStorage.getItem(MASTER_CATALOG_KEY);
-    if (s) { const arr = JSON.parse(s); if (Array.isArray(arr) && arr.length) return arr; }
+    if (s) {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr) && arr.length) {
+        // hydrate: เฉพาะ record เก่าที่ persist ไว้ "ก่อนมีฟีเจอร์ subtypes" (field ไม่มีเลย = undefined)
+        // → เติมจาก catalog กลาง. ถ้า HQ ตั้งใจลบจนเหลือ [] ต้องเคารพ (ไม่เด้งกลับ) จึงเช็ก === undefined เท่านั้น
+        const byId = new Map(solutionProducts.map((p) => [p.id, p]));
+        const byName = new Map(solutionProducts.map((p) => [p.name, p]));
+        return arr.map((p: SolutionProduct) => {
+          if (p.subtypes !== undefined) return p;
+          const base = byId.get(p.id) ?? byName.get(p.name);
+          return base?.subtypes?.length ? { ...p, subtypes: base.subtypes } : p;
+        });
+      }
+    }
   } catch {}
   return solutionProducts;
 }
 export const solutionProducts: SolutionProduct[] = [
-  { id: "tpl-1", name: "โกดังสำเร็จรูป", spec: "โครงสร้างเหล็กระบบข้อต่อสลักเกลียว ไม่มีเสากลาง เพิ่มพื้นที่ใช้สอย · เหมาะคลังสินค้า โกดังเก็บสินค้าเกษตร และโกดังอุตสาหกรรม", price: 5100, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4950, effectiveDate: "1 ม.ค. 2569", note: "ปรับตามราคาเหล็ก" }, { price: 4800, effectiveDate: "1 ก.ค. 2568" } ] },
-  { id: "tpl-2", name: "โรงงาน", spec: "รองรับมาตรฐานโรงงานผลิตคุณภาพสูง และโรงงานอัจฉริยะที่เชื่อมต่อระบบอัตโนมัติได้ · ช่วงเสากว้าง รับน้ำหนักเครนได้", price: 6800, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6600, effectiveDate: "1 ม.ค. 2569" }, { price: 6400, effectiveDate: "1 ก.ค. 2568" } ] },
-  { id: "tpl-3", name: "อาคารสำเร็จรูปทุกประเภท", spec: "ปรับผังใช้งานได้หลายรูปแบบ เช่น สำนักงาน โรงเรียน สถานพยาบาล และอาคารพาณิชย์ · โครงเหล็กมาตรฐาน ติดตั้งเร็ว", price: 6200, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6000, effectiveDate: "1 ม.ค. 2569" } ] },
-  { id: "tpl-4", name: "งานตามแบบของลูกค้า", spec: "ออกแบบผังตามความต้องการเฉพาะโครงการของลูกค้า · ปรับผนัง ประตู และช่องเปิดได้ตามแบบ", price: 7000, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6800, effectiveDate: "1 ม.ค. 2569", note: "ราคาเริ่มต้นแบบพิเศษ" } ] },
-  { id: "tpl-5", name: "งานรีโนเวท", spec: "ปรับปรุงและต่อเติมอาคารระบบสำเร็จรูปเดิมให้ใช้งานได้ดีขึ้น ประหยัดกว่าสร้างใหม่ · ประเมินหน้างานก่อนเสนอราคา", price: 4500, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4300, effectiveDate: "1 ม.ค. 2569" } ] },
-  { id: "tpl-6", name: "สนามกีฬาในร่ม", spec: "โครงสร้างช่วงกว้างไม่มีเสากลางขวางกั้น เพดานสูง เหมาะสนามกีฬาในร่มทุกรูปแบบ", price: 7400, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 7150, effectiveDate: "1 ม.ค. 2569" } ] },
+  { id: "tpl-1", name: "โกดังสำเร็จรูป", spec: "โครงสร้างเหล็กระบบข้อต่อสลักเกลียว ไม่มีเสากลาง เพิ่มพื้นที่ใช้สอย · เหมาะคลังสินค้า โกดังเก็บสินค้าเกษตร และโกดังอุตสาหกรรม", price: 5100, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4950, effectiveDate: "1 ม.ค. 2569", note: "ปรับตามราคาเหล็ก" }, { price: 4800, effectiveDate: "1 ก.ค. 2568" } ], subtypes: ["โกดังเก็บสินค้าทั่วไป", "โกดังเก็บสินค้าเกษตร", "โกดังห้องเย็น", "คลังกระจายสินค้า", "โกดังเก็บวัตถุดิบ"] },
+  { id: "tpl-2", name: "โรงงาน", spec: "รองรับมาตรฐานโรงงานผลิตคุณภาพสูง และโรงงานอัจฉริยะที่เชื่อมต่อระบบอัตโนมัติได้ · ช่วงเสากว้าง รับน้ำหนักเครนได้", price: 6800, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6600, effectiveDate: "1 ม.ค. 2569" }, { price: 6400, effectiveDate: "1 ก.ค. 2568" } ], subtypes: ["โรงงานอาหาร", "โรงงานผลิตเหล็ก", "โรงงานพลาสติก", "โรงงานสิ่งทอ", "โรงงานอิเล็กทรอนิกส์", "โรงงานยา", "โรงงานทั่วไป"] },
+  { id: "tpl-3", name: "อาคารสำเร็จรูปทุกประเภท", spec: "ปรับผังใช้งานได้หลายรูปแบบ เช่น สำนักงาน โรงเรียน สถานพยาบาล และอาคารพาณิชย์ · โครงเหล็กมาตรฐาน ติดตั้งเร็ว", price: 6200, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6000, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["อาคารสำนักงาน", "โชว์รูม", "อาคารพาณิชย์", "อาคารเรียน", "สถานพยาบาล"] },
+  { id: "tpl-4", name: "งานตามแบบของลูกค้า", spec: "ออกแบบผังตามความต้องการเฉพาะโครงการของลูกค้า · ปรับผนัง ประตู และช่องเปิดได้ตามแบบ", price: 7000, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6800, effectiveDate: "1 ม.ค. 2569", note: "ราคาเริ่มต้นแบบพิเศษ" } ], subtypes: ["ออกแบบเฉพาะโครงการ", "อาคารผสมผสาน", "งานโครงสร้างพิเศษ"] },
+  { id: "tpl-5", name: "งานรีโนเวท", spec: "ปรับปรุงและต่อเติมอาคารระบบสำเร็จรูปเดิมให้ใช้งานได้ดีขึ้น ประหยัดกว่าสร้างใหม่ · ประเมินหน้างานก่อนเสนอราคา", price: 4500, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4300, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["ปรับปรุงโกดังเดิม", "ต่อเติมอาคาร", "เปลี่ยนหลังคา", "เสริมโครงสร้าง"] },
+  { id: "tpl-6", name: "สนามกีฬาในร่ม", spec: "โครงสร้างช่วงกว้างไม่มีเสากลางขวางกั้น เพดานสูง เหมาะสนามกีฬาในร่มทุกรูปแบบ", price: 7400, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 7150, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["โรงยิมอเนกประสงค์", "สนามแบดมินตัน", "สนามบาสเกตบอล", "สระว่ายน้ำในร่ม"] },
 ];
+
+// แม่แบบย่อย → แม่แบบหลัก · ใช้ roll-up ตอนจัดกลุ่ม/นับ/กรองตามแม่แบบ (แหล่งเดียวทั้งระบบ)
+const _SUBTYPE_TO_PARENT: Record<string, string> = (() => {
+  const m: Record<string, string> = {};
+  solutionProducts.forEach(p => (p.subtypes ?? []).forEach(s => { m[s] = p.name; }));
+  return m;
+})();
+export function mainTemplateOf(name: string | undefined | null): string {
+  if (!name) return "";
+  return _SUBTYPE_TO_PARENT[name] ?? name;
+}
 
 // ─── QUOTATIONS ───────────────────────────────────────────────
 export type QuotationStatus = "draft" | "sent_to_client" | "viewed" | "won" | "lost" | "expired";
@@ -376,12 +437,12 @@ export const quotations: QuotationMock[] = [
   { id: "Q-2026-0099", customer: "บจ. นครสวรรค์โลหะ", project: "โรงงานสำเร็จรูป นครสวรรค์", total: "฿5,400,000", totalValue: 5400000, materialCost: 5400000, province: "นครสวรรค์", buildingType: "โรงงาน", area: 2800, status: "won", date: "2026-04-05", items: 18, customerId: 8, projectId: 6 },
   { id: "Q-2026-0100", customer: "บจ. เชียงรายเมทัล", project: "โกดังสำเร็จรูป เชียงราย", total: "฿1,500,000", totalValue: 1500000, materialCost: 1500000, province: "เชียงราย", buildingType: "โกดังสำเร็จรูป", area: 720, status: "lost", date: "2026-05-28", items: 6, customerId: 0, projectId: 9 },
   { id: "Q-2026-0101", customer: "บจ. พิษณุโลกฟาร์ม", project: "โกดังเก็บข้าว พิษณุโลก", total: "฿2,700,000", totalValue: 2700000, materialCost: 2700000, province: "พิษณุโลก", buildingType: "โกดังสำเร็จรูป", area: 1400, status: "viewed", date: "2026-06-19", items: 9, customerId: 0, projectId: 0, discountPct: 5, expiry: "2026-07-19" },
-  { id: "Q-2026-0102", customer: "บจ. ลำพูนอิเล็กทรอนิกส์", project: "โรงงานชิ้นส่วนอิเล็กทรอนิกส์ ลำพูน", total: "฿4,800,000", totalValue: 4800000, materialCost: 4800000, province: "ลำพูน", buildingType: "โรงงาน", area: 2200, status: "sent_to_client", date: "2026-06-17", items: 14, customerId: 0, projectId: 0, expiry: "2026-07-17" },
+  { id: "Q-2026-0102", customer: "บจ. ลำพูนอิเล็กทรอนิกส์", project: "โรงงานชิ้นส่วนอิเล็กทรอนิกส์ ลำพูน", total: "฿4,800,000", totalValue: 4800000, materialCost: 4800000, province: "ลำพูน", buildingType: "โรงงานอิเล็กทรอนิกส์", area: 2200, status: "sent_to_client", date: "2026-06-17", items: 14, customerId: 0, projectId: 0, expiry: "2026-07-17" },
   { id: "Q-2026-0103", customer: "บจ. แพร่วู้ดโปรดักส์", project: "โกดังเก็บไม้แปรรูป แพร่", total: "฿1,900,000", totalValue: 1900000, materialCost: 1900000, province: "แพร่", buildingType: "โกดังสำเร็จรูป", area: 1000, status: "sent_to_client", date: "2026-06-23", items: 7, customerId: 0, projectId: 0, expiry: "2026-07-23" },
-  { id: "Q-2026-0104", customer: "บจ. ลำปางแพ็คเกจจิ้ง", project: "โรงงานบรรจุภัณฑ์ ลำปาง", total: "฿3,600,000", totalValue: 3600000, materialCost: 3600000, province: "ลำปาง", buildingType: "โรงงาน", area: 1800, status: "won", date: "2026-06-20", items: 12, customerId: 10, projectId: 0, discountPct: 3 },
-  { id: "Q-2026-0105", customer: "หจก. เชียงใหม่ค้าวัสดุ", project: "รีโนเวทโกดัง เพิ่มชั้นลอย", total: "฿890,000", totalValue: 890000, materialCost: 890000, province: "เชียงใหม่", buildingType: "งานรีโนเวท", area: 450, status: "viewed", date: "2026-06-22", items: 5, customerId: 0, projectId: 0, expiry: "2026-07-22" },
-  { id: "Q-2026-0106", customer: "โรงเรียนนานาชาติเชียงใหม่", project: "โรงยิมอเนกประสงค์ CMIS", total: "฿6,500,000", totalValue: 6500000, materialCost: 6500000, province: "เชียงใหม่", buildingType: "สนามกีฬาในร่ม", area: 2000, status: "sent_to_client", date: "2026-06-16", items: 16, customerId: 0, projectId: 0, expiry: "2026-07-16" },
-  { id: "Q-2026-0107", customer: "บจ. เชียงรายฟู้ดส์", project: "โรงงานแปรรูปอาหาร เชียงราย", total: "฿2,200,000", totalValue: 2200000, materialCost: 2200000, province: "เชียงราย", buildingType: "โรงงาน", area: 1100, status: "lost", date: "2026-06-05", items: 8, customerId: 0, projectId: 0, note: "แพ้ราคาผู้รับเหมาท้องถิ่น" },
+  { id: "Q-2026-0104", customer: "บจ. ลำปางแพ็คเกจจิ้ง", project: "โรงงานบรรจุภัณฑ์ ลำปาง", total: "฿3,600,000", totalValue: 3600000, materialCost: 3600000, province: "ลำปาง", buildingType: "โรงงานอาหาร", area: 1800, status: "won", date: "2026-06-20", items: 12, customerId: 10, projectId: 0, discountPct: 3 },
+  { id: "Q-2026-0105", customer: "หจก. เชียงใหม่ค้าวัสดุ", project: "รีโนเวทโกดัง เพิ่มชั้นลอย", total: "฿890,000", totalValue: 890000, materialCost: 890000, province: "เชียงใหม่", buildingType: "ต่อเติมอาคาร", area: 450, status: "viewed", date: "2026-06-22", items: 5, customerId: 0, projectId: 0, expiry: "2026-07-22" },
+  { id: "Q-2026-0106", customer: "โรงเรียนนานาชาติเชียงใหม่", project: "โรงยิมอเนกประสงค์ CMIS", total: "฿6,500,000", totalValue: 6500000, materialCost: 6500000, province: "เชียงใหม่", buildingType: "โรงยิมอเนกประสงค์", area: 2000, status: "sent_to_client", date: "2026-06-16", items: 16, customerId: 0, projectId: 0, expiry: "2026-07-16" },
+  { id: "Q-2026-0107", customer: "บจ. เชียงรายฟู้ดส์", project: "โรงงานแปรรูปอาหาร เชียงราย", total: "฿2,200,000", totalValue: 2200000, materialCost: 2200000, province: "เชียงราย", buildingType: "โรงงานอาหาร", area: 1100, status: "lost", date: "2026-06-05", items: 8, customerId: 0, projectId: 0, note: "แพ้ราคาผู้รับเหมาท้องถิ่น" },
   { id: "Q-2026-0108", customer: "บจ. เอกชัยสตอเรจ", project: "คลังสินค้า เฟส 2 ลำปาง", total: "฿1,650,000", totalValue: 1650000, materialCost: 1650000, province: "ลำปาง", buildingType: "โกดังสำเร็จรูป", area: 850, status: "expired", date: "2026-04-02", items: 6, customerId: 11, projectId: 0, expiry: "2026-05-02", note: "ลูกค้าเลื่อนโครงการ — ใบเสนอราคาหมดอายุ" },
 ];
 
@@ -872,36 +933,36 @@ export const hqAllQuotations: HQQuotation[] = [
   { id:"HQ-Q02", quoteNo:"Q-2026-0091", dealerCode:"CNX", dealerName:"เชียงใหม่สตีลบิลด์", customer:"หจก. ราชบุรีโลหะ",       valueNum:760000,  discountPct:0,  status:"sent_to_client"          , createdAt:"1 มิ.ย. 2569",  salesperson:"วิภา ป.",     productLine:"โกดังสำเร็จรูป" },
   { id:"HQ-Q03", quoteNo:"Q-2026-0085", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.อุตสาหกรรมไทย จก.",    valueNum:4200000, discountPct:5,  status:"won",              createdAt:"10 มิ.ย. 2569", salesperson:"สมชาย ว.",     productLine:"โรงงาน"  },
   { id:"HQ-Q04", quoteNo:"Q-2026-0086", dealerCode:"CNX", dealerName:"เชียงใหม่สตีลบิลด์", customer:"สหกรณ์ลำพูน จก.",        valueNum:2200000, discountPct:7,  status:"won",              createdAt:"8 มิ.ย. 2569",  salesperson:"วิภา ป.",      productLine:"โกดังสำเร็จรูป" },
-  { id:"HQ-Q05", quoteNo:"Q-2026-0082", dealerCode:"MST", dealerName:"แม่สอดเมทัลเวิร์ค",    customer:"บ.ทีดีเค ลอจิสติกส์",    valueNum:5800000, discountPct:4,  status:"sent_to_client",             createdAt:"5 มิ.ย. 2569",  salesperson:"อนันต์ ส.",    productLine:"โรงงาน"  },
+  { id:"HQ-Q05", quoteNo:"Q-2026-0082", dealerCode:"MST", dealerName:"แม่สอดเมทัลเวิร์ค",    customer:"บ.ทีดีเค ลอจิสติกส์",    valueNum:5800000, discountPct:4,  status:"sent_to_client",             createdAt:"5 มิ.ย. 2569",  salesperson:"อนันต์ ส.",    productLine:"โรงงานผลิตเหล็ก"  },
   { id:"HQ-Q06", quoteNo:"Q-2026-0080", dealerCode:"CRI", dealerName:"เชียงรายสตรัคเจอร์",  customer:"วิสาหกิจชุมชนดอยอินทนนท์",valueNum:3100000, discountPct:6,  status:"sent_to_client",             createdAt:"3 มิ.ย. 2569",  salesperson:"เกรียงไกร จ.", productLine:"งานตามแบบของลูกค้า"    },
-  { id:"HQ-Q07", quoteNo:"Q-2026-0078", dealerCode:"NSN", dealerName:"นครสวรรค์เอ็นจิเนียริ่ง", customer:"สหกรณ์การเกษตรนครสวรรค์",valueNum:1600000, discountPct:3,  status:"won",              createdAt:"1 มิ.ย. 2569",  salesperson:"ธีรพล อ.",    productLine:"โกดังสำเร็จรูป" },
+  { id:"HQ-Q07", quoteNo:"Q-2026-0078", dealerCode:"NSN", dealerName:"นครสวรรค์เอ็นจิเนียริ่ง", customer:"สหกรณ์การเกษตรนครสวรรค์",valueNum:1600000, discountPct:3,  status:"won",              createdAt:"1 มิ.ย. 2569",  salesperson:"ธีรพล อ.",    productLine:"โกดังเก็บสินค้าเกษตร" },
   { id:"HQ-Q08", quoteNo:"Q-2026-0077", dealerCode:"CRI", dealerName:"เชียงรายสตรัคเจอร์",  customer:"บ.โกลเด้น ทรี โลจิส",    valueNum:2400000, discountPct:8,  status:"won",              createdAt:"28 พ.ค. 2569",  salesperson:"เกรียงไกร จ.", productLine:"โรงงาน"  },
-  { id:"HQ-Q09", quoteNo:"Q-2026-0075", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.ปิโตรเคม (ไทย)",       valueNum:5100000, discountPct:5,  status:"won",              createdAt:"25 พ.ค. 2569",  salesperson:"สมชาย ว.",     productLine:"โรงงาน"  },
-  { id:"HQ-Q10", quoteNo:"Q-2026-0073", dealerCode:"CNX", dealerName:"เชียงใหม่สตีลบิลด์", customer:"บ.ซีเอ็นเอ็กซ์ ฟูด",    valueNum:3800000, discountPct:6,  status:"sent_to_client",             createdAt:"20 พ.ค. 2569",  salesperson:"สุรชัย ท.",    productLine:"โรงงาน"  },
+  { id:"HQ-Q09", quoteNo:"Q-2026-0075", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.ปิโตรเคม (ไทย)",       valueNum:5100000, discountPct:5,  status:"won",              createdAt:"25 พ.ค. 2569",  salesperson:"สมชาย ว.",     productLine:"โรงงานพลาสติก"  },
+  { id:"HQ-Q10", quoteNo:"Q-2026-0073", dealerCode:"CNX", dealerName:"เชียงใหม่สตีลบิลด์", customer:"บ.ซีเอ็นเอ็กซ์ ฟูด",    valueNum:3800000, discountPct:6,  status:"sent_to_client",             createdAt:"20 พ.ค. 2569",  salesperson:"สุรชัย ท.",    productLine:"โรงงานอาหาร"  },
   { id:"HQ-Q11", quoteNo:"Q-2026-0070", dealerCode:"MST", dealerName:"แม่สอดเมทัลเวิร์ค",    customer:"หจก. แม่สอดพาณิชย์",    valueNum:2100000, discountPct:5,  status:"won",              createdAt:"15 พ.ค. 2569",  salesperson:"อนันต์ ส.",    productLine:"งานตามแบบของลูกค้า"    },
   { id:"HQ-Q12", quoteNo:"Q-2026-0068", dealerCode:"HYI", dealerName:"หาดใหญ่สตีลกรุ๊ป",  customer:"บ.หาดใหญ่อุตสาหกรรม",   valueNum:480000,  discountPct:0,  status:"draft",            createdAt:"10 พ.ค. 2569",  salesperson:"พิมพ์ ท.",     productLine:"งานตามแบบของลูกค้า"    },
-  { id:"HQ-Q13", quoteNo:"Q-2026-0065", dealerCode:"NSN", dealerName:"นครสวรรค์เอ็นจิเนียริ่ง", customer:"เทศบาลเมืองนครสวรรค์",  valueNum:900000,  discountPct:0,  status:"sent_to_client",             createdAt:"5 พ.ค. 2569",   salesperson:"ธีรพล อ.",    productLine:"อาคารสำเร็จรูปทุกประเภท"    },
-  { id:"HQ-Q14", quoteNo:"Q-2026-0062", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.เอสทีพี โฮลดิ้ง",     valueNum:1900000, discountPct:4,  status:"won",              createdAt:"1 พ.ค. 2569",   salesperson:"ประภาส ร.",    productLine:"อาคารสำเร็จรูปทุกประเภท"    },
+  { id:"HQ-Q13", quoteNo:"Q-2026-0065", dealerCode:"NSN", dealerName:"นครสวรรค์เอ็นจิเนียริ่ง", customer:"เทศบาลเมืองนครสวรรค์",  valueNum:900000,  discountPct:0,  status:"sent_to_client",             createdAt:"5 พ.ค. 2569",   salesperson:"ธีรพล อ.",    productLine:"อาคารสำนักงาน"    },
+  { id:"HQ-Q14", quoteNo:"Q-2026-0062", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.เอสทีพี โฮลดิ้ง",     valueNum:1900000, discountPct:4,  status:"won",              createdAt:"1 พ.ค. 2569",   salesperson:"ประภาส ร.",    productLine:"อาคารสำนักงาน"    },
   { id:"HQ-Q15", quoteNo:"Q-2026-0058", dealerCode:"CNX", dealerName:"เชียงใหม่สตีลบิลด์", customer:"กลุ่มเกษตรลำพูน",       valueNum:2900000, discountPct:9,  status:"lost",             createdAt:"20 เม.ย. 2569", salesperson:"วิภา ป.",      productLine:"งานตามแบบของลูกค้า"    },
   { id:"HQ-Q16", quoteNo:"Q-2026-0055", dealerCode:"CRI", dealerName:"เชียงรายสตรัคเจอร์",  customer:"ม.ราชภัฏเชียงราย",       valueNum:4900000, discountPct:7,  status:"draft",            createdAt:"15 เม.ย. 2569", salesperson:"สุชาติ ม.",    productLine:"งานตามแบบของลูกค้า"    },
-  { id:"HQ-Q17", quoteNo:"Q-2026-0111", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.ระยองยานยนต์",         valueNum:3300000, discountPct:6,  status:"sent_to_client",             createdAt:"25 มิ.ย. 2569", salesperson:"สมชาย ว.",     productLine:"งานตามแบบของลูกค้า"    },
-  { id:"HQ-Q18", quoteNo:"Q-2026-0093", dealerCode:"AYA", dealerName:"อยุธยาเมทัลบิลด์",   customer:"บ.โรจนะอินดัสทรี",        valueNum:6400000, discountPct:5,  status:"sent_to_client",  createdAt:"26 มิ.ย. 2569", salesperson:"กมล พ.",       productLine:"โรงงาน"  },
+  { id:"HQ-Q17", quoteNo:"Q-2026-0111", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.ระยองยานยนต์",         valueNum:3300000, discountPct:6,  status:"sent_to_client",             createdAt:"25 มิ.ย. 2569", salesperson:"สมชาย ว.",     productLine:"งานโครงสร้างพิเศษ"    },
+  { id:"HQ-Q18", quoteNo:"Q-2026-0093", dealerCode:"AYA", dealerName:"อยุธยาเมทัลบิลด์",   customer:"บ.โรจนะอินดัสทรี",        valueNum:6400000, discountPct:5,  status:"sent_to_client",  createdAt:"26 มิ.ย. 2569", salesperson:"กมล พ.",       productLine:"โรงงานผลิตเหล็ก"  },
   { id:"HQ-Q19", quoteNo:"Q-2026-0090", dealerCode:"AYA", dealerName:"อยุธยาเมทัลบิลด์",   customer:"หจก. บางปะอินโลจิสติกส์",  valueNum:2700000, discountPct:8,  status:"viewed",          createdAt:"23 มิ.ย. 2569", salesperson:"กมล พ.",       productLine:"โกดังสำเร็จรูป" },
-  { id:"HQ-Q20", quoteNo:"Q-2026-0084", dealerCode:"AYA", dealerName:"อยุธยาเมทัลบิลด์",   customer:"บ.วังน้อยฟู้ดส์",          valueNum:4100000, discountPct:4,  status:"won",             createdAt:"9 มิ.ย. 2569",  salesperson:"อรทัย บ.",     productLine:"โรงงาน"  },
-  { id:"HQ-Q21", quoteNo:"Q-2026-0088", dealerCode:"KKN", dealerName:"ขอนแก่นโครงเหล็ก",  customer:"บ.อีสานแดรี่",             valueNum:3900000, discountPct:6,  status:"sent_to_client",  createdAt:"21 มิ.ย. 2569", salesperson:"ชูชัย ก.",     productLine:"โรงงาน"  },
+  { id:"HQ-Q20", quoteNo:"Q-2026-0084", dealerCode:"AYA", dealerName:"อยุธยาเมทัลบิลด์",   customer:"บ.วังน้อยฟู้ดส์",          valueNum:4100000, discountPct:4,  status:"won",             createdAt:"9 มิ.ย. 2569",  salesperson:"อรทัย บ.",     productLine:"โรงงานอาหาร"  },
+  { id:"HQ-Q21", quoteNo:"Q-2026-0088", dealerCode:"KKN", dealerName:"ขอนแก่นโครงเหล็ก",  customer:"บ.อีสานแดรี่",             valueNum:3900000, discountPct:6,  status:"sent_to_client",  createdAt:"21 มิ.ย. 2569", salesperson:"ชูชัย ก.",     productLine:"โรงงานอาหาร"  },
   { id:"HQ-Q22", quoteNo:"Q-2026-0081", dealerCode:"KKN", dealerName:"ขอนแก่นโครงเหล็ก",  customer:"สหกรณ์โคนมขอนแก่น",       valueNum:2150000, discountPct:5,  status:"won",             createdAt:"4 มิ.ย. 2569",  salesperson:"ชูชัย ก.",     productLine:"โกดังสำเร็จรูป" },
   { id:"HQ-Q23", quoteNo:"Q-2026-0071", dealerCode:"KKN", dealerName:"ขอนแก่นโครงเหล็ก",  customer:"เทศบาลนครขอนแก่น",        valueNum:1750000, discountPct:0,  status:"viewed",          createdAt:"16 พ.ค. 2569",  salesperson:"มณีรัตน์ ศ.",  productLine:"อาคารสำเร็จรูปทุกประเภท"    },
-  { id:"HQ-Q24", quoteNo:"Q-2026-0087", dealerCode:"UBN", dealerName:"อุบลสตีลกรุ๊ป",      customer:"บ.อุบลไรซ์มิลล์",          valueNum:2900000, discountPct:7,  status:"sent_to_client",  createdAt:"19 มิ.ย. 2569", salesperson:"ประวิทย์ ห.",  productLine:"โกดังสำเร็จรูป" },
-  { id:"HQ-Q25", quoteNo:"Q-2026-0076", dealerCode:"UBN", dealerName:"อุบลสตีลกรุ๊ป",      customer:"หจก. วารินฟาร์ม",          valueNum:1450000, discountPct:3,  status:"won",             createdAt:"27 พ.ค. 2569",  salesperson:"ประวิทย์ ห.",  productLine:"โกดังสำเร็จรูป" },
+  { id:"HQ-Q24", quoteNo:"Q-2026-0087", dealerCode:"UBN", dealerName:"อุบลสตีลกรุ๊ป",      customer:"บ.อุบลไรซ์มิลล์",          valueNum:2900000, discountPct:7,  status:"sent_to_client",  createdAt:"19 มิ.ย. 2569", salesperson:"ประวิทย์ ห.",  productLine:"โกดังเก็บสินค้าเกษตร" },
+  { id:"HQ-Q25", quoteNo:"Q-2026-0076", dealerCode:"UBN", dealerName:"อุบลสตีลกรุ๊ป",      customer:"หจก. วารินฟาร์ม",          valueNum:1450000, discountPct:3,  status:"won",             createdAt:"27 พ.ค. 2569",  salesperson:"ประวิทย์ ห.",  productLine:"โกดังเก็บสินค้าเกษตร" },
   { id:"HQ-Q26", quoteNo:"Q-2026-0066", dealerCode:"UBN", dealerName:"อุบลสตีลกรุ๊ป",      customer:"บ.ศรีสะเกษวัสดุภัณฑ์",       valueNum:2300000, discountPct:10, status:"lost",            createdAt:"7 พ.ค. 2569",   salesperson:"ประวิทย์ ห.",  productLine:"งานตามแบบของลูกค้า"    },
-  { id:"HQ-Q27", quoteNo:"Q-2026-0094", dealerCode:"PKT", dealerName:"ภูเก็ตสตรัคเจอรัล", customer:"บ.อันดามันมารีน่า",        valueNum:5200000, discountPct:6,  status:"sent_to_client",  createdAt:"27 มิ.ย. 2569", salesperson:"ศิริพร ณ.",    productLine:"งานตามแบบของลูกค้า"    },
+  { id:"HQ-Q27", quoteNo:"Q-2026-0094", dealerCode:"PKT", dealerName:"ภูเก็ตสตรัคเจอรัล", customer:"บ.อันดามันมารีน่า",        valueNum:5200000, discountPct:6,  status:"sent_to_client",  createdAt:"27 มิ.ย. 2569", salesperson:"ศิริพร ณ.",    productLine:"งานโครงสร้างพิเศษ"    },
   { id:"HQ-Q28", quoteNo:"Q-2026-0079", dealerCode:"PKT", dealerName:"ภูเก็ตสตรัคเจอรัล", customer:"หจก. ถลางแวร์เฮาส์",       valueNum:1850000, discountPct:4,  status:"won",             createdAt:"31 พ.ค. 2569",  salesperson:"ศิริพร ณ.",    productLine:"โกดังสำเร็จรูป" },
-  { id:"HQ-Q29", quoteNo:"Q-2026-0060", dealerCode:"PKT", dealerName:"ภูเก็ตสตรัคเจอรัล", customer:"บ.ภูเก็ตรีสอร์ทกรุ๊ป",     valueNum:3400000, discountPct:12, status:"expired",         createdAt:"25 เม.ย. 2569", salesperson:"ศิริพร ณ.",    productLine:"อาคารสำเร็จรูปทุกประเภท"    },
-  { id:"HQ-Q30", quoteNo:"Q-2026-0059", dealerCode:"HYI", dealerName:"หาดใหญ่สตีลกรุ๊ป",  customer:"บ.สงขลาแคนนิ่ง",           valueNum:2600000, discountPct:9,  status:"lost",            createdAt:"22 เม.ย. 2569", salesperson:"พิมพ์ ท.",     productLine:"โรงงาน"  },
-  { id:"HQ-Q31", quoteNo:"Q-2026-0112", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",  customer:"บ.มาบตาพุดเคมิคอล",    valueNum:7200000, discountPct:3,  status:"viewed",          createdAt:"27 มิ.ย. 2569", salesperson:"สมชาย ว.",   productLine:"โรงงาน"  },
+  { id:"HQ-Q29", quoteNo:"Q-2026-0060", dealerCode:"PKT", dealerName:"ภูเก็ตสตรัคเจอรัล", customer:"บ.ภูเก็ตรีสอร์ทกรุ๊ป",     valueNum:3400000, discountPct:12, status:"expired",         createdAt:"25 เม.ย. 2569", salesperson:"ศิริพร ณ.",    productLine:"อาคารพาณิชย์"    },
+  { id:"HQ-Q30", quoteNo:"Q-2026-0059", dealerCode:"HYI", dealerName:"หาดใหญ่สตีลกรุ๊ป",  customer:"บ.สงขลาแคนนิ่ง",           valueNum:2600000, discountPct:9,  status:"lost",            createdAt:"22 เม.ย. 2569", salesperson:"พิมพ์ ท.",     productLine:"โรงงานอาหาร"  },
+  { id:"HQ-Q31", quoteNo:"Q-2026-0112", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",  customer:"บ.มาบตาพุดเคมิคอล",    valueNum:7200000, discountPct:3,  status:"viewed",          createdAt:"27 มิ.ย. 2569", salesperson:"สมชาย ว.",   productLine:"โรงงานพลาสติก"  },
   { id:"HQ-Q32", quoteNo:"Q-2026-0069", dealerCode:"CNX", dealerName:"เชียงใหม่สตีลบิลด์", customer:"บ.นอร์ทเทิร์นฟาร์ม",   valueNum:2500000, discountPct:6,  status:"expired",         createdAt:"12 พ.ค. 2569",  salesperson:"วิภา ป.",     productLine:"โกดังสำเร็จรูป" },
   { id:"HQ-Q33", quoteNo:"Q-2026-0083", dealerCode:"MST", dealerName:"แม่สอดเมทัลเวิร์ค",  customer:"บ.ชายแดนเทรดดิ้ง",     valueNum:1900000, discountPct:4,  status:"viewed",          createdAt:"7 มิ.ย. 2569",  salesperson:"อนันต์ ส.",   productLine:"อาคารสำเร็จรูปทุกประเภท"    },
-  { id:"HQ-Q34", quoteNo:"Q-2026-0074", dealerCode:"CRI", dealerName:"เชียงรายสตรัคเจอร์", customer:"บ.แม่สายอิมปอร์ต",     valueNum:3300000, discountPct:8,  status:"lost",            createdAt:"20 พ.ค. 2569",  salesperson:"เกรียงไกร จ.", productLine:"โรงงาน"  },
+  { id:"HQ-Q34", quoteNo:"Q-2026-0074", dealerCode:"CRI", dealerName:"เชียงรายสตรัคเจอร์", customer:"บ.แม่สายอิมปอร์ต",     valueNum:3300000, discountPct:8,  status:"lost",            createdAt:"20 พ.ค. 2569",  salesperson:"เกรียงไกร จ.", productLine:"โรงงานอิเล็กทรอนิกส์"  },
   { id:"HQ-Q35", quoteNo:"Q-2026-0113", dealerCode:"AYA", dealerName:"อยุธยาเมทัลบิลด์",   customer:"บ.บ้านแพนอุตสาหกรรม",  valueNum:5600000, discountPct:5,  status:"draft",           createdAt:"28 มิ.ย. 2569", salesperson:"อรทัย บ.",    productLine:"โรงงาน"  },
   { id:"HQ-Q36", quoteNo:"Q-2026-0064", dealerCode:"KKN", dealerName:"ขอนแก่นโครงเหล็ก",  customer:"หจก. น้ำพองวัสดุ",      valueNum:1250000, discountPct:2,  status:"won",             createdAt:"2 พ.ค. 2569",   salesperson:"มณีรัตน์ ศ.",  productLine:"โกดังสำเร็จรูป" },
 ];
@@ -965,13 +1026,13 @@ export const pipelineDeals: PipelineDealMock[] = [
     files: [],
     tasks: [
       { id: 1, text: "โทรหาลูกค้าครั้งแรก",    done: true  },
-      { id: 2, text: "ส่งแคตตาล็อกสินค้า",  done: true  },
+      { id: 2, text: "ส่งแม่แบบให้ลูกค้า",  done: true  },
       { id: 3, text: "นัดประชุมออนไลน์",        done: false },
     ],
     activities: [
       { id: 1, type: "deal_created",  text: "สร้างโอกาสการขายใหม่", timestamp: "2026-06-20T09:00:00" },
       { id: 2, type: "task_done",     text: "เสร็จงาน: โทรหาลูกค้าครั้งแรก", timestamp: "2026-06-20T10:30:00" },
-      { id: 3, type: "task_done",     text: "เสร็จงาน: ส่งแคตตาล็อกสินค้า", timestamp: "2026-06-21T11:00:00" },
+      { id: 3, type: "task_done",     text: "เสร็จงาน: ส่งแม่แบบให้ลูกค้า", timestamp: "2026-06-21T11:00:00" },
       { id: 4, type: "stage_change",  text: "ย้ายขั้นตอน → ติดต่อแล้ว", timestamp: "2026-06-21T11:05:00" },
     ],
   },

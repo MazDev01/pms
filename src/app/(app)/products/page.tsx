@@ -95,67 +95,87 @@ export default function DealerProductsPage() {
           {filtered.map(p => (
             <div
               key={p.id}
-              className="card"
+              className="card tpl-card"
               role="button"
               tabIndex={0}
               onClick={() => setViewP(p)}
               onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewP(p); } }}
               style={{ display: "flex", flexDirection: "column", overflow: "hidden", cursor: "pointer" }}
             >
-              {/* รูป placeholder (CI-styled) */}
+              {/* ── Hero: ไทล์โลโก้ + ป้ายจำนวนแม่แบบย่อย ── */}
               <div
                 style={{
-                  height: 150,
-                  background: "linear-gradient(135deg, #dce5f0 0%, #f3f5f8 100%)",
+                  position: "relative", height: 132,
+                  background: "#f0f4f9",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  borderBottom: `1px solid ${BORDER}`,
+                  borderBottom: `1px solid ${BORDER}`, overflow: "hidden",
                 }}
               >
-                <Building2 size={40} style={{ color: PRIMARY, opacity: 0.55 }} />
+                {/* ลายเส้นจาง */}
+                <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#00336610 1px, transparent 1px), linear-gradient(90deg, #00336610 1px, transparent 1px)", backgroundSize: "22px 22px", opacity: 0.5 }} />
+                <div className="tpl-hero" style={{ width: 62, height: 62, borderRadius: 16, background: "#fff", border: `1px solid ${BORDER}`, boxShadow: "0 6px 16px rgba(0,51,102,.12)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+                  <Building2 size={30} style={{ color: PRIMARY }} />
+                </div>
+                {p.subtypes && p.subtypes.length > 0 && (
+                  <span style={{ position: "absolute", top: 12, right: 12, fontSize: "0.62rem", fontWeight: 700, color: PRIMARY, background: "rgba(255,255,255,.85)", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px", backdropFilter: "blur(2px)" }}>
+                    {p.subtypes.length} แม่แบบย่อย
+                  </span>
+                )}
               </div>
 
               {/* เนื้อหา */}
-              <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-                <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL, lineHeight: 1.35 }}>
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 9, flex: 1 }}>
+                <div style={{ fontSize: "1.02rem", fontWeight: 800, color: STEEL, lineHeight: 1.3 }}>
                   {p.name}
                 </div>
 
-                {/* รายละเอียด */}
-                <div style={{ fontSize: "0.78rem", color: MUTED, lineHeight: 1.5, flex: 1 }}>
+                {/* รายละเอียด (2 บรรทัด) */}
+                <div className="tpl-clamp2" style={{ fontSize: "0.78rem", color: MUTED, lineHeight: 1.5, minHeight: "2.34em" }}>
                   {p.spec}
                 </div>
 
-                {/* ราคากลาง (HQ-managed / read-only) */}
-                <div style={{ marginTop: 2 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: "0.66rem", color: MUTED, fontWeight: 700 }}>ราคากลาง</span>
-                    <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(p.price)}</span>
-                    <span style={{ fontSize: "0.74rem", color: MUTED }}>/ {p.unit}</span>
+                {/* แม่แบบย่อย */}
+                {p.subtypes && p.subtypes.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {p.subtypes.map(s => (
+                      <span key={s} style={{ fontSize: "0.68rem", fontWeight: 600, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 7, padding: "3px 9px" }}>{s}</span>
+                    ))}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                    <Lock size={10} style={{ color: MUTED, flexShrink: 0 }} />
-                    <span style={{ fontSize: "0.64rem", color: MUTED }}>กำหนดโดยสำนักงานใหญ่ · อ่านอย่างเดียว</span>
-                  </div>
-                </div>
+                )}
 
-                {/* วันที่มีผล (read-only) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <CalendarClock size={12} style={{ color: MUTED }} />
-                  <span style={{ fontSize: "0.7rem", color: MUTED }}>มีผล {p.effectiveDate}</span>
+                {/* เส้นคั่น */}
+                <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: "auto", paddingTop: 12 }}>
+                  {/* ราคากลาง (HQ-managed / read-only) */}
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: "0.62rem", color: MUTED, fontWeight: 700, marginBottom: 1 }}>ราคากลาง</div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                        <span style={{ fontSize: "1.28rem", fontWeight: 800, color: PRIMARY, letterSpacing: "-0.01em" }}>{fmtMoney(p.price)}</span>
+                        <span style={{ fontSize: "0.74rem", color: MUTED }}>/ {p.unit}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: MUTED, fontSize: "0.66rem", whiteSpace: "nowrap" }}>
+                      <CalendarClock size={11} /> {p.effectiveDate}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5 }}>
+                    <Lock size={10} style={{ color: MUTED, flexShrink: 0 }} />
+                    <span style={{ fontSize: "0.63rem", color: MUTED }}>กำหนดโดยสำนักงานใหญ่ · อ่านอย่างเดียว</span>
+                  </div>
                 </div>
 
                 {/* ปุ่ม */}
-                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <div style={{ display: "flex", gap: 7, marginTop: 4 }}>
                   <button onClick={e => { e.stopPropagation(); setViewP(p); }} className="btn btn-secondary btn-sm" style={{ flex: 1, color: STEEL }}>
-                    <FileText size={13} /> ดูรายละเอียด
+                    <FileText size={13} /> รายละเอียด
                   </button>
-                  <button onClick={e => { e.stopPropagation(); downloadSpec(p); }} className="btn btn-secondary btn-sm" style={{ flex: 1, color: STEEL }}>
-                    <Download size={13} /> ดาวน์โหลด
+                  <button onClick={e => { e.stopPropagation(); downloadSpec(p); }} className="btn btn-secondary btn-sm" title="ดาวน์โหลด" style={{ width: 40, padding: 0, color: STEEL }}>
+                    <Download size={14} />
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); setHistoryP(p); }} className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 40, padding: 0, color: STEEL }}>
+                    <History size={14} />
                   </button>
                 </div>
-                <button onClick={e => { e.stopPropagation(); setHistoryP(p); }} className="btn btn-secondary btn-sm" style={{ color: STEEL, justifyContent: "center" }}>
-                  <History size={13} /> ดูประวัติราคา
-                </button>
                 <button onClick={e => { e.stopPropagation(); router.push("/quotations"); }} className="btn btn-primary btn-sm" style={{ justifyContent: "center" }}>
                   <FilePlus2 size={13} /> สร้างใบเสนอราคา
                 </button>

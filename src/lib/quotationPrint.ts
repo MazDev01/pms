@@ -7,6 +7,13 @@ import { DEFAULT_ISSUER, ISSUER_KEY, type IssuerProfile, type QuotationMock } fr
 export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number };
 export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-2026-", runningNumber: 1001 };
 export const DOC_KEY = "dealer_document_settings";
+export const WORDMARK_KEY = "dealer_company_wordmark_v2"; // โลโก้พร้อมชื่อ (แนวนอน) → หัวเอกสาร
+
+// อ่านโลโก้พร้อมชื่อของตัวแทน (ถ้ามี) มาแสดงบนหัวใบเสนอราคา
+export function loadWordmark(): string {
+  if (typeof window === "undefined") return "";
+  try { return localStorage.getItem(WORDMARK_KEY) || ""; } catch { return ""; }
+}
 
 export type PrintCustomer = { company?: string; name?: string; phone?: string; province?: string; email?: string };
 
@@ -28,7 +35,7 @@ function esc(s: unknown) { return String(s ?? "").replace(/[&<>"]/g, c => (({ "&
 function fmtDate(d: string) { if (!d || d === "—") return "—"; const [y, m, day] = d.split("-"); const mo = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m) - 1]} ${parseInt(y) + 543}`; }
 
 // สร้าง HTML ใบเสนอราคา A4 (เต็มรูปแบบ — หัวกระดาษ/คู่สัญญา/ตาราง/สรุป VAT/เงื่อนไข/ลายเซ็น+ตรา)
-export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC) {
+export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC, wordmark = "") {
   const n = (v: number) => Number(v || 0).toLocaleString("th-TH");
   const subtotal = q.totalValue;
   const vatPct = typeof doc.vatPercent === "number" ? doc.vatPercent : 7;
@@ -44,6 +51,7 @@ export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust
 body{font-family:'Sarabun','Tahoma',sans-serif;color:#2D2D2D;font-size:13px;line-height:1.5;background:#f3f4f6}
 .sheet{width:210mm;min-height:297mm;margin:12px auto;padding:16mm 14mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12)}
 .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #003366;padding-bottom:14px}
+.issuer-logo{max-height:54px;max-width:240px;object-fit:contain;display:block;margin-bottom:4px}
 .issuer-name{font-size:20px;font-weight:800;color:#003366}
 .issuer-meta{font-size:11px;color:#555;margin-top:4px;white-space:pre-line}
 .doc-title{text-align:right}
@@ -76,7 +84,9 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 <div class="sheet">
   <div class="top">
     <div>
-      <div class="issuer-name">${esc(issuer.company)}</div>
+      ${wordmark
+        ? `<img class="issuer-logo" src="${esc(wordmark)}" alt="${esc(issuer.company)}"/>`
+        : `<div class="issuer-name">${esc(issuer.company)}</div>`}
       <div class="issuer-meta">${esc(issuerMeta)}</div>
     </div>
     <div class="doc-title">
@@ -140,7 +150,7 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 // พิมพ์ใบเสนอราคา — โหลด issuer + doc จาก localStorage เอง แล้วเปิดหน้าต่างพิมพ์
 // ใช้ตัวนี้เพื่อความสม่ำเสมอ (VAT/ตรา/ลายเซ็น มาจากการตั้งค่าจริงเสมอ)
 export function printQuotation(q: QuotationMock, cust?: PrintCustomer) {
-  const html = buildQuotationHTML(q, loadIssuer(), cust, loadDoc());
+  const html = buildQuotationHTML(q, loadIssuer(), cust, loadDoc(), loadWordmark());
   const w = window.open("", "_blank"); if (!w) return;
   w.document.write(html); w.document.close();
 }

@@ -6,6 +6,7 @@ import {
   Upload, UserCheck, FileText, Info, ShieldCheck, Lock, ImagePlus,
 } from "lucide-react";
 import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, LOST_REASONS, type ResponsiblePerson } from "@/lib/mock";
+import { fileToResizedDataURL } from "@/lib/imageResize";
 
 type SettingTab = "company" | "documents" | "persons" | "rules";
 
@@ -19,8 +20,9 @@ const TABS: { key: SettingTab; label: string; icon: React.ReactNode }[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPANY PROFILE TAB
 // ─────────────────────────────────────────────────────────────────────────────
-const COMPANY_KEY = "dealer_issuer_profile_v2"; // v2 = รีเซ็ตข้อมูลเดโมเดิม
-const LOGO_KEY    = "dealer_company_logo_v2";
+const COMPANY_KEY   = "dealer_issuer_profile_v2"; // v2 = รีเซ็ตข้อมูลเดโมเดิม
+const LOGO_KEY      = "dealer_company_logo_v2";      // โลโก้สัญลักษณ์ (ไอคอน) → แถบเมนู
+const WORDMARK_KEY  = "dealer_company_wordmark_v2";  // โลโก้พร้อมชื่อ (แนวนอน) → เอกสาร/ใบเสนอราคา
 type CompanyProfile = { company: string; address: string; phone: string; email: string; website: string; taxId: string };
 // ข้อมูลบริษัทดีลเลอร์เริ่มต้น (ตัวอย่างสมจริง — ไม่ใช่ Benjamin)
 const COMPANY_DEFAULT: CompanyProfile = {
@@ -34,15 +36,19 @@ const COMPANY_DEFAULT: CompanyProfile = {
 
 function CompanyTab() {
   const [form, setForm] = useState<CompanyProfile>(COMPANY_DEFAULT);
-  const [logo, setLogo] = useState<string>("");
+  const [logo, setLogo] = useState<string>("");           // สัญลักษณ์ (ไอคอน)
+  const [wordmark, setWordmark] = useState<string>("");   // พร้อมชื่อ (แนวนอน)
   const [saved, setSaved]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const wordmarkRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const s = localStorage.getItem(COMPANY_KEY);
     if (s) try { setForm({ ...COMPANY_DEFAULT, ...JSON.parse(s) }); } catch {}
     const l = localStorage.getItem(LOGO_KEY);
     if (l) setLogo(l);
+    const w = localStorage.getItem(WORDMARK_KEY);
+    if (w) setWordmark(w);
   }, []);
 
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
@@ -50,17 +56,29 @@ function CompanyTab() {
     setSaved(false);
   }
   function save() {
-    localStorage.setItem(COMPANY_KEY, JSON.stringify(form));
-    if (logo) localStorage.setItem(LOGO_KEY, logo);
+    try {
+      localStorage.setItem(COMPANY_KEY, JSON.stringify(form));
+      if (logo) localStorage.setItem(LOGO_KEY, logo);
+      else localStorage.removeItem(LOGO_KEY);
+      if (wordmark) localStorage.setItem(WORDMARK_KEY, wordmark);
+      else localStorage.removeItem(WORDMARK_KEY);
+    } catch {
+      alert("บันทึกไม่สำเร็จ — รูปโลโก้มีขนาดใหญ่เกินไป กรุณาใช้รูปที่เล็กลง");
+      return;
+    }
+    window.dispatchEvent(new Event("bpms-company-updated")); // ให้ Sidebar อัปเดตชื่อ+โลโก้ทันที
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
-  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => { setLogo(ev.target?.result as string); setSaved(false); };
-    reader.readAsDataURL(file);
+    setLogo(await fileToResizedDataURL(file, 256)); setSaved(false); // ย่อก่อนเก็บ กัน quota เต็ม
+  }
+  async function uploadWordmark(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWordmark(await fileToResizedDataURL(file, 480)); setSaved(false); // แนวนอน — กว้างกว่า
   }
   const initials = (form.company || "บริษัท").trim().slice(0, 2).toUpperCase();
 
@@ -85,29 +103,63 @@ function CompanyTab() {
           </div>
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <label className="form-label">โลโก้บริษัท</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 80, height: 80, borderRadius: 12,
-              background: logo ? "transparent" : "#003366", border: "2px dashed #e5e7eb",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              overflow: "hidden", flexShrink: 0 }}>
-              {logo
-                ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
-            </div>
-            <div>
-              <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
-                <Upload size={13} /> อัปโหลดโลโก้
-              </button>
-              {logo && (
-                <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
-                  onClick={() => { setLogo(""); localStorage.removeItem(LOGO_KEY); }}>
-                  ลบ
+        {/* โลโก้ 2 แบบ — สัญลักษณ์ (ไอคอน) + พร้อมชื่อ (แนวนอน) */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px,100%), 1fr))", gap: 18, marginBottom: 22 }}>
+          {/* สัญลักษณ์ */}
+          <div>
+            <label className="form-label">โลโก้สัญลักษณ์ (ไอคอน)</label>
+            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginBottom: 8 }}>ใช้ในแถบเมนูและพื้นที่สี่เหลี่ยม</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 80, height: 80, borderRadius: 12,
+                background: logo ? "#fff" : "#003366", border: "2px dashed #e5e7eb",
+                display: "flex", alignItems: "center", justifyContent: "center", padding: logo ? 6 : 0,
+                overflow: "hidden", flexShrink: 0 }}>
+                {logo
+                  ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
+              </div>
+              <div>
+                <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
+                  <Upload size={13} /> อัปโหลด
                 </button>
-              )}
-              <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 5 }}>PNG, JPG · แนะนำ 200×200 px</div>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
+                {logo && (
+                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
+                    onClick={() => { setLogo(""); localStorage.removeItem(LOGO_KEY); window.dispatchEvent(new Event("bpms-company-updated")); }}>
+                    ลบ
+                  </button>
+                )}
+                <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 5 }}>PNG, JPG · แนะนำ 200×200 px</div>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
+              </div>
+            </div>
+          </div>
+
+          {/* พร้อมชื่อ (แนวนอน) */}
+          <div>
+            <label className="form-label">โลโก้พร้อมชื่อบริษัท (แนวนอน)</label>
+            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginBottom: 8 }}>ใช้บนหัวใบเสนอราคาและเอกสาร</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 168, height: 80, borderRadius: 12,
+                background: "#fff", border: "2px dashed #e5e7eb",
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 8,
+                overflow: "hidden", flexShrink: 0 }}>
+                {wordmark
+                  ? <img src={wordmark} alt="wordmark" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                  : <span style={{ color: "#c7ccd3", fontWeight: 700, fontSize: "0.72rem", textAlign: "center" }}>ยังไม่มีโลโก้พร้อมชื่อ</span>}
+              </div>
+              <div>
+                <button className="btn btn-secondary btn-sm" onClick={() => wordmarkRef.current?.click()}>
+                  <Upload size={13} /> อัปโหลด
+                </button>
+                {wordmark && (
+                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
+                    onClick={() => { setWordmark(""); localStorage.removeItem(WORDMARK_KEY); setSaved(false); }}>
+                    ลบ
+                  </button>
+                )}
+                <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 5 }}>PNG พื้นโปร่งใส · แนะนำ 480×160 px</div>
+                <input ref={wordmarkRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadWordmark} />
+              </div>
             </div>
           </div>
         </div>
@@ -184,12 +236,10 @@ function ImageUploadBox({
   label, hint, value, onChange,
 }: { label: string; hint: string; value: string; onChange: (v: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
-  function upload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => onChange(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    onChange(await fileToResizedDataURL(file, 320)); // ย่อก่อนเก็บ กัน quota เต็ม
   }
   return (
     <div>
@@ -400,8 +450,8 @@ function PersonsTab() {
     localStorage.setItem(RP_STORAGE_KEY, JSON.stringify(updated));
   }
   function startEdit(p: ResponsiblePerson) {
-    setEditId(p.id); setEditName(p.name); setEditTitle(p.title);
-    setEditPhone(p.phone); setEditEmail(p.email); setEditAvatar(p.avatar);
+    setEditId(p.id); setEditName(p.name ?? ""); setEditTitle(p.title ?? "");
+    setEditPhone(p.phone ?? ""); setEditEmail(p.email ?? ""); setEditAvatar(p.avatar);
   }
   function saveEdit() {
     save(persons.map(p => p.id === editId
@@ -431,31 +481,45 @@ function PersonsTab() {
         <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> เพิ่ม</button>
       </div>
       <div className="card-body" style={{ paddingTop: 0 }}>
-        {/* ── ป๊อปอัพเพิ่มผู้รับผิดชอบ ── */}
-        {adding && (() => {
-          const closeAdd = () => { setAdding(false); setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); };
+        {/* ── ป๊อปอัพเพิ่ม/แก้ไขผู้รับผิดชอบ (ใช้ modal เดียวกัน) ── */}
+        {(adding || editId !== null) && (() => {
+          const isEdit = editId !== null;
+          // coerce เป็นสตริงเสมอ — กัน input controlled/uncontrolled สลับกัน
+          const name = (isEdit ? editName : newName) ?? "";
+          const title = (isEdit ? editTitle : newTitle) ?? "";
+          const phone = (isEdit ? editPhone : newPhone) ?? "";
+          const email = (isEdit ? editEmail : newEmail) ?? "";
+          const avatar = isEdit ? editAvatar : newAvatar;
+          const setName = isEdit ? setEditName : setNewName;
+          const setTitle = isEdit ? setEditTitle : setNewTitle;
+          const setPhone = isEdit ? setEditPhone : setNewPhone;
+          const setEmail = isEdit ? setEditEmail : setNewEmail;
+          const setAvatar = isEdit ? setEditAvatar : setNewAvatar;
+          const submit = isEdit ? saveEdit : addPerson;
+          const close = () => { if (isEdit) setEditId(null); else { setAdding(false); setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); } };
+          const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && name.trim()) submit(); };
           return (
-            <div onClick={closeAdd} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
+            <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
               display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
               <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
                 overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
                 {/* header */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", background: "#003366" }}>
                   <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
-                    <Plus size={17} strokeWidth={2.5} /> เพิ่มผู้รับผิดชอบ
+                    {isEdit ? <><Pencil size={16} strokeWidth={2.5} /> แก้ไขผู้รับผิดชอบ</> : <><Plus size={17} strokeWidth={2.5} /> เพิ่มผู้รับผิดชอบ</>}
                   </div>
-                  <button onClick={closeAdd} style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(255,255,255,.2)",
+                  <button onClick={close} style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(255,255,255,.2)",
                     background: "rgba(255,255,255,.1)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
                 </div>
                 {/* body */}
                 <div style={{ padding: "24px 22px" }}>
                   {/* avatar upload — กลาง */}
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-                    <label title="เพิ่มรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
+                    <label title="เพิ่ม/เปลี่ยนรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
                       <input type="file" accept="image/*" style={{ display: "none" }}
-                        onChange={e => { readAvatar(e.target.files?.[0], url => setNewAvatar(url)); e.target.value = ""; }} />
-                      {newAvatar
-                        ? <img src={newAvatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: "3px solid #003366" }} />
+                        onChange={e => { readAvatar(e.target.files?.[0], url => setAvatar(url)); e.target.value = ""; }} />
+                      {avatar
+                        ? <img src={avatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: "3px solid #003366" }} />
                         : <span style={{ width: 84, height: 84, borderRadius: "50%", border: "2px dashed #c7ccd3", background: "#f8f9fb",
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: "#9ca3af" }}>
                             <ImagePlus size={22} /><span style={{ fontSize: "0.6rem" }}>เพิ่มรูป</span>
@@ -467,33 +531,33 @@ function PersonsTab() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <div style={{ gridColumn: "1/-1" }}>
                       <label className="form-label">ชื่อ-นามสกุล *</label>
-                      <input className="form-input" value={newName} autoFocus onChange={e => setNewName(e.target.value)}
-                        placeholder="เช่น สมชาย เชียงใหม่" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                      <input className="form-input" value={name} autoFocus onChange={e => setName(e.target.value)}
+                        placeholder="เช่น สมชาย เชียงใหม่" onKeyDown={onEnter} />
                     </div>
                     <div>
                       <label className="form-label">ตำแหน่ง</label>
-                      <input className="form-input" value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                        placeholder="เจ้าหน้าที่ขาย" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                      <input className="form-input" value={title} onChange={e => setTitle(e.target.value)}
+                        placeholder="เจ้าหน้าที่ขาย" onKeyDown={onEnter} />
                     </div>
                     <div>
                       <label className="form-label">โทรศัพท์</label>
-                      <input className="form-input" value={newPhone} onChange={e => setNewPhone(e.target.value)}
-                        placeholder="08x-xxx-xxxx" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                      <input className="form-input" value={phone} onChange={e => setPhone(e.target.value)}
+                        placeholder="08x-xxx-xxxx" onKeyDown={onEnter} />
                     </div>
                     <div style={{ gridColumn: "1/-1" }}>
                       <label className="form-label">อีเมล</label>
-                      <input className="form-input" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
-                        placeholder="name@dealer.co.th" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                      <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)}
+                        placeholder="name@dealer.co.th" onKeyDown={onEnter} />
                     </div>
                   </div>
                 </div>
                 {/* footer */}
                 <div style={{ padding: "14px 22px", borderTop: "1px solid #e5e7eb", background: "#fafafa",
                   display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button className="btn btn-secondary btn-md" onClick={closeAdd}>ยกเลิก</button>
-                  <button className="btn btn-primary btn-md" disabled={!newName.trim()}
-                    style={!newName.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                    onClick={addPerson}><Check size={14} strokeWidth={2.5} /> บันทึก</button>
+                  <button className="btn btn-secondary btn-md" onClick={close}>ยกเลิก</button>
+                  <button className="btn btn-primary btn-md" disabled={!name.trim()}
+                    style={!name.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                    onClick={submit}><Check size={14} strokeWidth={2.5} /> บันทึก</button>
                 </div>
               </div>
             </div>
@@ -524,52 +588,19 @@ function PersonsTab() {
               {persons.map(p => (
                 <tr key={p.id}>
                   <td>
-                    {editId === p.id
-                      ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <label title="เปลี่ยนรูป" style={{ flexShrink: 0, cursor: "pointer" }}>
-                            <input type="file" accept="image/*" style={{ display: "none" }}
-                              onChange={e => { readAvatar(e.target.files?.[0], url => setEditAvatar(url)); e.target.value = ""; }} />
-                            {editAvatar
-                              ? <img src={editAvatar} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", border: "2px solid #003366" }} />
-                              : <span style={{ width: 34, height: 34, borderRadius: "50%", border: "2px dashed #c7ccd3", background: "#fff",
-                                  display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af" }}><ImagePlus size={15} /></span>}
-                          </label>
-                          <input className="form-input" value={editName} autoFocus
-                            onChange={e => setEditName(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && saveEdit()} />
-                        </div>
-                      )
-                      : (
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          {p.avatar
-                            ? <img src={p.avatar} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0, opacity: p.active ? 1 : 0.5 }} />
-                            : <div style={{ width: 34, height: 34, borderRadius: "50%", background: p.active ? "#003366" : "#9ca3af",
-                                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <span style={{ color: "#fff", fontSize: "0.72rem", fontWeight: 800 }}>{p.name.charAt(0)}</span>
-                              </div>}
-                          <span style={{ fontWeight: 600, color: p.active ? "#2D2D2D" : "#9ca3af" }}>{p.name}</span>
-                        </div>
-                      )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {p.avatar
+                        ? <img src={p.avatar} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0, opacity: p.active ? 1 : 0.5 }} />
+                        : <div style={{ width: 34, height: 34, borderRadius: "50%", background: p.active ? "#003366" : "#9ca3af",
+                            flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ color: "#fff", fontSize: "0.72rem", fontWeight: 800 }}>{p.name.charAt(0)}</span>
+                          </div>}
+                      <span style={{ fontWeight: 600, color: p.active ? "#2D2D2D" : "#9ca3af" }}>{p.name}</span>
+                    </div>
                   </td>
-                  <td>
-                    {editId === p.id
-                      ? <input className="form-input" value={editTitle} onChange={e => setEditTitle(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && saveEdit()} />
-                      : <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.title}</span>}
-                  </td>
-                  <td>
-                    {editId === p.id
-                      ? <input className="form-input" value={editPhone} onChange={e => setEditPhone(e.target.value)}
-                          placeholder="โทรศัพท์" onKeyDown={e => e.key === "Enter" && saveEdit()} />
-                      : <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.phone || "—"}</span>}
-                  </td>
-                  <td>
-                    {editId === p.id
-                      ? <input className="form-input" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-                          placeholder="อีเมล" onKeyDown={e => e.key === "Enter" && saveEdit()} />
-                      : <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.email || "—"}</span>}
-                  </td>
+                  <td><span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.title}</span></td>
+                  <td><span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.phone || "—"}</span></td>
+                  <td><span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.email || "—"}</span></td>
                   <td>
                     <button onClick={() => toggleActive(p.id)} className="badge"
                       style={{ border: "none", cursor: "pointer", fontFamily: "inherit",
@@ -581,12 +612,7 @@ function PersonsTab() {
                     </button>
                   </td>
                   <td className="num">
-                    {editId === p.id ? (
-                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <button className="btn btn-primary btn-sm" onClick={saveEdit}><Check size={13} /> บันทึก</button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setEditId(null)}><X size={13} /></button>
-                      </div>
-                    ) : deleteConfirmId === p.id ? (
+                    {deleteConfirmId === p.id ? (
                       <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
                         <span style={{ fontSize: "0.65rem", color: "#dc2626", fontWeight: 600 }}>ยืนยันลบ?</span>
                         <button className="btn btn-danger btn-sm" onClick={() => deletePerson(p.id)}>ลบ</button>
@@ -722,7 +748,7 @@ function RulesTab() {
             background: "#f8fafc", border: "1px solid #eef1f5", borderLeft: "3px solid #003366", borderRadius: 10 }}>
             <Info size={15} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
             <div style={{ fontSize: "0.78rem", color: "#374151", lineHeight: 1.5 }}>
-              <strong style={{ color: "#003366" }}>ไปป์ไลน์เริ่มต้น</strong> — ทุกดีลใช้เส้นทางการขายมาตรฐาน
+              <strong style={{ color: "#003366" }}>ไปป์ไลน์เริ่มต้น</strong> — ทุกโอกาสการขายใช้เส้นทางการขายมาตรฐาน
               (Lead → Won / Lost) เพียงเส้นทางเดียว · ไม่มีไปป์ไลน์อื่นให้เลือก
             </div>
           </div>
@@ -773,7 +799,7 @@ function RulesTab() {
             <Info size={15} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
             <div style={{ fontSize: "0.78rem", color: "#374151", lineHeight: 1.5 }}>
               รายการเหตุผลเหล่านี้จะแสดงเป็นตัวเลือกเมื่อ<strong style={{ color: "#003366" }}>ปิดการขายไม่สำเร็จ (Lost)</strong> ·
-              ใช้ตอนปิดดีลเป็น Lost เพื่อบันทึกสาเหตุที่เสียโอกาส
+              ใช้ตอนปิดการขายเป็น Lost เพื่อบันทึกสาเหตุที่เสียโอกาส
             </div>
           </div>
 

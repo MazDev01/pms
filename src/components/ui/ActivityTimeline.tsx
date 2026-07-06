@@ -23,7 +23,7 @@ type ActivityMeta = { icon: LucideIcon; color: string; bg: string; label: string
 const ACTIVITY_META: Record<string, ActivityMeta> = {
   call:    { icon: Phone,      color: PRIMARY,   bg: "#dce5f0", label: "โทรหา" },
   quote:   { icon: FileText,   color: "#0d9488", bg: "#d5f2ee", label: "ส่งใบเสนอราคา" },
-  meeting: { icon: Users,      color: "#7c3aed", bg: "#ede4fb", label: "นัดประชุม" },
+  meeting: { icon: Users,      color: "#4338ca", bg: "#e0e7ff", label: "นัดประชุม" },
   open:    { icon: Eye,        color: "#d97706", bg: "#fef0d9", label: "ลูกค้าเปิดอ่าน" },
   status:  { icon: GitCommit,  color: "#059669", bg: "#d5f0e3", label: "เปลี่ยนสถานะ" },
   note:    { icon: StickyNote, color: STEEL,     bg: "#eef0f3", label: "บันทึก" },

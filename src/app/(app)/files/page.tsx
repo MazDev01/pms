@@ -341,7 +341,7 @@ function PreviewBody({ f }: { f: FileMock }) {
         <div style={{
           width: "100%", maxWidth: 520, aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden",
           border: "6px solid #fff", boxShadow: "0 8px 30px rgba(0,0,0,.16)",
-          background: "linear-gradient(135deg, #dce5f0 0%, #003366 100%)",
+          background: "#003366",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
         }}>
           <Image size={56} color="rgba(255,255,255,.9)" />

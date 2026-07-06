@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { solutionProducts, MASTER_CATALOG_KEY, type SolutionProduct } from "@/lib/mock";
-import { Search, Plus, Pencil, History, TrendingUp, X, Check, Trash2, Package } from "lucide-react";
+import { Search, Plus, Pencil, History, TrendingUp, X, Check, Trash2, Building2, CalendarClock } from "lucide-react";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -17,7 +17,7 @@ const fmtBaht = (v: number) => "฿" + v.toLocaleString("th-TH");
 const TH_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 function todayTH() { const d = new Date(); return `${d.getDate()} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
-type EditForm = { name: string; spec: string; unit: string };
+type EditForm = { name: string; spec: string; unit: string; subtypes: string[] };
 
 export default function HQMasterPage() {
   const [catalog, setCatalog] = usePersistentState<SolutionProduct[]>(MASTER_CATALOG_KEY, solutionProducts);
@@ -25,7 +25,8 @@ export default function HQMasterPage() {
 
   // modals
   const [editing, setEditing]   = useState<SolutionProduct | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", spec: "", unit: "ตร.ม." });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", spec: "", unit: "ตร.ม.", subtypes: [] });
+  const [newSub, setNewSub]     = useState("");
   const [adding, setAdding]     = useState(false);
   const [addForm, setAddForm]   = useState({ name: "", spec: "", price: "", unit: "ตร.ม." });
   const [reprice, setReprice]   = useState<SolutionProduct | null>(null);
@@ -39,11 +40,16 @@ export default function HQMasterPage() {
   const avgPrice = catalog.length ? Math.round(catalog.reduce((s, p) => s + p.price, 0) / catalog.length) : 0;
 
   function openEdit(p: SolutionProduct) {
-    setEditing(p); setEditForm({ name: p.name, spec: p.spec, unit: p.unit });
+    setEditing(p); setEditForm({ name: p.name, spec: p.spec, unit: p.unit, subtypes: [...(p.subtypes ?? [])] }); setNewSub("");
+  }
+  function addSubtype() {
+    const v = newSub.trim();
+    if (!v || editForm.subtypes.includes(v)) { setNewSub(""); return; }
+    setEditForm(f => ({ ...f, subtypes: [...f.subtypes, v] })); setNewSub("");
   }
   function saveEdit() {
     if (!editing || !editForm.name.trim()) return;
-    setCatalog(prev => prev.map(p => p.id !== editing.id ? p : { ...p, name: editForm.name.trim(), spec: editForm.spec.trim(), unit: editForm.unit.trim() || "ตร.ม." }));
+    setCatalog(prev => prev.map(p => p.id !== editing.id ? p : { ...p, name: editForm.name.trim(), spec: editForm.spec.trim(), unit: editForm.unit.trim() || "ตร.ม.", subtypes: editForm.subtypes }));
     setEditing(null);
   }
   function addProduct() {
@@ -106,26 +112,48 @@ export default function HQMasterPage() {
       {/* Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(310px,1fr))", gap: 16 }}>
         {filtered.map(p => (
-          <div key={p.id} className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <span style={{ width: 38, height: 38, borderRadius: 11, background: "#dce5f0", color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Package size={18} /></span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: "0.92rem", fontWeight: 800, color: STEEL }}>{p.name}</div>
-                <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 3, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.spec}</div>
+          <div key={p.id} className="card tpl-card" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* ── Hero: ไทล์ + ป้ายจำนวนแม่แบบย่อย ── */}
+            <div style={{ position: "relative", height: 104, background: "#f0f4f9", display: "flex", alignItems: "center", justifyContent: "center", borderBottom: `1px solid ${BORDER}`, overflow: "hidden" }}>
+              <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#00336610 1px, transparent 1px), linear-gradient(90deg, #00336610 1px, transparent 1px)", backgroundSize: "22px 22px", opacity: 0.5 }} />
+              <div className="tpl-hero" style={{ width: 54, height: 54, borderRadius: 14, background: "#fff", border: `1px solid ${BORDER}`, boxShadow: "0 6px 16px rgba(0,51,102,.12)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+                <Building2 size={26} style={{ color: PRIMARY }} />
               </div>
+              {p.subtypes && p.subtypes.length > 0 && (
+                <span style={{ position: "absolute", top: 11, right: 11, fontSize: "0.62rem", fontWeight: 700, color: PRIMARY, background: "rgba(255,255,255,.85)", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px" }}>{p.subtypes.length} แม่แบบย่อย</span>
+              )}
             </div>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", paddingTop: 6, borderTop: "1px solid #f0f4f8" }}>
-              <div>
-                <span style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(p.price)}</span>
-                <span style={{ fontSize: "0.7rem", color: MUTED }}> /{p.unit}</span>
+
+            {/* ── เนื้อหา ── */}
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 9, flex: 1 }}>
+              <div style={{ fontSize: "0.98rem", fontWeight: 800, color: STEEL, lineHeight: 1.3 }}>{p.name}</div>
+              <div className="tpl-clamp2" style={{ fontSize: "0.75rem", color: MUTED, lineHeight: 1.5, minHeight: "2.25em" }}>{p.spec}</div>
+
+              {p.subtypes && p.subtypes.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {p.subtypes.map(s => (
+                    <span key={s} style={{ fontSize: "0.67rem", fontWeight: 600, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 7, padding: "3px 9px" }}>{s}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* เส้นคั่น + ราคา */}
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, marginTop: "auto", paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+                <div>
+                  <div style={{ fontSize: "0.62rem", color: MUTED, fontWeight: 700, marginBottom: 1 }}>ราคากลาง</div>
+                  <span style={{ fontSize: "1.28rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>{fmtBaht(p.price)}</span>
+                  <span style={{ fontSize: "0.72rem", color: MUTED }}> /{p.unit}</span>
+                </div>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.65rem", color: "#9ca3af", whiteSpace: "nowrap" }}><CalendarClock size={11} /> {p.effectiveDate}</span>
               </div>
-              <span style={{ fontSize: "0.64rem", color: "#9ca3af" }}>มีผล {p.effectiveDate}</span>
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEdit(p)}><Pencil size={12} /> แก้ไข</button>
-              <button className="btn btn-tint btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setReprice(p); setRpPrice(String(p.price)); }}><TrendingUp size={12} /> ปรับราคา</button>
-              <button className="btn btn-secondary btn-sm" title="ประวัติราคา" onClick={() => setHistory(p)}><History size={13} /></button>
-              <button className="btn btn-danger btn-sm" title="ลบแม่แบบ" onClick={() => setDelTarget(p)}><Trash2 size={13} /></button>
+
+              {/* ปุ่มจัดการ */}
+              <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => openEdit(p)}><Pencil size={12} /> แก้ไข</button>
+                <button className="btn btn-tint btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setReprice(p); setRpPrice(String(p.price)); }}><TrendingUp size={12} /> ปรับราคา</button>
+                <button className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 38, padding: 0, justifyContent: "center" }} onClick={() => setHistory(p)}><History size={13} /></button>
+                <button className="btn btn-danger btn-sm" title="ลบแม่แบบ" style={{ width: 38, padding: 0, justifyContent: "center" }} onClick={() => setDelTarget(p)}><Trash2 size={13} /></button>
+              </div>
             </div>
           </div>
         ))}
@@ -171,6 +199,25 @@ export default function HQMasterPage() {
               <div><label style={lbl}>ชื่อแม่แบบ *</label><input style={inp} value={editForm.name} autoFocus onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
               <div><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={editForm.spec} onChange={e => setEditForm(f => ({ ...f, spec: e.target.value }))} /></div>
               <div><label style={lbl}>หน่วย</label><input style={inp} value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} /></div>
+              {/* แม่แบบย่อย — เพิ่ม/ลบได้ (เลือกได้ในฟอร์มลูกค้าเป้าหมาย/ใบเสนอราคา) */}
+              <div>
+                <label style={lbl}>แม่แบบย่อย ({editForm.subtypes.length})</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {editForm.subtypes.length === 0 && <span style={{ fontSize: "0.72rem", color: MUTED }}>ยังไม่มีแม่แบบย่อย</span>}
+                  {editForm.subtypes.map(s => (
+                    <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.72rem", fontWeight: 600, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 7, padding: "3px 6px 3px 9px" }}>
+                      {s}
+                      <button onClick={() => setEditForm(f => ({ ...f, subtypes: f.subtypes.filter(x => x !== s) }))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 0 }}><X size={12} /></button>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input style={{ ...inp, flex: 1 }} value={newSub} placeholder="เพิ่มแม่แบบย่อย เช่น โรงงานอาหาร"
+                    onChange={e => setNewSub(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSubtype(); } }} />
+                  <button className="btn btn-secondary btn-md" onClick={addSubtype} style={{ flexShrink: 0 }}><Plus size={14} /> เพิ่ม</button>
+                </div>
+              </div>
               <div style={{ fontSize: "0.7rem", color: MUTED }}>ราคากลางแก้ผ่านปุ่ม "ปรับราคา" เพื่อบันทึกประวัติราคาเสมอ</div>
             </div>
             <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>

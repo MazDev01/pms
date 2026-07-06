@@ -5,8 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import { useSales } from "@/context/SalesContext";
 import {
-  dealerLeaderboard, apptTypeLabel,
-  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock,
+  dealerLeaderboard, apptTypeLabel, loadUserProfile, PROFILE_UPDATED_EVENT,
+  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile,
 } from "@/lib/mock";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu } from "lucide-react";
 import { PRIMARY, STEEL } from "@/lib/theme";
@@ -197,7 +197,20 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const { session, isHQ, logout } = useRole();
   const router = useRouter();
   const pathname = usePathname();
-  const initial = session.name.charAt(0).toUpperCase();
+
+  // โปรไฟล์ที่ผู้ใช้บันทึกไว้ (/profile) → ชื่อ/รูปบน Topbar อัปเดตทันทีเมื่อบันทึก
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  useEffect(() => {
+    const read = () => setProfile(loadUserProfile(session.dealerCode, session.name));
+    read();
+    window.addEventListener(PROFILE_UPDATED_EVENT, read);
+    window.addEventListener("storage", read);
+    return () => { window.removeEventListener(PROFILE_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
+  }, [session.dealerCode, session.name]);
+
+  const displayName = profile?.name || session.name;
+  const avatarUrl = profile?.avatar;
+  const initial = displayName.charAt(0).toUpperCase();
   const roleLabel = isHQ ? "ผู้บริหาร HQ"
     : ({ DEALER_ADMIN: "ผู้จัดการตัวแทน", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
   // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
@@ -423,7 +436,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
           {/* Notifications panel */}
           {showNotifs && (
-            <div style={{ position:"fixed", top:70, right:24, width:340, background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
+            <div style={{ position:"absolute", top:"calc(100% + 10px)", right:0, width:340, background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:`1px solid ${BORDER}` }}>
                 <span style={{ fontSize:"0.85rem", fontWeight:800, color:STEEL }}>การแจ้งเตือน</span>
                 <button onClick={markAll} style={{ fontSize:"0.7rem", color:PRIMARY, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>อ่านทั้งหมด</button>
@@ -475,15 +488,18 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           )}
         </div>
 
+        {/* เส้นคั่น */}
+        <span className="topbar-divider" aria-hidden />
+
         {/* User pill + dropdown */}
         <div ref={userRef} style={{ position:"relative" }}>
           <button className="user-chip"
             onClick={() => { setShowUser(p => !p); setShowNotifs(false); }}>
-            <div className="avatar avatar-sm" style={{ background:PRIMARY, color:"#fff" }}>
-              {initial}
-            </div>
+            {avatarUrl
+              ? <img className="avatar avatar-sm" src={avatarUrl} alt="" style={{ objectFit:"cover" }} />
+              : <div className="avatar avatar-sm" style={{ background:PRIMARY, color:"#fff" }}>{initial}</div>}
             <div style={{ textAlign:"left" }}>
-              <div style={{ fontSize:"0.76rem", fontWeight:700, color:STEEL, lineHeight:1.2 }}>{session.name}</div>
+              <div style={{ fontSize:"0.76rem", fontWeight:700, color:STEEL, lineHeight:1.2 }}>{displayName}</div>
               <div style={{ fontSize:"0.6rem", color:"#6b7280" }}>{roleLabel}</div>
             </div>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft:2, transform: showUser ? "rotate(180deg)" : "none", transition:"transform .15s" }}>
@@ -493,15 +509,17 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
           {/* User menu */}
           {showUser && (
-            <div style={{ position:"fixed", top:70, right:24, width:240, background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
+            <div style={{ position:"absolute", top:"calc(100% + 10px)", right:0, width:240, background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
               {/* Profile header */}
               <div style={{ padding:"14px 16px", borderBottom:`1px solid ${BORDER}`, display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:40, height:40, borderRadius:"50%", background:PRIMARY, display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:"1rem", fontWeight:900, color:"#fff", flexShrink:0 }}>
-                  {initial}
-                </div>
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="" style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                  : <div style={{ width:40, height:40, borderRadius:"50%", background:PRIMARY, display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:"1rem", fontWeight:900, color:"#fff", flexShrink:0 }}>
+                      {initial}
+                    </div>}
                 <div>
-                  <div style={{ fontSize:"0.85rem", fontWeight:800, color:STEEL }}>{session.name}</div>
+                  <div style={{ fontSize:"0.85rem", fontWeight:800, color:STEEL }}>{displayName}</div>
                   <div style={{ fontSize:"0.68rem", color:"#6b7280" }}>{roleLabel}</div>
                   <div style={{ fontSize:"0.63rem", color:"#9ca3af", marginTop:1 }}>{session.dealerName}</div>
                 </div>
@@ -510,7 +528,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               {/* Menu items */}
               <div style={{ padding:"6px 0" }}>
                 {[
-                  { Icon: UserCircle, label:"โปรไฟล์", href: isHQ ? "/hq/settings" : "/settings" },
+                  { Icon: UserCircle, label:"โปรไฟล์", href: "/profile" },
                   { Icon: Settings,    label:"ตั้งค่า",  href: isHQ ? "/hq/settings" : "/settings" },
                 ].map(item => (
                   <button key={item.label} onClick={() => { setShowUser(false); router.push(item.href); }}

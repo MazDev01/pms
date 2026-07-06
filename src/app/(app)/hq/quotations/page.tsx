@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { hqAllQuotations, quotationStatusLabel, quotationStatusColor, type HQQuotation, type QuotationStatus } from "@/lib/mock";
+import { useState, useMemo, useEffect } from "react";
+import { hqAllQuotations, quotationStatusLabel, quotationStatusColor, solutionProducts, mainTemplateOf, type HQQuotation, type QuotationStatus } from "@/lib/mock";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { Search, Eye, X } from "lucide-react";
@@ -33,8 +33,13 @@ const ALL_DEALERS = Array.from(
   ).entries()
 ).sort((a, b) => a[0].localeCompare(b[0]));
 
+const parentLine = (pl: string) => mainTemplateOf(pl);
+// ตัวเลือกตัวกรอง = แม่แบบหลัก (จาก catalog) + productLine อื่นที่ยังไม่อยู่ใน catalog
 const ALL_PRODUCT_LINES = Array.from(
-  new Set(hqAllQuotations.map((q) => q.productLine))
+  new Set([
+    ...solutionProducts.map((p) => p.name),
+    ...hqAllQuotations.map((q) => parentLine(q.productLine)),
+  ])
 ).sort();
 
 const STATUS_OPTIONS: { value: QuotationStatus | "all"; label: string }[] = [
@@ -51,6 +56,13 @@ export default function HQQuotationsPage() {
   const [statusFilter, setStatusFilter] = useState<HQQuotation["status"] | "all">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
   const [viewQ, setViewQ] = useState<HQQuotation | null>(null); // View → เจาะดูใบเสนอราคา (HQ Data Ownership)
+
+  // เปิดหน้าด้วย ?dealer=CODE (เช่นกดมาจากการ์ดสถิติในแดชบอร์ด) → กรองตัวแทนนั้นให้เลย
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("dealer");
+    if (code && hqAllQuotations.some(q => q.dealerCode === code)) setDealerFilter(code);
+    if (code) window.history.replaceState(null, "", "/hq/quotations");
+  }, []);
 
   // ขอบเขตของ pills/การ์ดสถานะ = ตัวแทนที่เลือก (ตัวเลือกเฉพาะหน้านี้)
   const scoped = useMemo(
@@ -86,7 +98,7 @@ export default function HQQuotationsPage() {
       list = list.filter((r) => r.status === statusFilter);
     }
     if (productFilter !== "all") {
-      list = list.filter((r) => r.productLine === productFilter);
+      list = list.filter((r) => r.productLine === productFilter || parentLine(r.productLine) === productFilter);
     }
 
     list.sort((a, b) => {

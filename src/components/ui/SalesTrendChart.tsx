@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AreaGradientChart } from "@/components/ui/Charts";
+import { LineTrendChart } from "@/components/ui/Charts";
 import { STEEL } from "@/lib/theme";
 
 // ── กราฟแนวโน้มยอดขายที่ "กำหนดช่วงเวลาได้" ในตัว (ปุ่ม inline + รีบิลด์ตามวันจริง) ──
@@ -109,11 +109,23 @@ export function SalesTrendChart({
 
   const inputStyle = { padding: "6px 10px", border: "1px solid var(--border,#dde3ea)", borderRadius: 8, fontFamily: "inherit", fontSize: "0.8rem", color: STEEL } as const;
 
+  // ตัวเลขรวม + การเติบโต (จุดแรก → จุดสุดท้ายของช่วงที่เลือก) — สไตล์การ์ดสถิติ
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const growth = data.length >= 2 && data[0].value ? Math.round(((data[data.length - 1].value - data[0].value) / data[0].value) * 100) : 0;
+
   return (
     <div style={{ width: "100%" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
         <div>
           <div style={{ fontWeight: 800, fontSize: "0.98rem", color: "var(--text, #2D2D2D)" }}>{title}</div>
+          {/* ตัวเลขเด่น + trend (เหมือนการ์ดสถิติ) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 2px" }}>
+            <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#003366", lineHeight: 1 }}>฿{(total).toFixed(1)}M</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "0.72rem", fontWeight: 800,
+              color: growth >= 0 ? "#059669" : "#dc2626" }}>
+              {growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%
+            </span>
+          </div>
           <div style={{ fontSize: "0.76rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -137,7 +149,7 @@ export function SalesTrendChart({
         </div>
       )}
 
-      <AreaGradientChart key={`${range}-${customStart}-${customEnd}`} data={data} height={height} />
+      <LineTrendChart key={`${range}-${customStart}-${customEnd}`} data={data} height={height} />
     </div>
   );
 }

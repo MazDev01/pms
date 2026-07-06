@@ -6,18 +6,21 @@ import {
   leadStatusLabel, leadStatusColor,
   responsiblePersons, RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
-  solutionProducts, LOST_REASONS, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress,
+  solutionProducts, LOST_REASONS, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf,
   type LeadStatus, type LeadRow, type ResponsiblePerson,
 } from "@/lib/mock";
 import { LeadTasks } from "@/components/ui/LeadTasks";
 import { LeadQuotationsPanel } from "@/components/ui/LeadQuotationsPanel";
-import { PersonPicker } from "@/components/ui/PersonPicker";
+import { PersonPicker, AssigneeAvatars } from "@/components/ui/PersonPicker";
 import { useMasterCatalog } from "@/lib/useMasterCatalog";
+import { fileToResizedDataURL } from "@/lib/imageResize";
+import { TemplateSelect } from "@/components/ui/TemplateSelect";
 import { useRole } from "@/context/RoleContext";
 import {
   Plus, Search, X,
   CheckCircle2, User,
   MessageSquare, Paperclip, Trash2,
+  Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown, Filter,
   LayoutList, Columns3,
@@ -81,6 +84,11 @@ function leadProg(l: LeadRow): number {
   if (l.status === "CANCELLED") return 0;
   return taskProgress(l.tasks?.length ? l.tasks : buildLeadTasks());
 }
+// จำนวนงานที่ทำเสร็จ / ทั้งหมด (ไว้แสดงบนการ์ดบอร์ด)
+function leadTaskCount(l: LeadRow): { done: number; total: number } {
+  const t = l.tasks?.length ? l.tasks : buildLeadTasks();
+  return { done: t.filter(x => x.done).length, total: t.length };
+}
 // กิจกรรมล่าสุดของลีด (activities เรียงใหม่สุดอยู่บน)
 function lastActivity(l: LeadRow): string { return l.activities?.[0]?.date ?? "—"; }
 // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → เทียบแบบ "มีคนนี้อยู่ในรายชื่อ" ไม่ใช่เท่ากันเป๊ะ
@@ -124,8 +132,22 @@ function leadPriority(lead: LeadRow): Priority {
 
 // ─── Deterministic drawer seeds (no randomness) ───────────────────────────
 // กิจกรรม — เริ่มว่าง (เกิดจากการทำงานจริง ไม่ใส่ข้อมูลกระป๋อง)
-function seedActivities(_lead: LeadRow): { date: string; text: string }[] {
-  return [];
+// งานแต่ละอย่าง → ประเภทกิจกรรม (ไอคอน) เพื่อสร้างไทม์ไลน์จากงานที่ทำเสร็จจริง
+const TASK_ACTIVITY_TYPE: Record<string, string> = {
+  contact: "call", collect: "note", requirement: "meeting", catalog: "email",
+  appointment: "meeting", makeQuote: "doc", sendQuote: "doc",
+  followup: "call", negotiate: "meeting", close: "doc",
+};
+// ไทม์ไลน์กิจกรรม — ถ้าลีดยังไม่มี activities ที่บันทึกไว้ ให้สร้างจากงานที่ติ๊กเสร็จจริง (ใหม่สุดอยู่บน)
+function seedActivities(lead: LeadRow): { date: string; text: string; type?: string }[] {
+  return (lead.tasks ?? [])
+    .filter(t => t.done && t.doneAt)
+    .slice().reverse()
+    .map(t => ({
+      date: t.doneAt!,
+      text: t.doneBy ? `${t.label} · ${t.doneBy}` : t.label,
+      type: TASK_ACTIVITY_TYPE[t.key] ?? "task",
+    }));
 }
 // ไฟล์ — เริ่มว่าง (อัปโหลดจริงเท่านั้น)
 function seedFiles(_lead: LeadRow): string[] {
@@ -155,12 +177,10 @@ function OverviewEditor({ lead, persons, onSave }: {
   // reseed เมื่อสลับผู้สนใจ
   useEffect(() => { setF(seed()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [lead.id]);
   const set = (k: keyof ReturnType<typeof seed>, v: string) => setF(p => ({ ...p, [k]: v }));
-  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => set("logo", (ev.target?.result as string) ?? "");
-    reader.readAsDataURL(file);
+    set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
   }
 
   const dirty =
@@ -177,7 +197,7 @@ function OverviewEditor({ lead, persons, onSave }: {
   const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
   const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.82rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff" };
 
-  function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: f.product, value: fmtVal(f.value), lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined }); }
+  function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value), lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined }); }
 
   return (
     <div>
@@ -220,10 +240,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
         </div>
         <div><label style={lbl}>แม่แบบ</label>
-          <select value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
-            {!catalog.some(p=>p.name===f.product) && <option value={f.product}>{f.product}</option>}
-            {catalog.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
-          </select>
+          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} />
         </div>
         <div><label style={lbl}>มูลค่าประเมิน</label>
           <input value={f.value} onChange={e=>set("value",e.target.value)} onBlur={()=>{ if(f.value.trim()) set("value",fmtVal(f.value)); }} placeholder="เช่น 1200000 หรือ ฿1.2M" style={inp} />
@@ -290,12 +307,10 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   });
   const logoInputRef = useRef<HTMLInputElement>(null);
   function set(k: keyof typeof form, v: string) { setForm(p=>({...p,[k]:v})); }
-  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => set("logo", (ev.target?.result as string) ?? "");
-    reader.readAsDataURL(file);
+    set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
   }
   function submit() {
     if (!form.company.trim() || !form.contact.trim()) return;
@@ -304,7 +319,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
       company: form.company, contact: form.contact,
       phone: form.phone, email: form.email,
       province: form.province, product: form.product,
-      category: form.product, value: form.value,
+      category: mainTemplateOf(form.product), value: form.value,
       status: form.status, assigned: form.assigned,
       source: form.source, note: form.note,
       logo: form.logo || undefined,
@@ -406,13 +421,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               </div>
               <div>
                 <label style={labelStyle}>แม่แบบ</label>
-                <select value={form.product} onChange={e=>set("product",e.target.value)} style={inputStyle}>
-                  {/* คงค่าที่มีอยู่เดิมไว้ถ้าไม่ตรงกับแคตตาล็อก (กันข้อมูลเก่าเพี้ยน) */}
-                  {!catalog.some(p=>p.name===form.product) && <option value={form.product}>{form.product}</option>}
-                  {catalog.map(p=>(
-                    <option key={p.id} value={p.name}>{p.name}</option>
-                  ))}
-                </select>
+                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>มูลค่าประเมิน</label>
@@ -1108,13 +1117,7 @@ export default function LeadsPage() {
                           </td>
                         )}
                         <td>
-                          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                            <div style={{ width:26, height:26, borderRadius:"50%", background:"#003366",
-                              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                              <span style={{ color:"#fff", fontSize:"0.6rem", fontWeight:800 }}>{l.assigned.charAt(0)}</span>
-                            </div>
-                            <span style={{ fontSize:"0.75rem", color:"#374151" }}>{l.assigned}</span>
-                          </div>
+                          <AssigneeAvatars value={l.assigned} size={26} />
                         </td>
                         {!hiddenCols.includes("activity") && (
                           <td style={{ fontSize:"0.72rem", color:"#6b7280" }}>{lastActivity(l)}</td>
@@ -1210,26 +1213,66 @@ export default function LeadsPage() {
                 <div style={{ display:"flex", flexDirection:"column", gap:10, minHeight:44 }}>
                   {col.map(l => (
                     <div key={l.id} draggable
-                      onDragStart={e => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", l.id); setDragId(l.id); }}
+                      onDragStart={e => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", l.id);
+                        // drag image เอง — ทึบ มีขอบกรม+เงา+เอียงเล็กน้อย ไม่ให้กลืนพื้นหลัง
+                        const node = e.currentTarget as HTMLElement;
+                        const ghost = node.cloneNode(true) as HTMLElement;
+                        Object.assign(ghost.style, {
+                          width: `${node.offsetWidth}px`, position:"absolute", top:"-9999px", left:"-9999px",
+                          opacity:"1", background:"#fff", border:"2px solid #003366", borderRadius:"10px",
+                          boxShadow:"0 14px 32px rgba(0,51,102,.32)", transform:"rotate(-2deg)", pointerEvents:"none",
+                        } as CSSStyleDeclaration);
+                        document.body.appendChild(ghost);
+                        e.dataTransfer.setDragImage(ghost, 24, 22);
+                        setTimeout(() => ghost.remove(), 0);
+                        setDragId(l.id);
+                      }}
                       onDragEnd={() => { setDragId(null); setDragOver(null); }}
                       onClick={() => openPanel(l)}
                       className="card"
-                      style={{ padding:"12px 14px", cursor: dragId===l.id ? "grabbing" : "grab", userSelect:"none", borderRadius:10, opacity: dragId===l.id ? 0.4 : 1,
-                        boxShadow:"0 1px 4px rgba(0,0,0,.05)", transition:"box-shadow .12s, transform .12s" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 14px rgba(0,51,102,.12)"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.05)"; }}>
+                      style={{ padding:"12px 14px", cursor: dragId===l.id ? "grabbing" : "pointer", userSelect:"none", borderRadius:10,
+                        opacity: dragId===l.id ? 0.5 : 1,
+                        outline: dragId===l.id ? "2px dashed #94a9c9" : "none", outlineOffset: dragId===l.id ? "-1px" : 0,
+                        boxShadow: dragId===l.id ? "none" : "0 1px 4px rgba(0,0,0,.05)", transition:"box-shadow .12s, transform .12s" }}
+                      onMouseEnter={e => { if (dragId!==l.id) (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 14px rgba(0,51,102,.12)"; }}
+                      onMouseLeave={e => { if (dragId!==l.id) (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.05)"; }}>
                       <div style={{ fontSize:"0.84rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
-                      <div style={{ fontSize:"0.7rem", color:"#6b7280", marginBottom:9 }}>{l.contact}</div>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:9 }}>
-                        <span style={{ fontSize:"0.88rem", fontWeight:800, color:"#003366", fontVariantNumeric:"tabular-nums" }}>{fmtVal(l.value)}</span>
-                        <span style={{ width:24, height:24, borderRadius:"50%", background:"#003366", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.62rem", fontWeight:800, flexShrink:0 }} title={l.assigned}>{l.assigned.charAt(0)}</span>
+                      <div style={{ fontSize:"0.7rem", color:"#6b7280", marginBottom:8 }}>{l.contact}</div>
+                      {/* จังหวัด + แม่แบบ */}
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:9 }}>
+                        {l.province && (
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:"0.63rem", fontWeight:600, color:"#475569", background:"#f1f5f9", borderRadius:6, padding:"2px 7px" }}>
+                            <MapPin size={10} /> {l.province}
+                          </span>
+                        )}
+                        {l.product && (
+                          <span style={{ fontSize:"0.63rem", fontWeight:600, color:"#003366", background:"#eef3f8", border:"1px solid #dce5f0", borderRadius:6, padding:"2px 7px", maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>
+                            {l.product}
+                          </span>
+                        )}
                       </div>
-                      {/* Progress */}
-                      <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                        <span style={{ fontSize:"0.88rem", fontWeight:800, color:"#003366", fontVariantNumeric:"tabular-nums" }}>{fmtVal(l.value)}</span>
+                        <AssigneeAvatars value={l.assigned} size={24} showName={false} />
+                      </div>
+                      {/* Progress + จำนวนงาน + กิจกรรมล่าสุด */}
+                      <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
                         <div style={{ flex:1, height:5, background:"#eef2f7", borderRadius:99, overflow:"hidden" }}>
                           <div style={{ height:"100%", width:`${leadProg(l)}%`, background:"#003366", borderRadius:99 }} />
                         </div>
                         <span style={{ fontSize:"0.6rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums" }}>{leadProg(l)}%</span>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:"0.6rem", color:"#9ca3af", fontWeight:600 }}>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
+                          <CheckSquare size={10} /> {leadTaskCount(l).done}/{leadTaskCount(l).total} งาน
+                        </span>
+                        {lastActivity(l) !== "—" && (
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
+                            <CalendarClock size={10} /> {lastActivity(l)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1366,7 +1409,7 @@ export default function LeadsPage() {
         const pri = leadPriority(c);
         const pc = priorityColor[pri];
         const cInitials = (c.company || c.name).replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
-        const activities = c.activities ?? seedActivities(c);
+        const activities = (c.activities && c.activities.length) ? c.activities : seedActivities(c);
         const drawerFiles = myFiles.length > 0 ? myFiles : seedFiles(c);
         // เป็นลูกค้าเมื่อปิดการขายสำเร็จ (WON) เท่านั้น — mock บางลีดมี customerId ผูกไว้แต่ยังไม่ WON จึงไม่นับ
         const isCustomer = c.status === "PAID";
@@ -1396,21 +1439,49 @@ export default function LeadsPage() {
           <OverviewEditor lead={c} persons={personsList} onSave={saveLead} />
         );
 
-        // ── Tab: กิจกรรม (Activities) ──
+        // ── Tab: กิจกรรม (Activities) — ไทม์ไลน์ ไอคอนตามประเภท + empty state ──
+        const ACT_ICON: Record<string, { Icon: typeof Phone; color: string; bg: string }> = {
+          call:    { Icon: Phone,        color: "#003366", bg: "#e7eef7" },
+          email:   { Icon: Mail,         color: "#0369a1", bg: "#e0f2fe" },
+          meeting: { Icon: Users,        color: "#4338ca", bg: "#e0e7ff" },
+          doc:     { Icon: FileText,     color: "#b45309", bg: "#fef3e2" },
+          note:    { Icon: StickyNote,   color: "#6b7280", bg: "#f0f0f5" },
+          task:    { Icon: CheckCircle2, color: "#059669", bg: "#e6f6ef" },
+        };
         const tabActivities = (
           <DrawerSection title="กิจกรรม">
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {activities.map((a,i) => (
-                <div key={i} style={{ display:"flex", gap:10, padding:"8px 10px", borderRadius:9,
-                  background:"#f8f9fb", border:"1px solid #f0f4f8" }}>
-                  <MessageSquare size={14} color="#003366" style={{ flexShrink:0, marginTop:2 }} />
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:"0.8rem", color:"#2D2D2D", fontWeight:600 }}>{a.text}</div>
-                    <div style={{ fontSize:"0.68rem", color:"#6b7280", marginTop:2 }}>{a.date}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {activities.length === 0 ? (
+              <div style={{ color:"#9aa2ad", fontSize:"0.82rem", padding:"22px 0", textAlign:"center" }}>
+                <MessageSquare size={26} color="#C0C0C0" style={{ marginBottom:8 }} />
+                <div>ยังไม่มีกิจกรรม</div>
+                <div style={{ fontSize:"0.72rem", marginTop:3 }}>กิจกรรมจะถูกบันทึกอัตโนมัติเมื่อทำงานในแท็บ “งาน/ความคืบหน้า”</div>
+              </div>
+            ) : (
+              <div style={{ position:"relative", display:"flex", flexDirection:"column", gap:2 }}>
+                {activities.map((a,i) => {
+                  const meta = ACT_ICON[(a as { type?: string }).type ?? "task"] ?? ACT_ICON.task;
+                  const last = i === activities.length - 1;
+                  return (
+                    <div key={i} style={{ display:"flex", gap:11, position:"relative" }}>
+                      {/* เส้นไทม์ไลน์ + จุดไอคอน */}
+                      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
+                        <div style={{ width:28, height:28, borderRadius:"50%", background:meta.bg,
+                          display:"flex", alignItems:"center", justifyContent:"center" }}>
+                          <meta.Icon size={14} color={meta.color} />
+                        </div>
+                        {!last && <div style={{ width:2, flex:1, minHeight:14, background:"#eef1f5" }} />}
+                      </div>
+                      <div style={{ minWidth:0, paddingBottom:last ? 0 : 12 }}>
+                        <div style={{ fontSize:"0.82rem", color:"#2D2D2D", fontWeight:600, lineHeight:1.4 }}>{a.text}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:"0.68rem", color:"#6b7280", marginTop:3 }}>
+                          <CalendarClock size={11} /> {a.date}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </DrawerSection>
         );
 

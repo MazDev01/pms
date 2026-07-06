@@ -58,7 +58,7 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
           const isLast = i === data.length - 1;
           return (
             <div key={d.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
-              <div title={`${d.month}: ฿${(d.value / 1_000_000).toFixed(1)}M`} className="vbar-grow"
+              <div title={`${d.month}: ฿${(d.value / 1000).toFixed(1)}M`} className="vbar-grow"
                 style={{ width: "100%", height: `${pct}%`, minHeight: 4, borderRadius: "4px 4px 0 0", background: isLast ? "#003366" : "#dce5f0", animationDelay: `${i * 60}ms` }} />
             </div>
           );

@@ -7,7 +7,7 @@ import {
 import {
   pipelineDeals, pipelineStages,
   quotations as seedQuotations, initialCustomers,
-  appointments as seedAppointments, buildLeadTasks, stageFromTasks,
+  appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
   type PipelineDealMock, type LeadRow, type DealActivity,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock,
@@ -331,7 +331,8 @@ export function SalesProvider({
   const updateLeadStatus = useCallback((leadId: string, status: LeadRow["status"]) => {
     // สร้างลูกค้าเฉพาะตอนปิดการขายสำเร็จ (WON) — ตัดสินใจนอก updater กัน StrictMode เรียกซ้ำใน dev
     const lead = leadsRef.current.find(l => l.id === leadId);
-    setLeads(prev => prev.map(l => l.id !== leadId ? l : { ...l, status }));
+    // ย้ายสถานะ → ติ๊กงานใน Checklist ให้ถึงสเตจนั้นอัตโนมัติ (ผู้ทำ = ผู้รับผิดชอบของลีด)
+    setLeads(prev => prev.map(l => l.id !== leadId ? l : { ...l, status, tasks: syncTasksToStage(l.tasks, status, l.assigned || "—") }));
     if (status === "PAID" && lead && lead.customerId == null) {
       setTimeout(() => convertLeadToCustomer({ ...lead, status }, false), 0);
     }
@@ -467,7 +468,7 @@ function parseLeadValue(v: string): number {
 
 const DEFAULT_TASKS = [
   "ติดต่อลูกค้าและแนะนำตัว",
-  "ส่งแคตตาล็อกและข้อมูลผลิตภัณฑ์",
+  "ส่งแม่แบบและข้อมูลผลิตภัณฑ์",
   "นัดประชุมนำเสนอ",
   "สำรวจความต้องการลูกค้า",
   "จัดทำใบเสนอราคา",

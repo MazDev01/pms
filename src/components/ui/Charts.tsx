@@ -211,6 +211,94 @@ export function Donut({ segments, centerLabel, centerValue, size = 190 }: {
   );
 }
 
+/** Line – Trend (สไตล์ shadcn statistics) — เส้นตรงต่อจุด + เส้นประแนวตั้ง + จุดปลายแบบวงแหวน
+ *  minimal · เหมาะกับการ์ดสถิติที่เน้นตัวเลข · data = {month,value} */
+export function LineTrendChart({
+  data, unit = "M", height = 300, color = NAVY,
+}: {
+  data: { month: string; value: number }[];
+  unit?: string; height?: number; color?: string;
+}) {
+  const [drawn, setDrawn] = useState(false);
+  const [hover, setHover] = useState<number | null>(null);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+
+  const n = data.length;
+  const vals = data.map(d => d.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const pad = (max - min) * 0.18 || max * 0.1 || 1;
+  const lo = Math.max(0, min - pad), hi = max + pad;      // สเกลชิดข้อมูล (line-style ไม่อิง 0)
+  const W = 1180, H = height, pL = 56, pR = 30, pT = 26, pB = 40;
+  const cW = W - pL - pR, cH = H - pT - pB;
+  const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
+  const cy = (v: number) => pT + (1 - (v - lo) / (hi - lo)) * cH;
+  const bottomY = pT + cH;
+  const pts = data.map((d, i) => ({ x: cx(i), y: cy(d.value), ...d }));
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+  const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${bottomY} L${pts[0].x.toFixed(2)},${bottomY} Z` : "";
+  const yTicks = Array.from({ length: 4 }, (_, i) => lo + ((hi - lo) / 3) * i);
+  const last = pts[n - 1];
+  const hp = hover !== null ? pts[hover] : null;
+  const gid = "line-clip-" + n;
+  const grad = "line-grad-" + n;
+  const fmt = (v: number) => `฿${Math.round(v * 10) / 10}${unit}`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="line chart">
+      <defs>
+        <linearGradient id={grad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.20" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.06" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* y labels (จาง) */}
+      {yTicks.map((v, i) => (
+        <text key={i} x={pL - 10} y={cy(v) + 4} textAnchor="end" fontSize="14" fill="#c4cbd4">{fmt(v)}</text>
+      ))}
+      {/* เส้นประแนวตั้งทุกจุด */}
+      {pts.map((p, i) => (
+        <line key={i} x1={p.x} y1={pT} x2={p.x} y2={bottomY} stroke="#e8ecf2" strokeWidth={1} strokeDasharray="4,5" />
+      ))}
+      {data.map((d, i) => (
+        <text key={i} x={cx(i)} y={bottomY + 26} textAnchor="middle" fontSize="15" fill="#6b7280">{d.month}</text>
+      ))}
+      {/* พื้นที่เติมสี + เส้น (เผยจากซ้าย) */}
+      <clipPath id={gid}><rect x={pL - 6} y={0} width={drawn ? cW + 12 : 0} height={H} style={{ transition: "width 1s cubic-bezier(.4,0,.2,1)" }} /></clipPath>
+      <g clipPath={`url(#${gid})`}>
+        <path d={area} fill={`url(#${grad})`} />
+        <path d={line} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+      </g>
+      {/* hover guide + tooltip */}
+      {hp && (
+        <g>
+          <circle cx={hp.x} cy={hp.y} r={5} fill="#fff" stroke={color} strokeWidth={2.5} />
+          <g transform={`translate(${Math.min(Math.max(hp.x, pL + 46), W - pR - 46)}, ${Math.max(hp.y - 46, pT + 2)})`}>
+            <rect x={-46} y={-2} width={92} height={38} rx={8} fill="#fff" stroke="#e5e7eb" />
+            <text x={0} y={13} textAnchor="middle" fontSize="13" fill="#9ca3af">{hp.month}</text>
+            <text x={0} y={29} textAnchor="middle" fontSize="15" fontWeight="800" fill={color}>{fmt(hp.value)}</text>
+          </g>
+        </g>
+      )}
+      {/* จุดปลายแบบวงแหวน (target dot) */}
+      {last && !hp && drawn && (
+        <g>
+          <circle cx={last.x} cy={last.y} r={9} fill={color} opacity={0.18} />
+          <circle cx={last.x} cy={last.y} r={5} fill="#fff" stroke={color} strokeWidth={3} />
+          <circle cx={last.x} cy={last.y} r={2} fill={color} />
+        </g>
+      )}
+      {/* hit areas */}
+      {data.map((_, i) => (
+        <rect key={i} x={i === 0 ? pL - 6 : (cx(i - 1) + cx(i)) / 2} y={pT}
+          width={i === 0 ? (cx(0) + cx(1)) / 2 - (pL - 6) : (i === n - 1 ? W - pR - (cx(i - 1) + cx(i)) / 2 : (cx(i) + cx(i + 1)) / 2 - (cx(i - 1) + cx(i)) / 2)}
+          height={cH} fill="transparent"
+          onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(h => h === i ? null : h)} />
+      ))}
+    </svg>
+  );
+}
+
 /** Area – Gradient (สไตล์ shadcn) — เส้นเดี่ยวเรียบ + gradient นุ่ม + tooltip ตอน hover
  *  สะอาดกว่า AreaChart เดิม (ไม่มีเส้นประเปรียบเทียบที่ทำให้ดูรก) · data = {month,value} */
 export function AreaGradientChart({

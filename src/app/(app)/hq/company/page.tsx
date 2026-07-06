@@ -5,9 +5,11 @@ import {
   Building2, Upload, Check, Save, Palette, Download,
   MapPin, Type, Image as ImageIcon,
 } from "lucide-react";
+import { fileToResizedDataURL } from "@/lib/imageResize";
 
-const PROFILE_KEY = "hq_company_profile";
-const LOGO_KEY    = "hq_company_logo";
+const PROFILE_KEY  = "hq_company_profile";
+const LOGO_KEY     = "hq_company_logo";      // สัญลักษณ์ (ไอคอน) → แถบเมนู
+const WORDMARK_KEY = "hq_company_wordmark";  // พร้อมชื่อ (แนวนอน) → เอกสาร/สื่อ
 
 type CompanyProfile = {
   name: string; address: string; taxId: string;
@@ -43,14 +45,18 @@ const BRANCHES: Branch[] = [
 export default function HQCompanyPage() {
   const [form,  setForm]  = useState<CompanyProfile>(PROFILE_DEFAULT);
   const [logo,  setLogo]  = useState("");
+  const [wordmark, setWordmark] = useState("");
   const [saved, setSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const wordmarkRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const s = localStorage.getItem(PROFILE_KEY);
     if (s) try { setForm({ ...PROFILE_DEFAULT, ...JSON.parse(s) }); } catch {}
     const l = localStorage.getItem(LOGO_KEY);
     if (l) setLogo(l);
+    const w = localStorage.getItem(WORDMARK_KEY);
+    if (w) setWordmark(w);
   }, []);
 
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
@@ -58,17 +64,29 @@ export default function HQCompanyPage() {
     setSaved(false);
   }
   function save() {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(form));
-    if (logo) localStorage.setItem(LOGO_KEY, logo);
+    try {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(form));
+      if (logo) localStorage.setItem(LOGO_KEY, logo);
+      else localStorage.removeItem(LOGO_KEY);
+      if (wordmark) localStorage.setItem(WORDMARK_KEY, wordmark);
+      else localStorage.removeItem(WORDMARK_KEY);
+    } catch {
+      alert("บันทึกไม่สำเร็จ — รูปโลโก้มีขนาดใหญ่เกินไป กรุณาใช้รูปที่เล็กลง");
+      return;
+    }
+    window.dispatchEvent(new Event("bpms-company-updated")); // ให้ Sidebar HQ อัปเดตโลโก้ทันที
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
-  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => { setLogo(ev.target?.result as string); setSaved(false); };
-    reader.readAsDataURL(file);
+    setLogo(await fileToResizedDataURL(file, 256)); setSaved(false); // ย่อก่อนเก็บ กัน quota เต็ม
+  }
+  async function uploadWordmark(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWordmark(await fileToResizedDataURL(file, 480)); setSaved(false);
   }
   const initials = form.name.replace(/^บริษัท\s*/, "").trim().slice(0, 2).toUpperCase() || "BJ";
 
@@ -93,34 +111,68 @@ export default function HQCompanyPage() {
         </div>
         <div className="card-body">
 
-          {/* Logo */}
-          <div style={{ marginBottom: 24 }}>
-            <label className="form-label">โลโก้บริษัท</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{
-                width: 80, height: 80, borderRadius: 12, flexShrink: 0,
-                background: logo ? "transparent" : "#003366",
-                border: "2px dashed var(--border)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                overflow: "hidden",
-              }}>
-                {logo
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                  : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
-              </div>
-              <div>
-                <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
-                  <Upload size={13} /> อัปโหลดโลโก้
-                </button>
-                {logo && (
-                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
-                    onClick={() => { setLogo(""); localStorage.removeItem(LOGO_KEY); }}>
-                    ลบ
+          {/* Logo 2 แบบ — สัญลักษณ์ + พร้อมชื่อ */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px,100%), 1fr))", gap: 18, marginBottom: 24 }}>
+            {/* สัญลักษณ์ */}
+            <div>
+              <label className="form-label">โลโก้สัญลักษณ์ (ไอคอน)</label>
+              <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", marginBottom: 8 }}>ใช้ในแถบเมนูและพื้นที่สี่เหลี่ยม</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{
+                  width: 80, height: 80, borderRadius: 12, flexShrink: 0,
+                  background: logo ? "#fff" : "#003366", padding: logo ? 6 : 0,
+                  border: "2px dashed var(--border)",
+                  display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                }}>
+                  {logo
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                    : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
+                </div>
+                <div>
+                  <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
+                    <Upload size={13} /> อัปโหลด
                   </button>
-                )}
-                <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG, JPG · แนะนำ 400×400 px</div>
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
+                  {logo && (
+                    <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
+                      onClick={() => { setLogo(""); localStorage.removeItem(LOGO_KEY); window.dispatchEvent(new Event("bpms-company-updated")); }}>
+                      ลบ
+                    </button>
+                  )}
+                  <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG, JPG · แนะนำ 400×400 px</div>
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
+                </div>
+              </div>
+            </div>
+
+            {/* พร้อมชื่อ */}
+            <div>
+              <label className="form-label">โลโก้พร้อมชื่อบริษัท (แนวนอน)</label>
+              <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", marginBottom: 8 }}>ใช้บนเอกสารและสื่อการขาย</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{
+                  width: 168, height: 80, borderRadius: 12, flexShrink: 0, padding: 8,
+                  background: "#fff", border: "2px dashed var(--border)",
+                  display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                }}>
+                  {wordmark
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={wordmark} alt="wordmark" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                    : <span style={{ color: "#c7ccd3", fontWeight: 700, fontSize: "0.72rem", textAlign: "center" }}>ยังไม่มีโลโก้พร้อมชื่อ</span>}
+                </div>
+                <div>
+                  <button className="btn btn-secondary btn-sm" onClick={() => wordmarkRef.current?.click()}>
+                    <Upload size={13} /> อัปโหลด
+                  </button>
+                  {wordmark && (
+                    <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6 }}
+                      onClick={() => { setWordmark(""); localStorage.removeItem(WORDMARK_KEY); setSaved(false); }}>
+                      ลบ
+                    </button>
+                  )}
+                  <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG พื้นโปร่งใส · แนะนำ 480×160 px</div>
+                  <input ref={wordmarkRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadWordmark} />
+                </div>
               </div>
             </div>
           </div>

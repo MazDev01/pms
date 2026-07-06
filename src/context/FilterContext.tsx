@@ -4,7 +4,7 @@ import {
   createContext, useContext, useState, useMemo, useCallback, useEffect,
   type ReactNode,
 } from "react";
-import { dealerLeaderboard, hqAllCustomers, initialCustomers as customers, quotations, responsiblePersons, solutionProducts } from "@/lib/mock";
+import { dealerLeaderboard, hqAllCustomers, initialCustomers as customers, quotations, responsiblePersons, solutionProducts, mainTemplateOf } from "@/lib/mock";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -99,7 +99,7 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
 export const DEALER_OPTIONS: { value: string; label: string }[] =
   dealerLeaderboard.map(d => ({ value: d.code, label: d.name }));
 
-// แหล่งเดียว (single source): ตัวเลือกสินค้า = 6 แม่แบบจาก solutionProducts — ตรงกับฟอร์มผู้สนใจ/ใบเสนอราคาทั้งระบบ
+// แหล่งเดียว (single source): ตัวเลือกสินค้า = 6 แม่แบบหลักจาก solutionProducts — ตรงกับฟอร์มผู้สนใจ/ใบเสนอราคาทั้งระบบ
 export const PRODUCT_OPTIONS: { value: string; label: string }[] =
   solutionProducts.map(p => ({ value: p.name, label: p.name }));
 
@@ -215,8 +215,12 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     if (f.date !== undefined && !inRange(f.date)) return false;
     if (state.dealer !== ALL && f.dealer != null && f.dealer !== state.dealer) return false;
     if (state.province !== ALL && f.province != null && f.province !== state.province) return false;
-    if (state.product !== ALL && f.product != null &&
-        f.product.toUpperCase() !== state.product.toUpperCase()) return false;
+    if (state.product !== ALL && f.product != null) {
+      // จับคู่ทั้งแม่แบบหลักและแม่แบบย่อย (ย่อย → เทียบด้วยแม่แบบหลักของมัน)
+      const parent = mainTemplateOf(f.product);
+      if (parent.toUpperCase() !== state.product.toUpperCase() &&
+          f.product.toUpperCase() !== state.product.toUpperCase()) return false;
+    }
     if (state.status !== ALL && f.status != null && f.status !== state.status) return false;
     // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → เทียบแบบ "มีคนนี้อยู่ในรายชื่อ"
     if (state.person !== ALL && f.person != null &&

@@ -595,7 +595,7 @@ export default function HQDealersPage() {
               <CopyField label="อีเมล" value={viewCredsDealer.credentials.email} />
               <CopyField label="รหัสผ่าน" value={viewCredsDealer.credentials.password} />
               <div style={{ fontSize: "0.72rem", color: "#6b7280", background: "#f0f4f8", borderRadius: 8, padding: "8px 12px", marginTop: 4 }}>
-                ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของดีลเลอร์
+                ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
               </div>
             </div>
           </div>

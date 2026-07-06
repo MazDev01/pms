@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { salesByMonth, team, quotationStatusLabel, type QuotationStatus } from "@/lib/mock";
+import { salesByMonth, team, quotationStatusLabel, mainTemplateOf, type QuotationStatus } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -66,7 +66,7 @@ function ReportsPageInner() {
     { label: "มูลค่าผู้สนใจรวม", value: fmtBaht(leadValue), icon: "phone", current: leadValue / 1e6, target: 15, targetLabel: "฿15M", href: "/leads" },
     { label: "ใบเสนอราคาที่ส่ง", value: fmtBaht(sentValue), icon: "doc", current: sentValue / 1e6, target: 20, targetLabel: "฿20M", href: "/quotations" },
     { label: "อัตราปิดการขาย", value: `${winRate}%`, icon: "target", current: winRate, target: 50, targetLabel: "50%", href: "/leads" },
-    { label: "มูลค่าดีลเฉลี่ย", value: fmtBaht(avgDeal), icon: "award", current: avgDeal / 1e6, target: 5, targetLabel: "฿5M", href: "/quotations" },
+    { label: "มูลค่าเฉลี่ยต่อโอกาส", value: fmtBaht(avgDeal), icon: "award", current: avgDeal / 1e6, target: 5, targetLabel: "฿5M", href: "/quotations" },
   ];
 
   // ข้อมูลรายเดือนหน่วยล้านบาท ป้อนให้กราฟแนวโน้ม (กราฟมีปุ่มช่วงเวลาในตัว ไม่ใช้ factor)
@@ -101,9 +101,10 @@ function ReportsPageInner() {
 
   // ── ยอดขายตามสินค้า (leads.product + fallback quotations.buildingType) ──
   const byProduct = useMemo(() => {
+    // จัดกลุ่มตามแม่แบบหลัก — แม่แบบย่อย (เช่น "โรงงานอาหาร") ถูก roll-up เข้า "โรงงาน"
     const m = new Map<string, number>();
-    leads.forEach(l => { const k = l.product || "อื่น ๆ"; m.set(k, (m.get(k) ?? 0) + parseBaht(l.value)); });
-    quotations.forEach(q => { const k = q.buildingType || "อื่น ๆ"; m.set(k, (m.get(k) ?? 0) + q.totalValue); });
+    leads.forEach(l => { const k = mainTemplateOf(l.product) || "อื่น ๆ"; m.set(k, (m.get(k) ?? 0) + parseBaht(l.value)); });
+    quotations.forEach(q => { const k = mainTemplateOf(q.buildingType) || "อื่น ๆ"; m.set(k, (m.get(k) ?? 0) + q.totalValue); });
     const arr = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
     const max = arr.length ? arr[0][1] : 1;
     return arr.map(([label, value], i) => ({ label, value, pct: Math.round((value / max) * 100), color: SOURCE_COLORS[i % SOURCE_COLORS.length] }));

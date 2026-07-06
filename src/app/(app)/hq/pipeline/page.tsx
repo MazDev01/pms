@@ -5,7 +5,7 @@ import {
   Download, Users, Target, CheckCircle2, Trophy, TrendingDown,
 } from "lucide-react";
 import {
-  hqPipelineStages, hqPipelineLostReasons, hqPipelineByProduct, hqAllQuotations, dealerLeaderboard,
+  hqPipelineStages, hqPipelineLostReasons, hqPipelineByProduct, hqAllQuotations, dealerLeaderboard, mainTemplateOf,
 } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -217,9 +217,11 @@ export default function SalesOverviewPage() {
         const colorOf = new Map(hqPipelineByProduct.map(p => [p.product, p.color]));
         const m = new Map<string, { count: number; valueNum: number }>();
         branchQs.forEach(q => {
-          const r = m.get(q.productLine) ?? { count: 0, valueNum: 0 };
+          // ยุบแม่แบบย่อยเข้าแม่แบบหลัก — ไม่ให้แถบแตกและได้สีตรงตามแม่แบบหลัก
+          const key = mainTemplateOf(q.productLine);
+          const r = m.get(key) ?? { count: 0, valueNum: 0 };
           r.count += 1; r.valueNum += q.valueNum;
-          m.set(q.productLine, r);
+          m.set(key, r);
         });
         return [...m.entries()]
           .map(([product, v]) => ({ product, ...v, color: colorOf.get(product) ?? "#003366" }))
@@ -246,7 +248,7 @@ export default function SalesOverviewPage() {
     }
     rows.push("");
     rows.push("แยกตามแม่แบบ / บริการ");
-    rows.push(["สินค้า", "จำนวนดีล", "มูลค่า (บาท)"].join(","));
+    rows.push(["แม่แบบ", "จำนวนโอกาสการขาย", "มูลค่า (บาท)"].join(","));
     products.forEach(p => rows.push([p.product, p.count, Math.round(p.valueNum * pf)].join(",")));
     const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);

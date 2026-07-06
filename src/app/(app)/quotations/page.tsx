@@ -7,8 +7,8 @@ import {
   DEFAULT_ISSUER, ISSUER_KEY,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile,
 } from "@/lib/mock";
-import { useMasterCatalog } from "@/lib/useMasterCatalog";
-import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, type DocProfile } from "@/lib/quotationPrint";
+import { TemplateSelect } from "@/components/ui/TemplateSelect";
+import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@/lib/quotationPrint";
 import { useSales } from "@/context/SalesContext";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -111,7 +111,6 @@ function buildBlank(customers:CustomerRow[]): QForm {
 function QuotationModal({ initial, title, onSave, onClose, customers }:{
   initial:QForm; title:string; onSave:(f:QForm)=>void; onClose:()=>void; customers:CustomerRow[];
 }){
-  const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง
   const [form,setForm]=useState<QForm>(initial);
   const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.82rem",outline:"none",color:STEEL,boxSizing:"border-box"};
   const LBL:React.CSSProperties={fontSize:"0.68rem",fontWeight:700,color:MUTED,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
@@ -153,10 +152,8 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
                 <input value={form.province} onChange={e=>set("province",e.target.value)} placeholder="จังหวัด" style={INP}/>
               </div>
               <div>
-                <label style={LBL}>ประเภทอาคาร</label>
-                <select value={form.buildingType} onChange={e=>set("buildingType",e.target.value)} style={INP}>
-                  {catalog.map(p=><option key={p.id}>{p.name}</option>)}
-                </select>
+                <label style={LBL}>แม่แบบ</label>
+                <TemplateSelect value={form.buildingType} onChange={v=>set("buildingType",v)} style={INP} />
               </div>
               <div>
                 <label style={LBL}>พื้นที่ (ตร.ม.)</label>
@@ -373,7 +370,7 @@ function QuotationsPageInner(){
     const cust=customers.find(c=>c.id===q.customerId);
     const w=window.open("","_blank","width=880,height=1040");
     if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
-    w.document.write(buildQuotationHTML(q,issuer,cust,docProfile));
+    w.document.write(buildQuotationHTML(q,issuer,cust,docProfile,loadWordmark()));
     w.document.close();
   }
 

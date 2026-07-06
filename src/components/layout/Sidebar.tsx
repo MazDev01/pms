@@ -73,8 +73,11 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   const router = useRouter();
   const { isHQ, currentKey, switchSession } = useRole();
   const [roleOpen, setRoleOpen] = useState(false);
-  // แบรนด์ฝั่ง Dealer = ชื่อบริษัทจากโปรไฟล์บริษัท (แก้ในหน้าตั้งค่า) → ชื่อในแอปตรงกับโปรไฟล์เสมอ
+  // แบรนด์ฝั่ง Dealer = ชื่อ+โลโก้บริษัทจากโปรไฟล์บริษัท (แก้ในหน้าตั้งค่า) → แบรนด์ในแอปตรงกับโปรไฟล์เสมอ
   const [dealerBrand, setDealerBrand] = useState("เชียงใหม่สตีลบิลด์");
+  const [dealerLogo, setDealerLogo] = useState("");
+  const [hqLogo, setHqLogo] = useState(""); // โลโก้ HQ ที่อัปโหลด (แก้ในหน้าตั้งค่า › บริษัท)
+  const [brandWordmark, setBrandWordmark] = useState(""); // โลโก้พร้อมชื่อ (แนวนอน) → ใช้เป็นแบรนด์เต็มแถบเมนู
 
   useEffect(() => {
     router.prefetch("/hq/dashboard");
@@ -82,11 +85,24 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   }, [router]);
 
   useEffect(() => {
-    if (isHQ) return;
-    try {
-      const s = localStorage.getItem("dealer_issuer_profile_v2");
-      if (s) { const p = JSON.parse(s); if (p.company) setDealerBrand(String(p.company).replace(/^บริษัท\s*/, "").replace(/\s*จำกัด$/, "").trim()); }
-    } catch {}
+    // อ่านชื่อ+โลโก้ตาม role และอัปเดตทันทีเมื่อบันทึกในหน้าตั้งค่า (event) หรือแท็บอื่น (storage)
+    const read = () => {
+      if (isHQ) {
+        try { setHqLogo(localStorage.getItem("hq_company_logo") || ""); } catch {}
+        try { setBrandWordmark(localStorage.getItem("hq_company_wordmark") || ""); } catch {}
+        return;
+      }
+      try {
+        const s = localStorage.getItem("dealer_issuer_profile_v2");
+        if (s) { const p = JSON.parse(s); if (p.company) setDealerBrand(String(p.company).replace(/^บริษัท\s*/, "").replace(/\s*จำกัด$/, "").trim()); }
+      } catch {}
+      try { setDealerLogo(localStorage.getItem("dealer_company_logo_v2") || ""); } catch {}
+      try { setBrandWordmark(localStorage.getItem("dealer_company_wordmark_v2") || ""); } catch {}
+    };
+    read();
+    window.addEventListener("bpms-company-updated", read);
+    window.addEventListener("storage", read);
+    return () => { window.removeEventListener("bpms-company-updated", read); window.removeEventListener("storage", read); };
   }, [isHQ]);
 
   function handleSwitch(key: "hq" | "dealer") {
@@ -98,21 +114,37 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   }
 
   const nav = isHQ ? HQ_NAV : DEALER_NAV;
+  const brandLogo = isHQ ? hqLogo : dealerLogo; // มีโลโก้อัปโหลดหรือไม่ (ใช้สลับพื้นกรอบเป็นขาว)
 
   return (
     <aside className={`erp-sidebar${mobileOpen ? " open" : ""}`}>
       {/* Brand — HQ = Benjamin (สำนักงานใหญ่) · Dealer = แบรนด์บริษัทของตัวแทนเอง (จากโปรไฟล์บริษัท) */}
       <div className="sidebar-brand">
-        <div className="brand-mark">
+        {brandWordmark ? (
+          /* โลโก้พร้อมชื่อ (แนวนอน) → ใช้เป็นแบรนด์เต็มแถว แทนไอคอน+ตัวอักษร */
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={brandWordmark} alt="" style={{ maxWidth: "100%", maxHeight: 40, objectFit: "contain" }} />
+        ) : (
+        <>
+        {/* โลโก้อัปโหลด (มักเป็นสีเข้ม) → พื้นกรอบเป็นขาวกันกลืนพื้นกรม */}
+        <div className="brand-mark" style={brandLogo ? { background: "#fff", padding: 4 } : undefined}>
           {isHQ
-            /* eslint-disable-next-line @next/next/no-img-element */
-            ? <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
-            : <Building2 size={20} color="#fff" strokeWidth={2.2} />}
+            ? hqLogo
+              /* eslint-disable-next-line @next/next/no-img-element */
+              ? <img src={hqLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              /* eslint-disable-next-line @next/next/no-img-element */
+              : <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
+            : dealerLogo
+              /* eslint-disable-next-line @next/next/no-img-element */
+              ? <img src={dealerLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              : <Building2 size={20} color="#fff" strokeWidth={2.2} />}
         </div>
         <div className="brand-text">
           <h1>{isHQ ? "BENJAMIN" : dealerBrand}</h1>
           <span>{isHQ ? "PRE-ENGINEERED BUILDING" : "อาคารเหล็กสำเร็จรูป"}</span>
         </div>
+        </>
+        )}
       </div>
 
       {/* Role switcher */}

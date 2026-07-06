@@ -7,7 +7,7 @@ import {
   quotationStatusLabel, quotationStatusColor,
   type LeadRow, type QuotationMock,
 } from "@/lib/mock";
-import { useMasterCatalog } from "@/lib/useMasterCatalog";
+import { TemplateSelect } from "@/components/ui/TemplateSelect";
 import { printQuotation } from "@/lib/quotationPrint";
 import { parseBaht, fmtBaht } from "@/lib/format";
 
@@ -17,7 +17,6 @@ type FormState = { project: string; buildingType: string; items: string; price: 
 
 export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?: (m: string) => void }) {
   const { quotations, addQuotation, updateQuotation, deleteQuotation } = useSales();
-  const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง (HQ กำหนด)
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -108,10 +107,7 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
           <div style={{ gridColumn: "1/-1" }}><label style={lbl}>รายการ / โครงการ</label>
             <input value={form.project} onChange={e => set("project", e.target.value)} style={inp} /></div>
           <div><label style={lbl}>แม่แบบที่เสนอ</label>
-            <select value={form.buildingType} onChange={e => set("buildingType", e.target.value)} style={inp}>
-              {!catalog.some(p => p.name === form.buildingType) && form.buildingType && <option value={form.buildingType}>{form.buildingType}</option>}
-              {catalog.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-            </select></div>
+            <TemplateSelect value={form.buildingType} onChange={v => set("buildingType", v)} style={inp} /></div>
           <div><label style={lbl}>จำนวนรายการ</label>
             <input type="number" min={1} value={form.items} onChange={e => set("items", e.target.value)} style={inp} /></div>
           <div><label style={lbl}>ราคา (ก่อนส่วนลด)</label>

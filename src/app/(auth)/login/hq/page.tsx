@@ -188,11 +188,11 @@ export default function HQLoginPage() {
       {/* Back to dealer */}
       <p style={{ textAlign: "center", marginTop: 24 }}>
         <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.75rem", color: "#6b7280", textDecoration: "none" }}>
-          <ChevronLeft size={13} /> กลับไปหน้าเข้าสู่ระบบดีลเลอร์
+          <ChevronLeft size={13} /> กลับไปหน้าเข้าสู่ระบบตัวแทน
         </Link>
       </p>
       <p style={{ textAlign: "center", fontSize: "0.65rem", color: "#C0C0C0", marginTop: 12 }}>
-        © 2026 Benjamin PEB Steel Co., Ltd.
+        © 2569 Benjamin PEB Steel Co., Ltd.
       </p>
     </div>
   );

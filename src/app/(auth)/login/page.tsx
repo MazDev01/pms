@@ -65,7 +65,7 @@ export default function DealerLoginPage() {
       {/* Card */}
       <div style={CARD}>
         <div style={{ padding: "24px 28px 0 28px", marginBottom: 20 }}>
-          <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>เข้าสู่ระบบ — ดีลเลอร์</h2>
+          <h2 style={{ fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>เข้าสู่ระบบ — ตัวแทน</h2>
           <p style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: 4 }}>
             สำหรับตัวแทนจำหน่ายทั่วประเทศ
           </p>
@@ -156,9 +156,9 @@ export default function DealerLoginPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {[
             { label: "ผู้ดูแลสำนักงานใหญ่", sub: "Benjamin HQ Management · admin@benjamin.com", role: "hq" as const, redirect: "/hq/dashboard", color: "#2D2D2D" },
-            { label: "ดีลเลอร์เชียงใหม่", sub: "PEB Dealer CNX · cnx@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
-            { label: "ดีลเลอร์ระยอง สตีล", sub: "Dealer RYG · ryg@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
-            { label: "ดีลเลอร์เชียงราย เมทัล", sub: "Dealer CRI · cri@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
+            { label: "ตัวแทนเชียงใหม่", sub: "ตัวแทน CNX · cnx@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
+            { label: "ตัวแทนระยอง สตีล", sub: "ตัวแทน RYG · ryg@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
+            { label: "ตัวแทนเชียงราย เมทัล", sub: "ตัวแทน CRI · cri@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
           ].map((d, i) => (
             <button key={i} type="button"
               onClick={() => { login(d.role); router.push(d.redirect); }}
@@ -185,7 +185,7 @@ export default function DealerLoginPage() {
         </Link>
       </p>
       <p style={{ textAlign: "center", fontSize: "0.65rem", color: "#C0C0C0", marginTop: 12 }}>
-        © 2026 Benjamin PEB Steel Co., Ltd.
+        © 2569 Benjamin PEB Steel Co., Ltd.
       </p>
     </div>
   );

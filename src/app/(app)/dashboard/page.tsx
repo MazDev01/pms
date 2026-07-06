@@ -13,8 +13,9 @@ import {
   type LeadStatus, type QuotationStatus,
 } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
-import { AreaChart } from "@/components/ui/Charts";
+import { LineTrendChart } from "@/components/ui/Charts";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
 import { fmtBaht, parseBaht } from "@/lib/format";
 
 // ── CI colors ──
@@ -135,12 +136,35 @@ export default function DealerDashboard() {
     };
   }, [scoped]);
 
-  // ─── KPI cards (4 · action-first ไม่ซ้ำกับหน้ารายงาน) ──────────────
-  const kpis = [
-    { Icon: UserPlus, label: "ติดต่อแล้ว", en: "Contacted", value: `${m.newLeads}`, accent: PRIMARY, href: "/leads" },
-    { Icon: TrendingUp, label: "กำลังดำเนินการ", en: "Active", value: `${m.activeDeals}`, accent: PRIMARY, href: "/leads" },
-    { Icon: Trophy, label: "ปิดการขายได้", en: "Won Deals", value: `${m.wonDeals}`, accent: GREEN, href: "/leads" },
-    { Icon: Wallet, label: "ยอดขายที่ปิดได้", en: "Won Revenue", value: fmtBaht(m.wonValue), accent: GREEN, href: "/quotations" },
+  // ─── KPI cards (4 · action-first) — คำนวณค่า+trend ตามช่วงวันของแต่ละการ์ด (real windowed data) ──
+  // ค่า = ช่วง N วันล่าสุด · trend = เทียบกับ N วันก่อนหน้า (ทั้งคู่จากข้อมูลจริง)
+  const statsForDays = (days: number) => {
+    const today = parseISO(MOCK_TODAY);
+    const cs = addDays(today, -days), ps = addDays(today, -2 * days);
+    const inR = (iso: string, a: Date, b: Date) => { const d = parseISO(iso); return d > a && d <= b; };
+    const lc = leads.filter(l => inR(leadIsoOf(l.numId, today), cs, today));
+    const lp = leads.filter(l => inR(leadIsoOf(l.numId, today), ps, cs));
+    const qc = quotations.filter(q => inR(q.date, cs, today));
+    const qp = quotations.filter(q => inR(q.date, ps, cs));
+    const pct = (c: number, p: number) => p > 0 ? Math.round(((c - p) / p) * 100) : (c > 0 ? 100 : 0);
+    const contacted = (a: typeof leads) => a.filter(x => x.status === "WAITING").length;
+    const active = (a: typeof leads) => a.filter(x => x.status !== "PAID" && x.status !== "CANCELLED").length;
+    const won = (a: typeof leads) => a.filter(x => x.status === "PAID").length;
+    const rev = (a: typeof leads, q: typeof quotations) =>
+      a.filter(x => x.status === "PAID").reduce((s, x) => s + parseBaht(x.value), 0)
+      + q.filter(x => x.status === "won").reduce((s, x) => s + x.totalValue, 0);
+    return {
+      contacted: { value: `${contacted(lc)}`, trend: pct(contacted(lc), contacted(lp)) },
+      active:    { value: `${active(lc)}`,    trend: pct(active(lc), active(lp)) },
+      won:       { value: `${won(lc)}`,       trend: pct(won(lc), won(lp)) },
+      revenue:   { value: fmtBaht(rev(lc, qc)), trend: pct(rev(lc, qc), rev(lp, qp)) },
+    };
+  };
+  const kpiCards: { icon: React.ReactNode; label: string; key: "contacted" | "active" | "won" | "revenue"; href: string }[] = [
+    { icon: <UserPlus size={16} />, label: "ติดต่อแล้ว", key: "contacted", href: "/leads" },
+    { icon: <TrendingUp size={16} />, label: "กำลังดำเนินการ", key: "active", href: "/leads" },
+    { icon: <Trophy size={16} />, label: "ปิดการขายได้", key: "won", href: "/leads" },
+    { icon: <Wallet size={16} />, label: "ยอดขายที่ปิดได้", key: "revenue", href: "/quotations" },
   ];
 
   // ─── Sales Target ────────────────────────────────────────────────
@@ -182,6 +206,20 @@ export default function DealerDashboard() {
       .sort((a, b) => a.time.localeCompare(b.time));
     return { goals, goalPct, follow, todayItems };
   }, [quotations, appointments]);
+
+  // ── ดีลที่ต้องรีบดูแล — ลีดที่ยังไม่ปิดและเงียบนานสุด (เรียงตามวันเงียบ × มูลค่า) ──
+  const atRisk = useMemo(() => {
+    const today = parseISO(MOCK_TODAY);
+    return leads
+      .filter(l => l.status !== "PAID" && l.status !== "CANCELLED")
+      .map(l => {
+        const silent = Math.max(0, Math.round((today.getTime() - parseISO(leadIsoOf(l.numId, today)).getTime()) / 86_400_000));
+        return { l, silent, value: parseBaht(l.value) };
+      })
+      .filter(x => x.silent >= 7)
+      .sort((a, b) => (b.silent * b.value) - (a.silent * a.value))
+      .slice(0, 5);
+  }, [leads]);
 
   // หมายเหตุ: อันดับแม่แบบ (Top Products) ย้ายไปเป็นเจ้าของเดียวที่หน้ารายงาน "ยอดขายตามสินค้า"
   // เพื่อไม่ให้ Dashboard (actionable) ซ้ำกับ Reports (analytical)
@@ -236,18 +274,12 @@ export default function DealerDashboard() {
         }
       />
 
-      {/* 2 · KPI Row — 6 ใบเท่ากัน สีเดียว (navy) */}
+      {/* 2 · KPI Row — statistics cards (icon + label + dropdown ช่วงวัน + ค่า + trend) */}
       <div className="kpi-row">
-        {kpis.map(k => (
-          <div key={k.label} className="kc clickable" role="button" tabIndex={0}
-            onClick={() => router.push(k.href)}
-            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(k.href); } }}>
-            <div className="kc-hd">
-              <div className="kc-lbl">{k.label}</div>
-              <span className="kc-ico"><k.Icon size={18} /></span>
-            </div>
-            <div className="kc-val">{k.value}</div>
-          </div>
+        {kpiCards.map(c => (
+          <StatCard key={c.label} icon={c.icon} label={c.label}
+            metric={d => statsForDays(d)[c.key]}
+            onClick={() => router.push(c.href)} />
         ))}
       </div>
 
@@ -259,7 +291,7 @@ export default function DealerDashboard() {
             <span className="pg-sub">{rangeDesc}</span>
           </div>
           <div className="card-body" style={{ flex: 1, display: "flex", alignItems: "center", paddingTop: 8 }}>
-            <div style={{ width: "100%" }}><AreaChart key={`${chartRange}-${customStart}-${customEnd}`} data={sales} /></div>
+            <div style={{ width: "100%" }}><LineTrendChart key={`${chartRange}-${customStart}-${customEnd}`} data={sales} /></div>
           </div>
         </div>
 
@@ -353,6 +385,39 @@ export default function DealerDashboard() {
           </div>
         </div>
       </div>
+
+      {/* 5 · ลูกค้าเป้าหมายที่ต้องรีบดูแล — action-first: ลีดมูลค่าสูงที่เงียบนาน ใกล้หลุด */}
+      {atRisk.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <AlarmClock size={16} color="#dc2626" /> ลูกค้าเป้าหมายที่ต้องรีบดูแล
+            </div>
+            <span className="badge" style={{ background: "#fee2e2", color: "#dc2626", fontWeight: 800 }}>{atRisk.length} รายเงียบนาน</span>
+          </div>
+          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 8 }}>
+            {atRisk.map(({ l, silent, value }) => (
+              <div key={l.id} role="button" tabIndex={0}
+                onClick={() => router.push(`/leads?open=${l.numId}`)}
+                onKeyDown={e => { if (e.key === "Enter") router.push(`/leads?open=${l.numId}`); }}
+                style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", padding: "9px 11px", borderRadius: 10, border: "1px solid var(--border)" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fff5f5"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: silent >= 30 ? "#dc2626" : silent >= 14 ? "#d97706" : "#f59e0b" }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</div>
+                  <div style={{ fontSize: "0.66rem", color: "var(--sub)" }}>{l.contact} · {l.assigned}</div>
+                </div>
+                <span style={{ fontSize: "0.82rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtBaht(value)}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, borderRadius: 99, padding: "3px 10px", fontSize: "0.68rem", fontWeight: 700,
+                  background: silent >= 30 ? "#fee2e2" : "#fff3cd", color: silent >= 30 ? "#dc2626" : "#b45309" }}>
+                  เงียบ {silent} วัน
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   );
