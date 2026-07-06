@@ -4,7 +4,7 @@ import {
   createContext, useContext, useState, useMemo, useCallback, useEffect,
   type ReactNode,
 } from "react";
-import { dealerLeaderboard, hqAllCustomers, customers, quotations, responsiblePersons, solutionProducts } from "@/lib/mock";
+import { dealerLeaderboard, hqAllCustomers, initialCustomers as customers, quotations, responsiblePersons, solutionProducts } from "@/lib/mock";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -26,17 +26,17 @@ export function parseDate(s?: string | null): Date | null {
 
 // ── แสดงผลวันที่เป็นไทย (เพื่อโชว์ใน UI เท่านั้น ไม่เกี่ยวกับการกรอง) ──
 function fmtTH(d: Date): string {
-  return `${d.getDate()} ${THAI_MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+  return `${d.getDate()} ${THAI_MONTH_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
 }
 
 // ── Time range presets ──
-export type TimePreset = "today" | "last7" | "last30" | "thisMonth" | "thisYear" | "custom";
+export type TimePreset = "last7" | "last30" | "thisMonth" | "quarter" | "thisYear" | "custom";
 
 export const TIME_PRESETS: { key: TimePreset; label: string }[] = [
-  { key: "today",     label: "วันนี้" },
   { key: "last7",     label: "7 วันล่าสุด" },
   { key: "last30",    label: "30 วันล่าสุด" },
   { key: "thisMonth", label: "เดือนนี้" },
+  { key: "quarter",   label: "ไตรมาส" },
   { key: "thisYear",  label: "ปีนี้" },
   { key: "custom",    label: "กำหนดเอง" },
 ];
@@ -58,7 +58,7 @@ export type TimeRange = {
 };
 
 const PRESET_FACTOR: Record<Exclude<TimePreset, "custom">, number> = {
-  today: 0.033, last7: 0.23, last30: 1.0, thisMonth: 1.0, thisYear: 5.24,
+  last7: 0.23, last30: 1.0, thisMonth: 1.0, quarter: 3.03, thisYear: 5.24,
 };
 
 function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: string): TimeRange {
@@ -67,10 +67,10 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
   let start = now, end = now;
 
   switch (preset) {
-    case "today":     start = now; end = now; break;
     case "last7":     start = addDays(now, -6); end = now; break;
     case "last30":    start = addDays(now, -29); end = now; break;
     case "thisMonth": start = new Date(y, m, 1); end = now; break;
+    case "quarter":   start = new Date(y, Math.floor(m / 3) * 3, 1); end = now; break;
     case "thisYear":  start = new Date(y, 0, 1); end = now; break;
     case "custom": {
       const cs = parseDate(customStart) ?? addDays(now, -29);
@@ -177,7 +177,11 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) setState(s => ({ ...s, ...JSON.parse(raw) }));
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.preset && !TIME_PRESETS.some(t => t.key === saved.preset)) saved.preset = "last30";
+        setState(s => ({ ...s, ...saved }));
+      }
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
@@ -214,7 +218,9 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     if (state.product !== ALL && f.product != null &&
         f.product.toUpperCase() !== state.product.toUpperCase()) return false;
     if (state.status !== ALL && f.status != null && f.status !== state.status) return false;
-    if (state.person !== ALL && f.person != null && f.person !== state.person) return false;
+    // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → เทียบแบบ "มีคนนี้อยู่ในรายชื่อ"
+    if (state.person !== ALL && f.person != null &&
+        !f.person.split(",").map(s => s.trim()).includes(state.person)) return false;
     return true;
   }, [inRange, state.dealer, state.province, state.product, state.status, state.person]);
 

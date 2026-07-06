@@ -11,7 +11,7 @@ import {
 type Opt = { value: string; label: string };
 
 // ลำดับ preset (จัด 2 คอลัมน์ ไม่ต้องมีหัวข้อกลุ่ม)
-const PRESET_ORDER: TimePreset[] = ["today", "last7", "last30", "thisMonth", "thisYear"];
+const PRESET_ORDER: TimePreset[] = ["last7", "last30", "thisMonth", "quarter", "thisYear"];
 
 function useClickOutside(cb: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -164,7 +164,7 @@ function TimeRangePicker() {
 }
 
 /* ── Dropdown filter ทั่วไป (dealer / province / product / status) ── */
-function SelectFilter({ caption, value, options, onChange }: {
+export function SelectFilter({ caption, value, options, onChange }: {
   caption: string; value: string; options: Opt[]; onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -190,6 +190,40 @@ function SelectFilter({ caption, value, options, onChange }: {
   );
 }
 
+// ── ปุ่มช่วงเวลาแบบ pill (สไตล์เดียวกับหัวกราฟ SalesTrendChart) — ผูกกับ FilterContext กลาง ──
+const PILL_LABEL: Partial<Record<TimePreset, string>> = { last7: "7 วัน", last30: "30 วัน" };
+export function TimeRangePills({ style }: { style?: React.CSSProperties }) {
+  const { timeRange, setPreset, setCustomRange } = useFilters();
+  const [showCustom, setShowCustom] = useState(false);
+  const [cs, setCs] = useState("2026-06-01");
+  const [ce, setCe] = useState("2026-06-30");
+  const inp: React.CSSProperties = { border: "1px solid var(--border, #e5e7eb)", borderRadius: 8, padding: "4px 8px", fontSize: "0.72rem", fontFamily: "inherit", color: "#2D2D2D" };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", ...style }}>
+      {TIME_PRESETS.filter(p => p.key !== "custom").map(p => (
+        <button key={p.key}
+          className={timeRange.preset === p.key ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+          onClick={() => { setShowCustom(false); setPreset(p.key); }}>
+          {PILL_LABEL[p.key] ?? p.label}
+        </button>
+      ))}
+      <button
+        className={timeRange.preset === "custom" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+        onClick={() => setShowCustom(s => !s)}>
+        กำหนดเอง
+      </button>
+      {showCustom && (
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input type="date" value={cs} onChange={e => setCs(e.target.value)} style={inp} />
+          <span style={{ color: "#9ca3af", fontSize: "0.72rem" }}>–</span>
+          <input type="date" value={ce} onChange={e => setCe(e.target.value)} style={inp} />
+          <button className="btn btn-primary btn-sm" onClick={() => { setCustomRange(cs, ce); setShowCustom(false); }}>ใช้</button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export type FilterBarProps = {
   /** dimension ที่จะแสดง (นอกจาก time range) — ถ้าไม่ระบุจะ default ตาม role */
   dims?: FilterDim[];
@@ -199,10 +233,12 @@ export type FilterBarProps = {
   dealerOptions?: Opt[];
   personOptions?: Opt[];
   style?: React.CSSProperties;
+  /** false = ไม่แสดง dropdown ช่วงเวลา (กรณีหน้านั้นใช้ TimeRangePills แทน) */
+  time?: boolean;
 };
 
 export function FilterBar({
-  dims, statusOptions, productOptions, provinceOptions, dealerOptions, personOptions, style,
+  dims, statusOptions, productOptions, provinceOptions, dealerOptions, personOptions, style, time = true,
 }: FilterBarProps) {
   const { isHQ } = useRole();
   const {
@@ -221,7 +257,7 @@ export function FilterBar({
       display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
       justifyContent: "flex-end", ...style,
     }}>
-      <TimeRangePicker />
+      {time && <TimeRangePicker />}
 
       {show.includes("dealer") && (
         <SelectFilter caption="ตัวแทน" value={dealer}

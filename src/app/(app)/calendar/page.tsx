@@ -132,9 +132,6 @@ export default function CalendarPage() {
   function nextDay() { selectDate(addDays(selectedDate, 1)); }
 
   const selectedAppts = (byDate[selectedDate] ?? []).sort((a, b) => a.time.localeCompare(b.time));
-  const upcoming = useMemo(() =>
-    [...allAppts].filter(a => a.date >= TODAY && a.status === "upcoming").sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 5)
-  , [allAppts]);
 
   const monthAppts = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -197,69 +194,81 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Color legend (activity type) */}
-      <TypeLegend />
-
-      {/* Quick-filter: Today / Upcoming / Overdue */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <GroupChip label="ทั้งหมด" count={groups.today.length + groups.upcoming.length + groups.overdue.length}
-          keyColor={PRIMARY} bg="#f4f6f9" active={groupFilter === "all"} onClick={() => setGroupFilter("all")} plain />
-        <GroupChip label="วันนี้" count={groups.today.length}
-          keyColor={GROUP_COLORS.today.key} bg={GROUP_COLORS.today.bg} active={groupFilter === "today"} onClick={() => setGroupFilter("today")} />
-        <GroupChip label="กำลังจะถึง" count={groups.upcoming.length}
-          keyColor={GROUP_COLORS.upcoming.key} bg={GROUP_COLORS.upcoming.bg} active={groupFilter === "upcoming"} onClick={() => setGroupFilter("upcoming")} />
-        <GroupChip label="เกินกำหนด" count={groups.overdue.length}
-          keyColor={GROUP_COLORS.overdue.key} bg={GROUP_COLORS.overdue.bg} active={groupFilter === "overdue"} onClick={() => setGroupFilter("overdue")} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 16, alignItems: "start" }}>
         {/* Calendar (Month / Week / Day) */}
-        <div className="card" style={{ minWidth: 0 }}>
-          <div className="card-header">
+        <div className="card" style={{ minWidth: 0, alignSelf: "start" }}>
+          <div className="card-header" style={{ flexWrap: "wrap", gap: 12 }}>
             <div className="card-title">
               {view === "month" && `${THAI_MONTHS[month]} ${year + 543}`}
               {view === "week" && `สัปดาห์ ${parseInt(weekStart.split("-")[2])} ${THAI_MONTHS[parseYmd(weekStart).getMonth()]} – ${parseInt(weekDays[6].split("-")[2])} ${THAI_MONTHS[parseYmd(weekDays[6]).getMonth()]}`}
               {view === "day" && `${parseInt(selectedDate.split("-")[2])} ${THAI_MONTHS[parseYmd(selectedDate).getMonth()]} ${parseYmd(selectedDate).getFullYear() + 543}`}
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={view === "month" ? prevMonth : view === "week" ? prevWeek : prevDay} className="btn btn-secondary btn-sm" style={{ padding: "6px 10px" }}><ChevronLeft size={16} /></button>
-              <button onClick={goToday} className="btn btn-secondary btn-sm" style={{ color: PRIMARY }}>วันนี้</button>
-              <button onClick={view === "month" ? nextMonth : view === "week" ? nextWeek : nextDay} className="btn btn-secondary btn-sm" style={{ padding: "6px 10px" }}><ChevronRight size={16} /></button>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginLeft: "auto" }}>
+              {/* legend ย้ายมาอยู่ในหัวปฏิทิน (compact) */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {(Object.keys(BUCKET_META) as ActivityBucket[]).map(k => (
+                  <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.68rem", color: MUTED }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: BUCKET_META[k].color, flexShrink: 0 }} />
+                    {BUCKET_META[k].labelTh}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={view === "month" ? prevMonth : view === "week" ? prevWeek : prevDay} className="btn btn-secondary btn-sm" style={{ padding: "6px 10px" }}><ChevronLeft size={16} /></button>
+                <button onClick={goToday} className="btn btn-secondary btn-sm" style={{ color: PRIMARY }}>วันนี้</button>
+                <button onClick={view === "month" ? nextMonth : view === "week" ? nextWeek : nextDay} className="btn btn-secondary btn-sm" style={{ padding: "6px 10px" }}><ChevronRight size={16} /></button>
+              </div>
             </div>
           </div>
           <div className="card-body">
             {/* ── Month view ─────────────────────────────── */}
             {view === "month" && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+              // แยก header (auto) ออกจากตารางวัน (gridAutoRows คงที่) → ปฏิทินไม่ยืด/หดตามจำนวนนัด
+              <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, marginBottom: 5 }}>
                 {THAI_DAYS.map(d => (
-                  <div key={d} style={{ textAlign: "center", fontSize: "0.66rem", fontWeight: 700, color: MUTED, padding: "4px 0" }}>{d}</div>
+                  <div key={d} style={{ textAlign: "center", fontSize: "0.68rem", fontWeight: 700, color: MUTED, padding: "2px 0" }}>{d}</div>
                 ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: 108, gap: 5 }}>
                 {cells.map((d, i) => {
                   if (d === null) return <div key={i} />;
                   const date = ymd(year, month, d);
-                  const appts = byDate[date] ?? [];
+                  const appts = (byDate[date] ?? []).slice().sort((a, b) => a.time.localeCompare(b.time));
                   const isToday = date === TODAY;
                   const isSel = date === selectedDate;
                   return (
                     <button key={i} onClick={() => setSelectedDate(date)}
                       style={{
-                        minHeight: 64, borderRadius: 10, border: isSel ? `1.5px solid ${PRIMARY}` : `1px solid ${BORDER}`,
-                        background: isSel ? "#dce5f0" : isToday ? "#eef3f8" : "#fff", cursor: "pointer", padding: "5px 6px",
-                        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, transition: "background .12s",
+                        height: 108, borderRadius: 10, border: isSel ? `1.5px solid ${PRIMARY}` : `1px solid ${BORDER}`,
+                        background: isSel ? "#f4f8fc" : isToday ? "#eef3f8" : "#fff", cursor: "pointer", padding: "6px 6px 5px",
+                        display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, transition: "background .12s", overflow: "hidden",
                       }}
                       onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = "#f4f6f9"; }}
                       onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = isToday ? "#eef3f8" : "#fff"; }}>
-                      <span style={{ fontSize: "0.74rem", fontWeight: isToday ? 800 : 600, color: isToday ? PRIMARY : "#2D2D2D" }}>{d}</span>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                        {appts.slice(0, 3).map(a => (
-                          <span key={a.id} style={{ width: 6, height: 6, borderRadius: "50%", background: bucketMeta(a).color }} />
-                        ))}
-                        {appts.length > 3 && <span style={{ fontSize: "0.55rem", color: MUTED }}>+{appts.length - 3}</span>}
+                      <span style={{ fontSize: "0.76rem", fontWeight: isToday ? 800 : 600, color: isToday ? PRIMARY : "#2D2D2D",
+                        alignSelf: "flex-start", ...(isToday ? { background: PRIMARY, color: "#fff", borderRadius: 999, minWidth: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" } : {}) }}>{d}</span>
+                      {/* event chips จริง (สูงสุด 3) แทนจุด */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                        {appts.slice(0, 3).map(a => {
+                          const bm = bucketMeta(a);
+                          return (
+                            <span key={a.id} title={`${a.time} ${a.company}`}
+                              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.6rem", fontWeight: 600, color: "#2D2D2D",
+                                background: bm.bg, borderLeft: `2.5px solid ${bm.color}`, borderRadius: 4, padding: "1px 4px",
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <span style={{ color: bm.color, fontWeight: 800, flexShrink: 0 }}>{a.time}</span>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</span>
+                            </span>
+                          );
+                        })}
+                        {appts.length > 3 && <span style={{ fontSize: "0.58rem", color: MUTED, fontWeight: 600, paddingLeft: 2 }}>+{appts.length - 3} เพิ่มเติม</span>}
                       </div>
                     </button>
                   );
                 })}
               </div>
+              </>
             )}
 
             {/* ── Week view ──────────────────────────────── */}
@@ -307,16 +316,18 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Side: selected day + upcoming */}
+        {/* Rail: วันที่เลือก + รายการนัด (กรองด้วยชิป) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* วันที่เลือก */}
           <div className="card">
             <div className="card-header">
               <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.9rem" }}>
-                <CalendarDays size={15} color={PRIMARY} /> {selectedDate === TODAY ? "วันนี้" : `วันที่ ${parseInt(selectedDate.split("-")[2])}`}
+                <CalendarDays size={15} color={PRIMARY} /> {selectedDate === TODAY ? "วันนี้" : `${parseInt(selectedDate.split("-")[2])} ${THAI_MONTHS[parseYmd(selectedDate).getMonth()]}`}
               </div>
+              <button onClick={() => setAddOpen(true)} className="btn btn-secondary btn-sm" style={{ color: PRIMARY, padding: "5px 9px" }}><Plus size={13} /></button>
             </div>
             {selectedAppts.length === 0 ? (
-              <div className="card-body" style={{ fontSize: "0.78rem", color: MUTED, textAlign: "center", padding: "20px 0 24px" }}>ไม่มีนัดหมาย</div>
+              <div className="card-body" style={{ fontSize: "0.78rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมายวันนี้</div>
             ) : (
               <div>
                 {selectedAppts.map(a => <ApptRow key={a.id} a={a} onOpen={() => setDetail(a)} />)}
@@ -324,38 +335,42 @@ export default function CalendarPage() {
             )}
           </div>
 
+          {/* รายการนัด — ชิปกรอง (ทั้งหมด/วันนี้/กำลังจะถึง/เกินกำหนด) + list เดียว */}
           <div className="card">
-            <div className="card-header">
-              <div className="card-title" style={{ fontSize: "0.9rem" }}>นัดหมายที่กำลังจะถึง</div>
+            <div className="card-header" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+              <div className="card-title" style={{ fontSize: "0.9rem" }}>รายการนัดหมาย</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {([
+                  { k: "all" as const,      label: "ทั้งหมด",     n: groups.today.length + groups.upcoming.length + groups.overdue.length, col: PRIMARY },
+                  { k: "today" as const,    label: "วันนี้",       n: groups.today.length,    col: GROUP_COLORS.today.key },
+                  { k: "upcoming" as const, label: "กำลังจะถึง",   n: groups.upcoming.length, col: GROUP_COLORS.upcoming.key },
+                  { k: "overdue" as const,  label: "เกินกำหนด",    n: groups.overdue.length,  col: GROUP_COLORS.overdue.key },
+                ]).map(c => {
+                  const active = groupFilter === c.k;
+                  return (
+                    <button key={c.k} onClick={() => setGroupFilter(c.k)}
+                      style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", padding: "5px 10px", borderRadius: 99,
+                        border: active ? `1.5px solid ${c.col}` : `1px solid ${BORDER}`, background: active ? c.col : "#fff",
+                        color: active ? "#fff" : "#2D2D2D", fontSize: "0.72rem", fontWeight: 700 }}>
+                      {c.label}
+                      <span style={{ fontSize: "0.66rem", fontWeight: 800, background: active ? "rgba(255,255,255,.28)" : "#f0f4f8", color: active ? "#fff" : c.col, borderRadius: 99, padding: "0 6px" }}>{c.n}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div>
-              {upcoming.map(a => <ApptRow key={a.id} a={a} showDate onOpen={() => setDetail(a)} />)}
-            </div>
+            {groupedList.length === 0 ? (
+              <div className="card-body" style={{ fontSize: "0.78rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมาย</div>
+            ) : (
+              <div style={{ maxHeight: 520, overflowY: "auto" }}>
+                {groupedList.map(a => {
+                  const g = apptGroup(a);
+                  return <ApptRow key={a.id} a={a} showDate groupColor={g ? GROUP_COLORS[g].key : undefined} onOpen={() => setDetail(a)} />;
+                })}
+              </div>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Filtered list by group (Today / Upcoming / Overdue / All) */}
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-header">
-          <div className="card-title" style={{ fontSize: "0.9rem" }}>
-            {groupFilter === "today" ? "วันนี้"
-              : groupFilter === "upcoming" ? "กำลังจะถึง"
-              : groupFilter === "overdue" ? "เกินกำหนด"
-              : "นัดหมายทั้งหมด"}
-            <span style={{ color: MUTED, fontWeight: 600, marginLeft: 8 }}>({groupedList.length})</span>
-          </div>
-        </div>
-        {groupedList.length === 0 ? (
-          <div className="card-body" style={{ fontSize: "0.78rem", color: MUTED, textAlign: "center", padding: "20px 0 24px" }}>ไม่มีนัดหมาย</div>
-        ) : (
-          <div>
-            {groupedList.map(a => {
-              const g = apptGroup(a);
-              return <ApptRow key={a.id} a={a} showDate groupColor={g ? GROUP_COLORS[g].key : undefined} onOpen={() => setDetail(a)} />;
-            })}
-          </div>
-        )}
       </div>
 
       {/* Appointment detail modal */}
@@ -429,8 +444,8 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
               <button onClick={() => { onClose(); router.push("/customers"); }} className="btn btn-secondary btn-md" style={{ color: PRIMARY }}>
                 <Users size={13} /> ดูลูกค้า
               </button>
-              <button onClick={() => { onClose(); router.push("/pipeline"); }} className="btn btn-primary btn-md">
-                <GitBranch size={13} /> ดูไปป์ไลน์
+              <button onClick={() => { onClose(); router.push("/leads"); }} className="btn btn-primary btn-md">
+                <GitBranch size={13} /> ดูลูกค้าเป้าหมาย
               </button>
             </div>
           </div>
@@ -547,23 +562,6 @@ function ViewSwitcher({ view, onChange }: { view: ViewMode; onChange: (v: ViewMo
   );
 }
 
-// Color legend for activity types
-function TypeLegend() {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, padding: "8px 2px", marginBottom: 12 }}>
-      {(Object.keys(BUCKET_META) as ActivityBucket[]).map(k => {
-        const m = BUCKET_META[k];
-        return (
-          <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.75rem", color: "#2D2D2D" }}>
-            <span style={{ width: 10, height: 10, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
-            <span style={{ fontWeight: 700 }}>{m.labelTh}</span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 // Compact appointment chip for the Week view columns
 function WeekChip({ a, onOpen }: { a: AppointmentMock; onOpen?: () => void }) {
   const m = bucketMeta(a);
@@ -596,29 +594,6 @@ function DayRow({ a, onOpen }: { a: AppointmentMock; onOpen?: () => void }) {
         {a.note && <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.note}</div>}
       </div>
     </div>
-  );
-}
-
-function GroupChip({ label, count, keyColor, bg, active, onClick, plain }: {
-  label: string; count: number; keyColor: string; bg: string; active: boolean; onClick: () => void; plain?: boolean;
-}) {
-  return (
-    <button onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-        padding: "10px 14px", borderRadius: 12, textAlign: "left",
-        border: active ? `1.5px solid ${keyColor}` : `1px solid ${BORDER}`,
-        background: active ? bg : "#fff", transition: "background .12s, border-color .12s",
-      }}
-      onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "#f4f6f9"; }}
-      onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "#fff"; }}>
-      {!plain && <span style={{ width: 10, height: 10, borderRadius: "50%", background: keyColor, flexShrink: 0 }} />}
-      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: active ? keyColor : "#2D2D2D" }}>{label}</span>
-      <span style={{
-        fontSize: "0.8rem", fontWeight: 800, minWidth: 22, textAlign: "center",
-        color: "#fff", background: keyColor, borderRadius: 999, padding: "1px 8px",
-      }}>{count}</span>
-    </button>
   );
 }
 

@@ -1,24 +1,25 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  leads, appointments, notes,
+  appointments, notes,
   quotationStatusLabel, quotationStatusColor, noteCategoryColor,
-  responsiblePersons, RP_STORAGE_KEY,
-  type ResponsiblePerson, type QuotationMock, type PipelineDealMock,
+  type QuotationMock, type PipelineDealMock,
   type CustomerRow, type CustomerStatus, type CustomerType,
 } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
+import { useFilters } from "@/context/FilterContext";
+import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { RightDrawer, DrawerSection, DrawerRow, type DrawerTab } from "@/components/ui/RightDrawer";
 import { useTableLayout, type Col } from "@/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
+import { PersonPicker } from "@/components/ui/PersonPicker";
 import {
   Plus, Search, X, ChevronUp, ChevronDown,
-  Phone, Mail, MapPin, Building2, Edit2, ExternalLink,
+  Phone, Building2, ExternalLink,
   LayoutList, LayoutGrid, Filter, Trash2,
-  Calendar, FileText, StickyNote,
+  Calendar, FileText, StickyNote, Check, User, Paperclip,
 } from "lucide-react";
 
 // ── Design tokens ────────────────────────────────────────────
@@ -39,8 +40,7 @@ const CUSTOMER_STATUS_OPTIONS = [
   { value: "active",   label: "ใช้งาน" },
   { value: "inactive", label: "ไม่ใช้งาน" },
 ];
-const DEFAULT_OWNERS = responsiblePersons.filter(p => p.active).map(p => p.name);
-const PROVINCES  = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","สมุทรปราการ","นครสวรรค์","ราชบุรี","ขอนแก่น","ตาก","อุตรดิตถ์","อื่นๆ"];
+const PROVINCES  =["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","สมุทรปราการ","นครสวรรค์","ราชบุรี","ขอนแก่น","ตาก","อุตรดิตถ์","อื่นๆ"];
 
 function initials(name:string){ return name.replace(/บจ\.|หจก\./g,"").trim().slice(0,2); }
 function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
@@ -157,8 +157,8 @@ const LIFECYCLE_META: Record<LifecycleType,{label:string; fg:string; bg:string}>
 type CustomerForm = Omit<CustomerRow,"id"|"initials"|"color"|"totalValue">;
 const BLANK_FORM: CustomerForm = { name:"",company:"",type:"บริษัท",email:"",phone:"",province:"กรุงเทพฯ",category:"โกดัง/คลังสินค้า",status:"active",projects:0,joinDate:"",owner:"สมชาย เชียงใหม่" };
 
-function CustomerModal({ initial, title, onSave, onClose, owners }:{
-  initial:CustomerForm; title:string; onSave:(f:CustomerForm)=>void; onClose:()=>void; owners:string[];
+function CustomerModal({ initial, title, onSave, onClose }:{
+  initial:CustomerForm; title:string; onSave:(f:CustomerForm)=>void; onClose:()=>void;
 }){
   const [form, setForm] = useState<CustomerForm>(initial);
   function set<K extends keyof CustomerForm>(k:K,v:CustomerForm[K]){ setForm(p=>({...p,[k]:v})); }
@@ -219,9 +219,7 @@ function CustomerModal({ initial, title, onSave, onClose, owners }:{
               </div>
               <div>
                 <label className="form-label">ผู้รับผิดชอบ</label>
-                <select className="form-select" value={form.owner} onChange={e=>set("owner",e.target.value)}>
-                  {owners.map(o=><option key={o}>{o}</option>)}
-                </select>
+                <PersonPicker value={form.owner} onChange={v=>set("owner",v)} multiple />
               </div>
               <div>
                 <label className="form-label">สถานะ</label>
@@ -246,14 +244,112 @@ function CustomerModal({ initial, title, onSave, onClose, owners }:{
   );
 }
 
+// ─── ภาพรวม (แก้ไขในตัว) — ฟอร์มแก้ไขข้อมูลลูกค้าในแท็บ "ข้อมูล" ของโมดัลรายละเอียด ───
+// สไตล์เดียวกับหน้าลูกค้าเป้าหมาย (OverviewEditor) — แก้ในหน้านี้เลย ไม่มีฟอร์มแยก
+function CustomerOverviewEditor({ customer, onSave }:{
+  customer: CustomerRow; onSave: (f: CustomerForm)=>void;
+}){
+  const seed = (): CustomerForm => ({
+    name: customer.name, company: customer.company, type: customer.type, email: customer.email,
+    phone: customer.phone, province: customer.province, category: customer.category,
+    status: customer.status, projects: customer.projects, joinDate: customer.joinDate, owner: customer.owner,
+    logo: customer.logo ?? "",
+  });
+  const [f, setF] = useState<CustomerForm>(seed);
+  const logoRef = useRef<HTMLInputElement>(null);
+  useEffect(()=>{ setF(seed()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [customer.id]);
+  const set = <K extends keyof CustomerForm>(k:K,v:CustomerForm[K])=>setF(p=>({...p,[k]:v}));
+  function uploadLogo(e: React.ChangeEvent<HTMLInputElement>){
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => set("logo", (ev.target?.result as string) ?? "");
+    reader.readAsDataURL(file);
+  }
+  const dirty = (Object.keys(f) as (keyof CustomerForm)[]).some(k => (f[k] ?? "") !== ((customer as unknown as CustomerForm)[k] ?? ""));
+
+  const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
+  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.82rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
+
+  return (
+    <div style={{ padding:"14px 16px" }}>
+      <div style={{ fontSize:"0.63rem", fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:PRIMARY, marginBottom:12 }}>
+        ข้อมูลลูกค้า · แก้ไขได้ในหน้านี้
+      </div>
+      {/* เปลี่ยนรูป/โลโก้ลูกค้า (เหมือนหน้าลูกค้าเป้าหมาย) */}
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
+        <div style={{ width:60, height:60, borderRadius:14, flexShrink:0, overflow:"hidden",
+          border:`2px dashed ${f.logo ? "transparent" : "#e5e7eb"}`, background:f.logo ? "#fff" : "#f8fafc",
+          display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {f.logo
+            ? <img src={f.logo} alt="โลโก้" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+            : <User size={24} color="#9ca3af" />}
+        </div>
+        <div>
+          <label style={lbl}>รูป / โลโก้ลูกค้า</label>
+          <input ref={logoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
+          <div style={{ display:"flex", gap:8 }}>
+            <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
+              <Paperclip size={13} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+            </button>
+            {f.logo && (
+              <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
+                <X size={13} /> ลบรูป
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ gridColumn:"1/-1" }}>
+          <label style={lbl}>ประเภทลูกค้า</label>
+          <div style={{ display:"flex", background:"#f0f4f8", borderRadius:10, padding:3, border:`1px solid ${BORDER}` }}>
+            {CUSTOMER_TYPES.map(t=>(
+              <button key={t} type="button" onClick={()=>set("type",t)}
+                style={{ flex:1, padding:"7px 12px", borderRadius:8, border:"none", background:f.type===t?PRIMARY:"transparent", color:f.type===t?"#fff":MUTED, fontSize:"0.74rem", fontWeight:700, cursor:"pointer" }}>{t}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ gridColumn:"1/-1" }}><label style={lbl}>บริษัท *</label>
+          <input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></div>
+        <div><label style={lbl}>ผู้ติดต่อ *</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={inp} /></div>
+        <div><label style={lbl}>โทรศัพท์</label><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></div>
+        <div style={{ gridColumn:"1/-1" }}><label style={lbl}>อีเมล</label>
+          <input value={f.email} onChange={e=>set("email",e.target.value)} type="email" placeholder="email@company.com" style={inp} /></div>
+        <div><label style={lbl}>จังหวัด</label>
+          <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select></div>
+        <div><label style={lbl}>อุตสาหกรรม</label>
+          <select value={f.category} onChange={e=>set("category",e.target.value)} style={inp}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></div>
+        <div><label style={lbl}>ผู้รับผิดชอบ</label>
+          <PersonPicker value={f.owner} onChange={v=>set("owner",v)} multiple /></div>
+        <div><label style={lbl}>สถานะ</label>
+          <select value={f.status} onChange={e=>set("status",e.target.value as CustomerStatus)} style={inp}>
+            <option value="active">ใช้งาน</option><option value="inactive">ไม่ใช้งาน</option>
+          </select></div>
+        <div><label style={lbl}>วันที่เพิ่ม</label>
+          <input type="date" value={f.joinDate} onChange={e=>set("joinDate",e.target.value)} style={inp} /></div>
+      </div>
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:16 }}>
+        {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
+        <button onClick={()=>onSave(f)} disabled={!dirty} className="btn btn-primary btn-sm"
+          style={{ opacity: dirty ? 1 : 0.5, cursor: dirty ? "pointer" : "default" }}>
+          <Check size={13} /> บันทึกการแก้ไข
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────
 // หน้าลูกค้าไม่ใช้ตัวกรองช่วงเวลากลาง (ไม่จำเป็น) — แสดงลูกค้าทั้งหมด ใช้ค้นหา/ตัวกรองในเครื่องแทน
 export default function CustomersPage(){
   const router = useRouter();
   const {
-    customers: data, quotations, deals,
+    customers: data, quotations, deals, leads,
     addCustomer: ctxAddCustomer, updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
+  // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
+  const { timeRange, inRange } = useFilters();
   const [query, setQuery]             = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL"|CustomerStatus>("ALL");
   const [catFilter, setCatFilter]     = useState("ALL");
@@ -262,14 +358,17 @@ export default function CustomersPage(){
   const [sortDir, setSortDir]         = useState<SortDir>("asc");
   const [selected, setSelected]       = useState<CustomerRow|null>(null);
   const [page, setPage]               = useState(1);
-  const [ownersList, setOwnersList]   = useState<string[]>(DEFAULT_OWNERS);
+
+  // เปิดโมดัลอัตโนมัติจาก ?open=N (ลิงก์เดิม /customers/[id] redirect มาที่นี่)
   useEffect(() => {
-    const s = localStorage.getItem(RP_STORAGE_KEY);
-    if (s) try {
-      const arr: ResponsiblePerson[] = JSON.parse(s);
-      setOwnersList(arr.filter(p => p.active).map(p => p.name));
-    } catch {}
+    const p = new URLSearchParams(window.location.search).get("open");
+    if (!p) return;
+    const target = data.find(c => String(c.id) === p);
+    if (target) setSelected(target);
+    window.history.replaceState(null, "", "/customers");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // รายชื่อผู้รับผิดชอบดึงจาก PersonPicker เอง (registry กลาง) — ไม่ต้องเก็บ list ที่นี่
   // โมดัลรายละเอียด: ปิดด้วย Esc + ล็อกสกรอลล์พื้นหลัง (parity กับ RightDrawer)
   useEffect(() => {
     if (!selected) return;
@@ -283,12 +382,9 @@ export default function CustomersPage(){
   const [view, setView]               = useState<"card"|"table">("card");
   const [showFilter, setShowFilter]   = useState(false);
   const [showAdd, setShowAdd]         = useState(false);
-  const [editingRow, setEditingRow]   = useState<CustomerRow|null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailTab, setDetailTab]     = useState<"info"|"quotes"|"appts"|"notes">("info");
 
-  // View → RightDrawer (แทนการนำทางไป /customers/{id})
-  const [drawerRow, setDrawerRow]     = useState<CustomerRow|null>(null);
 
   // Table layout (density + hidden columns) จาก TableTools
   const { density, setDensity, hiddenCols, toggleCol } = useTableLayout("customers");
@@ -302,7 +398,9 @@ export default function CustomersPage(){
       const matchS=statusFilter==="ALL"||c.status===statusFilter;
       const matchC=catFilter==="ALL"||c.category===catFilter;
       const matchL=lifecycleFilter==="ALL"||lifecycleTypeFor(c.id,c.joinDate,quotations)===lifecycleFilter;
-      return matchQ&&matchS&&matchC&&matchL;
+      // ช่วงเวลา (วันเดือนปี) จากตัวกรองกลาง — เทียบวันที่เข้าเป็นลูกค้า (joinDate เป็น ISO)
+      const matchT=inRange(lastActivityFor(c.id,c.joinDate,quotations));
+      return matchQ&&matchS&&matchC&&matchL&&matchT;
     });
     const sortVal=(c:CustomerRow):string|number=>{
       switch(sortKey){
@@ -324,7 +422,7 @@ export default function CustomersPage(){
       return 0;
     });
     return rows;
-  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir]);
+  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir,inRange]);
 
   // ── Pagination (client-side) ──────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -339,13 +437,12 @@ export default function CustomersPage(){
   // สรุปด้านบนนับจากลูกค้าทั้งหมด (ไม่ผูกกับตัวกรองสถานะ/หมวดในเครื่อง)
   const scoped        = data;
   const totalAll      = scoped.length;
-  const totalActive   = scoped.filter(c=>c.status==="active"||hasOpenActivity(c.id,deals,quotations)).length;
-  const totalInactive = totalAll - totalActive;
   const totalValue    = scoped.reduce((s,c)=>s+c.totalValue,0);
 
   // Related data for selected customer
   const relatedQuotations   = selected ? quotations.filter(q=>q.customerId===selected.id) : [];
-  const relatedLeads        = selected ? leads.filter(l=>l.company===selected.company||l.customerId===selected.id) : [];
+  // ไม่รวมลีดที่ปิดการขายสำเร็จ (PAID) — กลายเป็นลูกค้ารายนี้ไปแล้ว ลิงก์จะวนกลับหน้าเดิม
+  const relatedLeads        = selected ? leads.filter(l=>(l.company===selected.company||l.customerId===selected.id) && l.status!=="PAID") : [];
   const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company) : [];
   const relatedNotes        = selected ? notes.filter(n=>n.customerId===selected.id) : [];
 
@@ -354,11 +451,12 @@ export default function CustomersPage(){
     const color = PALETTE[maxId % PALETTE.length];
     ctxAddCustomer({...form,id:maxId+1,initials:initials(form.company),color,totalValue:0});
   }
-  function saveEdit(form: CustomerForm){
-    if(!editingRow) return;
-    const updated: CustomerRow = {...editingRow,...form,initials:initials(form.company)};
+  // บันทึกการแก้ไขในตัว (จากแท็บ "ข้อมูล" ของโมดัลรายละเอียด)
+  function saveInline(form: CustomerForm){
+    if(!selected) return;
+    const updated: CustomerRow = {...selected,...form,initials:initials(form.company)};
     ctxUpdateCustomer(updated);
-    setSelected(p=>p&&p.id===editingRow.id?updated:p);
+    setSelected(updated);
   }
   function deleteCustomer(){
     if(!selected) return;
@@ -384,14 +482,6 @@ export default function CustomersPage(){
     {key:"notes",   label:`โน้ต (${relatedNotes.length})`, icon:<StickyNote size={11}/>},
   ];
 
-  // Stat cards meta
-  const STATS: {label:string; value:string|number; icon:React.ReactNode; iconBg:string; key:"ALL"|CustomerStatus|null}[] = [
-    {label:"ลูกค้าทั้งหมด", value:totalAll,             icon:<Building2 size={20}/>, iconBg:"#dce5f0", key:"ALL"},
-    {label:"ใช้งานอยู่",    value:totalActive,          icon:<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#059669" strokeWidth="1.9"><polyline points="20 6 9 17 4 12"/></svg>, iconBg:"#e5faf0", key:"active"},
-    {label:"ไม่ใช้งาน",     value:totalInactive,        icon:<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#64748b" strokeWidth="1.9"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>, iconBg:"#f1f5f9", key:"inactive"},
-    {label:"มูลค่ารวม",     value:fmtMoney(totalValue), icon:<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke={PRIMARY} strokeWidth="1.9"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>, iconBg:"#dce5f0", key:null},
-  ];
-
   // แถบแบ่งหน้า — "แสดง X–Y จาก Z" ซ้าย · Prev / หน้า p / total / Next ขวา
   const Pagination = () => {
     const btnStyle = (disabled:boolean): React.CSSProperties => ({
@@ -413,82 +503,6 @@ export default function CustomersPage(){
     );
   };
 
-  // ── RightDrawer (View) — 7 แท็บ deterministic ────────────────
-  const drawerTabs: DrawerTab[] = useMemo(()=>{
-    const c = drawerRow;
-    if(!c) return [];
-    const dQuotations = quotations.filter(q=>q.customerId===c.id);
-    const dActivities = activityItemsFor(c.id, c.joinDate, quotations, deals);
-    const dTasks      = taskItemsFor(c.id, deals);
-    const dHistory    = historyItemsFor(c.id, c.joinDate, quotations, deals);
-    const lc          = lifecycleTypeFor(c.id, c.joinDate, quotations);
-
-    const emptyState = (msg:string)=>(
-      <div style={{textAlign:"center",padding:"28px 8px",color:"#9aa2ad",fontSize:"0.82rem"}}>{msg}</div>
-    );
-
-    return [
-      // 1) ภาพรวม (Overview)
-      { key:"overview", label:"ภาพรวม", content:(
-        <>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:18}}>
-            {[
-              {label:"ยอดขายรวม",     val:fmtMoney(totalSalesFor(c.id,quotations)),                 accent:PRIMARY,   bg:"#dce5f0"},
-              {label:"ใบเสนอราคา",    val:quotationCountFor(c.id,quotations).toString(),            accent:STEEL,     bg:"#f0f4f8"},
-              {label:"ดีลที่ดำเนินการ", val:activeDealsCountFor(c.id,deals).toString(),          accent:"#059669", bg:"#e5faf0"},
-            ].map((s,i)=>(
-              <div key={i} style={{background:s.bg,borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
-                <div style={{fontSize:"0.9rem",fontWeight:800,color:s.accent,lineHeight:1.2}}>{s.val}</div>
-                <div style={{fontSize:"0.58rem",color:MUTED,marginTop:4,fontWeight:600}}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <DrawerSection title="ข้อมูลลูกค้า">
-            <DrawerRow label="บริษัท"        value={c.company} />
-            <DrawerRow label="ผู้ติดต่อ"      value={c.name} />
-            <DrawerRow label="โทร"           value={c.phone} />
-            <DrawerRow label="อีเมล"         value={c.email} />
-            <DrawerRow label="จังหวัด"        value={c.province} />
-            <DrawerRow label="ผู้รับผิดชอบ"    value={c.owner} />
-            <DrawerRow label="ประเภท"        value={c.type} />
-            <DrawerRow label="อุตสาหกรรม"    value={c.category} />
-            <DrawerRow label="สถานะลูกค้า"    value={LIFECYCLE_META[lc].label} />
-          </DrawerSection>
-        </>
-      )},
-      // 2) กิจกรรม (Activities)
-      { key:"activities", label:"กิจกรรม", content:(
-        <DrawerSection title="ไทม์ไลน์กิจกรรม">
-          <ActivityTimeline items={dActivities} />
-        </DrawerSection>
-      )},
-      // ใบเสนอราคา (Quotation)
-      { key:"quotation", label:"ใบเสนอราคา", content:(
-        dQuotations.length===0 ? emptyState("ยังไม่มีใบเสนอราคา") : (
-          <DrawerSection title={`ใบเสนอราคา (${dQuotations.length})`}>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {dQuotations.map(q=>(
-                <button key={q.id} onClick={()=>router.push("/quotations")}
-                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%",fontFamily:"inherit"}}>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{fontSize:"0.7rem",fontWeight:700,color:PRIMARY,fontFamily:"monospace"}}>{q.id}</div>
-                    <div style={{fontSize:"0.78rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.project}</div>
-                    <div style={{fontSize:"0.68rem",color:MUTED,marginTop:1}}>{q.total} · {fmtDate(q.date)}</div>
-                  </div>
-                  <span className="badge" style={{flexShrink:0,background:quotationStatusColor[q.status].bg,color:quotationStatusColor[q.status].text}}>
-                    {quotationStatusLabel[q.status]}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </DrawerSection>
-        )
-      )},
-      // 5) ไฟล์ (Files)
-      { key:"files", label:"ไฟล์", content: emptyState("ยังไม่มีไฟล์แนบ") },
-    ];
-  },[drawerRow,router,quotations,deals]);
-
   return (
     <div className="erp" style={{display:"flex",gap:16,alignItems:"flex-start"}}>
 
@@ -499,9 +513,10 @@ export default function CustomersPage(){
         <div className="page-head">
           <div>
             <h2>ลูกค้า</h2>
-            <p>จัดการข้อมูลลูกค้าและความสัมพันธ์ทางธุรกิจ</p>
+            <p>จัดการข้อมูลลูกค้าและความสัมพันธ์ทางธุรกิจ · {timeRange.subtitle}</p>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <FilterBar dims={[]} />
             <ExportMenu filename="customers" title="รายชื่อลูกค้า"
               headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ดีลปัจจุบัน","มูลค่าดีล"]}
               rows={filtered.map(c=>{
@@ -514,81 +529,128 @@ export default function CustomersPage(){
           </div>
         </div>
 
-        {/* Stat cards */}
-        <div className="stat-grid">
-          {STATS.map((s,i)=>(
-            <div key={i}
-              className={`stat-card${s.key!==null?" clickable":""}`}
-              onClick={()=>s.key!==null?setStatusFilter(s.key as "ALL"|CustomerStatus):undefined}>
-              <div className="stat-icon" style={{background:s.iconBg}}>{s.icon}</div>
-              <div className="stat-label">{s.label}</div>
-              <div className="stat-value">{s.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Toolbar */}
-        <div style={{marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              {/* Search */}
-              <div className="search-bar" style={{minWidth:220}}>
-                <Search size={13} color="#9ca3af"/>
-                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาลูกค้า..."/>
-                {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
+        {/* สรุปรวม (pill) + สรุปตามสถานะ (คลิกกรอง) */}
+        {(() => {
+          const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
+          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
+          const isAct = (c:CustomerRow) => c.status==="active"||hasOpenActivity(c.id,deals,quotations);
+          const lc = (c:CustomerRow) => lifecycleTypeFor(c.id,c.joinDate,quotations);
+          const sval = (arr:CustomerRow[]) => arr.reduce((s,c)=>s+c.totalValue,0);
+          const cards = [
+            {label:"ใช้งาน",    list:scoped.filter(isAct),           on:()=>setStatusFilter(statusFilter==="active"?"ALL":"active"),        act:statusFilter==="active",        bg:"#e5faf0", fg:"#059669"},
+            {label:"ไม่ใช้งาน", list:scoped.filter(c=>!isAct(c)),    on:()=>setStatusFilter(statusFilter==="inactive"?"ALL":"inactive"),    act:statusFilter==="inactive",      bg:"#f1f5f9", fg:"#64748b"},
+            {label:"ลูกค้าใหม่", list:scoped.filter(c=>lc(c)==="new"),      on:()=>setLifecycleFilter(lifecycleFilter==="new"?"ALL":"new"),          act:lifecycleFilter==="new",       bg:LIFECYCLE_META.new.bg,      fg:LIFECYCLE_META.new.fg},
+            {label:"ลูกค้าเดิม", list:scoped.filter(c=>lc(c)==="existing"), on:()=>setLifecycleFilter(lifecycleFilter==="existing"?"ALL":"existing"), act:lifecycleFilter==="existing", bg:LIFECYCLE_META.existing.bg, fg:LIFECYCLE_META.existing.fg},
+          ];
+          return (
+            <>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+                <div style={pill}>ลูกค้าทั้งหมด: <span style={{color:PRIMARY}}>{totalAll}</span></div>
+                <div style={pill}>มูลค่ารวม: <span style={{color:PRIMARY}}>{fmtC(totalValue)}</span></div>
               </div>
-              {/* Filter toggle */}
-              <button className={`btn btn-sm ${showFilter?"btn-primary":"btn-secondary"}`} onClick={()=>setShowFilter(f=>!f)}>
-                <Filter size={13}/> ตัวกรอง
-              </button>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              {/* View toggle */}
-              <div style={{display:"flex",alignItems:"center",background:"#f0f4f8",borderRadius:99,padding:3,border:`1px solid ${BORDER}`}}>
-                {(["card","table"] as const).map(v=>(
-                  <button key={v} onClick={()=>setView(v)}
-                    style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:99,border:"none",background:view===v?PRIMARY:"transparent",color:view===v?"#fff":MUTED,fontSize:"0.71rem",fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
-                    {v==="card"?<LayoutGrid size={13}/>:<LayoutList size={13}/>}
-                    {v==="card"?"การ์ด":"ตาราง"}
+              <div className="card" style={{ padding:"12px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap" }}>
+                {cards.map(card=>(
+                  <button key={card.label} onClick={card.on}
+                    style={{ display:"flex", flexDirection:"column", gap:2, background:card.act?card.bg:"#fafafa",
+                      border:`1px solid ${card.act?card.fg+"40":BORDER}`, borderRadius:10, padding:"8px 12px",
+                      fontSize:"0.72rem", fontWeight:600, color:card.act?card.fg:MUTED, cursor:"pointer", fontFamily:"inherit" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                      <span style={{ width:18, height:18, borderRadius:"50%", background:card.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.6rem", color:card.fg, fontWeight:800 }}>{card.list.length}</span>
+                      {card.label}
+                    </div>
+                    <span style={{ fontSize:"0.62rem", color:card.act?card.fg:"#C0C0C0", fontWeight:500 }}>{sval(card.list)>0?fmtC(sval(card.list)):"—"}</span>
                   </button>
                 ))}
               </div>
+            </>
+          );
+        })()}
+
+        {/* Toolbar */}
+        <div className="card" style={{padding:"12px 16px",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {/* Search — ชิดซ้าย */}
+            <div className="search-bar" style={{minWidth:220,flex:1,maxWidth:360}}>
+              <Search size={13} color="#9ca3af"/>
+              <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาลูกค้า..."/>
+              {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
+            </div>
+
+            <div style={{flex:1}}/>
+            {/* ปุ่มควบคุม — ชิดขวา: ตัวกรอง + สลับมุมมอง (สไตล์เดียวกับหน้าลูกค้าเป้าหมาย) */}
+            <button onClick={()=>setShowFilter(f=>!f)}
+              style={{display:"flex",alignItems:"center",gap:6,background:showFilter?"#003366":"#fff",
+                border:`1px solid ${showFilter?"#003366":"#e5e7eb"}`,borderRadius:10,padding:"0 13px",height:36,boxSizing:"border-box",
+                fontSize:"0.77rem",fontWeight:600,color:showFilter?"#fff":"#6b7280",cursor:"pointer"}}>
+              <Filter size={13}/> ตัวกรอง
+            </button>
+            <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
+              {([["card",LayoutGrid,"การ์ด"],["table",LayoutList,"ตาราง"]] as const).map(([v,Ico,tip])=>(
+                <button key={v} onClick={()=>setView(v)}
+                  style={{display:"flex",alignItems:"center",gap:5,padding:"0 12px",height:"100%",border:"none",cursor:"pointer",
+                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.75rem",fontWeight:600}}>
+                  <Ico size={14}/> {tip}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Filter panel */}
-          {showFilter&&(
-            <div style={{marginTop:10,padding:"12px 14px",background:"#f8f9fb",borderRadius:12,border:`1px solid ${BORDER}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:"0.68rem",fontWeight:700,color:MUTED,marginRight:2}}>สถานะ:</span>
-              {(["ALL","active","inactive"] as const).map(s=>(
-                <button key={s} onClick={()=>setStatusFilter(s)}
-                  style={{padding:"5px 12px",borderRadius:99,border:`1px solid ${statusFilter===s?PRIMARY:BORDER}`,background:statusFilter===s?PRIMARY:"#fff",color:statusFilter===s?"#fff":MUTED,fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>
-                  {s==="ALL"?"ทั้งหมด":s==="active"?"ใช้งาน":"ไม่ใช้งาน"}
-                </button>
-              ))}
-              <div style={{width:1,height:20,background:BORDER,margin:"0 4px"}}/>
-              <span style={{fontSize:"0.68rem",fontWeight:700,color:MUTED,marginRight:2}}>อุตสาหกรรม:</span>
-              {["ALL",...CATEGORIES].map(cat=>(
-                <button key={cat} onClick={()=>setCatFilter(cat)}
-                  style={{padding:"5px 11px",borderRadius:99,border:`1px solid ${catFilter===cat?"#C0C0C0":BORDER}`,background:catFilter===cat?"#f0f4f8":"#fff",color:catFilter===cat?STEEL:MUTED,fontSize:"0.68rem",fontWeight:600,cursor:"pointer"}}>
-                  {cat==="ALL"?"ทั้งหมด":cat}
-                </button>
-              ))}
-              <div style={{width:1,height:20,background:BORDER,margin:"0 4px"}}/>
-              <span style={{fontSize:"0.68rem",fontWeight:700,color:MUTED,marginRight:2}}>สถานะลูกค้า:</span>
-              {(["ALL","new","existing"] as const).map(lc=>(
-                <button key={lc} onClick={()=>setLifecycleFilter(lc)}
-                  style={{padding:"5px 11px",borderRadius:99,
-                    border:`1px solid ${lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:PRIMARY):BORDER}`,
-                    background:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.bg:lc==="new"?LIFECYCLE_META.new.bg:"#f0f4f8"):"#fff",
-                    color:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:STEEL):MUTED,
-                    fontSize:"0.68rem",fontWeight:700,cursor:"pointer"}}>
-                  {lc==="ALL"?"ทั้งหมด":lc==="new"?"ลูกค้าใหม่":"ลูกค้าเดิม"}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
+
+        {/* ── FILTER DRAWER (เลื่อนจากขวา) ── */}
+        {showFilter && (() => {
+          const anyFilter = statusFilter!=="ALL" || catFilter!=="ALL" || lifecycleFilter!=="ALL";
+          const sec = { fontSize:"0.68rem", fontWeight:800, color:STEEL, marginBottom:8, display:"block" } as const;
+          const pills = { display:"flex", flexWrap:"wrap" as const, gap:6 };
+          return (
+            <>
+              <div onClick={()=>setShowFilter(false)} className="drawer-overlay"
+                style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.4)", zIndex:150 }} />
+              <div className="side-drawer" style={{ position:"fixed", top:0, right:0, height:"100vh", width:360, maxWidth:"100vw",
+                zIndex:151, background:"#fff", boxShadow:"-16px 0 60px rgba(0,0,0,.2)", borderRadius:"18px 0 0 18px", display:"flex", flexDirection:"column" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${BORDER}`, flexShrink:0 }}>
+                  <span style={{ fontSize:"1rem", fontWeight:800, color:PRIMARY, display:"flex", gap:8, alignItems:"center" }}><Filter size={16} /> ตัวกรอง</span>
+                  <button onClick={()=>setShowFilter(false)} style={{ width:30, height:30, borderRadius:8, border:`1px solid ${BORDER}`, background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:MUTED }}><X size={14} /></button>
+                </div>
+                <div style={{ flex:1, overflowY:"auto", padding:"20px", display:"flex", flexDirection:"column", gap:22 }}>
+                  <div><label style={sec}>สถานะ</label><div style={pills}>
+                    {(["ALL","active","inactive"] as const).map(s=>(
+                      <button key={s} onClick={()=>setStatusFilter(s)}
+                        style={{padding:"6px 13px",borderRadius:99,border:`1px solid ${statusFilter===s?PRIMARY:BORDER}`,background:statusFilter===s?PRIMARY:"#fff",color:statusFilter===s?"#fff":MUTED,fontSize:"0.72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                        {s==="ALL"?"ทั้งหมด":s==="active"?"ใช้งาน":"ไม่ใช้งาน"}
+                      </button>
+                    ))}
+                  </div></div>
+                  <div><label style={sec}>อุตสาหกรรม</label><div style={pills}>
+                    {["ALL",...CATEGORIES].map(cat=>(
+                      <button key={cat} onClick={()=>setCatFilter(cat)}
+                        style={{padding:"6px 12px",borderRadius:99,border:`1px solid ${catFilter===cat?"#C0C0C0":BORDER}`,background:catFilter===cat?"#f0f4f8":"#fff",color:catFilter===cat?STEEL:MUTED,fontSize:"0.7rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                        {cat==="ALL"?"ทั้งหมด":cat}
+                      </button>
+                    ))}
+                  </div></div>
+                  <div><label style={sec}>สถานะลูกค้า</label><div style={pills}>
+                    {(["ALL","new","existing"] as const).map(lc=>(
+                      <button key={lc} onClick={()=>setLifecycleFilter(lc)}
+                        style={{padding:"6px 12px",borderRadius:99,fontFamily:"inherit",
+                          border:`1px solid ${lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:PRIMARY):BORDER}`,
+                          background:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.bg:lc==="new"?LIFECYCLE_META.new.bg:"#f0f4f8"):"#fff",
+                          color:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:STEEL):MUTED,
+                          fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>
+                        {lc==="ALL"?"ทั้งหมด":lc==="new"?"ลูกค้าใหม่":"ลูกค้าเดิม"}
+                      </button>
+                    ))}
+                  </div></div>
+                </div>
+                <div style={{ padding:"14px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8, flexShrink:0 }}>
+                  <button className="btn btn-secondary btn-md" style={{ flex:1, justifyContent:"center", color: anyFilter ? "#dc2626" : "#9ca3af" }} disabled={!anyFilter}
+                    onClick={()=>{ setStatusFilter("ALL"); setCatFilter("ALL"); setLifecycleFilter("ALL"); }}>ล้างทั้งหมด</button>
+                  <button className="btn btn-primary btn-md" style={{ flex:1, justifyContent:"center" }} onClick={()=>setShowFilter(false)}>ดูผลลัพธ์</button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* ── CARD VIEW ── */}
         {view==="card"&&(
@@ -607,14 +669,14 @@ export default function CustomersPage(){
                       style={{cursor:"pointer",overflow:"hidden",position:"relative",border:isSel?`1.5px solid ${PRIMARY}`:`1px solid ${BORDER}`,boxShadow:isSel?"0 4px 18px rgba(0,0,0,.15)":undefined,transition:"box-shadow .15s,border .15s",opacity:isActive?1:0.78}}
                       onMouseEnter={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.boxShadow="0 6px 22px rgba(0,0,0,.13)";}}
                       onMouseLeave={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.boxShadow="";}}>
-                      {/* view → RightDrawer (ไม่นำทางออกหน้า) */}
-                      <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setDrawerRow(c);}}
+                      {/* ดู → เปิดโมดัลรายละเอียด */}
+                      <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setSelected(c);}}
                         style={{position:"absolute",top:10,right:10,padding:"3px 8px",fontSize:"0.62rem",color:PRIMARY}}>
                         ดู →
                       </button>
                       <div style={{padding:"20px 18px 14px",textAlign:"center"}}>
-                        <div style={{width:52,height:52,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",margin:"0 auto 10px",boxShadow:`0 4px 12px ${c.color}55`}}>
-                          {c.initials}
+                        <div style={{width:52,height:52,borderRadius:"50%",overflow:"hidden",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",margin:"0 auto 10px",boxShadow:`0 4px 12px ${c.color}55`}}>
+                          {c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}
                         </div>
                         <div style={{fontSize:"0.88rem",fontWeight:800,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:36}}>{c.company}</div>
                         <div style={{fontSize:"0.7rem",color:MUTED,marginTop:2,fontWeight:500}}>{c.name} · {c.category}</div>
@@ -696,7 +758,7 @@ export default function CustomersPage(){
                         {/* บริษัท */}
                         <td>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div style={{width:34,height:34,borderRadius:10,background:c.color,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.7rem"}}>{c.initials}</div>
+                            <div style={{width:34,height:34,borderRadius:10,overflow:"hidden",background:c.color,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.7rem"}}>{c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}</div>
                             <div style={{minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:6}}>
                                 <div style={{fontSize:"0.83rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.company}</div>
@@ -743,9 +805,9 @@ export default function CustomersPage(){
                             )}
                           </td>
                         )}
-                        {/* ดู → RightDrawer (ไม่นำทางออกหน้า) */}
+                        {/* ดู → เปิดโมดัลรายละเอียด */}
                         <td onClick={e=>e.stopPropagation()}>
-                          <button className="btn btn-secondary btn-sm" onClick={()=>setDrawerRow(c)} style={{color:PRIMARY}}>ดู →</button>
+                          <button className="btn btn-secondary btn-sm" onClick={()=>setSelected(c)} style={{color:PRIMARY}}>ดู →</button>
                         </td>
                       </tr>
                     );
@@ -764,23 +826,30 @@ export default function CustomersPage(){
       {selected&&(
         <>
           <div onClick={()=>setSelected(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
-          <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:760,maxWidth:"calc(100vw - 32px)",height:"min(660px, calc(100vh - 48px))",zIndex:210,background:"#fff",borderRadius:18,boxShadow:"0 24px 80px rgba(0,0,0,.22)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div className="modal-pop" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:760,maxWidth:"calc(100vw - 32px)",height:"min(660px, calc(100vh - 48px))",zIndex:210,background:"#fff",borderRadius:18,boxShadow:"0 24px 80px rgba(0,0,0,.22)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
             {/* Header */}
             <div style={{background:PRIMARY,padding:"16px 18px 12px",flexShrink:0}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:44,height:44,borderRadius:13,background:"rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",border:"2px solid rgba(255,255,255,.25)",flexShrink:0}}>
-                    {selected.initials}
+                  <div style={{width:44,height:44,borderRadius:13,overflow:"hidden",background:"rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",border:"2px solid rgba(255,255,255,.25)",flexShrink:0}}>
+                    {selected.logo ? <img src={selected.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : selected.initials}
                   </div>
                   <div>
-                    <div style={{fontSize:"0.92rem",fontWeight:800,color:"#fff",lineHeight:1.2}}>{selected.company}</div>
-                    <div style={{fontSize:"0.68rem",color:"rgba(255,255,255,.65)",marginTop:2}}>{selected.category} · {selected.province}</div>
+                    <div style={{fontSize:"1.1rem",fontWeight:800,color:"#fff",lineHeight:1.2}}>{selected.company}</div>
+                    <div style={{fontSize:"0.8rem",color:"rgba(255,255,255,.7)",marginTop:3}}>{selected.category} · {selected.province}</div>
                   </div>
                 </div>
-                <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <X size={14}/>
-                </button>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  {/* แก้ไขทำได้ในแท็บ "ข้อมูล" โดยตรง (เหมือนหน้าลูกค้าเป้าหมาย) — ไม่มีปุ่มแก้ไขแยก */}
+                  <button title="ลบลูกค้า" onClick={()=>setShowDeleteConfirm(true)}
+                    style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fecaca",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <Trash2 size={14}/>
+                  </button>
+                  <button onClick={()=>setSelected(null)} title="ปิด" style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <X size={14}/>
+                  </button>
+                </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                 <button onClick={()=>toggleStatus(selected.id)}
@@ -807,15 +876,15 @@ export default function CustomersPage(){
             <div className="tab-bar" style={{flexShrink:0}}>
               {detailTabs.map(t=>(
                 <button key={t.key} className={`tab-item${detailTab===t.key?" active":""}`} onClick={()=>setDetailTab(t.key)}
-                  style={{display:"flex",alignItems:"center",gap:4}}>
+                  style={{display:"flex",alignItems:"center",gap:5,fontSize:"0.88rem",padding:"12px 16px"}}>
                   {t.icon} {t.label}
                 </button>
               ))}
             </div>
 
-            {/* Body — 760px 2 คอลัมน์ */}
+            {/* Body — เต็มความกว้าง (ไม่มี rail) */}
             <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-            <div style={{flex:1,overflowY:"auto",borderRight:`1px solid #f0f4f8`}}>
+            <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
 
             {/* Tab: ข้อมูล */}
             {detailTab==="info"&&(
@@ -841,31 +910,9 @@ export default function CustomersPage(){
                   </div>
                 </div>
 
-                <div style={{padding:"14px 16px",borderBottom:`1px solid #f0f4f8`}}>
-                  <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>ข้อมูลติดต่อ</div>
-                  {([
-                    {icon:<Building2 size={13} color={PRIMARY}/>,label:"เจ้าของ",   val:selected.name},
-                    {icon:<Mail      size={13} color={PRIMARY}/>,label:"อีเมล",     val:selected.email},
-                    {icon:<Phone     size={13} color={PRIMARY}/>,label:"โทรศัพท์", val:selected.phone},
-                    {icon:<MapPin    size={13} color={PRIMARY}/>,label:"จังหวัด",   val:selected.province},
-                  ]).map((row,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
-                      <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{row.icon}</div>
-                      <div>
-                        <div style={{fontSize:"0.62rem",color:"#9ca3af",fontWeight:600}}>{row.label}</div>
-                        <div style={{fontSize:"0.76rem",color:STEEL,fontWeight:600,marginTop:1}}>{row.val}</div>
-                      </div>
-                    </div>
-                  ))}
-                  <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                    <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      <svg width={13} height={13} fill="none" viewBox="0 0 24 24" stroke={PRIMARY} strokeWidth={2}><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
-                    </div>
-                    <div>
-                      <div style={{fontSize:"0.62rem",color:"#9ca3af",fontWeight:600}}>ผู้รับผิดชอบ</div>
-                      <div style={{fontSize:"0.76rem",color:STEEL,fontWeight:600,marginTop:1}}>{selected.owner}</div>
-                    </div>
-                  </div>
+                {/* ข้อมูลลูกค้า — แก้ไขในตัวเหมือนหน้าลูกค้าเป้าหมาย (ไม่มีฟอร์มแยก) */}
+                <div style={{borderBottom:`1px solid #f0f4f8`}}>
+                  <CustomerOverviewEditor customer={selected} onSave={saveInline} />
                 </div>
 
                 {/* Related leads */}
@@ -873,7 +920,7 @@ export default function CustomersPage(){
                   <div style={{padding:"12px 16px",borderBottom:`1px solid #f0f4f8`}}>
                     <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>ผู้สนใจที่เกี่ยวข้อง ({relatedLeads.length})</div>
                     {relatedLeads.map(l=>(
-                      <button key={l.id} onClick={()=>router.push(`/leads/${l.numId}`)}
+                      <button key={l.id} onClick={()=>router.push(`/leads?open=${l.numId}`)}
                         style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:9,border:`1px solid ${BORDER}`,background:"#fff",cursor:"pointer",marginBottom:5,textAlign:"left"}}
                         onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#dce5f0";}}
                         onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#fff";}}>
@@ -966,76 +1013,32 @@ export default function CustomersPage(){
             )}
 
             </div>
-            {/* Actions (right rail) */}
-            <div style={{width:220,flexShrink:0,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{display:"flex",gap:6}}>
-                <button className="btn btn-primary btn-sm" onClick={()=>setEditingRow(selected)} style={{flex:1,justifyContent:"center"}}>
-                  <Edit2 size={13}/> แก้ไข
-                </button>
-                <button className="btn btn-secondary btn-sm" onClick={()=>router.push(`/customers/${selected.id}`)} style={{flex:1,justifyContent:"center"}}>
-                  <ExternalLink size={13}/> หน้าเต็ม
-                </button>
-              </div>
-              <button className="btn btn-tint btn-sm" onClick={()=>router.push("/calendar")} style={{justifyContent:"center"}}>
-                <Calendar size={13}/> เพิ่มนัดหมาย
-              </button>
-              {/* Delete */}
-              {!showDeleteConfirm?(
-                <button className="btn btn-danger btn-sm" onClick={()=>setShowDeleteConfirm(true)} style={{justifyContent:"center"}}>
-                  <Trash2 size={13}/> ลบลูกค้า
-                </button>
-              ):(
-                <div style={{borderRadius:10,border:"1px solid #fca5a5",overflow:"hidden"}}>
-                  <div style={{padding:"7px 12px",background:"#fee2e2",fontSize:"0.7rem",color:"#dc2626",fontWeight:600}}>ยืนยันลบ "{selected.company}"?</div>
-                  <div style={{display:"flex"}}>
-                    <button onClick={deleteCustomer} style={{flex:1,padding:"7px",background:"#dc2626",border:"none",color:"#fff",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>ลบ</button>
-                    <button onClick={()=>setShowDeleteConfirm(false)} style={{flex:1,padding:"7px",background:"#fff",border:"none",borderLeft:"1px solid #fca5a5",color:STEEL,fontSize:"0.7rem",cursor:"pointer"}}>ยกเลิก</button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
           </div>
         </>
       )}
 
-      {/* ══ VIEW → RIGHT DRAWER (แทนการนำทางไป /customers/{id}) ══ */}
-      <RightDrawer
-        open={drawerRow!==null}
-        onClose={()=>setDrawerRow(null)}
-        width={480}
-        title={drawerRow?.company ?? ""}
-        subtitle={drawerRow ? `${drawerRow.owner} · ${drawerRow.province}` : ""}
-        tabs={drawerTabs}
-        headerRight={drawerRow && (
-          <>
-            <button
-              type="button"
-              onClick={()=>router.push(`/customers/${drawerRow.id}`)}
-              title="ดูข้อมูลเต็ม"
-              style={{display:"inline-flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.12)",color:"#fff",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-              <ExternalLink size={13}/> ดูข้อมูลเต็ม
-            </button>
-            <button
-              type="button"
-              onClick={()=>{ const r=drawerRow; setDrawerRow(null); setEditingRow(r); }}
-              title="แก้ไข"
-              style={{display:"inline-flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:8,border:"none",background:"#fff",color:PRIMARY,fontSize:"0.72rem",fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>
-              <Edit2 size={13}/> แก้ไข
-            </button>
-          </>
-        )}
-      />
-
-      {/* Add Modal */}
-      {showAdd&&<CustomerModal initial={BLANK_FORM} title="เพิ่มลูกค้าใหม่" onSave={addCustomer} onClose={()=>setShowAdd(false)} owners={ownersList}/>}
-
-      {/* Edit Modal */}
-      {editingRow&&(
-        <CustomerModal
-          initial={{name:editingRow.name,company:editingRow.company,type:editingRow.type,email:editingRow.email,phone:editingRow.phone,province:editingRow.province,category:editingRow.category,status:editingRow.status,projects:editingRow.projects,joinDate:editingRow.joinDate,owner:editingRow.owner}}
-          title="แก้ไขข้อมูลลูกค้า" onSave={saveEdit} onClose={()=>setEditingRow(null)} owners={ownersList}/>
+      {/* Delete confirm dialog */}
+      {showDeleteConfirm && selected && (
+        <div onClick={()=>setShowDeleteConfirm(false)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
+            <div style={{padding:"22px 22px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <span style={{width:38,height:38,borderRadius:"50%",background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={17} color="#dc2626"/></span>
+                <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบลูกค้า</div>
+              </div>
+              <p style={{fontSize:"0.82rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.company}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+            </div>
+            <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button className="btn btn-secondary btn-md" onClick={()=>setShowDeleteConfirm(false)}>ยกเลิก</button>
+              <button className="btn btn-md" style={{background:"#dc2626",color:"#fff",border:"none"}} onClick={deleteCustomer}><Trash2 size={13}/> ลบ</button>
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* Add Modal — แก้ไขทำในแท็บ "ข้อมูล" ของโมดัลรายละเอียด (ไม่มีฟอร์มแก้ไขแยกแล้ว) */}
+      {showAdd&&<CustomerModal initial={BLANK_FORM} title="เพิ่มลูกค้าใหม่" onSave={addCustomer} onClose={()=>setShowAdd(false)}/>}
     </div>
   );
 }

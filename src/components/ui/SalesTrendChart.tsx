@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AreaChart } from "@/components/ui/Charts";
+import { AreaGradientChart } from "@/components/ui/Charts";
 import { STEEL } from "@/lib/theme";
 
 // ── กราฟแนวโน้มยอดขายที่ "กำหนดช่วงเวลาได้" ในตัว (ปุ่ม inline + รีบิลด์ตามวันจริง) ──
@@ -33,6 +33,7 @@ export function SalesTrendChart({
   today = "2026-06-30",
   prevRatio = 0.86,
   initialRange = "year",
+  height,
 }: {
   title: string;
   desc?: string;
@@ -40,6 +41,7 @@ export function SalesTrendChart({
   today?: string;
   prevRatio?: number;
   initialRange?: string;
+  height?: number;
 }) {
   const [range, setRange] = useState(initialRange);
   const [customStart, setCustomStart] = useState("2026-06-01");
@@ -135,7 +137,7 @@ export function SalesTrendChart({
         </div>
       )}
 
-      <AreaChart key={`${range}-${customStart}-${customEnd}`} data={data} />
+      <AreaGradientChart key={`${range}-${customStart}-${customEnd}`} data={data} height={height} />
     </div>
   );
 }

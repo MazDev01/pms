@@ -118,7 +118,7 @@ export default function DealerLoginPage() {
 
           {/* Forgot */}
           <div style={{ textAlign: "right", marginTop: -8 }}>
-            <button type="button" style={{ fontSize: "0.72rem", color: "#003366", background: "none", border: "none", cursor: "pointer" }}>
+            <button type="button" onClick={() => alert("กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th")} style={{ fontSize: "0.72rem", color: "#003366", background: "none", border: "none", cursor: "pointer" }}>
               ลืมรหัสผ่าน?
             </button>
           </div>

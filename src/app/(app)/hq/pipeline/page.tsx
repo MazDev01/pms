@@ -5,7 +5,7 @@ import {
   Download, Users, Target, CheckCircle2, Trophy, TrendingDown,
 } from "lucide-react";
 import {
-  hqPipelineStages, hqPipelineLostReasons, hqPipelineByProduct,
+  hqPipelineStages, hqPipelineLostReasons, hqPipelineByProduct, hqAllQuotations, dealerLeaderboard,
 } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -18,16 +18,17 @@ function fmtM(n: number) {
 const STAGE_PALETTE = ["#94a3b8", "#60a5fa", "#2563eb", "#1e40af", "#003366"];
 
 // ── Funnel ────────────────────────────────────────────────────────
-function FunnelChart() {
-  const maxCount = hqPipelineStages[0]?.count ?? 1;
+type FunnelStage = { key: string; label: string; count: number; valueNum: number };
+function FunnelChart({ stages }: { stages: FunnelStage[] }) {
+  const maxCount = stages[0]?.count ?? 1;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      {hqPipelineStages.map((stage, i) => {
-        const prev      = hqPipelineStages[i - 1];
+      {stages.map((stage, i) => {
+        const prev      = stages[i - 1];
         const convRate  = prev ? Math.round((stage.count / prev.count) * 100) : null;
         const widthPct  = Math.round((stage.count / maxCount) * 100);
-        const isLast    = i === hqPipelineStages.length - 1;
+        const isLast    = i === stages.length - 1;
         const color     = STAGE_PALETTE[Math.min(i, STAGE_PALETTE.length - 1)];
         const convColor = !convRate ? "#6b7280"
           : convRate >= 70 ? "#059669"
@@ -101,7 +102,7 @@ function FunnelChart() {
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "0.6rem", color: "#9ca3af", marginBottom: 1 }}>เฉลี่ย/โอกาสการขาย</div>
                   <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>
-                    {fmtM(Math.round(stage.valueNum / stage.count))}
+                    {fmtM(stage.count ? Math.round(stage.valueNum / stage.count) : 0)}
                   </div>
                 </div>
               </div>
@@ -151,23 +152,26 @@ function LostReasons() {
 }
 
 // ── Product breakdown ─────────────────────────────────────────────
-function ProductBreakdown() {
-  const total = hqPipelineByProduct.reduce((s, p) => s + p.valueNum, 0);
+type ProductItem = { product: string; count: number; valueNum: number; color: string };
+function ProductBreakdown({ items }: { items: ProductItem[] }) {
+  const total = items.reduce((s, p) => s + p.valueNum, 0) || 1;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {hqPipelineByProduct.map(p => {
+      {items.map(p => {
         const pct = Math.round((p.valueNum / total) * 100);
         return (
           <div key={p.product} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{
-              fontSize: "0.65rem", fontWeight: 700, padding: "2px 8px",
+            {/* label กว้างคงที่ — แถบทุกอันเริ่มตรงแนวเดียวกัน */}
+            <span title={p.product} style={{
+              width: 150, flexShrink: 0,
+              fontSize: "0.65rem", fontWeight: 700, padding: "3px 8px",
               borderRadius: 6, background: p.color + "18", color: p.color,
-              minWidth: 80, textAlign: "center", flexShrink: 0,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>{p.product}</span>
             <div style={{ flex: 1, height: 6, background: "#f4f6f9", borderRadius: 99, overflow: "hidden" }}>
               <div className="top5-bar" style={{ height: "100%", width: `${pct}%`, background: p.color, borderRadius: 99 }} />
             </div>
-            <div style={{ textAlign: "right", flexShrink: 0, minWidth: 70 }}>
+            <div style={{ textAlign: "right", flexShrink: 0, width: 70 }}>
               <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#2D2D2D" }}>{fmtM(p.valueNum)}</div>
               <div style={{ fontSize: "0.6rem", color: "#9ca3af" }}>{pct}%</div>
             </div>
@@ -183,24 +187,80 @@ function ProductBreakdown() {
 // ── Main ──────────────────────────────────────────────────────────
 export default function SalesOverviewPage() {
   const { timeRange } = useFilters();
-  const pf = timeRange.factor;
+  const pf = 1; // ตัวเลขจริง — ไม่สเกลปลอมตามช่วงเวลา (timeRange ใช้แสดง subtitle เท่านั้น)
 
   const [toast, setToast]           = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
+  // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน)
+  const [dealerSel, setDealerSel]   = useState<string>("all");
+  const selDealer = dealerSel === "all" ? null : dealerLeaderboard.find(d => d.code === dealerSel) ?? null;
 
-  const first = hqPipelineStages[0];
-  const last  = hqPipelineStages[hqPipelineStages.length - 1];
-  const overallConv = Math.round((last.count / first.count) * 100);
+  // มุมมองรายตัวแทน: สร้าง funnel/สินค้า จากใบเสนอราคาจริงของตัวแทนนั้น (hqAllQuotations)
+  const branchQs = selDealer ? hqAllQuotations.filter(q => q.dealerCode === selDealer.code) : null;
+  const stages: { key: string; label: string; count: number; valueNum: number }[] = branchQs
+    ? (() => {
+        const by = (f: (s: string) => boolean) => branchQs.filter(q => f(q.status));
+        const sum = (qs: typeof branchQs) => qs.reduce((s, q) => s + q.valueNum, 0);
+        const sent   = by(s => s !== "draft");
+        const viewed = by(s => s === "viewed" || s === "won" || s === "lost");
+        const won    = by(s => s === "won");
+        return [
+          { key: "all",    label: "ใบเสนอราคาทั้งหมด",  count: branchQs.length, valueNum: sum(branchQs) },
+          { key: "sent",   label: "ส่งถึงลูกค้า",        count: sent.length,     valueNum: sum(sent) },
+          { key: "viewed", label: "ลูกค้าเปิดดู",        count: viewed.length,   valueNum: sum(viewed) },
+          { key: "won",    label: "ปิดการขายสำเร็จ",    count: won.length,      valueNum: sum(won) },
+        ];
+      })()
+    : hqPipelineStages;
+  const products: ProductItem[] = branchQs
+    ? (() => {
+        const colorOf = new Map(hqPipelineByProduct.map(p => [p.product, p.color]));
+        const m = new Map<string, { count: number; valueNum: number }>();
+        branchQs.forEach(q => {
+          const r = m.get(q.productLine) ?? { count: 0, valueNum: 0 };
+          r.count += 1; r.valueNum += q.valueNum;
+          m.set(q.productLine, r);
+        });
+        return [...m.entries()]
+          .map(([product, v]) => ({ product, ...v, color: colorOf.get(product) ?? "#003366" }))
+          .sort((a, b) => b.valueNum - a.valueNum);
+      })()
+    : hqPipelineByProduct;
 
+  const first = stages[0];
+  const last  = stages[stages.length - 1];
+  const overallConv = first.count ? Math.round((last.count / first.count) * 100) : 0;
+
+  // ส่งออกจริง — รวม funnel + เหตุผลเสียโอกาส + แยกตามสินค้า เป็น CSV (เปิดใน Excel ได้)
   function doExport(fmt: string) {
     setShowExport(false);
-    setToast(`กำลังส่งออก ${fmt}...`);
-    setTimeout(() => setToast(null), 2800);
+    const rows: string[] = [];
+    rows.push(selDealer ? `ช่องทางการขาย (Funnel) — ตัวแทน ${selDealer.code}` : "ช่องทางการขาย (Funnel)");
+    rows.push(["ขั้นตอน", "จำนวน (ราย)", "มูลค่า (บาท)"].join(","));
+    stages.forEach(s => rows.push([s.label, Math.round(s.count * pf), Math.round(s.valueNum * pf)].join(",")));
+    if (!selDealer) {
+      rows.push("");
+      rows.push("เหตุผลที่เสียโอกาสการขาย");
+      rows.push(["เหตุผล", "จำนวน", "สัดส่วน (%)"].join(","));
+      hqPipelineLostReasons.forEach(r => rows.push([r.reason, r.count, r.pct].join(",")));
+    }
+    rows.push("");
+    rows.push("แยกตามแม่แบบ / บริการ");
+    rows.push(["สินค้า", "จำนวนดีล", "มูลค่า (บาท)"].join(","));
+    products.forEach(p => rows.push([p.product, p.count, Math.round(p.valueNum * pf)].join(",")));
+    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `hq-pipeline-${timeRange.preset}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    setToast(`ส่งออก ${fmt} แล้ว`);
+    setTimeout(() => setToast(null), 2600);
   }
 
+  const midStage = selDealer ? stages[1] : stages[2];
   const kpis = [
     {
-      label: "ผู้สนใจทั้งหมด",
+      label: selDealer ? "ใบเสนอราคาทั้งหมด" : "ผู้สนใจทั้งหมด",
       value: `${Math.round(first.count * pf).toLocaleString()} ราย`,
       sub: fmtM(Math.round(first.valueNum * pf)),
       iconClass: "kpi-navy",
@@ -208,15 +268,15 @@ export default function SalesOverviewPage() {
     },
     {
       label: "ในกระบวนการ",
-      value: `${Math.round(hqPipelineStages[2].count * pf).toLocaleString()} ราย`,
-      sub: "ส่งใบเสนอราคาแล้ว",
+      value: `${Math.round(midStage.count * pf).toLocaleString()} ราย`,
+      sub: selDealer ? "ส่งถึงลูกค้าแล้ว" : "ส่งใบเสนอราคาแล้ว",
       iconClass: "kpi-navy",
       icon: <Target size={16} />,
     },
     {
       label: "อัตราแปลงทั้งกรวย",
       value: `${overallConv}%`,
-      sub: "ผู้สนใจ → ปิดสำเร็จ",
+      sub: selDealer ? "ใบเสนอราคา → ปิดสำเร็จ" : "ผู้สนใจ → ปิดสำเร็จ",
       iconClass: overallConv >= 30 ? "kpi-green" : "kpi-amber",
       icon: <CheckCircle2 size={16} />,
     },
@@ -233,7 +293,7 @@ export default function SalesOverviewPage() {
     { label: "อัตราแปลงทั้งกรวย", value: `${overallConv}%`,                                                     color: "#003366" },
     { label: "มูลค่าโอกาสการขาย", value: fmtM(first.valueNum),                                                  color: "#2D2D2D" },
     { label: "ปิดได้เดือนนี้", value: fmtM(last.valueNum),                                                      color: "#059669" },
-    { label: "รอปิด (เสนอราคาขึ้นไป)", value: fmtM(hqPipelineStages.slice(2, -1).reduce((s, x) => s + x.valueNum, 0)), color: "#f59e0b" },
+    { label: "รอปิด (เสนอราคาขึ้นไป)", value: fmtM(stages.slice(selDealer ? 1 : 2, -1).reduce((s, x) => s + x.valueNum, 0)), color: "#f59e0b" },
   ];
 
   return (
@@ -254,10 +314,17 @@ export default function SalesOverviewPage() {
       <div className="page-head">
         <div>
           <h2>ภาพรวมยอดขาย</h2>
-          <p>ภาพรวมยอดขายและโอกาสการขายทั้งเครือข่าย · {timeRange.subtitle}</p>
+          <p>{selDealer ? `มุมมองตัวแทน: ${selDealer.name.replace("Benjamin ", "")} (${selDealer.code}) · อิงจากใบเสนอราคาจริงของตัวแทน` : "ภาพรวมยอดขายและโอกาสการขายทั้งเครือข่าย"} · {timeRange.subtitle}</p>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* เลือกดูทั้งเครือ หรือเจาะรายตัวแทน — ตัวเลือกเฉพาะหน้านี้ */}
+          <select value={dealerSel} onChange={e => setDealerSel(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+            <option value="all">ทุกตัวแทน (ทั้งเครือ)</option>
+            {dealerLeaderboard.map(d => (
+              <option key={d.code} value={d.code}>{d.code} – {d.name.replace("Benjamin ", "")}</option>
+            ))}
+          </select>
           <FilterBar dims={[]} />
           <div style={{ position: "relative" }}>
             <button
@@ -275,7 +342,7 @@ export default function SalesOverviewPage() {
                   borderRadius: 10, boxShadow: "var(--shadow-md)",
                   zIndex: 101, minWidth: 158, overflow: "hidden",
                 }}>
-                  {["Excel (.xlsx)", "PDF รายงาน"].map(f => (
+                  {["CSV (Excel)"].map(f => (
                     <button key={f} onClick={() => doExport(f)} style={{
                       width: "100%", padding: "10px 16px", textAlign: "left",
                       background: "none", border: "none", fontSize: "0.78rem",
@@ -316,11 +383,11 @@ export default function SalesOverviewPage() {
           <div className="card-header">
             <div>
               <div className="card-title">ช่องทางการขาย</div>
-              <div className="card-desc">จากผู้สนใจจนถึงการปิดการขาย</div>
+              <div className="card-desc">{selDealer ? `ใบเสนอราคาของตัวแทน ${selDealer.code} จนถึงการปิดการขาย` : "จากผู้สนใจจนถึงการปิดการขาย"}</div>
             </div>
           </div>
           <div className="card-body">
-            <FunnelChart />
+            <FunnelChart stages={stages} />
 
             {/* Summary strip */}
             <div style={{
@@ -345,22 +412,41 @@ export default function SalesOverviewPage() {
 
         {/* Right column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* เหตุผลเสียโอกาส มีเฉพาะข้อมูลรวมเครือ — ไม่แสดงเลขหลอกตอนดูรายตัวแทน */}
+          {!selDealer && (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
+              </div>
+              <div className="card-body"><LostReasons /></div>
+            </div>
+          )}
           <div className="card">
             <div className="card-header">
-              <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
+              <div className="card-title">แยกตามแม่แบบ / บริการ</div>
             </div>
-            <div className="card-body"><LostReasons /></div>
+            <div className="card-body"><ProductBreakdown items={products} /></div>
           </div>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">แยกตามสินค้า / บริการ</div>
+          {selDealer && (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">ใบเสนอราคาล่าสุดของตัวแทน</div>
+              </div>
+              <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {(branchQs ?? []).slice(0, 6).map(q => (
+                  <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.74rem" }}>
+                    <span style={{ fontWeight: 700, color: "#003366", flexShrink: 0 }}>{q.quoteNo}</span>
+                    <span style={{ flex: 1, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.customer}</span>
+                    <span style={{ fontWeight: 800, color: "#2D2D2D", flexShrink: 0 }}>{fmtM(q.valueNum)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="card-body"><ProductBreakdown /></div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* ตารางผลงานต่อสาขา (leaderboard) ย้ายไปเป็นเจ้าของเดียวที่ HQ Dashboard */}
+      {/* ตารางผลงานต่อตัวแทน (leaderboard) ย้ายไปเป็นเจ้าของเดียวที่ HQ Dashboard */}
     </div>
   );
 }

@@ -1,0 +1,146 @@
+// ── ใบเสนอราคา: เทมเพลตพิมพ์ + การตั้งค่าเอกสาร (แหล่งเดียว) ──────────────────
+// ใช้ร่วมกันทั้งหน้า /quotations และใบเสนอราคา inline ในหน้า Lead (LeadQuotationsPanel)
+// เพื่อให้เอกสารที่พิมพ์ออกมา "เหมือนกัน 100%" ทุกจุด — VAT / ตราประทับ / ลายเซ็น / หัวกระดาษ
+import { DEFAULT_ISSUER, ISSUER_KEY, type IssuerProfile, type QuotationMock } from "./mock";
+
+// การตั้งค่าเอกสาร (จาก Settings → ตั้งค่าใบเสนอราคา) — คนละคีย์กับโปรไฟล์บริษัท
+export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number };
+export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-2026-", runningNumber: 1001 };
+export const DOC_KEY = "dealer_document_settings";
+
+export type PrintCustomer = { company?: string; name?: string; phone?: string; province?: string; email?: string };
+
+// อ่านโปรไฟล์ผู้ออก (บริษัทดีลเลอร์) จาก localStorage — fallback = DEFAULT_ISSUER
+export function loadIssuer(): IssuerProfile {
+  if (typeof window === "undefined") return { ...DEFAULT_ISSUER };
+  try { const s = localStorage.getItem(ISSUER_KEY); if (s) return { ...DEFAULT_ISSUER, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_ISSUER };
+}
+
+// อ่านการตั้งค่าเอกสาร (VAT/ตรา/ลายเซ็น/prefix/เลขรัน) — fallback = DEFAULT_DOC
+export function loadDoc(): DocProfile {
+  if (typeof window === "undefined") return { ...DEFAULT_DOC };
+  try { const s = localStorage.getItem(DOC_KEY); if (s) return { ...DEFAULT_DOC, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_DOC };
+}
+
+function esc(s: unknown) { return String(s ?? "").replace(/[&<>"]/g, c => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as Record<string, string>)[c])); }
+function fmtDate(d: string) { if (!d || d === "—") return "—"; const [y, m, day] = d.split("-"); const mo = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m) - 1]} ${parseInt(y) + 543}`; }
+
+// สร้าง HTML ใบเสนอราคา A4 (เต็มรูปแบบ — หัวกระดาษ/คู่สัญญา/ตาราง/สรุป VAT/เงื่อนไข/ลายเซ็น+ตรา)
+export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC) {
+  const n = (v: number) => Number(v || 0).toLocaleString("th-TH");
+  const subtotal = q.totalValue;
+  const vatPct = typeof doc.vatPercent === "number" ? doc.vatPercent : 7;
+  const vat = Math.round(subtotal * vatPct / 100);
+  const grand = subtotal + vat;
+  const issuerMeta = [issuer.address, issuer.phone ? ("โทร. " + issuer.phone) : "", issuer.taxId ? ("เลขผู้เสียภาษี " + issuer.taxId) : ""].filter(Boolean).join("\n");
+  return `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
+<title>ใบเสนอราคา ${esc(q.id)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Sarabun','Tahoma',sans-serif;color:#2D2D2D;font-size:13px;line-height:1.5;background:#f3f4f6}
+.sheet{width:210mm;min-height:297mm;margin:12px auto;padding:16mm 14mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+.top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #003366;padding-bottom:14px}
+.issuer-name{font-size:20px;font-weight:800;color:#003366}
+.issuer-meta{font-size:11px;color:#555;margin-top:4px;white-space:pre-line}
+.doc-title{text-align:right}
+.doc-title h1{font-size:22px;color:#003366;letter-spacing:1px}
+.doc-title .sub{font-size:11px;color:#888;letter-spacing:2px}
+.doc-meta{margin-top:8px;font-size:12px;line-height:1.7}
+.doc-meta b{color:#003366}
+.parties{display:flex;gap:16px;margin-top:18px}
+.party{flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px}
+.party .lbl{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;font-weight:700;margin-bottom:5px}
+.party .co{font-size:14px;font-weight:800;color:#003366}
+.party .row{font-size:11px;color:#555;margin-top:2px}
+table.items{width:100%;border-collapse:collapse;margin-top:18px}
+table.items th{background:#003366;color:#fff;font-size:11px;font-weight:700;padding:9px 10px;text-align:left}
+table.items th.r,table.items td.r{text-align:right}
+table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical-align:top}
+.sum{margin-top:12px;margin-left:auto;width:290px}
+.sum .line{display:flex;justify-content:space-between;padding:5px 2px;font-size:12px}
+.sum .grand{border-top:2px solid #003366;margin-top:4px;padding-top:8px;font-size:15px;font-weight:800;color:#003366}
+.terms{margin-top:22px;font-size:11px;color:#555}
+.terms .h{font-weight:700;color:#003366;margin-bottom:4px}
+.signs{display:flex;gap:40px;margin-top:46px}
+.sign{flex:1;text-align:center;position:relative}
+.sign .line{border-top:1px dotted #999;margin-top:44px;padding-top:6px;font-size:11px;color:#555;line-height:1.5}
+.sign .sig{display:block;max-height:48px;max-width:150px;object-fit:contain;margin:0 auto 2px}
+.sign .stamp{position:absolute;right:8px;bottom:18px;max-height:72px;max-width:72px;object-fit:contain;opacity:.9}
+.bar{margin-top:6px;font-size:10px;color:#9ca3af;text-align:center}
+@media print{@page{size:A4;margin:0}body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{margin:0;box-shadow:none}}
+</style></head><body>
+<div class="sheet">
+  <div class="top">
+    <div>
+      <div class="issuer-name">${esc(issuer.company)}</div>
+      <div class="issuer-meta">${esc(issuerMeta)}</div>
+    </div>
+    <div class="doc-title">
+      <h1>ใบเสนอราคา</h1>
+      <div class="sub">QUOTATION</div>
+      <div class="doc-meta">เลขที่ <b>${esc(q.id)}</b><br/>วันที่ ${esc(fmtDate(q.date))}<br/>ยืนราคา 30 วัน</div>
+    </div>
+  </div>
+  <div class="parties">
+    <div class="party">
+      <div class="lbl">เสนอแก่ / ลูกค้า</div>
+      <div class="co">${esc(cust?.company || q.customer)}</div>
+      ${cust?.name ? `<div class="row">ผู้ติดต่อ: ${esc(cust.name)}</div>` : ""}
+      ${cust?.phone ? `<div class="row">โทร. ${esc(cust.phone)}</div>` : ""}
+      <div class="row">จังหวัด: ${esc(q.province || cust?.province || "-")}</div>
+    </div>
+    <div class="party">
+      <div class="lbl">รายละเอียดงาน</div>
+      <div class="co" style="font-size:13px">${esc(q.project)}</div>
+      <div class="row">ประเภทอาคาร: ${esc(q.buildingType)}</div>
+      <div class="row">พื้นที่: ${n(q.area)} ตร.ม.</div>
+      <div class="row">จำนวนรายการ: ${esc(q.items)} รายการ</div>
+    </div>
+  </div>
+  <table class="items">
+    <thead><tr><th style="width:44px">ลำดับ</th><th>รายการ</th><th class="r" style="width:90px">พื้นที่</th><th class="r" style="width:140px">จำนวนเงิน (บาท)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><b>${esc(q.project)}</b><br/><span style="color:#888;font-size:11px">${esc(q.buildingType)} · อาคารสำเร็จรูป</span></td>
+        <td class="r">${n(q.area)} ม²</td>
+        <td class="r">${n(subtotal)}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="sum">
+    <div class="line"><span>มูลค่างาน (ก่อน VAT)</span><span>${n(subtotal)}</span></div>
+    <div class="line"><span>ภาษีมูลค่าเพิ่ม ${vatPct}%</span><span>${n(vat)}</span></div>
+    <div class="line grand"><span>รวมสุทธิ</span><span>฿${n(grand)}</span></div>
+  </div>
+  <div class="terms">
+    <div class="h">เงื่อนไข</div>
+    • ราคานี้ยืนยัน 30 วันนับจากวันที่ในเอกสาร<br/>
+    • มูลค่างานยังไม่รวมภาษีมูลค่าเพิ่ม · ยอดรวมสุทธิรวม VAT ${vatPct}% แล้ว<br/>
+    • เงื่อนไขการชำระเงินเป็นไปตามข้อตกลงระหว่างคู่สัญญา
+  </div>
+  <div class="signs">
+    <div class="sign">
+      ${doc.signature ? `<img class="sig" src="${esc(doc.signature)}" alt="ลายเซ็น"/>` : ""}
+      ${doc.stamp ? `<img class="stamp" src="${esc(doc.stamp)}" alt="ตราประทับ"/>` : ""}
+      <div class="line">ผู้เสนอราคา<br/>( ${esc(issuer.company)} )</div>
+    </div>
+    <div class="sign"><div class="line">ผู้อนุมัติสั่งซื้อ<br/>( ${esc(cust?.company || q.customer)} )</div></div>
+  </div>
+  <div class="bar">เอกสารนี้ออกในนามบริษัทของผู้เสนอราคา</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},350);}</script>
+</body></html>`;
+}
+
+// พิมพ์ใบเสนอราคา — โหลด issuer + doc จาก localStorage เอง แล้วเปิดหน้าต่างพิมพ์
+// ใช้ตัวนี้เพื่อความสม่ำเสมอ (VAT/ตรา/ลายเซ็น มาจากการตั้งค่าจริงเสมอ)
+export function printQuotation(q: QuotationMock, cust?: PrintCustomer) {
+  const html = buildQuotationHTML(q, loadIssuer(), cust, loadDoc());
+  const w = window.open("", "_blank"); if (!w) return;
+  w.document.write(html); w.document.close();
+}

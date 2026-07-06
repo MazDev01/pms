@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePersistentState } from "@/lib/usePersistentState";
 import { Users, Shield, Check, Eye, X, Plus, Pencil, Ban, User as UserIcon } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -26,8 +27,8 @@ type AppUser = {
 const ROLES: { key: RoleKey; en: string; th: string; tone: string }[] = [
   { key: "hq_admin",     en: "HQ Admin",     th: "ผู้ดูแลสำนักงานใหญ่",   tone: PRIMARY  },
   { key: "hq_manager",   en: "HQ Manager",   th: "ผู้จัดการสำนักงานใหญ่", tone: "#0369a1" },
-  { key: "dealer_admin", en: "Dealer Admin", th: "ผู้ดูแลสาขา",          tone: "#7c3aed" },
-  { key: "dealer_sales", en: "Dealer Sales", th: "เซลส์สาขา",            tone: "#059669" },
+  { key: "dealer_admin", en: "Dealer Admin", th: "ผู้ดูแลตัวแทน",          tone: "#475569" },
+  { key: "dealer_sales", en: "Dealer Sales", th: "เซลส์ตัวแทน",            tone: "#059669" },
 ];
 const ROLE_BY_KEY: Record<RoleKey, { en: string; th: string; tone: string }> = Object.fromEntries(
   ROLES.map((r) => [r.key, { en: r.en, th: r.th, tone: r.tone }])
@@ -160,7 +161,7 @@ function AddUserModal({ onClose, onAdd, initial }: { onClose: () => void; onAdd:
 
 // ── Page ──────────────────────────────────────────────────────
 export default function HQUsersPage() {
-  const [users, setUsers] = useState<AppUser[]>(USERS_INIT);
+  const [users, setUsers] = usePersistentState<AppUser[]>("hq_users", USERS_INIT);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<AppUser | null>(null);
 

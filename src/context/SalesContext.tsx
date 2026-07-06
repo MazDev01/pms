@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  createContext, useContext, useState, useCallback,
+  createContext, useContext, useState, useCallback, useRef, useEffect,
   type ReactNode,
 } from "react";
 import {
   pipelineDeals, pipelineStages,
   quotations as seedQuotations, initialCustomers,
-  appointments as seedAppointments,
+  appointments as seedAppointments, buildLeadTasks, stageFromTasks,
   type PipelineDealMock, type LeadRow, type DealActivity,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock,
@@ -79,6 +79,9 @@ export function SalesProvider({
 }) {
   const [deals, setDeals]           = useState<PipelineDealMock[]>(pipelineDeals);
   const [leads, setLeads]           = useState<LeadRow[]>(initialLeads);
+  // ref สำหรับอ่านค่า leads ล่าสุดใน callback โดยไม่ต้องพึ่ง closure (ใช้ใน updateLeadStatus)
+  const leadsRef = useRef(leads);
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [leadDealMap, setLeadDealMap] = useState<Record<string, number>>({});
   const [nextDealId, setNextDealId] = useState(pipelineDeals.length + 1);
   const [leadChecklists, setLeadChecklists] = useState<Record<string, ChecklistItem[]>>({});
@@ -104,23 +107,31 @@ export function SalesProvider({
     setDeals(prev => prev.map(d => {
       if (d.id !== dealId) return d;
       const task = d.tasks.find(t => t.id === taskId);
-      const updated = {
-        ...d,
-        tasks: d.tasks.map(t => t.id !== taskId ? t : { ...t, done }),
-      };
+      const tasks = d.tasks.map(t => t.id !== taskId ? t : { ...t, done });
+      const now = new Date().toISOString();
+      const acts: DealActivity[] = [];
       if (task) {
-        const now = new Date().toISOString();
-        updated.activities = [
-          {
-            id: Date.now(),
-            type: done ? "task_done" : "task_undone",
-            text: `${done ? "เสร็จงาน" : "ยังไม่เสร็จ"}: ${task.text}`,
-            timestamp: now,
-          },
-          ...(d.activities ?? []),
-        ];
+        acts.push({
+          id: Date.now(),
+          type: done ? "task_done" : "task_undone",
+          text: `${done ? "เสร็จงาน" : "ยังไม่เสร็จ"}: ${task.text}`,
+          timestamp: now,
+        });
       }
-      return updated;
+      // ── เลื่อนขั้นตอนอัตโนมัติตามความคืบหน้า (เฉพาะดีลที่ยัง active · ไม่ auto-ปิดการขาย) ──
+      let stageId = d.stageId;
+      const ACTIVE_STAGES = [2, 4, 5, 9, 6]; // ติดต่อ → รวบรวม → เสนอราคา → ติดตาม → เจรจา
+      if (d.outcome === "active" && tasks.length) {
+        const doneCount = tasks.filter(t => t.done).length;
+        const idx = Math.min(ACTIVE_STAGES.length - 1, Math.floor((doneCount / tasks.length) * ACTIVE_STAGES.length));
+        const nextStage = ACTIVE_STAGES[idx];
+        if (nextStage !== d.stageId) {
+          stageId = nextStage;
+          const stageName = pipelineStages.find(s => s.id === nextStage)?.name ?? nextStage;
+          acts.unshift({ id: Date.now() + 1, type: "stage_change", text: `เลื่อนขั้นตอนอัตโนมัติ → ${stageName}`, timestamp: now });
+        }
+      }
+      return { ...d, tasks, stageId, activities: [...acts, ...(d.activities ?? [])] };
     }));
   }, []);
 
@@ -151,6 +162,7 @@ export function SalesProvider({
       }
     }
     const newId = customers.reduce((m, c) => Math.max(m, c.id), 0) + 1;
+    // ลูกค้า = ลีดที่ปิดการขายสำเร็จ → พาข้อมูลตัวตนจากลีดมาให้ครบ (รูป/มูลค่าดีลที่ปิดได้)
     const newCustomer: CustomerRow = {
       id: newId,
       name: lead.contact || lead.company,
@@ -166,7 +178,8 @@ export function SalesProvider({
       owner: lead.assigned,
       initials: deriveInitials(lead.company || lead.name),
       color: CUSTOMER_PALETTE[newId % CUSTOMER_PALETTE.length],
-      totalValue: 0,
+      totalValue: parseBaht(lead.value),
+      logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลีดมาด้วย
     };
     setCustomers(prev => [...prev, newCustomer]);
     if (removeLead) {
@@ -176,6 +189,12 @@ export function SalesProvider({
       // แค่ผูกลูกค้าให้ลีด (ยังเป็นผู้สนใจอยู่)
       setLeads(prev => prev.map(l => l.id !== lead.id ? l : { ...l, customerId: newId }));
     }
+    // ผูกใบเสนอราคาที่ออกก่อน WON (customerId=0 ในนามบริษัทลีด) เข้ากับลูกค้าใหม่ย้อนหลัง
+    setQuotations(prev => prev.map(q =>
+      (!q.customerId || q.customerId === 0) && q.customer === lead.company
+        ? { ...q, customerId: newId }
+        : q
+    ));
     return newCustomer;
   }, [customers]);
 
@@ -272,9 +291,9 @@ export function SalesProvider({
       customer:   lead.company,
       project:    `${lead.product} — ${lead.company}`,
       value:      parseLeadValue(lead.value),
-      stageId:    1,
+      stageId:    2,
       assigned:   lead.assigned,
-      dealer:     "สาขาของฉัน",
+      dealer:     "ตัวแทนของฉัน",
       dealerColor: "#003366",
       tasks: (leadChecklists[lead.id]?.length
         ? leadChecklists[lead.id].map((item, i) => ({ id: id * 100 + i, text: item.text, done: item.done }))
@@ -310,8 +329,13 @@ export function SalesProvider({
 
   // ── Lead mutations ───────────────────────────────────────────────
   const updateLeadStatus = useCallback((leadId: string, status: LeadRow["status"]) => {
+    // สร้างลูกค้าเฉพาะตอนปิดการขายสำเร็จ (WON) — ตัดสินใจนอก updater กัน StrictMode เรียกซ้ำใน dev
+    const lead = leadsRef.current.find(l => l.id === leadId);
     setLeads(prev => prev.map(l => l.id !== leadId ? l : { ...l, status }));
-  }, []);
+    if (status === "PAID" && lead && lead.customerId == null) {
+      setTimeout(() => convertLeadToCustomer({ ...lead, status }, false), 0);
+    }
+  }, [convertLeadToCustomer]);
 
   const addLead = useCallback((lead: LeadRow) => {
     setLeads(prev => [lead, ...prev]);
@@ -319,7 +343,11 @@ export function SalesProvider({
 
   const updateLead = useCallback((lead: LeadRow) => {
     setLeads(prev => prev.map(l => l.id !== lead.id ? l : lead));
-  }, []);
+    // ปิดการขายสำเร็จ → สร้างลูกค้า (เฉพาะยังไม่เป็นลูกค้า)
+    if (lead.status === "PAID" && lead.customerId == null) {
+      setTimeout(() => convertLeadToCustomer(lead, false), 0);
+    }
+  }, [convertLeadToCustomer]);
 
   const deleteLead = useCallback((leadId: string) => {
     setLeads(prev => prev.filter(l => l.id !== leadId));
@@ -338,22 +366,60 @@ export function SalesProvider({
     setCustomers(prev => prev.filter(c => c.id !== id));
   }, []);
 
+  // ── Quotation → เช็กงานของลีดอัตโนมัติ ─────────────────────────────
+  // สร้างใบเสนอราคา = ติ๊ก "จัดทำใบเสนอราคา" · ส่งใบเสนอราคา = ติ๊ก "ส่งใบเสนอราคา"
+  // แล้วเลื่อนสถานะลีดตาม stageFromTasks (เลื่อนขึ้นเท่านั้น ไม่ดึงถอยหลัง)
+  const completeLeadQuoteTasks = useCallback((quotation: QuotationMock, keys: string[]) => {
+    const RANK: Partial<Record<LeadRow["status"], number>> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4 };
+    setLeads(prev => prev.map(l => {
+      const match = (quotation.customerId != null && quotation.customerId !== 0 && l.customerId === quotation.customerId)
+        || l.company === quotation.customer;
+      if (!match || l.status === "PAID" || l.status === "CANCELLED") return l;
+      let changed = false;
+      const base = l.tasks && l.tasks.length ? l.tasks : buildLeadTasks();
+      const tasks = base.map(t => {
+        if (keys.includes(t.key) && !t.done) {
+          changed = true;
+          // ผู้ทำงาน = ผู้รับผิดชอบของลีด (ไม่ใช่ "ระบบ"/ดีลเลอร์)
+          return { ...t, done: true, doneAt: "30 มิ.ย. 2569", doneBy: l.assigned || "อัปเดตอัตโนมัติ" };
+        }
+        return t;
+      });
+      if (!changed) return l;
+      const next = stageFromTasks(tasks);
+      const status = (RANK[next] ?? 0) > (RANK[l.status] ?? 0) ? next : l.status;
+      return { ...l, tasks, status };
+    }));
+  }, []);
+
   // ── Quotation mutations ──────────────────────────────────────────
   const addQuotation = useCallback((quotation: QuotationMock) => {
     setQuotations(prev => [quotation, ...prev]);
-  }, []);
+    // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
+    completeLeadQuoteTasks(quotation, quotation.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
+  }, [completeLeadQuoteTasks]);
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));
-  }, []);
+    if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
+  }, [completeLeadQuoteTasks]);
 
   const deleteQuotation = useCallback((id: string) => {
     setQuotations(prev => prev.filter(q => q.id !== id));
   }, []);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
-    setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status }));
-  }, []);
+    setQuotations(prev => {
+      const target = prev.find(q => q.id === id);
+      // เปลี่ยนเป็นสถานะหลังการส่ง → ติ๊ก จัดทำ/ส่งใบเสนอราคา ให้ลีดอัตโนมัติ
+      // (setTimeout กัน StrictMode เรียกซ้ำระหว่าง updater)
+      if (target && status !== "draft") {
+        const snap = { ...target, status };
+        setTimeout(() => completeLeadQuoteTasks(snap, ["makeQuote", "sendQuote"]), 0);
+      }
+      return prev.map(q => q.id !== id ? q : { ...q, status });
+    });
+  }, [completeLeadQuoteTasks]);
 
   // ── Appointment mutations ────────────────────────────────────────
   const addAppointment = useCallback((appt: AppointmentMock) => {

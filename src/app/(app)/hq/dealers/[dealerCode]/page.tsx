@@ -6,8 +6,9 @@ import Link from "next/link";
 import { use } from "react";
 import {
   dealerLeaderboard, dealerDetails,
-  type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
+  type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@/lib/mock";
+import { usePersistentState } from "@/lib/usePersistentState";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -19,11 +20,10 @@ function fmtM(n: number) {
 const BADGE = (bg: string, color: string): React.CSSProperties => ({ background: bg, color });
 
 const LEAD_STATUS: Record<DealerLeadItem["status"], { label: string; bg: string; color: string }> = {
-  new:       { label: "ผู้สนใจใหม่",    bg: "#dce5f0", color: "#003366" },
-  contacted: { label: "ติดต่อแล้ว", bg: "#fef3cd", color: "#d97706" },
+  contacted: { label: "ติดต่อแล้ว", bg: "#eef2f7", color: "#475569" },
   quoted:    { label: "ส่งใบเสนอ", bg: "#dce5f0", color: "#003366" },
-  won:       { label: "ปิดได้",     bg: "#e5faf0", color: "#059669" },
-  lost:      { label: "เสีย",       bg: "#fee2e2", color: "#dc2626" },
+  won:       { label: "ปิดการขายสำเร็จ",     bg: "#e5faf0", color: "#059669" },
+  lost:      { label: "ปิดการขายไม่สำเร็จ",  bg: "#fee2e2", color: "#dc2626" },
 };
 
 const PROJ_STATUS: Record<DealerProjectItem["status"], { label: string; bg: string; color: string; bar: string }> = {
@@ -34,10 +34,12 @@ const PROJ_STATUS: Record<DealerProjectItem["status"], { label: string; bg: stri
 };
 
 const QUOTE_STATUS: Record<DealerQuoteItem["status"], { label: string; bg: string; color: string }> = {
-  draft:    { label: "ร่าง",         bg: "#f0f0f5", color: "#6b7280" },
-  sent:     { label: "ส่งแล้ว",      bg: "#dce5f0", color: "#003366" },
-  won:      { label: "ปิดได้",       bg: "#e5faf0", color: "#059669" },
-  lost:     { label: "เสีย",         bg: "#fee2e2", color: "#dc2626" },
+  draft:          { label: "ร่าง",         bg: "#f0f0f5", color: "#6b7280" },
+  sent_to_client: { label: "ส่งแล้ว",      bg: "#dce5f0", color: "#003366" },
+  viewed:         { label: "เปิดอ่านแล้ว", bg: "#e0e7ff", color: "#4338ca" },
+  won:            { label: "ตอบรับ",       bg: "#e5faf0", color: "#059669" },
+  lost:           { label: "ปฏิเสธ",       bg: "#fee2e2", color: "#dc2626" },
+  expired:        { label: "หมดอายุ",      bg: "#f5f5f5", color: "#9ca3af" },
 };
 
 // ── Mini bar chart ───────────────────────────────────────────────
@@ -56,8 +58,8 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
           const isLast = i === data.length - 1;
           return (
             <div key={d.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
-              <div title={`${d.month}: ฿${(d.value / 1_000_000).toFixed(1)}M`}
-                style={{ width: "100%", height: `${pct}%`, minHeight: 4, borderRadius: "4px 4px 0 0", background: isLast ? "#003366" : "#dce5f0" }} />
+              <div title={`${d.month}: ฿${(d.value / 1_000_000).toFixed(1)}M`} className="vbar-grow"
+                style={{ width: "100%", height: `${pct}%`, minHeight: 4, borderRadius: "4px 4px 0 0", background: isLast ? "#003366" : "#dce5f0", animationDelay: `${i * 60}ms` }} />
             </div>
           );
         })}
@@ -120,7 +122,7 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
       {[
         { label: "โอกาสการขายที่กำลังดำเนินการ", value: String(dealer.activeProjects),  unit: "โอกาสการขาย",     color: "#003366" },
         { label: "อัตราปิดการขาย",     value: String(dealer.winRate),         unit: "%",       color: dealer.winRate >= 40 ? "#059669" : "#dc2626" },
-        { label: "ส่งตรงเวลา",         value: String(dealer.onTimePct),       unit: "%",       color: dealer.onTimePct >= 80 ? "#059669" : dealer.onTimePct >= 60 ? "#f59e0b" : "#dc2626" },
+        { label: "ติดตามตรงเวลา",         value: String(dealer.onTimePct),       unit: "%",       color: dealer.onTimePct >= 80 ? "#059669" : dealer.onTimePct >= 60 ? "#f59e0b" : "#dc2626" },
         { label: "ใบเสนอราคา",         value: String(detail?.quotes.length ?? 0),   unit: "ใบ",      color: "#2D2D2D" },
       ].map(s => (
         <div key={s.label} className="stat-card">
@@ -300,12 +302,14 @@ type TabKey = typeof TABS[number]["key"];
 
 export default function DealerDrillDownPage({ params }: { params: Promise<{ dealerCode: string }> }) {
   const { dealerCode } = use(params);
-  const dealer = dealerLeaderboard.find(d => d.code === dealerCode.toUpperCase());
+  // อ่านจากชุดที่ persist (hq_dealers_v2) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
+  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  const [tab, setTab] = useState<TabKey>("overview");
+  const dealer = dealers.find(d => d.code === dealerCode.toUpperCase())
+    ?? dealerLeaderboard.find(d => d.code === dealerCode.toUpperCase());
   const detail = dealerDetails[dealerCode.toUpperCase()];
 
   if (!dealer) return notFound();
-
-  const [tab, setTab] = useState<TabKey>("overview");
 
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;
   const isAtRisk  = targetPct < 50;
@@ -315,7 +319,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
     <div className="erp">
       {/* Back link */}
       <Link href="/hq/dealers" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "#6b7280", textDecoration: "none", marginBottom: 16, fontWeight: 600 }}>
-        <ArrowLeft size={14} /> กลับไปหน้าสาขา
+        <ArrowLeft size={14} /> กลับไปหน้าตัวแทน
       </Link>
 
       {/* Header */}
@@ -329,7 +333,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
             {dealer.status === "inactive" && <span className="badge" style={BADGE("#f0f0f5", "#9ca3af")}>ปิดใช้งาน</span>}
           </div>
           <p>
-            ภาค{dealer.region} · {dealer.activeProjects} โอกาสการขาย · อัตราปิดการขาย {dealer.winRate}% · ส่งตรงเวลา {dealer.onTimePct}%
+            ภาค{dealer.region} · {dealer.activeProjects} โอกาสการขาย · อัตราปิดการขาย {dealer.winRate}% · ติดตามตรงเวลา {dealer.onTimePct}%
           </p>
         </div>
       </div>
@@ -359,7 +363,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
       {/* Tab content */}
       {!detail && (
         <div className="card" style={{ padding: 32, textAlign: "center", fontSize: "0.84rem", color: "#9ca3af" }}>
-          ยังไม่มีข้อมูลรายละเอียดสำหรับสาขานี้
+          ยังไม่มีข้อมูลรายละเอียดสำหรับตัวแทนนี้
         </div>
       )}
       {detail && tab === "overview"  && <OverviewTab dealer={dealer} detail={detail} />}

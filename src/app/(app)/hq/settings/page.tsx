@@ -1,23 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import {
-  GitMerge, Store, Package, Building2, Shield,
   ChevronUp, ChevronDown, Plus, Trash2, Check, Save,
-  Lock, ArrowRight,
+  GitMerge, Building2, Shield, Target, Bell,
 } from "lucide-react";
-import { dealerLeaderboard } from "@/lib/mock";
-
-type HQSettingTab = "company" | "users" | "dealers" | "products" | "sales-journey";
-
-const TABS: { key: HQSettingTab; label: string; icon: React.ReactNode }[] = [
-  { key: "company",       label: "บริษัท",          icon: <Building2 size={15} /> },
-  { key: "users",         label: "ผู้ใช้งาน",       icon: <Shield    size={15} /> },
-  { key: "dealers",       label: "ตัวแทนจำหน่าย",   icon: <Store     size={15} /> },
-  { key: "products",      label: "สินค้า",          icon: <Package   size={15} /> },
-  { key: "sales-journey", label: "เส้นทางการขาย",   icon: <GitMerge  size={15} /> },
-];
+// หน้า ตั้งค่า แสดง "เนื้อหาจริงทั้งหมด" ในแท็บเลย — embed หน้าจัดการจริง ไม่ใช่การ์ดลิงก์
+import HQCompanyPage from "../company/page";
+import HQUsersPage from "../users/page";
+import { usePersistentState } from "@/lib/usePersistentState";
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,10 +20,11 @@ type Reason = { id: number; label: string };
 const STAGE_COLORS = ["#6b7280", "#d97706", "#003366", "#7c3aed", "#059669", "#0ea5e9", "#ec4899", "#dc2626"];
 
 const INIT_STAGES: Stage[] = [
-  { id: 1, code: "NEW",       label: "ผู้สนใจใหม่",          color: "#6b7280", isDefault: true,  locked: false },
-  { id: 2, code: "WAITING",   label: "รวบรวมความต้องการ", color: "#d97706", isDefault: false, locked: false },
-  { id: 3, code: "QUOTED",    label: "ใบเสนอราคา",       color: "#7c3aed", isDefault: false, locked: false },
-  { id: 4, code: "BULLET",    label: "เจรจาต่อรอง",      color: "#003366", isDefault: false, locked: false },
+  { id: 2, code: "WAITING",   label: "ติดต่อแล้ว",         color: "#475569", isDefault: true,  locked: false },
+  { id: 7, code: "BULLET",    label: "รวบรวมความต้องการ", color: "#003366", isDefault: false, locked: false },
+  { id: 3, code: "QUOTED",    label: "ใบเสนอราคา",       color: "#4338ca", isDefault: false, locked: false },
+  { id: 8, code: "FOLLOWUP",  label: "ติดตามผล",         color: "#d97706", isDefault: false, locked: false },
+  { id: 4, code: "NEGO",      label: "เจรจาต่อรอง",      color: "#b45309", isDefault: false, locked: false },
   { id: 5, code: "PAID",      label: "ปิดการขาย",        color: "#059669", isDefault: false, locked: true, terminal: "won"  },
   { id: 6, code: "CANCELLED", label: "ไม่สำเร็จ",        color: "#dc2626", isDefault: false, locked: true, terminal: "lost" },
 ];
@@ -46,6 +38,8 @@ const INIT_LOST: Reason[] = [
   { id: 5, label: "ลูกค้าไม่ตอบสนอง" },
 ];
 
+const HQ_JOURNEY_KEY = "hq_sales_journey";
+
 function SalesJourneyTab() {
   const [stages,  setStages]  = useState<Stage[]>(INIT_STAGES);
   const [won,     setWon]     = useState<Reason[]>(INIT_WON);
@@ -55,6 +49,16 @@ function SalesJourneyTab() {
   const [editVal, setEditVal] = useState("");
   const [newWon,  setNewWon]  = useState("");
   const [newLost, setNewLost] = useState("");
+
+  // โหลดค่าที่บันทึกไว้ (persist จริงผ่าน localStorage)
+  useEffect(() => {
+    const s = localStorage.getItem(HQ_JOURNEY_KEY);
+    if (s) try { const d = JSON.parse(s); if (d.stages) setStages(d.stages); if (d.won) setWon(d.won); if (d.lost) setLost(d.lost); } catch {}
+  }, []);
+  function saveJourney() {
+    localStorage.setItem(HQ_JOURNEY_KEY, JSON.stringify({ stages, won, lost }));
+    setSaved(true); setTimeout(() => setSaved(false), 2500);
+  }
 
   const active   = stages.filter(s => !s.locked);
   const terminal = stages.filter(s =>  s.locked);
@@ -111,10 +115,9 @@ function SalesJourneyTab() {
       <div className="card-header">
         <div>
           <div className="card-title">เส้นทางการขาย</div>
-          <div className="card-desc">กำหนดขั้นการขาย ลำดับขั้นตอน และเหตุผลปิดสำเร็จ / ไม่สำเร็จ สำหรับทุกสาขา</div>
+          <div className="card-desc">กำหนดขั้นการขาย ลำดับขั้นตอน และเหตุผลปิดสำเร็จ / ไม่สำเร็จ สำหรับทุกตัวแทน</div>
         </div>
-        <button className="btn btn-primary btn-sm"
-          onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2500); }}>
+        <button className="btn btn-primary btn-sm" onClick={saveJourney}>
           {saved ? <><Check size={13} /> บันทึกแล้ว</> : <><Save size={13} /> บันทึก</>}
         </button>
       </div>
@@ -319,132 +322,50 @@ function SalesJourneyTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROOT PAGE
+// เป้าหมายการขาย (HQ) — เป้ารายปีของเครือ + เกณฑ์คุณภาพ (persist จริง)
 // ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared bits
-// ─────────────────────────────────────────────────────────────────────────────
-function StatBox({ value, label, tone = "#003366" }: { value: React.ReactNode; label: string; tone?: string }) {
-  return (
-    <div style={{
-      flex: 1, minWidth: 120, padding: "16px 18px", borderRadius: 14,
-      border: "1px solid #eef1f5", background: "#fafbfc",
-    }}>
-      <div style={{ fontSize: "1.6rem", fontWeight: 900, color: tone, lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 3 }}>{label}</div>
-    </div>
-  );
-}
+type HQTargets = { annualTarget: number; winRateTarget: number; onTimeTarget: number };
+const DEFAULT_TARGETS: HQTargets = { annualTarget: 260_000_000, winRateTarget: 40, onTimeTarget: 85 };
 
-function CapabilityChips({ items }: { items: string[] }) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-      {items.map(c => (
-        <span key={c} style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "6px 12px", borderRadius: 99, background: "#f0f4fa",
-          border: "1px solid #dce5f0", fontSize: "0.74rem", fontWeight: 600, color: "#003366",
-        }}>
-          <Check size={12} /> {c}
-        </span>
-      ))}
-    </div>
-  );
-}
+function TargetsTab() {
+  const [targets, setTargets] = usePersistentState<HQTargets>("hq_targets", DEFAULT_TARGETS);
+  const [draft, setDraft] = useState<HQTargets>(targets);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setDraft(targets); }, [targets]);
+  function save() { setTargets(draft); setSaved(true); setTimeout(() => setSaved(false), 2500); }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. DEALER MANAGEMENT (overview → ลิงก์หน้าจัดการเต็ม)
-// ─────────────────────────────────────────────────────────────────────────────
-// แท็บลิงก์ไปหน้าจัดการเต็ม (ใช้ร่วมกับ บริษัท / ผู้ใช้งาน / เทมเพลต)
-function LinkTab({ title, desc, items, icon, panelTitle, panelDesc, href }: {
-  title: string; desc: string; items: string[]; icon: React.ReactNode;
-  panelTitle: string; panelDesc: string; href: string;
-}) {
-  return (
-    <>
-      <div className="card-header">
-        <div>
-          <div className="card-title">{title}</div>
-          <div className="card-desc">{desc}</div>
-        </div>
-      </div>
-      <div className="card-body">
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>
-            สิ่งที่จัดการได้
-          </div>
-          <CapabilityChips items={items} />
-        </div>
-        <div style={{
-          marginTop: 22, padding: "18px 20px", borderRadius: 14,
-          border: "1px solid #dce5f0", background: "#f7f9fc",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#003366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {icon}
-            </div>
-            <div>
-              <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#2D2D2D" }}>{panelTitle}</div>
-              <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 2 }}>{panelDesc}</div>
-            </div>
-          </div>
-          <Link href={href} className="btn btn-primary btn-md" style={{ gap: 7 }}>
-            เปิดหน้าจัดการ <ArrowRight size={15} />
-          </Link>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function DealerManagementTab() {
-  const total    = dealerLeaderboard.length;
-  const active   = dealerLeaderboard.filter(d => d.status === "active").length;
-  const inactive = total - active;
+  const fields: { key: keyof HQTargets; label: string; desc: string; unit: string; step: number }[] = [
+    { key: "annualTarget",  label: "เป้ายอดขายรวมทั้งเครือ (รายปี)", desc: "ใช้เทียบกับยอดสะสมจริงบนแดชบอร์ด HQ", unit: "บาท", step: 1_000_000 },
+    { key: "winRateTarget", label: "เป้าอัตราปิดการขายเฉลี่ย",       desc: "เกณฑ์ขั้นต่ำที่ตัวแทนควรทำได้",          unit: "%",   step: 1 },
+    { key: "onTimeTarget",  label: "เป้าติดตามตรงเวลา",              desc: "สัดส่วนงานติดตามที่ทำภายในกำหนด",       unit: "%",   step: 1 },
+  ];
 
   return (
     <>
       <div className="card-header">
         <div>
-          <div className="card-title">จัดการตัวแทนจำหน่าย</div>
-          <div className="card-desc">สร้าง แก้ไข เปิด/ปิดใช้งาน และดูแลความปลอดภัยบัญชีของตัวแทนทั้งเครือข่าย</div>
+          <div className="card-title">เป้าหมายการขาย</div>
+          <div className="card-desc">กำหนดเป้าระดับเครือ — เป้ารายตัวแทนตั้งได้ที่หน้า ตัวแทน (แก้ไขรายตัว)</div>
         </div>
+        <button className="btn btn-primary btn-sm" onClick={save}>
+          {saved ? <><Check size={13} /> บันทึกแล้ว</> : <><Save size={13} /> บันทึก</>}
+        </button>
       </div>
-      <div className="card-body">
-        {/* สรุปจำนวน */}
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 24 }}>
-          <StatBox value={total} label="ตัวแทนทั้งหมด" />
-          <StatBox value={active} label="กำลังใช้งาน" tone="#059669" />
-          <StatBox value={inactive} label="ปิดใช้งาน" tone="#9ca3af" />
-        </div>
-
-        {/* ความสามารถ */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>
-            สิ่งที่จัดการได้
-          </div>
-          <CapabilityChips items={["สร้างตัวแทน", "แก้ไขข้อมูล", "เปิด/ปิดใช้งาน", "ลบตัวแทน", "รีเซ็ตรหัสผ่าน", "ล็อก/ปลดล็อกบัญชี"]} />
-        </div>
-
-        {/* ลิงก์หน้าจัดการเต็ม */}
-        <div style={{
-          marginTop: 22, padding: "18px 20px", borderRadius: 14,
-          border: "1px solid #dce5f0", background: "#f7f9fc",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#003366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Store size={20} color="#fff" />
+      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {fields.map(f => (
+          <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{f.label}</div>
+              <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{f.desc}</div>
             </div>
-            <div>
-              <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#2D2D2D" }}>หน้าจัดการตัวแทนเต็มรูปแบบ</div>
-              <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 2 }}>ตาราง ค้นหา ฟอร์มสร้าง/แก้ไข และเครื่องมือความปลอดภัยบัญชี</div>
-            </div>
+            <input type="number" step={f.step} value={draft[f.key]}
+              onChange={e => setDraft(d => ({ ...d, [f.key]: Number(e.target.value) }))}
+              className="form-input" style={{ width: 170, textAlign: "right", fontWeight: 700 }} />
+            <span style={{ fontSize: "0.76rem", color: "#6b7280", width: 34 }}>{f.unit}</span>
           </div>
-          <Link href="/hq/dealers" className="btn btn-primary btn-md" style={{ gap: 7 }}>
-            เปิดหน้าจัดการ <ArrowRight size={15} />
-          </Link>
+        ))}
+        <div style={{ fontSize: "0.72rem", color: "#9ca3af" }}>
+          เป้ายอดขายรายปีปัจจุบัน: ฿{(draft.annualTarget / 1_000_000).toFixed(0)}M · ระบบใช้ค่านี้แสดง % ความคืบหน้าบนแดชบอร์ด
         </div>
       </div>
     </>
@@ -452,74 +373,66 @@ function DealerManagementTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. PRODUCT CATALOG (overview → ลิงก์หน้าแคตตาล็อกเต็ม)
+// การแจ้งเตือน (HQ) — เปิด/ปิดเหตุการณ์ที่ต้องการรับแจ้ง (persist จริง)
 // ─────────────────────────────────────────────────────────────────────────────
-const PRODUCT_LINES = [
-  { code: "โกดังสำเร็จรูป",  label: "โกดังสำเร็จรูป",  desc: "อาคารสำเร็จรูปมาตรฐาน พร้อมใช้งานไว", tone: "#003366" },
-  { code: "โรงงานสำเร็จรูป", label: "โรงงานสำเร็จรูป", desc: "โครงสร้างเหล็กสำหรับโรงงาน/คลังสินค้า", tone: "#0284c7" },
-  { code: "อาคารสำเร็จรูป",  label: "อาคารสำเร็จรูป",  desc: "อาคารพรีแฟบ สำนักงาน/อาคารเฉพาะกิจ", tone: "#7c3aed" },
+type NotifyPrefs = Record<string, boolean>;
+const NOTIFY_ITEMS: { key: string; label: string; desc: string }[] = [
+  { key: "newQuote",    label: "ใบเสนอราคาใหม่จากตัวแทน",       desc: "แจ้งทันทีเมื่อตัวแทนออกใบเสนอราคาใหม่" },
+  { key: "won",         label: "ปิดการขายสำเร็จ",                desc: "แจ้งเมื่อตัวแทนปิดดีลได้" },
+  { key: "belowTarget", label: "ตัวแทนต่ำกว่าเป้า",              desc: "แจ้งเมื่อยอดสะสมของตัวแทนต่ำกว่า 50% ของเป้า" },
+  { key: "expiring",    label: "ใบเสนอราคาใกล้หมดอายุ",          desc: "แจ้งล่วงหน้า 7 วันก่อนใบเสนอราคาหมดอายุ" },
+  { key: "weekly",      label: "สรุปผลงานรายสัปดาห์ (อีเมล)",    desc: "ส่งสรุปยอดขายทุกตัวแทนทางอีเมลทุกวันจันทร์" },
 ];
+const DEFAULT_NOTIFY: NotifyPrefs = { newQuote: true, won: true, belowTarget: true, expiring: true, weekly: false };
 
-function ProductCatalogTab() {
+function NotificationsTab() {
+  const [prefs, setPrefs] = usePersistentState<NotifyPrefs>("hq_notifications", DEFAULT_NOTIFY);
   return (
     <>
       <div className="card-header">
         <div>
-          <div className="card-title">แคตตาล็อกสินค้า</div>
-          <div className="card-desc">มาตรฐานสินค้าและราคากลางของเบนจามิน ที่ตัวแทนทุกสาขาใช้อ้างอิง</div>
+          <div className="card-title">การแจ้งเตือน</div>
+          <div className="card-desc">เลือกเหตุการณ์ที่ต้องการรับแจ้งเตือน — บันทึกอัตโนมัติทันทีที่สลับ</div>
         </div>
       </div>
-      <div className="card-body">
-        {/* สายผลิตภัณฑ์ */}
-        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>
-          สายผลิตภัณฑ์หลัก
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 22 }}>
-          {PRODUCT_LINES.map(p => (
-            <div key={p.code} style={{ padding: "16px 18px", borderRadius: 14, border: "1px solid #eef1f5", background: "#fafbfc" }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-                <span style={{ width: 9, height: 9, borderRadius: "50%", background: p.tone }} />
-                <span style={{ fontSize: "0.86rem", fontWeight: 800, color: p.tone, letterSpacing: "0.02em" }}>{p.label}</span>
+      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {NOTIFY_ITEMS.map(item => {
+          const on = prefs[item.key] ?? false;
+          return (
+            <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{item.label}</div>
+                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{item.desc}</div>
               </div>
-              <div style={{ fontSize: "0.76rem", color: "#6b7280", lineHeight: 1.5 }}>{p.desc}</div>
+              <button role="switch" aria-checked={on}
+                onClick={() => setPrefs(p => ({ ...p, [item.key]: !on }))}
+                style={{ width: 42, height: 24, borderRadius: 99, border: "none", cursor: "pointer", flexShrink: 0,
+                  background: on ? "#003366" : "#d1d5db", position: "relative", transition: "background .15s" }}>
+                <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%",
+                  background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.25)", transition: "left .15s" }} />
+              </button>
             </div>
-          ))}
-        </div>
-
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>
-            สิ่งที่จัดการได้
-          </div>
-          <CapabilityChips items={["ชื่อสินค้า", "หมวดหมู่", "รายละเอียด", "รูปภาพ", "ราคากลาง", "สถานะการขาย"]} />
-        </div>
-
-        {/* ลิงก์หน้าแคตตาล็อกเต็ม */}
-        <div style={{
-          marginTop: 22, padding: "18px 20px", borderRadius: 14,
-          border: "1px solid #dce5f0", background: "#f7f9fc",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#003366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Package size={20} color="#fff" />
-            </div>
-            <div>
-              <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#2D2D2D" }}>หน้าแคตตาล็อกสินค้าเต็มรูปแบบ</div>
-              <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 2 }}>รายการสินค้า ราคากลาง ระยะเวลารอสินค้า และการจัดการสถานะ</div>
-            </div>
-          </div>
-          <Link href="/hq/master" className="btn btn-primary btn-md" style={{ gap: 7 }}>
-            เปิดแคตตาล็อก <ArrowRight size={15} />
-          </Link>
-        </div>
-
-        <div style={{ marginTop: 16, fontSize: "0.72rem", color: "#9ca3af", display: "flex", alignItems: "center", gap: 6 }}>
-          <Lock size={12} /> ตัวแทนไม่สามารถแก้ไขสินค้าหรือราคากลางได้ — กำหนดโดย HQ เท่านั้น
-        </div>
+          );
+        })}
       </div>
     </>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT PAGE — ตั้งค่า HQ ศูนย์รวมงานบริหาร: ทุกแท็บแสดง "เนื้อหาจริงทั้งหมด" ในหน้านี้เลย
+// (embed หน้าจัดการจริง — ไม่มีการ์ดลิงก์ให้คลิกต่อ)
+// ─────────────────────────────────────────────────────────────────────────────
+// ตัวแทน/แม่แบบ ไม่อยู่ในแท็บ — มีหน้าจัดการของตัวเองในเมนูหลักแล้ว (ไม่ทำซ้ำ 2 ที่)
+type HQSettingTab = "company" | "users" | "sales-journey" | "targets" | "notifications";
+
+const TABS: { key: HQSettingTab; label: string; icon: React.ReactNode }[] = [
+  { key: "company",       label: "บริษัท",           icon: <Building2 size={15} /> },
+  { key: "users",         label: "ผู้ใช้งาน",        icon: <Shield    size={15} /> },
+  { key: "sales-journey", label: "เส้นทางการขาย",   icon: <GitMerge  size={15} /> },
+  { key: "targets",       label: "เป้าหมายการขาย",  icon: <Target    size={15} /> },
+  { key: "notifications", label: "การแจ้งเตือน",     icon: <Bell      size={15} /> },
+];
 
 export default function HQSettingsPage() {
   const [activeTab, setActiveTab] = useState<HQSettingTab>("company");
@@ -529,7 +442,7 @@ export default function HQSettingsPage() {
       <div className="page-head">
         <div>
           <h2>ตั้งค่า</h2>
-          <p>ศูนย์ควบคุมงานบริหารธุรกิจของเบนจามิน · จัดการตัวแทน · สินค้า · เส้นทางการขาย · บริษัท</p>
+          <p>ศูนย์รวมงานบริหารของเครือ — จัดการได้ครบทุกส่วนในหน้านี้</p>
         </div>
       </div>
 
@@ -539,7 +452,7 @@ export default function HQSettingsPage() {
           {TABS.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
               className={`tab-item${activeTab === t.key ? " active" : ""}`}
-              style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.85rem", padding: "12px 16px" }}>
               {t.icon}
               {t.label}
             </button>
@@ -547,26 +460,12 @@ export default function HQSettingsPage() {
         </div>
       </div>
 
-      {/* Content card */}
-      <div className="card">
-        {activeTab === "dealers"       && <DealerManagementTab />}
-        {activeTab === "products"      && <ProductCatalogTab />}
-        {activeTab === "sales-journey" && <SalesJourneyTab />}
-        {activeTab === "company"       && (
-          <LinkTab title="บริษัท" desc="ข้อมูลบริษัทเบนจามินและสินทรัพย์แบรนด์"
-            items={["ข้อมูลบริษัท", "โลโก้", "ที่อยู่ / เลขภาษี", "สี CI / ฟอนต์", "สาขา"]}
-            icon={<Building2 size={20} color="#fff" />}
-            panelTitle="หน้าบริษัทและสินทรัพย์แบรนด์" panelDesc="ข้อมูลองค์กร โลโก้ สี CI ฟอนต์ และรายชื่อสาขา"
-            href="/hq/company" />
-        )}
-        {activeTab === "users"         && (
-          <LinkTab title="ผู้ใช้งาน" desc="จัดการผู้ใช้ บทบาท และสิทธิ์การเข้าถึง"
-            items={["ผู้ใช้งาน", "บทบาท 4 ระดับ", "สิทธิ์ CRUD", "Role-based access"]}
-            icon={<Shield size={20} color="#fff" />}
-            panelTitle="หน้าจัดการผู้ใช้และสิทธิ์" panelDesc="ตารางผู้ใช้ บทบาท และเมทริกซ์สิทธิ์ตามโมดูล"
-            href="/hq/users" />
-        )}
-      </div>
+      {/* เนื้อหาเต็มของแต่ละส่วน — แสดงในหน้านี้เลย */}
+      {activeTab === "company"       && <HQCompanyPage />}
+      {activeTab === "users"         && <HQUsersPage />}
+      {activeTab === "sales-journey" && <div className="card"><SalesJourneyTab /></div>}
+      {activeTab === "targets"       && <div className="card"><TargetsTab /></div>}
+      {activeTab === "notifications" && <div className="card"><NotificationsTab /></div>}
     </div>
   );
 }

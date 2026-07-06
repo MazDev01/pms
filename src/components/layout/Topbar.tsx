@@ -5,8 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import { useSales } from "@/context/SalesContext";
 import {
-  leads, customers, quotations, dealerLeaderboard, apptTypeLabel,
-  type LeadRow, type CustomerMock, type QuotationMock, type DealerRow, type AppointmentMock,
+  dealerLeaderboard, apptTypeLabel,
+  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock,
 } from "@/lib/mock";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu } from "lucide-react";
 import { PRIMARY, STEEL } from "@/lib/theme";
@@ -60,14 +60,14 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     out.push({ ...n, id: id++, bucket: bucketOf(n.sortDate) });
   };
 
-  // 1) ลีดใหม่ (New Lead) — leads status "NEW" → assign เป็น "วันนี้"
-  for (const l of leads.filter(l => l.status === "NEW")) {
+  // 1) ผู้สนใจรอดำเนินการ — leads ขั้น "ติดต่อแล้ว" (WAITING) ที่ยังไม่คืบหน้า
+  for (const l of leads.filter(l => l.status === "WAITING")) {
     push({
-      iconEl: <MessageSquare size={14} />, iconBg: "#dce5f0", iconColor: "#003366",
-      title: "ผู้สนใจใหม่",
+      iconEl: <MessageSquare size={14} />, iconBg: "#eef2f7", iconColor: "#475569",
+      title: "ลูกค้าเป้าหมายรอดำเนินการ",
       body: `${l.company} — ${l.contact} · ${l.province} · ${l.value}`,
       time: `${l.source ?? "ช่องทางออนไลน์"} · ผู้รับผิดชอบ ${l.assigned}`,
-      href: "/leads",
+      href: `/leads?open=${l.numId}`,
       sortDate: MOCK_TODAY,
     });
   }
@@ -79,7 +79,7 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
       title: "เตือนติดตาม",
       body: `${l.company} — ${l.product} · ${l.value}`,
       time: `ผู้รับผิดชอบ ${l.assigned}`,
-      href: "/leads",
+      href: `/leads?open=${l.numId}`,
       sortDate: MOCK_TODAY,
     });
   }
@@ -89,7 +89,7 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
       title: "เตือนติดตาม",
       body: `${a.company} — ${a.note}`,
       time: `${a.date} ${a.time} น. · ${a.assigned}`,
-      href: "/quotations",
+      href: "/calendar",
       sortDate: a.date,
     });
   }
@@ -168,25 +168,23 @@ function useClickOutside(ref: React.RefObject<HTMLElement | null>, cb: () => voi
 const TITLE_MAP: { match: string; title: string }[] = [
   /* Dealer */
   { match: "/dashboard",       title: "แดชบอร์ด" },
-  { match: "/pipeline",        title: "เส้นทางการขาย" },
-  { match: "/leads",           title: "ผู้สนใจ" },
+  { match: "/leads",           title: "ลูกค้าเป้าหมาย" },
   { match: "/customers",       title: "ลูกค้า" },
   { match: "/quotations",      title: "ใบเสนอราคา" },
   { match: "/calendar",        title: "ปฏิทิน" },
-  { match: "/files",           title: "เอกสาร" },
+  { match: "/files",           title: "ไฟล์" },
   { match: "/products",        title: "แม่แบบ" },
   { match: "/settings",        title: "ตั้งค่า" },
   /* HQ */
-  { match: "/hq/dashboard",      title: "แดชบอร์ด" },
-  { match: "/hq/pipeline",       title: "เส้นทางการขาย" },
-  { match: "/hq/dealers",        title: "สาขา" },
-  { match: "/hq/lead-pool",      title: "ผู้สนใจ" },
-  { match: "/hq/customers",      title: "ลูกค้า" },
-  { match: "/hq/quotations",     title: "ใบเสนอราคา" },
-  { match: "/hq/master",         title: "สินค้า" },
+  { match: "/hq/dashboard",      title: "แดชบอร์ดสำนักงานใหญ่" },
+  { match: "/hq/pipeline",       title: "ภาพรวมยอดขาย" },
+  { match: "/hq/dealers",        title: "ตัวแทน" },
+  { match: "/hq/customers",      title: "ลูกค้าทั้งเครือ" },
+  { match: "/hq/quotations",     title: "ใบเสนอราคาทั้งเครือ" },
+  { match: "/hq/master",         title: "แคตตาล็อกแม่แบบ" },
   { match: "/hq/company",        title: "บริษัท" },
   { match: "/hq/users",          title: "ผู้ใช้งาน" },
-  { match: "/hq/settings",        title: "ตั้งค่า HQ" },
+  { match: "/hq/settings",        title: "ตั้งค่า" },
   { match: "/reports",           title: "รายงาน" },
 ];
 
@@ -201,9 +199,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const pathname = usePathname();
   const initial = session.name.charAt(0).toUpperCase();
   const roleLabel = isHQ ? "ผู้บริหาร HQ"
-    : ({ DEALER_ADMIN: "ผู้จัดการสาขา", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
+    : ({ DEALER_ADMIN: "ผู้จัดการตัวแทน", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
   // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
-  const { leads: liveLeads, quotations: liveQuotations, appointments: liveAppointments } = useSales();
+  const { leads: liveLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
   const notifs = useMemo(() => buildNotifications(liveLeads, liveQuotations, liveAppointments), [liveLeads, liveQuotations, liveAppointments]);
 
   // ── states ──
@@ -243,10 +241,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     if (q.length < 2) return [];
     const has = (s?: string) => (s ?? "").toLowerCase().includes(q);
     // ลูกค้าไม่มี owner field → หาผู้รับผิดชอบจากลีดที่ผูก customerId เดียวกัน
-    const ownerOfCustomer = (cid: number) => leads.find(l => l.customerId === cid)?.assigned;
+    const ownerOfCustomer = (cid: number) => liveLeads.find(l => l.customerId === cid)?.assigned;
     return [
       // ลีด — match company/contact/name/phone/ผู้รับผิดชอบ
-      ...leads
+      ...liveLeads
         .filter((l: LeadRow) => has(l.name) || has(l.company) || has(l.contact) || has(l.phone) || has(l.assigned))
         .slice(0, 5)
         .map((l: LeadRow) => {
@@ -256,33 +254,33 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
             : has(l.assigned)
             ? `${l.contact} · ผู้รับผิดชอบ ${l.assigned}`
             : `${l.contact} · ${l.province} · ${l.value}`;
-          return { type: "ผู้สนใจ", label: l.company, sub, href: "/leads" };
+          return { type: "ลูกค้าเป้าหมาย", label: l.company, sub, href: `/leads?open=${l.numId}` };
         }),
       // ลูกค้า — match company/name/province/phone/ผู้รับผิดชอบ (ผ่านลีดที่ผูกกัน)
-      ...customers
-        .filter((c: CustomerMock) => has(c.company) || has(c.name) || has(c.province) || has(c.phone) || has(ownerOfCustomer(c.id)))
+      ...liveCustomers
+        .filter((c: CustomerRow) => has(c.company) || has(c.name) || has(c.province) || has(c.phone) || has(ownerOfCustomer(c.id)))
         .slice(0, 5)
-        .map((c: CustomerMock) => {
+        .map((c: CustomerRow) => {
           const owner = ownerOfCustomer(c.id);
           const sub = has(c.phone)
             ? `${c.name} · ${c.phone}`
             : has(owner)
             ? `${c.name} · ผู้รับผิดชอบ ${owner}`
             : `${c.name} · ${c.province}`;
-          return { type: "ลูกค้า", label: c.company, sub, href: "/customers" };
+          return { type: "ลูกค้า", label: c.company, sub, href: `/customers?open=${c.id}` };
         }),
       // ใบเสนอราคา — match id (เลขที่ใบเสนอราคา)/customer/project
-      ...quotations
+      ...liveQuotations
         .filter((qt: QuotationMock) => has(qt.id) || has(qt.customer) || has(qt.project))
         .slice(0, 5)
         .map((qt: QuotationMock) => ({ type: "ใบเสนอราคา", label: qt.id, sub: `${qt.customer} · ${qt.total}`, href: "/quotations" })),
-      // ตัวแทนจำหน่าย — match dealer name/code
-      ...dealers
+      // ตัวแทนจำหน่าย — เฉพาะ role HQ (dealer ไม่มีสิทธิ์เข้าหน้า /hq)
+      ...(isHQ ? dealers
         .filter((d: DealerRow) => has(d.name) || has(d.code) || has(d.region))
         .slice(0, 5)
-        .map((d: DealerRow) => ({ type: "ตัวแทนจำหน่าย", label: d.name, sub: `${d.code} · ${d.region}`, href: "/hq/dealers" })),
+        .map((d: DealerRow) => ({ type: "ตัวแทน", label: d.name, sub: `${d.code} · ${d.region}`, href: `/hq/dealers/${d.code}` })) : []),
     ];
-  }, [q, dealers]);
+  }, [q, dealers, liveLeads, liveCustomers, liveQuotations, isHQ]);
 
   const unreadCount = notifs.filter(n => !readIds.has(n.id)).length;
 
@@ -303,10 +301,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
   // ── type badge color + icon per group ──
   const typeMeta: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-    "ผู้สนใจ":         { bg: "#dce5f0", text: PRIMARY,   icon: <MessageSquare size={14} /> },
+    "ลูกค้าเป้าหมาย":  { bg: "#dce5f0", text: PRIMARY,   icon: <MessageSquare size={14} /> },
     "ลูกค้า":         { bg: "#e5faf0", text: "#059669", icon: <Users size={14} /> },
     "ใบเสนอราคา":     { bg: "#fef3cd", text: "#b45309", icon: <FileText size={14} /> },
-    "ตัวแทนจำหน่าย":  { bg: "#f0e5fa", text: "#7c3aed", icon: <Sparkles size={14} /> },
+    "ตัวแทน":  { bg: "#e8eaed", text: STEEL, icon: <Sparkles size={14} /> },
   };
 
   return (
@@ -328,7 +326,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 ref={searchInputRef}
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
-                placeholder={isHQ ? "ค้นหาผู้สนใจ โอกาสการขาย ลูกค้า…" : "ค้นหาผู้สนใจ ลูกค้า ใบเสนอราคา…"}
+                placeholder={isHQ ? "ค้นหาลูกค้าเป้าหมาย ตัวแทน ใบเสนอราคา…" : "ค้นหาลูกค้าเป้าหมาย ลูกค้า ใบเสนอราคา…"}
                 style={{ flex:1, border:"none", outline:"none", fontSize:"0.95rem", color:STEEL, background:"transparent" }}/>
               <button onClick={() => { setShowSearch(false); setSearchQ(""); }}
                 style={{ fontSize:"0.72rem", color:"#9ca3af", background:"none", border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px", cursor:"pointer" }}>
@@ -372,8 +370,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               <div style={{ padding:"16px", display:"flex", flexDirection:"column", gap:6 }}>
                 <div style={{ fontSize:"0.68rem", color:"#9ca3af", fontWeight:700, marginBottom:4, letterSpacing:"0.05em" }}>ค้นหาด่วน</div>
                 {(isHQ
-                  ? [{ label:"วิเคราะห์ข้อมูล", href:"/reports" }, { label:"ตัวแทนจำหน่าย", href:"/hq/dealers" }, { label:"ผู้สนใจ", href:"/hq/lead-pool" }]
-                  : [{ label:"ผู้สนใจทั้งหมด", href:"/leads" }, { label:"ใบเสนอราคา", href:"/quotations" }, { label:"ลูกค้า", href:"/customers" }]
+                  ? [{ label:"ภาพรวมยอดขาย", href:"/hq/pipeline" }, { label:"ตัวแทน", href:"/hq/dealers" }, { label:"ใบเสนอราคาทั้งเครือ", href:"/hq/quotations" }]
+                  : [{ label:"ลูกค้าเป้าหมาย", href:"/leads" }, { label:"ใบเสนอราคา", href:"/quotations" }, { label:"ลูกค้า", href:"/customers" }]
                 ).map(s => (
                   <button key={s.href} onClick={() => goTo(s.href)}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.8rem", fontWeight:600, cursor:"pointer", textAlign:"left" }}
@@ -468,7 +466,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 })}
               </div>
               <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
-                <button onClick={() => { setShowNotifs(false); router.push("/activity"); }}
+                <button onClick={() => { setShowNotifs(false); router.push("/leads"); }}
                   style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.75rem", fontWeight:600, cursor:"pointer" }}>
                   {notifs.length > 8 ? `ดูทั้งหมด (${notifs.length}) →` : "ดูทั้งหมด →"}
                 </button>
@@ -512,8 +510,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               {/* Menu items */}
               <div style={{ padding:"6px 0" }}>
                 {[
-                  { Icon: UserCircle, label:"โปรไฟล์", href:"/settings" },
-                  { Icon: Settings,    label:"ตั้งค่า",  href:"/settings" },
+                  { Icon: UserCircle, label:"โปรไฟล์", href: isHQ ? "/hq/settings" : "/settings" },
+                  { Icon: Settings,    label:"ตั้งค่า",  href: isHQ ? "/hq/settings" : "/settings" },
                 ].map(item => (
                   <button key={item.label} onClick={() => { setShowUser(false); router.push(item.href); }}
                     style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"9px 16px", border:"none", background:"none", cursor:"pointer", color:STEEL, fontSize:"0.8rem", fontWeight:600, textAlign:"left" }}

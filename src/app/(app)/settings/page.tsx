@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save,
-  Upload, UserCheck, FileText, Info, ShieldCheck, Lock,
+  Upload, UserCheck, FileText, Info, ShieldCheck, Lock, ImagePlus,
 } from "lucide-react";
 import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, LOST_REASONS, type ResponsiblePerson } from "@/lib/mock";
 
@@ -69,7 +69,7 @@ function CompanyTab() {
       <div className="card-header">
         <div>
           <div className="card-title">โปรไฟล์บริษัท</div>
-          <div className="card-desc">ข้อมูลสำหรับออกใบเสนอราคาและเอกสารในนามสาขา</div>
+          <div className="card-desc">ข้อมูลสำหรับออกใบเสนอราคาและเอกสารในนามตัวแทน</div>
         </div>
       </div>
       <div className="card-body">
@@ -80,8 +80,8 @@ function CompanyTab() {
         }}>
           <Info size={18} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: "0.76rem", color: "#374151", lineHeight: 1.6 }}>
-            เอกสารและใบเสนอราคาจะใช้<strong style={{ color: "#003366" }}>ข้อมูลบริษัทของสาขา</strong>นี้เท่านั้น —
-            ข้อมูลบริษัทของสำนักงานใหญ่ (HQ) จะ<strong style={{ color: "#003366" }}>ไม่ปรากฏ</strong>บนใบเสนอราคาของสาขา
+            เอกสารและใบเสนอราคาจะใช้<strong style={{ color: "#003366" }}>ข้อมูลบริษัทของตัวแทน</strong>นี้เท่านั้น —
+            ข้อมูลบริษัทของสำนักงานใหญ่ (HQ) จะ<strong style={{ color: "#003366" }}>ไม่ปรากฏ</strong>บนใบเสนอราคาของตัวแทน
           </div>
         </div>
 
@@ -360,12 +360,35 @@ function PersonsTab() {
   const [editTitle, setEditTitle] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
   const [adding,    setAdding]    = useState(false);
   const [newName,   setNewName]   = useState("");
   const [newTitle,  setNewTitle]  = useState("");
   const [newPhone,  setNewPhone]  = useState("");
   const [newEmail,  setNewEmail]  = useState("");
+  const [newAvatar, setNewAvatar] = useState<string | undefined>(undefined);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  // อ่านไฟล์รูป → data URL (ย่อขนาดผ่าน canvas กัน localStorage เต็ม)
+  function readAvatar(file: File | undefined, cb: (url: string) => void) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 128;
+        const c = document.createElement("canvas");
+        c.width = size; c.height = size;
+        const ctx = c.getContext("2d");
+        if (!ctx) { cb(String(reader.result)); return; }
+        const s = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+        cb(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
 
   useEffect(() => {
     const s = localStorage.getItem(RP_STORAGE_KEY);
@@ -378,11 +401,11 @@ function PersonsTab() {
   }
   function startEdit(p: ResponsiblePerson) {
     setEditId(p.id); setEditName(p.name); setEditTitle(p.title);
-    setEditPhone(p.phone); setEditEmail(p.email);
+    setEditPhone(p.phone); setEditEmail(p.email); setEditAvatar(p.avatar);
   }
   function saveEdit() {
     save(persons.map(p => p.id === editId
-      ? { ...p, name: editName, title: editTitle, phone: editPhone, email: editEmail }
+      ? { ...p, name: editName, title: editTitle, phone: editPhone, email: editEmail, avatar: editAvatar }
       : p));
     setEditId(null);
   }
@@ -392,10 +415,10 @@ function PersonsTab() {
     if (!newName.trim()) return;
     const p: ResponsiblePerson = {
       id: Math.max(0, ...persons.map(x => x.id)) + 1, name: newName.trim(), title: newTitle.trim() || "เจ้าหน้าที่ขาย",
-      phone: newPhone.trim(), email: newEmail.trim(), active: true,
+      phone: newPhone.trim(), email: newEmail.trim(), active: true, avatar: newAvatar,
     };
     save([...persons, p]);
-    setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setAdding(false);
+    setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); setAdding(false);
   }
 
   return (
@@ -408,32 +431,74 @@ function PersonsTab() {
         <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> เพิ่ม</button>
       </div>
       <div className="card-body" style={{ paddingTop: 0 }}>
-        {adding && (
-          <div style={{ background: "#fafafa", borderRadius: 12, border: "1px solid #e5e7eb",
-            padding: "14px 16px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ flex: 2, minWidth: 160 }}>
-              <input className="form-input" value={newName} autoFocus onChange={e => setNewName(e.target.value)}
-                placeholder="ชื่อ-นามสกุล *" onKeyDown={e => e.key === "Enter" && addPerson()} />
+        {/* ── ป๊อปอัพเพิ่มผู้รับผิดชอบ ── */}
+        {adding && (() => {
+          const closeAdd = () => { setAdding(false); setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); };
+          return (
+            <div onClick={closeAdd} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+              <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
+                overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
+                {/* header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", background: "#003366" }}>
+                  <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Plus size={17} strokeWidth={2.5} /> เพิ่มผู้รับผิดชอบ
+                  </div>
+                  <button onClick={closeAdd} style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(255,255,255,.2)",
+                    background: "rgba(255,255,255,.1)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
+                </div>
+                {/* body */}
+                <div style={{ padding: "24px 22px" }}>
+                  {/* avatar upload — กลาง */}
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+                    <label title="เพิ่มรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
+                      <input type="file" accept="image/*" style={{ display: "none" }}
+                        onChange={e => { readAvatar(e.target.files?.[0], url => setNewAvatar(url)); e.target.value = ""; }} />
+                      {newAvatar
+                        ? <img src={newAvatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: "3px solid #003366" }} />
+                        : <span style={{ width: 84, height: 84, borderRadius: "50%", border: "2px dashed #c7ccd3", background: "#f8f9fb",
+                            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: "#9ca3af" }}>
+                            <ImagePlus size={22} /><span style={{ fontSize: "0.6rem" }}>เพิ่มรูป</span>
+                          </span>}
+                      <span style={{ position: "absolute", right: 0, bottom: 2, width: 26, height: 26, borderRadius: "50%", background: "#003366",
+                        border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><ImagePlus size={13} /></span>
+                    </label>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                    <div style={{ gridColumn: "1/-1" }}>
+                      <label className="form-label">ชื่อ-นามสกุล *</label>
+                      <input className="form-input" value={newName} autoFocus onChange={e => setNewName(e.target.value)}
+                        placeholder="เช่น สมชาย เชียงใหม่" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                    </div>
+                    <div>
+                      <label className="form-label">ตำแหน่ง</label>
+                      <input className="form-input" value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                        placeholder="เจ้าหน้าที่ขาย" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                    </div>
+                    <div>
+                      <label className="form-label">โทรศัพท์</label>
+                      <input className="form-input" value={newPhone} onChange={e => setNewPhone(e.target.value)}
+                        placeholder="08x-xxx-xxxx" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                    </div>
+                    <div style={{ gridColumn: "1/-1" }}>
+                      <label className="form-label">อีเมล</label>
+                      <input className="form-input" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                        placeholder="name@dealer.co.th" onKeyDown={e => e.key === "Enter" && addPerson()} />
+                    </div>
+                  </div>
+                </div>
+                {/* footer */}
+                <div style={{ padding: "14px 22px", borderTop: "1px solid #e5e7eb", background: "#fafafa",
+                  display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button className="btn btn-secondary btn-md" onClick={closeAdd}>ยกเลิก</button>
+                  <button className="btn btn-primary btn-md" disabled={!newName.trim()}
+                    style={!newName.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                    onClick={addPerson}><Check size={14} strokeWidth={2.5} /> บันทึก</button>
+                </div>
+              </div>
             </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <input className="form-input" value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                placeholder="ตำแหน่ง" onKeyDown={e => e.key === "Enter" && addPerson()} />
-            </div>
-            <div style={{ flex: 1, minWidth: 130 }}>
-              <input className="form-input" value={newPhone} onChange={e => setNewPhone(e.target.value)}
-                placeholder="โทรศัพท์" onKeyDown={e => e.key === "Enter" && addPerson()} />
-            </div>
-            <div style={{ flex: 1.5, minWidth: 160 }}>
-              <input className="form-input" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
-                placeholder="อีเมล" onKeyDown={e => e.key === "Enter" && addPerson()} />
-            </div>
-            <button className="btn btn-primary btn-sm" onClick={addPerson}><Check size={13} /> บันทึก</button>
-            <button className="btn btn-ghost btn-sm"
-              onClick={() => { setAdding(false); setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); }}>
-              <X size={13} /> ยกเลิก
-            </button>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="table-wrap" style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
           <table>
@@ -460,15 +525,29 @@ function PersonsTab() {
                 <tr key={p.id}>
                   <td>
                     {editId === p.id
-                      ? <input className="form-input" value={editName} autoFocus
-                          onChange={e => setEditName(e.target.value)}
-                          onKeyDown={e => e.key === "Enter" && saveEdit()} />
+                      ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <label title="เปลี่ยนรูป" style={{ flexShrink: 0, cursor: "pointer" }}>
+                            <input type="file" accept="image/*" style={{ display: "none" }}
+                              onChange={e => { readAvatar(e.target.files?.[0], url => setEditAvatar(url)); e.target.value = ""; }} />
+                            {editAvatar
+                              ? <img src={editAvatar} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", border: "2px solid #003366" }} />
+                              : <span style={{ width: 34, height: 34, borderRadius: "50%", border: "2px dashed #c7ccd3", background: "#fff",
+                                  display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af" }}><ImagePlus size={15} /></span>}
+                          </label>
+                          <input className="form-input" value={editName} autoFocus
+                            onChange={e => setEditName(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && saveEdit()} />
+                        </div>
+                      )
                       : (
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#003366",
-                            flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ color: "#fff", fontSize: "0.72rem", fontWeight: 800 }}>{p.name.charAt(0)}</span>
-                          </div>
+                          {p.avatar
+                            ? <img src={p.avatar} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0, opacity: p.active ? 1 : 0.5 }} />
+                            : <div style={{ width: 34, height: 34, borderRadius: "50%", background: p.active ? "#003366" : "#9ca3af",
+                                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <span style={{ color: "#fff", fontSize: "0.72rem", fontWeight: 800 }}>{p.name.charAt(0)}</span>
+                              </div>}
                           <span style={{ fontWeight: 600, color: p.active ? "#2D2D2D" : "#9ca3af" }}>{p.name}</span>
                         </div>
                       )}
@@ -560,13 +639,13 @@ const RULES_DEFAULT: BizRules = {
   defaultResponsibleId: null,
 };
 
-// ขั้นตอนการขายมาตรฐาน (Core Stage — HQ ล็อก ทุกสาขาเหมือนกัน)
-const CORE_STAGES = ["ผู้สนใจใหม่", "ติดต่อแล้ว", "รวบรวมความต้องการ", "เสนอราคา", "เจรจา", "ปิดการขาย (Won/Lost)"];
+// ขั้นตอนการขายมาตรฐาน (Core Stage — HQ ล็อก ทุกตัวแทนเหมือนกัน)
+const CORE_STAGES = ["ติดต่อแล้ว", "รวบรวมความต้องการ", "เสนอราคา", "ติดตามผล", "เจรจา", "ปิดการขาย (Won/Lost)"];
 
 // กติกาที่ HQ กำหนดตายตัว (อ่านอย่างเดียว)
 const LOCKED_RULES = [
   "เส้นทางการขายจบที่ Won / Lost เท่านั้น — ไม่มีขั้นตอนก่อสร้าง/ผลิต/ติดตั้ง",
-  "ใบเสนอราคาออกในนามบริษัทของสาขาเอง (ห้ามใช้ชื่อสำนักงานใหญ่)",
+  "ใบเสนอราคาออกในนามบริษัทของตัวแทนเอง (ห้ามใช้ชื่อสำนักงานใหญ่)",
   "ราคากลาง/แคตตาล็อกสินค้ากำหนดโดย HQ — Dealer ดูได้ แก้ไม่ได้",
   "ข้อมูลทั้งหมด Sync ไปสำนักงานใหญ่ (HQ) อัตโนมัติ",
   "Responsible Person เป็นรายชื่อเซลส์ ไม่ใช่ผู้ใช้ระบบ (Login ไม่ได้)",
@@ -610,7 +689,7 @@ function RulesTab() {
   const editable: { k: "quoteValidityDays" | "leadSlaHours" | "maxSelfDiscountPct" | "followUpDays"; label: string; hint: string; unit: string; max?: number }[] = [
     { k: "quoteValidityDays",  label: "อายุใบเสนอราคาเริ่มต้น (วัน)", hint: "จำนวนวันที่ราคามีผลนับจากวันออกเอกสาร", unit: "วัน" },
     { k: "followUpDays",       label: "จำนวนวันติดตามเริ่มต้น",       hint: "ระยะเวลาก่อนติดตามลูกค้าครั้งถัดไป",     unit: "วัน" },
-    { k: "leadSlaHours",       label: "SLA ติดตามผู้สนใจใหม่",         hint: "ต้องติดต่อผู้สนใจใหม่ภายในกี่ชั่วโมง",       unit: "ชั่วโมง" },
+    { k: "leadSlaHours",       label: "SLA ติดตามผู้สนใจ",         hint: "ต้องติดต่อผู้สนใจภายในกี่ชั่วโมงหลังสร้าง",       unit: "ชั่วโมง" },
     { k: "maxSelfDiscountPct", label: "ส่วนลดที่อนุมัติเองได้",     hint: "ส่วนลดสูงสุดที่เซลส์ให้ได้โดยไม่ต้องขออนุมัติ", unit: "%", max: 100 },
   ];
 
@@ -619,7 +698,7 @@ function RulesTab() {
       <div className="card-header">
         <div>
           <div className="card-title">กฎการขาย (Business Rules)</div>
-          <div className="card-desc">กติกามาตรฐานของ HQ และค่าที่สาขาปรับได้เอง</div>
+          <div className="card-desc">กติกามาตรฐานของ HQ และค่าที่ตัวแทนปรับได้เอง</div>
         </div>
       </div>
       <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -637,7 +716,7 @@ function RulesTab() {
               </span>
             ))}
           </div>
-          <p style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 8 }}>ทุกสาขาใช้ขั้นตอนเดียวกัน · เพิ่มงานย่อย (Sales Steps) ในแต่ละขั้นได้ แต่แก้ Core Stage ไม่ได้</p>
+          <p style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 8 }}>ทุกตัวแทนใช้ขั้นตอนเดียวกัน · เพิ่มงานย่อย (Sales Steps) ในแต่ละขั้นได้ แต่แก้ Core Stage ไม่ได้</p>
 
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", marginTop: 12,
             background: "#f8fafc", border: "1px solid #eef1f5", borderLeft: "3px solid #003366", borderRadius: 10 }}>
@@ -652,7 +731,7 @@ function RulesTab() {
         {/* Editable dealer rules */}
         <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 18 }}>
           <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 12, textTransform: "uppercase" }}>
-            ค่าที่สาขาปรับได้
+            ค่าที่ตัวแทนปรับได้
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 }}>
             {editable.map(f => (
@@ -679,7 +758,7 @@ function RulesTab() {
                 <option key={p.id} value={p.id}>{p.name}{p.title ? ` · ${p.title}` : ""}</option>
               ))}
             </select>
-            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ผู้สนใจใหม่โดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
+            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ผู้สนใจโดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
           </div>
         </div>
 
@@ -725,7 +804,7 @@ function RulesTab() {
               <Plus size={14} /> เพิ่ม
             </button>
           </div>
-          <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 6 }}>เพิ่มเหตุผลเฉพาะของสาขาได้ · กด × เพื่อลบออกจากรายการ</div>
+          <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 6 }}>เพิ่มเหตุผลเฉพาะของตัวแทนได้ · กด × เพื่อลบออกจากรายการ</div>
         </div>
 
         {/* Locked HQ rules */}
@@ -764,7 +843,7 @@ export default function SettingsPage() {
       <div className="page-head">
         <div>
           <h2>ตั้งค่า</h2>
-          <p>โปรไฟล์บริษัท · ใบเสนอราคา · ผู้รับผิดชอบ · กฎการขาย ของสาขา</p>
+          <p>โปรไฟล์บริษัท · ใบเสนอราคา · ผู้รับผิดชอบ · กฎการขาย ของตัวแทน</p>
         </div>
       </div>
 

@@ -6,12 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Phone, BarChart2, Package,
   Settings, GitMerge, ScrollText, ChevronDown, Check, Users,
-  CalendarDays, FolderOpen, Inbox, Building2,
+  CalendarDays, FolderOpen, Building2,
 } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 
 const ROLE_OPTIONS: { key: "dealer" | "hq"; dot: string; label: string }[] = [
-  { key: "dealer", dot: "#ECC94B", label: "Dealer · สาขา" },
+  { key: "dealer", dot: "#ECC94B", label: "Dealer · ตัวแทน" },
   { key: "hq",     dot: "#059669", label: "HQ · สำนักงานใหญ่" },
 ];
 
@@ -24,12 +24,11 @@ const DEALER_NAV: NavGroup[] = [
   {
     group: "เมนูหลัก",
     items: [
-      { label: "แดชบอร์ด",      href: "/dashboard",  icon: <LayoutDashboard size={16} /> },
-      { label: "ผู้สนใจ",       href: "/leads",      icon: <Phone size={16} /> },
-      { label: "ลูกค้า",        href: "/customers",  icon: <Users size={16} /> },
-      { label: "เส้นทางการขาย", href: "/pipeline",   icon: <GitMerge size={16} /> },
-      { label: "ใบเสนอราคา",    href: "/quotations", icon: <ScrollText size={16} /> },
-      { label: "แม่แบบ",         href: "/products", icon: <Package size={16} /> },
+      { label: "แดชบอร์ด",        href: "/dashboard",  icon: <LayoutDashboard size={16} /> },
+      { label: "ลูกค้าเป้าหมาย",  href: "/leads",      icon: <Phone size={16} /> },
+      { label: "ลูกค้า",          href: "/customers",  icon: <Users size={16} /> },
+      { label: "ใบเสนอราคา",      href: "/quotations", icon: <ScrollText size={16} /> },
+      { label: "แม่แบบ",          href: "/products",   icon: <Package size={16} /> },
     ],
   },
   {
@@ -53,14 +52,12 @@ const HQ_NAV: NavGroup[] = [
   {
     group: "เมนูหลัก",
     items: [
-      { label: "แดชบอร์ด",      href: "/hq/dashboard", icon: <LayoutDashboard size={16} /> },
-      { label: "สาขา", href: "/hq/dealers",   icon: <Store size={16} /> },
-      { label: "ผู้สนใจ",       href: "/hq/lead-pool", icon: <Inbox size={16} /> },
-      { label: "ลูกค้า",        href: "/hq/customers", icon: <Users size={16} /> },
-      { label: "เส้นทางการขาย", href: "/hq/pipeline",  icon: <GitMerge size={16} /> },
-      { label: "ใบเสนอราคา",    href: "/hq/quotations", icon: <ScrollText size={16} /> },
-      { label: "สินค้า",        href: "/hq/master",    icon: <Package size={16} /> },
-      { label: "รายงาน",         href: "/reports",      icon: <BarChart2 size={16} /> },
+      { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  icon: <LayoutDashboard size={16} /> },
+      { label: "ตัวแทน",         href: "/hq/dealers",    icon: <Store size={16} /> },
+      { label: "ลูกค้าทั้งเครือ",   href: "/hq/customers",  icon: <Users size={16} /> },
+      { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
+      { label: "ใบเสนอราคาทั้งเครือ", href: "/hq/quotations", icon: <ScrollText size={16} /> },
+      { label: "แคตตาล็อกแม่แบบ",  href: "/hq/master",     icon: <Package size={16} /> },
     ],
   },
   {
@@ -104,7 +101,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
 
   return (
     <aside className={`erp-sidebar${mobileOpen ? " open" : ""}`}>
-      {/* Brand — HQ = Benjamin (สำนักงานใหญ่) · Dealer = แบรนด์บริษัทของสาขาเอง (จากโปรไฟล์บริษัท) */}
+      {/* Brand — HQ = Benjamin (สำนักงานใหญ่) · Dealer = แบรนด์บริษัทของตัวแทนเอง (จากโปรไฟล์บริษัท) */}
       <div className="sidebar-brand">
         <div className="brand-mark">
           {isHQ
@@ -129,7 +126,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
           }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: isHQ ? "#059669" : "#ECC94B" }} />
           <span style={{ fontSize: "0.68rem", color: "#475569", fontWeight: 700, flex: 1 }}>
-            {isHQ ? "HQ · สำนักงานใหญ่" : "Dealer · สาขา"}
+            {isHQ ? "HQ · สำนักงานใหญ่" : "Dealer · ตัวแทน"}
           </span>
           <ChevronDown size={14} style={{ color: "var(--muted-foreground)", flexShrink: 0, transform: roleOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
         </button>

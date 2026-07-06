@@ -2,9 +2,9 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { customers } from "@/lib/mock";
+import { initialCustomers as customers } from "@/lib/mock";
 import {
-  FolderOpen, Search, X, Upload, Trash2, Download, File,
+  FolderOpen, Search, X, Upload, Trash2, File,
   FileText, FileSpreadsheet, Image, Plus,
   FileSignature, PenTool, Presentation, Files, Eye, Pencil,
 } from "lucide-react";
@@ -30,8 +30,8 @@ type FileMock = {
 };
 
 const MOCK_FILES: FileMock[] = [
-  { id: 1,  name: "ใบเสนอราคา_โกดังสินค้า_ไทยสตีล_v2.pdf", size: "1.4 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังสินค้า บจ. ไทยสตีล", uploadedBy: "วิภา",     uploadedAt: "2026-06-20", customerId: 1 },
-  { id: 2,  name: "สัญญาขาย_ไทยสตีล.pdf",                   size: "2.1 MB", ext: "pdf",  category: "สัญญา",      project: "โกดังสินค้า บจ. ไทยสตีล", uploadedBy: "สมชาย",   uploadedAt: "2026-06-18", customerId: 1 },
+  { id: 1,  name: "ใบเสนอราคา_โกดังสำเร็จรูป_ไทยสตีล_v2.pdf", size: "1.4 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "วิภา",     uploadedAt: "2026-06-20", customerId: 1 },
+  { id: 2,  name: "สัญญาขาย_ไทยสตีล.pdf",                   size: "2.1 MB", ext: "pdf",  category: "สัญญา",      project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "สมชาย",   uploadedAt: "2026-06-18", customerId: 1 },
   { id: 3,  name: "ผังพื้นที่ลูกค้า_โรงงาน.pdf",             size: "8.3 MB", ext: "pdf",  category: "แบบแปลน",    project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-06-15", customerId: 2 },
   { id: 4,  name: "presentation_VCS_Asia.pptx",             size: "5.7 MB", ext: "pptx", category: "นำเสนอ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-12", customerId: 5 },
   { id: 5,  name: "สรุปราคา_คลังสินค้า_บจ.ซีซีเอส.xlsx",       size: "340 KB", ext: "xlsx", category: "ใบเสนอราคา", project: "คลังสินค้า CCS",           uploadedBy: "สมชาย",   uploadedAt: "2026-06-10", customerId: 2 },
@@ -50,7 +50,7 @@ const MOCK_FILES: FileMock[] = [
 const CAT_COLORS: Record<FileCategory, { bg: string; text: string }> = {
   ใบเสนอราคา: { bg: "#dce5f0", text: "#003366" },
   แบบแปลน:    { bg: "#e5faf0", text: "#059669" },
-  รูปภาพ:     { bg: "#ede9fe", text: "#7c3aed" },
+  รูปภาพ:     { bg: "#e8ecf2", text: "#475569" },
   นำเสนอ:     { bg: "#fff3cd", text: "#d97706" },
   สัญญา:      { bg: "#fde8e8", text: "#dc2626" },
   อื่นๆ:      { bg: "#f0f0f5", text: "#6b7280" },
@@ -116,25 +116,6 @@ function guessExt(name: string): FileExt {
 }
 
 // ดาวน์โหลดเอกสาร (ระบบ frontend/mock) — สร้างไฟล์สรุปข้อมูลให้ดาวน์โหลดจริง
-function downloadFile(f: { name: string; size: string; uploadedBy: string; uploadedAt: string }) {
-  const content =
-    `เอกสารบริษัท\r\n` +
-    `====================\r\n` +
-    `ชื่อไฟล์: ${f.name}\r\n` +
-    `ขนาด: ${f.size}\r\n` +
-    `อัปโหลดโดย: ${f.uploadedBy}\r\n` +
-    `วันที่: ${f.uploadedAt}\r\n\r\n` +
-    `(ไฟล์ตัวอย่างจากระบบสาธิต)`;
-  const blob = new Blob(["﻿" + content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${f.name}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
 
 function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; onClose: () => void }) {
   const [name, setName]     = useState("");
@@ -454,10 +435,7 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
           </div>
           {/* Footer */}
           <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
-            <button onClick={onClose} className="btn btn-secondary btn-md">ปิด</button>
-            <button onClick={() => downloadFile(file)} className="btn btn-primary btn-md">
-              <Download size={13} /> ดาวน์โหลด
-            </button>
+            <button onClick={onClose} className="btn btn-primary btn-md">ปิด</button>
           </div>
         </div>
       </div>
@@ -543,21 +521,28 @@ export default function FilesPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="stat-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+      {/* สรุปแบบ pills — แทน stat card 5 ใบ */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+          ไฟล์ทั้งหมด <span style={{ color: PRIMARY }}>{files.length}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+          ขนาดรวม <span style={{ color: PRIMARY }}>{totalSize}</span>
+        </div>
         {(["pdf","xlsx","docx","dwg","pptx"] as FileExt[]).map(ext => (
-          <div key={ext} className="stat-card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
-            <div className="stat-icon" style={{ background: extBg(ext), margin: 0, width: 42, height: 42 }}>{extIcon(ext)}</div>
-            <div>
-              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: STEEL, lineHeight: 1 }}>{extCounts[ext] ?? 0}</div>
-              <div style={{ fontSize: "0.62rem", color: MUTED, marginTop: 3 }}>{extLabel(ext)}</div>
-            </div>
-          </div>
+          (extCounts[ext] ?? 0) > 0 ? (
+            <button key={ext} onClick={() => setExt(extFilter === ext ? "ALL" : ext)}
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
+                color: extFilter === ext ? "#fff" : MUTED, background: extFilter === ext ? PRIMARY : "#fff",
+                border: `1px solid ${extFilter === ext ? PRIMARY : BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+              {extLabel(ext)} <span style={{ color: extFilter === ext ? "#fff" : STEEL }}>{extCounts[ext]}</span>
+            </button>
+          ) : null
         ))}
       </div>
 
       {/* Folder filter bar */}
-      <div className="card" style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 700, color: MUTED }}>
           <FolderOpen size={14} color={PRIMARY} /> โฟลเดอร์
         </div>
@@ -618,10 +603,10 @@ export default function FilesPage() {
           <option value="ALL">ทุกประเภท</option>
           {(["pdf","xlsx","docx","dwg","pptx","jpg"] as FileExt[]).map(e => <option key={e} value={e}>{extLabel(e)}</option>)}
         </select>
-        <div style={{ display: "flex", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden", marginLeft: "auto" }}>
+        <div style={{ display: "flex", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden", marginLeft: "auto", height: 36, boxSizing: "border-box" }}>
           {(["list","grid"] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
-              style={{ padding: "7px 13px", border: "none", background: view === v ? PRIMARY : "#fff", color: view === v ? "#fff" : MUTED, fontSize: "0.72rem", fontWeight: 600, cursor: "pointer" }}>
+              style={{ padding: "0 13px", height: "100%", border: "none", background: view === v ? PRIMARY : "#fff", color: view === v ? "#fff" : MUTED, fontSize: "0.72rem", fontWeight: 600, cursor: "pointer" }}>
               {v === "list" ? "รายการ" : "กริด"}
             </button>
           ))}
@@ -683,7 +668,7 @@ export default function FilesPage() {
                           <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                             <span style={{ fontSize:"0.74rem", color:STEEL }}>{f.project}</span>
                             {f.customerId && (
-                              <button onClick={e => { e.stopPropagation(); router.push(`/customers/${f.customerId}`); }}
+                              <button onClick={e => { e.stopPropagation(); router.push(`/customers?open=${f.customerId}`); }}
                                 style={{ fontSize:"0.6rem", color:PRIMARY, fontWeight:700, background:"none", border:"none", padding:0, cursor:"pointer", textDecoration:"underline", textAlign:"left" }}>
                                 {customers.find(c=>c.id===f.customerId)?.company ?? `ลูกค้า #${f.customerId}`} →
                               </button>
@@ -702,10 +687,6 @@ export default function FilesPage() {
                         <button title="ดูตัวอย่าง" onClick={e => { e.stopPropagation(); setPreviewId(f.id); }}
                           style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                           <Eye size={12} />
-                        </button>
-                        <button title="ดาวน์โหลด" onClick={e => { e.stopPropagation(); downloadFile(f); }}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                          <Download size={12} />
                         </button>
                         <button title="แก้ไข" onClick={e => { e.stopPropagation(); setEditId(f.id); }}
                           style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
@@ -746,9 +727,6 @@ export default function FilesPage() {
                     <div style={{ display: "flex", gap: 4 }}>
                       <button title="ดูตัวอย่าง" onClick={e => { e.stopPropagation(); setPreviewId(f.id); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                         <Eye size={11} />
-                      </button>
-                      <button title="ดาวน์โหลด" onClick={e => { e.stopPropagation(); downloadFile(f); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                        <Download size={11} />
                       </button>
                       <button title="แก้ไข" onClick={e => { e.stopPropagation(); setEditId(f.id); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                         <Pencil size={11} />

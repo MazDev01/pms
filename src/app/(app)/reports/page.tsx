@@ -63,10 +63,10 @@ function ReportsPageInner() {
   const avgDeal = wonCount ? quotations.filter(q => q.status === "won").reduce((s, q) => s + q.totalValue, 0) / wonCount : 0;
 
   const kpis = [
-    { label: "มูลค่าผู้สนใจรวม", value: fmtBaht(leadValue), icon: "phone", delta: 12.4, current: leadValue / 1e6, target: 15, targetLabel: "฿15M", href: "/leads" },
-    { label: "ใบเสนอราคาที่ส่ง", value: fmtBaht(sentValue), icon: "doc", delta: 8.1, current: sentValue / 1e6, target: 20, targetLabel: "฿20M", href: "/quotations" },
-    { label: "อัตราปิดการขาย", value: `${winRate}%`, icon: "target", delta: 4.2, current: winRate, target: 50, targetLabel: "50%", href: "/pipeline" },
-    { label: "มูลค่าดีลเฉลี่ย", value: fmtBaht(avgDeal), icon: "award", delta: 6.5, current: avgDeal / 1e6, target: 5, targetLabel: "฿5M", href: "/quotations" },
+    { label: "มูลค่าผู้สนใจรวม", value: fmtBaht(leadValue), icon: "phone", current: leadValue / 1e6, target: 15, targetLabel: "฿15M", href: "/leads" },
+    { label: "ใบเสนอราคาที่ส่ง", value: fmtBaht(sentValue), icon: "doc", current: sentValue / 1e6, target: 20, targetLabel: "฿20M", href: "/quotations" },
+    { label: "อัตราปิดการขาย", value: `${winRate}%`, icon: "target", current: winRate, target: 50, targetLabel: "50%", href: "/leads" },
+    { label: "มูลค่าดีลเฉลี่ย", value: fmtBaht(avgDeal), icon: "award", current: avgDeal / 1e6, target: 5, targetLabel: "฿5M", href: "/quotations" },
   ];
 
   // ข้อมูลรายเดือนหน่วยล้านบาท ป้อนให้กราฟแนวโน้ม (กราฟมีปุ่มช่วงเวลาในตัว ไม่ใช้ factor)
@@ -82,7 +82,7 @@ function ReportsPageInner() {
   // ── อัตราการแปลงการขาย (Conversion Funnel) — จากสถานะลีดตามลำดับเส้นทางการขาย ──
   const funnel = useMemo(() => {
     // ลำดับขั้นเส้นทางการขาย (CANCELLED = ไม่ได้งาน ไม่นับเป็นขั้นที่คืบหน้า)
-    const rank: Record<string, number> = { NEW: 0, WAITING: 1, BULLET: 2, QUOTED: 3, FOLLOWUP: 4, NEGO: 5, PAID: 6 };
+    const rank: Record<string, number> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4, PAID: 5 };
     const rankOf = (s: string) => (s in rank ? rank[s] : -1);
     const total = leads.length;
     const atLeast = (r: number) => leads.filter(l => rankOf(l.status) >= r).length;
@@ -124,17 +124,13 @@ function ReportsPageInner() {
     return { rows, max, total: quotations.length };
   }, [quotations]);
 
-  // ── ปิดได้ / ปิดไม่ได้ (Dealer — จากใบเสนอราคา won/lost) ──
-  const wonLostDonut = useMemo(() => ([
-    { label: "ปิดได้", value: wonCount, color: "#059669" },
-    { label: "ปิดไม่ได้", value: lostCount, color: "#dc2626" },
-  ]), [wonCount, lostCount]);
 
   // ── ผลงานเซลส์ (Dealer) ──
   const salesPerf = useMemo(() => {
     return team
       .map(t => {
-        const own = leads.filter(l => l.assigned === t.name);
+        // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → นับให้ทุกคนที่ร่วมรับผิดชอบ
+        const own = leads.filter(l => l.assigned.split(",").map(s => s.trim()).includes(t.name));
         const value = own.reduce((s, l) => s + parseBaht(l.value), 0);
         const won = own.filter(l => l.status === "PAID").length;
         return { name: t.name, initials: t.initials, color: t.color, leads: own.length, value, won };
@@ -303,25 +299,7 @@ function ReportsPageInner() {
             </div>
           </div>
 
-          {/* Won / Lost */}
-          <div className="cc">
-            <div className="cc-hd"><div className="cc-title">ปิดได้ / ปิดไม่ได้</div></div>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-              <Donut segments={wonLostDonut} centerLabel="ปิดการขาย" centerValue={`${closedCount}`} />
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", borderRadius: 10, background: "var(--success-bg, #e5faf0)" }}>
-                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#059669", lineHeight: 1 }}>{wonCount}</div>
-                <div style={{ fontSize: ".72rem", color: "var(--sub)", marginTop: 4 }}>ปิดได้</div>
-              </div>
-              <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", borderRadius: 10, background: "var(--danger-bg, #fee2e2)" }}>
-                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#dc2626", lineHeight: 1 }}>{lostCount}</div>
-                <div style={{ fontSize: ".72rem", color: "var(--sub)", marginTop: 4 }}>ปิดไม่ได้</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Conversion funnel */}
+          {/* Conversion funnel + ผลปิดการขาย (รวมการ์ดเดียว — ไม่ซ้ำซ้อน) */}
           <div className="cc">
             <div className="cc-hd"><div className="cc-title">อัตราการแปลงการขาย (Conversion)</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{funnel.length} ขั้น</span></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -336,6 +314,17 @@ function ReportsPageInner() {
                   </div>
                 </div>
               ))}
+            </div>
+            {/* ผลปิดการขาย (Won/Lost) */}
+            <div style={{ display: "flex", gap: 10, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f0f4f8" }}>
+              <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", borderRadius: 10, background: "var(--success-bg, #e5faf0)" }}>
+                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#059669", lineHeight: 1 }}>{wonCount}</div>
+                <div style={{ fontSize: ".72rem", color: "var(--sub)", marginTop: 4 }}>ปิดได้</div>
+              </div>
+              <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", borderRadius: 10, background: "var(--danger-bg, #fee2e2)" }}>
+                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#dc2626", lineHeight: 1 }}>{lostCount}</div>
+                <div style={{ fontSize: ".72rem", color: "var(--sub)", marginTop: 4 }}>ปิดไม่ได้</div>
+              </div>
             </div>
           </div>
         </div>

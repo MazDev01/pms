@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   Package, FileText, Download, Search, Lock, Building2, X, History, CalendarClock, FilePlus2,
 } from "lucide-react";
-import { solutionProducts, type SolutionProduct } from "@/lib/mock";
+import { useEffect } from "react";
+import { solutionProducts, loadMasterCatalog, type SolutionProduct } from "@/lib/mock";
 
 // ── Design tokens ─────────────────────────────────────────────
 const PRIMARY = "#003366";
@@ -14,7 +15,6 @@ const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
 
 type Product = SolutionProduct;
-const PRODUCTS = solutionProducts;
 
 function fmtMoney(v: number) { return "฿" + v.toLocaleString("th-TH"); }
 
@@ -23,6 +23,9 @@ export default function DealerProductsPage() {
   const [query, setQuery] = useState("");
   const [viewP, setViewP] = useState<Product | null>(null);
   const [historyP, setHistoryP] = useState<Product | null>(null);
+  // แคตตาล็อกเดียวทั้งเครือ — อ่านชุดที่ HQ แก้ไข (MASTER_CATALOG_KEY) · fallback = mock
+  const [PRODUCTS, setPRODUCTS] = useState<Product[]>(solutionProducts);
+  useEffect(() => { setPRODUCTS(loadMasterCatalog()); }, []);
 
   // ดาวน์โหลดเอกสารแม่แบบ (เปิดหน้าพิมพ์ · ไทยล้วน)
   function downloadSpec(p: Product) {
@@ -46,7 +49,7 @@ export default function DealerProductsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q) || p.spec.toLowerCase().includes(q));
-  }, [query]);
+  }, [query, PRODUCTS]);
 
   return (
     <div className="erp">

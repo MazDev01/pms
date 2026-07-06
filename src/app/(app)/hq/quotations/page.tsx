@@ -1,23 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { hqAllQuotations, HQQuotation } from "@/lib/mock";
+import { hqAllQuotations, quotationStatusLabel, quotationStatusColor, type HQQuotation, type QuotationStatus } from "@/lib/mock";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import {
-  Search,
-  FileText,
-  TrendingUp,
-  CheckCircle2,
-  Send,
-  Eye,
-  X,
-} from "lucide-react";
+import { FilterBar } from "@/components/filters/FilterBar";
+import { Search, Eye, X } from "lucide-react";
 
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
 const AMBER = "#d97706";
 const RED = "#dc2626";
-const GREEN = "#059669";
 
 function fmtM(n: number): string {
   if (n >= 1_000_000) return `฿${(n / 1_000_000).toFixed(1)}M`;
@@ -25,21 +17,14 @@ function fmtM(n: number): string {
   return `฿${n.toLocaleString()}`;
 }
 
-const STATUS_META: Record<
-  HQQuotation["status"],
-  { label: string; bg: string; color: string }
-> = {
-  draft: { label: "ร่าง", bg: "#f0f0f5", color: "#6b7280" },
-  sent: { label: "ส่งแล้ว", bg: "#dce5f0", color: "#003366" },
-  won: { label: "ชนะ ✓", bg: "#e5faf0", color: "#059669" },
-  lost: { label: "เสีย", bg: "#fee2e2", color: "#dc2626" },
-};
+// สถานะ = enum เดียวกับฝั่งดีลเลอร์ (quotationStatusLabel/Color จาก mock) — แหล่งเดียว
+function statusMeta(s: QuotationStatus) {
+  const c = quotationStatusColor[s];
+  return { label: quotationStatusLabel[s], bg: c.bg, color: c.text };
+}
 
-const STATUS_ORDER: Record<HQQuotation["status"], number> = {
-  draft: 1,
-  sent: 2,
-  won: 3,
-  lost: 4,
+const STATUS_ORDER: Record<QuotationStatus, number> = {
+  draft: 1, sent_to_client: 2, viewed: 3, won: 4, lost: 5, expired: 6,
 };
 
 const ALL_DEALERS = Array.from(
@@ -52,12 +37,12 @@ const ALL_PRODUCT_LINES = Array.from(
   new Set(hqAllQuotations.map((q) => q.productLine))
 ).sort();
 
-const STATUS_OPTIONS: { value: HQQuotation["status"] | "all"; label: string }[] = [
+const STATUS_OPTIONS: { value: QuotationStatus | "all"; label: string }[] = [
   { value: "all", label: "ทุกสถานะ" },
-  { value: "draft", label: "ร่าง" },
-  { value: "sent", label: "ส่งแล้ว" },
-  { value: "won", label: "ชนะ" },
-  { value: "lost", label: "เสีย" },
+  { value: "draft", label: quotationStatusLabel.draft },
+  { value: "sent_to_client", label: quotationStatusLabel.sent_to_client },
+  { value: "won", label: quotationStatusLabel.won },
+  { value: "lost", label: quotationStatusLabel.lost },
 ];
 
 export default function HQQuotationsPage() {
@@ -67,15 +52,21 @@ export default function HQQuotationsPage() {
   const [productFilter, setProductFilter] = useState<string>("all");
   const [viewQ, setViewQ] = useState<HQQuotation | null>(null); // View → เจาะดูใบเสนอราคา (HQ Data Ownership)
 
+  // ขอบเขตของ pills/การ์ดสถานะ = ตัวแทนที่เลือก (ตัวเลือกเฉพาะหน้านี้)
+  const scoped = useMemo(
+    () => dealerFilter === "all" ? hqAllQuotations : hqAllQuotations.filter((q) => q.dealerCode === dealerFilter),
+    [dealerFilter],
+  );
+
   const stats = useMemo(() => {
-    const total = hqAllQuotations.length;
-    const totalValue = hqAllQuotations.reduce((s, q) => s + q.valueNum, 0);
-    const won = hqAllQuotations.filter((q) => q.status === "won").length;
-    const lost = hqAllQuotations.filter((q) => q.status === "lost").length;
+    const total = scoped.length;
+    const totalValue = scoped.reduce((s, q) => s + q.valueNum, 0);
+    const won = scoped.filter((q) => q.status === "won").length;
+    const lost = scoped.filter((q) => q.status === "lost").length;
     const winRate = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
-    const sent = hqAllQuotations.filter((q) => q.status === "sent").length;
+    const sent = scoped.filter((q) => q.status === "sent_to_client").length;
     return { total, totalValue, winRate, sent };
-  }, []);
+  }, [scoped]);
 
   const filtered = useMemo(() => {
     let list = [...hqAllQuotations];
@@ -113,64 +104,66 @@ export default function HQQuotationsPage() {
       <div className="page-head">
         <div>
           <h2>ใบเสนอราคาทั้งเครือ</h2>
-          <p>ติดตามใบเสนอราคาทุกสาขาในเครือ</p>
+          <p>ติดตามใบเสนอราคาทุกตัวแทนในเครือ</p>
         </div>
-        <ExportMenu filename="hq-quotations" title="ใบเสนอราคา (ทั้งเครือ)"
-          headers={["เลขที่","สาขา","ลูกค้า","มูลค่า","ส่วนลด %","สถานะ","เซลส์","สายผลิตภัณฑ์"]}
-          rows={filtered.map(q=>[q.quoteNo,q.dealerName,q.customer,q.valueNum,q.discountPct,({draft:"ร่าง",sent:"ส่งแล้ว",won:"ชนะ",lost:"เสีย"} as Record<string,string>)[q.status]??q.status,q.salesperson,q.productLine])} />
-      </div>
-
-      {/* Stat cards */}
-      <div className="stat-grid">
-        {/* Total */}
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dce5f0", color: PRIMARY }}>
-            <FileText size={18} strokeWidth={2} />
-          </div>
-          <div className="stat-label">ทั้งหมด</div>
-          <div className="stat-value">{stats.total}</div>
-          <div className="stat-delta" style={{ color: MUTED, fontWeight: 600 }}>ใบเสนอราคา</div>
-        </div>
-
-        {/* Total Value */}
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#e5faf0", color: GREEN }}>
-            <TrendingUp size={18} strokeWidth={2} />
-          </div>
-          <div className="stat-label">มูลค่ารวม</div>
-          <div className="stat-value" style={{ color: GREEN }}>{fmtM(stats.totalValue)}</div>
-          <div className="stat-delta" style={{ color: MUTED, fontWeight: 600 }}>มูลค่าทั้งหมด</div>
-        </div>
-
-        {/* Win Rate */}
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dce5f0", color: PRIMARY }}>
-            <CheckCircle2 size={18} strokeWidth={2} />
-          </div>
-          <div className="stat-label">อัตราปิดการขาย</div>
-          <div className="stat-value">{stats.winRate}%</div>
-          <div className="stat-delta" style={{ color: MUTED, fontWeight: 600 }}>อัตราชนะต่อปิด</div>
-        </div>
-
-        {/* Sent to client */}
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#eceef0", color: "#2D2D2D" }}>
-            <Send size={18} strokeWidth={2} />
-          </div>
-          <div className="stat-label">ส่งแล้ว</div>
-          <div className="stat-value">{stats.sent}</div>
-          <div className="stat-delta" style={{ color: MUTED, fontWeight: 600 }}>รายการที่ส่งให้ลูกค้า</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <FilterBar dims={[]} />
+          <ExportMenu filename="hq-quotations" title="ใบเสนอราคา (ทั้งเครือ)"
+            headers={["เลขที่","ตัวแทน","ลูกค้า","มูลค่า","ส่วนลด %","สถานะ","เซลส์","สายผลิตภัณฑ์"]}
+            rows={filtered.map(q=>[q.quoteNo,q.dealerName,q.customer,q.valueNum,q.discountPct,quotationStatusLabel[q.status]??q.status,q.salesperson,q.productLine])} />
         </div>
       </div>
+
+      {/* สรุป: pills + การ์ดสถานะคลิกกรอง (pattern เดียวกับฝั่งตัวแทน) */}
+      {(() => {
+        const BORDER = "#e5e7eb";
+        const pill = (label: string, value: string) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+            {label} <span style={{ color: PRIMARY }}>{value}</span>
+          </div>
+        );
+        const ORDER: QuotationStatus[] = ["draft", "sent_to_client", "viewed", "won", "lost", "expired"];
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: "1.25rem" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {pill("ทั้งหมด", `${stats.total} ใบ`)}
+              {pill("มูลค่ารวม", fmtM(stats.totalValue))}
+              {pill("อัตราปิดการขาย", `${stats.winRate}%`)}
+              {pill("ส่งแล้ว", `${stats.sent} ใบ`)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+              {ORDER.map((s) => {
+                const sm = statusMeta(s);
+                const items = scoped.filter((q) => q.status === s);
+                const active = statusFilter === s;
+                return (
+                  <button key={s} onClick={() => setStatusFilter(active ? "all" : s)}
+                    style={{ textAlign: "left", cursor: "pointer", background: "#fff", borderRadius: 12, padding: "12px 14px",
+                      border: active ? `2px solid ${PRIMARY}` : `1px solid ${BORDER}`,
+                      boxShadow: active ? "0 4px 14px rgba(0,51,102,.12)" : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 26, height: 26, borderRadius: 99, background: sm.bg, color: sm.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.78rem", fontWeight: 800 }}>{items.length}</span>
+                      <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#2D2D2D" }}>{sm.label}</span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: MUTED, marginTop: 7 }}>{fmtM(items.reduce((t, q) => t + q.valueNum, 0))}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Toolbar */}
       <div
+        className="card"
         style={{
           display: "flex",
           gap: 10,
           flexWrap: "wrap",
           alignItems: "center",
           marginBottom: "1.25rem",
+          padding: "10px 14px",
         }}
       >
         {/* Search */}
@@ -198,7 +191,7 @@ export default function HQQuotationsPage() {
           className="form-select"
           style={{ width: "auto", cursor: "pointer" }}
         >
-          <option value="all">ทุกสาขา</option>
+          <option value="all">ทุกตัวแทน</option>
           {ALL_DEALERS.map(([code, name]) => (
             <option key={code} value={code}>
               {code} – {name}
@@ -262,7 +255,7 @@ export default function HQQuotationsPage() {
               <tr>
                 <th>เลขที่</th>
                 <th>ลูกค้า</th>
-                <th>สาขา</th>
+                <th>ตัวแทน</th>
                 <th>สายผลิตภัณฑ์</th>
                 <th className="num">มูลค่า</th>
                 <th className="num">ส่วนลด</th>
@@ -284,7 +277,7 @@ export default function HQQuotationsPage() {
                 </tr>
               ) : (
                 filtered.map((q) => {
-                  const sm = STATUS_META[q.status];
+                  const sm = statusMeta(q.status);
                   const discountColor =
                     q.discountPct >= 10
                       ? RED
@@ -387,12 +380,12 @@ export default function HQQuotationsPage() {
             <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([
                 ["ลูกค้า", viewQ.customer],
-                ["สาขา", `${viewQ.dealerCode} · ${viewQ.dealerName}`],
+                ["ตัวแทน", `${viewQ.dealerCode} · ${viewQ.dealerName}`],
                 ["สายผลิตภัณฑ์", viewQ.productLine],
                 ["พนักงานขาย", viewQ.salesperson],
                 ["มูลค่า", `฿${viewQ.valueNum.toLocaleString()}`],
                 ["ส่วนลด", `${viewQ.discountPct}%`],
-                ["สถานะ", STATUS_META[viewQ.status].label],
+                ["สถานะ", quotationStatusLabel[viewQ.status]],
                 ["วันที่", viewQ.createdAt],
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 12px" }}>
@@ -401,7 +394,7 @@ export default function HQQuotationsPage() {
                 </div>
               ))}
             </div>
-            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูใบเสนอราคาได้ทุกสาขา (Data Ownership)</div>
+            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูใบเสนอราคาได้ทุกตัวแทน (Data Ownership)</div>
           </div>
         </div>
       )}

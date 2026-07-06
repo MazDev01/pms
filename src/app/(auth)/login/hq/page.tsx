@@ -135,7 +135,7 @@ export default function HQLoginPage() {
 
           {/* Forgot */}
           <div style={{ textAlign: "right", marginTop: -8 }}>
-            <button type="button" style={{ fontSize: "0.72rem", color: "#2D2D2D", background: "none", border: "none", cursor: "pointer" }}>
+            <button type="button" onClick={() => alert("กรุณาติดต่อฝ่ายไอทีของ Benjamin เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: it@benjamin.co.th")} style={{ fontSize: "0.72rem", color: "#2D2D2D", background: "none", border: "none", cursor: "pointer" }}>
               ลืมรหัสผ่าน?
             </button>
           </div>

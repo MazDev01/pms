@@ -113,8 +113,12 @@ body {
 
   /* ── Buttons ──────────────────────────────────────────────── */
   .btn {
+    /* ความสูงมาตรฐานเดียวทุกปุ่มทั้งระบบ — ต่างแค่ความกว้าง/ฟอนต์ ทำให้แถวเรียงตรงกันทุกหน้า */
+    height: 36px;
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     border-radius: 10px;
     font-weight: 700;
@@ -124,9 +128,12 @@ body {
     transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
     line-height: 1;
   }
-  .btn-sm  { padding: 6px  14px; font-size: 0.74rem; }
-  .btn-md  { padding: 8px  18px; font-size: 0.78rem; }
-  .btn-lg  { padding: 10px 22px; font-size: 0.82rem; }
+  /* size = ความกว้าง/ฟอนต์เท่านั้น (ความสูงคุมโดย .btn) */
+  .btn-sm  { padding: 0 13px; font-size: 0.75rem; }
+  .btn-md  { padding: 0 16px; font-size: 0.78rem; }
+  .btn-lg  { padding: 0 20px; font-size: 0.82rem; }
+  /* ปุ่มไอคอนล้วน (สี่เหลี่ยมจัตุรัส) — คงสัดส่วนเท่ากัน */
+  .btn-icon { width: 36px; padding: 0; }
 
   .btn-primary {
     background: #003366;
@@ -203,6 +210,8 @@ body {
     box-sizing: border-box;
     transition: border-color 0.12s, box-shadow 0.12s;
   }
+  /* input/select บรรทัดเดียว = สูงเท่าปุ่ม (36px) · textarea ยังยืดได้ */
+  .form-input, .form-select { height: 36px; }
   .form-input:focus,
   .form-select:focus,
   .form-textarea:focus {
@@ -264,13 +273,15 @@ body {
 
   /* ── Search bar ───────────────────────────────────────────── */
   .search-bar {
+    height: 36px;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: 8px;
     background: #fafafa;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
-    padding: 7px 12px;
+    padding: 0 12px;
   }
   .search-bar input {
     border: none;
@@ -343,6 +354,16 @@ body {
   --shadow: 0 2px 8px rgba(0,0,0,0.08);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+
+  /* ── Benjamin design system (global — เดิม scoped ใน .pms-dash เท่านั้น) ── */
+  --pr:#003366; --pr-d:#002244; --pr-lt:#dce5f0; --pr-llt:#eef2f7;
+  --silver:#C0C0C0; --gold:#ECC94B;
+  --sub:#6b7280; --text:#2D2D2D;
+  --success-bg:#e5faf0; --warning-bg:#fef3cd; --danger-bg:#fdeaed;
+  --r:16px;
+  --sh:0 2px 14px rgba(0,51,102,.06); --sh-md:0 6px 24px rgba(0,51,102,.10);
+  /* spacing scale — การ์ดห่าง 24, section ห่าง 32, padding การ์ด 20-24 */
+  --space-card:14px; --space-section:18px; --pad-card:22px;
 }
 
 /* Facebook-style thin scrollbar (whole app) */
@@ -362,7 +383,7 @@ body {
 /* ─── Shell layout ─── */
 .app { display: grid; grid-template-columns: 232px 1fr; height: 100vh; overflow: hidden; }
 .app .main { display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
-.app .content { padding: 1.75rem 2.25rem 2.5rem; max-width: 1480px; }
+.app .content { padding: 1.75rem 2.25rem 2.5rem; width: 100%; }
 
 /* ─── Sidebar ─── */
 .erp-sidebar { background: var(--card); border-right: 1px solid var(--border); height: 100vh; overflow-y: auto; }
@@ -690,11 +711,11 @@ body {
 .pms-dash .sc-det { font-size:.68rem; background:var(--pr-lt); color:var(--pr); border-radius:99px; padding:3px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-weight:600; text-decoration:none; }
 .pms-dash .stats-sub { font-size:.7rem; color:var(--sub); margin-bottom:16px; line-height:1.5; }
 
-/* donut + side tag */
-.pms-dash .donut-area { position:relative; display:flex; justify-content:center; align-items:center; }
-.pms-dash .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-.pms-dash .dc-lbl { font-size:.62rem; color:var(--sub); }
-.pms-dash .dc-val { font-size:1.4rem; font-weight:800; color:var(--text); line-height:1; }
+/* donut + side tag — ใช้ได้ทุก wrapper (.pms-dash และ .erp) */
+.donut-area { position:relative; display:flex; justify-content:center; align-items:center; }
+.donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.dc-lbl { font-size:.62rem; color:var(--sub); }
+.dc-val { font-size:1.4rem; font-weight:800; color:var(--text); line-height:1; }
 .pms-dash .donut-tag { position:absolute; text-align:left; }
 .pms-dash .dt-pct { font-size:.9rem; font-weight:800; color:var(--text); }
 
@@ -756,3 +777,62 @@ textarea:focus-visible {
     background:#fff; color:var(--primary,#003366); cursor:pointer;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHARED PRIMITIVES (global) — เดิม scoped ใน .pms-dash เท่านั้น
+   ยกออกมาให้ใช้ได้ทุกหน้า: KPI card, Page header, section spacing
+   (.pms-dash ยังมี rule เฉพาะที่ specificity สูงกว่า จึงไม่กระทบ Dashboard เดิม)
+═══════════════════════════════════════════════════════════════════════════ */
+
+/* Page header — ชื่อหน้า + breadcrumb + action */
+.pg-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:var(--space-section); }
+.pg-crumb { font-size:.7rem; color:var(--sub); margin:0 0 6px; display:flex; align-items:center; gap:6px; }
+.pg-crumb a { color:var(--sub); text-decoration:none; }
+.pg-crumb a:hover { color:var(--pr); }
+.pg-title { font-size:1.6rem; font-weight:800; color:var(--text); line-height:1.2; margin:0 0 3px; letter-spacing:-.01em; }
+.pg-sub { font-size:.8rem; color:var(--sub); margin:0; }
+
+/* Section spacing utility */
+.section-stack { display:flex; flex-direction:column; gap:var(--space-section); }
+/* กัน margin ภายในซ้อนกับ gap ของ section-stack (ระยะจะกลายเป็น 2 เท่า) */
+.section-stack > .pg-head,
+.section-stack > .row-2,
+.section-stack > .row-2-eq,
+.section-stack > .stat-grid { margin-bottom: 0; }
+.card-stack { display:flex; flex-direction:column; gap:var(--space-card); }
+
+/* KPI row + card (icon + big number + label + trend) */
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-card); }
+@media (max-width:1000px){ .kpi-row { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:680px){ .kpi-row { grid-template-columns:repeat(2,1fr); } }
+.kc { background:#fff; border-radius:var(--r); padding:var(--pad-card); border:1px solid var(--border); box-shadow:var(--sh); transition:transform .18s, box-shadow .18s; text-decoration:none; display:block; }
+.kc.clickable { cursor:pointer; }
+.kc.clickable:hover { transform:translateY(-2px); box-shadow:var(--sh-md); }
+.kc-hd { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; }
+.kc-lbl { font-size:.74rem; font-weight:600; color:var(--sub); }
+.kc-val { font-size:1.7rem; font-weight:800; color:var(--text); line-height:1; }
+.kc-val .cents { font-size:.9rem; font-weight:400; color:var(--sub); }
+.kc-ico { width:38px; height:38px; border-radius:11px; background:var(--pr-lt); color:var(--pr); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.kc-foot { display:flex; align-items:center; gap:8px; margin-top:2px; }
+.kc-ct { display:flex; align-items:center; gap:5px; font-size:.7rem; color:var(--sub); }
+.bdg-up { display:inline-flex; align-items:center; gap:3px; background:var(--success-bg); color:var(--success); border-radius:99px; padding:3px 9px; font-size:.66rem; font-weight:700; }
+.bdg-dn { display:inline-flex; align-items:center; gap:3px; background:var(--danger-bg); color:var(--danger); border-radius:99px; padding:3px 9px; font-size:.66rem; font-weight:700; }
+.mini-bar { height:6px; border-radius:99px; background:var(--pr-llt); overflow:hidden; margin-top:10px; }
+.mini-fill { height:100%; border-radius:99px; background:var(--pr); }
+
+/* ── Side drawer (slide from right) — Lead detail / Filter ── */
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+.side-drawer { animation: drawer-in .24s cubic-bezier(.4,0,.2,1); }
+.drawer-overlay { animation: overlay-in .18s ease; }
+@media (prefers-reduced-motion: reduce) { .side-drawer, .drawer-overlay { animation: none; } }
+
+/* Centered modal pop-in */
+@keyframes modal-pop { from { opacity:0; transform: translate(-50%,-48%) scale(.985); } to { opacity:1; transform: translate(-50%,-50%) scale(1); } }
+.modal-pop { animation: modal-pop .16s ease-out; }
+@media (prefers-reduced-motion: reduce) { .modal-pop { animation: none; } }
+
+/* Vertical bar grow (กราฟแท่งแนวตั้ง — โตจากฐานขึ้นบน) */
+@keyframes vbar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.vbar-grow { transform-origin: bottom; animation: vbar-grow .7s cubic-bezier(.34,1.06,.64,1) both; }
+@media (prefers-reduced-motion: reduce) { .vbar-grow { animation: none; } }

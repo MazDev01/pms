@@ -6,10 +6,9 @@ import { useFilters } from "@/context/FilterContext";
 import { useSales } from "@/context/SalesContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { Search, Users, Building2, Landmark, User, Eye, X } from "lucide-react";
+import { Search, Eye, X } from "lucide-react";
 
 const PRIMARY = "#003366";
-const GREEN = "#059669";
 
 function fmtM(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M";
@@ -45,6 +44,9 @@ export default function HQCustomersPage() {
   const { timeRange, passes } = useFilters();
   const { customers: ctxCustomers, quotations: ctxQuotations } = useSales();
   const [search, setSearch] = useState("");
+  const [segFilter, setSegFilter] = useState<HQCustomer["segment"] | "all">("all");
+  // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน ไม่จำข้ามหน้า)
+  const [dealerSel, setDealerSel] = useState<string>("all");
   const [viewC, setViewC] = useState<HQCustomer | null>(null); // View → เจาะดูรายละเอียดลูกค้า (HQ Data Ownership)
 
   // รวมลูกค้าที่ Dealer สร้างจริง (SalesContext) เข้ากับชุดข้อมูล HQ → HQ เห็นข้อมูลที่ปลายทางสร้าง
@@ -53,7 +55,7 @@ export default function HQCustomersPage() {
       id: 10000 + c.id,
       name: c.company,
       dealerCode: "LIVE",
-      dealerName: "สาขาปัจจุบัน (ระบบ)",
+      dealerName: "ตัวแทนปัจจุบัน (ระบบ)",
       type: c.type as HQCustomer["type"],
       province: c.province,
       dealsWon: ctxQuotations.filter((q) => q.customerId === c.id && q.status === "won").length,
@@ -73,27 +75,29 @@ export default function HQCustomersPage() {
       .filter((c) => {
         if (q && !c.name.toLowerCase().includes(q) && !c.province.toLowerCase().includes(q))
           return false;
+        if (segFilter !== "all" && c.segment !== segFilter) return false;
+        if (dealerSel !== "all" && c.dealerCode !== dealerSel) return false;
         return passes({
           date: c.lastContact,
-          dealer: c.dealerCode,
           province: c.province,
           status: c.status,
         });
       })
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [search, passes, source]);
+  }, [search, passes, source, segFilter, dealerSel]);
 
-  // KPI สรุปคำนวณจากชุดที่กรองแล้ว
-  const enterpriseCount = filtered.filter((c) => c.segment === "enterprise").length;
-  const smeCount = filtered.filter((c) => c.segment === "sme").length;
-  const govCount = filtered.filter((c) => c.segment === "government").length;
+  // ตัวเลือกตัวแทนจากข้อมูลจริงในหน้า
+  const dealerOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    source.forEach(c => m.set(c.dealerCode, c.dealerName));
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [source]);
 
-  const STATS = [
-    { label: "ลูกค้าทั้งหมด", value: filtered.length, icon: <Users size={20} color={PRIMARY} strokeWidth={2} />, iconBg: "#dce5f0" },
-    { label: "องค์กรขนาดใหญ่", value: enterpriseCount, icon: <Building2 size={20} color={PRIMARY} strokeWidth={2} />, iconBg: "#dce5f0" },
-    { label: "SME", value: smeCount, icon: <User size={20} color="#d97706" strokeWidth={2} />, iconBg: "#fff3cd" },
-    { label: "หน่วยงานรัฐ", value: govCount, icon: <Landmark size={20} color={GREEN} strokeWidth={2} />, iconBg: "#e5faf0" },
-  ];
+  // ขอบเขตข้อมูลของ pills/การ์ดสรุป = ตัวแทนที่เลือก
+  const scoped = useMemo(
+    () => dealerSel === "all" ? source : source.filter(c => c.dealerCode === dealerSel),
+    [source, dealerSel],
+  );
 
   return (
     <div className="erp">
@@ -101,40 +105,69 @@ export default function HQCustomersPage() {
       <div className="page-head">
         <div>
           <h2>ลูกค้าทั้งเครือ</h2>
-          <p>ฐานข้อมูลลูกค้าทุกสาขา · {timeRange.subtitle}</p>
+          <p>ฐานข้อมูลลูกค้าทุกตัวแทน · {timeRange.subtitle}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {/* เลือกดูทั้งเครือ หรือเจาะรายตัวแทน — ตัวเลือกเฉพาะหน้านี้ */}
+          <select value={dealerSel} onChange={(e) => setDealerSel(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+            <option value="all">ทุกตัวแทน (ทั้งเครือ)</option>
+            {dealerOptions.map(([code, name]) => (
+              <option key={code} value={code}>{code} – {name}</option>
+            ))}
+          </select>
           <FilterBar
-            dims={["dealer", "province", "status"]}
+            dims={["province", "status"]}
             statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
           />
           <ExportMenu filename="hq-customers" title="ลูกค้าทั้งเครือ"
-            headers={["ลูกค้า","ประเภท","จังหวัด","สาขา","โอกาสการขายที่ชนะ","รายได้รวม","สถานะ","ติดต่อล่าสุด"]}
+            headers={["ลูกค้า","ประเภท","จังหวัด","ตัวแทน","โอกาสการขายที่ชนะ","รายได้รวม","สถานะ","ติดต่อล่าสุด"]}
             rows={filtered.map(c=>[c.name,c.type,c.province,c.dealerName,c.dealsWon,c.totalRevenue,c.status==="active"?"ใช้งาน":"ไม่ใช้งาน",c.lastContact])} />
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="stat-grid">
-        {STATS.map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-icon" style={{ background: s.iconBg }}>{s.icon}</div>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
+      {/* สรุป: pills + การ์ดกลุ่มลูกค้าคลิกกรอง (pattern เดียวกับฝั่งตัวแทน) */}
+      {(() => {
+        const BORDER = "#e5e7eb";
+        const totalRevenue = scoped.reduce((s, c) => s + c.totalRevenue, 0);
+        const activeCount = scoped.filter((c) => c.status === "active").length;
+        const pill = (label: string, value: string) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+            {label} <span style={{ color: PRIMARY }}>{value}</span>
           </div>
-        ))}
-      </div>
+        );
+        const SEGMENTS: HQCustomer["segment"][] = ["enterprise", "sme", "government"];
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: "1.25rem" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {pill("ลูกค้าทั้งหมด", `${scoped.length} ราย`)}
+              {pill("ใช้งานอยู่", `${activeCount} ราย`)}
+              {pill("มูลค่ารวม", `฿${fmtM(totalRevenue)}`)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {SEGMENTS.map((seg) => {
+                const cfg = segmentBadgeMap[seg];
+                const items = scoped.filter((c) => c.segment === seg);
+                const active = segFilter === seg;
+                return (
+                  <button key={seg} onClick={() => setSegFilter(active ? "all" : seg)}
+                    style={{ textAlign: "left", cursor: "pointer", background: "#fff", borderRadius: 12, padding: "12px 14px",
+                      border: active ? `2px solid ${PRIMARY}` : `1px solid ${BORDER}`,
+                      boxShadow: active ? "0 4px 14px rgba(0,51,102,.12)" : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 26, height: 26, borderRadius: 99, background: cfg.bg, color: cfg.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.78rem", fontWeight: 800 }}>{items.length}</span>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D" }}>{segmentLabel[seg]}</span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginTop: 7 }}>฿{fmtM(items.reduce((t, c) => t + c.totalRevenue, 0))}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          marginBottom: 16,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
+      <div className="card" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
         <div className="search-bar" style={{ flex: "1 1 220px", minWidth: 180 }}>
           <Search size={14} color="#9ca3af" strokeWidth={2} />
           <input
@@ -144,6 +177,9 @@ export default function HQCustomersPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <span style={{ fontSize: "0.78rem", color: "#6b7280", whiteSpace: "nowrap" }}>
+          แสดง {filtered.length} / {scoped.length} รายการ
+        </span>
       </div>
 
       {/* Table Card */}
@@ -166,7 +202,7 @@ export default function HQCustomersPage() {
               <tr>
                 <th>ลูกค้า</th>
                 <th>ประเภท</th>
-                <th>สาขา</th>
+                <th>ตัวแทน</th>
                 <th>จังหวัด</th>
                 <th>กลุ่มลูกค้า</th>
                 <th className="num">โอกาสการขายที่ชนะ</th>
@@ -199,7 +235,7 @@ export default function HQCustomersPage() {
                         </span>
                       </td>
 
-                      {/* สาขา */}
+                      {/* ตัวแทน */}
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span style={{ fontWeight: 600, color: PRIMARY }}>{c.dealerCode}</span>
                         <span style={{ color: "#6b7280", marginLeft: 4, fontSize: "0.75rem" }}>
@@ -292,7 +328,7 @@ export default function HQCustomersPage() {
                 ["ประเภท", viewC.type],
                 ["กลุ่มลูกค้า", segmentLabel[viewC.segment]],
                 ["จังหวัด", viewC.province],
-                ["สาขาที่ดูแล", `${viewC.dealerCode} · ${viewC.dealerName}`],
+                ["ตัวแทนที่ดูแล", `${viewC.dealerCode} · ${viewC.dealerName}`],
                 ["โอกาสการขายที่ชนะ", `${viewC.dealsWon}`],
                 ["มูลค่ารวม", viewC.totalRevenue > 0 ? fmtM(viewC.totalRevenue) : "-"],
                 ["ติดต่อล่าสุด", viewC.lastContact],
@@ -304,7 +340,7 @@ export default function HQCustomersPage() {
                 </div>
               ))}
             </div>
-            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูได้ทุกสาขา (Data Ownership)</div>
+            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูได้ทุกตัวแทน (Data Ownership)</div>
           </div>
         </div>
       )}
