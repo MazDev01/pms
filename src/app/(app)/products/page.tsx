@@ -88,7 +88,7 @@ export default function DealerProductsPage() {
       {filtered.length === 0 ? (
         <div className="card" style={{ padding: "48px 24px", textAlign: "center", color: MUTED }}>
           <Package size={32} style={{ color: "#C0C0C0", marginBottom: 10 }} />
-          <div style={{ fontSize: "0.9rem" }}>ไม่พบแม่แบบที่ตรงกับเงื่อนไข</div>
+          <div style={{ fontSize: "0.92rem" }}>ไม่พบแม่แบบที่ตรงกับเงื่อนไข</div>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: 18 }}>
@@ -117,7 +117,7 @@ export default function DealerProductsPage() {
                   <Building2 size={30} style={{ color: PRIMARY }} />
                 </div>
                 {p.subtypes && p.subtypes.length > 0 && (
-                  <span style={{ position: "absolute", top: 12, right: 12, fontSize: "0.62rem", fontWeight: 700, color: PRIMARY, background: "rgba(255,255,255,.85)", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px", backdropFilter: "blur(2px)" }}>
+                  <span style={{ position: "absolute", top: 12, right: 12, fontSize: "0.65rem", fontWeight: 700, color: PRIMARY, background: "rgba(255,255,255,.85)", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px", backdropFilter: "blur(2px)" }}>
                     {p.subtypes.length} แม่แบบย่อย
                   </span>
                 )}
@@ -125,12 +125,12 @@ export default function DealerProductsPage() {
 
               {/* เนื้อหา */}
               <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 9, flex: 1 }}>
-                <div style={{ fontSize: "1.02rem", fontWeight: 800, color: STEEL, lineHeight: 1.3 }}>
+                <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL, lineHeight: 1.3 }}>
                   {p.name}
                 </div>
 
                 {/* รายละเอียด (2 บรรทัด) */}
-                <div className="tpl-clamp2" style={{ fontSize: "0.78rem", color: MUTED, lineHeight: 1.5, minHeight: "2.34em" }}>
+                <div className="tpl-clamp2" style={{ fontSize: "0.8rem", color: MUTED, lineHeight: 1.5, minHeight: "2.34em" }}>
                   {p.spec}
                 </div>
 
@@ -138,7 +138,7 @@ export default function DealerProductsPage() {
                 {p.subtypes && p.subtypes.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                     {p.subtypes.map(s => (
-                      <span key={s} style={{ fontSize: "0.68rem", fontWeight: 600, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 7, padding: "3px 9px" }}>{s}</span>
+                      <span key={s} style={{ fontSize: "0.65rem", fontWeight: 600, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 7, padding: "3px 9px" }}>{s}</span>
                     ))}
                   </div>
                 )}
@@ -148,19 +148,19 @@ export default function DealerProductsPage() {
                   {/* ราคากลาง (HQ-managed / read-only) */}
                   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: "0.62rem", color: MUTED, fontWeight: 700, marginBottom: 1 }}>ราคากลาง</div>
+                      <div style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 700, marginBottom: 1 }}>ราคากลาง</div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                        <span style={{ fontSize: "1.28rem", fontWeight: 800, color: PRIMARY, letterSpacing: "-0.01em" }}>{fmtMoney(p.price)}</span>
-                        <span style={{ fontSize: "0.74rem", color: MUTED }}>/ {p.unit}</span>
+                        <span style={{ fontSize: "1.3rem", fontWeight: 800, color: PRIMARY, letterSpacing: "-0.01em" }}>{fmtMoney(p.price)}</span>
+                        <span style={{ fontSize: "0.72rem", color: MUTED }}>/ {p.unit}</span>
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: MUTED, fontSize: "0.66rem", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: MUTED, fontSize: "0.65rem", whiteSpace: "nowrap" }}>
                       <CalendarClock size={11} /> {p.effectiveDate}
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5 }}>
                     <Lock size={10} style={{ color: MUTED, flexShrink: 0 }} />
-                    <span style={{ fontSize: "0.63rem", color: MUTED }}>กำหนดโดยสำนักงานใหญ่ · อ่านอย่างเดียว</span>
+                    <span style={{ fontSize: "0.65rem", color: MUTED }}>กำหนดโดยสำนักงานใหญ่ · อ่านอย่างเดียว</span>
                   </div>
                 </div>
 
@@ -192,19 +192,19 @@ export default function DealerProductsPage() {
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewP.name}</div>
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>แม่แบบอาคาร · กำหนดโดยสำนักงานใหญ่</div>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>แม่แบบอาคาร · กำหนดโดยสำนักงานใหญ่</div>
               </div>
               <button onClick={() => setViewP(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
             </div>
             <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <div style={{ fontSize: "0.63rem", color: MUTED, marginBottom: 4 }}>รายละเอียด</div>
-                <div style={{ fontSize: "0.84rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{viewP.spec}</div>
+                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>รายละเอียด</div>
+                <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{viewP.spec}</div>
               </div>
               <div>
-                <div style={{ fontSize: "0.63rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (สำนักงานใหญ่กำหนด)</div>
-                <span style={{ fontSize: "1.2rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(viewP.price)}</span>
-                <span style={{ fontSize: "0.74rem", color: MUTED }}> / {viewP.unit}</span>
+                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (สำนักงานใหญ่กำหนด)</div>
+                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(viewP.price)}</span>
+                <span style={{ fontSize: "0.72rem", color: MUTED }}> / {viewP.unit}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
                   <CalendarClock size={12} style={{ color: MUTED }} />
                   <span style={{ fontSize: "0.72rem", color: MUTED }}>มีผล {viewP.effectiveDate}</span>
@@ -233,12 +233,12 @@ export default function DealerProductsPage() {
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>ประวัติราคา</div>
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{historyP.name}</div>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{historyP.name}</div>
               </div>
               <button onClick={() => setHistoryP(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
             </div>
             <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f7fa", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", color: MUTED, fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f7fa", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 12px", color: MUTED, fontSize: "0.72rem" }}>
                 <Lock size={13} style={{ color: PRIMARY, flexShrink: 0 }} />
                 <span>ราคากลางและประวัติราคากำหนดโดยสำนักงานใหญ่ — ตัวแทนจำหน่ายดูได้อย่างเดียว</span>
               </div>
@@ -246,29 +246,29 @@ export default function DealerProductsPage() {
               {/* ราคาปัจจุบัน */}
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, padding: "12px 14px", borderRadius: 10, background: "#dce5f0" }}>
                 <div>
-                  <div style={{ fontSize: "0.63rem", color: MUTED, fontWeight: 700 }}>ราคากลางปัจจุบัน</div>
-                  <span style={{ fontSize: "1.2rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(historyP.price)}</span>
+                  <div style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 700 }}>ราคากลางปัจจุบัน</div>
+                  <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(historyP.price)}</span>
                   <span style={{ fontSize: "0.72rem", color: MUTED }}> / {historyP.unit}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: "0.74rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: "0.72rem" }}>
                   <CalendarClock size={12} /> มีผล {historyP.effectiveDate}
                 </div>
               </div>
 
               {/* ราคาก่อนหน้า */}
               <div>
-                <div style={{ fontSize: "0.63rem", color: MUTED, marginBottom: 8, fontWeight: 700 }}>ราคาก่อนหน้า</div>
+                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 8, fontWeight: 700 }}>ราคาก่อนหน้า</div>
                 {historyP.priceHistory.length === 0 ? (
-                  <div style={{ fontSize: "0.82rem", color: MUTED }}>ยังไม่มีประวัติราคา</div>
+                  <div style={{ fontSize: "0.8rem", color: MUTED }}>ยังไม่มีประวัติราคา</div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {historyP.priceHistory.map((h, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", border: `1px solid ${BORDER}`, borderRadius: 10 }}>
                         <div>
-                          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: STEEL }}>{fmtMoney(h.price)}</div>
-                          {h.note && <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 2 }}>{h.note}</div>}
+                          <div style={{ fontSize: "0.92rem", fontWeight: 700, color: STEEL }}>{fmtMoney(h.price)}</div>
+                          {h.note && <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 2 }}>{h.note}</div>}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: "0.73rem", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: "0.72rem", whiteSpace: "nowrap" }}>
                           <CalendarClock size={12} /> {h.effectiveDate}
                         </div>
                       </div>

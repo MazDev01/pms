@@ -382,7 +382,8 @@ body {
 
 /* ─── Shell layout ─── */
 .app { display: grid; grid-template-columns: 232px 1fr; height: 100vh; overflow: hidden; }
-.app .main { display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
+/* scrollbar-gutter: stable → จองที่ scrollbar ไว้เสมอ กันเนื้อหาขยับซ้าย-ขวาตอนแถวเยอะ/น้อย */
+.app .main { display: flex; flex-direction: column; height: 100vh; overflow-y: auto; scrollbar-gutter: stable; }
 .app .content { padding: 1.75rem 2.25rem 2.5rem; width: 100%; }
 
 /* ─── Sidebar ─── */
@@ -474,7 +475,7 @@ body {
 /* ─── Page header ─── */
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
 .page-head h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.2rem; color: var(--foreground); }
-.page-head p { color: var(--muted-foreground); font-size: 0.85rem; }
+.page-head p { color: var(--muted-foreground); font-size: 0.8rem; }
 
 /* ─── Card ─── */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
@@ -661,8 +662,8 @@ body {
 
 /* page head */
 .pms-dash .pg-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
-.pms-dash .pg-title { font-size:1.6rem; font-weight:800; color:var(--text); line-height:1.2; margin:0 0 3px; }
-.pms-dash .pg-sub { font-size:.78rem; color:var(--sub); margin:0; }
+.pms-dash .pg-title { font-size:1.5rem; font-weight:800; color:var(--text); line-height:1.2; margin:0 0 3px; }
+.pms-dash .pg-sub { font-size:.8rem; color:var(--sub); margin:0; }
 
 /* dashboard grid */
 .pms-dash .dg { display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; }

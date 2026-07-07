@@ -68,9 +68,9 @@ export default function ProfilePage() {
     setTimeout(() => setPwMsg(null), 2600);
   }
 
-  const inp: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px 9px 36px", fontSize: "0.85rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "#fff" };
-  const lbl: React.CSSProperties = { display: "block", fontSize: "0.7rem", fontWeight: 700, color: MUTED, marginBottom: 6 };
-  const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "#f7f8fa", borderRadius: 9, padding: "9px 12px", fontSize: "0.85rem", color: STEEL };
+  const inp: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px 9px 36px", fontSize: "0.86rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "#fff" };
+  const lbl: React.CSSProperties = { display: "block", fontSize: "0.72rem", fontWeight: 700, color: MUTED, marginBottom: 6 };
+  const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "#f7f8fa", borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL };
 
   return (
     <div className="erp">
@@ -87,7 +87,7 @@ export default function ProfilePage() {
         <div className="card" style={{ padding: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
             <UserCircle size={18} color={PRIMARY} />
-            <span style={{ fontSize: "0.95rem", fontWeight: 800, color: STEEL }}>ข้อมูลส่วนตัว</span>
+            <span style={{ fontSize: "0.92rem", fontWeight: 800, color: STEEL }}>ข้อมูลส่วนตัว</span>
           </div>
 
           {/* Avatar */}
@@ -105,12 +105,12 @@ export default function ProfilePage() {
               <input ref={fileRef} type="file" accept="image/*" onChange={onPickAvatar} style={{ display: "none" }} />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: STEEL }}>{form.name || session.name}</div>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: "0.68rem", fontWeight: 700, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL }}>{form.name || session.name}</div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: "0.65rem", fontWeight: 700, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px" }}>
                 <ShieldCheck size={11} /> {roleLabel}
               </div>
               {form.avatar && (
-                <button onClick={() => set("avatar", "")} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 8, background: "none", border: "none", color: "#dc2626", fontSize: "0.68rem", fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                <button onClick={() => set("avatar", "")} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 8, background: "none", border: "none", color: "#dc2626", fontSize: "0.65rem", fontWeight: 600, cursor: "pointer", padding: 0 }}>
                   <Trash2 size={11} /> ลบรูป
                 </button>
               )}
@@ -141,7 +141,7 @@ export default function ProfilePage() {
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{form.email}</span>
                   <Lock size={12} color="#9ca3af" style={{ marginLeft: "auto", flexShrink: 0 }} />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: "0.66rem", color: "#9ca3af" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, fontSize: "0.65rem", color: "#9ca3af" }}>
                   <Lock size={10} /> อีเมลล็อกอินกำหนดโดยสำนักงานใหญ่ — แก้ไขที่นี่ไม่ได้
                 </div>
               </>
@@ -171,9 +171,9 @@ export default function ProfilePage() {
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button className="btn btn-primary btn-md" onClick={save}><Check size={15} /> บันทึกโปรไฟล์</button>
-            {saved && <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.78rem", fontWeight: 700, color: "#059669" }}><Check size={14} /> บันทึกแล้ว</span>}
+            {saved && <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.8rem", fontWeight: 700, color: "#059669" }}><Check size={14} /> บันทึกแล้ว</span>}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, fontSize: "0.66rem", color: "#9ca3af" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, fontSize: "0.65rem", color: "#9ca3af" }}>
             <Lock size={11} /> ตำแหน่งและหน่วยงานกำหนดโดยผู้ดูแลระบบ — แก้ไขที่นี่ไม่ได้
           </div>
         </div>
@@ -182,12 +182,12 @@ export default function ProfilePage() {
         <div className="card" style={{ padding: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
             <KeyRound size={18} color={PRIMARY} />
-            <span style={{ fontSize: "0.95rem", fontWeight: 800, color: STEEL }}>ความปลอดภัย</span>
+            <span style={{ fontSize: "0.92rem", fontWeight: 800, color: STEEL }}>ความปลอดภัย</span>
           </div>
 
           {isHQ ? (
             <>
-              <div style={{ fontSize: "0.78rem", color: MUTED, marginBottom: 16 }}>เปลี่ยนรหัสผ่านสำหรับเข้าสู่ระบบ</div>
+              <div style={{ fontSize: "0.8rem", color: MUTED, marginBottom: 16 }}>เปลี่ยนรหัสผ่านสำหรับเข้าสู่ระบบ</div>
               {[
                 { k: "cur" as const, label: "รหัสผ่านปัจจุบัน", ph: "••••••••" },
                 { k: "next" as const, label: "รหัสผ่านใหม่", ph: "อย่างน้อย 6 ตัวอักษร" },
@@ -203,12 +203,12 @@ export default function ProfilePage() {
                 </div>
               ))}
               {pwMsg && (
-                <div style={{ fontSize: "0.75rem", fontWeight: 600, color: pwMsg.ok ? "#059669" : "#dc2626", marginBottom: 12 }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 600, color: pwMsg.ok ? "#059669" : "#dc2626", marginBottom: 12 }}>
                   {pwMsg.text}
                 </div>
               )}
               <button className="btn btn-secondary btn-md" onClick={changePassword} style={{ color: STEEL }}><KeyRound size={14} /> เปลี่ยนรหัสผ่าน</button>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.66rem", color: "#9ca3af" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.65rem", color: "#9ca3af" }}>
                 <ShieldCheck size={11} /> รหัสผ่านถูกเข้ารหัสและไม่ถูกจัดเก็บเป็นข้อความธรรมดา
               </div>
             </>
@@ -220,13 +220,13 @@ export default function ProfilePage() {
                   <Lock size={16} color={PRIMARY} />
                 </span>
                 <div>
-                  <div style={{ fontSize: "0.84rem", fontWeight: 700, color: STEEL, marginBottom: 3 }}>รหัสผ่านจัดการโดยสำนักงานใหญ่</div>
-                  <div style={{ fontSize: "0.76rem", color: MUTED, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL, marginBottom: 3 }}>รหัสผ่านจัดการโดยสำนักงานใหญ่</div>
+                  <div style={{ fontSize: "0.72rem", color: MUTED, lineHeight: 1.6 }}>
                     บัญชีตัวแทนถูกสร้างและตั้งรหัสผ่านโดยสำนักงานใหญ่ · หากต้องการรีเซ็ตรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบสำนักงานใหญ่
                   </div>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.66rem", color: "#9ca3af" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.65rem", color: "#9ca3af" }}>
                 <ShieldCheck size={11} /> เพื่อความปลอดภัย ตัวแทนไม่สามารถเปลี่ยนรหัสผ่านเองได้
               </div>
             </div>

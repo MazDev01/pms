@@ -66,14 +66,14 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         {data.map(d => (
-          <span key={d.month} style={{ flex: 1, textAlign: "center", fontSize: "0.58rem", color: "#9ca3af" }}>{d.month}</span>
+          <span key={d.month} style={{ flex: 1, textAlign: "center", fontSize: "0.65rem", color: "#9ca3af" }}>{d.month}</span>
         ))}
       </div>
       <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
         {delta >= 0
           ? <TrendingUp size={12} color="#059669" />
           : <TrendingDown size={12} color="#dc2626" />}
-        <span style={{ fontSize: "0.7rem", fontWeight: 700, color: delta >= 0 ? "#059669" : "#dc2626" }}>
+        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: delta >= 0 ? "#059669" : "#dc2626" }}>
           {delta >= 0 ? "+" : ""}{delta}% เทียบเดือนก่อน
         </span>
       </div>
@@ -103,8 +103,8 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
               <div className="top5-bar" style={{ height: "100%", width: `${targetPct}%`, background: barColor, borderRadius: 99 }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
-              <span style={{ fontSize: "0.66rem", color: "#6b7280" }}>ยอดจริง</span>
-              <span style={{ fontSize: "0.66rem", color: "#6b7280" }}>เป้า ฿{(dealer.revenueTarget / 1_000_000).toFixed(0)}M</span>
+              <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>ยอดจริง</span>
+              <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>เป้า ฿{(dealer.revenueTarget / 1_000_000).toFixed(0)}M</span>
             </div>
             {isAtRisk && (
               <div style={{ marginTop: 10, padding: "6px 12px", background: "#fee2e2", borderRadius: 8, fontSize: "0.72rem", color: "#dc2626", fontWeight: 600 }}>
@@ -148,7 +148,7 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
               <div style={{ flex: 1, height: 6, background: "#f0f0f5", borderRadius: 99, overflow: "hidden" }}>
                 <div className="top5-bar" style={{ height: "100%", width: `${Math.round(value / total * 100)}%`, background: colors[i % colors.length], borderRadius: 99 }} />
               </div>
-              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#2D2D2D", minWidth: 60, textAlign: "right" }}>{fmtM(value)}</span>
+              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#2D2D2D", minWidth: 60, textAlign: "right" }}>{fmtM(value)}</span>
             </div>
           ));
         })()}
@@ -190,10 +190,10 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
               return (
                 <tr key={l.id}>
                   <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{l.id}</td>
-                  <td style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D" }}>{l.name}</td>
-                  <td style={{ fontSize: "0.78rem", color: "#6b7280" }}>{l.province}</td>
+                  <td style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{l.name}</td>
+                  <td style={{ fontSize: "0.8rem", color: "#6b7280" }}>{l.province}</td>
                   <td><span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{l.product}</span></td>
-                  <td className="num" style={{ fontSize: "0.82rem", fontWeight: 700, color: "#003366" }}>{fmtM(l.valueNum)}</td>
+                  <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(l.valueNum)}</td>
                   <td><span className="badge" style={BADGE(st.bg, st.color)}>{st.label}</span></td>
                   <td style={{ fontSize: "0.72rem", color: "#9ca3af" }}>{l.assignedAt}</td>
                 </tr>
@@ -219,13 +219,13 @@ function ProjectsTab({ projects }: { projects: DealerProjectItem[] }) {
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{p.name}</span>
+                  <span style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{p.name}</span>
                   <span className="badge" style={BADGE(st.bg, st.color)}>{st.label}</span>
                   <span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{p.product}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>คาดปิดการขาย: {p.dueDate}</span>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#003366" }}>{fmtM(p.valueNum)}</span>
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(p.valueNum)}</span>
                 </div>
               </div>
             </div>
@@ -268,13 +268,13 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
               const st = QUOTE_STATUS[q.status];
               return (
                 <tr key={q.quoteNo}>
-                  <td style={{ fontSize: "0.76rem", fontWeight: 700, color: "#003366" }}>{q.quoteNo}</td>
-                  <td style={{ fontSize: "0.82rem", fontWeight: 600, color: "#2D2D2D" }}>{q.customer}</td>
+                  <td style={{ fontSize: "0.72rem", fontWeight: 700, color: "#003366" }}>{q.quoteNo}</td>
+                  <td style={{ fontSize: "0.8rem", fontWeight: 600, color: "#2D2D2D" }}>{q.customer}</td>
                   <td><span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{q.product}</span></td>
-                  <td className="num" style={{ fontSize: "0.82rem", fontWeight: 700, color: "#003366" }}>{fmtM(q.valueNum)}</td>
+                  <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(q.valueNum)}</td>
                   <td>
                     {q.discountPct > 0
-                      ? <span style={{ fontSize: "0.74rem", fontWeight: 700, color: q.discountPct >= 10 ? "#dc2626" : "#d97706" }}>−{q.discountPct}%</span>
+                      ? <span style={{ fontSize: "0.72rem", fontWeight: 700, color: q.discountPct >= 10 ? "#dc2626" : "#d97706" }}>−{q.discountPct}%</span>
                       : <span style={{ fontSize: "0.72rem", color: "#9ca3af" }}>—</span>}
                   </td>
                   <td><span className="badge" style={BADGE(st.bg, st.color)}>{st.label}</span></td>
@@ -318,7 +318,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   return (
     <div className="erp">
       {/* Back link */}
-      <Link href="/hq/dealers" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.78rem", color: "#6b7280", textDecoration: "none", marginBottom: 16, fontWeight: 600 }}>
+      <Link href="/hq/dealers" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.8rem", color: "#6b7280", textDecoration: "none", marginBottom: 16, fontWeight: 600 }}>
         <ArrowLeft size={14} /> กลับไปหน้าตัวแทน
       </Link>
 
@@ -351,7 +351,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
               style={{ display: "flex", alignItems: "center", gap: 5 }}>
               {t.label}
               {count !== null && (
-                <span style={{ fontSize: "0.62rem", fontWeight: 700, background: tab === t.key ? "#dce5f0" : "#e5e7eb", color: tab === t.key ? "#003366" : "#6b7280", borderRadius: 99, padding: "1px 6px" }}>
+                <span style={{ fontSize: "0.65rem", fontWeight: 700, background: tab === t.key ? "#dce5f0" : "#e5e7eb", color: tab === t.key ? "#003366" : "#6b7280", borderRadius: 99, padding: "1px 6px" }}>
                   {count}
                 </span>
               )}
@@ -362,7 +362,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
 
       {/* Tab content */}
       {!detail && (
-        <div className="card" style={{ padding: 32, textAlign: "center", fontSize: "0.84rem", color: "#9ca3af" }}>
+        <div className="card" style={{ padding: 32, textAlign: "center", fontSize: "0.86rem", color: "#9ca3af" }}>
           ยังไม่มีข้อมูลรายละเอียดสำหรับตัวแทนนี้
         </div>
       )}

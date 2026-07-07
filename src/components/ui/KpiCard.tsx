@@ -49,8 +49,8 @@ export function KpiCard({ label, value, unit, delta, icon, sub, current, target,
       {pct !== null && (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, marginBottom: 4 }}>
-            <span style={{ fontSize: ".62rem", color: "var(--sub)" }}>เป้า {targetLabel}</span>
-            <span style={{ fontSize: ".64rem", fontWeight: 700, color: barColor }}>{pct}%</span>
+            <span style={{ fontSize: "0.65rem", color: "var(--sub)" }}>เป้า {targetLabel}</span>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, color: barColor }}>{pct}%</span>
           </div>
           <div className="mini-bar"><div className="mini-fill bar-grow" style={{ width: `${pct}%`, background: barColor }} /></div>
         </>

@@ -134,7 +134,7 @@ export function RightDrawer({
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{
-                fontSize: "1.02rem",
+                fontSize: "1rem",
                 fontWeight: 800,
                 lineHeight: 1.25,
                 whiteSpace: "nowrap",
@@ -147,7 +147,7 @@ export function RightDrawer({
             {subtitle && (
               <div
                 style={{
-                  fontSize: "0.78rem",
+                  fontSize: "0.8rem",
                   fontWeight: 500,
                   color: "rgba(255,255,255,.72)",
                   marginTop: 2,
@@ -223,7 +223,7 @@ export function RightDrawer({
                     cursor: "pointer",
                     padding: "13px 14px 12px",
                     fontFamily: "inherit",
-                    fontSize: "0.82rem",
+                    fontSize: "0.8rem",
                     fontWeight: on ? 800 : 600,
                     color: on ? PRIMARY : "#6b7280",
                     whiteSpace: "nowrap",
@@ -252,7 +252,7 @@ export function RightDrawer({
         {/* body (scrolls) */}
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "18px", color: STEEL }}>
           {isEmptyContent ? (
-            <div style={{ color: "#9aa2ad", fontSize: "0.85rem", padding: "24px 0", textAlign: "center" }}>
+            <div style={{ color: "#9aa2ad", fontSize: "0.86rem", padding: "24px 0", textAlign: "center" }}>
               ไม่มีข้อมูล
             </div>
           ) : (
@@ -270,7 +270,7 @@ export function DrawerSection({ title, children }: { title: string; children: Re
     <section style={{ marginBottom: 20 }}>
       <div
         style={{
-          fontSize: "0.68rem",
+          fontSize: "0.65rem",
           fontWeight: 800,
           letterSpacing: ".06em",
           textTransform: "uppercase",
@@ -301,7 +301,7 @@ export function DrawerRow({ label, value }: { label: string; value: ReactNode })
       }}
     >
       <span style={{ fontSize: "0.8rem", color: "#6b7280", flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: "0.84rem", fontWeight: 600, color: STEEL, textAlign: "right", minWidth: 0 }}>
+      <span style={{ fontSize: "0.86rem", fontWeight: 600, color: STEEL, textAlign: "right", minWidth: 0 }}>
         {value == null || value === "" ? "—" : value}
       </span>
     </div>

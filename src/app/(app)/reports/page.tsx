@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { salesByMonth, team, quotationStatusLabel, mainTemplateOf, type QuotationStatus } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
-import { useFilters, FilterProvider } from "@/context/FilterContext";
+import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Donut } from "@/components/ui/Charts";
@@ -24,7 +24,7 @@ function parseBaht(s: string): number {
 function BarRow({ label, value, pct, valueLabel }: { label: string; value: number; pct: number; valueLabel?: string }) {
   return (
     <div key={label}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: ".76rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: "0.72rem" }}>
         <span style={{ fontWeight: 700, color: "var(--text)" }}>{label}</span>
         <span style={{ fontWeight: 800, color: "var(--pr)" }}>{valueLabel ?? fmtBaht(value)}</span>
       </div>
@@ -33,13 +33,9 @@ function BarRow({ label, value, pct, valueLabel }: { label: string; value: numbe
   );
 }
 
-// ห่อด้วย FilterProvider ของหน้านี้เอง → ช่วงเวลาแยกอิสระจากหน้าอื่น
+// ตัวกรองแยกอิสระต่อหน้าถูกครอบให้แล้วใน AppShell (bpms_filters:<pathname>)
 export default function ReportsPage() {
-  return (
-    <FilterProvider>
-      <ReportsPageInner />
-    </FilterProvider>
-  );
+  return <ReportsPageInner />;
 }
 
 function ReportsPageInner() {
@@ -194,7 +190,7 @@ function ReportsPageInner() {
           type="button"
           onClick={exportRankingsCsv}
           className="btn btn-sm"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: ".74rem", fontWeight: 700, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border, #dde3ea)", background: "var(--panel-2, #eef1f5)", color: "var(--text)", cursor: "pointer" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.72rem", fontWeight: 700, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border, #dde3ea)", background: "var(--panel-2, #eef1f5)", color: "var(--text)", cursor: "pointer" }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
@@ -218,28 +214,28 @@ function ReportsPageInner() {
 
           {/* Sales by Product */}
           <div className="cc">
-            <div className="cc-hd"><div className="cc-title">ยอดขายตามสินค้า</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{byProduct.length} กลุ่ม</span></div>
+            <div className="cc-hd"><div className="cc-title">ยอดขายตามสินค้า</div><span style={{ fontSize: "0.72rem", color: "var(--sub)" }}>{byProduct.length} กลุ่ม</span></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {byProduct.length === 0
-                ? <div style={{ fontSize: ".78rem", color: "var(--sub)", textAlign: "center", padding: "20px 0" }}>ไม่มีข้อมูลในช่วงเวลานี้</div>
+                ? <div style={{ fontSize: "0.8rem", color: "var(--sub)", textAlign: "center", padding: "20px 0" }}>ไม่มีข้อมูลในช่วงเวลานี้</div>
                 : byProduct.map(p => <BarRow key={p.label} label={p.label} value={p.value} pct={p.pct} />)}
             </div>
           </div>
 
           {/* Salesperson performance */}
           <div className="cc">
-            <div className="cc-hd"><div className="cc-title">ผลงานทีมขาย</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{salesPerf.length} คน</span></div>
+            <div className="cc-hd"><div className="cc-title">ผลงานทีมขาย</div><span style={{ fontSize: "0.72rem", color: "var(--sub)" }}>{salesPerf.length} คน</span></div>
             <div className="table-wrap" style={{ borderTop: "none" }}>
               <table>
                 <colgroup><col style={{ width: "34%" }} /><col style={{ width: "16%" }} /><col style={{ width: "16%" }} /><col style={{ width: "34%" }} /></colgroup>
                 <thead><tr><th>เซลส์</th><th className="num">ผู้สนใจ</th><th className="num">ปิดได้</th><th className="num">มูลค่ารวม</th></tr></thead>
                 <tbody>
-                  {salesPerf.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: "20px 0", color: "var(--sub)", fontSize: ".78rem" }}>ไม่มีข้อมูลในช่วงเวลานี้</td></tr>}
+                  {salesPerf.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", padding: "20px 0", color: "var(--sub)", fontSize: "0.8rem" }}>ไม่มีข้อมูลในช่วงเวลานี้</td></tr>}
                   {salesPerf.map(s => (
                     <tr key={s.name}>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                          <span style={{ width: 30, height: 30, borderRadius: 8, background: s.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: ".66rem", fontWeight: 800, flexShrink: 0 }}>{s.initials}</span>
+                          <span style={{ width: 30, height: 30, borderRadius: 8, background: s.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, flexShrink: 0 }}>{s.initials}</span>
                           <span style={{ fontWeight: 700 }}>{s.name}</span>
                         </div>
                       </td>
@@ -260,16 +256,16 @@ function ReportsPageInner() {
 
           {/* รายงานใบเสนอราคา (ตามสถานะ) */}
           <div className="cc">
-            <div className="cc-hd"><div className="cc-title">รายงานใบเสนอราคา</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{quoteByStatus.total} ใบ</span></div>
+            <div className="cc-hd"><div className="cc-title">รายงานใบเสนอราคา</div><span style={{ fontSize: "0.72rem", color: "var(--sub)" }}>{quoteByStatus.total} ใบ</span></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {quoteByStatus.rows.length === 0 && <div style={{ fontSize: ".78rem", color: "var(--sub)", textAlign: "center", padding: "20px 0" }}>ไม่มีใบเสนอราคาในช่วงเวลานี้</div>}
+              {quoteByStatus.rows.length === 0 && <div style={{ fontSize: "0.8rem", color: "var(--sub)", textAlign: "center", padding: "20px 0" }}>ไม่มีใบเสนอราคาในช่วงเวลานี้</div>}
               {quoteByStatus.rows.map(r => (
                 <div key={r.status}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5, fontSize: ".76rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5, fontSize: "0.72rem" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 700, color: "var(--text)" }}>
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.color, flexShrink: 0 }} />
                       {r.label}
-                      <span style={{ fontWeight: 700, color: "var(--sub)", fontSize: ".72rem" }}>· {r.count} ใบ</span>
+                      <span style={{ fontWeight: 700, color: "var(--sub)", fontSize: "0.72rem" }}>· {r.count} ใบ</span>
                     </span>
                     <span style={{ fontWeight: 800, color: "var(--pr)" }}>{fmtBaht(r.value)}</span>
                   </div>
@@ -289,7 +285,7 @@ function ReportsPageInner() {
               <Donut segments={sources} centerLabel="ผู้สนใจทั้งหมด" centerValue={`${leads.length}`} />
             </div>
             <div className="stats-legend">
-              {sources.length === 0 && <div style={{ fontSize: ".78rem", color: "var(--sub)", textAlign: "center", padding: "12px 0", width: "100%" }}>ไม่มีข้อมูลในช่วงเวลานี้</div>}
+              {sources.length === 0 && <div style={{ fontSize: "0.8rem", color: "var(--sub)", textAlign: "center", padding: "12px 0", width: "100%" }}>ไม่มีข้อมูลในช่วงเวลานี้</div>}
               {sources.map(s => (
                 <div key={s.label} className="sl">
                   <span className="sl-dot" style={{ background: s.color }} />
@@ -302,13 +298,13 @@ function ReportsPageInner() {
 
           {/* Conversion funnel + ผลปิดการขาย (รวมการ์ดเดียว — ไม่ซ้ำซ้อน) */}
           <div className="cc">
-            <div className="cc-hd"><div className="cc-title">อัตราการแปลงการขาย (Conversion)</div><span style={{ fontSize: ".72rem", color: "var(--sub)" }}>{funnel.length} ขั้น</span></div>
+            <div className="cc-hd"><div className="cc-title">อัตราการแปลงการขาย (Conversion)</div><span style={{ fontSize: "0.72rem", color: "var(--sub)" }}>{funnel.length} ขั้น</span></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {funnel.map(s => (
                 <div key={s.label}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: ".76rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: "0.72rem" }}>
                     <span style={{ fontWeight: 700, color: "var(--text)" }}>{s.label}</span>
-                    <span style={{ fontWeight: 800, color: "var(--pr)" }}>{s.count} <span style={{ fontWeight: 700, color: "var(--sub)", fontSize: ".72rem" }}>· {s.pct}%</span></span>
+                    <span style={{ fontWeight: 800, color: "var(--pr)" }}>{s.count} <span style={{ fontWeight: 700, color: "var(--sub)", fontSize: "0.72rem" }}>· {s.pct}%</span></span>
                   </div>
                   <div className="mini-bar" style={{ marginTop: 0, height: 10 }}>
                     <div className="mini-fill bar-grow" style={{ width: `${s.pct}%`, background: "#003366" }} />
@@ -319,12 +315,12 @@ function ReportsPageInner() {
             {/* ผลปิดการขาย (Won/Lost) */}
             <div style={{ display: "flex", gap: 10, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f0f4f8" }}>
               <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", borderRadius: 10, background: "var(--success-bg, #e5faf0)" }}>
-                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#059669", lineHeight: 1 }}>{wonCount}</div>
-                <div style={{ fontSize: ".72rem", color: "var(--sub)", marginTop: 4 }}>ปิดได้</div>
+                <div style={{ fontSize: "1.7rem", fontWeight: 800, color: "#059669", lineHeight: 1 }}>{wonCount}</div>
+                <div style={{ fontSize: "0.72rem", color: "var(--sub)", marginTop: 4 }}>ปิดได้</div>
               </div>
               <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", borderRadius: 10, background: "var(--danger-bg, #fee2e2)" }}>
-                <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#dc2626", lineHeight: 1 }}>{lostCount}</div>
-                <div style={{ fontSize: ".72rem", color: "var(--sub)", marginTop: 4 }}>ปิดไม่ได้</div>
+                <div style={{ fontSize: "1.7rem", fontWeight: 800, color: "#dc2626", lineHeight: 1 }}>{lostCount}</div>
+                <div style={{ fontSize: "0.72rem", color: "var(--sub)", marginTop: 4 }}>ปิดไม่ได้</div>
               </div>
             </div>
           </div>

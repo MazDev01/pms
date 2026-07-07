@@ -133,6 +133,18 @@ export const TAGS: { key: TagKey; label: string; bg: string; color: string }[] =
 
 // ─── Global: Lost Reasons (เหตุผลที่เสียโอกาสการขาย) ────────────────
 export const LOST_REASONS = ["ราคา", "คู่แข่ง", "งบประมาณ", "ลูกค้าเลื่อน", "ติดต่อไม่ได้", "อื่นๆ"] as const;
+// เหตุผลเสียโอกาส — อ่านจากที่ตั้งไว้ในหน้าตั้งค่า › กฎการขาย (dealer_lost_reasons) · fallback = ค่าเริ่มต้น
+export function loadLostReasons(): string[] {
+  if (typeof window === "undefined") return [...LOST_REASONS];
+  try { const s = localStorage.getItem("dealer_lost_reasons"); if (s) { const a = JSON.parse(s); if (Array.isArray(a) && a.length) return a; } } catch {}
+  return [...LOST_REASONS];
+}
+// อายุใบเสนอราคาเริ่มต้น (วัน) จากกฎการขาย (dealer_business_rules) · fallback = 30
+export function loadQuoteValidityDays(): number {
+  if (typeof window === "undefined") return 30;
+  try { const s = localStorage.getItem("dealer_business_rules"); if (s) { const r = JSON.parse(s); if (typeof r.quoteValidityDays === "number" && r.quoteValidityDays > 0) return r.quoteValidityDays; } } catch {}
+  return 30;
+}
 
 // ─── Global: โปรไฟล์ผู้ออกใบเสนอราคา (บริษัทดีลเลอร์) ────────────────
 // แหล่งเดียว — ใช้ทั้งหน้าใบเสนอราคา และใบเสนอราคาแบบ inline ในหน้า Lead
@@ -393,6 +405,14 @@ const _SUBTYPE_TO_PARENT: Record<string, string> = (() => {
 export function mainTemplateOf(name: string | undefined | null): string {
   if (!name) return "";
   return _SUBTYPE_TO_PARENT[name] ?? name;
+}
+
+// แปลงวันที่ ISO ("2026-06-30") → ไทย พ.ศ. ("30 มิ.ย. 2569") · ใช้แสดงวันนัดหมายทุกจุด
+const _THAI_MO_ABBR = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+export function fmtISOToThai(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  if (!m) return iso || "—";
+  return `${parseInt(m[3])} ${_THAI_MO_ABBR[parseInt(m[2]) - 1]} ${parseInt(m[1]) + 543}`;
 }
 
 // ─── QUOTATIONS ───────────────────────────────────────────────
@@ -1220,7 +1240,7 @@ export const notes: NoteMock[] = [
   },
   {
     id: 6, title: "ติดตาม หจก. ราชบุรีโลหะ", category: "โอกาสการขาย", pinned: false,
-    content: "โอกาสการขายโกดังสำเร็จรูป ราชบุรี 760K\nลูกค้ายังลังเลเรื่องราคา เปรียบเทียบกับคู่แข่ง\n\nจุดแข็งที่ต้องเน้น:\n- Benjamin มาตรฐาน ISO\n- รับประกัน 5 ปี\n- ส่งได้เร็วกว่า (8 สัปดาห์)\n\nวางแผนโทรติดตามอีกครั้ง 25 มิ.ย.",
+    content: "โอกาสการขายโกดังสำเร็จรูป ราชบุรี 760K\nลูกค้ายังลังเลเรื่องราคา เปรียบเทียบกับคู่แข่ง\n\nจุดแข็งที่ต้องเน้น:\n- โครงสร้างมาตรฐาน ISO\n- รับประกัน 5 ปี\n- ส่งได้เร็วกว่า (8 สัปดาห์)\n\nวางแผนโทรติดตามอีกครั้ง 25 มิ.ย.",
     customerId: 3, customerName: "หจก. ราชบุรีโลหะ",
     author: "วิภา", createdAt: "2026-06-17 09:30", updatedAt: "2026-06-17 09:30", color: "#b45309",
   },

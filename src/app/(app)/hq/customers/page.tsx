@@ -131,7 +131,7 @@ export default function HQCustomersPage() {
         const totalRevenue = scoped.reduce((s, c) => s + c.totalRevenue, 0);
         const activeCount = scoped.filter((c) => c.status === "active").length;
         const pill = (label: string, value: string) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
             {label} <span style={{ color: PRIMARY }}>{value}</span>
           </div>
         );
@@ -154,8 +154,8 @@ export default function HQCustomersPage() {
                       border: active ? `2px solid ${PRIMARY}` : `1px solid ${BORDER}`,
                       boxShadow: active ? "0 4px 14px rgba(0,51,102,.12)" : "none" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 99, background: cfg.bg, color: cfg.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.78rem", fontWeight: 800 }}>{items.length}</span>
-                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D" }}>{segmentLabel[seg]}</span>
+                      <span style={{ width: 26, height: 26, borderRadius: 99, background: cfg.bg, color: cfg.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", fontWeight: 800 }}>{items.length}</span>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{segmentLabel[seg]}</span>
                     </div>
                     <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginTop: 7 }}>฿{fmtM(items.reduce((t, c) => t + c.totalRevenue, 0))}</div>
                   </button>
@@ -177,7 +177,7 @@ export default function HQCustomersPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <span style={{ fontSize: "0.78rem", color: "#6b7280", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: "0.8rem", color: "#6b7280", whiteSpace: "nowrap" }}>
           แสดง {filtered.length} / {scoped.length} รายการ
         </span>
       </div>
@@ -238,7 +238,7 @@ export default function HQCustomersPage() {
                       {/* ตัวแทน */}
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span style={{ fontWeight: 600, color: PRIMARY }}>{c.dealerCode}</span>
-                        <span style={{ color: "#6b7280", marginLeft: 4, fontSize: "0.75rem" }}>
+                        <span style={{ color: "#6b7280", marginLeft: 4, fontSize: "0.72rem" }}>
                           {c.dealerName}
                         </span>
                       </td>
@@ -303,7 +303,7 @@ export default function HQCustomersPage() {
             style={{
               padding: "10px 16px",
               borderTop: "1px solid var(--border)",
-              fontSize: "0.75rem",
+              fontSize: "0.72rem",
               color: "#6b7280",
             }}
           >
@@ -319,7 +319,7 @@ export default function HQCustomersPage() {
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewC.name}</div>
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{viewC.dealerName} · {viewC.province}</div>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{viewC.dealerName} · {viewC.province}</div>
               </div>
               <button onClick={() => setViewC(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
             </div>
@@ -335,12 +335,12 @@ export default function HQCustomersPage() {
                 ["สถานะ", viewC.status === "active" ? "ใช้งาน" : "ไม่ใช้งาน"],
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 12px" }}>
-                  <div style={{ fontSize: "0.63rem", color: "#6b7280", marginBottom: 2 }}>{k}</div>
-                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D" }}>{v}</div>
+                  <div style={{ fontSize: "0.65rem", color: "#6b7280", marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{v}</div>
                 </div>
               ))}
             </div>
-            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูได้ทุกตัวแทน (Data Ownership)</div>
+            <div style={{ padding: "0 20px 16px", fontSize: "0.65rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูได้ทุกตัวแทน (Data Ownership)</div>
           </div>
         </div>
       )}

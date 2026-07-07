@@ -2,7 +2,8 @@
 
 import { useState, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { apptTypeLabel, type AppointmentMock, type ApptType } from "@/lib/mock";
+import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@/lib/mock";
+import { useRole } from "@/context/RoleContext";
 import { useSales } from "@/context/SalesContext";
 import { ChevronLeft, ChevronRight, Clock, MapPin, CalendarDays, CalendarCheck, Plus, X, User, Phone, Building2, GitBranch, Users, Edit2, Trash2 } from "lucide-react";
 
@@ -207,7 +208,7 @@ export default function CalendarPage() {
               {/* legend ย้ายมาอยู่ในหัวปฏิทิน (compact) */}
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 {(Object.keys(BUCKET_META) as ActivityBucket[]).map(k => (
-                  <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.68rem", color: MUTED }}>
+                  <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.65rem", color: MUTED }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: BUCKET_META[k].color, flexShrink: 0 }} />
                     {BUCKET_META[k].labelTh}
                   </span>
@@ -227,7 +228,7 @@ export default function CalendarPage() {
               <>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 5, marginBottom: 5 }}>
                 {THAI_DAYS.map(d => (
-                  <div key={d} style={{ textAlign: "center", fontSize: "0.68rem", fontWeight: 700, color: MUTED, padding: "2px 0" }}>{d}</div>
+                  <div key={d} style={{ textAlign: "center", fontSize: "0.65rem", fontWeight: 700, color: MUTED, padding: "2px 0" }}>{d}</div>
                 ))}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: 108, gap: 5 }}>
@@ -246,7 +247,7 @@ export default function CalendarPage() {
                       }}
                       onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = "#f4f6f9"; }}
                       onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = isToday ? "#eef3f8" : "#fff"; }}>
-                      <span style={{ fontSize: "0.76rem", fontWeight: isToday ? 800 : 600, color: isToday ? PRIMARY : "#2D2D2D",
+                      <span style={{ fontSize: "0.72rem", fontWeight: isToday ? 800 : 600, color: isToday ? PRIMARY : "#2D2D2D",
                         alignSelf: "flex-start", ...(isToday ? { background: PRIMARY, color: "#fff", borderRadius: 999, minWidth: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" } : {}) }}>{d}</span>
                       {/* event chips จริง (สูงสุด 3) แทนจุด */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
@@ -254,7 +255,7 @@ export default function CalendarPage() {
                           const bm = bucketMeta(a);
                           return (
                             <span key={a.id} title={`${a.time} ${a.company}`}
-                              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.6rem", fontWeight: 600, color: "#2D2D2D",
+                              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.65rem", fontWeight: 600, color: "#2D2D2D",
                                 background: bm.bg, borderLeft: `2.5px solid ${bm.color}`, borderRadius: 4, padding: "1px 4px",
                                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               <span style={{ color: bm.color, fontWeight: 800, flexShrink: 0 }}>{a.time}</span>
@@ -262,7 +263,7 @@ export default function CalendarPage() {
                             </span>
                           );
                         })}
-                        {appts.length > 3 && <span style={{ fontSize: "0.58rem", color: MUTED, fontWeight: 600, paddingLeft: 2 }}>+{appts.length - 3} เพิ่มเติม</span>}
+                        {appts.length > 3 && <span style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 600, paddingLeft: 2 }}>+{appts.length - 3} เพิ่มเติม</span>}
                       </div>
                     </button>
                   );
@@ -287,12 +288,12 @@ export default function CalendarPage() {
                         cursor: "pointer", minWidth: 0, minHeight: 150, padding: 6, display: "flex", flexDirection: "column", gap: 6,
                       }}>
                       <div style={{ textAlign: "center", borderBottom: `1px solid ${BORDER}`, paddingBottom: 4 }}>
-                        <div style={{ fontSize: "0.62rem", fontWeight: 700, color: MUTED }}>{THAI_DAYS[dt.getDay()]}</div>
-                        <div style={{ fontSize: "0.9rem", fontWeight: isToday ? 800 : 700, color: isToday ? PRIMARY : "#2D2D2D" }}>{dt.getDate()}</div>
+                        <div style={{ fontSize: "0.65rem", fontWeight: 700, color: MUTED }}>{THAI_DAYS[dt.getDay()]}</div>
+                        <div style={{ fontSize: "0.92rem", fontWeight: isToday ? 800 : 700, color: isToday ? PRIMARY : "#2D2D2D" }}>{dt.getDate()}</div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         {appts.length === 0 ? (
-                          <div style={{ fontSize: "0.6rem", color: "#c0c4cc", textAlign: "center", padding: "6px 0" }}>—</div>
+                          <div style={{ fontSize: "0.65rem", color: "#c0c4cc", textAlign: "center", padding: "6px 0" }}>—</div>
                         ) : appts.map(a => <WeekChip key={a.id} a={a} onOpen={() => setDetail(a)} />)}
                       </div>
                     </div>
@@ -321,13 +322,13 @@ export default function CalendarPage() {
           {/* วันที่เลือก */}
           <div className="card">
             <div className="card-header">
-              <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.9rem" }}>
+              <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.92rem" }}>
                 <CalendarDays size={15} color={PRIMARY} /> {selectedDate === TODAY ? "วันนี้" : `${parseInt(selectedDate.split("-")[2])} ${THAI_MONTHS[parseYmd(selectedDate).getMonth()]}`}
               </div>
               <button onClick={() => setAddOpen(true)} className="btn btn-secondary btn-sm" style={{ color: PRIMARY, padding: "5px 9px" }}><Plus size={13} /></button>
             </div>
             {selectedAppts.length === 0 ? (
-              <div className="card-body" style={{ fontSize: "0.78rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมายวันนี้</div>
+              <div className="card-body" style={{ fontSize: "0.8rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมายวันนี้</div>
             ) : (
               <div>
                 {selectedAppts.map(a => <ApptRow key={a.id} a={a} onOpen={() => setDetail(a)} />)}
@@ -338,7 +339,7 @@ export default function CalendarPage() {
           {/* รายการนัด — ชิปกรอง (ทั้งหมด/วันนี้/กำลังจะถึง/เกินกำหนด) + list เดียว */}
           <div className="card">
             <div className="card-header" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-              <div className="card-title" style={{ fontSize: "0.9rem" }}>รายการนัดหมาย</div>
+              <div className="card-title" style={{ fontSize: "0.92rem" }}>รายการนัดหมาย</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {([
                   { k: "all" as const,      label: "ทั้งหมด",     n: groups.today.length + groups.upcoming.length + groups.overdue.length, col: PRIMARY },
@@ -353,14 +354,14 @@ export default function CalendarPage() {
                         border: active ? `1.5px solid ${c.col}` : `1px solid ${BORDER}`, background: active ? c.col : "#fff",
                         color: active ? "#fff" : "#2D2D2D", fontSize: "0.72rem", fontWeight: 700 }}>
                       {c.label}
-                      <span style={{ fontSize: "0.66rem", fontWeight: 800, background: active ? "rgba(255,255,255,.28)" : "#f0f4f8", color: active ? "#fff" : c.col, borderRadius: 99, padding: "0 6px" }}>{c.n}</span>
+                      <span style={{ fontSize: "0.65rem", fontWeight: 800, background: active ? "rgba(255,255,255,.28)" : "#f0f4f8", color: active ? "#fff" : c.col, borderRadius: 99, padding: "0 6px" }}>{c.n}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
             {groupedList.length === 0 ? (
-              <div className="card-body" style={{ fontSize: "0.78rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมาย</div>
+              <div className="card-body" style={{ fontSize: "0.8rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมาย</div>
             ) : (
               <div style={{ maxHeight: 520, overflowY: "auto" }}>
                 {groupedList.map(a => {
@@ -402,7 +403,7 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
     [<User key="u" size={13} />, a.contact],
     [<Phone key="p" size={13} />, a.phone],
     [<MapPin key="mp" size={13} />, a.province],
-    [<Clock key="c" size={13} />, `${a.date} · ${a.time} น.`],
+    [<Clock key="c" size={13} />, `${fmtISOToThai(a.date)} · ${a.time} น.`],
     [<User key="a" size={13} />, `ผู้รับผิดชอบ: ${a.assigned}`],
   ];
   return (
@@ -412,10 +413,10 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
         <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 440, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#fff" }}>{a.company}</div>
+              <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#fff" }}>{a.company}</div>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: m.color, background: "#fff", borderRadius: 999, padding: "2px 10px" }}>{apptTypeLabel[a.type]}</span>
-                <span style={{ fontSize: "0.66rem", color: "rgba(255,255,255,.8)" }}>{statusLabel}</span>
+                <span style={{ fontSize: "0.65rem", fontWeight: 700, color: m.color, background: "#fff", borderRadius: 999, padding: "2px 10px" }}>{apptTypeLabel[a.type]}</span>
+                <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.8)" }}>{statusLabel}</span>
               </div>
             </div>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={13} /></button>
@@ -428,7 +429,7 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
               </div>
             ))}
             {a.note && (
-              <div style={{ fontSize: "0.76rem", color: MUTED, background: "#f4f6f9", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", marginTop: 2 }}>{a.note}</div>
+              <div style={{ fontSize: "0.72rem", color: MUTED, background: "#f4f6f9", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 12px", marginTop: 2 }}>{a.note}</div>
             )}
           </div>
           <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", background: "#fafafa", flexWrap: "wrap" }}>
@@ -458,6 +459,7 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
 // Add / Edit appointment modal — writes to local state only (mock.ts untouched)
 function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: AppointmentMock; defaultDate: string; onSave: (a: AppointmentMock) => void; onClose: () => void }) {
   const isEdit = !!initial;
+  const { session } = useRole(); // ผู้รับผิดชอบเริ่มต้น = ผู้ใช้ที่ล็อกอิน
   const [company, setCompany] = useState(initial?.company ?? "");
   const [date, setDate] = useState(initial?.date ?? defaultDate);
   const [time, setTime] = useState(initial?.time ?? "09:00");
@@ -473,7 +475,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
         id: Date.now(),
         contact: "—", phone: "—",
         buildingType: "—", area: 0,
-        assigned: "คุณ", status: "upcoming",
+        assigned: session.name, status: "upcoming",
       }),
       company: name,
       project: initial?.project ?? name,
@@ -489,7 +491,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
         <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.9rem" }}>{isEdit ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</span>
+            <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>{isEdit ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
           </div>
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -570,8 +572,8 @@ function WeekChip({ a, onOpen }: { a: AppointmentMock; onOpen?: () => void }) {
       borderLeft: `3px solid ${m.color}`, background: m.bg, borderRadius: 6,
       padding: "3px 6px", display: "flex", flexDirection: "column", gap: 1, cursor: "pointer",
     }}>
-      <span style={{ fontSize: "0.6rem", fontWeight: 800, color: m.color }}>{a.time}</span>
-      <span style={{ fontSize: "0.62rem", fontWeight: 600, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</span>
+      <span style={{ fontSize: "0.65rem", fontWeight: 800, color: m.color }}>{a.time}</span>
+      <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</span>
     </div>
   );
 }
@@ -583,15 +585,15 @@ function DayRow({ a, onOpen }: { a: AppointmentMock; onOpen?: () => void }) {
     <div onClick={onOpen} style={{ display: "flex", gap: 12, alignItems: "stretch", borderLeft: `3px solid ${m.color}`, padding: "10px 0 10px 12px", borderBottom: `1px solid ${BORDER}`, cursor: onOpen ? "pointer" : undefined }}>
       <div style={{ minWidth: 56, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
         <span style={{ fontSize: "0.86rem", fontWeight: 800, color: PRIMARY }}>{a.time}</span>
-        <span style={{ fontSize: "0.62rem", color: MUTED }}>น.</span>
+        <span style={{ fontSize: "0.65rem", color: MUTED }}>น.</span>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</div>
+        <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-          <span style={{ fontSize: "0.68rem", fontWeight: 700, color: m.color, background: m.bg, borderRadius: 999, padding: "1px 9px" }}>{apptTypeLabel[a.type]}</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.7rem", color: MUTED }}><MapPin size={11} /> {a.province}</span>
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, color: m.color, background: m.bg, borderRadius: 999, padding: "1px 9px" }}>{apptTypeLabel[a.type]}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.72rem", color: MUTED }}><MapPin size={11} /> {a.province}</span>
         </div>
-        {a.note && <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.note}</div>}
+        {a.note && <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.note}</div>}
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ export default function CustomerDetailRedirect() {
     router.replace(`/customers?open=${params.id}`);
   }, [params.id, router]);
   return (
-    <div className="erp" style={{ padding: 40, textAlign: "center", color: "#6b7280", fontSize: "0.85rem" }}>
+    <div className="erp" style={{ padding: 40, textAlign: "center", color: "#6b7280", fontSize: "0.86rem" }}>
       กำลังเปิดข้อมูลลูกค้า…
     </div>
   );

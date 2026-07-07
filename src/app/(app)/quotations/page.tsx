@@ -3,17 +3,18 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  quotationStatusLabel, quotationStatusColor, leadStatusLabel,
+  quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteValidityDays,
   DEFAULT_ISSUER, ISSUER_KEY,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile,
 } from "@/lib/mock";
 import { TemplateSelect } from "@/components/ui/TemplateSelect";
+import { AssigneeAvatars } from "@/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@/lib/quotationPrint";
 import { useSales } from "@/context/SalesContext";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { useTableLayout, type Col } from "@/components/ui/TableTools";
+import { useTableLayout, TableTools, type Col } from "@/components/ui/TableTools";
 import {
   Plus, Search, X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer,
@@ -60,6 +61,7 @@ const Q_STATUS_OPTIONS = STATUS_ORDER.map(s => ({ value: s, label: quotationStat
 
 // คอลัมน์ที่ซ่อน/แสดงได้ในตารางรายการ (เลขที่ + ลูกค้า + สถานะ + การกระทำ = คงที่เสมอ)
 const COLS: Col[] = [
+  { key: "owner",   label: "ผู้รับผิดชอบ" },
   { key: "value",   label: "มูลค่า" },
   { key: "expiry",  label: "วันหมดอายุ" },
 ];
@@ -93,27 +95,24 @@ function nextQId(data:QuotationMock[], doc:DocProfile=DEFAULT_DOC){
   const next = Math.max(start, ...nums, 0) + 1;
   return `${doc.quotePrefix || "Q-2026-"}${String(next).padStart(4,"0")}`;
 }
-function exportCSV(rows:QuotationMock[]){
-  const header=["เลขที่","ลูกค้า","โอกาสการขาย","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"];
-  const lines=rows.map(q=>[q.id,q.customer,q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date].join(","));
-  const blob=new Blob(["﻿"+[header.join(","),...lines].join("\n")],{type:"text/csv;charset=utf-8;"});
-  const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="quotations.csv"; a.click(); URL.revokeObjectURL(url);
-}
-
-
 // ── Add / Edit Modal ──────────────────────────────────────────
 const TODAY = "2026-06-23";
+// วันหมดอายุเริ่มต้น = วันนี้ + อายุใบเสนอราคา (จากกฎการขาย settings) → ISO
+function defaultExpiry(): string {
+  const d = new Date(TODAY); d.setDate(d.getDate() + loadQuoteValidityDays());
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function buildBlank(customers:CustomerRow[]): QForm {
   const c=customers[0];
-  return { customerId:c?.id??0, customer:c?.company??"", project:"", projectId:0, province:c?.province??"", buildingType:"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, revision:"V1", expiry:"" };
+  return { customerId:c?.id??0, customer:c?.company??"", project:"", projectId:0, province:c?.province??"", buildingType:"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, revision:"V1", expiry:defaultExpiry() };
 }
 
 function QuotationModal({ initial, title, onSave, onClose, customers }:{
   initial:QForm; title:string; onSave:(f:QForm)=>void; onClose:()=>void; customers:CustomerRow[];
 }){
   const [form,setForm]=useState<QForm>(initial);
-  const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.82rem",outline:"none",color:STEEL,boxSizing:"border-box"};
-  const LBL:React.CSSProperties={fontSize:"0.68rem",fontWeight:700,color:MUTED,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
+  const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.8rem",outline:"none",color:STEEL,boxSizing:"border-box"};
+  const LBL:React.CSSProperties={fontSize:"0.65rem",fontWeight:700,color:MUTED,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
   function set<K extends keyof QForm>(k:K,v:QForm[K]){setForm(p=>({...p,[k]:v}));}
   const total=form.materialCost;
   function pickCustomer(id:number){
@@ -171,7 +170,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
             {/* Total preview */}
             {total>0&&<div style={{padding:"10px 14px",background:"#dce5f0",borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่ารวม (คำนวณ)</span>
-              <span style={{fontSize:"1.05rem",fontWeight:800,color:PRIMARY}}>{fmtMoney(total)}</span>
+              <span style={{fontSize:"1rem",fontWeight:800,color:PRIMARY}}>{fmtMoney(total)}</span>
             </div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div>
@@ -395,9 +394,11 @@ function QuotationsPageInner(){
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
             <FilterBar dims={[]} />
+            <TableTools storageKey="quotations" columns={COLS} hiddenCols={hiddenCols} onToggleCol={toggleCol}
+              density={density} onDensityChange={setDensity} />
             <ExportMenu filename="quotations" title="ใบเสนอราคา" small
-              headers={["เลขที่","ลูกค้า","โอกาสการขาย","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
-              rows={filtered.map(q=>[q.id,q.customer,q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
+              headers={["เลขที่","ลูกค้า","ผู้รับผิดชอบ","โอกาสการขาย","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
+              rows={filtered.map(q=>[q.id,q.customer,customers.find(c=>c.id===q.customerId)?.owner ?? "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
             <button onClick={openAdd} className="btn btn-primary btn-sm">
               <Plus size={13}/> เพิ่มใบเสนอราคา
             </button>
@@ -408,18 +409,18 @@ function QuotationsPageInner(){
         {(() => {
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
           const STATUS_LIST: QuotationStatus[] = ["draft","sent_to_client","viewed","won","lost","expired"];
-          const totalVal = data.reduce((a,q)=>a+q.totalValue,0);
-          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
+          const totalVal = scoped.reduce((a,q)=>a+q.totalValue,0); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
+          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
           return (
             <>
               <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
-                <div style={pill}>ใบเสนอราคาทั้งหมด: <span style={{color:PRIMARY}}>{data.length}</span></div>
+                <div style={pill}>ใบเสนอราคาทั้งหมด: <span style={{color:PRIMARY}}>{scoped.length}</span></div>
                 <div style={pill}>มูลค่ารวม: <span style={{color:PRIMARY}}>{fmtC(totalVal)}</span></div>
               </div>
               {/* สรุปตามสถานะ — count + มูลค่า · คลิกกรอง */}
               <div className="card" style={{ padding:"12px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap" }}>
                 {STATUS_LIST.map(s=>{
-                  const c=quotationStatusColor[s]; const list=data.filter(q=>q.status===s);
+                  const c=quotationStatusColor[s]; const list=scoped.filter(q=>q.status===s);
                   const cnt=list.length; const val=list.reduce((a,q)=>a+q.totalValue,0); const active=filterStatus===s;
                   return (
                     <button key={s} onClick={()=>setFilterStatus(active?"ALL":s)}
@@ -427,10 +428,10 @@ function QuotationsPageInner(){
                         border:`1px solid ${active?c.text+"40":BORDER}`, borderRadius:10, padding:"8px 12px",
                         fontSize:"0.72rem", fontWeight:600, color:active?c.text:MUTED, cursor:"pointer", fontFamily:"inherit" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                        <span style={{ width:18, height:18, borderRadius:"50%", background:c.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.6rem", color:c.text, fontWeight:800 }}>{cnt}</span>
+                        <span style={{ width:18, height:18, borderRadius:"50%", background:c.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.65rem", color:c.text, fontWeight:800 }}>{cnt}</span>
                         {quotationStatusLabel[s]}
                       </div>
-                      <span style={{ fontSize:"0.62rem", color:active?c.text:"#C0C0C0", fontWeight:500 }}>{val>0?fmtC(val):"—"}</span>
+                      <span style={{ fontSize:"0.65rem", color:active?c.text:"#C0C0C0", fontWeight:500 }}>{val>0?fmtC(val):"—"}</span>
                     </button>
                   );
                 })}
@@ -444,17 +445,17 @@ function QuotationsPageInner(){
           <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"0 12px",height:36,boxSizing:"border-box",minWidth:280}}>
             <Search size={13} color={MUTED}/>
             <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า / โอกาสการขาย..."
-              style={{border:"none",outline:"none",fontSize:"0.78rem",color:STEEL,background:"transparent",flex:1}}/>
+              style={{border:"none",outline:"none",fontSize:"0.8rem",color:STEEL,background:"transparent",flex:1}}/>
             {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:"0.72rem",color:MUTED}}>แสดง {filtered.length}/{data.length}</span>
+            <span style={{fontSize:"0.72rem",color:MUTED}}>แสดง {filtered.length}/{scoped.length}</span>
             {/* สลับมุมมอง — สไตล์ segmented มีกรอบ (เหมือนหน้าลูกค้าเป้าหมาย/ลูกค้า) */}
             <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
               {([["list",LayoutList,"รายการ"],["card",LayoutGrid,"การ์ด"]] as const).map(([v,Ico,tip])=>(
                 <button key={v} onClick={()=>setView(v)}
                   style={{display:"flex",alignItems:"center",gap:5,padding:"0 12px",height:"100%",border:"none",cursor:"pointer",
-                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.75rem",fontWeight:600}}>
+                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.72rem",fontWeight:600}}>
                   <Ico size={14}/> {tip}
                 </button>
               ))}
@@ -468,16 +469,17 @@ function QuotationsPageInner(){
             <div className={`table-wrap${density==="compact"?" dense":""}`} style={{borderTop:"none"}}>
               <table>
                 <colgroup>
-                  <col style={{width:"14%"}} />
-                  <col style={{width:"30%"}} />
-                  {!hiddenCols.includes("value")&&<col style={{width:"14%"}} />}
                   <col style={{width:"13%"}} />
-                  {!hiddenCols.includes("expiry")&&<col style={{width:"13%"}} />}
-                  <col style={{width:"16%"}} />
+                  <col style={{width:"24%"}} />
+                  {!hiddenCols.includes("owner")&&<col style={{width:"13%"}} />}
+                  {!hiddenCols.includes("value")&&<col style={{width:"13%"}} />}
+                  <col style={{width:"12%"}} />
+                  {!hiddenCols.includes("expiry")&&<col style={{width:"12%"}} />}
+                  <col style={{width:"15%"}} />
                 </colgroup>
                 <thead>
                   <tr>
-                    {([{label:"เลขที่",key:"id",col:null},{label:"ลูกค้า",key:"customer",col:null},{label:"มูลค่า",key:"totalValue",col:"value"},{label:"สถานะ",key:"status",col:null},{label:"วันหมดอายุ",key:null,col:"expiry"},{label:"",key:null,col:null}] as {label:string;key:SortKey|null;col:string|null}[])
+                    {([{label:"เลขที่",key:"id",col:null},{label:"ลูกค้า",key:"customer",col:null},{label:"ผู้รับผิดชอบ",key:null,col:"owner"},{label:"มูลค่า",key:"totalValue",col:"value"},{label:"สถานะ",key:"status",col:null},{label:"วันหมดอายุ",key:null,col:"expiry"},{label:"",key:null,col:null}] as {label:string;key:SortKey|null;col:string|null}[])
                       .filter(col=>!col.col||!hiddenCols.includes(col.col))
                       .map((col,i)=>(
                       <th key={i} onClick={col.key?()=>handleSort(col.key as SortKey):undefined}
@@ -488,7 +490,7 @@ function QuotationsPageInner(){
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length===0&&<tr><td colSpan={6-["value","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.82rem"}}>ไม่พบใบเสนอราคา</td></tr>}
+                  {filtered.length===0&&<tr><td colSpan={7-["owner","value","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบใบเสนอราคา</td></tr>}
                   {paged.map(q=>{
                     const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
                     return (
@@ -497,39 +499,42 @@ function QuotationsPageInner(){
                         <td>
                           <div style={{display:"flex",alignItems:"center",gap:8}}>
                             <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><FileText size={12} color={PRIMARY}/></div>
-                            <span style={{fontSize:"0.78rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
-                            <span style={{background:"#eef2f7",color:"#003366",fontSize:"0.6rem",fontWeight:700,padding:"1px 6px",borderRadius:99,flexShrink:0}}>{q.revision??"V1"}</span>
+                            <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
+                            <span style={{background:"#eef2f7",color:"#003366",fontSize:"0.65rem",fontWeight:700,padding:"1px 6px",borderRadius:99,flexShrink:0}}>{q.revision??"V1"}</span>
                           </div>
                         </td>
                         <td>
                           {q.customerId ? (
                             <button onClick={e=>{e.stopPropagation();router.push(`/customers?open=${q.customerId}`);}}
-                              style={{background:"none",border:"none",cursor:"pointer",color:PRIMARY,fontSize:"0.82rem",fontWeight:700,padding:0,textAlign:"left"}}>
+                              style={{background:"none",border:"none",cursor:"pointer",color:PRIMARY,fontSize:"0.8rem",fontWeight:700,padding:0,textAlign:"left"}}>
                               {q.customer}
                             </button>
                           ) : (
-                            <span style={{fontSize:"0.82rem",fontWeight:700,color:STEEL}}>{q.customer}</span>
+                            <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL}}>{q.customer}</span>
                           )}
                         </td>
+                        {!hiddenCols.includes("owner")&&(
+                        <td><AssigneeAvatars value={customers.find(c=>c.id===q.customerId)?.owner ?? ""} size={24} /></td>
+                        )}
                         {!hiddenCols.includes("value")&&(
-                        <td className="num" style={{fontSize:"0.88rem",fontWeight:800,color:STEEL,whiteSpace:"nowrap"}}>{q.total}</td>
+                        <td className="num" style={{fontSize:"0.86rem",fontWeight:800,color:STEEL,whiteSpace:"nowrap"}}>{q.total}</td>
                         )}
                         <td>
                           <span className="badge" style={{background:sc.bg,color:sc.text}}>{quotationStatusLabel[q.status]}</span>
                         </td>
                         {!hiddenCols.includes("expiry")&&(
-                        <td style={{fontSize:"0.75rem",color:MUTED,whiteSpace:"nowrap"}}>{q.expiry?fmtDate(q.expiry):"—"}</td>
+                        <td style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{q.expiry?fmtDate(q.expiry):"—"}</td>
                         )}
                         <td onClick={e=>e.stopPropagation()}>
                           <div style={{display:"flex",gap:4,flexWrap:"nowrap"}}>
                             {q.status==="draft"&&(
                               <button onClick={()=>changeStatus(q.id,"sent_to_client")} className="btn btn-sm"
-                                style={{background:"#d97706",color:"#fff",border:"none",padding:"4px 9px",fontSize:"0.67rem"}}>ส่งลูกค้า</button>
+                                style={{background:"#d97706",color:"#fff",border:"none",padding:"4px 9px",fontSize:"0.65rem"}}>ส่งลูกค้า</button>
                             )}
                             <button onClick={()=>printQuotation(q)} title="พิมพ์ใบเสนอราคา" className="btn btn-secondary btn-sm"
-                              style={{color:PRIMARY,padding:"4px 8px",fontSize:"0.67rem"}}><Printer size={12}/></button>
+                              style={{color:PRIMARY,padding:"4px 8px",fontSize:"0.65rem"}}><Printer size={12}/></button>
                             <button onClick={()=>openEdit(q)} className="btn btn-secondary btn-sm"
-                              style={{color:PRIMARY,padding:"4px 9px",fontSize:"0.67rem"}}>แก้ไข</button>
+                              style={{color:PRIMARY,padding:"4px 9px",fontSize:"0.65rem"}}>แก้ไข</button>
                           </div>
                         </td>
                       </tr>
@@ -548,7 +553,7 @@ function QuotationsPageInner(){
         {view==="card"&&(
           <div className="card" style={{borderRadius:"0 0 var(--radius-xl) var(--radius-xl)",borderTop:"none"}}>
             <div style={{padding:16}}>
-            {filtered.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.82rem"}}>ไม่พบใบเสนอราคา</div>}
+            {filtered.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบใบเสนอราคา</div>}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
               {paged.map(q=>{
                 const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
@@ -560,7 +565,7 @@ function QuotationsPageInner(){
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderBottom:"1px solid #f0f4f8"}}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center"}}><FileText size={12} color={PRIMARY}/></div>
-                        <span style={{fontSize:"0.77rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
+                        <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
                       </div>
                       <span className="badge" style={{background:sc.bg,color:sc.text}}>{quotationStatusLabel[q.status]}</span>
                     </div>
@@ -573,15 +578,15 @@ function QuotationsPageInner(){
                       <div style={{display:"flex",gap:0,borderRadius:9,overflow:"hidden",border:"1px solid #f0f4f8",marginBottom:10}}>
                         {[{label:"พื้นที่",value:`${q.area?.toLocaleString()} ม²`},{label:"ประเภท",value:q.buildingType}].map((item,i)=>(
                           <div key={i} style={{flex:1,padding:"6px 8px",background:i%2===0?"#fafafa":"#f3f6fb",borderRight:i<1?"1px solid #f0f4f8":"none",textAlign:"center"}}>
-                            <div style={{fontSize:"0.58rem",color:"#9ca3af",fontWeight:600,marginBottom:2}}>{item.label}</div>
-                            <div style={{fontSize:"0.68rem",color:STEEL,fontWeight:700}}>{item.value}</div>
+                            <div style={{fontSize:"0.65rem",color:"#9ca3af",fontWeight:600,marginBottom:2}}>{item.label}</div>
+                            <div style={{fontSize:"0.65rem",color:STEEL,fontWeight:700}}>{item.value}</div>
                           </div>
                         ))}
                       </div>
                       <div style={{fontSize:"1.15rem",fontWeight:800,color:PRIMARY}}>{q.total}</div>
                     </div>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 14px",borderTop:"1px solid #f0f4f8",background:"#fafbfc"}}>
-                      <span style={{fontSize:"0.68rem",color:MUTED}}>{fmtDate(q.date)}</span>
+                      <span style={{fontSize:"0.65rem",color:MUTED}}>{fmtDate(q.date)}</span>
                       <div style={{display:"flex",gap:4}} onClick={e=>e.stopPropagation()}>
                         {q.status==="draft"&&(
                           <button onClick={()=>changeStatus(q.id,"sent_to_client")} className="btn btn-sm"
@@ -616,10 +621,10 @@ function QuotationsPageInner(){
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{fontSize:"0.64rem",fontWeight:700,color:"rgba(255,255,255,.55)",fontFamily:"monospace",letterSpacing:"0.05em"}}>{selected.id}</div>
-                    <span style={{background:"#eef2f7",color:"#003366",fontSize:"0.6rem",fontWeight:700,padding:"1px 6px",borderRadius:99}}>{selected.revision??"V1"}</span>
+                    <div style={{fontSize:"0.65rem",fontWeight:700,color:"rgba(255,255,255,.55)",fontFamily:"monospace",letterSpacing:"0.05em"}}>{selected.id}</div>
+                    <span style={{background:"#eef2f7",color:"#003366",fontSize:"0.65rem",fontWeight:700,padding:"1px 6px",borderRadius:99}}>{selected.revision??"V1"}</span>
                   </div>
-                  <div style={{fontSize:"1.05rem",fontWeight:800,color:"#fff",lineHeight:1.25,marginTop:2,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.customer}</div>
+                  <div style={{fontSize:"1rem",fontWeight:800,color:"#fff",lineHeight:1.25,marginTop:2,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.customer}</div>
                   <div style={{fontSize:"0.8rem",color:"rgba(255,255,255,.7)",marginTop:3,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.project}</div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,marginLeft:8}}>
@@ -644,10 +649,10 @@ function QuotationsPageInner(){
                 <span className="badge" style={{background:quotationStatusColor[selected.status].bg,color:quotationStatusColor[selected.status].text}}>
                   {quotationStatusLabel[selected.status]}
                 </span>
-                <span style={{fontSize:"0.88rem",fontWeight:800,color:"rgba(255,255,255,.9)"}}>{selected.total}</span>
+                <span style={{fontSize:"0.86rem",fontWeight:800,color:"rgba(255,255,255,.9)"}}>{selected.total}</span>
               </div>
               {selected.status==="won"&&(
-                <div style={{fontSize:"0.68rem",color:"rgba(255,255,255,.7)",marginTop:6}}>
+                <div style={{fontSize:"0.65rem",color:"rgba(255,255,255,.7)",marginTop:6}}>
                   ลูกค้าตอบรับแล้ว — ไปปิดการขาย ที่เส้นทางการขาย/ผู้สนใจ
                 </div>
               )}
@@ -657,7 +662,7 @@ function QuotationsPageInner(){
             <div className="tab-bar" style={{flexShrink:0}}>
               {detailTabs.map(([key,label])=>(
                 <button key={key} onClick={()=>setDetailTab(key as typeof detailTab)}
-                  className={`tab-item${detailTab===key?" active":""}`} style={{fontSize:"0.88rem",padding:"12px 16px"}}>
+                  className={`tab-item${detailTab===key?" active":""}`} style={{fontSize:"0.86rem",padding:"12px 16px"}}>
                   {label}
                 </button>
               ))}
@@ -672,14 +677,14 @@ function QuotationsPageInner(){
               <div style={{padding:"14px 16px"}}>
                 {/* Price */}
                 <div style={{marginBottom:14}}>
-                  <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>มูลค่า</div>
+                  <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>มูลค่า</div>
                   <div style={{padding:"12px 14px",background:"#dce5f0",borderRadius:11,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:"0.7rem",fontWeight:700,color:MUTED}}>มูลค่ารวม</span>
-                    <span style={{fontSize:"1.2rem",fontWeight:800,color:PRIMARY}}>{selected.total}</span>
+                    <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่ารวม</span>
+                    <span style={{fontSize:"1.15rem",fontWeight:800,color:PRIMARY}}>{selected.total}</span>
                   </div>
                 </div>
                 {/* Details */}
-                <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>รายละเอียด</div>
+                <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>รายละเอียด</div>
                 {[
                   {label:"จังหวัด",val:selected.province},{label:"ประเภทอาคาร",val:selected.buildingType},
                   {label:"พื้นที่",val:`${selected.area?.toLocaleString()} ตร.ม.`},{label:"จำนวนรายการ",val:`${selected.items} รายการ`},
@@ -688,19 +693,19 @@ function QuotationsPageInner(){
                 ].map((r,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<5?"1px solid #f0f4f8":"none"}}>
                     <span style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>{r.label}</span>
-                    <span style={{fontSize:"0.76rem",color:STEEL,fontWeight:700}}>{r.val}</span>
+                    <span style={{fontSize:"0.72rem",color:STEEL,fontWeight:700}}>{r.val}</span>
                   </div>
                 ))}
                 {/* (ลบ "จำนวนการเปิดอ่าน" ออก — เป็นตัวเลขปลอมที่ไม่มีการติดตามจริง) */}
                 {/* Status workflow */}
                 {STATUS_ACTIONS[selected.status].length>0&&(
                   <div style={{marginTop:14}}>
-                    <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>เปลี่ยนสถานะ</div>
+                    <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>เปลี่ยนสถานะ</div>
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       {STATUS_ACTIONS[selected.status].map(action=>(
                         <button key={action.next} onClick={()=>changeStatus(selected.id,action.next)} className="btn"
                           style={{justifyContent:"space-between",padding:"9px 12px",background:action.bg,border:"none",width:"100%"}}>
-                          <span style={{fontSize:"0.76rem",fontWeight:700,color:action.color}}>{action.label}</span>
+                          <span style={{fontSize:"0.72rem",fontWeight:700,color:action.color}}>{action.label}</span>
                           <ArrowRight size={13} color={action.color}/>
                         </button>
                       ))}
@@ -720,14 +725,14 @@ function QuotationsPageInner(){
                         {relCustomer.initials}
                       </div>
                       <div>
-                        <div style={{fontSize:"0.88rem",fontWeight:800,color:STEEL}}>{relCustomer.company}</div>
-                        <div style={{fontSize:"0.7rem",color:MUTED,marginTop:2}}>{relCustomer.name}</div>
+                        <div style={{fontSize:"0.86rem",fontWeight:800,color:STEEL}}>{relCustomer.company}</div>
+                        <div style={{fontSize:"0.72rem",color:MUTED,marginTop:2}}>{relCustomer.name}</div>
                       </div>
                     </div>
                     {[{label:"โทรศัพท์",val:relCustomer.phone},{label:"อีเมล",val:relCustomer.email},{label:"จังหวัด",val:relCustomer.province},{label:"หมวด",val:relCustomer.category},{label:"โอกาสการขาย",val:`${relCustomer.projects} โอกาสการขาย`}].map((r,i)=>(
                       <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<4?"1px solid #f0f4f8":"none"}}>
-                        <span style={{fontSize:"0.7rem",color:MUTED,fontWeight:600}}>{r.label}</span>
-                        <span style={{fontSize:"0.75rem",color:STEEL,fontWeight:700,maxWidth:160,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.val}</span>
+                        <span style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>{r.label}</span>
+                        <span style={{fontSize:"0.72rem",color:STEEL,fontWeight:700,maxWidth:160,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.val}</span>
                       </div>
                     ))}
                     <button onClick={()=>router.push(`/customers?open=${relCustomer.id}`)} className="btn btn-primary"
@@ -736,7 +741,7 @@ function QuotationsPageInner(){
                     </button>
                   </>
                 ):(
-                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.78rem"}}>ไม่พบข้อมูลลูกค้า</div>
+                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบข้อมูลลูกค้า</div>
                 )}
               </div>
             )}
@@ -746,12 +751,12 @@ function QuotationsPageInner(){
               <div style={{padding:"14px 16px"}}>
                 {relLead?(
                   <>
-                    <div style={{fontSize:"0.88rem",fontWeight:800,color:STEEL,marginBottom:2}}>{relLead.company}</div>
-                    <div style={{fontSize:"0.7rem",color:MUTED,marginBottom:14}}>{relLead.contact} · {relLead.province}</div>
+                    <div style={{fontSize:"0.86rem",fontWeight:800,color:STEEL,marginBottom:2}}>{relLead.company}</div>
+                    <div style={{fontSize:"0.72rem",color:MUTED,marginBottom:14}}>{relLead.contact} · {relLead.province}</div>
                     {[{label:"โทรศัพท์",val:relLead.phone},{label:"สินค้า",val:relLead.product},{label:"มูลค่า",val:relLead.value},{label:"สถานะ",val:leadStatusLabel[relLead.status]},{label:"ผู้รับผิดชอบ",val:relLead.assigned}].map((r,i)=>(
                       <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<4?"1px solid #f0f4f8":"none"}}>
-                        <span style={{fontSize:"0.7rem",color:MUTED,fontWeight:600}}>{r.label}</span>
-                        <span style={{fontSize:"0.75rem",color:STEEL,fontWeight:700}}>{r.val}</span>
+                        <span style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>{r.label}</span>
+                        <span style={{fontSize:"0.72rem",color:STEEL,fontWeight:700}}>{r.val}</span>
                       </div>
                     ))}
                     <button onClick={()=>router.push(`/leads?open=${relLead.numId}`)} className="btn btn-primary"
@@ -760,7 +765,7 @@ function QuotationsPageInner(){
                     </button>
                   </>
                 ):(
-                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.78rem"}}>ไม่พบผู้สนใจที่เกี่ยวข้อง</div>
+                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบผู้สนใจที่เกี่ยวข้อง</div>
                 )}
               </div>
             )}
@@ -780,7 +785,7 @@ function QuotationsPageInner(){
                 <span style={{width:38,height:38,borderRadius:"50%",background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={17} color="#dc2626"/></span>
                 <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบใบเสนอราคา</div>
               </div>
-              <p style={{fontSize:"0.82rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.id}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+              <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.id}</strong>? การลบไม่สามารถย้อนกลับได้</p>
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setDelConfirm(false)}>ยกเลิก</button>

@@ -21,7 +21,11 @@ type AppUser = {
   email: string;
   role: RoleKey;
   status: UserStatus;
+  dealer?: string;      // สังกัด (HQ = สำนักงานใหญ่ · ตัวแทน = ชื่อบริษัทตัวแทน)
+  lastActive?: string;  // เข้าใช้ล่าสุด (— = ยังไม่เคยเข้าใช้)
 };
+// สังกัดเริ่มต้นตามบทบาท (ใช้ตอนเพิ่มผู้ใช้ใหม่)
+const defaultDealer = (role: RoleKey) => role.startsWith("hq") ? "สำนักงานใหญ่" : "ตัวแทน (รอกำหนด)";
 
 // ── Role meta ─────────────────────────────────────────────────
 const ROLES: { key: RoleKey; en: string; th: string; tone: string }[] = [
@@ -56,12 +60,12 @@ const MODULES: { name: string; perms: Record<RoleKey, PermLevel> }[] = [
 
 // ── Mock users ────────────────────────────────────────────────
 const USERS_INIT: AppUser[] = [
-  { id: 1, name: "อารยา สุขวิเศษ",    email: "araya@benjamin.co.th",    role: "hq_admin",     status: "active"   },
-  { id: 2, name: "กิตติ พรมมา",        email: "kitti@benjamin.co.th",    role: "hq_manager",   status: "active"   },
-  { id: 3, name: "ประภัสสร ดาวรุ่ง",   email: "prapas@benjamin.co.th",   role: "hq_manager",   status: "active"   },
-  { id: 4, name: "ธนพล วิชาศิลป์",    email: "thanapol@dealer-cm.co.th", role: "dealer_admin", status: "active"   },
-  { id: 5, name: "นิภาพร จันทร์สว่าง", email: "nipaporn@dealer-bkk.co.th", role: "dealer_sales", status: "active"   },
-  { id: 6, name: "สมชาย พันธ์ดี",      email: "somchai@dealer-bkk.co.th", role: "dealer_sales", status: "inactive" },
+  { id: 1, name: "อารยา สุขวิเศษ",    email: "araya@benjamin.co.th",    role: "hq_admin",     status: "active",   dealer: "สำนักงานใหญ่",              lastActive: "30 มิ.ย. 2569 · 09:15" },
+  { id: 2, name: "กิตติ พรมมา",        email: "kitti@benjamin.co.th",    role: "hq_manager",   status: "active",   dealer: "สำนักงานใหญ่",              lastActive: "30 มิ.ย. 2569 · 08:40" },
+  { id: 3, name: "ประภัสสร ดาวรุ่ง",   email: "prapas@benjamin.co.th",   role: "hq_manager",   status: "active",   dealer: "สำนักงานใหญ่",              lastActive: "29 มิ.ย. 2569 · 16:22" },
+  { id: 4, name: "ธนพล วิชาศิลป์",    email: "thanapol@dealer-cm.co.th", role: "dealer_admin", status: "active",   dealer: "เชียงใหม่สตีลบิลด์ (CNX)",   lastActive: "30 มิ.ย. 2569 · 10:05" },
+  { id: 5, name: "นิภาพร จันทร์สว่าง", email: "nipaporn@dealer-bkk.co.th", role: "dealer_sales", status: "active",   dealer: "ระยองสตีลเวิร์คส์ (RYG)",    lastActive: "28 มิ.ย. 2569 · 14:47" },
+  { id: 6, name: "สมชาย พันธ์ดี",      email: "somchai@dealer-bkk.co.th", role: "dealer_sales", status: "inactive", dealer: "ระยองสตีลเวิร์คส์ (RYG)",    lastActive: "—" },
 ];
 
 // ── Sub-components ────────────────────────────────────────────
@@ -161,7 +165,7 @@ function AddUserModal({ onClose, onAdd, initial }: { onClose: () => void; onAdd:
 
 // ── Page ──────────────────────────────────────────────────────
 export default function HQUsersPage() {
-  const [users, setUsers] = usePersistentState<AppUser[]>("hq_users", USERS_INIT);
+  const [users, setUsers] = usePersistentState<AppUser[]>("hq_users_v2", USERS_INIT);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<AppUser | null>(null);
 
@@ -173,7 +177,7 @@ export default function HQUsersPage() {
 
   function addUser(form: UserForm) {
     const maxId = users.reduce((m, u) => Math.max(m, u.id), 0);
-    setUsers((prev) => [{ id: maxId + 1, ...form }, ...prev]);
+    setUsers((prev) => [{ id: maxId + 1, ...form, dealer: defaultDealer(form.role), lastActive: "—" }, ...prev]);
   }
 
   function updateUser(form: UserForm) {
@@ -212,18 +216,22 @@ export default function HQUsersPage() {
           <div className="table-wrap">
             <table>
               <colgroup>
-                <col style={{ width: "26%" }} />
-                <col style={{ width: "26%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "14%" }} />
+                <col style={{ width: "19%" }} />
                 <col style={{ width: "20%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>
                   <th>ชื่อ</th>
                   <th>อีเมล</th>
                   <th>บทบาท</th>
+                  <th>สังกัด</th>
                   <th>สถานะ</th>
+                  <th>เข้าใช้ล่าสุด</th>
                   <th style={{ textAlign: "right" }}>การจัดการ</th>
                 </tr>
               </thead>
@@ -237,7 +245,7 @@ export default function HQUsersPage() {
                             width: 34, height: 34, borderRadius: 10, flexShrink: 0,
                             background: ROLE_BY_KEY[u.role].tone, color: "#fff",
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontWeight: 800, fontSize: "0.82rem",
+                            fontWeight: 800, fontSize: "0.8rem",
                           }}
                         >
                           {u.name.charAt(0)}
@@ -247,13 +255,15 @@ export default function HQUsersPage() {
                     </td>
                     <td style={{ color: MUTED }}>{u.email}</td>
                     <td><RoleBadge role={u.role} /></td>
+                    <td style={{ color: STEEL, fontSize: "0.78rem", fontWeight: 600 }}>{u.dealer ?? "—"}</td>
                     <td><StatusBadge status={u.status} /></td>
+                    <td style={{ color: MUTED, fontSize: "0.72rem", whiteSpace: "nowrap" }}>{u.lastActive ?? "—"}</td>
                     <td>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                         <button
                           onClick={() => setEditUser(u)}
                           className="btn"
-                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", fontSize: "0.78rem" }}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", fontSize: "0.8rem" }}
                         >
                           <Pencil size={13} /> แก้ไข
                         </button>
@@ -261,7 +271,7 @@ export default function HQUsersPage() {
                           onClick={() => toggleStatus(u.id)}
                           className="btn"
                           style={{
-                            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", fontSize: "0.78rem",
+                            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", fontSize: "0.8rem",
                             color: u.status === "active" ? "#dc2626" : "#059669",
                             borderColor: u.status === "active" ? "#fecaca" : "#bbf7d0",
                           }}
@@ -294,7 +304,7 @@ export default function HQUsersPage() {
             {ROLES.map((r) => (
               <div key={r.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: r.tone, display: "inline-block", flexShrink: 0 }} />
-                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: STEEL }}>{r.en}</span>
+                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: STEEL }}>{r.en}</span>
                 <span style={{ fontSize: "0.72rem", color: MUTED }}>{r.th}</span>
               </div>
             ))}
@@ -317,7 +327,7 @@ export default function HQUsersPage() {
                   {ROLES.map((r) => (
                     <th key={r.key} style={{ textAlign: "center" }}>
                       <div style={{ fontWeight: 700, color: STEEL }}>{r.en}</div>
-                      <div style={{ fontSize: "0.68rem", color: MUTED, fontWeight: 500, marginTop: 2 }}>{r.th}</div>
+                      <div style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 500, marginTop: 2 }}>{r.th}</div>
                     </th>
                   ))}
                 </tr>
@@ -341,7 +351,7 @@ export default function HQUsersPage() {
         {/* Permission legend */}
         <div className="card-body" style={{ paddingTop: 4 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-            <span style={{ fontSize: "0.74rem", color: MUTED, fontWeight: 600 }}>ความหมายสิทธิ์:</span>
+            <span style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600 }}>ความหมายสิทธิ์:</span>
             {(["all", "view", "own", "none"] as PermLevel[]).map((lvl) => (
               <PermCell key={lvl} level={lvl} />
             ))}

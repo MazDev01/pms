@@ -83,8 +83,8 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
     onToast?.(resend ? `ส่งใบเสนอราคา ${q.id} ให้ลูกค้าอีกครั้งแล้ว` : `ส่งใบเสนอราคา ${q.id} ให้ลูกค้าแล้ว`);
   }
 
-  const lbl: React.CSSProperties = { display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 };
-  const inp: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: "0.82rem", fontFamily: "inherit", color: "#2D2D2D", background: "#fff" };
+  const lbl: React.CSSProperties = { display: "block", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 };
+  const inp: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: "0.8rem", fontFamily: "inherit", color: "#2D2D2D", background: "#fff" };
   const ro: React.CSSProperties = { ...inp, background: "#f8f9fb", color: "#6b7280" };
 
   // ── ฟอร์มสร้าง/แก้ไข (inline) ──
@@ -93,7 +93,7 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "5px 10px" }}><ArrowLeft size={13} /> กลับ</button>
-          <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#003366" }}>{mode === "edit" ? `แก้ไข ${editing?.id}` : "สร้างใบเสนอราคา"}</div>
+          <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{mode === "edit" ? `แก้ไข ${editing?.id}` : "สร้างใบเสนอราคา"}</div>
         </div>
 
         {/* ข้อมูลจาก Lead — เติมอัตโนมัติ (อ่านอย่างเดียว) */}
@@ -137,10 +137,10 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "5px 10px" }}><ArrowLeft size={13} /> กลับ</button>
-          <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#003366" }}>{q.id} · {q.revision ?? "V1"}</div>
+          <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{q.id} · {q.revision ?? "V1"}</div>
           <span className="badge" style={{ background: c.bg, color: c.text, marginLeft: "auto" }}>{quotationStatusLabel[q.status]}</span>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "0.82rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "0.8rem" }}>
           {[["ลูกค้า", q.customer], ["โครงการ", q.project], ["แม่แบบ", q.buildingType], ["จังหวัด", q.province], ["จำนวน", `${q.items} รายการ`],
             ["ส่วนลด", q.discountPct ? `${q.discountPct}%` : "—"], ["ยอดสุทธิ", fmtBaht(q.totalValue)], ["วันหมดอายุ", q.expiry || "—"], ["หมายเหตุ", q.note || "—"]].map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: "1px solid #f0f4f8" }}>
@@ -170,7 +170,7 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
       </div>
 
       {related.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "28px 0", color: "#9aa2ad", fontSize: "0.82rem" }}>ยังไม่มีใบเสนอราคา — กด “สร้างใบเสนอราคา” เพื่อเริ่ม</div>
+        <div style={{ textAlign: "center", padding: "28px 0", color: "#9aa2ad", fontSize: "0.8rem" }}>ยังไม่มีใบเสนอราคา — กด “สร้างใบเสนอราคา” เพื่อเริ่ม</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {related.map(q => {
@@ -181,10 +181,10 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                       <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#2D2D2D" }}>{q.id}</span>
-                      <span style={{ fontSize: "0.64rem", color: "#6b7280" }}>{q.revision ?? "V1"}</span>
-                      <span className="badge" style={{ background: c.bg, color: c.text, fontSize: "0.6rem" }}>{quotationStatusLabel[q.status]}</span>
+                      <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>{q.revision ?? "V1"}</span>
+                      <span className="badge" style={{ background: c.bg, color: c.text, fontSize: "0.65rem" }}>{quotationStatusLabel[q.status]}</span>
                     </div>
-                    <div style={{ fontSize: "0.68rem", color: "#6b7280", marginTop: 2 }}>{q.date} · {fmtBaht(q.totalValue)}</div>
+                    <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>{q.date} · {fmtBaht(q.totalValue)}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     {/* ส่งใบเสนอราคา — เด่นเป็นปุ่ม navy · แสดงเฉพาะใบที่ยังส่งได้ (draft/ส่งแล้ว/เปิดอ่าน) */}

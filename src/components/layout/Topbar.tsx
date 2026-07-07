@@ -340,7 +340,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
                 placeholder={isHQ ? "ค้นหาลูกค้าเป้าหมาย ตัวแทน ใบเสนอราคา…" : "ค้นหาลูกค้าเป้าหมาย ลูกค้า ใบเสนอราคา…"}
-                style={{ flex:1, border:"none", outline:"none", fontSize:"0.95rem", color:STEEL, background:"transparent" }}/>
+                style={{ flex:1, border:"none", outline:"none", fontSize:"0.92rem", color:STEEL, background:"transparent" }}/>
               <button onClick={() => { setShowSearch(false); setSearchQ(""); }}
                 style={{ fontSize:"0.72rem", color:"#9ca3af", background:"none", border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px", cursor:"pointer" }}>
                 Esc
@@ -355,7 +355,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   return (
                     <div key={i}>
                     {isGroupStart && (
-                      <div style={{ padding:"9px 16px 4px", fontSize:"0.62rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em", background:"#fff" }}>
+                      <div style={{ padding:"9px 16px 4px", fontSize:"0.65rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em", background:"#fff" }}>
                         {r.type}
                       </div>
                     )}
@@ -366,8 +366,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; }}>
                       <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:30, height:30, borderRadius:"50%", background:tc.bg, color:tc.text, flexShrink:0 }}>{tc.icon}</span>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:"0.84rem", fontWeight:700, color:STEEL, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.label}</div>
-                        <div style={{ fontSize:"0.7rem", color:"#6b7280", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.sub}</div>
+                        <div style={{ fontSize:"0.86rem", fontWeight:700, color:STEEL, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.label}</div>
+                        <div style={{ fontSize:"0.72rem", color:"#6b7280", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.sub}</div>
                       </div>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
                     </button>
@@ -376,12 +376,12 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 })}
               </div>
             ) : q.length >= 2 ? (
-              <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.82rem", color:"#9ca3af" }}>
+              <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.8rem", color:"#9ca3af" }}>
                 ไม่พบผลลัพธ์สำหรับ &ldquo;{searchQ}&rdquo;
               </div>
             ) : (
               <div style={{ padding:"16px", display:"flex", flexDirection:"column", gap:6 }}>
-                <div style={{ fontSize:"0.68rem", color:"#9ca3af", fontWeight:700, marginBottom:4, letterSpacing:"0.05em" }}>ค้นหาด่วน</div>
+                <div style={{ fontSize:"0.65rem", color:"#9ca3af", fontWeight:700, marginBottom:4, letterSpacing:"0.05em" }}>ค้นหาด่วน</div>
                 {(isHQ
                   ? [{ label:"ภาพรวมยอดขาย", href:"/hq/pipeline" }, { label:"ตัวแทน", href:"/hq/dealers" }, { label:"ใบเสนอราคาทั้งเครือ", href:"/hq/quotations" }]
                   : [{ label:"ลูกค้าเป้าหมาย", href:"/leads" }, { label:"ใบเสนอราคา", href:"/quotations" }, { label:"ลูกค้า", href:"/customers" }]
@@ -427,7 +427,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 position:"absolute", top:-2, right:-2, minWidth:16, height:16, padding:"0 4px",
                 display:"flex", alignItems:"center", justifyContent:"center",
                 borderRadius:99, background:"#dc2626", color:"#fff",
-                fontSize:"0.6rem", fontWeight:800, lineHeight:1, border:"2px solid #fff",
+                fontSize:"0.65rem", fontWeight:800, lineHeight:1, border:"2px solid #fff",
               }}>
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
@@ -438,8 +438,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           {showNotifs && (
             <div style={{ position:"absolute", top:"calc(100% + 10px)", right:0, width:340, background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:`1px solid ${BORDER}` }}>
-                <span style={{ fontSize:"0.85rem", fontWeight:800, color:STEEL }}>การแจ้งเตือน</span>
-                <button onClick={markAll} style={{ fontSize:"0.7rem", color:PRIMARY, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>อ่านทั้งหมด</button>
+                <span style={{ fontSize:"0.86rem", fontWeight:800, color:STEEL }}>การแจ้งเตือน</span>
+                <button onClick={markAll} style={{ fontSize:"0.72rem", color:PRIMARY, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>อ่านทั้งหมด</button>
               </div>
               <div style={{ maxHeight:340, overflowY:"auto" }}>
                 {notifs.length === 0 && (
@@ -453,7 +453,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   return (
                     <div key={n.id}>
                     {isBucketStart && (
-                      <div style={{ padding:"9px 16px 4px", fontSize:"0.62rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em", background:"#fafafa", borderBottom:`1px solid ${BG}` }}>
+                      <div style={{ padding:"9px 16px 4px", fontSize:"0.65rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em", background:"#fafafa", borderBottom:`1px solid ${BG}` }}>
                         {BUCKET_LABEL[n.bucket]}
                       </div>
                     )}
@@ -467,11 +467,11 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:32, height:32, borderRadius:"50%", background:n.iconBg, color:n.iconColor, flexShrink:0 }}>{n.iconEl}</span>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
-                          <span style={{ fontSize:"0.78rem", fontWeight:700, color:STEEL }}>{n.title}</span>
+                          <span style={{ fontSize:"0.8rem", fontWeight:700, color:STEEL }}>{n.title}</span>
                           {!isRead && <span style={{ width:6, height:6, borderRadius:"50%", background:"#dc2626", flexShrink:0 }}/>}
                         </div>
-                        <div style={{ fontSize:"0.7rem", color:"#6b7280", lineHeight:1.4 }}>{n.body}</div>
-                        <div style={{ fontSize:"0.63rem", color:"#9ca3af", marginTop:3 }}>{n.time}</div>
+                        <div style={{ fontSize:"0.72rem", color:"#6b7280", lineHeight:1.4 }}>{n.body}</div>
+                        <div style={{ fontSize:"0.65rem", color:"#9ca3af", marginTop:3 }}>{n.time}</div>
                       </div>
                     </button>
                     </div>
@@ -480,7 +480,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               </div>
               <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
                 <button onClick={() => { setShowNotifs(false); router.push("/leads"); }}
-                  style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.75rem", fontWeight:600, cursor:"pointer" }}>
+                  style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.72rem", fontWeight:600, cursor:"pointer" }}>
                   {notifs.length > 8 ? `ดูทั้งหมด (${notifs.length}) →` : "ดูทั้งหมด →"}
                 </button>
               </div>
@@ -499,8 +499,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               ? <img className="avatar avatar-sm" src={avatarUrl} alt="" style={{ objectFit:"cover" }} />
               : <div className="avatar avatar-sm" style={{ background:PRIMARY, color:"#fff" }}>{initial}</div>}
             <div style={{ textAlign:"left" }}>
-              <div style={{ fontSize:"0.76rem", fontWeight:700, color:STEEL, lineHeight:1.2 }}>{displayName}</div>
-              <div style={{ fontSize:"0.6rem", color:"#6b7280" }}>{roleLabel}</div>
+              <div style={{ fontSize:"0.72rem", fontWeight:700, color:STEEL, lineHeight:1.2 }}>{displayName}</div>
+              <div style={{ fontSize:"0.65rem", color:"#6b7280" }}>{roleLabel}</div>
             </div>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft:2, transform: showUser ? "rotate(180deg)" : "none", transition:"transform .15s" }}>
               <path d="M6 9l6 6 6-6"/>
@@ -519,9 +519,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       {initial}
                     </div>}
                 <div>
-                  <div style={{ fontSize:"0.85rem", fontWeight:800, color:STEEL }}>{displayName}</div>
-                  <div style={{ fontSize:"0.68rem", color:"#6b7280" }}>{roleLabel}</div>
-                  <div style={{ fontSize:"0.63rem", color:"#9ca3af", marginTop:1 }}>{session.dealerName}</div>
+                  <div style={{ fontSize:"0.86rem", fontWeight:800, color:STEEL }}>{displayName}</div>
+                  <div style={{ fontSize:"0.65rem", color:"#6b7280" }}>{roleLabel}</div>
+                  <div style={{ fontSize:"0.65rem", color:"#9ca3af", marginTop:1 }}>{session.dealerName}</div>
                 </div>
               </div>
 

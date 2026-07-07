@@ -2,25 +2,32 @@
 
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { ChevronDown, Check, TrendingUp, TrendingDown } from "lucide-react";
+import { useFilters } from "@/context/FilterContext";
 
 const PRIMARY = "#003366";
 
-// ตัวเลือกช่วงวัน (ต่อการ์ด) — ค่าเริ่มต้น 30 วัน
+// ตัวเลือกช่วงวัน (override รายการ์ด)
 const DAY_OPTIONS = [5, 10, 20, 30] as const;
 export type StatDays = typeof DAY_OPTIONS[number];
 
 /** Stat Card (สไตล์ shadcn statistics) — icon + label + dropdown ช่วงวัน + ตัวเลขเด่น + trend pill
- *  metric(days) คืนค่า { value, trend } ที่คำนวณจากข้อมูลจริงตามช่วงวันที่เลือก */
-export function StatCard({ icon, label, metric, onClick, defaultDays = 30 }: {
+ *  Sync ทางเดียว: ตัวกรองหลัก (FilterBar) เปลี่ยน → การ์ดตามอัตโนมัติ · เลือกช่วงในการ์ด → เฉพาะการ์ดนั้น (หลักไม่เปลี่ยน)
+ *  metric(days) คืนค่า { value, trend } ที่คำนวณจากข้อมูลจริงตามจำนวนวัน */
+export function StatCard({ icon, label, metric, onClick }: {
   icon: ReactNode;
   label: string;
-  metric: (days: StatDays) => { value: string; trend: number };
+  metric: (days: number) => { value: string; trend: number };
   onClick?: () => void;
-  defaultDays?: StatDays;
 }) {
-  const [days, setDays] = useState<StatDays>(defaultDays);
+  const { timeRange } = useFilters();
+  // จำนวนวันของตัวกรองหลัก (คำนวณจากช่วงวันที่)
+  const globalDays = Math.max(1, Math.round((timeRange.end.getTime() - timeRange.start.getTime()) / 86_400_000) + 1);
+  // override เฉพาะการ์ด (null = ตามตัวกรองหลัก)
+  const [override, setOverride] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // ตัวกรองหลักเปลี่ยน → ล้าง override → การ์ดกลับไปตามตัวกรองหลัก
+  useEffect(() => { setOverride(null); }, [timeRange.start, timeRange.end]);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
@@ -28,6 +35,7 @@ export function StatCard({ icon, label, metric, onClick, defaultDays = 30 }: {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  const days = override ?? globalDays;
   const { value, trend } = metric(days);
   const up = trend >= 0;
 
@@ -40,12 +48,16 @@ export function StatCard({ icon, label, metric, onClick, defaultDays = 30 }: {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: "#f0f4f8", color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
-          <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+          <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         </div>
         <div ref={ref} style={{ position: "relative", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button type="button" onClick={() => setOpen(o => !o)}
-            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer",
-              fontFamily: "inherit", fontSize: "0.76rem", fontWeight: 600, color: "#6b7280", padding: "2px 4px" }}>
+            style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontFamily: "inherit",
+              fontSize: "0.72rem", fontWeight: 700, color: open ? PRIMARY : "#475569",
+              background: open ? "#eef3f8" : "#fff", border: `1px solid ${open ? "#b9cbe2" : "#e5e7eb"}`,
+              borderRadius: 8, padding: "5px 10px", transition: "background .12s, border-color .12s, color .12s" }}
+            onMouseEnter={e => { if (!open) { const t = e.currentTarget as HTMLElement; t.style.background = "#f5f8fc"; t.style.borderColor = "#cdd8e6"; } }}
+            onMouseLeave={e => { if (!open) { const t = e.currentTarget as HTMLElement; t.style.background = "#fff"; t.style.borderColor = "#e5e7eb"; } }}>
             {days} วัน <ChevronDown size={13} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
           </button>
           {open && (
@@ -54,7 +66,7 @@ export function StatCard({ icon, label, metric, onClick, defaultDays = 30 }: {
               {DAY_OPTIONS.map(d => {
                 const sel = d === days;
                 return (
-                  <button key={d} type="button" onClick={() => { setDays(d); setOpen(false); }}
+                  <button key={d} type="button" onClick={() => { setOverride(d); setOpen(false); }}
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 13px",
                       border: "none", background: sel ? "#f0f6ff" : "#fff", cursor: "pointer", fontFamily: "inherit",
                       fontSize: "0.8rem", fontWeight: sel ? 700 : 400, color: sel ? PRIMARY : "#2D2D2D" }}>
@@ -68,7 +80,7 @@ export function StatCard({ icon, label, metric, onClick, defaultDays = 30 }: {
       </div>
       {/* value + trend pill */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: "1.55rem", fontWeight: 800, color: "#2D2D2D", lineHeight: 1 }}>{value}</span>
+        <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#2D2D2D", lineHeight: 1 }}>{value}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 3, borderRadius: 99, padding: "3px 9px",
           background: "#f0f4f8", fontSize: "0.72rem", fontWeight: 800, color: up ? "#059669" : "#dc2626" }}>
           {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}{up ? "+" : ""}{trend}%

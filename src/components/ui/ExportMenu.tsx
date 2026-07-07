@@ -103,7 +103,7 @@ export function ExportMenu({ filename, title, headers, rows, small }: ExportMenu
               <span style={{ width: 30, height: 30, borderRadius: 8, background: "#dce5f0", color: "#003366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><o.Icon size={15} /></span>
               <span>
                 <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{o.label}</span>
-                <span style={{ display: "block", fontSize: "0.66rem", color: "#6b7280" }}>{o.desc}</span>
+                <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280" }}>{o.desc}</span>
               </span>
             </button>
           ))}

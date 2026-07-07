@@ -123,7 +123,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
         {brandWordmark ? (
           /* โลโก้พร้อมชื่อ (แนวนอน) → ใช้เป็นแบรนด์เต็มแถว แทนไอคอน+ตัวอักษร */
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={brandWordmark} alt="" style={{ maxWidth: "100%", maxHeight: 40, objectFit: "contain" }} />
+          <img src={brandWordmark} alt="" style={{ maxWidth: "100%", maxHeight: 44, objectFit: "contain" }} />
         ) : (
         <>
         {/* โลโก้อัปโหลด (มักเป็นสีเข้ม) → พื้นกรอบเป็นขาวกันกลืนพื้นกรม */}
@@ -157,7 +157,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
             border: "1px solid var(--border)", cursor: "pointer", textAlign: "left",
           }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: isHQ ? "#059669" : "#ECC94B" }} />
-          <span style={{ fontSize: "0.68rem", color: "#475569", fontWeight: 700, flex: 1 }}>
+          <span style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700, flex: 1 }}>
             {isHQ ? "HQ · สำนักงานใหญ่" : "Dealer · ตัวแทน"}
           </span>
           <ChevronDown size={14} style={{ color: "var(--muted-foreground)", flexShrink: 0, transform: roleOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
@@ -181,7 +181,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
                       background: active ? "rgba(0,51,102,0.08)" : "transparent",
                     }}>
                     <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: opt.dot }} />
-                    <span style={{ fontSize: "0.74rem", flex: 1, color: active ? "#003366" : "#475569", fontWeight: active ? 700 : 500 }}>
+                    <span style={{ fontSize: "0.72rem", flex: 1, color: active ? "#003366" : "#475569", fontWeight: active ? 700 : 500 }}>
                       {opt.label}
                     </span>
                     {active && <Check size={14} style={{ color: "#003366", flexShrink: 0 }} />}

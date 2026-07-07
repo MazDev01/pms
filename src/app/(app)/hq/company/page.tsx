@@ -116,7 +116,7 @@ export default function HQCompanyPage() {
             {/* สัญลักษณ์ */}
             <div>
               <label className="form-label">โลโก้สัญลักษณ์ (ไอคอน)</label>
-              <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", marginBottom: 8 }}>ใช้ในแถบเมนูและพื้นที่สี่เหลี่ยม</div>
+              <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginBottom: 8 }}>ใช้ในแถบเมนูและพื้นที่สี่เหลี่ยม</div>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{
                   width: 80, height: 80, borderRadius: 12, flexShrink: 0,
@@ -127,7 +127,7 @@ export default function HQCompanyPage() {
                   {logo
                     // eslint-disable-next-line @next/next/no-img-element
                     ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                    : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
+                    : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.15rem" }}>{initials}</span>}
                 </div>
                 <div>
                   <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
@@ -139,7 +139,7 @@ export default function HQCompanyPage() {
                       ลบ
                     </button>
                   )}
-                  <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG, JPG · แนะนำ 400×400 px</div>
+                  <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG, JPG · แนะนำ 400×400 px</div>
                   <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
                 </div>
               </div>
@@ -148,7 +148,7 @@ export default function HQCompanyPage() {
             {/* พร้อมชื่อ */}
             <div>
               <label className="form-label">โลโก้พร้อมชื่อบริษัท (แนวนอน)</label>
-              <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", marginBottom: 8 }}>ใช้บนเอกสารและสื่อการขาย</div>
+              <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginBottom: 8 }}>ใช้บนเอกสารและสื่อการขาย</div>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{
                   width: 168, height: 80, borderRadius: 12, flexShrink: 0, padding: 8,
@@ -170,7 +170,7 @@ export default function HQCompanyPage() {
                       ลบ
                     </button>
                   )}
-                  <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG พื้นโปร่งใส · แนะนำ 480×160 px</div>
+                  <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginTop: 5 }}>PNG พื้นโปร่งใส · แนะนำ 480×160 px</div>
                   <input ref={wordmarkRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadWordmark} />
                 </div>
               </div>
@@ -251,7 +251,7 @@ export default function HQCompanyPage() {
                   onClick={() => { if (!logo) return; const a = document.createElement("a"); a.href = logo; a.download = "brand-logo"; document.body.appendChild(a); a.click(); document.body.removeChild(a); }}>
                   <Download size={13} /> ดาวน์โหลดโลโก้
                 </button>
-                <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 6, lineHeight: 1.5 }}>
+                <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginTop: 6, lineHeight: 1.5 }}>
                   ไฟล์โลโก้มาตรฐานสำหรับใช้บนเอกสารและสื่อการขาย<br />รองรับ PNG (พื้นโปร่งใส) และ SVG
                 </div>
               </div>
@@ -274,12 +274,12 @@ export default function HQCompanyPage() {
                     borderBottom: c.code.toUpperCase() === "#FFFFFF" ? "1px solid var(--border)" : "none",
                   }} />
                   <div style={{ padding: "10px 12px" }}>
-                    <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--foreground)" }}>{c.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--foreground)" }}>{c.name}</div>
                     <div style={{
                       fontSize: "0.72rem", color: "var(--muted-foreground)",
                       fontFamily: "monospace", marginTop: 2, letterSpacing: "0.02em",
                     }}>{c.code}</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 4 }}>{c.note}</div>
+                    <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginTop: 4 }}>{c.note}</div>
                   </div>
                 </div>
               ))}
@@ -296,7 +296,7 @@ export default function HQCompanyPage() {
               display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
             }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--foreground)" }}>Noto Sans Thai</div>
+                <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--foreground)" }}>Noto Sans Thai</div>
                 <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: 2 }}>ฟอนต์หลักสำหรับเอกสารและสื่อทั้งหมด</div>
               </div>
               <div style={{ fontSize: "1.5rem", color: "var(--primary)", fontWeight: 800 }}>

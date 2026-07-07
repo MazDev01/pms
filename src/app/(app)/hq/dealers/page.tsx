@@ -56,7 +56,7 @@ function RevBar({ actual, target }: { actual: number; target: number }) {
       <div style={{ height: 6, background: "#f0f0f5", borderRadius: 99, overflow: "hidden" }}>
         <div className="top5-bar" style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 99 }} />
       </div>
-      <div style={{ fontSize: "0.66rem", color: "#6b7280", marginTop: 2 }}>
+      <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
         เป้า ฿{(target / 1_000_000).toFixed(0)}M
       </div>
     </div>
@@ -64,7 +64,7 @@ function RevBar({ actual, target }: { actual: number; target: number }) {
 }
 
 function OnTimeBadge({ pct }: { pct: number }) {
-  if (pct === 0) return <span style={{ color: "#C0C0C0", fontSize: "0.78rem" }}>—</span>;
+  if (pct === 0) return <span style={{ color: "#C0C0C0", fontSize: "0.8rem" }}>—</span>;
   const color = pct >= 85 ? "#059669" : pct >= 70 ? "#f59e0b" : "#dc2626";
   return (
     <span className="badge" style={{ background: color + "22", color }}>
@@ -80,7 +80,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
   }
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: "0.7rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 11px" }}>
         <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D", letterSpacing: "0.03em" }}>{value}</span>
         <button type="button" onClick={doCopy} style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "#059669" : "#6b7280", padding: 0, display: "flex" }}>
@@ -100,7 +100,7 @@ function InputField({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-const INPUT_STYLE: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: "0.82rem", color: "#2D2D2D", outline: "none", background: "#fafafa", boxSizing: "border-box" };
+const INPUT_STYLE: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: "0.8rem", color: "#2D2D2D", outline: "none", background: "#fafafa", boxSizing: "border-box" };
 
 function genCredentials(code: string): DealerCredentials {
   const digits = String(1000 + ((code.charCodeAt(0) * 37 + code.charCodeAt(1) * 17) % 9000));
@@ -111,7 +111,7 @@ function genCredentials(code: string): DealerCredentials {
 
 export default function HQDealersPage() {
   const { login } = useRole();
-  const { timeRange, passes } = useFilters();
+  const { passes } = useFilters();
   const router = useRouter();
 
   const [dealers, setDealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
@@ -185,7 +185,7 @@ export default function HQDealersPage() {
     router.push("/dashboard");
   }
 
-  const selectStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 10, padding: "8px 12px", fontSize: "0.78rem", color: "#6b7280", background: "#fff", cursor: "pointer", outline: "none" };
+  const selectStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 10, padding: "8px 12px", fontSize: "0.8rem", color: "#6b7280", background: "#fff", cursor: "pointer", outline: "none" };
 
   return (
     <div className="erp">
@@ -193,7 +193,7 @@ export default function HQDealersPage() {
       <div className="page-head">
         <div>
           <h2>ตัวแทน</h2>
-          <p>จัดการและติดตามผลการดำเนินงานของทุกตัวแทน · {timeRange.subtitle}</p>
+          <p>จัดการและติดตามผลการดำเนินงานของทุกตัวแทน</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {/* เลือกดูทั้งเครือ หรือเจาะรายตัวแทน — ตัวเลือกเฉพาะหน้านี้ */}
@@ -204,6 +204,7 @@ export default function HQDealersPage() {
             ))}
           </select>
           <FilterBar
+            time={false}
             dims={["status"]}
             statusOptions={[{ value: "active", label: "ใช้งาน" }, { value: "inactive", label: "ไม่ใช้งาน" }]}
           />
@@ -267,7 +268,7 @@ export default function HQDealersPage() {
                   <button key={p.value} type="button" onClick={() => setStatusFilter(p.value)}
                     style={{
                       border: "none", cursor: "pointer", borderRadius: 8, padding: "5px 11px",
-                      fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap",
+                      fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap",
                       background: on ? accent : "transparent",
                       color: on ? "#fff" : "#6b7280",
                     }}>
@@ -302,13 +303,13 @@ export default function HQDealersPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: "32px", textAlign: "center", fontSize: "0.82rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={9} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
               ) : filtered.map((d, i) => (
                 <tr key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
                   onClick={() => setSelectedDealer(d)}>
                   <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{i + 1}</td>
                   <td>
-                    <span style={{ fontWeight: 800, color: "#003366", fontSize: "0.82rem", letterSpacing: "0.05em" }}>{d.code}</span>
+                    <span style={{ fontWeight: 800, color: "#003366", fontSize: "0.8rem", letterSpacing: "0.05em" }}>{d.code}</span>
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <span style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{d.name}</span>
@@ -319,8 +320,8 @@ export default function HQDealersPage() {
                   <td><RevBar actual={d.revenueActual} target={d.revenueTarget} /></td>
                   <td>
                     {d.activeProjects > 0
-                      ? <span style={{ fontWeight: 700, color: "#2D2D2D", fontSize: "0.84rem" }}>{d.activeProjects}<span style={{ fontSize: "0.7rem", color: "#6b7280", fontWeight: 500 }}> โอกาสการขาย</span></span>
-                      : <span style={{ color: "#C0C0C0", fontSize: "0.78rem" }}>—</span>}
+                      ? <span style={{ fontWeight: 700, color: "#2D2D2D", fontSize: "0.86rem" }}>{d.activeProjects}<span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 500 }}> โอกาสการขาย</span></span>
+                      : <span style={{ color: "#C0C0C0", fontSize: "0.8rem" }}>—</span>}
                   </td>
                   <td><OnTimeBadge pct={d.onTimePct} /></td>
                   <td>
@@ -361,7 +362,7 @@ export default function HQDealersPage() {
         </div>
 
         <div style={{ padding: "11px 16px", borderTop: "1px solid #e5e7eb" }}>
-          <span style={{ fontSize: "0.73rem", color: "#6b7280" }}>แสดง {filtered.length} จาก {dealers.length} ตัวแทน</span>
+          <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>แสดง {filtered.length} จาก {dealers.length} ตัวแทน</span>
         </div>
       </div>
 
@@ -374,10 +375,10 @@ export default function HQDealersPage() {
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
             </div>
             <div style={{ padding: "18px 20px" }}>
-              {formErr && <div style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.78rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
+              {formErr && <div style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.8rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
 
               {!editTarget && (
-                <div style={{ background: "#dce5f0", border: "1px solid #C0C0C0", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.75rem", color: "#003366", fontWeight: 600 }}>
+                <div style={{ background: "#dce5f0", border: "1px solid #C0C0C0", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.72rem", color: "#003366", fontWeight: 600 }}>
                   ระบบจะสร้างรหัสเข้าสู่ระบบอัตโนมัติหลังบันทึก
                 </div>
               )}
@@ -386,7 +387,7 @@ export default function HQDealersPage() {
                 <InputField label="รหัสตัวแทน *">
                   <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase().slice(0, 6) }))} placeholder="เช่น BKK" disabled={!!editTarget}
                     style={{ ...INPUT_STYLE, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em", opacity: editTarget ? 0.6 : 1 }} />
-                  {editTarget && <div style={{ fontSize: "0.66rem", color: "#6b7280", marginTop: 3 }}>แก้ไขรหัสไม่ได้</div>}
+                  {editTarget && <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>แก้ไขรหัสไม่ได้</div>}
                 </InputField>
                 <InputField label="ชื่อตัวแทน *">
                   <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="บจ. ตัวอย่างสตีล..." style={INPUT_STYLE} />
@@ -435,11 +436,11 @@ export default function HQDealersPage() {
             </div>
             <div style={{ padding: "0 20px 20px" }}>
               <div style={{ background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>รหัสเข้าสู่ระบบตัวแทน</div>
+                <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>รหัสเข้าสู่ระบบตัวแทน</div>
                 <CopyField label="อีเมล" value={credsModal.creds.email} />
                 <CopyField label="รหัสผ่านเริ่มต้น" value={credsModal.creds.password} />
               </div>
-              <div style={{ background: "#fef3cd", border: "1px solid #f59e0b30", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: "0.73rem", color: "#f59e0b", fontWeight: 600 }}>
+              <div style={{ background: "#fef3cd", border: "1px solid #f59e0b30", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: "0.72rem", color: "#f59e0b", fontWeight: 600 }}>
                 แจ้งรหัสผ่านให้ตัวแทนและแนะนำให้เปลี่ยนรหัสหลังเข้าครั้งแรก
               </div>
               <button onClick={() => setCredsModal(null)} className="btn btn-primary btn-md" style={{ width: "100%", justifyContent: "center" }}>
@@ -470,14 +471,14 @@ export default function HQDealersPage() {
               <div style={{ padding: "20px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fb" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontWeight: 900, fontSize: "0.82rem", color: "#003366", background: "#dce5f0", padding: "3px 10px", borderRadius: 8, letterSpacing: "0.06em" }}>{d.code}</span>
+                    <span style={{ fontWeight: 900, fontSize: "0.8rem", color: "#003366", background: "#dce5f0", padding: "3px 10px", borderRadius: 8, letterSpacing: "0.06em" }}>{d.code}</span>
                     <StatusBadge status={dealerStatus(d)} />
                     <span className="badge" style={{ background: tier.bg, color: tier.color }}>{tier.label}</span>
                   </div>
                   <button onClick={() => setSelectedDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
                 </div>
-                <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#2D2D2D", marginBottom: 2 }}>{d.name}</div>
-                <div style={{ fontSize: "0.73rem", color: "#6b7280" }}>ภาค{d.region}</div>
+                <div style={{ fontSize: "1rem", fontWeight: 800, color: "#2D2D2D", marginBottom: 2 }}>{d.name}</div>
+                <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>ภาค{d.region}</div>
               </div>
 
               {/* Scrollable content */}
@@ -485,10 +486,10 @@ export default function HQDealersPage() {
 
                 {/* Revenue card */}
                 <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: "0.67rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ยอดขายเทียบเป้าหมาย</div>
+                  <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ยอดขายเทียบเป้าหมาย</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                     <span style={{ fontSize: "1.5rem", fontWeight: 800, color: revColor }}>฿{(d.revenueActual / 1_000_000).toFixed(1)}M</span>
-                    <span style={{ fontSize: "0.76rem", color: "#6b7280" }}>เป้า ฿{(d.revenueTarget / 1_000_000).toFixed(0)}M</span>
+                    <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>เป้า ฿{(d.revenueTarget / 1_000_000).toFixed(0)}M</span>
                   </div>
                   <div style={{ height: 8, background: "#e5e7eb", borderRadius: 99, overflow: "hidden", marginBottom: 5 }}>
                     <div className="top5-bar" style={{ height: "100%", width: `${Math.min(revPct, 100)}%`, background: revColor, borderRadius: 99 }} />
@@ -499,54 +500,54 @@ export default function HQDealersPage() {
                 {/* 3 metrics */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
                   <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.2rem", fontWeight: 800, color: d.winRate >= 40 ? "#059669" : d.winRate >= 25 ? "#f59e0b" : "#dc2626" }}>{d.winRate}%</div>
-                    <div style={{ fontSize: "0.64rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>อัตราปิดการขาย</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: d.winRate >= 40 ? "#059669" : d.winRate >= 25 ? "#f59e0b" : "#dc2626" }}>{d.winRate}%</div>
+                    <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>อัตราปิดการขาย</div>
                   </div>
                   <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.2rem", fontWeight: 800, color: d.onTimePct >= 85 ? "#059669" : d.onTimePct >= 70 ? "#f59e0b" : d.onTimePct === 0 ? "#C0C0C0" : "#dc2626" }}>{d.onTimePct === 0 ? "—" : `${d.onTimePct}%`}</div>
-                    <div style={{ fontSize: "0.64rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>ติดตามตรงเวลา</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: d.onTimePct >= 85 ? "#059669" : d.onTimePct >= 70 ? "#f59e0b" : d.onTimePct === 0 ? "#C0C0C0" : "#dc2626" }}>{d.onTimePct === 0 ? "—" : `${d.onTimePct}%`}</div>
+                    <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>ติดตามตรงเวลา</div>
                   </div>
                   <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#003366" }}>{d.activeProjects}</div>
-                    <div style={{ fontSize: "0.64rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>โอกาสการขาย</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366" }}>{d.activeProjects}</div>
+                    <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>โอกาสการขาย</div>
                   </div>
                 </div>
 
                 {/* Performance analysis */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: "0.67rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>วิเคราะห์ผลงาน</div>
+                  <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>วิเคราะห์ผลงาน</div>
                   {revPct < 50 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.78rem", color: "#dc2626" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#dc2626" }}>
                       <AlertTriangle size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ยอดขายต่ำกว่าเป้ามาก ควรติดตามโอกาสการขายและช่วยปิดการขายที่ค้าง</span>
                     </div>
                   )}
                   {revPct >= 50 && revPct < 75 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.78rem", color: "#f59e0b" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#f59e0b" }}>
                       <BarChart2 size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ยอดขายอยู่ระดับกลาง — ยังมีช่องว่างถึงเป้าหมาย ควรเร่งผู้สนใจที่รอ</span>
                     </div>
                   )}
                   {revPct >= 75 && revPct < 100 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.78rem", color: "#003366" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#003366" }}>
                       <TrendingUp size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ยอดขายใกล้เป้าแล้ว — คาดว่าปิดได้ครบก่อนสิ้นไตรมาส</span>
                     </div>
                   )}
                   {revPct >= 100 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.78rem", color: "#059669" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#059669" }}>
                       <Trophy size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ถึงเป้าหมายแล้ว! ยอดขายเกินเป้า {revPct - 100}%</span>
                     </div>
                   )}
                   {d.onTimePct > 0 && d.onTimePct < 70 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.78rem", color: "#dc2626" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#dc2626" }}>
                       <Clock size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>อัตราติดตามตรงเวลาต่ำ ควรตรวจสอบโอกาสการขายที่ค้างคา</span>
                     </div>
                   )}
                   {d.winRate < 25 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.78rem", color: "#f59e0b" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#f59e0b" }}>
                       <Target size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>อัตราปิดการขายต่ำกว่าค่าเฉลี่ยเครือ — ควรพิจารณาฝึกสอนทีมขาย</span>
                     </div>
                   )}
                   {revPct >= 88 && d.onTimePct >= 85 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.78rem", color: "#059669" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", color: "#059669" }}>
                       <Award size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ตัวแทนผลงานดีเด่น — สามารถใช้เป็นต้นแบบให้ตัวแทนอื่นได้</span>
                     </div>
                   )}
@@ -554,7 +555,7 @@ export default function HQDealersPage() {
 
                 {/* Credentials */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px" }}>
-                  <div style={{ fontSize: "0.67rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
+                  <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
                   <CopyField label="อีเมล" value={d.credentials.email} />
                   <CopyField label="รหัสผ่าน" value={d.credentials.password} />
                 </div>
@@ -586,7 +587,7 @@ export default function HQDealersPage() {
           <div onClick={e => e.stopPropagation()} style={{ ...CARD, width: 380, maxWidth: "100%" }}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: "0.96rem", fontWeight: 800, color: "#2D2D2D" }}>รหัสเข้าระบบ</h3>
+                <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: "#2D2D2D" }}>รหัสเข้าระบบ</h3>
                 <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{viewCredsDealer.name}</div>
               </div>
               <button onClick={() => setViewCredsDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={16} /></button>

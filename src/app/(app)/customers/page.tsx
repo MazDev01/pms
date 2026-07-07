@@ -4,15 +4,13 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   notes,
-  quotationStatusLabel, quotationStatusColor, noteCategoryColor, apptTypeLabel,
-  type QuotationMock, type PipelineDealMock, type ApptType,
+  quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai,
+  type QuotationMock, type PipelineDealMock,
   type CustomerRow, type CustomerStatus, type CustomerType,
 } from "@/lib/mock";
 import { useSales } from "@/context/SalesContext";
-import { useFilters } from "@/context/FilterContext";
-import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { useTableLayout, type Col } from "@/components/ui/TableTools";
+import { useTableLayout, TableTools, type Col } from "@/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 import { PersonPicker, AssigneeAvatars } from "@/components/ui/PersonPicker";
 import { fileToResizedDataURL } from "@/lib/imageResize";
@@ -28,8 +26,6 @@ const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
 const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
-const apptLbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:5 };
-const apptInp: React.CSSProperties = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"8px 11px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" };
 
 // ── Types ────────────────────────────────────────────────────
 // CustomerRow / CustomerStatus / CustomerType imported from mock (shared app-wide)
@@ -62,6 +58,7 @@ const COLS: Col[] = [
   { key: "owner",          label: "ผู้รับผิดชอบ" },
   { key: "lastActivity",   label: "กิจกรรมล่าสุด" },
   { key: "quotationCount", label: "จำนวนใบเสนอราคา" },
+  { key: "totalSales",     label: "ยอดขายรวม" },
   { key: "currentDeal",    label: "โอกาสการขายปัจจุบัน" },
 ];
 
@@ -175,7 +172,7 @@ function CustomerModal({ initial, title, onSave, onClose }:{
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 24px",borderBottom:`1px solid ${BORDER}`,background:PRIMARY}}>
             <div>
               <div style={{fontSize:"1rem",fontWeight:800,color:"#fff"}}>{title}</div>
-              <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,.65)"}}>กรอกข้อมูลลูกค้า</div>
+              <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.65)"}}>กรอกข้อมูลลูกค้า</div>
             </div>
             <button onClick={onClose} style={{width:32,height:32,borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={15}/></button>
           </div>
@@ -186,7 +183,7 @@ function CustomerModal({ initial, title, onSave, onClose }:{
                 <div style={{display:"flex",background:"#f0f4f8",borderRadius:10,padding:3,border:`1px solid ${BORDER}`}}>
                   {CUSTOMER_TYPES.map(t=>(
                     <button key={t} type="button" onClick={()=>set("type",t)}
-                      style={{flex:1,padding:"7px 12px",borderRadius:8,border:"none",background:form.type===t?PRIMARY:"transparent",color:form.type===t?"#fff":MUTED,fontSize:"0.74rem",fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+                      style={{flex:1,padding:"7px 12px",borderRadius:8,border:"none",background:form.type===t?PRIMARY:"transparent",color:form.type===t?"#fff":MUTED,fontSize:"0.72rem",fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
                       {t}
                     </button>
                   ))}
@@ -269,12 +266,12 @@ function CustomerOverviewEditor({ customer, onSave }:{
   }
   const dirty = (Object.keys(f) as (keyof CustomerForm)[]).some(k => (f[k] ?? "") !== ((customer as unknown as CustomerForm)[k] ?? ""));
 
-  const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
-  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.82rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
+  const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
+  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.8rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
 
   return (
     <div style={{ padding:"14px 16px" }}>
-      <div style={{ fontSize:"0.63rem", fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:PRIMARY, marginBottom:12 }}>
+      <div style={{ fontSize:"0.65rem", fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:PRIMARY, marginBottom:12 }}>
         ข้อมูลลูกค้า · แก้ไขได้ในหน้านี้
       </div>
       {/* เปลี่ยนรูป/โลโก้ลูกค้า (เหมือนหน้าลูกค้าเป้าหมาย) */}
@@ -307,7 +304,7 @@ function CustomerOverviewEditor({ customer, onSave }:{
           <div style={{ display:"flex", background:"#f0f4f8", borderRadius:10, padding:3, border:`1px solid ${BORDER}` }}>
             {CUSTOMER_TYPES.map(t=>(
               <button key={t} type="button" onClick={()=>set("type",t)}
-                style={{ flex:1, padding:"7px 12px", borderRadius:8, border:"none", background:f.type===t?PRIMARY:"transparent", color:f.type===t?"#fff":MUTED, fontSize:"0.74rem", fontWeight:700, cursor:"pointer" }}>{t}</button>
+                style={{ flex:1, padding:"7px 12px", borderRadius:8, border:"none", background:f.type===t?PRIMARY:"transparent", color:f.type===t?"#fff":MUTED, fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>{t}</button>
             ))}
           </div>
         </div>
@@ -347,11 +344,10 @@ export default function CustomersPage(){
   const router = useRouter();
   const {
     customers: data, quotations, deals, leads,
-    appointments, addAppointment,
+    appointments,
     addCustomer: ctxAddCustomer, updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
-  const { timeRange, inRange } = useFilters();
   const [query, setQuery]             = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL"|CustomerStatus>("ALL");
   const [catFilter, setCatFilter]     = useState("ALL");
@@ -386,22 +382,6 @@ export default function CustomersPage(){
   const [showAdd, setShowAdd]         = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailTab, setDetailTab]     = useState<"info"|"quotes"|"appts"|"notes">("info");
-  // ฟอร์มเพิ่มนัดหมายในแท็บนัดหมายของลูกค้า
-  const [apptAdding, setApptAdding]   = useState(false);
-  const [apptForm, setApptForm]       = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
-  function resetApptForm() { setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" }); setApptAdding(false); }
-  function saveAppt() {
-    if (!selected) return;
-    addAppointment({
-      id: Math.max(0, ...appointments.map(a => a.id)) + 1,
-      company: selected.company, contact: selected.name, phone: selected.phone,
-      project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
-      buildingType: selected.category || "", area: 0, province: selected.province,
-      date: apptForm.date, time: apptForm.time, type: apptForm.type,
-      assigned: selected.owner, status: "upcoming", note: apptForm.note.trim(),
-    });
-    resetApptForm();
-  }
 
 
   // Table layout (density + hidden columns) จาก TableTools
@@ -416,9 +396,8 @@ export default function CustomersPage(){
       const matchS=statusFilter==="ALL"||c.status===statusFilter;
       const matchC=catFilter==="ALL"||c.category===catFilter;
       const matchL=lifecycleFilter==="ALL"||lifecycleTypeFor(c.id,c.joinDate,quotations)===lifecycleFilter;
-      // ช่วงเวลา (วันเดือนปี) จากตัวกรองกลาง — เทียบวันที่เข้าเป็นลูกค้า (joinDate เป็น ISO)
-      const matchT=inRange(lastActivityFor(c.id,c.joinDate,quotations));
-      return matchQ&&matchS&&matchC&&matchL&&matchT;
+      // ลูกค้าแสดงทั้งหมด — ไม่กรองด้วยช่วงเวลา (ลูกค้าเป็นข้อมูลถาวร ใช้ค้นหา/ตัวกรองในเครื่องแทน)
+      return matchQ&&matchS&&matchC&&matchL;
     });
     const sortVal=(c:CustomerRow):string|number=>{
       switch(sortKey){
@@ -440,7 +419,7 @@ export default function CustomersPage(){
       return 0;
     });
     return rows;
-  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir,inRange]);
+  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir]);
 
   // ── Pagination (client-side) ──────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -506,15 +485,15 @@ export default function CustomersPage(){
       display:"inline-flex",alignItems:"center",justifyContent:"center",
       padding:"5px 12px",borderRadius:8,border:`1px solid ${BORDER}`,
       background:disabled?"#f1f5f9":"#fff",color:disabled?"#9ca3af":PRIMARY,
-      fontSize:"0.7rem",fontWeight:700,cursor:disabled?"not-allowed":"pointer",
+      fontSize:"0.72rem",fontWeight:700,cursor:disabled?"not-allowed":"pointer",
       opacity:disabled?0.7:1,transition:"all .15s",
     });
     return (
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <span style={{fontSize:"0.7rem",color:MUTED}}>แสดง {rangeFrom}–{rangeTo} จาก {filtered.length} รายการ</span>
+        <span style={{fontSize:"0.72rem",color:MUTED}}>แสดง {rangeFrom}–{rangeTo} จาก {filtered.length} รายการ</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <button type="button" onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page<=1} style={btnStyle(page<=1)}>ก่อนหน้า</button>
-          <span style={{fontSize:"0.7rem",fontWeight:700,color:STEEL,padding:"0 4px"}}>หน้า {page} / {totalPages}</span>
+          <span style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,padding:"0 4px"}}>หน้า {page} / {totalPages}</span>
           <button type="button" onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page>=totalPages} style={btnStyle(page>=totalPages)}>ถัดไป</button>
         </div>
       </div>
@@ -531,15 +510,16 @@ export default function CustomersPage(){
         <div className="page-head">
           <div>
             <h2>ลูกค้า</h2>
-            <p>จัดการข้อมูลลูกค้าและความสัมพันธ์ทางธุรกิจ · {timeRange.subtitle}</p>
+            <p>จัดการข้อมูลลูกค้าและความสัมพันธ์ทางธุรกิจ</p>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <FilterBar dims={[]} />
+            <TableTools storageKey="customers" columns={COLS} hiddenCols={hiddenCols} onToggleCol={toggleCol}
+              density={density} onDensityChange={setDensity} />
             <ExportMenu filename="customers" title="รายชื่อลูกค้า"
-              headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","โอกาสการขายปัจจุบัน","มูลค่าโอกาสการขาย"]}
+              headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","โอกาสการขายปัจจุบัน","มูลค่าโอกาสการขาย"]}
               rows={filtered.map(c=>{
                 const deal=currentDealFor(c.id,deals);
-                return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),deal?deal.project:"—",deal?fmtMoney(deal.value):"—"];
+                return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),deal?deal.project:"—",deal?fmtMoney(deal.value):"—"];
               })} />
             <button className="btn btn-primary btn-md" onClick={()=>setShowAdd(true)}>
               <Plus size={13}/> เพิ่มลูกค้า
@@ -550,7 +530,7 @@ export default function CustomersPage(){
         {/* สรุปรวม (pill) + สรุปตามสถานะ (คลิกกรอง) */}
         {(() => {
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
-          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
+          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
           const isAct = (c:CustomerRow) => c.status==="active"||hasOpenActivity(c.id,deals,quotations);
           const lc = (c:CustomerRow) => lifecycleTypeFor(c.id,c.joinDate,quotations);
           const sval = (arr:CustomerRow[]) => arr.reduce((s,c)=>s+c.totalValue,0);
@@ -573,10 +553,10 @@ export default function CustomersPage(){
                       border:`1px solid ${card.act?card.fg+"40":BORDER}`, borderRadius:10, padding:"8px 12px",
                       fontSize:"0.72rem", fontWeight:600, color:card.act?card.fg:MUTED, cursor:"pointer", fontFamily:"inherit" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                      <span style={{ width:18, height:18, borderRadius:"50%", background:card.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.6rem", color:card.fg, fontWeight:800 }}>{card.list.length}</span>
+                      <span style={{ width:18, height:18, borderRadius:"50%", background:card.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.65rem", color:card.fg, fontWeight:800 }}>{card.list.length}</span>
                       {card.label}
                     </div>
-                    <span style={{ fontSize:"0.62rem", color:card.act?card.fg:"#C0C0C0", fontWeight:500 }}>{sval(card.list)>0?fmtC(sval(card.list)):"—"}</span>
+                    <span style={{ fontSize:"0.65rem", color:card.act?card.fg:"#C0C0C0", fontWeight:500 }}>{sval(card.list)>0?fmtC(sval(card.list)):"—"}</span>
                   </button>
                 ))}
               </div>
@@ -599,14 +579,14 @@ export default function CustomersPage(){
             <button onClick={()=>setShowFilter(f=>!f)}
               style={{display:"flex",alignItems:"center",gap:6,background:showFilter?"#003366":"#fff",
                 border:`1px solid ${showFilter?"#003366":"#e5e7eb"}`,borderRadius:10,padding:"0 13px",height:36,boxSizing:"border-box",
-                fontSize:"0.77rem",fontWeight:600,color:showFilter?"#fff":"#6b7280",cursor:"pointer"}}>
+                fontSize:"0.8rem",fontWeight:600,color:showFilter?"#fff":"#6b7280",cursor:"pointer"}}>
               <Filter size={13}/> ตัวกรอง
             </button>
             <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
               {([["card",LayoutGrid,"การ์ด"],["table",LayoutList,"ตาราง"]] as const).map(([v,Ico,tip])=>(
                 <button key={v} onClick={()=>setView(v)}
                   style={{display:"flex",alignItems:"center",gap:5,padding:"0 12px",height:"100%",border:"none",cursor:"pointer",
-                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.75rem",fontWeight:600}}>
+                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.72rem",fontWeight:600}}>
                   <Ico size={14}/> {tip}
                 </button>
               ))}
@@ -618,7 +598,7 @@ export default function CustomersPage(){
         {/* ── FILTER DRAWER (เลื่อนจากขวา) ── */}
         {showFilter && (() => {
           const anyFilter = statusFilter!=="ALL" || catFilter!=="ALL" || lifecycleFilter!=="ALL";
-          const sec = { fontSize:"0.68rem", fontWeight:800, color:STEEL, marginBottom:8, display:"block" } as const;
+          const sec = { fontSize:"0.65rem", fontWeight:800, color:STEEL, marginBottom:8, display:"block" } as const;
           const pills = { display:"flex", flexWrap:"wrap" as const, gap:6 };
           return (
             <>
@@ -642,7 +622,7 @@ export default function CustomersPage(){
                   <div><label style={sec}>อุตสาหกรรม</label><div style={pills}>
                     {["ALL",...CATEGORIES].map(cat=>(
                       <button key={cat} onClick={()=>setCatFilter(cat)}
-                        style={{padding:"6px 12px",borderRadius:99,border:`1px solid ${catFilter===cat?"#C0C0C0":BORDER}`,background:catFilter===cat?"#f0f4f8":"#fff",color:catFilter===cat?STEEL:MUTED,fontSize:"0.7rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                        style={{padding:"6px 12px",borderRadius:99,border:`1px solid ${catFilter===cat?"#C0C0C0":BORDER}`,background:catFilter===cat?"#f0f4f8":"#fff",color:catFilter===cat?STEEL:MUTED,fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
                         {cat==="ALL"?"ทั้งหมด":cat}
                       </button>
                     ))}
@@ -654,7 +634,7 @@ export default function CustomersPage(){
                           border:`1px solid ${lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:PRIMARY):BORDER}`,
                           background:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.bg:lc==="new"?LIFECYCLE_META.new.bg:"#f0f4f8"):"#fff",
                           color:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:STEEL):MUTED,
-                          fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>
+                          fontSize:"0.72rem",fontWeight:700,cursor:"pointer"}}>
                         {lc==="ALL"?"ทั้งหมด":lc==="new"?"ลูกค้าใหม่":"ลูกค้าเดิม"}
                       </button>
                     ))}
@@ -674,7 +654,7 @@ export default function CustomersPage(){
         {view==="card"&&(
           <div>
             {filtered.length===0?(
-              <div className="card" style={{padding:"48px 0",textAlign:"center",color:MUTED,fontSize:"0.82rem"}}>ไม่พบลูกค้าที่ตรงกับเงื่อนไข</div>
+              <div className="card" style={{padding:"48px 0",textAlign:"center",color:MUTED,fontSize:"0.8rem"}}>ไม่พบลูกค้าที่ตรงกับเงื่อนไข</div>
             ):(
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
                 {paged.map(c=>{
@@ -689,16 +669,16 @@ export default function CustomersPage(){
                       onMouseLeave={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.boxShadow="";}}>
                       {/* ดู → เปิดโมดัลรายละเอียด */}
                       <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setSelected(c);}}
-                        style={{position:"absolute",top:10,right:10,padding:"3px 8px",fontSize:"0.62rem",color:PRIMARY}}>
+                        style={{position:"absolute",top:10,right:10,padding:"3px 8px",fontSize:"0.65rem",color:PRIMARY}}>
                         ดู →
                       </button>
                       <div style={{padding:"20px 18px 14px",textAlign:"center"}}>
                         <div style={{width:52,height:52,borderRadius:"50%",overflow:"hidden",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",margin:"0 auto 10px",boxShadow:`0 4px 12px ${c.color}55`}}>
                           {c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}
                         </div>
-                        <div style={{fontSize:"0.88rem",fontWeight:800,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:36}}>{c.company}</div>
-                        <div style={{fontSize:"0.7rem",color:MUTED,marginTop:2,fontWeight:500}}>{c.name} · {c.category}</div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,marginTop:6,fontSize:"0.7rem",color:MUTED}}>
+                        <div style={{fontSize:"0.86rem",fontWeight:800,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:36}}>{c.company}</div>
+                        <div style={{fontSize:"0.72rem",color:MUTED,marginTop:2,fontWeight:500}}>{c.name} · {c.category}</div>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,marginTop:6,fontSize:"0.72rem",color:MUTED}}>
                           <Phone size={10} color="#C0C0C0"/> {c.phone}
                         </div>
                         {c.totalValue>0&&(
@@ -737,6 +717,7 @@ export default function CustomersPage(){
                   {!hiddenCols.includes("owner")          && <col style={{width:"11%"}} />}{/* ผู้รับผิดชอบ */}
                   {!hiddenCols.includes("lastActivity")   && <col style={{width:"11%"}} />}{/* กิจกรรมล่าสุด */}
                   {!hiddenCols.includes("quotationCount") && <col style={{width:"8%"}}  />}{/* จำนวนใบเสนอราคา */}
+                  {!hiddenCols.includes("totalSales")     && <col style={{width:"10%"}} />}{/* ยอดขายรวม */}
                   {!hiddenCols.includes("currentDeal")    && <col style={{width:"11%"}} />}{/* ดีลปัจจุบัน */}
                   <col style={{width:"7%"}}  />{/* ดู */}
                 </colgroup>
@@ -757,13 +738,14 @@ export default function CustomersPage(){
                           <span style={{display:"inline-flex",alignItems:"center"}}>{col.label}<SortIcon k={col.key}/></span>
                         </th>
                     ))}
+                    {!hiddenCols.includes("totalSales") && <th>ยอดขายรวม</th>}
                     {!hiddenCols.includes("currentDeal") && <th>โอกาสการขายปัจจุบัน</th>}
                     <th/>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length===0&&(
-                    <tr><td colSpan={9} style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.82rem"}}>ไม่พบลูกค้า</td></tr>
+                    <tr><td colSpan={10} style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบลูกค้า</td></tr>
                   )}
                   {paged.map(c=>{
                     const isSel=selected?.id===c.id;
@@ -776,15 +758,15 @@ export default function CustomersPage(){
                         {/* บริษัท */}
                         <td>
                           <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div style={{width:34,height:34,borderRadius:10,overflow:"hidden",background:c.color,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.7rem"}}>{c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}</div>
+                            <div style={{width:34,height:34,borderRadius:10,overflow:"hidden",background:c.color,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.72rem"}}>{c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}</div>
                             <div style={{minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <div style={{fontSize:"0.83rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.company}</div>
+                                <div style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.company}</div>
                                 {(()=>{ const m=LIFECYCLE_META[lifecycleTypeFor(c.id,c.joinDate,quotations)];
-                                  return <span style={{flexShrink:0,padding:"1px 7px",borderRadius:99,fontSize:"0.58rem",fontWeight:700,background:m.bg,color:m.fg}}>{lifecycleTypeFor(c.id,c.joinDate,quotations)==="existing"?"เดิม":"ใหม่"}</span>;
+                                  return <span style={{flexShrink:0,padding:"1px 7px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:m.bg,color:m.fg}}>{lifecycleTypeFor(c.id,c.joinDate,quotations)==="existing"?"เดิม":"ใหม่"}</span>;
                                 })()}
                               </div>
-                              <div style={{fontSize:"0.69rem",color:MUTED,marginTop:1}}>{c.category}</div>
+                              <div style={{fontSize:"0.72rem",color:MUTED,marginTop:1}}>{c.category}</div>
                             </div>
                           </div>
                         </td>
@@ -807,16 +789,20 @@ export default function CustomersPage(){
                         {/* จำนวนใบเสนอราคา */}
                         {!hiddenCols.includes("quotationCount") && (
                           <td>
-                            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:24,height:22,padding:"0 8px",borderRadius:99,fontSize:"0.7rem",fontWeight:800,background:qCount>0?"#dce5f0":"#f1f5f9",color:qCount>0?PRIMARY:"#9ca3af"}}>{qCount}</span>
+                            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:24,height:22,padding:"0 8px",borderRadius:99,fontSize:"0.72rem",fontWeight:800,background:qCount>0?"#dce5f0":"#f1f5f9",color:qCount>0?PRIMARY:"#9ca3af"}}>{qCount}</span>
                           </td>
+                        )}
+                        {/* ยอดขายรวม (lifetime) */}
+                        {!hiddenCols.includes("totalSales") && (
+                          <td style={{color:PRIMARY,fontWeight:700,whiteSpace:"nowrap",fontSize:"0.8rem"}}>{fmtMoney(totalSalesFor(c.id,quotations))}</td>
                         )}
                         {/* ดีลปัจจุบัน */}
                         {!hiddenCols.includes("currentDeal") && (
                           <td>
                             {deal?(
                               <div style={{minWidth:0}}>
-                                <div style={{fontSize:"0.74rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{deal.project}</div>
-                                <div style={{fontSize:"0.68rem",fontWeight:700,color:PRIMARY,marginTop:1}}>{fmtMoney(deal.value)}</div>
+                                <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{deal.project}</div>
+                                <div style={{fontSize:"0.65rem",fontWeight:700,color:PRIMARY,marginTop:1}}>{fmtMoney(deal.value)}</div>
                               </div>
                             ):(
                               <span style={{color:"#9ca3af"}}>—</span>
@@ -854,7 +840,7 @@ export default function CustomersPage(){
                     {selected.logo ? <img src={selected.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : selected.initials}
                   </div>
                   <div>
-                    <div style={{fontSize:"1.1rem",fontWeight:800,color:"#fff",lineHeight:1.2}}>{selected.company}</div>
+                    <div style={{fontSize:"1.15rem",fontWeight:800,color:"#fff",lineHeight:1.2}}>{selected.company}</div>
                     <div style={{fontSize:"0.8rem",color:"rgba(255,255,255,.7)",marginTop:3}}>{selected.category} · {selected.province}</div>
                   </div>
                 </div>
@@ -871,10 +857,10 @@ export default function CustomersPage(){
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                 <button onClick={()=>toggleStatus(selected.id)}
-                  style={{padding:"2px 10px",borderRadius:99,fontSize:"0.64rem",fontWeight:700,background:selected.status==="active"?"#e5faf0":"#f1f5f9",color:selected.status==="active"?"#059669":"#9ca3af",border:"none",cursor:"pointer"}}>
+                  style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:selected.status==="active"?"#e5faf0":"#f1f5f9",color:selected.status==="active"?"#059669":"#9ca3af",border:"none",cursor:"pointer"}}>
                   {selected.status==="active"?"ใช้งาน":"ไม่ใช้งาน"}
                 </button>
-                <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.64rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}>
+                <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}>
                   {selected.type}
                 </span>
                 {/* สถานะลูกค้า: ลูกค้าใหม่ / ลูกค้าเดิม (แยกจากประเภทลูกค้า บุคคล/บริษัท) */}
@@ -882,7 +868,7 @@ export default function CustomersPage(){
                   const lc = lifecycleTypeFor(selected.id, selected.joinDate, quotations);
                   const m  = LIFECYCLE_META[lc];
                   return (
-                    <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.64rem",fontWeight:700,background:m.bg,color:m.fg}}>
+                    <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:m.bg,color:m.fg}}>
                       {m.label}
                     </span>
                   );
@@ -894,7 +880,7 @@ export default function CustomersPage(){
             <div className="tab-bar" style={{flexShrink:0}}>
               {detailTabs.map(t=>(
                 <button key={t.key} className={`tab-item${detailTab===t.key?" active":""}`} onClick={()=>setDetailTab(t.key)}
-                  style={{display:"flex",alignItems:"center",gap:5,fontSize:"0.88rem",padding:"12px 16px"}}>
+                  style={{display:"flex",alignItems:"center",gap:5,fontSize:"0.86rem",padding:"12px 16px"}}>
                   {t.icon} {t.label}
                 </button>
               ))}
@@ -909,7 +895,7 @@ export default function CustomersPage(){
               <>
                 {/* Customer Summary Card — 3 tiles (deterministic, derived) */}
                 <div style={{padding:"14px 16px",borderBottom:`1px solid #f0f4f8`}}>
-                  <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>สรุปข้อมูลลูกค้า</div>
+                  <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>สรุปข้อมูลลูกค้า</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                     {[
                       {label:"ยอดขายรวม",       val:fmtMoney(totalSalesFor(selected.id,quotations)),          accent:PRIMARY,   bg:"#dce5f0"},
@@ -918,11 +904,11 @@ export default function CustomersPage(){
                     ].map((item,i)=>(
                       <div key={i} style={{background:item.bg,borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
                         <div style={{fontSize:"0.86rem",fontWeight:800,color:item.accent,lineHeight:1.2}}>{item.val}</div>
-                        <div style={{fontSize:"0.58rem",color:MUTED,marginTop:4,fontWeight:600}}>{item.label}</div>
+                        <div style={{fontSize:"0.65rem",color:MUTED,marginTop:4,fontWeight:600}}>{item.label}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{display:"flex",gap:14,marginTop:8,fontSize:"0.56rem",color:"#9ca3af",fontWeight:500}}>
+                  <div style={{display:"flex",gap:14,marginTop:8,fontSize:"0.65rem",color:"#9ca3af",fontWeight:500}}>
                     <span>ยอดขายรวม = ผลรวมใบเสนอราคาที่ปิดการขาย</span>
                     <span>โอกาสการขาย = รายการที่กำลังดำเนินการใน pipeline</span>
                   </div>
@@ -936,15 +922,15 @@ export default function CustomersPage(){
                 {/* Related leads */}
                 {relatedLeads.length>0&&(
                   <div style={{padding:"12px 16px",borderBottom:`1px solid #f0f4f8`}}>
-                    <div style={{fontSize:"0.63rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>ผู้สนใจที่เกี่ยวข้อง ({relatedLeads.length})</div>
+                    <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>ผู้สนใจที่เกี่ยวข้อง ({relatedLeads.length})</div>
                     {relatedLeads.map(l=>(
                       <button key={l.id} onClick={()=>router.push(`/leads?open=${l.numId}`)}
                         style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:9,border:`1px solid ${BORDER}`,background:"#fff",cursor:"pointer",marginBottom:5,textAlign:"left"}}
                         onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#dce5f0";}}
                         onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#fff";}}>
-                        <span style={{padding:"2px 7px",borderRadius:6,fontSize:"0.6rem",fontWeight:700,background:"#dce5f0",color:PRIMARY,flexShrink:0}}>ผู้สนใจ</span>
-                        <span style={{fontSize:"0.75rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.company}</span>
-                        <span style={{fontSize:"0.62rem",color:PRIMARY}}>→</span>
+                        <span style={{padding:"2px 7px",borderRadius:6,fontSize:"0.65rem",fontWeight:700,background:"#dce5f0",color:PRIMARY,flexShrink:0}}>ผู้สนใจ</span>
+                        <span style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.company}</span>
+                        <span style={{fontSize:"0.65rem",color:PRIMARY}}>→</span>
                       </button>
                     ))}
                   </div>
@@ -956,7 +942,7 @@ export default function CustomersPage(){
             {detailTab==="quotes"&&(
               <div style={{padding:"12px 16px"}}>
                 {relatedQuotations.length===0?(
-                  <div style={{fontSize:"0.78rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีใบเสนอราคา</div>
+                  <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีใบเสนอราคา</div>
                 ):(
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {relatedQuotations.map(q=>(
@@ -966,8 +952,8 @@ export default function CustomersPage(){
                         onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
                         <div style={{minWidth:0,flex:1}}>
                           <div style={{fontSize:"0.72rem",fontWeight:700,color:PRIMARY,fontFamily:"monospace"}}>{q.id}</div>
-                          <div style={{fontSize:"0.75rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.project}</div>
-                          <div style={{fontSize:"0.68rem",color:MUTED,marginTop:1}}>{q.total}</div>
+                          <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.project}</div>
+                          <div style={{fontSize:"0.65rem",color:MUTED,marginTop:1}}>{q.total}</div>
                         </div>
                         <span className="badge" style={{marginLeft:8,flexShrink:0,background:quotationStatusColor[q.status].bg,color:quotationStatusColor[q.status].text}}>
                           {quotationStatusLabel[q.status]}
@@ -979,42 +965,15 @@ export default function CustomersPage(){
               </div>
             )}
 
-            {/* Tab: นัดหมาย */}
+            {/* Tab: นัดหมาย — แสดงประวัตินัด (สร้างนัดทำที่หน้าลูกค้าเป้าหมาย ก่อนปิดการขาย) */}
             {detailTab==="appts"&&(
               <div style={{padding:"12px 16px"}}>
-                {/* ปุ่มเพิ่มนัดหมาย */}
-                {!apptAdding ? (
-                  <button onClick={()=>setApptAdding(true)} className="btn btn-primary btn-sm" style={{marginBottom:12}}>
-                    <Plus size={13}/> เพิ่มนัดหมาย
-                  </button>
-                ) : (
-                  <div style={{border:`1px solid ${BORDER}`,borderRadius:12,padding:14,marginBottom:12,background:"#fafbfc"}}>
-                    <div style={{fontSize:"0.8rem",fontWeight:800,color:STEEL,marginBottom:12}}>นัดหมายใหม่ · {selected.company}</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                      <div style={{gridColumn:"1/-1"}}>
-                        <label style={apptLbl}>ประเภทนัดหมาย</label>
-                        <select value={apptForm.type} onChange={e=>setApptForm(f=>({...f,type:e.target.value as ApptType}))} style={apptInp}>
-                          {(Object.keys(apptTypeLabel) as ApptType[]).map(t=><option key={t} value={t}>{apptTypeLabel[t]}</option>)}
-                        </select>
-                      </div>
-                      <div><label style={apptLbl}>วันที่</label>
-                        <input type="date" value={apptForm.date} onChange={e=>setApptForm(f=>({...f,date:e.target.value}))} style={apptInp}/></div>
-                      <div><label style={apptLbl}>เวลา</label>
-                        <input type="time" value={apptForm.time} onChange={e=>setApptForm(f=>({...f,time:e.target.value}))} style={apptInp}/></div>
-                      <div style={{gridColumn:"1/-1"}}><label style={apptLbl}>หัวข้อ</label>
-                        <input value={apptForm.title} onChange={e=>setApptForm(f=>({...f,title:e.target.value}))} placeholder={apptTypeLabel[apptForm.type]} style={apptInp}/></div>
-                      <div style={{gridColumn:"1/-1"}}><label style={apptLbl}>รายละเอียด</label>
-                        <input value={apptForm.note} onChange={e=>setApptForm(f=>({...f,note:e.target.value}))} placeholder="บันทึกเพิ่มเติม" style={apptInp}/></div>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:12}}>
-                      <button onClick={resetApptForm} className="btn btn-secondary btn-sm">ยกเลิก</button>
-                      <button onClick={saveAppt} className="btn btn-primary btn-sm"><Check size={13}/> บันทึกนัดหมาย</button>
-                    </div>
-                    <div style={{fontSize:"0.64rem",color:"#9ca3af",marginTop:8}}>ผู้รับผิดชอบ: {selected.owner} · นัดหมายจะแสดงในปฏิทินด้วย</div>
-                  </div>
-                )}
+                <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#f5f7fa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"9px 12px",marginBottom:12,fontSize:"0.72rem",color:MUTED,lineHeight:1.5}}>
+                  <Calendar size={13} style={{color:PRIMARY,flexShrink:0,marginTop:1}}/>
+                  <span>ประวัตินัดหมายจากช่วงก่อนปิดการขาย · การนัดหมายใหม่ทำที่หน้า<b style={{color:PRIMARY}}>ลูกค้าเป้าหมาย</b>หรือ<b style={{color:PRIMARY}}>ปฏิทิน</b></span>
+                </div>
                 {relatedAppointments.length===0?(
-                  <div style={{fontSize:"0.78rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีนัดหมาย</div>
+                  <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีนัดหมาย</div>
                 ):(
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {relatedAppointments.map(a=>(
@@ -1023,8 +982,8 @@ export default function CustomersPage(){
                         onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#e5faf0";}}
                         onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:"0.75rem",fontWeight:700,color:STEEL}}>{a.project}</div>
-                          <div style={{fontSize:"0.68rem",color:MUTED,marginTop:2}}>{a.date} · {a.time} น.</div>
+                          <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL}}>{a.project}</div>
+                          <div style={{fontSize:"0.65rem",color:MUTED,marginTop:2}}>{fmtISOToThai(a.date)} · {a.time} น.</div>
                         </div>
                         <span className="badge" style={{flexShrink:0,background:"#dce5f0",color:PRIMARY}}>
                           {a.status==="upcoming"?"กำลังจะมาถึง":a.status==="done"?"เสร็จแล้ว":"ยกเลิก"}
@@ -1040,7 +999,7 @@ export default function CustomersPage(){
             {detailTab==="notes"&&(
               <div style={{padding:"12px 16px"}}>
                 {relatedNotes.length===0?(
-                  <div style={{fontSize:"0.78rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีโน้ต</div>
+                  <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีโน้ต</div>
                 ):(
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {relatedNotes.map(n=>{
@@ -1049,8 +1008,8 @@ export default function CustomersPage(){
                         <div key={n.id} style={{padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`}}>
                           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
                             <span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
-                            <span style={{fontSize:"0.78rem",fontWeight:700,color:STEEL,flex:1}}>{n.title}</span>
-                            <span style={{fontSize:"0.6rem",color:MUTED}}>{n.updatedAt}</span>
+                            <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,flex:1}}>{n.title}</span>
+                            <span style={{fontSize:"0.65rem",color:MUTED}}>{n.updatedAt}</span>
                           </div>
                           <div style={{fontSize:"0.72rem",color:"#4b5563",whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:70,overflow:"hidden"}}>{n.content}</div>
                         </div>
@@ -1076,7 +1035,7 @@ export default function CustomersPage(){
                 <span style={{width:38,height:38,borderRadius:"50%",background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={17} color="#dc2626"/></span>
                 <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบลูกค้า</div>
               </div>
-              <p style={{fontSize:"0.82rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.company}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+              <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.company}</strong>? การลบไม่สามารถย้อนกลับได้</p>
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowDeleteConfirm(false)}>ยกเลิก</button>

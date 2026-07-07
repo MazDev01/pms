@@ -31,17 +31,20 @@ function Trigger({ icon, label, active, open, onClick }: {
 }) {
   return (
     <button
-      className="btn btn-secondary btn-sm"
+      className="btn btn-sm"
       onClick={onClick}
       style={{
-        gap: 6,
-        ...(active
-          ? { background: "var(--accent)", borderColor: "var(--primary)", color: "var(--primary)" }
-          : {}),
+        gap: 6, fontWeight: 700,
+        // ตัวคุมหลักทั้งหน้า → โทนกรม CI ให้เด่นกว่าตัวคุมย่อยรายการ์ด (StatCard)
+        color: "var(--primary)",
+        border: `1px solid ${active || open ? "var(--primary)" : "#cdd8e6"}`,
+        background: active || open ? "var(--accent)" : "#fff",
       }}
+      onMouseEnter={e => { if (!(active || open)) { const t = e.currentTarget as HTMLElement; t.style.background = "#eef3f8"; t.style.borderColor = "#b9cbe2"; } }}
+      onMouseLeave={e => { if (!(active || open)) { const t = e.currentTarget as HTMLElement; t.style.background = "#fff"; t.style.borderColor = "#cdd8e6"; } }}
     >
       {icon}
-      <span style={{ fontWeight: 700, whiteSpace: "nowrap", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span style={{ fontWeight: 700, whiteSpace: "nowrap", minWidth: 72, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>
         {label}
       </span>
       <ChevronDown size={13} style={{ opacity: 0.55, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
@@ -103,32 +106,24 @@ function TimeRangePicker() {
       />
       {open && (
         <Menu width={272}>
-          {/* ช่วงวันที่ปัจจุบัน บรรทัดเดียว */}
-          <div style={{
-            padding: "8px 13px", borderBottom: "1px solid var(--border)",
-            fontSize: "0.66rem", fontWeight: 600, color: "var(--muted-foreground)",
-          }}>
-            {timeRange.subtitle}
-          </div>
-
-          {/* ตารางปุ่ม preset 2 คอลัมน์ */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 10 }}>
+          {/* preset — รายการเดียว + เช็กมาร์ก (สไตล์เดียวกับแดชบอร์ดตัวแทน) */}
+          <div style={{ padding: "6px 0" }}>
             {PRESET_ORDER.map(k => {
               const opt = TIME_PRESETS.find(p => p.key === k)!;
               const sel = timeRange.preset === k;
               return (
                 <button key={k} onClick={() => { setPreset(k); setOpen(false); }}
                   style={{
-                    padding: "7px 9px", borderRadius: "var(--radius-md)", fontSize: "0.76rem",
-                    fontWeight: sel ? 700 : 500, fontFamily: "inherit", cursor: "pointer", textAlign: "left",
-                    border: `1px solid ${sel ? "var(--primary)" : "var(--border)"}`,
-                    background: sel ? "var(--accent)" : "var(--card)",
-                    color: sel ? "var(--primary)" : "var(--foreground)", transition: "all .12s",
+                    display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 13px",
+                    background: sel ? "var(--accent)" : "transparent", border: "none", cursor: "pointer",
+                    textAlign: "left", fontFamily: "inherit", fontSize: "0.8rem", fontWeight: sel ? 700 : 400,
+                    color: sel ? "var(--primary)" : "var(--foreground)",
                   }}
                   onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#f8f9fb"; }}
-                  onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "var(--card)"; }}
+                  onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}
                 >
-                  {opt.label}
+                  <Check size={13} style={{ color: sel ? "var(--primary)" : "transparent", flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{opt.label}</span>
                 </button>
               );
             })}
@@ -140,7 +135,7 @@ function TimeRangePicker() {
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
                 background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
-                padding: "6px 3px", fontSize: "0.76rem", fontWeight: 600,
+                padding: "6px 3px", fontSize: "0.72rem", fontWeight: 600,
                 color: timeRange.preset === "custom" ? "var(--primary)" : "var(--foreground)",
               }}>
               <span>กำหนดช่วงเอง</span>

@@ -157,7 +157,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
         <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.22)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.9rem" }}>อัปโหลดไฟล์</span>
+            <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>อัปโหลดไฟล์</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
           </div>
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -168,14 +168,14 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
                 <input type="file" style={{ display: "none" }} onChange={handleFile} />
                 {name ? (
                   <div>
-                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: STEEL }}>{name}</div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL }}>{name}</div>
                     <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 4 }}>{size}</div>
                   </div>
                 ) : (
                   <div>
                     <Upload size={28} color={MUTED} style={{ margin: "0 auto 10px" }} />
-                    <div style={{ fontSize: "0.78rem", color: MUTED }}>ลากไฟล์มาวาง หรือ <span style={{ color: PRIMARY, fontWeight: 700 }}>คลิกเลือกไฟล์</span></div>
-                    <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>PDF, Word, Excel, CAD, รูปภาพ</div>
+                    <div style={{ fontSize: "0.8rem", color: MUTED }}>ลากไฟล์มาวาง หรือ <span style={{ color: PRIMARY, fontWeight: 700 }}>คลิกเลือกไฟล์</span></div>
+                    <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>PDF, Word, Excel, CAD, รูปภาพ</div>
                   </div>
                 )}
               </label>
@@ -234,7 +234,7 @@ function EditFileModal({ file, onSave, onClose }: { file: FileMock; onSave: (f: 
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
         <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.22)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.9rem" }}>แก้ไขไฟล์</span>
+            <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>แก้ไขไฟล์</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
           </div>
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -290,7 +290,7 @@ function PaginationBar({
   });
   return (
     <div style={{ padding: "11px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-      <span style={{ fontSize: "0.7rem", color: MUTED }}>แสดง {from}–{to} จาก {total} ไฟล์</span>
+      <span style={{ fontSize: "0.72rem", color: MUTED }}>แสดง {from}–{to} จาก {total} ไฟล์</span>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button onClick={onPrev} disabled={atFirst} style={btnStyle(atFirst)}>ก่อนหน้า</button>
         <span style={{ fontSize: "0.72rem", fontWeight: 700, color: STEEL }}>หน้า {page} / {totalPages}</span>
@@ -318,7 +318,7 @@ function PreviewBody({ f }: { f: FileMock }) {
             letterSpacing: 6, pointerEvents: "none", userSelect: "none",
           }}>PDF</div>
           <div style={{ position: "relative" }}>
-            <div style={{ fontSize: "0.62rem", fontWeight: 800, color: PRIMARY, letterSpacing: 1, textTransform: "uppercase" }}>เอกสารบริษัท</div>
+            <div style={{ fontSize: "0.65rem", fontWeight: 800, color: PRIMARY, letterSpacing: 1, textTransform: "uppercase" }}>เอกสารบริษัท</div>
             <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL, marginTop: 10, lineHeight: 1.4, wordBreak: "break-word" }}>{f.name}</div>
             <div style={{ height: 3, width: 54, background: PRIMARY, borderRadius: 3, margin: "12px 0 20px" }} />
             {[92, 100, 78, 96, 64].map((w, i) => (
@@ -346,7 +346,7 @@ function PreviewBody({ f }: { f: FileMock }) {
         }}>
           <Image size={56} color="rgba(255,255,255,.9)" />
           <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fff", textAlign: "center", padding: "0 20px", wordBreak: "break-word" }}>{f.name}</div>
-          <div style={{ fontSize: "0.66rem", color: "rgba(255,255,255,.72)" }}>{f.size} · {extLabel(f.ext)}</div>
+          <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)" }}>{f.size} · {extLabel(f.ext)}</div>
         </div>
       </div>
     );
@@ -361,8 +361,8 @@ function PreviewBody({ f }: { f: FileMock }) {
           boxShadow: "0 8px 30px rgba(0,0,0,.16)", overflow: "hidden", display: "flex", flexDirection: "column",
         }}>
           <div style={{ background: PRIMARY, padding: "18px 24px" }}>
-            <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: 1 }}>สไลด์นำเสนอ</div>
-            <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", marginTop: 4, lineHeight: 1.3, wordBreak: "break-word" }}>{f.name}</div>
+            <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: 1 }}>สไลด์นำเสนอ</div>
+            <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", marginTop: 4, lineHeight: 1.3, wordBreak: "break-word" }}>{f.name}</div>
           </div>
           <div style={{ flex: 1, padding: "20px 28px", display: "flex", flexDirection: "column", gap: 14, justifyContent: "center" }}>
             {[86, 72, 90].map((w, i) => (
@@ -400,7 +400,7 @@ function PreviewBody({ f }: { f: FileMock }) {
           ].map(([k, v], i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: `1px solid ${BORDER}` }}>
               <span style={{ fontSize: "0.72rem", color: MUTED, flexShrink: 0 }}>{k}</span>
-              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: STEEL, textAlign: "right", wordBreak: "break-word" }}>{v}</span>
+              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: STEEL, textAlign: "right", wordBreak: "break-word" }}>{v}</span>
             </div>
           ))}
         </div>
@@ -423,8 +423,8 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
                 <Eye size={15} color="#fff" />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
-                <div style={{ fontSize: "0.66rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)} · {file.size}</div>
+                <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
+                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)} · {file.size}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={13} /></button>
@@ -523,16 +523,16 @@ export default function FilesPage() {
 
       {/* สรุปแบบ pills — แทน stat card 5 ใบ */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
           ไฟล์ทั้งหมด <span style={{ color: PRIMARY }}>{files.length}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
           ขนาดรวม <span style={{ color: PRIMARY }}>{totalSize}</span>
         </div>
         {(["pdf","xlsx","docx","dwg","pptx"] as FileExt[]).map(ext => (
           (extCounts[ext] ?? 0) > 0 ? (
             <button key={ext} onClick={() => setExt(extFilter === ext ? "ALL" : ext)}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
                 color: extFilter === ext ? "#fff" : MUTED, background: extFilter === ext ? PRIMARY : "#fff",
                 border: `1px solid ${extFilter === ext ? PRIMARY : BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
               {extLabel(ext)} <span style={{ color: extFilter === ext ? "#fff" : STEEL }}>{extCounts[ext]}</span>
@@ -551,7 +551,7 @@ export default function FilesPage() {
           <button onClick={() => setCat("ALL")}
             style={{
               display: "flex", alignItems: "center", gap: 7, padding: "7px 12px",
-              borderRadius: 9, cursor: "pointer", fontSize: "0.74rem", fontWeight: 700,
+              borderRadius: 9, cursor: "pointer", fontSize: "0.72rem", fontWeight: 700,
               border: `1px solid ${catFilter === "ALL" ? PRIMARY : BORDER}`,
               background: catFilter === "ALL" ? PRIMARY : "#fff",
               color: catFilter === "ALL" ? "#fff" : STEEL,
@@ -560,7 +560,7 @@ export default function FilesPage() {
             <FolderOpen size={15} color={catFilter === "ALL" ? "#fff" : PRIMARY} />
             ทั้งหมด
             <span style={{
-              fontSize: "0.66rem", fontWeight: 800, borderRadius: 999, padding: "1px 7px", lineHeight: 1.5,
+              fontSize: "0.65rem", fontWeight: 800, borderRadius: 999, padding: "1px 7px", lineHeight: 1.5,
               background: catFilter === "ALL" ? "rgba(255,255,255,.22)" : "#f0f0f5",
               color: catFilter === "ALL" ? "#fff" : MUTED,
             }}>{files.length}</span>
@@ -572,7 +572,7 @@ export default function FilesPage() {
               <button key={c} onClick={() => setCat(active ? "ALL" : c)}
                 style={{
                   display: "flex", alignItems: "center", gap: 7, padding: "7px 12px",
-                  borderRadius: 9, cursor: "pointer", fontSize: "0.74rem", fontWeight: 700,
+                  borderRadius: 9, cursor: "pointer", fontSize: "0.72rem", fontWeight: 700,
                   border: `1px solid ${active ? col.text : BORDER}`,
                   background: active ? col.bg : "#fff",
                   color: active ? col.text : STEEL,
@@ -581,7 +581,7 @@ export default function FilesPage() {
                 {catIcon(c)}
                 {c}
                 <span style={{
-                  fontSize: "0.66rem", fontWeight: 800, borderRadius: 999, padding: "1px 7px", lineHeight: 1.5,
+                  fontSize: "0.65rem", fontWeight: 800, borderRadius: 999, padding: "1px 7px", lineHeight: 1.5,
                   background: active ? "rgba(255,255,255,.55)" : "#f0f0f5",
                   color: active ? col.text : MUTED,
                 }}>{catCounts[c]}</span>
@@ -611,7 +611,7 @@ export default function FilesPage() {
             </button>
           ))}
         </div>
-        <span style={{ fontSize: "0.7rem", color: MUTED }}>{filtered.length} ไฟล์</span>
+        <span style={{ fontSize: "0.72rem", color: MUTED }}>{filtered.length} ไฟล์</span>
       </div>
 
       {/* Content */}
@@ -641,7 +641,7 @@ export default function FilesPage() {
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: "0.82rem" }}>
+                  <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: "0.8rem" }}>
                     <FolderOpen size={32} color="#C0C0C0" style={{ display: "block", margin: "0 auto 12px" }} />
                     ไม่พบไฟล์
                   </td></tr>
@@ -652,8 +652,8 @@ export default function FilesPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ background: extBg(f.ext), borderRadius: 8, padding: 7, display: "flex", flexShrink: 0 }}>{extIcon(f.ext)}</div>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
-                          <div style={{ fontSize: "0.62rem", color: MUTED, marginTop: 2 }}>{extLabel(f.ext)}</div>
+                          <div style={{ fontSize: "0.8rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                          <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 2 }}>{extLabel(f.ext)}</div>
                         </div>
                       </div>
                     </td>
@@ -666,21 +666,21 @@ export default function FilesPage() {
                       <td>
                         {f.project !== "—" ? (
                           <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                            <span style={{ fontSize:"0.74rem", color:STEEL }}>{f.project}</span>
+                            <span style={{ fontSize:"0.72rem", color:STEEL }}>{f.project}</span>
                             {f.customerId && (
                               <button onClick={e => { e.stopPropagation(); router.push(`/customers?open=${f.customerId}`); }}
-                                style={{ fontSize:"0.6rem", color:PRIMARY, fontWeight:700, background:"none", border:"none", padding:0, cursor:"pointer", textDecoration:"underline", textAlign:"left" }}>
+                                style={{ fontSize:"0.65rem", color:PRIMARY, fontWeight:700, background:"none", border:"none", padding:0, cursor:"pointer", textDecoration:"underline", textAlign:"left" }}>
                                 {customers.find(c=>c.id===f.customerId)?.company ?? `ลูกค้า #${f.customerId}`} →
                               </button>
                             )}
                           </div>
                         ) : (
-                          <span style={{ fontSize:"0.74rem", color:MUTED }}>—</span>
+                          <span style={{ fontSize:"0.72rem", color:MUTED }}>—</span>
                         )}
                       </td>
                     )}
-                    {showCol("size")       && <td style={{ fontSize: "0.74rem", color: MUTED, whiteSpace: "nowrap" }}>{f.size}</td>}
-                    {showCol("uploadedBy") && <td style={{ fontSize: "0.74rem", color: STEEL }}>{f.uploadedBy}</td>}
+                    {showCol("size")       && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.size}</td>}
+                    {showCol("uploadedBy") && <td style={{ fontSize: "0.72rem", color: STEEL }}>{f.uploadedBy}</td>}
                     {showCol("uploadedAt") && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.uploadedAt}</td>}
                     <td className="ovf-visible">
                       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
@@ -714,7 +714,7 @@ export default function FilesPage() {
         /* Grid view */
         <div className="card" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-xl) var(--radius-xl)", padding: 16 }}>
           {filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: "0.82rem" }}>
+            <div style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: "0.8rem" }}>
               <FolderOpen size={32} color="#C0C0C0" style={{ display: "block", margin: "0 auto 12px" }} />
               ไม่พบไฟล์
             </div>
@@ -737,8 +737,8 @@ export default function FilesPage() {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.74rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.name}>{f.name}</div>
-                    <div style={{ fontSize: "0.62rem", color: MUTED, marginTop: 3 }}>{f.size} · {f.uploadedAt}</div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.name}>{f.name}</div>
+                    <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 3 }}>{f.size} · {f.uploadedAt}</div>
                   </div>
                   <span className="badge" style={{ background: CAT_COLORS[f.category].bg, color: CAT_COLORS[f.category].text, alignSelf: "flex-start" }}>{f.category}</span>
                 </div>
@@ -780,8 +780,8 @@ export default function FilesPage() {
           <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
             <div onClick={e => e.stopPropagation()} className="card" style={{ width: 300, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
               <div style={{ padding: "16px 20px 14px", borderBottom: `1px solid ${BORDER}` }}>
-                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: STEEL }}>ยืนยันการลบไฟล์</div>
-                <div style={{ fontSize: "0.74rem", color: MUTED, marginTop: 4 }}>
+                <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL }}>ยืนยันการลบไฟล์</div>
+                <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 4 }}>
                   {files.find(f => f.id === delId)?.name}
                 </div>
               </div>

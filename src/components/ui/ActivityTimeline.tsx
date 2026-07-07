@@ -34,7 +34,7 @@ const NEUTRAL: ActivityMeta = { icon: StickyNote, color: MUTED, bg: "#f0f0f5", l
 export function ActivityTimeline({ items }: { items: ActivityTimelineItem[] }) {
   if (!items || items.length === 0) {
     return (
-      <div style={{ textAlign: "center", padding: "24px 8px", color: MUTED, fontSize: "0.78rem" }}>
+      <div style={{ textAlign: "center", padding: "24px 8px", color: MUTED, fontSize: "0.8rem" }}>
         ยังไม่มีกิจกรรม
       </div>
     );
@@ -68,15 +68,15 @@ export function ActivityTimeline({ items }: { items: ActivityTimelineItem[] }) {
             <div style={{ paddingBottom: isLast ? 0 : 16, minWidth: 0, flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{
-                  fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase",
+                  fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase",
                   letterSpacing: "0.04em", color: meta.color,
                   background: meta.bg, borderRadius: 6, padding: "2px 7px",
                 }}>
                   {meta.label}
                 </span>
-                <span style={{ fontSize: "0.68rem", color: MUTED }}>{item.time}</span>
+                <span style={{ fontSize: "0.65rem", color: MUTED }}>{item.time}</span>
               </div>
-              <div style={{ fontSize: "0.82rem", fontWeight: 500, color: STEEL, marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: "0.8rem", fontWeight: 500, color: STEEL, marginTop: 4, lineHeight: 1.4 }}>
                 {item.text}
               </div>
             </div>

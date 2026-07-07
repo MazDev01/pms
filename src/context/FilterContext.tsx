@@ -18,10 +18,15 @@ const APP_NOW = new Date(2026, 5, 30);
 const THAI_MONTH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 // ── อ่านวันที่: ISO (YYYY-MM-DD) เท่านั้น ──
+const _TH_MO = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 export function parseDate(s?: string | null): Date | null {
   if (!s) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]);
+  // ไทย พ.ศ. เช่น "1 มิ.ย. 2569" → CE (ปี − 543)
+  const th = /^(\d{1,2})\s+(\S+)\s+(\d{4})/.exec(s.trim());
+  if (th) { const mi = _TH_MO.indexOf(th[2]); if (mi >= 0) return new Date(+th[3] - 543, mi, +th[1]); }
+  return null;
 }
 
 // ── แสดงผลวันที่เป็นไทย (เพื่อโชว์ใน UI เท่านั้น ไม่เกี่ยวกับการกรอง) ──
@@ -131,7 +136,8 @@ type FilterState = {
 };
 
 const DEFAULTS: FilterState = {
-  preset: "last30", customStart: "", customEnd: "",
+  // เริ่มต้น "ปีนี้" → เปิดหน้าเห็นข้อมูลครบ (seed กระจายทั้งปี · ไม่ให้ดูเหมือนข้อมูลหาย) แล้วค่อยแคบลงเองได้
+  preset: "thisYear", customStart: "", customEnd: "",
   dealer: ALL, province: ALL, product: ALL, status: ALL, person: ALL,
 };
 
@@ -170,23 +176,24 @@ type Ctx = {
 
 const FilterContext = createContext<Ctx | null>(null);
 
-export function FilterProvider({ children }: { children: ReactNode }) {
+// storageKey = แยกต่อหน้าได้ (ส่งมาจาก AppShell เป็น bpms_filters:<pathname>) → แต่ละหน้ากรองอิสระกัน
+export function FilterProvider({ children, storageKey = STORAGE_KEY }: { children: ReactNode; storageKey?: string }) {
   const [state, setState] = useState<FilterState>(DEFAULTS);
 
-  // คงค่า filter ไว้ระหว่าง navigate / refresh
+  // คงค่า filter ของ "หน้านี้" ไว้ระหว่าง navigate / refresh (คีย์แยกต่อหน้า)
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = sessionStorage.getItem(storageKey);
       if (raw) {
         const saved = JSON.parse(raw);
         if (saved.preset && !TIME_PRESETS.some(t => t.key === saved.preset)) saved.preset = "last30";
         setState(s => ({ ...s, ...saved }));
       }
     } catch { /* ignore */ }
-  }, []);
+  }, [storageKey]);
   useEffect(() => {
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
-  }, [state]);
+    try { sessionStorage.setItem(storageKey, JSON.stringify(state)); } catch { /* ignore */ }
+  }, [state, storageKey]);
 
   const timeRange = useMemo(
     () => buildTimeRange(state.preset, state.customStart, state.customEnd),
@@ -202,7 +209,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const setStatus = useCallback((v: string) => setState(s => ({ ...s, status: v })), []);
   const setPerson = useCallback((v: string) => setState(s => ({ ...s, person: v })), []);
   const setDim = useCallback((dim: FilterDim, v: string) => setState(s => ({ ...s, [dim]: v })), []);
-  const reset = useCallback(() => setState(DEFAULTS), []);
+  // ล้างเฉพาะตัวกรอง dimension — คงช่วงเวลาเดิมไว้ (time ไม่ถูกนับใน activeCount)
+  const reset = useCallback(() => setState(s => ({ ...s, dealer: ALL, province: ALL, product: ALL, status: ALL, person: ALL })), []);
 
   const inRange = useCallback((date?: string | null) => {
     if (date === undefined || date === null || date === "") return true;

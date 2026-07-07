@@ -158,7 +158,7 @@ function SalesJourneyTab() {
                   width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
                   background: s.color + "20", color: s.color,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.66rem", fontWeight: 800,
+                  fontSize: "0.65rem", fontWeight: 800,
                 }}>
                   {idx + 1}
                 </div>
@@ -185,7 +185,7 @@ function SalesJourneyTab() {
                         onBlur={() => commitEdit(s.id)}
                         onKeyDown={e => { if (e.key === "Enter") commitEdit(s.id); if (e.key === "Escape") setEditId(null); }} />
                     : <span onClick={() => { setEditId(s.id); setEditVal(s.label); }}
-                        style={{ fontSize: "0.85rem", fontWeight: 600, color: "#2D2D2D",
+                        style={{ fontSize: "0.86rem", fontWeight: 600, color: "#2D2D2D",
                           cursor: "text", borderBottom: "1.5px dashed transparent",
                           display: "inline-block", paddingBottom: 1 }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderBottomColor = "#e2e8f0"; }}
@@ -200,7 +200,7 @@ function SalesJourneyTab() {
                   style={{ cursor: "pointer", border: `1px solid ${s.isDefault ? "#003366" : "#e2e8f0"}`,
                     background: s.isDefault ? "#f0f4fa" : "transparent",
                     color: s.isDefault ? "#003366" : "#9ca3af", fontFamily: "inherit",
-                    fontWeight: 700, fontSize: "0.67rem", letterSpacing: "0.02em" }}>
+                    fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.02em" }}>
                   {s.isDefault ? "✓ ค่าเริ่มต้น" : "ตั้งเป็นค่าเริ่มต้น"}
                 </button>
 
@@ -227,7 +227,7 @@ function SalesJourneyTab() {
                 border: `1px solid ${s.terminal === "won" ? "#bbf7d0" : "#fecaca"}`,
               }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }} />
-                <span style={{ flex: 1, fontSize: "0.82rem", fontWeight: 700,
+                <span style={{ flex: 1, fontSize: "0.8rem", fontWeight: 700,
                   color: s.terminal === "won" ? "#059669" : "#dc2626" }}>
                   {s.label}
                 </span>
@@ -247,7 +247,7 @@ function SalesJourneyTab() {
             display: "flex", alignItems: "center", gap: 8,
             padding: "9px 14px", borderRadius: 10, width: "100%",
             border: "1.5px dashed #e5e7eb", background: "transparent",
-            cursor: "pointer", color: "#6b7280", fontSize: "0.82rem", fontWeight: 600,
+            cursor: "pointer", color: "#6b7280", fontSize: "0.8rem", fontWeight: 600,
           }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#003366"; (e.currentTarget as HTMLElement).style.color = "#003366"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "#e5e7eb"; (e.currentTarget as HTMLElement).style.color = "#6b7280"; }}>
@@ -274,7 +274,7 @@ function SalesJourneyTab() {
                 <div key={type}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: accent }} />
-                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: accent }}>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 800, color: accent }}>
                       {type === "won" ? "เหตุผลปิดการขายสำเร็จ" : "เหตุผลไม่สำเร็จ"}
                     </span>
                   </div>
@@ -294,7 +294,7 @@ function SalesJourneyTab() {
                       </div>
                     ))}
                     {items.length === 0 && (
-                      <div style={{ padding: "16px", textAlign: "center", fontSize: "0.75rem", color: "#9ca3af" }}>
+                      <div style={{ padding: "16px", textAlign: "center", fontSize: "0.72rem", color: "#9ca3af" }}>
                         ยังไม่มีเหตุผล
                       </div>
                     )}
@@ -355,13 +355,13 @@ function TargetsTab() {
         {fields.map(f => (
           <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{f.label}</div>
+              <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{f.label}</div>
               <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{f.desc}</div>
             </div>
             <input type="number" step={f.step} value={draft[f.key]}
               onChange={e => setDraft(d => ({ ...d, [f.key]: Number(e.target.value) }))}
               className="form-input" style={{ width: 170, textAlign: "right", fontWeight: 700 }} />
-            <span style={{ fontSize: "0.76rem", color: "#6b7280", width: 34 }}>{f.unit}</span>
+            <span style={{ fontSize: "0.72rem", color: "#6b7280", width: 34 }}>{f.unit}</span>
           </div>
         ))}
         <div style={{ fontSize: "0.72rem", color: "#9ca3af" }}>
@@ -401,7 +401,7 @@ function NotificationsTab() {
           return (
             <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{item.label}</div>
+                <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{item.label}</div>
                 <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{item.desc}</div>
               </div>
               <button role="switch" aria-checked={on}
@@ -452,7 +452,7 @@ export default function HQSettingsPage() {
           {TABS.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
               className={`tab-item${activeTab === t.key ? " active" : ""}`}
-              style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.85rem", padding: "12px 16px" }}>
+              style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.86rem", padding: "12px 16px" }}>
               {t.icon}
               {t.label}
             </button>

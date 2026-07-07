@@ -27,7 +27,7 @@ export function AssigneeAvatars({ value, size = 22, showName = true, max = 3 }: 
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   useEffect(() => { setPersons(loadResponsiblePersons()); }, []);
   const names = value ? value.split(",").map(s => s.trim()).filter(Boolean) : [];
-  if (names.length === 0) return <span style={{ color: "#9ca3af", fontSize: "0.75rem" }}>—</span>;
+  if (names.length === 0) return <span style={{ color: "#9ca3af", fontSize: "0.72rem" }}>—</span>;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
       <span style={{ display: "flex", flexShrink: 0 }}>
@@ -41,7 +41,7 @@ export function AssigneeAvatars({ value, size = 22, showName = true, max = 3 }: 
         )}
       </span>
       {showName && (
-        <span style={{ fontSize: "0.75rem", color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: "0.72rem", color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`}
         </span>
       )}
@@ -102,11 +102,11 @@ export function PersonPicker({ value, onChange, style, placeholder = "เลื�
                   </span>
                 ))}
               </span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", fontWeight: 600, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: "0.8rem", fontWeight: 600, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`}
               </span>
             </>
-          : <span style={{ flex: 1, fontSize: "0.82rem", color: "#9ca3af" }}>{placeholder}</span>}
+          : <span style={{ flex: 1, fontSize: "0.8rem", color: "#9ca3af" }}>{placeholder}</span>}
         <ChevronDown size={14} color="#9ca3af" style={{ flexShrink: 0 }} />
       </button>
 
@@ -117,13 +117,13 @@ export function PersonPicker({ value, onChange, style, placeholder = "เลื�
           boxShadow: "0 12px 32px rgba(0,0,0,.14)", overflow: "hidden", maxHeight: 280, overflowY: "auto",
         }}>
           {multiple && (
-            <div style={{ padding: "8px 14px", fontSize: "0.68rem", fontWeight: 700, color: "#6b7280", borderBottom: "1px solid #f0f4f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "8px 14px", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", borderBottom: "1px solid #f0f4f8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span>เลือกได้หลายคน · เลือกแล้ว {names.length}</span>
-              <button type="button" onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: "0.7rem", fontFamily: "inherit" }}>เสร็จ</button>
+              <button type="button" onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: "0.72rem", fontFamily: "inherit" }}>เสร็จ</button>
             </div>
           )}
           {persons.length === 0 && (
-            <div style={{ padding: "12px 14px", fontSize: "0.78rem", color: "#9ca3af" }}>ยังไม่มีผู้รับผิดชอบ</div>
+            <div style={{ padding: "12px 14px", fontSize: "0.8rem", color: "#9ca3af" }}>ยังไม่มีผู้รับผิดชอบ</div>
           )}
           {persons.map(p => {
             const active = isSel(p.name);
@@ -142,8 +142,8 @@ export function PersonPicker({ value, onChange, style, placeholder = "เลื�
                 )}
                 <PersonAvatar name={p.name} avatar={p.avatar} size={30} />
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: active ? NAVY : "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                  <span style={{ display: "block", fontSize: "0.66rem", color: "#6b7280" }}>{p.title}</span>
+                  <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: active ? NAVY : "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                  <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280" }}>{p.title}</span>
                 </span>
                 {!multiple && active && <Check size={15} color={NAVY} style={{ flexShrink: 0 }} />}
               </button>

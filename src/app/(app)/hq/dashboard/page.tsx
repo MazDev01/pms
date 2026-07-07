@@ -150,7 +150,7 @@ export default function HQDashboard() {
                 <div style={{ width: 52, height: 52, borderRadius: 14, background: PRIMARY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1rem", flexShrink: 0 }}>{best.code}</div>
                 <div>
                   <div style={{ fontSize: "1rem", fontWeight: 800 }}>{best.name.replace("Benjamin ", "")}</div>
-                  <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>ภาค{best.region} · Win rate {best.winRate}% · คลิกดูรายละเอียด →</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>ภาค{best.region} · Win rate {best.winRate}% · คลิกดูรายละเอียด →</div>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -161,8 +161,8 @@ export default function HQDashboard() {
                   { k: "ตรงเวลา", v: `${best.onTimePct}%` },
                 ].map(m => (
                   <div key={m.k} style={{ background: "var(--muted)", borderRadius: 10, padding: "10px 12px" }}>
-                    <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)" }}>{m.k}</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: PRIMARY }}>{m.v}</div>
+                    <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)" }}>{m.k}</div>
+                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: PRIMARY }}>{m.v}</div>
                   </div>
                 ))}
               </div>
@@ -174,8 +174,8 @@ export default function HQDashboard() {
                     onClick={() => router.push(`/hq/dealers/${d.code}`)}
                     onKeyDown={e => { if (e.key === "Enter") router.push(`/hq/dealers/${d.code}`); }}
                     title="ดูรายละเอียดตัวแทน"
-                    style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", cursor: "pointer" }}>
-                    <span style={{ display: "inline-flex", width: 20, height: 20, borderRadius: 6, alignItems: "center", justifyContent: "center", fontSize: "0.66rem", fontWeight: 800, background: "#f0f4f8", color: "#6b7280", flexShrink: 0 }}>{i + 2}</span>
+                    style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem", cursor: "pointer" }}>
+                    <span style={{ display: "inline-flex", width: 20, height: 20, borderRadius: 6, alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, background: "#f0f4f8", color: "#6b7280", flexShrink: 0 }}>{i + 2}</span>
                     <span style={{ flex: 1, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name.replace("Benjamin ", "")}</span>
                     <span style={{ fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(d.revenueActual)}</span>
                   </div>
@@ -194,8 +194,8 @@ export default function HQDashboard() {
           <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 13 }}>
             {regions.map((r, i) => (
               <div key={r.region}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: 4 }}>
-                  <span style={{ fontWeight: 700 }}>{r.region} <span style={{ color: "var(--muted-foreground)", fontWeight: 400, fontSize: "0.7rem" }}>· {r.count} ตัวแทน</span></span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700 }}>{r.region} <span style={{ color: "var(--muted-foreground)", fontWeight: 400, fontSize: "0.72rem" }}>· {r.count} ตัวแทน</span></span>
                   <span style={{ fontWeight: 800, color: PRIMARY }}>{fmtBaht(r.revenue)}</span>
                 </div>
                 <div style={{ height: 8, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
@@ -211,7 +211,7 @@ export default function HQDashboard() {
           <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 12 }}>
             {ranked.map(d => (
               <div key={d.code}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 4 }}>
                   <span style={{ fontWeight: 700 }}>{d.name.replace("Benjamin ", "")}</span>
                   <span style={{ fontWeight: 800, color: d.winRate >= 45 ? "#059669" : d.winRate >= 35 ? PRIMARY : "#b7892a", fontVariantNumeric: "tabular-nums" }}>{d.winRate}%</span>
                 </div>
@@ -239,8 +239,8 @@ export default function HQDashboard() {
             {hqPipelineByProduct.map(p => (
               <div key={p.product} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color, flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: "0.76rem", color: "#2D2D2D" }}>{p.product}</span>
-                <span style={{ fontSize: "0.76rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(p.valueNum)}</span>
+                <span style={{ flex: 1, fontSize: "0.72rem", color: "#2D2D2D" }}>{p.product}</span>
+                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(p.valueNum)}</span>
               </div>
             ))}
           </div>

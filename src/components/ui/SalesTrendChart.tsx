@@ -117,7 +117,7 @@ export function SalesTrendChart({
     <div style={{ width: "100%" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
         <div>
-          <div style={{ fontWeight: 800, fontSize: "0.98rem", color: "var(--text, #2D2D2D)" }}>{title}</div>
+          <div style={{ fontWeight: 800, fontSize: "1rem", color: "var(--text, #2D2D2D)" }}>{title}</div>
           {/* ตัวเลขเด่น + trend (เหมือนการ์ดสถิติ) */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 2px" }}>
             <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#003366", lineHeight: 1 }}>฿{(total).toFixed(1)}M</span>
@@ -126,7 +126,7 @@ export function SalesTrendChart({
               {growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%
             </span>
           </div>
-          <div style={{ fontSize: "0.76rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
+          <div style={{ fontSize: "0.72rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {RANGE_PILLS.map(p => (

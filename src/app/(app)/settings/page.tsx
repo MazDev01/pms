@@ -97,7 +97,7 @@ function CompanyTab() {
           background: "#f0f4fa", border: "1px solid #dce5f0", borderLeft: "3px solid #003366", borderRadius: 10,
         }}>
           <Info size={18} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: "0.76rem", color: "#374151", lineHeight: 1.6 }}>
+          <div style={{ fontSize: "0.72rem", color: "#374151", lineHeight: 1.6 }}>
             เอกสารและใบเสนอราคาจะใช้<strong style={{ color: "#003366" }}>ข้อมูลบริษัทของตัวแทน</strong>นี้เท่านั้น —
             ข้อมูลบริษัทของสำนักงานใหญ่ (HQ) จะ<strong style={{ color: "#003366" }}>ไม่ปรากฏ</strong>บนใบเสนอราคาของตัวแทน
           </div>
@@ -108,7 +108,7 @@ function CompanyTab() {
           {/* สัญลักษณ์ */}
           <div>
             <label className="form-label">โลโก้สัญลักษณ์ (ไอคอน)</label>
-            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginBottom: 8 }}>ใช้ในแถบเมนูและพื้นที่สี่เหลี่ยม</div>
+            <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 8 }}>ใช้ในแถบเมนูและพื้นที่สี่เหลี่ยม</div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 80, height: 80, borderRadius: 12,
                 background: logo ? "#fff" : "#003366", border: "2px dashed #e5e7eb",
@@ -116,7 +116,7 @@ function CompanyTab() {
                 overflow: "hidden", flexShrink: 0 }}>
                 {logo
                   ? <img src={logo} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                  : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.1rem" }}>{initials}</span>}
+                  : <span style={{ color: "#fff", fontWeight: 900, fontSize: "1.15rem" }}>{initials}</span>}
               </div>
               <div>
                 <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
@@ -128,7 +128,7 @@ function CompanyTab() {
                     ลบ
                   </button>
                 )}
-                <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 5 }}>PNG, JPG · แนะนำ 200×200 px</div>
+                <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 5 }}>PNG, JPG · แนะนำ 200×200 px</div>
                 <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadLogo} />
               </div>
             </div>
@@ -137,7 +137,7 @@ function CompanyTab() {
           {/* พร้อมชื่อ (แนวนอน) */}
           <div>
             <label className="form-label">โลโก้พร้อมชื่อบริษัท (แนวนอน)</label>
-            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginBottom: 8 }}>ใช้บนหัวใบเสนอราคาและเอกสาร</div>
+            <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 8 }}>ใช้บนหัวใบเสนอราคาและเอกสาร</div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 168, height: 80, borderRadius: 12,
                 background: "#fff", border: "2px dashed #e5e7eb",
@@ -157,7 +157,7 @@ function CompanyTab() {
                     ลบ
                   </button>
                 )}
-                <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 5 }}>PNG พื้นโปร่งใส · แนะนำ 480×160 px</div>
+                <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 5 }}>PNG พื้นโปร่งใส · แนะนำ 480×160 px</div>
                 <input ref={wordmarkRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadWordmark} />
               </div>
             </div>
@@ -259,7 +259,7 @@ function ImageUploadBox({
           {value && (
             <button className="btn btn-ghost btn-sm" onClick={() => onChange("")}>ลบ</button>
           )}
-          <span style={{ fontSize: "0.67rem", color: "#9ca3af" }}>PNG, JPG · โปร่งใสได้</span>
+          <span style={{ fontSize: "0.65rem", color: "#9ca3af" }}>PNG, JPG · โปร่งใสได้</span>
         </div>
       </div>
       <input ref={ref} type="file" accept="image/*" style={{ display: "none" }} onChange={upload} />
@@ -419,25 +419,10 @@ function PersonsTab() {
   const [newAvatar, setNewAvatar] = useState<string | undefined>(undefined);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
-  // อ่านไฟล์รูป → data URL (ย่อขนาดผ่าน canvas กัน localStorage เต็ม)
-  function readAvatar(file: File | undefined, cb: (url: string) => void) {
+  // อ่านไฟล์รูป → ย่อขนาด (มาตรฐานกลาง imageResize) กัน localStorage เต็ม
+  async function readAvatar(file: File | undefined, cb: (url: string) => void) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const size = 128;
-        const c = document.createElement("canvas");
-        c.width = size; c.height = size;
-        const ctx = c.getContext("2d");
-        if (!ctx) { cb(String(reader.result)); return; }
-        const s = Math.min(img.width, img.height);
-        ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
-        cb(c.toDataURL("image/jpeg", 0.82));
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
+    cb(await fileToResizedDataURL(file, 128));
   }
 
   useEffect(() => {
@@ -522,7 +507,7 @@ function PersonsTab() {
                         ? <img src={avatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: "3px solid #003366" }} />
                         : <span style={{ width: 84, height: 84, borderRadius: "50%", border: "2px dashed #c7ccd3", background: "#f8f9fb",
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: "#9ca3af" }}>
-                            <ImagePlus size={22} /><span style={{ fontSize: "0.6rem" }}>เพิ่มรูป</span>
+                            <ImagePlus size={22} /><span style={{ fontSize: "0.65rem" }}>เพิ่มรูป</span>
                           </span>}
                       <span style={{ position: "absolute", right: 0, bottom: 2, width: 26, height: 26, borderRadius: "50%", background: "#003366",
                         border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><ImagePlus size={13} /></span>
@@ -598,9 +583,9 @@ function PersonsTab() {
                       <span style={{ fontWeight: 600, color: p.active ? "#2D2D2D" : "#9ca3af" }}>{p.name}</span>
                     </div>
                   </td>
-                  <td><span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.title}</span></td>
-                  <td><span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.phone || "—"}</span></td>
-                  <td><span style={{ fontSize: "0.78rem", color: "#6b7280" }}>{p.email || "—"}</span></td>
+                  <td><span style={{ fontSize: "0.8rem", color: "#6b7280" }}>{p.title}</span></td>
+                  <td><span style={{ fontSize: "0.8rem", color: "#6b7280" }}>{p.phone || "—"}</span></td>
+                  <td><span style={{ fontSize: "0.8rem", color: "#6b7280" }}>{p.email || "—"}</span></td>
                   <td>
                     <button onClick={() => toggleActive(p.id)} className="badge"
                       style={{ border: "none", cursor: "pointer", fontFamily: "inherit",
@@ -629,7 +614,7 @@ function PersonsTab() {
               ))}
               {persons.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: "28px", textAlign: "center", color: "#9ca3af", fontSize: "0.82rem" }}>
+                  <td colSpan={6} style={{ padding: "28px", textAlign: "center", color: "#9ca3af", fontSize: "0.8rem" }}>
                     ยังไม่มีผู้รับผิดชอบ — กด &quot;+ เพิ่ม&quot; เพื่อเริ่มต้น
                   </td>
                 </tr>
@@ -637,7 +622,7 @@ function PersonsTab() {
             </tbody>
           </table>
         </div>
-        <p style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 10 }}>
+        <p style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: 10 }}>
           ผู้รับผิดชอบ <strong>ไม่ใช่ผู้ใช้ระบบ · Login ไม่ได้</strong> — ใช้สำหรับเลือกตอนสร้างผู้สนใจเท่านั้น
         </p>
       </div>
@@ -742,12 +727,12 @@ function RulesTab() {
               </span>
             ))}
           </div>
-          <p style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 8 }}>ทุกตัวแทนใช้ขั้นตอนเดียวกัน · เพิ่มงานย่อย (Sales Steps) ในแต่ละขั้นได้ แต่แก้ Core Stage ไม่ได้</p>
+          <p style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: 8 }}>ทุกตัวแทนใช้ขั้นตอนเดียวกัน · เพิ่มงานย่อย (Sales Steps) ในแต่ละขั้นได้ แต่แก้ Core Stage ไม่ได้</p>
 
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", marginTop: 12,
             background: "#f8fafc", border: "1px solid #eef1f5", borderLeft: "3px solid #003366", borderRadius: 10 }}>
             <Info size={15} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontSize: "0.78rem", color: "#374151", lineHeight: 1.5 }}>
+            <div style={{ fontSize: "0.8rem", color: "#374151", lineHeight: 1.5 }}>
               <strong style={{ color: "#003366" }}>ไปป์ไลน์เริ่มต้น</strong> — ทุกโอกาสการขายใช้เส้นทางการขายมาตรฐาน
               (Lead → Won / Lost) เพียงเส้นทางเดียว · ไม่มีไปป์ไลน์อื่นให้เลือก
             </div>
@@ -767,9 +752,9 @@ function RulesTab() {
                   <input className="form-input" type="number" min={0} max={f.max} value={rules[f.k]}
                     onChange={e => set(f.k, Math.max(0, Number(e.target.value)) as BizRules[typeof f.k])}
                     style={{ fontFamily: "monospace", minWidth: 0 }} />
-                  <span style={{ fontSize: "0.76rem", color: "#6b7280", flexShrink: 0 }}>{f.unit}</span>
+                  <span style={{ fontSize: "0.72rem", color: "#6b7280", flexShrink: 0 }}>{f.unit}</span>
                 </div>
-                <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>{f.hint}</div>
+                <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>{f.hint}</div>
               </div>
             ))}
           </div>
@@ -784,7 +769,7 @@ function RulesTab() {
                 <option key={p.id} value={p.id}>{p.name}{p.title ? ` · ${p.title}` : ""}</option>
               ))}
             </select>
-            <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ผู้สนใจโดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
+            <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ผู้สนใจโดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
           </div>
         </div>
 
@@ -797,7 +782,7 @@ function RulesTab() {
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", marginBottom: 14,
             background: "#f8fafc", border: "1px solid #eef1f5", borderLeft: "3px solid #003366", borderRadius: 10 }}>
             <Info size={15} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontSize: "0.78rem", color: "#374151", lineHeight: 1.5 }}>
+            <div style={{ fontSize: "0.8rem", color: "#374151", lineHeight: 1.5 }}>
               รายการเหตุผลเหล่านี้จะแสดงเป็นตัวเลือกเมื่อ<strong style={{ color: "#003366" }}>ปิดการขายไม่สำเร็จ (Lost)</strong> ·
               ใช้ตอนปิดการขายเป็น Lost เพื่อบันทึกสาเหตุที่เสียโอกาส
             </div>
@@ -817,7 +802,7 @@ function RulesTab() {
               </span>
             ))}
             {lostReasons.length === 0 && (
-              <span style={{ fontSize: "0.74rem", color: "#9ca3af" }}>ยังไม่มีเหตุผล — เพิ่มด้านล่าง</span>
+              <span style={{ fontSize: "0.72rem", color: "#9ca3af" }}>ยังไม่มีเหตุผล — เพิ่มด้านล่าง</span>
             )}
           </div>
 
@@ -830,7 +815,7 @@ function RulesTab() {
               <Plus size={14} /> เพิ่ม
             </button>
           </div>
-          <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 6 }}>เพิ่มเหตุผลเฉพาะของตัวแทนได้ · กด × เพื่อลบออกจากรายการ</div>
+          <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 6 }}>เพิ่มเหตุผลเฉพาะของตัวแทนได้ · กด × เพื่อลบออกจากรายการ</div>
         </div>
 
         {/* Locked HQ rules */}
@@ -842,7 +827,7 @@ function RulesTab() {
             {LOCKED_RULES.map((r, i) => (
               <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "#f8fafc", border: "1px solid #eef1f5", borderRadius: 10 }}>
                 <ShieldCheck size={15} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
-                <span style={{ fontSize: "0.78rem", color: "#374151", lineHeight: 1.5 }}>{r}</span>
+                <span style={{ fontSize: "0.8rem", color: "#374151", lineHeight: 1.5 }}>{r}</span>
               </div>
             ))}
           </div>

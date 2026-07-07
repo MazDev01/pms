@@ -5,7 +5,7 @@ import {
   Download, Users, Target, CheckCircle2, Trophy, TrendingDown,
 } from "lucide-react";
 import {
-  hqPipelineStages, hqPipelineLostReasons, hqPipelineByProduct, hqAllQuotations, dealerLeaderboard, mainTemplateOf,
+  hqPipelineLostReasons, hqPipelineByProduct, hqAllQuotations, dealerLeaderboard, mainTemplateOf,
 } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -20,13 +20,13 @@ const STAGE_PALETTE = ["#94a3b8", "#60a5fa", "#2563eb", "#1e40af", "#003366"];
 // ── Funnel ────────────────────────────────────────────────────────
 type FunnelStage = { key: string; label: string; count: number; valueNum: number };
 function FunnelChart({ stages }: { stages: FunnelStage[] }) {
-  const maxCount = stages[0]?.count ?? 1;
+  const maxCount = stages[0]?.count || 1; // || กัน 0/0 = NaN ตอนไม่มีใบเสนอราคาในช่วงเวลา
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {stages.map((stage, i) => {
         const prev      = stages[i - 1];
-        const convRate  = prev ? Math.round((stage.count / prev.count) * 100) : null;
+        const convRate  = prev && prev.count > 0 ? Math.round((stage.count / prev.count) * 100) : null;
         const widthPct  = Math.round((stage.count / maxCount) * 100);
         const isLast    = i === stages.length - 1;
         const color     = STAGE_PALETTE[Math.min(i, STAGE_PALETTE.length - 1)];
@@ -42,7 +42,7 @@ function FunnelChart({ stages }: { stages: FunnelStage[] }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 4px 19px" }}>
                 <div style={{ width: 1.5, height: 16, background: "#dde1e7", flexShrink: 0 }} />
                 <span style={{
-                  fontSize: "0.63rem", fontWeight: 700, color: convColor,
+                  fontSize: "0.65rem", fontWeight: 700, color: convColor,
                   background: convColor + "18", borderRadius: 20,
                   padding: "2px 9px", border: `1px solid ${convColor}28`,
                   display: "flex", alignItems: "center", gap: 4,
@@ -66,10 +66,10 @@ function FunnelChart({ stages }: { stages: FunnelStage[] }) {
                     width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
                     background: isLast ? "#003366" : color + "20",
                     color: isLast ? "#fff" : color,
-                    fontSize: "0.63rem", fontWeight: 800,
+                    fontSize: "0.65rem", fontWeight: 800,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>{i + 1}</div>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: isLast ? "#003366" : "#2D2D2D" }}>
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: isLast ? "#003366" : "#2D2D2D" }}>
                     {stage.label}
                   </span>
                 </div>
@@ -94,13 +94,13 @@ function FunnelChart({ stages }: { stages: FunnelStage[] }) {
               {/* Bottom row */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                 <div>
-                  <div style={{ fontSize: "0.6rem", color: "#9ca3af", marginBottom: 1 }}>มูลค่ารวม</div>
-                  <div style={{ fontSize: "0.96rem", fontWeight: 800, color: isLast ? "#003366" : "#2D2D2D" }}>
+                  <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 1 }}>มูลค่ารวม</div>
+                  <div style={{ fontSize: "0.92rem", fontWeight: 800, color: isLast ? "#003366" : "#2D2D2D" }}>
                     {fmtM(stage.valueNum)}
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "0.6rem", color: "#9ca3af", marginBottom: 1 }}>เฉลี่ย/โอกาสการขาย</div>
+                  <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 1 }}>เฉลี่ย/โอกาสการขาย</div>
                   <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>
                     {fmtM(stage.count ? Math.round(stage.valueNum / stage.count) : 0)}
                   </div>
@@ -124,13 +124,13 @@ function LostReasons() {
             width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
             background: i === 0 ? "#fef2f2" : "#f4f6f9",
             color: i === 0 ? "#dc2626" : "#9ca3af",
-            fontSize: "0.62rem", fontWeight: 800,
+            fontSize: "0.65rem", fontWeight: 800,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>{i + 1}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: "0.73rem", color: "#2D2D2D", fontWeight: 600 }}>{r.reason}</span>
-              <span style={{ fontSize: "0.67rem", fontWeight: 700, color: "#dc2626", flexShrink: 0, marginLeft: 8 }}>
+              <span style={{ fontSize: "0.72rem", color: "#2D2D2D", fontWeight: 600 }}>{r.reason}</span>
+              <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#dc2626", flexShrink: 0, marginLeft: 8 }}>
                 {r.count} ราย
               </span>
             </div>
@@ -173,7 +173,7 @@ function ProductBreakdown({ items }: { items: ProductItem[] }) {
             </div>
             <div style={{ textAlign: "right", flexShrink: 0, width: 70 }}>
               <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#2D2D2D" }}>{fmtM(p.valueNum)}</div>
-              <div style={{ fontSize: "0.6rem", color: "#9ca3af" }}>{pct}%</div>
+              <div style={{ fontSize: "0.65rem", color: "#9ca3af" }}>{pct}%</div>
             </div>
           </div>
         );
@@ -186,8 +186,8 @@ function ProductBreakdown({ items }: { items: ProductItem[] }) {
 
 // ── Main ──────────────────────────────────────────────────────────
 export default function SalesOverviewPage() {
-  const { timeRange } = useFilters();
-  const pf = 1; // ตัวเลขจริง — ไม่สเกลปลอมตามช่วงเวลา (timeRange ใช้แสดง subtitle เท่านั้น)
+  const { timeRange, inRange } = useFilters();
+  const pf = 1; // ตัวเลขจริง — ไม่สเกลปลอม
 
   const [toast, setToast]           = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
@@ -195,39 +195,34 @@ export default function SalesOverviewPage() {
   const [dealerSel, setDealerSel]   = useState<string>("all");
   const selDealer = dealerSel === "all" ? null : dealerLeaderboard.find(d => d.code === dealerSel) ?? null;
 
-  // มุมมองรายตัวแทน: สร้าง funnel/สินค้า จากใบเสนอราคาจริงของตัวแทนนั้น (hqAllQuotations)
-  const branchQs = selDealer ? hqAllQuotations.filter(q => q.dealerCode === selDealer.code) : null;
-  const stages: { key: string; label: string; count: number; valueNum: number }[] = branchQs
-    ? (() => {
-        const by = (f: (s: string) => boolean) => branchQs.filter(q => f(q.status));
-        const sum = (qs: typeof branchQs) => qs.reduce((s, q) => s + q.valueNum, 0);
-        const sent   = by(s => s !== "draft");
-        const viewed = by(s => s === "viewed" || s === "won" || s === "lost");
-        const won    = by(s => s === "won");
-        return [
-          { key: "all",    label: "ใบเสนอราคาทั้งหมด",  count: branchQs.length, valueNum: sum(branchQs) },
-          { key: "sent",   label: "ส่งถึงลูกค้า",        count: sent.length,     valueNum: sum(sent) },
-          { key: "viewed", label: "ลูกค้าเปิดดู",        count: viewed.length,   valueNum: sum(viewed) },
-          { key: "won",    label: "ปิดการขายสำเร็จ",    count: won.length,      valueNum: sum(won) },
-        ];
-      })()
-    : hqPipelineStages;
-  const products: ProductItem[] = branchQs
-    ? (() => {
-        const colorOf = new Map(hqPipelineByProduct.map(p => [p.product, p.color]));
-        const m = new Map<string, { count: number; valueNum: number }>();
-        branchQs.forEach(q => {
-          // ยุบแม่แบบย่อยเข้าแม่แบบหลัก — ไม่ให้แถบแตกและได้สีตรงตามแม่แบบหลัก
-          const key = mainTemplateOf(q.productLine);
-          const r = m.get(key) ?? { count: 0, valueNum: 0 };
-          r.count += 1; r.valueNum += q.valueNum;
-          m.set(key, r);
-        });
-        return [...m.entries()]
-          .map(([product, v]) => ({ product, ...v, color: colorOf.get(product) ?? "#003366" }))
-          .sort((a, b) => b.valueNum - a.valueNum);
-      })()
-    : hqPipelineByProduct;
+  // ใบเสนอราคาในขอบเขต = ตัวแทนที่เลือก (ถ้ามี) + ช่วงเวลาจากตัวกรองหลัก → funnel/สินค้า กรองตามเวลาจริง
+  const branchQs = hqAllQuotations.filter(q => (!selDealer || q.dealerCode === selDealer.code) && inRange(q.createdAt));
+  const stages: { key: string; label: string; count: number; valueNum: number }[] = (() => {
+    const by = (f: (s: string) => boolean) => branchQs.filter(q => f(q.status));
+    const sum = (qs: typeof branchQs) => qs.reduce((s, q) => s + q.valueNum, 0);
+    const sent   = by(s => s !== "draft");
+    const viewed = by(s => s === "viewed" || s === "won" || s === "lost");
+    const won    = by(s => s === "won");
+    return [
+      { key: "all",    label: "ใบเสนอราคาทั้งหมด",  count: branchQs.length, valueNum: sum(branchQs) },
+      { key: "sent",   label: "ส่งถึงลูกค้า",        count: sent.length,     valueNum: sum(sent) },
+      { key: "viewed", label: "ลูกค้าเปิดดู",        count: viewed.length,   valueNum: sum(viewed) },
+      { key: "won",    label: "ปิดการขายสำเร็จ",    count: won.length,      valueNum: sum(won) },
+    ];
+  })();
+  const products: ProductItem[] = (() => {
+    const colorOf = new Map(hqPipelineByProduct.map(p => [p.product, p.color]));
+    const m = new Map<string, { count: number; valueNum: number }>();
+    branchQs.forEach(q => {
+      const key = mainTemplateOf(q.productLine); // ยุบแม่แบบย่อยเข้าแม่แบบหลัก
+      const r = m.get(key) ?? { count: 0, valueNum: 0 };
+      r.count += 1; r.valueNum += q.valueNum;
+      m.set(key, r);
+    });
+    return [...m.entries()]
+      .map(([product, v]) => ({ product, ...v, color: colorOf.get(product) ?? "#003366" }))
+      .sort((a, b) => b.valueNum - a.valueNum);
+  })();
 
   const first = stages[0];
   const last  = stages[stages.length - 1];
@@ -259,10 +254,10 @@ export default function SalesOverviewPage() {
     setTimeout(() => setToast(null), 2600);
   }
 
-  const midStage = selDealer ? stages[1] : stages[2];
+  const midStage = stages[1]; // funnel จากใบเสนอราคา (โครงสร้างเดียวกันทั้งมุมมองรวม/รายตัวแทน)
   const kpis = [
     {
-      label: selDealer ? "ใบเสนอราคาทั้งหมด" : "ผู้สนใจทั้งหมด",
+      label: "ใบเสนอราคาทั้งหมด",
       value: `${Math.round(first.count * pf).toLocaleString()} ราย`,
       sub: fmtM(Math.round(first.valueNum * pf)),
       iconClass: "kpi-navy",
@@ -271,14 +266,14 @@ export default function SalesOverviewPage() {
     {
       label: "ในกระบวนการ",
       value: `${Math.round(midStage.count * pf).toLocaleString()} ราย`,
-      sub: selDealer ? "ส่งถึงลูกค้าแล้ว" : "ส่งใบเสนอราคาแล้ว",
+      sub: "ส่งถึงลูกค้าแล้ว",
       iconClass: "kpi-navy",
       icon: <Target size={16} />,
     },
     {
       label: "อัตราแปลงทั้งกรวย",
       value: `${overallConv}%`,
-      sub: selDealer ? "ใบเสนอราคา → ปิดสำเร็จ" : "ผู้สนใจ → ปิดสำเร็จ",
+      sub: "ใบเสนอราคา → ปิดสำเร็จ",
       iconClass: overallConv >= 30 ? "kpi-green" : "kpi-amber",
       icon: <CheckCircle2 size={16} />,
     },
@@ -305,7 +300,7 @@ export default function SalesOverviewPage() {
         <div style={{
           position: "fixed", bottom: 24, right: 24, zIndex: 9999,
           background: "#2D2D2D", color: "#fff",
-          padding: "11px 18px", borderRadius: 12, fontSize: "0.78rem", fontWeight: 600,
+          padding: "11px 18px", borderRadius: 12, fontSize: "0.8rem", fontWeight: 600,
           boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: 8,
         }}>
           <Download size={14} /> {toast}
@@ -347,7 +342,7 @@ export default function SalesOverviewPage() {
                   {["CSV (Excel)"].map(f => (
                     <button key={f} onClick={() => doExport(f)} style={{
                       width: "100%", padding: "10px 16px", textAlign: "left",
-                      background: "none", border: "none", fontSize: "0.78rem",
+                      background: "none", border: "none", fontSize: "0.8rem",
                       color: "#2D2D2D", cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
                     }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#eef3f8"; }}
@@ -402,10 +397,10 @@ export default function SalesOverviewPage() {
                   textAlign: "center", padding: "0 8px",
                   borderRight: si < 3 ? "1px solid #e5e7eb" : "none",
                 }}>
-                  <div style={{ fontSize: "0.59rem", color: "#9ca3af", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                     {s.label}
                   </div>
-                  <div style={{ fontSize: "0.9rem", fontWeight: 800, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: "0.92rem", fontWeight: 800, color: s.color }}>{s.value}</div>
                 </div>
               ))}
             </div>
@@ -436,7 +431,7 @@ export default function SalesOverviewPage() {
               </div>
               <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {(branchQs ?? []).slice(0, 6).map(q => (
-                  <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.74rem" }}>
+                  <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
                     <span style={{ fontWeight: 700, color: "#003366", flexShrink: 0 }}>{q.quoteNo}</span>
                     <span style={{ flex: 1, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.customer}</span>
                     <span style={{ fontWeight: 800, color: "#2D2D2D", flexShrink: 0 }}>{fmtM(q.valueNum)}</span>

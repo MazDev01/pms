@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { hqAllQuotations, quotationStatusLabel, quotationStatusColor, solutionProducts, mainTemplateOf, type HQQuotation, type QuotationStatus } from "@/lib/mock";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { useFilters, parseDate } from "@/context/FilterContext";
 import { Search, Eye, X } from "lucide-react";
 
 const PRIMARY = "#003366";
@@ -56,6 +57,7 @@ export default function HQQuotationsPage() {
   const [statusFilter, setStatusFilter] = useState<HQQuotation["status"] | "all">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
   const [viewQ, setViewQ] = useState<HQQuotation | null>(null); // View → เจาะดูใบเสนอราคา (HQ Data Ownership)
+  const { inRange } = useFilters(); // ตัวกรองเวลาหลัก (FilterBar) → กรองตาม createdAt
 
   // เปิดหน้าด้วย ?dealer=CODE (เช่นกดมาจากการ์ดสถิติในแดชบอร์ด) → กรองตัวแทนนั้นให้เลย
   useEffect(() => {
@@ -66,8 +68,8 @@ export default function HQQuotationsPage() {
 
   // ขอบเขตของ pills/การ์ดสถานะ = ตัวแทนที่เลือก (ตัวเลือกเฉพาะหน้านี้)
   const scoped = useMemo(
-    () => dealerFilter === "all" ? hqAllQuotations : hqAllQuotations.filter((q) => q.dealerCode === dealerFilter),
-    [dealerFilter],
+    () => hqAllQuotations.filter((q) => (dealerFilter === "all" || q.dealerCode === dealerFilter) && inRange(q.createdAt)),
+    [dealerFilter, inRange],
   );
 
   const stats = useMemo(() => {
@@ -81,7 +83,7 @@ export default function HQQuotationsPage() {
   }, [scoped]);
 
   const filtered = useMemo(() => {
-    let list = [...hqAllQuotations];
+    let list = hqAllQuotations.filter((r) => inRange(r.createdAt)); // ตัวกรองเวลาหลัก
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -104,11 +106,12 @@ export default function HQQuotationsPage() {
     list.sort((a, b) => {
       const so = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
       if (so !== 0) return so;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      // createdAt เป็นวันที่ไทย พ.ศ. → parseDate (new Date() อ่านไม่ได้ = Invalid Date)
+      return (parseDate(b.createdAt)?.getTime() ?? 0) - (parseDate(a.createdAt)?.getTime() ?? 0);
     });
 
     return list;
-  }, [search, dealerFilter, statusFilter, productFilter]);
+  }, [search, dealerFilter, statusFilter, productFilter, inRange]);
 
   return (
     <div className="erp">
@@ -121,8 +124,8 @@ export default function HQQuotationsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FilterBar dims={[]} />
           <ExportMenu filename="hq-quotations" title="ใบเสนอราคา (ทั้งเครือ)"
-            headers={["เลขที่","ตัวแทน","ลูกค้า","มูลค่า","ส่วนลด %","สถานะ","เซลส์","สายผลิตภัณฑ์"]}
-            rows={filtered.map(q=>[q.quoteNo,q.dealerName,q.customer,q.valueNum,q.discountPct,quotationStatusLabel[q.status]??q.status,q.salesperson,q.productLine])} />
+            headers={["เลขที่","ตัวแทน","ลูกค้า","มูลค่า","ส่วนลด %","สถานะ","เซลส์","สายผลิตภัณฑ์","วันที่"]}
+            rows={filtered.map(q=>[q.quoteNo,q.dealerName,q.customer,q.valueNum,q.discountPct,quotationStatusLabel[q.status]??q.status,q.salesperson,q.productLine,q.createdAt])} />
         </div>
       </div>
 
@@ -130,7 +133,7 @@ export default function HQQuotationsPage() {
       {(() => {
         const BORDER = "#e5e7eb";
         const pill = (label: string, value: string) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
             {label} <span style={{ color: PRIMARY }}>{value}</span>
           </div>
         );
@@ -154,8 +157,8 @@ export default function HQQuotationsPage() {
                       border: active ? `2px solid ${PRIMARY}` : `1px solid ${BORDER}`,
                       boxShadow: active ? "0 4px 14px rgba(0,51,102,.12)" : "none" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 99, background: sm.bg, color: sm.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.78rem", fontWeight: 800 }}>{items.length}</span>
-                      <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#2D2D2D" }}>{sm.label}</span>
+                      <span style={{ width: 26, height: 26, borderRadius: 99, background: sm.bg, color: sm.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", fontWeight: 800 }}>{items.length}</span>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#2D2D2D" }}>{sm.label}</span>
                     </div>
                     <div style={{ fontSize: "0.72rem", fontWeight: 700, color: MUTED, marginTop: 7 }}>{fmtM(items.reduce((t, q) => t + q.valueNum, 0))}</div>
                   </button>
@@ -242,7 +245,7 @@ export default function HQQuotationsPage() {
           ))}
         </select>
 
-        <span style={{ fontSize: "0.78rem", color: MUTED, whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: "0.8rem", color: MUTED, whiteSpace: "nowrap" }}>
           แสดง {filtered.length} / {hqAllQuotations.length} รายการ
         </span>
       </div>
@@ -321,7 +324,7 @@ export default function HQQuotationsPage() {
                         <span className="badge" style={{ background: "#eef2f7", color: PRIMARY }}>
                           {q.dealerCode}
                         </span>
-                        <span style={{ marginLeft: 6, fontSize: "0.75rem", color: MUTED }}>
+                        <span style={{ marginLeft: 6, fontSize: "0.72rem", color: MUTED }}>
                           {q.dealerName}
                         </span>
                       </td>
@@ -353,7 +356,7 @@ export default function HQQuotationsPage() {
                       <td style={{ whiteSpace: "nowrap" }}>{q.salesperson}</td>
 
                       {/* Date — createdAt เป็นสตริงไทย (เช่น "24 มิ.ย. 2026") ใช้ new Date() ไม่ได้ จึงแสดงดิบ */}
-                      <td style={{ color: MUTED, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                      <td style={{ color: MUTED, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                         {q.createdAt}
                       </td>
 
@@ -385,7 +388,7 @@ export default function HQQuotationsPage() {
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewQ.quoteNo}</div>
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{viewQ.customer} · {viewQ.dealerName}</div>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{viewQ.customer} · {viewQ.dealerName}</div>
               </div>
               <button onClick={() => setViewQ(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
             </div>
@@ -401,12 +404,12 @@ export default function HQQuotationsPage() {
                 ["วันที่", viewQ.createdAt],
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 12px" }}>
-                  <div style={{ fontSize: "0.63rem", color: "#6b7280", marginBottom: 2 }}>{k}</div>
-                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D" }}>{v}</div>
+                  <div style={{ fontSize: "0.65rem", color: "#6b7280", marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{v}</div>
                 </div>
               ))}
             </div>
-            <div style={{ padding: "0 20px 16px", fontSize: "0.66rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูใบเสนอราคาได้ทุกตัวแทน (Data Ownership)</div>
+            <div style={{ padding: "0 20px 16px", fontSize: "0.65rem", color: "#9ca3af" }}>ข้อมูลเป็นของ Benjamin (HQ) — เจาะดูใบเสนอราคาได้ทุกตัวแทน (Data Ownership)</div>
           </div>
         </div>
       )}

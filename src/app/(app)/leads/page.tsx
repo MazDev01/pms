@@ -6,8 +6,8 @@ import {
   leadStatusLabel, leadStatusColor,
   responsiblePersons, RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
-  solutionProducts, LOST_REASONS, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf,
-  type LeadStatus, type LeadRow, type ResponsiblePerson,
+  solutionProducts, loadLostReasons, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
+  type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType,
 } from "@/lib/mock";
 import { LeadTasks } from "@/components/ui/LeadTasks";
 import { LeadQuotationsPanel } from "@/components/ui/LeadQuotationsPanel";
@@ -20,7 +20,7 @@ import {
   Plus, Search, X,
   CheckCircle2, User,
   MessageSquare, Paperclip, Trash2,
-  Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare,
+  Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown, Filter,
   LayoutList, Columns3,
@@ -28,7 +28,7 @@ import {
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useSales } from "@/context/SalesContext";
 import { DrawerSection } from "@/components/ui/RightDrawer";
-import { useTableLayout } from "@/components/ui/TableTools";
+import { useTableLayout, TableTools } from "@/components/ui/TableTools";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 
@@ -54,6 +54,7 @@ type SortKey = "company"|"value"|"status"|"assigned"|"priority";
 // คอลัมน์ที่ซ่อน/แสดงได้ (optional) สำหรับ TableTools — key ตรงกับ th/td/col ในตาราง
 const COLS: { key: string; label: string }[] = [
   { key: "province", label: "จังหวัด" },
+  { key: "source",   label: "ช่องทางที่มา" },
   { key: "product",  label: "แม่แบบ" },
   { key: "activity", label: "กิจกรรมล่าสุด" },
 ];
@@ -194,14 +195,14 @@ function OverviewEditor({ lead, persons, onSave }: {
   const pct = lead.status === "PAID" ? 100 : lead.status === "CANCELLED" ? 0
     : taskProgress(lead.tasks?.length ? lead.tasks : buildLeadTasks());
 
-  const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
-  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.82rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff" };
+  const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
+  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.8rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff" };
 
   function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value), lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined }); }
 
   return (
     <div>
-      <div style={{ fontSize:"0.68rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:12, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
+      <div style={{ fontSize:"0.65rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:12, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
         ภาพรวม · แก้ไขได้ในหน้านี้
       </div>
       {/* เปลี่ยนรูป/โลโก้ลูกค้า */}
@@ -252,7 +253,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           <div><label style={{...lbl, color:"#dc2626"}}>เหตุผลที่เสีย</label>
             <select value={f.lostReason} onChange={e=>set("lostReason",e.target.value)} style={{...inp, borderColor:"#fecaca"}}>
               <option value="">— เลือกเหตุผล —</option>
-              {LOST_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+              {loadLostReasons().map(r=><option key={r} value={r}>{r}</option>)}
             </select>
           </div>
         )}
@@ -269,7 +270,7 @@ function OverviewEditor({ lead, persons, onSave }: {
       </div>
 
       {/* ความคืบหน้า (อ่านอย่างเดียว) */}
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:14, fontSize:"0.76rem", color:"#374151" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:14, fontSize:"0.72rem", color:"#374151" }}>
         <span style={{ fontWeight:600 }}>ความคืบหน้า</span>
         <span style={{ flex:1, height:6, borderRadius:99, background:"#f0f4f8", overflow:"hidden" }}>
           <span className="bar-grow" style={{ display:"block", height:"100%", width:`${pct}%`, background:f.status==="CANCELLED"?"#dc2626":f.status==="PAID"?"#059669":"#003366" }} />
@@ -335,10 +336,10 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 
   const inputStyle: React.CSSProperties = {
     width:"100%", border:"1px solid #e5e7eb", borderRadius:8,
-    padding:"8px 11px", fontSize:"0.82rem", outline:"none", color:"#2D2D2D",
+    padding:"8px 11px", fontSize:"0.8rem", outline:"none", color:"#2D2D2D",
   };
   const labelStyle: React.CSSProperties = {
-    display:"block", fontSize:"0.68rem", fontWeight:700,
+    display:"block", fontSize:"0.65rem", fontWeight:700,
     color:"#374151", marginBottom:4, textTransform:"uppercase", letterSpacing:"0.04em",
   };
 
@@ -356,7 +357,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
             padding:"18px 24px", borderBottom:"1px solid #e5e7eb", background:"#003366" }}>
             <div>
               <div style={{ fontSize:"1rem", fontWeight:800, color:"#fff" }}>{isEdit ? "แก้ไขลูกค้าเป้าหมาย" : "เพิ่มลูกค้าเป้าหมาย"}</div>
-              <div style={{ fontSize:"0.7rem", color:"#374151" }}>{isEdit ? `แก้ไขข้อมูล ${initial?.id}` : "กรอกข้อมูลลูกค้าเป้าหมาย"}</div>
+              <div style={{ fontSize:"0.72rem", color:"#374151" }}>{isEdit ? `แก้ไขข้อมูล ${initial?.id}` : "กรอกข้อมูลลูกค้าเป้าหมาย"}</div>
             </div>
             <button onClick={onClose}
               style={{ width:32, height:32, borderRadius:9, border:"1px solid rgba(255,255,255,.2)",
@@ -496,11 +497,11 @@ function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: LeadRow) =>
   }
   function resetTemplate() { setText(buildLeadReport(lead, thaiDateStr(new Date()))); }
 
-  const lbl: React.CSSProperties = { display:"block", fontSize:"0.68rem", fontWeight:700, color:"#6b7280", marginBottom:6 };
+  const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:6 };
 
   return (
     <div>
-      <div style={{ fontSize:"0.68rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:10, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
+      <div style={{ fontSize:"0.65rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:10, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
         รายงานการติดตาม · แก้ไขได้ทั้งหมด
       </div>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
@@ -513,7 +514,7 @@ function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: LeadRow) =>
       <textarea ref={ref} value={text} onChange={e=>setText(e.target.value)}
         spellCheck={false}
         style={{ width:"100%", minHeight:320, padding:"12px 14px", borderRadius:10, border:"1px solid #e5e7eb",
-          fontSize:"0.82rem", lineHeight:1.7, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", resize:"vertical", whiteSpace:"pre-wrap" }} />
+          fontSize:"0.8rem", lineHeight:1.7, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", resize:"vertical", whiteSpace:"pre-wrap" }} />
       <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
         {dirty && <button onClick={()=>setText(initial())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
         <button onClick={()=>onSave({ ...lead, report: text })} disabled={!dirty}
@@ -534,6 +535,7 @@ export default function LeadsPage() {
   // List state
   const {
     leads: allLeads, addLead, updateLead, deleteLead: removeLead, updateLeadStatus,
+    appointments, addAppointment,
   } = useSales();
   // ปิดการขายสำเร็จ = เป็น "ลูกค้า" แล้ว → ไม่แสดงในหน้าลูกค้าเป้าหมาย (ไปอยู่ที่ /customers)
   const leadsData = useMemo(() => allLeads.filter(l => l.status !== "PAID"), [allLeads]);
@@ -594,8 +596,11 @@ export default function LeadsPage() {
 
   // Panel state
   const [selectedLead, setSelectedLead] = useState<LeadRow|null>(null);
-  const [activeTab, setActiveTab] = useState<"overview"|"tasks"|"report"|"activities"|"quotation"|"files">("overview");
+  const [activeTab, setActiveTab] = useState<"overview"|"tasks"|"report"|"activities"|"appts"|"quotation"|"files">("overview");
   const [editingField, setEditingField] = useState<string|null>(null);
+  // ฟอร์มนัดหมายในแท็บนัดหมายของลีด (นัดก่อนปิดการขาย)
+  const [apptAdding, setApptAdding] = useState(false);
+  const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
   const [draft, setDraft] = useState<LeadRow|null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -708,6 +713,7 @@ export default function LeadsPage() {
   const current = draft ?? selectedLead;
   const lid = current?.id ?? "";
 
+  function resetApptForm() { setApptAdding(false); setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" }); }
   function openPanel(l: LeadRow) {
     if (selectedLead?.id === l.id) return closePanel();
     setSelectedLead(l); setDraft({...l});
@@ -715,12 +721,14 @@ export default function LeadsPage() {
     setActiveTab("overview");
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
+    resetApptForm(); // กันฟอร์มนัดหมายค้างข้ามลีด
   }
   function closePanel() {
     setSelectedLead(null); setDraft(null);
     setEditingField(null); setShowDeleteConfirm(false);
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
+    resetApptForm();
   }
 
   // เปิดโมดัลอัตโนมัติจาก ?open=N (ลิงก์เดิม /leads/[id] redirect มาที่นี่ — deep link ยังใช้ได้)
@@ -833,9 +841,13 @@ export default function LeadsPage() {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <FilterBar dims={[]} />
+            {view !== "kanban" && (
+              <TableTools storageKey="leads" columns={COLS} hiddenCols={hiddenCols} onToggleCol={toggleCol}
+                density={density} onDensityChange={setDensity} />
+            )}
             <ExportMenu filename="leads" title="รายชื่อลูกค้าเป้าหมาย"
-              headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","แม่แบบ","สถานะ","ความคืบหน้า","มูลค่า","ผู้รับผิดชอบ","กิจกรรมล่าสุด"]}
-              rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.product,leadStatusLabel[l.status],`${leadProg(l)}%`,fmtVal(l.value),l.assigned,lastActivity(l)])} />
+              headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","ช่องทางที่มา","แม่แบบ","สถานะ","ความคืบหน้า","มูลค่า","ผู้รับผิดชอบ","กิจกรรมล่าสุด"]}
+              rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.source??"—",l.product,leadStatusLabel[l.status],`${leadProg(l)}%`,fmtVal(l.value),l.assigned,lastActivity(l)])} />
             <button onClick={() => setShowAddForm(true)} className="btn btn-primary btn-md">
               <Plus size={15} /> เพิ่มลูกค้าเป้าหมาย
             </button>
@@ -844,17 +856,17 @@ export default function LeadsPage() {
 
         {/* สรุปรวม (ไม่ซ้ำกับ funnel ด้านล่าง — funnel คุมการนับ/กรองตามสถานะ) */}
         <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700,
+          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", fontWeight:700,
             background:"#fff", border:"1px solid #e5e7eb", borderRadius:99, padding:"7px 16px" }}>
             ลูกค้าเป้าหมายทั้งหมด: <span style={{ color:"#003366" }}>{leadsData.length}</span>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.78rem", fontWeight:700,
+          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", fontWeight:700,
             background:"#fff", border:"1px solid #e5e7eb", borderRadius:99, padding:"7px 16px" }}>
             มูลค่ารวม: <span style={{ color:"#003366" }}>{fmtM(totalValue)}</span>
           </div>
           {filterStatus!=="ALL" && (
             <button onClick={()=>setFilterStatus("ALL")}
-              style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.76rem", fontWeight:600,
+              style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600,
                 background:"#f0f4f8", border:"1px solid #e5e7eb", borderRadius:99, padding:"7px 14px",
                 color:"#374151", cursor:"pointer" }}>
               แสดงทั้งหมด
@@ -879,10 +891,10 @@ export default function LeadsPage() {
                 <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                   <span style={{ width:18, height:18, borderRadius:"50%", background:col.bg,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:"0.6rem", color:col.text, fontWeight:800 }}>{c}</span>
+                    fontSize:"0.65rem", color:col.text, fontWeight:800 }}>{c}</span>
                   {leadStatusLabel[p]}
                 </div>
-                <span style={{ fontSize:"0.62rem", color:active?col.text:"#C0C0C0", fontWeight:500 }}>
+                <span style={{ fontSize:"0.65rem", color:active?col.text:"#C0C0C0", fontWeight:500 }}>
                   {val>0 ? fmtM(val) : "—"}
                 </span>
               </button>
@@ -911,7 +923,7 @@ export default function LeadsPage() {
             <button onClick={()=>setShowFilters(p=>!p)}
               style={{ display:"flex", alignItems:"center", gap:6, background:showFilters||hasActiveFilters?"#003366":"#fff",
                 border:`1px solid ${showFilters||hasActiveFilters?"#003366":"#e5e7eb"}`,
-                borderRadius:10, padding:"0 13px", height:36, boxSizing:"border-box", fontSize:"0.77rem", fontWeight:600,
+                borderRadius:10, padding:"0 13px", height:36, boxSizing:"border-box", fontSize:"0.8rem", fontWeight:600,
                 color:showFilters||hasActiveFilters?"#fff":"#6b7280", cursor:"pointer" }}>
               <Filter size={13} />
               ตัวกรอง {hasActiveFilters && <span style={{ background:"rgba(255,255,255,.3)", borderRadius:99, padding:"0 5px", fontSize:"0.65rem" }}>เปิด</span>}
@@ -922,7 +934,7 @@ export default function LeadsPage() {
               <button onClick={()=>setHideEmpty(v=>!v)}
                 style={{ display:"flex", alignItems:"center", gap:6, padding:"0 12px", height:36, boxSizing:"border-box", borderRadius:9, cursor:"pointer",
                   border:`1px solid ${hideEmpty?"#003366":"#e5e7eb"}`, background: hideEmpty?"#dce5f0":"#fff",
-                  color: hideEmpty?"#003366":"#6b7280", fontFamily:"inherit", fontSize:"0.75rem", fontWeight:600 }}>
+                  color: hideEmpty?"#003366":"#6b7280", fontFamily:"inherit", fontSize:"0.72rem", fontWeight:600 }}>
                 {hideEmpty ? <Check size={13} /> : <Columns3 size={13} />} ซ่อนคอลัมน์ว่าง
               </button>
             )}
@@ -930,7 +942,7 @@ export default function LeadsPage() {
               {([["list", LayoutList, "ตาราง"], ["kanban", Columns3, "บอร์ด"]] as const).map(([v, Ico, tip]) => (
                 <button key={v} title={tip} onClick={()=>setView(v)}
                   style={{ display:"flex", alignItems:"center", gap:5, padding:"0 12px", height:"100%", border:"none", cursor:"pointer",
-                    background: view===v ? "#003366" : "#fff", color: view===v ? "#fff" : "#6b7280", fontFamily:"inherit", fontSize:"0.75rem", fontWeight:600 }}>
+                    background: view===v ? "#003366" : "#fff", color: view===v ? "#fff" : "#6b7280", fontFamily:"inherit", fontSize:"0.72rem", fontWeight:600 }}>
                   <Ico size={14} /> {tip}
                 </button>
               ))}
@@ -941,8 +953,8 @@ export default function LeadsPage() {
 
         {/* ── FILTER DRAWER (เลื่อนจากขวา) ── */}
         {showFilters && (() => {
-          const lbl = { fontSize:"0.68rem", fontWeight:700, color:"#374151", marginBottom:6, display:"block" } as const;
-          const inp = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", outline:"none", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" as const };
+          const lbl = { fontSize:"0.65rem", fontWeight:700, color:"#374151", marginBottom:6, display:"block" } as const;
+          const inp = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.8rem", outline:"none", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" as const };
           return (
             <>
               <div onClick={()=>setShowFilters(false)} className="drawer-overlay"
@@ -999,8 +1011,9 @@ export default function LeadsPage() {
             <div className={`table-wrap${density === "compact" ? " dense" : ""}`}>
               <table>
                 <colgroup>
-                  <col style={{width:"20%"}} />
+                  <col style={{width:"18%"}} />
                   {!hiddenCols.includes("province") && <col style={{width:"9%"}} />}
+                  {!hiddenCols.includes("source")   && <col style={{width:"10%"}} />}
                   {!hiddenCols.includes("product")  && <col style={{width:"13%"}} />}
                   <col style={{width:"13%"}} />
                   <col style={{width:"13%"}} />
@@ -1014,6 +1027,7 @@ export default function LeadsPage() {
                     {([
                       ["company","บริษัท / ผู้ติดต่อ",null],
                       [null,"จังหวัด","province"],
+                      [null,"ช่องทางที่มา","source"],
                       [null,"แม่แบบ","product"],
                       ["status","ขั้นตอน",null],
                       [null,"ความคืบหน้า",null],
@@ -1046,14 +1060,17 @@ export default function LeadsPage() {
                       <tr key={l.id} onClick={()=>openPanel(l)} className="clickable"
                         style={{ background:isSel?"#f0f4f8":undefined }}>
                         <td style={{ minWidth:0 }}>
-                          <div style={{ fontSize:"0.84rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
-                          <div style={{ fontSize:"0.68rem", color:"#374151", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.contact}>{l.contact}</div>
+                          <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
+                          <div style={{ fontSize:"0.65rem", color:"#374151", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.contact}>{l.contact}</div>
                         </td>
                         {!hiddenCols.includes("province") && (
-                          <td style={{ fontSize:"0.75rem", color:"#374151" }}>{l.province || "—"}</td>
+                          <td style={{ fontSize:"0.72rem", color:"#374151" }}>{l.province || "—"}</td>
+                        )}
+                        {!hiddenCols.includes("source") && (
+                          <td style={{ fontSize:"0.72rem", color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.source}>{l.source || "—"}</td>
                         )}
                         {!hiddenCols.includes("product") && (
-                          <td style={{ fontSize:"0.75rem", color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>{l.product || "—"}</td>
+                          <td style={{ fontSize:"0.72rem", color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>{l.product || "—"}</td>
                         )}
                         <td className="ovf-visible" style={{ position:"relative" }}
                           onClick={e => { e.stopPropagation(); setOpenStatusId(openStatusId === l.id ? null : l.id); }}>
@@ -1076,10 +1093,10 @@ export default function LeadsPage() {
                                         border:"none", background:s===l.status?"#f0f4f8":"transparent",
                                         cursor:"pointer", textAlign:"left" }}>
                                       <span style={{ width:8, height:8, borderRadius:"50%", background:c.text, flexShrink:0 }}/>
-                                      <span style={{ fontSize:"0.78rem", color:s===l.status?"#003366":"#2D2D2D", fontWeight:s===l.status?700:400 }}>
+                                      <span style={{ fontSize:"0.8rem", color:s===l.status?"#003366":"#2D2D2D", fontWeight:s===l.status?700:400 }}>
                                         {leadStatusLabel[s]}
                                       </span>
-                                      {s===l.status && <span style={{ marginLeft:"auto", fontSize:"0.68rem", color:"#003366" }}>✓</span>}
+                                      {s===l.status && <span style={{ marginLeft:"auto", fontSize:"0.65rem", color:"#003366" }}>✓</span>}
                                     </button>
                                   );
                                 })}
@@ -1096,13 +1113,13 @@ export default function LeadsPage() {
                                 <div style={{ flex:1, height:6, background:"#eef2f7", borderRadius:99, overflow:"hidden", minWidth:44 }}>
                                   <div style={{ height:"100%", width:`${p}%`, background:col, borderRadius:99 }} />
                                 </div>
-                                <span style={{ fontSize:"0.66rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums", minWidth:26, textAlign:"right" }}>{p}%</span>
+                                <span style={{ fontSize:"0.65rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums", minWidth:26, textAlign:"right" }}>{p}%</span>
                               </div>
                             );
                           })()}
                         </td>
                         {(
-                          <td className="num" style={{ fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D" }}
+                          <td className="num" style={{ fontSize:"0.8rem", fontWeight:700, color:"#2D2D2D" }}
                             onClick={e => { e.stopPropagation(); setEditValueId(l.id); setValueDraft(String(parseValue(l.value) || "")); }}>
                             {editValueId === l.id ? (
                               <input autoFocus type="number" value={valueDraft}
@@ -1130,14 +1147,14 @@ export default function LeadsPage() {
                               <CheckCircle2 size={11} /> ลูกค้าแล้ว
                             </span>
                           ) : (
-                            <span style={{ fontSize:"0.7rem", color:"#c7ccd3" }}>—</span>
+                            <span style={{ fontSize:"0.72rem", color:"#c7ccd3" }}>—</span>
                           )}
                         </td>
                       </tr>
                     );
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={9 - COLS.filter(c => hiddenCols.includes(c.key)).length} style={{ padding:"40px", textAlign:"center", color:"#374151", fontSize:"0.82rem" }}>
+                    <tr><td colSpan={10 - COLS.filter(c => hiddenCols.includes(c.key)).length} style={{ padding:"40px", textAlign:"center", color:"#374151", fontSize:"0.8rem" }}>
                       ไม่พบข้อมูล
                     </td></tr>
                   )}
@@ -1146,7 +1163,7 @@ export default function LeadsPage() {
             </div>
             <div style={{ padding:"11px 16px", borderTop:"1px solid #e5e7eb", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               {/* Left: range summary */}
-              <span style={{ fontSize:"0.73rem", color:"#374151" }}>
+              <span style={{ fontSize:"0.72rem", color:"#374151" }}>
                 แสดง {pageStart}–{pageEnd} จาก {filtered.length} รายการ
               </span>
               {/* Right: pagination controls */}
@@ -1207,7 +1224,7 @@ export default function LeadsPage() {
                     <span style={{ fontSize:"0.8rem", fontWeight:800, color:"#2D2D2D" }}>{leadStatusLabel[status]}</span>
                     <span className="badge" style={{ background:sc.bg, color:sc.text }}>{col.length}</span>
                   </div>
-                  {total > 0 && <div style={{ fontSize:"0.66rem", color:"#9ca3af", fontWeight:600, marginTop:3, fontVariantNumeric:"tabular-nums" }}>{fmtM(total)}</div>}
+                  {total > 0 && <div style={{ fontSize:"0.65rem", color:"#9ca3af", fontWeight:600, marginTop:3, fontVariantNumeric:"tabular-nums" }}>{fmtM(total)}</div>}
                 </div>
                 {/* cards */}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, minHeight:44 }}>
@@ -1238,23 +1255,23 @@ export default function LeadsPage() {
                         boxShadow: dragId===l.id ? "none" : "0 1px 4px rgba(0,0,0,.05)", transition:"box-shadow .12s, transform .12s" }}
                       onMouseEnter={e => { if (dragId!==l.id) (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 14px rgba(0,51,102,.12)"; }}
                       onMouseLeave={e => { if (dragId!==l.id) (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.05)"; }}>
-                      <div style={{ fontSize:"0.84rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
-                      <div style={{ fontSize:"0.7rem", color:"#6b7280", marginBottom:8 }}>{l.contact}</div>
+                      <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
+                      <div style={{ fontSize:"0.72rem", color:"#6b7280", marginBottom:8 }}>{l.contact}</div>
                       {/* จังหวัด + แม่แบบ */}
                       <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:9 }}>
                         {l.province && (
-                          <span style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:"0.63rem", fontWeight:600, color:"#475569", background:"#f1f5f9", borderRadius:6, padding:"2px 7px" }}>
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:"0.65rem", fontWeight:600, color:"#475569", background:"#f1f5f9", borderRadius:6, padding:"2px 7px" }}>
                             <MapPin size={10} /> {l.province}
                           </span>
                         )}
                         {l.product && (
-                          <span style={{ fontSize:"0.63rem", fontWeight:600, color:"#003366", background:"#eef3f8", border:"1px solid #dce5f0", borderRadius:6, padding:"2px 7px", maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>
+                          <span style={{ fontSize:"0.65rem", fontWeight:600, color:"#003366", background:"#eef3f8", border:"1px solid #dce5f0", borderRadius:6, padding:"2px 7px", maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>
                             {l.product}
                           </span>
                         )}
                       </div>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                        <span style={{ fontSize:"0.88rem", fontWeight:800, color:"#003366", fontVariantNumeric:"tabular-nums" }}>{fmtVal(l.value)}</span>
+                        <span style={{ fontSize:"0.86rem", fontWeight:800, color:"#003366", fontVariantNumeric:"tabular-nums" }}>{fmtVal(l.value)}</span>
                         <AssigneeAvatars value={l.assigned} size={24} showName={false} />
                       </div>
                       {/* Progress + จำนวนงาน + กิจกรรมล่าสุด */}
@@ -1262,9 +1279,9 @@ export default function LeadsPage() {
                         <div style={{ flex:1, height:5, background:"#eef2f7", borderRadius:99, overflow:"hidden" }}>
                           <div style={{ height:"100%", width:`${leadProg(l)}%`, background:"#003366", borderRadius:99 }} />
                         </div>
-                        <span style={{ fontSize:"0.6rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums" }}>{leadProg(l)}%</span>
+                        <span style={{ fontSize:"0.65rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums" }}>{leadProg(l)}%</span>
                       </div>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:"0.6rem", color:"#9ca3af", fontWeight:600 }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:"0.65rem", color:"#9ca3af", fontWeight:600 }}>
                         <span style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
                           <CheckSquare size={10} /> {leadTaskCount(l).done}/{leadTaskCount(l).total} งาน
                         </span>
@@ -1277,7 +1294,7 @@ export default function LeadsPage() {
                     </div>
                   ))}
                   {col.length === 0 && (
-                    <div style={{ textAlign:"center", padding:"16px 6px", fontSize:"0.68rem", color: isOver ? "#003366" : "#c7ccd3", border:`1.5px dashed ${isOver ? "#003366" : "#e5e7eb"}`, borderRadius:10 }}>วางการ์ดที่นี่</div>
+                    <div style={{ textAlign:"center", padding:"16px 6px", fontSize:"0.65rem", color: isOver ? "#003366" : "#c7ccd3", border:`1.5px dashed ${isOver ? "#003366" : "#e5e7eb"}`, borderRadius:10 }}>วางการ์ดที่นี่</div>
                   )}
                 </div>
               </div>
@@ -1307,7 +1324,7 @@ export default function LeadsPage() {
             zIndex:201, background:"#fff", borderRadius:14, border:"1px solid #e5e7eb",
             boxShadow:"0 8px 32px rgba(0,0,0,.18)", padding:"18px 20px", width:300 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-              <span style={{ fontSize:"0.88rem", fontWeight:700, color:"#2D2D2D" }}>{editPopupLabel}</span>
+              <span style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D" }}>{editPopupLabel}</span>
               <button onClick={closeFieldPopup}
                 style={{ width:28, height:28, borderRadius:8, border:"1px solid #e5e7eb",
                   background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center",
@@ -1320,7 +1337,7 @@ export default function LeadsPage() {
                 value={editPopupVal}
                 onChange={e=>setEditPopupVal(e.target.value)}
                 style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9,
-                  padding:"9px 12px", fontSize:"0.82rem", outline:"none", color:"#2D2D2D",
+                  padding:"9px 12px", fontSize:"0.8rem", outline:"none", color:"#2D2D2D",
                   marginBottom:12, background:"#fff", cursor:"pointer",
                   boxSizing:"border-box" as const }}>
                 {editPopupOptions.map(o=><option key={o} value={o}>{o}</option>)}
@@ -1332,7 +1349,7 @@ export default function LeadsPage() {
                 onChange={e=>setEditPopupVal(e.target.value)}
                 onKeyDown={e=>{ if(e.key==="Enter") commitFieldPopup(); if(e.key==="Escape") closeFieldPopup(); }}
                 style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9,
-                  padding:"9px 12px", fontSize:"0.82rem", outline:"none", color:"#2D2D2D",
+                  padding:"9px 12px", fontSize:"0.8rem", outline:"none", color:"#2D2D2D",
                   marginBottom:12, boxSizing:"border-box" as const }} />
             )}
             <div style={{ display:"flex", justifyContent:"flex-end" }}>
@@ -1381,7 +1398,7 @@ export default function LeadsPage() {
               </span>
               <div style={{ fontSize:"1rem", fontWeight:800, color:"#2D2D2D" }}>ลบลูกค้าเป้าหมาย</div>
             </div>
-            <p style={{ fontSize:"0.82rem", color:"#6b7280", lineHeight:1.6, margin:"0 0 20px" }}>
+            <p style={{ fontSize:"0.8rem", color:"#6b7280", lineHeight:1.6, margin:"0 0 20px" }}>
               ต้องการลบ <strong style={{ color:"#2D2D2D" }}>{selectedLead.company}</strong> ({selectedLead.id}) หรือไม่?
               การลบไม่สามารถย้อนกลับได้
             </p>
@@ -1419,9 +1436,81 @@ export default function LeadsPage() {
           { key: "tasks",      label: "งาน/ความคืบหน้า" },
           { key: "report",     label: "รายงานติดตาม" },
           { key: "activities", label: "กิจกรรม" },
+          { key: "appts",      label: "นัดหมาย" },
           { key: "quotation",  label: "ใบเสนอราคา" },
           { key: "files",      label: "ไฟล์" },
         ] as const;
+
+        // ── Tab: นัดหมาย — นัดกับลูกค้าเป้าหมายก่อนปิดการขาย (แสดงในปฏิทิน+แจ้งเตือนด้วย) ──
+        const leadAppts = appointments.filter(a => a.company === c.company)
+          .slice().sort((a, b) => (a.date + a.time) < (b.date + b.time) ? 1 : -1);
+        const saveAppt = () => {
+          addAppointment({
+            id: Math.max(0, ...appointments.map(a => a.id)) + 1,
+            company: c.company, contact: c.contact ?? "", phone: c.phone ?? "", province: c.province ?? "",
+            project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
+            buildingType: c.product ?? "", area: 0,
+            date: apptForm.date, time: apptForm.time, type: apptForm.type,
+            assigned: c.assigned || session.name, status: "upcoming", note: apptForm.note.trim(),
+          });
+          setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
+          setApptAdding(false);
+          setToast("บันทึกนัดหมายแล้ว");
+        };
+        const aInp: React.CSSProperties = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"8px 11px", fontSize:"0.8rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" };
+        const aLbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:5 };
+        const tabAppts = (
+          <DrawerSection title="นัดหมาย">
+            {!apptAdding ? (
+              <button onClick={() => setApptAdding(true)} className="btn btn-primary btn-sm" style={{ marginBottom:12 }}>
+                <Plus size={13} /> เพิ่มนัดหมาย
+              </button>
+            ) : (
+              <div style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:14, marginBottom:12, background:"#fafbfc" }}>
+                <div style={{ fontSize:"0.8rem", fontWeight:800, color:"#2D2D2D", marginBottom:12 }}>นัดหมายใหม่ · {c.company}</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div style={{ gridColumn:"1/-1" }}>
+                    <label style={aLbl}>ประเภทนัดหมาย</label>
+                    <select value={apptForm.type} onChange={e => setApptForm(f => ({ ...f, type: e.target.value as ApptType }))} style={aInp}>
+                      {(Object.keys(apptTypeLabel) as ApptType[]).map(t => <option key={t} value={t}>{apptTypeLabel[t]}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={aLbl}>วันที่</label>
+                    <input type="date" value={apptForm.date} onChange={e => setApptForm(f => ({ ...f, date: e.target.value }))} style={aInp} /></div>
+                  <div><label style={aLbl}>เวลา</label>
+                    <input type="time" value={apptForm.time} onChange={e => setApptForm(f => ({ ...f, time: e.target.value }))} style={aInp} /></div>
+                  <div style={{ gridColumn:"1/-1" }}><label style={aLbl}>หัวข้อ</label>
+                    <input value={apptForm.title} onChange={e => setApptForm(f => ({ ...f, title: e.target.value }))} placeholder={apptTypeLabel[apptForm.type]} style={aInp} /></div>
+                  <div style={{ gridColumn:"1/-1" }}><label style={aLbl}>รายละเอียด</label>
+                    <input value={apptForm.note} onChange={e => setApptForm(f => ({ ...f, note: e.target.value }))} placeholder="บันทึกเพิ่มเติม" style={aInp} /></div>
+                </div>
+                <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
+                  <button onClick={() => setApptAdding(false)} className="btn btn-secondary btn-sm">ยกเลิก</button>
+                  <button onClick={saveAppt} className="btn btn-primary btn-sm"><Check size={13} /> บันทึกนัดหมาย</button>
+                </div>
+                <div style={{ fontSize:"0.65rem", color:"#9ca3af", marginTop:8 }}>ผู้รับผิดชอบ: {c.assigned || session.name} · นัดหมายจะแสดงในปฏิทินด้วย</div>
+              </div>
+            )}
+            {leadAppts.length === 0 ? (
+              <div style={{ color:"#9aa2ad", fontSize:"0.8rem", padding:"18px 0", textAlign:"center" }}>ยังไม่มีนัดหมาย</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {leadAppts.map(a => (
+                  <div key={a.id} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 12px", borderRadius:10, background:"#f8f9fb", border:"1px solid #eef0f4" }}>
+                    <span style={{ width:32, height:32, borderRadius:"50%", background:"#e7eef7", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Calendar size={15} color="#003366" /></span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:"0.8rem", fontWeight:700, color:"#2D2D2D" }}>{a.project}</div>
+                      <div style={{ fontSize:"0.65rem", color:"#6b7280", marginTop:2 }}>{apptTypeLabel[a.type]} · {fmtISOToThai(a.date)} · {a.time} น.</div>
+                    </div>
+                    <span className="badge" style={{ flexShrink:0, background:"#dce5f0", color:"#003366" }}>
+                      {a.status === "upcoming" ? "กำลังจะมาถึง" : a.status === "done" ? "เสร็จแล้ว" : "ยกเลิก"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DrawerSection>
+        );
 
         // ── Tab: งาน/ความคืบหน้า (Task-driven) — เช็กแล้วเลื่อน Stage อัตโนมัติ ──
         const tabTasks = (
@@ -1451,7 +1540,7 @@ export default function LeadsPage() {
         const tabActivities = (
           <DrawerSection title="กิจกรรม">
             {activities.length === 0 ? (
-              <div style={{ color:"#9aa2ad", fontSize:"0.82rem", padding:"22px 0", textAlign:"center" }}>
+              <div style={{ color:"#9aa2ad", fontSize:"0.8rem", padding:"22px 0", textAlign:"center" }}>
                 <MessageSquare size={26} color="#C0C0C0" style={{ marginBottom:8 }} />
                 <div>ยังไม่มีกิจกรรม</div>
                 <div style={{ fontSize:"0.72rem", marginTop:3 }}>กิจกรรมจะถูกบันทึกอัตโนมัติเมื่อทำงานในแท็บ “งาน/ความคืบหน้า”</div>
@@ -1472,8 +1561,8 @@ export default function LeadsPage() {
                         {!last && <div style={{ width:2, flex:1, minHeight:14, background:"#eef1f5" }} />}
                       </div>
                       <div style={{ minWidth:0, paddingBottom:last ? 0 : 12 }}>
-                        <div style={{ fontSize:"0.82rem", color:"#2D2D2D", fontWeight:600, lineHeight:1.4 }}>{a.text}</div>
-                        <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:"0.68rem", color:"#6b7280", marginTop:3 }}>
+                        <div style={{ fontSize:"0.8rem", color:"#2D2D2D", fontWeight:600, lineHeight:1.4 }}>{a.text}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:"0.65rem", color:"#6b7280", marginTop:3 }}>
                           <CalendarClock size={11} /> {a.date}
                         </div>
                       </div>
@@ -1497,7 +1586,7 @@ export default function LeadsPage() {
         const tabFiles = (
           <DrawerSection title="ไฟล์">
             {drawerFiles.length === 0 ? (
-              <div style={{ color:"#9aa2ad", fontSize:"0.82rem", padding:"18px 0", textAlign:"center" }}>
+              <div style={{ color:"#9aa2ad", fontSize:"0.8rem", padding:"18px 0", textAlign:"center" }}>
                 ยังไม่มีไฟล์แนบ
               </div>
             ) : (
@@ -1506,13 +1595,13 @@ export default function LeadsPage() {
                   <div key={fname} style={{ display:"flex", alignItems:"center", gap:8,
                     padding:"8px 10px", borderRadius:8, background:"#fafafa", border:"1px solid #f0f4f8" }}>
                     <Paperclip size={13} color="#C0C0C0" />
-                    <span style={{ flex:1, fontSize:"0.78rem", color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fname}</span>
+                    <span style={{ flex:1, fontSize:"0.8rem", color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{fname}</span>
                   </div>
                 ))}
               </div>
             )}
             <button onClick={()=>fileInputRef.current?.click()}
-              style={{ fontSize:"0.75rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:10 }}>
+              style={{ fontSize:"0.72rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:10 }}>
               + เพิ่มไฟล์แนบ
             </button>
           </DrawerSection>
@@ -1542,7 +1631,7 @@ export default function LeadsPage() {
                         : cInitials}
                     </div>
                     <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:"1.1rem", fontWeight:800, color:"#fff", lineHeight:1.2 }}>{c.company || c.name}</div>
+                      <div style={{ fontSize:"1.15rem", fontWeight:800, color:"#fff", lineHeight:1.2 }}>{c.company || c.name}</div>
                       <div style={{ fontSize:"0.8rem", color:"rgba(255,255,255,.7)", marginTop:3 }}>{c.contact} · {c.province}</div>
                     </div>
                   </div>
@@ -1551,7 +1640,7 @@ export default function LeadsPage() {
                       <button title="ดูโปรไฟล์ลูกค้า"
                         onClick={()=>{ closePanel(); router.push(c.customerId ? `/customers?open=${c.customerId}` : "/customers"); }}
                         style={{ background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:28, padding:"0 11px",
-                          cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:5, fontSize:"0.7rem", fontWeight:600, fontFamily:"inherit" }}>
+                          cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:5, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit" }}>
                         <CheckCircle2 size={13} /> ลูกค้า
                       </button>
                     )}
@@ -1569,12 +1658,12 @@ export default function LeadsPage() {
                 </div>
                 {/* Badge row: status · priority · source */}
                 <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.64rem", fontWeight:700,
+                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700,
                     background:sc.bg, color:sc.text }}>{leadStatusLabel[c.status]}</span>
-                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.64rem", fontWeight:700,
+                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700,
                     background:pc.bg, color:pc.text }}>{priorityLabel[pri]}</span>
                   {c.source && (
-                    <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.64rem", fontWeight:700,
+                    <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700,
                       background:"rgba(255,255,255,.18)", color:"#fff" }}>{c.source}</span>
                   )}
                 </div>
@@ -1584,7 +1673,7 @@ export default function LeadsPage() {
               <div className="tab-bar" style={{ flexShrink:0 }}>
                 {detailTabs.map(t => (
                   <button key={t.key} className={`tab-item${activeTab===t.key?" active":""}`}
-                    style={{ fontSize:"0.88rem", padding:"12px 16px" }}
+                    style={{ fontSize:"0.86rem", padding:"12px 16px" }}
                     onClick={()=>setActiveTab(t.key)}>
                     {t.label}
                   </button>
@@ -1597,6 +1686,7 @@ export default function LeadsPage() {
                 {activeTab==="tasks"      && tabTasks}
                 {activeTab==="report"     && tabReport}
                 {activeTab==="activities" && tabActivities}
+                {activeTab==="appts"      && tabAppts}
                 {activeTab==="quotation"  && tabQuotation}
                 {activeTab==="files"      && tabFiles}
               </div>
@@ -1610,7 +1700,7 @@ export default function LeadsPage() {
         <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
           zIndex:300, display:"flex", alignItems:"center", gap:9,
           background:"#003366", color:"#fff", borderRadius:12, padding:"12px 18px",
-          boxShadow:"0 10px 32px rgba(0,0,0,.25)", fontSize:"0.82rem", fontWeight:600,
+          boxShadow:"0 10px 32px rgba(0,0,0,.25)", fontSize:"0.8rem", fontWeight:600,
           maxWidth:"calc(100vw - 32px)" }}>
           <CheckCircle2 size={17} color="#34d399" />
           <span>{toast}</span>

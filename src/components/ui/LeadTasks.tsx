@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Trophy, XCircle, RotateCcw } from "lucide-react";
 import {
-  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, LOST_REASONS,
+  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, loadLostReasons,
   type LeadRow, type LeadTask,
 } from "@/lib/mock";
 
@@ -53,7 +53,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
 
   return (
     <div>
-      <div style={{ fontSize: "0.68rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid #C0C0C044" }}>
+      <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid #C0C0C044" }}>
         รายงานการทำงาน · เช็กแล้วเลื่อน Stage อัตโนมัติ
       </div>
 
@@ -61,15 +61,15 @@ export function LeadTasks({ lead, performedBy, onSave }: {
       <div style={{ background: "#f8f9fb", border: "1px solid #f0f4f8", borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div>
-            <span style={{ fontSize: "0.7rem", color: "#6b7280", fontWeight: 600 }}>สถานะปัจจุบัน</span>
-            <div style={{ fontSize: "0.9rem", fontWeight: 800, color: barColor }}>{leadStatusLabel[lead.status]}</div>
+            <span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>สถานะปัจจุบัน</span>
+            <div style={{ fontSize: "0.92rem", fontWeight: 800, color: barColor }}>{leadStatusLabel[lead.status]}</div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: barColor, fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
+          <div style={{ fontSize: "1.7rem", fontWeight: 800, color: barColor, fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
         </div>
         <div style={{ height: 10, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
           <div className="bar-grow" style={{ height: "100%", width: `${pct}%`, borderRadius: 999, background: barColor }} />
         </div>
-        <div style={{ fontSize: "0.64rem", color: "#9ca3af", marginTop: 6 }}>
+        <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 6 }}>
           คำนวณจาก {tasks.filter(t => t.done).length}/{tasks.length} งาน — เลื่อน Stage อัตโนมัติเมื่อเช็กงาน (ปรับ % / ลาก bar เองไม่ได้)
         </div>
       </div>
@@ -92,9 +92,9 @@ export function LeadTasks({ lead, performedBy, onSave }: {
               {t.done && <Check size={13} color="#fff" strokeWidth={3} />}
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: "0.84rem", fontWeight: 600, color: t.done ? "#065f46" : "#2D2D2D", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
+              <span style={{ fontSize: "0.86rem", fontWeight: 600, color: t.done ? "#065f46" : "#2D2D2D", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
               {t.done && (t.doneBy || t.doneAt) && (
-                <span style={{ display: "block", fontSize: "0.66rem", color: "#6b7280", marginTop: 2 }}>
+                <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
                   ✓ {t.doneBy ?? "—"}{t.doneAt ? ` · ${t.doneAt}` : ""}
                 </span>
               )}
@@ -113,7 +113,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
                 <div style={{ fontSize: "0.86rem", fontWeight: 800, color: lead.status === "PAID" ? "#059669" : "#dc2626" }}>
                   {lead.status === "PAID" ? "ปิดการขายสำเร็จ (Won)" : "ปิดการขายไม่สำเร็จ (Lost)"}
                 </div>
-                {lead.status === "CANCELLED" && lead.lostReason && <div style={{ fontSize: "0.7rem", color: "#991b1b" }}>เหตุผล: {lead.lostReason}</div>}
+                {lead.status === "CANCELLED" && lead.lostReason && <div style={{ fontSize: "0.72rem", color: "#991b1b" }}>เหตุผล: {lead.lostReason}</div>}
               </div>
             </div>
             <button type="button" onClick={reopen} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>
@@ -122,11 +122,11 @@ export function LeadTasks({ lead, performedBy, onSave }: {
           </div>
         ) : lostOpen ? (
           <div style={{ padding: "12px 14px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca" }}>
-            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {LOST_REASONS.map(r => (
+              {loadLostReasons().map(r => (
                 <button key={r} type="button" onClick={() => setLostReason(r)}
-                  style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit", textAlign: "left",
+                  style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
                     border: `1px solid ${lostReason === r ? "#dc2626" : "#e5e7eb"}`, background: lostReason === r ? "#fee2e2" : "#fff",
                     color: lostReason === r ? "#dc2626" : "#2D2D2D", fontWeight: lostReason === r ? 700 : 400 }}>{r}</button>
               ))}
