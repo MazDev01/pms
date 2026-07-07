@@ -40,14 +40,14 @@ export function StatCard({ icon, label, metric, onClick }: {
   const up = trend >= 0;
 
   return (
-    <div className="card" style={{ padding: "16px 18px", cursor: onClick ? "pointer" : "default",
+    <div className="card" style={{ padding: 20, cursor: onClick ? "pointer" : "default",
       overflow: "visible", position: "relative", zIndex: open ? 30 : undefined }}
       onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? e => { if (e.key === "Enter") onClick(); } : undefined}>
       {/* header: icon + label · dropdown ช่วงวัน */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-          <span style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: "#f0f4f8", color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
+          <span style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, background: "#dce5f0", color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</span>
           <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         </div>
         <div ref={ref} style={{ position: "relative", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
@@ -78,11 +78,10 @@ export function StatCard({ icon, label, metric, onClick }: {
           )}
         </div>
       </div>
-      {/* value + trend pill */}
+      {/* value + trend pill — ขนาด/badge เดียวกับ KpiCard (.kc-val/.bdg-up/.bdg-dn) ทั้งระบบ */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#2D2D2D", lineHeight: 1 }}>{value}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, borderRadius: 99, padding: "3px 9px",
-          background: "#f0f4f8", fontSize: "0.72rem", fontWeight: 800, color: up ? "#059669" : "#dc2626" }}>
+        <span style={{ fontSize: "1.7rem", fontWeight: 800, color: "#2D2D2D", lineHeight: 1 }}>{value}</span>
+        <span className={up ? "bdg-up" : "bdg-dn"}>
           {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}{up ? "+" : ""}{trend}%
         </span>
       </div>

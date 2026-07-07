@@ -478,7 +478,9 @@ body {
 .page-head p { color: var(--muted-foreground); font-size: 0.8rem; }
 
 /* ─── Card ─── */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--sh); }
+.card.clickable { cursor: pointer; transition: transform .18s, box-shadow .18s; text-decoration: none; }
+.card.clickable:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
 
 /* แคตตาล็อกแม่แบบ — การ์ดพรีเมียม */
 .tpl-card { transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
@@ -494,8 +496,8 @@ body {
 /* ─── Stat cards ─── */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.75rem; }
 .stat-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-xl);
-  padding: 1.5rem; position: relative; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 20px; position: relative; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s;
 }
 .stat-card.clickable { cursor: pointer; }
 .stat-card.clickable:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
@@ -505,7 +507,7 @@ body {
   display: flex; align-items: center; justify-content: center; margin-bottom: 0.7rem;
 }
 .stat-card .stat-label { font-size: 0.7rem; color: var(--muted-foreground); margin-bottom: 0.25rem; font-weight: 600; }
-.stat-card .stat-value { font-size: 1.6rem; font-weight: 800; line-height: 1.1; margin-bottom: 0.4rem; color: var(--foreground); }
+.stat-card .stat-value { font-size: 1.7rem; font-weight: 800; line-height: 1.1; margin-bottom: 0.4rem; color: var(--foreground); }
 .stat-card .stat-delta { font-size: 0.7rem; display: inline-flex; align-items: center; gap: 0.25rem; font-weight: 700; }
 .delta-up { color: var(--success); }
 .delta-down { color: var(--destructive); }
@@ -670,11 +672,8 @@ body {
 .pms-dash .dg-l { display:flex; flex-direction:column; gap:16px; min-width:0; }
 .pms-dash .dg-r { display:flex; flex-direction:column; gap:16px; min-width:0; }
 
-/* card (prototype) */
-.pms-dash .card { background:#fff; border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--sh); }
+/* card — ใช้ .card กลาง (globals.css บรรทัดบน) ทั่วแอปแล้ว เหลือแค่ padding utility เฉพาะ pms-dash */
 .pms-dash .card-pad { padding:14px 16px; }
-.pms-dash .card.clickable { cursor:pointer; transition:transform .18s, box-shadow .18s; text-decoration:none; }
-.pms-dash .card.clickable:hover { transform:translateY(-2px); box-shadow:var(--sh-md); }
 
 /* KPI grid (HQ = 10 cards → 4 per row) */
 .pms-dash .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
@@ -696,8 +695,7 @@ body {
 .pms-dash .kc-ct { display:flex; align-items:center; gap:5px; font-size:.7rem; color:var(--sub); }
 .pms-dash .kc-ct-icon { width:22px; height:22px; border-radius:6px; background:var(--pr-lt); color:var(--pr); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .pms-dash .kc-desc { font-size:.68rem; color:var(--sub); line-height:1.4; }
-.pms-dash .bdg-up { display:inline-flex; align-items:center; gap:3px; background:var(--success-bg); color:var(--success); border-radius:99px; padding:3px 9px; font-size:.66rem; font-weight:700; }
-.pms-dash .bdg-dn { display:inline-flex; align-items:center; gap:3px; background:var(--danger-bg); color:var(--danger); border-radius:99px; padding:3px 9px; font-size:.66rem; font-weight:700; }
+/* .bdg-up/.bdg-dn ใช้ตัว global แล้ว (ค่าเดียวกันเป๊ะ — ดูด้านล่างของไฟล์) */
 
 /* mini progress bar */
 .pms-dash .mini-bar { height:6px; border-radius:99px; background:var(--pr-llt); overflow:hidden; margin-top:10px; }

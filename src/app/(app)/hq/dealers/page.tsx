@@ -10,7 +10,7 @@ import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
 import { Plus, Search, X, Copy, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock } from "lucide-react";
 
-const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,0,0,.07)" };
+const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
 
 // ── Dealer status (LOCAL to this page) ──────────────────────────

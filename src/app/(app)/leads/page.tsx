@@ -33,10 +33,6 @@ import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
-const CARD: React.CSSProperties = {
-  background: "#fff", borderRadius: 16,
-  border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,0,0,.07)",
-};
 
 const ALL_STATUSES: LeadStatus[] = [
   "WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"

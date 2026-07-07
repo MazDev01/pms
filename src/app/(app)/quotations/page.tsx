@@ -27,7 +27,7 @@ const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
 const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
-const CARD: React.CSSProperties = { background:"#fff", borderRadius:16, border:`1px solid ${BORDER}`, boxShadow:"0 2px 14px rgba(0,0,0,.07)" };
+const CARD: React.CSSProperties = { background:"#fff", borderRadius:16, border:`1px solid ${BORDER}`, boxShadow:"0 2px 14px rgba(0,51,102,.07)" };
 
 // ── Quotation workflow (Dealer self-serve — ไม่มีขั้นตอนขออนุมัติจาก HQ) ──────
 // Sales (Dealer): draft → sent_to_client → won / lost / expired
