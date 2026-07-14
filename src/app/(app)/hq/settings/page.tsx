@@ -17,8 +17,8 @@ import {
   type HQPolicy, type HQTargets, type HQLeadRules, type HQNotifChannels,
 } from "@/lib/mock";
 // แท็บ "บริษัท" / "ผู้ใช้งาน" ฝังหน้าจัดการจริงเต็ม
-import HQCompanyPage from "../company/page";
-import HQUsersPage from "../users/page";
+import { CompanyPanel } from "@/components/hq/CompanyPanel";
+import { UsersPanel } from "@/components/hq/UsersPanel";
 import { useAuditLogger } from "@/lib/useAudit";
 import { SettingsBusCtx as BusCtx, type SectionApi } from "@/lib/settingsBus";
 import {
@@ -512,8 +512,8 @@ function SystemTab() {
 type TabKey = "rules" | "company" | "users" | "journey" | "dealers" | "targets" | "notifications" | "system";
 const TABS: { key: TabKey; label: string; icon: ReactNode; render: () => ReactNode }[] = [
   { key: "rules", label: "กฎธุรกิจ", icon: <ShieldCheck size={15} />, render: () => <BusinessRulesTab /> },
-  { key: "company", label: "บริษัท", icon: <Building2 size={15} />, render: () => <HQCompanyPage embedded /> },
-  { key: "users", label: "ผู้ใช้งานและสิทธิ์", icon: <Users size={15} />, render: () => <HQUsersPage embedded /> },
+  { key: "company", label: "บริษัท", icon: <Building2 size={15} />, render: () => <CompanyPanel embedded /> },
+  { key: "users", label: "ผู้ใช้งานและสิทธิ์", icon: <Users size={15} />, render: () => <UsersPanel embedded /> },
   { key: "journey", label: "เส้นทางการขาย", icon: <GitMerge size={15} />, render: () => <JourneyTab /> },
   { key: "dealers", label: "ตัวแทนจำหน่าย", icon: <Store size={15} />, render: () => <DealersTab /> },
   { key: "targets", label: "เป้าหมายยอดขาย", icon: <Target size={15} />, render: () => <TargetsTab /> },
