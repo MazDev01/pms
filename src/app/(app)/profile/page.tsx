@@ -82,7 +82,6 @@ export default function ProfilePage() {
     <div className="erp">
       <div className="page-head">
         <div>
-          <h2>โปรไฟล์ของฉัน</h2>
           <p>ข้อมูลส่วนตัวและความปลอดภัยของบัญชี · {isHQ ? "สำนักงานใหญ่" : "ตัวแทน"}</p>
         </div>
       </div>

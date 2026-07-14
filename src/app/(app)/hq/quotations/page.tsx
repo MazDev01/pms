@@ -120,7 +120,6 @@ export default function HQQuotationsPage() {
       {/* Header */}
       <div className="page-head">
         <div>
-          <h2>ใบเสนอราคาทั้งเครือ</h2>
           <p>ติดตามใบเสนอราคาทุกตัวแทนในเครือ</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

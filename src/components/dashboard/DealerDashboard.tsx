@@ -287,7 +287,7 @@ export default function DealerDashboard() {
         {/* ผลงานทีมขาย */}
         <div style={card}>
           <div style={hd}><span style={title}>ผลงานทีมขาย</span>{more("/leads")}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
             {teamPerf.map((t, i) => (
               <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ width: 26, height: 26, borderRadius: "50%", background: i === 0 ? NAVY : "#EEF2F7", color: i === 0 ? "#fff" : SUB, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.68rem", fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
@@ -309,7 +309,7 @@ export default function DealerDashboard() {
         {/* ยอดขายตามสินค้า */}
         <div style={card}>
           <div style={hd}><span style={title}>ยอดขายตามสินค้า</span>{more("/products")}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
             {salesByProduct.map((p, i) => {
               const col = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#0D9488"][i % 6];
               return (
@@ -327,19 +327,21 @@ export default function DealerDashboard() {
           </div>
         </div>
 
-        {/* กิจกรรมล่าสุด (แนวตั้ง) — แทนที่การ์ดแหล่งที่มา */}
+        {/* งานที่ต้องทำวันนี้ (ย้ายมาสลับกับกิจกรรมล่าสุด) */}
         <div style={card}>
-          <div style={hd}><span style={title}>กิจกรรมล่าสุด</span>{more("/leads")}</div>
-          {recent.length === 0 ? <EmptyState icon={<Activity size={26} />} title="ไม่มีกิจกรรม" description="—" compact /> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
-              {recent.map((e, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
-                  <IconBox Icon={e.icon} color={e.color} bg={e.bg} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: TEXT, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</div>
-                    <div style={{ fontSize: "0.68rem", color: SUB, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.customer}</div>
-                    <div style={{ fontSize: "0.65rem", color: "#94A3B8", marginTop: 2 }}>{fmtISOToThai(e.date)}{e.time ? ` ${e.time}` : ""}</div>
-                  </div>
+          <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><CalendarClock size={15} color={NAVY} /> งานที่ต้องทำวันนี้</span>{more("/calendar")}</div>
+          {todayTasks.length === 0 ? <EmptyState icon={<CheckCircle2 size={26} />} title="ไม่มีงานวันนี้" description="—" compact /> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+              {todayTasks.map(a => (
+                <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <IconBox Icon={a.type === "follow_up" ? PhoneCall : a.type === "presentation" ? Mail : CalendarClock}
+                    color={a.type === "follow_up" ? "#2563EB" : a.type === "presentation" ? "#EA580C" : "#7C3AED"}
+                    bg={a.type === "follow_up" ? "#E8F0FE" : a.type === "presentation" ? "#FEF0E6" : "#F0EBFB"} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{apptTypeLabel[a.type]} {a.company}</span>
+                    <span style={{ display: "block", fontSize: "0.68rem", color: SUB, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project}</span>
+                  </span>
+                  <span style={{ fontSize: "0.74rem", fontWeight: 700, color: SUB, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{a.time}</span>
                 </div>
               ))}
             </div>
@@ -353,7 +355,7 @@ export default function DealerDashboard() {
         <div style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6, flexShrink: 1 }}><AlarmClock size={15} color={DANGER} style={{ flexShrink: 0 }} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>ลีดที่ต้องติดตาม (เกิน 7 วัน)</span></span>{more("/leads")}</div>
           {urgentLeads.length === 0 ? <EmptyState icon={<PhoneCall size={26} />} title="ไม่มีลีดค้าง" description="ทุกลีดติดต่อใน 7 วัน" compact /> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
               {urgentLeads.map(l => (
                 <button key={l.id} onClick={() => router.push(`/leads?open=${l.numId}`)} style={{ display: "flex", gap: 10, alignItems: "center", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
                   <Thumb logo={l.logo} />
@@ -372,21 +374,19 @@ export default function DealerDashboard() {
           )}
         </div>
 
-        {/* Today's Tasks */}
+        {/* กิจกรรมล่าสุด (ย้ายมาสลับกับงานที่ต้องทำวันนี้) */}
         <div style={card}>
-          <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><CalendarClock size={15} color={NAVY} /> งานที่ต้องทำวันนี้</span>{more("/calendar")}</div>
-          {todayTasks.length === 0 ? <EmptyState icon={<CheckCircle2 size={26} />} title="ไม่มีงานวันนี้" description="—" compact /> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {todayTasks.map(a => (
-                <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <IconBox Icon={a.type === "follow_up" ? PhoneCall : a.type === "presentation" ? Mail : CalendarClock}
-                    color={a.type === "follow_up" ? "#2563EB" : a.type === "presentation" ? "#EA580C" : "#7C3AED"}
-                    bg={a.type === "follow_up" ? "#E8F0FE" : a.type === "presentation" ? "#FEF0E6" : "#F0EBFB"} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{apptTypeLabel[a.type]} {a.company}</span>
-                    <span style={{ display: "block", fontSize: "0.68rem", color: SUB, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project}</span>
-                  </span>
-                  <span style={{ fontSize: "0.74rem", fontWeight: 700, color: SUB, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{a.time}</span>
+          <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><Activity size={15} color={NAVY} /> กิจกรรมล่าสุด</span>{more("/leads")}</div>
+          {recent.length === 0 ? <EmptyState icon={<Activity size={26} />} title="ไม่มีกิจกรรม" description="—" compact /> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+              {recent.map((e, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid #f0f4f8" }}>
+                  <IconBox Icon={e.icon} color={e.color} bg={e.bg} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: TEXT, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</div>
+                    <div style={{ fontSize: "0.68rem", color: SUB, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.customer}</div>
+                    <div style={{ fontSize: "0.65rem", color: "#94A3B8", marginTop: 2 }}>{fmtISOToThai(e.date)}{e.time ? ` ${e.time}` : ""}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -397,7 +397,7 @@ export default function DealerDashboard() {
         <div style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><FileText size={15} color={NAVY} /> ใบเสนอราคาล่าสุด</span>{more("/quotations")}</div>
           {latestQuotes.length === 0 ? <EmptyState icon={<FileText size={26} />} title="ไม่มีใบเสนอราคา" description="—" compact /> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
               {latestQuotes.map(q => { const sc = quotationStatusColor[q.status]; return (
                 <button key={q.id} onClick={() => router.push("/quotations")} style={{ display: "flex", gap: 10, alignItems: "center", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
                   <IconBox Icon={FileText} color={NAVY} bg="#F1F5F9" />
@@ -420,7 +420,7 @@ export default function DealerDashboard() {
         <div style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><Trophy size={15} color={NAVY} /> ดีลที่มูลค่าสูงสุด</span>{more("/leads")}</div>
           {topDeals.length === 0 ? <EmptyState icon={<Target size={26} />} title="ไม่มีดีล" description="—" compact /> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
               {topDeals.map((d, i) => (
                 <button key={d.id} onClick={() => router.push(`/leads?open=${d.numId}`)} style={{ display: "flex", gap: 9, alignItems: "center", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
                   <span style={{ width: 20, height: 20, borderRadius: 6, background: i === 0 ? NAVY : "#F1F5F9", color: i === 0 ? "#fff" : SUB, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.66rem", flexShrink: 0 }}>{i + 1}</span>

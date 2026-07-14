@@ -127,6 +127,8 @@ export type BarPoint = { label: string; actual: number; plan: number };
 /** Grouped bar chart — actual (navy) vs plan (silver), exceeded month highlighted. */
 export function PlanVsActualBars({ data, unit = "M" }: { data: BarPoint[]; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
   const max = Math.max(...data.flatMap(d => [d.actual, d.plan]), 1) * 1.15;
   const W = 700, H = 210, pL = 34, pR = 12, pT = 16, pB = 34;
   const cW = W - pL - pR, cH = H - pT - pB, n = data.length;
@@ -136,9 +138,15 @@ export function PlanVsActualBars({ data, unit = "M" }: { data: BarPoint[]; unit?
   const baseY = pT + cH;
   const fmt = (v: number) => `฿${Math.round(v * 10) / 10}${unit}`;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
+  const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="plan vs actual">
+      <defs>
+        <linearGradient id="pva-navy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2c62ad" /><stop offset="1" stopColor={NAVY} /></linearGradient>
+        <linearGradient id="pva-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#34d399" /><stop offset="1" stopColor="#059669" /></linearGradient>
+        <linearGradient id="pva-silver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#e6eaef" /><stop offset="1" stopColor={SILVER} /></linearGradient>
+      </defs>
       {ticks.map((v, i) => (
         <g key={i}>
           <line x1={pL} y1={yAt(v)} x2={W - pR} y2={yAt(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
@@ -150,17 +158,21 @@ export function PlanVsActualBars({ data, unit = "M" }: { data: BarPoint[]; unit?
         const exceeded = d.actual > d.plan;
         const aH = d.actual > 0 ? baseY - yAt(d.actual) : 0;
         const pH = baseY - yAt(d.plan);
+        const isHover = hover === i;
         return (
           <g key={d.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+            {/* ไฮไลต์คอลัมน์ตอนชี้ */}
+            {isHover && <rect x={cx - slot / 2 + 3} y={pT} width={slot - 6} height={cH} rx={6} fill="#f2f6fc" />}
             <rect x={cx - slot / 2} y={pT} width={slot} height={cH} fill="transparent" />
-            {/* actual (navy) */}
-            <rect x={cx - bw - 2} y={yAt(d.actual)} width={bw} height={aH} rx={4}
-              fill={exceeded ? "#059669" : NAVY} opacity={d.actual > 0 ? 1 : 0}
-              stroke={exceeded ? "#ECC94B" : "none"} strokeWidth={exceeded ? 1.5 : 0} />
+            {/* actual (navy · โตจากล่าง) */}
+            <rect x={cx - bw - 2} y={drawn ? yAt(d.actual) : baseY} width={bw} height={drawn ? aH : 0} rx={4}
+              fill={exceeded ? "url(#pva-green)" : "url(#pva-navy)"} opacity={d.actual > 0 ? (hover === null || isHover ? 1 : 0.5) : 0}
+              stroke={exceeded ? "#ECC94B" : "none"} strokeWidth={exceeded ? 1.5 : 0} style={grow} />
             {/* plan (silver) */}
-            <rect x={cx + 2} y={yAt(d.plan)} width={bw} height={pH} rx={4} fill={SILVER} />
+            <rect x={cx + 2} y={drawn ? yAt(d.plan) : baseY} width={bw} height={drawn ? pH : 0} rx={4}
+              fill="url(#pva-silver)" opacity={hover === null || isHover ? 1 : 0.5} style={grow} />
             <text x={cx} y={H - 12} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{d.label}</text>
-            {hover === i && (
+            {isHover && (
               <g style={{ pointerEvents: "none" }}>
                 <rect x={Math.min(Math.max(cx - 52, pL), W - pR - 104)} y={pT} width="104" height="40" rx="8" fill="#2D2D2D" />
                 <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">จริง {fmt(d.actual)}</text>
@@ -225,18 +237,17 @@ export function LineTrendChart({
 
   const n = data.length;
   const vals = data.map(d => d.value);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const pad = (max - min) * 0.18 || max * 0.1 || 1;
-  const lo = Math.max(0, min - pad), hi = max + pad;      // สเกลชิดข้อมูล (line-style ไม่อิง 0)
-  const W = 1180, H = height, pL = 56, pR = 30, pT = 26, pB = 40;
+  const max = Math.max(...vals, 0);
+  const lo = 0, hi = niceCeil(max * 1.15) || 1;           // แกน Y เริ่มที่ 0 + เผื่อหัว (สไตล์ Chateau MRR) เส้นไม่ชิดขอบบน
+  const W = 1180, H = height, pL = 56, pR = 40, pT = 26, pB = 40;
   const cW = W - pL - pR, cH = H - pT - pB;
   const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
   const cy = (v: number) => pT + (1 - (v - lo) / (hi - lo)) * cH;
   const bottomY = pT + cH;
   const pts = data.map((d, i) => ({ x: cx(i), y: cy(d.value), ...d }));
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+  const line = smoothPath(pts); // เส้นโค้งเนียน (Catmull-Rom) แทนเส้นหักตรง
   const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${bottomY} L${pts[0].x.toFixed(2)},${bottomY} Z` : "";
-  const yTicks = Array.from({ length: 4 }, (_, i) => lo + ((hi - lo) / 3) * i);
+  const yTicks = Array.from({ length: 5 }, (_, i) => (hi / 4) * i);
   const last = pts[n - 1];
   const hp = hover !== null ? pts[hover] : null;
   const gid = "line-clip-" + n;
@@ -251,6 +262,9 @@ export function LineTrendChart({
           <stop offset="60%" stopColor={color} stopOpacity="0.06" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
+        <filter id="line-tt-shadow" x="-20%" y="-20%" width="140%" height="160%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#0f2a52" floodOpacity="0.14" />
+        </filter>
       </defs>
       {/* y labels (จาง) */}
       {yTicks.map((v, i) => (
@@ -267,19 +281,27 @@ export function LineTrendChart({
       <clipPath id={gid}><rect x={pL - 6} y={0} width={drawn ? cW + 12 : 0} height={H} style={{ transition: "width 1s cubic-bezier(.4,0,.2,1)" }} /></clipPath>
       <g clipPath={`url(#${gid})`}>
         <path d={area} fill={`url(#${grad})`} />
+        {/* เรืองแสงนุ่มใต้เส้น */}
+        <path d={line} fill="none" stroke={color} strokeWidth={8} opacity={0.12} strokeLinecap="round" strokeLinejoin="round" />
         <path d={line} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
       </g>
-      {/* hover guide + tooltip */}
-      {hp && (
-        <g>
-          <circle cx={hp.x} cy={hp.y} r={5} fill="#fff" stroke={color} strokeWidth={2.5} />
-          <g transform={`translate(${Math.min(Math.max(hp.x, pL + 46), W - pR - 46)}, ${Math.max(hp.y - 46, pT + 2)})`}>
-            <rect x={-46} y={-2} width={92} height={38} rx={8} fill="#fff" stroke="#e5e7eb" />
-            <text x={0} y={13} textAnchor="middle" fontSize="13" fill="#9ca3af">{hp.month}</text>
-            <text x={0} y={29} textAnchor="middle" fontSize="15" fontWeight="800" fill={color}>{fmt(hp.value)}</text>
+      {/* hover — เส้นไกด์ประแนวตั้ง + จุดทึบ + การ์ดทูลทิปลอย (สไตล์ Chateau) */}
+      {hp && (() => {
+        const tw = 152, th = 50;
+        const tx = Math.min(Math.max(hp.x + 14, pL), W - pR - tw);
+        const ty = Math.min(Math.max(hp.y - th - 10, pT + 2), bottomY - th);
+        return (
+          <g style={{ pointerEvents: "none" }}>
+            <line x1={hp.x} y1={pT} x2={hp.x} y2={bottomY} stroke={color} strokeWidth={1.3} strokeDasharray="5,4" opacity={0.45} />
+            <circle cx={hp.x} cy={hp.y} r={6} fill={color} stroke="#fff" strokeWidth={2.5} />
+            <g transform={`translate(${tx},${ty})`} filter="url(#line-tt-shadow)">
+              <rect x={0} y={0} width={tw} height={th} rx={10} fill="#fff" stroke="#eef1f5" strokeWidth={1} />
+              <text x={13} y={20} fontSize="13.5" fill="#9ca3af">{hp.month}</text>
+              <text x={13} y={39} fontSize="15" fontWeight="800" fill={color}>ยอดขาย : {fmt(hp.value)}</text>
+            </g>
           </g>
-        </g>
-      )}
+        );
+      })()}
       {/* จุดปลายแบบวงแหวน (target dot) */}
       {last && !hp && drawn && (
         <g>

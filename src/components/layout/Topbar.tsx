@@ -209,11 +209,14 @@ const TITLE_MAP: { match: string; title: string }[] = [
   { match: "/hq/dashboard",      title: "แดชบอร์ดสำนักงานใหญ่" },
   { match: "/hq/pipeline",       title: "ภาพรวมยอดขาย" },
   { match: "/hq/dealers",        title: "ตัวแทน" },
+  { match: "/hq/leads",          title: "ลูกค้าเป้าหมายทั้งเครือ" },
   { match: "/hq/customers",      title: "ลูกค้าทั้งเครือ" },
   { match: "/hq/quotations",     title: "ใบเสนอราคาทั้งเครือ" },
   { match: "/hq/master",         title: "แคตตาล็อกแม่แบบ" },
   { match: "/hq/company",        title: "บริษัท" },
   { match: "/hq/users",          title: "ผู้ใช้งาน" },
+  { match: "/hq/audit",          title: "บันทึกการใช้งาน" },
+  { match: "/hq/reports",        title: "รายงาน" },
   { match: "/hq/settings",        title: "ตั้งค่า" },
   { match: "/reports",           title: "รายงาน" },
 ];
@@ -240,6 +243,7 @@ const DEALER_PAGES: PageEntry[] = [
 const HQ_PAGES: PageEntry[] = [
   { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  keywords: "แดชบอร์ด dashboard สำนักงานใหญ่ hq ภาพรวม สรุป หน้าแรก" },
   { label: "ตัวแทน",              href: "/hq/dealers",    keywords: "ตัวแทน dealer dealers จำหน่าย" },
+  { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",   keywords: "ลูกค้าเป้าหมาย lead leads ลีด ทั้งเครือ" },
   { label: "ลูกค้าทั้งเครือ",       href: "/hq/customers",  keywords: "ลูกค้า customer customers ทั้งเครือ" },
   { label: "ภาพรวมยอดขาย",        href: "/hq/pipeline",   keywords: "ภาพรวมยอดขาย pipeline ยอดขาย sales funnel" },
   { label: "ใบเสนอราคาทั้งเครือ",   href: "/hq/quotations", keywords: "ใบเสนอราคา quotation quote ทั้งเครือ" },

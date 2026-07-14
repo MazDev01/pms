@@ -6,8 +6,9 @@ import {
   AlertTriangle, Lightbulb, Layers,
 } from "lucide-react";
 import {
-  hqPipelineByProduct, dealerLeaderboard, mainTemplateOf, loadLostReasons,
+  hqPipelineByProduct, mainTemplateOf, loadLostReasons,
 } from "@/lib/mock";
+import { NET_DEALERS as dealerLeaderboard } from "@/lib/hqNetwork";
 import { useFilters } from "@/context/FilterContext";
 import { useNetworkQuotations } from "@/lib/useNetworkData";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -333,7 +334,6 @@ export default function SalesOverviewPage() {
       {/* ── Header ── */}
       <div className="page-head">
         <div>
-          <h2>ภาพรวมยอดขาย</h2>
           <p>{selDealer ? `มุมมองตัวแทน: ${selDealer.name.replace("Benjamin ", "")} (${selDealer.code}) · อิงจากใบเสนอราคาจริงของตัวแทน` : "ภาพรวมยอดขายและโอกาสการขายทุกตัวแทน"} · {timeRange.subtitle}</p>
         </div>
 

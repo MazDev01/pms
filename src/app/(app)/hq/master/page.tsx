@@ -214,7 +214,6 @@ export default function HQMasterPage() {
       {/* Header */}
       <div className="page-head">
         <div>
-          <h2>แคตตาล็อกแม่แบบ</h2>
           <p>แหล่งเดียวทั้งเครือ — ตัวแทนเห็นแม่แบบและราคากลางชุดเดียวกันนี้ (อ่านอย่างเดียว)</p>
         </div>
         <button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={15} /> เพิ่มแม่แบบ</button>

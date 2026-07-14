@@ -546,6 +546,20 @@ body {
 
 /* ─── Stat cards ─── */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.75rem; }
+/* HQ Executive Dashboard — KPI 6 ใบ + แถว 3 คอลัมน์ (responsive) */
+.hq-kpi8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px) { .hq-kpi8 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .hq-kpi8 { grid-template-columns: 1fr; } }
+.hq-row-bottom { display: grid; grid-template-columns: 2.3fr 1fr; gap: 1.25rem; align-items: start; }
+@media (max-width: 1180px) { .hq-row-bottom { grid-template-columns: 1fr !important; } }
+@media (max-width: 1100px) { .hq-row2a, .hq-row2b { grid-template-columns: 1fr !important; } }
+@media (max-width: 1280px) { .hq-row3c { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 680px)  { .hq-row3c { grid-template-columns: 1fr !important; } }
+@media (max-width: 1180px) { .hq-row3 { grid-template-columns: 1fr !important; } }
+@media (max-width: 980px)  { .hq-row2 { grid-template-columns: 1fr !important; } }
+@media (max-width: 1280px) { .hq-row4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 680px)  { .hq-row4 { grid-template-columns: 1fr !important; } }
+@media (max-width: 900px)  { .hq-strip > div { border-right: none !important; } }
 .stat-card {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
   padding: 20px; position: relative; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s;

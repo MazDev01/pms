@@ -107,7 +107,6 @@ export default function HQCompanyPage({ embedded }: { embedded?: boolean } = {})
       {!embedded && (
         <div className="page-head">
           <div>
-            <h2>บริษัท</h2>
             <p>ข้อมูลบริษัทเบนจามินและสินทรัพย์แบรนด์</p>
           </div>
         </div>

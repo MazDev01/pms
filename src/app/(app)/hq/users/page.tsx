@@ -241,7 +241,7 @@ export default function HQUsersPage({ embedded }: { embedded?: boolean } = {}) {
 
   return (
     <div className="erp">
-      {!embedded && <div className="page-head"><div><h2>ผู้ใช้งานและสิทธิ์</h2><p>บริหารผู้ใช้ของสำนักงานใหญ่ (HQ) — ผู้ใช้ของตัวแทนจัดการที่เมนู “ตัวแทน”</p></div></div>}
+      {!embedded && <div className="page-head"><div><p>บริหารผู้ใช้ของสำนักงานใหญ่ (HQ) — ผู้ใช้ของตัวแทนจัดการที่เมนู “ตัวแทน”</p></div></div>}
 
       {/* Summary cards (4) */}
       <div className="stat-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>

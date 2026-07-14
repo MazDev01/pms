@@ -17,11 +17,9 @@ const dmLabel = (d: Date) => `${d.getDate()} ${monthsTH[d.getMonth() + 1]}`;
 const fmtDate = (iso: string) => { const [, mm, dd] = iso.split("-"); return `${parseInt(dd)} ${monthsTH[parseInt(mm)]}`; };
 
 const RANGE_PILLS: { key: string; label: string }[] = [
-  { key: "7d", label: "7 วัน" },
-  { key: "30d", label: "30 วัน" },
-  { key: "month", label: "เดือนนี้" },
-  { key: "quarter", label: "ไตรมาส" },
-  { key: "year", label: "ปีนี้" },
+  { key: "3m", label: "3 เดือน" },
+  { key: "6m", label: "6 เดือน" },
+  { key: "12m", label: "12 เดือน" },
 ];
 
 export type MonthlyPoint = { month: string; value: number };
@@ -32,7 +30,7 @@ export function SalesTrendChart({
   monthly,
   today = "2026-06-30",
   prevRatio = 0.86,
-  initialRange = "year",
+  initialRange = "6m",
   height,
 }: {
   title: string;
@@ -44,10 +42,6 @@ export function SalesTrendChart({
   height?: number;
 }) {
   const [range, setRange] = useState(initialRange);
-  const [customStart, setCustomStart] = useState("2026-06-01");
-  const [customEnd, setCustomEnd] = useState("2026-06-30");
-
-  const TODAY = useMemo(() => parseISO(today), [today]);
 
   // ยอดขายต่อวัน (ล้านบาท) — เฉลี่ยจากยอดเดือน + คลื่นในเดือนให้เส้นดูเป็นธรรมชาติ
   const dayValue = useMemo(() => (d: Date): number => {
@@ -79,35 +73,14 @@ export function SalesTrendChart({
   }));
 
   const data = useMemo(() => {
-    const tm = TODAY.getMonth();
-    switch (range) {
-      case "year": return asPoints(monthly);
-      case "quarter": { const q = Math.floor(tm / 3) * 3; return asPoints(monthly.slice(q, q + 3)); }
-      case "7d": return buildDaily(addDays(TODAY, -6), TODAY, 7);
-      case "30d": return buildDaily(addDays(TODAY, -29), TODAY, 10);
-      case "month": return buildDaily(new Date(TODAY.getFullYear(), tm, 1), TODAY, 6);
-      case "custom": {
-        let s = parseISO(customStart), e = parseISO(customEnd);
-        if (e < s) [s, e] = [e, s];
-        return buildDaily(s, e, 12);
-      }
-      default: return asPoints(monthly);
-    }
+    const n = range === "3m" ? 3 : range === "12m" ? 12 : 6; // slice N เดือนล่าสุด
+    return asPoints(monthly.slice(-n));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, customStart, customEnd, monthly, TODAY, buildDaily]);
+  }, [range, monthly]);
 
-  const rangeDesc = useMemo(() => {
-    const tm = TODAY.getMonth();
-    if (range === "custom") return `${fmtDate(customStart)} – ${fmtDate(customEnd)}`;
-    if (range === "year") return "ทั้งปี (รายเดือน)";
-    if (range === "quarter") return "ไตรมาสปัจจุบัน (รายเดือน)";
-    if (range === "month") return "เดือนนี้ (รายวัน)";
-    if (range === "7d") return `${dmLabel(addDays(TODAY, -6))} – ${dmLabel(TODAY)} (รายวัน)`;
-    return `${dmLabel(addDays(TODAY, -29))} – ${dmLabel(TODAY)} (รายวัน)`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, customStart, customEnd, TODAY]);
-
-  const inputStyle = { padding: "6px 10px", border: "1px solid var(--border,#dde3ea)", borderRadius: 8, fontFamily: "inherit", fontSize: "0.8rem", color: STEEL } as const;
+  const rangeDesc = range === "3m" ? "3 เดือนที่ผ่านมา (รายเดือน)"
+    : range === "12m" ? "12 เดือนที่ผ่านมา (รายเดือน)"
+    : "6 เดือนที่ผ่านมา (รายเดือน)";
 
   // ตัวเลขรวม + การเติบโต (จุดแรก → จุดสุดท้ายของช่วงที่เลือก) — สไตล์การ์ดสถิติ
   const total = data.reduce((s, d) => s + d.value, 0);
@@ -128,28 +101,16 @@ export function SalesTrendChart({
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
         </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
           {RANGE_PILLS.map(p => (
             <button key={p.key} onClick={() => setRange(p.key)}
               className={range === p.key ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-              style={{ padding: "5px 12px" }}>{p.label}</button>
+              style={{ padding: "4px 9px", fontSize: "0.72rem" }}>{p.label}</button>
           ))}
-          <button onClick={() => setRange("custom")}
-            className={range === "custom" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-            style={{ padding: "5px 12px" }}>กำหนดเอง</button>
         </div>
       </div>
 
-      {range === "custom" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10, fontSize: "0.8rem", color: STEEL }}>
-          <span style={{ fontWeight: 600 }}>ช่วงวันที่:</span>
-          <input type="date" value={customStart} min="2026-01-01" max="2026-12-31" onChange={e => setCustomStart(e.target.value)} style={inputStyle} />
-          <span style={{ color: "var(--sub,#8a94a3)" }}>ถึง</span>
-          <input type="date" value={customEnd} min="2026-01-01" max="2026-12-31" onChange={e => setCustomEnd(e.target.value)} style={inputStyle} />
-        </div>
-      )}
-
-      <LineTrendChart key={`${range}-${customStart}-${customEnd}`} data={data} height={height} />
+      <LineTrendChart key={range} data={data} height={height} />
     </div>
   );
 }

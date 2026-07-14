@@ -10,7 +10,7 @@ test("[ux·hq] เมนูข้างไปได้ทุกหน้า", as
   const links = ["ตัวแทน", "ลูกค้าทั้งเครือ", "ภาพรวมยอดขาย", "ใบเสนอราคาทั้งเครือ", "แคตตาล็อกแม่แบบ", "บันทึกการใช้งาน", "ตั้งค่า"];
   for (const label of links) {
     await page.getByRole("link", { name: label, exact: false }).first().click();
-    await expect(page.locator("h2").first()).toBeVisible();
+    await expect(page.locator(".topbar-title").first()).toBeVisible(); // หัวข้อหน้าอยู่บน Topbar (ตัด h2 ซ้ำในหน้าออกแล้ว)
     await expect(page).not.toHaveURL(/\/hq\/dashboard$/); // ต้องออกจากแดชบอร์ดจริง
   }
 });

@@ -36,7 +36,6 @@ export default function HQAuditPage() {
     <div className="erp">
       <div className="page-head">
         <div>
-          <h2>บันทึกการใช้งาน</h2>
           <p>ตรวจสอบว่าผู้ใช้งานสำนักงานใหญ่แต่ละคนทำอะไรไปบ้าง — ใคร แก้อะไร เมื่อไร</p>
         </div>
       </div>

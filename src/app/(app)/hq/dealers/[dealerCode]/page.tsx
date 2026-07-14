@@ -5,9 +5,10 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { use } from "react";
 import {
-  dealerLeaderboard, HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
+  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@/lib/mock";
+import { NET_DEALERS } from "@/lib/hqNetwork";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useNetworkDealerDetail, useNetworkCustomers } from "@/lib/useNetworkData";
 import { CountUp } from "@/components/ui/CountUp";
@@ -85,7 +86,7 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
 
 // ── Tab components ───────────────────────────────────────────────
 
-function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; detail: DealerDetail }) {
+function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDetail }) {
   // เกณฑ์ Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;
@@ -368,10 +369,10 @@ type TabKey = typeof TABS[number]["key"];
 export default function DealerDrillDownPage({ params }: { params: Promise<{ dealerCode: string }> }) {
   const { dealerCode } = use(params);
   // อ่านจากชุดที่ persist (hq_dealers_v2) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
-  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v3", NET_DEALERS);
   const [tab, setTab] = useState<TabKey>("overview");
   const code = dealerCode.toUpperCase();
-  const dealer = dealers.find(d => d.code === code) ?? dealerLeaderboard.find(d => d.code === code);
+  const dealer = dealers.find(d => d.code === code) ?? NET_DEALERS.find(d => d.code === code);
   // รายละเอียดตัวแทนแบบเชื่อมต่อ: CNX = ข้อมูลสด (leads/projects/quotes/ยอดรายเดือน) · สาขาอื่น = seed
   const detail = useNetworkDealerDetail(code);
   const custs = useNetworkCustomers().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (แหล่งเดียว)

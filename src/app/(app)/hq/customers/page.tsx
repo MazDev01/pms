@@ -95,7 +95,6 @@ export default function HQCustomersPage() {
       {/* Header */}
       <div className="page-head">
         <div>
-          <h2>ลูกค้าทั้งเครือ</h2>
           <p>ฐานข้อมูลลูกค้าทุกตัวแทน · {timeRange.subtitle}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

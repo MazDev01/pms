@@ -7,10 +7,11 @@
 import { useMemo } from "react";
 import { useSales } from "@/context/SalesContext";
 import {
-  hqAllQuotations, hqAllCustomers, dealerDetails, fmtISOToThai,
-  type HQQuotation, type HQCustomer, type LeadStatus,
+  dealerDetails, fmtISOToThai,
+  type HQQuotation, type HQCustomer, type LeadStatus, type LeadRow,
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@/lib/mock";
+import { NET_QUOTATIONS, NET_CUSTOMERS, NET_LEADS } from "@/lib/hqNetwork";
 import { parseBaht } from "@/lib/format";
 
 // ดีลเลอร์หลักของเดโม — SalesContext แทนสมุดงานของสาขานี้
@@ -32,8 +33,17 @@ export function useNetworkQuotations(): HQQuotation[] {
       };
     });
     const liveNos = new Set(live.map(l => l.quoteNo));
-    return [...live, ...hqAllQuotations.filter(h => !liveNos.has(h.quoteNo))];
+    return [...live, ...NET_QUOTATIONS.filter(h => !liveNos.has(h.quoteNo))];
   }, [quotations, leads]);
+}
+
+// ลีดทั้งเครือ = ลีดที่ดีลเลอร์สร้างจริง (สาขา CNX) + ชุดข้อมูลเครือ (สาขาอื่น)
+export function useNetworkLeads(): LeadRow[] {
+  const { leads } = useSales();
+  return useMemo(() => {
+    const liveIds = new Set(leads.map(l => l.numId));
+    return [...leads, ...NET_LEADS.filter(n => !liveIds.has(n.numId))];
+  }, [leads]);
 }
 
 // ลูกค้าทั้งเครือ = ลูกค้าที่ดีลเลอร์สร้างจริง (สาขา CNX) + seed สาขาอื่นที่ไม่ซ้ำชื่อ
@@ -50,7 +60,7 @@ export function useNetworkCustomers(): HQCustomer[] {
       lastContact: "30 มิ.ย. 2569", segment: "sme",
     }));
     const liveNames = new Set(live.map(l => l.name));
-    return [...live, ...hqAllCustomers.filter(h => !liveNames.has(h.name))];
+    return [...live, ...NET_CUSTOMERS.filter(h => !liveNames.has(h.name))];
   }, [customers, quotations]);
 }
 

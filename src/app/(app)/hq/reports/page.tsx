@@ -8,9 +8,10 @@ import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { usePersistentState } from "@/lib/usePersistentState";
 import {
-  dealerLeaderboard, mainTemplateOf, loadLostReasons, loadHQTargets,
+  mainTemplateOf, loadLostReasons, loadHQTargets,
   quotationStatusLabel, type DealerRow, type HQTargets, type QuotationStatus,
 } from "@/lib/mock";
+import { NET_DEALERS } from "@/lib/hqNetwork";
 import { useNetworkQuotations, useNetworkCustomers } from "@/lib/useNetworkData";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Donut } from "@/components/ui/Charts";
@@ -45,7 +46,7 @@ function BarRow({ label, valueLabel, pct, color }: { label: string; valueLabel: 
 
 export default function HQReportsPage() {
   const { timeRange, inRange } = useFilters();
-  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v3", NET_DEALERS);
   const netQuotes = useNetworkQuotations();
   const customers = useNetworkCustomers();
   const [targets, setTargets] = useState<HQTargets>(loadHQTargets);
