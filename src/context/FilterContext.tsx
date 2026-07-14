@@ -104,7 +104,7 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
 export const DEALER_OPTIONS: { value: string; label: string }[] =
   dealerLeaderboard.map(d => ({ value: d.code, label: d.name }));
 
-// แหล่งเดียว (single source): ตัวเลือกสินค้า = 6 แม่แบบหลักจาก solutionProducts — ตรงกับฟอร์มผู้สนใจ/ใบเสนอราคาทั้งระบบ
+// แหล่งเดียว (single source): ตัวเลือกสินค้า = 6 แม่แบบหลักจาก solutionProducts — ตรงกับฟอร์มลูกค้าเป้าหมาย/ใบเสนอราคาทั้งระบบ
 export const PRODUCT_OPTIONS: { value: string; label: string }[] =
   solutionProducts.map(p => ({ value: p.name, label: p.name }));
 

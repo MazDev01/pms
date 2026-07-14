@@ -384,12 +384,14 @@ export function AreaGradientChart({
 /** Multi-line Chart (สไตล์ shadcn) — เส้นแยกตามเอนทิตี (ตัวแทน) เทียบ trend รายเดือนในกราฟเดียว
  *  series[i].data เรียงตรงกับ months · ชี้ที่ legend เพื่อไฮไลต์เส้น */
 export function MultiLineChart({
-  months, series, fmt = v => `${Math.round(v)}`, height = 340,
+  months, series, fmt = v => `${Math.round(v)}`, height = 340, vw = 1180,
 }: {
   months: string[];
   series: { name: string; color: string; data: number[] }[];
   fmt?: (v: number) => string;
   height?: number;
+  /** ความกว้าง viewBox — ลดลงเมื่ออยู่ในการ์ดแคบ (3 คอลัมน์) เพื่อให้สัดส่วน/ตัวอักษรไม่ถูกบีบ */
+  vw?: number;
 }) {
   const [drawn, setDrawn] = useState(false);
   const [hi, setHi] = useState<number | null>(null); // legend hover → ไฮไลต์เส้น
@@ -398,7 +400,8 @@ export function MultiLineChart({
   const n = months.length;
   const allVals = series.flatMap(s => s.data);
   const ceiling = niceCeil(Math.max(...allVals, 1) * 1.08);
-  const W = 1180, H = height, pL = 60, pR = 28, pT = 22, pB = 42;
+  const narrow = vw < 800;
+  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 28, pT = 18, pB = narrow ? 34 : 42;
   const cW = W - pL - pR, cH = H - pT - pB;
   const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
   const cy = (v: number) => pT + (1 - v / ceiling) * cH;
@@ -412,12 +415,14 @@ export function MultiLineChart({
           return (
             <g key={i}>
               <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#eef1f5" strokeWidth={1} />
-              <text x={pL - 10} y={y + 4} textAnchor="end" fontSize="15" fill="#9ca3af">{fmt(v)}</text>
+              <text x={pL - 8} y={y + 4} textAnchor="end" fontSize={narrow ? 13 : 15} fill="#9ca3af">{fmt(v)}</text>
             </g>
           );
         })}
         {months.map((m, i) => (
-          <text key={m} x={cx(i)} y={pT + cH + 26} textAnchor="middle" fontSize="15" fill="#6b7280">{m}</text>
+          (!narrow || i % 2 === 0) && (
+            <text key={m} x={cx(i)} y={pT + cH + (narrow ? 22 : 26)} textAnchor="middle" fontSize={narrow ? 13 : 15} fill="#6b7280">{m}</text>
+          )
         ))}
         {/* lines (วาดเส้นเรียง: เส้นที่ไฮไลต์อยู่บนสุด) */}
         {series.map((ser, si) => {

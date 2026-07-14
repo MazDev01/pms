@@ -1,35 +1,55 @@
 "use client";
 
 import { useState } from "react";
-import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send } from "lucide-react";
+import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Percent, Calendar, Coins } from "lucide-react";
 import { useSales } from "@/context/SalesContext";
 import {
-  quotationStatusLabel, quotationStatusColor,
-  type LeadRow, type QuotationMock,
+  quotationStatusLabel, quotationStatusColor, loadDefaultDiscount, loadHQPolicy,
+  type LeadRow, type CustomerRow, type QuotationMock, type QuoteLineItem,
 } from "@/lib/mock";
-import { TemplateSelect } from "@/components/ui/TemplateSelect";
+import { LineItemsEditor } from "@/components/ui/LineItemsEditor";
 import { printQuotation } from "@/lib/quotationPrint";
 import { parseBaht, fmtBaht } from "@/lib/format";
 
 const MOCK_TODAY = "2026-06-30";
 
-type FormState = { project: string; buildingType: string; items: string; price: string; discountPct: string; expiry: string; note: string };
+type FormState = { project: string; buildingType: string; items: string; price: string; discountPct: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 
-export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?: (m: string) => void }) {
+export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRow; customer?: CustomerRow; onToast?: (m: string) => void }) {
   const { quotations, addQuotation, updateQuotation, deleteQuotation } = useSales();
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const emptyForm = (): FormState => ({
-    project: `${lead.product} — ${lead.company}`, buildingType: lead.product,
-    items: "1", price: lead.value ?? "", discountPct: "", expiry: "", note: "",
-  });
+  const policy = loadHQPolicy(); // นโยบาย HQ — เพดานส่วนลด/VAT/อายุใบ · บังคับใช้ทั้งเครือ (Constitution V2)
+
+  // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
+  const subj = lead ? {
+    kind: "lead" as const, company: lead.company, contact: lead.contact, phone: lead.phone, email: lead.email,
+    province: lead.province, assigned: lead.assigned, product: lead.product,
+    customerId: lead.customerId, dealId: lead.numId as number | undefined,
+  } : {
+    kind: "customer" as const, company: customer!.company, contact: customer!.name, phone: customer!.phone, email: customer!.email,
+    province: customer!.province, assigned: customer!.owner, product: customer!.category || "",
+    customerId: customer!.id, dealId: undefined as number | undefined,
+  };
+  const defProject = () => subj.product ? `${subj.product} — ${subj.company}` : subj.company;
+  const readOnly = subj.kind === "customer"; // แท็บใบเสนอราคาของ "ลูกค้า" = ดูอย่างเดียว (ไม่แก้/สร้าง/ลบ)
+  const viewLineItems = (q: QuotationMock): QuoteLineItem[] => q.lineItems ?? (q.materialCost > 0
+    ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
+
+  const emptyForm = (): FormState => {
+    const dd = Math.min(loadDefaultDiscount(), policy.maxDiscount); // ไม่ให้ค่าเริ่มต้นเกินเพดาน HQ
+    return { project: defProject(), buildingType: subj.product,
+      items: "0", price: "", discountPct: dd > 0 ? String(dd) : "", expiry: "", note: "", lineItems: [] };
+  };
   const [form, setForm] = useState<FormState>(emptyForm);
   const set = <K extends keyof FormState>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }));
 
-  // ใบเสนอราคาของลูกค้ารายนี้ (ตาม customerId หรือชื่อบริษัท) — อัปเดตทันทีจาก context
+  // ใบเสนอราคาที่เกี่ยวข้อง — ลูกค้า: ผูกด้วย customerId · ลีด: ผูกด้วย dealId (legacy ใช้ customerId/ชื่อบริษัท)
   const related = quotations
-    .filter(q => (lead.customerId && q.customerId === lead.customerId) || q.customer === lead.company)
+    .filter(q => subj.kind === "customer"
+      ? q.customerId === subj.customerId
+      : (q.dealId === subj.dealId || (q.dealId == null && ((subj.customerId && q.customerId === subj.customerId) || q.customer === subj.company))))
     .sort((a, b) => b.date.localeCompare(a.date));
 
   function nextQId() {
@@ -44,26 +64,34 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
   function openCreate() { setEditing(null); setForm(emptyForm()); setMode("create"); }
   function openEdit(q: QuotationMock) {
     setEditing(q);
-    setForm({ project: q.project, buildingType: q.buildingType, items: String(q.items || 1),
-      price: String(q.materialCost || q.totalValue), discountPct: String(q.discountPct ?? ""), expiry: q.expiry ?? "", note: q.note ?? "" });
+    const lineItems: QuoteLineItem[] = q.lineItems ?? (q.materialCost > 0
+      ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
+    setForm({ project: q.project, buildingType: q.buildingType, items: String(lineItems.length),
+      price: String(q.materialCost || q.totalValue), discountPct: String(q.discountPct ?? ""), expiry: q.expiry ?? "", note: q.note ?? "", lineItems });
     setMode("edit");
   }
 
   function save() {
+    // Constitution V2 · Discount Policy: ตัวแทนออกใบเสนอราคาเกินเพดานส่วนลดของ HQ ไม่ได้
+    const disc = parseFloat(form.discountPct) || 0;
+    if (disc > policy.maxDiscount) {
+      alert(`ส่วนลด ${disc}% เกินเพดานที่สำนักงานใหญ่กำหนด (${policy.maxDiscount}%)\nตัวแทนออกใบเสนอราคาเกินเพดานไม่ได้`);
+      return;
+    }
     const net = netTotal(form);
     if (mode === "edit" && editing) {
-      updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: parseInt(form.items) || 1,
-        materialCost: parseBaht(form.price), totalValue: net, total: "฿" + net.toLocaleString("th-TH"),
+      updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
+        lineItems: form.lineItems, materialCost: parseBaht(form.price), totalValue: net, total: "฿" + net.toLocaleString("th-TH"),
         expiry: form.expiry || "", discountPct: parseFloat(form.discountPct) || 0, note: form.note || undefined });
       onToast?.("บันทึกใบเสนอราคาแล้ว");
     } else {
-      // สร้างใหม่ — ออกใบในนามผู้สนใจ (ยังไม่สร้างลูกค้า · ลูกค้าจะถูกสร้างเมื่อปิดการขายสำเร็จเท่านั้น)
+      // สร้างใหม่ — ออกใบในนาม subject (ลีด/ลูกค้า) · ผูก customerId/dealId ตามบริบท
       addQuotation({
-        id: nextQId(), customer: lead.company, project: form.project || `${lead.product} — ${lead.company}`,
+        id: nextQId(), customer: subj.company, project: form.project || defProject(),
         total: "฿" + net.toLocaleString("th-TH"), totalValue: net, materialCost: parseBaht(form.price),
-        province: lead.province, buildingType: form.buildingType, area: 0,
-        status: "draft", date: MOCK_TODAY, items: parseInt(form.items) || 1,
-        customerId: lead.customerId ?? 0, projectId: 0, revision: "V1", expiry: form.expiry || "",
+        province: subj.province, buildingType: form.buildingType, area: 0,
+        status: "draft", date: MOCK_TODAY, items: form.lineItems.length, lineItems: form.lineItems,
+        customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: form.expiry || "",
         discountPct: parseFloat(form.discountPct) || 0, note: form.note || undefined,
       });
       onToast?.("สร้างใบเสนอราคาเรียบร้อย");
@@ -84,42 +112,83 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
   }
 
   const lbl: React.CSSProperties = { display: "block", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 };
-  const inp: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #e5e7eb", fontSize: "0.8rem", fontFamily: "inherit", color: "#2D2D2D", background: "#fff" };
-  const ro: React.CSSProperties = { ...inp, background: "#f8f9fb", color: "#6b7280" };
+  const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid #e6eaf0", fontSize: "0.82rem", fontFamily: "inherit", color: "#2D2D2D", background: "#fff", boxSizing: "border-box" };
 
-  // ── ฟอร์มสร้าง/แก้ไข (inline) ──
+  // ── ฟอร์มสร้าง/แก้ไข (inline · รีสไตล์ให้เข้ากับ wizard ใหม่) ──
   if (mode === "create" || mode === "edit") {
+    const secLabel: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.05em", margin: "16px 0 10px" };
+    const overCap = (parseFloat(form.discountPct) || 0) > policy.maxDiscount;
+    const subtotal = parseBaht(form.price);
+    const disc = parseFloat(form.discountPct) || 0;
+    const discountAmt = Math.round(subtotal * disc / 100);
+    const net = subtotal - discountAmt;               // มูลค่างาน (ก่อน VAT) = ยอดที่บันทึก
+    const vatPct = policy.vat;
+    const vatAmt = Math.round(net * vatPct / 100);
+    const grand = net + vatAmt;                        // ยอดรวมสุทธิ (รวม VAT)
     return (
       <div>
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "5px 10px" }}><ArrowLeft size={13} /> กลับ</button>
-          <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{mode === "edit" ? `แก้ไข ${editing?.id}` : "สร้างใบเสนอราคา"}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, background: "#eef4fb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><FileText size={14} color="#003366" /></span>
+            <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{mode === "edit" ? `แก้ไข ${editing?.id}` : "สร้างใบเสนอราคาใหม่"}</div>
+          </div>
         </div>
 
-        {/* ข้อมูลจาก Lead — เติมอัตโนมัติ (อ่านอย่างเดียว) */}
-        <div style={{ background: "#f0f4fa", border: "1px solid #dce5f0", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: "0.72rem", color: "#475569", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 14px" }}>
-          <div><b>ลูกค้า:</b> {lead.contact}</div><div><b>บริษัท:</b> {lead.company}</div>
-          <div><b>โทร:</b> {lead.phone || "—"}</div><div><b>อีเมล:</b> {lead.email || "—"}</div>
-          <div><b>จังหวัด:</b> {lead.province}</div><div><b>ผู้รับผิดชอบ:</b> {lead.assigned}</div>
+        {/* ข้อมูลจาก subject — เติมอัตโนมัติ (อ่านอย่างเดียว) */}
+        <div style={{ background: "#f7f9fc", border: "1px solid #eef1f5", borderRadius: 12, padding: "11px 13px", fontSize: "0.72rem", color: "#475569", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 14px" }}>
+          <div><b style={{ color: "#8a929c", fontWeight: 700 }}>ลูกค้า:</b> {subj.contact}</div><div><b style={{ color: "#8a929c", fontWeight: 700 }}>บริษัท:</b> {subj.company}</div>
+          <div><b style={{ color: "#8a929c", fontWeight: 700 }}>โทร:</b> {subj.phone || "—"}</div><div><b style={{ color: "#8a929c", fontWeight: 700 }}>อีเมล:</b> {subj.email || "—"}</div>
+          <div><b style={{ color: "#8a929c", fontWeight: 700 }}>จังหวัด:</b> {subj.province}</div><div><b style={{ color: "#8a929c", fontWeight: 700 }}>ผู้รับผิดชอบ:</b> {subj.assigned}</div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div style={{ gridColumn: "1/-1" }}><label style={lbl}>รายการ / โครงการ</label>
-            <input value={form.project} onChange={e => set("project", e.target.value)} style={inp} /></div>
-          <div><label style={lbl}>แม่แบบที่เสนอ</label>
-            <TemplateSelect value={form.buildingType} onChange={v => set("buildingType", v)} style={inp} /></div>
-          <div><label style={lbl}>จำนวนรายการ</label>
-            <input type="number" min={1} value={form.items} onChange={e => set("items", e.target.value)} style={inp} /></div>
-          <div><label style={lbl}>ราคา (ก่อนส่วนลด)</label>
-            <input value={form.price} onChange={e => set("price", e.target.value)} placeholder="เช่น 1200000 หรือ ฿1.2M" style={inp} /></div>
-          <div><label style={lbl}>ส่วนลด (%)</label>
-            <input type="number" min={0} max={100} value={form.discountPct} onChange={e => set("discountPct", e.target.value)} placeholder="0" style={inp} /></div>
-          <div><label style={lbl}>วันหมดอายุ</label>
+        {/* รายการใบเสนอราคา — ชื่อเอกสาร + BOQ ก้อนเดียว · แม่แบบเลือกได้จาก "เลือกจากแคตตาล็อก" ใน BOQ (ไม่มีช่องแม่แบบซ้ำอีก) */}
+        <div style={secLabel}><FileText size={12} color="#003366" /> รายการใบเสนอราคา</div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={lbl}>ชื่อโครงการ / เอกสาร</label>
+          <input value={form.project} onChange={e => set("project", e.target.value)} style={inp} placeholder="เช่น โกดังเก็บสินค้าเกษตร — บจ. ..." />
+        </div>
+        <LineItemsEditor items={form.lineItems}
+          onChange={li => setForm(p => ({
+            ...p, lineItems: li, items: String(li.length),
+            price: String(li.reduce((s, it) => s + it.qty * it.unitPrice, 0)),
+            // แม่แบบ = ชื่อหลักของรายการแรก (ตัด " · ประเภทย่อย" ออก) — เก็บไว้ใช้ในเอกสาร/พิมพ์ โดยไม่ต้องเลือกซ้ำ
+            buildingType: li.length ? li[0].name.split(" · ")[0] : p.buildingType,
+          })) } />
+
+        {/* ส่วนลด / วันหมดอายุ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
+          <div><label style={lbl}><Percent size={11} style={{ verticalAlign: "-1px" }} /> ส่วนลด (%) <span style={{ color: "#9ca3af", fontWeight: 400 }}>· เพดาน HQ {policy.maxDiscount}%</span></label>
+            <input type="number" min={0} max={policy.maxDiscount} value={form.discountPct} onChange={e => set("discountPct", e.target.value)} placeholder="0"
+              style={{ ...inp, ...(overCap ? { borderColor: "#dc2626", background: "#fff5f5" } : {}) }} />
+          </div>
+          <div><label style={lbl}><Calendar size={11} style={{ verticalAlign: "-1px" }} /> วันหมดอายุ</label>
             <input type="date" value={form.expiry} onChange={e => set("expiry", e.target.value)} style={inp} /></div>
-          <div><label style={lbl}>ยอดสุทธิ (คำนวณ)</label>
-            <input value={fmtBaht(netTotal(form))} readOnly style={{ ...ro, fontWeight: 800, color: "#003366" }} /></div>
-          <div style={{ gridColumn: "1/-1" }}><label style={lbl}>หมายเหตุ</label>
-            <textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2} placeholder="รายละเอียดเพิ่มเติม…" style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} /></div>
+          {overCap && (
+            <div style={{ gridColumn: "1/-1", fontSize: "0.65rem", color: "#dc2626", fontWeight: 600 }}>
+              เกินเพดานส่วนลด {policy.maxDiscount}% ที่สำนักงานใหญ่กำหนด — ออกใบเสนอราคาไม่ได้
+            </div>
+          )}
+        </div>
+
+        {/* หมายเหตุ */}
+        <div style={{ marginTop: 12 }}><label style={lbl}>หมายเหตุ</label>
+          <textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2} placeholder="รายละเอียดเพิ่มเติม…" style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} /></div>
+
+        {/* ยอดเงิน — ก่อน VAT (บันทึก) · VAT · รวม VAT (ตรงกับ wizard/เอกสารพิมพ์) */}
+        <div style={{ marginTop: 14, background: "#003366", borderRadius: 12, padding: 14, color: "#fff" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>มูลค่า BOQ</span><span>{fmtBaht(subtotal)}</span></div>
+          {disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>ส่วนลด {disc}%</span><span>- {fmtBaht(discountAmt)}</span></div>}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid rgba(255,255,255,.2)", marginTop: 7, paddingTop: 9 }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,.85)", display: "flex", alignItems: "center", gap: 4 }}><Coins size={12} /> มูลค่างาน (ก่อน VAT)</span>
+            <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>{fmtBaht(net)}</span>
+          </div>
+          <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,.6)", marginTop: 2 }}>= ยอดที่บันทึกในใบเสนอราคา</div>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,.15)", marginTop: 9, paddingTop: 7 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.7)" }}><span>VAT {vatPct}%</span><span>{fmtBaht(vatAmt)}</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.9)", fontWeight: 800 }}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtBaht(grand)}</span></div>
+          </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
@@ -130,28 +199,84 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
     );
   }
 
-  // ── มุมมองอ่านอย่างเดียว (View) ──
+  // ── มุมมองอ่านอย่างเดียว (View) — เลย์เอาต์เดียวกับฟอร์ม แต่อ่านอย่างเดียว (มีตาราง BOQ) ──
   if (mode === "view" && editing) {
     const q = editing; const c = quotationStatusColor[q.status];
+    const lis = viewLineItems(q);
+    const subtotal = lis.reduce((s, it) => s + it.qty * it.unitPrice, 0) || q.materialCost || q.totalValue;
+    const th: React.CSSProperties = { textAlign: "left", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", padding: "8px 10px", background: "#f7f9fc", whiteSpace: "nowrap" };
+    const td: React.CSSProperties = { fontSize: "0.78rem", color: "#2D2D2D", padding: "9px 10px", borderTop: "1px solid #eef0f4" };
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "5px 10px" }}><ArrowLeft size={13} /> กลับ</button>
-          <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{q.id} · {q.revision ?? "V1"}</div>
+          <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{q.id}</div>
           <span className="badge" style={{ background: c.bg, color: c.text, marginLeft: "auto" }}>{quotationStatusLabel[q.status]}</span>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "0.8rem" }}>
-          {[["ลูกค้า", q.customer], ["โครงการ", q.project], ["แม่แบบ", q.buildingType], ["จังหวัด", q.province], ["จำนวน", `${q.items} รายการ`],
-            ["ส่วนลด", q.discountPct ? `${q.discountPct}%` : "—"], ["ยอดสุทธิ", fmtBaht(q.totalValue)], ["วันหมดอายุ", q.expiry || "—"], ["หมายเหตุ", q.note || "—"]].map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: "1px solid #f0f4f8" }}>
-              <span style={{ color: "#6b7280", flexShrink: 0 }}>{k}</span><span style={{ fontWeight: 600, color: "#2D2D2D", textAlign: "right" }}>{v}</span>
-            </div>
-          ))}
+
+        {/* ข้อมูลลูกค้า/ผู้ติดต่อ */}
+        <div style={{ background: "#f0f4fa", border: "1px solid #dce5f0", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: "0.72rem", color: "#475569", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 14px" }}>
+          <div><b>ลูกค้า:</b> {subj.contact}</div><div><b>บริษัท:</b> {q.customer || subj.company}</div>
+          <div><b>โทร:</b> {subj.phone || "—"}</div><div><b>อีเมล:</b> {subj.email || "—"}</div>
+          <div><b>จังหวัด:</b> {q.province || subj.province}</div><div><b>ผู้รับผิดชอบ:</b> {subj.assigned}</div>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-          <button onClick={() => printQuotation(q, { company: lead.company, name: lead.contact, phone: lead.phone, province: lead.province })} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
-          <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>
-          {(q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed") && (
+
+        {/* ชื่อโครงการ/เอกสาร (อ่านอย่างเดียว) — แม่แบบแสดงเป็นแท็กเล็กใต้ชื่อ (มาจากรายการ BOQ) */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>ชื่อโครงการ / เอกสาร</div>
+          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#2D2D2D" }}>{q.project}</div>
+          {q.buildingType && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 6, padding: "2px 9px", borderRadius: 999, background: "#eef4fb", color: "#003366", fontSize: "0.66rem", fontWeight: 700 }}>
+              <FileText size={10} /> {q.buildingType}
+            </span>
+          )}
+        </div>
+
+        {/* ตารางรายการสินค้า (BOQ) — อ่านอย่างเดียว */}
+        <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>รายการสินค้า (BOQ)</div>
+        <div style={{ border: "1px solid #eef0f4", borderRadius: 10, overflow: "hidden", marginBottom: 4 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>
+              <th style={th}>รายการ</th><th style={{ ...th, textAlign: "right" }}>จำนวน</th>
+              <th style={th}>หน่วย</th><th style={{ ...th, textAlign: "right" }}>ราคา/หน่วย</th>
+              <th style={{ ...th, textAlign: "right" }}>รวม</th>
+            </tr></thead>
+            <tbody>
+              {lis.length === 0 ? (
+                <tr><td style={{ ...td, textAlign: "center", color: "#9aa2ad" }} colSpan={5}>ไม่มีรายการ</td></tr>
+              ) : lis.map((it, i) => (
+                <tr key={i}>
+                  <td style={{ ...td, fontWeight: 600 }}>{it.name}</td>
+                  <td style={{ ...td, textAlign: "right" }}>{it.qty.toLocaleString("th-TH")}</td>
+                  <td style={td}>{it.unit}</td>
+                  <td style={{ ...td, textAlign: "right" }}>{it.unitPrice.toLocaleString("th-TH")}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#003366" }}>{fmtBaht(it.qty * it.unitPrice)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td style={{ ...td, background: "#f7f9fc", fontWeight: 700 }} colSpan={4}>{lis.length} รายการ · รวมก่อน VAT/ส่วนลด</td>
+                <td style={{ ...td, background: "#f7f9fc", textAlign: "right", fontWeight: 800, color: "#003366" }}>{fmtBaht(subtotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* ส่วนลด / วันหมดอายุ / ยอดสุทธิ / หมายเหตุ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
+          <div><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>ส่วนลด</div>
+            <div style={{ fontSize: "0.85rem", color: "#2D2D2D" }}>{q.discountPct ? `${q.discountPct}%` : "—"}</div></div>
+          <div><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>วันหมดอายุ</div>
+            <div style={{ fontSize: "0.85rem", color: "#2D2D2D" }}>{q.expiry || "—"}</div></div>
+          <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>ยอดสุทธิ</div>
+            <div style={{ fontSize: "1rem", fontWeight: 800, color: "#003366" }}>{fmtBaht(q.totalValue)}</div></div>
+          {q.note && (<div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>หมายเหตุ</div>
+            <div style={{ fontSize: "0.82rem", color: "#2D2D2D", lineHeight: 1.6 }}>{q.note}</div></div>)}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province })} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
+          {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
+          {!readOnly && (q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed") && (
             <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
               <Send size={13} /> {q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
             </button>
@@ -165,12 +290,12 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
-        <div style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 700 }}>ใบเสนอราคา · {related.length} ฉบับ</div>
-        <button onClick={openCreate} className="btn btn-primary btn-sm"><FilePlus size={13} /> สร้างใบเสนอราคา</button>
+        <div style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 700 }}>ใบเสนอราคา · {related.length} ฉบับ{readOnly && " · ดูอย่างเดียว"}</div>
+        {!readOnly && <button onClick={openCreate} className="btn btn-primary btn-sm"><FilePlus size={13} /> สร้างใบเสนอราคา</button>}
       </div>
 
       {related.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "28px 0", color: "#9aa2ad", fontSize: "0.8rem" }}>ยังไม่มีใบเสนอราคา — กด “สร้างใบเสนอราคา” เพื่อเริ่ม</div>
+        <div style={{ textAlign: "center", padding: "28px 0", color: "#9aa2ad", fontSize: "0.8rem" }}>ยังไม่มีใบเสนอราคา{!readOnly && " — กด “สร้างใบเสนอราคา” เพื่อเริ่ม"}</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {related.map(q => {
@@ -181,26 +306,27 @@ export function LeadQuotationsPanel({ lead, onToast }: { lead: LeadRow; onToast?
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                       <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#2D2D2D" }}>{q.id}</span>
-                      <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>{q.revision ?? "V1"}</span>
                       <span className="badge" style={{ background: c.bg, color: c.text, fontSize: "0.65rem" }}>{quotationStatusLabel[q.status]}</span>
                     </div>
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>{q.date} · {fmtBaht(q.totalValue)}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {/* ส่งใบเสนอราคา — เด่นเป็นปุ่ม navy · แสดงเฉพาะใบที่ยังส่งได้ (draft/ส่งแล้ว/เปิดอ่าน) */}
-                    {(q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed") && (
+                    {/* ส่งใบเสนอราคา — เด่นเป็นปุ่ม navy · แสดงเฉพาะใบที่ยังส่งได้ (draft/ส่งแล้ว/เปิดอ่าน) · ซ่อนเมื่อดูอย่างเดียว */}
+                    {!readOnly && (q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed") && (
                       <button onClick={() => sendQuote(q)} title={q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
                         className="btn btn-primary btn-sm" style={{ height: 28, padding: "0 11px" }}>
                         <Send size={12} /> {q.status === "draft" ? "ส่ง" : "ส่งอีกครั้ง"}
                       </button>
                     )}
-                    {[
+                    {([
                       { ic: <Eye size={13} />, t: "ดู", fn: () => { setEditing(q); setMode("view"); } },
-                      { ic: <Pencil size={13} />, t: "แก้ไข", fn: () => openEdit(q) },
-                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: lead.company, name: lead.contact, phone: lead.phone, province: lead.province }) },
-                      { ic: <Copy size={13} />, t: "ทำสำเนา", fn: () => duplicate(q) },
-                      { ic: <Trash2 size={13} />, t: "ลบ", fn: () => setConfirmDel(q.id), danger: true },
-                    ].map((b, i) => (
+                      ...(readOnly ? [] : [{ ic: <Pencil size={13} />, t: "แก้ไข", fn: () => openEdit(q) }]),
+                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }) },
+                      ...(readOnly ? [] : [
+                        { ic: <Copy size={13} />, t: "ทำสำเนา", fn: () => duplicate(q) },
+                        { ic: <Trash2 size={13} />, t: "ลบ", fn: () => setConfirmDel(q.id), danger: true },
+                      ]),
+                    ] as { ic: React.ReactNode; t: string; fn: () => void; danger?: boolean }[]).map((b, i) => (
                       <button key={i} onClick={b.fn} title={b.t} aria-label={b.t}
                         style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #e5e7eb", background: "#fff",
                           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: b.danger ? "#dc2626" : "#475569" }}>{b.ic}</button>

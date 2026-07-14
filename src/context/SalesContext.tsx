@@ -6,13 +6,20 @@ import {
 } from "react";
 import {
   pipelineDeals, pipelineStages,
-  quotations as seedQuotations, initialCustomers,
+  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
+  syncAddQuotationFile, syncRemoveQuotationFile,
   type PipelineDealMock, type LeadRow, type DealActivity,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock,
 } from "@/lib/mock";
+import { loadIssuer } from "@/lib/quotationPrint";
 import { parseBaht } from "@/lib/format";
+
+// ใบเสนอราคาเดิม (seed) = ออกภายใต้โปรไฟล์บริษัทตั้งต้น → ตรึงชื่อไว้ ไม่เปลี่ยนตามโปรไฟล์ที่แก้ทีหลัง
+const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
+  q.issuer ? q : { ...q, issuer: { ...DEFAULT_ISSUER } }
+);
 
 // ─── Types ─────────────────────────────────────────────────────────
 export type DealSource = "pipeline" | "lead";
@@ -86,7 +93,7 @@ export function SalesProvider({
   const [nextDealId, setNextDealId] = useState(pipelineDeals.length + 1);
   const [leadChecklists, setLeadChecklists] = useState<Record<string, ChecklistItem[]>>({});
   const [customers, setCustomers]   = useState<CustomerRow[]>(initialCustomers);
-  const [quotations, setQuotations] = useState<QuotationMock[]>(seedQuotations);
+  const [quotations, setQuotations] = useState<QuotationMock[]>(seedQuotationsStamped);
   const [appointments, setAppointments] = useState<AppointmentMock[]>(seedAppointments);
   // ── Activity helper ─────────────────────────────────────────────
   const logDealActivity = useCallback((dealId: number, entry: Omit<DealActivity, "id">) => {
@@ -151,7 +158,7 @@ export function SalesProvider({
   }, []);
 
   // ── Lead → Customer conversion (creates a REAL customer) ─────────
-  // removeLead = true → "เปลี่ยนลีดเป็นลูกค้า" (ลบออกจากรายการผู้สนใจ) · false → แค่ผูกลูกค้าให้ลีด (คงลีดไว้ เช่นตอนสร้างใบเสนอราคา)
+  // removeLead = true → "เปลี่ยนลีดเป็นลูกค้า" (ลบออกจากรายการลูกค้าเป้าหมาย) · false → แค่ผูกลูกค้าให้ลีด (คงลีดไว้ เช่นตอนสร้างใบเสนอราคา)
   const convertLeadToCustomer = useCallback((lead: LeadRow, removeLead = false): CustomerRow => {
     // ถ้าลีดมี customerId ที่มีอยู่แล้ว → คืนลูกค้าเดิม (ไม่สร้างซ้ำ)
     if (lead.customerId != null) {
@@ -167,7 +174,7 @@ export function SalesProvider({
       id: newId,
       name: lead.contact || lead.company,
       company: lead.company,
-      type: "บริษัท",
+      type: lead.type ?? "บริษัท",   // ใช้ประเภทลูกค้าจริงจากลีด (ไม่ระบุ = บริษัท)
       email: lead.email ?? "",
       phone: lead.phone ?? "",
       province: lead.province,
@@ -183,10 +190,10 @@ export function SalesProvider({
     };
     setCustomers(prev => [...prev, newCustomer]);
     if (removeLead) {
-      // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการผู้สนใจ
+      // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
       setLeads(prev => prev.filter(l => l.id !== lead.id));
     } else {
-      // แค่ผูกลูกค้าให้ลีด (ยังเป็นผู้สนใจอยู่)
+      // แค่ผูกลูกค้าให้ลีด (ยังเป็นลูกค้าเป้าหมายอยู่)
       setLeads(prev => prev.map(l => l.id !== lead.id ? l : { ...l, customerId: newId }));
     }
     // ผูกใบเสนอราคาที่ออกก่อน WON (customerId=0 ในนามบริษัทลีด) เข้ากับลูกค้าใหม่ย้อนหลัง
@@ -229,7 +236,7 @@ export function SalesProvider({
       const [leadId] = entry;
       const lead = leads.find(l => l.id === leadId);
       if (outcome === "won") {
-        // ปิดการขายสำเร็จ → เปลี่ยนลีดเป็นลูกค้าเต็มตัว (ออกจากรายการผู้สนใจ),
+        // ปิดการขายสำเร็จ → เปลี่ยนลีดเป็นลูกค้าเต็มตัว (ออกจากรายการลูกค้าเป้าหมาย),
         // ผูกดีลกับลูกค้าใหม่ และตั้งใบเสนอราคาที่เกี่ยวข้องเป็น "ตอบรับ" (won)
         if (lead) {
           const customer = convertLeadToCustomer(lead, true);
@@ -239,7 +246,7 @@ export function SalesProvider({
           ));
         }
       } else if (lead) {
-        // ปิดการขายไม่สำเร็จ → ตั้งลีดเป็นไม่ได้งาน (ยังอยู่ในรายการผู้สนใจ)
+        // ปิดการขายไม่สำเร็จ → ตั้งลีดเป็นไม่ได้งาน (ยังอยู่ในรายการลูกค้าเป้าหมาย)
         setLeads(prev => prev.map(l => l.id !== leadId ? l : { ...l, status: "CANCELLED" }));
       }
     }
@@ -304,7 +311,7 @@ export function SalesProvider({
       createdAt:  "2026-06-30", // ตรึงตามวัน "ปัจจุบัน" ของ mock เพื่อให้ดีลใหม่อยู่ในช่วงตัวกรองเริ่มต้น
       notes:      "",
       activities: [
-        { id: Date.now(), type: "deal_created", text: `สร้างโอกาสการขายจากผู้สนใจ: ${lead.company}`, timestamp: now },
+        { id: Date.now(), type: "deal_created", text: `สร้างโอกาสการขายจากลูกค้าเป้าหมาย: ${lead.company}`, timestamp: now },
       ],
     };
 
@@ -395,9 +402,12 @@ export function SalesProvider({
 
   // ── Quotation mutations ──────────────────────────────────────────
   const addQuotation = useCallback((quotation: QuotationMock) => {
-    setQuotations(prev => [quotation, ...prev]);
+    // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง — ใบใหม่ใช้ชื่อปัจจุบัน, ใบเก่าคงชื่อเดิมเมื่อเปลี่ยนโปรไฟล์ทีหลัง
+    const stamped = quotation.issuer ? quotation : { ...quotation, issuer: loadIssuer() };
+    setQuotations(prev => [stamped, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
     completeLeadQuoteTasks(quotation, quotation.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
+    syncAddQuotationFile(stamped); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลีด/ลูกค้า
   }, [completeLeadQuoteTasks]);
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
@@ -407,6 +417,7 @@ export function SalesProvider({
 
   const deleteQuotation = useCallback((id: string) => {
     setQuotations(prev => prev.filter(q => q.id !== id));
+    syncRemoveQuotationFile(id); // ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง (ไม่แตะไฟล์ที่ผู้ใช้แนบเอง)
   }, []);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {

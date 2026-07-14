@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Trophy, XCircle, RotateCcw } from "lucide-react";
+import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
   buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, loadLostReasons,
   type LeadRow, type LeadTask,
@@ -22,9 +22,26 @@ export function LeadTasks({ lead, performedBy, onSave }: {
   const pct = closed ? 100 : taskProgress(tasks);
   const [lostOpen, setLostOpen] = useState(false);
   const [lostReason, setLostReason] = useState("");
+  const [hint, setHint] = useState("");
+
+  // ลำดับงาน (ไม่รวม "ปิดการขาย") — ใช้บังคับติ๊กตามลำดับ ห้ามข้ามขั้น
+  const normalTasks = tasks.filter(t => t.key !== "close");
+  const orderIndex = (key: string) => normalTasks.findIndex(t => t.key === key);
+  // เช็กขั้นนี้ได้ก็ต่อเมื่อขั้นก่อนหน้าเสร็จครบ · ยกเลิกได้เฉพาะขั้นล่าสุด (ไม่มีขั้นถัดไปที่เช็กไว้)
+  const canCheck   = (i: number) => normalTasks.slice(0, i).every(x => x.done);
+  const canUncheck = (i: number) => !normalTasks.slice(i + 1).some(x => x.done);
 
   function toggle(key: string) {
     if (closed) return;
+    const i = orderIndex(key);
+    if (i < 0) return;
+    const cur = normalTasks[i];
+    if (!cur.done) {
+      if (!canCheck(i)) { setHint("ทำขั้นตอนก่อนหน้าให้ครบก่อน จึงจะเช็กขั้นนี้ได้ (ห้ามข้ามขั้น)"); return; }
+    } else {
+      if (!canUncheck(i)) { setHint("ยกเลิกได้เฉพาะขั้นล่าสุด — ต้องยกเลิกขั้นถัดไปก่อน"); return; }
+    }
+    setHint("");
     const now = stamp(new Date());
     const next = tasks.map(t => t.key === key
       ? (t.done
@@ -49,7 +66,6 @@ export function LeadTasks({ lead, performedBy, onSave }: {
   }
 
   const barColor = lead.status === "CANCELLED" ? "#dc2626" : lead.status === "PAID" ? "#059669" : "#003366";
-  const normalTasks = tasks.filter(t => t.key !== "close");
 
   return (
     <div>
@@ -74,33 +90,48 @@ export function LeadTasks({ lead, performedBy, onSave }: {
         </div>
       </div>
 
-      {/* ── Checklist งาน ── */}
+      {/* ── ข้อความเตือนเมื่อพยายามข้ามขั้น ── */}
+      {hint && !closed && (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, background: "#fff7ed", border: "1px solid #fed7aa", color: "#b45309", borderRadius: 9, padding: "8px 11px", marginBottom: 10, fontSize: "0.72rem", fontWeight: 600 }}>
+          <Lock size={13} /> {hint}
+        </div>
+      )}
+
+      {/* ── Checklist งาน (ติ๊กตามลำดับ ห้ามข้ามขั้น) ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {normalTasks.map(t => (
-          <button key={t.key} type="button" onClick={() => toggle(t.key)} disabled={closed}
-            style={{
-              display: "flex", alignItems: "flex-start", gap: 11, width: "100%", textAlign: "left",
-              padding: "10px 12px", borderRadius: 10, border: `1px solid ${t.done ? "#bbf7d0" : "#e5e7eb"}`,
-              background: t.done ? "#f0fdf4" : "#fff", cursor: closed ? "default" : "pointer", fontFamily: "inherit",
-              opacity: closed && !t.done ? 0.55 : 1,
-            }}>
-            <span style={{
-              width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1,
-              border: `2px solid ${t.done ? "#059669" : "#cbd5e1"}`, background: t.done ? "#059669" : "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {t.done && <Check size={13} color="#fff" strokeWidth={3} />}
-            </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: "0.86rem", fontWeight: 600, color: t.done ? "#065f46" : "#2D2D2D", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-              {t.done && (t.doneBy || t.doneAt) && (
-                <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
-                  ✓ {t.doneBy ?? "—"}{t.doneAt ? ` · ${t.doneAt}` : ""}
-                </span>
-              )}
-            </span>
-          </button>
-        ))}
+        {normalTasks.map((t, i) => {
+          const lockedCheck = !closed && !t.done && !canCheck(i);   // ยังเช็กไม่ได้ (ขั้นก่อนหน้ายังไม่ครบ)
+          const lockedUncheck = !closed && t.done && !canUncheck(i); // ยกเลิกไม่ได้ (มีขั้นถัดไปที่เช็กแล้ว)
+          const locked = lockedCheck || lockedUncheck;
+          return (
+            <button key={t.key} type="button" onClick={() => toggle(t.key)} disabled={closed}
+              title={lockedCheck ? "ทำขั้นก่อนหน้าให้ครบก่อน" : lockedUncheck ? "ยกเลิกได้เฉพาะขั้นล่าสุด" : undefined}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 11, width: "100%", textAlign: "left",
+                padding: "10px 12px", borderRadius: 10, border: `1px solid ${t.done ? "#bbf7d0" : lockedCheck ? "#eceff3" : "#e5e7eb"}`,
+                background: t.done ? "#f0fdf4" : lockedCheck ? "#fafbfc" : "#fff",
+                cursor: closed ? "default" : locked ? "not-allowed" : "pointer", fontFamily: "inherit",
+                opacity: (closed && !t.done) || lockedCheck ? 0.6 : 1,
+              }}>
+              <span style={{
+                width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1,
+                border: `2px solid ${t.done ? "#059669" : lockedCheck ? "#d5dbe3" : "#cbd5e1"}`, background: t.done ? "#059669" : "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {t.done ? <Check size={13} color="#fff" strokeWidth={3} /> : lockedCheck ? <Lock size={11} color="#b6bfca" /> : null}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: "0.86rem", fontWeight: 600, color: t.done ? "#065f46" : lockedCheck ? "#9aa4b0" : "#2D2D2D", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
+                {t.done && (t.doneBy || t.doneAt) && (
+                  <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
+                    ✓ {t.doneBy ?? "—"}{t.doneAt ? ` · ${t.doneAt}` : ""}
+                  </span>
+                )}
+                {lockedCheck && <span style={{ display: "block", fontSize: "0.62rem", color: "#b6bfca", marginTop: 2 }}>ล็อก — ทำขั้นก่อนหน้าให้ครบก่อน</span>}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── ปิดการขาย (Won / Lost) → 100% ── */}

@@ -6,6 +6,7 @@ import {
   ScrollText, GitMerge, Handshake, Store, CheckCircle2, XCircle,
   type LucideIcon,
 } from "lucide-react";
+import { CountUp } from "@/components/ui/CountUp";
 
 const ICONS: Record<string, LucideIcon> = {
   target: Target, trending: TrendingUp, trendingdown: TrendingDown, award: Award, building: Building2,
@@ -36,7 +37,7 @@ export function KpiCard({ label, value, unit, delta, icon, sub, current, target,
       <div className="kc-hd">
         <div style={{ minWidth: 0 }}>
           <div className="kc-lbl">{label}</div>
-          <div className="kc-val" style={{ marginTop: 8 }}>{value}{unit && <span className="cents"> {unit}</span>}</div>
+          <div className="kc-val" style={{ marginTop: 8 }}><CountUp value={value} />{unit && <span className="cents"> {unit}</span>}</div>
         </div>
         <div className="kc-ico"><Icon size={19} /></div>
       </div>

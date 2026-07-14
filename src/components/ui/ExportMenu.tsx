@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Download, ChevronDown, FileText, FileSpreadsheet, Printer } from "lucide-react";
 
 type Cell = string | number;
+
+/** รายการเสริมท้ายเมนู (เช่น นำเข้า) — แสดงใต้ตัวเลือก Export พร้อมเส้นคั่น */
+export type ExtraAction = { label: string; desc?: string; icon?: ReactNode; onClick: () => void };
 
 export type ExportMenuProps = {
   /** ชื่อไฟล์ (ไม่ต้องใส่นามสกุล) */
@@ -14,6 +17,10 @@ export type ExportMenuProps = {
   rows: Cell[][];
   /** ปรับสไตล์ปุ่ม trigger */
   small?: boolean;
+  /** รายการเสริมท้ายเมนู (เช่น นำเข้า CSV / เพิ่มลูกค้าเดิม) */
+  extraActions?: ExtraAction[];
+  /** หัวข้อกลุ่มรายการเสริม (เช่น "นำเข้า") */
+  extraLabel?: string;
 };
 
 function downloadBlob(blob: Blob, name: string) {
@@ -30,7 +37,7 @@ function downloadBlob(blob: Blob, name: string) {
 const esc = (c: Cell) => String(c ?? "");
 
 /** Export ตาราง — CSV / Excel / PDF (frontend-only, ไม่ง้อ backend) */
-export function ExportMenu({ filename, title, headers, rows, small }: ExportMenuProps) {
+export function ExportMenu({ filename, title, headers, rows, small, extraActions, extraLabel }: ExportMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -107,6 +114,24 @@ export function ExportMenu({ filename, title, headers, rows, small }: ExportMenu
               </span>
             </button>
           ))}
+          {extraActions && extraActions.length > 0 && (
+            <>
+              <div style={{ borderTop: "1px solid #eef0f4", margin: "4px 0" }} />
+              {extraLabel && <div style={{ padding: "4px 10px 2px", fontSize: "0.62rem", fontWeight: 700, color: "#9ca3af", letterSpacing: "0.04em" }}>{extraLabel}</div>}
+              {extraActions.map(a => (
+                <button key={a.label} onClick={() => { setOpen(false); a.onClick(); }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", borderRadius: 8, border: "none", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#f8f9fb"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 8, background: "#dce5f0", color: "#003366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{a.icon}</span>
+                  <span>
+                    <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{a.label}</span>
+                    {a.desc && <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280" }}>{a.desc}</span>}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

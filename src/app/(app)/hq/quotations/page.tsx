@@ -5,7 +5,8 @@ import { hqAllQuotations, quotationStatusLabel, quotationStatusColor, solutionPr
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { useFilters, parseDate } from "@/context/FilterContext";
-import { Search, Eye, X } from "lucide-react";
+import { useNetworkQuotations } from "@/lib/useNetworkData";
+import { Search, X } from "lucide-react";
 
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
@@ -58,6 +59,7 @@ export default function HQQuotationsPage() {
   const [productFilter, setProductFilter] = useState<string>("all");
   const [viewQ, setViewQ] = useState<HQQuotation | null>(null); // View → เจาะดูใบเสนอราคา (HQ Data Ownership)
   const { inRange } = useFilters(); // ตัวกรองเวลาหลัก (FilterBar) → กรองตาม createdAt
+  const netQuotes = useNetworkQuotations(); // ใบที่ดีลเลอร์สร้างจริง + seed เครือ (แหล่งเดียว)
 
   // เปิดหน้าด้วย ?dealer=CODE (เช่นกดมาจากการ์ดสถิติในแดชบอร์ด) → กรองตัวแทนนั้นให้เลย
   useEffect(() => {
@@ -68,8 +70,8 @@ export default function HQQuotationsPage() {
 
   // ขอบเขตของ pills/การ์ดสถานะ = ตัวแทนที่เลือก (ตัวเลือกเฉพาะหน้านี้)
   const scoped = useMemo(
-    () => hqAllQuotations.filter((q) => (dealerFilter === "all" || q.dealerCode === dealerFilter) && inRange(q.createdAt)),
-    [dealerFilter, inRange],
+    () => netQuotes.filter((q) => (dealerFilter === "all" || q.dealerCode === dealerFilter) && inRange(q.createdAt)),
+    [netQuotes, dealerFilter, inRange],
   );
 
   const stats = useMemo(() => {
@@ -83,7 +85,7 @@ export default function HQQuotationsPage() {
   }, [scoped]);
 
   const filtered = useMemo(() => {
-    let list = hqAllQuotations.filter((r) => inRange(r.createdAt)); // ตัวกรองเวลาหลัก
+    let list = netQuotes.filter((r) => inRange(r.createdAt)); // ตัวกรองเวลาหลัก
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -111,7 +113,7 @@ export default function HQQuotationsPage() {
     });
 
     return list;
-  }, [search, dealerFilter, statusFilter, productFilter, inRange]);
+  }, [netQuotes, search, dealerFilter, statusFilter, productFilter, inRange]);
 
   return (
     <div className="erp">
@@ -182,7 +184,7 @@ export default function HQQuotationsPage() {
         }}
       >
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}>
+        <div style={{ position: "relative", width: 280, maxWidth: "100%", flexShrink: 0 }}>
           <Search
             size={14}
             color={MUTED}
@@ -198,6 +200,8 @@ export default function HQQuotationsPage() {
             style={{ paddingLeft: 32 }}
           />
         </div>
+
+        <div style={{ flex: 1 }} />
 
         {/* Dealer Filter */}
         <select
@@ -244,10 +248,6 @@ export default function HQQuotationsPage() {
             </option>
           ))}
         </select>
-
-        <span style={{ fontSize: "0.8rem", color: MUTED, whiteSpace: "nowrap" }}>
-          แสดง {filtered.length} / {hqAllQuotations.length} รายการ
-        </span>
       </div>
 
       {/* Table */}
@@ -264,7 +264,6 @@ export default function HQQuotationsPage() {
               <col style={{ width: "10%" }} />
               <col style={{ width: "8%" }} />
               <col style={{ width: "8%" }} />
-              <col style={{ width: "9%" }} />
             </colgroup>
             <thead>
               <tr>
@@ -277,14 +276,13 @@ export default function HQQuotationsPage() {
                 <th>พนักงานขาย</th>
                 <th>วันที่</th>
                 <th>สถานะ</th>
-                <th style={{ textAlign: "right" }}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     style={{ textAlign: "center", padding: "32px 14px", color: MUTED }}
                   >
                     ไม่พบข้อมูลที่ค้นหา
@@ -301,7 +299,7 @@ export default function HQQuotationsPage() {
                       : MUTED;
 
                   return (
-                    <tr key={q.id}>
+                    <tr key={q.id} onClick={() => setViewQ(q)} style={{ cursor: "pointer" }}>
                       {/* Quote No */}
                       <td style={{ color: PRIMARY, fontWeight: 700, whiteSpace: "nowrap" }}>
                         {q.quoteNo}
@@ -365,12 +363,6 @@ export default function HQQuotationsPage() {
                         <span className="badge" style={{ background: sm.bg, color: sm.color }}>
                           {sm.label}
                         </span>
-                      </td>
-                      {/* View — HQ เจาะดูใบเสนอราคา */}
-                      <td style={{ textAlign: "right" }}>
-                        <button onClick={() => setViewQ(q)} className="btn btn-secondary btn-sm" style={{ color: PRIMARY }}>
-                          <Eye size={13} /> ดู
-                        </button>
                       </td>
                     </tr>
                   );

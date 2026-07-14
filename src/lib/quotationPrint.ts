@@ -1,7 +1,7 @@
 // ── ใบเสนอราคา: เทมเพลตพิมพ์ + การตั้งค่าเอกสาร (แหล่งเดียว) ──────────────────
 // ใช้ร่วมกันทั้งหน้า /quotations และใบเสนอราคา inline ในหน้า Lead (LeadQuotationsPanel)
 // เพื่อให้เอกสารที่พิมพ์ออกมา "เหมือนกัน 100%" ทุกจุด — VAT / ตราประทับ / ลายเซ็น / หัวกระดาษ
-import { DEFAULT_ISSUER, ISSUER_KEY, type IssuerProfile, type QuotationMock } from "./mock";
+import { DEFAULT_ISSUER, ISSUER_KEY, loadHQPolicy, type IssuerProfile, type QuotationMock } from "./mock";
 
 // การตั้งค่าเอกสาร (จาก Settings → ตั้งค่าใบเสนอราคา) — คนละคีย์กับโปรไฟล์บริษัท
 export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number };
@@ -24,11 +24,14 @@ export function loadIssuer(): IssuerProfile {
   return { ...DEFAULT_ISSUER };
 }
 
-// อ่านการตั้งค่าเอกสาร (VAT/ตรา/ลายเซ็น/prefix/เลขรัน) — fallback = DEFAULT_DOC
+// อ่านการตั้งค่าเอกสาร (ตรา/ลายเซ็น/prefix/เลขรัน) — fallback = DEFAULT_DOC
+// VAT บังคับมาจากนโยบาย HQ เสมอ (HQ คุมอัตราภาษีทั้งเครือ · ตัวแทนแก้ไม่ได้)
 export function loadDoc(): DocProfile {
   if (typeof window === "undefined") return { ...DEFAULT_DOC };
-  try { const s = localStorage.getItem(DOC_KEY); if (s) return { ...DEFAULT_DOC, ...JSON.parse(s) }; } catch {}
-  return { ...DEFAULT_DOC };
+  let doc = { ...DEFAULT_DOC };
+  try { const s = localStorage.getItem(DOC_KEY); if (s) doc = { ...DEFAULT_DOC, ...JSON.parse(s) }; } catch {}
+  try { const vat = loadHQPolicy().vat; if (typeof vat === "number" && vat >= 0) doc.vatPercent = vat; } catch {}
+  return doc;
 }
 
 function esc(s: unknown) { return String(s ?? "").replace(/[&<>"]/g, c => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as Record<string, string>)[c])); }
@@ -41,6 +44,10 @@ export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust
   const vatPct = typeof doc.vatPercent === "number" ? doc.vatPercent : 7;
   const vat = Math.round(subtotal * vatPct / 100);
   const grand = subtotal + vat;
+  // ตารางรายการ — ใช้ lineItems จริงถ้ามี · ใบเก่าที่ไม่มี → แถวเดียว (ทั้งโปรเจกต์)
+  const itemRows = (q.lineItems && q.lineItems.length)
+    ? q.lineItems.map((it, i) => `<tr><td>${i + 1}</td><td><b>${esc(it.name)}</b></td><td class="r">${n(it.qty)} ${esc(it.unit)}</td><td class="r">${n(it.unitPrice)}</td><td class="r">${n(it.qty * it.unitPrice)}</td></tr>`).join("")
+    : `<tr><td>1</td><td><b>${esc(q.project)}</b><br/><span style="color:#888;font-size:11px">${esc(q.buildingType)} · อาคารสำเร็จรูป</span></td><td class="r">${n(q.area)} ม²</td><td class="r">-</td><td class="r">${n(subtotal)}</td></tr>`;
   const issuerMeta = [issuer.address, issuer.phone ? ("โทร. " + issuer.phone) : "", issuer.taxId ? ("เลขผู้เสียภาษี " + issuer.taxId) : ""].filter(Boolean).join("\n");
   return `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
 <title>ใบเสนอราคา ${esc(q.id)}</title>
@@ -53,6 +60,7 @@ body{font-family:'Sarabun','Tahoma',sans-serif;color:#2D2D2D;font-size:13px;line
 .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #003366;padding-bottom:14px}
 .issuer-logo{max-height:54px;max-width:240px;object-fit:contain;display:block;margin-bottom:4px}
 .issuer-name{font-size:20px;font-weight:800;color:#003366}
+.issuer-logo{max-height:46px;max-width:240px;object-fit:contain;display:block;margin-bottom:2px}
 .issuer-meta{font-size:11px;color:#555;margin-top:4px;white-space:pre-line}
 .doc-title{text-align:right}
 .doc-title h1{font-size:22px;color:#003366;letter-spacing:1px}
@@ -84,9 +92,8 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 <div class="sheet">
   <div class="top">
     <div>
-      ${wordmark
-        ? `<img class="issuer-logo" src="${esc(wordmark)}" alt="${esc(issuer.company)}"/>`
-        : `<div class="issuer-name">${esc(issuer.company)}</div>`}
+      ${/* Constitution V2 · Branding: ตัวแทนอัปโหลดโลโก้เองไม่ได้ → หัวเอกสารใช้ "ชื่อบริษัทตัวแทน" เป็นข้อความเท่านั้น (ไม่มีชื่อ/โลโก้ Benjamin) */""}
+      <div class="issuer-name">${esc(issuer.company)}</div>
       <div class="issuer-meta">${esc(issuerMeta)}</div>
     </div>
     <div class="doc-title">
@@ -112,15 +119,8 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
     </div>
   </div>
   <table class="items">
-    <thead><tr><th style="width:44px">ลำดับ</th><th>รายการ</th><th class="r" style="width:90px">พื้นที่</th><th class="r" style="width:140px">จำนวนเงิน (บาท)</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>1</td>
-        <td><b>${esc(q.project)}</b><br/><span style="color:#888;font-size:11px">${esc(q.buildingType)} · อาคารสำเร็จรูป</span></td>
-        <td class="r">${n(q.area)} ม²</td>
-        <td class="r">${n(subtotal)}</td>
-      </tr>
-    </tbody>
+    <thead><tr><th style="width:40px">ลำดับ</th><th>รายการ</th><th class="r" style="width:78px">จำนวน</th><th class="r" style="width:100px">ราคา/หน่วย</th><th class="r" style="width:128px">จำนวนเงิน (บาท)</th></tr></thead>
+    <tbody>${itemRows}</tbody>
   </table>
   <div class="sum">
     <div class="line"><span>มูลค่างาน (ก่อน VAT)</span><span>${n(subtotal)}</span></div>
@@ -150,7 +150,8 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 // พิมพ์ใบเสนอราคา — โหลด issuer + doc จาก localStorage เอง แล้วเปิดหน้าต่างพิมพ์
 // ใช้ตัวนี้เพื่อความสม่ำเสมอ (VAT/ตรา/ลายเซ็น มาจากการตั้งค่าจริงเสมอ)
 export function printQuotation(q: QuotationMock, cust?: PrintCustomer) {
-  const html = buildQuotationHTML(q, loadIssuer(), cust, loadDoc(), loadWordmark());
+  // ใช้สแนปช็อตผู้ออกที่ตรึงไว้กับใบ (ถ้ามี) — ใบเก่าคงชื่อเดิม; ไม่มีค่อย fallback โปรไฟล์ปัจจุบัน
+  const html = buildQuotationHTML(q, q.issuer ?? loadIssuer(), cust, loadDoc(), loadWordmark());
   const w = window.open("", "_blank"); if (!w) return;
   w.document.write(html); w.document.close();
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Building2, Upload, Check, Save, Palette, Download,
   MapPin, Type, Image as ImageIcon,
 } from "lucide-react";
 import { fileToResizedDataURL } from "@/lib/imageResize";
+import { useReportSection } from "@/lib/settingsBus";
 
 const PROFILE_KEY  = "hq_company_profile";
 const LOGO_KEY     = "hq_company_logo";      // สัญลักษณ์ (ไอคอน) → แถบเมนู
@@ -42,28 +43,30 @@ const BRANCHES: Branch[] = [
   { name: "สาขานครราชสีมา",          region: "ภาคตะวันออกเฉียงเหนือ", address: "ถ.มิตรภาพ อ.เมือง นครราชสีมา", status: "เร็วๆ นี้" },
 ];
 
-export default function HQCompanyPage() {
+export default function HQCompanyPage({ embedded }: { embedded?: boolean } = {}) {
   const [form,  setForm]  = useState<CompanyProfile>(PROFILE_DEFAULT);
   const [logo,  setLogo]  = useState("");
   const [wordmark, setWordmark] = useState("");
   const [saved, setSaved] = useState(false);
+  const [baseline, setBaseline] = useState(""); // สแนปช็อตค่าที่บันทึกล่าสุด → ใช้เทียบ dirty (โหมดฝัง)
   const fileRef = useRef<HTMLInputElement>(null);
   const wordmarkRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let f = PROFILE_DEFAULT, l = "", w = "";
     const s = localStorage.getItem(PROFILE_KEY);
-    if (s) try { setForm({ ...PROFILE_DEFAULT, ...JSON.parse(s) }); } catch {}
-    const l = localStorage.getItem(LOGO_KEY);
-    if (l) setLogo(l);
-    const w = localStorage.getItem(WORDMARK_KEY);
-    if (w) setWordmark(w);
+    if (s) try { f = { ...PROFILE_DEFAULT, ...JSON.parse(s) }; } catch {}
+    const ls = localStorage.getItem(LOGO_KEY); if (ls) l = ls;
+    const ws = localStorage.getItem(WORDMARK_KEY); if (ws) w = ws;
+    setForm(f); setLogo(l); setWordmark(w);
+    setBaseline(JSON.stringify({ form: f, logo: l, wordmark: w }));
   }, []);
 
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
     setForm(p => ({ ...p, [k]: v }));
     setSaved(false);
   }
-  function save() {
+  const save = useCallback(() => {
     try {
       localStorage.setItem(PROFILE_KEY, JSON.stringify(form));
       if (logo) localStorage.setItem(LOGO_KEY, logo);
@@ -75,9 +78,10 @@ export default function HQCompanyPage() {
       return;
     }
     window.dispatchEvent(new Event("bpms-company-updated")); // ให้ Sidebar HQ อัปเดตโลโก้ทันที
+    setBaseline(JSON.stringify({ form, logo, wordmark }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
-  }
+  }, [form, logo, wordmark]);
   async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -88,16 +92,26 @@ export default function HQCompanyPage() {
     if (!file) return;
     setWordmark(await fileToResizedDataURL(file, 480)); setSaved(false);
   }
+  // โหมดฝังในหน้าตั้งค่า → รายงาน {dirty,save,reset} ให้ปุ่มบันทึกกลาง (ไม่มีปุ่มของตัวเอง = ไม่ซ้ำ)
+  const dirty = baseline !== "" && JSON.stringify({ form, logo, wordmark }) !== baseline;
+  const reset = useCallback(() => {
+    if (!baseline) return;
+    try { const b = JSON.parse(baseline); setForm(b.form); setLogo(b.logo); setWordmark(b.wordmark); } catch {}
+  }, [baseline]);
+  // standalone (/hq/company) ไม่มี Provider → report เป็น no-op โดยปริยาย ปลอดภัย
+  useReportSection(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
   const initials = form.name.replace(/^บริษัท\s*/, "").trim().slice(0, 2).toUpperCase() || "BJ";
 
   return (
     <div className="erp">
-      <div className="page-head">
-        <div>
-          <h2>บริษัท</h2>
-          <p>ข้อมูลบริษัทเบนจามินและสินทรัพย์แบรนด์</p>
+      {!embedded && (
+        <div className="page-head">
+          <div>
+            <h2>บริษัท</h2>
+            <p>ข้อมูลบริษัทเบนจามินและสินทรัพย์แบรนด์</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── ข้อมูลบริษัท ─────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -208,11 +222,14 @@ export default function HQCompanyPage() {
               style={{ resize: "vertical" }} />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-            <button className="btn btn-primary btn-md" onClick={save}>
-              {saved ? <><Check size={14} /> บันทึกแล้ว</> : <><Save size={14} /> บันทึก</>}
-            </button>
-          </div>
+          {/* โหมดฝัง → ใช้ปุ่มบันทึกกลางบนหัวหน้าตั้งค่า (ไม่มีปุ่มของตัวเอง = ไม่ซ้ำ) */}
+          {!embedded && (
+            <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+              <button className="btn btn-primary btn-md" onClick={save}>
+                {saved ? <><Check size={14} /> บันทึกแล้ว</> : <><Save size={14} /> บันทึก</>}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -329,7 +346,7 @@ export default function HQCompanyPage() {
             <thead>
               <tr>
                 <th>ชื่อสาขา</th>
-                <th>ภูมิภาค</th>
+                <th>ภาค</th>
                 <th>ที่อยู่</th>
                 <th style={{ textAlign: "right" }}>สถานะ</th>
               </tr>

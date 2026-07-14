@@ -1,5 +1,6 @@
 "use client";
 
+import { TopbarActions } from "@/components/layout/TopbarActions";
 import { useState, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@/lib/mock";
@@ -75,7 +76,7 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(TODAY_DT.getMonth());
   const [selectedDate, setSelectedDate] = useState<string>(TODAY);
   const [groupFilter, setGroupFilter] = useState<GroupFilter>("all");
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>("month"); // หน้า "ปฏิทิน" เปิดที่มุมมองเดือนก่อน
   // นัดหมายทั้งหมดมาจาก SalesContext (ใช้ร่วมกับแดชบอร์ด/แจ้งเตือน)
   const { appointments: allAppts, addAppointment: ctxAddAppt, updateAppointment: ctxUpdateAppt, deleteAppointment: ctxDeleteAppt } = useSales();
   const [detail, setDetail] = useState<AppointmentMock | null>(null);
@@ -161,19 +162,14 @@ export default function CalendarPage() {
   return (
     <div className="erp">
       {/* Header */}
-      <div className="page-head">
-        <div>
-          <h2>ปฏิทิน</h2>
-          <p>นัดหมายและกิจกรรมการขายของคุณ</p>
-        </div>
-        {/* View switcher + add */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <ViewSwitcher view={view} onChange={setView} />
-          <button onClick={() => setAddOpen(true)} className="btn btn-primary btn-md">
-            <Plus size={15} /> เพิ่มกิจกรรม
-          </button>
-        </div>
-      </div>
+      {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
+      <TopbarActions>
+        <ViewSwitcher view={view} onChange={setView} />
+        <button onClick={() => setAddOpen(true)} className="btn btn-primary btn-sm">
+          <Plus size={15} /> เพิ่มกิจกรรม
+        </button>
+      </TopbarActions>
+      <p className="page-sub">นัดหมายและกิจกรรมการขายของคุณ</p>
 
       {/* Summary KPI bar */}
       <div className="kpi-bar">
@@ -460,24 +456,34 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
 function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: AppointmentMock; defaultDate: string; onSave: (a: AppointmentMock) => void; onClose: () => void }) {
   const isEdit = !!initial;
   const { session } = useRole(); // ผู้รับผิดชอบเริ่มต้น = ผู้ใช้ที่ล็อกอิน
+  const { leads } = useSales(); // เลือกกิจกรรมกับลูกค้าเป้าหมายที่มีอยู่
   const [company, setCompany] = useState(initial?.company ?? "");
+  const [contact, setContact] = useState(initial?.contact ?? "—");
+  const [phone, setPhone] = useState(initial?.phone ?? "—");
   const [date, setDate] = useState(initial?.date ?? defaultDate);
   const [time, setTime] = useState(initial?.time ?? "09:00");
   const [type, setType] = useState<ApptType>(initial?.type ?? "visit");
   const [province, setProvince] = useState(initial?.province ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
 
+  // เลือกลูกค้าเป้าหมาย → เติมชื่อบริษัท/ผู้ติดต่อ/เบอร์/จังหวัดอัตโนมัติ
+  function pickLead(companyName: string) {
+    setCompany(companyName);
+    const L = leads.find(l => l.company === companyName);
+    if (L) { setContact(L.contact || "—"); setPhone(L.phone || "—"); setProvince(L.province || ""); }
+  }
+
   function save() {
     const name = company.trim() || initial?.company || "กิจกรรมใหม่";
     onSave({
-      // preserve all non-edited fields when editing (contact/phone/assigned/status/etc.)
+      // preserve all non-edited fields when editing (assigned/status/etc.)
       ...(initial ?? {
         id: Date.now(),
-        contact: "—", phone: "—",
         buildingType: "—", area: 0,
         assigned: session.name, status: "upcoming",
       }),
       company: name,
+      contact, phone,
       project: initial?.project ?? name,
       province: province.trim() || "—",
       date, time, type,
@@ -496,8 +502,11 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
           </div>
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label className="form-label">ชื่อลูกค้า / กิจกรรม</label>
-              <input value={company} onChange={e => setCompany(e.target.value)} placeholder="เช่น บจ. ไทยสตีล" className="form-input" />
+              <label className="form-label">ลูกค้าเป้าหมาย</label>
+              <select value={leads.some(l => l.company === company) ? company : ""} onChange={e => pickLead(e.target.value)} className="form-select">
+                <option value="">— เลือกลูกค้าเป้าหมาย —</option>
+                {leads.map(l => <option key={l.numId} value={l.company}>{l.company}{l.contact ? ` · ${l.contact}` : ""}</option>)}
+              </select>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>

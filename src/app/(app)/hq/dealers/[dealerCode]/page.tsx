@@ -5,11 +5,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { use } from "react";
 import {
-  dealerLeaderboard, dealerDetails,
-  type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
+  dealerLeaderboard, HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
+  type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
-import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import { useNetworkDealerDetail, useNetworkCustomers } from "@/lib/useNetworkData";
+import { CountUp } from "@/components/ui/CountUp";
+import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -84,6 +86,8 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
 // ── Tab components ───────────────────────────────────────────────
 
 function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; detail: DealerDetail }) {
+  // เกณฑ์ Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
+  const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;
   const barColor  = targetPct >= 80 ? "#059669" : targetPct >= 50 ? "#003366" : "#dc2626";
   const isAtRisk  = targetPct < 50;
@@ -121,21 +125,21 @@ function OverviewTab({ dealer, detail }: { dealer: typeof dealerLeaderboard[0]; 
       {/* Stats */}
       {[
         { label: "โอกาสการขายที่กำลังดำเนินการ", value: String(dealer.activeProjects),  unit: "โอกาสการขาย",     color: "#003366" },
-        { label: "อัตราปิดการขาย",     value: String(dealer.winRate),         unit: "%",       color: dealer.winRate >= 40 ? "#059669" : "#dc2626" },
-        { label: "ติดตามตรงเวลา",         value: String(dealer.onTimePct),       unit: "%",       color: dealer.onTimePct >= 80 ? "#059669" : dealer.onTimePct >= 60 ? "#f59e0b" : "#dc2626" },
+        { label: "อัตราปิดการขาย",     value: String(dealer.winRate),         unit: "%",       color: dealer.winRate >= targets.winRateTarget ? "#059669" : "#dc2626" },
+        { label: "ติดตามตรงเวลา",         value: String(dealer.onTimePct),       unit: "%",       color: dealer.onTimePct >= targets.onTimeTarget ? "#059669" : dealer.onTimePct >= targets.onTimeTarget - 20 ? "#f59e0b" : "#dc2626" },
         { label: "ใบเสนอราคา",         value: String(detail?.quotes.length ?? 0),   unit: "ใบ",      color: "#2D2D2D" },
       ].map(s => (
         <div key={s.label} className="stat-card">
           <div className="stat-label">{s.label}</div>
           <div className="stat-value" style={{ color: s.color }}>
-            {s.value}<span style={{ fontSize: "0.8rem", fontWeight: 500, color: "#6b7280", marginLeft: 4 }}>{s.unit}</span>
+            <CountUp value={s.value} /><span style={{ fontSize: "0.8rem", fontWeight: 500, color: "#6b7280", marginLeft: 4 }}>{s.unit}</span>
           </div>
         </div>
       ))}
 
       {/* Top products */}
       <div className="card" style={{ padding: "18px 20px", gridColumn: "1 / -1" }}>
-        <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>สินค้าที่ขาย</p>
+        <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>แม่แบบที่ขาย</p>
         {(() => {
           const byProduct: Record<string, number> = {};
           (detail?.projects ?? []).forEach(p => { byProduct[p.product] = (byProduct[p.product] || 0) + p.valueNum; });
@@ -161,7 +165,7 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
   return (
     <div className="card">
       <div className="card-header">
-        <div className="card-title">ผู้สนใจที่ได้รับมอบหมาย</div>
+        <div className="card-title">ลูกค้าเป้าหมายที่ได้รับมอบหมาย</div>
       </div>
       <div className="table-wrap">
         <table>
@@ -176,14 +180,14 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
           </colgroup>
           <thead>
             <tr>
-              {["รหัสผู้สนใจ", "ลูกค้า", "จังหวัด", "สินค้า", "มูลค่า", "สถานะ", "มอบหมายเมื่อ"].map(h => (
+              {["รหัสลูกค้าเป้าหมาย", "ลูกค้า", "จังหวัด", "แม่แบบ", "มูลค่า", "สถานะ", "มอบหมายเมื่อ"].map(h => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {leads.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีผู้สนใจ</td></tr>
+              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีลูกค้าเป้าหมาย</td></tr>
             )}
             {leads.map(l => {
               const st = LEAD_STATUS[l.status];
@@ -255,7 +259,7 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
           </colgroup>
           <thead>
             <tr>
-              {["เลขที่", "ลูกค้า", "สินค้า", "มูลค่า", "ส่วนลด", "สถานะ", "วันที่"].map(h => (
+              {["เลขที่", "ลูกค้า", "แม่แบบ", "มูลค่า", "ส่วนลด", "สถานะ", "วันที่"].map(h => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -293,10 +297,71 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
 
 const TABS = [
   { key: "overview",  label: "ภาพรวม" },
-  { key: "leads",     label: "ผู้สนใจ" },
+  { key: "leads",     label: "ลูกค้าเป้าหมาย" },
   { key: "projects",  label: "โอกาสการขาย" },
   { key: "quotes",    label: "ใบเสนอ" },
+  { key: "customers", label: "ลูกค้า" },
+  { key: "activity",  label: "กิจกรรม" },
 ] as const;
+
+// ── Customer tab (read-only) — ลูกค้าที่ตัวแทนนี้ดูแล ────────────────────────────
+function CustomerTab({ customers }: { customers: HQCustomer[] }) {
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">ลูกค้าที่ตัวแทนนี้ดูแล</div></div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>{["ลูกค้า", "จังหวัด", "ประเภท", "ดีลที่ปิด", "มูลค่ารวม", "สถานะ"].map(h => <th key={h}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {customers.length === 0 && (
+              <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ยังไม่มีลูกค้า</td></tr>
+            )}
+            {customers.map(c => (
+              <tr key={c.id}>
+                <td style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{c.name}</td>
+                <td style={{ fontSize: "0.8rem", color: "#6b7280" }}>{c.province}</td>
+                <td><span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{c.type}</span></td>
+                <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{c.dealsWon}</td>
+                <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(c.totalRevenue)}</td>
+                <td><span className="badge" style={c.status === "active" ? BADGE("#e5faf0", "#059669") : BADGE("#f0f0f5", "#9ca3af")}>{c.status === "active" ? "ใช้งาน" : "ไม่ใช้งาน"}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Activity tab (read-only) — ไทม์ไลน์งาน: ออกใบเสนอ + รับมอบหมายลูกค้าเป้าหมาย ──
+function ActivityTab({ leads, quotes }: { leads: DealerLeadItem[]; quotes: DealerQuoteItem[] }) {
+  const items = [
+    ...quotes.map(q => ({ id: `q-${q.quoteNo}`, icon: <ScrollText size={14} />, color: "#003366",
+      title: `ออกใบเสนอราคา ${q.customer}`, sub: `${q.product} · ${fmtM(q.valueNum)} · ${QUOTE_STATUS[q.status].label}`, date: q.date })),
+    ...leads.map(l => ({ id: `l-${l.id}`, icon: <Users size={14} />, color: "#6b7280",
+      title: `รับมอบหมายลูกค้าเป้าหมาย ${l.name}`, sub: `${l.product} · ${fmtM(l.valueNum)}`, date: l.assignedAt })),
+  ];
+  return (
+    <div className="card">
+      <div className="card-header"><div className="card-title">กิจกรรมล่าสุด</div></div>
+      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {items.length === 0 && <div style={{ padding: 20, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ยังไม่มีกิจกรรม</div>}
+        {items.map((it, i) => (
+          <div key={it.id} style={{ display: "flex", gap: 12, padding: "12px 4px", borderTop: i ? "1px solid #f1f5f9" : "none" }}>
+            <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: it.color + "14", color: it.color, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#2D2D2D" }}>{it.title}</div>
+              <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 1 }}>{it.sub}</div>
+            </div>
+            <span style={{ fontSize: "0.7rem", color: "#9ca3af", flexShrink: 0 }}>{it.date}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type TabKey = typeof TABS[number]["key"];
 
@@ -305,9 +370,11 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   // อ่านจากชุดที่ persist (hq_dealers_v2) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
   const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
   const [tab, setTab] = useState<TabKey>("overview");
-  const dealer = dealers.find(d => d.code === dealerCode.toUpperCase())
-    ?? dealerLeaderboard.find(d => d.code === dealerCode.toUpperCase());
-  const detail = dealerDetails[dealerCode.toUpperCase()];
+  const code = dealerCode.toUpperCase();
+  const dealer = dealers.find(d => d.code === code) ?? dealerLeaderboard.find(d => d.code === code);
+  // รายละเอียดตัวแทนแบบเชื่อมต่อ: CNX = ข้อมูลสด (leads/projects/quotes/ยอดรายเดือน) · สาขาอื่น = seed
+  const detail = useNetworkDealerDetail(code);
+  const custs = useNetworkCustomers().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (แหล่งเดียว)
 
   if (!dealer) return notFound();
 
@@ -338,12 +405,24 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
         </div>
       </div>
 
+      {/* โหมดดูอย่างเดียว — HQ เจาะดูข้อมูลตัวแทนได้ทั้งหมด แก้ไม่ได้ (จัดการที่หน้าตัวแทน) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "#f5f7fa", border: "1px solid #e5e7eb",
+        borderLeft: "3px solid #003366", borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
+        <Lock size={15} color="#003366" style={{ flexShrink: 0 }} />
+        <span style={{ fontSize: "0.78rem", color: "#374151", flex: 1, minWidth: 180 }}>
+          <strong style={{ color: "#003366" }}>โหมดดูอย่างเดียว</strong> — HQ ดูข้อมูลของตัวแทนได้ทั้งหมด แต่แก้ไขไม่ได้จากหน้านี้
+        </span>
+        <button disabled title="เฉพาะ Super Admin" className="btn btn-secondary btn-sm"
+          style={{ opacity: .55, cursor: "not-allowed" }}><Lock size={12} /> เข้าสู่โหมดจัดการ</button>
+      </div>
+
       {/* Tabs */}
-      <div className="tab-bar" style={{ marginBottom: 20 }}>
+      <div className="tab-bar" style={{ marginBottom: 20, overflowX: "auto" }}>
         {TABS.map(t => {
-          const count = t.key === "leads" ? detail?.leads.length
-            : t.key === "projects" ? detail?.projects.length
-            : t.key === "quotes" ? detail?.quotes.length
+          const count = t.key === "leads" ? detail.leads.length
+            : t.key === "projects" ? detail.projects.length
+            : t.key === "quotes" ? detail.quotes.length
+            : t.key === "customers" ? custs.length
             : null;
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -360,16 +439,13 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
         })}
       </div>
 
-      {/* Tab content */}
-      {!detail && (
-        <div className="card" style={{ padding: 32, textAlign: "center", fontSize: "0.86rem", color: "#9ca3af" }}>
-          ยังไม่มีข้อมูลรายละเอียดสำหรับตัวแทนนี้
-        </div>
-      )}
-      {detail && tab === "overview"  && <OverviewTab dealer={dealer} detail={detail} />}
-      {detail && tab === "leads"     && <LeadsTab    leads={detail.leads} />}
-      {detail && tab === "projects"  && <ProjectsTab projects={detail.projects} />}
-      {detail && tab === "quotes"    && <QuotesTab   quotes={detail.quotes} />}
+      {/* Tab content — เชื่อมต่อ: CNX = ข้อมูลสด · สาขาอื่น = seed (แต่ละแท็บมี empty state ในตัว) */}
+      {tab === "overview"  && <OverviewTab dealer={dealer} detail={detail} />}
+      {tab === "leads"     && <LeadsTab    leads={detail.leads} />}
+      {tab === "projects"  && <ProjectsTab projects={detail.projects} />}
+      {tab === "quotes"    && <QuotesTab   quotes={detail.quotes} />}
+      {tab === "customers" && <CustomerTab customers={custs} />}
+      {tab === "activity"  && <ActivityTab leads={detail.leads} quotes={detail.quotes} />}
     </div>
   );
 }

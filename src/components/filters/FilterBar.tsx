@@ -101,7 +101,7 @@ function TimeRangePicker() {
     <div ref={ref} style={{ position: "relative" }}>
       <Trigger
         icon={<CalendarDays size={14} style={{ color: "var(--primary)", flexShrink: 0 }} />}
-        label={timeRange.label} active open={open}
+        label={timeRange.subtitle || timeRange.label} active open={open}
         onClick={() => setOpen(o => !o)}
       />
       {open && (
@@ -263,7 +263,7 @@ export function FilterBar({
           options={provinceOptions ?? PROVINCE_OPTIONS} onChange={setProvince} />
       )}
       {show.includes("product") && (
-        <SelectFilter caption="สินค้า" value={product}
+        <SelectFilter caption="แม่แบบ" value={product}
           options={productOptions ?? PRODUCT_OPTIONS} onChange={setProduct} />
       )}
       {show.includes("status") && statusOptions && statusOptions.length > 0 && (

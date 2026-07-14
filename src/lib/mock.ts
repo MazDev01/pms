@@ -89,7 +89,7 @@ export const responsiblePersons: ResponsiblePerson[] = [
 
 // โครงสร้างอ้างอิง prisma/schema.prisma
 
-// Sales Journey — 7 ขั้นมาตรฐาน (Dealer สร้าง Lead หลังติดต่อลูกค้าแล้ว → ไม่มีสถานะ "ผู้สนใจใหม่")
+// Sales Journey — 7 ขั้นมาตรฐาน (Dealer สร้าง Lead หลังติดต่อลูกค้าแล้ว → ไม่มีสถานะ "ลูกค้าเป้าหมายใหม่")
 // ติดต่อแล้ว → รวบรวมความต้องการ → เสนอราคา → ติดตามผล → เจรจาต่อรอง → ปิดการขาย (Won / Lost)
 export type LeadStatus =
   | "WAITING"    // Contacted (ขั้นเริ่มต้น)
@@ -133,17 +133,269 @@ export const TAGS: { key: TagKey; label: string; bg: string; color: string }[] =
 
 // ─── Global: Lost Reasons (เหตุผลที่เสียโอกาสการขาย) ────────────────
 export const LOST_REASONS = ["ราคา", "คู่แข่ง", "งบประมาณ", "ลูกค้าเลื่อน", "ติดต่อไม่ได้", "อื่นๆ"] as const;
-// เหตุผลเสียโอกาส — อ่านจากที่ตั้งไว้ในหน้าตั้งค่า › กฎการขาย (dealer_lost_reasons) · fallback = ค่าเริ่มต้น
+// เหตุผลปิดการขายไม่สำเร็จ (Lost) — จัดการโดย HQ (หน้า HQ ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน · fallback = ค่าเริ่มต้น
 export function loadLostReasons(): string[] {
   if (typeof window === "undefined") return [...LOST_REASONS];
-  try { const s = localStorage.getItem("dealer_lost_reasons"); if (s) { const a = JSON.parse(s); if (Array.isArray(a) && a.length) return a; } } catch {}
+  try {
+    const s = localStorage.getItem("hq_sales_journey");
+    if (s) {
+      const d = JSON.parse(s);
+      if (Array.isArray(d?.lost) && d.lost.length) {
+        // รองรับทั้งแบบเก่า {label} และแบบใหม่ string[]
+        const labels = d.lost.map((r: unknown) => typeof r === "string" ? r : (r as { label?: string })?.label).filter((x: unknown): x is string => typeof x === "string" && !!x);
+        if (labels.length) return labels;
+      }
+    }
+  } catch {}
   return [...LOST_REASONS];
 }
-// อายุใบเสนอราคาเริ่มต้น (วัน) จากกฎการขาย (dealer_business_rules) · fallback = 30
+// ─── นโยบายการขายของ HQ (แหล่งเดียว) — บังคับใช้กับทุกตัวแทน ────────────────
+// ตั้งที่ /hq/settings → แท็บ "นโยบายการขาย" · คุมเพดานส่วนลด / VAT / อายุใบเสนอราคา ทั้งเครือ
+export type HQPolicy = { maxDiscount: number; requireApproval: boolean; vat: number; quoteValidityDays: number };
+export const HQ_POLICY_KEY = "hq_sales_policy";
+export const DEFAULT_HQ_POLICY: HQPolicy = { maxDiscount: 10, requireApproval: true, vat: 7, quoteValidityDays: 30 };
+
+// ── กฎการติดตามลูกค้าเป้าหมาย (HQ กำหนด · บังคับใช้ทุกตัวแทน) — Constitution V2 · Lead Follow-up ──
+export type HQLeadRules = { followUpAlertDays: number; autoReminder: boolean; leadExpirationDays: number };
+export const HQ_LEAD_RULES_KEY = "hq_lead_rules";
+export const DEFAULT_HQ_LEAD_RULES: HQLeadRules = { followUpAlertDays: 7, autoReminder: true, leadExpirationDays: 30 };
+export function loadHQLeadRules(): HQLeadRules {
+  if (typeof window === "undefined") return { ...DEFAULT_HQ_LEAD_RULES };
+  try { const s = localStorage.getItem(HQ_LEAD_RULES_KEY); if (s) return { ...DEFAULT_HQ_LEAD_RULES, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_HQ_LEAD_RULES };
+}
+export function loadHQPolicy(): HQPolicy {
+  if (typeof window === "undefined") return { ...DEFAULT_HQ_POLICY };
+  try { const s = localStorage.getItem(HQ_POLICY_KEY); if (s) return { ...DEFAULT_HQ_POLICY, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_HQ_POLICY };
+}
+
+// ─── เป้าหมายยอดขายของ HQ (แหล่งเดียว) — ใช้เทียบความคืบหน้าบนแดชบอร์ด/รายงาน ─────
+// ตั้งที่ /hq/settings → แท็บ "เป้าหมายยอดขาย" · แดชบอร์ด/หน้าตัวแทน ดึงค่านี้ไปใช้จริง (ไม่ hardcode ซ้ำ)
+export type HQTargets = {
+  period: "month" | "quarter" | "year";
+  annualTarget: number;     // ยอดขายรวมทั้งเครือ (รายปี)
+  conversionTarget: number; // เป้าอัตราปิดการขายจากลูกค้าเป้าหมาย %
+  quotationTarget: number;  // เป้าอัตราออกใบเสนอราคาจากลูกค้าเป้าหมาย %
+  avgDealSize: number;      // มูลค่าเฉลี่ยต่อการปิดการขาย
+  winRateTarget: number;    // เป้าอัตราปิดการขายเฉลี่ย % (เกณฑ์สีบนแดชบอร์ด/หน้าตัวแทน)
+  onTimeTarget: number;     // เป้าติดตามตรงเวลา %
+};
+export const HQ_TARGETS_KEY = "hq_targets";
+export const DEFAULT_HQ_TARGETS: HQTargets = {
+  period: "year", annualTarget: 260_000_000, conversionTarget: 35, quotationTarget: 60,
+  avgDealSize: 2_500_000, winRateTarget: 40, onTimeTarget: 85,
+};
+export function loadHQTargets(): HQTargets {
+  if (typeof window === "undefined") return { ...DEFAULT_HQ_TARGETS };
+  try { const s = localStorage.getItem(HQ_TARGETS_KEY); if (s) return { ...DEFAULT_HQ_TARGETS, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_HQ_TARGETS };
+}
+
+// ─── การแจ้งเตือนของ HQ (แหล่งเดียว) — หมวดตาม "บันทึกการใช้งาน" (Audit Log) ที่ HQ ควรรู้ ──
+// ต่างจากฝั่งตัวแทน (งานขาย) — HQ = ผู้คุมเครือ จึงแจ้งเรื่องธรรมาภิบาล/การเปลี่ยนแปลงนโยบาย
+// toggle "ในระบบ" (inapp) กรองกระดิ่ง HQ จริง (ดู hqAuditCategory + Topbar)
+export type HQNotifChannels = { email: boolean; inapp: boolean; line: boolean };
+export const HQ_NOTIF_KEY = "hq_notifications_v2";
+export const HQ_NOTIF_UPDATED_EVENT = "bpms-hq-notif-updated";
+export const HQ_NOTIF_EVENTS: { key: string; label: string; desc: string }[] = [
+  { key: "dealer",  label: "จัดการตัวแทน",         desc: "สร้าง แก้ไข หรือระงับตัวแทนในเครือ" },
+  { key: "pricing", label: "ราคากลางและส่วนลด",    desc: "ปรับราคากลาง หรือเพดานส่วนลดทั้งเครือ" },
+  { key: "target",  label: "เป้าหมายและการตั้งค่า", desc: "แก้เป้ายอดขายเครือ หรือการตั้งค่าระบบ" },
+  { key: "catalog", label: "แม่แบบและแคตตาล็อก",    desc: "เพิ่ม แก้ไข หรือลบแม่แบบสินค้า" },
+  { key: "users",   label: "ผู้ใช้และสิทธิ์",        desc: "เพิ่มหรือแก้ไขผู้ใช้และสิทธิ์ใน HQ" },
+];
+export const DEFAULT_HQ_NOTIFS: Record<string, HQNotifChannels> =
+  Object.fromEntries(HQ_NOTIF_EVENTS.map(e => [e.key, { email: e.key === "pricing" || e.key === "dealer", inapp: true, line: false }]));
+export function loadHQNotifPrefs(): Record<string, HQNotifChannels> {
+  if (typeof window === "undefined") return { ...DEFAULT_HQ_NOTIFS };
+  try { const s = localStorage.getItem(HQ_NOTIF_KEY); if (s) return { ...DEFAULT_HQ_NOTIFS, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_HQ_NOTIFS };
+}
+// จัดหมวดข้อความ audit action → หมวดแจ้งเตือน HQ (ใช้กรองกระดิ่งตาม toggle)
+export function hqAuditCategory(action: string): string {
+  if (action.includes("ตัวแทน")) return "dealer";
+  if (action.includes("ราคากลาง") || action.includes("ส่วนลด")) return "pricing";
+  if (action.includes("แม่แบบ")) return "catalog";
+  if (action.includes("ผู้ใช้")) return "users";
+  return "target"; // เป้า/ตั้งค่า/อื่นๆ
+}
+
+// ─── รูปแบบเลขที่ใบเสนอราคา (แหล่งเดียว = HQ) — ตัวแทนใช้ตาม ห้ามแก้ ──────────────
+// ตั้งที่ /hq/settings → แท็บ "ระบบ" (hq_system.runningPrefix / runningNext)
+export type QuoteNumbering = { prefix: string; next: number };
+export const HQ_SYSTEM_KEY = "hq_system";
+export const DEFAULT_QUOTE_NUMBERING: QuoteNumbering = { prefix: "Q-2026-", next: 1101 };
+export function loadQuoteNumbering(): QuoteNumbering {
+  if (typeof window === "undefined") return { ...DEFAULT_QUOTE_NUMBERING };
+  // ตัวแทนคุมเลขที่ใบเสนอราคาของตัวเอง (เหมือนแฟรนไชส์แต่ไม่ใช่แฟรนไชส์) → อ่านจากตั้งค่าใบเสนอราคาของตัวแทนก่อน
+  try {
+    const s = localStorage.getItem("dealer_document_settings");
+    if (s) { const d = JSON.parse(s);
+      const prefix = typeof d.quotePrefix === "string" && d.quotePrefix ? d.quotePrefix : undefined;
+      const next   = typeof d.runningNumber === "number" && d.runningNumber > 0 ? d.runningNumber : undefined;
+      if (prefix || next) return { prefix: prefix ?? DEFAULT_QUOTE_NUMBERING.prefix, next: next ?? DEFAULT_QUOTE_NUMBERING.next };
+    }
+  } catch {}
+  try {
+    const s = localStorage.getItem(HQ_SYSTEM_KEY);
+    if (s) { const o = JSON.parse(s);
+      return {
+        prefix: typeof o.runningPrefix === "string" && o.runningPrefix ? o.runningPrefix : DEFAULT_QUOTE_NUMBERING.prefix,
+        next:   typeof o.runningNext === "number" && o.runningNext > 0 ? o.runningNext : DEFAULT_QUOTE_NUMBERING.next,
+      };
+    }
+  } catch {}
+  return { ...DEFAULT_QUOTE_NUMBERING };
+}
+
+// อายุใบเสนอราคาเริ่มต้น (วัน) — ตัวแทนคุมเอง (ตั้งค่าใบเสนอราคาของตัวแทน) ก่อน · fallback = นโยบาย HQ · สุดท้าย 30
 export function loadQuoteValidityDays(): number {
   if (typeof window === "undefined") return 30;
+  try { const s = localStorage.getItem("dealer_document_settings"); if (s) { const d = JSON.parse(s); if (typeof d.validityDays === "number" && d.validityDays > 0) return d.validityDays; } } catch {}
+  const pol = loadHQPolicy(); if (pol.quoteValidityDays > 0) return pol.quoteValidityDays;
   try { const s = localStorage.getItem("dealer_business_rules"); if (s) { const r = JSON.parse(s); if (typeof r.quoteValidityDays === "number" && r.quoteValidityDays > 0) return r.quoteValidityDays; } } catch {}
   return 30;
+}
+// ส่วนลดเริ่มต้น % ตอนสร้างใบเสนอราคาใหม่ (จากตั้งค่าใบเสนอราคา)
+export function loadDefaultDiscount(): number {
+  if (typeof window === "undefined") return 0;
+  try { const s = localStorage.getItem("dealer_document_settings"); if (s) { const d = JSON.parse(s); if (typeof d.defaultDiscount === "number" && d.defaultDiscount >= 0) return d.defaultDiscount; } } catch {}
+  return 0;
+}
+
+// ── ตั้งค่าการแจ้งเตือน (ตัวแทนเลือกเปิด/ปิดแต่ละชนิดได้) ──
+export type NotifCategory = "newLead" | "followUp" | "meeting" | "quoteExpiry" | "won" | "lost";
+export type NotifPrefs = Record<NotifCategory, boolean>;
+export const NOTIF_PREFS_KEY = "dealer_notif_prefs";
+export const NOTIF_PREFS_EVENT = "bpms-notif-prefs-updated";
+export const DEFAULT_NOTIF_PREFS: NotifPrefs = { newLead: true, followUp: true, meeting: true, quoteExpiry: true, won: true, lost: true };
+export const NOTIF_META: { key: NotifCategory; label: string; desc: string }[] = [
+  { key: "newLead",     label: "ลูกค้าเป้าหมายรอดำเนินการ", desc: "ลีดใหม่ที่ติดต่อแล้วแต่ยังไม่คืบหน้า" },
+  { key: "followUp",    label: "เตือนติดตาม",              desc: "งานติดตาม/นัดติดตามที่ถึงกำหนด" },
+  { key: "meeting",     label: "เตือนประชุม/นัดหมาย",       desc: "นัดพบ/นำเสนอที่กำลังจะถึง" },
+  { key: "quoteExpiry", label: "ใบเสนอราคาใกล้หมดอายุ",     desc: "ใบเสนอราคาที่ส่งแล้ว/ใกล้หมดอายุ" },
+  { key: "won",         label: "ปิดการขายสำเร็จ",             desc: "เมื่อปิดการขายสำเร็จ" },
+  { key: "lost",        label: "เสียโอกาส",                desc: "เมื่อปิดการขายไม่สำเร็จ" },
+];
+export function loadNotifPrefs(): NotifPrefs {
+  if (typeof window === "undefined") return { ...DEFAULT_NOTIF_PREFS };
+  try { const s = localStorage.getItem(NOTIF_PREFS_KEY); if (s) return { ...DEFAULT_NOTIF_PREFS, ...JSON.parse(s) }; } catch {}
+  return { ...DEFAULT_NOTIF_PREFS };
+}
+// map หัวข้อแจ้งเตือน → หมวด (ใช้กรองตาม prefs)
+export function notifCategoryOf(title: string): NotifCategory | null {
+  if (title.includes("รอดำเนินการ")) return "newLead";
+  if (title.includes("ติดตาม")) return "followUp";
+  if (title.includes("ประชุม")) return "meeting";
+  if (title.includes("หมดอายุ")) return "quoteExpiry";
+  if (title.includes("ปิดการขายสำเร็จ")) return "won";
+  if (title.includes("เสียโอกาส")) return "lost";
+  return null;
+}
+
+// ─── Global: คลังไฟล์ของตัวแทน (แหล่งเดียว) ──────────────────────────
+// ไฟล์แนบทั้งหมดรวมศูนย์ที่นี่ — แนบจากหน้าลูกค้า/ลูกค้าเป้าหมาย แล้วปรากฏในหน้าไฟล์กลางอัตโนมัติ
+export type DealerFileExt = "pdf" | "docx" | "xlsx" | "dwg" | "pptx" | "jpg" | "png" | "other";
+export type DealerFileCategory = "ใบเสนอราคา" | "แบบแปลน" | "รูปภาพ" | "นำเสนอ" | "สัญญา" | "อื่นๆ";
+export type DealerFileSource = "lead" | "customer" | "upload";
+export type DealerFile = {
+  id: number;
+  name: string;
+  size: string;
+  ext: DealerFileExt;
+  category: DealerFileCategory;
+  project: string;          // ชื่อโอกาสการขาย/โครงการ (แสดงในหน้าไฟล์กลาง)
+  uploadedBy: string;
+  uploadedAt: string;       // YYYY-MM-DD
+  source: DealerFileSource; // มาจากไหน: ลูกค้าเป้าหมาย / ลูกค้า / อัปโหลดตรง
+  recordId?: number;        // ผูกกับ customer.id หรือ lead.numId
+  customerId?: number;      // คงไว้เพื่อความเข้ากันได้ย้อนหลัง
+};
+export const DEALER_FILES_KEY = "dealer_files_v1";
+export const DEALER_FILES_EVENT = "bpms-files-updated";
+
+// ไฟล์ตั้งต้น = ไฟล์ที่ "แนบไว้กับลูกค้า/ลูกค้าเป้าหมายจริง" (source บอกว่ามาจากหน้าไหน)
+// หน้าไฟล์กลางเพียงดึงไฟล์เหล่านี้มารวมกัน — ไม่มีการสร้างไฟล์ใหม่จากใบเสนอราคา
+export const DEFAULT_DEALER_FILES: DealerFile[] = [
+  { id: 1,  name: "ใบเสนอราคา_โกดังสำเร็จรูป_ไทยสตีล_v2.pdf", size: "1.4 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "วิภา",     uploadedAt: "2026-06-20", source: "customer", recordId: 1, customerId: 1 },
+  { id: 2,  name: "สัญญาขาย_ไทยสตีล.pdf",                   size: "2.1 MB", ext: "pdf",  category: "สัญญา",      project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "สมชาย",   uploadedAt: "2026-06-18", source: "customer", recordId: 1, customerId: 1 },
+  { id: 3,  name: "ผังพื้นที่ลูกค้า_โรงงาน.pdf",             size: "8.3 MB", ext: "pdf",  category: "แบบแปลน",    project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-06-15", source: "customer", recordId: 2, customerId: 2 },
+  { id: 4,  name: "presentation_VCS_Asia.pptx",             size: "5.7 MB", ext: "pptx", category: "นำเสนอ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-12", source: "customer", recordId: 5, customerId: 5 },
+  { id: 5,  name: "สรุปราคา_คลังสินค้า_บจ.ซีซีเอส.xlsx",       size: "340 KB", ext: "xlsx", category: "ใบเสนอราคา", project: "คลังสินค้า CCS",           uploadedBy: "สมชาย",   uploadedAt: "2026-06-10", source: "customer", recordId: 2, customerId: 2 },
+  { id: 6,  name: "รูปถ่ายพื้นที่_พิษณุโลกฟาร์ม.jpg",         size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "โกดังเก็บข้าว บจ. พิษณุโลกฟาร์ม", uploadedBy: "สมชาย", uploadedAt: "2026-06-08", source: "lead", recordId: 8 },
+  { id: 7,  name: "ใบเสนอราคา_Q-2026-0101_พิษณุโลกฟาร์ม.pdf", size: "1.1 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังเก็บข้าว บจ. พิษณุโลกฟาร์ม", uploadedBy: "สมชาย", uploadedAt: "2026-06-05", source: "lead", recordId: 8 },
+  { id: 8,  name: "ใบเสนอราคา_Q-2026-0102_ลำพูนอิเล็กทรอนิกส์.pdf", size: "1.3 MB", ext: "pdf", category: "ใบเสนอราคา", project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา", uploadedAt: "2026-06-03", source: "lead", recordId: 10 },
+  { id: 9,  name: "รายละเอียดสินค้า_โกดังสำเร็จรูป.xlsx",         size: "512 KB", ext: "xlsx", category: "แบบแปลน",    project: "โรงงานสำเร็จรูป เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", source: "customer", recordId: 2, customerId: 2 },
+  { id: 10, name: "presentation_ลำพูนอิเล็กทรอนิกส์.pptx",     size: "12.4 MB",ext: "pptx", category: "นำเสนอ",     project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา",   uploadedAt: "2026-05-20", source: "lead", recordId: 10 },
+  { id: 11, name: "รูปถ่ายพื้นที่_VCS_Asia.jpg",              size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-05", source: "customer", recordId: 5, customerId: 5 },
+];
+
+// เดานามสกุลไฟล์ → ประเภท
+export function extOfName(name: string): DealerFileExt {
+  const m = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+  const e = m?.[1];
+  if (e === "jpeg") return "jpg";
+  if (e === "doc") return "docx";
+  if (e === "xls" || e === "csv") return "xlsx";
+  if (e === "ppt") return "pptx";
+  if (e === "pdf" || e === "docx" || e === "xlsx" || e === "dwg" || e === "pptx" || e === "jpg" || e === "png") return e as DealerFileExt;
+  return "other";
+}
+// เดาโฟลเดอร์จากชื่อไฟล์
+export function guessFileCategory(name: string): DealerFileCategory {
+  const n = name.toLowerCase();
+  if (name.includes("ใบเสนอราคา") || n.includes("quotation") || n.includes("quote") || name.includes("เสนอราคา")) return "ใบเสนอราคา";
+  if (name.includes("สัญญา") || n.includes("contract")) return "สัญญา";
+  if (name.includes("แบบ") || name.includes("ผัง") || n.includes("plan") || n.endsWith(".dwg")) return "แบบแปลน";
+  if (name.includes("นำเสนอ") || n.includes("present") || n.endsWith(".pptx") || n.endsWith(".ppt")) return "นำเสนอ";
+  if (name.includes("รูป") || name.includes("ภาพ") || /\.(jpg|jpeg|png)$/.test(n)) return "รูปภาพ";
+  return "อื่นๆ";
+}
+
+export function loadDealerFiles(): DealerFile[] {
+  if (typeof window === "undefined") return [...DEFAULT_DEALER_FILES];
+  try { const s = localStorage.getItem(DEALER_FILES_KEY); if (s) return JSON.parse(s) as DealerFile[]; } catch {}
+  return [...DEFAULT_DEALER_FILES];
+}
+export function saveDealerFiles(files: DealerFile[]) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(DEALER_FILES_KEY, JSON.stringify(files)); } catch {}
+  try { window.dispatchEvent(new Event(DEALER_FILES_EVENT)); } catch {}
+}
+// แนบไฟล์ใหม่เข้าคลัง (คืนค่า record ที่สร้าง) — id = max+1 เพื่อความ deterministic
+export function addDealerFile(f: Omit<DealerFile, "id">): DealerFile {
+  const files = loadDealerFiles();
+  const id = files.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+  const rec: DealerFile = { ...f, id };
+  saveDealerFiles([rec, ...files]);
+  return rec;
+}
+export function removeDealerFile(id: number) {
+  saveDealerFiles(loadDealerFiles().filter(f => f.id !== id));
+}
+
+// ─── Auto-link: ใบเสนอราคา → ไฟล์ (หมวด "ใบเสนอราคา") ผูกกับลีด/ลูกค้าอัตโนมัติ ──────
+// สร้างใบ → มีไฟล์โผล่ในแท็บ "ไฟล์" ของลีด/ลูกค้า + หน้าไฟล์กลางทันที · ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง
+const AUTO_FILE_BY = "ระบบ · จากใบเสนอราคา";
+export function quotationToFile(q: QuotationMock): Omit<DealerFile, "id"> {
+  const isLead = !!q.dealId;
+  return {
+    name: `ใบเสนอราคา_${q.id}_${(q.customer || "").replace(/\s+/g, "")}.pdf`,
+    size: "~140 KB", ext: "pdf", category: "ใบเสนอราคา", project: q.project,
+    uploadedBy: AUTO_FILE_BY, uploadedAt: q.date,
+    source: isLead ? "lead" : "customer",
+    recordId: isLead ? q.dealId : q.customerId,
+    customerId: q.customerId,
+  };
+}
+export function syncAddQuotationFile(q: QuotationMock) {
+  if (loadDealerFiles().some(f => f.category === "ใบเสนอราคา" && f.name.includes(q.id))) return; // กันซ้ำ
+  addDealerFile(quotationToFile(q));
+}
+export function syncRemoveQuotationFile(id: string) {
+  const f = loadDealerFiles().find(x => x.category === "ใบเสนอราคา" && x.name.includes(id) && x.uploadedBy === AUTO_FILE_BY);
+  if (f) removeDealerFile(f.id); // ลบเฉพาะไฟล์ที่ระบบสร้างเอง (ไม่แตะไฟล์ที่ผู้ใช้แนบเอง)
 }
 
 // ─── Global: โปรไฟล์ผู้ออกใบเสนอราคา (บริษัทดีลเลอร์) ────────────────
@@ -182,6 +434,7 @@ export type LeadRow = {
   numId: number;
   name: string;
   company: string;
+  type?: CustomerType;   // ประเภทลูกค้า (บุคคล/บริษัท) — ไม่ระบุ = บริษัท · ไหลไปลูกค้าตอนปิดการขาย
   contact: string;
   phone?: string;
   email?: string;
@@ -193,12 +446,15 @@ export type LeadRow = {
   assigned: string;
   source?: string;
   note?: string;
+  project?: string;      // ชื่อดีล/โครงการ (ลูกค้าเดิมสร้างดีลใหม่) — ไม่มีก็ใช้ "{แม่แบบ} — {บริษัท}"
+  expectedClose?: string; // วันปิดการขายคาดการณ์ (Expected Close Date)
+  createdAt?: string;    // วันที่สร้างดีล (Thai date) — ดีลใหม่ = วันนี้
   lostReason?: string;   // เหตุผลที่ปิดการขายไม่ได้ (เมื่อ status = CANCELLED)
   report?: string;       // รายงานการติดตามลูกค้า (สร้างอัตโนมัติตอนสร้าง Lead · แก้ไขได้ทั้งหมด)
   tasks?: LeadTask[];    // Report Checklist ขับเคลื่อนสถานะ/ความคืบหน้า (Task-driven Sales Journey)
   activities?: LeadActivity[]; // ไทม์ไลน์กิจกรรมของลีด (บันทึกจริง · persist ผ่าน updateLead)
   customerId?: number;
-  logo?: string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลดในฟอร์มเพิ่มผู้สนใจ
+  logo?: string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลดในฟอร์มเพิ่มลูกค้าเป้าหมาย
 };
 
 // กิจกรรมของลีด — บันทึกการโทร/ประชุม/โน้ต ฯลฯ ที่เกิดขึ้นจริง
@@ -335,31 +591,34 @@ export type CustomerRow = {
   joinDate:string; owner:string; initials:string; color:string;
   totalValue:number; contacts?:CustomerContact[];
   logo?:string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลด/แก้ไขในแท็บ "ข้อมูล"
+  imported?:boolean; // ลูกค้าเดิมที่นำเข้า/คีย์มือ (ไม่ได้ผ่าน Lead→Won) — สำหรับข้อมูลลูกค้าก่อนมีระบบ
 };
 
 export const initialCustomers: CustomerRow[] = [
-  { id:1, name:"คุณสมชาย ใจดี",      company:"บจ. ไทยสตีล",          type:"บริษัท", email:"somchai@thaisteel.co.th",  phone:"081-234-5678", province:"นนทบุรี",       category:"โกดัง/คลังสินค้า",  status:"active",   projects:2, joinDate:"2025-09-15", owner:"สมชาย เชียงใหม่",  initials:"สช", color:"#003366", totalValue:1800000 },
+  { id:1, name:"คุณสมชาย ใจดี",      company:"บจ. ไทยสตีล",          type:"บริษัท", email:"somchai@thaisteel.co.th",  phone:"081-234-5678", province:"นนทบุรี",       category:"โกดังสำเร็จรูป",  status:"active",   projects:2, joinDate:"2025-09-15", owner:"สมชาย เชียงใหม่",  initials:"สช", color:"#003366", totalValue:1800000 },
   { id:2, name:"คุณกาญจนา ม.",        company:"บจ. ซีซีเอส",           type:"บริษัท", email:"kanjana@ccs.co.th",        phone:"082-345-6789", province:"เชียงใหม่",    category:"โรงงาน", status:"active",   projects:1, joinDate:"2025-11-03", owner:"วิภา รัตนกุล",    initials:"กม", color:"#059669", totalValue:3200000 },
   { id:3, name:"คุณประยุทธ ร.",        company:"หจก. ราชบุรีโลหะ",      type:"บริษัท", email:"prayuth@rajburi.co.th",    phone:"083-456-7890", province:"ราชบุรี",      category:"โรงงาน", status:"active",   projects:1, joinDate:"2026-01-20", owner:"วิภา รัตนกุล",    initials:"ปร", color:"#f59e0b", totalValue:760000 },
-  { id:4, name:"คุณดารัล ส.",          company:"บจ. สมุทรโกดัง",        type:"บริษัท", email:"darat@smgodown.co.th",     phone:"084-567-8901", province:"สมุทรปราการ", category:"โกดัง/คลังสินค้า",  status:"active",   projects:2, joinDate:"2026-02-10", owner:"สมชาย เชียงใหม่",  initials:"ดส", color:"#dc2626", totalValue:2000000 },
+  { id:4, name:"คุณดารัล ส.",          company:"บจ. สมุทรโกดัง",        type:"บริษัท", email:"darat@smgodown.co.th",     phone:"084-567-8901", province:"สมุทรปราการ", category:"โกดังสำเร็จรูป",  status:"active",   projects:2, joinDate:"2026-02-10", owner:"สมชาย เชียงใหม่",  initials:"ดส", color:"#dc2626", totalValue:2000000 },
   { id:5, name:"VCS Asia (ระยอง)",     company:"VCS Asia Co., Ltd.",     type:"บริษัท", email:"vcs@vcsasia.com",           phone:"085-678-9012", province:"ระยอง",        category:"โรงงาน", status:"inactive", projects:3, joinDate:"2025-08-01", owner:"วิชัย ประสิทธิ์",  initials:"VC", color:"#002244", totalValue:6200000 },
-  { id:6, name:"คุณสุรัตน์ ล.",        company:"บจ. แม่สอดโลหะ",       type:"บริษัท", email:"surat@maesot.co.th",       phone:"086-789-0123", province:"ตาก",           category:"โกดัง/คลังสินค้า",  status:"active",   projects:1, joinDate:"2025-12-01", owner:"สมชาย เชียงใหม่",  initials:"สล", color:"#8fa3b8", totalValue:4100000 },
-  { id:7, name:"บจ. อุตรดิตถ์โลหะ",   company:"บจ. อุตรดิตถ์โลหะ",    type:"บริษัท", email:"info@uttaradit.co.th",      phone:"087-890-1234", province:"อุตรดิตถ์",    category:"เกษตรกรรม",status:"inactive", projects:0, joinDate:"2026-06-01", owner:"วิภา รัตนกุล",    initials:"อต", color:"#8fa3b8", totalValue:0 },
-  { id:8, name:"บจ. นครสวรรค์โลหะ",   company:"บจ. นครสวรรค์โลหะ",    type:"บริษัท", email:"nakhon@nsloha.co.th",      phone:"088-901-2345", province:"นครสวรรค์",    category:"อื่นๆ", status:"active",   projects:2, joinDate:"2025-07-15", owner:"กาญจนา มีสุข",    initials:"นส", color:"#059669", totalValue:5400000 },
-  { id:9, name:"คุณวิทยา ท.",          company:"บจ. ทีทีวาย อินเตอร์",  type:"บริษัท", email:"wittaya@ttyinter.com",     phone:"086-789-0123", province:"นครสวรรค์",    category:"โกดัง/คลังสินค้า", status:"active", projects:1, joinDate:"2026-06-28", owner:"สมชาย เชียงใหม่", initials:"ทท", color:"#003366", totalValue:5400000 },
+  { id:6, name:"คุณสุรัตน์ ล.",        company:"บจ. แม่สอดโลหะ",       type:"บริษัท", email:"surat@maesot.co.th",       phone:"086-789-0123", province:"ตาก",           category:"โกดังสำเร็จรูป",  status:"active",   projects:1, joinDate:"2025-12-01", owner:"สมชาย เชียงใหม่",  initials:"สล", color:"#8fa3b8", totalValue:4100000 },
+  { id:7, name:"บจ. อุตรดิตถ์โลหะ",   company:"บจ. อุตรดิตถ์โลหะ",    type:"บริษัท", email:"info@uttaradit.co.th",      phone:"087-890-1234", province:"อุตรดิตถ์",    category:"โรงงาน",status:"inactive", projects:0, joinDate:"2026-06-01", owner:"วิภา รัตนกุล",    initials:"อต", color:"#8fa3b8", totalValue:0 },
+  { id:8, name:"บจ. นครสวรรค์โลหะ",   company:"บจ. นครสวรรค์โลหะ",    type:"บริษัท", email:"nakhon@nsloha.co.th",      phone:"088-901-2345", province:"นครสวรรค์",    category:"อาคารสำเร็จรูปทุกประเภท", status:"active",   projects:2, joinDate:"2025-07-15", owner:"กาญจนา มีสุข",    initials:"นส", color:"#059669", totalValue:5400000 },
+  { id:9, name:"คุณวิทยา ท.",          company:"บจ. ทีทีวาย อินเตอร์",  type:"บริษัท", email:"wittaya@ttyinter.com",     phone:"086-789-0123", province:"นครสวรรค์",    category:"โกดังสำเร็จรูป", status:"active", projects:1, joinDate:"2026-06-28", owner:"สมชาย เชียงใหม่", initials:"ทท", color:"#003366", totalValue:5400000 },
   { id:10, name:"คุณอรทัย พ.",         company:"บจ. ลำปางแพ็คเกจจิ้ง",  type:"บริษัท", email:"orathai@lpkg.co.th",       phone:"089-111-2233", province:"ลำปาง",        category:"โรงงาน", status:"active", projects:1, joinDate:"2026-06-20", owner:"วิภา รัตนกุล", initials:"ลป", color:"#059669", totalValue:3600000, contacts:[ { id:1, date:"20 มิ.ย. 2569", icon:"meeting", text:"เซ็นสัญญาซื้อขายโรงงาน ฿3.6M", type:"meeting" } ] },
-  { id:11, name:"คุณประเสริฐ อ.",      company:"บจ. เอกชัยสตอเรจ",      type:"บริษัท", email:"prasert@ekachai.co.th",    phone:"089-333-2211", province:"ลำปาง",        category:"โกดัง/คลังสินค้า", status:"active", projects:2, joinDate:"2025-10-12", owner:"กาญจนา มีสุข", initials:"อช", color:"#003366", totalValue:2450000 },
-  { id:12, name:"คุณนภา ว.",           company:"คุณนภา วงศ์สวรรค์",     type:"บุคคล",  email:"napa.w@gmail.com",          phone:"089-444-3322", province:"เชียงใหม่",    category:"อื่นๆ", status:"active", projects:1, joinDate:"2026-03-05", owner:"วิภา รัตนกุล", initials:"นภ", color:"#f59e0b", totalValue:680000 },
-  { id:13, name:"คุณกิตติ ธ.",          company:"หจก. พะเยาเทรดดิ้ง",    type:"บริษัท", email:"kitti@phayaotrading.co.th", phone:"089-555-4433", province:"พะเยา",        category:"เกษตรกรรม", status:"inactive", projects:0, joinDate:"2025-09-01", owner:"สมชาย เชียงใหม่", initials:"พย", color:"#8fa3b8", totalValue:1150000 },
+  { id:11, name:"คุณประเสริฐ อ.",      company:"บจ. เอกชัยสตอเรจ",      type:"บริษัท", email:"prasert@ekachai.co.th",    phone:"089-333-2211", province:"ลำปาง",        category:"โกดังสำเร็จรูป", status:"active", projects:2, joinDate:"2025-10-12", owner:"กาญจนา มีสุข", initials:"อช", color:"#003366", totalValue:2450000 },
+  { id:12, name:"คุณนภา ว.",           company:"คุณนภา วงศ์สวรรค์",     type:"บุคคล",  email:"napa.w@gmail.com",          phone:"089-444-3322", province:"เชียงใหม่",    category:"อาคารสำเร็จรูปทุกประเภท", status:"active", projects:1, joinDate:"2026-03-05", owner:"วิภา รัตนกุล", initials:"นภ", color:"#f59e0b", totalValue:680000 },
+  { id:13, name:"คุณกิตติ ธ.",          company:"หจก. พะเยาเทรดดิ้ง",    type:"บริษัท", email:"kitti@phayaotrading.co.th", phone:"089-555-4433", province:"พะเยา",        category:"โรงงาน", status:"inactive", projects:0, joinDate:"2025-09-01", owner:"สมชาย เชียงใหม่", initials:"พย", color:"#8fa3b8", totalValue:1150000 },
 ];
 
 // ─── แม่แบบอาคาร (Building Templates — กำหนดโดย HQ, ดีลเลอร์ดูอย่างเดียว) ───
-// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "แม่แบบที่สนใจ" ในฟอร์มผู้สนใจ
+// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "แม่แบบที่สนใจ" ในฟอร์มลูกค้าเป้าหมาย
 export type SolutionPriceHistory = { price: number; effectiveDate: string; note?: string };
 export type SolutionProduct = {
   id: string; name: string; spec: string;
   price: number; unit: string; effectiveDate: string; priceHistory: SolutionPriceHistory[];
   subtypes?: string[];   // แม่แบบย่อยภายใต้แม่แบบหลัก (เช่น "โรงงาน" → "โรงงานอาหาร") · เลือกได้ในฟอร์ม
+  image?: string;        // รูปแม่แบบ (data URL ย่อขนาดแล้ว) — แสดงบนการ์ดแคตตาล็อก
+  subtypeImages?: Record<string, string>; // รูปรายแม่แบบย่อย (คีย์ = ชื่อแม่แบบย่อย) · HQ ใส่ได้รายอัน · fallback = image หลัก
 };
 
 // ─── Master Catalog (แหล่งเดียว) ─────────────────────────────────
@@ -418,18 +677,26 @@ export function fmtISOToThai(iso: string): string {
 // ─── QUOTATIONS ───────────────────────────────────────────────
 export type QuotationStatus = "draft" | "sent_to_client" | "viewed" | "won" | "lost" | "expired";
 
+// รายการสินค้าในใบเสนอราคา (BOQ) — ราคา/หน่วยดึงจากราคากลาง HQ (แคตตาล็อกแม่แบบ) แก้ได้
+export type QuoteLineItem = { name: string; qty: number; unit: string; unitPrice: number };
+
 export type QuotationMock = {
   id: string; customer: string; project: string;
   total: string; totalValue: number;
   materialCost: number;
   province: string; buildingType: string; area: number;
   status: QuotationStatus; date: string; items: number;
+  lineItems?: QuoteLineItem[]; // รายการสินค้าจริง (BOQ) — items=ความยาว, materialCost=Σ(qty×unitPrice)
   customerId: number;
   projectId: number;
+  dealId?: number;   // ผูกกับดีล (LeadRow.numId) — 1 Deal → หลาย Revision ใบเสนอราคา
   revision?: string; // เวอร์ชันใบเสนอราคา V1/V2/V3
   expiry?: string;   // วันหมดอายุใบเสนอราคา (Expiry Date)
   discountPct?: number; // ส่วนลด %
   note?: string;        // หมายเหตุ
+  paymentTerms?: string; // เงื่อนไขการชำระเงิน (เช่น "มัดจำ 30% ที่เหลือก่อนส่งมอบ")
+  deliveryTime?: string; // ระยะเวลาส่งมอบ (เช่น "90 วัน")
+  issuer?: IssuerProfile; // สแนปช็อตโปรไฟล์บริษัทผู้ออก ณ ตอนสร้าง — ใบเก่าคงชื่อเดิมแม้เปลี่ยนโปรไฟล์
 };
 
 // สถานะใบเสนอราคาตามสเปก: Draft / Sent / Viewed / Accepted / Rejected / Expired
@@ -501,29 +768,20 @@ export type DealerRow = {
 };
 
 export const dealerLeaderboard: DealerRow[] = [
-  { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      region: "ตะวันออก", revenueActual: 5400000, revenueTarget: 6000000, winRate: 48, activeProjects: 6, onTimePct: 91, status: "active",   credentials: { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" } },
-  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   region: "เหนือ",    revenueActual: 4200000, revenueTarget: 6200000, winRate: 35, activeProjects: 5, onTimePct: 78, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
-  { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      region: "ตะวันตก", revenueActual: 3800000, revenueTarget: 5000000, winRate: 52, activeProjects: 4, onTimePct: 85, status: "active",   credentials: { email: "sales@maesotmetal.co.th", password: "PEB-MST-7749" } },
-  { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    region: "เหนือ",    revenueActual: 3100000, revenueTarget: 5800000, winRate: 41, activeProjects: 3, onTimePct: 72, status: "active",   credentials: { email: "sales@crstructure.co.th", password: "PEB-CRI-5563" } },
-  { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   region: "กลาง",     revenueActual: 1900000, revenueTarget: 5000000, winRate: 29, activeProjects: 2, onTimePct: 61, status: "active",   credentials: { email: "sales@nsn-engineering.co.th", password: "PEB-NSN-2294" } },
-  { id: "HYI", code: "HYI", name: "บจ. หาดใหญ่สตีลกรุ๊ป",    region: "ใต้",      revenueActual: 920000,  revenueTarget: 4000000, winRate: 18, activeProjects: 1, onTimePct: 0,  status: "inactive", credentials: { email: "sales@hatyaisteel.co.th", password: "PEB-HYI-1108" } },
-  { id: "AYA", code: "AYA", name: "บจ. อยุธยาเมทัลบิลด์",     region: "กลาง",     revenueActual: 4650000, revenueTarget: 5200000, winRate: 47, activeProjects: 5, onTimePct: 90, status: "active",   credentials: { email: "sales@ayametalbuild.co.th", password: "PEB-AYA-6612" } },
-  { id: "KKN", code: "KKN", name: "หจก. ขอนแก่นโครงเหล็ก",   region: "อีสาน",    revenueActual: 3450000, revenueTarget: 4800000, winRate: 44, activeProjects: 4, onTimePct: 88, status: "active",   credentials: { email: "sales@kksteelframe.co.th", password: "PEB-KKN-9034" } },
-  { id: "UBN", code: "UBN", name: "บจ. อุบลสตีลกรุ๊ป",        region: "อีสาน",    revenueActual: 2750000, revenueTarget: 4500000, winRate: 33, activeProjects: 3, onTimePct: 74, status: "active",   credentials: { email: "sales@ubonsteel.co.th", password: "PEB-UBN-4478" } },
-  { id: "PKT", code: "PKT", name: "บจ. ภูเก็ตสตรัคเจอรัล",   region: "ใต้",      revenueActual: 2300000, revenueTarget: 3500000, winRate: 38, activeProjects: 2, onTimePct: 81, status: "active",   credentials: { email: "sales@phuketstructural.co.th", password: "PEB-PKT-2851" } },
+  { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      region: "ตะวันออก", revenueActual: 37800000, revenueTarget: 42000000, winRate: 48, activeProjects: 6, onTimePct: 91, status: "active",   credentials: { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" } },
+  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   region: "เหนือ",    revenueActual: 29400000, revenueTarget: 43400000, winRate: 35, activeProjects: 5, onTimePct: 78, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
+  { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      region: "ตะวันตก", revenueActual: 26600000, revenueTarget: 35000000, winRate: 52, activeProjects: 4, onTimePct: 85, status: "active",   credentials: { email: "sales@maesotmetal.co.th", password: "PEB-MST-7749" } },
+  { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    region: "เหนือ",    revenueActual: 21700000, revenueTarget: 40600000, winRate: 41, activeProjects: 3, onTimePct: 72, status: "active",   credentials: { email: "sales@crstructure.co.th", password: "PEB-CRI-5563" } },
+  { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   region: "กลาง",     revenueActual: 13300000, revenueTarget: 35000000, winRate: 29, activeProjects: 2, onTimePct: 61, status: "active",   credentials: { email: "sales@nsn-engineering.co.th", password: "PEB-NSN-2294" } },
+  { id: "HYI", code: "HYI", name: "บจ. หาดใหญ่สตีลกรุ๊ป",    region: "ใต้",      revenueActual: 6440000,  revenueTarget: 28000000, winRate: 18, activeProjects: 1, onTimePct: 0,  status: "inactive", credentials: { email: "sales@hatyaisteel.co.th", password: "PEB-HYI-1108" } },
+  { id: "AYA", code: "AYA", name: "บจ. อยุธยาเมทัลบิลด์",     region: "กลาง",     revenueActual: 32550000, revenueTarget: 36400000, winRate: 47, activeProjects: 5, onTimePct: 90, status: "active",   credentials: { email: "sales@ayametalbuild.co.th", password: "PEB-AYA-6612" } },
+  { id: "KKN", code: "KKN", name: "หจก. ขอนแก่นโครงเหล็ก",   region: "อีสาน",    revenueActual: 24150000, revenueTarget: 33600000, winRate: 44, activeProjects: 4, onTimePct: 88, status: "active",   credentials: { email: "sales@kksteelframe.co.th", password: "PEB-KKN-9034" } },
+  { id: "UBN", code: "UBN", name: "บจ. อุบลสตีลกรุ๊ป",        region: "อีสาน",    revenueActual: 19250000, revenueTarget: 31500000, winRate: 33, activeProjects: 3, onTimePct: 74, status: "active",   credentials: { email: "sales@ubonsteel.co.th", password: "PEB-UBN-4478" } },
+  { id: "PKT", code: "PKT", name: "บจ. ภูเก็ตสตรัคเจอรัล",   region: "ใต้",      revenueActual: 16100000, revenueTarget: 24500000, winRate: 38, activeProjects: 2, onTimePct: 81, status: "active",   credentials: { email: "sales@phuketstructural.co.th", password: "PEB-PKT-2851" } },
 ];
 
 // ยอดขายรายเดือน (รวมทั้งเครือ)
-export const hqSalesByMonth = [
-  { month: "ม.ค.",   value: 11.4, prevValue: 9.8  },
-  { month: "ก.พ.",  value: 10.3, prevValue: 11.1 },
-  { month: "มี.ค.", value: 15.1, prevValue: 12.7 },
-  { month: "เม.ย.", value: 19.2, prevValue: 16.0 },
-  { month: "พ.ค.",  value: 13.3, prevValue: 14.4 },
-  { month: "มิ.ย.", value: 18.4, prevValue: 15.2 },
-  { month: "ก.ค.",  value: 14.6, prevValue: 16.5 },
-  { month: "ส.ค.",  value: 22.2, prevValue: 19.0 },
-];
+// (hqSalesByMonth ถูกลบ — HQ dashboard คำนวณเทรนด์จากใบเสนอราคาจริงแล้ว)
 
 // กิจกรรมล่าสุดทั้งเครือ
 export type ActivityKind = "win" | "lead" | "approve" | "assign";
@@ -846,26 +1104,9 @@ export const hqPipelineStages: PipelineStage[] = [
   { key: "won",         label: "ปิดการขาย",         count: 5,  valueNum: 14300000, color: "#003366" },
 ];
 
-// สรุปดีลเดือนนี้ (HQ รวมทุกสาขา)
-export const hqDealSummary = {
-  won:         { count: 5,  value: 14300000 },
-  lost:        { count: 4,  value: 9800000  },
-  negotiating: { count: 16, value: 38600000 },
-  // เป้าปีนี้ (annual) vs YTD จริง
-  annualTarget: 260000000,
-  ytdActual:    124600000,
-  // leads รอติดตาม > 48 ชม.
-  leadsOverdue: 5,
-};
+// (hqDealSummary ถูกลบ — ค่า annualTarget ซ้ำกับ hq_targets · เป้าใช้ที่เดียว: loadHQTargets())
 
-export type PipelineLostReason = { reason: string; count: number; pct: number };
-export const hqPipelineLostReasons: PipelineLostReason[] = [
-  { reason: "ราคาสูงกว่าคู่แข่ง",    count: 6, pct: 38 },
-  { reason: "ลูกค้าเลื่อนการตัดสินใจ", count: 4, pct: 25 },
-  { reason: "ลูกค้าติดต่อไม่ได้",     count: 3, pct: 19 },
-  { reason: "เปลี่ยนประเภทอาคาร",     count: 2, pct: 13 },
-  { reason: "อื่นๆ",                   count: 1, pct: 6 },
-];
+// (hqPipelineLostReasons ถูกลบ — เหตุผลเสียโอกาสใช้ที่ HQ จัดการที่เดียว: hq_sales_journey → loadLostReasons)
 
 export type PipelineByProduct = { product: string; count: number; valueNum: number; color: string };
 export const hqPipelineByProduct: PipelineByProduct[] = [
@@ -1218,7 +1459,7 @@ export const notes: NoteMock[] = [
   },
   {
     id: 2, title: "ประชุมทีมขาย ประจำสัปดาห์", category: "ประชุม", pinned: true,
-    content: "ประชุมวันจันทร์ที่ 23 มิ.ย. 2569\n\nสรุปประเด็น:\n1. โอกาสการขายรวม ฿14.6M (กำลังดำเนินการ 6 รายการ)\n2. เป้าหมาย Q2 ต้องปิด 2 deals เพิ่ม\n3. ผู้สนใจรายใหม่จาก นิคมฯ อมตะ 3 ราย\n\nAction items:\n- วิภา: follow up บจ. อุตรดิตถ์โลหะ ภายใน 3 วัน\n- วิชัย: นำเสนอ spec ให้ VCS Asia รอบ 2",
+    content: "ประชุมวันจันทร์ที่ 23 มิ.ย. 2569\n\nสรุปประเด็น:\n1. โอกาสการขายรวม ฿14.6M (กำลังดำเนินการ 6 รายการ)\n2. เป้าหมาย Q2 ต้องปิด 2 deals เพิ่ม\n3. ลูกค้าเป้าหมายรายใหม่จาก นิคมฯ อมตะ 3 ราย\n\nAction items:\n- วิภา: follow up บจ. อุตรดิตถ์โลหะ ภายใน 3 วัน\n- วิชัย: นำเสนอ spec ให้ VCS Asia รอบ 2",
     author: "กาญจนา", createdAt: "2026-06-23 10:00", updatedAt: "2026-06-23 10:45", color: "#15803d",
   },
   {

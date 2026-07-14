@@ -6,10 +6,13 @@ import { useRole } from "@/context/RoleContext";
 import { useSales } from "@/context/SalesContext";
 import {
   dealerLeaderboard, apptTypeLabel, loadUserProfile, PROFILE_UPDATED_EVENT,
-  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile,
+  loadNotifPrefs, notifCategoryOf, NOTIF_PREFS_EVENT,
+  loadHQNotifPrefs, hqAuditCategory, HQ_NOTIF_UPDATED_EVENT,
+  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
 } from "@/lib/mock";
-import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu } from "lucide-react";
+import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History } from "lucide-react";
 import { PRIMARY, STEEL } from "@/lib/theme";
+import { useAuditEntries, type AuditEntry } from "@/lib/useAudit";
 
 // ── mock "วันนี้" (deterministic) ────────────────────────────────
 const MOCK_TODAY = "2026-06-30";
@@ -48,7 +51,7 @@ const BUCKET_LABEL: Record<NotifBucket, string> = {
 const BUCKET_ORDER: NotifBucket[] = ["today", "yesterday", "older"];
 
 // ── สร้างการแจ้งเตือนจาก mock (deterministic, mock วันนี้ = 2026-06-30) ──
-// ประเภท: ลีดใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายได้ · เสียโอกาส
+// ประเภท: ลีดใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายสำเร็จ · เสียโอกาส
 // รับ leads/quotations/appointments จาก SalesContext (ข้อมูลสดทั้งหมด)
 function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appointments: AppointmentMock[]): Notif[] {
   const out: Notif[] = [];
@@ -60,7 +63,7 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     out.push({ ...n, id: id++, bucket: bucketOf(n.sortDate) });
   };
 
-  // 1) ผู้สนใจรอดำเนินการ — leads ขั้น "ติดต่อแล้ว" (WAITING) ที่ยังไม่คืบหน้า
+  // 1) ลูกค้าเป้าหมายรอดำเนินการ — leads ขั้น "ติดต่อแล้ว" (WAITING) ที่ยังไม่คืบหน้า
   for (const l of leads.filter(l => l.status === "WAITING")) {
     push({
       iconEl: <MessageSquare size={14} />, iconBg: "#eef2f7", iconColor: "#475569",
@@ -119,11 +122,11 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     });
   }
 
-  // 5) ปิดการขายได้ (Deal Won) — quotations status "won"
+  // 5) ปิดการขายสำเร็จ (Deal Won) — quotations status "won"
   for (const qt of quotations.filter(qt => qt.status === "won")) {
     push({
       iconEl: <CheckCircle2 size={14} />, iconBg: "#d1fae5", iconColor: "#059669",
-      title: "ปิดการขายได้",
+      title: "ปิดการขายสำเร็จ",
       body: `${qt.customer} — ${qt.id} มูลค่า ${qt.total}`,
       time: `ปิดเมื่อ ${qt.date}`,
       href: "/quotations",
@@ -153,6 +156,32 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
   });
 }
 
+// ── การแจ้งเตือนฝั่ง HQ = บันทึกการใช้งาน (Audit Log) — HQ เห็นว่าใครทำอะไร ──
+const TH_MO_NUM: Record<string, number> = { "ม.ค.": 1, "ก.พ.": 2, "มี.ค.": 3, "เม.ย.": 4, "พ.ค.": 5, "มิ.ย.": 6, "ก.ค.": 7, "ส.ค.": 8, "ก.ย.": 9, "ต.ค.": 10, "พ.ย.": 11, "ธ.ค.": 12 };
+function auditISO(at: string): string {
+  const m = /(\d{1,2})\s+(\S+)\s+(\d{4})/.exec(at);
+  if (!m || !(m[2] in TH_MO_NUM)) return "";
+  return `${+m[3] - 543}-${String(TH_MO_NUM[m[2]]).padStart(2, "0")}-${String(+m[1]).padStart(2, "0")}`;
+}
+function buildHQNotifications(entries: AuditEntry[]): Notif[] {
+  return entries.map(e => {
+    const iso = auditISO(e.at);
+    // ของจริงที่เพิ่งเกิด (วันที่จริง ≥ mock วันนี้) จัดเป็น "วันนี้" · seed จัดตามวันที่
+    const bucket: NotifBucket = !iso ? "older" : iso >= MOCK_TODAY ? "today" : iso === MOCK_YESTERDAY ? "yesterday" : "older";
+    const timeOnly = e.at.split(" · ")[1] ?? e.at;
+    return {
+      id: e.id,
+      iconEl: <History size={14} />, iconBg: "#eef2f7", iconColor: PRIMARY,
+      title: e.action,
+      body: `${e.user} · ${e.target}`,
+      time: `${e.at.split(" · ")[0]} · ${timeOnly}`,
+      href: "/hq/audit",
+      sortDate: iso || MOCK_TODAY,
+      bucket,
+    };
+  });
+}
+
 type SearchResult = { type: string; label: string; sub: string; href: string };
 
 function useClickOutside(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
@@ -175,6 +204,7 @@ const TITLE_MAP: { match: string; title: string }[] = [
   { match: "/files",           title: "ไฟล์" },
   { match: "/products",        title: "แม่แบบ" },
   { match: "/settings",        title: "ตั้งค่า" },
+  { match: "/profile",         title: "โปรไฟล์" },
   /* HQ */
   { match: "/hq/dashboard",      title: "แดชบอร์ดสำนักงานใหญ่" },
   { match: "/hq/pipeline",       title: "ภาพรวมยอดขาย" },
@@ -193,6 +223,34 @@ function pageTitle(pathname: string): string {
   return hit?.title ?? "แดชบอร์ด";
 }
 
+// ── หน้า/เมนูที่ค้นหาได้ทั้งระบบ (แยกตามบทบาท) — keywords รวมคำพ้อง/อังกฤษเพื่อให้ค้นเจอง่าย ──
+type PageEntry = { label: string; href: string; keywords: string };
+const DEALER_PAGES: PageEntry[] = [
+  { label: "แดชบอร์ด",       href: "/dashboard",  keywords: "แดชบอร์ด dashboard หน้าแรก home ภาพรวม สรุป" },
+  { label: "ลูกค้าเป้าหมาย", href: "/leads",      keywords: "ลูกค้าเป้าหมาย ลีด lead leads ลูกค้าเป้าหมาย โอกาสการขาย" },
+  { label: "ลูกค้า",         href: "/customers",  keywords: "ลูกค้า customer customers" },
+  { label: "ใบเสนอราคา",     href: "/quotations", keywords: "ใบเสนอราคา quotation quote เสนอราคา" },
+  { label: "แม่แบบ",         href: "/products",   keywords: "แม่แบบ สินค้า product catalog แคตตาล็อก" },
+  { label: "ปฏิทิน",         href: "/calendar",   keywords: "ปฏิทิน calendar นัดหมาย นัด appointment" },
+  { label: "ไฟล์",           href: "/files",      keywords: "ไฟล์ file files เอกสาร document" },
+  { label: "รายงาน",         href: "/reports",    keywords: "รายงาน report analytics วิเคราะห์ สถิติ" },
+  { label: "ตั้งค่า",         href: "/settings",   keywords: "ตั้งค่า setting settings config" },
+  { label: "บัญชีดีลเลอร์",   href: "/settings",   keywords: "บัญชี account โปรไฟล์ profile ข้อมูลส่วนตัว บริษัท ดีลเลอร์" },
+];
+const HQ_PAGES: PageEntry[] = [
+  { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  keywords: "แดชบอร์ด dashboard สำนักงานใหญ่ hq ภาพรวม สรุป หน้าแรก" },
+  { label: "ตัวแทน",              href: "/hq/dealers",    keywords: "ตัวแทน dealer dealers จำหน่าย" },
+  { label: "ลูกค้าทั้งเครือ",       href: "/hq/customers",  keywords: "ลูกค้า customer customers ทั้งเครือ" },
+  { label: "ภาพรวมยอดขาย",        href: "/hq/pipeline",   keywords: "ภาพรวมยอดขาย pipeline ยอดขาย sales funnel" },
+  { label: "ใบเสนอราคาทั้งเครือ",   href: "/hq/quotations", keywords: "ใบเสนอราคา quotation quote ทั้งเครือ" },
+  { label: "แคตตาล็อกแม่แบบ",     href: "/hq/master",     keywords: "แคตตาล็อก แม่แบบ master สินค้า product catalog" },
+  { label: "บริษัท",              href: "/hq/company",    keywords: "บริษัท company องค์กร โปรไฟล์บริษัท" },
+  { label: "ผู้ใช้งาน",            href: "/hq/users",      keywords: "ผู้ใช้งาน user users บัญชีผู้ใช้ สิทธิ์" },
+  { label: "รายงาน",              href: "/reports",       keywords: "รายงาน report analytics วิเคราะห์ สถิติ" },
+  { label: "ตั้งค่า",              href: "/hq/settings",   keywords: "ตั้งค่า setting settings config" },
+  { label: "โปรไฟล์",             href: "/profile",       keywords: "โปรไฟล์ profile บัญชี account ข้อมูลส่วนตัว" },
+];
+
 export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const { session, isHQ, logout } = useRole();
   const router = useRouter();
@@ -208,18 +266,54 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     return () => { window.removeEventListener(PROFILE_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
   }, [session.dealerCode, session.name]);
 
+  // ตั้งค่าการแจ้งเตือน (เปิด/ปิดแต่ละชนิด) — อัปเดตทันทีเมื่อบันทึกในหน้าตั้งค่า
+  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs | null>(null);
+  useEffect(() => {
+    const read = () => setNotifPrefs(loadNotifPrefs());
+    read();
+    window.addEventListener(NOTIF_PREFS_EVENT, read);
+    window.addEventListener("storage", read);
+    return () => { window.removeEventListener(NOTIF_PREFS_EVENT, read); window.removeEventListener("storage", read); };
+  }, []);
+
+  // ตั้งค่าการแจ้งเตือนของ HQ (หมวดจาก Audit Log) — กรองกระดิ่งฝั่ง HQ ตาม toggle "ในระบบ"
+  const [hqNotifPrefs, setHqNotifPrefs] = useState<Record<string, HQNotifChannels> | null>(null);
+  useEffect(() => {
+    const read = () => setHqNotifPrefs(loadHQNotifPrefs());
+    read();
+    window.addEventListener(HQ_NOTIF_UPDATED_EVENT, read);
+    window.addEventListener("storage", read);
+    return () => { window.removeEventListener(HQ_NOTIF_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
+  }, []);
+
   const displayName = profile?.name || session.name;
+  // ชื่อบัญชี = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน (ไม่ใช่ชื่อคน) · HQ ใช้ชื่อผู้ใช้
+  const acctName = isHQ ? displayName : session.dealerName;
+  const acctSub = isHQ ? session.dealerName : `ผู้ดูแล: ${displayName}`;
   const avatarUrl = profile?.avatar;
-  const initial = displayName.charAt(0).toUpperCase();
+  const initial = acctName.charAt(0).toUpperCase();
   const roleLabel = isHQ ? "ผู้บริหาร HQ"
     : ({ DEALER_ADMIN: "ผู้จัดการตัวแทน", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
   // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
   const { leads: liveLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
-  const notifs = useMemo(() => buildNotifications(liveLeads, liveQuotations, liveAppointments), [liveLeads, liveQuotations, liveAppointments]);
+  const auditEntries = useAuditEntries(); // สำหรับ HQ — บันทึกการใช้งาน
+  const notifs = useMemo(() => {
+    // HQ → การแจ้งเตือน = บันทึกการใช้งาน (ใครทำอะไร) กรองตามหมวดที่ HQ เปิดไว้ · Dealer → งานขาย
+    if (isHQ) {
+      const shown = hqNotifPrefs
+        ? auditEntries.filter(e => hqNotifPrefs[hqAuditCategory(e.action)]?.inapp !== false)
+        : auditEntries;
+      return buildHQNotifications(shown);
+    }
+    const all = buildNotifications(liveLeads, liveQuotations, liveAppointments);
+    if (!notifPrefs) return all;
+    return all.filter(n => { const c = notifCategoryOf(n.title); return c ? notifPrefs[c] : true; });
+  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs]);
 
   // ── states ──
   const [showSearch, setShowSearch]     = useState(false);
   const [showNotifs, setShowNotifs]     = useState(false);
+  const [showAllNotifs, setShowAllNotifs] = useState(false); // ขยายดูการแจ้งเตือนทั้งหมดในแผงเดียวกัน
   const [showUser,   setShowUser]       = useState(false);
   const [searchQ,    setSearchQ]        = useState("");
   const [readIds,    setReadIds]        = useState<Set<number>>(new Set());
@@ -228,7 +322,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const userRef   = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const closeNotifs = useCallback(() => setShowNotifs(false), []);
+  const closeNotifs = useCallback(() => { setShowNotifs(false); setShowAllNotifs(false); }, []);
   const closeUser   = useCallback(() => setShowUser(false),   []);
   useClickOutside(notifsRef, closeNotifs);
   useClickOutside(userRef,   closeUser);
@@ -251,11 +345,16 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // ── search results (grouped, ≥2 chars, up to 5 per group) ──
   const q = searchQ.trim().toLowerCase();
   const results: SearchResult[] = useMemo(() => {
-    if (q.length < 2) return [];
+    if (q.length < 1) return [];
     const has = (s?: string) => (s ?? "").toLowerCase().includes(q);
     // ลูกค้าไม่มี owner field → หาผู้รับผิดชอบจากลีดที่ผูก customerId เดียวกัน
     const ownerOfCustomer = (cid: number) => liveLeads.find(l => l.customerId === cid)?.assigned;
     return [
+      // หน้า/เมนู — ค้นหาได้ทุกหน้าในระบบตามบทบาท (นำทางไปหน้านั้นทันที)
+      ...(isHQ ? HQ_PAGES : DEALER_PAGES)
+        .filter(p => p.keywords.toLowerCase().includes(q))
+        .slice(0, 6)
+        .map(p => ({ type: "หน้า", label: p.label, sub: "เปิดหน้านี้", href: p.href })),
       // ลีด — match company/contact/name/phone/ผู้รับผิดชอบ
       ...liveLeads
         .filter((l: LeadRow) => has(l.name) || has(l.company) || has(l.contact) || has(l.phone) || has(l.assigned))
@@ -310,10 +409,16 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     setShowSearch(false);
     setSearchQ("");
     router.push(href);
+    // แจ้งหน้าปลายทางให้เปิดเรคคอร์ดที่ค้นเจอ แม้ผู้ใช้อยู่หน้าเดิมอยู่แล้ว
+    // (router.push ไปเส้นทางเดิมด้วย query ต่างกัน จะไม่ remount → effect ?open ไม่ทำงาน)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("bpms:open-record", { detail: href }));
+    }
   }
 
   // ── type badge color + icon per group ──
   const typeMeta: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+    "หน้า":           { bg: "#eef2f7", text: PRIMARY,   icon: <Compass size={14} /> },
     "ลูกค้าเป้าหมาย":  { bg: "#dce5f0", text: PRIMARY,   icon: <MessageSquare size={14} /> },
     "ลูกค้า":         { bg: "#e5faf0", text: "#059669", icon: <Users size={14} /> },
     "ใบเสนอราคา":     { bg: "#fef3cd", text: "#b45309", icon: <FileText size={14} /> },
@@ -339,7 +444,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 ref={searchInputRef}
                 value={searchQ}
                 onChange={e => setSearchQ(e.target.value)}
-                placeholder={isHQ ? "ค้นหาลูกค้าเป้าหมาย ตัวแทน ใบเสนอราคา…" : "ค้นหาลูกค้าเป้าหมาย ลูกค้า ใบเสนอราคา…"}
+                placeholder={isHQ ? "ค้นหาหน้า ลูกค้าเป้าหมาย ตัวแทน ใบเสนอราคา…" : "ค้นหาหน้า ลูกค้าเป้าหมาย ลูกค้า ใบเสนอราคา…"}
                 style={{ flex:1, border:"none", outline:"none", fontSize:"0.92rem", color:STEEL, background:"transparent" }}/>
               <button onClick={() => { setShowSearch(false); setSearchQ(""); }}
                 style={{ fontSize:"0.72rem", color:"#9ca3af", background:"none", border:`1px solid ${BORDER}`, borderRadius:6, padding:"3px 8px", cursor:"pointer" }}>
@@ -375,24 +480,13 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   );
                 })}
               </div>
-            ) : q.length >= 2 ? (
+            ) : q.length >= 1 ? (
               <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.8rem", color:"#9ca3af" }}>
                 ไม่พบผลลัพธ์สำหรับ &ldquo;{searchQ}&rdquo;
               </div>
             ) : (
-              <div style={{ padding:"16px", display:"flex", flexDirection:"column", gap:6 }}>
-                <div style={{ fontSize:"0.65rem", color:"#9ca3af", fontWeight:700, marginBottom:4, letterSpacing:"0.05em" }}>ค้นหาด่วน</div>
-                {(isHQ
-                  ? [{ label:"ภาพรวมยอดขาย", href:"/hq/pipeline" }, { label:"ตัวแทน", href:"/hq/dealers" }, { label:"ใบเสนอราคาทั้งเครือ", href:"/hq/quotations" }]
-                  : [{ label:"ลูกค้าเป้าหมาย", href:"/leads" }, { label:"ใบเสนอราคา", href:"/quotations" }, { label:"ลูกค้า", href:"/customers" }]
-                ).map(s => (
-                  <button key={s.href} onClick={() => goTo(s.href)}
-                    style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.8rem", fontWeight:600, cursor:"pointer", textAlign:"left" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = BG; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; }}>
-                    <span style={{ color:"#9ca3af" }}>→</span> {s.label}
-                  </button>
-                ))}
+              <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.8rem", color:"#9ca3af" }}>
+                พิมพ์เพื่อค้นหา
               </div>
             )}
           </div>
@@ -407,6 +501,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           <Menu size={20} />
         </button>
 
+        {/* ชื่อหน้า — แหล่งเดียวของหัวหน้า (ทุกหน้าอยู่แถวนี้ ไม่มีหัวซ้ำในเนื้อหา) */}
+        <h1 className="topbar-title">{pageTitle(pathname)}</h1>
+
         <div className="topbar-right">
 
         {/* Search icon (opens overlay) */}
@@ -420,7 +517,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         {/* Bell + dropdown */}
         <div ref={notifsRef} style={{ position:"relative" }}>
           <button className="icon-btn" aria-label="การแจ้งเตือน"
-            onClick={() => { setShowNotifs(p => !p); setShowUser(false); }}>
+            onClick={() => { setShowNotifs(p => !p); setShowAllNotifs(false); setShowUser(false); }}>
             <Bell size={18} strokeWidth={2} />
             {unreadCount > 0 && (
               <span style={{
@@ -447,7 +544,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                     ไม่มีการแจ้งเตือน
                   </div>
                 )}
-                {notifs.slice(0, 8).map((n, i, shown) => {
+                {(showAllNotifs ? notifs : notifs.slice(0, 8)).map((n, i, shown) => {
                   const isRead = readIds.has(n.id);
                   const isBucketStart = i === 0 || shown[i - 1].bucket !== n.bucket;
                   return (
@@ -478,18 +575,24 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   );
                 })}
               </div>
-              <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
-                <button onClick={() => { setShowNotifs(false); router.push("/leads"); }}
-                  style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.72rem", fontWeight:600, cursor:"pointer" }}>
-                  {notifs.length > 8 ? `ดูทั้งหมด (${notifs.length}) →` : "ดูทั้งหมด →"}
-                </button>
-              </div>
+              {notifs.length > 8 && (
+                <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
+                  {isHQ ? (
+                    <button onClick={() => { setShowNotifs(false); router.push("/hq/audit"); }}
+                      style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:PRIMARY, fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>
+                      ดูบันทึกการใช้งานทั้งหมด →
+                    </button>
+                  ) : (
+                    <button onClick={() => setShowAllNotifs(v => !v)}
+                      style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:STEEL, fontSize:"0.72rem", fontWeight:600, cursor:"pointer" }}>
+                      {showAllNotifs ? "แสดงน้อยลง" : `ดูทั้งหมด (${notifs.length})`}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* เส้นคั่น */}
-        <span className="topbar-divider" aria-hidden />
 
         {/* User pill + dropdown */}
         <div ref={userRef} style={{ position:"relative" }}>
@@ -499,7 +602,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               ? <img className="avatar avatar-sm" src={avatarUrl} alt="" style={{ objectFit:"cover" }} />
               : <div className="avatar avatar-sm" style={{ background:PRIMARY, color:"#fff" }}>{initial}</div>}
             <div style={{ textAlign:"left" }}>
-              <div style={{ fontSize:"0.72rem", fontWeight:700, color:STEEL, lineHeight:1.2 }}>{displayName}</div>
+              <div style={{ fontSize:"0.72rem", fontWeight:700, color:STEEL, lineHeight:1.2 }}>{acctName}</div>
               <div style={{ fontSize:"0.65rem", color:"#6b7280" }}>{roleLabel}</div>
             </div>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft:2, transform: showUser ? "rotate(180deg)" : "none", transition:"transform .15s" }}>
@@ -519,16 +622,17 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       {initial}
                     </div>}
                 <div>
-                  <div style={{ fontSize:"0.86rem", fontWeight:800, color:STEEL }}>{displayName}</div>
+                  <div style={{ fontSize:"0.86rem", fontWeight:800, color:STEEL }}>{acctName}</div>
                   <div style={{ fontSize:"0.65rem", color:"#6b7280" }}>{roleLabel}</div>
-                  <div style={{ fontSize:"0.65rem", color:"#9ca3af", marginTop:1 }}>{session.dealerName}</div>
+                  <div style={{ fontSize:"0.65rem", color:"#9ca3af", marginTop:1 }}>{acctSub}</div>
                 </div>
               </div>
 
               {/* Menu items */}
               <div style={{ padding:"6px 0" }}>
                 {[
-                  { Icon: UserCircle, label:"โปรไฟล์", href: "/profile" },
+                  // ตัวแทน: บัญชีดีลเลอร์รวมอยู่ในหน้า "ตั้งค่า" แล้ว → ไม่ต้องมีเมนูซ้ำ · HQ ยังมี "โปรไฟล์" (/profile) แยก
+                  ...(isHQ ? [{ Icon: UserCircle, label: "โปรไฟล์", href: "/profile" }] : []),
                   { Icon: Settings,    label:"ตั้งค่า",  href: isHQ ? "/hq/settings" : "/settings" },
                 ].map(item => (
                   <button key={item.label} onClick={() => { setShowUser(false); router.push(item.href); }}
@@ -555,6 +659,11 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
         </div>{/* /topbar-right */}
       </header>
+
+      {/* แถวปุ่มเฉพาะหน้า — อยู่ใต้แถบบน ชิดขวา (ช่วงวันที่ · Export · เพิ่ม · รีเฟรช) · หน้าไหนไม่มี = ซ่อน */}
+      <div className="topbar-actionbar">
+        <div id="topbar-slot" className="topbar-slot" />
+      </div>
     </>
   );
 }

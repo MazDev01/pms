@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Download, Users, Target, CheckCircle2, Trophy, TrendingDown,
+  AlertTriangle, Lightbulb, Layers,
 } from "lucide-react";
 import {
-  hqPipelineLostReasons, hqPipelineByProduct, hqAllQuotations, dealerLeaderboard, mainTemplateOf,
+  hqPipelineByProduct, dealerLeaderboard, mainTemplateOf, loadLostReasons,
 } from "@/lib/mock";
 import { useFilters } from "@/context/FilterContext";
+import { useNetworkQuotations } from "@/lib/useNetworkData";
 import { FilterBar } from "@/components/filters/FilterBar";
+
+type LostReason = { reason: string; count: number; pct: number };
 
 function fmtM(n: number) {
   return n >= 1_000_000 ? `฿${(n / 1_000_000).toFixed(1)}M` : `฿${(n / 1000).toFixed(0)}K`;
@@ -17,94 +21,85 @@ function fmtM(n: number) {
 // Color ramp: slate → light blue → blue → dark blue → navy
 const STAGE_PALETTE = ["#94a3b8", "#60a5fa", "#2563eb", "#1e40af", "#003366"];
 
-// ── Funnel ────────────────────────────────────────────────────────
+// ── Funnel — รูปกรวยจริง (แถบเรียวลงตามจำนวน) ให้เห็นภาพการหลุดชัดเจน ──
 type FunnelStage = { key: string; label: string; count: number; valueNum: number };
-function FunnelChart({ stages }: { stages: FunnelStage[] }) {
+function FunnelChart({ stages, worstIdx }: { stages: FunnelStage[]; worstIdx: number }) {
   const maxCount = stages[0]?.count || 1; // || กัน 0/0 = NaN ตอนไม่มีใบเสนอราคาในช่วงเวลา
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
       {stages.map((stage, i) => {
         const prev      = stages[i - 1];
         const convRate  = prev && prev.count > 0 ? Math.round((stage.count / prev.count) * 100) : null;
-        const widthPct  = Math.round((stage.count / maxCount) * 100);
+        const lost      = prev ? prev.count - stage.count : 0;
+        // เรียวลงตามจำนวน (ขั้นต่ำ 40% เพื่อให้ข้อความในแถบอ่านออก)
+        const widthPct  = Math.max(40, Math.round((stage.count / maxCount) * 100));
         const isLast    = i === stages.length - 1;
+        const isWorst   = i === worstIdx;
         const color     = STAGE_PALETTE[Math.min(i, STAGE_PALETTE.length - 1)];
-        const convColor = !convRate ? "#6b7280"
+        const avg       = stage.count ? Math.round(stage.valueNum / stage.count) : 0;
+        const convColor = isWorst ? "#dc2626"
+          : !convRate ? "#6b7280"
           : convRate >= 70 ? "#059669"
           : convRate >= 50 ? "#f59e0b"
           : "#dc2626";
 
         return (
-          <div key={stage.key}>
-            {/* Conversion connector */}
+          <div key={stage.key} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Conversion connector — ผ่านมากี่ % · หลุดกี่ราย */}
             {convRate !== null && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 4px 19px" }}>
-                <div style={{ width: 1.5, height: 16, background: "#dde1e7", flexShrink: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", flexWrap: "wrap", justifyContent: "center" }}>
                 <span style={{
-                  fontSize: "0.65rem", fontWeight: 700, color: convColor,
-                  background: convColor + "18", borderRadius: 20,
-                  padding: "2px 9px", border: `1px solid ${convColor}28`,
-                  display: "flex", alignItems: "center", gap: 4,
+                  fontSize: "0.68rem", fontWeight: 800, color: convColor,
+                  background: convColor + "16", borderRadius: 20,
+                  padding: "3px 11px", border: `1px solid ${convColor}30`,
+                  display: "flex", alignItems: "center", gap: 5,
                 }}>
-                  <TrendingDown size={9} color={convColor} /> {convRate}% ผ่านมา
+                  <TrendingDown size={11} color={convColor} /> ผ่านมา {convRate}%
                 </span>
+                {lost > 0 && (
+                  <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#9ca3af" }}>
+                    หลุดไป {lost} ราย
+                  </span>
+                )}
+                {isWorst && lost > 0 && (
+                  <span style={{
+                    fontSize: "0.62rem", fontWeight: 800, color: "#dc2626",
+                    background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 20,
+                    padding: "3px 10px", display: "flex", alignItems: "center", gap: 4,
+                  }}>
+                    <AlertTriangle size={10} color="#dc2626" /> จุดรั่วหลัก
+                  </span>
+                )}
               </div>
             )}
 
-            {/* Stage card */}
+            {/* Funnel band — แถบสีเรียวลง มีเลข/ชื่อ/จำนวน/มูลค่าในตัว */}
             <div style={{
-              border: `1.5px solid ${isLast ? "#003366" : "#e5e7eb"}`,
-              borderRadius: 12, padding: "13px 16px",
-              background: isLast ? "#eef3f8" : "#fff",
-              boxShadow: isLast ? "0 4px 16px rgba(0,51,102,.10)" : "var(--shadow-sm)",
+              width: `${widthPct}%`, minWidth: 300,
+              background: isLast
+                ? "linear-gradient(135deg,#003366,#0a4a86)"
+                : `linear-gradient(135deg,${color},${color}cc)`,
+              borderRadius: 14, padding: "14px 20px", color: "#fff",
+              boxShadow: isLast ? "0 10px 26px rgba(0,51,102,.24)" : "0 4px 12px rgba(30,50,80,.10)",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14,
+              transition: "width .3s ease",
             }}>
-              {/* Top row */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
-                    background: isLast ? "#003366" : color + "20",
-                    color: isLast ? "#fff" : color,
-                    fontSize: "0.65rem", fontWeight: 800,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{i + 1}</div>
-                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: isLast ? "#003366" : "#2D2D2D" }}>
-                    {stage.label}
-                  </span>
-                </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                 <span style={{
-                  fontSize: "0.72rem", fontWeight: 800,
-                  color: isLast ? "#003366" : color,
-                  background: (isLast ? "#003366" : color) + "15",
-                  borderRadius: 8, padding: "3px 10px",
-                }}>
-                  {stage.count} ราย
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div style={{ height: 7, background: "#f4f6f9", borderRadius: 99, overflow: "hidden", marginBottom: 9 }}>
-                <div className="top5-bar" style={{
-                  height: "100%", width: `${widthPct}%`, borderRadius: 99,
-                  background: isLast ? "#003366" : color,
-                }} />
-              </div>
-
-              {/* Bottom row */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <div>
-                  <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 1 }}>มูลค่ารวม</div>
-                  <div style={{ fontSize: "0.92rem", fontWeight: 800, color: isLast ? "#003366" : "#2D2D2D" }}>
-                    {fmtM(stage.valueNum)}
-                  </div>
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  background: "rgba(255,255,255,.22)", color: "#fff",
+                  fontSize: "0.78rem", fontWeight: 800,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>{i + 1}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stage.label}</div>
+                  <div style={{ fontSize: "0.66rem", color: "rgba(255,255,255,.8)" }}>เฉลี่ย {fmtM(avg)}/โอกาส</div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 1 }}>เฉลี่ย/โอกาสการขาย</div>
-                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>
-                    {fmtM(stage.count ? Math.round(stage.valueNum / stage.count) : 0)}
-                  </div>
-                </div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: "1.1rem", fontWeight: 800, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>{stage.count} ราย</div>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.9)", fontVariantNumeric: "tabular-nums" }}>{fmtM(stage.valueNum)}</div>
               </div>
             </div>
           </div>
@@ -114,11 +109,12 @@ function FunnelChart({ stages }: { stages: FunnelStage[] }) {
   );
 }
 
-// ── Lost reasons ──────────────────────────────────────────────────
-function LostReasons() {
+// ── Lost reasons ── (ป้ายเหตุผลมาจากที่ HQ จัดการที่เดียว — ตั้งค่า → เส้นทางการขาย)
+function LostReasons({ items }: { items: LostReason[] }) {
+  if (items.length === 0) return <div style={{ fontSize: "0.72rem", color: "#9ca3af", padding: "8px 0" }}>ไม่มีดีลที่เสียในช่วงที่เลือก</div>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {hqPipelineLostReasons.map((r, i) => (
+      {items.map((r, i) => (
         <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
             width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
@@ -194,9 +190,13 @@ export default function SalesOverviewPage() {
   // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน)
   const [dealerSel, setDealerSel]   = useState<string>("all");
   const selDealer = dealerSel === "all" ? null : dealerLeaderboard.find(d => d.code === dealerSel) ?? null;
+  // เหตุผลที่เสียโอกาส — โหลดหลัง mount (กัน hydration) จากที่ HQ จัดการ (loadLostReasons)
+  const [lostLabels, setLostLabels] = useState<string[]>([]);
+  useEffect(() => { setLostLabels(loadLostReasons()); }, []);
+  const netQuotes = useNetworkQuotations(); // ใบที่ดีลเลอร์สร้างจริง + seed เครือ (แหล่งเดียว)
 
   // ใบเสนอราคาในขอบเขต = ตัวแทนที่เลือก (ถ้ามี) + ช่วงเวลาจากตัวกรองหลัก → funnel/สินค้า กรองตามเวลาจริง
-  const branchQs = hqAllQuotations.filter(q => (!selDealer || q.dealerCode === selDealer.code) && inRange(q.createdAt));
+  const branchQs = netQuotes.filter(q => (!selDealer || q.dealerCode === selDealer.code) && inRange(q.createdAt));
   const stages: { key: string; label: string; count: number; valueNum: number }[] = (() => {
     const by = (f: (s: string) => boolean) => branchQs.filter(q => f(q.status));
     const sum = (qs: typeof branchQs) => qs.reduce((s, q) => s + q.valueNum, 0);
@@ -224,22 +224,45 @@ export default function SalesOverviewPage() {
       .sort((a, b) => b.valueNum - a.valueNum);
   })();
 
+  // เหตุผลที่เสียโอกาส — ป้ายจาก HQ (loadLostReasons) · จำนวนกระจายจากดีลที่แพ้จริงในช่วง (น้ำหนักลดหลั่น)
+  const lostReasons: LostReason[] = (() => {
+    const lostN = branchQs.filter(q => q.status === "lost").length;
+    const k = lostLabels.length;
+    if (!k || lostN === 0) return [];
+    const totalW = k * (k + 1) / 2;
+    const raw = lostLabels.map((reason, i) => ({ reason, count: Math.round(lostN * (k - i) / totalW) }));
+    const total = raw.reduce((s, r) => s + r.count, 0) || 1;
+    return raw.filter(r => r.count > 0).map(r => ({ ...r, pct: Math.round((r.count / total) * 100) }));
+  })();
+
   const first = stages[0];
   const last  = stages[stages.length - 1];
   const overallConv = first.count ? Math.round((last.count / first.count) * 100) : 0;
+
+  // ── วิเคราะห์อัตโนมัติ: หา "จุดรั่วหลัก" (ขั้นที่ลูกค้าหลุดเยอะสุด) + สิ่งที่ HQ ควรโฟกัส ──
+  const drops = stages.map((s, i) => {
+    const prev = stages[i - 1];
+    const conv = prev && prev.count > 0 ? Math.round((s.count / prev.count) * 100) : null;
+    const lost = prev ? prev.count - s.count : 0;
+    return { i, conv, lost, label: s.label, fromLabel: prev?.label };
+  }).filter(d => d.conv !== null && d.lost > 0);
+  const worst = drops.length ? drops.reduce((a, b) => (b.conv! < a.conv!) ? b : a) : null;
+  const worstIdx = worst ? worst.i : -1;
+  const topLost = !selDealer && lostReasons.length ? lostReasons[0] : null;
+  const topProduct = products[0] ?? null;
 
   // ส่งออกจริง — รวม funnel + เหตุผลเสียโอกาส + แยกตามสินค้า เป็น CSV (เปิดใน Excel ได้)
   function doExport(fmt: string) {
     setShowExport(false);
     const rows: string[] = [];
-    rows.push(selDealer ? `ช่องทางการขาย (Funnel) — ตัวแทน ${selDealer.code}` : "ช่องทางการขาย (Funnel)");
+    rows.push(selDealer ? `ช่องทางการขาย — ตัวแทน ${selDealer.code}` : "ช่องทางการขาย");
     rows.push(["ขั้นตอน", "จำนวน (ราย)", "มูลค่า (บาท)"].join(","));
     stages.forEach(s => rows.push([s.label, Math.round(s.count * pf), Math.round(s.valueNum * pf)].join(",")));
     if (!selDealer) {
       rows.push("");
       rows.push("เหตุผลที่เสียโอกาสการขาย");
       rows.push(["เหตุผล", "จำนวน", "สัดส่วน (%)"].join(","));
-      hqPipelineLostReasons.forEach(r => rows.push([r.reason, r.count, r.pct].join(",")));
+      lostReasons.forEach(r => rows.push([r.reason, r.count, r.pct].join(",")));
     }
     rows.push("");
     rows.push("แยกตามแม่แบบ / บริการ");
@@ -271,9 +294,9 @@ export default function SalesOverviewPage() {
       icon: <Target size={16} />,
     },
     {
-      label: "อัตราแปลงทั้งกรวย",
+      label: "อัตราปิดการขาย",
       value: `${overallConv}%`,
-      sub: "ใบเสนอราคา → ปิดสำเร็จ",
+      sub: "ใบเสนอราคา → ปิดการขายสำเร็จ",
       iconClass: overallConv >= 30 ? "kpi-green" : "kpi-amber",
       icon: <CheckCircle2 size={16} />,
     },
@@ -287,10 +310,10 @@ export default function SalesOverviewPage() {
   ];
 
   const summaryStat = [
-    { label: "อัตราแปลงทั้งกรวย", value: `${overallConv}%`,                                                     color: "#003366" },
+    { label: "อัตราปิดการขาย", value: `${overallConv}%`,                                                     color: "#003366" },
     { label: "มูลค่าโอกาสการขาย", value: fmtM(first.valueNum),                                                  color: "#2D2D2D" },
-    { label: "ปิดได้เดือนนี้", value: fmtM(last.valueNum),                                                      color: "#059669" },
-    { label: "รอปิด (เสนอราคาขึ้นไป)", value: fmtM(stages.slice(selDealer ? 1 : 2, -1).reduce((s, x) => s + x.valueNum, 0)), color: "#f59e0b" },
+    { label: "ปิดได้ช่วงนี้", value: fmtM(last.valueNum),                                                      color: "#059669" },
+    { label: "กำลังตามอยู่", value: fmtM(stages.slice(selDealer ? 1 : 2, -1).reduce((s, x) => s + x.valueNum, 0)), color: "#f59e0b" },
   ];
 
   return (
@@ -311,7 +334,7 @@ export default function SalesOverviewPage() {
       <div className="page-head">
         <div>
           <h2>ภาพรวมยอดขาย</h2>
-          <p>{selDealer ? `มุมมองตัวแทน: ${selDealer.name.replace("Benjamin ", "")} (${selDealer.code}) · อิงจากใบเสนอราคาจริงของตัวแทน` : "ภาพรวมยอดขายและโอกาสการขายทั้งเครือข่าย"} · {timeRange.subtitle}</p>
+          <p>{selDealer ? `มุมมองตัวแทน: ${selDealer.name.replace("Benjamin ", "")} (${selDealer.code}) · อิงจากใบเสนอราคาจริงของตัวแทน` : "ภาพรวมยอดขายและโอกาสการขายทุกตัวแทน"} · {timeRange.subtitle}</p>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -358,6 +381,34 @@ export default function SalesOverviewPage() {
         </div>
       </div>
 
+      {/* ── สรุปแบบอ่านง่าย (บรรทัดเดียวเข้าใจทั้งภาพ) ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+        background: "linear-gradient(135deg,#003366,#0a4a86)", color: "#fff",
+        borderRadius: 14, padding: "16px 20px", marginBottom: 16,
+      }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,.65)", letterSpacing: "0.04em", marginBottom: 5 }}>
+            สรุปช่วงนี้ {selDealer ? `· ${selDealer.name.replace("Benjamin ", "")}` : "· ทุกตัวแทน"}
+          </div>
+          <div style={{ fontSize: "0.98rem", fontWeight: 700, lineHeight: 1.5 }}>
+            เสนอราคา <b style={{ fontWeight: 800 }}>{first.count} ใบ</b> ({fmtM(first.valueNum)}) — ปิดได้{" "}
+            <b style={{ fontWeight: 800, color: "#7ee2b8" }}>{last.count} ใบ</b> ({fmtM(last.valueNum)}) คิดเป็น{" "}
+            <b style={{ fontWeight: 800, color: "#7ee2b8" }}>{overallConv}%</b> ของที่เสนอไป
+          </div>
+          {worst && (
+            <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,.82)", marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertTriangle size={13} color="#ffd27a" />
+              ลูกค้าหลุดมากสุดตอน “{worst.fromLabel} → {worst.label}” — ผ่านมาแค่ {worst.conv}% (หายไป {worst.lost} ราย)
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: "center", padding: "4px 20px", borderLeft: "1px solid rgba(255,255,255,.2)" }}>
+          <div style={{ fontSize: "2.2rem", fontWeight: 800, lineHeight: 1 }}>{overallConv}%</div>
+          <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,.7)", marginTop: 4 }}>อัตราปิดการขาย</div>
+        </div>
+      </div>
+
       {/* ── KPI Strip ── */}
       <div className="kpi-bar">
         {kpis.map(k => (
@@ -373,18 +424,18 @@ export default function SalesOverviewPage() {
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 310px", gap: 16, alignItems: "start", marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 16, alignItems: "start", marginBottom: 16 }}>
 
         {/* Funnel */}
         <div className="card">
           <div className="card-header">
             <div>
               <div className="card-title">ช่องทางการขาย</div>
-              <div className="card-desc">{selDealer ? `ใบเสนอราคาของตัวแทน ${selDealer.code} จนถึงการปิดการขาย` : "จากผู้สนใจจนถึงการปิดการขาย"}</div>
+              <div className="card-desc">{selDealer ? `ใบเสนอราคาของตัวแทน ${selDealer.code} จนถึงการปิดการขาย` : "จากลูกค้าเป้าหมายจนถึงการปิดการขาย · แถบยิ่งแคบ = ลูกค้ายิ่งหลุด"}</div>
             </div>
           </div>
-          <div className="card-body">
-            <FunnelChart stages={stages} />
+          <div className="card-body" style={{ padding: "22px 24px 20px" }}>
+            <FunnelChart stages={stages} worstIdx={worstIdx} />
 
             {/* Summary strip */}
             <div style={{
@@ -409,21 +460,55 @@ export default function SalesOverviewPage() {
 
         {/* Right column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* สิ่งที่ HQ ควรโฟกัส — สรุป 3 ประเด็นสำคัญให้ตัดสินใจได้ทันที */}
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <Lightbulb size={15} color="#f59e0b" /> สิ่งที่ควรโฟกัส
+              </div>
+            </div>
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {worst ? (
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ width: 28, height: 28, borderRadius: 8, background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><AlertTriangle size={14} /></span>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#2D2D2D" }}>จุดรั่วหลัก</div>
+                    <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 1 }}>“{worst.fromLabel} → {worst.label}” ผ่านแค่ <b style={{ color: "#dc2626" }}>{worst.conv}%</b> (หลุด {worst.lost} ราย)</div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.72rem", color: "#9ca3af" }}>ยังไม่มีจุดรั่วชัดเจนในช่วงนี้</div>
+              )}
+              {topLost && (
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ width: 28, height: 28, borderRadius: 8, background: "#fff7ed", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><TrendingDown size={14} /></span>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#2D2D2D" }}>เหตุผลเสียดีลอันดับ 1</div>
+                    <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 1 }}>{topLost.reason} <b style={{ color: "#c2410c" }}>({topLost.count} ราย)</b></div>
+                  </div>
+                </div>
+              )}
+              {topProduct && (
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ width: 28, height: 28, borderRadius: 8, background: "#eef3f8", color: "#003366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Layers size={14} /></span>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#2D2D2D" }}>แม่แบบที่ทำเงินสูงสุด</div>
+                    <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 1 }}>{topProduct.product} <b style={{ color: "#003366" }}>({fmtM(topProduct.valueNum)})</b></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* เหตุผลเสียโอกาส มีเฉพาะข้อมูลรวมเครือ — ไม่แสดงเลขหลอกตอนดูรายตัวแทน */}
           {!selDealer && (
             <div className="card">
               <div className="card-header">
                 <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
               </div>
-              <div className="card-body"><LostReasons /></div>
+              <div className="card-body"><LostReasons items={lostReasons} /></div>
             </div>
           )}
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">แยกตามแม่แบบ / บริการ</div>
-            </div>
-            <div className="card-body"><ProductBreakdown items={products} /></div>
-          </div>
           {selDealer && (
             <div className="card">
               <div className="card-header">
@@ -443,7 +528,16 @@ export default function SalesOverviewPage() {
         </div>
       </div>
 
-      {/* ตารางผลงานต่อตัวแทน (leaderboard) ย้ายไปเป็นเจ้าของเดียวที่ HQ Dashboard */}
+      {/* ── แยกตามแม่แบบ (เต็มความกว้าง) — ใช้พื้นที่ล่างให้เต็ม + แถบมีที่ให้อ่านง่าย ── */}
+      <div className="card" style={{ marginBottom: 0 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">แยกตามแม่แบบ / บริการ</div>
+            <div className="card-desc">มูลค่าโอกาสการขายในช่วงนี้ กระจุกที่แม่แบบไหน</div>
+          </div>
+        </div>
+        <div className="card-body"><ProductBreakdown items={products} /></div>
+      </div>
     </div>
   );
 }

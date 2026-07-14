@@ -1,13 +1,20 @@
 "use client";
 
+import { TopbarActions } from "@/components/layout/TopbarActions";
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { initialCustomers as customers } from "@/lib/mock";
+import {
+  initialCustomers as customers,
+  loadDealerFiles, saveDealerFiles, addDealerFile, removeDealerFile,
+  DEALER_FILES_EVENT, type DealerFile,
+} from "@/lib/mock";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
   FileText, FileSpreadsheet, Image, Plus,
   FileSignature, PenTool, Presentation, Files, Eye, Pencil,
 } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -17,35 +24,9 @@ const MUTED   = "#6b7280";
 type FileCategory = "ใบเสนอราคา" | "แบบแปลน" | "รูปภาพ" | "นำเสนอ" | "สัญญา" | "อื่นๆ";
 type FileExt = "pdf" | "docx" | "xlsx" | "dwg" | "pptx" | "jpg" | "png" | "other";
 
-type FileMock = {
-  id: number;
-  name: string;
-  size: string;
-  ext: FileExt;
-  category: FileCategory;
-  project: string;
-  uploadedBy: string;
-  uploadedAt: string;
-  customerId?: number;
-};
-
-const MOCK_FILES: FileMock[] = [
-  { id: 1,  name: "ใบเสนอราคา_โกดังสำเร็จรูป_ไทยสตีล_v2.pdf", size: "1.4 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "วิภา",     uploadedAt: "2026-06-20", customerId: 1 },
-  { id: 2,  name: "สัญญาขาย_ไทยสตีล.pdf",                   size: "2.1 MB", ext: "pdf",  category: "สัญญา",      project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "สมชาย",   uploadedAt: "2026-06-18", customerId: 1 },
-  { id: 3,  name: "ผังพื้นที่ลูกค้า_โรงงาน.pdf",             size: "8.3 MB", ext: "pdf",  category: "แบบแปลน",    project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-06-15", customerId: 2 },
-  { id: 4,  name: "presentation_VCS_Asia.pptx",             size: "5.7 MB", ext: "pptx", category: "นำเสนอ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-12", customerId: 5 },
-  { id: 5,  name: "สรุปราคา_คลังสินค้า_บจ.ซีซีเอส.xlsx",       size: "340 KB", ext: "xlsx", category: "ใบเสนอราคา", project: "คลังสินค้า CCS",           uploadedBy: "สมชาย",   uploadedAt: "2026-06-10", customerId: 2 },
-  { id: 6,  name: "สัญญา_ลงนามแล้ว_ATC.pdf",              size: "1.8 MB", ext: "pdf",  category: "สัญญา",      project: "ATC Logistics",            uploadedBy: "ประสิทธิ์", uploadedAt: "2026-06-08" },
-  { id: 7,  name: "รูปถ่ายพื้นที่_โอกาสการขายนนทบุรี.jpg",     size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "โกดัง Nonthaburi Corp",    uploadedBy: "วิภา",     uploadedAt: "2026-06-05", customerId: 1 },
-  { id: 8,  name: "สรุปความต้องการ_ไทยเกษตร.pdf",       size: "920 KB", ext: "pdf",  category: "อื่นๆ",      project: "อาคารไทยเกษตรพัฒนา",      uploadedBy: "สุดาวรรณ", uploadedAt: "2026-06-03" },
-  { id: 9,  name: "รายละเอียดสินค้า_โกดังสำเร็จรูป.xlsx",         size: "512 KB", ext: "xlsx", category: "แบบแปลน",    project: "โรงงานสำเร็จรูป เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", customerId: 2 },
-  { id: 10, name: "quotation_Q2026-0095.pdf",               size: "1.1 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-05-28", customerId: 5 },
-  { id: 11, name: "ร่างสัญญาซื้อขาย_อาคารสำเร็จรูป.docx",                size: "520 KB", ext: "docx", category: "สัญญา",      project: "โรงงานสำเร็จรูป ซีซีเอส",              uploadedBy: "สมชาย",   uploadedAt: "2026-05-25", customerId: 2 },
-  { id: 12, name: "presentation_บริษัท_2026.pptx",        size: "12.4 MB",ext: "pptx", category: "นำเสนอ",     project: "—",                        uploadedBy: "วิภา",     uploadedAt: "2026-05-20" },
-  { id: 13, name: "เอกสารประกอบการเสนอราคา_อาคารเกษตร_v3.pdf",            size: "6.8 MB", ext: "pdf",  category: "แบบแปลน",    project: "อาคารไทยเกษตรพัฒนา",      uploadedBy: "วิชัย",   uploadedAt: "2026-05-18" },
-  { id: 14, name: "รายงานความคืบหน้า_Q2.pdf",              size: "2.8 MB", ext: "pdf",  category: "อื่นๆ",      project: "—",                        uploadedBy: "ประสิทธิ์", uploadedAt: "2026-05-15" },
-  { id: 15, name: "signed_contract_ATC.pdf",                size: "1.9 MB", ext: "pdf",  category: "สัญญา",      project: "ATC Logistics",            uploadedBy: "สุดาวรรณ", uploadedAt: "2026-05-10" },
-];
+// ไฟล์ในหน้านี้ = คลังไฟล์รวมของตัวแทน (แหล่งเดียวใน mock.ts)
+// แนบไฟล์จากหน้าลูกค้า/ลูกค้าเป้าหมาย → ปรากฏที่นี่อัตโนมัติ
+type FileMock = DealerFile;
 
 const CAT_COLORS: Record<FileCategory, { bg: string; text: string }> = {
   ใบเสนอราคา: { bg: "#dce5f0", text: "#003366" },
@@ -147,6 +128,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
       project: project.trim() || "—",
       uploadedBy: "คุณ",
       uploadedAt: new Date().toISOString().slice(0, 10),
+      source: "upload",
     });
     onClose();
   }
@@ -194,7 +176,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
               </div>
               <div>
                 <label className="form-label">โอกาสการขาย</label>
-                <input value={project} onChange={e => setProj(e.target.value)} placeholder="ชื่อโอกาสการขาย" className="form-input" />
+                <input value={project} onChange={e => setProj(e.target.value)} placeholder="ชื่อโครงการ" className="form-input" />
               </div>
             </div>
           </div>
@@ -251,7 +233,7 @@ function EditFileModal({ file, onSave, onClose }: { file: FileMock; onSave: (f: 
               </div>
               <div>
                 <label className="form-label">โอกาสการขาย</label>
-                <input value={project} onChange={e => setProj(e.target.value)} placeholder="ชื่อโอกาสการขาย" className="form-input" />
+                <input value={project} onChange={e => setProj(e.target.value)} placeholder="ชื่อโครงการ" className="form-input" />
               </div>
             </div>
           </div>
@@ -445,7 +427,17 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
 
 export default function FilesPage() {
   const router = useRouter();
-  const [files,   setFiles]   = useState<FileMock[]>(MOCK_FILES);
+  // คลังไฟล์รวม — ดึงไฟล์ที่แนบไว้กับลูกค้า/ลูกค้าเป้าหมายมารวมกัน (ไม่สร้างใหม่)
+  // เริ่มว่างแล้วโหลดหลัง mount — กัน hydration mismatch (localStorage อ่านได้เฉพาะ client)
+  const [files, setFiles] = useState<FileMock[]>([]);
+  const [loaded, setLoaded] = useState(false); // false = กำลังโหลด (แสดง Skeleton)
+  useEffect(() => {
+    setFiles(loadDealerFiles()); setLoaded(true);
+    const sync = () => setFiles(loadDealerFiles());
+    window.addEventListener(DEALER_FILES_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => { window.removeEventListener(DEALER_FILES_EVENT, sync); window.removeEventListener("storage", sync); };
+  }, []);
   const [query,   setQuery]   = useState("");
   const [catFilter, setCat]   = useState<FileCategory | "ALL">("ALL");
   const [extFilter, setExt]   = useState<FileExt | "ALL">("ALL");
@@ -505,21 +497,22 @@ export default function FilesPage() {
     return c;
   }, [files]);
 
-  function deleteFile(id: number) { setFiles(f => f.filter(x => x.id !== id)); setDelId(null); }
-  function updateFile(updated: FileMock) { setFiles(f => f.map(x => x.id === updated.id ? updated : x)); }
+  function deleteFile(id: number) { removeDealerFile(id); setFiles(loadDealerFiles()); setDelId(null); }
+  function updateFile(updated: FileMock) {
+    const next = loadDealerFiles().map(x => x.id === updated.id ? updated : x);
+    saveDealerFiles(next); setFiles(next);
+  }
 
   return (
     <div className="erp">
       {/* Header */}
-      <div className="page-head">
-        <div>
-          <h2>ไฟล์</h2>
-          <p>{files.length} ไฟล์ · {totalSize}</p>
-        </div>
-        <button onClick={() => setUpload(true)} className="btn btn-primary btn-md">
+      {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
+      <TopbarActions>
+        <button onClick={() => setUpload(true)} className="btn btn-primary btn-sm">
           <Plus size={14} /> อัปโหลดไฟล์
         </button>
-      </div>
+      </TopbarActions>
+      <p className="page-sub">{files.length} ไฟล์ · {totalSize}</p>
 
       {/* สรุปแบบ pills — แทน stat card 5 ใบ */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
@@ -593,7 +586,7 @@ export default function FilesPage() {
 
       {/* Toolbar */}
       <div className="card" style={{ borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", borderBottom: "none", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div className="search-bar" style={{ flex: 1, minWidth: 180 }}>
+        <div className="search-bar">
           <Search size={13} color={MUTED} />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="ค้นหาไฟล์ / โอกาสการขาย..." />
           {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 0 }}><X size={11} /></button>}
@@ -611,7 +604,6 @@ export default function FilesPage() {
             </button>
           ))}
         </div>
-        <span style={{ fontSize: "0.72rem", color: MUTED }}>{filtered.length} ไฟล์</span>
       </div>
 
       {/* Content */}
@@ -640,12 +632,18 @@ export default function FilesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && (
-                  <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: "0.8rem" }}>
-                    <FolderOpen size={32} color="#C0C0C0" style={{ display: "block", margin: "0 auto 12px" }} />
-                    ไม่พบไฟล์
+                {!loaded ? (
+                  Array.from({ length: 6 }).map((_, r) => (
+                    <tr key={`sk-${r}`}>{Array.from({ length: 2 + COLS.filter(c => showCol(c.key)).length }).map((_, i) => (
+                      <td key={i}><Skeleton h={13} w={i === 0 ? "70%" : "55%"} /></td>
+                    ))}</tr>
+                  ))
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ padding: 0 }}>
+                    <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
+                      description={query || catFilter !== "ALL" || extFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
                   </td></tr>
-                )}
+                ) : null}
                 {paged.map(f => (
                   <tr key={f.id} onClick={() => setPreviewId(f.id)} style={{ cursor: "pointer" }}>
                     <td style={{ maxWidth: 260 }}>
@@ -713,11 +711,17 @@ export default function FilesPage() {
       ) : (
         /* Grid view */
         <div className="card" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-xl) var(--radius-xl)", padding: 16 }}>
-          {filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: "0.8rem" }}>
-              <FolderOpen size={32} color="#C0C0C0" style={{ display: "block", margin: "0 auto 12px" }} />
-              ไม่พบไฟล์
+          {!loaded ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, background: "#fafbfc", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <Skeleton w={40} h={40} r={9} /><Skeleton h={12} w="80%" /><Skeleton h={10} w="55%" />
+                </div>
+              ))}
             </div>
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
+              description={query || catFilter !== "ALL" || extFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {paged.map(f => (
@@ -759,7 +763,10 @@ export default function FilesPage() {
       )}
 
       {/* Upload modal */}
-      {upload && <UploadModal onUpload={f => setFiles(fs => [f, ...fs])} onClose={() => setUpload(false)} />}
+      {upload && <UploadModal onUpload={f => {
+        addDealerFile({ name: f.name, size: f.size, ext: f.ext, category: f.category, project: f.project, uploadedBy: f.uploadedBy, uploadedAt: f.uploadedAt, source: "upload" });
+        setFiles(loadDealerFiles());
+      }} onClose={() => setUpload(false)} />}
 
       {/* Edit modal */}
       {editId !== null && (() => {

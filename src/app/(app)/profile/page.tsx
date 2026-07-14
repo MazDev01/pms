@@ -3,6 +3,7 @@
 // ─── โปรไฟล์ของฉัน — ใช้ได้ทั้ง HQ และตัวแทน (แยก persist ต่อ workspace) ─────
 // แก้รูป/ชื่อ/อีเมล/เบอร์ + เปลี่ยนรหัสผ่าน (เดโม) · บันทึกลง localStorage แล้วอัปเดต Topbar ทันที
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import {
   profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, type UserProfile,
@@ -25,6 +26,9 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function ProfilePage() {
   const { session, isHQ } = useRole();
+  const router = useRouter();
+  // ฝั่งตัวแทน: โปรไฟล์ส่วนตัวถูกรวมเป็น "บัญชีดีลเลอร์" ในหน้าตั้งค่าแล้ว → ส่งไปที่นั่น (HQ ยังใช้หน้านี้)
+  useEffect(() => { if (!isHQ) router.replace("/settings"); }, [isHQ, router]);
   // เริ่มด้วยค่า default (deterministic — server/client ตรงกัน) แล้วโหลดจาก localStorage หลัง mount กัน hydration mismatch
   const [form, setForm] = useState<UserProfile>({ name: session.name, email: defaultProfileEmail(session.dealerCode), phone: "" });
   useEffect(() => { setForm(loadUserProfile(session.dealerCode, session.name)); }, [session.dealerCode, session.name]);
@@ -71,6 +75,8 @@ export default function ProfilePage() {
   const inp: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px 9px 36px", fontSize: "0.86rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "#fff" };
   const lbl: React.CSSProperties = { display: "block", fontSize: "0.72rem", fontWeight: 700, color: MUTED, marginBottom: 6 };
   const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "#f7f8fa", borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL };
+
+  if (!isHQ) return null; // ฝั่งตัวแทน redirect ไป /settings (บัญชีดีลเลอร์) แล้ว — ไม่เรนเดอร์โปรไฟล์เดิม
 
   return (
     <div className="erp">

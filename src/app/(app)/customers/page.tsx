@@ -3,23 +3,38 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  notes,
-  quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai,
-  type QuotationMock, type PipelineDealMock,
-  type CustomerRow, type CustomerStatus, type CustomerType,
+  notes, buildLeadTasks, leadStatusLabel, leadStatusColor,
+  quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf,
+  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
+  type QuotationMock, type PipelineDealMock, type LeadRow,
+  type CustomerRow, type CustomerStatus, type CustomerType, type DealerFile,
+  type AppointmentMock, type NoteMock,
 } from "@/lib/mock";
+import { TemplateSelect } from "@/components/ui/TemplateSelect";
 import { useSales } from "@/context/SalesContext";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { useTableLayout, TableTools, type Col } from "@/components/ui/TableTools";
+import { useTableLayout, type Col } from "@/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 import { PersonPicker, AssigneeAvatars } from "@/components/ui/PersonPicker";
+import { useMasterCatalog } from "@/lib/useMasterCatalog";
+import { LeadQuotationsPanel } from "@/components/ui/LeadQuotationsPanel";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { MultiLineChart, Donut } from "@/components/ui/Charts";
+import { TemplateHero } from "@/components/ui/TemplateHero";
+import { FilterBar } from "@/components/filters/FilterBar";
+import { TopbarActions } from "@/components/layout/TopbarActions";
+import { useFilters } from "@/context/FilterContext";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 import {
-  Plus, Search, X, ChevronUp, ChevronDown,
+  Plus, Search, X, ChevronUp, ChevronDown, Upload, Download,
   Phone, Building2, ExternalLink,
-  LayoutList, LayoutGrid, Filter, Trash2,
-  Calendar, FileText, StickyNote, Check, User, Paperclip,
+  Filter, Trash2,
+  Calendar, FileText, StickyNote, Check, User, Paperclip, Eye,
+  MapPin, Mail, Coins, Target, Layers, TrendingUp, Percent, PhoneCall, CalendarClock,
+  Users, UserPlus, ShieldCheck, Package, ChevronRight, Truck, History as HistoryIcon, Pencil,
 } from "lucide-react";
+import { FilePreviewModal } from "@/components/ui/FilePreviewModal";
+import { CURRENT_DEALER } from "@/lib/useNetworkData";
 
 // ── Design tokens ────────────────────────────────────────────
 const PRIMARY = "#003366";
@@ -32,7 +47,6 @@ const MUTED   = "#6b7280";
 type SortKey = "company"|"name"|"phone"|"province"|"owner"|"lastActivity"|"quotationCount"|"joinDate";
 type SortDir = "asc"|"desc";
 
-const CATEGORIES    = ["โกดัง/คลังสินค้า","โรงงาน","ค้าปลีก","เกษตรกรรม","สำนักงาน","อื่นๆ"];
 const CUSTOMER_TYPES: CustomerType[] = ["บุคคล","บริษัท"];
 // สถานะลูกค้า (ใช้กับ FilterBar กลาง) — label ไทย
 const CUSTOMER_STATUS_OPTIONS = [
@@ -42,7 +56,37 @@ const CUSTOMER_STATUS_OPTIONS = [
 const PROVINCES  =["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","สมุทรปราการ","นครสวรรค์","ราชบุรี","ขอนแก่น","ตาก","อุตรดิตถ์","อื่นๆ"];
 
 function initials(name:string){ return name.replace(/บจ\.|หจก\./g,"").trim().slice(0,2); }
+// ── นำเข้าลูกค้าเดิม (CSV) ──────────────────────────────────
+type ImportRow = { company:string; name:string; phone:string; email:string; province:string; type:CustomerType; category:string };
+const CSV_HEADERS = ["บริษัท","ผู้ติดต่อ","โทรศัพท์","อีเมล","จังหวัด","ประเภท","แม่แบบ"];
+function parseCsv(text:string):ImportRow[]{
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const rows=lines.map(l=>l.split(",").map(s=>s.trim().replace(/^"|"$/g,"")));
+  const start=rows[0]&&rows[0][0]==="บริษัท"?1:0; // ข้าม header ถ้ามี
+  return rows.slice(start).map(c=>({
+    company:c[0]||"", name:c[1]||"", phone:c[2]||"", email:c[3]||"",
+    province:c[4]||"กรุงเทพฯ", type:(c[5]==="บุคคล"?"บุคคล":"บริษัท") as CustomerType, category:c[6]||"",
+  })).filter(r=>r.company);
+}
+function downloadCsvTemplate(){
+  const csv=CSV_HEADERS.join(",")+"\nบจ. ตัวอย่างสตีล,คุณสมชาย ใจดี,081-234-5678,contact@example.com,เชียงใหม่,บริษัท,โกดังสำเร็จรูป";
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download="customer-import-template.csv"; a.click(); URL.revokeObjectURL(url);
+}
 function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
+const THAI_MO=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+function thaiToday(){ const d=new Date(); return `${d.getDate()} ${THAI_MO[d.getMonth()]} ${d.getFullYear()+543}`; }
+// จัดรูปแบบมูลค่า (Expected Revenue) จากสตริงดิบ → "฿1.2M" / "฿480K" · ว่าง = ""
+function fmtDealValue(v:string):string{
+  const s=v.replace(/[฿,\s]/gi,"");
+  const n=/m$/i.test(s)?parseFloat(s)*1e6:/k$/i.test(s)?parseFloat(s)*1e3:/b$/i.test(s)?parseFloat(s)*1e9:parseFloat(s);
+  if(!n||isNaN(n)) return "";
+  if(n>=1e9) return "฿"+(n/1e9).toFixed(1)+"B";
+  if(n>=1e6) return "฿"+(n/1e6).toFixed(1)+"M";
+  if(n>=1e3) return "฿"+Math.round(n/1e3)+"K";
+  return "฿"+n.toLocaleString();
+}
 function fmtDate(d:string){
   if(!d||d==="—") return "—";
   const [y,m,day]=d.split("-");
@@ -59,7 +103,7 @@ const COLS: Col[] = [
   { key: "lastActivity",   label: "กิจกรรมล่าสุด" },
   { key: "quotationCount", label: "จำนวนใบเสนอราคา" },
   { key: "totalSales",     label: "ยอดขายรวม" },
-  { key: "currentDeal",    label: "โอกาสการขายปัจจุบัน" },
+  { key: "currentDeal",    label: "สินค้าที่ซื้อไป" },
 ];
 
 // ── Derived (deterministic) per-customer values ──────────────
@@ -91,12 +135,53 @@ function totalSalesFor(customerId:number, qs:QuotationMock[]){
   return qs.filter(q=>q.customerId===customerId && q.status==="won").reduce((s,q)=>s+q.totalValue,0);
 }
 // จำนวนดีลที่กำลังดำเนินการ — deals (context) ที่ outcome==="active"
+// สรุปดีลของลูกค้าจาก leads (Deal = LeadRow ผูก customerId) — total/active/won
+function dealStatsFor(customerId:number, company:string, leads:LeadRow[]){
+  const my=leads.filter(l=>l.customerId===customerId||l.company===company);
+  return { total:my.length, active:my.filter(l=>l.status!=="PAID"&&l.status!=="CANCELLED").length, won:my.filter(l=>l.status==="PAID").length };
+}
 function activeDealsCountFor(customerId:number, deals:PipelineDealMock[]){
   return deals.filter(d=>d.customerId===customerId && d.outcome==="active").length;
 }
 // จำนวนใบเสนอราคาที่ปิดการขายแล้ว (won)
 function wonQuotationCountFor(customerId:number, qs:QuotationMock[]){
   return qs.filter(q=>q.customerId===customerId && q.status==="won").length;
+}
+// สินค้า/งานที่ลูกค้า "ซื้อไปแล้ว" — ชนิดอาคารจากใบเสนอราคาที่ปิดการขาย (won) · ใช้ดูประวัติชัดเจน
+function purchasedItemsFor(customerId:number, qs:QuotationMock[]): string[] {
+  const items = qs.filter(q=>q.customerId===customerId && q.status==="won").map(q=>q.buildingType).filter(Boolean);
+  return Array.from(new Set(items));
+}
+// วันส่งมอบงานล่าสุด (โดยประมาณ = วันปิดการขาย + ระยะเวลาส่งมอบ) — ใช้ดูประวัติการรับประกัน (Warranty)
+function deliveryDateFor(customerId:number, qs:QuotationMock[]): string {
+  const won = qs.filter(q=>q.customerId===customerId && q.status==="won").sort((a,b)=>a.date<b.date?1:-1)[0];
+  if(!won) return "—";
+  const days = parseInt(String(won.deliveryTime||"").replace(/[^0-9]/g,"")) || 0;
+  if(days>0){ const d=new Date(won.date); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+  return won.date;
+}
+// วันที่ซื้อ (Purchase Date) = วันปิดการขายล่าสุดของลูกค้า
+function purchaseDateFor(customerId:number, qs:QuotationMock[]): string {
+  const won = qs.filter(q=>q.customerId===customerId && q.status==="won").map(q=>q.date).sort();
+  return won.length ? won[won.length-1] : "—";
+}
+// การรับประกัน (Warranty) — มาตรฐาน PEB: โครงสร้าง 10 ปี นับจากวันส่งมอบ
+function warrantyFor(customerId:number, qs:QuotationMock[]): string {
+  const del = deliveryDateFor(customerId, qs);
+  if(del==="—") return "—";
+  const d = new Date(del); d.setFullYear(d.getFullYear()+10);
+  return `โครงสร้าง 10 ปี · ถึง ${fmtDate(d.toISOString().slice(0,10))}`;
+}
+// สถานะการรับประกัน (Warranty Status) — เทียบวันหมดประกันกับวันนี้ (2026-06-30)
+function warrantyStatusFor(customerId:number, qs:QuotationMock[]): { label:string; color:string; bg:string } {
+  const del = deliveryDateFor(customerId, qs);
+  if(del==="—") return { label:"—", color:"#9ca3af", bg:"#f0f0f5" };
+  const end = new Date(del); end.setFullYear(end.getFullYear()+10);
+  const today = new Date(2026, 5, 30);
+  if(end < today) return { label:"หมดประกันแล้ว", color:"#DC3545", bg:"#fee2e2" };
+  const monthsLeft = (end.getFullYear()-today.getFullYear())*12 + (end.getMonth()-today.getMonth());
+  if(monthsLeft <= 12) return { label:"ใกล้หมดประกัน", color:"#FFC107", bg:"#fff8e1" };
+  return { label:"ยังอยู่ในประกัน", color:"#28A745", bg:"#e5faf0" };
 }
 
 // ── Deterministic drawer feeds (จากลูกค้า + quotations + pipelineDeals) ──
@@ -153,96 +238,9 @@ const LIFECYCLE_META: Record<LifecycleType,{label:string; fg:string; bg:string}>
   new:      { label:"ลูกค้าใหม่",       fg:"#003366", bg:"#dce5f0" },
 };
 
-// ── Add / Edit Modal ─────────────────────────────────────────
+// ── Customer form shape — ใช้กับฟอร์ม "แก้ไขในตัว" เท่านั้น ──
+// ลูกค้าสร้างใหม่โดยตรงไม่ได้ (ฝั่งตัวแทน) — เกิดจาก Lead→Won อัตโนมัติเท่านั้น · หน้านี้ไว้ดู/แก้ไขที่มีอยู่
 type CustomerForm = Omit<CustomerRow,"id"|"initials"|"color"|"totalValue">;
-const BLANK_FORM: CustomerForm = { name:"",company:"",type:"บริษัท",email:"",phone:"",province:"กรุงเทพฯ",category:"โกดัง/คลังสินค้า",status:"active",projects:0,joinDate:"",owner:"สมชาย เชียงใหม่" };
-
-function CustomerModal({ initial, title, onSave, onClose }:{
-  initial:CustomerForm; title:string; onSave:(f:CustomerForm)=>void; onClose:()=>void;
-}){
-  const [form, setForm] = useState<CustomerForm>(initial);
-  function set<K extends keyof CustomerForm>(k:K,v:CustomerForm[K]){ setForm(p=>({...p,[k]:v})); }
-  function submit(){ if(!form.company.trim()||!form.name.trim()) return; onSave(form); onClose(); }
-  return (
-    <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
-      <div style={{position:"fixed",inset:0,zIndex:210,display:"flex",alignItems:"center",justifyContent:"center",padding:24,pointerEvents:"none"}}>
-        <div onClick={e=>e.stopPropagation()}
-          style={{width:"100%",maxWidth:560,background:"#fff",borderRadius:20,border:`1px solid ${BORDER}`,boxShadow:"0 24px 80px rgba(0,0,0,.2)",pointerEvents:"auto",overflow:"hidden"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 24px",borderBottom:`1px solid ${BORDER}`,background:PRIMARY}}>
-            <div>
-              <div style={{fontSize:"1rem",fontWeight:800,color:"#fff"}}>{title}</div>
-              <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.65)"}}>กรอกข้อมูลลูกค้า</div>
-            </div>
-            <button onClick={onClose} style={{width:32,height:32,borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={15}/></button>
-          </div>
-          <div style={{padding:"22px 24px",overflowY:"auto",maxHeight:"65vh"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              <div style={{gridColumn:"1/-1"}}>
-                <label className="form-label">ประเภทลูกค้า</label>
-                <div style={{display:"flex",background:"#f0f4f8",borderRadius:10,padding:3,border:`1px solid ${BORDER}`}}>
-                  {CUSTOMER_TYPES.map(t=>(
-                    <button key={t} type="button" onClick={()=>set("type",t)}
-                      style={{flex:1,padding:"7px 12px",borderRadius:8,border:"none",background:form.type===t?PRIMARY:"transparent",color:form.type===t?"#fff":MUTED,fontSize:"0.72rem",fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div style={{gridColumn:"1/-1"}}>
-                <label className="form-label">บริษัท *</label>
-                <input className="form-input" value={form.company} onChange={e=>set("company",e.target.value)} placeholder="ชื่อบริษัท" autoFocus/>
-              </div>
-              <div>
-                <label className="form-label">ผู้ติดต่อ *</label>
-                <input className="form-input" value={form.name} onChange={e=>set("name",e.target.value)} placeholder="ชื่อผู้ติดต่อ"/>
-              </div>
-              <div>
-                <label className="form-label">โทรศัพท์</label>
-                <input className="form-input" value={form.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX"/>
-              </div>
-              <div style={{gridColumn:"1/-1"}}>
-                <label className="form-label">อีเมล</label>
-                <input className="form-input" type="email" value={form.email} onChange={e=>set("email",e.target.value)} placeholder="email@company.com"/>
-              </div>
-              <div>
-                <label className="form-label">จังหวัด</label>
-                <select className="form-select" value={form.province} onChange={e=>set("province",e.target.value)}>
-                  {PROVINCES.map(p=><option key={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="form-label">อุตสาหกรรม</label>
-                <select className="form-select" value={form.category} onChange={e=>set("category",e.target.value)}>
-                  {CATEGORIES.map(c=><option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="form-label">ผู้รับผิดชอบ</label>
-                <PersonPicker value={form.owner} onChange={v=>set("owner",v)} multiple />
-              </div>
-              <div>
-                <label className="form-label">สถานะ</label>
-                <select className="form-select" value={form.status} onChange={e=>set("status",e.target.value as CustomerStatus)}>
-                  <option value="active">ใช้งาน</option>
-                  <option value="inactive">ไม่ใช้งาน</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label">วันที่เพิ่ม</label>
-                <input className="form-input" type="date" value={form.joinDate} onChange={e=>set("joinDate",e.target.value)}/>
-              </div>
-            </div>
-          </div>
-          <div style={{padding:"14px 24px",borderTop:`1px solid ${BORDER}`,display:"flex",gap:8,justifyContent:"flex-end",background:"#fafafa"}}>
-            <button className="btn btn-secondary btn-md" onClick={onClose}>ยกเลิก</button>
-            <button className="btn btn-primary btn-md" onClick={submit}>บันทึก</button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
 
 // ─── ภาพรวม (แก้ไขในตัว) — ฟอร์มแก้ไขข้อมูลลูกค้าในแท็บ "ข้อมูล" ของโมดัลรายละเอียด ───
 // สไตล์เดียวกับหน้าลูกค้าเป้าหมาย (OverviewEditor) — แก้ในหน้านี้เลย ไม่มีฟอร์มแยก
@@ -299,15 +297,6 @@ function CustomerOverviewEditor({ customer, onSave }:{
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <div style={{ gridColumn:"1/-1" }}>
-          <label style={lbl}>ประเภทลูกค้า</label>
-          <div style={{ display:"flex", background:"#f0f4f8", borderRadius:10, padding:3, border:`1px solid ${BORDER}` }}>
-            {CUSTOMER_TYPES.map(t=>(
-              <button key={t} type="button" onClick={()=>set("type",t)}
-                style={{ flex:1, padding:"7px 12px", borderRadius:8, border:"none", background:f.type===t?PRIMARY:"transparent", color:f.type===t?"#fff":MUTED, fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>{t}</button>
-            ))}
-          </div>
-        </div>
         <div style={{ gridColumn:"1/-1" }}><label style={lbl}>บริษัท *</label>
           <input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></div>
         <div><label style={lbl}>ผู้ติดต่อ *</label><input value={f.name} onChange={e=>set("name",e.target.value)} style={inp} /></div>
@@ -316,8 +305,8 @@ function CustomerOverviewEditor({ customer, onSave }:{
           <input value={f.email} onChange={e=>set("email",e.target.value)} type="email" placeholder="email@company.com" style={inp} /></div>
         <div><label style={lbl}>จังหวัด</label>
           <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select></div>
-        <div><label style={lbl}>อุตสาหกรรม</label>
-          <select value={f.category} onChange={e=>set("category",e.target.value)} style={inp}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></div>
+        <div><label style={lbl}>แม่แบบ</label>
+          <TemplateSelect value={f.category} onChange={v=>set("category",v)} style={inp} /></div>
         <div><label style={lbl}>ผู้รับผิดชอบ</label>
           <PersonPicker value={f.owner} onChange={v=>set("owner",v)} multiple /></div>
         <div><label style={lbl}>สถานะ</label>
@@ -345,8 +334,11 @@ export default function CustomersPage(){
   const {
     customers: data, quotations, deals, leads,
     appointments,
-    addCustomer: ctxAddCustomer, updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
+    addLead, addCustomer: ctxAddCustomer,
+    updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
+  const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
+  const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
   const [query, setQuery]             = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL"|CustomerStatus>("ALL");
@@ -355,15 +347,32 @@ export default function CustomersPage(){
   const [sortKey, setSortKey]         = useState<SortKey>("company");
   const [sortDir, setSortDir]         = useState<SortDir>("asc");
   const [selected, setSelected]       = useState<CustomerRow|null>(null);
+  const [custTab, setCustTab]         = useState<"overview"|"deals"|"quotation"|"timeline">("overview"); // แท็บ detail
+  const [custEdit, setCustEdit]       = useState(false); // ภาพรวม: อ่าน (false) / แก้ไข (true)
+  useEffect(() => { setCustTab("overview"); setCustEdit(false); }, [selected?.id]);
   const [page, setPage]               = useState(1);
 
-  // เปิดโมดัลอัตโนมัติจาก ?open=N (ลิงก์เดิม /customers/[id] redirect มาที่นี่)
+  // เปิดโมดัลจากพารามิเตอร์ ?open=N — ใช้ทั้งตอนโหลดหน้า (ลิงก์เดิม/deep link) และตอนค้นหาจาก Topbar หน้าเดิม
+  const dataRef = useRef(data);
+  dataRef.current = data;
   useEffect(() => {
-    const p = new URLSearchParams(window.location.search).get("open");
-    if (!p) return;
-    const target = data.find(c => String(c.id) === p);
-    if (target) setSelected(target);
-    window.history.replaceState(null, "", "/customers");
+    const openByParam = (qs: string) => {
+      const p = new URLSearchParams(qs).get("open");
+      if (!p) return;
+      const target = dataRef.current.find(c => String(c.id) === p);
+      if (target) setSelected(target);
+      window.history.replaceState(null, "", "/customers");
+    };
+    // 1) ตอนโหลดหน้า (mount) — จาก URL จริง
+    openByParam(window.location.search);
+    // 2) ตอนค้นหาจาก Topbar ขณะอยู่หน้าเดิม — Topbar ยิง event พร้อม href ปลายทาง
+    const onOpen = (e: Event) => {
+      const href = (e as CustomEvent<string>).detail ?? "";
+      const [path, query = ""] = href.split("?");
+      if (path === "/customers" && query) openByParam(`?${query}`);
+    };
+    window.addEventListener("bpms:open-record", onOpen);
+    return () => window.removeEventListener("bpms:open-record", onOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // รายชื่อผู้รับผิดชอบดึงจาก PersonPicker เอง (registry กลาง) — ไม่ต้องเก็บ list ที่นี่
@@ -377,11 +386,52 @@ export default function CustomersPage(){
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [selected]);
 
-  const [view, setView]               = useState<"card"|"table">("card");
+  const [view] = useState<"card"|"table">("table"); // ตารางอย่างเดียว (เอามุมมองการ์ดออก)
   const [showFilter, setShowFilter]   = useState(false);
-  const [showAdd, setShowAdd]         = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [detailTab, setDetailTab]     = useState<"info"|"quotes"|"appts"|"notes">("info");
+  const [detailTab, setDetailTab]     = useState<"info"|"deals"|"quotes"|"appts"|"notes"|"files">("info");
+  // สร้างดีลใหม่ (ลูกค้าเดิมซื้อโครงการใหม่) — Deal = ลีดที่ผูก customerId
+  const [showNewDeal, setShowNewDeal] = useState(false);
+  const [dealCustomer, setDealCustomer] = useState<CustomerRow|null>(null);
+  const [dealForm, setDealForm] = useState({project:"",product:"",value:"",assigned:"",closeDate:"",note:""});
+  // นำเข้าลูกค้าเดิม (ตัวแทน) — ลูกค้าก่อนมีระบบ / ไม่ได้ผ่าน Lead→Won · CSV + คีย์มือ
+  const [showImport, setShowImport]   = useState(false);
+  const [importRows, setImportRows]   = useState<ImportRow[]>([]);
+  const [importErr, setImportErr]     = useState("");
+  const [showManual, setShowManual]   = useState(false);
+  const [legacyForm, setLegacyForm]   = useState({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",type:"บริษัท" as CustomerType,category:"",owner:"สมชาย เชียงใหม่"});
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  // ไฟล์แนบต่อลูกค้า — คลังไฟล์รวม (แหล่งเดียว) ปรากฏในหน้าไฟล์กลางด้วย
+  const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
+  const [previewFile, setPreviewFile] = useState<DealerFile | null>(null);
+  const [viewAppt, setViewAppt] = useState<AppointmentMock | null>(null);
+  const [viewNote, setViewNote] = useState<NoteMock | null>(null);
+  useEffect(() => {
+    setDealerFiles(loadDealerFiles());
+    const sync = () => setDealerFiles(loadDealerFiles());
+    window.addEventListener(DEALER_FILES_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => { window.removeEventListener(DEALER_FILES_EVENT, sync); window.removeEventListener("storage", sync); };
+  }, []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const rightQuoteRef = useRef<HTMLDivElement|null>(null);
+  const rightApptRef  = useRef<HTMLDivElement|null>(null);
+  const scrollTo = (r: React.RefObject<HTMLDivElement|null>) => r.current?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f || !selected) return;
+    const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
+    addDealerFile({
+      name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
+      project: selected.company || selected.name, uploadedBy: selected.owner || "คุณ",
+      uploadedAt: new Date().toISOString().slice(0,10), source: "customer", recordId: selected.id, customerId: selected.id,
+    });
+    setDealerFiles(loadDealerFiles());
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+  // ไฟล์ของลูกค้าที่เลือก — ผูกด้วย customerId หรือแนบตรงกับลูกค้า
+  const selectedFiles: DealerFile[] = selected
+    ? dealerFiles.filter(f => f.customerId === selected.id || (f.source === "customer" && f.recordId === selected.id))
+    : [];
 
 
   // Table layout (density + hidden columns) จาก TableTools
@@ -394,10 +444,11 @@ export default function CustomersPage(){
       const q=query.toLowerCase();
       const matchQ=!q||c.company.toLowerCase().includes(q)||c.name.toLowerCase().includes(q)||c.province.toLowerCase().includes(q)||c.phone.includes(q);
       const matchS=statusFilter==="ALL"||c.status===statusFilter;
-      const matchC=catFilter==="ALL"||c.category===catFilter;
+      const matchC=catFilter==="ALL"||mainTemplateOf(c.category)===catFilter;
       const matchL=lifecycleFilter==="ALL"||lifecycleTypeFor(c.id,c.joinDate,quotations)===lifecycleFilter;
-      // ลูกค้าแสดงทั้งหมด — ไม่กรองด้วยช่วงเวลา (ลูกค้าเป็นข้อมูลถาวร ใช้ค้นหา/ตัวกรองในเครื่องแทน)
-      return matchQ&&matchS&&matchC&&matchL;
+      // กรองตามช่วงเวลา — ใช้ "กิจกรรมล่าสุด" ของลูกค้า (โชว์ลูกค้าที่มีความเคลื่อนไหวในช่วงที่เลือก)
+      const matchT=passes({date:lastActivityFor(c.id,c.joinDate,quotations)});
+      return matchQ&&matchS&&matchC&&matchL&&matchT;
     });
     const sortVal=(c:CustomerRow):string|number=>{
       switch(sortKey){
@@ -419,7 +470,7 @@ export default function CustomersPage(){
       return 0;
     });
     return rows;
-  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir]);
+  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir,timeRange,passes]);
 
   // ── Pagination (client-side) ──────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -436,18 +487,53 @@ export default function CustomersPage(){
   const totalAll      = scoped.length;
   const totalValue    = scoped.reduce((s,c)=>s+c.totalValue,0);
 
+  // ── S1: KPI + กราฟ (ภาษาเดียวกับแดชบอร์ด) — mock วันนี้ = 2026-06-30 ──
+  const newThisMonth = useMemo(() => scoped.filter(c => {
+    const d = new Date(c.joinDate);
+    return d.getFullYear() === 2026 && d.getMonth() === 5;
+  }).length, [scoped]);
+  const warrantyActive = useMemo(() => scoped.filter(c => warrantyStatusFor(c.id, quotations).label === "ยังอยู่ในประกัน").length, [scoped, quotations]);
+  const deliveredCount = useMemo(() => scoped.filter(c => deliveryDateFor(c.id, quotations) !== "—").length, [scoped, quotations]);
+
+  // กราฟ 1 — การเติบโตของลูกค้า (สะสมตามเดือนที่เข้าร่วม, 12 เดือน)
+  const growthSeries = useMemo(() => {
+    const per = Array(12).fill(0);
+    scoped.forEach(c => { const d = new Date(c.joinDate); if (d.getFullYear() === 2026) per[d.getMonth()]++; });
+    const cum: number[] = []; let run = 0;
+    for (let i = 0; i < 12; i++) { run += per[i]; cum.push(run); }
+    return { per, cum };
+  }, [scoped]);
+  // กราฟ 2 — สินค้าที่ซื้อ (โดนัทตามแม่แบบหลัก)
+  const productSegments = useMemo(() => {
+    const m = new Map<string, number>();
+    scoped.forEach(c => { const k = mainTemplateOf(c.category) || c.category || "อื่นๆ"; m.set(k, (m.get(k) ?? 0) + 1); });
+    const total = scoped.length || 1;
+    const COLORS = ["#2563EB","#16A34A","#F59E0B","#7C3AED","#EA580C","#0D9488","#94A3B8"];
+    return [...m.entries()].sort((a,b)=>b[1]-a[1]).map(([label,value],i)=>({ label, value, color: COLORS[i%COLORS.length], pct: Math.round((value/total)*100) }));
+  }, [scoped]);
+  // กราฟ 3 — สถานะการรับประกัน (โดนัท)
+  const warrantySegments = useMemo(() => {
+    const order = [
+      { key:"ยังอยู่ในประกัน", color:"#28A745" },
+      { key:"ใกล้หมดประกัน",   color:"#FFC107" },
+      { key:"หมดประกันแล้ว",   color:"#DC3545" },
+      { key:"—",              color:"#94A3B8" },
+    ];
+    const m = new Map<string, number>();
+    scoped.forEach(c => { const l = warrantyStatusFor(c.id, quotations).label; m.set(l, (m.get(l) ?? 0) + 1); });
+    const total = scoped.length || 1;
+    return order.filter(o => m.get(o.key)).map(o => ({ label: o.key === "—" ? "ยังไม่ส่งมอบ" : o.key, value: m.get(o.key)!, color: o.color, pct: Math.round((m.get(o.key)!/total)*100) }));
+  }, [scoped, quotations]);
+
   // Related data for selected customer
   const relatedQuotations   = selected ? quotations.filter(q=>q.customerId===selected.id) : [];
   // ไม่รวมลีดที่ปิดการขายสำเร็จ (PAID) — กลายเป็นลูกค้ารายนี้ไปแล้ว ลิงก์จะวนกลับหน้าเดิม
   const relatedLeads        = selected ? leads.filter(l=>(l.company===selected.company||l.customerId===selected.id) && l.status!=="PAID") : [];
+  // ดีลทั้งหมดของลูกค้า (ทุกสถานะ = ประวัติดีล) — Deal = ลีดที่ผูก customerId/ชื่อบริษัท
+  const customerDeals       = selected ? leads.filter(l=>l.customerId===selected.id||l.company===selected.company) : [];
   const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company) : [];
   const relatedNotes        = selected ? notes.filter(n=>n.customerId===selected.id) : [];
 
-  function addCustomer(form: CustomerForm){
-    const maxId = Math.max(...data.map(c=>c.id),0);
-    const color = PALETTE[maxId % PALETTE.length];
-    ctxAddCustomer({...form,id:maxId+1,initials:initials(form.company),color,totalValue:0});
-  }
   // บันทึกการแก้ไขในตัว (จากแท็บ "ข้อมูล" ของโมดัลรายละเอียด)
   function saveInline(form: CustomerForm){
     if(!selected) return;
@@ -459,6 +545,62 @@ export default function CustomersPage(){
     if(!selected) return;
     ctxDeleteCustomer(selected.id);
     setSelected(null); setShowDeleteConfirm(false);
+  }
+  // ── นำเข้าลูกค้าเดิม (ตัวแทน) — เพิ่มเข้า SalesContext เดียว · flag imported=true ──
+  function makeImported(r: ImportRow, id: number): CustomerRow {
+    return { id, name:r.name||r.company, company:r.company, type:r.type, email:r.email, phone:r.phone,
+      province:r.province||"กรุงเทพฯ", category:r.category, status:"active", projects:0,
+      joinDate:new Date().toISOString().slice(0,10), owner:legacyForm.owner||"สมชาย เชียงใหม่",
+      initials:initials(r.company), color:PALETTE[id%PALETTE.length], totalValue:0, imported:true };
+  }
+  function onCsvFile(e: React.ChangeEvent<HTMLInputElement>){
+    const f=e.target.files?.[0]; if(e.target)e.target.value=""; if(!f) return;
+    const reader=new FileReader();
+    reader.onload=()=>{ try{ const rows=parseCsv(String(reader.result)); setImportRows(rows); setImportErr(rows.length?"":"ไม่พบข้อมูลในไฟล์"); }catch{ setImportErr("อ่านไฟล์ไม่สำเร็จ — ตรวจรูปแบบ CSV"); } };
+    reader.readAsText(f,"utf-8");
+  }
+  function commitImport(){
+    const base=Math.max(0,...data.map(c=>c.id));
+    importRows.forEach((r,i)=>ctxAddCustomer(makeImported(r, base+i+1)));
+    setShowImport(false); setImportRows([]); setImportErr("");
+  }
+  function createLegacy(){
+    if(!legacyForm.company.trim()) return;
+    const base=Math.max(0,...data.map(c=>c.id));
+    ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,type:legacyForm.type,category:legacyForm.category}, base+1));
+    setShowManual(false);
+    setLegacyForm({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",type:"บริษัท",category:"",owner:"สมชาย เชียงใหม่"});
+  }
+  // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
+  function openNewDeal(c: CustomerRow){
+    setDealCustomer(c);
+    setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",assigned:c.owner,closeDate:"",note:""});
+    setShowNewDeal(true);
+  }
+  // สร้างดีล = ลีดใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
+  function createDeal(){
+    const c=dealCustomer; if(!c||!dealForm.product) return;
+    const nid=Math.max(0,...leads.map(l=>l.numId))+1;
+    const product=dealForm.product;
+    const newDeal: LeadRow={
+      id:`#L-${40321+nid}`, numId:nid,
+      name:c.company, company:c.company, type:c.type,                 // ── ข้อมูลลูกค้าเดิม ──
+      contact:c.name, phone:c.phone, email:c.email, province:c.province,
+      assigned:dealForm.assigned||c.owner, logo:c.logo, customerId:c.id,
+      product, category:mainTemplateOf(product),                     // ── รายละเอียดดีล ──
+      value:fmtDealValue(dealForm.value),
+      project:dealForm.project||undefined,
+      expectedClose:dealForm.closeDate||undefined,
+      note:dealForm.note||undefined,
+      status:"WAITING",                                              // ดีลใหม่เริ่มที่ต้น pipeline
+      source:"ลูกค้าเดิม (ดีลใหม่)",
+      createdAt:thaiToday(),
+      tasks:buildLeadTasks(),                                        // Default Checklist (ยังไม่ติ๊ก)
+      activities:[],                                                 // เริ่มว่าง
+    };
+    addLead(newDeal);
+    setShowNewDeal(false);
+    router.push(`/leads?open=${newDeal.numId}`);                     // เปิด Deal Detail ทันที (ไม่ต้องกลับหน้า Lead)
   }
   function toggleStatus(id:number){
     const target = data.find(c=>c.id===id);
@@ -472,11 +614,14 @@ export default function CustomersPage(){
     ? (sortDir==="asc"?<ChevronUp size={11} style={{marginLeft:2}}/>:<ChevronDown size={11} style={{marginLeft:2}}/>)
     : <ChevronDown size={11} style={{marginLeft:2,opacity:0.3}}/>;
 
-  const detailTabs: {key:"info"|"quotes"|"appts"|"notes"; label:string; icon:React.ReactNode}[] = [
-    {key:"info",    label:"ข้อมูล",     icon:<Building2 size={11}/>},
-    {key:"quotes",  label:`ใบเสนอ (${relatedQuotations.length})`, icon:<FileText size={11}/>},
+  const detailFileCount = selectedFiles.length;
+  const detailTabs: {key:"info"|"deals"|"quotes"|"appts"|"notes"|"files"; label:string; icon:React.ReactNode}[] = [
+    {key:"info",    label:"ภาพรวม",     icon:<Building2 size={11}/>},
+    {key:"deals",   label:`ดีล (${customerDeals.length})`, icon:<FileText size={11}/>},
+    {key:"quotes",  label:`ใบเสนอราคา (${relatedQuotations.length})`, icon:<FileText size={11}/>},
     {key:"appts",   label:`นัดหมาย (${relatedAppointments.length})`,icon:<Calendar size={11}/>},
     {key:"notes",   label:`โน้ต (${relatedNotes.length})`, icon:<StickyNote size={11}/>},
+    {key:"files",   label:`ไฟล์ (${detailFileCount})`, icon:<Paperclip size={11}/>},
   ];
 
   // แถบแบ่งหน้า — "แสดง X–Y จาก Z" ซ้าย · Prev / หน้า p / total / Next ขวา
@@ -506,61 +651,46 @@ export default function CustomersPage(){
       {/* ══ MAIN ══════════════════════════════════════════════ */}
       <div style={{flex:1,minWidth:0}}>
 
-        {/* Header */}
-        <div className="page-head">
-          <div>
-            <h2>ลูกค้า</h2>
-            <p>จัดการข้อมูลลูกค้าและความสัมพันธ์ทางธุรกิจ</p>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <TableTools storageKey="customers" columns={COLS} hiddenCols={hiddenCols} onToggleCol={toggleCol}
-              density={density} onDensityChange={setDensity} />
-            <ExportMenu filename="customers" title="รายชื่อลูกค้า"
-              headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","โอกาสการขายปัจจุบัน","มูลค่าโอกาสการขาย"]}
-              rows={filtered.map(c=>{
-                const deal=currentDealFor(c.id,deals);
-                return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),deal?deal.project:"—",deal?fmtMoney(deal.value):"—"];
-              })} />
-            <button className="btn btn-primary btn-md" onClick={()=>setShowAdd(true)}>
-              <Plus size={13}/> เพิ่มลูกค้า
-            </button>
-          </div>
-        </div>
+        {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
+        <TopbarActions>
+          <FilterBar dims={[]} />
+          <ExportMenu filename="customers" title="รายชื่อลูกค้า"
+            headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","สินค้าที่ซื้อไป","วันส่งมอบ"]}
+            rows={filtered.map(c=>{
+              const bought=purchasedItemsFor(c.id,quotations);
+              return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),bought.length?bought.join(", "):"—",fmtDate(deliveryDateFor(c.id,quotations))];
+            })} />
+          {/* นำเข้าลูกค้าเดิม (คีย์มือ/CSV) — ลูกค้าใหม่ยังเกิดจาก Lead→Won เท่านั้น */}
+          <button className="btn btn-primary btn-sm" onClick={()=>{setImportRows([]);setImportErr("");setShowImport(true);}}>
+            <Upload size={14}/> นำเข้าลูกค้าเดิม
+          </button>
+        </TopbarActions>
+        <p className="page-sub">ฐานข้อมูลลูกค้าที่ปิดการขายแล้ว · {timeRange.subtitle}</p>
 
-        {/* สรุปรวม (pill) + สรุปตามสถานะ (คลิกกรอง) */}
+        {/* ── KPI 4 ใบ (ภาษาเดียวกับแดชบอร์ด) ── */}
         {(() => {
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
-          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
-          const isAct = (c:CustomerRow) => c.status==="active"||hasOpenActivity(c.id,deals,quotations);
-          const lc = (c:CustomerRow) => lifecycleTypeFor(c.id,c.joinDate,quotations);
-          const sval = (arr:CustomerRow[]) => arr.reduce((s,c)=>s+c.totalValue,0);
-          const cards = [
-            {label:"ใช้งาน",    list:scoped.filter(isAct),           on:()=>setStatusFilter(statusFilter==="active"?"ALL":"active"),        act:statusFilter==="active",        bg:"#e5faf0", fg:"#059669"},
-            {label:"ไม่ใช้งาน", list:scoped.filter(c=>!isAct(c)),    on:()=>setStatusFilter(statusFilter==="inactive"?"ALL":"inactive"),    act:statusFilter==="inactive",      bg:"#f1f5f9", fg:"#64748b"},
-            {label:"ลูกค้าใหม่", list:scoped.filter(c=>lc(c)==="new"),      on:()=>setLifecycleFilter(lifecycleFilter==="new"?"ALL":"new"),          act:lifecycleFilter==="new",       bg:LIFECYCLE_META.new.bg,      fg:LIFECYCLE_META.new.fg},
-            {label:"ลูกค้าเดิม", list:scoped.filter(c=>lc(c)==="existing"), on:()=>setLifecycleFilter(lifecycleFilter==="existing"?"ALL":"existing"), act:lifecycleFilter==="existing", bg:LIFECYCLE_META.existing.bg, fg:LIFECYCLE_META.existing.fg},
+          const kpis = [
+            { label:"ลูกค้าทั้งหมด",     value:`${totalAll}`,        sub:"ราย",     Icon:Users,       color:"#2563EB", bg:"#E8F0FE" },
+            { label:"โครงการที่ส่งมอบ",   value:`${deliveredCount}`,  sub:"โครงการ", Icon:Truck,       color:"#16A34A", bg:"#E6F7EE" },
+            { label:"อยู่ในประกัน",       value:`${warrantyActive}`,  sub:"ราย",     Icon:ShieldCheck, color:"#0D9488", bg:"#E6F7F5" },
+            { label:"ยอดขายรวม",         value:fmtC(totalValue),     sub:"ทุกดีล",  Icon:Coins,       color:"#EA580C", bg:"#FEF0E6" },
           ];
           return (
-            <>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
-                <div style={pill}>ลูกค้าทั้งหมด: <span style={{color:PRIMARY}}>{totalAll}</span></div>
-                <div style={pill}>มูลค่ารวม: <span style={{color:PRIMARY}}>{fmtC(totalValue)}</span></div>
-              </div>
-              <div className="card" style={{ padding:"12px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap" }}>
-                {cards.map(card=>(
-                  <button key={card.label} onClick={card.on}
-                    style={{ display:"flex", flexDirection:"column", gap:2, background:card.act?card.bg:"#fafafa",
-                      border:`1px solid ${card.act?card.fg+"40":BORDER}`, borderRadius:10, padding:"8px 12px",
-                      fontSize:"0.72rem", fontWeight:600, color:card.act?card.fg:MUTED, cursor:"pointer", fontFamily:"inherit" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                      <span style={{ width:18, height:18, borderRadius:"50%", background:card.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.65rem", color:card.fg, fontWeight:800 }}>{card.list.length}</span>
-                      {card.label}
-                    </div>
-                    <span style={{ fontSize:"0.65rem", color:card.act?card.fg:"#C0C0C0", fontWeight:500 }}>{sval(card.list)>0?fmtC(sval(card.list)):"—"}</span>
-                  </button>
-                ))}
-              </div>
-            </>
+            <div className="dash-kpis" style={{ marginBottom:16 }}>
+              {kpis.map(k => (
+                <div key={k.label} className="card" style={{ padding:"16px 14px", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:"0.72rem", color:"#6B7280" }}>{k.label}</div>
+                    <div style={{ fontSize:"1.42rem", fontWeight:800, color:"#1F2937", marginTop:6, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>{k.value}</div>
+                    <div style={{ fontSize:"0.72rem", color:"#6B7280", marginTop:2 }}>{k.sub}</div>
+                  </div>
+                  <span style={{ width:42, height:42, borderRadius:12, background:k.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <k.Icon size={20} color={k.color} strokeWidth={2.1} />
+                  </span>
+                </div>
+              ))}
+            </div>
           );
         })()}
 
@@ -568,7 +698,7 @@ export default function CustomersPage(){
         <div className="card" style={{padding:"12px 16px",marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             {/* Search — ชิดซ้าย */}
-            <div className="search-bar" style={{minWidth:220,flex:1,maxWidth:360}}>
+            <div className="search-bar">
               <Search size={13} color="#9ca3af"/>
               <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาลูกค้า..."/>
               {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
@@ -582,15 +712,6 @@ export default function CustomersPage(){
                 fontSize:"0.8rem",fontWeight:600,color:showFilter?"#fff":"#6b7280",cursor:"pointer"}}>
               <Filter size={13}/> ตัวกรอง
             </button>
-            <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
-              {([["card",LayoutGrid,"การ์ด"],["table",LayoutList,"ตาราง"]] as const).map(([v,Ico,tip])=>(
-                <button key={v} onClick={()=>setView(v)}
-                  style={{display:"flex",alignItems:"center",gap:5,padding:"0 12px",height:"100%",border:"none",cursor:"pointer",
-                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.72rem",fontWeight:600}}>
-                  <Ico size={14}/> {tip}
-                </button>
-              ))}
-            </div>
           </div>
 
         </div>
@@ -611,31 +732,11 @@ export default function CustomersPage(){
                   <button onClick={()=>setShowFilter(false)} style={{ width:30, height:30, borderRadius:8, border:`1px solid ${BORDER}`, background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:MUTED }}><X size={14} /></button>
                 </div>
                 <div style={{ flex:1, overflowY:"auto", padding:"20px", display:"flex", flexDirection:"column", gap:22 }}>
-                  <div><label style={sec}>สถานะ</label><div style={pills}>
-                    {(["ALL","active","inactive"] as const).map(s=>(
-                      <button key={s} onClick={()=>setStatusFilter(s)}
-                        style={{padding:"6px 13px",borderRadius:99,border:`1px solid ${statusFilter===s?PRIMARY:BORDER}`,background:statusFilter===s?PRIMARY:"#fff",color:statusFilter===s?"#fff":MUTED,fontSize:"0.72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-                        {s==="ALL"?"ทั้งหมด":s==="active"?"ใช้งาน":"ไม่ใช้งาน"}
-                      </button>
-                    ))}
-                  </div></div>
-                  <div><label style={sec}>อุตสาหกรรม</label><div style={pills}>
-                    {["ALL",...CATEGORIES].map(cat=>(
+                  <div><label style={sec}>แม่แบบ</label><div style={pills}>
+                    {["ALL",...catalog.map(p=>p.name)].map(cat=>(
                       <button key={cat} onClick={()=>setCatFilter(cat)}
                         style={{padding:"6px 12px",borderRadius:99,border:`1px solid ${catFilter===cat?"#C0C0C0":BORDER}`,background:catFilter===cat?"#f0f4f8":"#fff",color:catFilter===cat?STEEL:MUTED,fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
                         {cat==="ALL"?"ทั้งหมด":cat}
-                      </button>
-                    ))}
-                  </div></div>
-                  <div><label style={sec}>สถานะลูกค้า</label><div style={pills}>
-                    {(["ALL","new","existing"] as const).map(lc=>(
-                      <button key={lc} onClick={()=>setLifecycleFilter(lc)}
-                        style={{padding:"6px 12px",borderRadius:99,fontFamily:"inherit",
-                          border:`1px solid ${lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:PRIMARY):BORDER}`,
-                          background:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.bg:lc==="new"?LIFECYCLE_META.new.bg:"#f0f4f8"):"#fff",
-                          color:lifecycleFilter===lc?(lc==="existing"?LIFECYCLE_META.existing.fg:lc==="new"?LIFECYCLE_META.new.fg:STEEL):MUTED,
-                          fontSize:"0.72rem",fontWeight:700,cursor:"pointer"}}>
-                        {lc==="ALL"?"ทั้งหมด":lc==="new"?"ลูกค้าใหม่":"ลูกค้าเดิม"}
                       </button>
                     ))}
                   </div></div>
@@ -650,381 +751,516 @@ export default function CustomersPage(){
           );
         })()}
 
-        {/* ── CARD VIEW ── */}
-        {view==="card"&&(
-          <div>
-            {filtered.length===0?(
-              <div className="card" style={{padding:"48px 0",textAlign:"center",color:MUTED,fontSize:"0.8rem"}}>ไม่พบลูกค้าที่ตรงกับเงื่อนไข</div>
-            ):(
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
-                {paged.map(c=>{
-                  const isSel=selected?.id===c.id;
-                  const activeDeals=activeDealsCountFor(c.id,deals);
-                  // มีดีล/ใบเสนอราคาที่ยังไม่ปิดอยู่จริง → ถือว่าใช้งานอยู่เสมอ แม้ status ที่บันทึกไว้จะเป็น "ไม่ใช้งาน"
-                  const isActive=c.status==="active"||hasOpenActivity(c.id,deals,quotations);
-                  return (
-                    <div key={c.id} className="card" onClick={()=>{ setSelected(s=>s?.id===c.id?null:c); setDetailTab("info"); setShowDeleteConfirm(false); }}
-                      style={{cursor:"pointer",overflow:"hidden",position:"relative",border:isSel?`1.5px solid ${PRIMARY}`:`1px solid ${BORDER}`,boxShadow:isSel?"0 4px 18px rgba(0,0,0,.15)":undefined,transition:"box-shadow .15s,border .15s",opacity:isActive?1:0.78}}
-                      onMouseEnter={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.boxShadow="0 6px 22px rgba(0,0,0,.13)";}}
-                      onMouseLeave={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.boxShadow="";}}>
-                      {/* ดู → เปิดโมดัลรายละเอียด */}
-                      <button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();setSelected(c);}}
-                        style={{position:"absolute",top:10,right:10,padding:"3px 8px",fontSize:"0.65rem",color:PRIMARY}}>
-                        ดู →
-                      </button>
-                      <div style={{padding:"20px 18px 14px",textAlign:"center"}}>
-                        <div style={{width:52,height:52,borderRadius:"50%",overflow:"hidden",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",margin:"0 auto 10px",boxShadow:`0 4px 12px ${c.color}55`}}>
-                          {c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}
-                        </div>
-                        <div style={{fontSize:"0.86rem",fontWeight:800,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:36}}>{c.company}</div>
-                        <div style={{fontSize:"0.72rem",color:MUTED,marginTop:2,fontWeight:500}}>{c.name} · {c.category}</div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,marginTop:6,fontSize:"0.72rem",color:MUTED}}>
-                          <Phone size={10} color="#C0C0C0"/> {c.phone}
-                        </div>
-                        {c.totalValue>0&&(
-                          <div style={{fontSize:"0.72rem",fontWeight:700,color:PRIMARY,marginTop:5}}>{fmtMoney(c.totalValue)}</div>
-                        )}
-                      </div>
-                      <div style={{padding:"10px 16px 14px",display:"flex",alignItems:"center",justifyContent:"center",gap:6,borderTop:`1px solid #f0f4f8`}}>
-                        <span className="badge" style={{background:isActive?"#e5faf0":"#f1f5f9",color:isActive?"#059669":"#64748b"}}>
-                          {isActive?"ใช้งาน":"ไม่ใช้งาน"}
-                        </span>
-                        <span className="badge" style={{background:activeDeals>0?"#dce5f0":"#f1f5f9",color:activeDeals>0?PRIMARY:"#9ca3af"}}>
-                          {activeDeals} โอกาสการขาย
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div style={{marginTop:12,padding:"4px 2px"}}>
-              <Pagination />
-            </div>
+        {/* ── การ์ดโครงการลูกค้า (interface หลัก) — 3/2/1 คอลัมน์ · แต่ละใบ = 1 ลูกค้าที่ปิดการขายแล้ว ── */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+          <span style={{ fontSize:"0.85rem", fontWeight:800, color:STEEL }}>ลูกค้า ({filtered.length})</span>
+          <span style={{ fontSize:"0.72rem", color:MUTED }}>แสดง {rangeFrom}-{rangeTo}</span>
+        </div>
+        {filtered.length===0?(
+          <div className="card" style={{ marginBottom:16 }}>
+            <EmptyState icon={<User size={28}/>} title="ไม่พบลูกค้าที่ตรงกับเงื่อนไข"
+              description="ลองปรับคำค้นหรือล้างตัวกรองเพื่อดูลูกค้าทั้งหมด"
+              action={<button className="btn btn-secondary btn-md" style={{color:PRIMARY}} onClick={()=>{ setStatusFilter("ALL"); setCatFilter("ALL"); setLifecycleFilter("ALL"); setQuery(""); }}>ล้างตัวกรอง</button>} />
           </div>
-        )}
+        ):(
+          <div className="cust-grid" style={{ marginBottom:16 }}>
+            {paged.map(c=>{
+              const bought = purchasedItemsFor(c.id,quotations);
+              const buildingName = bought[0] || c.category || "อาคารสำเร็จรูป";
+              const ws = warrantyStatusFor(c.id,quotations);
+              const delivery = deliveryDateFor(c.id,quotations);
+              const bt = mainTemplateOf(c.category) || c.category;
+              const tags = Array.from(new Set([bt, "โครงสร้างเหล็ก"].filter(Boolean)));
+              const openDetail = () => { setSelected(c); setDetailTab("info"); setShowDeleteConfirm(false); };
+              return (
+                <div key={c.id} className="card cust-card"
+                  style={{ overflow:"hidden", display:"flex", flexDirection:"column", padding:0,
+                    border: selected?.id===c.id ? `1.5px solid ${PRIMARY}` : `1px solid ${BORDER}` }}>
+                  {/* Hero — ภาพแม่แบบตามอาคารที่ซื้อเสมอ (ไม่ใช้รูปลูกค้า) */}
+                  <button onClick={openDetail} style={{ position:"relative", height:150, border:"none", padding:0, cursor:"pointer", background:"#eaf1fb", overflow:"hidden", display:"block" }}>
+                    <TemplateHero name={buildingName} />
+                  </button>
 
-        {/* ── TABLE VIEW ── */}
-        {view==="table"&&(
-          <div className="card">
-            <div className={`table-wrap${density==="compact"?" dense":""}`} style={{borderTop:"none"}}>
-              <table>
-                <colgroup>
-                  <col style={{width:"20%"}} />{/* บริษัท */}
-                  <col style={{width:"12%"}} />{/* ผู้ติดต่อ */}
-                  <col style={{width:"11%"}} />{/* โทรศัพท์ */}
-                  <col style={{width:"9%"}}  />{/* จังหวัด */}
-                  {!hiddenCols.includes("owner")          && <col style={{width:"11%"}} />}{/* ผู้รับผิดชอบ */}
-                  {!hiddenCols.includes("lastActivity")   && <col style={{width:"11%"}} />}{/* กิจกรรมล่าสุด */}
-                  {!hiddenCols.includes("quotationCount") && <col style={{width:"8%"}}  />}{/* จำนวนใบเสนอราคา */}
-                  {!hiddenCols.includes("totalSales")     && <col style={{width:"10%"}} />}{/* ยอดขายรวม */}
-                  {!hiddenCols.includes("currentDeal")    && <col style={{width:"11%"}} />}{/* ดีลปัจจุบัน */}
-                  <col style={{width:"7%"}}  />{/* ดู */}
-                </colgroup>
-                <thead>
-                  <tr>
-                    {([
-                      {label:"บริษัท",key:"company",colKey:null},
-                      {label:"ผู้ติดต่อ",key:"name",colKey:null},
-                      {label:"โทรศัพท์",key:"phone",colKey:null},
-                      {label:"จังหวัด",key:"province",colKey:null},
-                      {label:"ผู้รับผิดชอบ",key:"owner",colKey:"owner"},
-                      {label:"กิจกรรมล่าสุด",key:"lastActivity",colKey:"lastActivity"},
-                      {label:"ใบเสนอราคา",key:"quotationCount",colKey:"quotationCount"},
-                    ] as {label:string;key:SortKey;colKey:string|null}[])
-                      .filter(col=>col.colKey===null||!hiddenCols.includes(col.colKey))
-                      .map(col=>(
-                        <th key={col.key} onClick={()=>handleSort(col.key)} style={{cursor:"pointer",userSelect:"none"}}>
-                          <span style={{display:"inline-flex",alignItems:"center"}}>{col.label}<SortIcon k={col.key}/></span>
-                        </th>
-                    ))}
-                    {!hiddenCols.includes("totalSales") && <th>ยอดขายรวม</th>}
-                    {!hiddenCols.includes("currentDeal") && <th>โอกาสการขายปัจจุบัน</th>}
-                    <th/>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length===0&&(
-                    <tr><td colSpan={10} style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบลูกค้า</td></tr>
-                  )}
-                  {paged.map(c=>{
-                    const isSel=selected?.id===c.id;
-                    const qCount=quotationCountFor(c.id,quotations);
-                    const lastAct=lastActivityFor(c.id,c.joinDate,quotations);
-                    const deal=currentDealFor(c.id,deals);
-                    return(
-                      <tr key={c.id} className="clickable" onClick={()=>{setSelected(s=>s?.id===c.id?null:c);setDetailTab("info");setShowDeleteConfirm(false);}}
-                        style={isSel?{background:"#f0f6ff"}:undefined}>
-                        {/* บริษัท */}
-                        <td>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div style={{width:34,height:34,borderRadius:10,overflow:"hidden",background:c.color,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.72rem"}}>{c.logo ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : c.initials}</div>
-                            <div style={{minWidth:0}}>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <div style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.company}</div>
-                                {(()=>{ const m=LIFECYCLE_META[lifecycleTypeFor(c.id,c.joinDate,quotations)];
-                                  return <span style={{flexShrink:0,padding:"1px 7px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:m.bg,color:m.fg}}>{lifecycleTypeFor(c.id,c.joinDate,quotations)==="existing"?"เดิม":"ใหม่"}</span>;
-                                })()}
-                              </div>
-                              <div style={{fontSize:"0.72rem",color:MUTED,marginTop:1}}>{c.category}</div>
-                            </div>
-                          </div>
-                        </td>
-                        {/* ผู้ติดต่อ */}
-                        <td style={{color:STEEL,fontWeight:600}}>{c.name}</td>
-                        {/* โทรศัพท์ */}
-                        <td style={{color:MUTED,whiteSpace:"nowrap"}}>
-                          <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Phone size={11} color="#C0C0C0"/>{c.phone}</span>
-                        </td>
-                        {/* จังหวัด */}
-                        <td style={{color:MUTED}}>{c.province}</td>
-                        {/* ผู้รับผิดชอบ */}
-                        {!hiddenCols.includes("owner") && (
-                          <td><AssigneeAvatars value={c.owner} size={24} /></td>
-                        )}
-                        {/* กิจกรรมล่าสุด */}
-                        {!hiddenCols.includes("lastActivity") && (
-                          <td style={{color:MUTED,whiteSpace:"nowrap"}}>{fmtDate(lastAct)}</td>
-                        )}
-                        {/* จำนวนใบเสนอราคา */}
-                        {!hiddenCols.includes("quotationCount") && (
-                          <td>
-                            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:24,height:22,padding:"0 8px",borderRadius:99,fontSize:"0.72rem",fontWeight:800,background:qCount>0?"#dce5f0":"#f1f5f9",color:qCount>0?PRIMARY:"#9ca3af"}}>{qCount}</span>
-                          </td>
-                        )}
-                        {/* ยอดขายรวม (lifetime) */}
-                        {!hiddenCols.includes("totalSales") && (
-                          <td style={{color:PRIMARY,fontWeight:700,whiteSpace:"nowrap",fontSize:"0.8rem"}}>{fmtMoney(totalSalesFor(c.id,quotations))}</td>
-                        )}
-                        {/* ดีลปัจจุบัน */}
-                        {!hiddenCols.includes("currentDeal") && (
-                          <td>
-                            {deal?(
-                              <div style={{minWidth:0}}>
-                                <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{deal.project}</div>
-                                <div style={{fontSize:"0.65rem",fontWeight:700,color:PRIMARY,marginTop:1}}>{fmtMoney(deal.value)}</div>
-                              </div>
-                            ):(
-                              <span style={{color:"#9ca3af"}}>—</span>
-                            )}
-                          </td>
-                        )}
-                        {/* ดู → เปิดโมดัลรายละเอียด */}
-                        <td onClick={e=>e.stopPropagation()}>
-                          <button className="btn btn-secondary btn-sm" onClick={()=>setSelected(c)} style={{color:PRIMARY}}>ดู →</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div style={{padding:"10px 16px",borderTop:`1px solid ${BORDER}`}}>
-              <Pagination />
-            </div>
+                  {/* Body */}
+                  <div style={{ padding:"14px 16px", display:"flex", flexDirection:"column", gap:8, flex:1 }}>
+                    <div style={{ fontSize:"0.95rem", fontWeight:800, color:STEEL, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={buildingName}>{buildingName}</div>
+                    <div>
+                      <div style={{ fontSize:"0.8rem", fontWeight:700, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.company}</div>
+                      <div style={{ fontSize:"0.72rem", color:MUTED }}>{c.name}</div>
+                    </div>
+
+                    {/* ข้อมูลการขาย (พระเอก): มูลค่า + ผู้รับผิดชอบ */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"7px 10px", borderTop:"1px solid #f0f4f8", padding:"9px 0 8px" }}>
+                      <div><div style={{ fontSize:"0.6rem", color:"#9ca3af", fontWeight:700 }}>มูลค่าโครงการ</div><div style={{ fontSize:"0.86rem", fontWeight:800, color:PRIMARY, fontVariantNumeric:"tabular-nums" }}>{fmtMoney(c.totalValue)}</div></div>
+                      <div><div style={{ fontSize:"0.6rem", color:"#9ca3af", fontWeight:700 }}>ผู้รับผิดชอบ</div><div style={{ fontSize:"0.76rem", fontWeight:700, color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.owner}</div></div>
+                    </div>
+                    {/* หลังการขาย — แถบเล็ก มุมล่าง (ไม่ใช่พระเอกของ Sales CRM) */}
+                    {delivery !== "—" && (
+                      <div style={{ fontSize:"0.65rem", color:"#94a3b8", borderTop:"1px dashed #eef1f5", paddingTop:7 }}>
+                        หลังการขาย · ส่งมอบ {fmtDate(delivery)} · ประกันถึง {warrantyFor(c.id,quotations)}
+                      </div>
+                    )}
+
+                    {/* Tags */}
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                      {tags.map(t=>(
+                        <span key={t} style={{ fontSize:"0.62rem", fontWeight:600, color:PRIMARY, background:"#eef3f8", border:"1px solid #dce5f0", borderRadius:6, padding:"2px 8px" }}>{t}</span>
+                      ))}
+                    </div>
+
+                    {/* ปุ่ม: รายละเอียด (ใหญ่) + ประกัน/ไฟล์/ประวัติ (เล็ก) */}
+                    <div style={{ display:"flex", gap:6, marginTop:"auto" }}>
+                      <button onClick={openDetail} className="btn btn-secondary btn-sm" style={{ flex:1, justifyContent:"center", color:PRIMARY }}>
+                        รายละเอียด
+                      </button>
+                      <button onClick={openDetail} title="การรับประกัน" className="btn btn-secondary btn-sm" style={{ width:34, padding:0, color:MUTED }}><ShieldCheck size={14}/></button>
+                      <button onClick={openDetail} title="ไฟล์" className="btn btn-secondary btn-sm" style={{ width:34, padding:0, color:MUTED }}><Paperclip size={14}/></button>
+                      <button onClick={openDetail} title="ประวัติ" className="btn btn-secondary btn-sm" style={{ width:34, padding:0, color:MUTED }}><HistoryIcon size={14}/></button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
+        <div style={{ marginBottom:18 }}><Pagination /></div>
+
       </div>
 
       {/* ══ DETAIL PANEL ══════════════════════════════════════ */}
-      {selected&&(
-        <>
-          <div onClick={()=>setSelected(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
-          <div className="modal-pop" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:760,maxWidth:"calc(100vw - 32px)",height:"min(660px, calc(100vh - 48px))",zIndex:210,background:"#fff",borderRadius:18,boxShadow:"0 24px 80px rgba(0,0,0,.22)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {selected&&(() => {
+        const cardStyle: React.CSSProperties = { background:"#fff", border:"1px solid #eef1f5", borderRadius:14, padding:16 };
+        const secLabel: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
+        const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
+        const lcType = lifecycleTypeFor(selected.id, selected.joinDate, quotations);
+        const lcMeta = LIFECYCLE_META[lcType];
+        // ลูกค้ามาจากลีดที่ปิดการขาย → ถ้ายังไม่มีใบเสนอราคาปิดผูกไว้ ใช้มูลค่าที่ยกมาจากลีด (totalValue) เป็นค่าตั้งต้น
+        const totalSales = totalSalesFor(selected.id, quotations) || selected.totalValue;
+        const quoteCount = quotationCountFor(selected.id, quotations);
+        const activeCount = activeDealsCountFor(selected.id, deals);
+        // สินค้าที่ซื้อ — จากใบเสนอราคาที่ปิด · ไม่มี → ใช้แม่แบบที่ลูกค้าซื้อ (มาจากลีด)
+        const purchasedItems = (() => { const p = purchasedItemsFor(selected.id, quotations); return p.length ? p : (selected.category ? [selected.category] : []); })();
+        const dealCount = customerDeals.length || selected.projects || 0;
+        const timelineItems = activityItemsFor(selected.id, selected.joinDate, quotations, deals);
 
-            {/* Header */}
-            <div style={{background:PRIMARY,padding:"16px 18px 12px",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:44,height:44,borderRadius:13,overflow:"hidden",background:"rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",border:"2px solid rgba(255,255,255,.25)",flexShrink:0}}>
-                    {selected.logo ? <img src={selected.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : selected.initials}
+        return (
+        <>
+          <div onClick={()=>setSelected(null)} className="drawer-overlay" style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
+
+          {/* Customer Detail — แผงกลางจอ · คอลัมน์เดียว (มาตรฐานเดียวกับลูกค้าเป้าหมาย) */}
+          <div className="modal-pop" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+            width:820, maxWidth:"calc(100vw - 24px)", height:"min(920px, calc(100vh - 24px))",
+            zIndex:210, background:"#fff", boxShadow:"0 30px 90px rgba(0,0,0,.32)", borderRadius:18,
+            display:"flex", flexDirection:"column", overflow:"hidden"}}>
+
+            {/* Sticky navy header + quick actions */}
+            <div style={{background:PRIMARY,padding:"14px 20px",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+                  <div style={{width:46,height:46,borderRadius:13,overflow:"hidden",background:"rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",border:"2px solid rgba(255,255,255,.25)",flexShrink:0}}>
+                    {selected.logo ? <img src={selected.logo} alt="โลโก้" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : selected.initials}
                   </div>
-                  <div>
-                    <div style={{fontSize:"1.15rem",fontWeight:800,color:"#fff",lineHeight:1.2}}>{selected.company}</div>
-                    <div style={{fontSize:"0.8rem",color:"rgba(255,255,255,.7)",marginTop:3}}>{selected.category} · {selected.province}</div>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:"1.12rem",fontWeight:800,color:"#fff",lineHeight:1.2}}>{selected.company}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:"0.72rem",color:"rgba(255,255,255,.72)",marginTop:4}}>
+                      {selected.name && <span>{selected.name}</span>}
+                      <span style={{display:"flex",alignItems:"center",gap:3}}><MapPin size={11}/> {selected.province}</span>
+                      {selected.phone && <span style={{display:"flex",alignItems:"center",gap:3}}><Phone size={11}/> {selected.phone}</span>}
+                      {selected.email && <span style={{display:"flex",alignItems:"center",gap:3}}><Mail size={11}/> {selected.email}</span>}
+                      <span style={{opacity:.8}}>#{selected.id}</span>
+                      <span style={{opacity:.8}}>เข้าร่วม {fmtDate(selected.joinDate)}</span>
+                    </div>
                   </div>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                  {/* แก้ไขทำได้ในแท็บ "ข้อมูล" โดยตรง (เหมือนหน้าลูกค้าเป้าหมาย) — ไม่มีปุ่มแก้ไขแยก */}
-                  <button title="ลบลูกค้า" onClick={()=>setShowDeleteConfirm(true)}
-                    style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fecaca",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <Trash2 size={14}/>
-                  </button>
-                  <button onClick={()=>setSelected(null)} title="ปิด" style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <X size={14}/>
-                  </button>
+                {/* หัว = การกระทำด่วนเท่านั้น (โทร · ลบ · ปิด) · สร้างดีล/ใบเสนอราคา/นัดหมาย อยู่แถบล่าง */}
+                <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+                  <a href={selected.phone ? `tel:${selected.phone}` : undefined} title="โทรหา" style={{...qa,textDecoration:"none",pointerEvents:selected.phone?"auto":"none",opacity:selected.phone?1:.5}}><PhoneCall size={13}/> โทร</a>
+                  <button title="ลบลูกค้า" onClick={()=>setShowDeleteConfirm(true)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
+                  <button onClick={()=>setSelected(null)} title="ปิด" style={{...qa,width:30,padding:0,justifyContent:"center"}}><X size={15}/></button>
                 </div>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                <button onClick={()=>toggleStatus(selected.id)}
-                  style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:selected.status==="active"?"#e5faf0":"#f1f5f9",color:selected.status==="active"?"#059669":"#9ca3af",border:"none",cursor:"pointer"}}>
-                  {selected.status==="active"?"ใช้งาน":"ไม่ใช้งาน"}
-                </button>
-                <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}>
-                  {selected.type}
-                </span>
-                {/* สถานะลูกค้า: ลูกค้าใหม่ / ลูกค้าเดิม (แยกจากประเภทลูกค้า บุคคล/บริษัท) */}
-                {(() => {
-                  const lc = lifecycleTypeFor(selected.id, selected.joinDate, quotations);
-                  const m  = LIFECYCLE_META[lc];
-                  return (
-                    <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:m.bg,color:m.fg}}>
-                      {m.label}
-                    </span>
-                  );
-                })()}
+              {/* Badges: ประเภท · แม่แบบ · ยอดขายรวม (ตัดสถานะ ใช้งาน/ไม่ใช้งาน + ลูกค้าใหม่/เดิม ออก) */}
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:12}}>
+                <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}>{selected.type}</span>
+                {selected.category && <span style={{display:"flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}><Building2 size={11}/> {selected.category}</span>}
+                <span style={{display:"flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:800,background:"#fff",color:PRIMARY}}><Coins size={11}/> {fmtMoney(totalSales)}</span>
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="tab-bar" style={{flexShrink:0}}>
-              {detailTabs.map(t=>(
-                <button key={t.key} className={`tab-item${detailTab===t.key?" active":""}`} onClick={()=>setDetailTab(t.key)}
-                  style={{display:"flex",alignItems:"center",gap:5,fontSize:"0.86rem",padding:"12px 16px"}}>
-                  {t.icon} {t.label}
-                </button>
+            {/* Tab bar — ภาพรวม / ดีล / ใบเสนอราคา / ไทม์ไลน์ (มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย) */}
+            <div style={{ display:"flex", borderBottom:"1px solid #e5e7eb", background:"#fff", flexShrink:0, padding:"0 8px" }}>
+              {([["overview","ภาพรวม"],["deals","ดีล/โครงการ"],["quotation","ใบเสนอราคา"],["timeline","ไทม์ไลน์"]] as ["overview"|"deals"|"quotation"|"timeline",string][]).map(([k,label])=>(
+                <button key={k} onClick={()=>setCustTab(k)}
+                  style={{ padding:"11px 14px", border:"none", borderBottom:`2px solid ${custTab===k?PRIMARY:"transparent"}`, background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:"0.8rem", fontWeight:custTab===k?800:600, color:custTab===k?PRIMARY:"#6b7280", marginBottom:-1 }}>{label}</button>
               ))}
             </div>
 
-            {/* Body — เต็มความกว้าง (ไม่มี rail) */}
-            <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-            <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
+            {/* Body — เนื้อหาตามแท็บ */}
+            <div style={{ flex:1, overflowY:"auto", background:"#f5f7fa" }}>
 
-            {/* Tab: ข้อมูล */}
-            {detailTab==="info"&&(
-              <>
-                {/* Customer Summary Card — 3 tiles (deterministic, derived) */}
-                <div style={{padding:"14px 16px",borderBottom:`1px solid #f0f4f8`}}>
-                  <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10}}>สรุปข้อมูลลูกค้า</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              {/* ── ภาพรวม ── */}
+              <div style={{ padding:16, display:custTab==="overview"?"flex":"none", flexDirection:"column", gap:14 }}>
+                <div style={cardStyle}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:custEdit?12:2}}>
+                    <div style={{...secLabel,marginBottom:0}}><User size={13} color={PRIMARY}/> ข้อมูลลูกค้า</div>
+                    <button onClick={()=>setCustEdit(v=>!v)} style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:"0.68rem",fontWeight:700,color:PRIMARY,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>{custEdit?<>เสร็จ</>:<><Pencil size={12}/> แก้ไขข้อมูล</>}</button>
+                  </div>
+                  {custEdit ? (
+                    <CustomerOverviewEditor customer={selected} onSave={saveInline} />
+                  ) : (
+                    <>
+                      <div style={{fontSize:"0.62rem",color:"#8a929c",fontWeight:700}}>ยอดขายรวม</div>
+                      <div style={{fontSize:"1.5rem",fontWeight:800,color:PRIMARY,fontVariantNumeric:"tabular-nums",lineHeight:1.2}}>{fmtMoney(totalSales)}</div>
+                      <div style={{display:"flex",gap:6,marginTop:8,marginBottom:12,flexWrap:"wrap"}}>
+                        {selected.category && <span style={{padding:"3px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"#eef3f8",color:PRIMARY}}>{selected.category}</span>}
+                        {(() => { const ws = warrantyStatusFor(selected.id, quotations); return ws.label!=="—" ? <span style={{padding:"3px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:ws.bg,color:ws.color}}>{ws.label}</span> : null; })()}
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,borderTop:"1px solid #eef1f5",paddingTop:12}}>
+                        {([
+                          { icon:User,     label:"ผู้ติดต่อ",   value:selected.name||"—" },
+                          { icon:Phone,    label:"โทรศัพท์",   value:selected.phone||"—" },
+                          { icon:Mail,     label:"อีเมล",      value:selected.email||"—" },
+                          { icon:MapPin,   label:"จังหวัด",    value:selected.province||"—" },
+                          { icon:Package,  label:"แม่แบบ",     value:selected.category||"—" },
+                          { icon:User,     label:"ผู้รับผิดชอบ", value:selected.owner||"—" },
+                          { icon:Calendar, label:"วันที่ซื้อ",  value:fmtDate(purchaseDateFor(selected.id,quotations)) },
+                          { icon:Calendar, label:"เข้าร่วมเมื่อ", value:fmtDate(selected.joinDate) },
+                        ] as { icon: typeof User; label:string; value:string }[]).map(r => (
+                          <div key={r.label} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",border:"1px solid #eef1f5",borderRadius:9,background:"#fafbfc",minWidth:0}}>
+                            <r.icon size={13} color="#94a3b8" style={{flexShrink:0}}/>
+                            <span style={{fontSize:"0.7rem",color:"#8a929c",flexShrink:0}}>{r.label}</span>
+                            <span style={{fontSize:"0.8rem",fontWeight:700,color:"#2D2D2D",flex:1,minWidth:0,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={r.value}>{r.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* สรุปข้อมูลลูกค้า */}
+                <div style={cardStyle}>
+                  <div style={secLabel}><Target size={13} color={PRIMARY}/> สรุปข้อมูลลูกค้า</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
                     {[
-                      {label:"ยอดขายรวม",       val:fmtMoney(totalSalesFor(selected.id,quotations)),          accent:PRIMARY,   bg:"#dce5f0"},
-                      {label:"ใบเสนอราคา",      val:quotationCountFor(selected.id,quotations).toString(),      accent:STEEL,     bg:"#f0f4f8"},
-                      {label:"โอกาสที่ดำเนินการ",  val:activeDealsCountFor(selected.id,deals).toString(),    accent:"#059669", bg:"#e5faf0"},
-                    ].map((item,i)=>(
-                      <div key={i} style={{background:item.bg,borderRadius:10,padding:"12px 8px",textAlign:"center"}}>
-                        <div style={{fontSize:"0.86rem",fontWeight:800,color:item.accent,lineHeight:1.2}}>{item.val}</div>
-                        <div style={{fontSize:"0.65rem",color:MUTED,marginTop:4,fontWeight:600}}>{item.label}</div>
+                      {k:"ยอดขายรวม", v:fmtMoney(totalSales), accent:PRIMARY},
+                      {k:"ใบเสนอราคา", v:`${quoteCount}`, accent:STEEL},
+                      {k:"สินค้าที่ซื้อไป", v:`${purchasedItems.length}`, accent:"#059669"},
+                    ].map(m=>(
+                      <div key={m.k} style={{background:"#f7f9fc",border:"1px solid #eef1f5",borderRadius:11,padding:"10px 8px",textAlign:"center"}}>
+                        <div style={{fontSize:"0.95rem",fontWeight:800,color:m.accent,lineHeight:1.2}}>{m.v}</div>
+                        <div style={{fontSize:"0.6rem",color:"#8a929c",marginTop:4,fontWeight:600}}>{m.k}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{display:"flex",gap:14,marginTop:8,fontSize:"0.65rem",color:"#9ca3af",fontWeight:500}}>
-                    <span>ยอดขายรวม = ผลรวมใบเสนอราคาที่ปิดการขาย</span>
-                    <span>โอกาสการขาย = รายการที่กำลังดำเนินการใน pipeline</span>
+                  {([
+                    ["ตัวแทน (Dealer)", CURRENT_DEALER.name],
+                    ["ผู้ดูแล (เซลส์)", selected.owner],
+                    ["สินค้าที่ซื้อไป", purchasedItems.join(", ") || "—"],
+                    ["จำนวนดีล/โครงการ", `${dealCount}`],
+                    ["วันที่ซื้อ (ปิดการขาย)", fmtDate(purchaseDateFor(selected.id,quotations))],
+                    ["วันส่งมอบงาน", fmtDate(deliveryDateFor(selected.id,quotations))],
+                    ["การรับประกัน", warrantyFor(selected.id,quotations)],
+                    ["เข้าร่วมเมื่อ", fmtDate(selected.joinDate)],
+                  ] as [string,string][]).map(([k,v])=>(
+                    <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
+                      <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:"#2D2D2D",textAlign:"right"}}>{v}</span>
+                    </div>
+                  ))}
+                  {(() => { const ws = warrantyStatusFor(selected.id, quotations); return (
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"8px 0 2px",fontSize:"0.76rem"}}>
+                      <span style={{color:"#8a929c"}}>สถานะการรับประกัน</span>
+                      <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.68rem",fontWeight:700,background:ws.bg,color:ws.color}}>{ws.label}</span>
+                    </div>
+                  ); })()}
+                </div>
+              </div>
+
+              {/* ── ดีล/โครงการ ── */}
+              <div style={{ padding:16, display:custTab==="deals"?"flex":"none", flexDirection:"column", gap:14 }}>
+                <div style={cardStyle}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                    <div style={{...secLabel,marginBottom:0}}><Layers size={13} color={PRIMARY}/> ดีล / โครงการ ({customerDeals.length})</div>
+                    <button onClick={()=>openNewDeal(selected)} className="btn btn-primary btn-sm"><Plus size={13}/> สร้างดีลใหม่</button>
                   </div>
+                  {customerDeals.length===0?(
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีดีล — กด &ldquo;สร้างดีลใหม่&rdquo; เพื่อเริ่มโครงการแรก</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {customerDeals.map(d=>{
+                        const sc=leadStatusColor[d.status];
+                        const dealQuoteCount=quotations.filter(q=>q.dealId===d.numId).length;
+                        const quoteLabel=dealQuoteCount>0?`${dealQuoteCount} ใบ`:(["QUOTED","FOLLOWUP","NEGO","PAID"].includes(d.status)?"มี":"—");
+                        return (
+                          <button key={d.id} onClick={()=>router.push(`/leads?open=${d.numId}`)}
+                            style={{display:"flex",flexDirection:"column",gap:6,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
+                            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#eef3f8";}}
+                            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:"0.8rem",fontWeight:800,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.project||`${d.product} — ${d.company}`}</span>
+                              <span className="badge" style={{flexShrink:0,background:sc.bg,color:sc.text}}>{leadStatusLabel[d.status]}</span>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:"0.65rem",color:MUTED}}>
+                              <span>{d.product}</span>
+                              {d.value&&<span style={{color:PRIMARY,fontWeight:700}}>{d.value}</span>}
+                              <span>ใบเสนอราคา: {quoteLabel}</span>
+                              <span>ผู้รับผิดชอบ: {d.assigned}</span>
+                              {d.createdAt&&<span>สร้าง: {d.createdAt}</span>}
+                              <span style={{marginLeft:"auto",color:PRIMARY,fontWeight:700}}>เปิด →</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-
-                {/* ข้อมูลลูกค้า — แก้ไขในตัวเหมือนหน้าลูกค้าเป้าหมาย (ไม่มีฟอร์มแยก) */}
-                <div style={{borderBottom:`1px solid #f0f4f8`}}>
-                  <CustomerOverviewEditor customer={selected} onSave={saveInline} />
-                </div>
-
-                {/* Related leads */}
                 {relatedLeads.length>0&&(
-                  <div style={{padding:"12px 16px",borderBottom:`1px solid #f0f4f8`}}>
-                    <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>ผู้สนใจที่เกี่ยวข้อง ({relatedLeads.length})</div>
-                    {relatedLeads.map(l=>(
-                      <button key={l.id} onClick={()=>router.push(`/leads?open=${l.numId}`)}
-                        style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:9,border:`1px solid ${BORDER}`,background:"#fff",cursor:"pointer",marginBottom:5,textAlign:"left"}}
-                        onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#dce5f0";}}
-                        onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#fff";}}>
-                        <span style={{padding:"2px 7px",borderRadius:6,fontSize:"0.65rem",fontWeight:700,background:"#dce5f0",color:PRIMARY,flexShrink:0}}>ผู้สนใจ</span>
-                        <span style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.company}</span>
-                        <span style={{fontSize:"0.65rem",color:PRIMARY}}>→</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Tab: ใบเสนอราคา */}
-            {detailTab==="quotes"&&(
-              <div style={{padding:"12px 16px"}}>
-                {relatedQuotations.length===0?(
-                  <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีใบเสนอราคา</div>
-                ):(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {relatedQuotations.map(q=>(
-                      <button key={q.id} onClick={()=>router.push("/quotations")}
-                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
-                        onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#fef3cd";}}
-                        onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
-                        <div style={{minWidth:0,flex:1}}>
-                          <div style={{fontSize:"0.72rem",fontWeight:700,color:PRIMARY,fontFamily:"monospace"}}>{q.id}</div>
-                          <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.project}</div>
-                          <div style={{fontSize:"0.65rem",color:MUTED,marginTop:1}}>{q.total}</div>
-                        </div>
-                        <span className="badge" style={{marginLeft:8,flexShrink:0,background:quotationStatusColor[q.status].bg,color:quotationStatusColor[q.status].text}}>
-                          {quotationStatusLabel[q.status]}
-                        </span>
-                      </button>
-                    ))}
+                  <div style={cardStyle}>
+                    <div style={secLabel}><Building2 size={13} color={PRIMARY}/> ลูกค้าเป้าหมายที่เกี่ยวข้อง ({relatedLeads.length})</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {relatedLeads.map(l=>(
+                        <button key={l.id} onClick={()=>router.push(`/leads?open=${l.numId}`)}
+                          style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:9,border:`1px solid ${BORDER}`,background:"#fff",cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#dce5f0";}}
+                          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#fff";}}>
+                          <span style={{padding:"2px 7px",borderRadius:6,fontSize:"0.6rem",fontWeight:700,background:"#dce5f0",color:PRIMARY,flexShrink:0}}>ลูกค้าเป้าหมาย</span>
+                          <span style={{fontSize:"0.72rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.company}</span>
+                          <span style={{fontSize:"0.65rem",color:PRIMARY}}>→</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Tab: นัดหมาย — แสดงประวัตินัด (สร้างนัดทำที่หน้าลูกค้าเป้าหมาย ก่อนปิดการขาย) */}
-            {detailTab==="appts"&&(
-              <div style={{padding:"12px 16px"}}>
-                <div style={{display:"flex",alignItems:"flex-start",gap:8,background:"#f5f7fa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"9px 12px",marginBottom:12,fontSize:"0.72rem",color:MUTED,lineHeight:1.5}}>
-                  <Calendar size={13} style={{color:PRIMARY,flexShrink:0,marginTop:1}}/>
-                  <span>ประวัตินัดหมายจากช่วงก่อนปิดการขาย · การนัดหมายใหม่ทำที่หน้า<b style={{color:PRIMARY}}>ลูกค้าเป้าหมาย</b>หรือ<b style={{color:PRIMARY}}>ปฏิทิน</b></span>
+              {/* ── ใบเสนอราคา ── */}
+              <div style={{ padding:16, display:custTab==="quotation"?"flex":"none", flexDirection:"column", gap:14 }}>
+                <div ref={rightQuoteRef} style={cardStyle}>
+                  <div style={secLabel}><FileText size={13} color={PRIMARY}/> ใบเสนอราคา</div>
+                  <LeadQuotationsPanel customer={selected} />
                 </div>
-                {relatedAppointments.length===0?(
-                  <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีนัดหมาย</div>
-                ):(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {relatedAppointments.map(a=>(
-                      <button key={a.id} onClick={()=>router.push("/calendar")}
-                        style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
-                        onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#e5faf0";}}
-                        onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL}}>{a.project}</div>
-                          <div style={{fontSize:"0.65rem",color:MUTED,marginTop:2}}>{fmtISOToThai(a.date)} · {a.time} น.</div>
-                        </div>
-                        <span className="badge" style={{flexShrink:0,background:"#dce5f0",color:PRIMARY}}>
-                          {a.status==="upcoming"?"กำลังจะมาถึง":a.status==="done"?"เสร็จแล้ว":"ยกเลิก"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
-            )}
 
-            {/* Tab: โน้ต */}
-            {detailTab==="notes"&&(
-              <div style={{padding:"12px 16px"}}>
-                {relatedNotes.length===0?(
-                  <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีโน้ต</div>
-                ):(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {relatedNotes.map(n=>{
-                      const c=noteCategoryColor[n.category];
-                      return (
-                        <div key={n.id} style={{padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                            <span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
-                            <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,flex:1}}>{n.title}</span>
-                            <span style={{fontSize:"0.65rem",color:MUTED}}>{n.updatedAt}</span>
+              {/* ── ไทม์ไลน์ + โน้ต + นัดหมาย + ไฟล์ ── */}
+              <div style={{ padding:16, display:custTab==="timeline"?"flex":"none", flexDirection:"column", gap:14 }}>
+                <div style={cardStyle}>
+                  <div style={secLabel}><TrendingUp size={13} color={PRIMARY}/> ไทม์ไลน์กิจกรรม</div>
+                  {timelineItems.length===0
+                    ? <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"18px 0"}}>ยังไม่มีกิจกรรม</div>
+                    : <ActivityTimeline items={timelineItems} />}
+                </div>
+                <div style={cardStyle}>
+                  <div style={secLabel}><StickyNote size={13} color={PRIMARY}/> โน้ต / รายงานติดตาม</div>
+                  {relatedNotes.length===0?(
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"18px 0"}}>ยังไม่มีโน้ต</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {relatedNotes.map(n=>{
+                        const c=noteCategoryColor[n.category];
+                        return (
+                          <button key={n.id} type="button" onClick={()=>setViewNote(n)} title="กดเพื่อดูโน้ตเต็ม"
+                            style={{padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
+                            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#eef2f7";}}
+                            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                              <span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
+                              <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.title}</span>
+                              <span style={{fontSize:"0.65rem",color:MUTED}}>{n.updatedAt}</span>
+                              <Eye size={13} color={PRIMARY} style={{flexShrink:0}}/>
+                            </div>
+                            <div style={{fontSize:"0.72rem",color:"#4b5563",whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:70,overflow:"hidden"}}>{n.content}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div ref={rightApptRef} style={cardStyle}>
+                  <div style={secLabel}><CalendarClock size={13} color={PRIMARY}/> นัดหมาย</div>
+                  {relatedAppointments.length===0?(
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"14px 0"}}>ยังไม่มีนัดหมาย</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {relatedAppointments.map(a=>(
+                        <button key={a.id} onClick={()=>setViewAppt(a)} title="กดเพื่อดูรายละเอียดนัดหมาย"
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
+                          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#e5faf0";}}
+                          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL}}>{a.project}</div>
+                            <div style={{fontSize:"0.65rem",color:MUTED,marginTop:2}}>{apptTypeLabel[a.type]} · {fmtISOToThai(a.date)} · {a.time} น.</div>
                           </div>
-                          <div style={{fontSize:"0.72rem",color:"#4b5563",whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:70,overflow:"hidden"}}>{n.content}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                          <span className="badge" style={{flexShrink:0,background:"#dce5f0",color:PRIMARY}}>{a.status==="upcoming"?"กำลังจะมาถึง":a.status==="done"?"เสร็จแล้ว":"ยกเลิก"}</span>
+                          <Eye size={14} color={PRIMARY} style={{flexShrink:0}}/>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={cardStyle}>
+                  <div style={secLabel}><Paperclip size={13} color={PRIMARY}/> ไฟล์</div>
+                  {selectedFiles.length===0?(
+                    <div style={{color:"#9aa2ad",fontSize:"0.8rem",padding:"14px 0",textAlign:"center"}}>ยังไม่มีไฟล์แนบ</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      {selectedFiles.map(file=>(
+                        <button key={file.id} type="button" onClick={()=>setPreviewFile(file)} title="กดเพื่อดูไฟล์"
+                          style={{display:"flex",alignItems:"center",gap:8,textAlign:"left",width:"100%",cursor:"pointer",padding:"8px 10px",borderRadius:8,background:"#fafafa",border:"1px solid #f0f4f8"}}>
+                          <Paperclip size={13} color="#C0C0C0"/>
+                          <span style={{flex:1,fontSize:"0.8rem",color:"#2D2D2D",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{file.name}</span>
+                          <Eye size={13} color="#003366"/>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={()=>fileInputRef.current?.click()}
+                    style={{fontSize:"0.72rem",color:"#003366",background:"none",border:"none",cursor:"pointer",padding:0,marginTop:10}}>
+                    + เพิ่มไฟล์แนบ
+                  </button>
+                </div>
               </div>
-            )}
-
             </div>
-          </div>
+
           </div>
         </>
+        );
+      })()}
+
+      {/* input ไฟล์ (ซ่อน) — ใช้ร่วมกับแท็บไฟล์ของโมดัลลูกค้า */}
+      <input ref={fileInputRef} type="file" style={{display:"none"}} onChange={handleFileSelect} />
+      <input ref={csvInputRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={onCsvFile} />
+
+      {/* คีย์ลูกค้าเดิมทีละราย (legacy manual) */}
+      {showManual && (
+        <div onClick={()=>setShowManual(false)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:230,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
+            <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:"0.92rem",fontWeight:800}}>เพิ่มลูกค้าเดิม</div>
+                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>ลูกค้าก่อนมีระบบ / ไม่ได้ผ่านลูกค้าเป้าหมาย</div>
+              </div>
+              <button onClick={()=>setShowManual(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
+            </div>
+            <div style={{padding:20,display:"flex",flexDirection:"column",gap:12,overflow:"visible"}}>
+              <div><label className="form-label">บริษัท / ชื่อลูกค้า *</label>
+                <input className="form-input" value={legacyForm.company} autoFocus onChange={e=>setLegacyForm(f=>({...f,company:e.target.value}))} placeholder="ชื่อบริษัท / ชื่อลูกค้า" /></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><label className="form-label">ผู้ติดต่อ</label>
+                  <input className="form-input" value={legacyForm.name} onChange={e=>setLegacyForm(f=>({...f,name:e.target.value}))} placeholder="ชื่อผู้ติดต่อ" /></div>
+                <div><label className="form-label">โทรศัพท์</label>
+                  <input className="form-input" value={legacyForm.phone} onChange={e=>setLegacyForm(f=>({...f,phone:e.target.value}))} placeholder="0XX-XXX-XXXX" /></div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><label className="form-label">อีเมล</label>
+                  <input className="form-input" value={legacyForm.email} onChange={e=>setLegacyForm(f=>({...f,email:e.target.value}))} placeholder="email@company.com" /></div>
+                <div><label className="form-label">จังหวัด</label>
+                  <input className="form-input" value={legacyForm.province} onChange={e=>setLegacyForm(f=>({...f,province:e.target.value}))} /></div>
+              </div>
+              <div>
+                <label className="form-label">แม่แบบ</label>
+                <TemplateSelect value={legacyForm.category} onChange={v=>setLegacyForm(f=>({...f,category:v}))} className="form-select" />
+              </div>
+              <div style={{fontSize:"0.65rem",color:"#9ca3af"}}>ลูกค้านำเข้าจะติดป้าย &ldquo;นำเข้า&rdquo; · ลูกค้าใหม่ปกติเกิดจากปิดการขาย (Lead→Won)</div>
+            </div>
+            <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button className="btn btn-secondary btn-md" onClick={()=>setShowManual(false)}>ยกเลิก</button>
+              <button className="btn btn-primary btn-md" onClick={createLegacy} disabled={!legacyForm.company.trim()}><Plus size={14}/> เพิ่มลูกค้า</button>
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* นำเข้าลูกค้าเดิมจาก CSV */}
+      {showImport && (
+        <div onClick={()=>setShowImport(false)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:230,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:560,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
+            <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:"0.92rem",fontWeight:800}}>นำเข้าลูกค้าเดิมจาก CSV</div>
+                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>คอลัมน์: {CSV_HEADERS.join(" · ")}</div>
+              </div>
+              <button onClick={()=>setShowImport(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
+            </div>
+            <div style={{padding:20,display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button className="btn btn-secondary btn-sm" onClick={downloadCsvTemplate}><Download size={13}/> ดาวน์โหลดเทมเพลต</button>
+                <button className="btn btn-secondary btn-sm" onClick={()=>csvInputRef.current?.click()}><Upload size={13}/> เลือกไฟล์ CSV</button>
+                <button className="btn btn-secondary btn-sm" onClick={()=>{setShowImport(false);setShowManual(true);}} style={{marginLeft:"auto"}}><Plus size={13}/> เพิ่มทีละราย</button>
+              </div>
+              {importErr && <div style={{fontSize:"0.72rem",color:"#dc2626"}}>{importErr}</div>}
+              {importRows.length>0 ? (
+                <>
+                  <div style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>พบ {importRows.length} รายการ — ตรวจก่อนยืนยัน</div>
+                  <div style={{maxHeight:280,overflowY:"auto",border:`1px solid ${BORDER}`,borderRadius:10}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.72rem"}}>
+                      <thead><tr style={{background:"#f8f9fb"}}>{["บริษัท","ผู้ติดต่อ","จังหวัด","ประเภท","แม่แบบ"].map(h=><th key={h} style={{textAlign:"left",padding:"7px 10px",color:MUTED,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {importRows.map((r,i)=>(
+                          <tr key={i} style={{borderTop:`1px solid ${BORDER}`}}>
+                            <td style={{padding:"7px 10px",fontWeight:700,color:STEEL}}>{r.company}</td>
+                            <td style={{padding:"7px 10px",color:MUTED}}>{r.name||"—"}</td>
+                            <td style={{padding:"7px 10px",color:MUTED}}>{r.province}</td>
+                            <td style={{padding:"7px 10px",color:MUTED}}>{r.type}</td>
+                            <td style={{padding:"7px 10px",color:MUTED}}>{r.category||"—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div style={{fontSize:"0.72rem",color:"#9ca3af",padding:"18px 0",textAlign:"center"}}>ยังไม่ได้เลือกไฟล์ — ดาวน์โหลดเทมเพลต กรอกข้อมูล แล้วเลือกไฟล์ CSV</div>
+              )}
+            </div>
+            <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button className="btn btn-secondary btn-md" onClick={()=>setShowImport(false)}>ยกเลิก</button>
+              <button className="btn btn-primary btn-md" onClick={commitImport} disabled={!importRows.length}><Check size={14}/> นำเข้า {importRows.length>0?`${importRows.length} ราย`:""}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* สร้างดีลใหม่ dialog — ลูกค้าเดิมซื้อโครงการใหม่ (ข้อมูลลูกค้าคงเดิม) */}
+      {showNewDeal && dealCustomer && (
+        <div onClick={()=>setShowNewDeal(false)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:230,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:460,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
+            <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:"0.92rem",fontWeight:800}}>สร้างดีลใหม่</div>
+                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>โครงการใหม่ของลูกค้าเดิม · ข้อมูลลูกค้าคงเดิม</div>
+              </div>
+              <button onClick={()=>setShowNewDeal(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
+            </div>
+            <div style={{padding:20,display:"flex",flexDirection:"column",gap:13,overflow:"visible"}}>
+              <div>
+                <label className="form-label">ลูกค้า</label>
+                <div style={{padding:"9px 12px",borderRadius:9,background:"#f0f4f8",border:`1px solid ${BORDER}`,fontSize:"0.8rem",fontWeight:700,color:STEEL}}>{dealCustomer.company}</div>
+              </div>
+              <div><label className="form-label">ชื่อโครงการ</label>
+                <input className="form-input" value={dealForm.project} onChange={e=>setDealForm(f=>({...f,project:e.target.value}))} placeholder={`เช่น ${dealForm.product} เฟส 2`} /></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><label className="form-label">แม่แบบ</label>
+                  <TemplateSelect value={dealForm.product} onChange={v=>setDealForm(f=>({...f,product:v}))} className="form-select" /></div>
+                <div><label className="form-label">มูลค่าคาดการณ์</label>
+                  <input className="form-input" value={dealForm.value} onChange={e=>setDealForm(f=>({...f,value:e.target.value}))} placeholder="เช่น ฿1.2M" /></div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div><label className="form-label">ผู้รับผิดชอบ</label>
+                  <PersonPicker value={dealForm.assigned} onChange={v=>setDealForm(f=>({...f,assigned:v}))} multiple /></div>
+                <div><label className="form-label">วันปิดคาดการณ์</label>
+                  <input className="form-input" type="date" value={dealForm.closeDate} onChange={e=>setDealForm(f=>({...f,closeDate:e.target.value}))} /></div>
+              </div>
+              <div><label className="form-label">หมายเหตุ</label>
+                <textarea className="form-input" rows={2} style={{resize:"vertical"}} value={dealForm.note} onChange={e=>setDealForm(f=>({...f,note:e.target.value}))} placeholder="รายละเอียดเพิ่มเติม..." /></div>
+              <div style={{fontSize:"0.65rem",color:"#9ca3af"}}>ดีลใหม่เริ่มที่สเตจ &ldquo;ติดต่อแล้ว&rdquo; ในบอร์ด pipeline · นับรวมใน Dashboard/รายงานทันที · เปิดรายละเอียดดีลให้เลย</div>
+            </div>
+            <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button className="btn btn-secondary btn-md" onClick={()=>setShowNewDeal(false)}>ยกเลิก</button>
+              <button className="btn btn-primary btn-md" onClick={createDeal} disabled={!dealForm.product}><Plus size={14}/> สร้างดีล</button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Delete confirm dialog */}
       {showDeleteConfirm && selected && (
@@ -1044,9 +1280,70 @@ export default function CustomersPage(){
           </div>
         </div>
       )}
+      {/* ลูกค้าเกิดจาก Lead→Won อัตโนมัติเท่านั้น — ฝั่งตัวแทนสร้างลูกค้าเองไม่ได้ (ไม่มีฟอร์มเพิ่ม) */}
+      {previewFile && <FilePreviewModal file={previewFile} onClose={()=>setPreviewFile(null)} />}
 
-      {/* Add Modal — แก้ไขทำในแท็บ "ข้อมูล" ของโมดัลรายละเอียด (ไม่มีฟอร์มแก้ไขแยกแล้ว) */}
-      {showAdd&&<CustomerModal initial={BLANK_FORM} title="เพิ่มลูกค้าใหม่" onSave={addCustomer} onClose={()=>setShowAdd(false)}/>}
+      {/* รายละเอียดนัดหมาย (ดูในตัว) */}
+      {viewAppt && (
+        <>
+          <div onClick={()=>setViewAppt(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:300}}/>
+          <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:310,width:420,maxWidth:"calc(100vw - 32px)",background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,51,102,.28)"}}>
+            <div style={{background:PRIMARY,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                <Calendar size={16} color="#fff"/>
+                <div style={{fontSize:"0.9rem",fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewAppt.project}</div>
+              </div>
+              <button onClick={()=>setViewAppt(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:7,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={13}/></button>
+            </div>
+            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:2}}>
+              {[
+                ["ประเภท", apptTypeLabel[viewAppt.type]],
+                ["วันที่", `${fmtISOToThai(viewAppt.date)} · ${viewAppt.time} น.`],
+                ["สถานะ", viewAppt.status==="upcoming"?"กำลังจะมาถึง":viewAppt.status==="done"?"เสร็จแล้ว":"ยกเลิก"],
+                ["ผู้รับผิดชอบ", viewAppt.assigned||"—"],
+                ["ผู้ติดต่อ", viewAppt.contact||"—"],
+                ["โทรศัพท์", viewAppt.phone||"—"],
+                ["จังหวัด", viewAppt.province||"—"],
+                ["หมายเหตุ", viewAppt.note||"—"],
+              ].map(([k,v])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",gap:12,padding:"8px 0",borderBottom:`1px solid #f0f4f8`}}>
+                  <span style={{fontSize:"0.72rem",color:MUTED,flexShrink:0}}>{k}</span>
+                  <span style={{fontSize:"0.76rem",fontWeight:600,color:STEEL,textAlign:"right"}}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:"12px 18px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button onClick={()=>router.push("/calendar")} className="btn btn-secondary btn-sm" style={{color:"#374151"}}><Calendar size={13}/> เปิดในปฏิทิน</button>
+              <button onClick={()=>setViewAppt(null)} className="btn btn-primary btn-sm">ปิด</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* รายละเอียดโน้ต (ดูในตัว) */}
+      {viewNote && (
+        <>
+          <div onClick={()=>setViewNote(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:300}}/>
+          <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:310,width:460,maxWidth:"calc(100vw - 32px)",maxHeight:"85vh",background:"#fff",borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 24px 80px rgba(0,51,102,.28)"}}>
+            <div style={{background:PRIMARY,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                <StickyNote size={16} color="#fff"/>
+                <div style={{fontSize:"0.9rem",fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewNote.title}</div>
+              </div>
+              <button onClick={()=>setViewNote(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:7,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={13}/></button>
+            </div>
+            <div style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:8,borderBottom:`1px solid #f0f4f8`,flexWrap:"wrap"}}>
+              <span className="badge" style={{background:noteCategoryColor[viewNote.category].bg,color:noteCategoryColor[viewNote.category].text}}>{viewNote.category}</span>
+              <span style={{fontSize:"0.68rem",color:MUTED}}>โดย {viewNote.author}</span>
+              <span style={{fontSize:"0.68rem",color:MUTED,marginLeft:"auto"}}>แก้ไขล่าสุด {viewNote.updatedAt}</span>
+            </div>
+            <div style={{padding:"16px 18px",overflowY:"auto",fontSize:"0.8rem",color:"#374151",whiteSpace:"pre-wrap",lineHeight:1.7}}>{viewNote.content}</div>
+            <div style={{padding:"12px 18px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>setViewNote(null)} className="btn btn-primary btn-sm">ปิด</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

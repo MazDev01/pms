@@ -1,12 +1,13 @@
 "use client";
 
+import { TopbarActions } from "@/components/layout/TopbarActions";
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import {
-  Package, FileText, Download, Search, Lock, Building2, X, History, CalendarClock, FilePlus2,
+  Package, FileText, Download, Search, Lock, X, History, CalendarClock,
 } from "lucide-react";
 import { useEffect } from "react";
 import { solutionProducts, loadMasterCatalog, type SolutionProduct } from "@/lib/mock";
+import { TemplateHero } from "@/components/ui/TemplateHero";
 
 // ── Design tokens ─────────────────────────────────────────────
 const PRIMARY = "#003366";
@@ -19,10 +20,10 @@ type Product = SolutionProduct;
 function fmtMoney(v: number) { return "฿" + v.toLocaleString("th-TH"); }
 
 export default function DealerProductsPage() {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [viewP, setViewP] = useState<Product | null>(null);
   const [historyP, setHistoryP] = useState<Product | null>(null);
+  const [subView, setSubView] = useState<{ parent: Product; sub: string } | null>(null); // ดูรายละเอียดแม่แบบย่อย
   // แคตตาล็อกเดียวทั้งเครือ — อ่านชุดที่ HQ แก้ไข (MASTER_CATALOG_KEY) · fallback = mock
   const [PRODUCTS, setPRODUCTS] = useState<Product[]>(solutionProducts);
   useEffect(() => { setPRODUCTS(loadMasterCatalog()); }, []);
@@ -54,12 +55,9 @@ export default function DealerProductsPage() {
   return (
     <div className="erp">
       {/* ── หัวข้อหน้า ── */}
-      <div className="page-head" style={{ flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <h2>แม่แบบ</h2>
-          <p>แม่แบบอาคารสำเร็จรูป · ราคากลางกำหนดโดยสำนักงานใหญ่</p>
-        </div>
-        <div style={{ position: "relative", width: 280, maxWidth: "100%" }}>
+      {/* หัวหน้า/ช่องค้นหา → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
+      <TopbarActions>
+        <div style={{ position: "relative", width: 240, maxWidth: "100%" }}>
           <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: MUTED }} />
           <input
             className="form-input"
@@ -69,7 +67,8 @@ export default function DealerProductsPage() {
             onChange={e => setQuery(e.target.value)}
           />
         </div>
-      </div>
+      </TopbarActions>
+      <p className="page-sub">แม่แบบอาคารสำเร็จรูป · ราคากลางกำหนดโดยสำนักงานใหญ่</p>
 
       {/* ── Banner: read-only ── */}
       <div
@@ -91,7 +90,7 @@ export default function DealerProductsPage() {
           <div style={{ fontSize: "0.92rem" }}>ไม่พบแม่แบบที่ตรงกับเงื่อนไข</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 18 }}>
           {filtered.map(p => (
             <div
               key={p.id}
@@ -111,11 +110,14 @@ export default function DealerProductsPage() {
                   borderBottom: `1px solid ${BORDER}`, overflow: "hidden",
                 }}
               >
-                {/* ลายเส้นจาง */}
-                <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#00336610 1px, transparent 1px), linear-gradient(90deg, #00336610 1px, transparent 1px)", backgroundSize: "22px 22px", opacity: 0.5 }} />
-                <div className="tpl-hero" style={{ width: 62, height: 62, borderRadius: 16, background: "#fff", border: `1px solid ${BORDER}`, boxShadow: "0 6px 16px rgba(0,51,102,.12)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
-                  <Building2 size={30} style={{ color: PRIMARY }} />
-                </div>
+                {p.image ? (
+                  /* รูปแม่แบบที่ HQ อัปโหลด — เต็มพื้นที่ Hero */
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={p.image} alt={p.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  /* ไม่มีรูปจริง → ภาพประกอบ SVG ตามประเภทอาคาร */
+                  <TemplateHero name={p.name} />
+                )}
                 {p.subtypes && p.subtypes.length > 0 && (
                   <span style={{ position: "absolute", top: 12, right: 12, fontSize: "0.65rem", fontWeight: 700, color: PRIMARY, background: "rgba(255,255,255,.85)", border: `1px solid #dce5f0`, borderRadius: 999, padding: "3px 10px", backdropFilter: "blur(2px)" }}>
                     {p.subtypes.length} แม่แบบย่อย
@@ -169,16 +171,10 @@ export default function DealerProductsPage() {
                   <button onClick={e => { e.stopPropagation(); setViewP(p); }} className="btn btn-secondary btn-sm" style={{ flex: 1, color: STEEL }}>
                     <FileText size={13} /> รายละเอียด
                   </button>
-                  <button onClick={e => { e.stopPropagation(); downloadSpec(p); }} className="btn btn-secondary btn-sm" title="ดาวน์โหลด" style={{ width: 40, padding: 0, color: STEEL }}>
-                    <Download size={14} />
-                  </button>
                   <button onClick={e => { e.stopPropagation(); setHistoryP(p); }} className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 40, padding: 0, color: STEEL }}>
                     <History size={14} />
                   </button>
                 </div>
-                <button onClick={e => { e.stopPropagation(); router.push("/quotations"); }} className="btn btn-primary btn-sm" style={{ justifyContent: "center" }}>
-                  <FilePlus2 size={13} /> สร้างใบเสนอราคา
-                </button>
               </div>
             </div>
           ))}
@@ -188,7 +184,7 @@ export default function DealerProductsPage() {
       {/* ── รายละเอียดแม่แบบ modal ── */}
       {viewP && (
         <div onClick={() => setViewP(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewP.name}</div>
@@ -201,6 +197,28 @@ export default function DealerProductsPage() {
                 <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>รายละเอียด</div>
                 <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{viewP.spec}</div>
               </div>
+              {/* แม่แบบย่อย พร้อมรูป */}
+              {viewP.subtypes && viewP.subtypes.length > 0 && (
+                <div>
+                  <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 8 }}>แม่แบบย่อย ({viewP.subtypes.length})</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                    {viewP.subtypes.map(s => (
+                      <button key={s} onClick={() => setSubView({ parent: viewP, sub: s })} title={`ดูรายละเอียด ${s}`}
+                        style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", background: "#fafafa", cursor: "pointer", padding: 0, textAlign: "center", fontFamily: "inherit" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 14px rgba(0,51,102,.14)"; (e.currentTarget as HTMLElement).style.borderColor = "#cdd8e6"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "none"; (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}>
+                        <div style={{ position: "relative", height: 66, background: "#f0f4f9", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                          {(viewP.subtypeImages?.[s] ?? viewP.image)
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            ? <img src={viewP.subtypeImages?.[s] ?? viewP.image} alt={s} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            : <TemplateHero name={`${viewP.name} ${s}`} />}
+                        </div>
+                        <div style={{ padding: "6px 8px", fontSize: "0.7rem", fontWeight: 600, color: STEEL, textAlign: "center", lineHeight: 1.3 }}>{s}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (สำนักงานใหญ่กำหนด)</div>
                 <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(viewP.price)}</span>
@@ -218,9 +236,42 @@ export default function DealerProductsPage() {
                   <Download size={14} /> ดาวน์โหลด
                 </button>
               </div>
-              <button onClick={() => router.push("/quotations")} className="btn btn-primary btn-md" style={{ justifyContent: "center" }}>
-                <FilePlus2 size={14} /> สร้างใบเสนอราคาจากแม่แบบนี้
-              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── รายละเอียดแม่แบบย่อย modal ── */}
+      {subView && (
+        <div onClick={() => setSubView(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+            <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: "1rem", fontWeight: 800 }}>{subView.sub}</div>
+                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>แม่แบบย่อยของ {subView.parent.name}</div>
+              </div>
+              <button onClick={() => setSubView(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
+            </div>
+            <div style={{ position: "relative", height: 150, background: "#f0f4f9", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", borderBottom: `1px solid ${BORDER}` }}>
+              {(subView.parent.subtypeImages?.[subView.sub] ?? subView.parent.image)
+                /* eslint-disable-next-line @next/next/no-img-element */
+                ? <img src={subView.parent.subtypeImages?.[subView.sub] ?? subView.parent.image} alt={subView.sub} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <TemplateHero name={`${subView.parent.name} ${subView.sub}`} big />}
+            </div>
+            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>รายละเอียด</div>
+                <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{subView.parent.spec}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (ตามแม่แบบหลัก · สำนักงานใหญ่กำหนด)</div>
+                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(subView.parent.price)}</span>
+                <span style={{ fontSize: "0.72rem", color: MUTED }}> / {subView.parent.unit}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
+                  <CalendarClock size={12} style={{ color: MUTED }} />
+                  <span style={{ fontSize: "0.72rem", color: MUTED }}>มีผล {subView.parent.effectiveDate}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

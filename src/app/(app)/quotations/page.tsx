@@ -3,23 +3,26 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteValidityDays,
-  DEFAULT_ISSUER, ISSUER_KEY,
-  type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile,
+  quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteValidityDays, loadQuoteNumbering,
+  loadHQPolicy, DEFAULT_ISSUER, ISSUER_KEY,
+  type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@/lib/mock";
-import { TemplateSelect } from "@/components/ui/TemplateSelect";
+import { LineItemsEditor } from "@/components/ui/LineItemsEditor";
 import { AssigneeAvatars } from "@/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@/lib/quotationPrint";
 import { useSales } from "@/context/SalesContext";
+import { QuotationCreateModal } from "@/components/ui/QuotationCreateModal";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { TopbarActions } from "@/components/layout/TopbarActions";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { useTableLayout, TableTools, type Col } from "@/components/ui/TableTools";
+import { useTableLayout, type Col } from "@/components/ui/TableTools";
 import {
   Plus, Search, X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer,
   ExternalLink, ArrowRight, ChevronLeft, ChevronRight,
-  Send,
+  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Percent,
 } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -75,6 +78,7 @@ type QForm = {
   province:string; buildingType:string; area:number;
   materialCost:number;
   status:QuotationStatus; date:string; items:number;
+  lineItems:QuoteLineItem[];
   revision:string; expiry:string;
 };
 
@@ -88,23 +92,28 @@ type Issuer = IssuerProfile;
 // ── Helpers ───────────────────────────────────────────────────
 function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
 function fmtDate(d:string){ if(!d||d==="—") return "—"; const [y,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]} ${parseInt(y)+543}`; }
-function nextQId(data:QuotationMock[], doc:DocProfile=DEFAULT_DOC){
-  // เลขที่ถัดไป = อิงเลขท้ายสุดของเอกสารเดิม และเลขเริ่มต้นที่ตั้งไว้ในตั้งค่า (runningNumber)
+function nextQId(data:QuotationMock[]){
+  // รูปแบบเลขที่ = HQ กำหนด (แหล่งเดียว loadQuoteNumbering) · ตัวแทนแก้ไม่ได้
+  const { prefix, next: startNo } = loadQuoteNumbering();
   const nums = data.map(q=>{ const mt=q.id.match(/(\d+)\s*$/); return mt?parseInt(mt[1]):0; });
-  const start = doc.runningNumber ? doc.runningNumber - 1 : 100;
-  const next = Math.max(start, ...nums, 0) + 1;
-  return `${doc.quotePrefix || "Q-2026-"}${String(next).padStart(4,"0")}`;
+  const next = Math.max(startNo - 1, ...nums, 0) + 1;
+  return `${prefix}${String(next).padStart(4,"0")}`;
 }
 // ── Add / Edit Modal ──────────────────────────────────────────
-const TODAY = "2026-06-23";
+const TODAY = "2026-06-30";
 // วันหมดอายุเริ่มต้น = วันนี้ + อายุใบเสนอราคา (จากกฎการขาย settings) → ISO
 function defaultExpiry(): string {
   const d = new Date(TODAY); d.setDate(d.getDate() + loadQuoteValidityDays());
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
+// ชื่อโครงการแนะนำจากลูกค้า — "{แม่แบบ} — {บริษัท}" (เหมือนตอนสร้างใบเสนอจากลีด) · แก้ได้
+function suggestProject(c?:CustomerRow):string{
+  if(!c) return "";
+  return c.category ? `${c.category} — ${c.company}` : c.company;
+}
 function buildBlank(customers:CustomerRow[]): QForm {
   const c=customers[0];
-  return { customerId:c?.id??0, customer:c?.company??"", project:"", projectId:0, province:c?.province??"", buildingType:"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, revision:"V1", expiry:defaultExpiry() };
+  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry() };
 }
 
 function QuotationModal({ initial, title, onSave, onClose, customers }:{
@@ -114,13 +123,14 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
   const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.8rem",outline:"none",color:STEEL,boxSizing:"border-box"};
   const LBL:React.CSSProperties={fontSize:"0.65rem",fontWeight:700,color:MUTED,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
   function set<K extends keyof QForm>(k:K,v:QForm[K]){setForm(p=>({...p,[k]:v}));}
-  const total=form.materialCost;
+  const total=form.lineItems.reduce((s,it)=>s+it.qty*it.unitPrice,0); // = Σ รายการ (BOQ)
   function pickCustomer(id:number){
     const c=customers.find(c=>c.id===id);
     if(!c) return;
-    setForm(p=>({...p,customerId:c.id,customer:c.company,province:p.province||c.province}));
+    // prefill ทุกช่องที่ดึงจากลูกค้าได้: จังหวัด · แม่แบบ (จาก category) · ชื่อโครงการ (แนะนำ แก้ได้)
+    setForm(p=>({...p,customerId:c.id,customer:c.company,province:c.province||p.province,buildingType:c.category||p.buildingType,project:suggestProject(c)}));
   }
-  function submit(){if(!form.customer||!form.project)return; onSave(form); onClose();}
+  function submit(){if(!form.customer||!form.project)return; onSave({...form, items:form.lineItems.length, materialCost:total}); onClose();}
   return (
     <>
       <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.4)",zIndex:200}}/>
@@ -142,7 +152,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
             </div>
             {/* Project */}
             <div>
-              <label style={LBL}>ชื่อโอกาสการขาย *</label>
+              <label style={LBL}>ชื่อโครงการ *</label>
               <input value={form.project} onChange={e=>set("project",e.target.value)} placeholder="เช่น โกดังสินค้า ABC" style={INP}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -151,22 +161,13 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
                 <input value={form.province} onChange={e=>set("province",e.target.value)} placeholder="จังหวัด" style={INP}/>
               </div>
               <div>
-                <label style={LBL}>แม่แบบ</label>
-                <TemplateSelect value={form.buildingType} onChange={v=>set("buildingType",v)} style={INP} />
-              </div>
-              <div>
                 <label style={LBL}>พื้นที่ (ตร.ม.)</label>
                 <input type="number" value={form.area||""} onChange={e=>set("area",Number(e.target.value))} placeholder="0" style={INP}/>
               </div>
-              <div>
-                <label style={LBL}>จำนวนรายการ</label>
-                <input type="number" value={form.items||""} onChange={e=>set("items",Number(e.target.value))} placeholder="0" style={INP}/>
-              </div>
-              <div>
-                <label style={LBL}>มูลค่า (บาท)</label>
-                <input type="number" value={form.materialCost||""} onChange={e=>set("materialCost",Number(e.target.value))} placeholder="0" style={INP}/>
-              </div>
             </div>
+            {/* รายการสินค้า (BOQ) — เลือกจากแคตตาล็อก → ราคากลาง HQ · แม่แบบ derive จากรายการแรก (ไม่มีช่องแม่แบบซ้ำ) */}
+            <LineItemsEditor items={form.lineItems} defaultQty={form.area}
+              onChange={li=>setForm(p=>({...p,lineItems:li,buildingType:li.length?li[0].name.split(" · ")[0]:p.buildingType}))} />
             {/* Total preview */}
             {total>0&&<div style={{padding:"10px 14px",background:"#dce5f0",borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่ารวม (คำนวณ)</span>
@@ -186,12 +187,6 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
               <div>
                 <label style={LBL}>วันหมดอายุ</label>
                 <input type="date" value={form.expiry} onChange={e=>set("expiry",e.target.value)} style={INP}/>
-              </div>
-              <div>
-                <label style={LBL}>เวอร์ชัน</label>
-                <select value={form.revision} onChange={e=>set("revision",e.target.value)} style={INP}>
-                  {["V1","V2","V3"].map(v=><option key={v} value={v}>{v}</option>)}
-                </select>
               </div>
             </div>
           </div>
@@ -336,7 +331,7 @@ function QuotationsPageInner(){
       updateQuotation(updated);
       setSelected(p=>p?.id===editingQ.id?updated:p);
     } else {
-      const newQ:QuotationMock={...form,revision:form.revision,expiry:form.expiry,id:nextQId(data, docProfile),total,totalValue:tv};
+      const newQ:QuotationMock={...form,revision:form.revision,expiry:form.expiry,id:nextQId(data),total,totalValue:tv};
       addQuotation(newQ);
     }
   }
@@ -369,15 +364,20 @@ function QuotationsPageInner(){
     const cust=customers.find(c=>c.id===q.customerId);
     const w=window.open("","_blank","width=880,height=1040");
     if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
-    w.document.write(buildQuotationHTML(q,issuer,cust,docProfile,loadWordmark()));
+    // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
+    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,docProfile,loadWordmark()));
     w.document.close();
   }
 
-  const detailTabs:[string,string][]=[["info","ข้อมูล"],["customer","ลูกค้า"],["lead","ผู้สนใจ"]];
+  const detailTabs:[string,string][]=[["info","ข้อมูล"],["customer","ลูกค้า"],["lead","ลูกค้าเป้าหมาย"]];
 
   // form initial for edit
   function toForm(q:QuotationMock):QForm{
-    return {customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,revision:q.revision??"V1",expiry:q.expiry??""};
+    // ใบเก่าที่ไม่มี lineItems → สังเคราะห์เป็น 1 รายการจาก แม่แบบ/พื้นที่/มูลค่า (แก้ต่อได้)
+    const lineItems:QuoteLineItem[] = q.lineItems ?? (q.materialCost>0
+      ? [{ name:q.buildingType||"รายการ", qty:q.area||1, unit:q.area?"ตร.ม.":"รายการ", unitPrice:q.area?Math.round(q.materialCost/q.area):q.materialCost }]
+      : []);
+    return {customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,lineItems,revision:q.revision??"V1",expiry:q.expiry??""};
   }
 
   return (
@@ -386,55 +386,76 @@ function QuotationsPageInner(){
       {/* ══ MAIN ════════════════════════════════════════════ */}
       <div style={{flex:1,minWidth:0}}>
 
-        {/* Header */}
-        <div className="page-head" style={{flexWrap:"wrap"}}>
-          <div>
-            <h2>ใบเสนอราคา</h2>
-            <p>จัดการใบเสนอราคาและติดตามสถานะ · {timeRange.subtitle}</p>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
-            <FilterBar dims={[]} />
-            <TableTools storageKey="quotations" columns={COLS} hiddenCols={hiddenCols} onToggleCol={toggleCol}
-              density={density} onDensityChange={setDensity} />
-            <ExportMenu filename="quotations" title="ใบเสนอราคา" small
-              headers={["เลขที่","ลูกค้า","ผู้รับผิดชอบ","โอกาสการขาย","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
-              rows={filtered.map(q=>[q.id,q.customer,customers.find(c=>c.id===q.customerId)?.owner ?? "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
-            <button onClick={openAdd} className="btn btn-primary btn-sm">
-              <Plus size={13}/> เพิ่มใบเสนอราคา
-            </button>
-          </div>
-        </div>
+        {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
+        <TopbarActions>
+          <FilterBar dims={[]} />
+          <ExportMenu filename="quotations" title="ใบเสนอราคา" small
+            headers={["เลขที่","ลูกค้า","ผู้รับผิดชอบ","โครงการ","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
+            rows={filtered.map(q=>[q.id,q.customer,customers.find(c=>c.id===q.customerId)?.owner ?? "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
+          <button onClick={openAdd} className="btn btn-primary btn-sm">
+            <Plus size={13}/> เพิ่มใบเสนอราคา
+          </button>
+        </TopbarActions>
+        <p className="page-sub">จัดการใบเสนอราคาและติดตามสถานะ · {timeRange.subtitle}</p>
 
-        {/* สรุปรวม (pill) */}
+        {/* ── สรุป 5 ตัวชี้วัด — การ์ด KPI คลิกกรองได้ (มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย/ลูกค้า) ── */}
         {(() => {
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
           const STATUS_LIST: QuotationStatus[] = ["draft","sent_to_client","viewed","won","lost","expired"];
-          const totalVal = scoped.reduce((a,q)=>a+q.totalValue,0); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
-          const pill = { display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", fontWeight:700, background:"#fff", border:`1px solid ${BORDER}`, borderRadius:99, padding:"7px 16px" } as const;
+          const valOf = (list: QuotationMock[]) => list.reduce((a,q)=>a+q.totalValue,0);
+          const totalVal = valOf(scoped); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
+          const waiting  = scoped.filter(q=>q.status==="sent_to_client"||q.status==="viewed");
+          const wonList  = scoped.filter(q=>q.status==="won");
+          const lostList = scoped.filter(q=>q.status==="lost");
+          const closed   = wonList.length + lostList.length;
+          const rate     = closed ? Math.round(wonList.length/closed*100) : 0;
+          const clear    = () => setFilterStatus("ALL");
+          const kpis = [
+            { label:"ใบเสนอราคาทั้งหมด", value:`${scoped.length}`,      sub:"รายการ",            Icon:FileText, color:"#2563EB", bg:"#E8F0FE", on: filterStatus==="ALL", onClick: clear },
+            { label:"มูลค่ารวม",         value:fmtC(totalVal),          sub:"ทุกสถานะ",           Icon:Coins,    color:"#16A34A", bg:"#E6F7EE", on: false,                onClick: clear },
+            { label:"รอลูกค้าตอบ",       value:`${waiting.length}`,     sub:fmtC(valOf(waiting)), Icon:Send,     color:"#7C3AED", bg:"#F0EBFB", on: filterStatus==="sent_to_client", onClick:()=>setFilterStatus(filterStatus==="sent_to_client"?"ALL":"sent_to_client") },
+            { label:"ตอบรับแล้ว",        value:`${wonList.length}`,     sub:fmtC(valOf(wonList)), Icon:Check,    color:"#0D9488", bg:"#E6F7F5", on: filterStatus==="won",  onClick:()=>setFilterStatus(filterStatus==="won"?"ALL":"won") },
+            { label:"อัตราตอบรับ",       value:`${rate}%`,              sub:"ตอบรับ/ปิดแล้ว",     Icon:Percent,  color:"#EA580C", bg:"#FEF0E6", on: false,                onClick: clear },
+          ];
           return (
             <>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
-                <div style={pill}>ใบเสนอราคาทั้งหมด: <span style={{color:PRIMARY}}>{scoped.length}</span></div>
-                <div style={pill}>มูลค่ารวม: <span style={{color:PRIMARY}}>{fmtC(totalVal)}</span></div>
-              </div>
-              {/* สรุปตามสถานะ — count + มูลค่า · คลิกกรอง */}
-              <div className="card" style={{ padding:"12px 16px", marginBottom:14, display:"flex", gap:6, flexWrap:"wrap" }}>
-                {STATUS_LIST.map(s=>{
-                  const c=quotationStatusColor[s]; const list=scoped.filter(q=>q.status===s);
-                  const cnt=list.length; const val=list.reduce((a,q)=>a+q.totalValue,0); const active=filterStatus===s;
-                  return (
-                    <button key={s} onClick={()=>setFilterStatus(active?"ALL":s)}
-                      style={{ display:"flex", flexDirection:"column", gap:2, background:active?c.bg:"#fafafa",
-                        border:`1px solid ${active?c.text+"40":BORDER}`, borderRadius:10, padding:"8px 12px",
-                        fontSize:"0.72rem", fontWeight:600, color:active?c.text:MUTED, cursor:"pointer", fontFamily:"inherit" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                        <span style={{ width:18, height:18, borderRadius:"50%", background:c.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.65rem", color:c.text, fontWeight:800 }}>{cnt}</span>
-                        {quotationStatusLabel[s]}
+              <div className="dash-kpis" style={{ marginBottom:16 }}>
+                {kpis.map(k=>(
+                  <button key={k.label} onClick={k.onClick} title={k.on?"กดอีกครั้งเพื่อล้างตัวกรอง":`กรอง: ${k.label}`}
+                    className="card" style={{ padding:"16px 14px", display:"flex", flexDirection:"column", gap:6, textAlign:"left",
+                      cursor:"pointer", fontFamily:"inherit", width:"100%",
+                      border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB",
+                      boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
+                    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10, width:"100%" }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:"0.72rem", color:"#6B7280" }}>{k.label}</div>
+                        <div style={{ fontSize:"1.42rem", fontWeight:800, color:"#1F2937", marginTop:6, fontVariantNumeric:"tabular-nums" }}>{k.value}</div>
+                        <div style={{ fontSize:"0.72rem", color:"#6B7280", marginTop:2 }}>{k.sub}</div>
                       </div>
-                      <span style={{ fontSize:"0.65rem", color:active?c.text:"#C0C0C0", fontWeight:500 }}>{val>0?fmtC(val):"—"}</span>
-                    </button>
-                  );
-                })}
+                      <span style={{ width:42, height:42, borderRadius:12, background:k.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        <k.Icon size={20} color={k.color} strokeWidth={2.1} />
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* ชิปกรองสถานะ — สไตล์เดียวกับชิปกรองด่วนหน้าลูกค้าเป้าหมาย */}
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+                {([["ALL","ทั้งหมด",scoped.length]] as [string,string,number][])
+                  .concat(STATUS_LIST.map(s=>[s, quotationStatusLabel[s], scoped.filter(q=>q.status===s).length] as [string,string,number]))
+                  .map(([k,label,cnt])=>{
+                    const on = filterStatus===k;
+                    return (
+                      <button key={k} onClick={()=>setFilterStatus(on&&k!=="ALL"?"ALL":k as QuotationStatus|"ALL")}
+                        style={{ display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px", borderRadius:99, cursor:"pointer", fontFamily:"inherit", fontSize:"0.75rem", fontWeight:700,
+                          border:`1px solid ${on?"#003366":"#e5e7eb"}`, background:on?"#003366":"#fff", color:on?"#fff":"#6b7280" }}>
+                        {label}
+                        <span style={{ fontSize:"0.65rem", fontWeight:800, borderRadius:99, padding:"0 6px",
+                          background:on?"rgba(255,255,255,.24)":"#f0f4f8", color:on?"#fff":"#003366" }}>{cnt}</span>
+                      </button>
+                    );
+                  })}
               </div>
             </>
           );
@@ -442,14 +463,13 @@ function QuotationsPageInner(){
 
         {/* Toolbar */}
         <div className="card" style={{borderRadius:"var(--radius-xl) var(--radius-xl) 0 0",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"0 12px",height:36,boxSizing:"border-box",minWidth:280}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"0 12px",height:36,boxSizing:"border-box",width:280,maxWidth:"100%",flexShrink:0}}>
             <Search size={13} color={MUTED}/>
-            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า / โอกาสการขาย..."
+            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า / โครงการ..."
               style={{border:"none",outline:"none",fontSize:"0.8rem",color:STEEL,background:"transparent",flex:1}}/>
             {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:"0.72rem",color:MUTED}}>แสดง {filtered.length}/{scoped.length}</span>
             {/* สลับมุมมอง — สไตล์ segmented มีกรอบ (เหมือนหน้าลูกค้าเป้าหมาย/ลูกค้า) */}
             <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
               {([["list",LayoutList,"รายการ"],["card",LayoutGrid,"การ์ด"]] as const).map(([v,Ico,tip])=>(
@@ -469,13 +489,13 @@ function QuotationsPageInner(){
             <div className={`table-wrap${density==="compact"?" dense":""}`} style={{borderTop:"none"}}>
               <table>
                 <colgroup>
-                  <col style={{width:"13%"}} />
-                  <col style={{width:"24%"}} />
-                  {!hiddenCols.includes("owner")&&<col style={{width:"13%"}} />}
-                  {!hiddenCols.includes("value")&&<col style={{width:"13%"}} />}
-                  <col style={{width:"12%"}} />
-                  {!hiddenCols.includes("expiry")&&<col style={{width:"12%"}} />}
-                  <col style={{width:"15%"}} />
+                  <col style={{width:"14%"}} />{/* เลขที่ */}
+                  <col style={{width:"20%"}} />{/* ลูกค้า */}
+                  {!hiddenCols.includes("owner")&&<col style={{width:"13%"}} />}{/* ผู้รับผิดชอบ */}
+                  {!hiddenCols.includes("value")&&<col style={{width:"12%"}} />}{/* มูลค่า */}
+                  <col style={{width:"11%"}} />{/* สถานะ */}
+                  {!hiddenCols.includes("expiry")&&<col style={{width:"12%"}} />}{/* วันหมดอายุ */}
+                  <col style={{width:"18%"}} />{/* ปุ่มการกระทำ */}
                 </colgroup>
                 <thead>
                   <tr>
@@ -490,7 +510,10 @@ function QuotationsPageInner(){
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length===0&&<tr><td colSpan={7-["owner","value","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบใบเสนอราคา</td></tr>}
+                  {filtered.length===0&&<tr><td colSpan={7-["owner","value","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{padding:0}}>
+                    <EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="สร้างใบเสนอราคาใหม่จากลูกค้าและดีลของคุณ"
+                      action={<button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={14}/> สร้างใบเสนอราคา</button>} />
+                  </td></tr>}
                   {paged.map(q=>{
                     const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
                     return (
@@ -500,7 +523,6 @@ function QuotationsPageInner(){
                           <div style={{display:"flex",alignItems:"center",gap:8}}>
                             <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><FileText size={12} color={PRIMARY}/></div>
                             <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
-                            <span style={{background:"#eef2f7",color:"#003366",fontSize:"0.65rem",fontWeight:700,padding:"1px 6px",borderRadius:99,flexShrink:0}}>{q.revision??"V1"}</span>
                           </div>
                         </td>
                         <td>
@@ -526,7 +548,7 @@ function QuotationsPageInner(){
                         <td style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{q.expiry?fmtDate(q.expiry):"—"}</td>
                         )}
                         <td onClick={e=>e.stopPropagation()}>
-                          <div style={{display:"flex",gap:4,flexWrap:"nowrap"}}>
+                          <div style={{display:"flex",gap:4,flexWrap:"nowrap",justifyContent:"flex-end"}}>
                             {q.status==="draft"&&(
                               <button onClick={()=>changeStatus(q.id,"sent_to_client")} className="btn btn-sm"
                                 style={{background:"#d97706",color:"#fff",border:"none",padding:"4px 9px",fontSize:"0.65rem"}}>ส่งลูกค้า</button>
@@ -553,7 +575,8 @@ function QuotationsPageInner(){
         {view==="card"&&(
           <div className="card" style={{borderRadius:"0 0 var(--radius-xl) var(--radius-xl)",borderTop:"none"}}>
             <div style={{padding:16}}>
-            {filtered.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบใบเสนอราคา</div>}
+            {filtered.length===0&&<EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="สร้างใบเสนอราคาใหม่จากลูกค้าและดีลของคุณ"
+              action={<button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={14}/> สร้างใบเสนอราคา</button>} />}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
               {paged.map(q=>{
                 const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
@@ -611,96 +634,174 @@ function QuotationsPageInner(){
       </div>
 
       {/* ══ DETAIL PANEL ════════════════════════════════════ */}
-      {selected&&(
+      {selected&&(() => {
+        const cardStyle: React.CSSProperties = { background:"#fff", border:"1px solid #eef1f5", borderRadius:14, padding:16 };
+        const secLabel: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
+        const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
+        const fmtBaht = (n:number) => "฿"+Math.round(n).toLocaleString("th-TH");
+        const lineItems: QuoteLineItem[] = selected.lineItems ?? (selected.materialCost>0
+          ? [{ name:selected.buildingType||"รายการ", qty:selected.area||1, unit:selected.area?"ตร.ม.":"รายการ", unitPrice:selected.area?Math.round(selected.materialCost/selected.area):selected.materialCost }]
+          : []);
+        const subtotal = lineItems.reduce((s,li)=>s+li.qty*li.unitPrice, 0);
+        const discountPct = selected.discountPct ?? 0;
+        const discountAmt = Math.round(subtotal*discountPct/100);
+        const net = subtotal - discountAmt;              // = totalValue (มูลค่างาน ก่อน VAT)
+        const vatPct = loadHQPolicy().vat;
+        const vatAmt = Math.round(net*vatPct/100);
+        const grand = net + vatAmt;                      // ยอดรวมสุทธิ (รวม VAT) — ตรงกับเอกสารพิมพ์
+        const sc = quotationStatusColor[selected.status];
+
+        return (
         <>
-          <div onClick={()=>setSelected(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
-          <div className="modal-pop" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:760,maxWidth:"calc(100vw - 32px)",height:"min(660px, calc(100vh - 48px))",zIndex:210,background:"#fff",borderRadius:18,boxShadow:"0 24px 80px rgba(0,0,0,.22)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div onClick={()=>setSelected(null)} className="drawer-overlay" style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
 
-            {/* Panel header */}
-            <div style={{background:PRIMARY,padding:"16px 18px 12px",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10}}>
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{fontSize:"0.65rem",fontWeight:700,color:"rgba(255,255,255,.55)",fontFamily:"monospace",letterSpacing:"0.05em"}}>{selected.id}</div>
-                    <span style={{background:"#eef2f7",color:"#003366",fontSize:"0.65rem",fontWeight:700,padding:"1px 6px",borderRadius:99}}>{selected.revision??"V1"}</span>
+          {/* Quotation Detail — แผงกลางจอ · คอลัมน์เดียว (มาตรฐานเดียวกับ ลีด/ลูกค้า) */}
+          <div className="modal-pop" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+            width:820, maxWidth:"calc(100vw - 24px)", height:"min(920px, calc(100vh - 24px))",
+            zIndex:210, background:"#fff", boxShadow:"0 30px 90px rgba(0,0,0,.32)", borderRadius:18,
+            display:"flex", flexDirection:"column", overflow:"hidden"}}>
+
+            {/* Sticky navy header + quick actions */}
+            <div style={{background:PRIMARY,padding:"14px 20px",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+                  <div style={{width:46,height:46,borderRadius:13,background:"rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",border:"2px solid rgba(255,255,255,.25)",flexShrink:0}}>
+                    <FileText size={20}/>
                   </div>
-                  <div style={{fontSize:"1rem",fontWeight:800,color:"#fff",lineHeight:1.25,marginTop:2,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.customer}</div>
-                  <div style={{fontSize:"0.8rem",color:"rgba(255,255,255,.7)",marginTop:3,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.project}</div>
+                  <div style={{minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:"0.65rem",fontWeight:700,color:"rgba(255,255,255,.6)",fontFamily:"monospace",letterSpacing:"0.05em"}}>{selected.id}</span>
+                    </div>
+                    <div style={{fontSize:"1.08rem",fontWeight:800,color:"#fff",lineHeight:1.2,marginTop:2}}>{selected.customer}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:"0.72rem",color:"rgba(255,255,255,.72)",marginTop:4}}>
+                      {selected.project && <span>{selected.project}</span>}
+                      <span style={{display:"flex",alignItems:"center",gap:3}}><MapPin size={11}/> {selected.province}</span>
+                      <span style={{opacity:.8}}>วันที่ {fmtDate(selected.date)}</span>
+                      {selected.expiry && <span style={{opacity:.8}}>หมดอายุ {fmtDate(selected.expiry)}</span>}
+                    </div>
+                  </div>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,marginLeft:8}}>
-                  {[
-                    {t:"พิมพ์ / ดาวน์โหลด PDF", ic:<Printer size={14}/>, fn:()=>printQuotation(selected), show:true, dis:false, danger:false},
-                    {t:"แก้ไข", ic:<Edit2 size={14}/>, fn:()=>openEdit(selected), show:true, dis:false, danger:false},
-                    {t:"ส่งอีกครั้ง", ic:<Send size={14}/>, fn:()=>sendAgain(selected), show:selected.status==="sent_to_client"||selected.status==="viewed", dis:false, danger:false},
-                    {t:"ดูลูกค้า", ic:<ExternalLink size={14}/>, fn:()=>router.push(`/customers?open=${selected.customerId}`), show:!!selected.customerId, dis:false, danger:false},
-                    {t:"ลบใบเสนอราคา", ic:<Trash2 size={14}/>, fn:()=>setDelConfirm(true), show:true, dis:false, danger:true},
-                    {t:"ปิด", ic:<X size={14}/>, fn:()=>setSelected(null), show:true, dis:false, danger:false},
-                  ].filter(b=>b.show).map((b,i)=>(
-                    <button key={i} title={b.t} onClick={b.fn} disabled={b.dis}
-                      style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,
-                        cursor:b.dis?"not-allowed":"pointer",color:b.danger?"#fecaca":"#fff",opacity:b.dis?0.4:1,
-                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      {b.ic}
-                    </button>
+                <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0,flexWrap:"wrap"}}>
+                  <button title="พิมพ์ / ดาวน์โหลด PDF" onClick={()=>printQuotation(selected)} style={qa}><Printer size={13}/> พิมพ์ PDF</button>
+                  <button title="แก้ไข" onClick={()=>openEdit(selected)} style={qa}><Edit2 size={13}/> แก้ไข</button>
+                  {(selected.status==="sent_to_client"||selected.status==="viewed") && <button title="ส่งอีกครั้ง" onClick={()=>sendAgain(selected)} style={qa}><Send size={13}/> ส่งอีกครั้ง</button>}
+                  {selected.customerId ? <button title="ดูลูกค้า" onClick={()=>router.push(`/customers?open=${selected.customerId}`)} style={qa}><ExternalLink size={13}/> ลูกค้า</button> : null}
+                  <button title="ลบใบเสนอราคา" onClick={()=>setDelConfirm(true)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
+                  <button onClick={()=>setSelected(null)} title="ปิด" style={{...qa,width:30,padding:0,justifyContent:"center"}}><X size={15}/></button>
+                </div>
+              </div>
+              {/* Badges: status · total · items · area */}
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:12}}>
+                <span style={{padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:sc.bg,color:sc.text}}>{quotationStatusLabel[selected.status]}</span>
+                <span style={{display:"flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}><Package size={11}/> {selected.buildingType}</span>
+                <span style={{display:"flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"rgba(255,255,255,.18)",color:"#fff"}}>{selected.items} รายการ · {selected.area?.toLocaleString()} ตร.ม.</span>
+                <span style={{display:"flex",alignItems:"center",gap:4,padding:"2px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:800,background:"#fff",color:PRIMARY}}><Coins size={11}/> {selected.total}</span>
+              </div>
+            </div>
+
+            {/* Body — คอลัมน์เดียว เลื่อนทั้งแผง (drawer) */}
+            <div style={{flex:1,overflowY:"auto",background:"#f5f7fa"}}>
+              {/* เอกสารใบเสนอราคา (BOQ + รายละเอียด) */}
+              <div style={{padding:16,display:"flex",flexDirection:"column",gap:14}}>
+                {/* BOQ line items */}
+                <div style={cardStyle}>
+                  <div style={secLabel}><Layers size={13} color={PRIMARY}/> รายการสินค้า (BOQ)</div>
+                  {lineItems.length===0?(
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"18px 0"}}>ไม่มีรายการสินค้า</div>
+                  ):(
+                    <div style={{overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.78rem"}}>
+                        <thead>
+                          <tr style={{background:"#f7f9fc"}}>
+                            {["รายการ","จำนวน","หน่วย","ราคา/หน่วย","รวม"].map((h,i)=>(
+                              <th key={h} style={{textAlign:i>0?"right":"left",padding:"8px 10px",color:"#8a929c",fontWeight:700,whiteSpace:"nowrap",fontSize:"0.68rem"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lineItems.map((li,i)=>(
+                            <tr key={i} style={{borderTop:"1px solid #f0f4f8"}}>
+                              <td style={{padding:"8px 10px",fontWeight:700,color:STEEL}}>{li.name}</td>
+                              <td style={{padding:"8px 10px",textAlign:"right",color:STEEL}}>{li.qty.toLocaleString()}</td>
+                              <td style={{padding:"8px 10px",textAlign:"right",color:MUTED}}>{li.unit}</td>
+                              <td style={{padding:"8px 10px",textAlign:"right",color:STEEL}}>{fmtBaht(li.unitPrice)}</td>
+                              <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:STEEL}}>{fmtBaht(li.qty*li.unitPrice)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {/* Totals — ตรงกับเอกสารพิมพ์: มูลค่างาน (ก่อน VAT) = ยอดที่บันทึก, บวก VAT → ยอดรวมสุทธิ */}
+                  <div style={{marginTop:12,marginLeft:"auto",width:"min(340px,100%)",display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.78rem"}}><span style={{color:"#8a929c"}}>ยอดรวมย่อย</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(subtotal)}</span></div>
+                    {discountPct>0 && <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.78rem"}}><span style={{color:"#8a929c"}}>ส่วนลด {discountPct}%</span><span style={{fontWeight:700,color:"#dc2626"}}>−{fmtBaht(discountAmt)}</span></div>}
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"9px 12px",background:"#dce5f0",borderRadius:10,marginTop:2}}>
+                      <span style={{fontSize:"0.8rem",fontWeight:700,color:MUTED}}>มูลค่างาน (ก่อน VAT)</span>
+                      <span style={{fontSize:"1.05rem",fontWeight:800,color:PRIMARY}}>{fmtBaht(net)}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.76rem",marginTop:2}}><span style={{color:"#8a929c"}}>VAT {vatPct}%</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(vatAmt)}</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.8rem",fontWeight:800,color:STEEL,borderTop:"1px solid #e6eaf0",paddingTop:7}}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtBaht(grand)}</span></div>
+                  </div>
+                  {selected.note && (
+                    <div style={{marginTop:12,padding:"10px 12px",background:"#fafbfc",border:"1px solid #f0f4f8",borderRadius:10,fontSize:"0.75rem",color:"#4b5563",lineHeight:1.6}}>
+                      <span style={{fontWeight:700,color:"#8a929c"}}>หมายเหตุ: </span>{selected.note}
+                    </div>
+                  )}
+                </div>
+
+                {/* รายละเอียดเอกสาร */}
+                <div style={cardStyle}>
+                  <div style={secLabel}><FileText size={13} color={PRIMARY}/> รายละเอียดเอกสาร</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 24px"}}>
+                    {([
+                      ["จังหวัด", selected.province],
+                      ["ประเภทอาคาร", selected.buildingType],
+                      ["พื้นที่", `${selected.area?.toLocaleString()} ตร.ม.`],
+                      ["จำนวนรายการ", `${selected.items} รายการ`],
+                      ["วันที่ออก", fmtDate(selected.date)],
+                      ["วันหมดอายุ", selected.expiry?fmtDate(selected.expiry):"—"],
+                      ["เงื่อนไขชำระเงิน", selected.paymentTerms||"—"],
+                      ["ระยะเวลาส่งมอบ", selected.deliveryTime||"—"],
+                    ] as [string,string][]).map(([k,v])=>(
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
+                        <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,textAlign:"right"}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* สรุป/สถานะ/ลูกค้า/ลูกค้าเป้าหมาย — ต่อในคอลัมน์เดียวกัน */}
+              <div style={{width:"100%",padding:"0 16px 16px",display:"flex",flexDirection:"column",gap:14}}>
+                {/* Summary + total */}
+                <div style={cardStyle}>
+                  <div style={secLabel}><Target size={13} color={PRIMARY}/> สรุปใบเสนอราคา</div>
+                  <div style={{padding:"12px 14px",background:"#dce5f0",borderRadius:11,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่างาน (ก่อน VAT)</span>
+                    <span style={{fontSize:"1.2rem",fontWeight:800,color:PRIMARY}}>{fmtBaht(net)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:"0.72rem",color:"#8a929c",marginBottom:12,padding:"0 2px"}}>
+                    <span>รวม VAT {vatPct}%</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(grand)}</span>
+                  </div>
+                  {([
+                    ["สถานะ", quotationStatusLabel[selected.status]],
+                    ["วันที่ออก", fmtDate(selected.date)],
+                    ["วันหมดอายุ", selected.expiry?fmtDate(selected.expiry):"—"],
+                  ] as [string,string][]).map(([k,v])=>(
+                    <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
+                      <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,textAlign:"right"}}>{v}</span>
+                    </div>
                   ))}
+                  {selected.status==="won"&&(
+                    <div style={{fontSize:"0.68rem",color:"#059669",marginTop:10,display:"flex",gap:6,alignItems:"flex-start"}}><Check size={13} style={{flexShrink:0,marginTop:1}}/> ลูกค้าตอบรับแล้ว — ไปปิดการขายที่เส้นทางการขาย/ลูกค้าเป้าหมาย</div>
+                  )}
                 </div>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                <span className="badge" style={{background:quotationStatusColor[selected.status].bg,color:quotationStatusColor[selected.status].text}}>
-                  {quotationStatusLabel[selected.status]}
-                </span>
-                <span style={{fontSize:"0.86rem",fontWeight:800,color:"rgba(255,255,255,.9)"}}>{selected.total}</span>
-              </div>
-              {selected.status==="won"&&(
-                <div style={{fontSize:"0.65rem",color:"rgba(255,255,255,.7)",marginTop:6}}>
-                  ลูกค้าตอบรับแล้ว — ไปปิดการขาย ที่เส้นทางการขาย/ผู้สนใจ
-                </div>
-              )}
-            </div>
 
-            {/* Tabs */}
-            <div className="tab-bar" style={{flexShrink:0}}>
-              {detailTabs.map(([key,label])=>(
-                <button key={key} onClick={()=>setDetailTab(key as typeof detailTab)}
-                  className={`tab-item${detailTab===key?" active":""}`} style={{fontSize:"0.86rem",padding:"12px 16px"}}>
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Body — เต็มความกว้าง (ไม่มี rail) */}
-            <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-            <div style={{flex:1,minWidth:0,overflowY:"auto"}}>
-
-            {/* Tab: ข้อมูล */}
-            {detailTab==="info"&&(
-              <div style={{padding:"14px 16px"}}>
-                {/* Price */}
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>มูลค่า</div>
-                  <div style={{padding:"12px 14px",background:"#dce5f0",borderRadius:11,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่ารวม</span>
-                    <span style={{fontSize:"1.15rem",fontWeight:800,color:PRIMARY}}>{selected.total}</span>
-                  </div>
-                </div>
-                {/* Details */}
-                <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>รายละเอียด</div>
-                {[
-                  {label:"จังหวัด",val:selected.province},{label:"ประเภทอาคาร",val:selected.buildingType},
-                  {label:"พื้นที่",val:`${selected.area?.toLocaleString()} ตร.ม.`},{label:"จำนวนรายการ",val:`${selected.items} รายการ`},
-                  {label:"วันที่",val:fmtDate(selected.date)},
-                  {label:"วันหมดอายุ",val:selected.expiry?fmtDate(selected.expiry):"—"},
-                ].map((r,i)=>(
-                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<5?"1px solid #f0f4f8":"none"}}>
-                    <span style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>{r.label}</span>
-                    <span style={{fontSize:"0.72rem",color:STEEL,fontWeight:700}}>{r.val}</span>
-                  </div>
-                ))}
-                {/* (ลบ "จำนวนการเปิดอ่าน" ออก — เป็นตัวเลขปลอมที่ไม่มีการติดตามจริง) */}
                 {/* Status workflow */}
                 {STATUS_ACTIONS[selected.status].length>0&&(
-                  <div style={{marginTop:14}}>
-                    <div style={{fontSize:"0.65rem",fontWeight:700,color:MUTED,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>เปลี่ยนสถานะ</div>
+                  <div style={cardStyle}>
+                    <div style={secLabel}><ArrowRight size={13} color={PRIMARY}/> เปลี่ยนสถานะ</div>
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       {STATUS_ACTIONS[selected.status].map(action=>(
                         <button key={action.next} onClick={()=>changeStatus(selected.id,action.next)} className="btn"
@@ -712,69 +813,70 @@ function QuotationsPageInner(){
                     </div>
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Tab: ลูกค้า */}
-            {detailTab==="customer"&&(
-              <div style={{padding:"14px 16px"}}>
-                {relCustomer?(
-                  <>
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                      <div style={{width:44,height:44,borderRadius:13,background:relCustomer.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"1rem",flexShrink:0}}>
-                        {relCustomer.initials}
-                      </div>
-                      <div>
-                        <div style={{fontSize:"0.86rem",fontWeight:800,color:STEEL}}>{relCustomer.company}</div>
-                        <div style={{fontSize:"0.72rem",color:MUTED,marginTop:2}}>{relCustomer.name}</div>
-                      </div>
-                    </div>
-                    {[{label:"โทรศัพท์",val:relCustomer.phone},{label:"อีเมล",val:relCustomer.email},{label:"จังหวัด",val:relCustomer.province},{label:"หมวด",val:relCustomer.category},{label:"โอกาสการขาย",val:`${relCustomer.projects} โอกาสการขาย`}].map((r,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<4?"1px solid #f0f4f8":"none"}}>
-                        <span style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>{r.label}</span>
-                        <span style={{fontSize:"0.72rem",color:STEEL,fontWeight:700,maxWidth:160,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.val}</span>
-                      </div>
-                    ))}
-                    <button onClick={()=>router.push(`/customers?open=${relCustomer.id}`)} className="btn btn-primary"
-                      style={{justifyContent:"center",width:"100%",padding:"9px 0",marginTop:14}}>
-                      <ExternalLink size={13}/> ดูข้อมูลลูกค้าเต็ม
-                    </button>
-                  </>
-                ):(
-                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบข้อมูลลูกค้า</div>
-                )}
+                {/* ลูกค้า / ดีล — รวมผู้ติดต่อ + ดีลที่เกี่ยวข้องไว้ใบเดียว (ไม่แยกลูกค้า/ลูกค้าเป้าหมายให้ซ้ำ) */}
+                <div style={cardStyle}>
+                  <div style={secLabel}><User size={13} color={PRIMARY}/> ลูกค้า / ดีล</div>
+                  {(relCustomer||relLead)?(()=>{
+                    // ข้อมูลผู้ติดต่อ: ใช้ของลูกค้าก่อน ถ้าไม่มีค่อยดึงจากลูกค้าเป้าหมาย (ดีล)
+                    const company  = relCustomer?.company || relLead?.company || selected.customer;
+                    const contact  = relCustomer?.name || relLead?.contact || "—";
+                    const initials = relCustomer?.initials || company.replace(/บจ\.|หจก\.|บมจ\./g,"").trim().slice(0,2) || "ลค";
+                    const color    = relCustomer?.color || PRIMARY;
+                    const rows: [string,string][] = [
+                      ["โทรศัพท์", relCustomer?.phone || relLead?.phone || "—"],
+                      ["อีเมล",    relCustomer?.email || relLead?.email || "—"],
+                      ["จังหวัด",  relCustomer?.province || relLead?.province || selected.province],
+                      // จากดีล (ลูกค้าเป้าหมาย) เพิ่มเฉพาะที่ไม่ซ้ำกับ "รายละเอียดเอกสาร"
+                      ...(relLead?[["ผู้รับผิดชอบ",relLead.assigned] as [string,string],["สถานะดีล",leadStatusLabel[relLead.status]] as [string,string]]:[]),
+                    ];
+                    return (
+                      <>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                          <div style={{width:40,height:40,borderRadius:12,background:color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.9rem",flexShrink:0}}>{initials}</div>
+                          <div style={{minWidth:0}}>
+                            <div style={{fontSize:"0.84rem",fontWeight:800,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{company}</div>
+                            <div style={{fontSize:"0.72rem",color:MUTED,marginTop:1}}>{contact}</div>
+                          </div>
+                        </div>
+                        {rows.map(([k,v])=>(
+                          <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"6px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.74rem"}}>
+                            <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,maxWidth:180,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>
+                          </div>
+                        ))}
+                        <div style={{display:"flex",gap:8,marginTop:12}}>
+                          {relCustomer&&(
+                            <button onClick={()=>router.push(`/customers?open=${relCustomer.id}`)} className="btn btn-secondary btn-sm" style={{justifyContent:"center",flex:1,color:PRIMARY}}>
+                              <ExternalLink size={13}/> ดูลูกค้า
+                            </button>
+                          )}
+                          {relLead&&(
+                            <button onClick={()=>router.push(`/leads?open=${relLead.numId}`)} className="btn btn-secondary btn-sm" style={{justifyContent:"center",flex:1,color:PRIMARY}}>
+                              <ExternalLink size={13}/> ดูดีล
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })():(
+                    <div style={{textAlign:"center",padding:"18px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบข้อมูลลูกค้า/ดีล</div>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
 
-            {/* Tab: ลีด */}
-            {detailTab==="lead"&&(
-              <div style={{padding:"14px 16px"}}>
-                {relLead?(
-                  <>
-                    <div style={{fontSize:"0.86rem",fontWeight:800,color:STEEL,marginBottom:2}}>{relLead.company}</div>
-                    <div style={{fontSize:"0.72rem",color:MUTED,marginBottom:14}}>{relLead.contact} · {relLead.province}</div>
-                    {[{label:"โทรศัพท์",val:relLead.phone},{label:"สินค้า",val:relLead.product},{label:"มูลค่า",val:relLead.value},{label:"สถานะ",val:leadStatusLabel[relLead.status]},{label:"ผู้รับผิดชอบ",val:relLead.assigned}].map((r,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<4?"1px solid #f0f4f8":"none"}}>
-                        <span style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>{r.label}</span>
-                        <span style={{fontSize:"0.72rem",color:STEEL,fontWeight:700}}>{r.val}</span>
-                      </div>
-                    ))}
-                    <button onClick={()=>router.push(`/leads?open=${relLead.numId}`)} className="btn btn-primary"
-                      style={{justifyContent:"center",width:"100%",padding:"9px 0",marginTop:14}}>
-                      <ExternalLink size={13}/> ดูผู้สนใจเต็ม
-                    </button>
-                  </>
-                ):(
-                  <div style={{textAlign:"center",padding:"28px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบผู้สนใจที่เกี่ยวข้อง</div>
-                )}
+            {/* Floating action bar */}
+            <div style={{flexShrink:0,borderTop:"1px solid #e6eaf0",background:"#fafbfc",padding:"11px 20px",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:"0.68rem",color:"#8a929c",display:"flex",alignItems:"center",gap:5}}><Coins size={13} color={PRIMARY}/> มูลค่างาน (ก่อน VAT) {fmtBaht(net)} · รวม VAT {fmtBaht(grand)}</span>
+              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>openEdit(selected)} className="btn btn-secondary btn-md" style={{color:PRIMARY}}><Edit2 size={14}/> แก้ไข</button>
+                <button onClick={()=>printQuotation(selected)} className="btn btn-primary btn-md"><Printer size={14}/> พิมพ์ / ดาวน์โหลด PDF</button>
               </div>
-            )}
-
             </div>
           </div>
-          </div>
         </>
-      )}
+        );
+      })()}
 
       {/* Delete confirm dialog */}
       {delConfirm&&selected&&(
@@ -795,11 +897,14 @@ function QuotationsPageInner(){
         </div>
       )}
 
-      {/* Modal */}
-      {showModal&&(
+      {/* Modal — สร้างใหม่ใช้ตัวช่วย 4 ขั้นตอน (Customer→Deal→แม่แบบ→BOQ→ใบเสนอราคา) · แก้ไขใช้ฟอร์มเดิม */}
+      {showModal && !editingQ && (
+        <QuotationCreateModal onClose={()=>setShowModal(false)} onToast={showToast} />
+      )}
+      {showModal && editingQ && (
         <QuotationModal
-          title={editingQ?"แก้ไขใบเสนอราคา":"เพิ่มใบเสนอราคาใหม่"}
-          initial={editingQ?toForm(editingQ):buildBlank(customers)}
+          title="แก้ไขใบเสนอราคา"
+          initial={toForm(editingQ)}
           customers={customers}
           onSave={saveQ} onClose={()=>setShowModal(false)}/>
       )}

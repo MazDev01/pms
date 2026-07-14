@@ -1,471 +1,584 @@
 "use client";
 
-import { useState, useEffect } from "react";
+// ─── HQ · ตั้งค่า — ศูนย์กลางการตั้งค่าระบบทั้งเครือ ────────────────────────────
+// 7 แท็บ: บริษัท · ผู้ใช้งาน (ฝังหน้าจริง) · เส้นทางการขาย · ตัวแทนจำหน่าย · เป้าหมาย · แจ้งเตือน · ระบบ
+// ใช้การ์ด/ปุ่ม/ฟอร์มมาตรฐานของระบบ · แก้ไขในหน้า · บันทึก/รีเซ็ตรายส่วนผ่าน BusCtx · เตือน unsaved · toast
+// เก็บค่าจริงด้วย usePersistentState (พร้อมเปลี่ยนเป็น Supabase ภายหลัง)
 import {
-  ChevronUp, ChevronDown, Plus, Trash2, Check, Save,
-  GitMerge, Building2, Shield, Target, Bell,
-} from "lucide-react";
-// หน้า ตั้งค่า แสดง "เนื้อหาจริงทั้งหมด" ในแท็บเลย — embed หน้าจัดการจริง ไม่ใช่การ์ดลิงก์
+  useState, useEffect, useRef, useCallback, useMemo, useContext,
+  type ReactNode,
+} from "react";
+import { usePersistentState } from "@/lib/usePersistentState";
+import {
+  HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
+  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
+  HQ_LEAD_RULES_KEY, DEFAULT_HQ_LEAD_RULES,
+  HQ_NOTIF_KEY, HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
+  type HQPolicy, type HQTargets, type HQLeadRules, type HQNotifChannels,
+} from "@/lib/mock";
+// แท็บ "บริษัท" / "ผู้ใช้งาน" ฝังหน้าจัดการจริงเต็ม
 import HQCompanyPage from "../company/page";
 import HQUsersPage from "../users/page";
-import { usePersistentState } from "@/lib/usePersistentState";
+import { useAuditLogger } from "@/lib/useAudit";
+import { SettingsBusCtx as BusCtx, type SectionApi } from "@/lib/settingsBus";
+import {
+  Building2, Users, Store, GitMerge, Target, Bell, SlidersHorizontal,
+  Save, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Check,
+  Download, Upload, RefreshCw, Mail, Smartphone, MessageSquare, Lock, AlertCircle,
+  ShieldCheck, Percent,
+} from "lucide-react";
 
+// ── tokens ──────────────────────────────────────────────────────────────────
+const NAVY = "#003366";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. SALES JOURNEY
-// ─────────────────────────────────────────────────────────────────────────────
-type Stage  = { id: number; code: string; label: string; color: string; isDefault: boolean; locked: boolean; terminal?: "won" | "lost" };
-type Reason = { id: number; label: string };
+// ── shared bus (report dirty/save/reset ของแท็บที่ active + toast) — ดู @/lib/settingsBus
+function useReport(api: SectionApi) {
+  const { report } = useContext(BusCtx);
+  useEffect(() => { report(api); return () => report(null); }, [api, report]);
+}
+function useToast() { return useContext(BusCtx).toast; }
 
-const STAGE_COLORS = ["#6b7280", "#d97706", "#003366", "#4338ca", "#059669", "#0ea5e9", "#0891b2", "#dc2626"];
+// draft = state ที่แก้ไขได้ + เทียบกับค่าที่บันทึกไว้ (dirty) → ใช้กับ Save/Reset กลาง
+function usePersistentDraft<T>(key: string, initial: T) {
+  const [saved, setSaved] = usePersistentState<T>(key, initial);
+  const [draft, setDraft] = useState<T>(saved);
+  const editedRef = useRef(false);
+  const draftRef = useRef(draft); draftRef.current = draft;
+  const savedRef = useRef(saved); savedRef.current = saved;
+  // ระหว่าง hydration (โหลดค่าเก่า) sync draft ← saved จนกว่าผู้ใช้จะแก้เอง
+  useEffect(() => { if (!editedRef.current) setDraft(saved); }, [saved]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const set = useCallback((updater: (prev: T) => T) => { editedRef.current = true; setDraft(updater); }, []);
+  const save = useCallback(() => setSaved(draftRef.current), [setSaved]);
+  const reset = useCallback(() => { editedRef.current = false; setDraft(savedRef.current); }, []);
+  return { draft, set, dirty, save, reset };
+}
 
-const INIT_STAGES: Stage[] = [
-  { id: 2, code: "WAITING",   label: "ติดต่อแล้ว",         color: "#475569", isDefault: true,  locked: false },
-  { id: 7, code: "BULLET",    label: "รวบรวมความต้องการ", color: "#003366", isDefault: false, locked: false },
-  { id: 3, code: "QUOTED",    label: "ใบเสนอราคา",       color: "#4338ca", isDefault: false, locked: false },
-  { id: 8, code: "FOLLOWUP",  label: "ติดตามผล",         color: "#d97706", isDefault: false, locked: false },
-  { id: 4, code: "NEGO",      label: "เจรจาต่อรอง",      color: "#b45309", isDefault: false, locked: false },
-  { id: 5, code: "PAID",      label: "ปิดการขาย",        color: "#059669", isDefault: false, locked: true, terminal: "won"  },
-  { id: 6, code: "CANCELLED", label: "ไม่สำเร็จ",        color: "#dc2626", isDefault: false, locked: true, terminal: "lost" },
-];
-const INIT_WON:  Reason[] = [
-  { id: 1, label: "ราคาดีที่สุดในตลาด" }, { id: 2, label: "คุณภาพสินค้าสูง" },
-  { id: 3, label: "บริการดี / ไว้วางใจ" }, { id: 4, label: "ความสัมพันธ์ที่ดี" },
-];
-const INIT_LOST: Reason[] = [
-  { id: 1, label: "ราคาสูงเกินงบประมาณ" }, { id: 2, label: "คู่แข่งให้ข้อเสนอดีกว่า" },
-  { id: 3, label: "ลูกค้ายกเลิกการสั่งซื้อ" }, { id: 4, label: "งบประมาณไม่พร้อม" },
-  { id: 5, label: "ลูกค้าไม่ตอบสนอง" },
-];
+// ── reusable UI ───────────────────────────────────────────────────────────────
+function SectionCard({ icon, title, desc, children, action }: { icon?: ReactNode; title: string; desc?: string; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {icon && <span style={{ color: "var(--primary)", display: "flex" }}>{icon}</span>}{title}
+          </div>
+          {desc && <div className="card-desc">{desc}</div>}
+        </div>
+        {action}
+      </div>
+      <div className="card-body">{children}</div>
+    </div>
+  );
+}
+function Row({ label, desc, children, error }: { label: string; desc?: string; children: ReactNode; error?: string }) {
+  return (
+    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", padding: "13px 0", borderTop: "1px solid var(--border,#f1f5f9)" }}>
+      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--foreground,#2D2D2D)" }}>{label}</div>
+        {desc && <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground,#6b7280)", marginTop: 2 }}>{desc}</div>}
+      </div>
+      <div style={{ flex: "0 0 340px", maxWidth: "100%" }}>
+        {children}
+        {error && <div style={{ fontSize: "0.68rem", color: "#dc2626", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}><AlertCircle size={11} /> {error}</div>}
+      </div>
+    </div>
+  );
+}
+function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+  return (
+    <button role="switch" aria-checked={on} onClick={onChange}
+      style={{ width: 42, height: 24, borderRadius: 99, border: "none", cursor: "pointer", flexShrink: 0, background: on ? NAVY : "#d1d5db", position: "relative", transition: "background .15s" }}>
+      <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.25)", transition: "left .15s" }} />
+    </button>
+  );
+}
+function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div style={{ display: "inline-flex", background: "#f1f5f9", borderRadius: 10, padding: 3, gap: 2 }}>
+      {options.map(o => (
+        <button key={o.v} onClick={() => onChange(o.v)}
+          style={{ border: "none", cursor: "pointer", borderRadius: 8, padding: "6px 14px", fontSize: "0.76rem", fontWeight: 700, fontFamily: "inherit",
+            background: value === o.v ? "#fff" : "transparent", color: value === o.v ? NAVY : "#6b7280",
+            boxShadow: value === o.v ? "0 1px 3px rgba(16,40,80,.14)" : "none" }}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+// ═══════════════════════ TAB · กฎธุรกิจ (Business Rules) ═════════════════════
+// ศูนย์กลางนโยบายธุรกิจของสำนักงานใหญ่ — บังคับใช้อัตโนมัติกับทุกตัวแทน (Constitution V2)
+// ขอบเขต: Lead → Pipeline → Quotation → Won/Lost → Customer เท่านั้น (ไม่มี ERP/บัญชี/ก่อสร้าง)
 
-const HQ_JOURNEY_KEY = "hq_sales_journey";
+// การ์ดนโยบายแบบอ่านอย่างเดียว — ระบุกติกาที่ระบบบังคับใช้อยู่แล้ว (ไม่ใช่ช่องตั้งค่า)
+function PolicyList({ items, tone = "navy" }: { items: string[]; tone?: "navy" | "green" }) {
+  const c = tone === "green" ? "#059669" : NAVY;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+      {items.map((t, i) => (
+        <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "#f8fafc", border: "1px solid #eef1f5", borderRadius: 10 }}>
+          <Check size={15} color={c} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span style={{ fontSize: "0.8rem", color: "#374151", lineHeight: 1.5 }}>{t}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function SalesJourneyTab() {
-  const [stages,  setStages]  = useState<Stage[]>(INIT_STAGES);
-  const [won,     setWon]     = useState<Reason[]>(INIT_WON);
-  const [lost,    setLost]    = useState<Reason[]>(INIT_LOST);
-  const [saved,   setSaved]   = useState(false);
-  const [editId,  setEditId]  = useState<number | null>(null);
-  const [editVal, setEditVal] = useState("");
-  const [newWon,  setNewWon]  = useState("");
-  const [newLost, setNewLost] = useState("");
+function BusinessRulesTab() {
+  const pol  = usePersistentDraft<HQPolicy>(HQ_POLICY_KEY, DEFAULT_HQ_POLICY);
+  const lead = usePersistentDraft<HQLeadRules>(HQ_LEAD_RULES_KEY, DEFAULT_HQ_LEAD_RULES);
+  const tgt  = usePersistentDraft<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  const sys  = usePersistentDraft<SystemCfg>("hq_system", DEFAULT_SYSTEM);
+  useReport(useMemo(() => ({
+    dirty: pol.dirty || lead.dirty || tgt.dirty || sys.dirty,
+    save:  () => { pol.save(); lead.save(); tgt.save(); sys.save(); },
+    reset: () => { pol.reset(); lead.reset(); tgt.reset(); sys.reset(); },
+  }), [pol.dirty, lead.dirty, tgt.dirty, sys.dirty, pol.save, lead.save, tgt.save, sys.save, pol.reset, lead.reset, tgt.reset, sys.reset]));
 
-  // โหลดค่าที่บันทึกไว้ (persist จริงผ่าน localStorage)
-  useEffect(() => {
-    const s = localStorage.getItem(HQ_JOURNEY_KEY);
-    if (s) try { const d = JSON.parse(s); if (d.stages) setStages(d.stages); if (d.won) setWon(d.won); if (d.lost) setLost(d.lost); } catch {}
-  }, []);
-  function saveJourney() {
-    localStorage.setItem(HQ_JOURNEY_KEY, JSON.stringify({ stages, won, lost }));
-    setSaved(true); setTimeout(() => setSaved(false), 2500);
-  }
-
-  const active   = stages.filter(s => !s.locked);
-  const terminal = stages.filter(s =>  s.locked);
-
-  function move(id: number, dir: -1 | 1) {
-    setStages(prev => {
-      const arr = [...prev.filter(s => !s.locked)];
-      const i = arr.findIndex(s => s.id === id);
-      const j = i + dir;
-      if (j < 0 || j >= arr.length) return prev;
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-      return [...arr, ...prev.filter(s => s.locked)];
-    });
-  }
-  function setColor(id: number, color: string) {
-    setStages(p => p.map(s => s.id === id ? { ...s, color } : s));
-  }
-  function setDefault(id: number) {
-    setStages(p => p.map(s => ({ ...s, isDefault: s.id === id })));
-  }
-  function commitEdit(id: number) {
-    if (editVal.trim()) setStages(p => p.map(s => s.id === id ? { ...s, label: editVal.trim() } : s));
-    setEditId(null);
-  }
-  function deleteStage(id: number) {
-    setStages(prev => {
-      const next = prev.filter(s => s.id !== id);
-      if (!next.some(s => s.isDefault && !s.locked)) {
-        const first = next.find(s => !s.locked);
-        if (first) return next.map(s => ({ ...s, isDefault: s.id === first.id }));
-      }
-      return next;
-    });
-  }
-  function addStage() {
-    const id = Date.now();
-    setStages(prev => [
-      ...prev.filter(s => !s.locked),
-      { id, code: `S${id}`, label: "ขั้นการขายใหม่", color: "#6b7280", isDefault: false, locked: false },
-      ...prev.filter(s => s.locked),
-    ]);
-    setEditId(id); setEditVal("ขั้นการขายใหม่");
-  }
-  function addReason(type: "won" | "lost") {
-    const label = (type === "won" ? newWon : newLost).trim();
-    if (!label) return;
-    const item = { id: Date.now(), label };
-    if (type === "won") { setWon(p => [...p, item]); setNewWon(""); }
-    else                { setLost(p => [...p, item]); setNewLost(""); }
-  }
+  const numInput = (value: number, onChange: (n: number) => void, unit: string, step?: number) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <input type="number" step={step} className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={value} onChange={e => onChange(Number(e.target.value))} />
+      <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
+    </div>
+  );
 
   return (
     <>
-      <div className="card-header">
-        <div>
-          <div className="card-title">เส้นทางการขาย</div>
-          <div className="card-desc">กำหนดขั้นการขาย ลำดับขั้นตอน และเหตุผลปิดสำเร็จ / ไม่สำเร็จ สำหรับทุกตัวแทน</div>
+      {/* 1 · นโยบายการขาย */}
+      <SectionCard icon={<Target size={19} />} title="นโยบายการขาย (Sales Policy)" desc="กติกาการขายที่ใช้กับทุกตัวแทนในเครือ">
+        <Row label="แจ้งเตือนติดตามลูกค้าเป้าหมาย" desc="ลีดไม่มีความเคลื่อนไหวเกินกี่วัน → แจ้งเตือนตัวแทน + ขึ้นป้าย “ต้องติดตามด่วน”">
+          {numInput(lead.draft.followUpAlertDays, n => lead.set(p => ({ ...p, followUpAlertDays: n })), "วัน")}
+        </Row>
+        <Row label="เตือนอัตโนมัติ" desc="ระบบส่งการแจ้งเตือนติดตามให้ตัวแทนเองเมื่อครบกำหนด">
+          <Toggle on={lead.draft.autoReminder} onChange={() => lead.set(p => ({ ...p, autoReminder: !p.autoReminder }))} />
+        </Row>
+        <Row label="อายุลูกค้าเป้าหมาย" desc="ลีดที่เงียบเกินกำหนดถือว่าหมดอายุ — ให้เก็บเข้าคลังหรือลบ">
+          {numInput(lead.draft.leadExpirationDays, n => lead.set(p => ({ ...p, leadExpirationDays: n })), "วัน")}
+        </Row>
+        <Row label="เป้าอัตราปิดการขาย" desc="สัดส่วนลูกค้าเป้าหมายที่ต้องปิดการขายได้">
+          {numInput(tgt.draft.conversionTarget, n => tgt.set(p => ({ ...p, conversionTarget: n })), "%")}
+        </Row>
+        <Row label="เป้ายอดขายรายปี (ทั้งเครือ)" desc="ใช้เทียบความคืบหน้า Target / Actual / % บนแดชบอร์ด">
+          {numInput(tgt.draft.annualTarget, n => tgt.set(p => ({ ...p, annualTarget: n })), "บาท", 1_000_000)}
+        </Row>
+      </SectionCard>
+
+      {/* 2 · นโยบายส่วนลด */}
+      <SectionCard icon={<Percent size={19} />} title="นโยบายส่วนลด (Discount Policy)" desc="คุมส่วนลดสูงสุดที่ตัวแทนให้ลูกค้าได้">
+        <Row label="เพดานส่วนลดสูงสุด" desc="ตัวแทนออกใบเสนอราคาที่ลดเกินค่านี้ไม่ได้ (ระบบบล็อกอัตโนมัติ)">
+          {numInput(pol.draft.maxDiscount, n => pol.set(p => ({ ...p, maxDiscount: n })), "%")}
+        </Row>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.78rem", color: "#b45309" }}>
+          <Lock size={14} style={{ flexShrink: 0 }} /> กฎธุรกิจ: ตัวแทนสร้างใบเสนอราคาที่ส่วนลดเกิน {pol.draft.maxDiscount}% ไม่ได้
         </div>
-        <button className="btn btn-primary btn-sm" onClick={saveJourney}>
-          {saved ? <><Check size={13} /> บันทึกแล้ว</> : <><Save size={13} /> บันทึก</>}
-        </button>
-      </div>
+      </SectionCard>
 
-      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* 3 · นโยบายราคา (อ่านอย่างเดียว) */}
+      <SectionCard icon={<Lock size={19} />} title="นโยบายราคา (Pricing Policy)" desc="โมเดลราคา — สำนักงานใหญ่ขายให้ตัวแทน ตัวแทนบวกกำไรเอง">
+        <PolicyList items={[
+          "ตัวแทนซื้อสินค้าจากสำนักงานใหญ่ด้วย “ราคากลาง” (Master Price)",
+          "ตัวแทนแก้ราคากลางไม่ได้ — ดูได้อย่างเดียว",
+          "ตัวแทนกำหนดราคาขายต่อให้ลูกค้าเองได้ (บวกกำไรเอง) ภายใต้เพดานส่วนลดข้างต้น",
+        ]} />
+      </SectionCard>
 
-        {/* Stage list */}
-        <div>
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em",
-            textTransform: "uppercase", marginBottom: 12 }}>
-            ขั้นการขาย
+      {/* 4 · กฎลูกค้าเป้าหมาย (อ่านอย่างเดียว) */}
+      <SectionCard icon={<GitMerge size={19} />} title="กฎลูกค้าเป้าหมาย (Lead Management Rules)" desc="กติกาที่ระบบบังคับใช้อัตโนมัติ">
+        <PolicyList items={[
+          `แจ้งเตือนเมื่อลูกค้าเป้าหมายไม่มีความเคลื่อนไหวเกิน ${lead.draft.followUpAlertDays} วัน`,
+          lead.draft.autoReminder ? "เตือนอัตโนมัติ: เปิดใช้งาน" : "เตือนอัตโนมัติ: ปิดใช้งาน",
+          "ปิดการขายสำเร็จ (Won) → สร้างลูกค้าอัตโนมัติ",
+          "ลูกค้า 1 ราย สร้างดีลได้ไม่จำกัด",
+          "ห้ามสร้างลูกค้าซ้ำ — ลูกค้าเดิมให้ใช้ “สร้างดีลใหม่”",
+        ]} />
+      </SectionCard>
+
+      {/* 5 · กฎใบเสนอราคา */}
+      <SectionCard icon={<SlidersHorizontal size={19} />} title="กฎใบเสนอราคา (Quotation Rules)" desc="มาตรฐานเอกสารที่ใช้ทั้งเครือ">
+        <Row label="อายุใบเสนอราคาเริ่มต้น" desc="กี่วันก่อนใบเสนอราคาหมดอายุ">
+          {numInput(pol.draft.quoteValidityDays, n => pol.set(p => ({ ...p, quoteValidityDays: n })), "วัน")}
+        </Row>
+        <Row label="ภาษีมูลค่าเพิ่ม (VAT)" desc="อัตรามาตรฐานบนใบเสนอราคาทุกตัวแทน">
+          {numInput(pol.draft.vat, n => pol.set(p => ({ ...p, vat: n })), "%")}
+        </Row>
+        <Row label="คำนำหน้าเลขที่ + เลขถัดไป" desc="รูปแบบเลขที่ใบเสนอราคา (ใช้ทั้งเครือ)">
+          <div style={{ display: "flex", gap: 8 }}>
+            <input className="form-input" style={{ flex: 1 }} value={sys.draft.runningPrefix} onChange={e => sys.set(p => ({ ...p, runningPrefix: e.target.value }))} />
+            <input type="number" className="form-input" style={{ width: 100, textAlign: "right", fontWeight: 700 }} value={sys.draft.runningNext} onChange={e => sys.set(p => ({ ...p, runningNext: Number(e.target.value) }))} />
           </div>
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", marginBottom: 8 }}>
-            {active.map((s, idx) => (
-              <div key={s.id} style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                background: "#fff",
-                borderBottom: idx < active.length - 1 ? "1px solid #f1f5f9" : "none",
-              }}>
-                {/* Reorder */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                  <button onClick={() => move(s.id, -1)} disabled={idx === 0}
-                    className="btn btn-ghost btn-sm"
-                    style={{ width: 22, height: 22, padding: 0, opacity: idx === 0 ? 0.25 : 1,
-                      display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <ChevronUp size={12} />
-                  </button>
-                  <button onClick={() => move(s.id, 1)} disabled={idx === active.length - 1}
-                    className="btn btn-ghost btn-sm"
-                    style={{ width: 22, height: 22, padding: 0, opacity: idx === active.length - 1 ? 0.25 : 1,
-                      display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <ChevronDown size={12} />
-                  </button>
-                </div>
+        </Row>
+        <PolicyList items={["แบบฟอร์ม PDF มาตรฐานเดียวทั้งเครือ — ใบเสนอราคาของตัวแทนใช้ “ข้อมูลบริษัทของตัวแทน” (ชื่อ / ที่อยู่ / เลขผู้เสียภาษี) เสมอ"]} />
+      </SectionCard>
 
-                {/* Step badge */}
-                <div style={{
-                  width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
-                  background: s.color + "20", color: s.color,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.65rem", fontWeight: 800,
-                }}>
-                  {idx + 1}
-                </div>
+      {/* 6 · นโยบายตัวแทน (อ่านอย่างเดียว) */}
+      <SectionCard icon={<Store size={19} />} title="นโยบายตัวแทน (Dealer Policy)" desc="สิทธิ์และข้อจำกัดของตัวแทนในเครือ">
+        <PolicyList items={[
+          "ทั้งระบบใช้แบรนด์ Benjamin — ตัวแทนเปลี่ยนโลโก้/แบรนด์/ธีมเองไม่ได้",
+          "ตัวแทนแก้แม่แบบและราคากลางของสำนักงานใหญ่ไม่ได้",
+          "บัญชีตัวแทนสร้างโดยสำนักงานใหญ่เท่านั้น",
+          "ตัวแทนเปลี่ยนอีเมลเข้าสู่ระบบและรหัสผ่านเองไม่ได้",
+        ]} />
+      </SectionCard>
 
-                {/* Color swatches */}
-                <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                  {STAGE_COLORS.map(c => (
-                    <button key={c} onClick={() => setColor(s.id, c)} style={{
-                      width: 12, height: 12, borderRadius: "50%", background: c,
-                      border: "none", cursor: "pointer", padding: 0,
-                      outline: s.color === c ? `2.5px solid ${c}` : "none",
-                      outlineOffset: 1.5,
-                    }} />
-                  ))}
-                </div>
+      {/* 7 · ผู้รับผิดชอบ (อ่านอย่างเดียว) */}
+      <SectionCard icon={<Users size={19} />} title="นโยบายผู้รับผิดชอบ (Responsible Person)" desc="ข้อมูลประกอบ — ไม่ใช่ผู้ใช้ระบบ">
+        <PolicyList items={[
+          "ผู้รับผิดชอบ (พนักงานขาย) ไม่ใช่ผู้ใช้ระบบ — เข้าสู่ระบบไม่ได้",
+          "ใช้กำกับลูกค้าเป้าหมาย / ดีล และแสดงในรายงานกับแดชบอร์ดเท่านั้น",
+        ]} />
+      </SectionCard>
 
-                {/* Label — click to edit */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {editId === s.id
-                    ? <input autoFocus value={editVal}
-                        className="form-input"
-                        style={{ padding: "4px 8px" }}
-                        onChange={e => setEditVal(e.target.value)}
-                        onBlur={() => commitEdit(s.id)}
-                        onKeyDown={e => { if (e.key === "Enter") commitEdit(s.id); if (e.key === "Escape") setEditId(null); }} />
-                    : <span onClick={() => { setEditId(s.id); setEditVal(s.label); }}
-                        style={{ fontSize: "0.86rem", fontWeight: 600, color: "#2D2D2D",
-                          cursor: "text", borderBottom: "1.5px dashed transparent",
-                          display: "inline-block", paddingBottom: 1 }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderBottomColor = "#e2e8f0"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderBottomColor = "transparent"; }}>
-                        {s.label}
-                      </span>}
-                </div>
+      {/* 8 · นโยบายข้อมูล (อ่านอย่างเดียว) */}
+      <SectionCard icon={<Lock size={19} />} title="นโยบายข้อมูล (Data Policy)" desc="สำนักงานใหญ่เป็นแหล่งข้อมูลเดียวของทั้งเครือ">
+        <PolicyList items={[
+          "ฐานข้อมูลรวมศูนย์ — สำนักงานใหญ่เห็นข้อมูลของทุกตัวแทน",
+          "ตัวแทนเห็นเฉพาะข้อมูลของตัวเองเท่านั้น",
+          "เส้นทาง: ลูกค้าเป้าหมาย → ปิดการขาย → ลูกค้า",
+          "ลูกค้า 1 ราย มีได้หลายดีล · แต่ละดีลมีได้หลายใบเสนอราคา",
+        ]} />
+      </SectionCard>
 
-                {/* Default */}
-                <button onClick={() => setDefault(s.id)}
-                  className="badge"
-                  style={{ cursor: "pointer", border: `1px solid ${s.isDefault ? "#003366" : "#e2e8f0"}`,
-                    background: s.isDefault ? "#f0f4fa" : "transparent",
-                    color: s.isDefault ? "#003366" : "#9ca3af", fontFamily: "inherit",
-                    fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.02em" }}>
-                  {s.isDefault ? "✓ ค่าเริ่มต้น" : "ตั้งเป็นค่าเริ่มต้น"}
-                </button>
-
-                {/* Delete */}
-                {active.length > 1 && (
-                  <button className="btn btn-danger btn-sm"
-                    style={{ width: 28, height: 28, padding: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center" }}
-                    onClick={() => deleteStage(s.id)}>
-                    <Trash2 size={12} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Terminal (locked) stages */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            {terminal.map(s => (
-              <div key={s.id} style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
-                borderRadius: 10, flex: 1,
-                background: s.terminal === "won" ? "#f0fdf4" : "#fff5f5",
-                border: `1px solid ${s.terminal === "won" ? "#bbf7d0" : "#fecaca"}`,
-              }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }} />
-                <span style={{ flex: 1, fontSize: "0.8rem", fontWeight: 700,
-                  color: s.terminal === "won" ? "#059669" : "#dc2626" }}>
-                  {s.label}
-                </span>
-                <span className="badge" style={{
-                  background: s.terminal === "won" ? "#dcfce7" : "#fee2e2",
-                  color: s.terminal === "won" ? "#059669" : "#dc2626",
-                  border: "none",
-                }}>
-                  {s.terminal === "won" ? "ปิดสำเร็จ" : "ไม่สำเร็จ"}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Add stage */}
-          <button onClick={addStage} style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "9px 14px", borderRadius: 10, width: "100%",
-            border: "1.5px dashed #e5e7eb", background: "transparent",
-            cursor: "pointer", color: "#6b7280", fontSize: "0.8rem", fontWeight: 600,
-          }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "#003366"; (e.currentTarget as HTMLElement).style.color = "#003366"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "#e5e7eb"; (e.currentTarget as HTMLElement).style.color = "#6b7280"; }}>
-            <Plus size={14} /> เพิ่มขั้นการขาย
-          </button>
-        </div>
-
-        {/* Won / Lost reasons */}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 20 }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em",
-            textTransform: "uppercase", marginBottom: 16 }}>
-            เหตุผลปิดสำเร็จ และ ไม่สำเร็จ
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-            {(["won", "lost"] as const).map(type => {
-              const items    = type === "won" ? won  : lost;
-              const setItems = type === "won" ? setWon : setLost;
-              const newVal   = type === "won" ? newWon : newLost;
-              const setNew   = type === "won" ? setNewWon : setNewLost;
-              const accent   = type === "won" ? "#059669" : "#dc2626";
-              const lightBg  = type === "won" ? "#f0fdf4" : "#fff5f5";
-              const lightBdr = type === "won" ? "#bbf7d0" : "#fecaca";
-              return (
-                <div key={type}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: accent }} />
-                    <span style={{ fontSize: "0.72rem", fontWeight: 800, color: accent }}>
-                      {type === "won" ? "เหตุผลปิดการขายสำเร็จ" : "เหตุผลไม่สำเร็จ"}
-                    </span>
-                  </div>
-                  <div style={{ border: `1px solid ${lightBdr}`, borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
-                    {items.map((r, idx) => (
-                      <div key={r.id} style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        padding: "9px 12px", background: lightBg,
-                        borderBottom: idx < items.length - 1 ? `1px solid ${lightBdr}` : "none",
-                      }}>
-                        <span style={{ flex: 1, fontSize: "0.8rem", color: "#2D2D2D" }}>{r.label}</span>
-                        <button onClick={() => setItems(p => p.filter(x => x.id !== r.id))}
-                          style={{ background: "none", border: "none", cursor: "pointer",
-                            color: accent, opacity: 0.5, display: "flex", alignItems: "center", padding: 2 }}>
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    {items.length === 0 && (
-                      <div style={{ padding: "16px", textAlign: "center", fontSize: "0.72rem", color: "#9ca3af" }}>
-                        ยังไม่มีเหตุผล
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input value={newVal} onChange={e => setNew(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") addReason(type); }}
-                      placeholder="เพิ่มเหตุผล..."
-                      className="form-input"
-                      style={{ flex: 1 }} />
-                    <button onClick={() => addReason(type)}
-                      className="btn btn-primary btn-sm"
-                      style={{ flexShrink: 0 }}>
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {/* 9 · นโยบายรายงาน (อ่านอย่างเดียว) */}
+      <SectionCard icon={<Download size={19} />} title="นโยบายรายงาน (Report Policy)" desc="มาตรฐานรายงานและการส่งออก">
+        <PolicyList items={[
+          "แดชบอร์ดแสดง: ภาพรวมผลงาน · ผลงานตัวแทน · เป้าเทียบผลจริง · ใบเสนอราคาเทียบยอดขาย · อัตราปิดการขาย",
+          "รายงานทุกชุดส่งออกได้ทั้ง CSV และ PDF",
+        ]} tone="green" />
+      </SectionCard>
     </>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// เป้าหมายการขาย (HQ) — เป้ารายปีของเครือ + เกณฑ์คุณภาพ (persist จริง)
-// ─────────────────────────────────────────────────────────────────────────────
-type HQTargets = { annualTarget: number; winRateTarget: number; onTimeTarget: number };
-const DEFAULT_TARGETS: HQTargets = { annualTarget: 260_000_000, winRateTarget: 40, onTimeTarget: 85 };
-
-function TargetsTab() {
-  const [targets, setTargets] = usePersistentState<HQTargets>("hq_targets", DEFAULT_TARGETS);
-  const [draft, setDraft] = useState<HQTargets>(targets);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { setDraft(targets); }, [targets]);
-  function save() { setTargets(draft); setSaved(true); setTimeout(() => setSaved(false), 2500); }
-
-  const fields: { key: keyof HQTargets; label: string; desc: string; unit: string; step: number }[] = [
-    { key: "annualTarget",  label: "เป้ายอดขายรวมทั้งเครือ (รายปี)", desc: "ใช้เทียบกับยอดสะสมจริงบนแดชบอร์ด HQ", unit: "บาท", step: 1_000_000 },
-    { key: "winRateTarget", label: "เป้าอัตราปิดการขายเฉลี่ย",       desc: "เกณฑ์ขั้นต่ำที่ตัวแทนควรทำได้",          unit: "%",   step: 1 },
-    { key: "onTimeTarget",  label: "เป้าติดตามตรงเวลา",              desc: "สัดส่วนงานติดตามที่ทำภายในกำหนด",       unit: "%",   step: 1 },
-  ];
-
+// ═══════════════════════ TAB · ตัวแทนจำหน่าย ═════════════════════════════════
+// (แท็บ "บริษัท" และ "ผู้ใช้งาน" ฝังหน้าจริง <HQCompanyPage/> / <HQUsersPage/> — ดู TABS ด้านล่าง)
+type DealerDefaults = { defaultQuota: number; defaultColor: string; allowResetPwd: boolean; allowSelfCreateCustomer: boolean };
+const DEFAULT_DEALER_DEFAULTS: DealerDefaults = { defaultQuota: 30_000_000, defaultColor: "#003366", allowResetPwd: true, allowSelfCreateCustomer: false };
+const DEALER_COLORS = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
+function DealersTab() {
+  const dd = usePersistentDraft<DealerDefaults>("hq_dealer_settings", DEFAULT_DEALER_DEFAULTS);
+  const draft = dd.draft, set = dd.set;
+  // นโยบายราคา/ส่วนลด/VAT/อายุใบ ย้ายไปแท็บ "กฎธุรกิจ" (Business Rules) — ไม่ซ้ำซ้อน
+  useReport(useMemo(() => ({ dirty: dd.dirty, save: dd.save, reset: dd.reset }), [dd.dirty, dd.save, dd.reset]));
+  // รายชื่อ/สถานะ/โควตาตัวแทน จัดการที่หน้า /hq/dealers ที่เดียว (ไม่ฝังซ้ำในหน้าตั้งค่า)
   return (
     <>
-      <div className="card-header">
-        <div>
-          <div className="card-title">เป้าหมายการขาย</div>
-          <div className="card-desc">กำหนดเป้าระดับเครือ — เป้ารายตัวแทนตั้งได้ที่หน้า ตัวแทน (แก้ไขรายตัว)</div>
+      <SectionCard icon={<Store size={19} />} title="ค่ามาตรฐานตัวแทนจำหน่าย" desc="ค่าตั้งต้นเวลาสร้างตัวแทนใหม่ + สิทธิ์รวม">
+        <Row label="เป้ายอดขายเริ่มต้น (ต่อปี)" desc="เป้าตั้งต้นของตัวแทนใหม่">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="number" step={1_000_000} className="form-input" value={draft.defaultQuota} onChange={e => set(p => ({ ...p, defaultQuota: Number(e.target.value) }))} style={{ textAlign: "right", fontWeight: 700 }} />
+            <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>บาท</span>
+          </div>
+        </Row>
+        <Row label="สีประจำตัวแทนเริ่มต้น">
+          <div style={{ display: "flex", gap: 7 }}>
+            {DEALER_COLORS.map(c => (
+              <button key={c} onClick={() => set(p => ({ ...p, defaultColor: c }))} style={{ width: 26, height: 26, borderRadius: 8, background: c, border: "none", cursor: "pointer", outline: draft.defaultColor === c ? `2.5px solid ${c}` : "none", outlineOffset: 2 }} />
+            ))}
+          </div>
+        </Row>
+        <Row label="ให้ตัวแทนรีเซ็ตรหัสผ่านเองได้" desc="ปิดไว้ให้สำนักงานใหญ่คุมการเข้าระบบ"><Toggle on={draft.allowResetPwd} onChange={() => set(p => ({ ...p, allowResetPwd: !p.allowResetPwd }))} /></Row>
+        <Row label="ให้ตัวแทนสร้างลูกค้าเองได้" desc="ปิดไว้ — ลูกค้าเกิดจากการปิดการขายเท่านั้น"><Toggle on={draft.allowSelfCreateCustomer} onChange={() => set(p => ({ ...p, allowSelfCreateCustomer: !p.allowSelfCreateCustomer }))} /></Row>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.76rem", color: "#6b7280" }}>
+          <Lock size={14} color={NAVY} style={{ flexShrink: 0 }} /> เพดานส่วนลด · ภาษี · อายุใบเสนอราคา ตั้งที่แท็บ “กฎธุรกิจ” (Business Rules)
         </div>
-        <button className="btn btn-primary btn-sm" onClick={save}>
-          {saved ? <><Check size={13} /> บันทึกแล้ว</> : <><Save size={13} /> บันทึก</>}
-        </button>
-      </div>
-      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {fields.map(f => (
-          <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{f.label}</div>
-              <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{f.desc}</div>
+      </SectionCard>
+    </>
+  );
+}
+
+// ═══════════════════════ TAB 4 · เส้นทางการขาย ════════════════════════════════
+type Stage = { id: number; label: string; color: string; isDefault: boolean; terminal?: "won" | "lost" };
+type Journey = { stages: Stage[]; won: string[]; lost: string[]; checklist: string[] };
+const STAGE_COLORS = ["#6b7280", "#d97706", "#003366", "#4338ca", "#059669", "#0ea5e9", "#0891b2", "#dc2626"];
+const DEFAULT_JOURNEY: Journey = {
+  stages: [
+    { id: 1, label: "ติดต่อแล้ว", color: "#475569", isDefault: true },
+    { id: 2, label: "รวบรวมความต้องการ", color: "#003366", isDefault: false },
+    { id: 3, label: "เสนอราคา", color: "#4338ca", isDefault: false },
+    { id: 4, label: "ติดตามผล", color: "#d97706", isDefault: false },
+    { id: 5, label: "เจรจา", color: "#b45309", isDefault: false },
+    { id: 6, label: "ปิดการขาย", color: "#059669", isDefault: false, terminal: "won" },
+    { id: 7, label: "ปิดการขายไม่สำเร็จ", color: "#dc2626", isDefault: false, terminal: "lost" },
+  ],
+  won: ["ราคาดีที่สุดในตลาด", "คุณภาพสินค้าสูง", "บริการดี / ไว้วางใจ"],
+  lost: ["ราคาสูงเกินงบประมาณ", "คู่แข่งให้ข้อเสนอดีกว่า", "งบประมาณไม่พร้อม", "ลูกค้าไม่ตอบสนอง"],
+  checklist: ["โทรแนะนำบริษัท", "นัดสำรวจ/เก็บความต้องการ", "จัดทำใบเสนอราคา", "ติดตามหลังส่งใบเสนอราคา"],
+};
+function JourneyTab() {
+  const { draft, set, dirty, save, reset } = usePersistentDraft<Journey>("hq_sales_journey", DEFAULT_JOURNEY);
+  useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
+  const [newWon, setNewWon] = useState(""); const [newLost, setNewLost] = useState(""); const [newChk, setNewChk] = useState("");
+  const active = draft.stages.filter(s => !s.terminal); const terminal = draft.stages.filter(s => s.terminal);
+  const move = (id: number, dir: -1 | 1) => set(p => { const arr = p.stages.filter(s => !s.terminal); const i = arr.findIndex(s => s.id === id); const j = i + dir; if (j < 0 || j >= arr.length) return p; [arr[i], arr[j]] = [arr[j], arr[i]]; return { ...p, stages: [...arr, ...p.stages.filter(s => s.terminal)] }; });
+  const addStage = () => set(p => { const id = Math.max(0, ...p.stages.map(s => s.id)) + 1; return { ...p, stages: [...p.stages.filter(s => !s.terminal), { id, label: "ขั้นใหม่", color: "#6b7280", isDefault: false }, ...p.stages.filter(s => s.terminal)] }; });
+  return (
+    <>
+      <SectionCard icon={<GitMerge size={19} />} title="ขั้นตอนการขาย" desc="จัดลำดับ/สี/ขั้นเริ่มต้น — ใช้เหมือนกันทุกตัวแทน"
+        action={<button className="btn btn-secondary btn-sm" onClick={addStage}><Plus size={14} /> เพิ่มขั้น</button>}>
+        <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden", marginTop: 6 }}>
+          {active.map((s, idx) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: idx < active.length - 1 ? "1px solid #f1f5f9" : "none", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <button className="btn btn-ghost btn-sm" style={{ width: 22, height: 20, padding: 0, opacity: idx === 0 ? .25 : 1 }} onClick={() => move(s.id, -1)}><ChevronUp size={12} /></button>
+                <button className="btn btn-ghost btn-sm" style={{ width: 22, height: 20, padding: 0, opacity: idx === active.length - 1 ? .25 : 1 }} onClick={() => move(s.id, 1)}><ChevronDown size={12} /></button>
+              </div>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: s.color + "20", color: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, flexShrink: 0 }}>{idx + 1}</span>
+              <div style={{ display: "flex", gap: 3 }}>
+                {STAGE_COLORS.map(c => <button key={c} onClick={() => set(p => ({ ...p, stages: p.stages.map(x => x.id === s.id ? { ...x, color: c } : x) }))} style={{ width: 12, height: 12, borderRadius: "50%", background: c, border: "none", cursor: "pointer", outline: s.color === c ? `2px solid ${c}` : "none", outlineOffset: 1 }} />)}
+              </div>
+              <input value={s.label} onChange={e => set(p => ({ ...p, stages: p.stages.map(x => x.id === s.id ? { ...x, label: e.target.value } : x) }))} style={{ flex: "1 1 120px", border: "1px solid transparent", background: "transparent", borderRadius: 7, padding: "5px 7px", fontSize: "0.84rem", fontWeight: 600, fontFamily: "inherit" }} />
+              <button onClick={() => set(p => ({ ...p, stages: p.stages.map(x => ({ ...x, isDefault: x.id === s.id && !x.terminal })) }))} className="badge"
+                style={{ cursor: "pointer", border: `1px solid ${s.isDefault ? NAVY : "#e2e8f0"}`, background: s.isDefault ? "#f0f4fa" : "transparent", color: s.isDefault ? NAVY : "#9ca3af", fontFamily: "inherit", fontWeight: 700 }}>
+                {s.isDefault ? "✓ ค่าเริ่มต้น" : "ตั้งค่าเริ่มต้น"}
+              </button>
+              {active.length > 1 && <button className="btn btn-danger btn-sm" style={{ width: 28, padding: 0, justifyContent: "center" }} onClick={() => set(p => ({ ...p, stages: p.stages.filter(x => x.id !== s.id) }))}><Trash2 size={12} /></button>}
             </div>
-            <input type="number" step={f.step} value={draft[f.key]}
-              onChange={e => setDraft(d => ({ ...d, [f.key]: Number(e.target.value) }))}
-              className="form-input" style={{ width: 170, textAlign: "right", fontWeight: 700 }} />
-            <span style={{ fontSize: "0.72rem", color: "#6b7280", width: 34 }}>{f.unit}</span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          {terminal.map(s => (
+            <div key={s.id} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: s.terminal === "won" ? "#f0fdf4" : "#fff5f5", border: `1px solid ${s.terminal === "won" ? "#bbf7d0" : "#fecaca"}` }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }} />
+              <span style={{ flex: 1, fontSize: "0.8rem", fontWeight: 700, color: s.terminal === "won" ? "#059669" : "#dc2626" }}>{s.label}</span>
+              <span className="badge" style={{ background: s.terminal === "won" ? "#dcfce7" : "#fee2e2", color: s.terminal === "won" ? "#059669" : "#dc2626", border: "none" }}>{s.terminal === "won" ? "ปิดการขายสำเร็จ" : "ปิดการขายไม่สำเร็จ"}</span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard icon={<Check size={19} />} title="เหตุผลปิดการขาย & สิ่งที่ต้องทำเริ่มต้น" desc="มาตรฐานเดียวกันทุกตัวแทน">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 20, marginTop: 6 }}>
+          {([["won", "ปิดการขายสำเร็จ", "#059669", newWon, setNewWon] as const, ["lost", "ปิดการขายไม่สำเร็จ", "#dc2626", newLost, setNewLost] as const]).map(([key, label, accent, val, setVal]) => (
+            <div key={key}>
+              <div style={{ fontSize: "0.72rem", fontWeight: 800, color: accent, marginBottom: 8 }}>เหตุผล{label}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {draft[key].map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: accent + "0d", border: `1px solid ${accent}33`, borderRadius: 8, padding: "7px 10px" }}>
+                    <span style={{ flex: 1, fontSize: "0.78rem" }}>{r}</span>
+                    <button onClick={() => set(p => ({ ...p, [key]: p[key].filter((_, x) => x !== i) }))} style={{ background: "none", border: "none", cursor: "pointer", color: accent, display: "flex", padding: 2 }}><Trash2 size={12} /></button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <input className="form-input" value={val} placeholder="เพิ่มเหตุผล…" onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && val.trim()) { set(p => ({ ...p, [key]: [...p[key], val.trim()] })); setVal(""); } }} />
+                <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }} onClick={() => { if (val.trim()) { set(p => ({ ...p, [key]: [...p[key], val.trim()] })); setVal(""); } }}><Plus size={14} /></button>
+              </div>
+            </div>
+          ))}
+          <div>
+            <div style={{ fontSize: "0.72rem", fontWeight: 800, color: NAVY, marginBottom: 8 }}>สิ่งที่ต้องทำเริ่มต้น</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {draft.checklist.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: "#f7f9fc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "7px 10px" }}>
+                  <Check size={13} color={NAVY} /><span style={{ flex: 1, fontSize: "0.78rem" }}>{c}</span>
+                  <button onClick={() => set(p => ({ ...p, checklist: p.checklist.filter((_, x) => x !== i) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", padding: 2 }}><Trash2 size={12} /></button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <input className="form-input" value={newChk} placeholder="เพิ่มรายการ…" onChange={e => setNewChk(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && newChk.trim()) { set(p => ({ ...p, checklist: [...p.checklist, newChk.trim()] })); setNewChk(""); } }} />
+              <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }} onClick={() => { if (newChk.trim()) { set(p => ({ ...p, checklist: [...p.checklist, newChk.trim()] })); setNewChk(""); } }}><Plus size={14} /></button>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+    </>
+  );
+}
+
+// ═══════════════════════ TAB · เป้าหมายยอดขาย ════════════════════════════════
+// ชนิด/ค่าเริ่มต้น = แหล่งเดียวใน mock (HQTargets) — แดชบอร์ด/หน้าตัวแทนดึงผ่าน loadHQTargets()
+function TargetsTab() {
+  const { draft, set, dirty, save, reset } = usePersistentDraft<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
+  const num = (k: keyof HQTargets, v: number) => set(p => ({ ...p, [k]: v }));
+  const periodLabel = draft.period === "month" ? "รายเดือน" : draft.period === "quarter" ? "รายไตรมาส" : "รายปี";
+  return (
+    <SectionCard icon={<Target size={19} />} title="เป้าหมายยอดขาย" desc="ตั้งเป้าทั้งเครือ — ใช้เทียบความคืบหน้าบนแดชบอร์ด"
+      action={<Segmented value={draft.period} onChange={v => set(p => ({ ...p, period: v }))} options={[{ v: "month", label: "รายเดือน" }, { v: "quarter", label: "ไตรมาส" }, { v: "year", label: "รายปี" }]} />}>
+      <Row label={`ยอดขายรวมทั้งประเทศ (${periodLabel})`} desc="ยอดปิดการขายรวมทุกตัวแทน">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" step={1_000_000} className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.annualTarget} onChange={e => num("annualTarget", Number(e.target.value))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>บาท</span></div>
+      </Row>
+      <Row label="เป้าปิดการขายจากลูกค้าเป้าหมาย" desc="สัดส่วนลูกค้าเป้าหมายที่ปิดการขายสำเร็จ">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.conversionTarget} onChange={e => num("conversionTarget", Number(e.target.value))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>%</span></div>
+      </Row>
+      <Row label="เป้าออกใบเสนอราคาจากลูกค้าเป้าหมาย" desc="สัดส่วนลูกค้าเป้าหมายที่ออกใบเสนอราคา">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.quotationTarget} onChange={e => num("quotationTarget", Number(e.target.value))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>%</span></div>
+      </Row>
+      <Row label="เป้ามูลค่าเฉลี่ยต่อการปิดการขาย" desc="ปิดได้เฉลี่ยครั้งละเท่าไร">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" step={100_000} className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.avgDealSize} onChange={e => num("avgDealSize", Number(e.target.value))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>บาท</span></div>
+      </Row>
+      <Row label="เป้าอัตราปิดการขายเฉลี่ย" desc="อย่างน้อยตัวแทนควรทำได้เท่านี้">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.winRateTarget} onChange={e => num("winRateTarget", Number(e.target.value))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>%</span></div>
+      </Row>
+      <Row label="ติดตามตรงเวลา" desc="งานติดตามที่ทำทันเวลา">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.onTimeTarget} onChange={e => num("onTimeTarget", Number(e.target.value))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>%</span></div>
+      </Row>
+    </SectionCard>
+  );
+}
+
+// ═══════════════════════ TAB 7 · การแจ้งเตือน ═════════════════════════════════
+// event = เรื่องที่ "HQ ควรรู้" (จาก Audit Log) ไม่ใช่งานขายของตัวแทน · toggle "ในระบบ" กรองกระดิ่ง HQ จริง
+type Notifs = Record<string, HQNotifChannels>;
+function NotificationsTab() {
+  const { draft, set, dirty, save, reset } = usePersistentDraft<Notifs>(HQ_NOTIF_KEY, DEFAULT_HQ_NOTIFS);
+  // บันทึกแล้วยิง event → กระดิ่ง HQ อัปเดตทันที (Topbar ฟัง HQ_NOTIF_UPDATED_EVENT)
+  const saveAndBroadcast = useCallback(() => { save(); window.dispatchEvent(new Event(HQ_NOTIF_UPDATED_EVENT)); }, [save]);
+  useReport(useMemo(() => ({ dirty, save: saveAndBroadcast, reset }), [dirty, saveAndBroadcast, reset]));
+  const ch: { k: keyof HQNotifChannels; label: string; icon: ReactNode }[] = [
+    { k: "email", label: "อีเมล", icon: <Mail size={13} /> },
+    { k: "inapp", label: "ในระบบ", icon: <Smartphone size={13} /> },
+    { k: "line", label: "ไลน์", icon: <MessageSquare size={13} /> },
+  ];
+  return (
+    <SectionCard icon={<Bell size={19} />} title="การแจ้งเตือน" desc="เลือกเรื่องที่ HQ อยากรู้ (จากบันทึกการใช้งาน) · ปิด “ในระบบ” เพื่อซ่อนจากกระดิ่ง">
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 40, padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
+        {ch.map(c => <span key={c.k} style={{ width: 66, textAlign: "center" }}>{c.label}</span>)}
+      </div>
+      <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden" }}>
+        {HQ_NOTIF_EVENTS.map((ev, i) => (
+          <div key={ev.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderTop: i ? "1px solid #f1f5f9" : "none" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "0.84rem", fontWeight: 700 }}>{ev.label}</div>
+              <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 1 }}>{ev.desc}</div>
+            </div>
+            {ch.map(c => (
+              <div key={c.k} style={{ width: 66, display: "flex", justifyContent: "center" }}>
+                <Toggle on={draft[ev.key]?.[c.k] ?? false} onChange={() => set(p => ({ ...p, [ev.key]: { ...p[ev.key], [c.k]: !p[ev.key]?.[c.k] } }))} />
+              </div>
+            ))}
           </div>
         ))}
-        <div style={{ fontSize: "0.72rem", color: "#9ca3af" }}>
-          เป้ายอดขายรายปีปัจจุบัน: ฿{(draft.annualTarget / 1_000_000).toFixed(0)}M · ระบบใช้ค่านี้แสดง % ความคืบหน้าบนแดชบอร์ด
-        </div>
       </div>
-    </>
+    </SectionCard>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// การแจ้งเตือน (HQ) — เปิด/ปิดเหตุการณ์ที่ต้องการรับแจ้ง (persist จริง)
-// ─────────────────────────────────────────────────────────────────────────────
-type NotifyPrefs = Record<string, boolean>;
-const NOTIFY_ITEMS: { key: string; label: string; desc: string }[] = [
-  { key: "newQuote",    label: "ใบเสนอราคาใหม่จากตัวแทน",       desc: "แจ้งทันทีเมื่อตัวแทนออกใบเสนอราคาใหม่" },
-  { key: "won",         label: "ปิดการขายสำเร็จ",                desc: "แจ้งเมื่อตัวแทนปิดการขายได้" },
-  { key: "belowTarget", label: "ตัวแทนต่ำกว่าเป้า",              desc: "แจ้งเมื่อยอดสะสมของตัวแทนต่ำกว่า 50% ของเป้า" },
-  { key: "expiring",    label: "ใบเสนอราคาใกล้หมดอายุ",          desc: "แจ้งล่วงหน้า 7 วันก่อนใบเสนอราคาหมดอายุ" },
-  { key: "weekly",      label: "สรุปผลงานรายสัปดาห์ (อีเมล)",    desc: "ส่งสรุปยอดขายทุกตัวแทนทางอีเมลทุกวันจันทร์" },
+// ═══════════════════════ TAB 8 · ระบบ ═════════════════════════════════════════
+// ภาษา/เขตเวลา/รูปแบบวันที่ = pref ส่วนตัว/แสดงผล (ไม่ใช่ของ HQ) + dead → เอาออก · เหลือของที่ HQ คุมจริง
+type SystemCfg = { sessionTimeout: number; runningPrefix: string; runningNext: number };
+const DEFAULT_SYSTEM: SystemCfg = { sessionTimeout: 30, runningPrefix: "Q-2026-", runningNext: 1101 };
+// คีย์จริงที่ใช้ทั้งระบบ (รวมของหน้าบริษัท/ผู้ใช้ที่ฝัง + ตัวแทน) → backup/restore ครบจริง
+const SETTINGS_KEYS = [
+  "hq_company_profile", "hq_company_logo", "hq_company_wordmark", "hq_users_v4",
+  "hq_dealer_settings", "hq_dealers_v2", "hq_sales_journey", "hq_targets",
+  "hq_notifications_v2", "hq_system", "hq_sales_policy",
 ];
-const DEFAULT_NOTIFY: NotifyPrefs = { newQuote: true, won: true, belowTarget: true, expiring: true, weekly: false };
-
-function NotificationsTab() {
-  const [prefs, setPrefs] = usePersistentState<NotifyPrefs>("hq_notifications", DEFAULT_NOTIFY);
+function SystemTab() {
+  const { draft, set, dirty, save, reset } = usePersistentDraft<SystemCfg>("hq_system", DEFAULT_SYSTEM);
+  useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
+  const toast = useToast();
+  function exportAll() {
+    const out: Record<string, unknown> = {};
+    SETTINGS_KEYS.forEach(k => { try { const s = localStorage.getItem(k); if (s) out[k] = JSON.parse(s); } catch {} });
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "benjamin-settings-backup.json"; a.click(); URL.revokeObjectURL(a.href);
+    toast("ส่งออกการตั้งค่าแล้ว");
+  }
+  function importAll(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    const r = new FileReader();
+    r.onload = () => { try { const obj = JSON.parse(String(r.result)); Object.entries(obj).forEach(([k, v]) => { if (SETTINGS_KEYS.includes(k)) localStorage.setItem(k, JSON.stringify(v)); }); toast("นำเข้าสำเร็จ — กำลังโหลดใหม่"); setTimeout(() => location.reload(), 900); } catch { toast("ไฟล์ไม่ถูกต้อง"); } };
+    r.readAsText(file);
+  }
+  function restoreDefaults() {
+    if (!confirm("คืนค่าเริ่มต้นทั้งหมด? การตั้งค่าปัจจุบันจะถูกลบ")) return;
+    SETTINGS_KEYS.forEach(k => localStorage.removeItem(k)); location.reload();
+  }
   return (
     <>
-      <div className="card-header">
-        <div>
-          <div className="card-title">การแจ้งเตือน</div>
-          <div className="card-desc">เลือกเหตุการณ์ที่ต้องการรับแจ้งเตือน — บันทึกอัตโนมัติทันทีที่สลับ</div>
+      {/* เลขที่ใบเสนอราคา ย้ายไปแท็บ "กฎธุรกิจ" (Quotation Rules) — ไม่ซ้ำซ้อน */}
+      <SectionCard icon={<SlidersHorizontal size={19} />} title="ระบบ" desc="ตั้งค่าพื้นฐานของระบบ">
+        <Row label="ออกจากระบบเองเมื่อไม่ใช้งาน" desc="ออกจากระบบให้เองเมื่อไม่ได้ใช้งานนานเกินกำหนด">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="number" className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={draft.sessionTimeout} onChange={e => set(p => ({ ...p, sessionTimeout: Number(e.target.value) }))} /><span style={{ fontSize: "0.72rem", color: "#6b7280" }}>นาที</span></div>
+        </Row>
+      </SectionCard>
+
+      <SectionCard icon={<RefreshCw size={19} />} title="สำรองและกู้คืนข้อมูล" desc="ส่งออก/นำเข้าการตั้งค่าทั้งหมด">
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+          <button className="btn btn-secondary btn-md" onClick={exportAll}><Download size={14} /> ส่งออก (สำรองข้อมูล)</button>
+          <label className="btn btn-secondary btn-md" style={{ cursor: "pointer" }}><Upload size={14} /> นำเข้า (กู้คืน)<input type="file" accept="application/json" style={{ display: "none" }} onChange={importAll} /></label>
+          <button className="btn btn-md" style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }} onClick={restoreDefaults}><RotateCcw size={14} /> คืนค่าเริ่มต้นทั้งหมด</button>
         </div>
-      </div>
-      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {NOTIFY_ITEMS.map(item => {
-          const on = prefs[item.key] ?? false;
-          return (
-            <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{item.label}</div>
-                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{item.desc}</div>
-              </div>
-              <button role="switch" aria-checked={on}
-                onClick={() => setPrefs(p => ({ ...p, [item.key]: !on }))}
-                style={{ width: 42, height: 24, borderRadius: 99, border: "none", cursor: "pointer", flexShrink: 0,
-                  background: on ? "#003366" : "#d1d5db", position: "relative", transition: "background .15s" }}>
-                <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%",
-                  background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.25)", transition: "left .15s" }} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      </SectionCard>
     </>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ROOT PAGE — ตั้งค่า HQ ศูนย์รวมงานบริหาร: ทุกแท็บแสดง "เนื้อหาจริงทั้งหมด" ในหน้านี้เลย
-// (embed หน้าจัดการจริง — ไม่มีการ์ดลิงก์ให้คลิกต่อ)
-// ─────────────────────────────────────────────────────────────────────────────
-// ตัวแทน/แม่แบบ ไม่อยู่ในแท็บ — มีหน้าจัดการของตัวเองในเมนูหลักแล้ว (ไม่ทำซ้ำ 2 ที่)
-type HQSettingTab = "company" | "users" | "sales-journey" | "targets" | "notifications";
-
-const TABS: { key: HQSettingTab; label: string; icon: React.ReactNode }[] = [
-  { key: "company",       label: "บริษัท",           icon: <Building2 size={15} /> },
-  { key: "users",         label: "ผู้ใช้งาน",        icon: <Shield    size={15} /> },
-  { key: "sales-journey", label: "เส้นทางการขาย",   icon: <GitMerge  size={15} /> },
-  { key: "targets",       label: "เป้าหมายการขาย",  icon: <Target    size={15} /> },
-  { key: "notifications", label: "การแจ้งเตือน",     icon: <Bell      size={15} /> },
+// ═══════════════════════ ROOT ═════════════════════════════════════════════════
+type TabKey = "rules" | "company" | "users" | "journey" | "dealers" | "targets" | "notifications" | "system";
+const TABS: { key: TabKey; label: string; icon: ReactNode; render: () => ReactNode }[] = [
+  { key: "rules", label: "กฎธุรกิจ", icon: <ShieldCheck size={15} />, render: () => <BusinessRulesTab /> },
+  { key: "company", label: "บริษัท", icon: <Building2 size={15} />, render: () => <HQCompanyPage embedded /> },
+  { key: "users", label: "ผู้ใช้งานและสิทธิ์", icon: <Users size={15} />, render: () => <HQUsersPage embedded /> },
+  { key: "journey", label: "เส้นทางการขาย", icon: <GitMerge size={15} />, render: () => <JourneyTab /> },
+  { key: "dealers", label: "ตัวแทนจำหน่าย", icon: <Store size={15} />, render: () => <DealersTab /> },
+  { key: "targets", label: "เป้าหมายยอดขาย", icon: <Target size={15} />, render: () => <TargetsTab /> },
+  { key: "notifications", label: "การแจ้งเตือน", icon: <Bell size={15} />, render: () => <NotificationsTab /> },
+  { key: "system", label: "ระบบ", icon: <SlidersHorizontal size={15} />, render: () => <SystemTab /> },
 ];
 
 export default function HQSettingsPage() {
-  const [activeTab, setActiveTab] = useState<HQSettingTab>("company");
+  const [tab, setTab] = useState<TabKey>("company");
+  const [api, setApi] = useState<SectionApi | null>(null);
+  const [toast, setToastMsg] = useState<string | null>(null);
+  const report = useCallback((a: SectionApi | null) => setApi(a), []);
+  const showToast = useCallback((m: string) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2400); }, []);
+  const logAudit = useAuditLogger();
+  const dirty = !!api?.dirty;
+
+  function switchTab(next: TabKey) {
+    if (next === tab) return;
+    if (dirty && !confirm("ส่วนนี้ยังไม่บันทึก · ทิ้งที่แก้ไว้ไหม?")) return;
+    setTab(next);
+  }
+  const active = TABS.find(t => t.key === tab)!;
+  function saveAll() { if (dirty && api) { api.save(); logAudit("บันทึกการตั้งค่า", active.label); showToast("บันทึกการตั้งค่าแล้ว"); } }
+  function resetAll() { if (dirty && api) api.reset(); }
 
   return (
-    <div className="erp">
-      <div className="page-head">
-        <div>
-          <h2>ตั้งค่า</h2>
-          <p>ศูนย์รวมงานบริหารของเครือ — จัดการได้ครบทุกส่วนในหน้านี้</p>
+    <BusCtx.Provider value={{ report, toast: showToast }}>
+      <div className="erp">
+        {/* Header */}
+        <div className="page-head" style={{ alignItems: "flex-start" }}>
+          <div>
+            <h2>ตั้งค่า</h2>
+            <p>ตั้งค่าระบบของสำนักงานใหญ่ · สิ่งที่แก้จะมีผลกับตัวแทนตามสิทธิ์</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {dirty && <span style={{ fontSize: "0.72rem", color: "#d97706", fontWeight: 600 }}>ยังไม่บันทึก</span>}
+            <button className="btn btn-secondary btn-md" onClick={resetAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><RotateCcw size={14} /> รีเซ็ต</button>
+            <button className="btn btn-primary btn-md" onClick={saveAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><Save size={14} /> บันทึก</button>
+          </div>
         </div>
-      </div>
 
-      {/* Tab bar */}
-      <div className="card" style={{ marginBottom: 18 }}>
-        <div className="tab-bar">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className={`tab-item${activeTab === t.key ? " active" : ""}`}
-              style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.86rem", padding: "12px 16px" }}>
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
+        {/* Tabs */}
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="tab-bar" style={{ overflowX: "auto" }}>
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => switchTab(t.key)} className={`tab-item${tab === t.key ? " active" : ""}`}
+                style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.84rem", padding: "12px 16px", whiteSpace: "nowrap" }}>
+                {t.icon}{t.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* เนื้อหาเต็มของแต่ละส่วน — แสดงในหน้านี้เลย */}
-      {activeTab === "company"       && <HQCompanyPage />}
-      {activeTab === "users"         && <HQUsersPage />}
-      {activeTab === "sales-journey" && <div className="card"><SalesJourneyTab /></div>}
-      {activeTab === "targets"       && <div className="card"><TargetsTab /></div>}
-      {activeTab === "notifications" && <div className="card"><NotificationsTab /></div>}
-    </div>
+        {/* Active section — ห่อด้วย section-stack ให้การ์ดทุกใบห่างเท่ากัน (18px = ระยะเดียวกับใต้แถบแท็บ) */}
+        <div className="section-stack">
+          {active.render()}
+        </div>
+
+        {/* Toast */}
+        {toast && (
+          <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: "#111827", color: "#fff", padding: "12px 18px", borderRadius: 12, fontSize: "0.82rem", fontWeight: 600, boxShadow: "0 12px 32px rgba(0,0,0,.28)", display: "flex", alignItems: "center", gap: 9 }}>
+            <Check size={15} color="#7ee2b8" /> {toast}
+          </div>
+        )}
+      </div>
+    </BusCtx.Provider>
   );
 }
