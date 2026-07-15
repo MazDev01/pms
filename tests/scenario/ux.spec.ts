@@ -134,17 +134,6 @@ test("[ux·hq] แท็บบริษัทมีปุ่มบันทึ�
   await expect(page.getByRole("button", { name: "บันทึก", exact: true })).toBeEnabled();
 });
 
-// หน้ารายงาน HQ = dashboard รวมทุกส่วน (แบบเดียวกับรายงาน Dealer) + Export CSV
-test("[ux·hq] หน้ารายงานเป็น dashboard รวมทุกส่วน", async ({ page }) => {
-  await open(page, "hq", "/hq/reports");
-  // .first() กัน dev route-transition ที่ mount หน้าซ้ำชั่วขณะ (source มี h1.pg-title เดียว)
-  await expect(page.locator("h1.pg-title").first()).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText("ผลงานตัวแทน")).toBeVisible();
-  await expect(page.getByText("ยอดขายรายภาค")).toBeVisible();
-  await expect(page.getByText("จากใบเสนอราคาถึงปิดการขาย")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Export CSV/i })).toBeVisible();
-});
-
 // Dealer Detail = read-only workspace + มีแท็บ ลูกค้า/กิจกรรม
 test("[ux·hq] Dealer Detail อ่านอย่างเดียว + แท็บกิจกรรม", async ({ page }) => {
   await open(page, "hq", "/hq/dealers/CNX");

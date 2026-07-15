@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, type DealerRow, type DealerCredentials, type HQTargets } from "@/lib/mock";
-import { NET_DEALERS } from "@/lib/hqNetwork";
+import { dealerLeaderboard } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useRole } from "@/context/RoleContext";
 import { useAuditLogger } from "@/lib/useAudit";
@@ -126,7 +126,7 @@ export default function HQDealersPage() {
   const logAudit = useAuditLogger(); // บันทึกการกระทำของ admin
   const router = useRouter();
 
-  const [dealers, setDealers] = usePersistentState<DealerRow[]>("hq_dealers_v3", NET_DEALERS);
+  const [dealers, setDealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
   // เกณฑ์สี Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
   const [q, setQ] = useState("");

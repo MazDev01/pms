@@ -8,7 +8,7 @@ import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@/lib/mock";
-import { NET_DEALERS } from "@/lib/hqNetwork";
+import { dealerLeaderboard } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useNetworkDealerDetail, useNetworkCustomers } from "@/lib/useNetworkData";
 import { CountUp } from "@/components/ui/CountUp";
@@ -369,10 +369,10 @@ type TabKey = typeof TABS[number]["key"];
 export default function DealerDrillDownPage({ params }: { params: Promise<{ dealerCode: string }> }) {
   const { dealerCode } = use(params);
   // อ่านจากชุดที่ persist (hq_dealers_v2) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
-  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v3", NET_DEALERS);
+  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
   const [tab, setTab] = useState<TabKey>("overview");
   const code = dealerCode.toUpperCase();
-  const dealer = dealers.find(d => d.code === code) ?? NET_DEALERS.find(d => d.code === code);
+  const dealer = dealers.find(d => d.code === code) ?? dealerLeaderboard.find(d => d.code === code);
   // รายละเอียดตัวแทนแบบเชื่อมต่อ: CNX = ข้อมูลสด (leads/projects/quotes/ยอดรายเดือน) · สาขาอื่น = seed
   const detail = useNetworkDealerDetail(code);
   const custs = useNetworkCustomers().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (แหล่งเดียว)

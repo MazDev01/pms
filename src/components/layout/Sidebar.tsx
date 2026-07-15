@@ -59,7 +59,6 @@ const HQ_NAV: NavGroup[] = [
       { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
       { label: "ใบเสนอราคาทั้งเครือ", href: "/hq/quotations", icon: <ScrollText size={16} /> },
       { label: "แคตตาล็อกแม่แบบ",  href: "/hq/master",     icon: <Package size={16} /> },
-      { label: "รายงาน",           href: "/hq/reports",    icon: <BarChart2 size={16} /> },
     ],
   },
   {

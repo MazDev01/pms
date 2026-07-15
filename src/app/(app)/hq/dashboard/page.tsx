@@ -11,7 +11,7 @@ import {
 import { PlanVsActualBars, MultiLineChart, Donut } from "@/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 import {
-  DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor,
+  dealerLeaderboard, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor,
   type DealerRow, type HQTargets,
 } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
@@ -19,7 +19,7 @@ import { useFilters } from "@/context/FilterContext";
 import { FilterBar, SelectFilter } from "@/components/filters/FilterBar";
 import { SalesTrendChart } from "@/components/ui/SalesTrendChart";
 import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads } from "@/lib/useNetworkData";
-import { NET_DEALERS } from "@/lib/hqNetwork";
+
 import { useSales } from "@/context/SalesContext";
 import { fmtBaht, parseBaht } from "@/lib/format";
 
@@ -65,7 +65,7 @@ export default function HQDashboard() {
   const router = useRouter();
   const { timeRange } = useFilters();
   // ข้อมูลตัวแทน = ชุดเดียวกับหน้า "ตัวแทน" (persist ผ่าน hq_dealers_v2) — คุณสมบัติคงที่ (ชื่อ/ภาค/เป้าทั้งปี/สถานะ)
-  const [allDealers] = usePersistentState<DealerRow[]>("hq_dealers_v3", NET_DEALERS);
+  const [allDealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
   // เป้าหมายที่ HQ ตั้งไว้ (แหล่งเดียว) — ใช้เป็นเกณฑ์สี Win rate แทนการ hardcode
   const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
   // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน ไม่จำข้ามหน้า)
@@ -384,7 +384,7 @@ export default function HQDashboard() {
 
   // การ์ด KPI 6 ใบ — ดีไซน์เดียวกับแดชบอร์ดตัวแทน (ไอคอนพาสเทล · (i) คำอธิบาย · การ์ดเป้าหมายเป็นวงแหวน · "ดูรายละเอียด")
   const kpiCards = [
-    { label: "เป้าหมายยอดขายทั้งเครือ", tip: "เป้าหมายยอดขายทั้งปีของทั้งเครือ เทียบกับยอดปิดการขายสะสมในช่วงเวลาที่เลือก", Icon: Target, color: "#2563EB", bg: "#E8F0FE", href: "/hq/reports", ring: true },
+    { label: "เป้าหมายยอดขายทั้งเครือ", tip: "เป้าหมายยอดขายทั้งปีของทั้งเครือ เทียบกับยอดปิดการขายสะสมในช่วงเวลาที่เลือก", Icon: Target, color: "#2563EB", bg: "#E8F0FE", href: "/hq/quotations", ring: true },
     { label: "ใบเสนอราคารวม", tip: "จำนวนใบเสนอราคาทั้งเครือในช่วงเวลาที่เลือก", Icon: FileText, color: "#0891B2", bg: "#E6F4F9", href: "/hq/quotations", value: sc.quotes.value, sub1: "ใบ" },
     { label: "ลูกค้าทั้งเครือ", tip: "จำนวนลูกค้าทั้งหมดในเครือ", Icon: Users2, color: "#7C3AED", bg: "#F0EBFB", href: "/hq/customers", value: sc.customers.value, sub1: "ราย" },
     { label: "ดีลที่ปิดการขาย (Won)", tip: "จำนวนดีลที่ปิดการขายสำเร็จในช่วงเวลาที่เลือก", Icon: Trophy, color: "#D97706", bg: "#FEF0E6", href: "/hq/quotations", value: sc.won.value, sub1: "ดีล" },

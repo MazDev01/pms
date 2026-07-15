@@ -7,6 +7,7 @@ import { useNetworkCustomers } from "@/lib/useNetworkData";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { Search, X } from "lucide-react";
+import { StackedBarChart } from "@/components/ui/Charts";
 
 const PRIMARY = "#003366";
 
@@ -28,22 +29,9 @@ const typeBadgeMap: Record<HQCustomer["type"], TypeBadgeConfig> = {
   หน่วยงานรัฐ: { bg: "#e5faf0", color: "#065f46" },
 };
 
-const segmentBadgeMap: Record<HQCustomer["segment"], TypeBadgeConfig> = {
-  enterprise: { bg: "#dce5f0", color: "#003366" },
-  sme: { bg: "#fef3cd", color: "#92400e" },
-  government: { bg: "#e5faf0", color: "#065f46" },
-};
-
-const segmentLabel: Record<HQCustomer["segment"], string> = {
-  enterprise: "องค์กรขนาดใหญ่",
-  sme: "SME",
-  government: "ภาครัฐ",
-};
-
 export default function HQCustomersPage() {
   const { timeRange, passes } = useFilters();
   const [search, setSearch] = useState("");
-  const [segFilter, setSegFilter] = useState<HQCustomer["segment"] | "all">("all");
   // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน ไม่จำข้ามหน้า)
   const [dealerSel, setDealerSel] = useState<string>("all");
   // สถานะ/จังหวัด — ตัวกรองเฉพาะหน้านี้ (local) รวมแถวเดียวกับค้นหา+ตัวแทน ในทูลบาร์
@@ -61,14 +49,13 @@ export default function HQCustomersPage() {
       .filter((c) => {
         if (q && !c.name.toLowerCase().includes(q) && !c.province.toLowerCase().includes(q))
           return false;
-        if (segFilter !== "all" && c.segment !== segFilter) return false;
         if (dealerSel !== "all" && c.dealerCode !== dealerSel) return false;
         if (statusFilter !== "all" && c.status !== statusFilter) return false;
         if (provinceFilter !== "all" && c.province !== provinceFilter) return false;
         return passes({ date: c.lastContact });
       })
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [search, passes, source, segFilter, dealerSel, statusFilter, provinceFilter]);
+  }, [search, passes, source, dealerSel, statusFilter, provinceFilter]);
 
   // ตัวเลือกตัวแทนจากข้อมูลจริงในหน้า
   const dealerOptions = useMemo(() => {
@@ -100,8 +87,8 @@ export default function HQCustomersPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FilterBar dims={[]} />
           <ExportMenu filename="hq-customers" title="ลูกค้าทั้งเครือ"
-            headers={["ลูกค้า","ประเภท","จังหวัด","ตัวแทน","โอกาสการขายที่ชนะ","รายได้รวม","สถานะ","ติดต่อล่าสุด"]}
-            rows={filtered.map(c=>[c.name,c.type,c.province,c.dealerName,c.dealsWon,c.totalRevenue,c.status==="active"?"ใช้งาน":"ไม่ใช้งาน",c.lastContact])} />
+            headers={["ลูกค้า","ประเภท","รหัส","ชื่อตัวแทน","จังหวัด","ซื้อแล้ว (ดีล)","มูลค่ารวม","สถานะ","ติดต่อล่าสุด"]}
+            rows={filtered.map(c=>[c.name,c.type,c.dealerCode,c.dealerName,c.province,c.dealsWon,c.totalRevenue,c.status==="active"?"ใช้งาน":"ไม่ใช้งาน",c.lastContact])} />
         </div>
       </div>
 
@@ -115,33 +102,12 @@ export default function HQCustomersPage() {
             {label} <span style={{ color: PRIMARY }}>{value}</span>
           </div>
         );
-        const SEGMENTS: HQCustomer["segment"][] = ["enterprise", "sme", "government"];
+        // ไม่แบ่งลูกค้าเป็น SME/องค์กร/ภาครัฐ อีกต่อไป — ฐานข้อมูลลูกค้าไม่ใช้ขนาดกิจการเป็นเกณฑ์
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: "1.25rem" }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {pill("ลูกค้าทั้งหมด", `${scoped.length} ราย`)}
-              {pill("ใช้งานอยู่", `${activeCount} ราย`)}
-              {pill("มูลค่ารวม", `฿${fmtM(totalRevenue)}`)}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {SEGMENTS.map((seg) => {
-                const cfg = segmentBadgeMap[seg];
-                const items = scoped.filter((c) => c.segment === seg);
-                const active = segFilter === seg;
-                return (
-                  <button key={seg} onClick={() => setSegFilter(active ? "all" : seg)}
-                    style={{ textAlign: "left", cursor: "pointer", background: "#fff", borderRadius: 12, padding: "12px 14px",
-                      border: active ? `2px solid ${PRIMARY}` : `1px solid ${BORDER}`,
-                      boxShadow: active ? "0 4px 14px rgba(0,51,102,.12)" : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 99, background: cfg.bg, color: cfg.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", fontWeight: 800 }}>{items.length}</span>
-                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{segmentLabel[seg]}</span>
-                    </div>
-                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginTop: 7 }}>฿{fmtM(items.reduce((t, c) => t + c.totalRevenue, 0))}</div>
-                  </button>
-                );
-              })}
-            </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1.25rem" }}>
+            {pill("ลูกค้าทั้งหมด", `${scoped.length} ราย`)}
+            {pill("ใช้งานอยู่", `${activeCount} ราย`)}
+            {pill("มูลค่ารวม", `฿${fmtM(totalRevenue)}`)}
           </div>
         );
       })()}
@@ -177,29 +143,63 @@ export default function HQCustomersPage() {
         </select>
       </div>
 
+      {/* กราฟเปรียบเทียบรายตัวแทน — HQ ดูเทียบกันได้ ไม่ต้องอ่านตารางดิบ
+          แท่งแนวตั้ง: ความสูง = มูลค่ารวม · ป้ายใต้แท่ง = รหัสสาขา + จำนวนลูกค้า (ข้อมูลครบในกราฟเดียว) */}
+      {(() => {
+        const byDealer = new Map<string, { name: string; count: number; revenue: number }>();
+        filtered.forEach(c => {
+          const r = byDealer.get(c.dealerCode) ?? { name: c.dealerName, count: 0, revenue: 0 };
+          r.count += 1; r.revenue += c.totalRevenue;
+          byDealer.set(c.dealerCode, r);
+        });
+        const rows = [...byDealer.entries()]
+          .map(([code, v]) => ({ code, ...v }))
+          .sort((a, b) => b.revenue - a.revenue);
+        return (
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="card-header">
+              <div className="card-title">ลูกค้า รายตัวแทน</div>
+              <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เรียงตามมูลค่ารวม · หน่วย: ล้านบาท</span>
+            </div>
+            <div className="card-body" style={{ paddingTop: 8 }}>
+              {!rows.length ? (
+                <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
+              ) : (
+                <StackedBarChart
+                  months={rows.map(r => `${r.code} (${r.count})`)}
+                  height={300}
+                  fmt={v => `฿${v.toFixed(1)}M`}
+                  series={[{ name: "มูลค่ารวม (วงเล็บใต้แท่ง = จำนวนลูกค้า)", color: PRIMARY, data: rows.map(r => Math.round(r.revenue / 1e6 * 10) / 10) }]}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Table Card */}
       <div className="card">
         <div className="table-wrap" style={{ borderTop: "none" }}>
           <table>
             <colgroup>
-              <col style={{ width: "21%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "9%" }} />
+              <col style={{ width: "23%" }} />
+              <col style={{ width: "9%", minWidth: 88 }} />
+              <col style={{ width: "6%", minWidth: 68 }} />
+              <col style={{ width: "17%", minWidth: 150 }} />
               <col style={{ width: "10%" }} />
+              <col style={{ width: "7%" }} />
               <col style={{ width: "9%" }} />
+              <col style={{ width: "11%" }} />
               <col style={{ width: "8%" }} />
             </colgroup>
             <thead>
               <tr>
                 <th>ลูกค้า</th>
                 <th>ประเภท</th>
-                <th>ตัวแทน</th>
+                <th style={{ paddingRight: 0 }}>รหัส</th>
+                <th style={{ paddingLeft: 8 }}>ชื่อตัวแทน</th>
                 <th>จังหวัด</th>
-                <th>กลุ่มลูกค้า</th>
-                <th className="num">โอกาสการขายที่ชนะ</th>
+                <th className="num">ซื้อแล้ว</th>
                 <th className="num">มูลค่ารวม</th>
                 <th>ติดต่อล่าสุด</th>
                 <th>สถานะ</th>
@@ -215,7 +215,6 @@ export default function HQCustomersPage() {
               ) : (
                 filtered.map((c) => {
                   const typeCfg = typeBadgeMap[c.type];
-                  const segCfg = segmentBadgeMap[c.segment];
                   return (
                     <tr key={c.id} onClick={() => setViewC(c)} style={{ cursor: "pointer" }}>
                       {/* ลูกค้า */}
@@ -228,23 +227,14 @@ export default function HQCustomersPage() {
                         </span>
                       </td>
 
-                      {/* ตัวแทน */}
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <span style={{ fontWeight: 600, color: PRIMARY }}>{c.dealerCode}</span>
-                        <span style={{ color: "#6b7280", marginLeft: 4, fontSize: "0.72rem" }}>
-                          {c.dealerName}
-                        </span>
-                      </td>
+                      {/* รหัสตัวแทน */}
+                      <td style={{ whiteSpace: "nowrap", fontWeight: 700, color: PRIMARY, paddingRight: 0 }}>{c.dealerCode}</td>
+
+                      {/* ชื่อตัวแทน */}
+                      <td style={{ whiteSpace: "nowrap", paddingLeft: 8 }}>{c.dealerName}</td>
 
                       {/* จังหวัด */}
                       <td style={{ whiteSpace: "nowrap" }}>{c.province}</td>
-
-                      {/* Segment */}
-                      <td>
-                        <span className="badge" style={{ background: segCfg.bg, color: segCfg.color }}>
-                          {segmentLabel[c.segment]}
-                        </span>
-                      </td>
 
                       {/* ดีลที่ชนะ */}
                       <td className="num">{c.dealsWon}</td>
@@ -313,10 +303,9 @@ export default function HQCustomersPage() {
             <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([
                 ["ประเภท", viewC.type],
-                ["กลุ่มลูกค้า", segmentLabel[viewC.segment]],
                 ["จังหวัด", viewC.province],
                 ["ตัวแทนที่ดูแล", `${viewC.dealerCode} · ${viewC.dealerName}`],
-                ["โอกาสการขายที่ชนะ", `${viewC.dealsWon}`],
+                ["ซื้อแล้ว", `${viewC.dealsWon} ดีล`],
                 ["มูลค่ารวม", viewC.totalRevenue > 0 ? fmtM(viewC.totalRevenue) : "-"],
                 ["ติดต่อล่าสุด", viewC.lastContact],
                 ["สถานะ", viewC.status === "active" ? "ใช้งาน" : "ไม่ใช้งาน"],

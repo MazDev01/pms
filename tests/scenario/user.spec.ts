@@ -13,7 +13,7 @@ const DEALER_PAGES = [
 const HQ_PAGES = [
   ["/hq/dashboard", "แดชบอร์ด HQ"], ["/hq/dealers", "ตัวแทน"], ["/hq/customers", "ลูกค้าทั้งเครือ"],
   ["/hq/pipeline", "ภาพรวมยอดขาย"], ["/hq/quotations", "ใบเสนอราคาทั้งเครือ"], ["/hq/master", "แคตตาล็อก"],
-  ["/hq/reports", "รายงาน HQ"], ["/hq/audit", "บันทึกการใช้งาน"], ["/hq/settings", "ตั้งค่า HQ"],
+  ["/hq/audit", "บันทึกการใช้งาน"], ["/hq/settings", "ตั้งค่า HQ"],
 ] as const;
 
 for (const [path, label] of DEALER_PAGES) {

@@ -216,9 +216,7 @@ const TITLE_MAP: { match: string; title: string }[] = [
   { match: "/hq/company",        title: "บริษัท" },
   { match: "/hq/users",          title: "ผู้ใช้งาน" },
   { match: "/hq/audit",          title: "บันทึกการใช้งาน" },
-  { match: "/hq/reports",        title: "รายงาน" },
   { match: "/hq/settings",        title: "ตั้งค่า" },
-  { match: "/reports",           title: "รายงาน" },
 ];
 
 function pageTitle(pathname: string): string {
@@ -236,7 +234,6 @@ const DEALER_PAGES: PageEntry[] = [
   { label: "แม่แบบ",         href: "/products",   keywords: "แม่แบบ สินค้า product catalog แคตตาล็อก" },
   { label: "ปฏิทิน",         href: "/calendar",   keywords: "ปฏิทิน calendar นัดหมาย นัด appointment" },
   { label: "ไฟล์",           href: "/files",      keywords: "ไฟล์ file files เอกสาร document" },
-  { label: "รายงาน",         href: "/reports",    keywords: "รายงาน report analytics วิเคราะห์ สถิติ" },
   { label: "ตั้งค่า",         href: "/settings",   keywords: "ตั้งค่า setting settings config" },
   { label: "บัญชีดีลเลอร์",   href: "/settings",   keywords: "บัญชี account โปรไฟล์ profile ข้อมูลส่วนตัว บริษัท ดีลเลอร์" },
 ];
@@ -250,7 +247,6 @@ const HQ_PAGES: PageEntry[] = [
   { label: "แคตตาล็อกแม่แบบ",     href: "/hq/master",     keywords: "แคตตาล็อก แม่แบบ master สินค้า product catalog" },
   { label: "บริษัท",              href: "/hq/company",    keywords: "บริษัท company องค์กร โปรไฟล์บริษัท" },
   { label: "ผู้ใช้งาน",            href: "/hq/users",      keywords: "ผู้ใช้งาน user users บัญชีผู้ใช้ สิทธิ์" },
-  { label: "รายงาน",              href: "/reports",       keywords: "รายงาน report analytics วิเคราะห์ สถิติ" },
   { label: "ตั้งค่า",              href: "/hq/settings",   keywords: "ตั้งค่า setting settings config" },
   { label: "โปรไฟล์",             href: "/profile",       keywords: "โปรไฟล์ profile บัญชี account ข้อมูลส่วนตัว" },
 ];

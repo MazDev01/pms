@@ -13,7 +13,7 @@ import { dealerLeaderboard, hqAllCustomers, initialCustomers as customers, quota
  * ────────────────────────────────────────────────────────────────────────── */
 
 // ยึด "วันนี้" ไว้ที่ยุคของข้อมูล mock (30 มิ.ย. 2026)
-const APP_NOW = new Date(2026, 5, 30);
+export const APP_NOW = new Date(2026, 5, 30);
 
 const THAI_MONTH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 

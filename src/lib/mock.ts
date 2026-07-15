@@ -443,7 +443,8 @@ export type LeadRow = {
   category: string;
   status: LeadStatus;
   value: string;
-  assigned: string;
+  assigned: string;      // ชื่อผู้รับผิดชอบ (พนักงานขาย) — ไม่ใช่ตัวแทนจำหน่าย
+  dealerCode?: string;   // ตัวแทนเจ้าของลีด (HQ ใช้ดูทั้งเครือ) — ไม่ระบุ = สมุดงานของตัวแทนที่ล็อกอิน
   source?: string;
   note?: string;
   project?: string;      // ชื่อดีล/โครงการ (ลูกค้าเดิมสร้างดีลใหม่) — ไม่มีก็ใช้ "{แม่แบบ} — {บริษัท}"
@@ -768,16 +769,16 @@ export type DealerRow = {
 };
 
 export const dealerLeaderboard: DealerRow[] = [
-  { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      region: "ตะวันออก", revenueActual: 37800000, revenueTarget: 42000000, winRate: 48, activeProjects: 6, onTimePct: 91, status: "active",   credentials: { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" } },
-  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   region: "เหนือ",    revenueActual: 29400000, revenueTarget: 43400000, winRate: 35, activeProjects: 5, onTimePct: 78, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
-  { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      region: "ตะวันตก", revenueActual: 26600000, revenueTarget: 35000000, winRate: 52, activeProjects: 4, onTimePct: 85, status: "active",   credentials: { email: "sales@maesotmetal.co.th", password: "PEB-MST-7749" } },
-  { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    region: "เหนือ",    revenueActual: 21700000, revenueTarget: 40600000, winRate: 41, activeProjects: 3, onTimePct: 72, status: "active",   credentials: { email: "sales@crstructure.co.th", password: "PEB-CRI-5563" } },
-  { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   region: "กลาง",     revenueActual: 13300000, revenueTarget: 35000000, winRate: 29, activeProjects: 2, onTimePct: 61, status: "active",   credentials: { email: "sales@nsn-engineering.co.th", password: "PEB-NSN-2294" } },
-  { id: "HYI", code: "HYI", name: "บจ. หาดใหญ่สตีลกรุ๊ป",    region: "ใต้",      revenueActual: 6440000,  revenueTarget: 28000000, winRate: 18, activeProjects: 1, onTimePct: 0,  status: "inactive", credentials: { email: "sales@hatyaisteel.co.th", password: "PEB-HYI-1108" } },
-  { id: "AYA", code: "AYA", name: "บจ. อยุธยาเมทัลบิลด์",     region: "กลาง",     revenueActual: 32550000, revenueTarget: 36400000, winRate: 47, activeProjects: 5, onTimePct: 90, status: "active",   credentials: { email: "sales@ayametalbuild.co.th", password: "PEB-AYA-6612" } },
-  { id: "KKN", code: "KKN", name: "หจก. ขอนแก่นโครงเหล็ก",   region: "อีสาน",    revenueActual: 24150000, revenueTarget: 33600000, winRate: 44, activeProjects: 4, onTimePct: 88, status: "active",   credentials: { email: "sales@kksteelframe.co.th", password: "PEB-KKN-9034" } },
-  { id: "UBN", code: "UBN", name: "บจ. อุบลสตีลกรุ๊ป",        region: "อีสาน",    revenueActual: 19250000, revenueTarget: 31500000, winRate: 33, activeProjects: 3, onTimePct: 74, status: "active",   credentials: { email: "sales@ubonsteel.co.th", password: "PEB-UBN-4478" } },
-  { id: "PKT", code: "PKT", name: "บจ. ภูเก็ตสตรัคเจอรัล",   region: "ใต้",      revenueActual: 16100000, revenueTarget: 24500000, winRate: 38, activeProjects: 2, onTimePct: 81, status: "active",   credentials: { email: "sales@phuketstructural.co.th", password: "PEB-PKT-2851" } },
+  { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      region: "ตะวันออก", revenueActual: 5400000, revenueTarget: 6000000, winRate: 48, activeProjects: 6, onTimePct: 91, status: "active",   credentials: { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" } },
+  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   region: "เหนือ",    revenueActual: 4200000, revenueTarget: 6200000, winRate: 35, activeProjects: 5, onTimePct: 78, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
+  { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      region: "ตะวันตก", revenueActual: 3800000, revenueTarget: 5000000, winRate: 52, activeProjects: 4, onTimePct: 85, status: "active",   credentials: { email: "sales@maesotmetal.co.th", password: "PEB-MST-7749" } },
+  { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    region: "เหนือ",    revenueActual: 3100000, revenueTarget: 5800000, winRate: 41, activeProjects: 3, onTimePct: 72, status: "active",   credentials: { email: "sales@crstructure.co.th", password: "PEB-CRI-5563" } },
+  { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   region: "กลาง",     revenueActual: 1900000, revenueTarget: 5000000, winRate: 29, activeProjects: 2, onTimePct: 61, status: "active",   credentials: { email: "sales@nsn-engineering.co.th", password: "PEB-NSN-2294" } },
+  { id: "HYI", code: "HYI", name: "บจ. หาดใหญ่สตีลกรุ๊ป",    region: "ใต้",      revenueActual: 920000,  revenueTarget: 4000000, winRate: 18, activeProjects: 1, onTimePct: 0,  status: "inactive", credentials: { email: "sales@hatyaisteel.co.th", password: "PEB-HYI-1108" } },
+  { id: "AYA", code: "AYA", name: "บจ. อยุธยาเมทัลบิลด์",     region: "กลาง",     revenueActual: 4650000, revenueTarget: 5200000, winRate: 47, activeProjects: 5, onTimePct: 90, status: "active",   credentials: { email: "sales@ayametalbuild.co.th", password: "PEB-AYA-6612" } },
+  { id: "KKN", code: "KKN", name: "หจก. ขอนแก่นโครงเหล็ก",   region: "อีสาน",    revenueActual: 3450000, revenueTarget: 4800000, winRate: 44, activeProjects: 4, onTimePct: 88, status: "active",   credentials: { email: "sales@kksteelframe.co.th", password: "PEB-KKN-9034" } },
+  { id: "UBN", code: "UBN", name: "บจ. อุบลสตีลกรุ๊ป",        region: "อีสาน",    revenueActual: 2750000, revenueTarget: 4500000, winRate: 33, activeProjects: 3, onTimePct: 74, status: "active",   credentials: { email: "sales@ubonsteel.co.th", password: "PEB-UBN-4478" } },
+  { id: "PKT", code: "PKT", name: "บจ. ภูเก็ตสตรัคเจอรัล",   region: "ใต้",      revenueActual: 2300000, revenueTarget: 3500000, winRate: 38, activeProjects: 2, onTimePct: 81, status: "active",   credentials: { email: "sales@phuketstructural.co.th", password: "PEB-PKT-2851" } },
 ];
 
 // ยอดขายรายเดือน (รวมทั้งเครือ)
@@ -1175,6 +1176,10 @@ export const hqAllCustomers: HQCustomer[] = [
 
 // ─── HQ ALL QUOTATIONS ───────────────────────────────────────────────────────
 
+// ระยะเวลาส่งมอบมาตรฐาน (วัน) — HQ กำหนดเป็นกฎธุรกิจ ใช้เมื่อใบเสนอราคาไม่ได้ระบุ deliveryTime ไว้เอง
+// วันส่งมอบ = วันปิดการขาย + ระยะเวลานี้ · การรับประกันโครงสร้าง 10 ปีนับจากวันส่งมอบ (มาตรฐาน PEB)
+export const DEFAULT_DELIVERY_DAYS = 90;
+
 export type HQQuotation = {
   id: string;
   quoteNo: string;
@@ -1187,6 +1192,11 @@ export type HQQuotation = {
   createdAt: string;
   salesperson: string;
   productLine: string;
+  deliveryTime?: string;  // ระยะเวลาส่งมอบเฉพาะใบ (เช่น "120 วัน") — ไม่ระบุ = DEFAULT_DELIVERY_DAYS
+  // ── รายละเอียดราคา: มีเฉพาะใบที่ดีลเลอร์สร้างจริง (สาขา CNX) — ใบ seed ของสาขาอื่นไม่มี ──
+  // valueNum = ราคาสุทธิหลังหักส่วนลด (ก่อน VAT) · materialCost = ราคามาตรฐานก่อนส่วนลด
+  materialCost?: number;
+  lineItems?: QuoteLineItem[];
 };
 
 export const hqAllQuotations: HQQuotation[] = [

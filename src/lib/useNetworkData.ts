@@ -7,11 +7,10 @@
 import { useMemo } from "react";
 import { useSales } from "@/context/SalesContext";
 import {
-  dealerDetails, fmtISOToThai,
+  dealerDetails, fmtISOToThai, hqAllQuotations, hqAllCustomers,
   type HQQuotation, type HQCustomer, type LeadStatus, type LeadRow,
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@/lib/mock";
-import { NET_QUOTATIONS, NET_CUSTOMERS, NET_LEADS } from "@/lib/hqNetwork";
 import { parseBaht } from "@/lib/format";
 
 // ดีลเลอร์หลักของเดโม — SalesContext แทนสมุดงานของสาขานี้
@@ -30,20 +29,21 @@ export function useNetworkQuotations(): HQQuotation[] {
         status: q.status, createdAt: fmtISOToThai(q.date),
         salesperson: lead?.assigned ?? `ตัวแทน ${CURRENT_DEALER.code}`,
         productLine: q.buildingType || q.project,
+        // รายละเอียดราคาจริงของใบที่ดีลเลอร์สร้าง → HQ เจาะดูรายการสินค้า/ราคาก่อนส่วนลดได้
+        materialCost: q.materialCost, lineItems: q.lineItems,
       };
     });
     const liveNos = new Set(live.map(l => l.quoteNo));
-    return [...live, ...NET_QUOTATIONS.filter(h => !liveNos.has(h.quoteNo))];
+    return [...live, ...hqAllQuotations.filter(h => !liveNos.has(h.quoteNo))];
   }, [quotations, leads]);
 }
 
-// ลีดทั้งเครือ = ลีดที่ดีลเลอร์สร้างจริง (สาขา CNX) + ชุดข้อมูลเครือ (สาขาอื่น)
+// ลีดทั้งเครือ = ลีดจริงจาก SalesContext เท่านั้น (ไม่มีข้อมูลเติมสังเคราะห์)
+// ลีดทั้งเครือ — ปัจจุบันระบบมีสมุดงานของสาขา CNX สาขาเดียว จึงผูก dealerCode = CNX ตามความจริง
+// (ไม่มีลีดสังเคราะห์ของสาขาอื่น — ถ้ามีสาขาอื่นบันทึกลีดจริงเมื่อไร ค่อยไหลเข้ามาที่นี่)
 export function useNetworkLeads(): LeadRow[] {
   const { leads } = useSales();
-  return useMemo(() => {
-    const liveIds = new Set(leads.map(l => l.numId));
-    return [...leads, ...NET_LEADS.filter(n => !liveIds.has(n.numId))];
-  }, [leads]);
+  return useMemo(() => leads.map(l => ({ ...l, dealerCode: l.dealerCode ?? CURRENT_DEALER.code })), [leads]);
 }
 
 // ลูกค้าทั้งเครือ = ลูกค้าที่ดีลเลอร์สร้างจริง (สาขา CNX) + seed สาขาอื่นที่ไม่ซ้ำชื่อ
@@ -60,7 +60,7 @@ export function useNetworkCustomers(): HQCustomer[] {
       lastContact: "30 มิ.ย. 2569", segment: "sme",
     }));
     const liveNames = new Set(live.map(l => l.name));
-    return [...live, ...NET_CUSTOMERS.filter(h => !liveNames.has(h.name))];
+    return [...live, ...hqAllCustomers.filter(h => !liveNames.has(h.name))];
   }, [customers, quotations]);
 }
 

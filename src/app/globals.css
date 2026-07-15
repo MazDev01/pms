@@ -550,6 +550,36 @@ body {
 .hq-kpi8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 1100px) { .hq-kpi8 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .hq-kpi8 { grid-template-columns: 1fr; } }
+/* HQ · ภาพรวมยอดขาย — KPI 5 ใบ */
+.hq-kpi5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1280px) { .hq-kpi5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px)  { .hq-kpi5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px)  { .hq-kpi5 { grid-template-columns: 1fr; } }
+/* HQ · ใบเสนอราคาทั้งเครือ — KPI 7 ใบ */
+.hq-kpi7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1440px) { .hq-kpi7 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 860px)  { .hq-kpi7 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px)  { .hq-kpi7 { grid-template-columns: 1fr; } }
+/* แถบตัวกรองติดบน (หน้ารายการยาว ๆ ของ HQ) — รูปแบบเดียวกับ .cust-filter ในหน้าลูกค้า */
+.hq-sticky-filter { position: sticky; top: 8px; z-index: 20; }
+/* กราฟ "แยกตามตัวแทน" บนหน้า HQ — 2 คอลัมน์บนจอกว้าง */
+.hq-dealer-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; margin-bottom: 24px; }
+@media (max-width: 900px) { .hq-dealer-charts { grid-template-columns: 1fr; } }
+
+/* ─── HQ · Customer Database ─── */
+.cust-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; }
+@media (max-width: 1280px) { .cust-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 820px)  { .cust-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .cust-kpis { grid-template-columns: 1fr; } }
+.cust-analytics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
+@media (max-width: 1280px) { .cust-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px)  { .cust-analytics { grid-template-columns: 1fr; } }
+/* ตัวกรองปักบนสุดเวลาเลื่อนตาราง */
+.cust-filter { position: sticky; top: 8px; z-index: 20; }
+/* แท่งการส่งมอบรายเดือน — โตจากฐาน */
+@keyframes bar-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.bar-grow-y { transform-origin: bottom; animation: bar-grow-y .7s cubic-bezier(.4,0,.2,1) both; }
+
 .hq-row-bottom { display: grid; grid-template-columns: 2.3fr 1fr; gap: 1.25rem; align-items: start; }
 @media (max-width: 1180px) { .hq-row-bottom { grid-template-columns: 1fr !important; } }
 @media (max-width: 1100px) { .hq-row2a, .hq-row2b { grid-template-columns: 1fr !important; } }

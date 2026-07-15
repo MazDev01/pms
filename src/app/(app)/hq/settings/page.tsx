@@ -464,7 +464,7 @@ const DEFAULT_SYSTEM: SystemCfg = { sessionTimeout: 30, runningPrefix: "Q-2026-"
 // คีย์จริงที่ใช้ทั้งระบบ (รวมของหน้าบริษัท/ผู้ใช้ที่ฝัง + ตัวแทน) → backup/restore ครบจริง
 const SETTINGS_KEYS = [
   "hq_company_profile", "hq_company_logo", "hq_company_wordmark", "hq_users_v4",
-  "hq_dealer_settings", "hq_dealers_v2", "hq_dealers_v3", "hq_sales_journey", "hq_targets",
+  "hq_dealer_settings", "hq_dealers_v2", "hq_sales_journey", "hq_targets",
   "hq_notifications_v2", "hq_system", "hq_sales_policy",
 ];
 function SystemTab() {
