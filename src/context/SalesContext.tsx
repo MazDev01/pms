@@ -14,12 +14,27 @@ import {
   type AppointmentMock,
 } from "@/lib/mock";
 import { loadIssuer } from "@/lib/quotationPrint";
+import { usePersistentState } from "@/lib/usePersistentState";
 import { parseBaht } from "@/lib/format";
 
 // ใบเสนอราคาเดิม (seed) = ออกภายใต้โปรไฟล์บริษัทตั้งต้น → ตรึงชื่อไว้ ไม่เปลี่ยนตามโปรไฟล์ที่แก้ทีหลัง
 const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
   q.issuer ? q : { ...q, issuer: { ...DEFAULT_ISSUER } }
 );
+
+// ── คีย์เก็บข้อมูลงานขายลง localStorage — กด F5 แล้วข้อมูลต้องไม่หาย ──────────────
+// สำคัญ: ถ้าแก้ "ข้อมูลตั้งต้น" ใน mock.ts (เพิ่มฟิลด์/แก้ค่า) ต้องขึ้นเลขเวอร์ชันคีย์ด้วย
+// ไม่งั้นเบราว์เซอร์ที่เคยเปิดจะอ่านของเก่าที่บันทึกไว้ทับตลอด แล้วมองไม่เห็นข้อมูลใหม่
+const K = {
+  deals:        "sales_deals_v1",
+  leads:        "sales_leads_v1",        // v1 = ลีดชุดที่มี createdAt ครบทุกใบ
+  customers:    "sales_customers_v1",
+  quotations:   "sales_quotations_v1",
+  appointments: "sales_appointments_v1", // v1 = นัดหมายชุดที่มี leadId
+  leadDealMap:  "sales_lead_deal_map_v1",
+  nextDealId:   "sales_next_deal_id_v1",
+  checklists:   "sales_lead_checklists_v1",
+};
 
 // ─── Types ─────────────────────────────────────────────────────────
 export type DealSource = "pipeline" | "lead";
@@ -84,17 +99,17 @@ export function SalesProvider({
   children: ReactNode;
   initialLeads: LeadRow[];
 }) {
-  const [deals, setDeals]           = useState<PipelineDealMock[]>(pipelineDeals);
-  const [leads, setLeads]           = useState<LeadRow[]>(initialLeads);
+  const [deals, setDeals]           = usePersistentState<PipelineDealMock[]>(K.deals, pipelineDeals);
+  const [leads, setLeads]           = usePersistentState<LeadRow[]>(K.leads, initialLeads);
   // ref สำหรับอ่านค่า leads ล่าสุดใน callback โดยไม่ต้องพึ่ง closure (ใช้ใน updateLeadStatus)
   const leadsRef = useRef(leads);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
-  const [leadDealMap, setLeadDealMap] = useState<Record<string, number>>({});
-  const [nextDealId, setNextDealId] = useState(pipelineDeals.length + 1);
-  const [leadChecklists, setLeadChecklists] = useState<Record<string, ChecklistItem[]>>({});
-  const [customers, setCustomers]   = useState<CustomerRow[]>(initialCustomers);
-  const [quotations, setQuotations] = useState<QuotationMock[]>(seedQuotationsStamped);
-  const [appointments, setAppointments] = useState<AppointmentMock[]>(seedAppointments);
+  const [leadDealMap, setLeadDealMap] = usePersistentState<Record<string, number>>(K.leadDealMap, {});
+  const [nextDealId, setNextDealId] = usePersistentState<number>(K.nextDealId, pipelineDeals.length + 1);
+  const [leadChecklists, setLeadChecklists] = usePersistentState<Record<string, ChecklistItem[]>>(K.checklists, {});
+  const [customers, setCustomers]   = usePersistentState<CustomerRow[]>(K.customers, initialCustomers);
+  const [quotations, setQuotations] = usePersistentState<QuotationMock[]>(K.quotations, seedQuotationsStamped);
+  const [appointments, setAppointments] = usePersistentState<AppointmentMock[]>(K.appointments, seedAppointments);
   // ── Activity helper ─────────────────────────────────────────────
   const logDealActivity = useCallback((dealId: number, entry: Omit<DealActivity, "id">) => {
     setDeals(prev => prev.map(d =>
@@ -174,7 +189,6 @@ export function SalesProvider({
       id: newId,
       name: lead.contact || lead.company,
       company: lead.company,
-      type: lead.type ?? "บริษัท",   // ใช้ประเภทลูกค้าจริงจากลีด (ไม่ระบุ = บริษัท)
       email: lead.email ?? "",
       phone: lead.phone ?? "",
       province: lead.province,

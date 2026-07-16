@@ -55,9 +55,9 @@ const HQ_NAV: NavGroup[] = [
       { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  icon: <LayoutDashboard size={16} /> },
       { label: "ตัวแทนจำหน่าย",     href: "/hq/dealers",    icon: <Store size={16} /> },
       { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",  icon: <Phone size={16} /> },
-      { label: "ลูกค้าทั้งเครือ",   href: "/hq/customers",  icon: <Users size={16} /> },
       { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
       { label: "ใบเสนอราคาทั้งเครือ", href: "/hq/quotations", icon: <ScrollText size={16} /> },
+      { label: "ลูกค้าทั้งเครือ",   href: "/hq/customers",  icon: <Users size={16} /> },
       { label: "แคตตาล็อกแม่แบบ",  href: "/hq/master",     icon: <Package size={16} /> },
     ],
   },
@@ -75,11 +75,8 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   const router = useRouter();
   const { isHQ, currentKey, switchSession, session, logout } = useRole();
   const [roleOpen, setRoleOpen] = useState(false);
-  // แบรนด์ฝั่ง Dealer = ชื่อ+โลโก้บริษัทจากโปรไฟล์บริษัท (แก้ในหน้าตั้งค่า) → แบรนด์ในแอปตรงกับโปรไฟล์เสมอ
-  const [dealerBrand, setDealerBrand] = useState("เชียงใหม่สตีลบิลด์");
-  const [dealerLogo, setDealerLogo] = useState("");
-  const [hqLogo, setHqLogo] = useState(""); // โลโก้ HQ ที่อัปโหลด (แก้ในหน้าตั้งค่า › บริษัท)
-  const [brandWordmark, setBrandWordmark] = useState(""); // โลโก้พร้อมชื่อ (แนวนอน) → ใช้เป็นแบรนด์เต็มแถบเมนู
+  // แถบเมนูใช้แบรนด์ Benjamin มาตรฐานเดียวเสมอทุกบทบาท (ดู .sidebar-brand ด้านล่าง)
+  // — เดิมอ่านโลโก้/ชื่อแบรนด์จาก localStorage มาเก็บใน state แต่ไม่เคยเอาไปแสดง (โค้ดตาย) จึงเอาออก
   // โปรไฟล์ผู้ใช้ (/profile) → ชื่อ/รูปในการ์ดเจ้าของท้าย sidebar อัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
@@ -96,27 +93,6 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
     return () => { window.removeEventListener(PROFILE_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
   }, [session.dealerCode, session.name]);
 
-  useEffect(() => {
-    // อ่านชื่อ+โลโก้ตาม role และอัปเดตทันทีเมื่อบันทึกในหน้าตั้งค่า (event) หรือแท็บอื่น (storage)
-    const read = () => {
-      if (isHQ) {
-        try { setHqLogo(localStorage.getItem("hq_company_logo") || ""); } catch {}
-        try { setBrandWordmark(localStorage.getItem("hq_company_wordmark") || ""); } catch {}
-        return;
-      }
-      try {
-        const s = localStorage.getItem("dealer_issuer_profile_v2");
-        if (s) { const p = JSON.parse(s); if (p.company) setDealerBrand(String(p.company).replace(/^บริษัท\s*/, "").replace(/\s*จำกัด$/, "").trim()); }
-      } catch {}
-      try { setDealerLogo(localStorage.getItem("dealer_company_logo_v2") || ""); } catch {}
-      try { setBrandWordmark(localStorage.getItem("dealer_company_wordmark_v2") || ""); } catch {}
-    };
-    read();
-    window.addEventListener("bpms-company-updated", read);
-    window.addEventListener("storage", read);
-    return () => { window.removeEventListener("bpms-company-updated", read); window.removeEventListener("storage", read); };
-  }, [isHQ]);
-
   function handleSwitch(key: "hq" | "dealer") {
     setRoleOpen(false);
     if (key !== currentKey) {
@@ -126,7 +102,6 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   }
 
   const nav = isHQ ? HQ_NAV : DEALER_NAV;
-  const brandLogo = isHQ ? hqLogo : dealerLogo; // มีโลโก้อัปโหลดหรือไม่ (ใช้สลับพื้นกรอบเป็นขาว)
   // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน · HQ ใช้ชื่อผู้ใช้
   const displayName = isHQ ? (profile?.name || session.name) : session.dealerName;
 

@@ -5,7 +5,7 @@
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
 import { useState, useMemo, useRef } from "react";
 import { usePersistentState } from "@/lib/usePersistentState";
-import { useAuditLogger } from "@/lib/useAudit";
+import { useAuditLogger, useAuditEntries } from "@/lib/useAudit";
 import { RightDrawer } from "@/components/ui/RightDrawer";
 import { CountUp } from "@/components/ui/CountUp";
 import { fileToResizedDataURL } from "@/lib/imageResize";
@@ -44,35 +44,37 @@ const LEVEL_CAP: Record<string, Cap> = {
   view:   { v: true,  c: false, e: false, d: false, x: true  },
   none:   { v: false, c: false, e: false, d: false, x: false },
 };
-const MODULE_LIST = ["แดชบอร์ด", "ตัวแทน", "ลูกค้าทั้งเครือ", "ภาพรวมยอดขาย", "ใบเสนอราคา", "แม่แบบ", "รายงาน", "ผู้ใช้", "ตั้งค่า"];
+// โมดูลในตารางสิทธิ์ = 7 หัวข้อตามสเปก Enterprise (ไม่มีเมนู "ความปลอดภัย" แยก)
+const MODULE_LIST = ["แดชบอร์ด", "ตัวแทน", "ลูกค้าเป้าหมาย", "ลูกค้า", "ใบเสนอราคา", "รายงาน", "ตั้งค่า"];
 const ROLE_MODULES: Record<RoleKey, Partial<Record<string, keyof typeof LEVEL_CAP>>> = {
   super_admin: Object.fromEntries(MODULE_LIST.map(m => [m, "full"])),
-  executive: Object.fromEntries(MODULE_LIST.map(m => [m, (m === "ผู้ใช้" || m === "ตั้งค่า") ? "none" : "view"])),
-  sales_manager: { "แดชบอร์ด": "view", "ตัวแทน": "view", "ลูกค้าทั้งเครือ": "manage", "ภาพรวมยอดขาย": "manage", "ใบเสนอราคา": "manage", "รายงาน": "manage" },
-  central_sales: { "แดชบอร์ด": "view", "ลูกค้าทั้งเครือ": "edit", "ภาพรวมยอดขาย": "edit", "ใบเสนอราคา": "edit" },
-  system_officer: { "แดชบอร์ด": "view", "ผู้ใช้": "full", "ตั้งค่า": "full" },
+  executive: Object.fromEntries(MODULE_LIST.map(m => [m, m === "ตั้งค่า" ? "none" : "view"])),
+  sales_manager: { "แดชบอร์ด": "view", "ตัวแทน": "view", "ลูกค้าเป้าหมาย": "manage", "ลูกค้า": "manage", "ใบเสนอราคา": "manage", "รายงาน": "manage" },
+  central_sales: { "แดชบอร์ด": "view", "ลูกค้าเป้าหมาย": "edit", "ลูกค้า": "edit", "ใบเสนอราคา": "edit" },
+  system_officer: { "แดชบอร์ด": "view", "ตั้งค่า": "full" },
 };
 const capOf = (role: RoleKey, module: string): Cap => LEVEL_CAP[ROLE_MODULES[role][module] ?? "none"];
 const roleSummary: Record<RoleKey, string> = {
   super_admin: "จัดการทุกอย่างในระบบ",
   executive: "ดูข้อมูลทั้งหมด · ไม่มีสิทธิ์จัดการระบบ",
   sales_manager: "จัดการฝ่ายขาย · ดูแดชบอร์ด",
-  central_sales: "จัดการลูกค้า · ใบเสนอราคา · ภาพรวมยอดขาย",
-  system_officer: "จัดการผู้ใช้ · ตั้งค่าระบบ",
+  central_sales: "จัดการลูกค้าเป้าหมาย · ลูกค้า · ใบเสนอราคา",
+  system_officer: "ตั้งค่าระบบ · จัดการผู้ใช้",
 };
 
+// ไม่มีฟิลด์ "เข้าใช้ล่าสุด" — ระบบไม่ได้บันทึกเวลาเข้าสู่ระบบจริง (เดิมเป็นข้อความ seed ตายตัวที่ไม่มีอะไรอัปเดต)
 type AppUser = {
   id: number; name: string; email: string; phone: string; role: RoleKey; department: string;
-  status: UserStatus; lastActive: string; createdAt: string; avatar?: string;
+  status: UserStatus; createdAt: string; avatar?: string;
 };
 const USERS_INIT: AppUser[] = [
-  { id: 1, name: "อารยา สุขวิเศษ",   email: "araya@benjamin.co.th",   phone: "081-234-5678", role: "super_admin",    department: "ไอทีและระบบ", status: "active",   lastActive: "30 มิ.ย. 2569 · 09:15", createdAt: "1 ม.ค. 2568" },
-  { id: 2, name: "วิชัย ประสิทธิ์",   email: "wichai@benjamin.co.th",  phone: "081-000-1111", role: "executive",      department: "บริหาร",      status: "active",   lastActive: "30 มิ.ย. 2569 · 08:05", createdAt: "1 ม.ค. 2568" },
-  { id: 3, name: "กิตติ พรมมา",       email: "kitti@benjamin.co.th",   phone: "082-345-6789", role: "sales_manager",  department: "ฝ่ายขาย",     status: "active",   lastActive: "30 มิ.ย. 2569 · 08:40", createdAt: "12 ม.ค. 2568" },
-  { id: 4, name: "ประภัสสร ดาวรุ่ง",  email: "prapas@benjamin.co.th",  phone: "083-456-7890", role: "central_sales",  department: "ฝ่ายขาย",     status: "active",   lastActive: "29 มิ.ย. 2569 · 16:22", createdAt: "3 ก.พ. 2568" },
-  { id: 5, name: "วีรพล มั่นคง",      email: "weerapol@benjamin.co.th", phone: "084-567-8901", role: "central_sales", department: "ฝ่ายขาย",     status: "active",   lastActive: "30 มิ.ย. 2569 · 11:48", createdAt: "20 ก.พ. 2568" },
-  { id: 6, name: "สุดา เจริญพร",      email: "suda@benjamin.co.th",    phone: "085-678-9012", role: "system_officer", department: "ไอทีและระบบ", status: "active",   lastActive: "28 มิ.ย. 2569 · 15:10", createdAt: "5 มี.ค. 2568" },
-  { id: 7, name: "มานพ ทองดี",        email: "manop@benjamin.co.th",   phone: "086-789-0123", role: "sales_manager",  department: "ฝ่ายขาย",     status: "inactive", lastActive: "—",                     createdAt: "1 เม.ย. 2568" },
+  { id: 1, name: "อารยา สุขวิเศษ",   email: "araya@benjamin.co.th",   phone: "081-234-5678", role: "super_admin",    department: "ไอทีและระบบ", status: "active",   createdAt: "1 ม.ค. 2568" },
+  { id: 2, name: "วิชัย ประสิทธิ์",   email: "wichai@benjamin.co.th",  phone: "081-000-1111", role: "executive",      department: "บริหาร",      status: "active",   createdAt: "1 ม.ค. 2568" },
+  { id: 3, name: "กิตติ พรมมา",       email: "kitti@benjamin.co.th",   phone: "082-345-6789", role: "sales_manager",  department: "ฝ่ายขาย",     status: "active",   createdAt: "12 ม.ค. 2568" },
+  { id: 4, name: "ประภัสสร ดาวรุ่ง",  email: "prapas@benjamin.co.th",  phone: "083-456-7890", role: "central_sales",  department: "ฝ่ายขาย",     status: "active",   createdAt: "3 ก.พ. 2568" },
+  { id: 5, name: "วีรพล มั่นคง",      email: "weerapol@benjamin.co.th", phone: "084-567-8901", role: "central_sales", department: "ฝ่ายขาย",     status: "active",   createdAt: "20 ก.พ. 2568" },
+  { id: 6, name: "สุดา เจริญพร",      email: "suda@benjamin.co.th",    phone: "085-678-9012", role: "system_officer", department: "ไอทีและระบบ", status: "active",   createdAt: "5 มี.ค. 2568" },
+  { id: 7, name: "มานพ ทองดี",        email: "manop@benjamin.co.th",   phone: "086-789-0123", role: "sales_manager",  department: "ฝ่ายขาย",     status: "inactive", createdAt: "1 เม.ย. 2568" },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -81,7 +83,6 @@ function genTempPassword(seed: string): string {
   const sum = seed.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
   return `BJ-${local}-${1000 + (sum % 9000)}`;
 }
-const onlineToday = (u: AppUser) => u.status === "active" && u.lastActive.startsWith(MOCK_TODAY);
 
 // ── Small UI ─────────────────────────────────────────────────────────────────────
 function Avatar({ name, role, size = 34, avatar }: { name: string; role: RoleKey; size?: number; avatar?: string }) {
@@ -114,7 +115,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 // ── Add/Edit Dialog (modal กลาง) ─────────────────────────────────────────────────
 type UserForm = { firstName: string; lastName: string; email: string; phone: string; role: RoleKey; department: string; tempPassword: string; status: UserStatus; avatar?: string };
-function UserDialog({ initial, onSave, onClose }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "lastActive" | "createdAt">) => void; onClose: () => void }) {
+function UserDialog({ initial, onSave, onClose }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">) => void; onClose: () => void }) {
   const [f, setF] = useState<UserForm>(() => {
     if (initial) { const [fn, ...ln] = initial.name.split(" "); return { firstName: fn, lastName: ln.join(" "), email: initial.email, phone: initial.phone, role: initial.role, department: initial.department, tempPassword: "", status: initial.status, avatar: initial.avatar }; }
     return { firstName: "", lastName: "", email: "", phone: "", role: "central_sales", department: "ฝ่ายขาย", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
@@ -176,7 +177,7 @@ function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; on
 }
 
 // ═══════════════════════ PAGE ═══════════════════════════════════════════════════
-type SortKey = "name" | "lastActive" | "createdAt";
+type SortKey = "name" | "createdAt";
 const PAGE_SIZE = 8;
 
 export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
@@ -201,7 +202,6 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     total: users.length,
     active: users.filter(u => u.status === "active").length,
     inactive: users.filter(u => u.status === "inactive").length,
-    online: users.filter(onlineToday).length,
   }), [users]);
 
   const filtered = useMemo(() => {
@@ -219,9 +219,9 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const pageRows = filtered.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
 
   const update = (id: number, patch: Partial<AppUser>) => setUsers(prev => prev.map(u => u.id === id ? { ...u, ...patch } : u));
-  function saveUser(id: number | null, data: Omit<AppUser, "id" | "lastActive" | "createdAt">) {
+  function saveUser(id: number | null, data: Omit<AppUser, "id" | "createdAt">) {
     if (id !== null) { update(id, data); logAudit("แก้ไขผู้ใช้", data.email); }
-    else { const nid = users.reduce((m, u) => Math.max(m, u.id), 0) + 1; setUsers(prev => [{ id: nid, ...data, lastActive: "—", createdAt: MOCK_TODAY }, ...prev]); logAudit("เพิ่มผู้ใช้ HQ", data.email); }
+    else { const nid = users.reduce((m, u) => Math.max(m, u.id), 0) + 1; setUsers(prev => [{ id: nid, ...data, createdAt: MOCK_TODAY }, ...prev]); logAudit("เพิ่มผู้ใช้ HQ", data.email); }
   }
   function toggleStatus(u: AppUser) { update(u.id, { status: u.status === "active" ? "inactive" : "active" }); logAudit(u.status === "active" ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้", u.email); }
   function resetPassword(u: AppUser) { const pw = genTempPassword(u.email + Date.now()); setResetInfo({ user: u, pw }); logAudit("รีเซ็ตรหัสผ่านผู้ใช้", u.email); }
@@ -236,7 +236,6 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     { label: "ผู้ใช้ทั้งหมด", value: stats.total, color: PRIMARY },
     { label: "ผู้ใช้งานอยู่", value: stats.active, color: "#059669" },
     { label: "ปิดใช้งาน", value: stats.inactive, color: "#9ca3af" },
-    { label: "เข้าใช้วันนี้", value: stats.online, color: "#d97706" },
   ];
 
   return (
@@ -274,10 +273,10 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
           <div className="table-wrap" style={{ maxHeight: 460, overflow: "auto" }}>
             <table>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
-                <tr>{th("ผู้ใช้", "name")}<th>บทบาท</th><th>แผนก</th><th>สถานะ</th>{th("เข้าใช้ล่าสุด", "lastActive")}{th("สร้างบัญชี", "createdAt")}<th className="ovf-visible" style={{ textAlign: "right" }}>จัดการ</th></tr>
+                <tr>{th("ผู้ใช้", "name")}<th>บทบาท</th><th>แผนก</th><th>สถานะ</th>{th("สร้างบัญชี", "createdAt")}<th className="ovf-visible" style={{ textAlign: "right" }}>จัดการ</th></tr>
               </thead>
               <tbody>
-                {pageRows.length === 0 && <tr><td colSpan={7} style={{ padding: 36, textAlign: "center", color: "#9ca3af", fontSize: "0.82rem" }}>ไม่พบผู้ใช้ตามเงื่อนไข</td></tr>}
+                {pageRows.length === 0 && <tr><td colSpan={6} style={{ padding: 36, textAlign: "center", color: "#9ca3af", fontSize: "0.82rem" }}>ไม่พบผู้ใช้ตามเงื่อนไข</td></tr>}
                 {pageRows.map(u => (
                   <tr key={u.id} className="clickable" onClick={() => setDetailUser(u)}>
                     <td>
@@ -288,8 +287,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
                     </td>
                     <td><RoleBadge role={u.role} /></td>
                     <td style={{ fontSize: "0.8rem", color: STEEL, fontWeight: 600 }}>{u.department}</td>
-                    <td>{onlineToday(u) ? <span className="badge" style={{ background: "#e5faf0", color: "#059669" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#059669", display: "inline-block" }} />ออนไลน์</span> : <StatusDot status={u.status} />}</td>
-                    <td style={{ color: MUTED, fontSize: "0.72rem", whiteSpace: "nowrap" }}>{u.lastActive}</td>
+                    <td><StatusDot status={u.status} /></td>
                     <td style={{ color: MUTED, fontSize: "0.72rem", whiteSpace: "nowrap" }}>{u.createdAt}</td>
                     <td className="ovf-visible" onClick={e => e.stopPropagation()}>
                       <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -365,14 +363,23 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
 }
 
 // ── Detail Drawer (ข้อมูลทั่วไป + Timeline) ──────────────────────────────────────
+// Timeline = บันทึกการใช้งานจริงของผู้ใช้คนนี้ (audit log) — เดิมเป็นวันที่ปลอมที่ hardcode ไว้
+// ระบบไม่ได้บันทึกการเข้าสู่ระบบ จึงไม่มีรายการ "เข้าสู่ระบบล่าสุด"
 function UserDetailDrawer({ user, onClose, onEdit }: { user: AppUser; onClose: () => void; onEdit: () => void }) {
+  const auditEntries = useAuditEntries();
+  const iconOf = (action: string) =>
+    action.includes("รหัสผ่าน") ? { icon: <KeyRound size={13} />, color: "#d97706" }
+    : action.includes("สิทธิ์") || action.includes("ตั้งค่า") ? { icon: <Shield size={13} />, color: PRIMARY }
+    : action.includes("ปิดใช้งาน") || action.includes("เปิดใช้งาน") ? { icon: <Power size={13} />, color: "#7c3aed" }
+    : { icon: <Clock size={13} />, color: MUTED };
   const timeline = [
-    { icon: <LogIn size={13} />, color: "#059669", label: "เข้าสู่ระบบล่าสุด", at: user.lastActive },
-    { icon: <Shield size={13} />, color: PRIMARY, label: "ปรับสิทธิ์การใช้งาน", at: "25 มิ.ย. 2569 · 10:20" },
-    { icon: <KeyRound size={13} />, color: "#d97706", label: "รีเซ็ตรหัสผ่าน", at: "20 มิ.ย. 2569 · 14:05" },
-    { icon: <Power size={13} />, color: "#7c3aed", label: user.status === "active" ? "เปิดใช้งานบัญชี" : "ปิดใช้งานบัญชี", at: "18 มิ.ย. 2569 · 09:00" },
+    // การกระทำที่ผู้ใช้คนนี้ทำ + การกระทำที่กระทำ "ต่อ" ผู้ใช้คนนี้ (target = อีเมล)
+    ...auditEntries
+      .filter(e => e.user === user.name || e.target === user.email)
+      .slice(0, 8)
+      .map(e => ({ ...iconOf(e.action), label: e.target && e.target !== user.email ? `${e.action} · ${e.target}` : e.action, at: e.at })),
     { icon: <UserPlus size={13} />, color: MUTED, label: "สร้างบัญชี", at: user.createdAt },
-  ].filter(t => t.at !== "—");
+  ];
 
   const info = (
     <div style={{ padding: 20 }}>
@@ -385,7 +392,6 @@ function UserDetailDrawer({ user, onClose, onEdit }: { user: AppUser; onClose: (
       <Field label="แผนก" value={user.department} />
       <Field label="สถานะ" value={<StatusDot status={user.status} />} />
       <Field label="วันที่สร้างบัญชี" value={user.createdAt} />
-      <Field label="เข้าใช้ล่าสุด" value={user.lastActive} />
     </div>
   );
   const perms = (

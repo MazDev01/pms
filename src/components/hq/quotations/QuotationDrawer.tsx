@@ -4,11 +4,11 @@
 // อ่านอย่างเดียว ไม่มีปุ่มแก้ไข/ลบ/อนุมัติ
 //
 // สิ่งที่ระบบไม่มีข้อมูล จึงไม่แสดง (ห้ามกุ):
-//  · ประวัติการเปิดอ่าน (วันที่เปิด/ครั้งล่าสุด/จำนวนครั้ง) — ไม่มีการติดตามจริง
+//  · ประวัติการเปิดอ่าน — ลบทั้งฟีเจอร์แล้ว (ไม่มีการติดตามจริง)
 //  · ไทม์ไลน์/ประวัติการแก้ไขของ "ใบเสนอราคา" — ระบบเก็บไทม์ไลน์ไว้ที่ดีล ไม่ได้ผูกรายใบ
 //  · เอกสารแนบรายใบ — คลังไฟล์ผูกกับลูกค้า/ลีด ไม่ได้ผูกกับเลขที่ใบเสนอราคา
-//  · รายการสินค้า/ราคาก่อนส่วนลด — มีเฉพาะใบที่ดีลเลอร์สร้างจริง (CNX) ที่เหลือขึ้น "—"
-import { X, AlertTriangle } from "lucide-react";
+//  · รายการสินค้า — มีเฉพาะใบที่ดีลเลอร์สร้างจริง (CNX) ที่เหลือขึ้น "—"
+import { X } from "lucide-react";
 import { quotationStatusLabel, quotationStatusColor } from "@/lib/mock";
 import { fmtBaht } from "@/lib/format";
 import { regionDisplay, type QuoteRow } from "@/lib/hqQuotations";
@@ -34,15 +34,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function QuotationDrawer({ quote, maxDiscount, onClose }: {
+export function QuotationDrawer({ quote, onClose }: {
   quote: QuoteRow;
-  maxDiscount: number;
   onClose: () => void;
 }) {
   const sc = quotationStatusColor[quote.status];
-  const overCap = quote.discountPct > maxDiscount;
-  const standard = quote.materialCost;                 // ราคาก่อนส่วนลด — มีเฉพาะใบที่ดีลเลอร์สร้างจริง
-  const discountAmt = standard != null ? standard - quote.valueNum : null;
   const items = quote.lineItems ?? [];
 
   return (
@@ -67,19 +63,9 @@ export function QuotationDrawer({ quote, maxDiscount, onClose }: {
         </div>
 
         <div style={{ padding: 20, flex: 1 }}>
-          {overCap && (
-            <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 12, padding: "11px 13px", marginBottom: 18 }}>
-              <AlertTriangle size={15} color="#dc2626" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <div style={{ fontSize: "0.74rem", fontWeight: 800, color: "#dc2626" }}>ส่วนลดเกินเพดานที่ HQ กำหนด</div>
-                <div style={{ fontSize: "0.72rem", color: "#7f1d1d", marginTop: 1 }}>ใบนี้ลด {quote.discountPct}% · เพดานปัจจุบัน {maxDiscount}% (ตั้งที่ ตั้งค่า → กฎธุรกิจ)</div>
-              </div>
-            </div>
-          )}
 
           <Section title="ข้อมูลใบเสนอราคา">
             <Row label="สถานะ" value={<span className="badge" style={{ background: sc.bg, color: sc.text }}>{quotationStatusLabel[quote.status]}</span>} />
-            <Row label="เปิดอ่านแล้ว" value={!quote.sent ? <span style={{ color: "#9ca3af" }}>ยังไม่ได้ส่ง</span> : quote.opened ? <span style={{ color: "#7c3aed" }}>ใช่</span> : "ไม่"} />
             <Row label="วันที่สร้าง" value={quote.createdAt} />
             <Row label="ใช้ได้ถึง" value={quote.validUntil ?? "—"} />
             <Row label="อายุใบ" value={quote.agingDays != null ? `${quote.agingDays} วัน` : "—"} />
@@ -93,18 +79,13 @@ export function QuotationDrawer({ quote, maxDiscount, onClose }: {
           <Section title="ตัวแทนจำหน่าย">
             <Row label="รหัสตัวแทน" value={quote.dealerCode} />
             <Row label="ตัวแทน" value={quote.dealerName} />
+            <Row label="จังหวัด" value={quote.dealerProvince} />
             <Row label="ภูมิภาค" value={regionDisplay(quote.region)} />
             <Row label="ผู้รับผิดชอบ" value={quote.salesperson} />
           </Section>
 
           <Section title="ราคา">
-            <Row label="ราคามาตรฐาน (ก่อนส่วนลด)" value={standard != null ? fmtBaht(standard) : <span style={{ color: "#9ca3af" }}>—</span>} />
-            <Row label="ส่วนลด" value={
-              <span style={{ color: overCap ? "#dc2626" : "#2D2D2D" }}>
-                {quote.discountPct}%{discountAmt != null && discountAmt > 0 ? ` (−${fmtBaht(discountAmt)})` : ""}
-              </span>
-            } />
-            <Row label="ราคาสุทธิ (ก่อน VAT)" value={<span style={{ color: PRIMARY }}>{fmtBaht(quote.valueNum)}</span>} />
+            <Row label="มูลค่างาน (ก่อน VAT)" value={<span style={{ color: PRIMARY }}>{fmtBaht(quote.valueNum)}</span>} />
           </Section>
 
           <Section title="รายการสินค้า">

@@ -1,46 +1,66 @@
 "use client";
 
 import { useState } from "react";
-import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Percent, Calendar, Coins } from "lucide-react";
+import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins } from "lucide-react";
 import { useSales } from "@/context/SalesContext";
 import {
-  quotationStatusLabel, quotationStatusColor, loadDefaultDiscount, loadHQPolicy,
+  quotationStatusLabel, quotationStatusColor, loadHQPolicy,
   type LeadRow, type CustomerRow, type QuotationMock, type QuoteLineItem,
 } from "@/lib/mock";
 import { LineItemsEditor } from "@/components/ui/LineItemsEditor";
 import { printQuotation } from "@/lib/quotationPrint";
 import { parseBaht, fmtBaht } from "@/lib/format";
+import { useMasterCatalog } from "@/lib/useMasterCatalog";
 
 const MOCK_TODAY = "2026-06-30";
 
-type FormState = { project: string; buildingType: string; items: string; price: string; discountPct: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
+type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 
 export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRow; customer?: CustomerRow; onToast?: (m: string) => void }) {
   const { quotations, addQuotation, updateQuotation, deleteQuotation } = useSales();
+  const catalog = useMasterCatalog(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const policy = loadHQPolicy(); // นโยบาย HQ — เพดานส่วนลด/VAT/อายุใบ · บังคับใช้ทั้งเครือ (Constitution V2)
+  const policy = loadHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ
 
   // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
   const subj = lead ? {
     kind: "lead" as const, company: lead.company, contact: lead.contact, phone: lead.phone, email: lead.email,
     province: lead.province, assigned: lead.assigned, product: lead.product,
     customerId: lead.customerId, dealId: lead.numId as number | undefined,
+    value: lead.value,                       // มูลค่าประเมินจากลีด — ใช้ตั้งต้น BOQ
   } : {
     kind: "customer" as const, company: customer!.company, contact: customer!.name, phone: customer!.phone, email: customer!.email,
     province: customer!.province, assigned: customer!.owner, product: customer!.category || "",
     customerId: customer!.id, dealId: undefined as number | undefined,
+    value: customer!.totalValue ? String(customer!.totalValue) : "",
   };
   const defProject = () => subj.product ? `${subj.product} — ${subj.company}` : subj.company;
   const readOnly = subj.kind === "customer"; // แท็บใบเสนอราคาของ "ลูกค้า" = ดูอย่างเดียว (ไม่แก้/สร้าง/ลบ)
   const viewLineItems = (q: QuotationMock): QuoteLineItem[] => q.lineItems ?? (q.materialCost > 0
     ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
 
+  // ตั้งต้น BOQ จากข้อมูลลูกค้าเป้าหมายเลย ไม่ต้องให้ไปเลือกแคตตาล็อกเอง (บอสสั่ง)
+  // โครงสร้าง BOQ ที่ถูก: ราคา/หน่วย = ราคากลางของ HQ (คงที่) · จำนวน = พื้นที่ (ตัวแปร)
+  // จึงถอดพื้นที่ออกมาจากมูลค่าประเมิน: จำนวน = มูลค่าประเมิน ÷ ราคากลาง — ไม่ใช่ยัดมูลค่าทั้งก้อนลงราคา/หน่วย
+  // ลีดอาจระบุ "แม่แบบย่อย" (เช่น โรงงานอาหาร อยู่ใต้ โรงงาน) → หาในแคตตาล็อกทั้ง 2 ชั้น
   const emptyForm = (): FormState => {
-    const dd = Math.min(loadDefaultDiscount(), policy.maxDiscount); // ไม่ให้ค่าเริ่มต้นเกินเพดาน HQ
-    return { project: defProject(), buildingType: subj.product,
-      items: "0", price: "", discountPct: dd > 0 ? String(dd) : "", expiry: "", note: "", lineItems: [] };
+    const est = parseBaht(subj.value || "");
+    const prod = catalog.find(p => p.name === subj.product)
+              ?? catalog.find(p => p.subtypes?.includes(subj.product));
+    const rate = prod?.price ?? 0;
+    // จำนวน = ถอดกลับจาก มูลค่าประเมิน ÷ ราคากลาง (ลีดไม่เก็บพื้นที่แล้ว — BOQ เป็นแหล่งเดียว)
+    const qty = rate > 0 && est > 0 ? Math.round(est / rate) : 0;
+    const seed: QuoteLineItem[] = subj.product && rate > 0 && qty > 0
+      ? [{ name: subj.product, qty: Math.max(1, qty), unit: prod!.unit, unitPrice: rate }]
+      : [];
+    const total = seed.reduce((s, it) => s + it.qty * it.unitPrice, 0);
+    return {
+      project: defProject(), buildingType: subj.product,
+      items: String(seed.length), price: total > 0 ? String(total) : "",
+      expiry: "", note: "", lineItems: seed,
+    };
   };
   const [form, setForm] = useState<FormState>(emptyForm);
   const set = <K extends keyof FormState>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -56,10 +76,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     const nums = quotations.map(q => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
     return `Q-2026-${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`;
   }
-  function netTotal(f: FormState) {
-    const price = parseBaht(f.price);
-    return Math.round(price * (1 - (parseFloat(f.discountPct) || 0) / 100));
-  }
+  // มูลค่างาน (ก่อน VAT) = ผลรวมรายการสินค้า — ระบบไม่มีส่วนลดแล้ว
+  function netTotal(f: FormState) { return parseBaht(f.price); }
 
   function openCreate() { setEditing(null); setForm(emptyForm()); setMode("create"); }
   function openEdit(q: QuotationMock) {
@@ -67,32 +85,28 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     const lineItems: QuoteLineItem[] = q.lineItems ?? (q.materialCost > 0
       ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
     setForm({ project: q.project, buildingType: q.buildingType, items: String(lineItems.length),
-      price: String(q.materialCost || q.totalValue), discountPct: String(q.discountPct ?? ""), expiry: q.expiry ?? "", note: q.note ?? "", lineItems });
+      price: String(q.materialCost || q.totalValue), expiry: q.expiry ?? "", note: q.note ?? "", lineItems });
     setMode("edit");
   }
 
   function save() {
-    // Constitution V2 · Discount Policy: ตัวแทนออกใบเสนอราคาเกินเพดานส่วนลดของ HQ ไม่ได้
-    const disc = parseFloat(form.discountPct) || 0;
-    if (disc > policy.maxDiscount) {
-      alert(`ส่วนลด ${disc}% เกินเพดานที่สำนักงานใหญ่กำหนด (${policy.maxDiscount}%)\nตัวแทนออกใบเสนอราคาเกินเพดานไม่ได้`);
-      return;
-    }
     const net = netTotal(form);
     if (mode === "edit" && editing) {
       updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
         lineItems: form.lineItems, materialCost: parseBaht(form.price), totalValue: net, total: "฿" + net.toLocaleString("th-TH"),
-        expiry: form.expiry || "", discountPct: parseFloat(form.discountPct) || 0, note: form.note || undefined });
+        expiry: form.expiry || "", note: form.note || undefined });
       onToast?.("บันทึกใบเสนอราคาแล้ว");
     } else {
       // สร้างใหม่ — ออกใบในนาม subject (ลีด/ลูกค้า) · ผูก customerId/dealId ตามบริบท
       addQuotation({
         id: nextQId(), customer: subj.company, project: form.project || defProject(),
         total: "฿" + net.toLocaleString("th-TH"), totalValue: net, materialCost: parseBaht(form.price),
-        province: subj.province, buildingType: form.buildingType, area: 0,
+        // พื้นที่ = จำนวนของรายการ BOQ ที่คิดเป็น ตร.ม. (เดิม hardcode 0 → พื้นที่หายไปจากใบ)
+        province: subj.province, buildingType: form.buildingType,
+        area: form.lineItems.filter(it => it.unit === "ตร.ม.").reduce((s, it) => s + it.qty, 0),
         status: "draft", date: MOCK_TODAY, items: form.lineItems.length, lineItems: form.lineItems,
         customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: form.expiry || "",
-        discountPct: parseFloat(form.discountPct) || 0, note: form.note || undefined,
+        note: form.note || undefined,
       });
       onToast?.("สร้างใบเสนอราคาเรียบร้อย");
     }
@@ -117,11 +131,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   // ── ฟอร์มสร้าง/แก้ไข (inline · รีสไตล์ให้เข้ากับ wizard ใหม่) ──
   if (mode === "create" || mode === "edit") {
     const secLabel: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.05em", margin: "16px 0 10px" };
-    const overCap = (parseFloat(form.discountPct) || 0) > policy.maxDiscount;
-    const subtotal = parseBaht(form.price);
-    const disc = parseFloat(form.discountPct) || 0;
-    const discountAmt = Math.round(subtotal * disc / 100);
-    const net = subtotal - discountAmt;               // มูลค่างาน (ก่อน VAT) = ยอดที่บันทึก
+    const net = parseBaht(form.price);                 // มูลค่างาน (ก่อน VAT) = ยอดที่บันทึก
     const vatPct = policy.vat;
     const vatAmt = Math.round(net * vatPct / 100);
     const grand = net + vatAmt;                        // ยอดรวมสุทธิ (รวม VAT)
@@ -149,7 +159,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
           <label style={lbl}>ชื่อโครงการ / เอกสาร</label>
           <input value={form.project} onChange={e => set("project", e.target.value)} style={inp} placeholder="เช่น โกดังเก็บสินค้าเกษตร — บจ. ..." />
         </div>
-        <LineItemsEditor items={form.lineItems}
+        {/* ไม่มีปุ่มเลือกแคตตาล็อก — BOQ ตั้งต้นจากแม่แบบของลูกค้าเป้าหมายให้แล้ว (บอสสั่ง) */}
+        <LineItemsEditor showCatalog={false} items={form.lineItems}
           onChange={li => setForm(p => ({
             ...p, lineItems: li, items: String(li.length),
             price: String(li.reduce((s, it) => s + it.qty * it.unitPrice, 0)),
@@ -157,19 +168,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
             buildingType: li.length ? li[0].name.split(" · ")[0] : p.buildingType,
           })) } />
 
-        {/* ส่วนลด / วันหมดอายุ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
-          <div><label style={lbl}><Percent size={11} style={{ verticalAlign: "-1px" }} /> ส่วนลด (%) <span style={{ color: "#9ca3af", fontWeight: 400 }}>· เพดาน HQ {policy.maxDiscount}%</span></label>
-            <input type="number" min={0} max={policy.maxDiscount} value={form.discountPct} onChange={e => set("discountPct", e.target.value)} placeholder="0"
-              style={{ ...inp, ...(overCap ? { borderColor: "#dc2626", background: "#fff5f5" } : {}) }} />
-          </div>
-          <div><label style={lbl}><Calendar size={11} style={{ verticalAlign: "-1px" }} /> วันหมดอายุ</label>
-            <input type="date" value={form.expiry} onChange={e => set("expiry", e.target.value)} style={inp} /></div>
-          {overCap && (
-            <div style={{ gridColumn: "1/-1", fontSize: "0.65rem", color: "#dc2626", fontWeight: 600 }}>
-              เกินเพดานส่วนลด {policy.maxDiscount}% ที่สำนักงานใหญ่กำหนด — ออกใบเสนอราคาไม่ได้
-            </div>
-          )}
+        {/* วันหมดอายุ */}
+        <div style={{ marginTop: 14 }}>
+          <label style={lbl}><Calendar size={11} style={{ verticalAlign: "-1px" }} /> วันหมดอายุ</label>
+          <input type="date" value={form.expiry} onChange={e => set("expiry", e.target.value)} style={inp} />
         </div>
 
         {/* หมายเหตุ */}
@@ -178,8 +180,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
 
         {/* ยอดเงิน — ก่อน VAT (บันทึก) · VAT · รวม VAT (ตรงกับ wizard/เอกสารพิมพ์) */}
         <div style={{ marginTop: 14, background: "#003366", borderRadius: 12, padding: 14, color: "#fff" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>มูลค่า BOQ</span><span>{fmtBaht(subtotal)}</span></div>
-          {disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>ส่วนลด {disc}%</span><span>- {fmtBaht(discountAmt)}</span></div>}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>มูลค่า BOQ</span><span>{fmtBaht(net)}</span></div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid rgba(255,255,255,.2)", marginTop: 7, paddingTop: 9 }}>
             <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,.85)", display: "flex", alignItems: "center", gap: 4 }}><Coins size={12} /> มูลค่างาน (ก่อน VAT)</span>
             <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>{fmtBaht(net)}</span>
@@ -254,17 +255,15 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
                 </tr>
               ))}
               <tr>
-                <td style={{ ...td, background: "#f7f9fc", fontWeight: 700 }} colSpan={4}>{lis.length} รายการ · รวมก่อน VAT/ส่วนลด</td>
+                <td style={{ ...td, background: "#f7f9fc", fontWeight: 700 }} colSpan={4}>{lis.length} รายการ · รวมก่อน VAT</td>
                 <td style={{ ...td, background: "#f7f9fc", textAlign: "right", fontWeight: 800, color: "#003366" }}>{fmtBaht(subtotal)}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* ส่วนลด / วันหมดอายุ / ยอดสุทธิ / หมายเหตุ */}
+        {/* วันหมดอายุ / ยอดสุทธิ / หมายเหตุ */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
-          <div><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>ส่วนลด</div>
-            <div style={{ fontSize: "0.85rem", color: "#2D2D2D" }}>{q.discountPct ? `${q.discountPct}%` : "—"}</div></div>
           <div><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>วันหมดอายุ</div>
             <div style={{ fontSize: "0.85rem", color: "#2D2D2D" }}>{q.expiry || "—"}</div></div>
           <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>ยอดสุทธิ</div>
@@ -276,7 +275,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
           <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province })} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
           {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
-          {!readOnly && (q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed") && (
+          {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
             <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
               <Send size={13} /> {q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
             </button>
@@ -311,8 +310,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>{q.date} · {fmtBaht(q.totalValue)}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {/* ส่งใบเสนอราคา — เด่นเป็นปุ่ม navy · แสดงเฉพาะใบที่ยังส่งได้ (draft/ส่งแล้ว/เปิดอ่าน) · ซ่อนเมื่อดูอย่างเดียว */}
-                    {!readOnly && (q.status === "draft" || q.status === "sent_to_client" || q.status === "viewed") && (
+                    {/* ส่งใบเสนอราคา — เด่นเป็นปุ่ม navy · แสดงเฉพาะใบที่ยังส่งได้ (ร่าง/ส่งแล้ว) · ซ่อนเมื่อดูอย่างเดียว */}
+                    {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
                       <button onClick={() => sendQuote(q)} title={q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
                         className="btn btn-primary btn-sm" style={{ height: 28, padding: "0 11px" }}>
                         <Send size={12} /> {q.status === "draft" ? "ส่ง" : "ส่งอีกครั้ง"}

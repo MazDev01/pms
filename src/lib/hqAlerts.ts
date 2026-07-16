@@ -1,0 +1,164 @@
+// ─── การแจ้งเตือนของสำนักงานใหญ่ (คำนวณล้วน) ──────────────────────────────────
+// แหล่งเดียวของ "กฎแจ้งเตือน 6 ข้อ" ที่ตั้งไว้ที่ /hq/settings → การแจ้งเตือน
+// ทุกข้อคำนวณจากข้อมูลจริงเท่านั้น (ลีด/ใบเสนอราคา/เป้าตัวแทน) — ไม่มีตัวเลขสังเคราะห์
+// ผลลัพธ์เป็นข้อมูลล้วน (ไม่มี JSX) → Topbar เอาไปใส่ไอคอนแล้วขึ้นกระดิ่ง
+import {
+  type HQAlertKey, type HQNotifRules, type HQLeadRules,
+  type LeadRow, type DealerRow, type HQQuotation,
+} from "@/lib/mock";
+import { parseDate, APP_NOW } from "@/context/FilterContext";
+import { leadCreatedDate, daysSinceContact, isLeadOpen } from "@/lib/leadMetrics";
+
+export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string };
+
+const DAY_MS = 86_400_000;
+const fmtB = (n: number) => (n >= 1e6 ? `฿${(n / 1e6).toFixed(1)}M` : `฿${n.toLocaleString("th-TH")}`);
+
+/** ลีดที่ยังไม่มีผู้รับผิดชอบ นานเกินเกณฑ์ (กฎ 48 ชม.) — นับจากวันที่สร้างลีด */
+export function unassignedLeads(leads: LeadRow[], hours: number): LeadRow[] {
+  return leads.filter(l => {
+    if (l.assigned?.trim()) return false;
+    if (!isLeadOpen(l)) return false; // ปิดแล้วไม่ต้องหาคนรับผิดชอบ
+    return (APP_NOW.getTime() - leadCreatedDate(l).getTime()) / 3_600_000 > hours;
+  });
+}
+
+/** ลีดที่ยังไม่ปิด และไม่มีการติดต่อเกินเกณฑ์ (กฎ 7 วัน) */
+export function idleLeads(leads: LeadRow[], days: number): LeadRow[] {
+  return leads.filter(l => {
+    if (!isLeadOpen(l)) return false;
+    const d = daysSinceContact(l);
+    return d !== null && d > days; // ไม่มีวันติดต่อบันทึกไว้ = ไม่เดาว่าค้าง
+  });
+}
+
+/** ใบเสนอราคาที่ส่งแล้วและจะหมดอายุภายใน N วัน (วันหมดอายุ = วันที่ออก + อายุใบตามนโยบาย HQ) */
+export function expiringQuotes(quotes: HQQuotation[], validityDays: number, withinDays: number) {
+  const out: { q: HQQuotation; daysLeft: number }[] = [];
+  for (const q of quotes) {
+    if (q.status !== "sent_to_client") continue; // ค้างอยู่เท่านั้น — ตอบรับ/ปฏิเสธ/หมดอายุแล้วไม่ต้องเตือน
+    const created = parseDate(q.createdAt);
+    if (!created) continue;
+    const daysLeft = Math.round((created.getTime() + validityDays * DAY_MS - APP_NOW.getTime()) / DAY_MS);
+    if (daysLeft >= 0 && daysLeft <= withinDays) out.push({ q, daysLeft });
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+/** ตัวแทนที่ไม่ออกใบเสนอราคาใหม่เกิน N วัน — ไม่เคยออกเลย = ไม่นับ (ไม่มีข้อมูลให้เทียบ) */
+export function idleDealers(dealers: DealerRow[], quotes: HQQuotation[], days: number) {
+  const latest = new Map<string, number>();
+  for (const q of quotes) {
+    const d = parseDate(q.createdAt);
+    if (!d) continue;
+    const prev = latest.get(q.dealerCode);
+    if (prev == null || d.getTime() > prev) latest.set(q.dealerCode, d.getTime());
+  }
+  const out: { d: DealerRow; idleDays: number }[] = [];
+  for (const d of dealers) {
+    const last = latest.get(d.code);
+    if (last == null) continue;
+    const idleDays = Math.floor((APP_NOW.getTime() - last) / DAY_MS);
+    if (idleDays > days) out.push({ d, idleDays });
+  }
+  return out.sort((a, b) => b.idleDays - a.idleDays);
+}
+
+/** ตัวแทนที่ทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี */
+export function dealersAtTarget(dealers: DealerRow[], pct: number) {
+  return dealers
+    .filter(d => d.revenueTarget > 0)
+    .map(d => ({ d, achieved: Math.round((d.revenueActual / d.revenueTarget) * 100) }))
+    .filter(x => x.achieved >= pct)
+    .sort((a, b) => b.achieved - a.achieved);
+}
+
+/** อัตราปิดไม่สำเร็จของตัวแทน = ลีดที่ปิดไม่สำเร็จ ÷ ลีดที่ปิดแล้วทั้งหมด (ยังไม่ปิด = ไม่นับ) */
+export function dealersHighLostRate(dealers: DealerRow[], leads: LeadRow[], pct: number) {
+  const out: { d: DealerRow; rate: number; lost: number; closed: number }[] = [];
+  for (const d of dealers) {
+    const mine = leads.filter(l => l.dealerCode === d.code);
+    const lost = mine.filter(l => l.status === "CANCELLED").length;
+    const closed = lost + mine.filter(l => l.status === "PAID").length;
+    if (closed === 0) continue; // ยังไม่มีลีดที่ปิด = คิดอัตราไม่ได้
+    const rate = Math.round((lost / closed) * 100);
+    if (rate >= pct) out.push({ d, rate, lost, closed });
+  }
+  return out.sort((a, b) => b.rate - a.rate);
+}
+
+/** รวมการแจ้งเตือนทั้ง 6 ข้อตามกฎที่เปิดไว้ (เฉพาะข้อที่ inapp = ขึ้นกระดิ่ง) */
+export function buildHQAlerts(input: {
+  leads: LeadRow[];
+  quotes: HQQuotation[];
+  dealers: DealerRow[];
+  rules: HQNotifRules;
+  leadRules: HQLeadRules;
+  validityDays: number;
+}): HQAlert[] {
+  const { leads, quotes, dealers, rules, leadRules, validityDays } = input;
+  const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
+  const out: HQAlert[] = [];
+
+  if (on("unassignedLead")) {
+    for (const l of unassignedLeads(leads, leadRules.unassignedAlertHours)) {
+      out.push({
+        key: "unassignedLead",
+        title: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ",
+        body: `${l.company || l.name} · ${l.province} · ${l.value}`,
+        href: `/hq/leads?open=${l.numId}`,
+      });
+    }
+  }
+  if (on("idleLead")) {
+    for (const l of idleLeads(leads, leadRules.followUpAlertDays)) {
+      out.push({
+        key: "idleLead",
+        title: "ลูกค้าเป้าหมายไม่มีการติดต่อ",
+        body: `${l.company || l.name} · ไม่ได้ติดต่อ ${daysSinceContact(l)} วัน · ผู้รับผิดชอบ ${l.assigned || "—"}`,
+        href: `/hq/leads?open=${l.numId}`,
+      });
+    }
+  }
+  if (on("quoteExpiring")) {
+    for (const { q, daysLeft } of expiringQuotes(quotes, validityDays, rules.quoteExpiringDays)) {
+      out.push({
+        key: "quoteExpiring",
+        title: "ใบเสนอราคาใกล้หมดอายุ",
+        body: `${q.quoteNo} · ${q.customer} · ${fmtB(q.valueNum)} · เหลือ ${daysLeft} วัน`,
+        href: "/hq/quotations",
+      });
+    }
+  }
+  if (on("dealerIdle")) {
+    for (const { d, idleDays } of idleDealers(dealers, quotes, rules.dealerIdleDays)) {
+      out.push({
+        key: "dealerIdle",
+        title: "ตัวแทนไม่มีความเคลื่อนไหว",
+        body: `${d.code} · ${d.name} — ไม่ออกใบเสนอราคาใหม่ ${idleDays} วัน`,
+        href: `/hq/dealers/${d.code}`,
+      });
+    }
+  }
+  if (on("targetAchieved")) {
+    for (const { d, achieved } of dealersAtTarget(dealers, rules.targetAchievedPct)) {
+      out.push({
+        key: "targetAchieved",
+        title: "ตัวแทนทำยอดถึงเป้า",
+        body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(d.revenueActual)} จาก ${fmtB(d.revenueTarget)})`,
+        href: `/hq/dealers/${d.code}`,
+      });
+    }
+  }
+  if (on("lostRate")) {
+    for (const { d, rate, lost, closed } of dealersHighLostRate(dealers, leads, rules.lostRatePct)) {
+      out.push({
+        key: "lostRate",
+        title: "อัตราปิดการขายไม่สำเร็จสูง",
+        body: `${d.code} · ${d.name} — ปิดไม่สำเร็จ ${rate}% (${lost} จาก ${closed} ลีดที่ปิดแล้ว)`,
+        href: `/hq/dealers/${d.code}`,
+      });
+    }
+  }
+  return out;
+}

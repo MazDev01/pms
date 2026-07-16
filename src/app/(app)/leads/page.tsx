@@ -8,7 +8,7 @@ import {
   quotationStatusLabel, quotationStatusColor,
   solutionProducts, loadLostReasons, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory,
-  type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type CustomerType, type DealerFile,
+  type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
 } from "@/lib/mock";
 import { FilePreviewModal } from "@/components/ui/FilePreviewModal";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,12 +16,13 @@ import { LeadTasks } from "@/components/ui/LeadTasks";
 import { LeadQuotationsPanel } from "@/components/ui/LeadQuotationsPanel";
 import { PersonPicker, AssigneeAvatars } from "@/components/ui/PersonPicker";
 import { useMasterCatalog } from "@/lib/useMasterCatalog";
+import { useHQLeadRules } from "@/lib/useHQRules";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 import { TemplateSelect } from "@/components/ui/TemplateSelect";
 import { useRole } from "@/context/RoleContext";
 import {
   Plus, Search, X,
-  CheckCircle2, User, ArrowRight,
+  CheckCircle2, User, ArrowRight, Building2,
   MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, PhoneCall, Package, Layers,
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
@@ -37,6 +38,8 @@ import { FilterBar } from "@/components/filters/FilterBar";
 import { TopbarActions } from "@/components/layout/TopbarActions";
 import { MultiLineChart, Donut } from "@/components/ui/Charts";
 import { leadCreatedDate } from "@/lib/leadMetrics";
+import { CURRENT_DEALER } from "@/lib/useNetworkData";
+import { ReportEditor } from "@/components/ui/ReportEditor";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
 
@@ -50,7 +53,6 @@ const DEFAULT_PERSONS = responsiblePersons.filter(p => p.active).map(p => p.name
 const SOURCE_COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#0D9488", "#94A3B8"];
 const SOURCES = ["Facebook","เว็บไซต์","LINE","Walk-in","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
 const PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","นครสวรรค์","ราชบุรี","ขอนแก่น","อื่นๆ"];
-const CUSTOMER_TYPES: CustomerType[] = ["บุคคล","บริษัท"]; // ประเภทลูกค้า — เก็บตั้งแต่ลีด ไหลไปลูกค้า
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 function thaiDateStr(d: Date) { return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
@@ -132,7 +134,7 @@ function needsFollowUp(l: LeadRow, threshold = 7): boolean {
 
 // ─── Priority (ความสำคัญ) — deterministic by value tier ──────────────────────
 type Priority = "HIGH" | "MEDIUM" | "LOW";
-const PRIORITIES: Priority[] = ["HIGH", "MEDIUM", "LOW"];
+// PRIORITIES ถูกลบพร้อมตัวกรอง "ความสำคัญ" — ป้ายความสำคัญในแผงรายละเอียดลีดยังใช้ leadPriority/priorityLabel อยู่
 const priorityLabel: Record<Priority, string> = { HIGH: "สูง", MEDIUM: "กลาง", LOW: "ต่ำ" };
 const priorityColor: Record<Priority, { text: string; bg: string }> = {
   HIGH:   { text: "#dc2626", bg: "#fee2e2" },
@@ -187,7 +189,6 @@ function OverviewEditor({ lead, persons, onSave }: {
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
     email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
     product: lead.product ?? catalog[0]?.name ?? "", status: lead.status,
-    type: (lead.type ?? "บริษัท") as CustomerType,
     assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
     note: lead.note ?? "", lostReason: lead.lostReason ?? "", logo: lead.logo ?? "",
   });
@@ -207,7 +208,6 @@ function OverviewEditor({ lead, persons, onSave }: {
     f.phone !== (lead.phone ?? "") || f.email !== (lead.email ?? "") ||
     f.province !== (lead.province ?? "") || f.source !== (lead.source ?? "") ||
     f.product !== (lead.product ?? "") || f.status !== lead.status ||
-    f.type !== (lead.type ?? "บริษัท") ||
     f.assigned !== (lead.assigned ?? "") || f.value !== (lead.value ?? "") ||
     f.note !== (lead.note ?? "") || f.lostReason !== (lead.lostReason ?? "") || f.logo !== (lead.logo ?? "");
   // ความคืบหน้า = แหล่งเดียวกับแท็บ "งาน/ความคืบหน้า" (LeadTasks) → เลขตรงกันทุกแท็บ
@@ -215,90 +215,95 @@ function OverviewEditor({ lead, persons, onSave }: {
     : taskProgress(lead.tasks?.length ? lead.tasks : buildLeadTasks());
 
   const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
-  const inp: React.CSSProperties = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1px solid #e5e7eb", fontSize:"0.8rem", fontFamily:"inherit", color:"#2D2D2D", background:"#fff" };
+  const inp: React.CSSProperties = { width:"100%", height:26, padding:"0 8px", borderRadius:6, border:"1px solid #e5e7eb", fontSize:"0.8rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
 
   function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value), lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined }); }
 
+  // แก้ไข "ในที่เดิม" — ใช้แถวหน้าตาเดียวกับตอนอ่าน (ไอคอน + ป้าย + ค่า) ค่ากลายเป็นช่องกรอก
+  // ไม่เด้งป็อบอัพ (บอสสั่ง — ให้เหมือนหน้าลูกค้า)
+  const cell: React.CSSProperties = { display:"flex", alignItems:"center", gap:10, padding:"5px 10px", border:"1px solid #eef1f5", borderRadius:9, background:"#fafbfc", minWidth:0 };
+  const cellLbl: React.CSSProperties = { fontSize:"0.7rem", color:"#8a929c", fontWeight:600, flexShrink:0 };
+  const Cell = ({ icon:Ic, label, children }:{ icon: typeof User; label:string; children:React.ReactNode }) => (
+    <div style={cell}>
+      <Ic size={14} color="#94a3b8" style={{ flexShrink:0 }} />
+      <span style={cellLbl}>{label}</span>
+      <span style={{ flex:1, minWidth:0 }}>{children}</span>
+    </div>
+  );
+
   return (
     <div>
-      <div style={{ fontSize:"0.65rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:12, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
-        ภาพรวม · แก้ไขได้ในหน้านี้
-      </div>
-      {/* เปลี่ยนรูป/โลโก้ลูกค้า */}
-      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
-        <div style={{ width:60, height:60, borderRadius:14, flexShrink:0, overflow:"hidden",
-          border:`2px dashed ${f.logo ? "transparent" : "#e5e7eb"}`, background:f.logo ? "#fff" : "#f8fafc",
-          display:"flex", alignItems:"center", justifyContent:"center" }}>
-          {f.logo
-            ? <img src={f.logo} alt="โลโก้" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-            : <User size={24} color="#9ca3af" />}
-        </div>
-        <div>
-          <label style={lbl}>รูป / โลโก้ลูกค้า</label>
-          <input ref={logoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
-          <div style={{ display:"flex", gap:8 }}>
-            <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
-              <Paperclip size={13} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
-            </button>
-            {f.logo && (
-              <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
-                <X size={13} /> ลบรูป
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <div style={{ gridColumn:"1/-1" }}>
-          <label style={lbl}>บริษัท *</label>
-          <input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} />
-        </div>
-        <div><label style={lbl}>ผู้ติดต่อ *</label><input value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></div>
-        <div><label style={lbl}>โทรศัพท์</label><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></div>
-        <div><label style={lbl}>อีเมล</label><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" placeholder="email@company.com" style={inp} /></div>
-        <div><label style={lbl}>จังหวัด</label>
-          <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
-        </div>
-        <div><label style={lbl}>แม่แบบ</label>
-          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} />
-        </div>
-        <div><label style={lbl}>มูลค่าประเมิน</label>
-          <input value={f.value} onChange={e=>set("value",e.target.value)} onBlur={()=>{ if(f.value.trim()) set("value",fmtVal(f.value)); }} placeholder="เช่น 1200000 หรือ ฿1.2M" style={inp} />
-        </div>
-        <div><label style={lbl}>ขั้นตอน</label>
-          <select value={f.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inp}>{ALL_STATUSES.map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}</select>
-        </div>
-        {f.status==="CANCELLED" && (
-          <div><label style={{...lbl, color:"#dc2626"}}>เหตุผลที่เสีย</label>
-            <select value={f.lostReason} onChange={e=>set("lostReason",e.target.value)} style={{...inp, borderColor:"#fecaca"}}>
-              <option value="">— เลือกเหตุผล —</option>
-              {loadLostReasons().map(r=><option key={r} value={r}>{r}</option>)}
+      {/* มูลค่า + ป้ายสถานะ — ตำแหน่งเดียวกับตอนอ่าน */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:12 }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontSize:"0.62rem", color:"#8a929c", fontWeight:700 }}>มูลค่าประเมิน</div>
+          <input value={f.value} onChange={e=>set("value",e.target.value)} placeholder="฿1.4M"
+            style={{ ...inp, width:170, marginTop:4, fontSize:"1rem", fontWeight:800, color:"#003366" }} />
+          <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+            <select value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700 }}>
+              {(Object.keys(leadStatusLabel) as LeadStatus[]).map(k => <option key={k} value={k}>{leadStatusLabel[k]}</option>)}
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* รายละเอียด — แถวเดียวกับตอนอ่าน แต่ค่าแก้ได้ */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, borderTop:"1px solid #eef1f5", paddingTop:14 }}>
+        <div style={{ gridColumn:"1/-1", ...cell }}>
+          <Building2 size={14} color="#94a3b8" style={{ flexShrink:0 }} />
+          <span style={cellLbl}>บริษัท</span>
+          <span style={{ flex:1, minWidth:0 }}><input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></span>
+        </div>
+        <Cell icon={User}    label="ผู้ติดต่อ"><input value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></Cell>
+        <Cell icon={Phone}   label="โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Cell>
+        <Cell icon={Mail}    label="อีเมล"><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" style={inp} /></Cell>
+        <Cell icon={MapPin}  label="จังหวัด">
+          <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(x=><option key={x}>{x}</option>)}</select>
+        </Cell>
+        <Cell icon={Package} label="แม่แบบที่สนใจ">
+          <select value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
+            {catalog.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+        </Cell>
+        <Cell icon={Target}  label="แหล่งที่มา">
+          <select value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(x=><option key={x}>{x}</option>)}</select>
+        </Cell>
+        <Cell icon={Users}   label="ผู้รับผิดชอบ">
+          <select value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>{persons.map(x=><option key={x}>{x}</option>)}</select>
+        </Cell>
+        {f.status === "CANCELLED" && (
+          <Cell icon={XCircle} label="เหตุผลที่เสีย">
+            <select value={f.lostReason} onChange={e=>set("lostReason",e.target.value)} style={inp}>
+              <option value="">— เลือก —</option>
+              {loadLostReasons().map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Cell>
         )}
-        <div><label style={lbl}>ผู้รับผิดชอบ</label>
-          <PersonPicker value={f.assigned} onChange={v=>set("assigned",v)} multiple />
-        </div>
-        <div><label style={lbl}>แหล่งที่มา</label>
-          <select value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(s=><option key={s}>{s}</option>)}</select>
-        </div>
-        <div style={{ gridColumn:"1/-1" }}><label style={lbl}>หมายเหตุ</label>
-          <textarea value={f.note} onChange={e=>set("note",e.target.value)} rows={3} placeholder="รายละเอียดเพิ่มเติม..."
-            style={{ ...inp, resize:"vertical", fontFamily:"inherit", lineHeight:1.6 }} />
-        </div>
       </div>
 
-      {/* ความคืบหน้า (อ่านอย่างเดียว) */}
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:14, fontSize:"0.72rem", color:"#374151" }}>
-        <span style={{ fontWeight:600 }}>ความคืบหน้า</span>
-        <span style={{ flex:1, height:6, borderRadius:99, background:"#f0f4f8", overflow:"hidden" }}>
-          <span className="bar-grow" style={{ display:"block", height:"100%", width:`${pct}%`, background:f.status==="CANCELLED"?"#dc2626":f.status==="PAID"?"#059669":"#003366" }} />
+      {/* หมายเหตุ — ตำแหน่งเดียวกับตอนอ่าน */}
+      <div style={{ background:"#f7f9fc", border:"1px solid #eef1f5", borderRadius:10, padding:"10px 12px", marginTop:12 }}>
+        <div style={{ fontSize:"0.62rem", color:"#9ca3af", fontWeight:700, marginBottom:4 }}>หมายเหตุ</div>
+        <textarea value={f.note} onChange={e=>set("note",e.target.value)} rows={2} placeholder="รายละเอียดเพิ่มเติม…"
+          style={{ ...inp, background:"#fff", resize:"vertical", lineHeight:1.6 }} />
+      </div>
+
+      {/* รูป/โลโก้ + ปุ่ม — บรรทัดเดียว กันการ์ดขยายตอนสลับโหมด */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12, paddingTop:10, borderTop:"1px solid #f4f6f9", flexWrap:"wrap" }}>
+        <span style={{ width:28, height:28, borderRadius:8, flexShrink:0, overflow:"hidden", background:f.logo?"#fff":"#f8fafc",
+          border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
         </span>
-        <span style={{ fontWeight:800, color:"#003366" }}>{pct}%</span>
-      </div>
-
-      {/* ปุ่มบันทึก */}
-      <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:16 }}>
+        <input ref={logoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
+        <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
+          <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+        </button>
+        {f.logo && (
+          <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
+            <X size={12} /> ลบรูป
+          </button>
+        )}
+        <span style={{ flex:1 }} />
         {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
         <button onClick={save} disabled={!dirty} className="btn btn-primary btn-sm"
           style={{ opacity: dirty ? 1 : 0.5, cursor: dirty ? "pointer" : "default" }}>
@@ -320,8 +325,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     company: initial?.company ?? "", contact: initial?.contact ?? "",
     phone: initial?.phone ?? "", email: initial?.email ?? "",
     province: initial?.province ?? "กรุงเทพฯ", product: initial?.product ?? solutionProducts[0].name,
-    value: initial?.value ?? "", status: (initial?.status ?? "WAITING") as LeadStatus,
-    type: (initial?.type ?? "บริษัท") as CustomerType,
+    value: initial?.value ?? "",
+    status: (initial?.status ?? "WAITING") as LeadStatus,
     assigned: initial?.assigned ?? persons[0] ?? "สมชาย เชียงใหม่",
     source: initial?.source ?? "เว็บไซต์", note: initial?.note ?? "",
     logo: initial?.logo ?? "",
@@ -342,7 +347,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
       province: form.province, product: form.product,
       category: mainTemplateOf(form.product), value: form.value,
       status: form.status, assigned: form.assigned,
-      type: form.type,
       source: form.source, note: form.note,
       logo: form.logo || undefined,
     };
@@ -507,60 +511,12 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 }
 
 // ─── รายงานการติดตาม (Lead Report) — textarea แก้ไข/เพิ่ม/ลบ/ขึ้นบรรทัด/bullet ได้ทั้งหมด ──
-function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: LeadRow) => void }) {
-  // ถ้ายังไม่มีรายงาน (ลีดเก่า) → เปิดด้วยเทมเพลตมาตรฐาน (พรีฟิลจากข้อมูลลีด) ให้แก้ต่อได้
-  const initial = () => lead.report ?? buildLeadReport(lead, thaiDateStr(new Date()));
-  const [text, setText] = useState(initial);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { setText(initial()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [lead.id]);
-  const dirty = text !== (lead.report ?? "");
-
-  // แทรก bullet บรรทัดใหม่ที่ตำแหน่งเคอร์เซอร์
-  function insertBullet() {
-    const el = ref.current; if (!el) return;
-    const pos = el.selectionStart ?? text.length;
-    const before = text.slice(0, pos), after = text.slice(pos);
-    const needNL = before && !before.endsWith("\n");
-    const insert = `${needNL ? "\n" : ""}- `;
-    const next = before + insert + after;
-    setText(next);
-    requestAnimationFrame(() => { el.focus(); const c = (before + insert).length; el.setSelectionRange(c, c); });
-  }
-  function resetTemplate() { setText(buildLeadReport(lead, thaiDateStr(new Date()))); }
-
-  const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:6 };
-
-  return (
-    <div>
-      <div style={{ fontSize:"0.65rem", fontWeight:800, letterSpacing:".06em", textTransform:"uppercase", color:"#003366", marginBottom:10, paddingBottom:6, borderBottom:"1px solid #C0C0C044" }}>
-        รายงานการติดตาม · แก้ไขได้ทั้งหมด
-      </div>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
-        <label style={lbl}>เนื้อหารายงาน</label>
-        <div style={{ display:"flex", gap:6 }}>
-          <button type="button" onClick={insertBullet} className="btn btn-secondary btn-sm" style={{ color:"#374151", padding:"4px 10px" }}>+ หัวข้อย่อย</button>
-          <button type="button" onClick={resetTemplate} className="btn btn-secondary btn-sm" style={{ color:"#374151", padding:"4px 10px" }}>รีเซ็ตเทมเพลต</button>
-        </div>
-      </div>
-      <textarea ref={ref} value={text} onChange={e=>setText(e.target.value)}
-        spellCheck={false}
-        style={{ width:"100%", minHeight:320, padding:"12px 14px", borderRadius:10, border:"1px solid #e5e7eb",
-          fontSize:"0.8rem", lineHeight:1.7, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", resize:"vertical", whiteSpace:"pre-wrap" }} />
-      <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
-        {dirty && <button onClick={()=>setText(initial())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
-        <button onClick={()=>onSave({ ...lead, report: text })} disabled={!dirty}
-          className="btn btn-primary btn-sm" style={!dirty ? { opacity:0.5, cursor:"not-allowed" } : undefined}>
-          บันทึกรายงาน
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────
 export default function LeadsPage() {
   const router = useRouter();
   const { session } = useRole(); // ผู้ดำเนินการ (บันทึกลง task ที่เช็ก)
+  const { followUpAlertDays } = useHQLeadRules(); // กฎ HQ 7 วัน — ตัวแทนแก้เองไม่ได้
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // List state
@@ -569,7 +525,13 @@ export default function LeadsPage() {
     appointments, addAppointment, quotations,
   } = useSales();
   // ปิดการขายสำเร็จ = เป็น "ลูกค้า" แล้ว → ไม่แสดงในหน้าลูกค้าเป้าหมาย (ไปอยู่ที่ /customers)
-  const leadsData = useMemo(() => allLeads.filter(l => l.status !== "PAID"), [allLeads]);
+  // สมุดงานของ "ตัวแทนที่ล็อกอิน" เท่านั้น — กรองด้วย dealerCode
+  // จำเป็นตั้งแต่มีลีดของสาขาอื่นในระบบ (ก่อนหน้านี้มีสาขาเดียวเลยไม่กรองก็ไม่มีใครเห็นความต่าง)
+  // ลีดที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
+  const leadsData = useMemo(
+    () => allLeads.filter(l => l.status !== "PAID" && (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
+    [allLeads],
+  );
 
   // sync งาน/สถานะที่ระบบติ๊กอัตโนมัติ (เช่น สร้าง/ส่งใบเสนอราคา) เข้าโมดัลที่เปิดอยู่
   // — อัปเดตเฉพาะ tasks/status ไม่ทับฟิลด์ที่ผู้ใช้กำลังแก้ใน draft
@@ -601,7 +563,7 @@ export default function LeadsPage() {
   const { person, timeRange } = useFilters();
   // Table toolbar: density + column show/hide (localStorage-backed)
   const { density, setDensity, hiddenCols, toggleCol } = useTableLayout("leads");
-  const [view, setView] = useState<"list"|"kanban">("kanban"); // ค่าเริ่มต้น = บอร์ด (Sales Workspace)
+  const [view, setView] = useState<"list"|"kanban">("list"); // ค่าเริ่มต้น = ตาราง (สลับไปบอร์ดได้ที่ปุ่มมุมขวา)
   const [dragId, setDragId] = useState<string|null>(null); // การ์ดที่กำลังลากในมุมมอง Kanban
   const [dragOver, setDragOver] = useState<LeadStatus|null>(null); // คอลัมน์ที่กำลังลากค้างอยู่ (ไฮไลต์)
   const [hideEmpty, setHideEmpty] = useState(false); // ซ่อนคอลัมน์ที่ไม่มีการ์ด
@@ -611,10 +573,10 @@ export default function LeadsPage() {
   const [sortDir, setSortDir] = useState<"asc"|"desc">("asc");
   const [showFilters, setShowFilters] = useState(false);
   const [followUpDays, setFollowUpDays] = useState(0); // Smart filter: 0=off · 7/14/30 = ขาดติดต่อเกินกี่วัน
-  const [quick, setQuick] = useState<"all"|"today"|"week"|"mine"|"overdue"|"lost">("all"); // Quick filter chips
+  // quick filter chips ถูกลบตามที่บอสสั่ง — state นี้ไม่มีใครตั้งค่าได้แล้ว จึงลบทิ้ง
   const [dTab, setDTab] = useState<"overview"|"tasks"|"quotation"|"timeline">("overview"); // แท็บใน drawer รายละเอียด
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingLead, setEditingLead] = useState<LeadRow|null>(null);
+  const [leadEdit, setLeadEdit] = useState(false); // ภาพรวม: อ่าน (false) / แก้ไขในที่เดิม (true) — ไม่เด้งป็อบอัพ
 
   // List pagination (LIST view only)
   const PAGE_SIZE = 10;
@@ -626,10 +588,12 @@ export default function LeadsPage() {
   const [fValueMax, setFValueMax] = useState("");
   const [fProvince, setFProvince] = useState("");
   const [fSource, setFSource] = useState("");
-  const [fPriority, setFPriority] = useState<Priority|"">("");
+  // ตัวกรอง "ความสำคัญ" (fPriority) ถูกลบตามที่บอสสั่ง — ไม่เหลือ UI ที่ตั้งค่าได้
 
   // Panel state
   const [selectedLead, setSelectedLead] = useState<LeadRow|null>(null);
+  // ปิดโหมดแก้ไขเมื่อสลับไปลีดอื่น (กันฟอร์มค้างข้ามราย)
+  useEffect(() => { setLeadEdit(false); }, [selectedLead?.id]);
   const [activeTab, setActiveTab] = useState<"overview"|"tasks"|"report"|"activities"|"appts"|"quotation"|"files">("overview");
   const [editingField, setEditingField] = useState<string|null>(null);
   // Lead Detail (split layout) — refs สำหรับ quick action เลื่อนไปการ์ด + ปิดการขายไม่สำเร็จ (เลือกเหตุผล)
@@ -711,21 +675,12 @@ export default function LeadsPage() {
       const matchA = !fAssignee || assignedHas(l.assigned, fAssignee);
       const matchP = !fProvince || l.province === fProvince;
       const matchSrc = !fSource || (l.source ?? "") === fSource;
-      const matchPri = !fPriority || leadPriority(l) === fPriority;
       const val = parseValue(l.value);
       const matchMin = !fValueMin || val >= parseFloat(fValueMin.replace(/[฿,M]/g,""))*1e6;
       const matchMax = !fValueMax || val <= parseFloat(fValueMax.replace(/[฿,M]/g,""))*1e6;
       const matchFollow = followUpDays === 0 || needsFollowUp(l, followUpDays);
-      // Quick filter chips
-      const dSinceCreate = Math.floor((MOCK_TODAY_LEAD.getTime() - leadCreatedDate(l).getTime()) / 86400000);
-      const matchQuick =
-        quick === "all"     ? true :
-        quick === "today"   ? (daysSinceContact(l) === 0 || dSinceCreate === 0) :
-        quick === "week"    ? dSinceCreate <= 7 :
-        quick === "mine"    ? assignedHas(l.assigned, session.name) :
-        quick === "overdue" ? needsFollowUp(l, 7) :
-        quick === "lost"    ? l.status === "CANCELLED" : true;
-      return matchQ && matchS && matchPerson && matchTime && matchA && matchP && matchSrc && matchPri && matchMin && matchMax && matchFollow && matchQuick;
+      // ตัวกรอง quick (วันนี้/สัปดาห์นี้/ของฉัน/ค้างเกิน 7 วัน/ปิดไม่สำเร็จ) ถูกลบพร้อมชิปกรองด่วน
+      return matchQ && matchS && matchPerson && matchTime && matchA && matchP && matchSrc && matchMin && matchMax && matchFollow;
     });
 
     arr = [...arr].sort((a,b) => {
@@ -743,15 +698,15 @@ export default function LeadsPage() {
       return 0;
     });
     return arr;
-  }, [leadsData, query, filterStatus, person, timeRange, fAssignee, fProvince, fSource, fPriority, fValueMin, fValueMax, sortKey, sortDir, followUpDays, quick, session.name]);
+  }, [leadsData, query, filterStatus, person, timeRange, fAssignee, fProvince, fSource, fValueMin, fValueMax, sortKey, sortDir, followUpDays, session.name]);
 
-  // จำนวนลีดที่ต้องรีบติดตาม (ขาดการติดต่อ >7 วัน) — สำหรับแจ้งเตือน "ด่วน"
-  const followUpCount = useMemo(() => leadsData.filter(l => needsFollowUp(l, 7)).length, [leadsData]);
+  // จำนวนลีดที่ต้องรีบติดตาม (ขาดการติดต่อเกินเกณฑ์กฎธุรกิจ) — สำหรับแจ้งเตือน "ด่วน"
+  const followUpCount = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
 
   // ─── List pagination (LIST view only) ──────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Reset to page 1 whenever filters / search / sort change the result set
-  useEffect(() => { setPage(1); }, [query, filterStatus, person, fAssignee, fProvince, fSource, fPriority, fValueMin, fValueMax, sortKey, sortDir]);
+  useEffect(() => { setPage(1); }, [query, filterStatus, person, fAssignee, fProvince, fSource, fValueMin, fValueMax, sortKey, sortDir]);
   // Clamp page into range if the list shrinks
   useEffect(() => { setPage(p => Math.min(p, totalPages)); }, [totalPages]);
   const paged = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
@@ -763,7 +718,7 @@ export default function LeadsPage() {
   const wonLeads = allLeads.filter(l => l.status === "PAID").length;
   const nonLost = allLeads.filter(l => l.status !== "CANCELLED").length;
   const winRate = nonLost ? Math.round((wonLeads / nonLost)*100) : 0;
-  const hasActiveFilters = !!(fAssignee || fProvince || fSource || fPriority || fValueMin || fValueMax);
+  const hasActiveFilters = !!(fAssignee || fProvince || fSource || fValueMin || fValueMax);
 
   function onSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -902,14 +857,13 @@ export default function LeadsPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (showDeleteConfirm) setShowDeleteConfirm(false);
-      else if (editingLead) setEditingLead(null);
       else if (popupField) closeFieldPopup();
       else closePanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLead, showDeleteConfirm, editingLead, popupField]);
+  }, [selectedLead, showDeleteConfirm, popupField]);
 
   // ─── สรุปด้านบน: 5 ตัวชี้วัด + กราฟแนวโน้ม + แหล่งที่มา ────────────────
   // นับจาก leadsData (ชุดที่ผ่านตัวกรองหลักแล้ว) — คลิกการ์ดเพื่อกรองต่อ
@@ -917,7 +871,7 @@ export default function LeadsPage() {
     () => leadsData.filter(l => { const d = leadCreatedDate(l); return d.getMonth() === MOCK_TODAY_LEAD.getMonth() && d.getFullYear() === MOCK_TODAY_LEAD.getFullYear(); }).length,
     [leadsData]);
   const followUpTodayCount = useMemo(() => leadsData.filter(l => daysSinceContact(l) === 0).length, [leadsData]);
-  const overdue7 = useMemo(() => leadsData.filter(l => needsFollowUp(l, 7)).length, [leadsData]);
+  const overdue7 = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
   const meetingToday = useMemo(() => appointments.filter(a => a.date === "2026-06-30" && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
   const newWaiting = useMemo(() => leadsData.filter(l => l.status === "WAITING").length, [leadsData]);
   // Sales Opportunity = มูลค่ารวมของลีดที่ยังเปิดอยู่ (Expected Revenue)
@@ -1008,21 +962,7 @@ export default function LeadsPage() {
         </div>
 
 
-        {/* ── Quick Filters — ชิปกรองด่วน (จุดกรองเดียวที่ผู้ใช้เห็นก่อน) ── */}
-        <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap", marginBottom:12 }}>
-          {([
-            ["all","ทั้งหมด"],["today","วันนี้"],["week","สัปดาห์นี้"],["mine","ของฉัน"],["overdue","ค้างเกิน 7 วัน"],["lost","ปิดไม่สำเร็จ"],
-          ] as ["all"|"today"|"week"|"mine"|"overdue"|"lost",string][]).map(([k,label])=>{
-            const on = quick===k;
-            return (
-              <button key={k} onClick={()=>setQuick(k)}
-                style={{ height:32, padding:"0 14px", borderRadius:99, cursor:"pointer", fontFamily:"inherit", fontSize:"0.75rem", fontWeight:700,
-                  border:`1px solid ${on?"#003366":"#e5e7eb"}`, background:on?"#003366":"#fff", color:on?"#fff":"#6b7280" }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        {/* ชิปกรองด่วน (ทั้งหมด/วันนี้/สัปดาห์นี้/ของฉัน/ค้างเกิน 7 วัน/ปิดไม่สำเร็จ) เอาออกตามที่บอสสั่ง */}
 
         {/* Toolbar */}
         <div className="card" style={{ padding:"12px 16px", marginBottom:14 }}>
@@ -1118,10 +1058,7 @@ export default function LeadsPage() {
                     <select value={fSource} onChange={e=>setFSource(e.target.value)} style={inp}>
                       <option value="">ทั้งหมด</option>{SOURCES.map(s=><option key={s}>{s}</option>)}
                     </select></div>
-                  <div><label style={lbl}>ความสำคัญ</label>
-                    <select value={fPriority} onChange={e=>setFPriority(e.target.value as Priority|"")} style={inp}>
-                      <option value="">ทั้งหมด</option>{PRIORITIES.map(p=><option key={p} value={p}>{priorityLabel[p]}</option>)}
-                    </select></div>
+                  {/* ตัวกรอง "ความสำคัญ" เอาออกตามที่บอสสั่ง */}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div><label style={lbl}>มูลค่าขั้นต่ำ (M฿)</label>
                       <input value={fValueMin} onChange={e=>setFValueMin(e.target.value)} placeholder="1" type="number" style={inp} /></div>
@@ -1132,7 +1069,7 @@ export default function LeadsPage() {
                 <div style={{ padding:"14px 20px", borderTop:"1px solid #e5e7eb", display:"flex", gap:8, flexShrink:0 }}>
                   <button className="btn btn-secondary btn-md" style={{ flex:1, justifyContent:"center", color: hasActiveFilters ? "#dc2626" : "#9ca3af" }}
                     disabled={!hasActiveFilters}
-                    onClick={()=>{ setFAssignee(""); setFProvince(""); setFSource(""); setFPriority(""); setFValueMin(""); setFValueMax(""); }}>
+                    onClick={()=>{ setFAssignee(""); setFProvince(""); setFSource(""); setFValueMin(""); setFValueMax(""); }}>
                     ล้างทั้งหมด
                   </button>
                   <button className="btn btn-primary btn-md" style={{ flex:1, justifyContent:"center" }} onClick={()=>setShowFilters(false)}>
@@ -1286,6 +1223,10 @@ export default function LeadsPage() {
                                 <CheckCircle2 size={11} /> ลูกค้าแล้ว
                               </span>
                             )}
+                            <button title="ดูรายละเอียด" onClick={()=>openPanel(l)}
+                              style={{ width:28, height:28, borderRadius:7, border:"1px solid #dbe3ec", background:"#fff", color:"#003366", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                              <Eye size={13} />
+                            </button>
                             <button title="ลบลูกค้าเป้าหมาย" onClick={()=>{ if (window.confirm(`ลบ "${l.company}" ใช่หรือไม่?`)) { removeLead(l.id); setToast("ลบลูกค้าเป้าหมายแล้ว"); } }}
                               style={{ width:28, height:28, borderRadius:7, border:"1px solid #fecaca", background:"#fff", color:"#dc2626", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <Trash2 size={13} />
@@ -1422,7 +1363,7 @@ export default function LeadsPage() {
                         {(() => {
                           const d = daysSinceContact(l);
                           if (d === null) return null;
-                          const late = d > 7;
+                          const late = d > followUpAlertDays;
                           return (
                             <span style={{ display:"inline-flex", alignItems:"center", gap:5, color: late ? "#DC3545" : "#94a3b8", fontWeight: late ? 700 : 600 }}>
                               <AlarmClock size={10} /> ติดต่อล่าสุด {d} วันที่แล้ว
@@ -1546,16 +1487,6 @@ export default function LeadsPage() {
         />
       )}
 
-      {/* Edit lead modal — เปิดจากปุ่ม "แก้ไข" (ตาราง/การ์ด/โมดัล) */}
-      {editingLead && (
-        <LeadFormModal
-          initial={editingLead}
-          onClose={()=>setEditingLead(null)}
-          onSave={(l)=>{ updateLead(l); setSelectedLead(s => s?.id===l.id ? l : s); setToast("บันทึกการแก้ไขแล้ว"); }}
-          persons={personsList}
-        />
-      )}
-
       {/* Delete confirm dialog */}
       {showDeleteConfirm && selectedLead && (
         <>
@@ -1615,11 +1546,12 @@ export default function LeadsPage() {
         ] as const;
 
         // ── Tab: นัดหมาย — นัดกับลูกค้าเป้าหมายก่อนปิดการขาย (แสดงในปฏิทิน+แจ้งเตือนด้วย) ──
-        const leadAppts = appointments.filter(a => a.company === c.company)
+        const leadAppts = appointments.filter(a => a.leadId === c.numId)
           .slice().sort((a, b) => (a.date + a.time) < (b.date + b.time) ? 1 : -1);
         const saveAppt = () => {
           addAppointment({
             id: Math.max(0, ...appointments.map(a => a.id)) + 1,
+            leadId: c.numId,
             company: c.company, contact: c.contact ?? "", phone: c.phone ?? "", province: c.province ?? "",
             project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
             buildingType: c.product ?? "", area: 0,
@@ -1724,9 +1656,6 @@ export default function LeadsPage() {
                     <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: "0.65rem", fontWeight: 700, background: pcO.bg, color: pcO.text }}>ความสำคัญ {priorityLabel[priO]}</span>
                   </div>
                 </div>
-                <button onClick={() => setEditingLead(c)} className="btn btn-secondary btn-sm" style={{ color: "#003366", flexShrink: 0 }}>
-                  <Edit2 size={13} /> แก้ไขข้อมูล
-                </button>
               </div>
 
               {/* รายละเอียด — แถวป้ายกำกับ (ไอคอน + หัวข้อ : ค่า) อ่านง่ายแบบต้นแบบ · 2 คอลัมน์ */}
@@ -1836,12 +1765,7 @@ export default function LeadsPage() {
         const cardStyle: React.CSSProperties = { background:"#fff", border:"1px solid #eef1f5", borderRadius:14, padding:16 };
         const secLabel: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
         const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
-        const PROB: Record<LeadStatus, number> = { WAITING:15, BULLET:30, QUOTED:55, FOLLOWUP:68, NEGO:82, PAID:100, CANCELLED:0 };
-        const probability = PROB[c.status] ?? 20;
-        const leadScore = Math.min(100, probability + (pri==="HIGH"?15:pri==="MEDIUM"?8:0));
-        const daysInStage = (c.numId * 3) % 21 + 1;
         const progressPct = leadProg(c);
-        const JOURNEY: LeadStatus[] = ["WAITING","BULLET","QUOTED","FOLLOWUP","NEGO"];
         const scrollTo = (r: React.RefObject<HTMLDivElement|null>) => r.current?.scrollIntoView({ behavior:"smooth", block:"nearest" });
         const markWon = () => { const t = (c.tasks?.length ? c.tasks : buildLeadTasks()).map(x => ({ ...x, done:true })); saveLead({ ...c, tasks:t, status:"PAID" }); setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ"); };
         const markLost = (reason:string) => { saveLead({ ...c, status:"CANCELLED", lostReason:reason }); setQuickLost(false); setQuickLostReason(""); setToast("บันทึกปิดการขายไม่สำเร็จแล้ว"); };
@@ -1914,60 +1838,16 @@ export default function LeadsPage() {
               <div style={{ flex:1, overflowY:"auto", background:"#f5f7fa" }}>
                 {/* ── TAB: ภาพรวม ── */}
                 <div style={{ padding:16, display:dTab==="overview"?"flex":"none", flexDirection:"column", gap:14 }}>
-                  <div style={cardStyle}><div style={secLabel}><User size={13} color="#003366" /> ข้อมูลลูกค้า (Overview)</div>{tabOverview}</div>
                   <div style={cardStyle}>
-                    <div style={secLabel}><Target size={13} color="#003366" /> สรุปโอกาสการขาย</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-                      {[
-                        { ic:<TrendingUp size={13} />, k:"Lead Score", v:`${leadScore}`, big:true },
-                        { ic:<Percent size={13} />,    k:"โอกาสปิด", v:`${probability}%`, big:true },
-                      ].map(m => (
-                        <div key={m.k} style={{ background:"#f7f9fc", border:"1px solid #eef1f5", borderRadius:11, padding:"10px 12px" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:"0.62rem", color:"#8a929c", fontWeight:700 }}>{m.ic} {m.k}</div>
-                          <div style={{ fontSize:"1.25rem", fontWeight:800, color:"#003366", marginTop:2 }}>{m.v}</div>
-                        </div>
-                      ))}
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ ...secLabel, marginBottom:0 }}><User size={13} color="#003366" /> ข้อมูลลูกค้า (Overview)</div>
+                      <button onClick={() => setLeadEdit(v => !v)} className="btn btn-secondary btn-sm" style={{ color:"#003366", flexShrink:0 }}>
+                        {leadEdit ? "เสร็จ" : <><Edit2 size={13} /> แก้ไขข้อมูล</>}
+                      </button>
                     </div>
-                    {[
-                      ["วันในสเตจนี้", `${daysInStage} วัน`],
-                      ["ขาดการติดต่อ", daysSinceContact(c) !== null ? `${daysSinceContact(c)} วัน` : "—"],
-                      ["คาดปิดการขาย", c.expectedClose ?? "—"],
-                      ["ผู้รับผิดชอบ", c.assigned || "—"],
-                    ].map(([k,v]) => (
-                      <div key={k} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"7px 0", borderBottom:"1px solid #f0f4f8", fontSize:"0.76rem" }}>
-                        <span style={{ color:"#8a929c" }}>{k}</span><span style={{ fontWeight:700, color:"#2D2D2D", textAlign:"right" }}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Pipeline card */}
-                  <div style={cardStyle}>
-                    <div style={secLabel}><Layers size={13} color="#003366" /> Sales Pipeline</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {JOURNEY.map((s, i) => {
-                        const active = c.status === s;
-                        const passed = JOURNEY.indexOf(c.status) > i || c.status === "PAID";
-                        const col = leadStatusColor[s];
-                        return (
-                          <button key={s} onClick={()=>setDTab("tasks")} title="เลื่อนสเตจอัตโนมัติจากงานใน Sales Journey"
-                            style={{ display:"flex", alignItems:"center", gap:9, width:"100%", textAlign:"left", cursor:"pointer",
-                              padding:"8px 11px", borderRadius:9, fontFamily:"inherit",
-                              border:`1px solid ${active ? "#003366" : "#eef1f5"}`, background: active ? "#eef4fb" : passed ? "#f7fbf9" : "#fff" }}>
-                            <span style={{ width:18, height:18, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
-                              background: active ? "#003366" : passed ? "#059669" : "#e5e7eb", color:"#fff" }}>
-                              {passed && !active ? <Check size={11} strokeWidth={3} /> : <span style={{ fontSize:"0.6rem", fontWeight:800 }}>{i+1}</span>}
-                            </span>
-                            <span style={{ flex:1, fontSize:"0.78rem", fontWeight: active ? 800 : 600, color: active ? "#003366" : "#475569" }}>{leadStatusLabel[s]}</span>
-                            {active && <span style={{ width:8, height:8, borderRadius:"50%", background:col.text }} />}
-                          </button>
-                        );
-                      })}
-                      <div style={{ display:"flex", gap:6, marginTop:2 }}>
-                        <div style={{ flex:1, textAlign:"center", padding:"7px", borderRadius:9, fontSize:"0.72rem", fontWeight:800, background: c.status==="PAID" ? "#059669" : "#f0fdf4", color: c.status==="PAID" ? "#fff" : "#059669", border:"1px solid #bbf7d0" }}>Won</div>
-                        <div style={{ flex:1, textAlign:"center", padding:"7px", borderRadius:9, fontSize:"0.72rem", fontWeight:800, background: c.status==="CANCELLED" ? "#dc2626" : "#fef2f2", color: c.status==="CANCELLED" ? "#fff" : "#dc2626", border:"1px solid #fecaca" }}>Lost</div>
-                      </div>
-                    </div>
-                    <div style={{ fontSize:"0.62rem", color:"#9aa4b0", marginTop:8 }}>สเตจเลื่อนอัตโนมัติเมื่อเช็กงานใน Sales Journey (กดเพื่อไปที่งาน)</div>
+                    {leadEdit
+                      ? <OverviewEditor lead={c} persons={personsList} onSave={l => { saveLead(l); setLeadEdit(false); }} />
+                      : tabOverview}
                   </div>
                 </div>
 
@@ -1993,11 +1873,7 @@ export default function LeadsPage() {
               {/* แถบปุ่มติดล่าง */}
               <div style={{ flexShrink:0, borderTop:"1px solid #e6eaf0", background:"#fff", padding:"12px 20px",
                 display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                  <button onClick={()=>setDTab("quotation")} className="btn btn-secondary btn-md" style={{ color:"#003366" }}><FileText size={14} /> สร้างใบเสนอราคา</button>
-                  <button onClick={()=>{ setDTab("timeline"); setApptAdding(true); }} className="btn btn-secondary btn-md" style={{ color:"#003366" }}><CalendarClock size={14} /> สร้างนัดหมาย</button>
-                  <span style={{ fontSize:"0.68rem", color:"#8a929c", display:"flex", alignItems:"center", gap:5 }}><Check size={13} color="#059669" /> ระบบบันทึกให้อัตโนมัติ</span>
-                </div>
+                <div />{/* ปุ่มสร้างใบเสนอราคา/นัดหมาย เอาออกตามที่บอสสั่ง — ทำได้ที่แท็บ "ใบเสนอราคา" และ "ไทม์ไลน์" */}
                 {!isCustomer && (
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <button onClick={()=>setQuickLost(true)} className="btn btn-md" style={{ background:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca" }}><XCircle size={14} /> ปิดการขายไม่สำเร็จ</button>

@@ -2,9 +2,10 @@
 
 // ─── KPI ใบเสนอราคาทั้งเครือ (7 ตัว) ──────────────────────────────────────────
 // ทุกตัวคำนวณจากข้อมูลจริง — ไม่มี "จำนวนวันเฉลี่ยที่ใช้ปิดดีล" เพราะระบบไม่เก็บวันที่ลูกค้าตอบรับ/ปฏิเสธ
-import { FileText, Coins, MailOpen, Percent, CheckCircle2, XCircle, CalendarX } from "lucide-react";
+// ไม่มี "ลูกค้าเปิดอ่าน" เพราะระบบไม่มีการติดตามการเปิดอ่าน (ถูกลบทั้งฟีเจอร์)
+import { FileText, Coins, Percent, Calculator, CheckCircle2, XCircle, CalendarX } from "lucide-react";
 import { fmtBaht } from "@/lib/format";
-import type { QuoteAgg } from "@/lib/hqQuotations";
+import { conversionRate, avgQuoteValue, type QuoteAgg } from "@/lib/hqQuotations";
 
 type Tile = { label: string; value: string; sub: string; Icon: typeof FileText; color: string; bg: string };
 
@@ -12,11 +13,11 @@ export function QuotationKPICards({ agg, expired }: { agg: QuoteAgg; expired: nu
   const tiles: Tile[] = [
     { label: "ใบเสนอราคาทั้งหมด", value: `${agg.count}`, sub: "ใบ", Icon: FileText, color: "#003366", bg: "#E8F0FE" },
     { label: "มูลค่ารวม", value: fmtBaht(agg.value), sub: "ก่อน VAT", Icon: Coins, color: "#0891B2", bg: "#E6F4F9" },
-    { label: "เปิดอ่านแล้ว", value: `${agg.opened}`, sub: `จากที่ส่ง ${agg.sent} ใบ`, Icon: MailOpen, color: "#7C3AED", bg: "#F0EBFB" },
-    { label: "อัตราการเปิดอ่าน", value: `${agg.openRate}%`, sub: "เปิดอ่าน ÷ ส่งแล้ว", Icon: Percent, color: "#2563EB", bg: "#E8F0FE" },
     { label: "ตอบรับ", value: `${agg.accepted}`, sub: "ใบ", Icon: CheckCircle2, color: "#059669", bg: "#E6F6EF" },
     { label: "ปฏิเสธ", value: `${agg.rejected}`, sub: "ใบ", Icon: XCircle, color: "#DC2626", bg: "#FDECEC" },
     { label: "หมดอายุ", value: `${expired}`, sub: "ใบ", Icon: CalendarX, color: "#D97706", bg: "#FEF0E6" },
+    { label: "อัตราปิดการขาย", value: `${conversionRate(agg)}%`, sub: `${agg.accepted}/${agg.sent} ใบที่ส่งแล้ว`, Icon: Percent, color: "#7C3AED", bg: "#F1EBFD" },
+    { label: "มูลค่าเฉลี่ยต่อใบ", value: fmtBaht(avgQuoteValue(agg)), sub: "ก่อน VAT", Icon: Calculator, color: "#0F766E", bg: "#E6F4F2" },
   ];
 
   return (

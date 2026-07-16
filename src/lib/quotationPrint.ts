@@ -1,11 +1,13 @@
 // ── ใบเสนอราคา: เทมเพลตพิมพ์ + การตั้งค่าเอกสาร (แหล่งเดียว) ──────────────────
 // ใช้ร่วมกันทั้งหน้า /quotations และใบเสนอราคา inline ในหน้า Lead (LeadQuotationsPanel)
 // เพื่อให้เอกสารที่พิมพ์ออกมา "เหมือนกัน 100%" ทุกจุด — VAT / ตราประทับ / ลายเซ็น / หัวกระดาษ
-import { DEFAULT_ISSUER, ISSUER_KEY, loadHQPolicy, type IssuerProfile, type QuotationMock } from "./mock";
+import { DEFAULT_ISSUER, ISSUER_KEY, loadHQPolicy, fmtISOToThai, type IssuerProfile, type QuotationMock } from "./mock";
 
 // การตั้งค่าเอกสาร (จาก Settings → ตั้งค่าใบเสนอราคา) — คนละคีย์กับโปรไฟล์บริษัท
-export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number };
-export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-2026-", runningNumber: 1001 };
+// termsAndConditions / validityDays มาจากหน้าตั้งค่าตัวแทน (คีย์ dealer_document_settings เดียวกัน)
+// เดิมไม่ได้ประกาศไว้ → เอกสารพิมพ์เงื่อนไขที่เขียนตายในโค้ด ตัวแทนแก้ที่หน้าตั้งค่าไปก็ไม่มีผล
+export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number; termsAndConditions?: string; validityDays?: number };
+export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-2026-", runningNumber: 1001, termsAndConditions: "", validityDays: 30 };
 export const DOC_KEY = "dealer_document_settings";
 export const WORDMARK_KEY = "dealer_company_wordmark_v2"; // โลโก้พร้อมชื่อ (แนวนอน) → หัวเอกสาร
 
@@ -39,6 +41,26 @@ function fmtDate(d: string) { if (!d || d === "—") return "—"; const [y, m, 
 
 // สร้าง HTML ใบเสนอราคา A4 (เต็มรูปแบบ — หัวกระดาษ/คู่สัญญา/ตาราง/สรุป VAT/เงื่อนไข/ลายเซ็น+ตรา)
 export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC, wordmark = "") {
+  // ── เงื่อนไข ────────────────────────────────────────────────────────────────
+  // ยึดข้อมูลจริงเท่านั้น:
+  //  · วันยืนยันราคา = "วันหมดอายุ" ของใบนั้น (ถ้าไม่มี = วันที่ออก + อายุใบจากตั้งค่า)
+  //    เดิมเขียนตายว่า "30 วัน" → ตัวแทนตั้งอายุใบเป็น 45 เอกสารก็ยังพิมพ์ 30 = เอกสารโกหก
+  //  · บรรทัด VAT ตัดออก — ตารางสรุปด้านบนแยก "ก่อน VAT / ภาษี / รวมสุทธิ" ให้เห็นตัวเลขจริงแล้ว
+  //  · ที่เหลือ = เงื่อนไขที่ตัวแทนพิมพ์เองในหน้าตั้งค่า (ไม่กรอก = ไม่ขึ้นอะไร ไม่ยัดข้อความให้)
+  const validUntil = (() => {
+    if (q.expiry) return q.expiry;
+    if (!q.date) return "";
+    const d = new Date(q.date);
+    if (isNaN(d.getTime())) return "";
+    d.setDate(d.getDate() + (doc.validityDays ?? 30));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const termLines: string[] = [];
+  if (validUntil) termLines.push(`ราคานี้ยืนยันถึงวันที่ ${fmtISOToThai(validUntil)}`);
+  (doc.termsAndConditions ?? "").split(/\r?\n/).map(t => t.trim()).filter(Boolean).forEach(t => termLines.push(t));
+  const termsHTML = termLines.length
+    ? `<div class="terms"><div class="h">เงื่อนไข</div>${termLines.map(t => `• ${esc(t)}`).join("<br/>")}</div>`
+    : "";
   const n = (v: number) => Number(v || 0).toLocaleString("th-TH");
   const subtotal = q.totalValue;
   const vatPct = typeof doc.vatPercent === "number" ? doc.vatPercent : 7;
@@ -127,12 +149,7 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
     <div class="line"><span>ภาษีมูลค่าเพิ่ม ${vatPct}%</span><span>${n(vat)}</span></div>
     <div class="line grand"><span>รวมสุทธิ</span><span>฿${n(grand)}</span></div>
   </div>
-  <div class="terms">
-    <div class="h">เงื่อนไข</div>
-    • ราคานี้ยืนยัน 30 วันนับจากวันที่ในเอกสาร<br/>
-    • มูลค่างานยังไม่รวมภาษีมูลค่าเพิ่ม · ยอดรวมสุทธิรวม VAT ${vatPct}% แล้ว<br/>
-    • เงื่อนไขการชำระเงินเป็นไปตามข้อตกลงระหว่างคู่สัญญา
-  </div>
+  ${termsHTML}
   <div class="signs">
     <div class="sign">
       ${doc.signature ? `<img class="sig" src="${esc(doc.signature)}" alt="ลายเซ็น"/>` : ""}

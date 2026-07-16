@@ -4,15 +4,16 @@
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
 // จึงมีแค่ ดู / วิเคราะห์ / เปรียบเทียบ / ส่งออก — ไม่มีปุ่มสร้าง แก้ไข ลบ อนุมัติ
 import { useState, useMemo, useEffect } from "react";
-import { hqAllQuotations, loadHQPolicy, loadQuoteValidityDays, quotationStatusLabel, mainTemplateOf } from "@/lib/mock";
+import { hqAllQuotations, loadQuoteValidityDays, quotationStatusLabel, mainTemplateOf } from "@/lib/mock";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useFilters } from "@/context/FilterContext";
-import { useNetworkQuotations } from "@/lib/useNetworkData";
+import { useNetworkQuotations, useNetworkLeads } from "@/lib/useNetworkData";
 import {
-  toQuoteRows, aggregate, regionDisplay, ALL_REGIONS, STATUS_ORDER, type QuoteRow,
+  toQuoteRows, aggregate, regionDisplay, regionOfDealer, provinceOfDealer,
+  ALL_REGIONS, ALL_PROVINCES, STATUS_ORDER, type QuoteRow,
 } from "@/lib/hqQuotations";
 import { QuotationKPICards } from "@/components/hq/quotations/QuotationKPICards";
-import { QuotationFilterBar, EMPTY_FILTERS, type QuotationFilters } from "@/components/hq/quotations/QuotationFilterBar";
+import { QuotationFilterBar, EMPTY_FILTERS, VALUE_BANDS, type QuotationFilters } from "@/components/hq/quotations/QuotationFilterBar";
 import { QuotationAnalytics } from "@/components/hq/quotations/QuotationAnalytics";
 import { QuotationTable } from "@/components/hq/quotations/QuotationTable";
 import { QuotationDrawer } from "@/components/hq/quotations/QuotationDrawer";
@@ -24,16 +25,13 @@ const ALL_DEALERS = [...new Map(hqAllQuotations.map(q => [q.dealerCode, q.dealer
 export default function NetworkQuotationPage() {
   const { inRange, timeRange } = useFilters();
   const netQuotes = useNetworkQuotations();
+  const netLeads = useNetworkLeads();
   const [filters, setFilters] = useState<QuotationFilters>(EMPTY_FILTERS);
   const [viewQ, setViewQ] = useState<QuoteRow | null>(null);
 
   // นโยบาย HQ อยู่ใน localStorage → อ่านหลัง mount (กัน hydration mismatch)
   const [validityDays, setValidityDays] = useState(30);
-  const [maxDiscount, setMaxDiscount] = useState(10);
-  useEffect(() => {
-    setValidityDays(loadQuoteValidityDays());
-    setMaxDiscount(loadHQPolicy().maxDiscount);
-  }, []);
+  useEffect(() => { setValidityDays(loadQuoteValidityDays()); }, []);
 
   // เปิดหน้าด้วย ?dealer=CODE (กดมาจากแดชบอร์ด/การ์ดสถิติ) → กรองตัวแทนนั้นให้เลย
   useEffect(() => {
@@ -53,8 +51,14 @@ export default function NetworkQuotationPage() {
   const matchesNonTime = useMemo(() => (r: QuoteRow) => {
     if (filters.dealer !== "all" && r.dealerCode !== filters.dealer) return false;
     if (filters.region !== "all" && r.region !== filters.region) return false;
+    if (filters.province !== "all" && r.dealerProvince !== filters.province) return false;
     if (filters.status !== "all" && r.status !== filters.status) return false;
     if (filters.product !== "all" && r.productLine !== filters.product && mainTemplateOf(r.productLine) !== filters.product) return false;
+    if (filters.valueBand !== "all") {
+      const b = VALUE_BANDS.find(v => v.key === filters.valueBand);
+      // ขอบล่างรวม ขอบบนไม่รวม → ช่วงติดกันไม่นับซ้ำ
+      if (b && (r.valueNum < b.min || (b.max != null && r.valueNum >= b.max))) return false;
+    }
     if (filters.search.trim()) {
       const s = filters.search.trim().toLowerCase();
       const hay = `${r.quoteNo} ${r.customer} ${r.dealerName} ${r.dealerCode}`.toLowerCase();
@@ -65,6 +69,17 @@ export default function NetworkQuotationPage() {
 
   const trendRows = useMemo(() => allRows.filter(matchesNonTime), [allRows, matchesNonTime]);
   const rows = useMemo(() => trendRows.filter(r => inRange(r.createdAt)), [trendRows, inRange]);
+
+  // ลีดสำหรับกราฟ "ลีด → ใบเสนอราคา" และ "เหตุผลที่เสียโอกาส"
+  // กรองเฉพาะมิติที่ลีดมีจริง: ขอบเขตตัวแทน (ตัวแทน/ภูมิภาค/จังหวัดตัวแทน) + ช่วงเวลา
+  // ไม่กรองด้วยสถานะ/ช่วงมูลค่าของใบเสนอราคา — เป็นคนละเอกสารกัน จะกรองข้ามไม่ได้
+  const leadRows = useMemo(() => netLeads.filter(l => {
+    const code = l.dealerCode || "";
+    if (filters.dealer !== "all" && code !== filters.dealer) return false;
+    if (filters.region !== "all" && regionOfDealer(code) !== filters.region) return false;
+    if (filters.province !== "all" && provinceOfDealer(code) !== filters.province) return false;
+    return l.createdAt ? inRange(l.createdAt) : true;
+  }), [netLeads, filters.dealer, filters.region, filters.province, inRange]);
 
   const tableRows = useMemo(() => [...rows].sort((a, b) => {
     const so = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
@@ -85,11 +100,10 @@ export default function NetworkQuotationPage() {
           <ExportMenu
             filename="hq-network-quotations"
             title="ใบเสนอราคาทั้งเครือ"
-            headers={["เลขที่", "รหัสตัวแทน", "ตัวแทน", "ลูกค้า", "ประเภทอาคาร", "ภูมิภาค", "มูลค่า (บาท)", "ส่วนลด %", "สถานะ", "เปิดอ่าน", "วันที่สร้าง", "ใช้ได้ถึง", "อายุใบ (วัน)"]}
+            headers={["เลขที่", "รหัสตัวแทน", "ตัวแทน", "ลูกค้า", "จังหวัด (ตัวแทน)", "ประเภทอาคาร", "ภูมิภาค", "มูลค่า (บาท)", "สถานะ", "วันที่สร้าง", "ใช้ได้ถึง", "อายุใบ (วัน)"]}
             rows={tableRows.map(q => [
-              q.quoteNo, q.dealerCode, q.dealerName, q.customer, q.productLine, regionDisplay(q.region),
-              q.valueNum, q.discountPct, quotationStatusLabel[q.status],
-              !q.sent ? "ยังไม่ได้ส่ง" : q.opened ? "ใช่" : "ไม่",
+              q.quoteNo, q.dealerCode, q.dealerName, q.customer, q.dealerProvince, q.productLine, regionDisplay(q.region),
+              q.valueNum, quotationStatusLabel[q.status],
               q.createdAt, q.validUntil ?? "—", q.agingDays ?? "—",
             ])}
           />
@@ -103,15 +117,16 @@ export default function NetworkQuotationPage() {
         onChange={setFilters}
         dealers={ALL_DEALERS}
         regions={ALL_REGIONS}
+        provinces={ALL_PROVINCES}
         products={products}
         resultCount={rows.length}
       />
 
-      <QuotationAnalytics rows={rows} trendRows={trendRows} />
+      <QuotationAnalytics rows={rows} trendRows={trendRows} leads={leadRows} />
 
-      <QuotationTable rows={tableRows} onView={setViewQ} maxDiscount={maxDiscount} />
+      <QuotationTable rows={tableRows} onView={setViewQ} />
 
-      {viewQ && <QuotationDrawer quote={viewQ} maxDiscount={maxDiscount} onClose={() => setViewQ(null)} />}
+      {viewQ && <QuotationDrawer quote={viewQ} onClose={() => setViewQ(null)} />}
     </div>
   );
 }

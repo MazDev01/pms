@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, type DealerRow, type DealerCredentials, type HQTargets } from "@/lib/mock";
-import { dealerLeaderboard } from "@/lib/mock";
+import { dealerLeaderboard, HQ_DEALERS_KEY } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useRole } from "@/context/RoleContext";
 import { useAuditLogger } from "@/lib/useAudit";
@@ -126,7 +126,7 @@ export default function HQDealersPage() {
   const logAudit = useAuditLogger(); // บันทึกการกระทำของ admin
   const router = useRouter();
 
-  const [dealers, setDealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  const [dealers, setDealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
   // เกณฑ์สี Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
   const [q, setQ] = useState("");
@@ -136,7 +136,7 @@ export default function HQDealersPage() {
   // Modals
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<DealerRow | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", region: "กลาง", revenueTarget: 0, status: "active" as "active" | "inactive" });
+  const [form, setForm] = useState({ code: "", name: "", province: "", region: "กลาง", revenueTarget: 0, status: "active" as "active" | "inactive" });
   // ผู้ใช้แก้ช่องเป้าเองหรือยัง — ถ้ายัง เปลี่ยนภาคจะเติมค่าเริ่มต้นตามภาคให้ (โหมดเพิ่มใหม่เท่านั้น)
   const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
@@ -149,7 +149,7 @@ export default function HQDealersPage() {
   const filtered = dealers.filter(d => {
     if (statusFilter !== "all" && dealerStatus(d) !== statusFilter) return false;
     if (regionFilter !== "ทั้งหมด" && d.region !== regionFilter) return false;
-    if (q && !`${d.code} ${d.name} ${d.region}`.toLowerCase().includes(q.toLowerCase())) return false;
+    if (q && !`${d.code} ${d.name} ${d.province} ${d.region}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   }).sort((a, b) => b.revenueActual - a.revenueActual);
 
@@ -161,8 +161,8 @@ export default function HQDealersPage() {
   const avgOnTime = active.length > 0 ? Math.round(active.reduce((s, d) => s + d.onTimePct, 0) / active.length) : 0;
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
-  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", region: "กลาง", revenueTarget: regionDefaultTarget("กลาง"), status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
-  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setTargetTouched(true); setFormErr(""); setShowForm(true); }
+  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "กลาง", revenueTarget: regionDefaultTarget("กลาง"), status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
+  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setTargetTouched(true); setFormErr(""); setShowForm(true); }
 
   // เปลี่ยนภาค: อัปเดตภาค + ถ้ายังไม่แก้เป้าเอง (โหมดเพิ่มใหม่) เติมค่าเริ่มต้นตามภาคให้
   function changeRegion(region: string) {
@@ -173,16 +173,17 @@ export default function HQDealersPage() {
     const code = form.code.trim().toUpperCase();
     if (!code) { setFormErr("ต้องระบุรหัสตัวแทน"); return; }
     if (!form.name.trim()) { setFormErr("ต้องระบุชื่อตัวแทน"); return; }
+    if (!form.province.trim()) { setFormErr("ต้องระบุจังหวัด"); return; }
     const dupe = dealers.find(d => d.code === code && d.id !== editTarget?.id);
     if (dupe) { setFormErr(`รหัส "${code}" มีอยู่แล้ว`); return; }
 
     if (editTarget) {
-      setDealers(prev => prev.map(d => d.id === editTarget.id ? { ...d, name: form.name.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status } : d));
+      setDealers(prev => prev.map(d => d.id === editTarget.id ? { ...d, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status } : d));
       logAudit("แก้ไขตัวแทน", `${code} · ${form.name.trim()}`);
       setShowForm(false);
     } else {
       const creds = genCredentials(code);
-      setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), region: form.region, revenueActual: 0, revenueTarget: form.revenueTarget, winRate: 0, activeProjects: 0, onTimePct: 0, status: form.status, credentials: creds }]);
+      setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueActual: 0, revenueTarget: form.revenueTarget, winRate: 0, activeProjects: 0, onTimePct: 0, status: form.status, credentials: creds }]);
       logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
       setShowForm(false);
       setCredsModal({ name: form.name.trim(), creds });
@@ -216,8 +217,8 @@ export default function HQDealersPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
-            headers={["รหัส","ตัวแทน","ภาค","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
-            rows={filtered.map(d=>[d.code,d.name,d.region,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,STATUS_META[dealerStatus(d)].label])} />
+            headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
+            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials.email,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,STATUS_META[dealerStatus(d)].label])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มตัวแทน
           </button>
@@ -273,28 +274,30 @@ export default function HQDealersPage() {
       <div className="card">
         <div className="table-wrap">
           <table>
+            {/* เพิ่มคอลัมน์ "จังหวัด" → เกลี่ย % ใหม่ทั้งชุด (รวมต้องได้ 100) */}
             <colgroup>
               <col style={{ width: "4%" }} />
               <col style={{ width: "6%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "7%" }} />
               <col style={{ width: "14%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
+              <col style={{ width: "9%", minWidth: 96 }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "7%" }} />
               {/* คอลัมน์ปุ่ม: เข้าระบบ + ไอคอน 4 ปุ่ม ต้องการ ~230px — ให้พื้นที่พอ ไม่ล้นออกนอกตาราง */}
-              <col style={{ width: "25%", minWidth: 268 }} />
+              <col style={{ width: "22%", minWidth: 268 }} />
             </colgroup>
             <thead>
               <tr>
-                {["#", "รหัส", "ชื่อตัวแทน", "ภาค", "ยอด / เป้า", "โอกาสการขาย", "ติดตามตรงเวลา", "สถานะ", ""].map((h, i) => (
+                {["#", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ยอด / เป้า", "โอกาสการขาย", "ติดตามตรงเวลา", "สถานะ", ""].map((h, i) => (
                   <th key={i}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={10} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
               ) : filtered.map((d, i) => (
                 <tr key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
                   onClick={() => setSelectedDealer(d)}>
@@ -302,8 +305,11 @@ export default function HQDealersPage() {
                   <td>
                     <span style={{ fontWeight: 800, color: "#003366", fontSize: "0.8rem", letterSpacing: "0.05em" }}>{d.code}</span>
                   </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
+                  <td style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={d.name}>
                     <span style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{d.name}</span>
+                  </td>
+                  <td style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.82rem", color: "#374151" }} title={d.province}>
+                    {d.province || "—"}
                   </td>
                   <td>
                     <span className="badge" style={{ background: "#f0f0f5", color: "#6b7280" }}>{d.region}</span>
@@ -382,6 +388,9 @@ export default function HQDealersPage() {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <InputField label="จังหวัดที่ตั้ง">
+                  <input value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))} placeholder="เช่น ระยอง" style={INPUT_STYLE} />
+                </InputField>
                 <InputField label="ภาค">
                   <select value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                     {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}

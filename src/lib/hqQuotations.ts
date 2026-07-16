@@ -1,11 +1,10 @@
 // ─── ตัวช่วยวิเคราะห์ใบเสนอราคาทั้งเครือ (HQ) ─────────────────────────────────
-// แหล่งเดียวของนิยาม "เปิดอ่าน / ส่งแล้ว / ค้างอยู่ / อายุใบ / ภูมิภาค" ที่หน้า HQ ใช้ร่วมกัน
+// แหล่งเดียวของนิยาม "ส่งแล้ว / ค้างอยู่ / อายุใบ / ภูมิภาค" ที่หน้า HQ ใช้ร่วมกัน
 //
 // ขอบเขตข้อมูลจริง (อย่าเดาเกินนี้):
-//  · ระบบไม่มีการติดตามการเปิดอ่านจริง — ไม่มีวันที่เปิด / ครั้งล่าสุด / จำนวนครั้ง
-//    "เปิดอ่านแล้ว" จึงอ่านจาก "สถานะปัจจุบัน" ของใบเท่านั้น (status === "viewed")
+//  · ไม่มีการติดตามการเปิดอ่าน — สถานะ "เปิดอ่านแล้ว" กับอัตราการเปิดอ่านถูกลบทั้งฟีเจอร์แล้ว
 //  · ไม่มีวันที่ลูกค้าตอบรับ/ปฏิเสธ — คำนวณ "จำนวนวันที่ใช้ปิดดีล" ไม่ได้
-//  · ใบของสาขาอื่น (seed) ไม่มีรายการสินค้า/ราคาก่อนส่วนลด → ให้แสดง "—" ห้ามคำนวณย้อนกลับ
+//  · ใบของสาขาอื่น (seed) ไม่มีรายการสินค้า → ให้แสดง "—" ห้ามเดาขึ้นมาเอง
 import { dealerLeaderboard, type HQQuotation, type QuotationStatus } from "@/lib/mock";
 import { parseDate, APP_NOW } from "@/context/FilterContext";
 
@@ -15,17 +14,21 @@ export const fmtThaiDate = (d: Date) => `${d.getDate()} ${TH_MO[d.getMonth()]} $
 // ภูมิภาคของใบเสนอราคา = ภาคของตัวแทนที่ออกใบ (ใบเสนอราคาไม่มีฟิลด์ภาค/จังหวัดของตัวเอง)
 const REGION_BY_DEALER = new Map(dealerLeaderboard.map(d => [d.code, d.region]));
 export const regionOfDealer = (code: string) => REGION_BY_DEALER.get(code) ?? "ไม่ระบุ";
+
+// จังหวัดของใบเสนอราคา = จังหวัดของ "ตัวแทนที่ออกใบ" ไม่ใช่จังหวัดลูกค้า/หน้างาน
+// (ใบเสนอราคาไม่เก็บจังหวัดของตัวเอง — ทุกที่ที่แสดงต้องกำกับให้ชัดว่าเป็นจังหวัดตัวแทน)
+const PROVINCE_BY_DEALER = new Map(dealerLeaderboard.map(d => [d.code, d.province]));
+export const provinceOfDealer = (code: string) => PROVINCE_BY_DEALER.get(code) ?? "ไม่ระบุ";
+export const ALL_PROVINCES = [...new Set(dealerLeaderboard.map(d => d.province))].sort();
 export const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะวันออกเฉียงเหนือ" : r === "ไม่ระบุ" ? r : `ภาค${r}`;
 export const ALL_REGIONS = [...new Set(dealerLeaderboard.map(d => d.region))];
 
-// ส่งแล้ว = ทุกสถานะที่ไม่ใช่ร่าง · เปิดอ่าน = สถานะปัจจุบันเป็น "เปิดอ่านแล้ว"
-// (ใบที่ตอบรับ/ปฏิเสธไปแล้วจะไม่ถูกนับเป็นเปิดอ่าน เพราะสถานะทับไปแล้ว — ระบบเก็บสถานะเดียว)
+// ส่งแล้ว = ทุกสถานะที่ไม่ใช่ร่าง · ค้างอยู่ = ส่งแล้วแต่ลูกค้ายังไม่ตอบ
 export const isSent = (q: HQQuotation) => q.status !== "draft";
-export const isOpened = (q: HQQuotation) => q.status === "viewed";
 // ค้างอยู่ = ส่งถึงลูกค้าแล้วแต่ยังไม่ตอบรับ/ปฏิเสธ/หมดอายุ → ใช้คิด Aging
-export const isPending = (q: HQQuotation) => q.status === "sent_to_client" || q.status === "viewed";
+export const isPending = (q: HQQuotation) => q.status === "sent_to_client";
 
-export const STATUS_ORDER: QuotationStatus[] = ["draft", "sent_to_client", "viewed", "won", "lost", "expired"];
+export const STATUS_ORDER: QuotationStatus[] = ["draft", "sent_to_client", "won", "lost", "expired"];
 
 export type AgingBucket = "0-7" | "8-14" | "15-30" | "30+";
 export const AGING_BUCKETS: { key: AgingBucket; label: string; color: string }[] = [
@@ -41,13 +44,13 @@ export function agingBucketOf(days: number): AgingBucket {
   return "30+";
 }
 
-/** ใบเสนอราคา + ฟิลด์ที่คำนวณได้จากข้อมูลจริง (ภาค/อายุ/วันหมดอายุ/สถานะการเปิดอ่าน) */
+/** ใบเสนอราคา + ฟิลด์ที่คำนวณได้จากข้อมูลจริง (ภาค/จังหวัดตัวแทน/อายุ/วันหมดอายุ) */
 export type QuoteRow = HQQuotation & {
   region: string;
+  dealerProvince: string;     // จังหวัดของตัวแทนที่ออกใบ (ไม่ใช่จังหวัดลูกค้า)
   createdDate: Date | null;
   agingDays: number | null;   // จำนวนวันนับจากวันที่สร้าง ถึง "วันนี้" ของระบบ (30 มิ.ย. 2569)
   validUntil: string | null;  // วันที่สร้าง + อายุใบเสนอราคาตามนโยบาย HQ
-  opened: boolean;
   sent: boolean;
   pending: boolean;
 };
@@ -68,26 +71,34 @@ export function toQuoteRows(quotes: HQQuotation[], validityDays: number): QuoteR
     return {
       ...q,
       region: regionOfDealer(q.dealerCode),
+      dealerProvince: provinceOfDealer(q.dealerCode),
       createdDate, agingDays, validUntil,
-      opened: isOpened(q), sent: isSent(q), pending: isPending(q),
+      sent: isSent(q), pending: isPending(q),
     };
   });
 }
 
 /** สรุปตัวเลขต่อกลุ่ม (ใช้ซ้ำทั้งรายตัวแทนและรายภูมิภาค) */
-export type QuoteAgg = { count: number; value: number; sent: number; opened: number; accepted: number; rejected: number; openRate: number };
+export type QuoteAgg = {
+  count: number; value: number; sent: number; accepted: number; rejected: number;
+  wonValue: number;  // มูลค่าเฉพาะใบที่ปิดการขายได้ = "ยอดขายจริง" ที่เทียบกับมูลค่าใบเสนอราคา
+};
 export function aggregate(rows: QuoteRow[]): QuoteAgg {
   const sent = rows.filter(r => r.sent).length;
-  const opened = rows.filter(r => r.opened).length;
   return {
     count: rows.length,
     value: rows.reduce((s, r) => s + r.valueNum, 0),
-    sent, opened,
+    sent,
     accepted: rows.filter(r => r.status === "won").length,
     rejected: rows.filter(r => r.status === "lost").length,
-    openRate: sent ? Math.round((opened / sent) * 100) : 0,
+    wonValue: rows.filter(r => r.status === "won").reduce((s, r) => s + r.valueNum, 0),
   };
 }
+
+// อัตราการปิดการขาย = ตอบรับ ÷ ใบที่ส่งถึงลูกค้าแล้ว (ไม่นับใบร่าง — ยังไม่ถึงมือลูกค้า)
+export const conversionRate = (a: QuoteAgg) => (a.sent ? Math.round((a.accepted / a.sent) * 100) : 0);
+// มูลค่าเฉลี่ยต่อใบ — หารด้วยจำนวนใบทั้งหมดที่อยู่ในตัวกรองปัจจุบัน
+export const avgQuoteValue = (a: QuoteAgg) => (a.count ? Math.round(a.value / a.count) : 0);
 
 export function groupBy<K extends string>(rows: QuoteRow[], key: (r: QuoteRow) => K): Map<K, QuoteRow[]> {
   const m = new Map<K, QuoteRow[]>();

@@ -440,7 +440,7 @@ export default function FilesPage() {
   }, []);
   const [query,   setQuery]   = useState("");
   const [catFilter, setCat]   = useState<FileCategory | "ALL">("ALL");
-  const [extFilter, setExt]   = useState<FileExt | "ALL">("ALL");
+  // extFilter ถูกลบพร้อมชิปสรุป + select "ทุกประเภท" — ไม่เหลือ UI ที่ตั้งค่าได้ จึงเป็นโค้ดตาย
   const [view,    setView]    = useState<"grid" | "list">("list");
   const [upload,  setUpload]  = useState(false);
   const [delId,   setDelId]   = useState<number | null>(null);
@@ -457,13 +457,12 @@ export default function FilesPage() {
     return files.filter(f => {
       const matchQ = !q || f.name.toLowerCase().includes(q) || f.project.toLowerCase().includes(q) || f.uploadedBy.toLowerCase().includes(q);
       const matchC = catFilter === "ALL" || f.category === catFilter;
-      const matchE = extFilter === "ALL" || f.ext === extFilter;
-      return matchQ && matchC && matchE;
+      return matchQ && matchC;
     });
-  }, [files, query, catFilter, extFilter]);
+  }, [files, query, catFilter]);
 
   // เปลี่ยนตัวกรอง/ค้นหา/มุมมอง → กลับไปหน้าแรก
-  useEffect(() => { setPage(1); }, [query, catFilter, extFilter, view]);
+  useEffect(() => { setPage(1); }, [query, catFilter, view]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // กันหน้าเกินเมื่อจำนวนรายการลดลง (เช่น ลบไฟล์)
@@ -483,11 +482,7 @@ export default function FilesPage() {
     return `${mb.toFixed(1)} MB`;
   }, [files]);
 
-  const extCounts = useMemo(() => {
-    const c: Partial<Record<FileExt, number>> = {};
-    files.forEach(f => { c[f.ext] = (c[f.ext] ?? 0) + 1; });
-    return c;
-  }, [files]);
+  // extCounts ถูกลบพร้อมชิปสรุปประเภทไฟล์ (PDF/Excel/Word/PowerPoint) — ไม่มีใครอ่านแล้ว
 
   const catCounts = useMemo(() => {
     const c: Record<FileCategory, number> = {
@@ -514,25 +509,7 @@ export default function FilesPage() {
       </TopbarActions>
       <p className="page-sub">{files.length} ไฟล์ · {totalSize}</p>
 
-      {/* สรุปแบบ pills — แทน stat card 5 ใบ */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
-          ไฟล์ทั้งหมด <span style={{ color: PRIMARY }}>{files.length}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, color: STEEL, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
-          ขนาดรวม <span style={{ color: PRIMARY }}>{totalSize}</span>
-        </div>
-        {(["pdf","xlsx","docx","dwg","pptx"] as FileExt[]).map(ext => (
-          (extCounts[ext] ?? 0) > 0 ? (
-            <button key={ext} onClick={() => setExt(extFilter === ext ? "ALL" : ext)}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
-                color: extFilter === ext ? "#fff" : MUTED, background: extFilter === ext ? PRIMARY : "#fff",
-                border: `1px solid ${extFilter === ext ? PRIMARY : BORDER}`, borderRadius: 99, padding: "7px 16px" }}>
-              {extLabel(ext)} <span style={{ color: extFilter === ext ? "#fff" : STEEL }}>{extCounts[ext]}</span>
-            </button>
-          ) : null
-        ))}
-      </div>
+      {/* ชิปสรุป (ไฟล์ทั้งหมด/ขนาดรวม/PDF/Excel/Word/PowerPoint) เอาออกตามที่บอสสั่ง */}
 
       {/* Folder filter bar */}
       <div className="card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
@@ -591,11 +568,7 @@ export default function FilesPage() {
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="ค้นหาไฟล์ / โอกาสการขาย..." />
           {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 0 }}><X size={11} /></button>}
         </div>
-        <select value={extFilter} onChange={e => setExt(e.target.value as FileExt | "ALL")}
-          className="form-select" style={{ width: "auto" }}>
-          <option value="ALL">ทุกประเภท</option>
-          {(["pdf","xlsx","docx","dwg","pptx","jpg"] as FileExt[]).map(e => <option key={e} value={e}>{extLabel(e)}</option>)}
-        </select>
+        {/* ตัวเลือก "ทุกประเภท" เอาออกตามที่บอสสั่ง */}
         <div style={{ display: "flex", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden", marginLeft: "auto", height: 36, boxSizing: "border-box" }}>
           {(["list","grid"] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
@@ -641,7 +614,7 @@ export default function FilesPage() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ padding: 0 }}>
                     <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
-                      description={query || catFilter !== "ALL" || extFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
+                      description={query || catFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
                   </td></tr>
                 ) : null}
                 {paged.map(f => (
@@ -721,7 +694,7 @@ export default function FilesPage() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
-              description={query || catFilter !== "ALL" || extFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
+              description={query || catFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {paged.map(f => (

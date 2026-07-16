@@ -12,7 +12,10 @@ const PRIMARY = "#003366";
 const BORDER = "#e5e7eb";
 const fmt = (n: number) => n.toLocaleString("th-TH");
 
-export function LineItemsEditor({ items, onChange, defaultQty }: { items: QuoteLineItem[]; onChange: (items: QuoteLineItem[]) => void; defaultQty?: number }) {
+// showCatalog=false → ซ่อนทั้งปุ่ม "เลือกจากแคตตาล็อก" และปุ่มลบรายการ (บอสสั่ง)
+// ใช้ตอน BOQ ตั้งต้นมาจากแม่แบบของลูกค้าแล้ว — เพิ่มไม่ได้ก็ไม่ควรลบได้ ไม่งั้นลบแล้วเอากลับไม่ได้
+// ยังแก้ชื่อ/จำนวน/ราคาต่อหน่วยได้ตามปกติ
+export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = true }: { items: QuoteLineItem[]; onChange: (items: QuoteLineItem[]) => void; defaultQty?: number; showCatalog?: boolean }) {
   const catalog = useMasterCatalog();
   const [pickOpen, setPickOpen] = useState(false);
   const subtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
@@ -28,8 +31,8 @@ export function LineItemsEditor({ items, onChange, defaultQty }: { items: QuoteL
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" }}>รายการสินค้า (BOQ)</label>
         <div style={{ display: "flex", gap: 6, position: "relative" }}>
-          <button type="button" onClick={() => setPickOpen(o => !o)} className="btn btn-secondary btn-sm"><Plus size={13} /> เลือกจากแคตตาล็อก <ChevronDown size={12} /></button>
-          {pickOpen && (
+          {showCatalog && <button type="button" onClick={() => setPickOpen(o => !o)} className="btn btn-secondary btn-sm"><Plus size={13} /> เลือกจากแคตตาล็อก <ChevronDown size={12} /></button>}
+          {showCatalog && pickOpen && (
             <>
               <div onClick={() => setPickOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 220 }} />
               <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 221, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, width: 300, maxHeight: 320, overflowY: "auto" }}>
@@ -67,7 +70,7 @@ export function LineItemsEditor({ items, onChange, defaultQty }: { items: QuoteL
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && <tr><td colSpan={6} style={{ padding: 18, textAlign: "center", color: "#9ca3af", fontSize: "0.76rem" }}>ยังไม่มีรายการ — กด “เลือกจากแคตตาล็อก” เพื่อเพิ่ม</td></tr>}
+            {items.length === 0 && <tr><td colSpan={6} style={{ padding: 18, textAlign: "center", color: "#9ca3af", fontSize: "0.76rem" }}>{showCatalog ? "ยังไม่มีรายการ — กด “เลือกจากแคตตาล็อก” เพื่อเพิ่ม" : "ยังไม่มีรายการ — ระบุแม่แบบและมูลค่าประเมินที่ลูกค้าเป้าหมายก่อน"}</td></tr>}
             {items.map((it, i) => (
               <tr key={i} style={{ borderTop: `1px solid #f1f5f9` }}>
                 <td style={{ padding: "5px 8px" }}><input style={inp} value={it.name} onChange={e => set(i, { name: e.target.value })} placeholder="ชื่อรายการ" /></td>
@@ -75,14 +78,14 @@ export function LineItemsEditor({ items, onChange, defaultQty }: { items: QuoteL
                 <td style={{ padding: "5px 6px" }}><input style={inp} value={it.unit} onChange={e => set(i, { unit: e.target.value })} /></td>
                 <td style={{ padding: "5px 6px" }}><input type="number" min={0} style={{ ...inp, textAlign: "right" }} value={it.unitPrice || ""} onChange={e => set(i, { unitPrice: Number(e.target.value) })} /></td>
                 <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>฿{fmt(it.qty * it.unitPrice)}</td>
-                <td style={{ padding: "5px 4px", textAlign: "center" }}><button type="button" onClick={() => del(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 3 }}><Trash2 size={13} /></button></td>
+                <td style={{ padding: "5px 4px", textAlign: "center" }}>{showCatalog && <button type="button" onClick={() => del(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 3 }}><Trash2 size={13} /></button>}</td>
               </tr>
             ))}
           </tbody>
           {items.length > 0 && (
             <tfoot>
               <tr style={{ borderTop: `1px solid ${BORDER}`, background: "#f8fafc" }}>
-                <td colSpan={4} style={{ padding: "8px 10px", textAlign: "right", fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>{items.length} รายการ · รวมก่อน VAT/ส่วนลด</td>
+                <td colSpan={4} style={{ padding: "8px 10px", textAlign: "right", fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>{items.length} รายการ · รวมก่อน VAT</td>
                 <td style={{ padding: "8px 8px", textAlign: "right", fontWeight: 800, color: PRIMARY, fontSize: "0.86rem", whiteSpace: "nowrap" }}>฿{fmt(subtotal)}</td>
                 <td></td>
               </tr>

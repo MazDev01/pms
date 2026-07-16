@@ -3,7 +3,7 @@
 // ── Dealer Dashboard — ตาม design reference (Enterprise SaaS CRM) ──────────────
 // S1: 5 KPI (icon พาสเทลคนละสี · Sales Target = ring) · S2: 3 charts · S3: 4 analytics cards
 // S4: Recent Activities timeline (แนวนอน + ลูกศร) · stack เดิม (SVG charts, ไม่ลง Recharts)
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Target, TrendingUp, Users, PhoneCall, Activity, Building2,
@@ -25,6 +25,7 @@ import {
   parseValue, isLeadOpen, needsFollowUp, daysSinceContact,
   MOCK_TODAY, leadCreatedDate,
 } from "@/lib/leadMetrics";
+import { useHQLeadRules } from "@/lib/useHQRules";
 
 const NAVY = "#003366", AMBER = "#F59E0B", SUCCESS = "#16A34A", DANGER = "#DC2626";
 const TEXT = "#1F2937", SUB = "#6B7280", BORDER = "#E5E7EB";
@@ -35,12 +36,23 @@ const CUR_M = MOCK_TODAY.getMonth();
 // วงกลมความคืบหน้า
 function Ring({ pct, size = 72 }: { pct: number; size?: number }) {
   const r = (size - 11) / 2, c = 2 * Math.PI * r;
+  // วงแหวนต้องวิ่งจาก 0 → ค่าจริง (มาตรฐานเดียวกับแถบความคืบหน้า .bar-grow ที่วิ่งจากซ้าย)
+  // เดิมมี transition .8s อยู่แล้วแต่ "ไม่มีวันทำงาน" เพราะค่าถูกตั้งตั้งแต่เรนเดอร์แรก
+  // CSS transition วิ่งเมื่อค่าเปลี่ยน "หลัง mount" เท่านั้น → ต้องเริ่มที่ 0 แล้วค่อยตั้งค่าจริงในเฟรมถัดไป
+  // เริ่มที่ 0 เท่ากันทั้งเซิร์ฟเวอร์และเบราว์เซอร์ → ไม่เกิด hydration mismatch
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(pct));
+    return () => cancelAnimationFrame(id);
+  }, [pct]);
+  // เส้นโค้งวาดได้สูงสุด 1 รอบ (เกิน 100% วาดเพิ่มไม่ได้) — แต่ "ตัวเลขเก็บค่าจริง" ไม่ถูกตัด
+  const arc = Math.max(0, Math.min(100, shown));
   return (
     <svg width={size} height={size} style={{ flexShrink: 0 }} role="img" aria-label={`${pct}%`}>
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EEF2F7" strokeWidth={9} />
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={NAVY} strokeWidth={9} strokeLinecap="round"
-        strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(100, pct) / 100)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)" }} />
+        strokeDasharray={c} strokeDashoffset={c * (1 - arc / 100)}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)" }} />
       <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.24} fontWeight={800} fill={NAVY}>{pct}%</text>
     </svg>
   );
@@ -54,6 +66,7 @@ export default function DealerDashboard() {
   const { leads, quotations, appointments } = useSales();
   const { timeRange } = useFilters();
   const targets = loadHQTargets();
+  const { followUpAlertDays } = useHQLeadRules(); // กฎ HQ — ตัวแทนแก้เองไม่ได้
 
   const wonByMonth = useMemo(() => {
     const m = Array(12).fill(0);
@@ -99,7 +112,7 @@ export default function DealerDashboard() {
     }));
   }, [leads]);
 
-  // ── ผลงานทีมขาย · ยอดขายตามสินค้า · แหล่งที่มาของผู้สนใจ (แถวใต้กราฟ) ──
+  // ── ผลงานผู้รับผิดชอบ · ยอดขายตามสินค้า · แหล่งที่มาของผู้สนใจ (แถวใต้กราฟ) ──
   const teamPerf = useMemo(() => {
     const m = new Map<string, { deals: number; won: number }>();
     leads.forEach(l => {
@@ -134,7 +147,7 @@ export default function DealerDashboard() {
   const cmpBaht = (v: number) => v >= 1e6 ? `฿${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `฿${Math.round(v / 1e3)}K` : `฿${v}`;
 
   // ── Analytics cards ──
-  const urgentLeads = useMemo(() => leads.filter(l => needsFollowUp(l, 7)).sort((a, b) => (daysSinceContact(b) ?? 0) - (daysSinceContact(a) ?? 0)).slice(0, 4), [leads]);
+  const urgentLeads = useMemo(() => leads.filter(l => needsFollowUp(l, followUpAlertDays)).sort((a, b) => (daysSinceContact(b) ?? 0) - (daysSinceContact(a) ?? 0)).slice(0, 4), [leads, followUpAlertDays]);
   const todayTasks = useMemo(() => appointments.filter(a => a.date === TODAY_ISO && a.status !== "cancelled").sort((a, b) => a.time.localeCompare(b.time)).slice(0, 4), [appointments]);
   const latestQuotes = useMemo(() => [...quotations].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), [quotations]);
   const topDeals = useMemo(() => openLeads.slice().sort((a, b) => parseValue(b.value) - parseValue(a.value)).slice(0, 5), [openLeads]);
@@ -282,11 +295,11 @@ export default function DealerDashboard() {
         </div>
       </div>
 
-      {/* SECTION 2.5 — ผลงานทีมขาย · ยอดขายตามสินค้า · แหล่งที่มาของผู้สนใจ */}
+      {/* SECTION 2.5 — ผลงานผู้รับผิดชอบ · ยอดขายตามสินค้า · แหล่งที่มาของผู้สนใจ */}
       <div className="dash-charts" style={{ marginBottom: 24 }}>
-        {/* ผลงานทีมขาย */}
+        {/* ผลงานผู้รับผิดชอบ */}
         <div style={card}>
-          <div style={hd}><span style={title}>ผลงานทีมขาย</span>{more("/leads")}</div>
+          <div style={hd}><span style={title}>ผลงานผู้รับผิดชอบ</span>{more("/leads")}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
             {teamPerf.map((t, i) => (
               <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>

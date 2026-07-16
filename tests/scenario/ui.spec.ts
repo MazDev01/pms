@@ -34,7 +34,9 @@ test("[ui·hq] KPI count-up แสดงค่าครบ", async ({ page }) =>
 test("[ui·desktop] modal ลูกค้า HQ ครอบเต็มจอ (fixed ยึด viewport)", async ({ page }) => {
   await open(page, "hq", "/hq/customers");
   await page.locator("table tbody tr").first().click();
-  await expect(page.getByText("Data Ownership")).toBeVisible();
+  // รอโมดัลขึ้นจริงก่อนวัด — ใช้ "รหัสลูกค้า" ในแท็บโปรไฟล์เป็นหมุด (ป้าย "Data Ownership" เหลือแค่คอมเมนต์ในโค้ดแล้ว)
+  // (คำเดียวกันเป็นหัวคอลัมน์ในตารางเบื้องหลังด้วย จึงต้อง .first())
+  await expect(page.getByText("รหัสลูกค้า").first()).toBeVisible();
   const rect = await page.evaluate(() => {
     const ov = [...document.querySelectorAll<HTMLElement>("div")].find(d => {
       const s = getComputedStyle(d);
@@ -51,7 +53,11 @@ test("[ui·desktop] modal ลูกค้า HQ ครอบเต็มจอ (
   expect(Math.abs(rect!.w - rect!.vw)).toBeLessThanOrEqual(2);
 });
 
-// KPI cards ของ HQ ทุกแบบต้องมีแอนิเมชันเข้า (animationName = cardIn) ทุกหน้า
+// KPI cards ของ HQ ทุกแบบต้องมีแอนิเมชันเข้า ทุกหน้า
+// ไม่ล็อกชื่อคีย์เฟรมตัวเดียว — ดีไซน์ตอนนี้ใช้ "chart-fade-in" (จางเข้าเฉย ๆ ตามแนว calm enterprise
+// ที่ globals.css เขียนกำกับไว้ว่า no rise, no stagger) ส่วน "cardIn" (เลื่อนขึ้น+จาง) ยังใช้กับการ์ดอื่นอยู่
+// สิ่งที่ต้องกันคือ "ไม่มีแอนิเมชันเข้าเลย" (none)
+const ENTRANCE_ANIMS = ["cardIn", "chart-fade-in"];
 for (const [path, selector, label] of [
   ["/hq/dealers", ".stat-grid > .stat-card", "หน้าตัวแทน (.stat-card)"],
   ["/hq/master", ".hqx-kpis > .hqx-kpi", "หน้าแม่แบบ (.hqx-kpi)"],
@@ -61,7 +67,7 @@ for (const [path, selector, label] of [
     const card = page.locator(selector).first();
     await expect(card).toBeVisible();
     const anim = await card.evaluate(el => getComputedStyle(el).animationName);
-    expect(anim, `${label}: ต้องมี entrance animation`).toBe("cardIn");
+    expect(ENTRANCE_ANIMS, `${label}: ต้องมี entrance animation (ได้: ${anim})`).toContain(anim);
   });
 }
 

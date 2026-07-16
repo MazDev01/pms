@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteValidityDays, loadQuoteNumbering,
@@ -8,10 +8,9 @@ import {
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@/lib/mock";
 import { LineItemsEditor } from "@/components/ui/LineItemsEditor";
-import { AssigneeAvatars } from "@/components/ui/PersonPicker";
+import { AssigneeAvatars, PersonPicker } from "@/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@/lib/quotationPrint";
 import { useSales } from "@/context/SalesContext";
-import { QuotationCreateModal } from "@/components/ui/QuotationCreateModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -20,9 +19,9 @@ import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useTableLayout, type Col } from "@/components/ui/TableTools";
 import {
   Plus, Search, X, FileText, LayoutList, LayoutGrid,
-  Edit2, Trash2, ChevronUp, ChevronDown, Printer,
+  Edit2, Trash2, ChevronUp, ChevronDown, Printer, Eye,
   ExternalLink, ArrowRight, ChevronLeft, ChevronRight,
-  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Percent,
+  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Percent, Lock, Filter,
 } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -35,7 +34,7 @@ const CARD: React.CSSProperties = { background:"#fff", borderRadius:16, border:`
 // ── Quotation workflow (Dealer self-serve — ไม่มีขั้นตอนขออนุมัติจาก HQ) ──────
 // Sales (Dealer): draft → sent_to_client → won / lost / expired
 // หลังปิดการขาย (won) ถือว่าจบงานฝั่งดีลเลอร์ — บันทึกเข้า HQ อัตโนมัติ
-const STATUS_ORDER: QuotationStatus[] = ["draft","sent_to_client","viewed","won","lost","expired"];
+const STATUS_ORDER: QuotationStatus[] = ["draft","sent_to_client","won","lost","expired"];
 
 const PAGE_SIZE = 10;
 
@@ -44,16 +43,12 @@ const STATUS_ACTIONS: Record<QuotationStatus,{label:string;next:QuotationStatus;
     {label:"ส่งใบเสนอราคา", next:"sent_to_client", bg:"#dce5f0", color:PRIMARY},
   ],
   sent_to_client: [
-    {label:"ลูกค้าเปิดอ่าน",     next:"viewed", bg:"#e0e7ff", color:"#4338ca"},
     {label:"ลูกค้าตอบรับ ✓", next:"won",  bg:"#e5faf0", color:"#059669"},
     {label:"ลูกค้าปฏิเสธ",     next:"lost", bg:"#fee2e2", color:"#dc2626"},
     {label:"หมดอายุ",                       next:"expired", bg:"#f0f0f5", color:"#6b7280"},
   ],
-  viewed: [
-    {label:"ลูกค้าตอบรับ ✓", next:"won",  bg:"#e5faf0", color:"#059669"},
-    {label:"ลูกค้าปฏิเสธ",     next:"lost", bg:"#fee2e2", color:"#dc2626"},
-    {label:"หมดอายุ",                       next:"expired", bg:"#f0f0f5", color:"#6b7280"},
-  ],
+  // สถานะ "viewed" (เปิดอ่านแล้ว) ถูกลบทั้งฟีเจอร์ — เส้นทางเดิม ส่งแล้ว→เปิดอ่าน→ตอบรับ/ปฏิเสธ
+  // ตอนนี้ยุบเหลือ ส่งแล้ว→ตอบรับ/ปฏิเสธ/หมดอายุ (อยู่ในบล็อก sent_to_client ข้างบนแล้ว)
   won:      [],
   lost:     [{label:"เปิดร่างใหม่", next:"draft", bg:"#f0f0f5", color:"#6b7280"}],
   expired:  [{label:"เปิดร่างใหม่", next:"draft", bg:"#f0f0f5", color:"#6b7280"}],
@@ -64,9 +59,12 @@ const Q_STATUS_OPTIONS = STATUS_ORDER.map(s => ({ value: s, label: quotationStat
 
 // คอลัมน์ที่ซ่อน/แสดงได้ในตารางรายการ (เลขที่ + ลูกค้า + สถานะ + การกระทำ = คงที่เสมอ)
 const COLS: Col[] = [
+  { key: "project", label: "โครงการ" },
+  { key: "type",    label: "ประเภท" },
   { key: "owner",   label: "ผู้รับผิดชอบ" },
   { key: "value",   label: "มูลค่า" },
-  { key: "expiry",  label: "วันหมดอายุ" },
+  { key: "created", label: "วันที่สร้าง" },
+  { key: "expiry",  label: "หมดอายุ" },
 ];
 
 // ── Types ─────────────────────────────────────────────────────
@@ -80,6 +78,9 @@ type QForm = {
   status:QuotationStatus; date:string; items:number;
   lineItems:QuoteLineItem[];
   revision:string; expiry:string;
+  // ผู้รับผิดชอบ — ไม่ใช่ฟิลด์ของใบเสนอราคา (QuotationMock ไม่มี) เป็นของลูกค้าที่ผูกอยู่
+  // บอสสั่งให้แก้ในหน้านี้ได้ → ตอนบันทึกจะเขียนกลับไปที่ตัวลูกค้า (updateCustomer) ไม่ได้เก็บลงใบ
+  owner:string;
 };
 
 // แม่แบบ = แคตตาล็อกกลาง (useMasterCatalog ในคอมโพเนนต์)
@@ -92,6 +93,19 @@ type Issuer = IssuerProfile;
 // ── Helpers ───────────────────────────────────────────────────
 function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
 function fmtDate(d:string){ if(!d||d==="—") return "—"; const [y,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]} ${parseInt(y)+543}`; }
+// วันที่แบบสั้น (ไม่มีปี พ.ศ.) — ใช้เฉพาะในตาราง ตามรูปแบบที่บอสกำหนดมา ("28 มิ.ย." / "28 ก.ค.")
+// ทำให้ 9 คอลัมน์พอดีกรอบโดยไม่ต้องเลื่อนแนวนอน · แผงรายละเอียด/เอกสารพิมพ์ยังใช้วันที่เต็มมีปี
+function fmtDateShort(d:string){ if(!d||d==="—") return "—"; const [,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]}`; }
+// วันหมดอายุที่ใช้แสดงผล — ใบที่กรอกวันเองใช้ค่านั้น · ใบที่ไม่ได้กรอก (11 จาก 17 ใบใน seed)
+// คำนวณจาก วันที่สร้าง + อายุใบเสนอราคา (ค่ากลางจากตั้งค่า loadQuoteValidityDays) ตามที่บอสสั่ง
+// ไม่ใช่การเดา — "อายุใบเสนอราคา" เป็นนโยบายจริงในหน้าตั้งค่า และเป็นกฎที่ใช้ตอนสร้างใบใหม่อยู่แล้ว
+function expiryOf(q:{date:string;expiry?:string}):string{
+  if(q.expiry) return q.expiry;
+  if(!q.date) return "";
+  const d=new Date(q.date); if(isNaN(d.getTime())) return "";
+  d.setDate(d.getDate()+loadQuoteValidityDays());
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function nextQId(data:QuotationMock[]){
   // รูปแบบเลขที่ = HQ กำหนด (แหล่งเดียว loadQuoteNumbering) · ตัวแทนแก้ไม่ได้
   const { prefix, next: startNo } = loadQuoteNumbering();
@@ -113,11 +127,12 @@ function suggestProject(c?:CustomerRow):string{
 }
 function buildBlank(customers:CustomerRow[]): QForm {
   const c=customers[0];
-  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry() };
+  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(), owner:c?.owner??"" };
 }
 
-function QuotationModal({ initial, title, onSave, onClose, customers }:{
+function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:{
   initial:QForm; title:string; onSave:(f:QForm)=>void; onClose:()=>void; customers:CustomerRow[];
+  quoteId?:string; // เลขที่ใบ — โชว์อย่างเดียว แก้ไม่ได้ (HQ กำหนดรูปแบบ/เลขรัน)
 }){
   const [form,setForm]=useState<QForm>(initial);
   const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.8rem",outline:"none",color:STEEL,boxSizing:"border-box"};
@@ -128,7 +143,8 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
     const c=customers.find(c=>c.id===id);
     if(!c) return;
     // prefill ทุกช่องที่ดึงจากลูกค้าได้: จังหวัด · แม่แบบ (จาก category) · ชื่อโครงการ (แนะนำ แก้ได้)
-    setForm(p=>({...p,customerId:c.id,customer:c.company,province:c.province||p.province,buildingType:c.category||p.buildingType,project:suggestProject(c)}));
+    // ผู้รับผิดชอบตามลูกค้าที่เลือก (ดึงมาโชว์ให้ตรงกับตาราง — แก้ต่อได้)
+    setForm(p=>({...p,customerId:c.id,customer:c.company,province:c.province||p.province,buildingType:c.category||p.buildingType,project:suggestProject(c),owner:c.owner??""}));
   }
   function submit(){if(!form.customer||!form.project)return; onSave({...form, items:form.lineItems.length, materialCost:total}); onClose();}
   return (
@@ -141,6 +157,16 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
             <button onClick={onClose} style={{width:28,height:28,borderRadius:8,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={13}/></button>
           </div>
           <div style={{padding:"20px 22px",overflowY:"auto",maxHeight:"68vh",display:"flex",flexDirection:"column",gap:14}}>
+            {/* เลขที่ — โชว์อย่างเดียวตามที่บอสสั่ง (HQ กำหนดรูปแบบ ตัวแทนแก้ไม่ได้) */}
+            {quoteId && (
+              <div>
+                <label style={LBL}>เลขที่</label>
+                <div style={{...INP,background:"#f4f6f9",color:MUTED,fontFamily:"monospace",fontWeight:700,display:"flex",alignItems:"center",gap:7}}>
+                  <Lock size={11}/> {quoteId}
+                  <span style={{marginLeft:"auto",fontSize:"0.62rem",fontWeight:400}}>สำนักงานใหญ่กำหนด</span>
+                </div>
+              </div>
+            )}
             {/* Customer */}
             <div>
               <label style={LBL}>ลูกค้า *</label>
@@ -149,6 +175,17 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
                 <option value={0}>— อื่นๆ (พิมพ์เอง) —</option>
               </select>
               {form.customerId===0&&<input value={form.customer} onChange={e=>set("customer",e.target.value)} placeholder="ชื่อบริษัท..." style={{...INP,marginTop:6}}/>}
+            </div>
+            {/* ผู้รับผิดชอบ — เป็นข้อมูลของ "ลูกค้า" ไม่ใช่ของใบเสนอราคา
+                บอสสั่งให้แก้ที่นี่ได้ → บันทึกแล้วจะไปเปลี่ยนที่ตัวลูกค้า (มีผลกับใบอื่นของลูกค้าคนนี้ด้วย) */}
+            <div>
+              <label style={LBL}>ผู้รับผิดชอบ</label>
+              <PersonPicker value={form.owner} onChange={v=>set("owner",v)} multiple />
+              <div style={{fontSize:"0.62rem",color:MUTED,marginTop:5,display:"flex",alignItems:"center",gap:4}}>
+                <Lock size={9}/> {form.customerId
+                  ? "เป็นผู้รับผิดชอบของลูกค้า — แก้แล้วมีผลกับใบเสนอราคาอื่นของลูกค้ารายนี้ด้วย"
+                  : "ใบนี้ยังผูกกับลูกค้าเป้าหมาย — แก้แล้วจะไปเปลี่ยนผู้รับผิดชอบที่ลูกค้าเป้าหมาย"}
+              </div>
             </div>
             {/* Project */}
             <div>
@@ -163,6 +200,15 @@ function QuotationModal({ initial, title, onSave, onClose, customers }:{
               <div>
                 <label style={LBL}>พื้นที่ (ตร.ม.)</label>
                 <input type="number" value={form.area||""} onChange={e=>set("area",Number(e.target.value))} placeholder="0" style={INP}/>
+              </div>
+            </div>
+            {/* ประเภท — โชว์ให้ครบตามตาราง แต่แก้เองไม่ได้ เพราะระบบดึงจากรายการ BOQ แถวแรกอัตโนมัติ
+                (เปลี่ยนรายการแรกใน BOQ ข้างล่าง = ประเภทเปลี่ยนตาม) */}
+            <div>
+              <label style={LBL}>ประเภท</label>
+              <div style={{...INP,background:"#f4f6f9",color:form.buildingType?STEEL:MUTED,display:"flex",alignItems:"center",gap:7}}>
+                <Lock size={11} color={MUTED}/> {form.buildingType || "—"}
+                <span style={{marginLeft:"auto",fontSize:"0.62rem",color:MUTED,fontWeight:400}}>มาจากรายการ BOQ แถวแรก</span>
               </div>
             </div>
             {/* รายการสินค้า (BOQ) — เลือกจากแคตตาล็อก → ราคากลาง HQ · แม่แบบ derive จากรายการแรก (ไม่มีช่องแม่แบบซ้ำ) */}
@@ -247,9 +293,15 @@ function QuotationsPageInner(){
   const {
     quotations: data, customers, leads,
     addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
+    updateCustomer, updateLead,
   } = useSales();
   const [query, setQuery]           = useState("");
   const [filterStatus, setFilterStatus] = useState<QuotationStatus|"ALL">("ALL");
+  // แผงตัวกรอง (มาตรฐานเดียวกับหน้าลูกค้า) — ตัวเลือกสร้างจากใบเสนอราคาจริงที่มีอยู่
+  const [showFilter, setShowFilter]   = useState(false);
+  const [typeFilter, setTypeFilter]   = useState("ALL");
+  const [ownerFilter, setOwnerFilter] = useState("ALL");
+  const [provFilter, setProvFilter]   = useState("ALL");
   const [view, setView]             = useState<"list"|"card">("list");
   const [sortKey, setSortKey]       = useState<SortKey>("date");
   const [sortDir, setSortDir]       = useState<SortDir>("desc");
@@ -275,24 +327,38 @@ function QuotationsPageInner(){
     const s = localStorage.getItem(ISSUER_KEY);
     if (s) { try { setIssuer({ ...DEFAULT_ISSUER, ...JSON.parse(s) }); } catch {} }
     const d = localStorage.getItem(DOC_KEY);
-    if (d) { try { const p = JSON.parse(d); setDocProfile({
-      stamp: p.stamp ?? "", signature: p.signature ?? "",
-      vatPercent: typeof p.vatPercent === "number" ? p.vatPercent : 7,
-      quotePrefix: p.quotePrefix || "Q-2026-",
-      runningNumber: typeof p.runningNumber === "number" ? p.runningNumber : 1001,
-    }); } catch {} }
+    // spread ทั้งก้อนทับค่าเริ่มต้น (แบบเดียวกับ loadDoc()) — เดิมหยิบทีละฟิลด์แบบเขียนชื่อไว้ตายตัว
+    // พอหน้าตั้งค่าเพิ่มฟิลด์ใหม่ (termsAndConditions/validityDays) มันเลยตกหล่น ไม่ถึงเอกสารพิมพ์
+    if (d) { try { setDocProfile({ ...DEFAULT_DOC, ...JSON.parse(d) }); } catch {} }
   }, []);
 
   function handleSort(k:SortKey){ if(sortKey===k) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortKey(k);setSortDir("asc");} }
   const SortIcon=({k}:{k:SortKey})=>sortKey===k?(sortDir==="asc"?<ChevronUp size={10} style={{marginLeft:2}}/>:<ChevronDown size={10} style={{marginLeft:2}}/>):<ChevronDown size={10} style={{marginLeft:2,opacity:.3}}/>;
 
+  // ── ผู้รับผิดชอบของใบเสนอราคา (แหล่งเดียว ใช้ทั้งตาราง/ฟอร์มแก้ไข/ส่งออก) ──────
+  // ใบเสนอราคาไม่มีฟิลด์ผู้รับผิดชอบของตัวเอง — ต้องไปหาจากที่มา 2 ทาง:
+  //   1) ลูกค้าที่ผูกอยู่ (customerId) → customer.owner  — ใบที่ปิดการขายเป็นลูกค้าแล้ว
+  //   2) ลีดที่ยังไม่ปิด → lead.assigned              — ใบที่ออกให้ลีด (customerId=0)
+  // เดิมดูแต่ทาง 1 ใบที่ยังเป็นลีด (7/17 ใบ) เลยขึ้น "—" ทั้งที่ลีดระบุผู้รับผิดชอบไว้ครบ
+  // ผูกด้วย dealId ก่อน (แม่นสุด) ไม่มีค่อยเทียบชื่อบริษัท (วิธีเดียวกับที่ SalesContext ผูกย้อนหลัง)
+  const ownerOf = useCallback((q:{customerId:number;customer:string;dealId?:number}):string => {
+    const byCust = customers.find(c=>c.id===q.customerId)?.owner;
+    if (byCust) return byCust;
+    const lead = (q.dealId ? leads.find(l=>l.numId===q.dealId) : undefined)
+      ?? leads.find(l=>l.company===q.customer);
+    return lead?.assigned ?? "";
+  },[customers,leads]);
+
   const filtered = useMemo(()=>{
     let rows=data.filter(q=>{
       const matchQ=!query||q.id.toLowerCase().includes(query.toLowerCase())||q.customer.toLowerCase().includes(query.toLowerCase())||q.project.toLowerCase().includes(query.toLowerCase())||q.province?.includes(query);
       const matchS=filterStatus==="ALL"||q.status===filterStatus;
+      const matchType=typeFilter==="ALL"||q.buildingType===typeFilter;
+      const matchOwner=ownerFilter==="ALL"||ownerOf(q)===ownerFilter;
+      const matchProv=provFilter==="ALL"||q.province===provFilter;
       // FilterBar กลาง: ช่วงเวลา (date) + สถานะ (enum) + จังหวัด
       const matchGlobal=passes({ date:q.date, status:q.status, province:q.province });
-      return matchQ&&matchS&&matchGlobal;
+      return matchQ&&matchS&&matchType&&matchOwner&&matchProv&&matchGlobal;
     });
     rows=[...rows].sort((a,b)=>{
       const va:string|number=a[sortKey] as string|number;
@@ -301,7 +367,13 @@ function QuotationsPageInner(){
       return sortDir==="asc"?cmp:-cmp;
     });
     return rows;
-  },[data,query,filterStatus,sortKey,sortDir,passes]);
+  },[data,query,filterStatus,typeFilter,ownerFilter,provFilter,sortKey,sortDir,passes,ownerOf]);
+
+  // ตัวเลือกตัวกรอง — ดึงจากใบเสนอราคาจริง ไม่ hardcode
+  const typeOptions  = useMemo(()=>[...new Set(data.map(q=>q.buildingType).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th")),[data]);
+  const provOptions  = useMemo(()=>[...new Set(data.map(q=>q.province).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th")),[data]);
+  const ownerOptions = useMemo(()=>[...new Set(data.map(q=>ownerOf(q)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th")),[data,ownerOf]);
+
 
   // ── Pagination (client-side) ──────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -317,22 +389,39 @@ function QuotationsPageInner(){
   const scoped       = useMemo(()=>data.filter(q=>passes({ date:q.date, province:q.province })),[data,passes]);
 
   // Related data for selected quotation
-  const relCustomer  = selected ? customers.find(c=>c.id===selected.customerId) : null;
-  const relLead      = selected ? leads.find(l=>l.company===selected.customer) : null;
 
-  function openAdd(){ setEditingQ(null); setShowModal(true); }
   function openEdit(q:QuotationMock){ setEditingQ(q); setShowModal(true); }
 
   function saveQ(form:QForm){
-    const tv=form.materialCost;
+    // owner ไม่ใช่ฟิลด์ของใบเสนอราคา — แยกออกก่อน ไม่งั้นจะติดไปกับ QuotationMock เป็นฟิลด์ขยะ
+    const { owner, ...qf } = form;
+    const tv=qf.materialCost;
     const total=fmtMoney(tv);
     if(editingQ){
-      const updated:QuotationMock={...editingQ,...form,revision:form.revision,expiry:form.expiry,total,totalValue:tv};
+      const updated:QuotationMock={...editingQ,...qf,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv};
       updateQuotation(updated);
       setSelected(p=>p?.id===editingQ.id?updated:p);
     } else {
-      const newQ:QuotationMock={...form,revision:form.revision,expiry:form.expiry,id:nextQId(data),total,totalValue:tv};
+      const newQ:QuotationMock={...qf,revision:qf.revision,expiry:qf.expiry,id:nextQId(data),total,totalValue:tv};
       addQuotation(newQ);
+    }
+    // ผู้รับผิดชอบ → เขียนกลับที่ "ต้นทาง" ตามที่บอสสั่ง (ใบเสนอราคาไม่มีฟิลด์นี้)
+    // ปิดการขายแล้ว → เขียนที่ลูกค้า · ยังเป็นลีด → เขียนที่ลีด
+    // ถ้าเขียนแค่ที่ลูกค้าอย่างเดียว ใบที่ยังเป็นลีด (customerId=0) จะเลือกแล้วบันทึกไม่ลงแบบเงียบๆ
+    // เปลี่ยนเฉพาะตอนค่าต่างจริง เพื่อไม่ไปแตะเรคคอร์ดต้นทางโดยไม่จำเป็น
+    const cust = customers.find(c=>c.id===qf.customerId);
+    if(cust){
+      if((cust.owner ?? "") !== owner){
+        updateCustomer({ ...cust, owner });
+        setToast(`บันทึกแล้ว · เปลี่ยนผู้รับผิดชอบของลูกค้า ${cust.company} เป็น ${owner||"—"}`);
+      }
+    } else {
+      const lead = (editingQ?.dealId ? leads.find(l=>l.numId===editingQ.dealId) : undefined)
+        ?? leads.find(l=>l.company===qf.customer);
+      if(lead && lead.assigned !== owner){
+        updateLead({ ...lead, assigned: owner });
+        setToast(`บันทึกแล้ว · เปลี่ยนผู้รับผิดชอบของลูกค้าเป้าหมาย ${lead.company} เป็น ${owner||"—"}`);
+      }
     }
   }
   function changeStatus(id:string,s:QuotationStatus){
@@ -373,11 +462,13 @@ function QuotationsPageInner(){
 
   // form initial for edit
   function toForm(q:QuotationMock):QForm{
+    // ผู้รับผิดชอบมาจากลูกค้าที่ใบนี้ผูกอยู่ (ใบไม่มีฟิลด์นี้)
+    const owner = ownerOf(q);
     // ใบเก่าที่ไม่มี lineItems → สังเคราะห์เป็น 1 รายการจาก แม่แบบ/พื้นที่/มูลค่า (แก้ต่อได้)
     const lineItems:QuoteLineItem[] = q.lineItems ?? (q.materialCost>0
       ? [{ name:q.buildingType||"รายการ", qty:q.area||1, unit:q.area?"ตร.ม.":"รายการ", unitPrice:q.area?Math.round(q.materialCost/q.area):q.materialCost }]
       : []);
-    return {customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,lineItems,revision:q.revision??"V1",expiry:q.expiry??""};
+    return {customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,lineItems,revision:q.revision??"V1",expiry:q.expiry??"",owner};
   }
 
   return (
@@ -391,20 +482,17 @@ function QuotationsPageInner(){
           <FilterBar dims={[]} />
           <ExportMenu filename="quotations" title="ใบเสนอราคา" small
             headers={["เลขที่","ลูกค้า","ผู้รับผิดชอบ","โครงการ","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
-            rows={filtered.map(q=>[q.id,q.customer,customers.find(c=>c.id===q.customerId)?.owner ?? "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
-          <button onClick={openAdd} className="btn btn-primary btn-sm">
-            <Plus size={13}/> เพิ่มใบเสนอราคา
-          </button>
+            rows={filtered.map(q=>[q.id,q.customer,ownerOf(q) || "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
         </TopbarActions>
         <p className="page-sub">จัดการใบเสนอราคาและติดตามสถานะ · {timeRange.subtitle}</p>
 
         {/* ── สรุป 5 ตัวชี้วัด — การ์ด KPI คลิกกรองได้ (มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย/ลูกค้า) ── */}
         {(() => {
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
-          const STATUS_LIST: QuotationStatus[] = ["draft","sent_to_client","viewed","won","lost","expired"];
+          // STATUS_LIST ถูกลบพร้อมชิปกรองสถานะ — ไม่มีใครอ่านแล้ว
           const valOf = (list: QuotationMock[]) => list.reduce((a,q)=>a+q.totalValue,0);
           const totalVal = valOf(scoped); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
-          const waiting  = scoped.filter(q=>q.status==="sent_to_client"||q.status==="viewed");
+          const waiting  = scoped.filter(q=>q.status==="sent_to_client");
           const wonList  = scoped.filter(q=>q.status==="won");
           const lostList = scoped.filter(q=>q.status==="lost");
           const closed   = wonList.length + lostList.length;
@@ -440,29 +528,65 @@ function QuotationsPageInner(){
                 ))}
               </div>
 
-              {/* ชิปกรองสถานะ — สไตล์เดียวกับชิปกรองด่วนหน้าลูกค้าเป้าหมาย */}
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
-                {([["ALL","ทั้งหมด",scoped.length]] as [string,string,number][])
-                  .concat(STATUS_LIST.map(s=>[s, quotationStatusLabel[s], scoped.filter(q=>q.status===s).length] as [string,string,number]))
-                  .map(([k,label,cnt])=>{
-                    const on = filterStatus===k;
-                    return (
-                      <button key={k} onClick={()=>setFilterStatus(on&&k!=="ALL"?"ALL":k as QuotationStatus|"ALL")}
-                        style={{ display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px", borderRadius:99, cursor:"pointer", fontFamily:"inherit", fontSize:"0.75rem", fontWeight:700,
-                          border:`1px solid ${on?"#003366":"#e5e7eb"}`, background:on?"#003366":"#fff", color:on?"#fff":"#6b7280" }}>
-                        {label}
-                        <span style={{ fontSize:"0.65rem", fontWeight:800, borderRadius:99, padding:"0 6px",
-                          background:on?"rgba(255,255,255,.24)":"#f0f4f8", color:on?"#fff":"#003366" }}>{cnt}</span>
-                      </button>
-                    );
-                  })}
+              {/* ชิปกรองสถานะ (ทั้งหมด/ร่าง/ส่งแล้ว/...) เอาออกตามที่บอสสั่ง
+                  กรองสถานะยังทำได้ที่การ์ด KPI ด้านบน (กดการ์ดแล้วกรอง) */}
+            </>
+          );
+        })()}
+
+        {/* ── แผงตัวกรอง (ยกมาตรฐานเดียวกับหน้าลูกค้า) ──
+            ตัวเลือกทุกกลุ่มสร้างจากใบเสนอราคาจริงที่มีอยู่ ไม่ hardcode
+            "สถานะ" ใช้ state เดียวกับการ์ด KPI ด้านบน → กดที่ไหนก็ตรงกัน */}
+        {showFilter && (() => {
+          const sec: React.CSSProperties = { fontSize:"0.66rem", fontWeight:800, color:MUTED, textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:9 };
+          const pills: React.CSSProperties = { display:"flex", flexWrap:"wrap", gap:6 };
+          const chip = (on:boolean):React.CSSProperties => ({
+            padding:"6px 12px", borderRadius:99, border:`1px solid ${on?"#C0C0C0":BORDER}`,
+            background:on?"#f0f4f8":"#fff", color:on?STEEL:MUTED,
+            fontSize:"0.72rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+          });
+          const Group = ({label,value,options,onPick}:{label:string;value:string;options:{v:string;l:string}[];onPick:(v:string)=>void}) => (
+            <div><label style={sec}>{label}</label><div style={pills}>
+              {[{v:"ALL",l:"ทั้งหมด"},...options].map(o=>(
+                <button key={o.v} onClick={()=>onPick(o.v)} style={chip(value===o.v)}>{o.l}</button>
+              ))}
+            </div></div>
+          );
+          const anyFilter = filterStatus!=="ALL" || typeFilter!=="ALL" || ownerFilter!=="ALL" || provFilter!=="ALL";
+          const clearAll = () => { setFilterStatus("ALL"); setTypeFilter("ALL"); setOwnerFilter("ALL"); setProvFilter("ALL"); };
+          return (
+            <>
+              <div onClick={()=>setShowFilter(false)} className="drawer-overlay"
+                style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.4)", zIndex:150 }} />
+              <div className="side-drawer" style={{ position:"fixed", top:0, right:0, height:"100vh", width:360, maxWidth:"100vw",
+                zIndex:151, background:"#fff", boxShadow:"-16px 0 60px rgba(0,0,0,.2)", borderRadius:"18px 0 0 18px", display:"flex", flexDirection:"column" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${BORDER}`, flexShrink:0 }}>
+                  <span style={{ fontSize:"1rem", fontWeight:800, color:PRIMARY, display:"flex", gap:8, alignItems:"center" }}><Filter size={16}/> ตัวกรอง</span>
+                  <button onClick={()=>setShowFilter(false)} style={{ width:30, height:30, borderRadius:8, border:`1px solid ${BORDER}`, background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:MUTED }}><X size={14}/></button>
+                </div>
+                <div style={{ flex:1, overflowY:"auto", padding:"20px", display:"flex", flexDirection:"column", gap:22 }}>
+                  <Group label="สถานะ" value={filterStatus} onPick={v=>setFilterStatus(v as QuotationStatus|"ALL")}
+                    options={STATUS_ORDER.map(s=>({v:s,l:quotationStatusLabel[s]}))} />
+                  <Group label="ประเภท" value={typeFilter} onPick={setTypeFilter}
+                    options={typeOptions.map(t=>({v:t,l:t}))} />
+                  <Group label="ผู้รับผิดชอบ" value={ownerFilter} onPick={setOwnerFilter}
+                    options={ownerOptions.map(o=>({v:o,l:o}))} />
+                  <Group label="จังหวัด" value={provFilter} onPick={setProvFilter}
+                    options={provOptions.map(p=>({v:p,l:p}))} />
+                </div>
+                <div style={{ padding:"14px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8, flexShrink:0 }}>
+                  <button className="btn btn-secondary btn-md" style={{ flex:1, justifyContent:"center", color: anyFilter ? "#dc2626" : "#9ca3af" }} disabled={!anyFilter}
+                    onClick={clearAll}>ล้างทั้งหมด</button>
+                  <button className="btn btn-primary btn-md" style={{ flex:1, justifyContent:"center" }} onClick={()=>setShowFilter(false)}>ดูผลลัพธ์</button>
+                </div>
               </div>
             </>
           );
         })()}
 
-        {/* Toolbar */}
-        <div className="card" style={{borderRadius:"var(--radius-xl) var(--radius-xl) 0 0",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        {/* Toolbar — การ์ดแยกมีระยะห่างจากตาราง (มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย)
+            เดิมมุมโค้งเฉพาะด้านบนแล้วเชื่อมติดกับตาราง ทำให้หัวตาราง "ติด" แถบค้นหา */}
+        <div className="card" style={{padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"0 12px",height:36,boxSizing:"border-box",width:280,maxWidth:"100%",flexShrink:0}}>
             <Search size={13} color={MUTED}/>
             <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า / โครงการ..."
@@ -470,6 +594,13 @@ function QuotationsPageInner(){
             {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {/* ปุ่มเปิดแผงตัวกรอง — ตำแหน่ง/สไตล์เดียวกับหน้าลูกค้า */}
+            <button onClick={()=>setShowFilter(f=>!f)}
+              style={{display:"flex",alignItems:"center",gap:6,background:showFilter?"#003366":"#fff",
+                border:`1px solid ${showFilter?"#003366":BORDER}`,borderRadius:10,padding:"0 13px",height:36,boxSizing:"border-box",
+                fontSize:"0.8rem",fontWeight:600,color:showFilter?"#fff":MUTED,cursor:"pointer",fontFamily:"inherit"}}>
+              <Filter size={13}/> ตัวกรอง
+            </button>
             {/* สลับมุมมอง — สไตล์ segmented มีกรอบ (เหมือนหน้าลูกค้าเป้าหมาย/ลูกค้า) */}
             <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
               {([["list",LayoutList,"รายการ"],["card",LayoutGrid,"การ์ด"]] as const).map(([v,Ico,tip])=>(
@@ -485,45 +616,57 @@ function QuotationsPageInner(){
 
         {/* ── LIST VIEW ── */}
         {view==="list"&&(
-          <div className="card" style={{borderRadius:"0 0 var(--radius-xl) var(--radius-xl)",borderTop:"none"}}>
-            <div className={`table-wrap${density==="compact"?" dense":""}`} style={{borderTop:"none"}}>
+          <div className="card">
+            <div className={`table-wrap${density==="compact"?" dense":""}`}>
               <table>
+                {/* บอสสั่ง "ตารางมันเกิน" → ต้องพอดีกรอบ (~1012px) ห้ามเลื่อนแนวนอน
+                    ที่ประหยัดพื้นที่มาได้: ตัดไอคอนเอกสารหน้าเลขที่ (ซ้ำทุกแถว ไม่ได้บอกอะไร) ~36px
+                    + ปุ่มการกระทำเป็นไอคอนล้วน (hover เห็นชื่อ) ~60px
+                    คอลัมน์ข้อความยาวใช้ ... + hover ดูเต็ม · minWidth รวม ~1000px */}
                 <colgroup>
-                  <col style={{width:"14%"}} />{/* เลขที่ */}
-                  <col style={{width:"20%"}} />{/* ลูกค้า */}
-                  {!hiddenCols.includes("owner")&&<col style={{width:"13%"}} />}{/* ผู้รับผิดชอบ */}
-                  {!hiddenCols.includes("value")&&<col style={{width:"12%"}} />}{/* มูลค่า */}
-                  <col style={{width:"11%"}} />{/* สถานะ */}
-                  {!hiddenCols.includes("expiry")&&<col style={{width:"12%"}} />}{/* วันหมดอายุ */}
-                  <col style={{width:"18%"}} />{/* ปุ่มการกระทำ */}
+                  {/* ความกว้างมาจากการ "วัดจริง" ในเบราว์เซอร์ ทั้งหัวตารางและข้อมูล (ไม่ใช่เดา)
+                      ของจริงต้องการรวม 1284px แต่กรอบมีแค่ 1012px (กรอบกว้างเท่านี้ตายตัว ขยายจอไม่ช่วย)
+                      → คอลัมน์ห้ามตัด (เลขที่/มูลค่า/สถานะ/วันที่/ปุ่ม) ให้เต็มตามที่วัดได้ รวมหัวตารางด้วย
+                        คอลัมน์ข้อความยาว (ลูกค้า/โครงการ/ประเภท/ผู้รับผิดชอบ) รับส่วนที่เหลือ → "..." + hover ดูเต็ม */}
+                  <col style={{width:"10.9%",minWidth:110}} />{/* เลขที่ — "Q-2026-0096" 110 ห้ามตัด */}
+                  <col style={{width:"9.5%",minWidth:94}} />{/* ลูกค้า (…) หัว 74 */}
+                  {!hiddenCols.includes("project")&&<col style={{width:"9.5%",minWidth:94}} />}{/* โครงการ (…) หัว 88 */}
+                  {!hiddenCols.includes("type")&&<col style={{width:"8.2%",minWidth:82}} />}{/* ประเภท (…) หัว 67 */}
+                  {!hiddenCols.includes("owner")&&<col style={{width:"8.9%",minWidth:90}} />}{/* ผู้รับผิดชอบ (…) หัว 87 */}
+                  {!hiddenCols.includes("value")&&<col style={{width:"11.3%",minWidth:116}} />}{/* มูลค่า — ข้อมูล 114 ห้ามตัด */}
+                  <col style={{width:"10.9%",minWidth:110}} />{/* สถานะ — ป้ายยาวสุด "ส่งแล้ว"/"ปฏิเสธ" */}
+                  {!hiddenCols.includes("created")&&<col style={{width:"7.7%",minWidth:78}} />}{/* วันที่สร้าง — หัว 75 (ไม่มีลูกศร) */}
+                  {!hiddenCols.includes("expiry")&&<col style={{width:"7.5%",minWidth:74}} />}{/* หมดอายุ — หัว 71 */}
+                  <col style={{width:"15.6%",minWidth:158}} />{/* ปุ่ม 4 ไอคอน — 156 */}
                 </colgroup>
                 <thead>
                   <tr>
-                    {([{label:"เลขที่",key:"id",col:null},{label:"ลูกค้า",key:"customer",col:null},{label:"ผู้รับผิดชอบ",key:null,col:"owner"},{label:"มูลค่า",key:"totalValue",col:"value"},{label:"สถานะ",key:"status",col:null},{label:"วันหมดอายุ",key:null,col:"expiry"},{label:"",key:null,col:null}] as {label:string;key:SortKey|null;col:string|null}[])
+                    {([{label:"เลขที่",key:"id",col:null},{label:"ลูกค้า",key:"customer",col:null},{label:"โครงการ",key:"project",col:"project"},{label:"ประเภท",key:null,col:"type"},{label:"ผู้รับผิดชอบ",key:null,col:"owner"},{label:"มูลค่า",key:"totalValue",col:"value"},{label:"สถานะ",key:"status",col:null},
+                      /* "วันที่สร้าง" ไม่มีลูกศรเรียงตามที่บอสสั่ง (key:null) — หัวคอลัมน์เหลือแค่ตัวหนังสือ ไม่มี ‹› ไม่มี "..." */
+                      {label:"วันที่สร้าง",key:null,col:"created"},{label:"หมดอายุ",key:null,col:"expiry"},{label:"",key:null,col:null}] as {label:string;key:SortKey|null;col:string|null}[])
                       .filter(col=>!col.col||!hiddenCols.includes(col.col))
                       .map((col,i)=>(
                       <th key={i} onClick={col.key?()=>handleSort(col.key as SortKey):undefined}
                         style={{cursor:col.key?"pointer":"default",userSelect:"none"}}>
-                        <span style={{display:"inline-flex",alignItems:"center"}}>{col.label}{col.key&&<SortIcon k={col.key}/>}</span>
+                        {/* nowrap กันหัวคอลัมน์ตกบรรทัดเวลาช่องแคบ (มาตรฐานเดียวกับตารางลีด/ลูกค้า) */}
+                        <span style={{display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>{col.label}{col.key&&<SortIcon k={col.key}/>}</span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length===0&&<tr><td colSpan={7-["owner","value","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{padding:0}}>
-                    <EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="สร้างใบเสนอราคาใหม่จากลูกค้าและดีลของคุณ"
-                      action={<button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={14}/> สร้างใบเสนอราคา</button>} />
+                  {filtered.length===0&&<tr><td colSpan={10-["project","type","owner","value","created","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{padding:0}}>
+                    <EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="ใบเสนอราคาออกจากหน้า “ลูกค้าเป้าหมาย” — เปิดลีดแล้วสร้างในแท็บใบเสนอราคา"
+                      action={<button className="btn btn-secondary btn-md" style={{color:"#003366"}} onClick={()=>router.push("/leads")}>ไปหน้าลูกค้าเป้าหมาย →</button>} />
                   </td></tr>}
                   {paged.map(q=>{
                     const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
                     return (
                       <tr key={q.id} onClick={()=>selectRow(q)} className="clickable"
                         style={{background:isSel?"#f0f6ff":undefined}}>
+                        {/* ไอคอนเอกสารหน้าเลขที่เอาออก — ซ้ำกันทุกแถว ไม่ได้บอกอะไร แลกที่ให้คอลัมน์อื่น */}
                         <td>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><FileText size={12} color={PRIMARY}/></div>
-                            <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
-                          </div>
+                          <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace",whiteSpace:"nowrap"}}>{q.id}</span>
                         </td>
                         <td>
                           {q.customerId ? (
@@ -535,28 +678,52 @@ function QuotationsPageInner(){
                             <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL}}>{q.customer}</span>
                           )}
                         </td>
-                        {!hiddenCols.includes("owner")&&(
-                        <td><AssigneeAvatars value={customers.find(c=>c.id===q.customerId)?.owner ?? ""} size={24} /></td>
+                        {!hiddenCols.includes("project")&&(
+                        <td title={q.project} style={{fontSize:"0.78rem",color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.project||"—"}</td>
                         )}
+                        {!hiddenCols.includes("type")&&(
+                        <td title={q.buildingType} style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {q.buildingType
+                            ? <span className="badge" style={{background:"#eef3f8",color:PRIMARY}}>{q.buildingType}</span>
+                            : <span style={{color:"#9ca3af"}}>—</span>}
+                        </td>
+                        )}
+                        {!hiddenCols.includes("owner")&&(() => {
+                          // ผู้รับผิดชอบ = ผู้รับผิดชอบลูกค้าที่ใบนี้ผูกอยู่ · ใบที่ไม่ได้ผูกลูกค้า (customerId=0) หาไม่เจอ
+                          // แสดงเป็นวงกลมย่อ + ชื่อ (AssigneeAvatars) ตามที่บอสสั่ง — ตัวคอมโพเนนต์ขึ้น "—" ให้เองเมื่อไม่มีค่า
+                          const owner = ownerOf(q);
+                          return (
+                            <td title={owner||undefined} style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              <AssigneeAvatars value={owner} size={26} />
+                            </td>
+                          );
+                        })()}
                         {!hiddenCols.includes("value")&&(
                         <td className="num" style={{fontSize:"0.86rem",fontWeight:800,color:STEEL,whiteSpace:"nowrap"}}>{q.total}</td>
                         )}
                         <td>
                           <span className="badge" style={{background:sc.bg,color:sc.text}}>{quotationStatusLabel[q.status]}</span>
                         </td>
-                        {!hiddenCols.includes("expiry")&&(
-                        <td style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{q.expiry?fmtDate(q.expiry):"—"}</td>
+                        {!hiddenCols.includes("created")&&(
+                        <td title={fmtDate(q.date)} style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{fmtDateShort(q.date)}</td>
                         )}
+                        {!hiddenCols.includes("expiry")&&(() => {
+                          const ex = expiryOf(q);
+                          return <td title={ex?fmtDate(ex):undefined} style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{ex?fmtDateShort(ex):"—"}</td>;
+                        })()}
                         <td onClick={e=>e.stopPropagation()}>
                           <div style={{display:"flex",gap:4,flexWrap:"nowrap",justifyContent:"flex-end"}}>
+                            {/* ปุ่มเป็นไอคอนล้วนเพื่อให้ตารางพอดีกรอบ — hover เห็นชื่อปุ่มจาก title */}
                             {q.status==="draft"&&(
-                              <button onClick={()=>changeStatus(q.id,"sent_to_client")} className="btn btn-sm"
-                                style={{background:"#d97706",color:"#fff",border:"none",padding:"4px 9px",fontSize:"0.65rem"}}>ส่งลูกค้า</button>
+                              <button onClick={()=>changeStatus(q.id,"sent_to_client")} title="ส่งให้ลูกค้า"
+                                style={{width:28,height:28,borderRadius:7,border:"none",background:"#d97706",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Send size={12}/></button>
                             )}
-                            <button onClick={()=>printQuotation(q)} title="พิมพ์ใบเสนอราคา" className="btn btn-secondary btn-sm"
-                              style={{color:PRIMARY,padding:"4px 8px",fontSize:"0.65rem"}}><Printer size={12}/></button>
-                            <button onClick={()=>openEdit(q)} className="btn btn-secondary btn-sm"
-                              style={{color:PRIMARY,padding:"4px 9px",fontSize:"0.65rem"}}>แก้ไข</button>
+                            <button onClick={()=>selectRow(q)} title="ดูรายละเอียด"
+                              style={{width:28,height:28,borderRadius:7,border:`1px solid ${BORDER}`,background:"#fff",color:PRIMARY,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Eye size={13}/></button>
+                            <button onClick={()=>printQuotation(q)} title="พิมพ์ใบเสนอราคา"
+                              style={{width:28,height:28,borderRadius:7,border:`1px solid ${BORDER}`,background:"#fff",color:PRIMARY,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Printer size={13}/></button>
+                            <button onClick={()=>openEdit(q)} title="แก้ไข"
+                              style={{width:28,height:28,borderRadius:7,border:`1px solid ${BORDER}`,background:"#fff",color:PRIMARY,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Edit2 size={13}/></button>
                           </div>
                         </td>
                       </tr>
@@ -575,8 +742,8 @@ function QuotationsPageInner(){
         {view==="card"&&(
           <div className="card" style={{borderRadius:"0 0 var(--radius-xl) var(--radius-xl)",borderTop:"none"}}>
             <div style={{padding:16}}>
-            {filtered.length===0&&<EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="สร้างใบเสนอราคาใหม่จากลูกค้าและดีลของคุณ"
-              action={<button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={14}/> สร้างใบเสนอราคา</button>} />}
+            {filtered.length===0&&<EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="ใบเสนอราคาออกจากหน้า “ลูกค้าเป้าหมาย” — เปิดลีดแล้วสร้างในแท็บใบเสนอราคา"
+              action={<button className="btn btn-secondary btn-md" style={{color:"#003366"}} onClick={()=>router.push("/leads")}>ไปหน้าลูกค้าเป้าหมาย →</button>} />}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
               {paged.map(q=>{
                 const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
@@ -643,9 +810,7 @@ function QuotationsPageInner(){
           ? [{ name:selected.buildingType||"รายการ", qty:selected.area||1, unit:selected.area?"ตร.ม.":"รายการ", unitPrice:selected.area?Math.round(selected.materialCost/selected.area):selected.materialCost }]
           : []);
         const subtotal = lineItems.reduce((s,li)=>s+li.qty*li.unitPrice, 0);
-        const discountPct = selected.discountPct ?? 0;
-        const discountAmt = Math.round(subtotal*discountPct/100);
-        const net = subtotal - discountAmt;              // = totalValue (มูลค่างาน ก่อน VAT)
+        const net = subtotal;                            // = totalValue (มูลค่างาน ก่อน VAT) — ไม่มีส่วนลด
         const vatPct = loadHQPolicy().vat;
         const vatAmt = Math.round(net*vatPct/100);
         const grand = net + vatAmt;                      // ยอดรวมสุทธิ (รวม VAT) — ตรงกับเอกสารพิมพ์
@@ -676,15 +841,14 @@ function QuotationsPageInner(){
                     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:"0.72rem",color:"rgba(255,255,255,.72)",marginTop:4}}>
                       {selected.project && <span>{selected.project}</span>}
                       <span style={{display:"flex",alignItems:"center",gap:3}}><MapPin size={11}/> {selected.province}</span>
-                      <span style={{opacity:.8}}>วันที่ {fmtDate(selected.date)}</span>
-                      {selected.expiry && <span style={{opacity:.8}}>หมดอายุ {fmtDate(selected.expiry)}</span>}
+                      {/* "วันที่ / หมดอายุ" เอาออกตามที่บอสสั่ง — ซ้ำกับ "วันที่ออก / วันหมดอายุ" ในการ์ดข้อมูลใบเสนอราคาด้านล่าง */}
                     </div>
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0,flexWrap:"wrap"}}>
                   <button title="พิมพ์ / ดาวน์โหลด PDF" onClick={()=>printQuotation(selected)} style={qa}><Printer size={13}/> พิมพ์ PDF</button>
                   <button title="แก้ไข" onClick={()=>openEdit(selected)} style={qa}><Edit2 size={13}/> แก้ไข</button>
-                  {(selected.status==="sent_to_client"||selected.status==="viewed") && <button title="ส่งอีกครั้ง" onClick={()=>sendAgain(selected)} style={qa}><Send size={13}/> ส่งอีกครั้ง</button>}
+                  {selected.status==="sent_to_client" && <button title="ส่งอีกครั้ง" onClick={()=>sendAgain(selected)} style={qa}><Send size={13}/> ส่งอีกครั้ง</button>}
                   {selected.customerId ? <button title="ดูลูกค้า" onClick={()=>router.push(`/customers?open=${selected.customerId}`)} style={qa}><ExternalLink size={13}/> ลูกค้า</button> : null}
                   <button title="ลบใบเสนอราคา" onClick={()=>setDelConfirm(true)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
                   <button onClick={()=>setSelected(null)} title="ปิด" style={{...qa,width:30,padding:0,justifyContent:"center"}}><X size={15}/></button>
@@ -703,6 +867,25 @@ function QuotationsPageInner(){
             <div style={{flex:1,overflowY:"auto",background:"#f5f7fa"}}>
               {/* เอกสารใบเสนอราคา (BOQ + รายละเอียด) */}
               <div style={{padding:16,display:"flex",flexDirection:"column",gap:14}}>
+                {/* รายละเอียดเอกสาร */}
+                <div style={cardStyle}>
+                  <div style={secLabel}><FileText size={13} color={PRIMARY}/> รายละเอียดเอกสาร</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 24px"}}>
+                    {([
+                      ["จังหวัด", selected.province],
+                      ["ประเภทอาคาร", selected.buildingType],
+                      ["พื้นที่", `${selected.area?.toLocaleString()} ตร.ม.`],
+                      ["จำนวนรายการ", `${selected.items} รายการ`],
+                      ["วันที่ออก", fmtDate(selected.date)],
+                      ["วันหมดอายุ", expiryOf(selected)?fmtDate(expiryOf(selected)):"—"],
+                    ] as [string,string][]).map(([k,v])=>(
+                      <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
+                        <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,textAlign:"right"}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* BOQ line items */}
                 <div style={cardStyle}>
                   <div style={secLabel}><Layers size={13} color={PRIMARY}/> รายการสินค้า (BOQ)</div>
@@ -735,11 +918,8 @@ function QuotationsPageInner(){
                   {/* Totals — ตรงกับเอกสารพิมพ์: มูลค่างาน (ก่อน VAT) = ยอดที่บันทึก, บวก VAT → ยอดรวมสุทธิ */}
                   <div style={{marginTop:12,marginLeft:"auto",width:"min(340px,100%)",display:"flex",flexDirection:"column",gap:6}}>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.78rem"}}><span style={{color:"#8a929c"}}>ยอดรวมย่อย</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(subtotal)}</span></div>
-                    {discountPct>0 && <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.78rem"}}><span style={{color:"#8a929c"}}>ส่วนลด {discountPct}%</span><span style={{fontWeight:700,color:"#dc2626"}}>−{fmtBaht(discountAmt)}</span></div>}
-                    <div style={{display:"flex",justifyContent:"space-between",padding:"9px 12px",background:"#dce5f0",borderRadius:10,marginTop:2}}>
-                      <span style={{fontSize:"0.8rem",fontWeight:700,color:MUTED}}>มูลค่างาน (ก่อน VAT)</span>
-                      <span style={{fontSize:"1.05rem",fontWeight:800,color:PRIMARY}}>{fmtBaht(net)}</span>
-                    </div>
+                    {/* แถบ "มูลค่างาน (ก่อน VAT)" เอาออกตามที่บอสสั่ง — ซ้ำกับ "ยอดรวมย่อย" เป๊ะ
+                        (พอไม่มีส่วนลดในระบบ ยอดก่อน VAT = ผลรวม BOQ เสมอ) */}
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.76rem",marginTop:2}}><span style={{color:"#8a929c"}}>VAT {vatPct}%</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(vatAmt)}</span></div>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.8rem",fontWeight:800,color:STEEL,borderTop:"1px solid #e6eaf0",paddingTop:7}}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtBaht(grand)}</span></div>
                   </div>
@@ -750,53 +930,10 @@ function QuotationsPageInner(){
                   )}
                 </div>
 
-                {/* รายละเอียดเอกสาร */}
-                <div style={cardStyle}>
-                  <div style={secLabel}><FileText size={13} color={PRIMARY}/> รายละเอียดเอกสาร</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 24px"}}>
-                    {([
-                      ["จังหวัด", selected.province],
-                      ["ประเภทอาคาร", selected.buildingType],
-                      ["พื้นที่", `${selected.area?.toLocaleString()} ตร.ม.`],
-                      ["จำนวนรายการ", `${selected.items} รายการ`],
-                      ["วันที่ออก", fmtDate(selected.date)],
-                      ["วันหมดอายุ", selected.expiry?fmtDate(selected.expiry):"—"],
-                      ["เงื่อนไขชำระเงิน", selected.paymentTerms||"—"],
-                      ["ระยะเวลาส่งมอบ", selected.deliveryTime||"—"],
-                    ] as [string,string][]).map(([k,v])=>(
-                      <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
-                        <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,textAlign:"right"}}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               {/* สรุป/สถานะ/ลูกค้า/ลูกค้าเป้าหมาย — ต่อในคอลัมน์เดียวกัน */}
               <div style={{width:"100%",padding:"0 16px 16px",display:"flex",flexDirection:"column",gap:14}}>
-                {/* Summary + total */}
-                <div style={cardStyle}>
-                  <div style={secLabel}><Target size={13} color={PRIMARY}/> สรุปใบเสนอราคา</div>
-                  <div style={{padding:"12px 14px",background:"#dce5f0",borderRadius:11,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่างาน (ก่อน VAT)</span>
-                    <span style={{fontSize:"1.2rem",fontWeight:800,color:PRIMARY}}>{fmtBaht(net)}</span>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:"0.72rem",color:"#8a929c",marginBottom:12,padding:"0 2px"}}>
-                    <span>รวม VAT {vatPct}%</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(grand)}</span>
-                  </div>
-                  {([
-                    ["สถานะ", quotationStatusLabel[selected.status]],
-                    ["วันที่ออก", fmtDate(selected.date)],
-                    ["วันหมดอายุ", selected.expiry?fmtDate(selected.expiry):"—"],
-                  ] as [string,string][]).map(([k,v])=>(
-                    <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
-                      <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,textAlign:"right"}}>{v}</span>
-                    </div>
-                  ))}
-                  {selected.status==="won"&&(
-                    <div style={{fontSize:"0.68rem",color:"#059669",marginTop:10,display:"flex",gap:6,alignItems:"flex-start"}}><Check size={13} style={{flexShrink:0,marginTop:1}}/> ลูกค้าตอบรับแล้ว — ไปปิดการขายที่เส้นทางการขาย/ลูกค้าเป้าหมาย</div>
-                  )}
-                </div>
 
                 {/* Status workflow */}
                 {STATUS_ACTIONS[selected.status].length>0&&(
@@ -814,64 +951,14 @@ function QuotationsPageInner(){
                   </div>
                 )}
 
-                {/* ลูกค้า / ดีล — รวมผู้ติดต่อ + ดีลที่เกี่ยวข้องไว้ใบเดียว (ไม่แยกลูกค้า/ลูกค้าเป้าหมายให้ซ้ำ) */}
-                <div style={cardStyle}>
-                  <div style={secLabel}><User size={13} color={PRIMARY}/> ลูกค้า / ดีล</div>
-                  {(relCustomer||relLead)?(()=>{
-                    // ข้อมูลผู้ติดต่อ: ใช้ของลูกค้าก่อน ถ้าไม่มีค่อยดึงจากลูกค้าเป้าหมาย (ดีล)
-                    const company  = relCustomer?.company || relLead?.company || selected.customer;
-                    const contact  = relCustomer?.name || relLead?.contact || "—";
-                    const initials = relCustomer?.initials || company.replace(/บจ\.|หจก\.|บมจ\./g,"").trim().slice(0,2) || "ลค";
-                    const color    = relCustomer?.color || PRIMARY;
-                    const rows: [string,string][] = [
-                      ["โทรศัพท์", relCustomer?.phone || relLead?.phone || "—"],
-                      ["อีเมล",    relCustomer?.email || relLead?.email || "—"],
-                      ["จังหวัด",  relCustomer?.province || relLead?.province || selected.province],
-                      // จากดีล (ลูกค้าเป้าหมาย) เพิ่มเฉพาะที่ไม่ซ้ำกับ "รายละเอียดเอกสาร"
-                      ...(relLead?[["ผู้รับผิดชอบ",relLead.assigned] as [string,string],["สถานะดีล",leadStatusLabel[relLead.status]] as [string,string]]:[]),
-                    ];
-                    return (
-                      <>
-                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                          <div style={{width:40,height:40,borderRadius:12,background:color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:"0.9rem",flexShrink:0}}>{initials}</div>
-                          <div style={{minWidth:0}}>
-                            <div style={{fontSize:"0.84rem",fontWeight:800,color:STEEL,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{company}</div>
-                            <div style={{fontSize:"0.72rem",color:MUTED,marginTop:1}}>{contact}</div>
-                          </div>
-                        </div>
-                        {rows.map(([k,v])=>(
-                          <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"6px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.74rem"}}>
-                            <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,maxWidth:180,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>
-                          </div>
-                        ))}
-                        <div style={{display:"flex",gap:8,marginTop:12}}>
-                          {relCustomer&&(
-                            <button onClick={()=>router.push(`/customers?open=${relCustomer.id}`)} className="btn btn-secondary btn-sm" style={{justifyContent:"center",flex:1,color:PRIMARY}}>
-                              <ExternalLink size={13}/> ดูลูกค้า
-                            </button>
-                          )}
-                          {relLead&&(
-                            <button onClick={()=>router.push(`/leads?open=${relLead.numId}`)} className="btn btn-secondary btn-sm" style={{justifyContent:"center",flex:1,color:PRIMARY}}>
-                              <ExternalLink size={13}/> ดูดีล
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })():(
-                    <div style={{textAlign:"center",padding:"18px 0",color:MUTED,fontSize:"0.8rem"}}>ไม่พบข้อมูลลูกค้า/ดีล</div>
-                  )}
-                </div>
               </div>
             </div>
 
             {/* Floating action bar */}
             <div style={{flexShrink:0,borderTop:"1px solid #e6eaf0",background:"#fafbfc",padding:"11px 20px",display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:"0.68rem",color:"#8a929c",display:"flex",alignItems:"center",gap:5}}><Coins size={13} color={PRIMARY}/> มูลค่างาน (ก่อน VAT) {fmtBaht(net)} · รวม VAT {fmtBaht(grand)}</span>
-              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>openEdit(selected)} className="btn btn-secondary btn-md" style={{color:PRIMARY}}><Edit2 size={14}/> แก้ไข</button>
-                <button onClick={()=>printQuotation(selected)} className="btn btn-primary btn-md"><Printer size={14}/> พิมพ์ / ดาวน์โหลด PDF</button>
-              </div>
+              {/* ปุ่ม "แก้ไข" + "พิมพ์ / ดาวน์โหลด PDF" ที่แถบล่าง ลบตามที่บอสสั่ง
+                  ซ้ำกับปุ่มบนหัวแผงสีน้ำเงินอยู่แล้ว (พิมพ์ PDF · แก้ไข) */}
             </div>
           </div>
         </>
@@ -898,14 +985,12 @@ function QuotationsPageInner(){
       )}
 
       {/* Modal — สร้างใหม่ใช้ตัวช่วย 4 ขั้นตอน (Customer→Deal→แม่แบบ→BOQ→ใบเสนอราคา) · แก้ไขใช้ฟอร์มเดิม */}
-      {showModal && !editingQ && (
-        <QuotationCreateModal onClose={()=>setShowModal(false)} onToast={showToast} />
-      )}
       {showModal && editingQ && (
         <QuotationModal
           title="แก้ไขใบเสนอราคา"
           initial={toForm(editingQ)}
           customers={customers}
+          quoteId={editingQ.id}
           onSave={saveQ} onClose={()=>setShowModal(false)}/>
       )}
 

@@ -1,27 +1,40 @@
 "use client";
 
-// ─── HQ · ภาพรวมยอดขาย (Executive Dashboard) ───────────────────────────────────
-// หน้าอ่านอย่างเดียวสำหรับผู้บริหาร HQ — ไม่มีการสร้าง/แก้/ลบข้อมูล (Action = ดู/วิเคราะห์/ส่งออก)
-// กราฟใช้แท่ง/เส้นเท่านั้น (ไม่มีกรวย/พีระมิด/เกจ/วงกลม) · ทุกตัวเลขมาจากข้อมูลจริงในระบบ
-// ไม่รองรับ = ไม่แสดง (ไม่มีสัญญา ไม่มีคาดการณ์ยอดขาย — ระบบไม่มีข้อมูลสองอย่างนี้)
+// ─── HQ · ภาพรวมยอดขายทั้งเครือ (Sales Analytics) ──────────────────────────────
+// ศูนย์บัญชาการยอดขายของสำนักงานใหญ่ — อ่านอย่างเดียว ไม่มีสร้าง/แก้/ลบ (Action = ดู · วิเคราะห์ · ส่งออก)
+// กราฟใช้ได้เฉพาะ แท่งแนวนอน / แท่งคู่ / แท่งซ้อน / เส้น (ไม่มีกรวย/เกจ/วงกลม)
+//
+// ── สิ่งที่ตัดออกจากสเปก เพราะข้อมูลจริงไม่รองรับ (อย่าใส่กลับโดยไม่มีข้อมูลก่อน) ──
+// • Forecast / คาดการณ์รายได้ — ไม่มีลีดใบไหนกรอก expectedClose และไม่มีฟิลด์ % ความน่าจะเป็น
+//   จึงถ่วงน้ำหนัก pipeline ไม่ได้ · บอสสั่งตัดออก
+// • ย้อนหลังฟิกซ์ 12 เดือน — ตัวแทน 9/10 รายมีข้อมูลแค่ 3 เดือน · กราฟตัดตามตัวกรองเวลา "เท่าที่มีข้อมูล"
+// • Last Updated รายตัวแทน — DealerRow ไม่มีฟิลด์นี้ · ใช้ "ใบเสนอราคาล่าสุด" ที่หาได้จริงแทน (ชื่อคอลัมน์ตรงกับสิ่งที่มันเป็น)
+// • Refresh — ระบบไม่มี backend ให้ refresh (ข้อมูลสดจาก SalesContext อยู่แล้ว)
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Download, FileText, Percent, Store, Target, Trophy, TrendingUp,
+  FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
 } from "lucide-react";
-import { MultiLineChart } from "@/components/ui/Charts";
-import { DealerChart } from "@/components/hq/DealerChart";
+import { MultiLineChart, StackedBarChart } from "@/components/ui/Charts";
+import { ExportMenu } from "@/components/ui/ExportMenu";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
-  dealerLeaderboard, mainTemplateOf, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY,
-  type DealerRow, type HQTargets,
+  dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY,
+  loadDealerFiles, DEALER_FILES_EVENT, fmtISOToThai,
+  type DealerRow, type HQTargets, type DealerFile,
 } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useFilters } from "@/context/FilterContext";
-import { FilterBar, SelectFilter } from "@/components/filters/FilterBar";
-import { useNetworkQuotations, useNetworkLeads } from "@/lib/useNetworkData";
+import { useSales } from "@/context/SalesContext";
+import { FilterBar } from "@/components/filters/FilterBar";
+import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers } from "@/lib/useNetworkData";
+import { regionDisplay } from "@/lib/hqQuotations";
 import { fmtBaht } from "@/lib/format";
+import { useEffect } from "react";
 
 const PRIMARY = "#003366";
+const STEEL = "#2D2D2D";
+const MUTED = "var(--muted-foreground)";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const TH_MONTH: Record<string, number> = Object.fromEntries(TH_ABBR.map((m, i) => [m, i]));
@@ -31,224 +44,338 @@ const parseThaiDate = (s: string): Date | null => {
   const y = +mt[3] > 2500 ? +mt[3] - 543 : +mt[3];
   return new Date(y, TH_MONTH[mt[2]], +mt[1]);
 };
-const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะวันออกเฉียงเหนือ" : `ภาค${r}`;
+const QUOTED_UP = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
+const ALL = "ALL";
 
-// สถานะใบเสนอราคา — ป้าย/สีชุดเดียวกับทั้งระบบ
-const QUOTE_STATES = [
-  { k: "draft",          label: "ร่าง",     color: "#9ca3af" },
-  { k: "sent_to_client", label: "ส่งแล้ว",   color: "#003366" },
-  { k: "viewed",         label: "เปิดอ่าน",  color: "#7c3aed" },
-  { k: "won",            label: "ตอบรับ",   color: "#059669" },
-  { k: "lost",           label: "ปฏิเสธ",   color: "#dc2626" },
-  { k: "expired",        label: "หมดอายุ",  color: "#d97706" },
-];
+// ── แท่งแนวนอนคู่ — ใช้ซ้ำใน Section 1 / 2 / 3 (แท่งหลัก + แท่งเทียบ) ──
+type HRow = { key: string; label: string; a: number; b: number; note?: string; onClick?: () => void };
+function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt }: {
+  rows: HRow[]; aLabel: string; bLabel: string; aColor?: string; bColor?: string; fmt: (v: number) => string;
+}) {
+  const max = Math.max(...rows.flatMap(r => [r.a, r.b]), 1);
+  return (
+    <div className="card-body" style={{ paddingTop: 4 }}>
+      {/* คำอธิบายสี — ต้องมี ไม่งั้นแท่งคู่อ่านไม่ออกว่าอันไหนคืออะไร */}
+      <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
+        {[[aLabel, aColor], [bLabel, bColor]].map(([l, c]) => (
+          <span key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.66rem", fontWeight: 700, color: MUTED }}>
+            <span style={{ width: 9, height: 9, borderRadius: 3, background: c, flexShrink: 0 }} /> {l}
+          </span>
+        ))}
+      </div>
+      {!rows.length ? (
+        <EmptyState icon={<Coins size={26} />} title="ไม่พบข้อมูลในช่วงที่เลือก" description="ลองปรับตัวกรอง" compact />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {rows.map(r => (
+            <div key={r.key} onClick={r.onClick} style={{ cursor: r.onClick ? "pointer" : "default" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
+                <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
+                <span style={{ flexShrink: 0, fontWeight: 700, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>
+                  {fmt(r.a)} <span style={{ color: MUTED, fontWeight: 400 }}>/ {fmt(r.b)}</span>
+                  {r.note && <span style={{ color: MUTED, fontWeight: 400 }}> · {r.note}</span>}
+                </span>
+              </div>
+              <div style={{ height: 8, background: "var(--muted)", borderRadius: 999, overflow: "hidden", marginBottom: 3 }}>
+                <div className="bar-grow" style={{ height: "100%", width: `${Math.round(r.a / max * 100)}%`, background: aColor, borderRadius: 999 }} />
+              </div>
+              <div style={{ height: 5, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
+                <div className="bar-grow" style={{ height: "100%", width: `${Math.round(r.b / max * 100)}%`, background: bColor, borderRadius: 999 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-export default function SalesOverviewPage() {
+export default function SalesAnalyticsPage() {
   const router = useRouter();
   const { timeRange, inRange } = useFilters();
-  const [allDealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  const [allDealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
   const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
-  const [dealerSel, setDealerSel] = useState<string>("all");
-  const selDealer = dealerSel === "all" ? null : allDealers.find(d => d.code === dealerSel) ?? null;
 
   const netQuotes = useNetworkQuotations();
   const netLeads = useNetworkLeads();
+  const netCustomers = useNetworkCustomers();
+  const { appointments } = useSales();
 
-  // ── ขอบเขตข้อมูลของทั้งหน้า = ตัวแทนที่เลือก (ถ้ามี) + ช่วงเวลาจากตัวกรอง ──
-  const scoped = useMemo(
-    () => netQuotes.filter(q => (!selDealer || q.dealerCode === selDealer.code) && inRange(q.createdAt)),
-    [netQuotes, selDealer, inRange],
+  // ไฟล์แนบ — ใช้เฉพาะใน Drawer (ผูกกับลีดด้วย recordId = numId)
+  const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
+  useEffect(() => {
+    const read = () => setDealerFiles(loadDealerFiles());
+    read();
+    window.addEventListener(DEALER_FILES_EVENT, read);
+    return () => window.removeEventListener(DEALER_FILES_EVENT, read);
+  }, []);
+
+  // ── Smart Filter — ทุกตัวเลือกสร้างจากข้อมูลจริง ไม่ฮาร์ดโค้ด ──
+  const [q, setQ] = useState("");
+  const [dealerSel, setDealerSel] = useState(ALL);
+  const [regionSel, setRegionSel] = useState(ALL);
+  const [provSel, setProvSel] = useState(ALL);
+  const [btSel, setBtSel] = useState(ALL);
+  const [salesSel, setSalesSel] = useState(ALL);
+  const [view, setView] = useState<"dealer" | "region" | "province" | "month">("dealer");
+
+  const DEALER_META = useMemo(() => new Map(allDealers.map(d => [d.code, d])), [allDealers]);
+  const SALES_BANDS = useMemo(() => [
+    { v: "lt5", l: "ต่ำกว่า ฿5M", hit: (n: number) => n < 5e6 },
+    { v: "5to8", l: "฿5M – ฿8M", hit: (n: number) => n >= 5e6 && n < 8e6 },
+    { v: "gte8", l: "฿8M ขึ้นไป", hit: (n: number) => n >= 8e6 },
+  ], []);
+
+  // ตัวแทนที่ผ่านตัวกรอง = ขอบเขตของทั้งหน้า (ทุกกราฟ/ตารางอิงชุดนี้ชุดเดียว)
+  const dealers = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return allDealers.filter(d =>
+      (dealerSel === ALL || d.code === dealerSel) &&
+      (regionSel === ALL || d.region === regionSel) &&
+      (provSel === ALL || d.province === provSel) &&
+      (salesSel === ALL || (SALES_BANDS.find(b => b.v === salesSel)?.hit(d.revenueActual) ?? true)) &&
+      (!s || (d.code + d.name + d.province + d.region).toLowerCase().includes(s)),
+    );
+  }, [allDealers, q, dealerSel, regionSel, provSel, salesSel, SALES_BANDS]);
+  const codes = useMemo(() => new Set(dealers.map(d => d.code)), [dealers]);
+
+  const quotes = useMemo(
+    () => netQuotes.filter(x => codes.has(x.dealerCode) && inRange(x.createdAt) && (btSel === ALL || x.productLine === btSel)),
+    [netQuotes, codes, inRange, btSel],
+  );
+  const leads = useMemo(
+    () => netLeads.filter(l => codes.has(l.dealerCode ?? "") && (btSel === ALL || l.product === btSel)),
+    [netLeads, codes, btSel],
   );
 
-  // ── KPI ──
-  const kpi = useMemo(() => {
-    const won = scoped.filter(q => q.status === "won");
-    const lost = scoped.filter(q => q.status === "lost");
+  const regionOpts = useMemo(() => [...new Set(allDealers.map(d => d.region))].sort(), [allDealers]);
+  const provOpts = useMemo(() => [...new Set(allDealers.map(d => d.province))].sort(), [allDealers]);
+  const btOpts = useMemo(() => [...new Set(netQuotes.map(x => x.productLine).filter(Boolean))].sort(), [netQuotes]);
+
+  // ── สถิติรายตัวแทน — แหล่งเดียวของทุกกราฟ/ตาราง (คำนวณครั้งเดียว) ──
+  const perf = useMemo(() => dealers.map(d => {
+    const dq = quotes.filter(x => x.dealerCode === d.code);
+    const dl = leads.filter(l => l.dealerCode === d.code);
+    const won = dq.filter(x => x.status === "won");
+    const lost = dq.filter(x => x.status === "lost");
     const closed = won.length + lost.length;
-    const activeCodes = new Set(scoped.map(q => q.dealerCode));
+    // ใบเสนอราคาล่าสุด — ไม่มีฟิลด์ "อัปเดตล่าสุด" ในระบบ จึงใช้ค่านี้และตั้งชื่อคอลัมน์ให้ตรงกับที่มันเป็นจริง
+    const latest = dq.map(x => parseThaiDate(x.createdAt)).filter(Boolean).sort((a, b) => +b! - +a!)[0] ?? null;
     return {
-      wonVal: won.reduce((s, q) => s + q.valueNum, 0),
+      ...d,
+      leads: dl.length,
+      quoted: dl.filter(l => QUOTED_UP.includes(l.status)).length,
+      quotes: dq.length,
+      quoteVal: dq.reduce((s, x) => s + x.valueNum, 0),
       wonCount: won.length,
-      quotes: scoped.length,
-      quoteVal: scoped.reduce((s, q) => s + q.valueNum, 0),
-      conv: closed ? Math.round((won.length / closed) * 100) : 0,
-      activeDealers: selDealer ? (activeCodes.size ? 1 : 0) : activeCodes.size,
+      wonVal: won.reduce((s, x) => s + x.valueNum, 0),
+      conv: closed ? Math.round(won.length / closed * 100) : null,
+      tpct: d.revenueTarget > 0 ? Math.round(d.revenueActual / d.revenueTarget * 100) : 0,
+      latest: latest ? `${latest.getDate()} ${TH_ABBR[latest.getMonth()]} ${latest.getFullYear() + 543}` : "—",
     };
-  }, [scoped, selDealer]);
+  }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads]);
 
-  // ── ความสำเร็จตามเป้า = ยอดสะสมทั้งปี เทียบเป้าทั้งปี (ไม่เฉลี่ยตามช่วงเวลาที่กรอง) ──
-  // ใช้ตัวเลข "ทางการ" ของตัวแทน (revenueActual/revenueTarget) ให้ตรงกับหน้าตัวแทนและอันดับ
-  const goal = useMemo(() => {
-    const actual = selDealer ? selDealer.revenueActual : allDealers.reduce((s, d) => s + d.revenueActual, 0);
-    const target = selDealer ? selDealer.revenueTarget : targets.annualTarget;
-    return { actual, target, pct: target > 0 ? Math.round((actual / target) * 100) : 0 };
-  }, [selDealer, allDealers, targets.annualTarget]);
+  // ── Executive KPI (5 การ์ด — ตัด Forecast ออก ไม่มีข้อมูล) ──
+  const kpi = useMemo(() => {
+    const won = quotes.filter(x => x.status === "won");
+    const lost = quotes.filter(x => x.status === "lost");
+    const closed = won.length + lost.length;
+    const top = perf.length ? [...perf].sort((a, b) => b.revenueActual - a.revenueActual)[0] : null;
+    const actual = dealers.reduce((s, d) => s + d.revenueActual, 0);
+    // เป้าทั้งเครือใช้ค่าที่ HQ ตั้งไว้ · แต่ถ้ากรองเหลือบางตัวแทน ต้องรวมเป้าเฉพาะรายนั้น ไม่งั้น % ผิด
+    const filtered = dealers.length !== allDealers.length;
+    const target = filtered ? dealers.reduce((s, d) => s + d.revenueTarget, 0) : targets.annualTarget;
+    return {
+      wonVal: won.reduce((s, x) => s + x.valueNum, 0), wonCount: won.length,
+      quotes: quotes.length, quoteVal: quotes.reduce((s, x) => s + x.valueNum, 0),
+      conv: closed ? Math.round(won.length / closed * 100) : null,
+      actual, target, tpct: target > 0 ? Math.round(actual / target * 100) : 0, filtered,
+      top,
+    };
+  }, [quotes, perf, dealers, allDealers.length, targets.annualTarget]);
 
-  // ── สถานะใบเสนอราคา (แถบแนวนอน — จำนวน + มูลค่า) ──
-  const statusRows = useMemo(() => {
-    const rows = QUOTE_STATES.map(s => {
-      const arr = scoped.filter(q => q.status === s.k);
-      return { ...s, count: arr.length, value: arr.reduce((a, q) => a + q.valueNum, 0) };
+  // ── Section 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — สลับมุมมองได้ 4 แบบ ──
+  const leadVsQuote = useMemo(() => {
+    if (view === "month") {
+      const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
+      const lM = Array(12).fill(0), qM = Array(12).fill(0), upM = Array(12).fill(0);
+      leads.forEach(l => {
+        const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
+        lM[d.getMonth()]++;
+        if (QUOTED_UP.includes(l.status)) upM[d.getMonth()]++;
+      });
+      quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (d) qM[d.getMonth()]++; });
+      return TH_ABBR.slice(a, b + 1).map((m, i) => ({
+        key: m, label: m, a: lM[a + i], b: qM[a + i],
+        note: lM[a + i] ? `อัตราแปลง ${Math.round(upM[a + i] / lM[a + i] * 100)}%` : undefined,
+      }));
+    }
+    const keyOf = (code: string) => view === "dealer" ? code
+      : view === "region" ? (DEALER_META.get(code)?.region ?? "—")
+      : (DEALER_META.get(code)?.province ?? "—");
+    // up = ลีดที่ไปถึงขั้น "เสนอราคา" ขึ้นไป — ใช้คิดอัตราแปลง (นิยามเดียวกับหน้าลูกค้าเป้าหมายทั้งเครือ)
+    const m = new Map<string, { a: number; b: number; up: number }>();
+    const bump = (k: string, f: "a" | "b" | "up") => { const r = m.get(k) ?? { a: 0, b: 0, up: 0 }; r[f]++; m.set(k, r); };
+    leads.forEach(l => {
+      bump(keyOf(l.dealerCode ?? ""), "a");
+      if (QUOTED_UP.includes(l.status)) bump(keyOf(l.dealerCode ?? ""), "up");
     });
-    const max = Math.max(...rows.map(r => r.value), 1);
-    return rows.map(r => ({ ...r, pct: Math.round((r.value / max) * 100) }));
-  }, [scoped]);
+    quotes.forEach(x => bump(keyOf(x.dealerCode), "b"));
+    return [...m.entries()].map(([k, v]) => ({
+      key: k, a: v.a, b: v.b,
+      label: view === "dealer" ? `${k} – ${DEALER_META.get(k)?.name ?? k}` : view === "region" ? regionDisplay(k) : k,
+      note: v.a ? `อัตราแปลง ${Math.round(v.up / v.a * 100)}%` : undefined,
+      onClick: view === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
+    })).sort((x, y) => y.a - x.a);
+  }, [view, leads, quotes, DEALER_META, timeRange, router]);
 
-  // ── มูลค่าใบเสนอราคา เทียบ ยอดปิดการขาย รายเดือน (ล้านบาท) ──
-  const monthly = useMemo(() => {
-    const qM = Array(12).fill(0), wM = Array(12).fill(0);
-    scoped.forEach(q => {
-      const d = parseThaiDate(q.createdAt); if (!d) return;
-      qM[d.getMonth()] += q.valueNum;
-      if (q.status === "won") wM[d.getMonth()] += q.valueNum;
+  // ── Section 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง (รายตัวแทน) ──
+  const quoteVsSales = useMemo(() => perf.map(d => ({
+    key: d.code, label: `${d.code} – ${d.name}`, a: d.quoteVal, b: d.wonVal,
+    note: d.quoteVal ? `ปิดได้ ${Math.round(d.wonVal / d.quoteVal * 100)}%` : undefined,
+    onClick: () => router.push(`/hq/dealers/${d.code}`),
+  })).sort((a, b) => b.a - a.a), [perf, router]);
+
+  // ── Section 3 · เป้าหมายทั้งปี เทียบ ยอดขายจริง — สลับกลุ่มได้ ──
+  const [tgView, setTgView] = useState<"dealer" | "region" | "province">("dealer");
+  const targetVsActual = useMemo(() => {
+    const keyOf = (d: DealerRow) => tgView === "dealer" ? d.code : tgView === "region" ? d.region : d.province;
+    const m = new Map<string, { a: number; b: number }>();
+    dealers.forEach(d => {
+      const k = keyOf(d);
+      const r = m.get(k) ?? { a: 0, b: 0 };
+      r.a += d.revenueActual; r.b += d.revenueTarget;
+      m.set(k, r);
     });
-    const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
-    const toM = (arr: number[]) => arr.slice(a, b + 1).map(v => Math.round(v / 1e6 * 10) / 10);
-    return { months: TH_ABBR.slice(a, b + 1), quote: toM(qM), won: toM(wM) };
-  }, [scoped, timeRange]);
+    return [...m.entries()].map(([k, v]) => ({
+      key: k, a: v.a, b: v.b,
+      label: tgView === "dealer" ? `${k} – ${DEALER_META.get(k)?.name ?? k}` : tgView === "region" ? regionDisplay(k) : k,
+      note: v.b ? `${Math.round(v.a / v.b * 100)}% ของเป้า` : undefined,
+      onClick: tgView === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
+    })).sort((x, y) => y.a - x.a);
+  }, [tgView, dealers, DEALER_META, router]);
 
-  // ── สถิติรายตัวแทนในช่วง (ใบเสนอราคา/ปิดได้) — ใช้ทั้งกราฟอันดับและตารางล่าง ──
-  const dealerStats = useMemo(() => {
-    const m = new Map<string, { quotes: number; won: number; wonVal: number }>();
-    netQuotes.filter(q => inRange(q.createdAt)).forEach(q => {
-      const r = m.get(q.dealerCode) ?? { quotes: 0, won: 0, wonVal: 0 };
-      r.quotes += 1;
-      if (q.status === "won") { r.won += 1; r.wonVal += q.valueNum; }
-      m.set(q.dealerCode, r);
-    });
-    return m;
-  }, [netQuotes, inRange]);
+  // ── Section 6 · เทียบรายภูมิภาค — แท่งซ้อน ลีด/ใบเสนอราคา/ปิดได้ ──
+  const regional = useMemo(() => {
+    const rs = [...new Set(perf.map(d => d.region))].sort();
+    const sum = (r: string, f: "leads" | "quotes" | "wonCount") =>
+      perf.filter(d => d.region === r).reduce((s, d) => s + d[f], 0);
+    return {
+      labels: rs.map(regionDisplay),
+      series: [
+        { name: "ลูกค้าเป้าหมาย", color: "#003366", data: rs.map(r => sum(r, "leads")) },
+        { name: "ใบเสนอราคา", color: "#0891b2", data: rs.map(r => sum(r, "quotes")) },
+        { name: "ปิดการขายได้", color: "#10B981", data: rs.map(r => sum(r, "wonCount")) },
+      ],
+    };
+  }, [perf]);
 
-  const ranked = useMemo(() => allDealers.map(d => {
-    const st = dealerStats.get(d.code) ?? { quotes: 0, won: 0, wonVal: 0 };
-    return { ...d, ...st, tpct: d.revenueTarget > 0 ? Math.round((d.revenueActual / d.revenueTarget) * 100) : 0 };
-  }).sort((a, b) => b.revenueActual - a.revenueActual), [allDealers, dealerStats]);
-
-  // ── เทียบรายภูมิภาค (ยอดขายสะสม + จำนวนใบเสนอราคาในช่วง) ──
-  const regions = useMemo(() => {
-    const m = new Map<string, { revenue: number; quotes: number; dealers: number }>();
-    ranked.forEach(d => {
-      const r = m.get(d.region) ?? { revenue: 0, quotes: 0, dealers: 0 };
-      r.revenue += d.revenueActual; r.quotes += d.quotes; r.dealers += 1;
-      m.set(d.region, r);
-    });
-    const arr = [...m.entries()].map(([region, v]) => ({ region, ...v })).sort((a, b) => b.revenue - a.revenue);
-    const maxR = Math.max(...arr.map(a => a.revenue), 1);
-    const maxQ = Math.max(...arr.map(a => a.quotes), 1);
-    return arr.map(a => ({ ...a, rPct: Math.round(a.revenue / maxR * 100), qPct: Math.round(a.quotes / maxQ * 100) }));
-  }, [ranked]);
-
-  // ── เหตุผลที่เสียโอกาสการขาย — จากลีดที่ถูกยกเลิกและ "บันทึกเหตุผลไว้จริง" เท่านั้น ──
+  // ── Section 7 · เหตุผลที่เสียโอกาสการขาย — จากลีดที่บันทึกเหตุผลไว้จริงเท่านั้น ──
   const lostReasons = useMemo(() => {
     const m = new Map<string, number>();
-    netLeads
-      .filter(l => l.status === "CANCELLED" && l.lostReason && (!selDealer || l.dealerCode === selDealer.code))
+    leads.filter(l => l.status === "CANCELLED" && l.lostReason)
       .forEach(l => m.set(l.lostReason!, (m.get(l.lostReason!) ?? 0) + 1));
     const arr = [...m.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
     const total = arr.reduce((s, r) => s + r.count, 0) || 1;
     const max = Math.max(...arr.map(a => a.count), 1);
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [netLeads, selDealer]);
+  }, [leads]);
 
-  // ── แยกตามแม่แบบ / บริการ (มูลค่าใบเสนอราคาในช่วง) ──
-  const templates = useMemo(() => {
-    const m = new Map<string, { value: number; count: number }>();
-    scoped.forEach(q => {
-      const key = mainTemplateOf(q.productLine);
-      const r = m.get(key) ?? { value: 0, count: 0 };
-      r.value += q.valueNum; r.count += 1;
-      m.set(key, r);
+  // ── Section 8 · แนวโน้มรายเดือน — ลีด/ใบเสนอราคา/ยอดขาย · เท่าที่มีข้อมูล (ไม่ฟิกซ์ 12 เดือน) ──
+  const trend = useMemo(() => {
+    const lM = Array(12).fill(0), qM = Array(12).fill(0), sM = Array(12).fill(0);
+    leads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) lM[d.getMonth()]++; });
+    quotes.forEach(x => {
+      const d = parseThaiDate(x.createdAt); if (!d) return;
+      qM[d.getMonth()]++;
+      if (x.status === "won") sM[d.getMonth()] += x.valueNum;
     });
-    const arr = [...m.entries()].map(([product, v]) => ({ product, ...v })).sort((a, b) => b.value - a.value);
-    const total = arr.reduce((s, p) => s + p.value, 0) || 1;
-    const max = Math.max(...arr.map(a => a.value), 1);
-    return arr.map((p, i) => ({ ...p, pct: Math.round(p.value / max * 100), share: Math.round(p.value / total * 100), color: RAMP[i % RAMP.length] }));
-  }, [scoped]);
+    const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
+    const cut = (arr: number[]) => arr.slice(a, b + 1);
+    return {
+      months: TH_ABBR.slice(a, b + 1),
+      counts: [
+        { name: "ลูกค้าเป้าหมาย", color: "#003366", data: cut(lM) },
+        { name: "ใบเสนอราคา", color: "#0891b2", data: cut(qM) },
+      ],
+      sales: [{ name: "ยอดขาย (ล้านบาท)", color: "#10B981", data: cut(sM).map(v => Math.round(v / 1e5) / 10) }],
+    };
+  }, [leads, quotes, timeRange]);
 
-  // ── ส่งออกรายงาน (CSV เปิดใน Excel ได้) ──
-  const [toast, setToast] = useState<string | null>(null);
-  function doExport() {
-    const rows: string[] = [];
-    rows.push(selDealer ? `ภาพรวมยอดขาย — ตัวแทน ${selDealer.code}` : "ภาพรวมยอดขาย — ทั้งเครือ");
-    rows.push(timeRange.subtitle);
-    rows.push("");
-    rows.push("สถานะใบเสนอราคา");
-    rows.push(["สถานะ", "จำนวน (ใบ)", "มูลค่า (บาท)"].join(","));
-    statusRows.forEach(r => rows.push([r.label, r.count, Math.round(r.value)].join(",")));
-    rows.push("");
-    rows.push("ผลงานตัวแทนจำหน่าย");
-    rows.push(["รหัส", "ตัวแทน", "ภูมิภาค", "ใบเสนอราคา", "ปิดได้", "อัตราปิด (%)", "ยอดขายสะสม (บาท)", "% เป้า"].join(","));
-    ranked.forEach(d => rows.push([d.code, d.name, regionDisplay(d.region), d.quotes, d.won, d.winRate, d.revenueActual, d.tpct].join(",")));
-    if (lostReasons.length) {
-      rows.push("");
-      rows.push("เหตุผลที่เสียโอกาสการขาย");
-      rows.push(["เหตุผล", "จำนวน (ราย)", "สัดส่วน (%)"].join(","));
-      lostReasons.forEach(r => rows.push([r.reason, r.count, r.share].join(",")));
-    }
-    rows.push("");
-    rows.push("แยกตามแม่แบบ / บริการ");
-    rows.push(["แม่แบบ", "จำนวนใบเสนอราคา", "มูลค่า (บาท)", "สัดส่วน (%)"].join(","));
-    templates.forEach(p => rows.push([p.product, p.count, Math.round(p.value), p.share].join(",")));
+  // ── Drawer (View) — เจาะรายตัวแทน ไม่เปลี่ยนหน้า ──
+  const [drawer, setDrawer] = useState<typeof perf[number] | null>(null);
+  const anyFilter = q.trim() !== "" || [dealerSel, regionSel, provSel, btSel, salesSel].some(v => v !== ALL);
 
-    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `hq-sales-overview-${timeRange.preset}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    setToast("ส่งออกรายงาน CSV แล้ว");
-    setTimeout(() => setToast(null), 2600);
-  }
-
-  // ── การ์ด KPI (ไม่มีวงแหวน/เกจ — ความคืบหน้าใช้แถบ) ──
-  const kSub: React.CSSProperties = { fontSize: "0.72rem", color: "var(--muted-foreground)" };
   const kNum: React.CSSProperties = { fontSize: "1.15rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
+  const kSub: React.CSSProperties = { fontSize: "0.72rem", color: MUTED };
   const kpiCards = [
-    { label: "ยอดขายที่ปิดได้", value: fmtBaht(kpi.wonVal), sub: `${kpi.wonCount} ดีล · ในช่วงที่เลือก`, Icon: Trophy, color: "#059669", bg: "#E6F6EF" },
-    { label: "ใบเสนอราคา", value: `${kpi.quotes}`, sub: `${fmtBaht(kpi.quoteVal)} · ในช่วงที่เลือก`, Icon: FileText, color: "#0891B2", bg: "#E6F4F9" },
-    { label: "อัตราปิดการขาย", value: `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
-    { label: "เป้าหมายทั้งปี", value: fmtBaht(goal.target), sub: selDealer ? `ตัวแทน ${selDealer.code}` : "ทั้งเครือ", Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
-    { label: "ตัวแทนที่มีผลงาน", value: `${kpi.activeDealers}`, sub: `จากตัวแทนทั้งหมด ${allDealers.length} ราย`, Icon: Store, color: "#D97706", bg: "#FEF0E6" },
+    { label: "ยอดขายจริง (ในช่วง)", value: fmtBaht(kpi.wonVal), sub: `${kpi.wonCount} ดีล · จากใบเสนอราคาที่ปิดได้`, Icon: Trophy, color: "#059669", bg: "#E6F6EF" },
+    { label: "มูลค่าใบเสนอราคา", value: fmtBaht(kpi.quoteVal), sub: `${kpi.quotes} ใบ · ในช่วงที่เลือก`, Icon: FileText, color: "#0891B2", bg: "#E6F4F9" },
+    { label: "อัตราปิดการขาย", value: kpi.conv === null ? "—" : `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
+    { label: "เป้าหมายทั้งปี", value: `${kpi.tpct}%`, sub: `ยอดสะสม ${fmtBaht(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
+    { label: "ตัวแทนยอดขายสูงสุด", value: kpi.top ? kpi.top.code : "—", sub: kpi.top ? `${kpi.top.name} · ${fmtBaht(kpi.top.revenueActual)}` : "—", Icon: Trophy, color: "#D97706", bg: "#FEF0E6" },
   ];
+
+  const sel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
+    <select value={v} onChange={e => on(e.target.value)} className="form-input"
+      style={{ width: "auto", minWidth: 128, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer" }}>
+      <option value={ALL}>{caption}</option>
+      {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  );
+  const viewTab = (cur: string, v: string, l: string, on: () => void) => (
+    <button key={v} onClick={on} style={{
+      padding: "4px 11px", borderRadius: 8, fontSize: "0.68rem", fontWeight: 700, cursor: "pointer",
+      border: `1px solid ${cur === v ? PRIMARY : "#dbe3ec"}`, background: cur === v ? PRIMARY : "#fff",
+      color: cur === v ? "#fff" : MUTED,
+    }}>{l}</button>
+  );
 
   return (
     <div className="erp">
-      {toast && (
-        <div style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 9999,
-          background: "#2D2D2D", color: "#fff", padding: "11px 18px", borderRadius: 12,
-          fontSize: "0.8rem", fontWeight: 600, boxShadow: "var(--shadow-lg)",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <Download size={14} /> {toast}
-        </div>
-      )}
-
-      {/* ── หัวหน้า ── */}
+      {/* ── HEADER ── */}
       <div className="page-head">
         <div>
-          <p style={{ margin: 0 }}>
-            {selDealer ? `มุมมองตัวแทน: ${selDealer.name} (${selDealer.code})` : "ภาพรวมยอดขายทุกตัวแทน · ทุกตัวเลขคำนวณจากใบเสนอราคาจริงในช่วงที่เลือก"} · {timeRange.subtitle}
-          </p>
+          <p style={{ margin: 0 }}>วิเคราะห์และเปรียบเทียบประสิทธิภาพยอดขายของตัวแทนจำหน่ายทั่วประเทศ · {timeRange.subtitle}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <SelectFilter caption="ทุกตัวแทน (ทั้งเครือ)" value={dealerSel}
-            options={allDealers.map(d => ({ value: d.code, label: `${d.code} – ${d.name}` }))}
-            onChange={setDealerSel} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FilterBar dims={[]} />
-          <button onClick={doExport} className="btn btn-secondary btn-md">
-            <Download size={14} /> ส่งออกรายงาน
-          </button>
+          {/* ส่งออก = ตารางผลงานที่เห็นบนจอ (ผ่านตัวกรองทุกตัวแล้ว) */}
+          <ExportMenu filename="hq-sales-analytics" title="ภาพรวมยอดขายทั้งเครือ"
+            headers={["รหัสตัวแทน", "ตัวแทนจำหน่าย", "ภูมิภาค", "จังหวัด", "ลูกค้าเป้าหมาย", "ใบเสนอราคา", "มูลค่าใบเสนอราคา", "ยอดขายสะสมทั้งปี", "อัตราปิดการขาย", "เป้าหมายทั้งปี", "% ของเป้า", "ใบเสนอราคาล่าสุด"]}
+            rows={perf.map(d => [
+              d.code, d.name, regionDisplay(d.region), d.province, d.leads, d.quotes, d.quoteVal,
+              d.revenueActual, d.conv === null ? "—" : `${d.conv}%`, d.revenueTarget, `${d.tpct}%`, d.latest,
+            ])} />
         </div>
       </div>
 
-      {/* ── KPI ── */}
+      {/* ── SMART FILTER ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 14, paddingBottom: 14 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหารหัส ชื่อตัวแทน จังหวัด…"
+            className="form-input" style={{ width: 240, padding: "7px 11px", fontSize: "0.74rem" }} />
+          {sel(dealerSel, setDealerSel, "ทุกตัวแทน", allDealers.map(d => ({ v: d.code, l: `${d.code} – ${d.name}` })))}
+          {sel(regionSel, setRegionSel, "ทุกภูมิภาค", regionOpts.map(r => ({ v: r, l: regionDisplay(r) })))}
+          {sel(provSel, setProvSel, "ทุกจังหวัด", provOpts.map(p => ({ v: p, l: p })))}
+          {sel(btSel, setBtSel, "ทุกประเภทอาคาร", btOpts.map(b => ({ v: b, l: b })))}
+          {sel(salesSel, setSalesSel, "ทุกช่วงยอดขาย", SALES_BANDS.map(b => ({ v: b.v, l: b.l })))}
+          {anyFilter && (
+            <button onClick={() => { setQ(""); setDealerSel(ALL); setRegionSel(ALL); setProvSel(ALL); setBtSel(ALL); setSalesSel(ALL); }}
+              className="btn btn-secondary btn-sm">ล้างตัวกรอง</button>
+          )}
+          <span style={{ fontSize: "0.7rem", color: MUTED, marginLeft: "auto" }}>ตัวแทน {perf.length} จาก {allDealers.length} ราย</span>
+        </div>
+      </div>
+
+      {/* ── EXECUTIVE KPI ── */}
       <div className="hq-kpi5" style={{ marginBottom: "1.25rem" }}>
         {kpiCards.map(k => (
           <div key={k.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ ...kSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.label}</div>
               <div style={{ ...kNum, marginTop: 6 }}>{k.value}</div>
-              <div style={{ ...kSub, marginTop: 2 }}>{k.sub}</div>
+              <div style={{ ...kSub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.sub}</div>
             </div>
             <span style={{ width: 42, height: 42, borderRadius: 12, background: k.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <k.Icon size={20} color={k.color} strokeWidth={2.1} />
@@ -257,211 +384,337 @@ export default function SalesOverviewPage() {
         ))}
       </div>
 
-      {/* ── ความสำเร็จตามเป้า (แถบ — สะสมทั้งปี ไม่ขึ้นกับตัวกรองเวลา) ── */}
+      {/* ── SECTION 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา ── */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
         <div className="card-header">
-          <div className="card-title">ความสำเร็จตามเป้าหมาย {selDealer ? `· ${selDealer.name}` : "· ทั้งเครือ"}</div>
-          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>ยอดสะสมทั้งปี เทียบเป้าทั้งปี — ไม่ขึ้นกับตัวกรองช่วงเวลา</span>
-        </div>
-        <div className="card-body" style={{ paddingTop: 8 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: "1.5rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{goal.pct}%</span>
-            <span style={{ fontSize: "0.78rem", color: "#374151", fontWeight: 600 }}>
-              {fmtBaht(goal.actual)} <span style={{ color: "var(--muted-foreground)", fontWeight: 400 }}>จากเป้า {fmtBaht(goal.target)}</span>
-            </span>
-          </div>
-          <div style={{ height: 10, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-            <div className="bar-grow" style={{ height: "100%", width: `${Math.min(100, goal.pct)}%`, background: goal.pct >= 100 ? "#059669" : PRIMARY, borderRadius: 999 }} />
+          <div className="card-title">ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {([["dealer", "ตัวแทน"], ["region", "ภูมิภาค"], ["province", "จังหวัด"], ["month", "รายเดือน"]] as const)
+              .map(([v, l]) => viewTab(view, v, l, () => setView(v)))}
           </div>
         </div>
+        <HBars rows={leadVsQuote} aLabel="ลูกค้าเป้าหมาย" bLabel="ใบเสนอราคา" bColor="#0891b2" fmt={v => `${v}`} />
       </div>
 
-      {/* ── แถว 1: มูลค่าใบเสนอราคา เทียบ ยอดปิดการขาย · สถานะใบเสนอราคา ── */}
-      <div className="hq-row2a" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
-        <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-header">
-            <div className="card-title">มูลค่าใบเสนอราคา เทียบ ยอดปิดการขาย (รายเดือน)</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span>
-          </div>
-          <div className="card-body" style={{ paddingTop: 4, flex: 1 }}>
-            <MultiLineChart months={monthly.months} vw={820} height={280} fmt={v => `${v.toFixed(1)}M`}
-              series={[
-                { name: "มูลค่าใบเสนอราคา", color: "#0891b2", data: monthly.quote },
-                { name: "ยอดปิดการขาย", color: "#003366", data: monthly.won },
-              ]} />
-          </div>
+      {/* ── SECTION 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-header">
+          <div className="card-title">มูลค่าใบเสนอราคา เทียบ ยอดขายจริง · รายตัวแทน</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>ในช่วงที่เลือก · คลิกเพื่อเจาะรายตัวแทน</span>
         </div>
-
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">สถานะใบเสนอราคา</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>ความยาวแถบ = มูลค่า</span>
-          </div>
-          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
-            {statusRows.map(s => (
-              <div key={s.k}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#374151", fontWeight: 600 }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />{s.label}
-                  </span>
-                  <span style={{ display: "flex", gap: 8, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                    <span style={{ color: "var(--muted-foreground)", fontWeight: 600 }}>{s.count} ใบ</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937" }}>{fmtBaht(s.value)}</span>
-                  </span>
-                </div>
-                <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${s.pct}%`, background: s.color, borderRadius: 999 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <HBars rows={quoteVsSales} aLabel="มูลค่าใบเสนอราคา" bLabel="ยอดขายจริง" aColor="#0891b2" bColor="#059669" fmt={fmtBaht} />
       </div>
 
-      {/* ── แถว 2: อันดับตัวแทน (เทียบเป้า) · เทียบรายภูมิภาค ── */}
-      <div className="hq-dealer-charts">
-        <DealerChart
-          title="อันดับตัวแทนจำหน่าย (ยอดขายสะสม เทียบ เป้าหมาย)"
-          hint="คลิกเพื่อดูรายตัวแทน"
-          rows={ranked.map(d => ({ code: d.code, name: d.name, value: d.revenueActual, compare: d.revenueTarget, note: `${d.tpct}% ของเป้า` }))}
-          fmt={fmtBaht}
-          compareLabel="เป้าหมายทั้งปี"
-        />
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">เทียบรายภูมิภาค</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>ยอดขายสะสม · ใบเสนอราคาในช่วง</span>
+      {/* ── SECTION 3 · เป้าหมายทั้งปี เทียบ ยอดขายจริง ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-header">
+          <div className="card-title">เป้าหมายทั้งปี เทียบ ยอดขายจริง</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ fontSize: "0.62rem", color: MUTED, marginRight: 4 }}>ยอดสะสมทั้งปี — ไม่ขึ้นกับตัวกรองเวลา</span>
+            {([["dealer", "ตัวแทน"], ["region", "ภูมิภาค"], ["province", "จังหวัด"]] as const)
+              .map(([v, l]) => viewTab(tgView, v, l, () => setTgView(v)))}
           </div>
-          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 14 }}>
-            {regions.map((r, i) => (
-              <div key={r.region}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                  <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {regionDisplay(r.region)} <span style={{ color: "var(--muted-foreground)", fontWeight: 400 }}>({r.dealers} ตัวแทน)</span>
-                  </span>
-                  <span style={{ fontWeight: 800, color: "#1F2937", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(r.revenue)}</span>
-                </div>
-                <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden", marginBottom: 3 }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${r.rPct}%`, background: RAMP[i % RAMP.length], borderRadius: 999 }} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                    <div className="bar-grow" style={{ height: "100%", width: `${r.qPct}%`, background: "#C0C0C0", borderRadius: 999 }} />
+        </div>
+        <HBars rows={targetVsActual} aLabel="ยอดขายสะสมทั้งปี" bLabel="เป้าหมายทั้งปี" fmt={fmtBaht} />
+      </div>
+
+      {/* ── SECTION 5 · อันดับตัวแทนจำหน่าย (10 อันดับแรก) ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-header">
+          <div className="card-title">อันดับตัวแทนจำหน่าย</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>10 อันดับแรกตามยอดขายสะสม</span>
+        </div>
+        <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+          {!perf.length ? <EmptyState icon={<Trophy size={26} />} title="ไม่พบตัวแทน" description="ลองปรับตัวกรอง" compact /> :
+            perf.slice(0, 10).map((d, i) => {
+              const max = Math.max(...perf.map(x => x.revenueActual), 1);
+              return (
+                <div key={d.code} onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
+                    <span style={{ width: 18, fontWeight: 800, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY, width: 38 }}>{d.code}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtBaht(d.revenueActual)}</span>
+                    <span style={{ color: MUTED, flexShrink: 0, width: 62, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.quotes} ใบ</span>
+                    <span style={{ color: MUTED, flexShrink: 0, width: 52, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.conv === null ? "—" : `${d.conv}%`}</span>
+                    <span style={{ fontWeight: 700, color: d.tpct >= 100 ? "#059669" : PRIMARY, flexShrink: 0, width: 46, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.tpct}%</span>
                   </div>
-                  <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 52, textAlign: "right" }}>{r.quotes} ใบเสนอราคา</span>
+                  <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden", marginLeft: 26 }}>
+                    <div className="bar-grow" style={{ height: "100%", width: `${Math.round(d.revenueActual / max * 100)}%`, background: RAMP[i % RAMP.length], borderRadius: 999 }} />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              );
+            })}
         </div>
       </div>
 
-      {/* ── แถว 3: เหตุผลที่เสียโอกาส · แยกตามแม่แบบ ── */}
-      <div className="hq-row2b" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>จากลีดที่บันทึกเหตุผลไว้</span>
-          </div>
-          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
-            {!lostReasons.length ? (
-              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
-            ) : lostReasons.map(r => (
+      {/* ── SECTION 6 · เทียบรายภูมิภาค ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-header">
+          <div className="card-title">เทียบรายภูมิภาค</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>จำนวนรายการ · ลูกค้าเป้าหมาย / ใบเสนอราคา / ปิดการขายได้</span>
+        </div>
+        <div className="card-body" style={{ paddingTop: 4 }}>
+          {!regional.labels.length
+            ? <EmptyState icon={<Building2 size={26} />} title="ไม่พบข้อมูลภูมิภาค" description="ลองปรับตัวกรอง" compact />
+            : <StackedBarChart months={regional.labels} series={regional.series} height={300} fmt={v => `${Math.round(v)}`} />}
+        </div>
+      </div>
+
+      {/* ── SECTION 7 · เหตุผลที่เสียโอกาสการขาย ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-header">
+          <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>ตัวเลือกเหตุผลกำหนดโดย HQ ที่หน้าตั้งค่า · นับเฉพาะลีดที่บันทึกเหตุผลไว้จริง</span>
+        </div>
+        <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
+          {!lostReasons.length ? <div style={{ fontSize: "0.78rem", color: MUTED }}>— ไม่มีลีดที่บันทึกเหตุผลไว้ในขอบเขตนี้</div>
+            : lostReasons.map(r => (
               <div key={r.reason}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
                   <span style={{ color: "#374151", fontWeight: 600 }}>{r.reason}</span>
-                  <span style={{ fontWeight: 700, color: "var(--muted-foreground)", fontVariantNumeric: "tabular-nums" }}>{r.count} ราย ({r.share}%)</span>
+                  <span style={{ fontWeight: 700, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{r.count} ราย ({r.share}%)</span>
                 </div>
                 <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
                   <div className="bar-grow" style={{ height: "100%", width: `${r.pct}%`, background: "#dc2626", borderRadius: 999 }} />
                 </div>
               </div>
             ))}
-          </div>
         </div>
+      </div>
 
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">แยกตามแม่แบบ / บริการ</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>มูลค่าใบเสนอราคาในช่วง</span>
+      {/* ── SECTION 8 · แนวโน้มรายเดือน ── */}
+      <div className="card" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-header">
+          <div className="card-title">แนวโน้มรายเดือน</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>ตามช่วงเวลาที่กรอง — ระบบมีข้อมูลไม่ครบ 12 เดือน จึงแสดงเท่าที่มี</span>
+        </div>
+        <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <div style={{ fontSize: "0.66rem", fontWeight: 700, color: MUTED, marginBottom: 6 }}>จำนวนรายการ</div>
+            <MultiLineChart months={trend.months} series={trend.counts} vw={820} height={240} fmt={v => `${Math.round(v)}`} />
           </div>
-          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
-            {!templates.length ? (
-              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
-            ) : templates.map(p => (
-              <div key={p.product}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                  <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.product}</span>
-                  <span style={{ display: "flex", gap: 8, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                    <span style={{ color: "var(--muted-foreground)", fontWeight: 600 }}>{p.count} ใบ</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937" }}>{fmtBaht(p.value)}</span>
-                  </span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ flex: 1, height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                    <div className="bar-grow" style={{ height: "100%", width: `${p.pct}%`, background: p.color, borderRadius: 999 }} />
-                  </div>
-                  <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 28, textAlign: "right" }}>{p.share}%</span>
-                </div>
-              </div>
-            ))}
+          <div>
+            <div style={{ fontSize: "0.66rem", fontWeight: 700, color: MUTED, marginBottom: 6 }}>ยอดขาย (ล้านบาท)</div>
+            <MultiLineChart months={trend.months} series={trend.sales} vw={820} height={200} fmt={v => `${v.toFixed(1)}M`} />
           </div>
         </div>
       </div>
 
-      {/* ── ตารางผลงานตัวแทนจำหน่าย ── */}
+      {/* ── PERFORMANCE TABLE ── */}
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
-          <div className="card-title">ผลงานตัวแทนจำหน่าย</div>
-          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>ใบเสนอราคา/ปิดได้ = ในช่วงที่เลือก · ยอดขายสะสม/% เป้า = ทั้งปี</span>
+          <div className="card-title">ตารางผลงานตัวแทนจำหน่าย</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>ลีด/ใบเสนอราคา/มูลค่า = ในช่วงที่เลือก · ยอดขายสะสม/เป้า = ทั้งปี (ตัวเลขทางการของตัวแทน)</span>
         </div>
         <div className="table-wrap">
           <table>
             <colgroup>
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "26%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "9%" }} />
+              <col style={{ width: "7%", minWidth: 58 }} />{/* รหัส */}
+              <col style={{ width: "17%", minWidth: 150 }} />{/* ตัวแทน */}
+              <col style={{ width: "12%", minWidth: 110 }} />{/* ภูมิภาค */}
+              <col style={{ width: "7%", minWidth: 58 }} />{/* ลีด */}
+              <col style={{ width: "8%", minWidth: 74 }} />{/* ใบเสนอราคา */}
+              <col style={{ width: "10%", minWidth: 96 }} />{/* มูลค่าใบเสนอราคา */}
+              <col style={{ width: "9%", minWidth: 88 }} />{/* ยอดขายจริง */}
+              <col style={{ width: "7%", minWidth: 66 }} />{/* อัตราปิด */}
+              <col style={{ width: "9%", minWidth: 88 }} />{/* เป้าทั้งปี */}
+              <col style={{ width: "6%", minWidth: 58 }} />{/* % เป้า */}
+              <col style={{ width: "9%", minWidth: 94 }} />{/* ใบเสนอราคาล่าสุด */}
+              <col style={{ width: "5%", minWidth: 56 }} />{/* ปุ่มดู */}
             </colgroup>
             <thead>
               <tr>
-                <th>อันดับ</th>
                 <th>รหัส</th>
                 <th>ตัวแทนจำหน่าย</th>
                 <th>ภูมิภาค</th>
+                <th style={{ textAlign: "right" }}>ลีด</th>
                 <th style={{ textAlign: "right" }}>ใบเสนอราคา</th>
-                <th style={{ textAlign: "right" }}>ปิดได้</th>
-                <th style={{ textAlign: "right" }}>อัตราปิด</th>
+                <th style={{ textAlign: "right" }}>มูลค่าใบเสนอราคา</th>
                 <th style={{ textAlign: "right" }}>ยอดขายสะสม</th>
+                <th style={{ textAlign: "right" }}>อัตราปิด</th>
+                <th style={{ textAlign: "right" }}>เป้าทั้งปี</th>
                 <th style={{ textAlign: "right" }}>% เป้า</th>
+                <th>ใบเสนอราคาล่าสุด</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {ranked.map((d, i) => (
-                <tr key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
-                  <td style={{ fontWeight: 700, color: "var(--muted-foreground)" }}>{i + 1}</td>
+              {!perf.length && <tr><td colSpan={12} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่พบตัวแทนที่ตรงกับตัวกรอง</td></tr>}
+              {perf.map(d => (
+                <tr key={d.code} className="clickable" onClick={() => setDrawer(d)} style={{ cursor: "pointer" }}>
                   <td style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY }}>{d.code}</td>
-                  <td style={{ fontWeight: 600, color: "#1F2937" }}>
+                  <td style={{ fontWeight: 600, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {d.name}
-                    {d.status === "inactive" && <span style={{ marginLeft: 6, fontSize: "0.62rem", fontWeight: 700, color: "var(--muted-foreground)" }}>(ปิดใช้งาน)</span>}
+                    {d.status === "inactive" && <span style={{ marginLeft: 6, fontSize: "0.62rem", fontWeight: 700, color: MUTED }}>(ปิดใช้งาน)</span>}
                   </td>
-                  <td style={{ color: "#374151" }}>{regionDisplay(d.region)}</td>
+                  <td style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{regionDisplay(d.region)}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.leads}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.quotes}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.won}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: d.winRate >= targets.winRateTarget ? "#059669" : "#374151" }}>{d.winRate}%</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(d.quoteVal)}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 800, color: "#1F2937" }}>{fmtBaht(d.revenueActual)}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{d.conv === null ? "—" : `${d.conv}%`}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(d.revenueTarget)}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: d.tpct >= 100 ? "#059669" : PRIMARY }}>{d.tpct}%</td>
+                  <td style={{ color: MUTED, whiteSpace: "nowrap" }}>{d.latest}</td>
+                  <td onClick={e => e.stopPropagation()}>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button title="ดูรายละเอียด" onClick={() => setDrawer(d)}
+                        style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #dbe3ec", background: "#fff", color: PRIMARY, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Eye size={13} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* ── DRAWER — เจาะรายตัวแทน (อ่านอย่างเดียว ไม่มีแก้/ลบ) ── */}
+      {drawer && <DealerDrawer d={drawer} onClose={() => setDrawer(null)}
+        customers={netCustomers.filter(c => c.dealerCode === drawer.code)}
+        leads={netLeads.filter(l => l.dealerCode === drawer.code)}
+        quotes={netQuotes.filter(x => x.dealerCode === drawer.code)}
+        appointments={appointments} files={dealerFiles} onOpenDealer={() => router.push(`/hq/dealers/${drawer.code}`)} />}
     </div>
+  );
+}
+
+// ── Drawer ────────────────────────────────────────────────────────────────────
+// นัดหมาย/ไฟล์ ไม่มี dealerCode ในระบบ → ผูกผ่าน leadId/recordId = numId ของลีดตัวแทนรายนี้
+// ตัวแทนที่ยังไม่มีนัดหมาย/ไฟล์บันทึกไว้จะขึ้น "—" ตามจริง (ไม่เติมข้อมูลปลอม)
+function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, files, onOpenDealer }: {
+  d: { code: string; name: string; region: string; province: string; status: string; revenueActual: number; revenueTarget: number; tpct: number; leads: number; quoted: number; quotes: number; quoteVal: number; wonCount: number; wonVal: number; conv: number | null; latest: string };
+  onClose: () => void;
+  customers: { id: number; name: string; province: string; dealsWon: number; totalRevenue: number }[];
+  leads: { numId: number; company: string; status: string }[];
+  quotes: { quoteNo: string; customer: string; valueNum: number; status: string; createdAt: string }[];
+  appointments: { id: number; leadId?: number; company: string; project: string; date: string; time: string; assigned: string }[];
+  files: DealerFile[];
+  onOpenDealer: () => void;
+}) {
+  const leadIds = new Set(leads.map(l => l.numId));
+  const appts = appointments.filter(a => a.leadId != null && leadIds.has(a.leadId));
+  const docs = files.filter(f => f.source === "lead" && f.recordId != null && leadIds.has(f.recordId));
+
+  // ยอดขายรายเดือนของตัวแทนรายนี้ — จากใบเสนอราคาที่ปิดได้จริง
+  const monthly = (() => {
+    const m = Array(12).fill(0);
+    quotes.forEach(x => { if (x.status !== "won") return; const dt = parseThaiDate(x.createdAt); if (dt) m[dt.getMonth()] += x.valueNum; });
+    const last = m.reduce((acc, v, i) => v > 0 ? i : acc, -1);
+    return last < 0 ? [] : m.slice(0, last + 1).map((v, i) => ({ month: TH_ABBR[i], value: v }));
+  })();
+  const maxM = Math.max(...monthly.map(x => x.value), 1);
+
+  const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 };
+  const row = (l: string, v: React.ReactNode) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", fontSize: "0.76rem" }}>
+      <span style={{ color: MUTED }}>{l}</span>
+      <span style={{ fontWeight: 700, color: STEEL, textAlign: "right" }}>{v}</span>
+    </div>
+  );
+  const empty = (t: string) => <div style={{ fontSize: "0.78rem", color: MUTED }}>— {t}</div>;
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.35)", zIndex: 300 }} />
+      <div className="side-drawer" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "94vw", background: "#f8fafc", zIndex: 310, display: "flex", flexDirection: "column", boxShadow: "-18px 0 60px rgba(0,51,102,.18)" }}>
+        {/* Dealer Profile */}
+        <div style={{ background: PRIMARY, padding: "18px 20px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,.72)", marginTop: 3 }}>
+                {d.code} · {regionDisplay(d.region)} · {d.province}{d.status === "inactive" ? " · ปิดใช้งาน" : ""}
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 30, height: 30, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={14} /></button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 20px 20px" }}>
+          <div style={head}><Users size={11} /> สรุปลูกค้าเป้าหมาย</div>
+          {row("ลูกค้าเป้าหมายทั้งหมด", `${d.leads} ราย`)}
+          {row("เสนอราคาแล้ว", `${d.quoted} ราย`)}
+          {row("อัตราแปลงเป็นใบเสนอราคา", d.leads ? `${Math.round(d.quoted / d.leads * 100)}%` : "—")}
+
+          <div style={head}><FileText size={11} /> สรุปใบเสนอราคา</div>
+          {row("ใบเสนอราคา (ในช่วง)", `${d.quotes} ใบ`)}
+          {row("มูลค่ารวม", fmtBaht(d.quoteVal))}
+          {row("ปิดได้", `${d.wonCount} ใบ · ${fmtBaht(d.wonVal)}`)}
+          {row("อัตราปิดการขาย", d.conv === null ? "—" : `${d.conv}%`)}
+          {row("ใบเสนอราคาล่าสุด", d.latest)}
+
+          <div style={head}><Building2 size={11} /> สรุปลูกค้า</div>
+          {row("ลูกค้าทั้งหมด", `${customers.length} ราย`)}
+          {row("มูลค่ารวมจากลูกค้า", fmtBaht(customers.reduce((s, c) => s + c.totalRevenue, 0)))}
+          {!customers.length ? empty("ยังไม่มีลูกค้า") : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
+              {[...customers].sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 5).map(c => (
+                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "7px 10px", fontSize: "0.74rem" }}>
+                  <span style={{ flex: 1, minWidth: 0, fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                  <span style={{ color: MUTED, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(c.totalRevenue)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={head}><Coins size={11} /> สรุปยอดขาย</div>
+          <div style={{ fontSize: "0.66rem", color: MUTED, marginBottom: 4 }}>ยอดสะสม/เป้า = ตัวเลขทางการของตัวแทน · ไม่ใช่ผลรวมใบเสนอราคาด้านบน</div>
+          {row("ยอดขายสะสมทั้งปี", fmtBaht(d.revenueActual))}
+          {row("เป้าหมายทั้งปี", fmtBaht(d.revenueTarget))}
+          {row("% ของเป้า", <span style={{ color: d.tpct >= 100 ? "#059669" : PRIMARY }}>{d.tpct}%</span>)}
+
+          <div style={head}>ยอดขายรายเดือน · จากใบเสนอราคาที่ปิดได้</div>
+          {!monthly.length ? empty("ยังไม่มียอดปิดการขาย") : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {monthly.map(m => (
+                <div key={m.month} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 34, fontSize: "0.66rem", color: MUTED, fontWeight: 700, flexShrink: 0 }}>{m.month}</span>
+                  <div style={{ flex: 1, height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
+                    <div className="bar-grow" style={{ height: "100%", width: `${Math.round(m.value / maxM * 100)}%`, background: PRIMARY, borderRadius: 999 }} />
+                  </div>
+                  <span style={{ width: 58, textAlign: "right", fontSize: "0.66rem", fontWeight: 700, color: STEEL, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{m.value ? fmtBaht(m.value) : "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={head}><CalendarDays size={11} /> ไทม์ไลน์นัดหมาย</div>
+          {!appts.length ? empty("ไม่มีนัดหมายที่ผูกกับลีดของตัวแทนรายนี้") : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {appts.map(a => (
+                <div key={a.id} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "8px 10px" }}>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project || a.company}</div>
+                  <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 2 }}>{fmtISOToThai(a.date)} · {a.time} · {a.assigned}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={head}><FolderOpen size={11} /> เอกสาร</div>
+          {!docs.length ? empty("ไม่มีเอกสารที่ผูกกับลีดของตัวแทนรายนี้") : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {docs.map(f => (
+                <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "7px 10px" }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: "0.74rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                  <span style={{ fontSize: "0.65rem", color: MUTED, flexShrink: 0 }}>{f.size}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ borderTop: "1px solid #e6ebf2", background: "#fff", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: "0.68rem", color: MUTED }}>สำนักงานใหญ่ดูอย่างเดียว</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onOpenDealer} className="btn btn-secondary btn-sm">เปิดหน้าตัวแทน</button>
+            <button onClick={onClose} className="btn btn-primary btn-sm">ปิด</button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

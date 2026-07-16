@@ -1,22 +1,29 @@
 "use client";
 
 // ─── ส่วนวิเคราะห์ใบเสนอราคาทั้งเครือ ─────────────────────────────────────────
-// #1+#2 ใบเสนอราคารายตัวแทน · #3 อัตราการเปิดอ่าน · #4 สถานะแยกตัวแทน
-// #5 แนวโน้ม 12 เดือน · #6 เทียบรายภูมิภาค · #7 อันดับตัวแทน · #8 อายุใบที่ค้าง
+// ลีด→ใบเสนอราคา · มูลค่าเทียบยอดขายจริง · ใบเสนอราคารายตัวแทน · สถานะแยกตัวแทน
+// แนวโน้ม 12 เดือน · เทียบรายภูมิภาค · ประเภทอาคาร · เหตุผลที่เสียโอกาส · อายุใบที่ค้าง · อันดับตัวแทน
 // ใช้เฉพาะแท่ง/แท่งแนวนอน/แท่งซ้อน/เส้น — ไม่มีกรวย/วงกลม/เกจ
+//
+// ไม่มี "อัตราการเปิดอ่าน" และ "การใช้แม่แบบ" — ระบบไม่มีข้อมูลรองรับทั้งสองอย่าง (ห้ามกุ)
 import { useRouter } from "next/navigation";
+import { Eye } from "lucide-react";
 import { DealerRankingChart } from "./DealerRankingChart";
-import { QuotationOpenRateChart } from "./QuotationOpenRateChart";
 import { QuotationStatusChart } from "./QuotationStatusChart";
 import { QuotationTrendChart } from "./QuotationTrendChart";
 import { QuotationAgingChart } from "./QuotationAgingChart";
-import { aggregate, groupBy, regionDisplay, type QuoteRow } from "@/lib/hqQuotations";
+import { LeadsVsQuotationsChart } from "./LeadsVsQuotationsChart";
+import { QuotationValueVsSalesChart } from "./QuotationValueVsSalesChart";
+import { BuildingTypeChart } from "./BuildingTypeChart";
+import { LostReasonsChart } from "./LostReasonsChart";
+import { aggregate, conversionRate, groupBy, regionDisplay, type QuoteRow } from "@/lib/hqQuotations";
+import type { LeadRow } from "@/lib/mock";
 import { fmtBaht } from "@/lib/format";
 
 const PRIMARY = "#003366";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 
-// ── #6 เทียบรายภูมิภาค — จำนวนใบ · มูลค่า · อัตราการเปิดอ่าน ──
+// ── #6 เทียบรายภูมิภาค — จำนวนใบ · มูลค่า ──
 function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
   const regions = [...groupBy(rows, r => r.region).entries()]
     .map(([region, list]) => ({ region, ...aggregate(list) }))
@@ -28,7 +35,7 @@ function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">เทียบรายภูมิภาค</div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>มูลค่า · จำนวนใบ · อัตราเปิดอ่าน</span>
+        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>มูลค่า · จำนวนใบ</span>
       </div>
       <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 14 }}>
         {!regions.length ? (
@@ -38,7 +45,6 @@ function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem", marginBottom: 4 }}>
               <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{regionDisplay(r.region)}</span>
               <span style={{ display: "flex", gap: 8, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                <span style={{ color: "#7c3aed", fontWeight: 700 }}>เปิดอ่าน {r.openRate}%</span>
                 <span style={{ fontWeight: 800, color: "#1F2937" }}>{fmtBaht(r.value)}</span>
               </span>
             </div>
@@ -58,29 +64,35 @@ function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
   );
 }
 
-// ── #7 อันดับตัวแทน — ตาราง: ใบเสนอราคา · มูลค่า · อัตราเปิดอ่าน · ตอบรับ ──
+// ── #3 อันดับตัวแทน — 10 อันดับแรก: ใบเสนอราคา · มูลค่า · ตอบรับ · อัตราปิดการขาย ──
+const TOP_N = 10;
 function TopDealerRanking({ rows }: { rows: QuoteRow[] }) {
   const router = useRouter();
-  const ranked = [...groupBy(rows, r => r.dealerCode).entries()]
+  const all = [...groupBy(rows, r => r.dealerCode).entries()]
     .map(([code, list]) => ({ code, name: list[0].dealerName, region: list[0].region, ...aggregate(list) }))
     .sort((a, b) => b.value - a.value);
+  const ranked = all.slice(0, TOP_N);
+  const hidden = all.length - ranked.length;  // บอกจำนวนที่ไม่ได้แสดง — ห้ามตัดเงียบ
 
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">อันดับตัวแทนจำหน่าย</div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เรียงตามมูลค่าใบเสนอราคา</span>
+        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>10 อันดับแรก · เรียงตามมูลค่าใบเสนอราคา</span>
       </div>
       <div className="table-wrap">
         <table>
+          {/* ความกว้างคุมที่ colgroup เท่านั้น (ตาราง table-layout:fixed — ใส่ที่ th ไม่มีผล) */}
           <colgroup>
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "28%" }} />
-            <col style={{ width: "16%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "14%" }} />
+            <col style={{ width: "6%" }} />
             <col style={{ width: "8%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "11%" }} />{/* อัตราปิดการขาย */}
+            <col style={{ width: "5%", minWidth: 64 }} />{/* ปุ่มดูรายละเอียด */}
           </colgroup>
           <thead>
             <tr>
@@ -91,11 +103,13 @@ function TopDealerRanking({ rows }: { rows: QuoteRow[] }) {
               <th className="num">ใบเสนอราคา</th>
               <th className="num">มูลค่า</th>
               <th className="num">ตอบรับ</th>
+              <th className="num">อัตราปิดการขาย</th>
+              <th></th>{/* คอลัมน์ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ */}
             </tr>
           </thead>
           <tbody>
             {!ranked.length ? (
-              <tr><td colSpan={7} style={{ textAlign: "center", padding: "28px 14px", color: "var(--muted-foreground)" }}>ไม่พบข้อมูล</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: "center", padding: "28px 14px", color: "var(--muted-foreground)" }}>ไม่พบข้อมูล</td></tr>
             ) : ranked.map((d, i) => (
               <tr key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
                 <td style={{ fontWeight: 700, color: "var(--muted-foreground)" }}>{i + 1}</td>
@@ -105,31 +119,59 @@ function TopDealerRanking({ rows }: { rows: QuoteRow[] }) {
                 <td className="num" style={{ fontVariantNumeric: "tabular-nums" }}>{d.count}</td>
                 <td className="num" style={{ fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(d.value)}</td>
                 <td className="num" style={{ fontWeight: 700, color: "#059669", fontVariantNumeric: "tabular-nums" }}>{d.accepted}</td>
+                {/* ยังไม่ส่งใบถึงลูกค้าเลย = หารไม่ได้ → "—" ไม่ใช่ 0% */}
+                <td className="num" style={{ fontWeight: 700, color: "#374151", fontVariantNumeric: "tabular-nums" }}>{d.sent ? `${conversionRate(d)}%` : "—"}</td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button title="ดูรายละเอียดตัวแทน" onClick={() => router.push(`/hq/dealers/${d.code}`)}
+                      style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #dbe3ec", background: "#fff", color: PRIMARY, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Eye size={13} />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {hidden > 0 && (
+        <div style={{ padding: "8px 14px", fontSize: "0.65rem", color: "#9ca3af", borderTop: "1px solid #f2f4f7" }}>
+          แสดง 10 อันดับแรก — อีก {hidden} ตัวแทนไม่ได้แสดงในตารางนี้
+        </div>
+      )}
     </div>
   );
 }
 
-export function QuotationAnalytics({ rows, trendRows }: { rows: QuoteRow[]; trendRows: QuoteRow[] }) {
+export function QuotationAnalytics({ rows, trendRows, leads }: {
+  rows: QuoteRow[];
+  trendRows: QuoteRow[];
+  leads: LeadRow[];
+}) {
   return (
     <>
       <div className="hq-dealer-charts">
+        <LeadsVsQuotationsChart rows={rows} leads={leads} />
+        <QuotationValueVsSalesChart rows={rows} />
+      </div>
+
+      <div className="hq-dealer-charts">
         <DealerRankingChart rows={rows} />
-        <QuotationOpenRateChart rows={rows} />
-      </div>
-
-      <div className="hq-dealer-charts">
         <QuotationStatusChart rows={rows} />
-        <QuotationTrendChart rows={trendRows} />
       </div>
 
       <div className="hq-dealer-charts">
+        <BuildingTypeChart rows={rows} />
         <RegionalComparison rows={rows} />
+      </div>
+
+      <div className="hq-dealer-charts">
+        <LostReasonsChart leads={leads} />
         <QuotationAgingChart rows={rows} />
+      </div>
+
+      <div className="hq-dealer-charts">
+        <QuotationTrendChart rows={trendRows} />
       </div>
 
       <div style={{ marginBottom: 24 }}>

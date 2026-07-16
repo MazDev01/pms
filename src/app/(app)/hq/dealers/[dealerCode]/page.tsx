@@ -8,7 +8,7 @@ import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@/lib/mock";
-import { dealerLeaderboard } from "@/lib/mock";
+import { dealerLeaderboard, HQ_DEALERS_KEY } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useNetworkDealerDetail, useNetworkCustomers } from "@/lib/useNetworkData";
 import { CountUp } from "@/components/ui/CountUp";
@@ -39,7 +39,6 @@ const PROJ_STATUS: Record<DealerProjectItem["status"], { label: string; bg: stri
 const QUOTE_STATUS: Record<DealerQuoteItem["status"], { label: string; bg: string; color: string }> = {
   draft:          { label: "ร่าง",         bg: "#f0f0f5", color: "#6b7280" },
   sent_to_client: { label: "ส่งแล้ว",      bg: "#dce5f0", color: "#003366" },
-  viewed:         { label: "เปิดอ่านแล้ว", bg: "#e0e7ff", color: "#4338ca" },
   won:            { label: "ตอบรับ",       bg: "#e5faf0", color: "#059669" },
   lost:           { label: "ปฏิเสธ",       bg: "#fee2e2", color: "#dc2626" },
   expired:        { label: "หมดอายุ",      bg: "#f5f5f5", color: "#9ca3af" },
@@ -249,25 +248,25 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
       </div>
       <div className="table-wrap">
         <table>
+          {/* ตัดคอลัมน์ "ส่วนลด" ออก (ระบบไม่มีส่วนลดแล้ว) → เกลี่ย % ใหม่ให้ครบ 100 */}
           <colgroup>
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "26%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "30%" }} />
+            <col style={{ width: "16%" }} />
             <col style={{ width: "14%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "14%" }} />
+            <col style={{ width: "15%" }} />
             <col style={{ width: "14%" }} />
           </colgroup>
           <thead>
             <tr>
-              {["เลขที่", "ลูกค้า", "แม่แบบ", "มูลค่า", "ส่วนลด", "สถานะ", "วันที่"].map(h => (
+              {["เลขที่", "ลูกค้า", "แม่แบบ", "มูลค่า", "สถานะ", "วันที่"].map(h => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {quotes.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีใบเสนอ</td></tr>
+              <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีใบเสนอ</td></tr>
             )}
             {quotes.map(q => {
               const st = QUOTE_STATUS[q.status];
@@ -277,11 +276,6 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
                   <td style={{ fontSize: "0.8rem", fontWeight: 600, color: "#2D2D2D" }}>{q.customer}</td>
                   <td><span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{q.product}</span></td>
                   <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(q.valueNum)}</td>
-                  <td>
-                    {q.discountPct > 0
-                      ? <span style={{ fontSize: "0.72rem", fontWeight: 700, color: q.discountPct >= 10 ? "#dc2626" : "#d97706" }}>−{q.discountPct}%</span>
-                      : <span style={{ fontSize: "0.72rem", color: "#9ca3af" }}>—</span>}
-                  </td>
                   <td><span className="badge" style={BADGE(st.bg, st.color)}>{st.label}</span></td>
                   <td style={{ fontSize: "0.72rem", color: "#9ca3af" }}>{q.date}</td>
                 </tr>
@@ -313,17 +307,16 @@ function CustomerTab({ customers }: { customers: HQCustomer[] }) {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr>{["ลูกค้า", "จังหวัด", "ประเภท", "ดีลที่ปิด", "มูลค่ารวม", "สถานะ"].map(h => <th key={h}>{h}</th>)}</tr>
+            <tr>{["ลูกค้า", "จังหวัด", "ดีลที่ปิด", "มูลค่ารวม", "สถานะ"].map(h => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {customers.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ยังไม่มีลูกค้า</td></tr>
+              <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ยังไม่มีลูกค้า</td></tr>
             )}
             {customers.map(c => (
               <tr key={c.id}>
                 <td style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{c.name}</td>
                 <td style={{ fontSize: "0.8rem", color: "#6b7280" }}>{c.province}</td>
-                <td><span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{c.type}</span></td>
                 <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{c.dealsWon}</td>
                 <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(c.totalRevenue)}</td>
                 <td><span className="badge" style={c.status === "active" ? BADGE("#e5faf0", "#059669") : BADGE("#f0f0f5", "#9ca3af")}>{c.status === "active" ? "ใช้งาน" : "ไม่ใช้งาน"}</span></td>
@@ -368,8 +361,8 @@ type TabKey = typeof TABS[number]["key"];
 
 export default function DealerDrillDownPage({ params }: { params: Promise<{ dealerCode: string }> }) {
   const { dealerCode } = use(params);
-  // อ่านจากชุดที่ persist (hq_dealers_v2) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
-  const [dealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  // อ่านจากชุดที่ persist (HQ_DEALERS_KEY) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
+  const [dealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
   const [tab, setTab] = useState<TabKey>("overview");
   const code = dealerCode.toUpperCase();
   const dealer = dealers.find(d => d.code === code) ?? dealerLeaderboard.find(d => d.code === code);

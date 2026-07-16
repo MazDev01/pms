@@ -1,21 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   DollarSign, MapPin, Trophy, Building2, XCircle, Percent,
-  FileText, ChevronRight, AlertTriangle, Clock, TrendingDown, Users2, CalendarClock,
-  ArrowUpRight, ArrowDownRight, Store, Target, Activity, RefreshCw, Info,
+  FileText, ChevronRight, Users2, CalendarClock,
+  ArrowUpRight, ArrowDownRight, Target, Activity, RefreshCw, Info,
 } from "lucide-react";
 import { PlanVsActualBars, MultiLineChart, Donut } from "@/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 import {
-  dealerLeaderboard, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor,
+  dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy,
   type DealerRow, type HQTargets,
 } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters, APP_NOW } from "@/context/FilterContext";
 import { FilterBar, SelectFilter } from "@/components/filters/FilterBar";
 import { SalesTrendChart } from "@/components/ui/SalesTrendChart";
 import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads } from "@/lib/useNetworkData";
@@ -64,10 +64,12 @@ const THAI_REGION_PATHS: Record<string, string> = {
 export default function HQDashboard() {
   const router = useRouter();
   const { timeRange } = useFilters();
-  // ข้อมูลตัวแทน = ชุดเดียวกับหน้า "ตัวแทน" (persist ผ่าน hq_dealers_v2) — คุณสมบัติคงที่ (ชื่อ/ภาค/เป้าทั้งปี/สถานะ)
-  const [allDealers] = usePersistentState<DealerRow[]>("hq_dealers_v2", dealerLeaderboard);
+  // ข้อมูลตัวแทน = ชุดเดียวกับหน้า "ตัวแทน" (persist ผ่าน HQ_DEALERS_KEY) — คุณสมบัติคงที่ (ชื่อ/ภาค/เป้าทั้งปี/สถานะ)
+  const [allDealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
   // เป้าหมายที่ HQ ตั้งไว้ (แหล่งเดียว) — ใช้เป็นเกณฑ์สี Win rate แทนการ hardcode
   const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  // เกณฑ์การแจ้งเตือน (ตั้งที่ /hq/settings → การแจ้งเตือน) — อ่านหลัง mount กัน hydration mismatch
+  // notifRules ถูกลบพร้อมการ์ดแจ้งเตือน — เกณฑ์เตือนไม่มีใครอ่านแล้ว
   // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน ไม่จำข้ามหน้า)
   const [dealerSel, setDealerSel] = useState<string>("all");
   const dealers = useMemo(
@@ -219,12 +221,11 @@ export default function HQDashboard() {
     return { lC, qC };
   }, [allNetLeads, netQuotes]);
 
-  // ── สถานะใบเสนอราคา (กราฟแท่ง) — สีตามสเปค: ร่าง เทา · ส่ง navy · เปิดอ่าน ม่วง · ตอบรับ เขียว · ปฏิเสธ แดง · หมดอายุ ส้ม ──
+  // ── สถานะใบเสนอราคา (กราฟแท่ง) — สีตามสเปค: ร่าง เทา · ส่ง navy · ตอบรับ เขียว · ปฏิเสธ แดง · หมดอายุ ส้ม ──
   const quoteStatus = useMemo(() => {
     const order = [
       { k: "draft",          label: "ร่าง",     color: "#9ca3af" },
       { k: "sent_to_client", label: "ส่งแล้ว",   color: "#003366" },
-      { k: "viewed",         label: "เปิดอ่าน",  color: "#7c3aed" },
       { k: "won",            label: "ตอบรับ",   color: "#059669" },
       { k: "lost",           label: "ปฏิเสธ",   color: "#dc2626" },
       { k: "expired",        label: "หมดอายุ",  color: "#d97706" },
@@ -236,19 +237,7 @@ export default function HQDashboard() {
   const templateTotal = useMemo(() => productAgg.reduce((s, p) => s + p.valueNum, 0), [productAgg]);
   const templateTop = useMemo(() => productAgg.slice(0, 5).map(p => ({ ...p, pct: templateTotal ? Math.round(p.valueNum / templateTotal * 100) : 0 })), [productAgg, templateTotal]);
 
-  // ── การแจ้งเตือนที่สำคัญ (Network Alerts) ──
-  const alerts = useMemo(() => {
-    const noContact = allNetLeads.filter(l => l.status === "WAITING" || l.status === "FOLLOWUP" || l.status === "BULLET").length;
-    const expiringSoon = winQuotes.filter(q => q.status === "sent_to_client" || q.status === "viewed").length;
-    const belowGoal = rankedWin.filter(d => d.tpct < 50).length;
-    const discountPending = winQuotes.filter(q => (q.discountPct ?? 0) > 10).length; // ลดเกินเพดาน HQ → รออนุมัติ
-    return [
-      { Icon: AlertTriangle, title: "ลีดไม่มีการติดต่อเกิน 7 วัน", sub: "ต้องติดตามโดยด่วน",         count: noContact,       unit: "ราย",    color: "#dc2626", bg: "#fef2f2", href: "/hq/pipeline" },
-      { Icon: Clock,         title: "ใบเสนอราคาใกล้หมดอายุ",     sub: "ควรติดตามลูกค้าให้ตอบรับ",   count: expiringSoon,    unit: "ราย",    color: "#d97706", bg: "#fff7ed", href: "/hq/quotations" },
-      { Icon: TrendingDown,  title: "ตัวแทนต่ำกว่าเป้า",          sub: "ทำได้ต่ำกว่า 50% ของเป้า",   count: belowGoal,       unit: "Dealer", color: "#b7892a", bg: "#fefce8", href: "/hq/dealers" },
-      { Icon: Percent,       title: "ส่วนลดรออนุมัติ",           sub: "ลดเกินเพดานที่ HQ กำหนด",    count: discountPending, unit: "ใบ",     color: "#2563a8", bg: "#eff6ff", href: "/hq/quotations" },
-    ];
-  }, [allNetLeads, winQuotes, rankedWin]);
+  // ตัวคำนวณ alerts ถูกลบพร้อมการ์ดแจ้งเตือน — ไม่มีใครอ่านผลแล้ว
 
   // ── ชุดข้อมูลรายเดือนสำหรับ sparkline บนการ์ด KPI ──
   const monthly = useMemo(() => {
@@ -276,7 +265,6 @@ export default function HQDashboard() {
     const defs = [
       { k: "draft",          label: "ร่าง",     color: "#9ca3af" },
       { k: "sent_to_client", label: "ส่งแล้ว",   color: "#003366" },
-      { k: "viewed",         label: "เปิดอ่าน",  color: "#7c3aed" },
       { k: "won",            label: "ตอบรับ",   color: "#059669" },
       { k: "lost",           label: "ปฏิเสธ",   color: "#dc2626" },
       { k: "expired",        label: "หมดอายุ",  color: "#d97706" },
@@ -327,12 +315,11 @@ export default function HQDashboard() {
 
   // กิจกรรมล่าสุดทั้งเครือ (จากใบเสนอราคาล่าสุด)
   const recentActivities = useMemo<ActivityTimelineItem[]>(() => {
-    const typeOf = (st: string) => st === "won" ? "status" : st === "lost" ? "status" : st === "viewed" ? "open" : "quote";
+    const typeOf = (st: string) => st === "won" ? "status" : st === "lost" ? "status" : "quote";
     const textOf = (q: typeof winQuotes[number]) => {
       const who = q.customer;
       if (q.status === "won") return `${who} · ปิดการขายสำเร็จ (${fmtBaht(q.valueNum)})`;
       if (q.status === "lost") return `${who} · ปิดการขายไม่สำเร็จ`;
-      if (q.status === "viewed") return `${who} · ลูกค้าเปิดอ่านใบเสนอราคา`;
       return `${who} · ${fmtBaht(q.valueNum)}`;
     };
     return [...winQuotes]
@@ -354,14 +341,7 @@ export default function HQDashboard() {
     return out;
   }, [winQuotes, targets, timeRange]);
 
-  // เหตุผลปิดการขายไม่สำเร็จ (Lost Reasons)
-  const lostReasons = useMemo(() => {
-    const m = new Map<string, number>();
-    allNetLeads.forEach(l => { if (l.status === "CANCELLED") { const r = l.lostReason || "อื่นๆ"; m.set(r, (m.get(r) ?? 0) + 1); } });
-    const arr = [...m.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
-    const max = Math.max(...arr.map(a => a.count), 1);
-    return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100) }));
-  }, [allNetLeads]);
+  // lostReasons ถูกลบพร้อมการ์ด — ไม่มีใครอ่านผลแล้ว
 
   // คาดการณ์รายได้ (Forecast) = แนวโน้ม + ต่ออีก 3 เดือนตามอัตราเติบโต
   const forecast = useMemo(() => {
@@ -469,6 +449,8 @@ export default function HQDashboard() {
           </div>
         ))}
       </div>
+
+      {/* แถวการ์ดแจ้งเตือน (ลีดไม่มีผู้รับผิดชอบ/ไม่ติดต่อ/ใบใกล้หมดอายุ/ตัวแทนยอดต่ำ) เอาออกตามที่บอสสั่ง */}
 
       {/* แถว 1: แนวโน้มยอดขายรวม · ยอดขายตามภูมิภาค */}
       <div className="hq-row2a" style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
@@ -589,23 +571,7 @@ export default function HQDashboard() {
             ))}
           </div>
         </div>
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">เหตุผลปิดการขายไม่สำเร็จ</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ราย</span></div>
-          <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 12 }}>
-            {(() => { const tot = lostReasons.reduce((s, r) => s + r.count, 0) || 1; return lostReasons.map(r => (
-              <div key={r.reason}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
-                  <span style={{ color: "#374151", fontWeight: 600 }}>{r.reason}</span>
-                  <span style={{ fontWeight: 700, color: "var(--muted-foreground)", fontVariantNumeric: "tabular-nums" }}>{r.count} ({Math.round(r.count / tot * 100)}%)</span>
-                </div>
-                <div style={{ height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${r.pct}%`, background: "#dc2626", borderRadius: 999 }} />
-                </div>
-              </div>
-            )); })()}
-          </div>
-        </div>
+        {/* การ์ด "เหตุผลปิดการขายไม่สำเร็จ" เอาออกตามที่บอสสั่ง */}
       </div>
 
     </div>

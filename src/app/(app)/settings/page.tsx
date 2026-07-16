@@ -16,7 +16,7 @@ const ROLE_LABEL: Record<string, string> = {
   HQ_MANAGEMENT: "ผู้บริหารสำนักงานใหญ่", DEALER_ADMIN: "ผู้จัดการตัวแทน", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม",
 };
 
-type SettingTab = "company" | "documents" | "persons" | "notifications" | "rules";
+type SettingTab = "company" | "documents" | "persons" | "notifications";
 
 // ── shared save bus — แท็บที่มีฟอร์มรายงาน {dirty,save,reset} ให้ปุ่มบันทึกกลางบนหัว
 // (แนวเดียวกับหน้าตั้งค่า HQ · แท็บที่บันทึกทันที เช่น ผู้รับผิดชอบ/แจ้งเตือน ไม่ต้องรายงาน)
@@ -32,7 +32,6 @@ const TABS: { key: SettingTab; label: string; icon: React.ReactNode }[] = [
   { key: "documents", label: "ตั้งค่าใบเสนอราคา", icon: <FileText  size={15} /> },
   { key: "persons",   label: "ผู้รับผิดชอบ",       icon: <UserCheck size={15} /> },
   { key: "notifications", label: "การแจ้งเตือน",   icon: <Bell size={15} /> },
-  { key: "rules",     label: "กฎธุรกิจ",           icon: <ShieldCheck size={15} /> },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,7 +216,6 @@ type DocumentSettings = {
   runningNumber: number;
   vatPercent: number;
   validityDays: number;    // อายุใบเสนอราคา (วัน) → วันหมดอายุเริ่มต้น
-  defaultDiscount: number; // ส่วนลดเริ่มต้น % ตอนสร้างใบเสนอราคา
   termsAndConditions: string;
   header: string;
   footer: string;
@@ -230,7 +228,6 @@ const DOC_DEFAULT: DocumentSettings = {
   runningNumber:       1101,
   vatPercent:          7,
   validityDays:        30,
-  defaultDiscount:     0,
   termsAndConditions:
     "ราคานี้มีผลภายใน 30 วัน นับจากวันที่ออกใบเสนอราคา\n" +
     "บริษัทขอสงวนสิทธิ์เปลี่ยนแปลงราคาโดยไม่แจ้งล่วงหน้า\n" +
@@ -313,12 +310,12 @@ function DocumentsTab() {
       <div className="card-header">
         <div>
           <div className="card-title">ตั้งค่าใบเสนอราคา</div>
-          <div className="card-desc">เลขที่ · อายุใบ · ส่วนลด · หัว/ท้าย เงื่อนไข ตราประทับ และลายเซ็น · ภาษีกำหนดโดยสำนักงานใหญ่</div>
+          <div className="card-desc">เลขที่ · อายุใบ · หัว/ท้าย เงื่อนไข ตราประทับ และลายเซ็น · ภาษีกำหนดโดยสำนักงานใหญ่</div>
         </div>
       </div>
       <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
-        {/* Quote number format — ตัวแทนตั้งเลขที่/อายุใบ/ส่วนลดเองได้ · ล็อกเฉพาะ VAT (อัตราภาษีมาตรฐาน) */}
+        {/* Quote number format — ตัวแทนตั้งเลขที่/อายุใบเองได้ · ล็อกเฉพาะ VAT (อัตราภาษีมาตรฐาน) */}
         <div>
           <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 10, textTransform: "uppercase" }}>
             เลขที่ใบเสนอราคา
@@ -351,18 +348,12 @@ function DocumentsTab() {
               <div style={{ fontFamily: "monospace", fontWeight: 800, color: "#003366", fontSize: "1rem" }}>{previewNo}</div>
             </div>
           </div>
-          {/* ค่าเริ่มต้น: อายุใบเสนอราคา + ส่วนลดเริ่มต้น (ตัวแทนตั้งได้เอง) */}
+          {/* ค่าเริ่มต้น: อายุใบเสนอราคา (ตัวแทนตั้งได้เอง) */}
           <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 200px) minmax(150px, 200px)", gap: 12, marginTop: 14 }}>
             <div>
               <label className="form-label">อายุใบเสนอราคา (วัน)</label>
               <input className="form-input" type="number" min={1} value={doc.validityDays}
                 onChange={e => set("validityDays", Math.max(1, Number(e.target.value) || 1))}
-                style={{ fontFamily: "monospace" }} />
-            </div>
-            <div>
-              <label className="form-label">ส่วนลดเริ่มต้น (%) <span style={{ color: "#9ca3af", fontWeight: 400 }}>· เพดาน HQ {hq.maxDiscount}%</span></label>
-              <input className="form-input" type="number" min={0} max={hq.maxDiscount} value={doc.defaultDiscount}
-                onChange={e => set("defaultDiscount", Math.max(0, Math.min(hq.maxDiscount, Number(e.target.value) || 0)))}
                 style={{ fontFamily: "monospace" }} />
             </div>
           </div>
@@ -663,176 +654,6 @@ function PersonsTab() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BUSINESS RULES TAB — กติกาการขาย (บางข้อ HQ ล็อก, บางข้อ Dealer ปรับได้)
-// ─────────────────────────────────────────────────────────────────────────────
-const RULES_KEY = "dealer_business_rules";
-type BizRules = {
-  quoteValidityDays: number;
-  leadSlaHours: number;
-  maxSelfDiscountPct: number;
-  followUpDays: number;
-  defaultResponsibleId: number | null;
-};
-const RULES_DEFAULT: BizRules = {
-  quoteValidityDays: 30,
-  leadSlaHours: 48,
-  maxSelfDiscountPct: 10,
-  followUpDays: 7,
-  defaultResponsibleId: null,
-};
-
-// ขั้นตอนการขายมาตรฐาน (Core Stage — HQ ล็อก ทุกตัวแทนเหมือนกัน)
-const CORE_STAGES = ["ติดต่อแล้ว", "รวบรวมความต้องการ", "เสนอราคา", "ติดตามผล", "เจรจา", "ปิดการขาย (Won/Lost)"];
-
-// กติกาที่ HQ กำหนดตายตัว (อ่านอย่างเดียว)
-const LOCKED_RULES = [
-  "เส้นทางการขายจบที่ Won / Lost เท่านั้น — ไม่มีขั้นตอนก่อสร้าง/ผลิต/ติดตั้ง",
-  "ใบเสนอราคาออกในนามบริษัทของตัวแทนเอง (ห้ามใช้ชื่อสำนักงานใหญ่)",
-  "ราคากลาง/แคตตาล็อกแม่แบบกำหนดโดย HQ — Dealer ดูได้ แก้ไม่ได้",
-  "ข้อมูลทั้งหมด Sync ไปสำนักงานใหญ่ (HQ) อัตโนมัติ",
-  "Responsible Person เป็นรายชื่อเซลส์ ไม่ใช่ผู้ใช้ระบบ (Login ไม่ได้)",
-];
-
-function RulesTab() {
-  const [rules, setRules] = useState<BizRules>(RULES_DEFAULT);
-  const [persons, setPersons] = useState<ResponsiblePerson[]>(RP_INITIAL);
-  const [baseline, setBaseline] = useState(""); // สแนปช็อตค่าที่บันทึกล่าสุด → ใช้เทียบ dirty
-  const [hq, setHq] = useState<HQPolicy>(DEFAULT_HQ_POLICY); // นโยบายที่ HQ ล็อก
-
-  useEffect(() => {
-    setHq(loadHQPolicy());
-    let r = RULES_DEFAULT;
-    const s = localStorage.getItem(RULES_KEY);
-    if (s) try { r = { ...RULES_DEFAULT, ...JSON.parse(s) }; } catch {}
-    setRules(r);
-    setBaseline(JSON.stringify(r));
-    const p = localStorage.getItem(RP_STORAGE_KEY);
-    if (p) try { setPersons(reindexPersons(JSON.parse(p))); } catch {}
-  }, []);
-
-  function set<K extends keyof BizRules>(k: K, v: BizRules[K]) { setRules(p => ({ ...p, [k]: v })); }
-  const save = useCallback(() => {
-    setRules(r => { localStorage.setItem(RULES_KEY, JSON.stringify(r)); setBaseline(JSON.stringify(r)); return r; });
-  }, []);
-  const dirty = baseline !== "" && JSON.stringify(rules) !== baseline;
-  const reset = useCallback(() => {
-    if (!baseline) return;
-    try { setRules(JSON.parse(baseline)); } catch {}
-  }, [baseline]);
-  useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
-
-  // ค่าที่ตัวแทนปรับได้เอง (Constitution V2 — ตัด SLA ออกทั้งหมด)
-  const editable: { k: "followUpDays"; label: string; hint: string; unit: string; max?: number }[] = [
-    { k: "followUpDays", label: "จำนวนวันติดตามเริ่มต้น", hint: "ระยะเวลาก่อนติดตามลูกค้าครั้งถัดไป", unit: "วัน" },
-  ];
-  // นโยบายที่ HQ กำหนด — ตัวแทนดูได้ แก้ไม่ได้ (ตั้งที่ HQ → ตั้งค่า → กฎธุรกิจ)
-  const hqLocked: { label: string; value: string; hint: string }[] = [
-    { label: "เพดานส่วนลดสูงสุด", value: `${hq.maxDiscount}%`,          hint: "ตัวแทนออกใบเสนอราคาเกินเพดานนี้ไม่ได้" },
-    { label: "ภาษีมูลค่าเพิ่ม",     value: `${hq.vat}%`,                  hint: "อัตรามาตรฐานบนใบเสนอราคาทุกตัวแทน" },
-    { label: "อายุใบเสนอราคา",     value: `${hq.quoteValidityDays} วัน`, hint: "จำนวนวันที่ราคามีผลนับจากวันออกเอกสาร" },
-  ];
-
-  return (
-    <>
-      <div className="card-header">
-        <div>
-          <div className="card-title">กฎธุรกิจ (Business Rules)</div>
-          <div className="card-desc">นโยบายที่สำนักงานใหญ่กำหนด (อ่านอย่างเดียว) และค่าที่ตัวแทนปรับได้เอง</div>
-        </div>
-      </div>
-      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-
-        {/* Core sales journey (locked) */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 12, textTransform: "uppercase" }}>
-            <Lock size={13} /> ขั้นตอนการขายมาตรฐาน · HQ ล็อก
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            {CORE_STAGES.map((s, i) => (
-              <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <span className="badge" style={{ background: "#dce5f0", color: "#003366" }}>{i + 1}. {s}</span>
-                {i < CORE_STAGES.length - 1 && <span style={{ color: "#cbd5e1" }}>→</span>}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Editable dealer rules */}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 18 }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 12, textTransform: "uppercase" }}>
-            ค่าที่ตัวแทนปรับได้
-          </div>
-          {/* ชิดซ้าย · จำกัดความกว้าง — ไม่ให้ช่องกรอกยืดเต็มจอ */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 220px) minmax(0, 340px)", gap: 16, alignItems: "start" }}>
-            {editable.map(f => (
-              <div key={f.k}>
-                <label className="form-label">{f.label}</label>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <input className="form-input" type="number" min={0} max={f.max} value={rules[f.k]}
-                    onChange={e => set(f.k, Math.max(0, Number(e.target.value)) as BizRules[typeof f.k])}
-                    style={{ fontFamily: "monospace", minWidth: 0, textAlign: "right", fontWeight: 700 }} />
-                  <span style={{ fontSize: "0.72rem", color: "#6b7280", flexShrink: 0 }}>{f.unit}</span>
-                </div>
-                <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>{f.hint}</div>
-              </div>
-            ))}
-            <div>
-              <label className="form-label">ผู้รับผิดชอบเริ่มต้น</label>
-              <select className="form-input"
-                value={rules.defaultResponsibleId ?? ""}
-                onChange={e => set("defaultResponsibleId", e.target.value ? Number(e.target.value) : null)}>
-                <option value="">— ไม่กำหนด —</option>
-                {persons.filter(p => p.active).map(p => (
-                  <option key={p.id} value={p.id}>{p.name}{p.title ? ` · ${p.title}` : ""}</option>
-                ))}
-              </select>
-              <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>ผู้รับผิดชอบที่กำหนดให้ลูกค้าเป้าหมายโดยอัตโนมัติเมื่อไม่ได้ระบุ</div>
-            </div>
-          </div>
-        </div>
-
-        {/* HQ-locked numeric policy — แสดงค่าจริงจากสำนักงานใหญ่ (ไม่ให้แก้ · กันซ้ำซ้อนกับหน้า HQ) */}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 12, textTransform: "uppercase" }}>
-            <Lock size={13} /> นโยบายราคาที่สำนักงานใหญ่กำหนด
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-            {hqLocked.map(f => (
-              <div key={f.label} style={{ padding: "12px 14px", background: "#f8fafc", border: "1px solid #eef1f5", borderRadius: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-                  <span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{f.label}</span>
-                  <span style={{ fontSize: "0.58rem", color: "#9ca3af", fontWeight: 700, border: "1px solid #dce5f0", borderRadius: 5, padding: "1px 5px" }}>HQ</span>
-                </div>
-                <div style={{ fontFamily: "monospace", fontWeight: 800, color: "#003366", fontSize: "1.05rem", marginTop: 4 }}>{f.value}</div>
-                <div style={{ fontSize: "0.62rem", color: "#9ca3af", marginTop: 3, lineHeight: 1.4 }}>{f.hint}</div>
-              </div>
-            ))}
-          </div>
-          <p style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 8 }}>
-            ค่าเหล่านี้ตั้งที่สำนักงานใหญ่และมีผลกับทุกตัวแทน · ตัวแทนดูได้ แก้ไม่ได้
-          </p>
-        </div>
-
-        {/* Locked HQ rules */}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 12, textTransform: "uppercase" }}>
-            <Lock size={13} /> กติกาที่ HQ กำหนด · อ่านอย่างเดียว
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {LOCKED_RULES.map((r, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "#f8fafc", border: "1px solid #eef1f5", borderRadius: 10 }}>
-                <ShieldCheck size={15} style={{ color: "#003366", flexShrink: 0, marginTop: 1 }} />
-                <span style={{ fontSize: "0.8rem", color: "#374151", lineHeight: 1.5 }}>{r}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
-    </>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICATIONS TAB — เปิด/ปิดการแจ้งเตือนแต่ละชนิด (มีผลกับกระดิ่งบน Topbar ทันที)
@@ -909,7 +730,7 @@ export default function SettingsPage() {
           <button className="btn btn-secondary btn-sm" onClick={resetAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><RotateCcw size={14} /> รีเซ็ต</button>
           <button className="btn btn-primary btn-sm" onClick={saveAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><Save size={14} /> บันทึก</button>
         </TopbarActions>
-        <p className="page-sub">บัญชีดีลเลอร์ · ใบเสนอราคา · ผู้รับผิดชอบ · กฎธุรกิจ ของตัวแทน</p>
+        <p className="page-sub">บัญชีดีลเลอร์ · ใบเสนอราคา · ผู้รับผิดชอบ · การแจ้งเตือน ของตัวแทน</p>
 
         {/* Tab bar */}
         <div className="card" style={{ marginBottom: 18 }}>
@@ -931,7 +752,6 @@ export default function SettingsPage() {
           {activeTab === "documents" && <DocumentsTab />}
           {activeTab === "persons"   && <PersonsTab />}
           {activeTab === "notifications" && <NotificationsTab />}
-          {activeTab === "rules"     && <RulesTab />}
         </div>
 
         {/* Toast */}

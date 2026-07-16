@@ -13,6 +13,17 @@ export async function open(page: Page, role: "hq" | "dealer", path: string) {
   await page.goto(path, { waitUntil: "domcontentloaded" });
 }
 
+// เปิดฟอร์ม "สร้างใบเสนอราคาใหม่" — ตอนนี้อยู่ในแผงรายละเอียดลูกค้าเป้าหมาย (แท็บใบเสนอราคา)
+// wizard เดิมบนหน้า /quotations ถูกลบทั้งฟีเจอร์ → ตัวแทนออกใบจากลีดเท่านั้น
+export async function openLeadQuotationForm(page: Page) {
+  await open(page, "dealer", "/leads");
+  await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตาราง
+  await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
+  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible();
+}
+
 // ตรวจหน้าโหลดสมบูรณ์: มีหัวข้อ h2 + ไม่มี uncaught error + ไม่มี body เลื่อนแนวนอน
 export async function assertHealthyPage(page: Page, label: string) {
   const errors: string[] = [];

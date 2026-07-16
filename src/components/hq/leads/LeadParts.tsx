@@ -6,10 +6,11 @@ import { AlertTriangle, CheckCircle2, Circle, ChevronRight } from "lucide-react"
 import type { LeadRow } from "@/lib/mock";
 import { LEAD_TASK_TEMPLATE, buildLeadTasks } from "@/lib/mock";
 import { daysSinceContact, lastContactLabel, leadProgress } from "@/lib/leadMetrics";
+import { useHQLeadRules } from "@/lib/useHQRules";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 const PRIMARY = "#003366";
-export const IDLE_LIMIT = 7; // กฎธุรกิจ: ไม่มีการติดต่อเกิน 7 วัน → เตือน
+// เกณฑ์ "ไม่มีการติดต่อเกินกี่วัน" มาจากกฎธุรกิจของ HQ (/hq/settings → กฎธุรกิจ) — ไม่ hardcode
 
 /** ความคืบหน้า = งานที่ทำเสร็จ ÷ งานมาตรฐานทั้งหมด × 100 (คำนวณล้วน · แก้มือไม่ได้) */
 export function ProgressCell({ lead }: { lead: LeadRow }) {
@@ -28,11 +29,12 @@ export function ProgressCell({ lead }: { lead: LeadRow }) {
   );
 }
 
-/** จำนวนวันที่ไม่มีการติดต่อ — เกิน 7 วันขึ้นสีแดง */
+/** จำนวนวันที่ไม่มีการติดต่อ — เกินเกณฑ์กฎธุรกิจขึ้นสีแดง */
 export function DaysIdleCell({ lead }: { lead: LeadRow }) {
+  const { followUpAlertDays } = useHQLeadRules();
   const d = daysSinceContact(lead);
   if (d == null) return <span style={{ color: "#9CA3AF", fontSize: "0.72rem" }}>—</span>; // ไม่มีวันติดต่อบันทึกไว้
-  const over = d > IDLE_LIMIT;
+  const over = d > followUpAlertDays;
   return (
     <span className="badge" style={over ? { background: "#FDECEC", color: "#DC2626" } : { background: "#F1F5F9", color: "#6B7280" }}
       title={`ติดต่อล่าสุด ${lastContactLabel(lead)}`}>
@@ -42,25 +44,26 @@ export function DaysIdleCell({ lead }: { lead: LeadRow }) {
   );
 }
 
-/** การ์ดเตือนกฎ 7 วัน — แสดงวันที่ไม่ติดต่อ / ติดต่อล่าสุด / กดดูได้ทันที */
+/** การ์ดเตือนลีดค้าง — เกณฑ์วันมาจากกฎธุรกิจของ HQ · แสดงวันที่ไม่ติดต่อ / ติดต่อล่าสุด / กดดูได้ทันที */
 export function SevenDayAlertCard({ leads, onView }: { leads: LeadRow[]; onView: (l: LeadRow) => void }) {
+  const { followUpAlertDays } = useHQLeadRules();
   // นับเฉพาะลีดที่มีวันติดต่อบันทึกไว้จริง — ไม่มีข้อมูล = ไม่เดาว่าค้าง
   const overdue = leads
     .map(l => ({ l, d: daysSinceContact(l) }))
-    .filter((x): x is { l: LeadRow; d: number } => x.d != null && x.d > IDLE_LIMIT)
+    .filter((x): x is { l: LeadRow; d: number } => x.d != null && x.d > followUpAlertDays)
     .sort((a, b) => b.d - a.d);
 
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <AlertTriangle size={15} color="#DC2626" /> ลีดที่ไม่มีการติดต่อเกิน {IDLE_LIMIT} วัน
+          <AlertTriangle size={15} color="#DC2626" /> ลีดที่ไม่มีการติดต่อเกิน {followUpAlertDays} วัน
         </div>
         <span className="badge" style={{ background: "#FDECEC", color: "#DC2626" }}>{overdue.length} ลีด</span>
       </div>
       <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" }}>
         {!overdue.length ? (
-          <EmptyState icon={<CheckCircle2 size={26} />} title="ไม่มีลีดค้าง" description={`ทุกลีดถูกติดต่อภายใน ${IDLE_LIMIT} วัน`} compact />
+          <EmptyState icon={<CheckCircle2 size={26} />} title="ไม่มีลีดค้าง" description={`ทุกลีดถูกติดต่อภายใน ${followUpAlertDays} วัน`} compact />
         ) : overdue.map(({ l, d }) => (
           <button key={l.id} onClick={() => onView(l)}
             style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "inherit",

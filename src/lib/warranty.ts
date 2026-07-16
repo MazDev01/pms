@@ -6,7 +6,7 @@
 import { DEFAULT_DELIVERY_DAYS } from "./mock";
 
 export const WARRANTY_YEARS = 10;
-const TODAY = new Date(2026, 5, 30); // "วันนี้" ของระบบ (deterministic)
+export const TODAY = new Date(2026, 5, 30); // "วันนี้" ของระบบ (deterministic)
 
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const TH_MONTH: Record<string, number> = Object.fromEntries(TH_ABBR.map((m, i) => [m, i]));

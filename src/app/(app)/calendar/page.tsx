@@ -4,6 +4,7 @@ import { TopbarActions } from "@/components/layout/TopbarActions";
 import { useState, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@/lib/mock";
+import { CURRENT_DEALER } from "@/lib/useNetworkData";
 import { useRole } from "@/context/RoleContext";
 import { useSales } from "@/context/SalesContext";
 import { ChevronLeft, ChevronRight, Clock, MapPin, CalendarDays, CalendarCheck, Plus, X, User, Phone, Building2, GitBranch, Users, Edit2, Trash2 } from "lucide-react";
@@ -165,9 +166,8 @@ export default function CalendarPage() {
       {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
       <TopbarActions>
         <ViewSwitcher view={view} onChange={setView} />
-        <button onClick={() => setAddOpen(true)} className="btn btn-primary btn-sm">
-          <Plus size={15} /> เพิ่มกิจกรรม
-        </button>
+        {/* ปุ่ม "+ เพิ่มกิจกรรม" บนแถบบน เอาออกตามที่บอสสั่ง
+            (ยังเพิ่มกิจกรรมได้ที่ปุ่ม + ในแผงนัดหมายของวันที่เลือก) */}
       </TopbarActions>
       <p className="page-sub">นัดหมายและกิจกรรมการขายของคุณ</p>
 
@@ -456,7 +456,13 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
 function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: AppointmentMock; defaultDate: string; onSave: (a: AppointmentMock) => void; onClose: () => void }) {
   const isEdit = !!initial;
   const { session } = useRole(); // ผู้รับผิดชอบเริ่มต้น = ผู้ใช้ที่ล็อกอิน
-  const { leads } = useSales(); // เลือกกิจกรรมกับลูกค้าเป้าหมายที่มีอยู่
+  const { leads: allLeads } = useSales();
+  // เลือกได้เฉพาะลีดของตัวแทนที่ล็อกอิน — ไม่ให้เห็นลีดของตัวแทนรายอื่นทั้งเครือ
+  const leads = useMemo(
+    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
+    [allLeads],
+  );
+  const [leadId, setLeadId] = useState<number | undefined>(initial?.leadId);
   const [company, setCompany] = useState(initial?.company ?? "");
   const [contact, setContact] = useState(initial?.contact ?? "—");
   const [phone, setPhone] = useState(initial?.phone ?? "—");
@@ -466,11 +472,15 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const [province, setProvince] = useState(initial?.province ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
 
-  // เลือกลูกค้าเป้าหมาย → เติมชื่อบริษัท/ผู้ติดต่อ/เบอร์/จังหวัดอัตโนมัติ
-  function pickLead(companyName: string) {
-    setCompany(companyName);
-    const L = leads.find(l => l.company === companyName);
-    if (L) { setContact(L.contact || "—"); setPhone(L.phone || "—"); setProvince(L.province || ""); }
+  // เลือกลูกค้าเป้าหมาย → ผูก leadId แล้วเติมชื่อบริษัท/ผู้ติดต่อ/เบอร์/จังหวัดอัตโนมัติ
+  // เลือกด้วย numId ไม่ใช่ชื่อบริษัท — ชื่อซ้ำกันได้ และแก้ชื่อทีหลังแล้วจะขาดจากกัน
+  function pickLead(v: string) {
+    if (!v) { setLeadId(undefined); return; }   // "ไม่ผูกลูกค้าเป้าหมาย" — พิมพ์ชื่อเอง
+    const L = leads.find(l => l.numId === Number(v));
+    if (!L) return;
+    setLeadId(L.numId);
+    setCompany(L.company);
+    setContact(L.contact || "—"); setPhone(L.phone || "—"); setProvince(L.province || "");
   }
 
   function save() {
@@ -482,6 +492,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
         buildingType: "—", area: 0,
         assigned: session.name, status: "upcoming",
       }),
+      leadId,
       company: name,
       contact, phone,
       project: initial?.project ?? name,
@@ -503,9 +514,9 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <label className="form-label">ลูกค้าเป้าหมาย</label>
-              <select value={leads.some(l => l.company === company) ? company : ""} onChange={e => pickLead(e.target.value)} className="form-select">
-                <option value="">— เลือกลูกค้าเป้าหมาย —</option>
-                {leads.map(l => <option key={l.numId} value={l.company}>{l.company}{l.contact ? ` · ${l.contact}` : ""}</option>)}
+              <select value={leadId ?? ""} onChange={e => pickLead(e.target.value)} className="form-select">
+                <option value="">— ไม่ผูกลูกค้าเป้าหมาย —</option>
+                {leads.map(l => <option key={l.numId} value={l.numId}>{l.company}{l.contact ? ` · ${l.contact}` : ""}</option>)}
               </select>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
