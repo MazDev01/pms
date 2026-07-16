@@ -1,27 +1,25 @@
 "use client";
 
-// ─── KPI ใบเสนอราคาทั้งเครือ (7 ตัว) ──────────────────────────────────────────
+// ─── KPI ใบเสนอราคาทั้งเครือ (4 ตัว — ทุกหน้าใช้ KPI 4 ใบเท่ากัน) ────────────────
 // ทุกตัวคำนวณจากข้อมูลจริง — ไม่มี "จำนวนวันเฉลี่ยที่ใช้ปิดดีล" เพราะระบบไม่เก็บวันที่ลูกค้าตอบรับ/ปฏิเสธ
 // ไม่มี "ลูกค้าเปิดอ่าน" เพราะระบบไม่มีการติดตามการเปิดอ่าน (ถูกลบทั้งฟีเจอร์)
-import { FileText, Coins, Percent, Calculator, CheckCircle2, XCircle, CalendarX } from "lucide-react";
+// ตัดออกตอนเหลือ 4 ใบ: ปฏิเสธ · หมดอายุ · มูลค่าเฉลี่ยต่อใบ (ยังดูได้จากตาราง/ตัวกรองสถานะ)
+import { FileText, Coins, Percent, CheckCircle2 } from "lucide-react";
 import { fmtBaht } from "@/lib/format";
-import { conversionRate, avgQuoteValue, type QuoteAgg } from "@/lib/hqQuotations";
+import { conversionRate, type QuoteAgg } from "@/lib/hqQuotations";
 
 type Tile = { label: string; value: string; sub: string; Icon: typeof FileText; color: string; bg: string };
 
-export function QuotationKPICards({ agg, expired }: { agg: QuoteAgg; expired: number }) {
+export function QuotationKPICards({ agg }: { agg: QuoteAgg }) {
   const tiles: Tile[] = [
     { label: "ใบเสนอราคาทั้งหมด", value: `${agg.count}`, sub: "ใบ", Icon: FileText, color: "#003366", bg: "#E8F0FE" },
     { label: "มูลค่ารวม", value: fmtBaht(agg.value), sub: "ก่อน VAT", Icon: Coins, color: "#0891B2", bg: "#E6F4F9" },
     { label: "ตอบรับ", value: `${agg.accepted}`, sub: "ใบ", Icon: CheckCircle2, color: "#059669", bg: "#E6F6EF" },
-    { label: "ปฏิเสธ", value: `${agg.rejected}`, sub: "ใบ", Icon: XCircle, color: "#DC2626", bg: "#FDECEC" },
-    { label: "หมดอายุ", value: `${expired}`, sub: "ใบ", Icon: CalendarX, color: "#D97706", bg: "#FEF0E6" },
     { label: "อัตราปิดการขาย", value: `${conversionRate(agg)}%`, sub: `${agg.accepted}/${agg.sent} ใบที่ส่งแล้ว`, Icon: Percent, color: "#7C3AED", bg: "#F1EBFD" },
-    { label: "มูลค่าเฉลี่ยต่อใบ", value: fmtBaht(avgQuoteValue(agg)), sub: "ก่อน VAT", Icon: Calculator, color: "#0F766E", bg: "#E6F4F2" },
   ];
 
   return (
-    <div className="hq-kpi7" style={{ marginBottom: "1.25rem" }}>
+    <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
       {tiles.map(t => (
         <div key={t.label} className="card" style={{ marginBottom: 0, padding: "14px 14px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div style={{ minWidth: 0 }}>

@@ -8,8 +8,7 @@
 // ไม่มี "อัตราการเปิดอ่าน" และ "การใช้แม่แบบ" — ระบบไม่มีข้อมูลรองรับทั้งสองอย่าง (ห้ามกุ)
 import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
-import { DealerRankingChart } from "./DealerRankingChart";
-import { QuotationStatusChart } from "./QuotationStatusChart";
+import { DealerClosingChart } from "./DealerClosingChart";
 import { QuotationTrendChart } from "./QuotationTrendChart";
 import { QuotationAgingChart } from "./QuotationAgingChart";
 import { LeadsVsQuotationsChart } from "./LeadsVsQuotationsChart";
@@ -155,22 +154,23 @@ export function QuotationAnalytics({ rows, trendRows, leads }: {
         <QuotationValueVsSalesChart rows={rows} />
       </div>
 
+      {/* "ใบเสนอราคา รายตัวแทน" (DealerRankingChart) ถูกตัดออก — ข้อมูลซ้ำทั้งใบ:
+          มูลค่ารายตัวแทนมีใน "มูลค่าใบเสนอราคา เทียบ ยอดขายจริง" · จำนวนใบมีใน "ลีด → ใบเสนอราคา"
+          และตาราง "อันดับตัวแทนจำหน่าย" ท้ายหน้ามีครบทั้งคู่ + อัตราปิดการขาย */}
+      {/* "สถานะใบเสนอราคา แยกตามตัวแทน" (แท่งซ้อน 5 สถานะ) ถูกแทนด้วย DealerClosingChart —
+          ข้อมูลชุดเดียวกัน (ตัวแทน × สถานะ) แต่จัดกลุ่มเป็นผลลัพธ์จริง + เรียงตามจำนวนใบ + บอกอัตราปิด */}
       <div className="hq-dealer-charts">
-        <DealerRankingChart rows={rows} />
-        <QuotationStatusChart rows={rows} />
-      </div>
-
-      <div className="hq-dealer-charts">
-        <BuildingTypeChart rows={rows} />
+        <DealerClosingChart rows={rows} />
         <RegionalComparison rows={rows} />
       </div>
 
       <div className="hq-dealer-charts">
+        <BuildingTypeChart rows={rows} />
         <LostReasonsChart leads={leads} />
-        <QuotationAgingChart rows={rows} />
       </div>
 
       <div className="hq-dealer-charts">
+        <QuotationAgingChart rows={rows} />
         <QuotationTrendChart rows={trendRows} />
       </div>
 

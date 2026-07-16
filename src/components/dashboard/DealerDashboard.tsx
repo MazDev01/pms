@@ -6,7 +6,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Target, TrendingUp, Users, PhoneCall, Activity, Building2,
+  Target, TrendingUp, PhoneCall, Activity, Building2,
   CalendarClock, FileText, Trophy, AlarmClock, ChevronRight, ArrowRight,
   UserPlus, CheckCircle2, Mail, Info,
 } from "lucide-react";
@@ -85,7 +85,6 @@ export default function DealerDashboard() {
   const achievePct = annualTarget > 0 ? Math.round((ytdSales / annualTarget) * 100) : 0;
   const openLeads = useMemo(() => leads.filter(isLeadOpen), [leads]);
   const openValue = useMemo(() => openLeads.reduce((s, l) => s + parseValue(l.value), 0), [openLeads]);
-  const newLeadsToday = useMemo(() => leads.filter(l => (l.createdAt ?? "") === "30 มิ.ย. 2569").length, [leads]);
   const followUpToday = useMemo(() => appointments.filter(a => a.date === TODAY_ISO && a.status !== "cancelled").length, [appointments]);
   const winRate = useMemo(() => {
     const won = quotations.filter(q => q.status === "won").length, lost = quotations.filter(q => q.status === "lost").length;
@@ -201,7 +200,6 @@ export default function DealerDashboard() {
   const kpis = [
     { label: "เป้าหมายยอดขาย", tip: "เป้าหมายยอดขายทั้งปีที่สำนักงานใหญ่กำหนด เทียบกับยอดปิดการขายสะสมตั้งแต่ต้นปี", Icon: Target, color: "#2563EB", bg: "#E8F0FE", href: "/quotations", ring: true },
     { label: "โอกาสทางการขาย", tip: "มูลค่ารวมของดีลที่ยังเปิดอยู่ (ยังไม่ปิดการขาย/ยกเลิก)", Icon: TrendingUp, color: SUCCESS, bg: "#E6F7EE", href: "/leads", value: baht(openValue), sub1: "มูลค่าโอกาสทั้งหมด", sub2: `${openLeads.length} ดีล` },
-    { label: "ลีดวันนี้", tip: "จำนวนลูกค้าเป้าหมายที่สร้างใหม่วันนี้", Icon: Users, color: "#7C3AED", bg: "#F0EBFB", href: "/leads", value: `${newLeadsToday}`, sub1: "รายการ" },
     { label: "ติดตามวันนี้", tip: "งานติดตาม/นัดหมายที่ต้องทำวันนี้", Icon: PhoneCall, color: "#EA580C", bg: "#FEF0E6", href: "/calendar", value: `${followUpToday}`, sub1: "รายการ" },
     { label: "อัตราการปิดการขาย", tip: "สัดส่วนใบเสนอราคาที่ตอบรับ เทียบกับที่ปิดแล้วทั้งหมด (ตอบรับ + ปฏิเสธ)", Icon: Activity, color: "#0D9488", bg: "#E6F7F5", href: "/quotations", value: `${winRate}%`, sub1: "อัตราการปิดการขาย" },
   ];
@@ -221,7 +219,7 @@ export default function DealerDashboard() {
         <FilterBar dims={[]} />
       </TopbarActions>
 
-      {/* SECTION 1 — 5 KPI (แถวเดียวบนจอกว้าง · ยุบเป็น 2/1 คอลัมน์บนจอแคบ) */}
+      {/* SECTION 1 — 4 KPI (แถวเดียวบนจอกว้าง · ยุบเป็น 2/1 คอลัมน์บนจอแคบ) */}
       <div className="dash-kpis" style={{ marginBottom: 24 }}>
         {kpis.map(k => (
           <div key={k.label} style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>

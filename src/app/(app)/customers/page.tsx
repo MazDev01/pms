@@ -8,7 +8,7 @@ import {
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, loadHQPolicy, customerCode,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
   type QuotationMock, type QuoteLineItem, type PipelineDealMock, type LeadRow,
-  type CustomerRow, type CustomerStatus, type DealerFile,
+  type CustomerRow, type DealerFile,
   type AppointmentMock, type NoteMock,
 } from "@/lib/mock";
 import { TemplateSelect } from "@/components/ui/TemplateSelect";
@@ -25,13 +25,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { MultiLineChart, Donut } from "@/components/ui/Charts";
 import { TemplateHero } from "@/components/ui/TemplateHero";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { FilterRow, FilterSelect } from "@/components/filters/FilterRow";
 import { TopbarActions } from "@/components/layout/TopbarActions";
 import { useFilters } from "@/context/FilterContext";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 import {
-  Plus, Search, X, ChevronUp, ChevronDown, Upload, Download,
+  Plus, X, ChevronUp, ChevronDown, Upload, Download,
   Phone, Building2, ExternalLink,
-  Filter, Trash2,
+  Trash2,
   Calendar, FileText, StickyNote, Check, User, Paperclip, Eye, Hash, Printer,
   MapPin, Mail, Coins, Layers, TrendingUp, Percent, PhoneCall, CalendarClock,
   Users, UserPlus, ShieldCheck, Package, ChevronRight, Truck, History as HistoryIcon, Pencil,
@@ -45,15 +46,10 @@ const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
 
 // ── Types ────────────────────────────────────────────────────
-// CustomerRow / CustomerStatus imported from mock (shared app-wide)
+// CustomerRow imported from mock (shared app-wide)
 type SortKey = "company"|"name"|"phone"|"province"|"owner"|"lastActivity"|"quotationCount"|"joinDate";
 type SortDir = "asc"|"desc";
 
-// สถานะลูกค้า (ใช้กับ FilterBar กลาง) — label ไทย
-const CUSTOMER_STATUS_OPTIONS = [
-  { value: "active",   label: "ใช้งาน" },
-  { value: "inactive", label: "ไม่ใช้งาน" },
-];
 const PROVINCES  =["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","สมุทรปราการ","นครสวรรค์","ราชบุรี","ขอนแก่น","ตาก","อุตรดิตถ์","อื่นๆ"];
 
 function initials(name:string){ return name.replace(/บจ\.|หจก\./g,"").trim().slice(0,2); }
@@ -386,9 +382,7 @@ export default function CustomersPage(){
   const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
   const [query, setQuery]             = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL"|CustomerStatus>("ALL");
   const [catFilter, setCatFilter]     = useState("ALL");
-  const [lifecycleFilter, setLifecycleFilter] = useState<"ALL"|LifecycleType>("ALL");
   // ตัวกรองจังหวัด/ผู้รับผิดชอบ — ตัวเลือกสร้างจากข้อมูลลูกค้าจริงที่มีอยู่ ไม่ใช่รายการตายตัว
   const [provFilter, setProvFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
@@ -435,7 +429,6 @@ export default function CustomersPage(){
   }, [selected]);
 
   const [view] = useState<"card"|"table">("table"); // ตารางอย่างเดียว (เอามุมมองการ์ดออก)
-  const [showFilter, setShowFilter]   = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailTab, setDetailTab]     = useState<"info"|"deals"|"quotes"|"appts"|"notes"|"files">("info");
   // โครงการที่กดดู (จากตาราง "ประวัติการปิดการขาย") → เปิดแผงรายละเอียดโครงการซ้อนขึ้นมา
@@ -495,14 +488,13 @@ export default function CustomersPage(){
     let rows=data.filter(c=>{
       const q=query.toLowerCase();
       const matchQ=!q||c.company.toLowerCase().includes(q)||c.name.toLowerCase().includes(q)||c.province.toLowerCase().includes(q)||c.phone.includes(q);
-      const matchS=statusFilter==="ALL"||c.status===statusFilter;
+      // ตัวกรอง "สถานะ" + "ลูกค้าใหม่/เดิม" ถูกลบตามที่บอสสั่ง — ไม่มี UI ให้ตั้งค่าแล้ว
       const matchC=catFilter==="ALL"||mainTemplateOf(c.category)===catFilter;
-      const matchL=lifecycleFilter==="ALL"||lifecycleTypeFor(c.id,c.joinDate,quotations)===lifecycleFilter;
       const matchP=provFilter==="ALL"||c.province===provFilter;
       const matchO=ownerFilter==="ALL"||(c.owner||"")===ownerFilter;
       // กรองตามช่วงเวลา — ใช้ "กิจกรรมล่าสุด" ของลูกค้า (โชว์ลูกค้าที่มีความเคลื่อนไหวในช่วงที่เลือก)
       const matchT=passes({date:lastActivityFor(c.id,c.joinDate,quotations)});
-      return matchQ&&matchS&&matchC&&matchL&&matchP&&matchO&&matchT;
+      return matchQ&&matchC&&matchP&&matchO&&matchT;
     });
     const sortVal=(c:CustomerRow):string|number=>{
       switch(sortKey){
@@ -524,7 +516,7 @@ export default function CustomersPage(){
       return 0;
     });
     return rows;
-  },[data,quotations,query,statusFilter,catFilter,lifecycleFilter,provFilter,ownerFilter,sortKey,sortDir,timeRange,passes]);
+  },[data,quotations,query,catFilter,provFilter,ownerFilter,sortKey,sortDir,timeRange,passes]);
 
   // ตัวเลือกตัวกรอง — ดึงจากข้อมูลลูกค้าจริงที่มีอยู่ (ไม่ hardcode รายการจังหวัด/พนักงาน)
   const provOptions  = useMemo(()=>[...new Set(data.map(c=>c.province).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"th")),[data]);
@@ -533,7 +525,7 @@ export default function CustomersPage(){
   // ── Pagination (client-side) ──────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // รีเซ็ต/clamp หน้าเมื่อค้นหา/เรียง/ตัวกรองเปลี่ยน หรือจำนวนหน้าลดลง
-  useEffect(() => { setPage(1); }, [query,statusFilter,catFilter,lifecycleFilter,sortKey,sortDir]);
+  useEffect(() => { setPage(1); }, [query,catFilter,provFilter,ownerFilter,sortKey,sortDir]);
   useEffect(() => { setPage(p => Math.min(p, totalPages)); }, [totalPages]);
   const pageStart = (page - 1) * PAGE_SIZE;
   const paged     = filtered.slice(pageStart, pageStart + PAGE_SIZE);
@@ -738,9 +730,8 @@ export default function CustomersPage(){
             { label:"อยู่ในประกัน",       value:`${warrantyActive}`,  sub:"ราย",     Icon:ShieldCheck, color:"#0D9488", bg:"#E6F7F5" },
             { label:"ยอดขายรวม",         value:fmtC(totalValue),     sub:"ทุกโครงการ", Icon:Coins,    color:"#EA580C", bg:"#FEF0E6" },
           ];
-          // kpi-4 = หน้านี้มี KPI 4 ใบ (ค่าเริ่มต้นของ .dash-kpis คือ 5 คอลัมน์)
           return (
-            <div className="dash-kpis kpi-4" style={{ marginBottom:16 }}>
+            <div className="dash-kpis" style={{ marginBottom:16 }}>
               {kpis.map(k => (
                 <div key={k.label} className="card" style={{ padding:"16px 14px", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
                   <div style={{ minWidth:0 }}>
@@ -758,81 +749,22 @@ export default function CustomersPage(){
         })()}
 
 
-        {/* ── FILTER DRAWER (เลื่อนจากขวา) ── */}
-        {showFilter && (() => {
-          const anyFilter = statusFilter!=="ALL" || catFilter!=="ALL" || lifecycleFilter!=="ALL" || provFilter!=="ALL" || ownerFilter!=="ALL";
-          const sec = { fontSize:"0.65rem", fontWeight:800, color:STEEL, marginBottom:8, display:"block" } as const;
-          const pills = { display:"flex", flexWrap:"wrap" as const, gap:6 };
-          return (
-            <>
-              <div onClick={()=>setShowFilter(false)} className="drawer-overlay"
-                style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.4)", zIndex:150 }} />
-              <div className="side-drawer" style={{ position:"fixed", top:0, right:0, height:"100vh", width:360, maxWidth:"100vw",
-                zIndex:151, background:"#fff", boxShadow:"-16px 0 60px rgba(0,0,0,.2)", borderRadius:"18px 0 0 18px", display:"flex", flexDirection:"column" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${BORDER}`, flexShrink:0 }}>
-                  <span style={{ fontSize:"1rem", fontWeight:800, color:PRIMARY, display:"flex", gap:8, alignItems:"center" }}><Filter size={16} /> ตัวกรอง</span>
-                  <button onClick={()=>setShowFilter(false)} style={{ width:30, height:30, borderRadius:8, border:`1px solid ${BORDER}`, background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:MUTED }}><X size={14} /></button>
-                </div>
-                <div style={{ flex:1, overflowY:"auto", padding:"20px", display:"flex", flexDirection:"column", gap:22 }}>
-                  {/* ปุ่มชิปตัวกรอง — ใช้รูปแบบเดียวกันทุกกลุ่ม */}
-                  {(() => {
-                    const chip = (on:boolean):React.CSSProperties => ({
-                      padding:"6px 12px", borderRadius:99, border:`1px solid ${on?"#C0C0C0":BORDER}`,
-                      background:on?"#f0f4f8":"#fff", color:on?STEEL:MUTED,
-                      fontSize:"0.72rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit",
-                    });
-                    const Group = ({label,value,options,onPick}:{label:string;value:string;options:{v:string;l:string}[];onPick:(v:string)=>void}) => (
-                      <div><label style={sec}>{label}</label><div style={pills}>
-                        {[{v:"ALL",l:"ทั้งหมด"},...options].map(o=>(
-                          <button key={o.v} onClick={()=>onPick(o.v)} style={chip(value===o.v)}>{o.l}</button>
-                        ))}
-                      </div></div>
-                    );
-                    return (
-                      <>
-                        <Group label="แม่แบบ" value={catFilter} onPick={setCatFilter}
-                          options={catalog.map(p=>({v:p.name,l:p.name}))} />
-                        {/* สถานะ + ประเภทลูกค้า: เดิมกรองได้จริงแต่ไม่มี UI ให้ตั้งค่า (ค้างที่ "ทั้งหมด" ตลอด) */}
-                        <Group label="สถานะ" value={statusFilter} onPick={v=>setStatusFilter(v as "ALL"|CustomerStatus)}
-                          options={[{v:"active",l:"ใช้งาน"},{v:"inactive",l:"ไม่ใช้งาน"}]} />
-                        <Group label="ลูกค้าใหม่/เดิม" value={lifecycleFilter} onPick={v=>setLifecycleFilter(v as "ALL"|LifecycleType)}
-                          options={(Object.keys(LIFECYCLE_META) as LifecycleType[]).map(k=>({v:k,l:LIFECYCLE_META[k].label}))} />
-                        <Group label="จังหวัด" value={provFilter} onPick={setProvFilter}
-                          options={provOptions.map(p=>({v:p,l:p}))} />
-                        <Group label="ผู้รับผิดชอบ" value={ownerFilter} onPick={setOwnerFilter}
-                          options={ownerOptions.map(o=>({v:o,l:o}))} />
-                      </>
-                    );
-                  })()}
-                </div>
-                <div style={{ padding:"14px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8, flexShrink:0 }}>
-                  <button className="btn btn-secondary btn-md" style={{ flex:1, justifyContent:"center", color: anyFilter ? "#dc2626" : "#9ca3af" }} disabled={!anyFilter}
-                    onClick={()=>{ setStatusFilter("ALL"); setCatFilter("ALL"); setLifecycleFilter("ALL"); setProvFilter("ALL"); setOwnerFilter("ALL"); }}>ล้างทั้งหมด</button>
-                  <button className="btn btn-primary btn-md" style={{ flex:1, justifyContent:"center" }} onClick={()=>setShowFilter(false)}>ดูผลลัพธ์</button>
-                </div>
-              </div>
-            </>
-          );
-        })()}
-
-        {/* ── แถบค้นหา + ตัวกรอง ── */}
-        <div className="card" style={{ padding:"12px 16px", marginBottom:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-            <div className="search-bar">
-              <Search size={13} color="#9ca3af"/>
-              <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาลูกค้า, เบอร์โทร, อีเมล..."/>
-              {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
-            </div>
-            <div style={{flex:1}}/>
-            {/* "ลูกค้าทั้งหมด N รายการ" เอาออกตามที่บอสสั่ง — จำนวนดูได้ที่การ์ด KPI ด้านบน และแถบแบ่งหน้าด้านล่าง */}
-            <button onClick={()=>setShowFilter(f=>!f)}
-              style={{display:"flex",alignItems:"center",gap:6,background:showFilter?"#003366":"#fff",
-                border:`1px solid ${showFilter?"#003366":"#e5e7eb"}`,borderRadius:10,padding:"0 13px",height:36,boxSizing:"border-box",
-                fontSize:"0.8rem",fontWeight:600,color:showFilter?"#fff":"#6b7280",cursor:"pointer"}}>
-              <Filter size={13}/> ตัวกรอง
-            </button>
-          </div>
-        </div>
+        {/* ── แถบตัวกรองแถวเดียว (มาตรฐานเดียวกับหน้า /hq/pipeline) ──
+            เดิมเป็นปุ่ม "ตัวกรอง" + แผงชิปเลื่อนจากขวา — ตอนนี้เห็นตัวกรองทุกตัวพร้อมกัน
+            ตัวเลือกจังหวัด/ผู้รับผิดชอบสร้างจากข้อมูลลูกค้าจริง · แม่แบบมาจากแคตตาล็อกกลาง
+            "ลูกค้าทั้งหมด N รายการ" เอาออกตามที่บอสสั่ง — จำนวนดูได้ที่การ์ด KPI และแถบแบ่งหน้า */}
+        <FilterRow
+          query={query} onQuery={setQuery} placeholder="ค้นหาลูกค้า, เบอร์โทร, อีเมล..."
+          showClear={catFilter!=="ALL" || provFilter!=="ALL" || ownerFilter!=="ALL" || !!query}
+          onClear={()=>{ setQuery(""); setCatFilter("ALL"); setProvFilter("ALL"); setOwnerFilter("ALL"); }}
+        >
+          <FilterSelect caption="ทุกแม่แบบ" value={catFilter} onChange={setCatFilter}
+            options={catalog.map(p=>({v:p.name,l:p.name}))} minWidth={140} />
+          <FilterSelect caption="ทุกจังหวัด" value={provFilter} onChange={setProvFilter}
+            options={provOptions.map(p=>({v:p,l:p}))} />
+          <FilterSelect caption="ทุกผู้รับผิดชอบ" value={ownerFilter} onChange={setOwnerFilter}
+            options={ownerOptions.map(o=>({v:o,l:o}))} minWidth={140} />
+        </FilterRow>
 
         {/* ── ตารางลูกค้า — คลิกแถวเพื่อเปิดแผงรายละเอียด · เรียงได้ที่หัวคอลัมน์
              ความกว้างคุมที่ colgroup เท่านั้น (table-layout:fixed — ใส่ที่ th ไม่มีผล) ── */}
@@ -840,7 +772,7 @@ export default function CustomersPage(){
           <div className="card" style={{ marginBottom:16 }}>
             <EmptyState icon={<User size={28}/>} title="ไม่พบลูกค้าที่ตรงกับเงื่อนไข"
               description="ลองปรับคำค้นหรือล้างตัวกรองเพื่อดูลูกค้าทั้งหมด"
-              action={<button className="btn btn-secondary btn-md" style={{color:PRIMARY}} onClick={()=>{ setStatusFilter("ALL"); setCatFilter("ALL"); setLifecycleFilter("ALL"); setProvFilter("ALL"); setOwnerFilter("ALL"); setQuery(""); }}>ล้างตัวกรอง</button>} />
+              action={<button className="btn btn-secondary btn-md" style={{color:PRIMARY}} onClick={()=>{ setCatFilter("ALL"); setProvFilter("ALL"); setOwnerFilter("ALL"); setQuery(""); }}>ล้างตัวกรอง</button>} />
           </div>
         ):(
           <div className="card" style={{ marginBottom:16 }}>

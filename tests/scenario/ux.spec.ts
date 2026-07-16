@@ -70,8 +70,11 @@ test("[ux·dealer] ฟอร์มเพิ่มลีดไม่มีขั�
   await open(page, "dealer", "/leads");
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).click();
   await expect(page.getByText("กรอกข้อมูลลูกค้าเป้าหมาย")).toBeVisible();
-  await expect(page.getByRole("option", { name: "เสนอราคา", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("option", { name: "ติดต่อแล้ว", exact: true })).toHaveCount(1);
+  // ต้องเจาะที่ช่อง "ขั้นตอน" ของฟอร์มเท่านั้น — dropdown กรองสถานะบนแถบเครื่องมือ (หลังโมดัล)
+  // มีครบทุกขั้นรวม "เสนอราคา" ตามปกติ ถ้าหาทั้งหน้าจะไปจับตัวนั้นแล้วฟ้องผิด
+  const stage = page.getByLabel("ขั้นตอน");
+  await expect(stage.getByRole("option", { name: "เสนอราคา", exact: true })).toHaveCount(0);
+  await expect(stage.getByRole("option", { name: "ติดต่อแล้ว", exact: true })).toHaveCount(1);
 });
 
 // ใบเสนอราคา = ฟอร์มหน้าเดียว (ไม่มี stepper) · ทุก section แสดงพร้อมกัน · แม่แบบรวมกับ BOQ ไม่ซ้ำ

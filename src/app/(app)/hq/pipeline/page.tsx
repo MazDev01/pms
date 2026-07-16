@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import {
   FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
 } from "lucide-react";
-import { MultiLineChart, StackedBarChart } from "@/components/ui/Charts";
+import { MultiLineChart, StackedBarChart, Donut } from "@/components/ui/Charts";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -36,6 +36,8 @@ const PRIMARY = "#003366";
 const STEEL = "#2D2D2D";
 const MUTED = "var(--muted-foreground)";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
+// โทนแดง-ส้มของโดนัท "เหตุผลที่เสียโอกาส" — ชุดเดียวกับหน้า /hq/leads ให้อ่านเหมือนกันทั้งระบบ
+const LOST_RAMP = ["#dc2626", "#ea580c", "#d97706", "#b45309", "#9f1239", "#7c2d12"];
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const TH_MONTH: Record<string, number> = Object.fromEntries(TH_ABBR.map((m, i) => [m, i]));
 const parseThaiDate = (s: string): Date | null => {
@@ -175,12 +177,11 @@ export default function SalesAnalyticsPage() {
     };
   }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads]);
 
-  // ── Executive KPI (5 การ์ด — ตัด Forecast ออก ไม่มีข้อมูล) ──
+  // ── Executive KPI (4 การ์ด — ตัด Forecast ออก ไม่มีข้อมูล · ตัด "ตัวแทนยอดขายสูงสุด" ตามคำสั่ง) ──
   const kpi = useMemo(() => {
     const won = quotes.filter(x => x.status === "won");
     const lost = quotes.filter(x => x.status === "lost");
     const closed = won.length + lost.length;
-    const top = perf.length ? [...perf].sort((a, b) => b.revenueActual - a.revenueActual)[0] : null;
     const actual = dealers.reduce((s, d) => s + d.revenueActual, 0);
     // เป้าทั้งเครือใช้ค่าที่ HQ ตั้งไว้ · แต่ถ้ากรองเหลือบางตัวแทน ต้องรวมเป้าเฉพาะรายนั้น ไม่งั้น % ผิด
     const filtered = dealers.length !== allDealers.length;
@@ -190,9 +191,8 @@ export default function SalesAnalyticsPage() {
       quotes: quotes.length, quoteVal: quotes.reduce((s, x) => s + x.valueNum, 0),
       conv: closed ? Math.round(won.length / closed * 100) : null,
       actual, target, tpct: target > 0 ? Math.round(actual / target * 100) : 0, filtered,
-      top,
     };
-  }, [quotes, perf, dealers, allDealers.length, targets.annualTarget]);
+  }, [quotes, dealers, allDealers.length, targets.annualTarget]);
 
   // ── Section 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — สลับมุมมองได้ 4 แบบ ──
   const leadVsQuote = useMemo(() => {
@@ -313,7 +313,6 @@ export default function SalesAnalyticsPage() {
     { label: "มูลค่าใบเสนอราคา", value: fmtBaht(kpi.quoteVal), sub: `${kpi.quotes} ใบ · ในช่วงที่เลือก`, Icon: FileText, color: "#0891B2", bg: "#E6F4F9" },
     { label: "อัตราปิดการขาย", value: kpi.conv === null ? "—" : `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
     { label: "เป้าหมายทั้งปี", value: `${kpi.tpct}%`, sub: `ยอดสะสม ${fmtBaht(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
-    { label: "ตัวแทนยอดขายสูงสุด", value: kpi.top ? kpi.top.code : "—", sub: kpi.top ? `${kpi.top.name} · ${fmtBaht(kpi.top.revenueActual)}` : "—", Icon: Trophy, color: "#D97706", bg: "#FEF0E6" },
   ];
 
   const sel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
@@ -350,7 +349,24 @@ export default function SalesAnalyticsPage() {
         </div>
       </div>
 
-      {/* ── SMART FILTER ── */}
+      {/* ── EXECUTIVE KPI ── */}
+      <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
+        {kpiCards.map(k => (
+          <div key={k.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...kSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.label}</div>
+              <div style={{ ...kNum, marginTop: 6 }}>{k.value}</div>
+              <div style={{ ...kSub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.sub}</div>
+            </div>
+            <span style={{ width: 42, height: 42, borderRadius: 12, background: k.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <k.Icon size={20} color={k.color} strokeWidth={2.1} />
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── SMART FILTER ── อยู่ใต้ KPI เหมือนหน้า HQ อื่น (ใบเสนอราคา/ลูกค้า/ตัวแทน)
+          เดิมหน้านี้หน้าเดียวที่เอาตัวกรองไว้เหนือ KPI */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
         <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 14, paddingBottom: 14 }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหารหัส ชื่อตัวแทน จังหวัด…"
@@ -368,24 +384,11 @@ export default function SalesAnalyticsPage() {
         </div>
       </div>
 
-      {/* ── EXECUTIVE KPI ── */}
-      <div className="hq-kpi5" style={{ marginBottom: "1.25rem" }}>
-        {kpiCards.map(k => (
-          <div key={k.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ ...kSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.label}</div>
-              <div style={{ ...kNum, marginTop: 6 }}>{k.value}</div>
-              <div style={{ ...kSub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.sub}</div>
-            </div>
-            <span style={{ width: 42, height: 42, borderRadius: 12, background: k.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <k.Icon size={20} color={k.color} strokeWidth={2.1} />
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── SECTION 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา ── */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
+      {/* ── แถว 1 · เปรียบเทียบรายตัวแทน: ลีด→ใบเสนอราคา | มูลค่า→ยอดขายจริง ──
+          สองใบนี้เป็นแท่งคู่รายตัวแทนเหมือนกันและสูงพอ ๆ กัน จับคู่ไว้แถวเดียว
+          (เดิมทั้งหน้าเป็นการ์ดเต็มความกว้าง 8 ใบเรียงซ้อนกัน ยาว 4,800px) */}
+      <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
+      <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</div>
           <div style={{ display: "flex", gap: 5 }}>
@@ -397,16 +400,18 @@ export default function SalesAnalyticsPage() {
       </div>
 
       {/* ── SECTION 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง ── */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
+      <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">มูลค่าใบเสนอราคา เทียบ ยอดขายจริง · รายตัวแทน</div>
           <span style={{ fontSize: "0.62rem", color: MUTED }}>ในช่วงที่เลือก · คลิกเพื่อเจาะรายตัวแทน</span>
         </div>
         <HBars rows={quoteVsSales} aLabel="มูลค่าใบเสนอราคา" bLabel="ยอดขายจริง" aColor="#0891b2" bColor="#059669" fmt={fmtBaht} />
       </div>
+      </div>
 
-      {/* ── SECTION 3 · เป้าหมายทั้งปี เทียบ ยอดขายจริง ── */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
+      {/* ── แถว 2 · เป้าหมายทั้งปี | อันดับตัวแทน ── */}
+      <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
+      <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">เป้าหมายทั้งปี เทียบ ยอดขายจริง</div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -418,37 +423,39 @@ export default function SalesAnalyticsPage() {
         <HBars rows={targetVsActual} aLabel="ยอดขายสะสมทั้งปี" bLabel="เป้าหมายทั้งปี" fmt={fmtBaht} />
       </div>
 
-      {/* ── SECTION 5 · อันดับตัวแทนจำหน่าย (10 อันดับแรก) ── */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
+      {/* โดนัท: เหตุผลรวมกัน = ลีดที่เสียโอกาสทั้งหมดพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง
+          (ชุดสีเดียวกับหน้า /hq/leads เพื่อให้ทั้งระบบอ่านเหมือนกัน) */}
+      <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
         <div className="card-header">
-          <div className="card-title">อันดับตัวแทนจำหน่าย</div>
-          <span style={{ fontSize: "0.62rem", color: MUTED }}>10 อันดับแรกตามยอดขายสะสม</span>
+          <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>กำหนดโดย HQ ที่หน้าตั้งค่า · นับเฉพาะลีดที่บันทึกเหตุผลไว้จริง</span>
         </div>
-        <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
-          {!perf.length ? <EmptyState icon={<Trophy size={26} />} title="ไม่พบตัวแทน" description="ลองปรับตัวกรอง" compact /> :
-            perf.slice(0, 10).map((d, i) => {
-              const max = Math.max(...perf.map(x => x.revenueActual), 1);
-              return (
-                <div key={d.code} onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                    <span style={{ width: 18, fontWeight: 800, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY, width: 38 }}>{d.code}</span>
-                    <span style={{ flex: 1, minWidth: 0, fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtBaht(d.revenueActual)}</span>
-                    <span style={{ color: MUTED, flexShrink: 0, width: 62, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.quotes} ใบ</span>
-                    <span style={{ color: MUTED, flexShrink: 0, width: 52, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.conv === null ? "—" : `${d.conv}%`}</span>
-                    <span style={{ fontWeight: 700, color: d.tpct >= 100 ? "#059669" : PRIMARY, flexShrink: 0, width: 46, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.tpct}%</span>
+        <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+          {!lostReasons.length ? <div style={{ fontSize: "0.78rem", color: MUTED }}>— ไม่มีลีดที่บันทึกเหตุผลไว้ในขอบเขตนี้</div>
+            : (<>
+              <Donut
+                segments={lostReasons.map((r, i) => ({ label: r.reason, value: r.count, color: LOST_RAMP[i % LOST_RAMP.length] }))}
+                centerLabel="เสียโอกาส"
+                centerValue={`${lostReasons.reduce((s, r) => s + r.count, 0)}`}
+                size={168}
+              />
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
+                {lostReasons.map((r, i) => (
+                  <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: LOST_RAMP[i % LOST_RAMP.length], flexShrink: 0 }} />
+                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</span>
+                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
+                    <span style={{ color: MUTED, minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.share}%</span>
                   </div>
-                  <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden", marginLeft: 26 }}>
-                    <div className="bar-grow" style={{ height: "100%", width: `${Math.round(d.revenueActual / max * 100)}%`, background: RAMP[i % RAMP.length], borderRadius: 999 }} />
-                  </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            </>)}
         </div>
       </div>
+      </div>
 
-      {/* ── SECTION 6 · เทียบรายภูมิภาค ── */}
+      {/* ── แถว 3 · เทียบรายภูมิภาค — เต็มความกว้าง
+          แท่งซ้อนแนวตั้ง 6 ภาคอ่านง่ายกว่าตอนกว้าง · และเหลือการ์ดคี่ใบเดียวพอดี ไม่ต้องยัดคู่ให้ครึ่งขวาว่าง */}
       <div className="card" style={{ marginBottom: "1.25rem" }}>
         <div className="card-header">
           <div className="card-title">เทียบรายภูมิภาค</div>
@@ -461,42 +468,25 @@ export default function SalesAnalyticsPage() {
         </div>
       </div>
 
-      {/* ── SECTION 7 · เหตุผลที่เสียโอกาสการขาย ── */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <div className="card-header">
-          <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
-          <span style={{ fontSize: "0.62rem", color: MUTED }}>ตัวเลือกเหตุผลกำหนดโดย HQ ที่หน้าตั้งค่า · นับเฉพาะลีดที่บันทึกเหตุผลไว้จริง</span>
-        </div>
-        <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
-          {!lostReasons.length ? <div style={{ fontSize: "0.78rem", color: MUTED }}>— ไม่มีลีดที่บันทึกเหตุผลไว้ในขอบเขตนี้</div>
-            : lostReasons.map(r => (
-              <div key={r.reason}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                  <span style={{ color: "#374151", fontWeight: 600 }}>{r.reason}</span>
-                  <span style={{ fontWeight: 700, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{r.count} ราย ({r.share}%)</span>
-                </div>
-                <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${r.pct}%`, background: "#dc2626", borderRadius: 999 }} />
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* ── SECTION 8 · แนวโน้มรายเดือน ── */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <div className="card-header">
-          <div className="card-title">แนวโน้มรายเดือน</div>
-          <span style={{ fontSize: "0.62rem", color: MUTED }}>ตามช่วงเวลาที่กรอง — ระบบมีข้อมูลไม่ครบ 12 เดือน จึงแสดงเท่าที่มี</span>
-        </div>
-        <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 18 }}>
-          <div>
-            <div style={{ fontSize: "0.66rem", fontWeight: 700, color: MUTED, marginBottom: 6 }}>จำนวนรายการ</div>
-            <MultiLineChart months={trend.months} series={trend.counts} vw={820} height={240} fmt={v => `${Math.round(v)}`} />
+      {/* ── แถว 4 · แนวโน้มรายเดือน — แยกเป็น 2 การ์ดวางข้างกัน (เดิมซ้อนกันในใบเดียว สูง 818px) ── */}
+      <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <div className="card-title">แนวโน้มจำนวนรายการ</div>
+            <span style={{ fontSize: "0.62rem", color: MUTED }}>ตามช่วงที่กรอง · แสดงเท่าที่มีข้อมูล</span>
           </div>
-          <div>
-            <div style={{ fontSize: "0.66rem", fontWeight: 700, color: MUTED, marginBottom: 6 }}>ยอดขาย (ล้านบาท)</div>
-            <MultiLineChart months={trend.months} series={trend.sales} vw={820} height={200} fmt={v => `${v.toFixed(1)}M`} />
+          <div className="card-body" style={{ paddingTop: 4 }}>
+            {/* vw ต้องใกล้ความกว้างการ์ดจริง (~545px) ไม่งั้น SVG ถูกย่อจนกราฟเตี้ยผิดสัดส่วน */}
+            <MultiLineChart months={trend.months} series={trend.counts} vw={560} height={260} fmt={v => `${Math.round(v)}`} />
+          </div>
+        </div>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <div className="card-title">แนวโน้มยอดขาย</div>
+            <span style={{ fontSize: "0.62rem", color: MUTED }}>หน่วย: ล้านบาท</span>
+          </div>
+          <div className="card-body" style={{ paddingTop: 4 }}>
+            <MultiLineChart months={trend.months} series={trend.sales} vw={560} height={260} fmt={v => `${v.toFixed(1)}M`} />
           </div>
         </div>
       </div>

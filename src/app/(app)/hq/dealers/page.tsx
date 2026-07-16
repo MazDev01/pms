@@ -228,11 +228,13 @@ export default function HQDealersPage() {
       {/* Stat cards */}
       <div className="stat-grid">
         <div className="stat-card">
+          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#003366", borderRadius: "0 4px 4px 0" }} />
           <div className="stat-label">ตัวแทนทั้งหมด</div>
           <div className="stat-value" style={{ color: "#003366" }}><CountUp value={`${dealers.length} ตัวแทน`} /></div>
           <div className="stat-delta delta-up">เปิดใช้งาน {active.length} ตัวแทน</div>
         </div>
         <div className="stat-card">
+          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#059669", borderRadius: "0 4px 4px 0" }} />
           <div className="stat-label">รายได้รวม</div>
           <div className="stat-value" style={{ color: "#059669" }}><CountUp value={`฿${(totalRevenue / 1_000_000).toFixed(1)}M`} /></div>
           <div className="stat-delta" style={{ color: totalPct >= 100 ? "#059669" : "#f59e0b" }}>
@@ -240,6 +242,7 @@ export default function HQDealersPage() {
           </div>
         </div>
         <div className="stat-card">
+          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#f59e0b", borderRadius: "0 4px 4px 0" }} />
           <div className="stat-label">โอกาสการขายทั้งหมด</div>
           <div className="stat-value" style={{ color: "#f59e0b" }}><CountUp value={`${totalProjects} โอกาสการขาย`} /></div>
           <div className="stat-delta" style={{ color: "#6b7280" }}>
@@ -247,6 +250,7 @@ export default function HQDealersPage() {
           </div>
         </div>
         <div className="stat-card">
+          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#003366", borderRadius: "0 4px 4px 0" }} />
           <div className="stat-label">ติดตามตรงเวลา</div>
           <div className="stat-value" style={{ color: "#003366" }}><CountUp value={`${avgOnTime}%`} /></div>
           <div className="stat-delta" style={{ color: avgOnTime >= 85 ? "#059669" : avgOnTime >= 70 ? "#f59e0b" : "#dc2626" }}>

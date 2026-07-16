@@ -47,15 +47,16 @@ const DEALER_NAV: NavGroup[] = [
   },
 ];
 
-// ตามสเปก HQ modules: Executive Dashboard · Dealer Management · Leads (ทุก Dealer) · Analytics · Product Catalog · Settings
+// ตามสเปก HQ modules: Executive Dashboard · Dealer Management · Analytics · Leads (ทุก Dealer) · Product Catalog · Settings
+// ลำดับ "ภาพรวมยอดขาย" มาก่อน "ลูกค้าเป้าหมายทั้งเครือ" — บอสสั่ง 16 ก.ค. 69
 const HQ_NAV: NavGroup[] = [
   {
     group: "เมนูหลัก",
     items: [
       { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  icon: <LayoutDashboard size={16} /> },
       { label: "ตัวแทนจำหน่าย",     href: "/hq/dealers",    icon: <Store size={16} /> },
-      { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",  icon: <Phone size={16} /> },
       { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
+      { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",  icon: <Phone size={16} /> },
       { label: "ใบเสนอราคาทั้งเครือ", href: "/hq/quotations", icon: <ScrollText size={16} /> },
       { label: "ลูกค้าทั้งเครือ",   href: "/hq/customers",  icon: <Users size={16} /> },
       { label: "แคตตาล็อกแม่แบบ",  href: "/hq/master",     icon: <Package size={16} /> },

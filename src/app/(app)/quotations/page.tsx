@@ -14,14 +14,15 @@ import { useSales } from "@/context/SalesContext";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { FilterRow, FilterSelect } from "@/components/filters/FilterRow";
 import { TopbarActions } from "@/components/layout/TopbarActions";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useTableLayout, type Col } from "@/components/ui/TableTools";
 import {
-  Plus, Search, X, FileText, LayoutList, LayoutGrid,
+  Plus, X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer, Eye,
   ExternalLink, ArrowRight, ChevronLeft, ChevronRight,
-  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Percent, Lock, Filter,
+  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Percent, Lock,
 } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -297,8 +298,7 @@ function QuotationsPageInner(){
   } = useSales();
   const [query, setQuery]           = useState("");
   const [filterStatus, setFilterStatus] = useState<QuotationStatus|"ALL">("ALL");
-  // แผงตัวกรอง (มาตรฐานเดียวกับหน้าลูกค้า) — ตัวเลือกสร้างจากใบเสนอราคาจริงที่มีอยู่
-  const [showFilter, setShowFilter]   = useState(false);
+  // ตัวกรองในแถบ FilterRow — ตัวเลือกสร้างจากใบเสนอราคาจริงที่มีอยู่
   const [typeFilter, setTypeFilter]   = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
   const [provFilter, setProvFilter]   = useState("ALL");
@@ -492,7 +492,6 @@ function QuotationsPageInner(){
           // STATUS_LIST ถูกลบพร้อมชิปกรองสถานะ — ไม่มีใครอ่านแล้ว
           const valOf = (list: QuotationMock[]) => list.reduce((a,q)=>a+q.totalValue,0);
           const totalVal = valOf(scoped); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
-          const waiting  = scoped.filter(q=>q.status==="sent_to_client");
           const wonList  = scoped.filter(q=>q.status==="won");
           const lostList = scoped.filter(q=>q.status==="lost");
           const closed   = wonList.length + lostList.length;
@@ -501,7 +500,6 @@ function QuotationsPageInner(){
           const kpis = [
             { label:"ใบเสนอราคาทั้งหมด", value:`${scoped.length}`,      sub:"รายการ",            Icon:FileText, color:"#2563EB", bg:"#E8F0FE", on: filterStatus==="ALL", onClick: clear },
             { label:"มูลค่ารวม",         value:fmtC(totalVal),          sub:"ทุกสถานะ",           Icon:Coins,    color:"#16A34A", bg:"#E6F7EE", on: false,                onClick: clear },
-            { label:"รอลูกค้าตอบ",       value:`${waiting.length}`,     sub:fmtC(valOf(waiting)), Icon:Send,     color:"#7C3AED", bg:"#F0EBFB", on: filterStatus==="sent_to_client", onClick:()=>setFilterStatus(filterStatus==="sent_to_client"?"ALL":"sent_to_client") },
             { label:"ตอบรับแล้ว",        value:`${wonList.length}`,     sub:fmtC(valOf(wonList)), Icon:Check,    color:"#0D9488", bg:"#E6F7F5", on: filterStatus==="won",  onClick:()=>setFilterStatus(filterStatus==="won"?"ALL":"won") },
             { label:"อัตราตอบรับ",       value:`${rate}%`,              sub:"ตอบรับ/ปิดแล้ว",     Icon:Percent,  color:"#EA580C", bg:"#FEF0E6", on: false,                onClick: clear },
           ];
@@ -534,85 +532,37 @@ function QuotationsPageInner(){
           );
         })()}
 
-        {/* ── แผงตัวกรอง (ยกมาตรฐานเดียวกับหน้าลูกค้า) ──
-            ตัวเลือกทุกกลุ่มสร้างจากใบเสนอราคาจริงที่มีอยู่ ไม่ hardcode
-            "สถานะ" ใช้ state เดียวกับการ์ด KPI ด้านบน → กดที่ไหนก็ตรงกัน */}
-        {showFilter && (() => {
-          const sec: React.CSSProperties = { fontSize:"0.66rem", fontWeight:800, color:MUTED, textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:9 };
-          const pills: React.CSSProperties = { display:"flex", flexWrap:"wrap", gap:6 };
-          const chip = (on:boolean):React.CSSProperties => ({
-            padding:"6px 12px", borderRadius:99, border:`1px solid ${on?"#C0C0C0":BORDER}`,
-            background:on?"#f0f4f8":"#fff", color:on?STEEL:MUTED,
-            fontSize:"0.72rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit",
-          });
-          const Group = ({label,value,options,onPick}:{label:string;value:string;options:{v:string;l:string}[];onPick:(v:string)=>void}) => (
-            <div><label style={sec}>{label}</label><div style={pills}>
-              {[{v:"ALL",l:"ทั้งหมด"},...options].map(o=>(
-                <button key={o.v} onClick={()=>onPick(o.v)} style={chip(value===o.v)}>{o.l}</button>
-              ))}
-            </div></div>
-          );
-          const anyFilter = filterStatus!=="ALL" || typeFilter!=="ALL" || ownerFilter!=="ALL" || provFilter!=="ALL";
-          const clearAll = () => { setFilterStatus("ALL"); setTypeFilter("ALL"); setOwnerFilter("ALL"); setProvFilter("ALL"); };
-          return (
-            <>
-              <div onClick={()=>setShowFilter(false)} className="drawer-overlay"
-                style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.4)", zIndex:150 }} />
-              <div className="side-drawer" style={{ position:"fixed", top:0, right:0, height:"100vh", width:360, maxWidth:"100vw",
-                zIndex:151, background:"#fff", boxShadow:"-16px 0 60px rgba(0,0,0,.2)", borderRadius:"18px 0 0 18px", display:"flex", flexDirection:"column" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${BORDER}`, flexShrink:0 }}>
-                  <span style={{ fontSize:"1rem", fontWeight:800, color:PRIMARY, display:"flex", gap:8, alignItems:"center" }}><Filter size={16}/> ตัวกรอง</span>
-                  <button onClick={()=>setShowFilter(false)} style={{ width:30, height:30, borderRadius:8, border:`1px solid ${BORDER}`, background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:MUTED }}><X size={14}/></button>
-                </div>
-                <div style={{ flex:1, overflowY:"auto", padding:"20px", display:"flex", flexDirection:"column", gap:22 }}>
-                  <Group label="สถานะ" value={filterStatus} onPick={v=>setFilterStatus(v as QuotationStatus|"ALL")}
-                    options={STATUS_ORDER.map(s=>({v:s,l:quotationStatusLabel[s]}))} />
-                  <Group label="ประเภท" value={typeFilter} onPick={setTypeFilter}
-                    options={typeOptions.map(t=>({v:t,l:t}))} />
-                  <Group label="ผู้รับผิดชอบ" value={ownerFilter} onPick={setOwnerFilter}
-                    options={ownerOptions.map(o=>({v:o,l:o}))} />
-                  <Group label="จังหวัด" value={provFilter} onPick={setProvFilter}
-                    options={provOptions.map(p=>({v:p,l:p}))} />
-                </div>
-                <div style={{ padding:"14px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8, flexShrink:0 }}>
-                  <button className="btn btn-secondary btn-md" style={{ flex:1, justifyContent:"center", color: anyFilter ? "#dc2626" : "#9ca3af" }} disabled={!anyFilter}
-                    onClick={clearAll}>ล้างทั้งหมด</button>
-                  <button className="btn btn-primary btn-md" style={{ flex:1, justifyContent:"center" }} onClick={()=>setShowFilter(false)}>ดูผลลัพธ์</button>
-                </div>
-              </div>
-            </>
-          );
-        })()}
-
-        {/* Toolbar — การ์ดแยกมีระยะห่างจากตาราง (มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย)
-            เดิมมุมโค้งเฉพาะด้านบนแล้วเชื่อมติดกับตาราง ทำให้หัวตาราง "ติด" แถบค้นหา */}
-        <div className="card" style={{padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafafa",border:`1px solid ${BORDER}`,borderRadius:10,padding:"0 12px",height:36,boxSizing:"border-box",width:280,maxWidth:"100%",flexShrink:0}}>
-            <Search size={13} color={MUTED}/>
-            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาเลขที่ / ลูกค้า / โครงการ..."
-              style={{border:"none",outline:"none",fontSize:"0.8rem",color:STEEL,background:"transparent",flex:1}}/>
-            {query&&<button onClick={()=>setQuery("")} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:MUTED,display:"flex"}}><X size={12}/></button>}
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {/* ปุ่มเปิดแผงตัวกรอง — ตำแหน่ง/สไตล์เดียวกับหน้าลูกค้า */}
-            <button onClick={()=>setShowFilter(f=>!f)}
-              style={{display:"flex",alignItems:"center",gap:6,background:showFilter?"#003366":"#fff",
-                border:`1px solid ${showFilter?"#003366":BORDER}`,borderRadius:10,padding:"0 13px",height:36,boxSizing:"border-box",
-                fontSize:"0.8rem",fontWeight:600,color:showFilter?"#fff":MUTED,cursor:"pointer",fontFamily:"inherit"}}>
-              <Filter size={13}/> ตัวกรอง
-            </button>
-            {/* สลับมุมมอง — สไตล์ segmented มีกรอบ (เหมือนหน้าลูกค้าเป้าหมาย/ลูกค้า) */}
-            <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:9,overflow:"hidden",height:36,boxSizing:"border-box"}}>
+        {/* ── แถบตัวกรองแถวเดียว (มาตรฐานเดียวกับหน้า /hq/pipeline) ──
+            เดิมเป็นปุ่ม "ตัวกรอง" + แผงชิปที่ต้องกดเปิด — ตอนนี้เห็นตัวกรองทุกตัวพร้อมกัน
+            ตัวเลือกทุกตัวสร้างจากใบเสนอราคาจริงที่มีอยู่ ไม่ hardcode
+            "ทุกสถานะ" ใช้ state เดียวกับการ์ด KPI ด้านบน → กดที่ไหนก็ตรงกัน */}
+        <FilterRow
+          query={query} onQuery={setQuery} placeholder="ค้นหาเลขที่ / ลูกค้า / โครงการ..."
+          showClear={filterStatus!=="ALL" || typeFilter!=="ALL" || ownerFilter!=="ALL" || provFilter!=="ALL" || !!query}
+          onClear={()=>{ setQuery(""); setFilterStatus("ALL"); setTypeFilter("ALL"); setOwnerFilter("ALL"); setProvFilter("ALL"); }}
+          right={
+            /* สลับมุมมอง รายการ/การ์ด — อยู่ท้ายแถบตัวกรองเหมือนหน้าลูกค้าเป้าหมาย (ช่อง right ของ FilterRow)
+               ขนาดเล็กกว่าช่องกรอง (สูง 30 · ไอคอน 12) เพราะเป็นตัวควบคุมรอง ไม่ใช่ตัวกรอง */
+            <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:8,overflow:"hidden",height:30,boxSizing:"border-box",flexShrink:0}}>
               {([["list",LayoutList,"รายการ"],["card",LayoutGrid,"การ์ด"]] as const).map(([v,Ico,tip])=>(
-                <button key={v} onClick={()=>setView(v)}
-                  style={{display:"flex",alignItems:"center",gap:5,padding:"0 12px",height:"100%",border:"none",cursor:"pointer",
-                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.72rem",fontWeight:600}}>
-                  <Ico size={14}/> {tip}
+                <button key={v} title={tip} onClick={()=>setView(v)}
+                  style={{display:"flex",alignItems:"center",gap:4,padding:"0 8px",height:"100%",border:"none",cursor:"pointer",
+                    background:view===v?PRIMARY:"#fff",color:view===v?"#fff":"#6b7280",fontFamily:"inherit",fontSize:"0.68rem",fontWeight:600}}>
+                  <Ico size={12}/> {tip}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+          }
+        >
+          <FilterSelect caption="ทุกสถานะ" value={filterStatus} onChange={v=>setFilterStatus(v as QuotationStatus|"ALL")}
+            options={STATUS_ORDER.map(s=>({v:s,l:quotationStatusLabel[s]}))} />
+          <FilterSelect caption="ทุกประเภทอาคาร" value={typeFilter} onChange={setTypeFilter}
+            options={typeOptions.map(t=>({v:t,l:t}))} minWidth={140} />
+          <FilterSelect caption="ทุกผู้รับผิดชอบ" value={ownerFilter} onChange={setOwnerFilter}
+            options={ownerOptions.map(o=>({v:o,l:o}))} minWidth={140} />
+          <FilterSelect caption="ทุกจังหวัด" value={provFilter} onChange={setProvFilter}
+            options={provOptions.map(p=>({v:p,l:p}))} />
+        </FilterRow>
 
         {/* ── LIST VIEW ── */}
         {view==="list"&&(

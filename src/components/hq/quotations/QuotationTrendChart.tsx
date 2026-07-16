@@ -29,8 +29,11 @@ export function QuotationTrendChart({ rows }: { rows: QuoteRow[] }) {
         <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ใบ</span>
       </div>
       <div className="card-body" style={{ paddingTop: 6 }}>
+        {/* vw ต้องใกล้ความกว้างการ์ดจริง (~545px ตอนอยู่ในกริด 2 คอลัมน์)
+            ถ้าไม่ส่ง จะใช้ค่าเริ่มต้น 1180 → SVG ถูกย่อจนกราฟเตี้ยผิดสัดส่วน */}
         <MultiLineChart
           months={slots.map(s => s.label)}
+          vw={560}
           height={280}
           fmt={v => `${Math.round(v)}`}
           series={[

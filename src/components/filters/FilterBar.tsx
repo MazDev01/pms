@@ -10,8 +10,8 @@ import {
 
 type Opt = { value: string; label: string };
 
-// ลำดับ preset (จัด 2 คอลัมน์ ไม่ต้องมีหัวข้อกลุ่ม)
-const PRESET_ORDER: TimePreset[] = ["last7", "last30", "thisMonth", "quarter", "thisYear"];
+// ลำดับ preset ในเมนู — "กำหนดช่วงเอง" อยู่ท้ายเมนูแยกต่างหาก (ไม่อยู่ในลิสต์นี้)
+const PRESET_ORDER: TimePreset[] = ["today", "last7", "thisMonth", "thisYear"];
 
 function useClickOutside(cb: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -186,7 +186,7 @@ export function SelectFilter({ caption, value, options, onChange }: {
 }
 
 // ── ปุ่มช่วงเวลาแบบ pill (สไตล์เดียวกับหัวกราฟ SalesTrendChart) — ผูกกับ FilterContext กลาง ──
-const PILL_LABEL: Partial<Record<TimePreset, string>> = { last7: "7 วัน", last30: "30 วัน" };
+const PILL_LABEL: Partial<Record<TimePreset, string>> = { today: "วันนี้", last7: "7 วัน" };
 export function TimeRangePills({ style }: { style?: React.CSSProperties }) {
   const { timeRange, setPreset, setCustomRange } = useFilters();
   const [showCustom, setShowCustom] = useState(false);

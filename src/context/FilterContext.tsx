@@ -35,13 +35,14 @@ function fmtTH(d: Date): string {
 }
 
 // ── Time range presets ──
-export type TimePreset = "last7" | "last30" | "thisMonth" | "quarter" | "thisYear" | "custom";
+// เหลือ 5 ตัวตามที่บอสสั่ง (16 ก.ค. 69): วันนี้ · 7 วันล่าสุด · เดือนนี้ · ปีนี้ · กำหนดช่วงเอง
+// ตัดออกแล้ว: "30 วันล่าสุด" · "ไตรมาส" — อย่าใส่กลับโดยไม่ถาม
+export type TimePreset = "today" | "last7" | "thisMonth" | "thisYear" | "custom";
 
 export const TIME_PRESETS: { key: TimePreset; label: string }[] = [
+  { key: "today",     label: "วันนี้" },
   { key: "last7",     label: "7 วันล่าสุด" },
-  { key: "last30",    label: "30 วันล่าสุด" },
   { key: "thisMonth", label: "เดือนนี้" },
-  { key: "quarter",   label: "ไตรมาส" },
   { key: "thisYear",  label: "ปีนี้" },
   { key: "custom",    label: "กำหนดเอง" },
 ];
@@ -63,7 +64,7 @@ export type TimeRange = {
 };
 
 const PRESET_FACTOR: Record<Exclude<TimePreset, "custom">, number> = {
-  last7: 0.23, last30: 1.0, thisMonth: 1.0, quarter: 3.03, thisYear: 5.24,
+  today: 0.05, last7: 0.23, thisMonth: 1.0, thisYear: 5.24,
 };
 
 function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: string): TimeRange {
@@ -72,10 +73,9 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
   let start = now, end = now;
 
   switch (preset) {
+    case "today":     start = now; end = now; break;
     case "last7":     start = addDays(now, -6); end = now; break;
-    case "last30":    start = addDays(now, -29); end = now; break;
     case "thisMonth": start = new Date(y, m, 1); end = now; break;
-    case "quarter":   start = new Date(y, Math.floor(m / 3) * 3, 1); end = now; break;
     case "thisYear":  start = new Date(y, 0, 1); end = now; break;
     case "custom": {
       const cs = parseDate(customStart) ?? addDays(now, -29);
@@ -186,7 +186,9 @@ export function FilterProvider({ children, storageKey = STORAGE_KEY }: { childre
       const raw = sessionStorage.getItem(storageKey);
       if (raw) {
         const saved = JSON.parse(raw);
-        if (saved.preset && !TIME_PRESETS.some(t => t.key === saved.preset)) saved.preset = "last30";
+        // ค่าที่บันทึกไว้อาจเป็น preset ที่ถูกลบไปแล้ว (เช่น "last30"/"quarter" ของเก่าที่ค้างใน sessionStorage)
+        // → ตกกลับเป็นค่าเริ่มต้น ห้ามชี้ไปหา preset ที่ไม่มีอยู่จริง ไม่งั้นช่วงเวลาจะเพี้ยนเงียบ ๆ
+        if (saved.preset && !TIME_PRESETS.some(t => t.key === saved.preset)) saved.preset = DEFAULTS.preset;
         setState(s => ({ ...s, ...saved }));
       }
     } catch { /* ignore */ }

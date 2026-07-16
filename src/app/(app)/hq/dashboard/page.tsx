@@ -413,8 +413,8 @@ export default function HQDashboard() {
         </div>
       </div>
 
-      {/* KPI 6 ใบ — ดีไซน์เดียวกับแดชบอร์ดตัวแทน (การ์ดเป้าหมาย=วงแหวน · ที่เหลือ=ไอคอน + "ดูรายละเอียด") */}
-      <div className="hq-kpi8" style={{ marginBottom: "1.5rem" }}>
+      {/* KPI 4 ใบ — ดีไซน์เดียวกับแดชบอร์ดตัวแทน (การ์ดเป้าหมาย=วงแหวน · ที่เหลือ=ไอคอน + "ดูรายละเอียด") */}
+      <div className="hq-kpi4" style={{ marginBottom: "1.5rem" }}>
         {kpiCards.map(k => (
           <div key={k.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", flexDirection: "column", gap: 10 }}>
             {k.ring ? (

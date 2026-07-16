@@ -546,24 +546,11 @@ body {
 
 /* ─── Stat cards ─── */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.75rem; }
-/* HQ Executive Dashboard — KPI 6 ใบ + แถว 3 คอลัมน์ (responsive) */
-.hq-kpi8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 1100px) { .hq-kpi8 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .hq-kpi8 { grid-template-columns: 1fr; } }
-/* HQ · ภาพรวมยอดขาย — KPI 5 ใบ */
-.hq-kpi5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 1280px) { .hq-kpi5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 760px)  { .hq-kpi5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 460px)  { .hq-kpi5 { grid-template-columns: 1fr; } }
-/* HQ · ใบเสนอราคาทั้งเครือ — KPI 7 ใบ */
-.hq-kpi7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 1440px) { .hq-kpi7 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 860px)  { .hq-kpi7 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 460px)  { .hq-kpi7 { grid-template-columns: 1fr; } }
-/* HQ · ฐานข้อมูลลูกค้า — KPI 8 ตัว (4×2 บนจอปกติ ไม่บีบจนอ่านไม่ออก) */
-.hq-kpi8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 860px)  { .hq-kpi8 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 460px)  { .hq-kpi8 { grid-template-columns: 1fr; } }
+/* HQ · KPI แถวเดียว 4 ใบ — ทุกหน้า HQ ใช้กริดเดียวกัน (แดชบอร์ด · ภาพรวมยอดขาย · ใบเสนอราคา · ลูกค้า)
+   กติกา: ทุกหน้าใช้ KPI 4 ใบเท่ากัน — ห้ามเพิ่มเป็น 5+ (เคยมี .hq-kpi5/.hq-kpi7/.hq-kpi8 ลบไปแล้ว) */
+.hq-kpi4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px) { .hq-kpi4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px)  { .hq-kpi4 { grid-template-columns: 1fr; } }
 /* HQ · ฐานข้อมูลลูกค้า — กราฟวิเคราะห์ 2 คอลัมน์ */
 .hq-cust-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-bottom: 24px; }
 @media (max-width: 1100px) { .hq-cust-charts { grid-template-columns: 1fr; } }
@@ -1037,16 +1024,12 @@ textarea:focus-visible {
 .vbar-grow { transform-origin: bottom; animation: vbar-grow .7s cubic-bezier(.34,1.06,.64,1) both; }
 @media (prefers-reduced-motion: reduce) { .vbar-grow { animation: none; } }
 
-/* ─── Dealer Dashboard — KPI 5 ใบแถวเดียว (ยุบตามความกว้างจอ) ─── */
-.dash-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-/* หน้าที่มี KPI 4 ใบ (ลูกค้าเป้าหมายทั้งเครือ · ลูกค้าของตัวแทน) — ต้องใส่ .kpi-4 ด้วย
-   ไม่งั้นรางที่ 5 ว่างคาไว้ ~230px ริมขวา
-   หมายเหตุ: อย่าเปลี่ยนตัวหลักเป็น auto-fit — ที่จอ 1280 การ์ด 5 ใบจะตกบรรทัดเป็น 2 แถว */
-.dash-kpis.kpi-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-/* จอแคบ: บังคับทั้งสองแบบให้เท่ากัน (ต้องระบุ .kpi-4 ซ้ำ ไม่งั้นสู้ specificity ข้างบนไม่ได้) */
-@media (max-width: 1100px) { .dash-kpis, .dash-kpis.kpi-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 820px)  { .dash-kpis, .dash-kpis.kpi-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px)  { .dash-kpis, .dash-kpis.kpi-4 { grid-template-columns: 1fr; } }
+/* ─── Dealer — KPI แถวเดียว 4 ใบ (ยุบตามความกว้างจอ) ───
+   กติกา: ทุกหน้าใช้ KPI 4 ใบเท่ากัน — ห้ามเพิ่มเป็น 5+ (ตัวหลักเคยเป็น 5 คอลัมน์ + ตัวช่วย .kpi-4 ลบไปแล้ว)
+   หมายเหตุ: อย่าเปลี่ยนเป็น auto-fit — การ์ดจะตกบรรทัดเป็น 2 แถวบนจอ 1280 */
+.dash-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px) { .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .dash-kpis { grid-template-columns: 1fr; } }
 /* การ์ด KPI แคบลง → ลด padding/ขนาดตัวเลขให้พอดี ไม่ล้น */
 .dash-kpis > div { padding: 16px 14px !important; }
 

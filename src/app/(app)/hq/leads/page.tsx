@@ -269,17 +269,18 @@ export default function HQLeadsPage() {
       </div>
 
       {/* KPI */}
-      {/* kpi-4 = หน้านี้มี KPI 4 ใบ (ค่าเริ่มต้นของ .dash-kpis คือ 5 คอลัมน์) */}
-      <div className="dash-kpis kpi-4" style={{ marginBottom: 16 }}>
+      <div className="dash-kpis" style={{ marginBottom: 16 }}>
         {kpiCards.map(k => (
-          <button key={k.label} onClick={k.onClick} className="card" style={{ padding: "16px 14px", display: "flex", flexDirection: "column", gap: 6, textAlign: "left", cursor: "pointer", fontFamily: "inherit", width: "100%", border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB", boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
+          <button key={k.label} onClick={k.onClick} className="card" style={{ position: "relative", overflow: "hidden", padding: "17px 16px 17px 18px", display: "flex", flexDirection: "column", gap: 6, textAlign: "left", cursor: "pointer", fontFamily: "inherit", width: "100%", border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB", boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
+            {/* แถบสีนำสายตาด้านซ้าย — ระบุหมวด KPI ด้วยสี (โพลิชแบบ enterprise) */}
+            <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: k.color, borderRadius: "0 4px 4px 0" }} />
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, width: "100%" }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "0.72rem", color: "#6B7280" }}>{k.label}</div>
-                <div style={{ fontSize: "1.42rem", fontWeight: 800, color: "#1F2937", marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{k.value}</div>
-                <div style={{ fontSize: "0.72rem", color: "#6B7280", marginTop: 2 }}>{k.sub}</div>
+                <div style={{ fontSize: "0.72rem", color: "#6B7280", fontWeight: 600 }}>{k.label}</div>
+                <div style={{ fontSize: "1.7rem", fontWeight: 800, color: "#1F2937", marginTop: 7, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" }}>{k.value}</div>
+                <div style={{ fontSize: "0.7rem", color: "#6B7280", marginTop: 7 }}>{k.sub}</div>
               </div>
-              <span style={{ width: 42, height: 42, borderRadius: 12, background: k.color + "1a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><k.Icon size={20} color={k.color} strokeWidth={2.1} /></span>
+              <span style={{ width: 44, height: 44, borderRadius: 13, background: k.color + "17", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><k.Icon size={21} color={k.color} strokeWidth={2.1} /></span>
             </div>
           </button>
         ))}
@@ -304,46 +305,10 @@ export default function HQLeadsPage() {
         </div>
       )}
 
-      {/* ── แถว 1 · ใครทำได้แค่ไหน · ที่ไหน ── ลีด→ใบเสนอราคา รายตัวแทน | เทียบรายภูมิภาค
-          จับคู่กราฟแท่งสองใบไว้แถวเดียว — เดิมต่างคนต่างกินเต็มความกว้าง ทำให้หน้ายาวโดยไม่จำเป็น
-          stretch = การ์ดสองใบสูงเท่ากัน (ตัวแทน 10 ราย ยาวกว่าภูมิภาค 6 ภาคอยู่แล้ว)
-          ถ้าปล่อย start ขอบล่างจะเหลื่อมกันเป็นรอยหยัก */}
-      <div className="hq-dealer-charts" style={{ marginBottom: 16, alignItems: "stretch" }}>
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="card-header">
-          <div className="card-title">ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา · รายตัวแทน</div>
-          <span style={{ display: "flex", alignItems: "center", gap: 12, fontSize: "0.62rem", color: "var(--muted-foreground)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: "#003366", display: "inline-block" }} /> ลีด</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: "#0891b2", display: "inline-block" }} /> ใบเสนอราคา</span>
-            <span>· เรียงตามจำนวนลีด</span>
-          </span>
-        </div>
-        <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
-          {!leadVsQuote.length ? (
-            <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
-          ) : leadVsQuote.map(d => (
-            <button key={d.code} onClick={() => router.push(`/hq/dealers/${d.code}`)}
-              style={{ border: "none", background: "none", padding: 0, cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 5 }}>
-                <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
-                <span style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums", color: "var(--muted-foreground)" }}>
-                  {d.leads} ลีด · {d.quotes} ใบ
-                  {d.conv !== null && <span style={{ fontWeight: 800, color: "#003366", marginLeft: 6 }}>{d.conv}%</span>}
-                </span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${d.lPct}%`, background: "#003366", borderRadius: 999 }} />
-                </div>
-                <div style={{ height: 7, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${d.qPct}%`, background: "#0891b2", borderRadius: 999 }} />
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* ── แถว 1 · ลีดสนใจอะไร · ที่ไหน ── ประเภทอาคาร | เทียบรายภูมิภาค
+          กราฟ "ลีด เทียบ ใบเสนอราคา รายตัวแทน" ถูกตัดออก — ข้อมูลซ้ำกับตาราง "ผลงานตัวแทนจำหน่าย (Top 10)"
+          ที่มีครบกว่า (ลีด/ใบเสนอราคา/อัตราแปลง + ยอดขาย) ตามกฎ "ข้อมูลซ้ำให้รวมเป็นที่เดียว" */}
+      <div className="hq-dealer-charts" style={{ marginBottom: 12, alignItems: "stretch" }}>
       {/* เทียบรายภูมิภาค (แท่งซ้อน) — ย้ายขึ้นมาคู่กับกราฟรายตัวแทน (เดิมอยู่เดี่ยวเต็มความกว้าง สูงแค่ 320px)
           .card ไม่ได้เป็น flex เอง → ต้องสั่งตรงนี้ card-body ถึงจะยืดเต็มความสูงได้ */}
       <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
@@ -373,10 +338,9 @@ export default function HQLeadsPage() {
           ))}
         </div>
       </div>
-      </div>
 
-      {/* ── แถว 2 · ลีดสนใจอะไร · ทำไมถึงไม่ปิด ── (stretch: ประเภทอาคารมี 11 แถว เหตุผลมี 6 → ขอบล่างเสมอกัน) */}
-      <div className="hq-dealer-charts" style={{ marginBottom: 16, alignItems: "stretch" }}>
+        {/* ประเภทอาคารที่สนใจ — ย้ายขึ้นมาคู่กับเทียบรายภูมิภาค (11 แถว vs 6 ภาค)
+            ⚠️ อย่าทำเป็นโดนัท: ลีดหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
             <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลีดสนใจ · หน่วย: ราย</span></div>
@@ -398,8 +362,11 @@ export default function HQLeadsPage() {
             ))}
           </div>
         </div>
-        {/* โดนัท: เหตุผลรวมกันได้ 100% ของลีดที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง
-            (และช่วยให้แถวนี้ไม่ใช่แท่งนอนคู่กับแท่งนอน) */}
+      </div>
+
+      {/* ── แถว 2 · ทำไมถึงไม่ปิด · มาจากไหน ── โดนัทสองใบ (สัดส่วนของก้อนเดียวทั้งคู่) */}
+      <div className="hq-dealer-charts" style={{ marginBottom: 12, alignItems: "stretch" }}>
+        {/* โดนัท: เหตุผลรวมกันได้ 100% ของลีดที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header"><div className="card-title">เหตุผลที่ปิดการขายไม่สำเร็จ</div>
             <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เฉพาะลีดที่บันทึกเหตุผลไว้ · หน่วย: ราย</span></div>
@@ -411,7 +378,7 @@ export default function HQLeadsPage() {
                 segments={lostReasons.map((r, i) => ({ label: r.reason, value: r.count, color: LOST_RAMP[i % LOST_RAMP.length] }))}
                 centerLabel="ปิดไม่สำเร็จ"
                 centerValue={`${lostReasons.reduce((s, r) => s + r.count, 0)}`}
-                size={168}
+                size={150}
               />
               <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
                 {lostReasons.map((r, i) => (
@@ -426,10 +393,39 @@ export default function HQLeadsPage() {
             </>)}
           </div>
         </div>
+
+        {/* โดนัท: แหล่งที่มารวมกัน = ลีดทั้งหมดพอดี → สัดส่วนของก้อนเดียว
+            ย้ายมาจากแถว 3 · การ์ดกว้างขึ้น (ครึ่งจอ) → วางโดนัทซ้าย legend ขวา แบบเดียวกับใบข้าง ๆ */}
+        <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
+          <div className="card-header"><div className="card-title">ตามแหล่งที่มา</div><GitBranch size={16} color="#9ca3af" /></div>
+          <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+            {!sources.length ? (
+              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
+            ) : (<>
+              <Donut
+                segments={sources.map((s, i) => ({ label: s.label, value: s.count, color: RAMP[i % RAMP.length] }))}
+                centerLabel="ลีดทั้งหมด"
+                centerValue={`${sources.reduce((s, x) => s + x.count, 0)}`}
+                size={150}
+              />
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                {sources.map((s, i) => (
+                  <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: RAMP[i % RAMP.length], flexShrink: 0 }} />
+                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
+                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{s.count}</span>
+                    <span style={{ color: "var(--muted-foreground)", minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.share}%</span>
+                  </div>
+                ))}
+              </div>
+            </>)}
+          </div>
+        </div>
       </div>
 
-      {/* ── แถว 3 · แนวโน้ม + แหล่งที่มา + สถานะ ── */}
-      <div className="hq-row3" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: 16 }}>
+      {/* ── แถว 3 · แนวโน้ม (เส้น) | ตามสถานะ (แท่ง) ──
+          เดิมเป็น 3 คอลัมน์ (มีแหล่งที่มาด้วย) — ย้ายแหล่งที่มาไปคู่กับเหตุผลที่แถว 2 เพราะเป็นโดนัทเหมือนกัน */}
+      <div className="hq-row3" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: 12 }}>
         {/* กราฟเส้นเป็น SVG ที่ย่อ/ขยายตามความกว้างการ์ด → ความสูงจริงไม่เท่า height ที่ส่งเข้าไป
             การ์ดถูกยืดให้สูงเท่าเพื่อนในแถว จึงเหลือที่ว่างท้ายการ์ด ~190px → จัดกึ่งกลางแนวตั้งแทน */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
@@ -438,40 +434,13 @@ export default function HQLeadsPage() {
             {/* vw = ความกว้าง viewBox ต้องใกล้ความกว้างการ์ดจริง (~480px) ไม่งั้น SVG ถูกย่อตามสัดส่วน
                 เดิมไม่ได้ส่ง vw → ใช้ค่าเริ่มต้น 1180 → อัตราส่วน 1180:250 ทำให้กราฟสูงจริงแค่ ~100px ลอยอยู่กลางการ์ด
                 (หน้าอื่นที่การ์ดแคบส่ง vw กันหมดแล้ว — หน้านี้ตกหล่นอยู่หน้าเดียว) */}
-            <MultiLineChart months={trend.months} vw={560} height={280} fmt={v => `${Math.round(v)}`}
+            <MultiLineChart months={trend.months} vw={560} height={210} fmt={v => `${Math.round(v)}`}
               series={[
                 { name: "ลีดใหม่", color: "#003366", data: trend.newM },
                 { name: "ใบเสนอราคา", color: "#0891b2", data: trend.quoteM },
                 { name: "ปิดการขาย", color: "#10B981", data: trend.wonM },
                 { name: "ปิดไม่สำเร็จ", color: "#dc2626", data: trend.lostM },
               ]} />
-          </div>
-        </div>
-        {/* โดนัท: แหล่งที่มารวมกัน = ลีดทั้งหมดพอดี → เป็นสัดส่วนของก้อนเดียว
-            การ์ดนี้แคบ (1fr) → วางโดนัทไว้บน legend ไว้ล่าง (ถ้าวางข้างกันจะเหลือที่ให้ชื่อไม่พอ) */}
-        <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-header"><div className="card-title">ตามแหล่งที่มา</div><GitBranch size={16} color="#9ca3af" /></div>
-          <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-            {!sources.length ? (
-              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)", alignSelf: "flex-start" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
-            ) : (<>
-              <Donut
-                segments={sources.map((s, i) => ({ label: s.label, value: s.count, color: RAMP[i % RAMP.length] }))}
-                centerLabel="ลีดทั้งหมด"
-                centerValue={`${sources.reduce((s, x) => s + x.count, 0)}`}
-                size={150}
-              />
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 7 }}>
-                {sources.map((s, i) => (
-                  <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.7rem" }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: RAMP[i % RAMP.length], flexShrink: 0 }} />
-                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{s.count}</span>
-                    <span style={{ color: "var(--muted-foreground)", minWidth: 32, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{s.share}%</span>
-                  </div>
-                ))}
-              </div>
-            </>)}
           </div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
@@ -515,7 +484,12 @@ export default function HQLeadsPage() {
                 <tr><td colSpan={6} style={{ textAlign: "center", padding: "28px 14px", color: "var(--muted-foreground)" }}>ไม่มีข้อมูลในช่วงที่เลือก</td></tr>
               ) : dealerPerf.map((d, i) => (
                 <tr key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
-                  <td style={{ fontWeight: 700, color: "var(--muted-foreground)" }}>{i + 1}</td>
+                  <td>
+                    {/* อันดับ 1-3 = เหรียญ ทอง/เงิน/ทองแดง · ที่เหลือ = เลขในชิปเทา (โพลิชแบบ leaderboard) */}
+                    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, fontWeight: 800, fontSize: "0.72rem", fontVariantNumeric: "tabular-nums",
+                      background: i === 0 ? "linear-gradient(135deg,#ffe9a8,#f6c453)" : i === 1 ? "linear-gradient(135deg,#e9edf3,#c7cfdb)" : i === 2 ? "linear-gradient(135deg,#f5ddc4,#e0a878)" : "#eef2f9",
+                      color: i === 0 ? "#7a5a00" : i === 1 ? "#48566b" : i === 2 ? "#6b4522" : "#6b7280" }}>{i + 1}</span>
+                  </td>
                   <td title={d.name} style={{ fontWeight: 600, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</td>
                   <td className="num" style={{ fontVariantNumeric: "tabular-nums" }}>{d.leads}</td>
                   <td className="num" style={{ fontVariantNumeric: "tabular-nums" }}>{d.quotes}</td>

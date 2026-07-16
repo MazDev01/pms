@@ -2,19 +2,21 @@ import { test, expect } from "@playwright/test";
 import { open, assertHealthyPage } from "./helpers";
 
 // ─── HQ · ใบเสนอราคาทั้งเครือ ─────────────────────────────────────────────────
-// ล็อกสเปก: HQ ดูอย่างเดียว · KPI 7 ตัว · กราฟครบตามที่ข้อมูลจริงรองรับ
+// ล็อกสเปก: HQ ดูอย่างเดียว · KPI 4 ตัว · กราฟครบตามที่ข้อมูลจริงรองรับ
 // และล็อก "สิ่งที่ต้องไม่มี" เพราะข้อมูลไม่รองรับ/บอสสั่งลบ (กันใครเผลอเอากลับมา)
 
-test("[ux·hq] KPI 7 ตัว คำนวณสอดคล้องกัน (ไม่มี 'ลูกค้าเปิดอ่าน')", async ({ page }) => {
+// กติกา (globals.css): ทุกหน้าใช้ KPI 4 ใบเท่ากัน — ห้ามเพิ่มเป็น 5+
+// (.hq-kpi5/.hq-kpi7/.hq-kpi8 ถูกลบทิ้งแล้ว · ปฏิเสธ/หมดอายุ/มูลค่าเฉลี่ย ดูได้จากตาราง+ตัวกรองสถานะแทน)
+test("[ux·hq] KPI 4 ตัว คำนวณสอดคล้องกัน (ไม่มี 'ลูกค้าเปิดอ่าน')", async ({ page }) => {
   await open(page, "hq", "/hq/quotations");
   await assertHealthyPage(page, "ใบเสนอราคาทั้งเครือ");
-  const tiles = page.locator(".hq-kpi7 > div");
-  await expect(tiles).toHaveCount(7);
-  for (const label of ["ใบเสนอราคาทั้งหมด", "มูลค่ารวม", "ตอบรับ", "ปฏิเสธ", "หมดอายุ", "อัตราปิดการขาย", "มูลค่าเฉลี่ยต่อใบ"]) {
-    await expect(page.locator(".hq-kpi7").getByText(label, { exact: true })).toBeVisible();
+  const tiles = page.locator(".hq-kpi4 > div");
+  await expect(tiles).toHaveCount(4);
+  for (const label of ["ใบเสนอราคาทั้งหมด", "มูลค่ารวม", "ตอบรับ", "อัตราปิดการขาย"]) {
+    await expect(page.locator(".hq-kpi4").getByText(label, { exact: true })).toBeVisible();
   }
   // อัตราปิดการขาย = ตอบรับ ÷ ใบที่ส่งแล้ว → ต้องกำกับตัวหารไว้ให้ตรวจสอบได้
-  await expect(page.locator(".hq-kpi7").getByText(/\d+\/\d+ ใบที่ส่งแล้ว/)).toBeVisible();
+  await expect(page.locator(".hq-kpi4").getByText(/\d+\/\d+ ใบที่ส่งแล้ว/)).toBeVisible();
 });
 
 test("[ux·hq] มีกราฟครบตามที่ข้อมูลจริงรองรับ", async ({ page }) => {
@@ -22,6 +24,7 @@ test("[ux·hq] มีกราฟครบตามที่ข้อมูล�
   for (const title of [
     "ลีด → ใบเสนอราคา รายตัวแทน",
     "มูลค่าใบเสนอราคา เทียบ ยอดขายจริง",
+    "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย",
     "ประเภทอาคาร",
     "เทียบรายภูมิภาค",
     "เหตุผลที่เสียโอกาสการขาย",
@@ -31,6 +34,27 @@ test("[ux·hq] มีกราฟครบตามที่ข้อมูล�
   ]) {
     await expect(page.getByText(title, { exact: true }).first(), `ต้องมีกราฟ "${title}"`).toBeVisible();
   }
+});
+
+// กราฟ "ออกใบเยอะ แต่ปิดได้น้อย" — กันอ่านผิดว่า "ใบที่ยังรอลูกค้าตอบ" = "ปิดไม่ได้"
+// ตัวเลขต้องตรงกับคอลัมน์ "อัตราปิดการขาย" ในตารางอันดับ (นิยามเดียวกัน: ตอบรับ ÷ ใบที่ส่งแล้ว)
+test("[ux·hq] กราฟออกใบเยอะแต่ปิดน้อย แยก 'ยังรอตอบ' ออกจาก 'ปิดไม่ได้'", async ({ page }) => {
+  await open(page, "hq", "/hq/quotations");
+  const card = page.locator(".card").filter({ hasText: "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย" }).first();
+  await expect(card).toBeVisible();
+  // ต้องมีคำอธิบายสีครบ 4 กลุ่ม — "ยังรอลูกค้าตอบ" ต้องเป็นกลุ่มแยก ไม่ถูกเหมารวมเป็นล้มเหลว
+  for (const l of ["ปิดได้", "ปิดไม่ได้", "หมดอายุ", "ยังรอลูกค้าตอบ"]) {
+    await expect(card.getByText(l, { exact: true }), `ต้องแยกกลุ่ม "${l}"`).toBeVisible();
+  }
+  // แต่ละแถวบอกตัวหารชัด (ปิดได้ X / Y ใบ) — ตรวจสอบย้อนได้ ไม่ใช่ % ลอย ๆ
+  await expect(card.getByText(/ปิดได้ \d+ \/ \d+ ใบ/).first()).toBeVisible();
+
+  // ตัวแทนแถวแรก (ออกใบเยอะสุด) ต้องมี % ตรงกับตารางอันดับของหน้าเดียวกัน
+  const first = (await card.getByText(/ปิดได้ \d+ \/ \d+ ใบ\d+%/).first().innerText()).replace(/\s/g, "");
+  const m = /ปิดได้(\d+)\/(\d+)ใบ(\d+)%/.exec(first);
+  expect(m, `อ่านแถวแรกไม่ได้: ${first}`).not.toBeNull();
+  const [, won, sent, pct] = m!.map(Number);
+  expect(Math.round((won / sent) * 100), "% ต้องคำนวณจากตัวเลขที่แสดงจริง").toBe(pct);
 });
 
 // ข้อมูลไม่รองรับ / บอสสั่งลบ — ห้ามกลับมา (ถ้าจะเอากลับต้องมีข้อมูลจริงรองรับก่อน)

@@ -88,7 +88,6 @@ export default function NetworkQuotationPage() {
   }), [rows]);
 
   const agg = useMemo(() => aggregate(rows), [rows]);
-  const expired = useMemo(() => rows.filter(r => r.status === "expired").length, [rows]);
 
   return (
     <div className="erp">
@@ -110,7 +109,7 @@ export default function NetworkQuotationPage() {
         </div>
       </div>
 
-      <QuotationKPICards agg={agg} expired={expired} />
+      <QuotationKPICards agg={agg} />
 
       <QuotationFilterBar
         filters={filters}

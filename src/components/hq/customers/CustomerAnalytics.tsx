@@ -3,7 +3,7 @@
 // ─── กราฟวิเคราะห์ฐานข้อมูลลูกค้า ────────────────────────────────────────────────
 // ทุกกราฟนับจาก "ใบเสนอราคาที่ปิดการขายได้" ของลูกค้าในผลกรอง
 // ลูกค้าที่ไม่มีใบปิดการขาย จะไม่ปรากฏในกราฟที่เกี่ยวกับอาคาร (ไม่ใช่การซ่อน — ไม่มีข้อมูลจริง)
-import { LineTrendChart } from "@/components/ui/Charts";
+import { LineTrendChart, Donut } from "@/components/ui/Charts";
 import { fmtBaht } from "@/lib/format";
 import { TODAY } from "@/lib/warranty";
 import { isWarrantyExpiringSoon, type CustomerDbRow } from "@/lib/customerDb";
@@ -107,13 +107,18 @@ export function CustomerAnalytics({ rows }: { rows: CustomerDbRow[] }) {
   })();
   const hasDelivery = deliveryTrend.some(d => d.value > 0);
 
-  // 7 · สถานะประกัน (นับรายอาคาร) — "ใกล้หมดประกัน" เป็นส่วนหนึ่งของที่ยังคุ้มครองอยู่
+  // 7 · สถานะประกัน (นับรายอาคาร) — โดนัทต้องใช้กลุ่มที่ "ไม่ทับกัน" ไม่งั้นรวมกันเกินจำนวนจริง
+  // ⚠️ isWarrantyExpiringSoon คืน true เฉพาะอาคารที่ status = active → "ใกล้หมด" เป็นสับเซตของ "อยู่ในประกัน"
+  //    จึงต้องหักออกจากกัน: อยู่ในประกัน(ยังไม่ใกล้หมด) + ใกล้หมด + หมดแล้ว = อาคารทั้งหมดพอดี
   const buildings = rows.flatMap(r => r.buildings).filter(b => b.warranty);
-  const warrantyRows: HRow[] = [
-    { label: "อยู่ในประกัน", value: buildings.filter(b => b.warranty!.status === "active").length },
-    { label: "ใกล้หมดประกัน (ภายใน 12 เดือน)", value: buildings.filter(b => isWarrantyExpiringSoon(b.warranty)).length },
-    { label: "หมดประกันแล้ว", value: buildings.filter(b => b.warranty!.status === "expired").length },
-  ];
+  const expiringSoon = buildings.filter(b => isWarrantyExpiringSoon(b.warranty)).length;
+  const activeAll = buildings.filter(b => b.warranty!.status === "active").length;
+  const warrantySegs = [
+    { label: "อยู่ในประกัน", value: activeAll - expiringSoon, color: "#059669" },
+    { label: "ใกล้หมดประกัน (ภายใน 12 เดือน)", value: expiringSoon, color: "#d97706" },
+    { label: "หมดประกันแล้ว", value: buildings.filter(b => b.warranty!.status === "expired").length, color: "#9ca3af" },
+  ].filter(s => s.value > 0);
+  const warrantyTotal = warrantySegs.reduce((s, x) => s + x.value, 0);
 
   const cnt = (v: number) => `${v} ราย`;
 
@@ -139,8 +144,28 @@ export function CustomerAnalytics({ rows }: { rows: CustomerDbRow[] }) {
         <HBar rows={bySubtype} fmt={cnt} color="#7C3AED" empty="ไม่มีใบที่ระบุแม่แบบย่อยในผลกรองนี้" />
       </Card>
 
+      {/* โดนัท: 3 กลุ่มนี้ไม่ทับกันและรวมกัน = อาคารที่มีประกันทั้งหมด → เป็นสัดส่วนของก้อนเดียว
+          (เดิมเป็นแท่งนอนแค่ 3 แถวในการ์ดสูง ๆ เหลือที่ว่างเยอะ) */}
       <Card title="สถานะประกัน" hint="นับรายอาคาร · ประกัน 10 ปีจากวันส่งมอบ">
-        <HBar rows={warrantyRows} fmt={v => `${v} อาคาร`} color="#0D9488" empty="ยังไม่มีอาคารที่ส่งมอบในผลกรองนี้" />
+        {!warrantyTotal ? (
+          <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>ยังไม่มีอาคารที่ส่งมอบในผลกรองนี้</div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+            <Donut segments={warrantySegs} centerLabel="อาคาร" centerValue={`${warrantyTotal}`} size={168} />
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              {warrantySegs.map(s => (
+                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, color: "#374151", fontWeight: 600 }}>{s.label}</span>
+                  <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{s.value}</span>
+                  <span style={{ color: "var(--muted-foreground)", minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                    {Math.round(s.value / warrantyTotal * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       <div style={{ gridColumn: "1 / -1" }}>

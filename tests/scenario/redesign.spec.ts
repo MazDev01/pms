@@ -103,21 +103,34 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
   expect(joined, "ใบที่สร้างใหม่ต้องลงวันที่ 30 มิ.ย. (วันนี้ของระบบ)").toContain("30 มิ.ย.");
 });
 
-// Smart filter: ลีดขาดติดต่อ >7/14/30 วัน — จำนวนอยู่บนการ์ด KPI "เกิน 7 วัน" (ไม่ซ้ำ), แถบเครื่องมือเหลือเกณฑ์วัน
+// Smart filter: ลีดขาดติดต่อ >7/14/30 วัน — จำนวนอยู่บนการ์ด KPI "เกิน 7 วัน" (ไม่ซ้ำ)
+// ตัวกรองเกณฑ์วันเป็น dropdown บนแถบเครื่องมือ (เดิมเป็นชิป >7/>14/>30 — เปลี่ยนแล้ว)
 test("[ux·dealer] Smart filter ค้างติดต่อ (>7/14/30 วัน) + กรองได้", async ({ page }) => {
   await open(page, "dealer", "/leads");
   await assertHealthyPage(page, "ลูกค้าเป้าหมาย");
-  await expect(page.getByText("ค้างติดต่อ")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^เกิน 7 วัน/ })).toBeVisible(); // การ์ด KPI (^ กันชนกับชิป "ค้างเกิน 7 วัน")
-  await expect(page.getByRole("button", { name: ">14 วัน" })).toBeVisible();
-  await expect(page.getByRole("button", { name: ">30 วัน" })).toBeVisible();
+
+  // การ์ด KPI บอกจำนวนลีดที่ค้างเกิน 7 วัน
+  const kpi = page.getByRole("button", { name: /^เกิน 7 วัน/ });
+  await expect(kpi).toBeVisible();
+  const overdue = parseInt((await kpi.innerText()).split("\n")[1], 10);
+
+  // ตัวกรองค้างติดต่อ = dropdown เกณฑ์วัน (aria-label มาจาก caption ของ FilterSelect)
+  const idle = page.getByLabel("ค้างติดต่อทุกช่วง");
+  await expect(idle).toBeVisible();
+  for (const d of [7, 14, 30]) {
+    await expect(idle.getByRole("option", { name: `ค้างติดต่อ >${d} วัน`, exact: true }), `ต้องมีเกณฑ์ >${d} วัน`).toHaveCount(1);
+  }
+
   await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตารางเพื่อนับแถว
-  await page.waitForTimeout(300);
-  const before = await page.locator("tbody tr").count();
-  await page.getByRole("button", { name: ">7 วัน" }).click();
-  await page.waitForTimeout(300);
-  const after = await page.locator("tbody tr").count();
-  expect(after, "กด >7 วัน แล้วต้องกรองเหลือเฉพาะลีดที่ต้องติดตาม").toBeLessThanOrEqual(before);
+  const rows = page.locator("tbody tr");
+  const before = await rows.count();
+
+  // กรอง >7 วัน → จำนวนแถวต้องตรงกับตัวเลขบนการ์ด KPI (เช็คว่าการ์ดกับตัวกรองนับด้วยเกณฑ์เดียวกันจริง)
+  // เทียบตรง ๆ ได้เพราะจำนวนน้อยกว่าขนาดหน้า (10) — ถ้าข้อมูลโตเกินนั้นต้องคิดเรื่องแบ่งหน้าด้วย
+  await idle.selectOption("7");
+  expect(overdue, "ลีดค้างเกิน 7 วันต้องไม่เกิน 1 หน้า มิฉะนั้นเทียบกับแถวตรง ๆ ไม่ได้").toBeLessThanOrEqual(10);
+  await expect.poll(() => rows.count(), { timeout: 5_000 }).toBe(overdue);
+  expect(overdue, "กรองแล้วต้องเหลือน้อยกว่าทั้งหมด").toBeLessThanOrEqual(before);
 });
 
 // รายละเอียดลูกค้าเป้าหมาย = แผงกลางจอ 4 แท็บ ครอบเส้นทางการขายทั้งเส้น (งาน → ใบเสนอราคา → ไทม์ไลน์)

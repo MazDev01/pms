@@ -26,7 +26,7 @@ import {
   MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, PhoneCall, Package, Layers,
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
-  ArrowUpDown, ArrowUp, ArrowDown, Filter,
+  ArrowUpDown, ArrowUp, ArrowDown,
   LayoutList, Columns3, AlarmClock, ChevronRight, Edit2,
 } from "lucide-react";
 import { ExportMenu } from "@/components/ui/ExportMenu";
@@ -35,6 +35,7 @@ import { DrawerSection } from "@/components/ui/RightDrawer";
 import { useTableLayout } from "@/components/ui/TableTools";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { FilterRow, FilterSelect } from "@/components/filters/FilterRow";
 import { TopbarActions } from "@/components/layout/TopbarActions";
 import { MultiLineChart, Donut } from "@/components/ui/Charts";
 import { leadCreatedDate } from "@/lib/leadMetrics";
@@ -52,6 +53,14 @@ const DEFAULT_PERSONS = responsiblePersons.filter(p => p.active).map(p => p.name
 // สีของแต่ละแหล่งที่มา (โดนัท) — วนใช้ตามลำดับจำนวนมาก→น้อย
 const SOURCE_COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#0D9488", "#94A3B8"];
 const SOURCES = ["Facebook","เว็บไซต์","LINE","Walk-in","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
+// ช่วงมูลค่าใน FilterRow — เดิมเป็นช่องกรอก "มูลค่าขั้นต่ำ/สูงสุด (M฿)" สองช่องในแผงตัวกรอง
+// เก็บเป็นสตริงหน่วยล้านบาท เพราะตัวกรองจริง (fValueMin/fValueMax) อ่านค่าแบบนั้นอยู่แล้ว
+const VALUE_BANDS = [
+  { v:"lt1",   l:"ต่ำกว่า 1 ล้าน",  min:"",   max:"1"  },
+  { v:"1to5",  l:"1 – 5 ล้าน",      min:"1",  max:"5"  },
+  { v:"5to10", l:"5 – 10 ล้าน",     min:"5",  max:"10" },
+  { v:"gte10", l:"มากกว่า 10 ล้าน", min:"10", max:""   },
+];
 const PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","นครสวรรค์","ราชบุรี","ขอนแก่น","อื่นๆ"];
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 function thaiDateStr(d: Date) { return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
@@ -465,8 +474,9 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               </div>
               <div>
                 <label style={labelStyle}>ขั้นตอน</label>
-                {/* เลือกได้เฉพาะขั้นก่อน "เสนอราคา" — ขั้นเสนอราคาขึ้นไปเลื่อนอัตโนมัติเมื่อมีใบเสนอราคา */}
-                <select value={form.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inputStyle}>
+                {/* เลือกได้เฉพาะขั้นก่อน "เสนอราคา" — ขั้นเสนอราคาขึ้นไปเลื่อนอัตโนมัติเมื่อมีใบเสนอราคา
+                    aria-label: ชื่อเดียวกับ label — กันสับสนกับ dropdown "ทุกสถานะ" บนแถบเครื่องมือที่มีครบทุกขั้น */}
+                <select aria-label="ขั้นตอน" value={form.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inputStyle}>
                   {(isEdit ? ALL_STATUSES : (["WAITING","BULLET"] as LeadStatus[])).map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}
                 </select>
                 {!isEdit && <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ขั้น “เสนอราคา” ขึ้นไปจะเลื่อนอัตโนมัติเมื่อสร้างใบเสนอราคา</div>}
@@ -571,7 +581,6 @@ export default function LeadsPage() {
   const [filterStatus, setFilterStatus] = useState<LeadStatus|"ALL">("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("company");
   const [sortDir, setSortDir] = useState<"asc"|"desc">("asc");
-  const [showFilters, setShowFilters] = useState(false);
   const [followUpDays, setFollowUpDays] = useState(0); // Smart filter: 0=off · 7/14/30 = ขาดติดต่อเกินกี่วัน
   // quick filter chips ถูกลบตามที่บอสสั่ง — state นี้ไม่มีใครตั้งค่าได้แล้ว จึงลบทิ้ง
   const [dTab, setDTab] = useState<"overview"|"tasks"|"quotation"|"timeline">("overview"); // แท็บใน drawer รายละเอียด
@@ -719,6 +728,12 @@ export default function LeadsPage() {
   const nonLost = allLeads.filter(l => l.status !== "CANCELLED").length;
   const winRate = nonLost ? Math.round((wonLeads / nonLost)*100) : 0;
   const hasActiveFilters = !!(fAssignee || fProvince || fSource || fValueMin || fValueMax);
+  // ช่วงมูลค่าใน FilterRow ↔ fValueMin/fValueMax ที่ตัวกรองจริงใช้ (แหล่งความจริงเดียวยังเป็นสองค่านี้)
+  const valueBand = VALUE_BANDS.find(b => b.min === fValueMin && b.max === fValueMax)?.v ?? "ALL";
+  const pickValueBand = (v: string) => {
+    const b = VALUE_BANDS.find(x => x.v === v);
+    setFValueMin(b?.min ?? ""); setFValueMax(b?.max ?? "");
+  };
 
   function onSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -870,7 +885,6 @@ export default function LeadsPage() {
   const newThisMonth = useMemo(
     () => leadsData.filter(l => { const d = leadCreatedDate(l); return d.getMonth() === MOCK_TODAY_LEAD.getMonth() && d.getFullYear() === MOCK_TODAY_LEAD.getFullYear(); }).length,
     [leadsData]);
-  const followUpTodayCount = useMemo(() => leadsData.filter(l => daysSinceContact(l) === 0).length, [leadsData]);
   const overdue7 = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
   const meetingToday = useMemo(() => appointments.filter(a => a.date === "2026-06-30" && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
   const newWaiting = useMemo(() => leadsData.filter(l => l.status === "WAITING").length, [leadsData]);
@@ -889,7 +903,6 @@ export default function LeadsPage() {
   const leadKpis = [
     { label:"ลูกค้าเป้าหมายทั้งหมด", value:`${leadsData.length}`,   sub:"รายการ",       Icon:Users,      color:"#2563EB", bg:"#E8F0FE", on: noFilter,                 onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
     { label:"โอกาสการขาย",          value:fmtCompact(openValue),    sub:"มูลค่าที่เปิดอยู่", Icon:TrendingUp, color:"#16A34A", bg:"#E6F7EE", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
-    { label:"ติดตามวันนี้",         value:`${followUpTodayCount}`,  sub:"รายการ",       Icon:PhoneCall,  color:"#7C3AED", bg:"#F0EBFB", on: filterStatus === "FOLLOWUP" && !followUpDays, onClick:()=>{ setFollowUpDays(0); setFilterStatus(filterStatus === "FOLLOWUP" ? "ALL" : "FOLLOWUP"); } },
     { label:"เกิน 7 วัน",           value:`${overdue7}`,            sub:"รายการ",       Icon:AlarmClock, color:"#EA580C", bg:"#FEF0E6", on: followUpDays === 7,       onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(followUpDays === 7 ? 0 : 7); } },
     { label:"อัตราปิดการขาย",       value:`${convRate}%`,           sub:"ปิดได้/ปิดทั้งหมด", Icon:Percent,   color:"#0D9488", bg:"#E6F7F5", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
   ];
@@ -928,6 +941,15 @@ export default function LeadsPage() {
       <div className="erp">
         {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) · เหลือคำบรรยายไว้ในเนื้อหา */}
         <TopbarActions>
+          {/* ตัวเลือกของมุมมองบอร์ด — โผล่เฉพาะตอนดูบอร์ด */}
+          {view === "kanban" && (
+            <button onClick={()=>setHideEmpty(v=>!v)}
+              style={{ display:"flex", alignItems:"center", gap:6, padding:"0 12px", height:33, boxSizing:"border-box", borderRadius:9, cursor:"pointer",
+                border:`1px solid ${hideEmpty?"#003366":"#e5e7eb"}`, background: hideEmpty?"#dce5f0":"#fff",
+                color: hideEmpty?"#003366":"#6b7280", fontFamily:"inherit", fontSize:"0.72rem", fontWeight:600 }}>
+              {hideEmpty ? <Check size={13} /> : <Columns3 size={13} />} ซ่อนคอลัมน์ว่าง
+            </button>
+          )}
           <FilterBar dims={[]} />
           <ExportMenu filename="leads" title="รายชื่อลูกค้าเป้าหมาย"
             headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","ช่องทางที่มา","แม่แบบ","สถานะ","ความคืบหน้า","มูลค่า","ผู้รับผิดชอบ","กิจกรรมล่าสุด"]}
@@ -939,7 +961,7 @@ export default function LeadsPage() {
         {/* จำนวน/อัตราปิดการขาย อยู่บนการ์ด KPI แล้ว — บรรทัดนี้บอกแค่ช่วงเวลาที่กำลังดู */}
         <p className="page-sub">จัดการและติดตามลูกค้าเป้าหมาย · {timeRange.subtitle}</p>
 
-        {/* ── สรุป 5 ตัวชี้วัด — ทั้งการ์ดคือปุ่มกรอง (กดซ้ำ = ล้าง) · ไม่มีลิงก์ซ้ำในการ์ด ── */}
+        {/* ── สรุป 4 ตัวชี้วัด — ทั้งการ์ดคือปุ่มกรอง (กดซ้ำ = ล้าง) · ไม่มีลิงก์ซ้ำในการ์ด ── */}
         <div className="dash-kpis" style={{ marginBottom: 16 }}>
           {leadKpis.map(k => (
             <button key={k.label} onClick={k.onClick} title={k.on ? "กดอีกครั้งเพื่อล้างตัวกรอง" : `กรอง: ${k.label}`}
@@ -964,122 +986,46 @@ export default function LeadsPage() {
 
         {/* ชิปกรองด่วน (ทั้งหมด/วันนี้/สัปดาห์นี้/ของฉัน/ค้างเกิน 7 วัน/ปิดไม่สำเร็จ) เอาออกตามที่บอสสั่ง */}
 
-        {/* Toolbar */}
-        <div className="card" style={{ padding:"12px 16px", marginBottom:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-            {/* Search — ชิดซ้าย */}
-            <div style={{ display:"flex", alignItems:"center", gap:8, background:"#fafafa",
-              border:"1px solid #e5e7eb", borderRadius:10, padding:"0 12px", height:36, boxSizing:"border-box", width:280, maxWidth:"100%", flexShrink:0 }}>
-              <Search size={13} color="#6b7280" />
-              <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="ค้นหาบริษัท ผู้ติดต่อ..."
-                style={{ border:"none", outline:"none", fontSize:"0.8rem", color:"#2D2D2D", background:"transparent", flex:1 }} />
-              {query && <button onClick={()=>setQuery("")}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"#374151", padding:0, display:"flex" }}>
-                <X size={13}/>
-              </button>}
-            </div>
-
-            <div style={{ flex:1 }} />
-            {/* ค้างติดต่อเกิน N วัน — เกณฑ์วันอย่างเดียว (จำนวนอยู่บนการ์ด "เกิน 7 วัน" ด้านบนแล้ว ไม่ซ้ำ) */}
-            {followUpCount > 0 && (
-              <div title="กรองลีดที่ขาดการติดต่อเกินกำหนด"
-                style={{ display:"flex", alignItems:"center", gap:6, height:36, padding:"0 10px", boxSizing:"border-box", borderRadius:10,
-                  border:"1px solid #e5e7eb", background:"#fff" }}>
-                <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:"0.72rem", fontWeight:700, color:"#6b7280", whiteSpace:"nowrap" }}>
-                  <AlarmClock size={13} /> ค้างติดต่อ
-                </span>
-                {[7,14,30].map(d => (
-                  <button key={d} onClick={()=>setFollowUpDays(v=>v===d?0:d)}
-                    style={{ height:26, padding:"0 9px", borderRadius:7, cursor:"pointer", fontFamily:"inherit", fontSize:"0.7rem", fontWeight:700,
-                      border:`1px solid ${followUpDays===d?"#DC3545":"#e5e7eb"}`, background: followUpDays===d?"#DC3545":"#fff", color: followUpDays===d?"#fff":"#6b7280" }}>
-                    &gt;{d} วัน
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* ปุ่มควบคุม — ชิดขวา: ตัวกรอง + สลับมุมมอง */}
-            {/* Filter toggle */}
-            <button onClick={()=>setShowFilters(p=>!p)}
-              style={{ display:"flex", alignItems:"center", gap:6, background:showFilters||hasActiveFilters?"#003366":"#fff",
-                border:`1px solid ${showFilters||hasActiveFilters?"#003366":"#e5e7eb"}`,
-                borderRadius:10, padding:"0 13px", height:36, boxSizing:"border-box", fontSize:"0.8rem", fontWeight:600,
-                color:showFilters||hasActiveFilters?"#fff":"#6b7280", cursor:"pointer" }}>
-              <Filter size={13} />
-              ตัวกรอง {hasActiveFilters && <span style={{ background:"rgba(255,255,255,.3)", borderRadius:99, padding:"0 5px", fontSize:"0.65rem" }}>เปิด</span>}
-            </button>
-
-            {/* สลับมุมมอง List / Kanban (รวม "เส้นทางการขาย" มาไว้ที่นี่) */}
-            {view === "kanban" && (
-              <button onClick={()=>setHideEmpty(v=>!v)}
-                style={{ display:"flex", alignItems:"center", gap:6, padding:"0 12px", height:36, boxSizing:"border-box", borderRadius:9, cursor:"pointer",
-                  border:`1px solid ${hideEmpty?"#003366":"#e5e7eb"}`, background: hideEmpty?"#dce5f0":"#fff",
-                  color: hideEmpty?"#003366":"#6b7280", fontFamily:"inherit", fontSize:"0.72rem", fontWeight:600 }}>
-                {hideEmpty ? <Check size={13} /> : <Columns3 size={13} />} ซ่อนคอลัมน์ว่าง
-              </button>
-            )}
-            <div style={{ display:"flex", border:"1px solid #e5e7eb", borderRadius:9, overflow:"hidden", height:36, boxSizing:"border-box" }}>
+        {/* ── แถบตัวกรองแถวเดียว (มาตรฐานเดียวกับหน้า /hq/pipeline) ──
+            เดิมเป็นปุ่ม "ตัวกรอง" + แผงเลื่อนจากขวา — ตอนนี้เห็นตัวกรองทุกตัวพร้อมกัน
+            "ทุกสถานะ" ใช้ state เดียวกับการ์ด KPI ด้านบน → กดที่ไหนก็ตรงกัน
+            ปิดการขายสำเร็จ (PAID) ไม่อยู่ในตัวเลือก — ลีดที่ปิดแล้วย้ายไปหน้าลูกค้า (leadsData ตัดออก) */}
+        <FilterRow
+          query={query} onQuery={setQuery} placeholder="ค้นหาบริษัท ผู้ติดต่อ..."
+          showClear={hasActiveFilters || filterStatus!=="ALL" || followUpDays!==0 || !!query}
+          onClear={()=>{ setQuery(""); setFilterStatus("ALL"); setFollowUpDays(0); setFAssignee(""); setFProvince(""); setFSource(""); setFValueMin(""); setFValueMax(""); }}
+          right={
+            /* สลับมุมมอง ตาราง/บอร์ด — กลับมาอยู่ท้ายแถบตัวกรองเหมือนเดิม (ช่อง right ของ FilterRow เตรียมไว้ให้พอดี)
+               ขนาดเล็กกว่าช่องกรอง (สูง 30 · ไอคอน 12) เพราะเป็นตัวควบคุมรอง ไม่ใช่ตัวกรอง */
+            <div style={{ display:"flex", border:"1px solid #e5e7eb", borderRadius:8, overflow:"hidden", height:30, boxSizing:"border-box", flexShrink:0 }}>
               {([["list", LayoutList, "ตาราง"], ["kanban", Columns3, "บอร์ด"]] as const).map(([v, Ico, tip]) => (
                 <button key={v} title={tip} onClick={()=>setView(v)}
-                  style={{ display:"flex", alignItems:"center", gap:5, padding:"0 12px", height:"100%", border:"none", cursor:"pointer",
-                    background: view===v ? "#003366" : "#fff", color: view===v ? "#fff" : "#6b7280", fontFamily:"inherit", fontSize:"0.72rem", fontWeight:600 }}>
-                  <Ico size={14} /> {tip}
+                  style={{ display:"flex", alignItems:"center", gap:4, padding:"0 8px", height:"100%", border:"none", cursor:"pointer",
+                    background: view===v ? "#003366" : "#fff", color: view===v ? "#fff" : "#6b7280", fontFamily:"inherit", fontSize:"0.68rem", fontWeight:600 }}>
+                  <Ico size={12} /> {tip}
                 </button>
               ))}
             </div>
-          </div>
-
-        </div>
-
-        {/* ── FILTER DRAWER (เลื่อนจากขวา) ── */}
-        {showFilters && (() => {
-          const lbl = { fontSize:"0.65rem", fontWeight:700, color:"#374151", marginBottom:6, display:"block" } as const;
-          const inp = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.8rem", outline:"none", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" as const };
-          return (
-            <>
-              <div onClick={()=>setShowFilters(false)} className="drawer-overlay"
-                style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.4)", zIndex:150 }} />
-              <div className="side-drawer" style={{ position:"fixed", top:0, right:0, height:"100vh", width:360, maxWidth:"100vw",
-                zIndex:151, background:"#fff", boxShadow:"-16px 0 60px rgba(0,0,0,.2)", borderRadius:"18px 0 0 18px",
-                display:"flex", flexDirection:"column" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:"1px solid #e5e7eb", flexShrink:0 }}>
-                  <span style={{ fontSize:"1rem", fontWeight:800, color:"#003366", display:"flex", gap:8, alignItems:"center" }}><Filter size={16} /> ตัวกรอง</span>
-                  <button onClick={()=>setShowFilters(false)} style={{ width:30, height:30, borderRadius:8, border:"1px solid #e5e7eb", background:"#f8f9fb", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:"#374151" }}><X size={14} /></button>
-                </div>
-                <div style={{ flex:1, overflowY:"auto", padding:"20px", display:"flex", flexDirection:"column", gap:16 }}>
-                  <div><label style={lbl}>ผู้รับผิดชอบ</label>
-                    <select value={fAssignee} onChange={e=>setFAssignee(e.target.value)} style={inp}>
-                      <option value="">ทั้งหมด</option>{personsList.map(t=><option key={t}>{t}</option>)}
-                    </select></div>
-                  <div><label style={lbl}>จังหวัด</label>
-                    <select value={fProvince} onChange={e=>setFProvince(e.target.value)} style={inp}>
-                      <option value="">ทั้งหมด</option>{PROVINCES.map(p=><option key={p}>{p}</option>)}
-                    </select></div>
-                  <div><label style={lbl}>แหล่งที่มา</label>
-                    <select value={fSource} onChange={e=>setFSource(e.target.value)} style={inp}>
-                      <option value="">ทั้งหมด</option>{SOURCES.map(s=><option key={s}>{s}</option>)}
-                    </select></div>
-                  {/* ตัวกรอง "ความสำคัญ" เอาออกตามที่บอสสั่ง */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                    <div><label style={lbl}>มูลค่าขั้นต่ำ (M฿)</label>
-                      <input value={fValueMin} onChange={e=>setFValueMin(e.target.value)} placeholder="1" type="number" style={inp} /></div>
-                    <div><label style={lbl}>มูลค่าสูงสุด (M฿)</label>
-                      <input value={fValueMax} onChange={e=>setFValueMax(e.target.value)} placeholder="5" type="number" style={inp} /></div>
-                  </div>
-                </div>
-                <div style={{ padding:"14px 20px", borderTop:"1px solid #e5e7eb", display:"flex", gap:8, flexShrink:0 }}>
-                  <button className="btn btn-secondary btn-md" style={{ flex:1, justifyContent:"center", color: hasActiveFilters ? "#dc2626" : "#9ca3af" }}
-                    disabled={!hasActiveFilters}
-                    onClick={()=>{ setFAssignee(""); setFProvince(""); setFSource(""); setFValueMin(""); setFValueMax(""); }}>
-                    ล้างทั้งหมด
-                  </button>
-                  <button className="btn btn-primary btn-md" style={{ flex:1, justifyContent:"center" }} onClick={()=>setShowFilters(false)}>
-                    ดูผลลัพธ์
-                  </button>
-                </div>
-              </div>
-            </>
-          );
-        })()}
+          }
+        >
+          {/* ไม่ตั้ง minWidth เกินจำเป็น — select กว้างตามคำ caption อยู่แล้ว
+              ตั้งเกินไว้ = กินที่ฟรีจนแถบตกบรรทัดที่จอ 1440 */}
+          <FilterSelect caption="ทุกสถานะ" value={filterStatus} onChange={v=>setFilterStatus(v as LeadStatus|"ALL")}
+            options={ALL_STATUSES.filter(s=>s!=="PAID").map(s=>({v:s,l:leadStatusLabel[s]}))} />
+          <FilterSelect caption="ทุกผู้รับผิดชอบ" value={fAssignee} onChange={setFAssignee} all=""
+            options={personsList.map(p=>({v:p,l:p}))} />
+          <FilterSelect caption="ทุกจังหวัด" value={fProvince} onChange={setFProvince} all=""
+            options={PROVINCES.map(p=>({v:p,l:p}))} />
+          <FilterSelect caption="ทุกช่องทางที่มา" value={fSource} onChange={setFSource} all=""
+            options={SOURCES.map(s=>({v:s,l:s}))} />
+          <FilterSelect caption="ทุกช่วงมูลค่า" value={valueBand} onChange={pickValueBand}
+            options={VALUE_BANDS.map(b=>({v:b.v,l:b.l}))} />
+          {/* ค้างติดต่อเกิน N วัน — เกณฑ์วันอย่างเดียว (จำนวนอยู่บนการ์ด "เกิน 7 วัน" ด้านบนแล้ว ไม่ซ้ำ) */}
+          {followUpCount > 0 && (
+            <FilterSelect caption="ค้างติดต่อทุกช่วง" value={String(followUpDays)} onChange={v=>setFollowUpDays(Number(v))} all="0"
+              options={[7,14,30].map(d=>({v:String(d),l:`ค้างติดต่อ >${d} วัน`}))} />
+          )}
+        </FilterRow>
 
         {/* ── LIST VIEW ── */}
         {view === "list" && (
@@ -1793,13 +1739,13 @@ export default function LeadsPage() {
                     </div>
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontSize:"1.12rem", fontWeight:800, color:"#fff", lineHeight:1.2 }}>{c.company || c.name}</div>
+                      {/* หัวแผงบอกแค่ว่า "นี่คือใคร ที่ไหน" — โทรศัพท์/อีเมล/วันที่สร้าง ตัดออกแล้ว
+                          เพราะซ้ำกับการ์ด "ข้อมูลลูกค้า (OVERVIEW)" ในแท็บภาพรวมที่มีครบกว่า (มีแหล่งที่มา/ผู้รับผิดชอบ/ติดต่อล่าสุดด้วย)
+                          รหัสลีดก็ตัดออก — หัวแผงใช้ชื่อบริษัทระบุตัวอยู่แล้ว (และของเดิมเรนเดอร์เพี้ยนเป็น "##L-40336"
+                          เพราะ c.id มี "#" ติดมาอยู่แล้วแต่โค้ดเติม "#" ซ้ำอีกตัว) */}
                       <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", fontSize:"0.72rem", color:"rgba(255,255,255,.72)", marginTop:4 }}>
                         <span>{c.contact}</span>
                         <span style={{ display:"flex", alignItems:"center", gap:3 }}><MapPin size={11} /> {c.province}</span>
-                        {c.phone && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Phone size={11} /> {c.phone}</span>}
-                        {c.email && <span style={{ display:"flex", alignItems:"center", gap:3 }}><Mail size={11} /> {c.email}</span>}
-                        <span style={{ opacity:.8 }}>#{c.id}</span>
-                        <span style={{ opacity:.8 }}>สร้าง {c.createdAt ?? "—"}</span>
                       </div>
                     </div>
                   </div>
