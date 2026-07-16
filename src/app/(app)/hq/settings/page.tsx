@@ -387,7 +387,7 @@ function DealersTab() {
 // ═══════════════════════ 5 · เป้าหมายยอดขาย ═══════════════════════════════════
 // เป้าทั้งปี = แหล่งเดียว (แดชบอร์ด HQ/ตัวแทนอ่านค่านี้) · ไตรมาส/เดือน = แบ่งจากเป้าทั้งปี
 // เป้ารายตัวแทน = DealerRow.revenueTarget (ตั้งที่หน้า “ตัวแทน”) · ความคืบหน้า = ยอดจริงเทียบเป้า
-// ไม่มี "คาดการณ์" (Forecast) — ระบบไม่มีข้อมูลคาดการณ์ (ไม่มี expectedClose / ค่าความน่าจะเป็น)
+// ไม่มี "คาดการณ์" (Forecast) — ระบบไม่มีข้อมูลคาดการณ์ (ไม่มีวันคาดปิดการขาย / ค่าความน่าจะเป็น)
 function RollupTable({ title, hint, rows, countryTarget }: {
   title: string; hint: string;
   rows: { key: string; target: number; actual: number; dealers: number }[];

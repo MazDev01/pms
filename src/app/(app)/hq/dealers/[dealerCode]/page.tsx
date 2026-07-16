@@ -228,7 +228,6 @@ function ProjectsTab({ projects }: { projects: DealerProjectItem[] }) {
                   <span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{p.product}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>คาดปิดการขาย: {p.dueDate}</span>
                   <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(p.valueNum)}</span>
                 </div>
               </div>

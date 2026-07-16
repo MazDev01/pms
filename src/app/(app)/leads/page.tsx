@@ -130,6 +130,7 @@ function leadLatestDate(l: LeadRow): Date | null {
 }
 // ── ลีดที่ต้องรีบติดตาม (ขาดการติดต่อเกิน 7 วัน) — กฎธุรกิจเดียวที่ต้องมี (ไม่มี SLA) ──
 const MOCK_TODAY_LEAD = new Date(2026, 5, 30); // 2026-06-30
+const CUR_YEAR = MOCK_TODAY_LEAD.getFullYear(); // กราฟรายเดือน = ปีปัจจุบันเท่านั้น (ข้อมูลมีของปีที่แล้วปนอยู่)
 function daysSinceContact(l: LeadRow): number | null {
   const d = leadLatestDate(l) ?? parseThaiDate(l.createdAt);
   if (!d) return null;
@@ -538,10 +539,12 @@ export default function LeadsPage() {
   // สมุดงานของ "ตัวแทนที่ล็อกอิน" เท่านั้น — กรองด้วย dealerCode
   // จำเป็นตั้งแต่มีลีดของสาขาอื่นในระบบ (ก่อนหน้านี้มีสาขาเดียวเลยไม่กรองก็ไม่มีใครเห็นความต่าง)
   // ลีดที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
-  const leadsData = useMemo(
-    () => allLeads.filter(l => l.status !== "PAID" && (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
+  // สมุดงานของสาขาตัวเอง "ทุกสถานะ" (รวมที่ปิดการขายสำเร็จแล้ว) — ใช้คิดอัตราปิดการขาย
+  const myAllLeads = useMemo(
+    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
     [allLeads],
   );
+  const leadsData = useMemo(() => myAllLeads.filter(l => l.status !== "PAID"), [myAllLeads]);
 
   // sync งาน/สถานะที่ระบบติ๊กอัตโนมัติ (เช่น สร้าง/ส่งใบเสนอราคา) เข้าโมดัลที่เปิดอยู่
   // — อัปเดตเฉพาะ tasks/status ไม่ทับฟิลด์ที่ผู้ใช้กำลังแก้ใน draft
@@ -722,11 +725,9 @@ export default function LeadsPage() {
   const pageStart = filtered.length === 0 ? 0 : (page-1)*PAGE_SIZE + 1;
   const pageEnd = Math.min(page*PAGE_SIZE, filtered.length);
 
-  const totalValue = leadsData.reduce((s,l) => s + parseValue(l.value), 0);
-  // อัตราปิดการขายคิดจากข้อมูลทั้งหมด (รวมที่กลายเป็นลูกค้าไปแล้ว) — หน้ารายการแสดงเฉพาะที่ยังไม่ปิด
-  const wonLeads = allLeads.filter(l => l.status === "PAID").length;
-  const nonLost = allLeads.filter(l => l.status !== "CANCELLED").length;
-  const winRate = nonLost ? Math.round((wonLeads / nonLost)*100) : 0;
+  // totalValue / wonLeads / nonLost / winRate ถูกลบ — คำนวณไว้แต่ไม่มีใครแสดง
+  // และทั้งสามคิดจาก allLeads (ทั้งเครือ) ซึ่งผิดขอบเขตของหน้าตัวแทนอยู่แล้ว
+  // อัตราปิดการขายที่แสดงจริงคือ convRate ด้านล่าง (คิดจาก myAllLeads)
   const hasActiveFilters = !!(fAssignee || fProvince || fSource || fValueMin || fValueMax);
   // ช่วงมูลค่าใน FilterRow ↔ fValueMin/fValueMax ที่ตัวกรองจริงใช้ (แหล่งความจริงเดียวยังเป็นสองค่านี้)
   const valueBand = VALUE_BANDS.find(b => b.min === fValueMin && b.max === fValueMax)?.v ?? "ALL";
@@ -890,12 +891,13 @@ export default function LeadsPage() {
   const newWaiting = useMemo(() => leadsData.filter(l => l.status === "WAITING").length, [leadsData]);
   // Sales Opportunity = มูลค่ารวมของลีดที่ยังเปิดอยู่ (Expected Revenue)
   const openValue = useMemo(() => leadsData.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0), [leadsData]);
-  // Conversion Rate = ปิดได้ / (ปิดได้ + ปิดไม่ได้) — ใช้ allLeads (leadsData ตัด PAID ออกแล้ว)
+  // Conversion Rate = ปิดได้ / (ปิดได้ + ปิดไม่ได้) — ใช้ myAllLeads เพราะ leadsData ตัด PAID ออกแล้ว
+  // ต้องเป็นของสาขาตัวเองเท่านั้น: เดิมใช้ allLeads จึงคิดรวมลีดของอีก 9 สาขาเข้ามาด้วย
   const convRate = useMemo(() => {
-    const won = allLeads.filter(l => l.status === "PAID").length;
-    const lost = allLeads.filter(l => l.status === "CANCELLED").length;
+    const won = myAllLeads.filter(l => l.status === "PAID").length;
+    const lost = myAllLeads.filter(l => l.status === "CANCELLED").length;
     return won + lost ? Math.round((won / (won + lost)) * 1000) / 10 : 0;
-  }, [allLeads]);
+  }, [myAllLeads]);
   const fmtCompact = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
 
   // การ์ด = ปุ่มกรอง · on = กำลังกรองด้วยเงื่อนไขนี้อยู่ (กดซ้ำ = ล้าง)
@@ -907,32 +909,30 @@ export default function LeadsPage() {
     { label:"อัตราปิดการขาย",       value:`${convRate}%`,           sub:"ปิดได้/ปิดทั้งหมด", Icon:Percent,   color:"#0D9488", bg:"#E6F7F5", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
   ];
 
-  // แนวโน้ม 12 เดือน — ลูกค้าเป้าหมายใหม่ เทียบ ปิดการขาย
+  // แนวโน้ม 12 เดือน — ลูกค้าเป้าหมายใหม่ เทียบ ปิดการขาย · ปีปัจจุบันเท่านั้น
+  // ข้อมูลมีทั้งปี 2568 และ 2569 — เดิมนับแต่เดือนโดยไม่ดูปี ของปีที่แล้วเลยมาโผล่ในกราฟปีนี้
   const leadTrend = useMemo(() => {
     const newLeads = Array(12).fill(0), won = Array(12).fill(0);
     leadsData.forEach(l => {
-      const m = leadCreatedDate(l).getMonth();
-      newLeads[m]++;
-      if (l.status === "PAID") won[m]++;
+      const d = leadCreatedDate(l);
+      if (d.getFullYear() !== CUR_YEAR) return;
+      newLeads[d.getMonth()]++;
+      if (l.status === "PAID") won[d.getMonth()]++;
     });
     return { newLeads, won };
   }, [leadsData]);
 
-  // Lead vs Quotations — จำนวนลีด (น้ำเงิน) เทียบ ใบเสนอราคา (ส้ม) รายเดือน
+  // Lead vs Quotations — จำนวนลีด (น้ำเงิน) เทียบ ใบเสนอราคา (ส้ม) รายเดือน · ปีปัจจุบันเท่านั้น
   const leadVsQuote = useMemo(() => {
     const leadC = Array(12).fill(0), quoteC = Array(12).fill(0);
-    leadsData.forEach(l => { leadC[leadCreatedDate(l).getMonth()]++; });
-    quotations.forEach(q => { const mo = parseInt(q.date.slice(5, 7), 10) - 1; if (mo >= 0 && mo < 12) quoteC[mo]++; });
+    leadsData.forEach(l => { const d = leadCreatedDate(l); if (d.getFullYear() === CUR_YEAR) leadC[d.getMonth()]++; });
+    quotations.filter(q => q.date.slice(0, 4) === String(CUR_YEAR))
+      .forEach(q => { const mo = parseInt(q.date.slice(5, 7), 10) - 1; if (mo >= 0 && mo < 12) quoteC[mo]++; });
     return { leadC, quoteC };
   }, [leadsData, quotations]);
 
-  // Sales Journey — จำนวน + มูลค่ารวมต่อสเตจ (ใช้ทั้งการ์ดเส้นทาง + action center)
-  const stageStats = useMemo(() => {
-    const stat: Record<string, { count: number; value: number }> = {};
-    ALL_STATUSES.forEach(s => { stat[s] = { count: 0, value: 0 }; });
-    allLeads.forEach(l => { const s = stat[l.status]; if (s) { s.count++; s.value += parseValue(l.value); } });
-    return stat;
-  }, [allLeads]);
+  // stageStats (Sales Journey) ถูกลบพร้อมการ์ดเส้นทาง/action center — เหลือแต่การคำนวณที่ไม่มีใครอ่าน
+  // และนับจาก allLeads ทั้งเครือ ซึ่งผิดขอบเขตของหน้าตัวแทน
 
   // ─── RENDER ────────────────────────────────────────────────────────────
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NAVY, SILVER, STEEL } from "@/lib/theme";
 
 // เพดานแกน Y แบบ "nice number" — ปรับตามขนาดข้อมูลจริง เพื่อให้เส้นเต็มกราฟทั้งค่าน้อย (รายวัน) และค่ามาก (รายเดือน)
@@ -21,6 +21,38 @@ function smoothPath(pts: Array<{ x: number; y: number }>): string {
     const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
     const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
     d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+// เส้นโค้งแบบ monotone (Fritsch–Carlson) — โค้งเนียนแต่ "ห้ามแกว่งเกินจุดข้อมูล"
+// ต่างจาก smoothPath (Catmull-Rom) ที่ overshoot ได้: ยอดพุ่งแล้วดิ่ง เส้นจะจุ่มต่ำกว่าจุดจริง
+// เช่น ยอดขาย ฿11.8M เดือนหนึ่งแล้ว ฿0 เดือนถัดไป Catmull-Rom จะลากเส้นลงต่ำกว่าศูนย์ = ติดลบ
+// ซึ่งเป็นไปไม่ได้ในข้อมูลจริง · monotone รับประกันว่าเส้นอยู่ระหว่างค่าสองจุดเสมอ
+function monotonePath(pts: Array<{ x: number; y: number }>): string {
+  const n = pts.length;
+  if (n < 2) return "";
+  const dx: number[] = [], dy: number[] = [], m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1].x - pts[i].x);
+    dy.push(pts[i + 1].y - pts[i].y);
+    m.push(dx[i] === 0 ? 0 : dy[i] / dx[i]);
+  }
+  // ความชันที่แต่ละจุด — จุดกลับทิศให้ชันเป็น 0 (เป็นยอด/ก้น) แล้วจำกัดไม่ให้เกิน 3 เท่าของชันข้างเคียง
+  const t: number[] = [m[0]];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) { t.push(0); continue; }
+    const avg = (m[i - 1] + m[i]) / 2;
+    const lim = 3 * Math.min(Math.abs(m[i - 1]), Math.abs(m[i]));
+    t.push(Math.sign(avg) * Math.min(Math.abs(avg), lim));
+  }
+  t.push(m[n - 2]);
+  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += ` C${(pts[i].x + h).toFixed(2)},${(pts[i].y + t[i] * h).toFixed(2)}` +
+         ` ${(pts[i + 1].x - h).toFixed(2)},${(pts[i + 1].y - t[i + 1] * h).toFixed(2)}` +
+         ` ${pts[i + 1].x.toFixed(2)},${pts[i + 1].y.toFixed(2)}`;
   }
   return d;
 }
@@ -124,19 +156,32 @@ export function AreaChart({ data, target, unit = "M", height }: { data: AreaPoin
 
 export type BarPoint = { label: string; actual: number; plan: number };
 
-/** Grouped bar chart — actual (navy) vs plan (silver), exceeded month highlighted. */
-export function PlanVsActualBars({ data, unit = "M" }: { data: BarPoint[]; unit?: string }) {
+/** Grouped bar chart — actual (navy) vs plan (silver), exceeded month highlighted.
+ *  ค่าเริ่มต้น = ยอดขายจริง/แผน (฿) · ส่งชื่อชุด+ตัวจัดรูปแบบเข้ามาได้ เพื่อใช้กับกราฟ "จำนวน" ด้วย */
+export function PlanVsActualBars({
+  data, unit = "M", height, aLabel = "จริง", bLabel = "แผน", fmt: fmtProp,
+  aFill, bFill, highlightExceeded = true,
+}: {
+  data: BarPoint[]; unit?: string; height?: number;
+  /** ชื่อชุดข้อมูลในกล่องข้อความตอนชี้ (actual / plan) */
+  aLabel?: string; bLabel?: string;
+  fmt?: (v: number) => string;
+  /** สีทับแท่ง — ไม่ส่ง = ใช้ไล่เฉดมาตรฐาน (กรมท่า / เงิน) */
+  aFill?: string; bFill?: string;
+  /** เดือนที่ทำได้เกินแผนเป็นแท่งเขียวขอบทอง — ปิดได้เมื่อสองชุดไม่ใช่ "จริงเทียบแผน" */
+  highlightExceeded?: boolean;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const [drawn, setDrawn] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
   const max = Math.max(...data.flatMap(d => [d.actual, d.plan]), 1) * 1.15;
-  const W = 700, H = 210, pL = 34, pR = 12, pT = 16, pB = 34;
+  const W = 700, H = height ?? 210, pL = 34, pR = 12, pT = 16, pB = 34;
   const cW = W - pL - pR, cH = H - pT - pB, n = data.length;
   const slot = cW / n;
   const bw = Math.min(20, slot / 3);
   const yAt = (v: number) => pT + (1 - v / max) * cH;
   const baseY = pT + cH;
-  const fmt = (v: number) => `฿${Math.round(v * 10) / 10}${unit}`;
+  const fmt = fmtProp ?? ((v: number) => `฿${Math.round(v * 10) / 10}${unit}`);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
   const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
 
@@ -155,7 +200,7 @@ export function PlanVsActualBars({ data, unit = "M" }: { data: BarPoint[]; unit?
       ))}
       {data.map((d, i) => {
         const cx = pL + slot * i + slot / 2;
-        const exceeded = d.actual > d.plan;
+        const exceeded = highlightExceeded && d.actual > d.plan;
         const aH = d.actual > 0 ? baseY - yAt(d.actual) : 0;
         const pH = baseY - yAt(d.plan);
         const isHover = hover === i;
@@ -166,21 +211,309 @@ export function PlanVsActualBars({ data, unit = "M" }: { data: BarPoint[]; unit?
             <rect x={cx - slot / 2} y={pT} width={slot} height={cH} fill="transparent" />
             {/* actual (navy · โตจากล่าง) */}
             <rect x={cx - bw - 2} y={drawn ? yAt(d.actual) : baseY} width={bw} height={drawn ? aH : 0} rx={4}
-              fill={exceeded ? "url(#pva-green)" : "url(#pva-navy)"} opacity={d.actual > 0 ? (hover === null || isHover ? 1 : 0.5) : 0}
+              fill={exceeded ? "url(#pva-green)" : (aFill ?? "url(#pva-navy)")} opacity={d.actual > 0 ? (hover === null || isHover ? 1 : 0.5) : 0}
               stroke={exceeded ? "#ECC94B" : "none"} strokeWidth={exceeded ? 1.5 : 0} style={grow} />
             {/* plan (silver) */}
             <rect x={cx + 2} y={drawn ? yAt(d.plan) : baseY} width={bw} height={drawn ? pH : 0} rx={4}
-              fill="url(#pva-silver)" opacity={hover === null || isHover ? 1 : 0.5} style={grow} />
+              fill={bFill ?? "url(#pva-silver)"} opacity={d.plan > 0 ? (hover === null || isHover ? 1 : 0.5) : 0} style={grow} />
             <text x={cx} y={H - 12} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{d.label}</text>
             {isHover && (
               <g style={{ pointerEvents: "none" }}>
                 <rect x={Math.min(Math.max(cx - 52, pL), W - pR - 104)} y={pT} width="104" height="40" rx="8" fill="#2D2D2D" />
-                <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">จริง {fmt(d.actual)}</text>
-                <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 31} textAnchor="middle" fontSize="10" fill="#C0C0C0">แผน {fmt(d.plan)}</text>
+                <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">{aLabel} {fmt(d.actual)}</text>
+                <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 31} textAnchor="middle" fontSize="10" fill="#C0C0C0">{bLabel} {fmt(d.plan)}</text>
               </g>
             )}
           </g>
         );
+      })}
+    </svg>
+  );
+}
+
+/** แท่งรายเดือน + เส้นประเป้าหมายพาดผ่าน — เดือนไหนถึง/ไม่ถึงเป้าเห็นทันที
+ *  ใช้แทนแท่งคู่เมื่อ "เป้า" เท่ากันทุกเดือน (แท่งเป้าที่ซ้ำ 12 อันอ่านยากกว่าเส้นเดียว) */
+export function MonthlyBarsWithTarget({
+  data, target, fmt, height = 260, targetLabel = "เป้าหมาย",
+}: {
+  data: { label: string; value: number }[];
+  target: number;
+  fmt: (v: number) => string;
+  height?: number;
+  targetLabel?: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+  const max = niceCeil(Math.max(...data.map(d => d.value), target, 1) * 1.12);
+  const W = 700, H = height, pL = 40, pR = 58, pT = 14, pB = 32;
+  const cW = W - pL - pR, cH = H - pT - pB, n = data.length;
+  const slot = cW / n;
+  const bw = Math.min(26, slot * 0.54);
+  const yAt = (v: number) => pT + (1 - v / max) * cH;
+  const baseY = pT + cH;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
+  const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
+  const tY = yAt(target);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="ยอดขายรายเดือนเทียบเป้าหมาย">
+      <defs>
+        <linearGradient id="mbt-navy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2c62ad" /><stop offset="1" stopColor={NAVY} /></linearGradient>
+        <linearGradient id="mbt-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#34d399" /><stop offset="1" stopColor="#059669" /></linearGradient>
+      </defs>
+      {ticks.map((v, i) => (
+        <g key={i}>
+          <line x1={pL} y1={yAt(v)} x2={W - pR} y2={yAt(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
+          <text x={pL - 6} y={yAt(v) + 3} textAnchor="end" fontSize="9.5" fill="#aab2bd">{fmt(v)}</text>
+        </g>
+      ))}
+      {data.map((d, i) => {
+        const cx = pL + slot * i + slot / 2;
+        const hit = d.value >= target && d.value > 0;
+        const h = d.value > 0 ? baseY - yAt(d.value) : 0;
+        const isHover = hover === i;
+        return (
+          <g key={d.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+            {isHover && <rect x={cx - slot / 2 + 2} y={pT} width={slot - 4} height={cH} rx={6} fill="#f2f6fc" />}
+            <rect x={cx - slot / 2} y={pT} width={slot} height={cH} fill="transparent" />
+            <rect x={cx - bw / 2} y={drawn ? yAt(d.value) : baseY} width={bw} height={drawn ? h : 0} rx={4}
+              fill={hit ? "url(#mbt-green)" : "url(#mbt-navy)"}
+              opacity={d.value > 0 ? (hover === null || isHover ? 1 : 0.5) : 0} style={grow} />
+            <text x={cx} y={H - 11} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{d.label}</text>
+          </g>
+        );
+      })}
+      {/* เส้นประเป้าหมาย — วาดทับแท่ง ให้เห็นว่าเดือนไหนข้ามเส้น */}
+      <line x1={pL} y1={tY} x2={W - pR} y2={tY} stroke="#EA580C" strokeWidth="1.6" strokeDasharray="6 4"
+        opacity={drawn ? 1 : 0} style={{ transition: "opacity .5s ease .5s" }} />
+      <text x={W - pR + 6} y={tY - 3} fontSize="9.5" fill="#EA580C" fontWeight="700" opacity={drawn ? 1 : 0} style={{ transition: "opacity .5s ease .5s" }}>{targetLabel}</text>
+      <text x={W - pR + 6} y={tY + 9} fontSize="9.5" fill="#EA580C" opacity={drawn ? 1 : 0} style={{ transition: "opacity .5s ease .5s" }}>{fmt(target)}</text>
+      {hover !== null && (() => {
+        const d = data[hover];
+        const cx = pL + slot * hover + slot / 2;
+        const x = Math.min(Math.max(cx - 54, pL), W - pR - 108);
+        const pct = target > 0 ? Math.round((d.value / target) * 100) : 0;
+        return (
+          <g style={{ pointerEvents: "none" }}>
+            <rect x={x} y={pT} width="108" height="40" rx="8" fill="#2D2D2D" />
+            <text x={x + 54} y={pT + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">{fmt(d.value)}</text>
+            <text x={x + 54} y={pT + 31} textAnchor="middle" fontSize="10" fill={d.value >= target ? "#34d399" : "#C0C0C0"}>{pct}% ของเป้า</text>
+          </g>
+        );
+      })()}
+    </svg>
+  );
+}
+
+/** วงแหวนความคืบหน้า (บนการ์ด KPI เป้าหมาย) — แหล่งเดียวของทั้งระบบ
+ *
+ *  กับดัก: ใส่ transition ไว้เฉย ๆ "ไม่มีวันทำงาน" เพราะค่าถูกตั้งตั้งแต่เรนเดอร์แรก
+ *  CSS transition วิ่งเมื่อค่าเปลี่ยน "หลัง mount" เท่านั้น → ต้องเริ่มที่ 0 แล้วตั้งค่าจริงในเฟรมถัดไป
+ *  เริ่มที่ 0 เท่ากันทั้งเซิร์ฟเวอร์และเบราว์เซอร์ → ไม่เกิด hydration mismatch
+ *  (เคยเขียนซ้ำ 2 ที่ · ตัวแก้ถูกใส่ให้ฝั่งตัวแทนอย่างเดียว ฝั่ง HQ เลยนิ่งอยู่นาน — จึงรวมเหลือตัวเดียว)
+ */
+export function ProgressRing({ pct, size = 50, color = NAVY }: { pct: number; size?: number; color?: string }) {
+  const r = (size - 11) / 2, c = 2 * Math.PI * r;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    // สองเฟรม: เฟรมแรกให้เบราว์เซอร์ commit ค่า 0 ลง DOM จริง เฟรมสองค่อยเปลี่ยน — transition ถึงจะจับความต่างได้
+    let id2 = 0;
+    const id1 = requestAnimationFrame(() => { id2 = requestAnimationFrame(() => setShown(pct)); });
+    return () => { cancelAnimationFrame(id1); cancelAnimationFrame(id2); };
+  }, [pct]);
+  // เส้นโค้งวาดได้สูงสุด 1 รอบ (เกิน 100% วาดเพิ่มไม่ได้) — แต่ "ตัวเลขเก็บค่าจริง" ไม่ถูกตัด
+  const arc = Math.max(0, Math.min(100, shown));
+  return (
+    <svg width={size} height={size} style={{ flexShrink: 0 }} role="img" aria-label={`${pct}%`}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EEF2F7" strokeWidth={9} />
+      <circle className="ring-arc" cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={9} strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={c * (1 - arc / 100)}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.24} fontWeight={800} fill={color}>{pct}%</text>
+    </svg>
+  );
+}
+
+export type CategoryBar = { label: string; value: number; sub?: string };
+
+/** แท่งแนวตั้งเทียบหมวดหมู่ (จัดอันดับ) — หนึ่งหมวด = หนึ่งแท่ง
+ *
+ *  ใช้ "สีเดียวทั้งกราฟ" เพราะเป็นชุดข้อมูลเดียว (ยอดขาย) ไม่ใช่หลายชุด
+ *  ถ้าไล่สีทีละแท่งตามลำดับในอาร์เรย์ที่เรียงตามยอด = สีผูกกับ "อันดับ" ไม่ใช่ "ตัวตน"
+ *  พอยอดขยับจนสลับอันดับ สีจะสลับตามทั้งที่เป็นคน/สินค้าคนเดิม — อ่านผิดง่าย
+ *
+ *  viewBox = ความกว้างจริงของการ์ด (ResizeObserver) → ตัวอักษรคมเท่ากันทุกขนาด
+ *  ไม่มีแกน Y เพราะมีไม่กี่แท่ง — ติดตัวเลขไว้บนหัวแท่งตรง ๆ อ่านง่ายกว่าไล่สายตาไปหาแกน
+ */
+export function CategoryBars({
+  data, fmt, height = 240, color = NAVY, onSelect, ariaLabel,
+}: {
+  data: CategoryBar[];
+  fmt: (v: number) => string;
+  height?: number;
+  color?: string;
+  onSelect?: (i: number) => void;
+  ariaLabel: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [vw, setVw] = useState(380); // ค่าตั้งต้นเท่ากันทั้งเซิร์ฟเวอร์/เบราว์เซอร์ → ไม่เกิด hydration mismatch
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setVw(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const n = data.length;
+  const W = Math.max(240, vw), H = height;
+  const hasSub = data.some(d => d.sub);
+  const pL = 6, pR = 6, pT = 26, pB = hasSub ? 42 : 30;
+  const cW = W - pL - pR, cH = H - pT - pB;
+  const max = niceCeil(Math.max(...data.map(d => d.value), 1) * 1.08);
+  const slot = cW / n;
+  const bw = Math.min(54, slot * 0.46);
+  const baseY = pT + cH;
+  const yAt = (v: number) => pT + (1 - v / max) * cH;
+  // ตัดชื่อที่ยาวเกินช่อง (ไทย ~5.2px/ตัว ที่ 9.5px) — ชื่อเต็มยังอ่านได้จาก <title> ตอนชี้
+  const maxChars = Math.max(4, Math.floor((slot - 6) / 5.2));
+  const clip = (s: string) => (s.length > maxChars ? `${s.slice(0, maxChars - 1)}…` : s);
+  const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
+
+  return (
+    <div ref={wrapRef}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }}
+        role="img" aria-label={ariaLabel}>
+        <line x1={pL} y1={baseY} x2={W - pR} y2={baseY} stroke="#eef1f5" strokeWidth="1" />
+        {data.map((d, i) => {
+          const cx = pL + slot * i + slot / 2;
+          const h = d.value > 0 ? baseY - yAt(d.value) : 0;
+          const on = hover === i;
+          const full = `${d.label}${d.sub ? ` · ${d.sub}` : ""} — ${fmt(d.value)}`;
+          return (
+            <g key={d.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+              onClick={() => onSelect?.(i)} style={{ cursor: onSelect ? "pointer" : "default" }}>
+              <title>{full}</title>
+              {on && <rect x={cx - slot / 2 + 2} y={pT - 22} width={slot - 4} height={cH + 22} rx={8} fill="#f2f6fc" />}
+              {/* พื้นที่รับเมาส์เต็มช่อง — เล็งง่ายกว่าตัวแท่ง */}
+              <rect x={cx - slot / 2} y={pT - 22} width={slot} height={cH + 22} fill="transparent" />
+              <text x={cx} y={pT - 9} textAnchor="middle" fontSize="10" fontWeight="800" fill={color}
+                opacity={drawn ? 1 : 0} style={{ transition: "opacity .4s ease .5s" }}>{fmt(d.value)}</text>
+              <rect x={cx - bw / 2} y={drawn ? yAt(d.value) : baseY} width={bw} height={drawn ? h : 0} rx={4}
+                fill={color} opacity={d.value > 0 ? (hover === null || on ? 1 : 0.5) : 0} style={grow} />
+              <text x={cx} y={baseY + 15} textAnchor="middle" fontSize="9.5" fontWeight="600" fill="#6B7280">{clip(d.label)}</text>
+              {d.sub && <text x={cx} y={baseY + 28} textAnchor="middle" fontSize="8.5" fill="#aab2bd">{clip(d.sub)}</text>}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+export type SalesLinePoint = { label: string; value: number };
+
+/** ยอดขายรายเดือน — กราฟเส้น + พื้นไล่เฉด + เส้นประเป้าหมายรายเดือน
+ *  จุดสีเขียว = เดือนที่ถึงเป้า · จุดกรมท่า = ไม่ถึงเป้า (คงความหมายเดิมของแท่งเขียว/น้ำเงิน)
+ *  ขนาด viewBox เท่ากับ PlanVsActualBars (W=700) เพื่อให้การ์ดคู่กันมีขนาดตัวอักษรเท่ากัน
+ */
+export function SalesLineChart({
+  data, target, fmt, height = 260, targetLabel = "เป้า/เดือน",
+}: {
+  data: SalesLinePoint[];
+  target: number;
+  fmt: (v: number) => string;
+  height?: number;
+  targetLabel?: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+
+  const n = data.length;
+  const max = niceCeil(Math.max(...data.map(d => d.value), target, 1) * 1.12);
+  const W = 700, H = height, pL = 44, pR = 58, pT = 16, pB = 32;
+  const cW = W - pL - pR, cH = H - pT - pB;
+  const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
+  const cy = (v: number) => pT + (1 - v / max) * cH;
+  const baseY = pT + cH;
+  const pts = data.map((d, i) => ({ x: cx(i), y: cy(d.value), ...d }));
+  // monotone ไม่ใช่ Catmull-Rom — เดือนที่ยอดพุ่งแล้วดิ่งกลับ 0 เส้นจะไม่จุ่มต่ำกว่าศูนย์ (ยอดขายติดลบไม่ได้)
+  const line = monotonePath(pts);
+  const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${baseY} L${pts[0].x.toFixed(2)},${baseY} Z` : "";
+  const tY = cy(target);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
+  const fadeIn = (d: number) => ({ transition: `opacity .5s ease ${d}s` });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }}
+      role="img" aria-label="ยอดขายรายเดือน เทียบ เป้าหมายรายเดือน">
+      <defs>
+        <linearGradient id="sl-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={NAVY} stopOpacity="0.22" />
+          <stop offset="95%" stopColor={NAVY} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {ticks.map((v, i) => (
+        <g key={i}>
+          <line x1={pL} y1={cy(v)} x2={W - pR} y2={cy(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
+          <text x={pL - 6} y={cy(v) + 3} textAnchor="end" fontSize="9.5" fill="#aab2bd">{fmt(v)}</text>
+        </g>
+      ))}
+
+      {/* พื้นใต้เส้น — จางเข้ามาหลังเส้นวาดเสร็จ */}
+      {area && <path d={area} fill="url(#sl-area)" opacity={drawn ? 1 : 0} style={fadeIn(0.5)} />}
+
+      {/* เส้นยอดขาย — วาดจากซ้ายไปขวา */}
+      {line && (
+        <path d={line} fill="none" stroke={NAVY} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+          pathLength={1} strokeDasharray={1} strokeDashoffset={drawn ? 0 : 1}
+          style={{ transition: "stroke-dashoffset 1.15s cubic-bezier(.4,0,.2,1)" }} />
+      )}
+
+      {/* เส้นประเป้าหมาย — วาดทับเส้น ให้เห็นว่าเดือนไหนอยู่เหนือเส้น */}
+      <line x1={pL} y1={tY} x2={W - pR} y2={tY} stroke="#EA580C" strokeWidth="1.6" strokeDasharray="6 4"
+        opacity={drawn ? 1 : 0} style={fadeIn(0.5)} />
+      <text x={W - pR + 6} y={tY - 3} fontSize="9.5" fill="#EA580C" fontWeight="700" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{targetLabel}</text>
+      <text x={W - pR + 6} y={tY + 9} fontSize="9.5" fill="#EA580C" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{fmt(target)}</text>
+
+      {/* จุดรายเดือน — เขียว = ถึงเป้า · ขนาด >=8px ตามสเปกมาร์ก */}
+      {pts.map((p, i) => {
+        const hit = p.value >= target && p.value > 0;
+        return (
+          <circle key={p.label} cx={p.x} cy={p.y} r={hover === i ? 5.5 : 4}
+            fill={hit ? "#059669" : NAVY} stroke="#fff" strokeWidth="2"
+            opacity={drawn ? 1 : 0} style={fadeIn(0.9 + i * 0.02)} />
+        );
+      })}
+
+      {pts.map(p => <text key={`x${p.label}`} x={p.x} y={H - 10} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{p.label}</text>)}
+
+      {/* ชั้นรับเมาส์ + เส้นตั้ง + ป้ายค่า (เดือนที่ชี้เท่านั้น) */}
+      {hover !== null && (() => {
+        const p = pts[hover];
+        const tw = 104, th = 40;
+        const x = Math.min(Math.max(p.x - tw / 2, pL), W - pR - tw);
+        const y = Math.max(p.y - th - 10, pT);
+        const pct = target > 0 ? Math.round((p.value / target) * 100) : 0;
+        return (
+          <g style={{ pointerEvents: "none" }}>
+            <line x1={p.x} y1={pT} x2={p.x} y2={baseY} stroke="#c4cbd4" strokeWidth="1" strokeDasharray="3 3" />
+            <rect x={x} y={y} width={tw} height={th} rx="8" fill="#2D2D2D" />
+            <text x={x + tw / 2} y={y + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">{fmt(p.value)}</text>
+            <text x={x + tw / 2} y={y + 31} textAnchor="middle" fontSize="10" fill={p.value >= target ? "#34d399" : "#C0C0C0"}>{pct}% ของเป้า</text>
+          </g>
+        );
+      })()}
+      {pts.map((p, i) => {
+        const half = n > 1 ? cW / (n - 1) / 2 : cW / 2;
+        return <rect key={`hit${p.label}`} x={p.x - half} y={pT} width={half * 2} height={cH} fill="transparent"
+          style={{ cursor: "crosshair" }} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />;
       })}
     </svg>
   );
@@ -476,6 +809,89 @@ export function MultiLineChart({
             <span style={{ width: 14, height: 3, borderRadius: 2, background: ser.color, flexShrink: 0 }} />
             {ser.name}
           </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Grouped Bar Chart — แต่ละเดือนมีแท่งวางเรียงข้างกัน แท่งละหนึ่งชุดข้อมูล
+ *  ใช้เมื่อชุดข้อมูล "ไม่ควรบวกกัน" (เช่น ลีด / ใบเสนอราคา / ปิดการขาย — เป็นขั้นของดีลเดียวกัน
+ *  เอามาซ้อนแล้วยอดรวมจะไม่มีความหมาย) · ถ้าชุดข้อมูลบวกกันแล้วได้ยอดรวมจริง ให้ใช้ StackedBarChart
+ *  series[i].data ต้องเรียงตรงกับ months · vw = ความกว้าง viewBox (ลดลงเมื่ออยู่ในการ์ดแคบ) */
+export function GroupedBarChart({
+  months, series, fmt = v => `${Math.round(v)}`, height = 340, vw = 1180,
+}: {
+  months: string[];
+  series: { name: string; color: string; data: number[] }[];
+  fmt?: (v: number) => string;
+  height?: number;
+  vw?: number;
+}) {
+  const [drawn, setDrawn] = useState(false);
+  const [hover, setHover] = useState<number | null>(null);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+
+  const n = months.length;
+  // เพดานแกนคิดจากค่าสูงสุดของแท่งเดี่ยว (ไม่ใช่ผลรวม) เพราะแท่งวางข้างกัน ไม่ได้ซ้อน
+  const ceiling = niceCeil(Math.max(...series.flatMap(s => s.data), 1) * 1.08);
+  const narrow = vw < 800;
+  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 24, pT = 22, pB = narrow ? 34 : 42;
+  const cW = W - pL - pR, cH = H - pT - pB;
+  const band = cW / n;
+  const groupW = Math.min(band * 0.68, 24 * series.length);
+  const bw = groupW / series.length;
+  const yTicks = Array.from({ length: 5 }, (_, i) => (ceiling / 4) * i);
+  const bottomY = pT + cH;
+  const fs = narrow ? 13 : 15;
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="grouped bar chart">
+        {yTicks.map((v, i) => {
+          const y = pT + (1 - v / ceiling) * cH;
+          return (
+            <g key={i}>
+              <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#eef1f5" strokeWidth={1} />
+              <text x={pL - 10} y={y + 4} textAnchor="end" fontSize={fs} fill="#9ca3af">{fmt(v)}</text>
+            </g>
+          );
+        })}
+        {months.map((m, i) => {
+          const gx = pL + band * i + band / 2 - groupW / 2;
+          const isHover = hover === i;
+          return (
+            <g key={m} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              {/* hit area — ชี้ที่ไหนก็ได้ในเดือนนั้น แล้วโชว์ตัวเลขทุกแท่ง */}
+              <rect x={pL + band * i} y={pT} width={band} height={cH} fill="transparent" />
+              {series.map((ser, si) => {
+                const val = ser.data[i] ?? 0;
+                const h = (val / ceiling) * cH;
+                const x = gx + bw * si;
+                return (
+                  <g key={ser.name}>
+                    {/* แท่งค่า 0 ยังวาดเป็นขีดบาง ๆ ให้เห็นว่าเดือนนั้นมีชุดข้อมูลนี้แต่เป็นศูนย์ */}
+                    <rect x={x + bw * 0.12} y={drawn ? bottomY - Math.max(h, val > 0 ? 2 : 1.5) : bottomY}
+                      width={bw * 0.76} height={drawn ? Math.max(h, val > 0 ? 2 : 1.5) : 0}
+                      rx={3} fill={ser.color} opacity={val > 0 ? (hover === null || isHover ? 1 : 0.45) : 0.22}
+                      style={{ transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" }} />
+                    {isHover && (
+                      <text x={x + bw / 2} y={bottomY - h - 7} textAnchor="middle" fontSize={fs - 1} fontWeight="800" fill={ser.color}>{fmt(val)}</text>
+                    )}
+                  </g>
+                );
+              })}
+              <text x={pL + band * i + band / 2} y={bottomY + (narrow ? 22 : 26)} textAnchor="middle" fontSize={fs} fill="#6b7280">{m}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 14, paddingTop: 12, borderTop: "1px solid #f0f4f8" }}>
+        {series.map(ser => (
+          <span key={ser.name} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: STEEL }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: ser.color, flexShrink: 0 }} />
+            {ser.name}
+          </span>
         ))}
       </div>
     </div>

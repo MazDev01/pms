@@ -175,8 +175,8 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
                 </select>
               </div>
               <div>
-                <label className="form-label">โอกาสการขาย</label>
-                <input value={project} onChange={e => setProj(e.target.value)} placeholder="ชื่อโครงการ" className="form-input" />
+                <label className="form-label">ชื่อโครงการ/ชื่อบริษัท</label>
+                <input value={project} onChange={e => setProj(e.target.value)} placeholder="เช่น โกดังเก็บสินค้า — บจ. เอบีซี" className="form-input" />
               </div>
             </div>
           </div>
@@ -232,8 +232,8 @@ function EditFileModal({ file, onSave, onClose }: { file: FileMock; onSave: (f: 
                 </select>
               </div>
               <div>
-                <label className="form-label">โอกาสการขาย</label>
-                <input value={project} onChange={e => setProj(e.target.value)} placeholder="ชื่อโครงการ" className="form-input" />
+                <label className="form-label">ชื่อโครงการ/ชื่อบริษัท</label>
+                <input value={project} onChange={e => setProj(e.target.value)} placeholder="เช่น โกดังเก็บสินค้า — บจ. เอบีซี" className="form-input" />
               </div>
             </div>
           </div>

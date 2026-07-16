@@ -487,7 +487,6 @@ export type LeadRow = {
   source?: string;
   note?: string;
   project?: string;      // ชื่อดีล/โครงการ (ลูกค้าเดิมสร้างดีลใหม่) — ไม่มีก็ใช้ "{แม่แบบ} — {บริษัท}"
-  expectedClose?: string; // วันปิดการขายคาดการณ์ (Expected Close Date)
   createdAt?: string;    // วันที่สร้างดีล (Thai date) — ดีลใหม่ = วันนี้
   lostReason?: string;   // เหตุผลที่ปิดการขายไม่ได้ (เมื่อ status = CANCELLED)
   report?: string;       // รายงานการติดตามลูกค้า (สร้างอัตโนมัติตอนสร้าง Lead · แก้ไขได้ทั้งหมด)
@@ -897,9 +896,13 @@ export function loadHQDealers(): DealerRow[] {
 }
 
 // จังหวัดของแต่ละสาขา = จังหวัดที่รหัสสาขามาตรฐานอ้างถึงอยู่แล้ว (RYG=ระยอง, CNX=เชียงใหม่, …)
+// CNX = สาขาที่ล็อกอินใน demo → ตัวเลขต้องตรงกับใบเสนอราคาจริงใน SalesContext ที่หน้าตัวแทนใช้
+// (ใบที่ตอบรับแล้วปี 2569 รวม ฿22,438,650 · run-rate ทั้งปี ≈ ฿45M · ปิดได้ 50%)
+// เดิมตั้งไว้ ฿4.2M/เป้า ฿6.2M ซึ่งเล็กกว่ายอดจริงราว 5 เท่า แดชบอร์ดตัวแทนเลยขึ้น 362% และทุกเดือนเกินเป้า
+// สาขาอื่นยังเป็นตัวเลขสมมติของ HQ ล้วน — ไม่มีใบเสนอราคาจริงผูกอยู่
 export const dealerLeaderboard: DealerRow[] = [
   { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      province: "ระยอง",           region: "ตะวันออก", revenueActual: 5400000, revenueTarget: 6000000, winRate: 48, activeProjects: 6, onTimePct: 91, status: "active",   credentials: { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" } },
-  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   province: "เชียงใหม่",       region: "เหนือ",    revenueActual: 4200000, revenueTarget: 6200000, winRate: 35, activeProjects: 5, onTimePct: 78, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
+  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   province: "เชียงใหม่",       region: "เหนือ",    revenueActual: 22438650, revenueTarget: 45000000, winRate: 50, activeProjects: 5, onTimePct: 78, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
   { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      province: "ตาก",             region: "ตะวันตก", revenueActual: 3800000, revenueTarget: 5000000, winRate: 52, activeProjects: 4, onTimePct: 85, status: "active",   credentials: { email: "sales@maesotmetal.co.th", password: "PEB-MST-7749" } },
   { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    province: "เชียงราย",        region: "เหนือ",    revenueActual: 3100000, revenueTarget: 5800000, winRate: 41, activeProjects: 3, onTimePct: 72, status: "active",   credentials: { email: "sales@crstructure.co.th", password: "PEB-CRI-5563" } },
   { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   province: "นครสวรรค์",       region: "กลาง",     revenueActual: 1900000, revenueTarget: 5000000, winRate: 29, activeProjects: 2, onTimePct: 61, status: "active",   credentials: { email: "sales@nsn-engineering.co.th", password: "PEB-NSN-2294" } },
@@ -990,7 +993,6 @@ export type DealerProjectItem = {
   id: string; name: string; product: string;
   valueNum: number; progress: number;
   status: "in_progress" | "completed" | "on_hold" | "overdue";
-  dueDate: string;
 };
 export type DealerQuoteItem = {
   quoteNo: string; customer: string; product: string;
@@ -1020,12 +1022,12 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-R04", name: "นาย อนันต์ ศ.",            province: "จันทบุรี",  product: "โกดังสำเร็จรูป", valueNum: 850000,  status: "won",       assignedAt: "2 สัปดาห์" },
     ],
     projects: [
-      { id: "PRJ-R01", name: "โกดัง VCS Asia ระยอง",        product: "โรงงาน",  valueNum: 6200000, progress: 100, status: "completed",  dueDate: "28 ก.พ. 2569" },
-      { id: "PRJ-R02", name: "โรงงาน บจ. แหลมฉบัง",         product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 3800000, progress: 62,  status: "in_progress", dueDate: "31 ส.ค. 2569" },
-      { id: "PRJ-R03", name: "โกดัง มาบตาพุดโลหะ",           product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 38,  status: "in_progress", dueDate: "15 ก.ย. 2569" },
-      { id: "PRJ-R04", name: "คลังสินค้า ชลบุรี เฟส 2",       product: "โรงงาน",  valueNum: 2400000, progress: 10,  status: "in_progress", dueDate: "30 ต.ค. 2569" },
-      { id: "PRJ-R05", name: "โกดัง จันทบุรี อนันต์",         product: "โกดังสำเร็จรูป", valueNum: 850000,  progress: 0,   status: "in_progress", dueDate: "15 พ.ย. 2569" },
-      { id: "PRJ-R06", name: "โรงงาน ตราด อุตสาหกรรม",        product: "โรงงาน",  valueNum: 3100000, progress: 0,   status: "in_progress", dueDate: "31 ธ.ค. 2569" },
+      { id: "PRJ-R01", name: "โกดัง VCS Asia ระยอง",        product: "โรงงาน",  valueNum: 6200000, progress: 100, status: "completed" },
+      { id: "PRJ-R02", name: "โรงงาน บจ. แหลมฉบัง",         product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 3800000, progress: 62,  status: "in_progress" },
+      { id: "PRJ-R03", name: "โกดัง มาบตาพุดโลหะ",           product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 38,  status: "in_progress" },
+      { id: "PRJ-R04", name: "คลังสินค้า ชลบุรี เฟส 2",       product: "โรงงาน",  valueNum: 2400000, progress: 10,  status: "in_progress" },
+      { id: "PRJ-R05", name: "โกดัง จันทบุรี อนันต์",         product: "โกดังสำเร็จรูป", valueNum: 850000,  progress: 0,   status: "in_progress" },
+      { id: "PRJ-R06", name: "โรงงาน ตราด อุตสาหกรรม",        product: "โรงงาน",  valueNum: 3100000, progress: 0,   status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0091", customer: "หจก. ราชบุรีโลหะ",      product: "โรงงาน",  valueNum: 1800000, status: "sent_to_client", date: "3 ชม." },
@@ -1046,11 +1048,11 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-C03", name: "บจ. ลำพูนโลหะ",         province: "ลำพูน",      product: "โรงงาน",  valueNum: 2800000, status: "contacted", assignedAt: "1 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-C01", name: "โกดัง บจ. ไทยสตีล เชียงใหม่",  product: "โกดังสำเร็จรูป", valueNum: 3200000, progress: 45, status: "in_progress", dueDate: "31 ก.ค. 2569" },
-      { id: "PRJ-C02", name: "โรงงาน อาคารสำเร็จรูป ซีซีเอส",          product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 3200000, progress: 72, status: "in_progress", dueDate: "15 ส.ค. 2569" },
-      { id: "PRJ-C03", name: "คลังสินค้า ลำพูน อุตฯ",          product: "โรงงาน",  valueNum: 1600000, progress: 0,  status: "in_progress", dueDate: "30 ก.ย. 2569" },
-      { id: "PRJ-C04", name: "โกดัง เชียงใหม่-ลำปาง",          product: "โกดังสำเร็จรูป", valueNum: 2100000, progress: 25, status: "on_hold",     dueDate: "31 ต.ค. 2569" },
-      { id: "PRJ-C05", name: "โรงงาน น่าน (งานตามแบบ)",             product: "งานตามแบบของลูกค้า",    valueNum: 4800000, progress: 5,  status: "in_progress", dueDate: "28 ก.พ. 2570" },
+      { id: "PRJ-C01", name: "โกดัง บจ. ไทยสตีล เชียงใหม่",  product: "โกดังสำเร็จรูป", valueNum: 3200000, progress: 45, status: "in_progress" },
+      { id: "PRJ-C02", name: "โรงงาน อาคารสำเร็จรูป ซีซีเอส",          product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 3200000, progress: 72, status: "in_progress" },
+      { id: "PRJ-C03", name: "คลังสินค้า ลำพูน อุตฯ",          product: "โรงงาน",  valueNum: 1600000, progress: 0,  status: "in_progress" },
+      { id: "PRJ-C04", name: "โกดัง เชียงใหม่-ลำปาง",          product: "โกดังสำเร็จรูป", valueNum: 2100000, progress: 25, status: "on_hold" },
+      { id: "PRJ-C05", name: "โรงงาน น่าน (งานตามแบบ)",             product: "งานตามแบบของลูกค้า",    valueNum: 4800000, progress: 5,  status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0089", customer: "บจ. ไทยสตีล",       product: "โกดังสำเร็จรูป", valueNum: 1800000,  status: "won", date: "6 สัปดาห์" },
@@ -1070,10 +1072,10 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-M03", name: "นาย ธนกร ป.",            province: "ตาก",    product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 980000,  status: "contacted", assignedAt: "2 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-M01", name: "โกดังสำเร็จรูป แม่สอด บจ. แม่สอดโลหะ", product: "โกดังสำเร็จรูป", valueNum: 4100000, progress: 82, status: "in_progress", dueDate: "31 ก.ค. 2569" },
-      { id: "PRJ-M02", name: "โกดัง โรงงานสำเร็จรูป กาญจนบุรี",         product: "โรงงาน",  valueNum: 2200000, progress: 55, status: "in_progress", dueDate: "30 ส.ค. 2569" },
-      { id: "PRJ-M03", name: "โรงงาน อาคารสำเร็จรูป ตาก",                product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 1600000, progress: 30, status: "in_progress", dueDate: "30 ก.ย. 2569" },
-      { id: "PRJ-M04", name: "คลังสินค้า ราชบุรี",               product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 0,  status: "in_progress", dueDate: "31 ต.ค. 2569" },
+      { id: "PRJ-M01", name: "โกดังสำเร็จรูป แม่สอด บจ. แม่สอดโลหะ", product: "โกดังสำเร็จรูป", valueNum: 4100000, progress: 82, status: "in_progress" },
+      { id: "PRJ-M02", name: "โกดัง โรงงานสำเร็จรูป กาญจนบุรี",         product: "โรงงาน",  valueNum: 2200000, progress: 55, status: "in_progress" },
+      { id: "PRJ-M03", name: "โรงงาน อาคารสำเร็จรูป ตาก",                product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 1600000, progress: 30, status: "in_progress" },
+      { id: "PRJ-M04", name: "คลังสินค้า ราชบุรี",               product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 0,  status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0085", customer: "บจ. แม่สอดโลหะ", product: "โกดังสำเร็จรูป", valueNum: 4100000,  status: "won",  date: "1 สัปดาห์" },
@@ -1092,9 +1094,9 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-CR02", name: "หจก. พะเยาสตีล",    province: "พะเยา",    product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 1100000, status: "contacted", assignedAt: "1 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-CR01", name: "โรงงาน โรงงานสำเร็จรูป เชียงราย",     product: "โรงงาน",  valueNum: 3600000, progress: 40, status: "in_progress", dueDate: "30 ก.ย. 2569" },
-      { id: "PRJ-CR02", name: "โกดัง โกดังสำเร็จรูป พะเยา",        product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 60, status: "in_progress", dueDate: "31 ส.ค. 2569" },
-      { id: "PRJ-CR03", name: "อาคารสำเร็จรูป เชียงราย เฟส 1",        product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 2100000, progress: 15, status: "overdue",     dueDate: "15 มิ.ย. 2569" },
+      { id: "PRJ-CR01", name: "โรงงาน โรงงานสำเร็จรูป เชียงราย",     product: "โรงงาน",  valueNum: 3600000, progress: 40, status: "in_progress" },
+      { id: "PRJ-CR02", name: "โกดัง โกดังสำเร็จรูป พะเยา",        product: "โกดังสำเร็จรูป", valueNum: 1800000, progress: 60, status: "in_progress" },
+      { id: "PRJ-CR03", name: "อาคารสำเร็จรูป เชียงราย เฟส 1",        product: "อาคารสำเร็จรูปทุกประเภท",    valueNum: 2100000, progress: 15, status: "overdue" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0082", customer: "บจ. เชียงรายอุตฯ", product: "โรงงาน",  valueNum: 3600000,  status: "sent_to_client",  date: "3 วัน" },
@@ -1113,8 +1115,8 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-N02", name: "หจก. สุโขทัยอุตฯ",  province: "สุโขทัย",   product: "โรงงาน",  valueNum: 1800000, status: "contacted", assignedAt: "2 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-N01", name: "โรงงาน โรงงานสำเร็จรูป นครสวรรค์",    product: "โรงงาน",  valueNum: 5400000, progress: 100, status: "completed",  dueDate: "31 มี.ค. 2569" },
-      { id: "PRJ-N02", name: "โกดัง โกดังสำเร็จรูป นครสวรรค์",    product: "โกดังสำเร็จรูป", valueNum: 1900000, progress: 20,  status: "in_progress", dueDate: "31 ส.ค. 2569" },
+      { id: "PRJ-N01", name: "โรงงาน โรงงานสำเร็จรูป นครสวรรค์",    product: "โรงงาน",  valueNum: 5400000, progress: 100, status: "completed" },
+      { id: "PRJ-N02", name: "โกดัง โกดังสำเร็จรูป นครสวรรค์",    product: "โกดังสำเร็จรูป", valueNum: 1900000, progress: 20,  status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0117", customer: "บจ. นครสวรรค์โกดัง", product: "โกดังสำเร็จรูป", valueNum: 2400000, status: "sent_to_client", date: "4 วัน" },
@@ -1131,7 +1133,7 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-H01", name: "บ.สงขลาแคนนิ่ง", province: "สงขลา", product: "โรงงาน", valueNum: 2600000, status: "contacted", assignedAt: "2 เดือนก่อน" },
     ],
     projects: [
-      { id: "PRJ-H01", name: "โกดัง หาดใหญ่ เฟส 1", product: "โกดังสำเร็จรูป", valueNum: 920000, progress: 100, status: "completed", dueDate: "31 ม.ค. 2569" },
+      { id: "PRJ-H01", name: "โกดัง หาดใหญ่ เฟส 1", product: "โกดังสำเร็จรูป", valueNum: 920000, progress: 100, status: "completed" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0059", customer: "บ.สงขลาแคนนิ่ง", product: "โรงงาน", valueNum: 2600000, status: "lost", date: "2 เดือน" },
@@ -1149,9 +1151,9 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-A03", name: "บ.สระบุรีคอนกรีต",        province: "สระบุรี",          product: "งานตามแบบของลูกค้า",      valueNum: 3100000, status: "contacted", assignedAt: "1 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-A01", name: "โรงงาน วังน้อยฟู้ดส์",     product: "โรงงาน",  valueNum: 4100000, progress: 35, status: "in_progress", dueDate: "30 ก.ย. 2569" },
-      { id: "PRJ-A02", name: "โกดัง นิคมโรจนะ B4",       product: "โกดังสำเร็จรูป", valueNum: 2800000, progress: 70, status: "in_progress", dueDate: "31 ส.ค. 2569" },
-      { id: "PRJ-A03", name: "อาคารสำนักงาน อยุธยาพาร์ค", product: "อาคารสำเร็จรูปทุกประเภท",  valueNum: 1900000, progress: 100, status: "completed", dueDate: "30 เม.ย. 2569" },
+      { id: "PRJ-A01", name: "โรงงาน วังน้อยฟู้ดส์",     product: "โรงงาน",  valueNum: 4100000, progress: 35, status: "in_progress" },
+      { id: "PRJ-A02", name: "โกดัง นิคมโรจนะ B4",       product: "โกดังสำเร็จรูป", valueNum: 2800000, progress: 70, status: "in_progress" },
+      { id: "PRJ-A03", name: "อาคารสำนักงาน อยุธยาพาร์ค", product: "อาคารสำเร็จรูปทุกประเภท",  valueNum: 1900000, progress: 100, status: "completed" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0093", customer: "บ.โรจนะอินดัสทรี",        product: "โรงงาน",  valueNum: 6400000, status: "sent_to_client", date: "4 วัน" },
@@ -1171,8 +1173,8 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-K03", name: "หจก. ชุมแพเกษตรภัณฑ์", province: "ขอนแก่น",   product: "โกดังสำเร็จรูป", valueNum: 1300000, status: "contacted", assignedAt: "2 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-K01", name: "โกดัง สหกรณ์โคนมขอนแก่น",  product: "โกดังสำเร็จรูป", valueNum: 2150000, progress: 55, status: "in_progress", dueDate: "30 ก.ย. 2569" },
-      { id: "PRJ-K02", name: "โรงงาน อีสานแดรี่ เฟส 1",    product: "โรงงาน",  valueNum: 3900000, progress: 10, status: "in_progress", dueDate: "31 ธ.ค. 2569" },
+      { id: "PRJ-K01", name: "โกดัง สหกรณ์โคนมขอนแก่น",  product: "โกดังสำเร็จรูป", valueNum: 2150000, progress: 55, status: "in_progress" },
+      { id: "PRJ-K02", name: "โรงงาน อีสานแดรี่ เฟส 1",    product: "โรงงาน",  valueNum: 3900000, progress: 10, status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0088", customer: "บ.อีสานแดรี่",       product: "โรงงาน",  valueNum: 3900000, status: "sent_to_client", date: "1 สัปดาห์" },
@@ -1190,8 +1192,8 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-U02", name: "หจก. เดชอุดมค้าวัสดุ", province: "อุบลราชธานี", product: "อาคารสำเร็จรูปทุกประเภท",  valueNum: 950000,  status: "contacted", assignedAt: "1 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-U01", name: "โกดังข้าว วารินฟาร์ม",   product: "โกดังสำเร็จรูป", valueNum: 1450000, progress: 80, status: "in_progress", dueDate: "31 ก.ค. 2569" },
-      { id: "PRJ-U02", name: "โกดัง อุบลไรซ์มิลล์",     product: "โกดังสำเร็จรูป", valueNum: 2900000, progress: 0,  status: "in_progress", dueDate: "30 พ.ย. 2569" },
+      { id: "PRJ-U01", name: "โกดังข้าว วารินฟาร์ม",   product: "โกดังสำเร็จรูป", valueNum: 1450000, progress: 80, status: "in_progress" },
+      { id: "PRJ-U02", name: "โกดัง อุบลไรซ์มิลล์",     product: "โกดังสำเร็จรูป", valueNum: 2900000, progress: 0,  status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0087", customer: "บ.อุบลไรซ์มิลล์",     product: "โกดังสำเร็จรูป", valueNum: 2900000,  status: "sent_to_client", date: "2 สัปดาห์" },
@@ -1210,8 +1212,8 @@ export const dealerDetails: Record<string, DealerDetail> = {
       { id: "LD-P02", name: "บ.กะตะบีชรีสอร์ท",      province: "ภูเก็ต", product: "อาคารสำเร็จรูปทุกประเภท",  valueNum: 2800000, status: "contacted", assignedAt: "6 วันก่อน" },
     ],
     projects: [
-      { id: "PRJ-P01", name: "คลังสินค้า ถลางแวร์เฮาส์", product: "โกดังสำเร็จรูป", valueNum: 1850000, progress: 45, status: "in_progress", dueDate: "31 ต.ค. 2569" },
-      { id: "PRJ-P02", name: "โครงหลังคา มารีน่าคลับ",    product: "งานตามแบบของลูกค้า",     valueNum: 3200000, progress: 20, status: "in_progress", dueDate: "31 ม.ค. 2570" },
+      { id: "PRJ-P01", name: "คลังสินค้า ถลางแวร์เฮาส์", product: "โกดังสำเร็จรูป", valueNum: 1850000, progress: 45, status: "in_progress" },
+      { id: "PRJ-P02", name: "โครงหลังคา มารีน่าคลับ",    product: "งานตามแบบของลูกค้า",     valueNum: 3200000, progress: 20, status: "in_progress" },
     ],
     quotes: [
       { quoteNo: "Q-2026-0094", customer: "บ.อันดามันมารีน่า",    product: "งานตามแบบของลูกค้า",      valueNum: 5200000,  status: "sent_to_client", date: "1 สัปดาห์" },
@@ -1419,7 +1421,6 @@ export type PipelineDealMock = {
   files: PipelineFile[];
   outcome: PipelineOutcome;
   createdAt: string;
-  expectedClose?: string;   // วันคาดว่าจะปิดการขาย (Expected Closing Date)
   lostReason?: string;
   notes?: string;
   activities?: DealActivity[];

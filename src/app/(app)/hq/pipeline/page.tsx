@@ -5,7 +5,7 @@
 // กราฟใช้ได้เฉพาะ แท่งแนวนอน / แท่งคู่ / แท่งซ้อน / เส้น (ไม่มีกรวย/เกจ/วงกลม)
 //
 // ── สิ่งที่ตัดออกจากสเปก เพราะข้อมูลจริงไม่รองรับ (อย่าใส่กลับโดยไม่มีข้อมูลก่อน) ──
-// • Forecast / คาดการณ์รายได้ — ไม่มีลีดใบไหนกรอก expectedClose และไม่มีฟิลด์ % ความน่าจะเป็น
+// • Forecast / คาดการณ์รายได้ — ระบบไม่มีวันคาดปิดการขาย (ลบทั้งฟีเจอร์แล้ว) และไม่มีฟิลด์ % ความน่าจะเป็น
 //   จึงถ่วงน้ำหนัก pipeline ไม่ได้ · บอสสั่งตัดออก
 // • ย้อนหลังฟิกซ์ 12 เดือน — ตัวแทน 9/10 รายมีข้อมูลแค่ 3 เดือน · กราฟตัดตามตัวกรองเวลา "เท่าที่มีข้อมูล"
 // • Last Updated รายตัวแทน — DealerRow ไม่มีฟิลด์นี้ · ใช้ "ใบเสนอราคาล่าสุด" ที่หาได้จริงแทน (ชื่อคอลัมน์ตรงกับสิ่งที่มันเป็น)
@@ -16,6 +16,7 @@ import {
   FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
 } from "lucide-react";
 import { MultiLineChart, StackedBarChart, Donut } from "@/components/ui/Charts";
+import { DealerQuotationPerformance } from "@/components/hq/pipeline/DealerQuotationPerformance";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -170,6 +171,7 @@ export default function SalesAnalyticsPage() {
       quotes: dq.length,
       quoteVal: dq.reduce((s, x) => s + x.valueNum, 0),
       wonCount: won.length,
+      lostCount: lost.length,   // ปฏิเสธจริงเท่านั้น — ไม่ใช่ "ใบทั้งหมด − ปิดได้"
       wonVal: won.reduce((s, x) => s + x.valueNum, 0),
       conv: closed ? Math.round(won.length / closed * 100) : null,
       tpct: d.revenueTarget > 0 ? Math.round(d.revenueActual / d.revenueTarget * 100) : 0,
@@ -235,6 +237,22 @@ export default function SalesAnalyticsPage() {
     note: d.quoteVal ? `ปิดได้ ${Math.round(d.wonVal / d.quoteVal * 100)}%` : undefined,
     onClick: () => router.push(`/hq/dealers/${d.code}`),
   })).sort((a, b) => b.a - a.a), [perf, router]);
+
+  // ── Section 2b · วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน ──
+  // แท่งคู่ทุกตัวแทน: ออกใบกี่ใบ เทียบ ปิดได้กี่ใบ · เรียงออกใบมาก→น้อย
+  // "ยังไม่รู้ผล" ต้องแยกออกมาเสมอ ไม่ยุบเข้า "ปิดไม่ได้" (ดูเหตุผลในคอมเมนต์ของคอมโพเนนต์)
+  const quotePerf = useMemo(
+    () => perf
+      .filter(d => d.quotes > 0)  // ไม่มีใบเลย = ไม่มีอะไรให้วัด
+      .map(d => ({
+        code: d.code, name: d.name,
+        quotes: d.quotes, won: d.wonCount, lost: d.lostCount,
+        pending: d.quotes - d.wonCount - d.lostCount,
+        conv: d.conv,
+      }))
+      .sort((a, b) => b.quotes - a.quotes || b.won - a.won),
+    [perf],
+  );
 
   // ── Section 3 · เป้าหมายทั้งปี เทียบ ยอดขายจริง — สลับกลุ่มได้ ──
   const [tgView, setTgView] = useState<"dealer" | "region" | "province">("dealer");
@@ -408,6 +426,13 @@ export default function SalesAnalyticsPage() {
         <HBars rows={quoteVsSales} aLabel="มูลค่าใบเสนอราคา" bLabel="ยอดขายจริง" aColor="#0891b2" bColor="#059669" fmt={fmtBaht} />
       </div>
       </div>
+
+      {/* ── แถว 1b · วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน ──
+          เต็มความกว้าง: แท่งคู่ 10 ตัวแทน + ตารางสรุปใต้กราฟ
+          ต่างจากแถว 1 ใบขวาตรงที่นับ "จำนวนใบ" ไม่ใช่ "มูลค่า" — คำถามคือออกกี่ใบ ปิดได้กี่ใบ
+          แทนที่การ์ดเดิม "เปิดใบเสนอราคาเยอะ แต่ปิดการขายได้น้อย" ที่โชว์เฉพาะรายที่เข้าเกณฑ์
+          (ข้อมูล/คำถามชุดเดียวกัน · ใบนี้เห็นครบทุกตัวแทนแล้วยังชี้รายที่ต่ำกว่าเฉลี่ยด้วยสีแดงเหมือนเดิม) */}
+      <DealerQuotationPerformance rows={quotePerf} avgConv={kpi.conv} />
 
       {/* ── แถว 2 · เป้าหมายทั้งปี | อันดับตัวแทน ── */}
       <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>

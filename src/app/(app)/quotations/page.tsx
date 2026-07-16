@@ -22,7 +22,7 @@ import {
   Plus, X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer, Eye,
   ExternalLink, ArrowRight, ChevronLeft, ChevronRight,
-  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Percent, Lock,
+  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Lock,
 } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -494,14 +494,12 @@ function QuotationsPageInner(){
           const totalVal = valOf(scoped); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
           const wonList  = scoped.filter(q=>q.status==="won");
           const lostList = scoped.filter(q=>q.status==="lost");
-          const closed   = wonList.length + lostList.length;
-          const rate     = closed ? Math.round(wonList.length/closed*100) : 0;
           const clear    = () => setFilterStatus("ALL");
           const kpis = [
             { label:"ใบเสนอราคาทั้งหมด", value:`${scoped.length}`,      sub:"รายการ",            Icon:FileText, color:"#2563EB", bg:"#E8F0FE", on: filterStatus==="ALL", onClick: clear },
             { label:"มูลค่ารวม",         value:fmtC(totalVal),          sub:"ทุกสถานะ",           Icon:Coins,    color:"#16A34A", bg:"#E6F7EE", on: false,                onClick: clear },
             { label:"ตอบรับแล้ว",        value:`${wonList.length}`,     sub:fmtC(valOf(wonList)), Icon:Check,    color:"#0D9488", bg:"#E6F7F5", on: filterStatus==="won",  onClick:()=>setFilterStatus(filterStatus==="won"?"ALL":"won") },
-            { label:"อัตราตอบรับ",       value:`${rate}%`,              sub:"ตอบรับ/ปิดแล้ว",     Icon:Percent,  color:"#EA580C", bg:"#FEF0E6", on: false,                onClick: clear },
+            { label:"ปฏิเสธแล้ว",        value:`${lostList.length}`,    sub:fmtC(valOf(lostList)), Icon:X,       color:"#DC2626", bg:"#FEE2E2", on: filterStatus==="lost", onClick:()=>setFilterStatus(filterStatus==="lost"?"ALL":"lost") },
           ];
           return (
             <>

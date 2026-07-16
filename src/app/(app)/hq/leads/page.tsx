@@ -226,26 +226,6 @@ export default function HQLeadsPage() {
       .slice(0, 10);
   }, [leadVsQuote, netQuotes, timeRange.start, timeRange.end]);
 
-  // ── Section 6 · เทียบรายภูมิภาค (แท่งซ้อน: ลีด / ใบเสนอราคา / ปิดการขาย) ──
-  // ภาคมาจากข้อมูลตัวแทนจริง (dealerLeaderboard.region) — ไม่เดาภาคจากจังหวัด
-  const regions = useMemo(() => {
-    const REGION_OF = new Map(dealerLeaderboard.map(d => [d.code, d.region]));
-    const m = new Map<string, { leads: number; quotes: number; won: number }>();
-    const at = (r: string) => m.get(r) ?? (m.set(r, { leads: 0, quotes: 0, won: 0 }), m.get(r)!);
-    scoped.forEach(l => { const r = REGION_OF.get(l.dealerCode ?? ""); if (r) at(r).leads++; });
-    netQuotes.forEach(q => {
-      const d = parseThaiDate(q.createdAt ?? "");
-      if (d && (d < timeRange.start || d > timeRange.end)) return;
-      const r = REGION_OF.get(q.dealerCode); if (!r) return;
-      at(r).quotes++;
-      if (q.status === "won") at(r).won++;
-    });
-    const arr = [...m.entries()].map(([region, v]) => ({ region, ...v, total: v.leads + v.quotes + v.won }))
-      .sort((a, b) => b.total - a.total);
-    const max = Math.max(1, ...arr.map(a => a.total));
-    return arr.map(a => ({ ...a, max }));
-  }, [scoped, netQuotes, timeRange.start, timeRange.end]);
-
   return (
     <div className="erp">
       <div className="page-head">
@@ -305,62 +285,30 @@ export default function HQLeadsPage() {
         </div>
       )}
 
-      {/* ── แถว 1 · ลีดสนใจอะไร · ที่ไหน ── ประเภทอาคาร | เทียบรายภูมิภาค
+      {/* ── แถว 1 · ลีดสนใจอะไร ── ประเภทอาคาร (เต็มความกว้าง)
           กราฟ "ลีด เทียบ ใบเสนอราคา รายตัวแทน" ถูกตัดออก — ข้อมูลซ้ำกับตาราง "ผลงานตัวแทนจำหน่าย (Top 10)"
-          ที่มีครบกว่า (ลีด/ใบเสนอราคา/อัตราแปลง + ยอดขาย) ตามกฎ "ข้อมูลซ้ำให้รวมเป็นที่เดียว" */}
-      <div className="hq-dealer-charts" style={{ marginBottom: 12, alignItems: "stretch" }}>
-      {/* เทียบรายภูมิภาค (แท่งซ้อน) — ย้ายขึ้นมาคู่กับกราฟรายตัวแทน (เดิมอยู่เดี่ยวเต็มความกว้าง สูงแค่ 320px)
-          .card ไม่ได้เป็น flex เอง → ต้องสั่งตรงนี้ card-body ถึงจะยืดเต็มความสูงได้ */}
-      <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-        <div className="card-header"><div className="card-title">เทียบรายภูมิภาค</div>
-          <span style={{ display: "flex", alignItems: "center", gap: 12, fontSize: "0.62rem", color: "var(--muted-foreground)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: "#003366", display: "inline-block" }} /> ลีด</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: "#0891b2", display: "inline-block" }} /> ใบเสนอราคา</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: "#059669", display: "inline-block" }} /> ปิดการขาย</span>
-          </span></div>
-        {/* ภาคมี 6 แถว แต่การ์ดสูงตามกราฟรายตัวแทน (10 ราย) → เกลี่ยแถวให้เต็มความสูง
-            ไม่งั้นเหลือที่ว่างก้อนใหญ่ท้ายการ์ด ดูเหมือนข้อมูลหาย */}
-        <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", flexDirection: "column", gap: 12, justifyContent: "space-around" }}>
-          {!regions.length ? (
+          ที่มีครบกว่า (ลีด/ใบเสนอราคา/อัตราแปลง + ยอดขาย) ตามกฎ "ข้อมูลซ้ำให้รวมเป็นที่เดียว"
+          "เทียบรายภูมิภาค" ถูกตัดออกตามคำสั่ง — เหลือใบเดียวจึงกินเต็มแถว ไม่จับคู่ให้ครึ่งขวาว่าง */}
+      {/* ⚠️ อย่าทำเป็นโดนัท: ลีดหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
+          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลีดสนใจ · หน่วย: ราย</span></div>
+        <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 11 }}>
+          {!buildingTypes.length ? (
             <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
-          ) : regions.map(r => (
-            <div key={r.region}>
+          ) : buildingTypes.map(r => (
+            <div key={r.label}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                <span style={{ color: "#374151", fontWeight: 600 }}>{regionDisplay(r.region)}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums", color: "var(--muted-foreground)" }}>{r.leads} ลีด · {r.quotes} ใบ · {r.won} ปิดได้</span>
+                <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
+                <span style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums", color: "var(--muted-foreground)" }}>
+                  {r.count} ราย <span style={{ fontWeight: 800, color: "#003366" }}>{r.share}%</span>
+                </span>
               </div>
-              <div style={{ display: "flex", height: 8, borderRadius: 999, overflow: "hidden", background: "var(--muted)" }}>
-                <div className="bar-grow" style={{ width: `${r.leads / r.max * 100}%`, background: "#003366" }} />
-                <div className="bar-grow" style={{ width: `${r.quotes / r.max * 100}%`, background: "#0891b2" }} />
-                <div className="bar-grow" style={{ width: `${r.won / r.max * 100}%`, background: "#059669" }} />
+              <div style={{ height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
+                <div className="bar-grow" style={{ height: "100%", width: `${r.pct}%`, background: "#003366", borderRadius: 999 }} />
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-        {/* ประเภทอาคารที่สนใจ — ย้ายขึ้นมาคู่กับเทียบรายภูมิภาค (11 แถว vs 6 ภาค)
-            ⚠️ อย่าทำเป็นโดนัท: ลีดหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลีดสนใจ · หน่วย: ราย</span></div>
-          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 11 }}>
-            {!buildingTypes.length ? (
-              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
-            ) : buildingTypes.map(r => (
-              <div key={r.label}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
-                  <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
-                  <span style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums", color: "var(--muted-foreground)" }}>
-                    {r.count} ราย <span style={{ fontWeight: 800, color: "#003366" }}>{r.share}%</span>
-                  </span>
-                </div>
-                <div style={{ height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${r.pct}%`, background: "#003366", borderRadius: 999 }} />
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 

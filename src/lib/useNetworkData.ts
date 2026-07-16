@@ -92,7 +92,6 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
     const projects: DealerProjectItem[] = leads.filter(l => l.status !== "CANCELLED").map(l => ({
       id: l.id, name: l.company || l.name, product: l.product, valueNum: parseBaht(l.value),
       progress: LEAD_PROGRESS[l.status], status: l.status === "PAID" ? "completed" : "in_progress",
-      dueDate: l.expectedClose ?? "—",
     }));
     // ยอดขายรายเดือน (พันบาท) จากใบเสนอราคาที่ปิดได้ · แสดง ม.ค.–มิ.ย. (mock วันนี้ = มิ.ย.)
     const byMonth = new Map<number, number>();

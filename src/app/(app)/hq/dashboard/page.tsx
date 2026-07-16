@@ -8,7 +8,7 @@ import {
   FileText, ChevronRight, Users2, CalendarClock,
   ArrowUpRight, ArrowDownRight, Target, Activity, RefreshCw, Info,
 } from "lucide-react";
-import { PlanVsActualBars, MultiLineChart, Donut } from "@/components/ui/Charts";
+import { PlanVsActualBars, GroupedBarChart, Donut, ProgressRing } from "@/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
 import {
   dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy,
@@ -425,7 +425,7 @@ export default function HQDashboard() {
                     <div style={{ ...kNum, marginTop: 6 }}>{fmtBaht(targets.annualTarget)}</div>
                     <div style={{ ...kSub, marginTop: 2 }}>เป้าหมายทั้งปี</div>
                   </div>
-                  <Ring pct={Math.round(wonValNum / (targets.annualTarget || 1) * 100)} size={50} />
+                  <ProgressRing pct={Math.round(wonValNum / (targets.annualTarget || 1) * 100)} size={50} />
                 </div>
                 <div>
                   <div style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(wonValNum)}</div>
@@ -512,7 +512,8 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header"><div className="card-title">ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)</div></div>
           <div className="card-body" style={{ paddingTop: 4, flex: 1 }}>
-            <MultiLineChart months={rangeMonths} vw={820} height={260} fmt={v => `${Math.round(v)}`}
+            {/* แท่งกลุ่ม ไม่ใช่แท่งซ้อน — ลีด/ใบเสนอราคา/ปิดการขาย เป็นขั้นของดีลเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
+            <GroupedBarChart months={rangeMonths} vw={820} height={260} fmt={v => `${Math.round(v)}`}
               series={[
                 { name: "ลูกค้าเป้าหมาย (Leads)", color: "#003366", data: monthly.customers },
                 { name: "ใบเสนอราคา (Quotations)", color: "#0891b2", data: monthly.quotes },
@@ -607,19 +608,8 @@ function GroupedBar({ months, series }: { months: string[]; series: { name: stri
   );
 }
 
-// ── วงแหวนความคืบหน้า (บนการ์ด KPI เป้าหมาย) — เหมือนแดชบอร์ดตัวแทน ──
-function Ring({ pct, size = 50 }: { pct: number; size?: number }) {
-  const r = (size - 11) / 2, c = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} style={{ flexShrink: 0 }} role="img" aria-label={`${pct}%`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EEF2F7" strokeWidth={9} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={PRIMARY} strokeWidth={9} strokeLinecap="round"
-        strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(100, pct) / 100)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)" }} />
-      <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central" fontSize={size * 0.24} fontWeight={800} fill={PRIMARY}>{pct}%</text>
-    </svg>
-  );
-}
+// วงแหวนความคืบหน้าใช้ ProgressRing จาก @/components/ui/Charts — แหล่งเดียวร่วมกับแดชบอร์ดตัวแทน
+// (เดิมเขียนซ้ำไว้ที่นี่ แต่ตกตัวแก้ที่ทำให้แอนิเมชันวิ่ง วงแหวนเลยนิ่งอยู่ที่ค่าจริงตั้งแต่เฟรมแรก)
 
 // ── มินิกราฟบนการ์ด KPI (เส้น + พื้นไล่เฉด) ──
 function Sparkline({ data, color }: { data: number[]; color: string }) {

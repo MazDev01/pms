@@ -35,7 +35,7 @@ import {
   Trash2,
   Calendar, FileText, StickyNote, Check, User, Paperclip, Eye, Hash, Printer,
   MapPin, Mail, Coins, Layers, TrendingUp, Percent, PhoneCall, CalendarClock,
-  Users, UserPlus, ShieldCheck, Package, ChevronRight, Truck, History as HistoryIcon, Pencil,
+  Users, UserPlus, Package, ChevronRight, History as HistoryIcon, Pencil,
 } from "lucide-react";
 import { FilePreviewModal } from "@/components/ui/FilePreviewModal";
 
@@ -438,7 +438,7 @@ export default function CustomersPage(){
   // สร้างดีลใหม่ (ลูกค้าเดิมซื้อโครงการใหม่) — Deal = ลีดที่ผูก customerId
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [dealCustomer, setDealCustomer] = useState<CustomerRow|null>(null);
-  const [dealForm, setDealForm] = useState({project:"",product:"",value:"",assigned:"",closeDate:"",note:""});
+  const [dealForm, setDealForm] = useState({project:"",product:"",value:"",assigned:"",note:""});
   // นำเข้าลูกค้าเดิม (ตัวแทน) — ลูกค้าก่อนมีระบบ / ไม่ได้ผ่าน Lead→Won · CSV + คีย์มือ
   const [showImport, setShowImport]   = useState(false);
   const [importRows, setImportRows]   = useState<ImportRow[]>([]);
@@ -542,8 +542,6 @@ export default function CustomersPage(){
     const d = new Date(c.joinDate);
     return d.getFullYear() === 2026 && d.getMonth() === 5;
   }).length, [scoped]);
-  const warrantyActive = useMemo(() => scoped.filter(c => warrantyStatusFor(c.id, quotations).label === "ยังอยู่ในประกัน").length, [scoped, quotations]);
-  const deliveredCount = useMemo(() => scoped.filter(c => deliveryDateFor(c.id, quotations) !== "—").length, [scoped, quotations]);
 
   // กราฟ 1 — การเติบโตของลูกค้า (สะสมตามเดือนที่เข้าร่วม, 12 เดือน)
   const growthSeries = useMemo(() => {
@@ -628,7 +626,7 @@ export default function CustomersPage(){
   // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
   function openNewDeal(c: CustomerRow){
     setDealCustomer(c);
-    setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",assigned:c.owner,closeDate:"",note:""});
+    setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",assigned:c.owner,note:""});
     setShowNewDeal(true);
   }
   // สร้างดีล = ลีดใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
@@ -644,7 +642,6 @@ export default function CustomersPage(){
       product, category:mainTemplateOf(product),                     // ── รายละเอียดดีล ──
       value:fmtDealValue(dealForm.value),
       project:dealForm.project||undefined,
-      expectedClose:dealForm.closeDate||undefined,
       note:dealForm.note||undefined,
       status:"WAITING",                                              // ดีลใหม่เริ่มที่ต้น pipeline
       source:"ลูกค้าเดิม (ดีลใหม่)",
@@ -726,12 +723,10 @@ export default function CustomersPage(){
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
           const kpis = [
             { label:"ลูกค้าทั้งหมด",     value:`${totalAll}`,        sub:"ราย",     Icon:Users,       color:"#2563EB", bg:"#E8F0FE" },
-            { label:"โครงการที่ส่งมอบ",   value:`${deliveredCount}`,  sub:"โครงการ", Icon:Truck,       color:"#16A34A", bg:"#E6F7EE" },
-            { label:"อยู่ในประกัน",       value:`${warrantyActive}`,  sub:"ราย",     Icon:ShieldCheck, color:"#0D9488", bg:"#E6F7F5" },
             { label:"ยอดขายรวม",         value:fmtC(totalValue),     sub:"ทุกโครงการ", Icon:Coins,    color:"#EA580C", bg:"#FEF0E6" },
           ];
           return (
-            <div className="dash-kpis" style={{ marginBottom:16 }}>
+            <div className="dash-kpis kpi-2" style={{ marginBottom:16 }}>
               {kpis.map(k => (
                 <div key={k.label} className="card" style={{ padding:"16px 14px", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
                   <div style={{ minWidth:0 }}>
@@ -1630,12 +1625,8 @@ export default function CustomersPage(){
                 <div><label className="form-label">มูลค่าคาดการณ์</label>
                   <input className="form-input" value={dealForm.value} onChange={e=>setDealForm(f=>({...f,value:e.target.value}))} placeholder="เช่น ฿1.2M" /></div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div><label className="form-label">ผู้รับผิดชอบ</label>
-                  <PersonPicker value={dealForm.assigned} onChange={v=>setDealForm(f=>({...f,assigned:v}))} multiple /></div>
-                <div><label className="form-label">วันปิดคาดการณ์</label>
-                  <input className="form-input" type="date" value={dealForm.closeDate} onChange={e=>setDealForm(f=>({...f,closeDate:e.target.value}))} /></div>
-              </div>
+              <div><label className="form-label">ผู้รับผิดชอบ</label>
+                <PersonPicker value={dealForm.assigned} onChange={v=>setDealForm(f=>({...f,assigned:v}))} multiple /></div>
               <div><label className="form-label">หมายเหตุ</label>
                 <textarea className="form-input" rows={2} style={{resize:"vertical"}} value={dealForm.note} onChange={e=>setDealForm(f=>({...f,note:e.target.value}))} placeholder="รายละเอียดเพิ่มเติม..." /></div>
               <div style={{fontSize:"0.65rem",color:"#9ca3af"}}>โครงการใหม่เริ่มที่สเตจ &ldquo;ติดต่อแล้ว&rdquo; ในบอร์ด pipeline · นับรวมใน Dashboard/รายงานทันที · เปิดรายละเอียดให้เลย</div>

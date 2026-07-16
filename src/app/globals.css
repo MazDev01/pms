@@ -869,6 +869,10 @@ body {
 .bar-grow { transform-origin: left; animation: bar-grow 0.7s cubic-bezier(0.34, 1.06, 0.64, 1) both; }
 @media (prefers-reduced-motion: reduce) { .bar-grow { animation: none; transform: none; } }
 
+/* วงแหวนความคืบหน้า (ProgressRing) — กวาดจาก 0 → ค่าจริง มาตรฐานเดียวกับ .bar-grow ที่วิ่งจากซ้าย */
+.ring-arc { transition: stroke-dashoffset 1s cubic-bezier(.4, 0, .2, 1); }
+@media (prefers-reduced-motion: reduce) { .ring-arc { transition: none; } }
+
 /* chart card */
 .pms-dash .cc { background:#fff; border-radius:var(--r); padding:24px; border:1px solid var(--border); box-shadow:var(--sh); transition:box-shadow .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1); }
 .pms-dash .cc:hover { box-shadow:var(--sh-md); transform:translateY(-1px); }
@@ -1028,6 +1032,8 @@ textarea:focus-visible {
    กติกา: ทุกหน้าใช้ KPI 4 ใบเท่ากัน — ห้ามเพิ่มเป็น 5+ (ตัวหลักเคยเป็น 5 คอลัมน์ + ตัวช่วย .kpi-4 ลบไปแล้ว)
    หมายเหตุ: อย่าเปลี่ยนเป็น auto-fit — การ์ดจะตกบรรทัดเป็น 2 แถวบนจอ 1280 */
 .dash-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+/* หน้าลูกค้า — เหลือ KPI 2 ใบ (ตัด "โครงการที่ส่งมอบ"/"อยู่ในประกัน" ออกตามคำสั่ง) */
+.dash-kpis.kpi-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px)  { .dash-kpis { grid-template-columns: 1fr; } }
 /* การ์ด KPI แคบลง → ลด padding/ขนาดตัวเลขให้พอดี ไม่ล้น */
@@ -1060,4 +1066,22 @@ textarea:focus-visible {
 .dash-charts > div { display: flex; flex-direction: column; }
 @media (max-width: 1100px) { .dash-charts { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px)  { .dash-charts { grid-template-columns: 1fr; } }
+
+/* แถวกราฟใหญ่ 2 ใบ — ยอดขายรายเดือน / ลูกค้าเป้าหมายเทียบใบเสนอราคา (อ่านง่ายกว่าเบียด 3 ใบ) */
+.dash-charts-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+.dash-charts-2 > div { display: flex; flex-direction: column; }
+@media (max-width: 900px) { .dash-charts-2 { grid-template-columns: 1fr; } }
+
+/* ── แดชบอร์ดตัวแทน — การ์ด/แถวที่กดได้ ──
+   .dash-tile = ทั้งใบเป็นปุ่ม (ยกขึ้นตอนชี้) · .dash-row = แถวในรายการ (ไฮไลต์ตอนชี้) */
+.dash-tile { transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease, border-color .18s ease; }
+.dash-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(16,40,80,.10); border-color: #C7D2E0; }
+.dash-tile:active { transform: translateY(0); }
+.dash-tile:focus-visible, .dash-row:focus-visible { outline: 2px solid #003366; outline-offset: 2px; }
+.dash-row { transition: background .15s ease; }
+.dash-row:hover { background: #F5F8FC; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-tile, .dash-row { transition: none; }
+  .dash-tile:hover { transform: none; }
+}
 
