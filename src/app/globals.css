@@ -1062,6 +1062,20 @@ textarea:focus-visible {
     width:40px; height:40px; border-radius:10px; border:1px solid var(--border,#e5e7eb);
     background:#fff; color:var(--primary,#003366); cursor:pointer;
   }
+
+  /* ── แถบบนติดหนึบตอนเลื่อน — ปุ่มเมนู/ค้นหา/กระดิ่ง ต้องกดได้ตลอด ──
+     ตัวที่เลื่อนคือ .main (overflow-y:auto) และแถบบนอยู่ข้างในมัน → เดิมเลื่อนหายไปด้วย
+     บนจอแคบไม่มีแถบข้างค้างไว้ ปุ่มเมนูจึงเป็นทางเดียวที่จะไปหน้าอื่น
+     ถ้าหายไป = ต้องเลื่อนกลับขึ้นสุดทุกครั้งที่อยากเปลี่ยนหน้า
+
+     พื้นต้องทึบ (เดิม transparent) ไม่งั้นเนื้อหาลอดใต้แถบตอนเลื่อน
+     z-index 90: สูงกว่าแถบตัวกรองติดหนึบในหน้า (20) แต่ต่ำกว่า overlay (110) และ drawer (120)
+     → เปิดเมนูแล้วแถบบนไม่ทับ drawer */
+  .erp-topbar {
+    position:sticky; top:0; z-index:90;
+    background:var(--color-bg,#fff);
+    padding-top:12px; padding-bottom:10px;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
