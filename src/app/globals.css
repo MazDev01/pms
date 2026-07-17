@@ -1038,12 +1038,17 @@ textarea:focus-visible {
 /* ── Mobile nav: hamburger + slide-in drawer (≤768px) ── */
 .hamburger { display:none; }
 .nav-overlay { display:none; }
-@media (max-width:768px){
-  /* แถบข้างกลายเป็น drawer เลื่อนเข้า/ออก */
-  /* ⚠️ ต้องเขียน .app.app-hq ด้วย ไม่ใช่แค่ .app — media query ไม่เพิ่ม specificity
-     .app.app-hq (0,2,0) ที่ประกาศไว้ข้างบนจึงชนะ .app (0,1,0) ในนี้เสมอ
-     ผลคือ HQ ไม่เคยยุบเป็น drawer: sidebar หลุดไปเป็น position:fixed แต่กริดยังจอง 244px ไว้
-     → เนื้อหาทั้งหน้าถูกบีบเหลือ 244px ส่วนอีก 524px ของจอว่างเปล่า (ฝั่ง Dealer ไม่โดนเพราะไม่มีคลาส app-hq) */
+/* ── มือถือ + แท็บเล็ต: แถบข้างกลายเป็น drawer เลื่อนเข้า/ออก ──────────────────
+   เกณฑ์ 1024px = iPad ทุกรุ่นแนวตั้ง (Mini 768 · Air 820 · Pro 1024) ได้เนื้อหาเต็มจอ
+   เดิมเกณฑ์ 768px → iPad Air (820px) ตกไปใช้เลย์เอาต์เดสก์ท็อป: แถบข้างกิน 244px จาก 820
+   (30% ของจอเป็นเมนู) เหลือเนื้อหา 576px ทั้งที่หน้า HQ ออกแบบมาสำหรับ ~1,000px+ → อึดอัดมาก
+   บล็อกนี้คุมเฉพาะ "โครงหน้า" (กริด/แถบข้าง/overlay/ปุ่มเมนู) — กริดเนื้อหาแต่ละใบมี breakpoint ของตัวเอง
+
+   ⚠️ ต้องเขียน .app.app-hq ด้วย ไม่ใช่แค่ .app — media query ไม่เพิ่ม specificity
+   .app.app-hq (0,2,0) ที่ประกาศไว้ข้างบนจึงชนะ .app (0,1,0) ในนี้เสมอ
+   ผลคือ HQ ไม่เคยยุบเป็น drawer: sidebar หลุดไปเป็น position:fixed แต่กริดยังจอง 244px ไว้
+   → เนื้อหาทั้งหน้าถูกบีบเหลือ 244px ส่วนที่เหลือของจอว่างเปล่า (ฝั่ง Dealer ไม่โดนเพราะไม่มีคลาส app-hq) */
+@media (max-width:1024px){
   .app, .app.app-hq { grid-template-columns:1fr; }
   .erp-sidebar {
     position:fixed; top:0; left:0; height:100dvh; width:248px; z-index:120;
