@@ -9,6 +9,7 @@ import { solutionProducts, MASTER_CATALOG_KEY, type SolutionProduct } from "@/li
 import { useAuditLogger } from "@/lib/useAudit";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 import { CountUp } from "@/components/ui/CountUp";
+import { APP_NOW } from "@/context/FilterContext";
 import { Search, Plus, Pencil, History, TrendingUp, X, Check, Trash2, Building2, CalendarClock, ImagePlus, Layers, Tag } from "lucide-react";
 
 const PRIMARY = "#003366";
@@ -18,7 +19,8 @@ const BORDER  = "#e5e7eb";
 
 const fmtBaht = (v: number) => "฿" + v.toLocaleString("th-TH");
 const TH_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-function todayTH() { const d = new Date(); return `${d.getDate()} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
+// วันของระบบ (APP_NOW) ไม่ใช่นาฬิกาเครื่อง — effectiveDate ของราคากลางต้องอยู่ในยุคเดียวกับข้อมูล
+function todayTH() { const d = APP_NOW; return `${d.getDate()} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
 type EditForm = { name: string; spec: string; unit: string; subtypes: string[]; image: string; subtypeImages: Record<string, string> };
 

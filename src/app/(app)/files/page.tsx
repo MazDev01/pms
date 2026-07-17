@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { APP_NOW_ISO } from "@/context/FilterContext";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -127,7 +128,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
       category: cat,
       project: project.trim() || "—",
       uploadedBy: "คุณ",
-      uploadedAt: new Date().toISOString().slice(0, 10),
+      uploadedAt: APP_NOW_ISO,
       source: "upload",
     });
     onClose();

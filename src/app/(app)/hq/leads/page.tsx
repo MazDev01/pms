@@ -10,6 +10,7 @@ import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBran
 import { useNetworkLeads, useNetworkQuotations } from "@/lib/useNetworkData";
 import { useLeadRulesOf } from "@/lib/useHQRules";
 import { unassignedLeads } from "@/lib/hqAlerts";
+import { needsFollowUp } from "@/lib/leadMetrics";
 import { dealerLeaderboard, fmtISOToThai, type LeadRow } from "@/lib/mock";
 import { regionDisplay } from "@/lib/hqQuotations";  // แหล่งเดียวของชื่อภาค — ไม่ก็อปโค้ดซ้ำ
 import { ExportMenu } from "@/components/ui/ExportMenu";
@@ -40,7 +41,10 @@ const parseThaiDate = (s: string): Date | null => {
   return new Date(y, TH_MONTH[mt[2]], +mt[1]);
 };
 const ACTIVE: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO"];
-const NEED_FOLLOWUP: LeadStatus[] = ["WAITING", "FOLLOWUP"]; // ยังไม่ติดตาม (กฎ 7 วัน HQ)
+// "ต้องติดตาม" = ลีดที่ยังไม่ปิด และเงียบเกินเกณฑ์ของสาขาเจ้าของลีด (needsFollowUp)
+// ⚠️ ห้ามกลับไปใช้รายการสถานะ: เดิมเป็น ["WAITING","FOLLOWUP"] ซึ่งไม่ได้นับวันเลย
+//    แต่ป้ายเขียนว่า ">7 วัน" → ตัวเลขไม่ตรงกับคำ และไม่ตรงกับที่ตัวแทนเห็นบนหน้าตัวเอง
+//    เกณฑ์วันเป็นของแต่ละสาขา (ตัวแทนตั้งเอง) → ต้องถามด้วย dealerCode ของลีดใบนั้นเสมอ
 
 export default function HQLeadsPage() {
   const router = useRouter();
@@ -48,6 +52,7 @@ export default function HQLeadsPage() {
   const leads = useNetworkLeads();
   // เกณฑ์เป็นของแต่ละสาขา (ตัวแทนตั้งเองที่ ตั้งค่า › การแจ้งเตือน) → ถามเป็นรายใบด้วย dealerCode
   const rulesOf = useLeadRulesOf();
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<LeadStatus | "ALL">("ALL");
   const [province, setProvince] = useState<string>("ALL");
@@ -85,10 +90,12 @@ export default function HQLeadsPage() {
 
   const provinces = useMemo(() => [...new Set(scoped.map(l => l.province).filter(Boolean))].sort(), [scoped]);
 
-  const filtered = useMemo(() => {
+  // ฐานของ KPI = ตัวกรอง "ขอบเขต" ทุกตัว (ตัวแทน · ภูมิภาค · จังหวัด · ประเภทอาคาร · แหล่งที่มา · ค้นหา)
+  // แต่ยังไม่กรองด้วย "สถานะ" และ "ต้องติดตามด่วน" — สองอันนั้นคือปุ่มของการ์ด KPI เอง
+  // ถ้า KPI ตามสองอันนั้นด้วย ตัวเลขจะยุบเหลือค่าเดียวทันทีที่กด การ์ดจะไร้ความหมาย
+  const kpiBase = useMemo(() => {
     const q = query.trim().toLowerCase();
     return scoped.filter(l =>
-      (status === "ALL" || l.status === status) &&
       (province === "ALL" || l.province === province) &&
       (dealerSel === "ALL" || l.dealerCode === dealerSel) &&
       (regionSel === "ALL" || REGION_OF.get(l.dealerCode ?? "") === regionSel) &&
@@ -96,7 +103,12 @@ export default function HQLeadsPage() {
       (srcSel === "ALL" || (l.source || "ไม่ระบุ") === srcSel) &&
       (!q || (l.company + l.contact + l.province + l.product + l.assigned + (l.id ?? "") + (l.dealerCode ?? "")).toLowerCase().includes(q))
     );
-  }, [scoped, query, status, province, dealerSel, regionSel, btSel, srcSel]);
+  }, [scoped, query, province, dealerSel, regionSel, btSel, srcSel, REGION_OF]);
+
+  const filtered = useMemo(() => kpiBase.filter(l =>
+    (status === "ALL" || l.status === status) &&
+    (!overdueOnly || needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays))
+  ), [kpiBase, status, overdueOnly, rulesOf]);
 
   // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
   // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง
@@ -123,17 +135,18 @@ export default function HQLeadsPage() {
   );
   const anyFilter = !!query.trim() || [status, province, dealerSel, regionSel, btSel, srcSel].some(v => v !== "ALL");
 
-  // KPI
+  // KPI — คิดจาก kpiBase (ตามตัวกรองขอบเขต) ไม่ใช่ scoped (ทั้งเครือ)
+  // เดิมคิดจาก scoped → กรองเหลือตัวแทนเดียว ตารางหด 25→7 แถว แต่ KPI นิ่งที่ 61/24/42% คนอ่านเข้าใจผิด
   const kpis = useMemo(() => {
-    const total = scoped.length;
-    const won = scoped.filter(l => l.status === "PAID").length;
-    const lost = scoped.filter(l => l.status === "CANCELLED").length;
+    const total = kpiBase.length;
+    const won = kpiBase.filter(l => l.status === "PAID").length;
+    const lost = kpiBase.filter(l => l.status === "CANCELLED").length;
     const closed = won + lost;
-    const followUp = scoped.filter(l => NEED_FOLLOWUP.includes(l.status)).length;
+    const followUp = kpiBase.filter(l => needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays)).length;
     const lastM = timeRange.end.getMonth();
-    const newThis = scoped.filter(l => { const d = parseThaiDate(l.createdAt ?? ""); return d && d.getMonth() === lastM; }).length;
+    const newThis = kpiBase.filter(l => { const d = parseThaiDate(l.createdAt ?? ""); return d && d.getMonth() === lastM; }).length;
     return { total, followUp, newThis, conv: closed ? Math.round(won / closed * 100) : 0 };
-  }, [scoped, timeRange.end]);
+  }, [kpiBase, timeRange.end, rulesOf]);
 
   // ── Section 1 · ลีด เทียบ ใบเสนอราคา รายตัวแทน ─────────────────────────────
   // สาขาไหนรับลีดเยอะแต่ออกใบเสนอราคาน้อย = จุดที่ผู้บริหารต้องเร่ง
@@ -168,10 +181,30 @@ export default function HQLeadsPage() {
     const max = Math.max(1, ...arr.flatMap(a => [a.leads, a.quotes]));
     return arr.map(a => ({ ...a, lPct: Math.round(a.leads / max * 100), qPct: Math.round(a.quotes / max * 100) }));
   }, [filtered, netQuotes, timeRange.start, timeRange.end, DEALER_NAME]);
+  // เกณฑ์เป็นของแต่ละสาขา → หน้านี้ที่รวมหลายสาขาต้องสรุปเป็นช่วง ไม่ใช่เลขเดียว
+  const followUpSub = useMemo(() => {
+    const ds = [...new Set(kpiBase.map(l => rulesOf(l.dealerCode).followUpAlertDays))].sort((a, b) => a - b);
+    if (!ds.length) return "ตามเกณฑ์ของแต่ละสาขา";
+    return ds.length === 1 ? `เงียบเกิน ${ds[0]} วัน` : `เงียบเกิน ${ds[0]}–${ds[ds.length - 1]} วัน แล้วแต่สาขา`;
+  }, [kpiBase, rulesOf]);
+
+  // ขอบเขตที่ KPI กำลังนับอยู่ — ไม่มีตัวกรอง = "ทั้งเครือ" · มี = บอกว่ากรองอะไรไว้
+  // ป้ายนี้ต้องเปลี่ยนตามจริง ไม่งั้นเลข 7 รายการจะขึ้นคำว่า "ทั้งเครือ" กำกับ ซึ่งโกหกคนอ่าน
+  const scopeLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (dealerSel !== "ALL") parts.push(DEALER_NAME.get(dealerSel) ?? dealerSel);
+    if (regionSel !== "ALL") parts.push(regionDisplay(regionSel));
+    if (province !== "ALL") parts.push(province);
+    if (btSel !== "ALL") parts.push(btSel);
+    if (srcSel !== "ALL") parts.push(srcSel);
+    if (query.trim()) parts.push(`ค้นหา “${query.trim()}”`);
+    return parts.length ? parts.join(" · ") : "ทั้งเครือ";
+  }, [dealerSel, regionSel, province, btSel, srcSel, query, DEALER_NAME]);
+
   const kpiCards = [
-    { label: "ลูกค้าเป้าหมายทั้งหมด", value: `${kpis.total}`, sub: "ทั้งเครือ", Icon: Users, color: "#2563a8", on: status === "ALL", onClick: () => setStatus("ALL") },
+    { label: "ลูกค้าเป้าหมายทั้งหมด", value: `${kpis.total}`, sub: scopeLabel, Icon: Users, color: "#2563a8", on: status === "ALL", onClick: () => setStatus("ALL") },
     { label: "ลีดใหม่ (เดือนนี้)", value: `${kpis.newThis}`, sub: "รายการ", Icon: PhoneCall, color: "#7c3aed", on: false, onClick: () => setStatus("ALL") },
-    { label: "ยังไม่ติดตาม (>7 วัน)", value: `${kpis.followUp}`, sub: "ต้องติดตามด่วน", Icon: AlarmClock, color: "#EA580C", on: status === "FOLLOWUP", onClick: () => setStatus(status === "FOLLOWUP" ? "ALL" : "FOLLOWUP") },
+    { label: "ต้องติดตามด่วน", value: `${kpis.followUp}`, sub: followUpSub, Icon: AlarmClock, color: "#EA580C", on: overdueOnly, onClick: () => { setStatus("ALL"); setOverdueOnly(v => !v); } },
     { label: "อัตราแปลงเป็นลูกค้า", value: `${kpis.conv}%`, sub: "ปิดได้ / ปิดทั้งหมด", Icon: Percent, color: "#059669", on: false, onClick: () => setStatus("ALL") },
   ];
 
@@ -266,13 +299,13 @@ export default function HQLeadsPage() {
           <FilterBar dims={[]} />
           {/* ส่งออก = สิ่งที่เห็นบนจอตอนนี้ (ผ่านตัวกรองทุกตัวแล้ว) · คอลัมน์เรียงตรงกับตาราง */}
           <ExportMenu filename="hq-leads" title="ลูกค้าเป้าหมายทั้งเครือ"
-            headers={["รหัสลีด","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","เตือน 7 วัน","ผู้รับผิดชอบ","สถานะ"]}
+            headers={["รหัสลีด","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","ต้องติดตาม","ผู้รับผิดชอบ","สถานะ"]}
             rows={filtered.map(l => [
               l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
               l.province, l.product, l.source || "—", l.value || "—",
               ["QUOTED","FOLLOWUP","NEGO","PAID"].includes(l.status) ? "เสนอแล้ว" : "—",
               l.activities?.length ? l.activities[0].date : "—",
-              NEED_FOLLOWUP.includes(l.status) ? "ต้องติดตาม" : "—",
+              needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays) ? "ต้องติดตาม" : "—",
               l.assigned || "—", leadStatusLabel[l.status],
             ])} />
         </div>
@@ -299,7 +332,8 @@ export default function HQLeadsPage() {
 
       {/* ── SMART FILTER ── อยู่ใต้ KPI เหมือนหน้าอื่น (/hq/quotations · /hq/pipeline)
           เดิมแถบนี้อยู่ล่างสุดเหนือตาราง → กราฟทุกใบอยู่ "เหนือ" ตัวกรอง คนอ่านเลยไม่รู้ว่ามันคุมกราฟได้
-          ตอนนี้คุมทั้งหน้า: กราฟ · Top 10 · การ์ดเตือน · ตาราง (KPI ไม่ตามด้วย — มันคือตัวกรองสถานะเอง)
+          ตอนนี้คุมทั้งหน้า: KPI · กราฟ · Top 10 · การ์ดเตือน · ตาราง
+          (KPI ตามตัวกรองขอบเขตทุกตัว แต่ไม่ตาม "สถานะ"/"ต้องติดตามด่วน" เพราะการ์ด KPI คือปุ่มของสองอันนั้นเอง — ดู kpiBase)
           ตัวเลือกในดรอปดาวน์สร้างจาก scoped ไม่ใช่ filtered — ไม่งั้นพอเลือกตัวแทนแล้วจะเปลี่ยนกลับไม่ได้ */}
       <div className="card hq-sticky-filter" style={{ marginBottom: "1.25rem" }}>
         <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 14, paddingBottom: 14 }}>
@@ -489,7 +523,7 @@ export default function HQLeadsPage() {
             <thead><tr>
               <th>อันดับ</th><th>ตัวแทนจำหน่าย</th>
               <th className="num">ลีด</th><th className="num">ใบเสนอราคา</th>
-              <th className="num">อัตราแปลง</th><th className="num">ยอดขาย</th>
+              <th className="num" title="ลีดที่ออกใบเสนอราคาแล้ว ÷ ลีดทั้งหมด — ไม่ใช่อัตราปิดการขาย">อัตราออกใบเสนอราคา</th><th className="num">ยอดขาย</th>
             </tr></thead>
             <tbody>
               {!dealerPerf.length ? (
@@ -539,7 +573,7 @@ export default function HQLeadsPage() {
               <col style={{ width: "7%", minWidth: 84 }} />{/* มูลค่า */}
               <col style={{ width: "8%", minWidth: 88 }} />{/* เสนอราคาแล้ว */}
               <col style={{ width: "8%", minWidth: 96 }} />{/* ติดต่อล่าสุด */}
-              <col style={{ width: "7%", minWidth: 86 }} />{/* เตือน 7 วัน */}
+              <col style={{ width: "7%", minWidth: 86 }} />{/* ต้องติดตาม */}
               <col style={{ width: "9%", minWidth: 100 }} />{/* สถานะ */}
               <col style={{ width: "5%", minWidth: 52 }} />{/* ดู — ไอคอนล้วน (ปุ่ม 28px + padding ของ td) */}
             </colgroup>
@@ -547,14 +581,14 @@ export default function HQLeadsPage() {
               <th>รหัสลีด</th><th>ตัวแทน</th><th>ลูกค้า</th>
               <th>จังหวัด</th><th>ประเภทอาคาร</th><th>แหล่งที่มา</th>
               <th className="num">มูลค่า</th><th>เสนอราคาแล้ว</th><th>ติดต่อล่าสุด</th>
-              <th>เตือน 7 วัน</th><th>สถานะ</th><th></th>
+              <th>ต้องติดตาม</th><th>สถานะ</th><th></th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={12} style={{ padding: 0 }}><EmptyState icon={<Users size={26} />} title="ไม่พบลูกค้าเป้าหมาย" description="ลองปรับตัวกรองหรือคำค้น" /></td></tr>
               ) : filtered.map(l => {
                 const c = leadStatusColor[l.status];
-                const followUp = NEED_FOLLOWUP.includes(l.status);
+                const followUp = needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays);
                 const quoted = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status);
                 // ติดต่อล่าสุด = กิจกรรมล่าสุดของลีด · ลีดที่ไม่มีบันทึกกิจกรรม = "—" (ไม่เดาวันให้)
                 const last = l.activities?.length ? l.activities[0].date : "—";

@@ -135,25 +135,47 @@ export default function HQDashboard() {
     };
   }, [winQuotes, prevQuotes, totalDealers, allNetLeads.length, netCustomers.length]);
 
-  // ── สถิติรายตัวแทนในช่วง (รายได้=มูลค่า won, Win rate=won/ทั้งหมด) ──
+  // ── สถิติรายตัวแทนในช่วง — คำนวณจากใบเสนอราคาจริง (รายได้=มูลค่า won · อัตราปิด=won/(won+lost)) ──
   const dealerStats = useMemo(() => {
-    const m = new Map<string, { revenue: number; total: number; won: number }>();
+    const m = new Map<string, { revenue: number; total: number; won: number; lost: number }>();
     winQuotes.forEach(q => {
-      const r = m.get(q.dealerCode) ?? { revenue: 0, total: 0, won: 0 };
+      const r = m.get(q.dealerCode) ?? { revenue: 0, total: 0, won: 0, lost: 0 };
       r.total += 1;
       if (q.status === "won") { r.won += 1; r.revenue += q.valueNum; }
+      if (q.status === "lost") r.lost += 1;
       m.set(q.dealerCode, r);
     });
     return m;
   }, [winQuotes]);
 
-  // อันดับตัวแทน — ใช้ยอดขาย/เป้า/อัตราปิด "ทางการ" ของ dealer (revenueActual/revenueTarget/winRate)
-  // ให้ตรงกับหน้าตัวแทน + หน้ารายงาน (จำนวนใบเสนอราคายังนับตามช่วงเวลาจริง)
+  // ยอดขายสะสมทั้งปีจริง รายตัวแทน — สำหรับ "% เป้า" (เป้าเป็นรายปี ห้ามเทียบกับยอดแค่ในช่วงตัวกรอง)
+  const annualWonByDealer = useMemo(() => {
+    const m = new Map<string, number>();
+    scopedQuotes.forEach(q => {
+      if (q.status !== "won") return;
+      const d = parseThaiDate(q.createdAt);
+      if (!d || d.getFullYear() !== APP_NOW.getFullYear()) return;
+      m.set(q.dealerCode, (m.get(q.dealerCode) ?? 0) + q.valueNum);
+    });
+    return m;
+  }, [scopedQuotes]);
+
+  // อันดับตัวแทน — ทุกคอลัมน์คำนวณจากใบเสนอราคาจริง (บอสสั่ง 17 ก.ค. 69: "ให้แสดงค่าข้อมูลจริง")
+  // เดิมใช้ค่าซีดตายตัวของ DealerRow (revenueActual/winRate) → ตัวเลขไม่ขยับตามช่วงเวลา
+  // และไม่ตรงกับหน้าอื่นที่คำนวณจริง (CNX ฿22.4M ที่นี่ vs ฿24.6M ที่ pipeline/leads/quotations)
+  //   ยอดขาย  = มูลค่าใบที่ปิดได้ "ในช่วงที่เลือก" (แหล่งเดียวกับ KPI ของหน้านี้)
+  //   อัตราปิด = ปิดได้ ÷ (ปิดได้+ปิดไม่ได้) นิยามกลางของระบบ · ไม่มีใบรู้ผล = "—" ไม่ใช่ 0%
+  //   % เป้า   = ยอดปิดได้สะสมทั้งปีจริง ÷ เป้าทั้งปี (เป้าเป็นรายปี — ไม่หดตามตัวกรองเวลา)
   const rankedWin = useMemo(() => dealers.map(d => {
-    const st = dealerStats.get(d.code) ?? { revenue: 0, total: 0, won: 0 };
-    const tpct = d.revenueTarget > 0 ? Math.round((d.revenueActual / d.revenueTarget) * 100) : 0;
-    return { ...d, revenueW: d.revenueActual, winRateW: d.winRate, quotesW: st.total, wonW: st.won, tpct };
-  }).sort((a, b) => b.revenueW - a.revenueW), [dealers, dealerStats]);
+    const st = dealerStats.get(d.code) ?? { revenue: 0, total: 0, won: 0, lost: 0 };
+    const closed = st.won + st.lost;
+    const annual = annualWonByDealer.get(d.code) ?? 0;
+    const tpct = d.revenueTarget > 0 ? Math.round((annual / d.revenueTarget) * 100) : 0;
+    return {
+      ...d, revenueW: st.revenue, quotesW: st.total, wonW: st.won, tpct,
+      convW: closed ? Math.round((st.won / closed) * 100) : null,
+    };
+  }).sort((a, b) => b.revenueW - a.revenueW), [dealers, dealerStats, annualWonByDealer]);
   const best = rankedWin[0];
 
   // ยอดขายรายเดือนในช่วง (ล้านบาท) ป้อนกราฟแนวโน้ม — สรุปจาก won ในช่วงที่เลือก
@@ -363,7 +385,9 @@ export default function HQDashboard() {
     };
     return auditEntries
       .filter(e => inRange(e.at))
-      .slice(0, 7)
+      // เลื่อนอ่านในการ์ดได้ จึงไม่ต้องตัดเหลือ 7 รายการเหมือนตอนยังไม่มีแถบเลื่อน
+      // เพดาน 50 กันการ์ดวาดยาวเกินจำเป็น (บันทึกทั้งหมดดูได้ที่หน้า "บันทึกการใช้งาน" ซึ่งเก็บสูงสุด 300)
+      .slice(0, 50)
       .map(e => ({
         id: e.id,
         type: AUDIT_ICON[hqAuditCategory(e.action)] ?? "note",
@@ -638,7 +662,7 @@ export default function HQDashboard() {
                 </div>
                 <span style={{ flex: "0 0 44px", fontSize: "0.68rem", fontWeight: 800, color: "#1F2937", textAlign: "right" }}>฿{(d.revenueW / 1e6).toFixed(1)}M</span>
                 <span style={{ flex: "0 0 34px", fontSize: "0.66rem", fontWeight: 700, color: PRIMARY, textAlign: "right" }}>{d.tpct}%</span>
-                <span style={{ flex: "0 0 44px", fontSize: "0.66rem", fontWeight: 700, color: "var(--muted-foreground)", textAlign: "right" }}>{d.winRateW}%</span>
+                <span style={{ flex: "0 0 44px", fontSize: "0.66rem", fontWeight: 700, color: "var(--muted-foreground)", textAlign: "right" }}>{d.convW === null ? "—" : `${d.convW}%`}</span>
               </div>
             )); })()}
           </div>
@@ -661,9 +685,13 @@ export default function HQDashboard() {
             <div className="card-title">กิจกรรมล่าสุด</div>
             <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>จากบันทึกการใช้งาน · ตามตัวกรองด้านบน</span>
           </div>
-          {/* ล้นแล้วเลื่อนในการ์ด — ห้ามให้การ์ดยืดจนแถวสูงไม่เท่ากัน (กติกาเดียวกับ .chart-scroll) */}
-          <div className="card-body chart-scroll" style={{ paddingTop: 4, flex: 1, minHeight: 0 }}>
-            <ActivityTimeline items={recentActivities} />
+          {/* กล่องเลื่อน: ตัวเนื้อเป็น absolute → ความสูงของรายการ "ไม่ถูกนับ" เป็นความสูงการ์ด
+              จำเป็น เพราะแถวนี้เป็น grid + align-items: stretch ซึ่งคิดความสูงแถวจากการ์ดที่เนื้อสูงสุด
+              ถ้าปล่อยให้เนื้อดันเอง พอกิจกรรมเยอะการ์ดจะยืดจนแถวสูงตาม แล้วจะไม่มีวันเกิดแถบเลื่อนเลย */}
+          <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+            <div className="chart-scroll" style={{ position: "absolute", inset: 0, padding: "4px 1.15rem 1.15rem" }}>
+              <ActivityTimeline items={recentActivities} />
+            </div>
           </div>
         </div>
       </div>

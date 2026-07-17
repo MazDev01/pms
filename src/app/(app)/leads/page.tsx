@@ -27,13 +27,13 @@ import {
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown,
-  LayoutList, Columns3, AlarmClock, ChevronRight, Edit2,
+  LayoutList, Columns3, AlarmClock, ChevronRight, Edit2, Ruler,
 } from "lucide-react";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useSales } from "@/context/SalesContext";
 import { DrawerSection } from "@/components/ui/RightDrawer";
 import { useTableLayout } from "@/components/ui/TableTools";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters, APP_NOW, APP_NOW_ISO } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@/components/filters/FilterRow";
 import { TopbarActions } from "@/components/layout/TopbarActions";
@@ -72,6 +72,7 @@ const COLS: { key: string; label: string }[] = [
   { key: "province", label: "จังหวัด" },
   { key: "source",   label: "ช่องทางที่มา" },
   { key: "product",  label: "แม่แบบ" },
+  { key: "area",     label: "พื้นที่" },
   { key: "activity", label: "กิจกรรมล่าสุด" },
 ];
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -106,8 +107,12 @@ function leadTaskCount(l: LeadRow): { done: number; total: number } {
   const t = l.tasks?.length ? l.tasks : buildLeadTasks();
   return { done: t.filter(x => x.done).length, total: t.length };
 }
-// กิจกรรมล่าสุดของลีด (activities เรียงใหม่สุดอยู่บน) — ไม่มีกิจกรรม → ใช้วันที่สร้างดีล (ไม่ปล่อยว่าง)
-function lastActivity(l: LeadRow): string { return l.activities?.[0]?.date ?? l.createdAt ?? thaiDateStr(leadCreatedDate(l)); }
+// กิจกรรมล่าสุดของลีด (activities เรียงใหม่สุดอยู่บน) — ไม่มีกิจกรรม/ไม่มีวันที่สร้าง = "—"
+// ห้าม fallback ไป leadCreatedDate(): มันสังเคราะห์วันจาก numId (numId × 17 % 150 วันก่อนวันนี้)
+// ซึ่งใช้ได้แค่กับกราฟรวมของลีด seed — เอามาโชว์เป็น "ติดต่อล่าสุด" คือโกหกคนอ่าน
+// (ลีดที่เพิ่งสร้างเคยขึ้น "11 ก.พ. 2569" ย้อนหลัง 5 เดือน → เซลส์นึกว่าลีดถูกทิ้งค้าง)
+// กติกาเดียวกับ lastContactLabel() ใน leadMetrics และคอมเมนต์ที่ hq/leads/page.tsx:559
+function lastActivity(l: LeadRow): string { return l.activities?.[0]?.date ?? l.createdAt ?? "—"; }
 // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → เทียบแบบ "มีคนนี้อยู่ในรายชื่อ" ไม่ใช่เท่ากันเป๊ะ
 function assignedHas(assigned: string, person: string): boolean {
   return assigned.split(",").map(s => s.trim()).includes(person);
@@ -200,6 +205,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
     product: lead.product ?? catalog[0]?.name ?? "", status: lead.status,
     assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
+    area: lead.area != null ? String(lead.area) : "",
     note: lead.note ?? "", lostReason: lead.lostReason ?? "", logo: lead.logo ?? "",
   });
   const [f, setF] = useState(seed);
@@ -219,6 +225,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     f.province !== (lead.province ?? "") || f.source !== (lead.source ?? "") ||
     f.product !== (lead.product ?? "") || f.status !== lead.status ||
     f.assigned !== (lead.assigned ?? "") || f.value !== (lead.value ?? "") ||
+    f.area !== (lead.area != null ? String(lead.area) : "") ||
     f.note !== (lead.note ?? "") || f.lostReason !== (lead.lostReason ?? "") || f.logo !== (lead.logo ?? "");
   // ความคืบหน้า = แหล่งเดียวกับแท็บ "งาน/ความคืบหน้า" (LeadTasks) → เลขตรงกันทุกแท็บ
   const pct = lead.status === "PAID" ? 100 : lead.status === "CANCELLED" ? 0
@@ -227,7 +234,14 @@ function OverviewEditor({ lead, persons, onSave }: {
   const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
   const inp: React.CSSProperties = { width:"100%", height:26, padding:"0 8px", borderRadius:6, border:"1px solid #e5e7eb", fontSize:"0.8rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
 
-  function save() { onSave({ ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value), lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined }); }
+  function save() {
+    onSave({
+      ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value),
+      // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
+      area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
+      lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined,
+    });
+  }
 
   // แก้ไข "ในที่เดิม" — ใช้แถวหน้าตาเดียวกับตอนอ่าน (ไอคอน + ป้าย + ค่า) ค่ากลายเป็นช่องกรอก
   // ไม่เด้งป็อบอัพ (บอสสั่ง — ให้เหมือนหน้าลูกค้า)
@@ -274,6 +288,9 @@ function OverviewEditor({ lead, persons, onSave }: {
           <select value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
             {catalog.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
+        </Cell>
+        <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
+          <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
         </Cell>
         <Cell icon={Target}  label="แหล่งที่มา">
           <select value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(x=><option key={x}>{x}</option>)}</select>
@@ -336,6 +353,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     phone: initial?.phone ?? "", email: initial?.email ?? "",
     province: initial?.province ?? "กรุงเทพฯ", product: initial?.product ?? solutionProducts[0].name,
     value: initial?.value ?? "",
+    // เก็บเป็นสตริง ให้ปล่อยว่างได้ (= ยังไม่รู้พื้นที่) — ตอนบันทึกค่อยแปลงเป็นตัวเลข
+    area: initial?.area != null ? String(initial.area) : "",
     status: (initial?.status ?? "WAITING") as LeadStatus,
     assigned: initial?.assigned ?? persons[0] ?? "สมชาย เชียงใหม่",
     source: initial?.source ?? "เว็บไซต์", note: initial?.note ?? "",
@@ -359,6 +378,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
       status: form.status, assigned: form.assigned,
       source: form.source, note: form.note,
       logo: form.logo || undefined,
+      // เว้นว่าง/ไม่ใช่ตัวเลข = ไม่มีข้อมูลพื้นที่ (undefined) — ห้ามบันทึกเป็น 0 เพราะ 0 แปลว่า "พื้นที่ศูนย์" ซึ่งไม่จริง
+      area: form.area.trim() && Number(form.area) > 0 ? Number(form.area) : undefined,
     };
     if (initial) {
       onSave({ ...initial, ...base });
@@ -449,6 +470,12 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               <div>
                 <label style={labelStyle}>แม่แบบที่สนใจ</label>
                 <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>พื้นที่ (ตร.ม.)</label>
+                <input type="number" min={0} value={form.area} onChange={e=>set("area",e.target.value)}
+                  placeholder="เช่น 1200" style={inputStyle} />
+                <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ยังไม่รู้ก็เว้นว่างได้ · ใช้เป็นค่าตั้งต้นตอนออกใบเสนอราคา</div>
               </div>
 
               <div>
@@ -827,7 +854,7 @@ export default function LeadsPage() {
     addDealerFile({
       name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
       project: current.company || current.name, uploadedBy: current.assigned || "คุณ",
-      uploadedAt: new Date().toISOString().slice(0,10), source: "lead", recordId: current.numId,
+      uploadedAt: APP_NOW_ISO, source: "lead", recordId: current.numId,
     });
     setDealerFiles(loadDealerFiles());
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -901,11 +928,17 @@ export default function LeadsPage() {
   const fmtCompact = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
 
   // การ์ด = ปุ่มกรอง · on = กำลังกรองด้วยเงื่อนไขนี้อยู่ (กดซ้ำ = ล้าง)
+  // ช่วงวันในดรอปดาวน์ — เกณฑ์ของสาขาต้องเป็นตัวเลือกแรกเสมอ (การ์ด "เกิน N วัน" กดแล้วเซ็ตค่านี้)
+  // เดิมฟิกซ์ [7,14,30] ไว้ พอสาขาตั้ง 3 วัน ค่าที่การ์ดเซ็ตจะไม่มีในลิสต์ → ดรอปดาวน์เด้งกลับ
+  const followUpBands = useMemo(
+    () => [...new Set([followUpAlertDays, 7, 14, 30])].sort((a, b) => a - b),
+    [followUpAlertDays],
+  );
   const noFilter = filterStatus === "ALL" && followUpDays === 0;
   const leadKpis = [
     { label:"ลูกค้าเป้าหมายทั้งหมด", value:`${leadsData.length}`,   sub:"รายการ",       Icon:Users,      color:"#2563EB", bg:"#E8F0FE", on: noFilter,                 onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
     { label:"โอกาสการขาย",          value:fmtCompact(openValue),    sub:"มูลค่าที่เปิดอยู่", Icon:TrendingUp, color:"#16A34A", bg:"#E6F7EE", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
-    { label:"เกิน 7 วัน",           value:`${overdue7}`,            sub:"รายการ",       Icon:AlarmClock, color:"#EA580C", bg:"#FEF0E6", on: followUpDays === 7,       onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(followUpDays === 7 ? 0 : 7); } },
+    { label:`เกิน ${followUpAlertDays} วัน`, value:`${overdue7}`,     sub:"รายการ",       Icon:AlarmClock, color:"#EA580C", bg:"#FEF0E6", on: followUpDays === followUpAlertDays, onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(followUpDays === followUpAlertDays ? 0 : followUpAlertDays); } },
     { label:"อัตราปิดการขาย",       value:`${convRate}%`,           sub:"ปิดได้/ปิดทั้งหมด", Icon:Percent,   color:"#0D9488", bg:"#E6F7F5", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
   ];
 
@@ -952,8 +985,8 @@ export default function LeadsPage() {
           )}
           <FilterBar dims={[]} />
           <ExportMenu filename="leads" title="รายชื่อลูกค้าเป้าหมาย"
-            headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","ช่องทางที่มา","แม่แบบ","สถานะ","ความคืบหน้า","มูลค่า","ผู้รับผิดชอบ","กิจกรรมล่าสุด"]}
-            rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.source??"—",l.product,leadStatusLabel[l.status],`${leadProg(l)}%`,fmtVal(l.value),l.assigned,lastActivity(l)])} />
+            headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","ช่องทางที่มา","แม่แบบ","พื้นที่ (ตร.ม.)","สถานะ","ความคืบหน้า","มูลค่า","ผู้รับผิดชอบ","กิจกรรมล่าสุด"]}
+            rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.source??"—",l.product,l.area ?? "—",leadStatusLabel[l.status],`${leadProg(l)}%`,fmtVal(l.value),l.assigned,lastActivity(l)])} />
           <button onClick={() => setShowAddForm(true)} className="btn btn-primary btn-sm">
             <Plus size={15} /> เพิ่มลูกค้าเป้าหมาย
           </button>
@@ -1023,7 +1056,7 @@ export default function LeadsPage() {
           {/* ค้างติดต่อเกิน N วัน — เกณฑ์วันอย่างเดียว (จำนวนอยู่บนการ์ด "เกิน 7 วัน" ด้านบนแล้ว ไม่ซ้ำ) */}
           {followUpCount > 0 && (
             <FilterSelect caption="ค้างติดต่อทุกช่วง" value={String(followUpDays)} onChange={v=>setFollowUpDays(Number(v))} all="0"
-              options={[7,14,30].map(d=>({v:String(d),l:`ค้างติดต่อ >${d} วัน`}))} />
+              options={followUpBands.map(d=>({v:String(d),l:`ค้างติดต่อ >${d} วัน`}))} />
           )}
         </FilterRow>
 
@@ -1037,6 +1070,7 @@ export default function LeadsPage() {
                   {!hiddenCols.includes("province") && <col style={{width:"9%"}} />}
                   {!hiddenCols.includes("source")   && <col style={{width:"10%"}} />}
                   {!hiddenCols.includes("product")  && <col style={{width:"13%"}} />}
+                  {!hiddenCols.includes("area")     && <col style={{width:"8%"}} />}
                   <col style={{width:"13%"}} />
                   <col style={{width:"13%"}} />
                   <col style={{width:"11%"}} />
@@ -1051,6 +1085,7 @@ export default function LeadsPage() {
                       [null,"จังหวัด","province"],
                       [null,"ช่องทางที่มา","source"],
                       [null,"แม่แบบ","product"],
+                      [null,"พื้นที่ (ตร.ม.)","area"],
                       ["status","ขั้นตอน",null],
                       [null,"ความคืบหน้า",null],
                       ["value","มูลค่า",null],
@@ -1060,7 +1095,7 @@ export default function LeadsPage() {
                     ] as [SortKey|null,string,string|null][])
                       .filter(([,,colKey]) => !colKey || !hiddenCols.includes(colKey))
                       .map(([key,label])=>{
-                      const isNum = key === "value"; // คอลัมน์ตัวเลข — จัดหัวคอลัมน์ชิดขวาให้ตรงกับค่าในเซลล์ (.num)
+                      const isNum = key === "value" || label === "พื้นที่ (ตร.ม.)"; // คอลัมน์ตัวเลข — จัดหัวคอลัมน์ชิดขวาให้ตรงกับค่าในเซลล์ (.num)
                       return (
                       <th key={label || "actions"}
                         className={isNum ? "num" : undefined}
@@ -1093,6 +1128,11 @@ export default function LeadsPage() {
                         )}
                         {!hiddenCols.includes("product") && (
                           <td style={{ fontSize:"0.72rem", color:"#374151", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>{l.product || "—"}</td>
+                        )}
+                        {!hiddenCols.includes("area") && (
+                          <td className="num" style={{ fontSize:"0.72rem", color:"#374151", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>
+                            {l.area != null ? l.area.toLocaleString() : "—"}
+                          </td>
                         )}
                         <td className="ovf-visible" style={{ position:"relative" }}
                           onClick={e => { e.stopPropagation(); setOpenStatusId(openStatusId === l.id ? null : l.id); }}>
@@ -1421,10 +1461,12 @@ export default function LeadsPage() {
             // กำหนด id/numId แบบ max+1 กันชนกับลีดเดิม (แทน Math.random)
             const nid = Math.max(0, ...leadsData.map(x=>x.numId)) + 1;
             // สร้าง "รายงานการติดตาม" + "Report Checklist (Task)" อัตโนมัติทุกครั้งที่สร้าง Lead
-            const withIds = { ...l, numId: nid, id: `#L-${40321 + nid}` };
+            // createdAt ต้องมีตั้งแต่ตอนสร้าง — ไม่มีแล้วหน้าไหนก็โชว์ "สร้างเมื่อ —"
+            // และ leadCreatedDate() จะไปสังเคราะห์วันจาก numId แทน (ได้วันย้อนหลังหลายเดือน)
+            const withIds = { ...l, numId: nid, id: `#L-${40321 + nid}`, createdAt: l.createdAt || thaiDateStr(APP_NOW) };
             addLead({
               ...withIds,
-              report: l.report || buildLeadReport(withIds, thaiDateStr(new Date())),
+              report: l.report || buildLeadReport(withIds, thaiDateStr(APP_NOW)),
               // ดีลเลอร์สร้างลีดหลังติดต่อลูกค้าแล้ว → ติ๊กงานให้ถึงสถานะที่เลือก (เริ่มต้น "ติดต่อแล้ว" = ติ๊กติดต่อครั้งแรก/เก็บข้อมูล)
               tasks: l.tasks?.length ? l.tasks : seedLeadTasks(l.status, l.assigned || "—", 30),
             });
@@ -1580,11 +1622,15 @@ export default function LeadsPage() {
           const priO = leadPriority(c);
           const pcO = priorityColor[priO];
           const facts: { icon: typeof User; label: string; value: string }[] = [
+            // ชื่อโครงการมีเฉพาะดีลที่สร้างจากลูกค้าเดิม (กรอกเองตอน "เพิ่มงานขายใหม่") — ลีดทั่วไปไม่มี
+            // จึงโชว์เมื่อมีจริงเท่านั้น ไม่ต้องแขวนแถว "—" ค้างไว้ทุกลีด
+            ...(c.project?.trim() ? [{ icon: Building2, label: "ชื่อโครงการ", value: c.project.trim() }] : []),
             { icon: User,          label: "ผู้ติดต่อ",     value: c.contact || "—" },
             { icon: Phone,         label: "โทรศัพท์",     value: c.phone || "—" },
             { icon: Mail,          label: "อีเมล",        value: c.email || "—" },
             { icon: MapPin,        label: "จังหวัด",      value: c.province || "—" },
             { icon: Package,       label: "แม่แบบที่สนใจ", value: c.product || "—" },
+            { icon: Ruler,         label: "พื้นที่",        value: c.area != null ? `${c.area.toLocaleString()} ตร.ม.` : "—" },
             { icon: Target,        label: "แหล่งที่มา",       value: c.source || "—" },
             { icon: Users,         label: "ผู้รับผิดชอบ",     value: c.assigned || "—" },
             { icon: MessageSquare, label: "ติดต่อล่าสุด",     value: lastActivity(c) },

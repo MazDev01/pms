@@ -30,13 +30,19 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     province: lead.province, assigned: lead.assigned, product: lead.product,
     customerId: lead.customerId, dealId: lead.numId as number | undefined,
     value: lead.value,                       // มูลค่าประเมินจากลีด — ใช้ตั้งต้น BOQ
+    area: lead.area,                         // พื้นที่ที่กรอกไว้ตอนเพิ่มลีด — ใช้เป็นจำนวนตั้งต้นของ BOQ
+    project: lead.project,                   // ชื่อโครงการที่ตัวแทนตั้งไว้ตอนสร้างดีล (ถ้ามี)
   } : {
     kind: "customer" as const, company: customer!.company, contact: customer!.name, phone: customer!.phone, email: customer!.email,
     province: customer!.province, assigned: customer!.owner, product: customer!.category || "",
     customerId: customer!.id, dealId: undefined as number | undefined,
     value: customer!.totalValue ? String(customer!.totalValue) : "",
+    area: undefined as number | undefined,   // ลูกค้า (ปิดการขายแล้ว) ไม่มีพื้นที่ตั้งต้น — ใบเสนอราคาของลูกค้าดูอย่างเดียวอยู่แล้ว
+    project: undefined as string | undefined,
   };
-  const defProject = () => subj.product ? `${subj.product} — ${subj.company}` : subj.company;
+  // ตัวแทนตั้งชื่อโครงการไว้แล้วตอนสร้างดีล → ใช้ชื่อนั้น ไม่ใช่ประกอบชื่อใหม่ทับ
+  // ไม่ได้ตั้งไว้ค่อยประกอบจากแม่แบบ + ชื่อบริษัท (ยังแก้ในช่องได้ตามเดิม)
+  const defProject = () => subj.project?.trim() || (subj.product ? `${subj.product} — ${subj.company}` : subj.company);
   const readOnly = subj.kind === "customer"; // แท็บใบเสนอราคาของ "ลูกค้า" = ดูอย่างเดียว (ไม่แก้/สร้าง/ลบ)
   const viewLineItems = (q: QuotationMock): QuoteLineItem[] => q.lineItems ?? (q.materialCost > 0
     ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
@@ -50,8 +56,12 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     const prod = catalog.find(p => p.name === subj.product)
               ?? catalog.find(p => p.subtypes?.includes(subj.product));
     const rate = prod?.price ?? 0;
-    // จำนวน = ถอดกลับจาก มูลค่าประเมิน ÷ ราคากลาง (ลีดไม่เก็บพื้นที่แล้ว — BOQ เป็นแหล่งเดียว)
-    const qty = rate > 0 && est > 0 ? Math.round(est / rate) : 0;
+    // จำนวนตั้งต้นของ BOQ เรียงตามความน่าเชื่อถือของข้อมูล:
+    //  1) พื้นที่ที่กรอกไว้ในลีด + แม่แบบคิดเป็น ตร.ม. → ใช้ตัวเลขจริงจากลีด (ตรงที่สุด · บอสสั่ง 17 ก.ค. 69)
+    //  2) ไม่มีพื้นที่ → ถอดกลับจาก มูลค่าประเมิน ÷ ราคากลาง (ประมาณเอา เหมือนเดิม)
+    // ทั้งสองทางเป็นแค่ "ค่าตั้งต้น" — ตัวแทนแก้ทับใน BOQ ได้ และพื้นที่บนใบยึดตาม BOQ ตอนบันทึกเสมอ
+    const areaQty = prod?.unit === "ตร.ม." && (subj.area ?? 0) > 0 ? subj.area! : 0;
+    const qty = areaQty > 0 ? areaQty : (rate > 0 && est > 0 ? Math.round(est / rate) : 0);
     const seed: QuoteLineItem[] = subj.product && rate > 0 && qty > 0
       ? [{ name: subj.product, qty: Math.max(1, qty), unit: prod!.unit, unitPrice: rate }]
       : [];

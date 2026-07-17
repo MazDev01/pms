@@ -27,7 +27,7 @@ import { TemplateHero } from "@/components/ui/TemplateHero";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@/components/filters/FilterRow";
 import { TopbarActions } from "@/components/layout/TopbarActions";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters, APP_NOW, APP_NOW_ISO } from "@/context/FilterContext";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 import {
   Plus, X, ChevronUp, ChevronDown, Upload, Download,
@@ -73,7 +73,9 @@ function downloadCsvTemplate(){
 }
 function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
 const THAI_MO=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-function thaiToday(){ const d=new Date(); return `${d.getDate()} ${THAI_MO[d.getMonth()]} ${d.getFullYear()+543}`; }
+// "วันนี้" ต้องเป็นวันของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง
+// ใช้ new Date() = ดีลใหม่ได้วันที่ล่วงหน้าจากยุคของข้อมูล แล้วหลุดนอกช่วงตัวกรองทุกพรีเซ็ต (ทุกพรีเซ็ตจบที่ APP_NOW)
+function thaiToday(){ const d=APP_NOW; return `${d.getDate()} ${THAI_MO[d.getMonth()]} ${d.getFullYear()+543}`; }
 // จัดรูปแบบมูลค่า (Expected Revenue) จากสตริงดิบ → "฿1.2M" / "฿480K" · ว่าง = ""
 function fmtDealValue(v:string):string{
   const s=v.replace(/[฿,\s]/gi,"");
@@ -467,7 +469,7 @@ export default function CustomersPage(){
     addDealerFile({
       name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
       project: selected.company || selected.name, uploadedBy: selected.owner || "คุณ",
-      uploadedAt: new Date().toISOString().slice(0,10), source: "customer", recordId: selected.id, customerId: selected.id,
+      uploadedAt: APP_NOW_ISO, source: "customer", recordId: selected.id, customerId: selected.id,
     });
     setDealerFiles(loadDealerFiles());
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -588,7 +590,7 @@ export default function CustomersPage(){
   function makeImported(r: ImportRow, id: number): CustomerRow {
     return { id, name:r.name||r.company, company:r.company, email:r.email, phone:r.phone,
       province:r.province||"กรุงเทพฯ", category:r.category, status:"active", projects:0,
-      joinDate:new Date().toISOString().slice(0,10), owner:legacyForm.owner||"สมชาย เชียงใหม่",
+      joinDate:APP_NOW_ISO, owner:legacyForm.owner||"สมชาย เชียงใหม่",
       initials:initials(r.company), color:PALETTE[id%PALETTE.length], totalValue:0, imported:true };
   }
   function onCsvFile(e: React.ChangeEvent<HTMLInputElement>){

@@ -36,6 +36,7 @@ import { CompanyPanel } from "@/components/hq/CompanyPanel";
 import { UsersPanel } from "@/components/hq/UsersPanel";
 import { TopbarActions } from "@/components/layout/TopbarActions";
 import { useAuditLogger } from "@/lib/useAudit";
+import { useUnsavedGuard } from "@/lib/useUnsavedGuard";
 import { SettingsBusCtx as BusCtx, type SectionApi } from "@/lib/settingsBus";
 import {
   Building2, Users, GitMerge, Target, Bell,
@@ -560,6 +561,8 @@ export default function HQSettingsPage() {
   const showToast = useCallback((m: string) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2400); }, []);
   const logAudit = useAuditLogger();
   const dirty = !!api?.dirty;
+  // เตือนตอนออกจากหน้า/ปิดแท็บด้วย — switchTab ข้างล่างเตือนแค่ตอนสลับแท็บในหน้าเดียวกัน
+  useUnsavedGuard(dirty);
 
   function switchTab(next: TabKey) {
     if (next === tab) return;

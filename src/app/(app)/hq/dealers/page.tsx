@@ -84,8 +84,14 @@ function OnTimeBadge({ pct }: { pct: number }) {
   );
 }
 
-function CopyField({ label, value }: { label: string; value: string }) {
+// secret = ปิดบังค่าไว้ก่อน ต้องกดตาถึงเห็น (ยังคัดลอกได้โดยไม่ต้องเปิดดู)
+// ใช้กับรหัสผ่านในแผงรายละเอียดตัวแทน — เดิมโชว์ "PEB-CNX-3317" เต็ม ๆ ทันทีที่เปิดแถว
+// ใครเดินผ่านหลังจอ/แชร์หน้าจอ/ถ่ายภาพหน้าจอ ก็ได้รหัสเข้าระบบของตัวแทนไปเลย
+// (โมดัลตอนสร้าง/รีเซ็ตยังโชว์เต็มโดยตั้งใจ — เป็นจังหวะเดียวที่ HQ ต้องอ่านไปแจ้งตัวแทน)
+function CopyField({ label, value, secret = false }: { label: string; value: string; secret?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [shown, setShown] = useState(false);
+  const masked = secret && !shown;
   function doCopy() {
     navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   }
@@ -93,8 +99,17 @@ function CopyField({ label, value }: { label: string; value: string }) {
     <div style={{ marginBottom: 10 }}>
       <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 11px" }}>
-        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D", letterSpacing: "0.03em" }}>{value}</span>
-        <button type="button" onClick={doCopy} style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "#059669" : "#6b7280", padding: 0, display: "flex" }}>
+        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D", letterSpacing: "0.03em" }}>
+          {masked ? "••••••••••••" : value}
+        </span>
+        {secret && (
+          <button type="button" onClick={() => setShown(v => !v)} aria-label={shown ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} title={shown ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", padding: 0, display: "flex" }}>
+            {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        )}
+        <button type="button" onClick={doCopy} aria-label={`คัดลอก${label}`} title={`คัดลอก${label}`}
+          style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "#059669" : "#6b7280", padding: 0, display: "flex" }}>
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
@@ -574,7 +589,7 @@ export default function HQDealersPage() {
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px" }}>
                   <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
                   <CopyField label="อีเมล" value={d.credentials.email} />
-                  <CopyField label="รหัสผ่าน" value={d.credentials.password} />
+                  <CopyField label="รหัสผ่าน" value={d.credentials.password} secret />
                 </div>
               </div>
 

@@ -252,7 +252,8 @@ export default function SalesAnalyticsPage() {
   // ── Section 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง (รายตัวแทน) ──
   const quoteVsSales = useMemo(() => perf.map(d => ({
     key: d.code, label: `${d.code} – ${d.name}`, a: d.quoteVal, b: d.wonVal,
-    note: d.quoteVal ? `ปิดได้ ${Math.round(d.wonVal / d.quoteVal * 100)}%` : undefined,
+    // สัดส่วน "มูลค่า" ไม่ใช่ "จำนวนใบ" — คนละตัวกับ "อัตราปิดการขาย" ที่นับใบ ต้องกำกับหน่วยไว้ ไม่งั้นอ่านว่าขัดกัน
+    note: d.quoteVal ? `ปิดได้ ${Math.round(d.wonVal / d.quoteVal * 100)}% ของมูลค่า` : undefined,
     onClick: () => router.push(`/hq/dealers/${d.code}`),
   })).sort((a, b) => b.a - a.a), [perf, router]);
 
@@ -460,7 +461,7 @@ export default function SalesAnalyticsPage() {
                 <th style={{ textAlign: "right" }}>ใบเสนอราคา</th>
                 <th style={{ textAlign: "right" }}>มูลค่าใบเสนอราคา</th>
                 <th style={{ textAlign: "right" }}>ยอดขายสะสม</th>
-                <th style={{ textAlign: "right" }}>อัตราปิด</th>
+                <th style={{ textAlign: "right" }} title="ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) — นับเฉพาะใบที่รู้ผลแล้ว · คนละสูตรกับ “อัตราปิดการขาย” ที่หน้าใบเสนอราคาทั้งเครือ">อัตราปิด</th>
                 <th style={{ textAlign: "right" }}>เป้าทั้งปี</th>
                 <th style={{ textAlign: "right" }}>% เป้า</th>
                 <th>ใบเสนอราคาล่าสุด</th>

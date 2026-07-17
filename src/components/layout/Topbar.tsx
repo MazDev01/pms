@@ -14,6 +14,7 @@ import {
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown } from "lucide-react";
 import { PRIMARY, STEEL } from "@/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@/lib/useAudit";
+import { confirmDiscard } from "@/lib/useUnsavedGuard";
 import { useHQAlerts } from "@/lib/useHQAlerts";
 import { type HQAlert } from "@/lib/hqAlerts";
 
@@ -438,13 +439,17 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   function markAll() { setReadIds(new Set(notifs.map(n => n.id))); }
   function markOne(id: number) { setReadIds(prev => new Set([...prev, id])); }
 
+  // ทุกทางที่พาออกจากหน้าปัจจุบันต้องผ่าน confirmDiscard() ก่อน — หน้าที่มีฟอร์มค้าง (ตั้งค่า)
+  // จะได้เตือนครบทุกทาง ไม่ใช่เตือนเฉพาะตอนสลับแท็บ (ดู @/lib/useUnsavedGuard)
   function handleLogout() {
+    if (!confirmDiscard()) return;
     setShowUser(false);
     logout();
     router.push("/login");
   }
 
   function goTo(href: string) {
+    if (!confirmDiscard()) return;
     setShowSearch(false);
     setSearchQ("");
     router.push(href);
@@ -604,7 +609,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                           <div style={{ marginLeft:34, marginTop:3, display:"flex", flexDirection:"column" }}>
                             {shown.map((a, i) => (
                               <button key={`${a.href}-${i}`}
-                                onClick={() => { setShowNotifs(false); router.push(a.href); }}
+                                onClick={() => { if (!confirmDiscard()) return; setShowNotifs(false); router.push(a.href); }}
                                 style={{ display:"block", width:"100%", padding:"3px 0", border:"none", background:"none", cursor:"pointer", textAlign:"left",
                                   fontSize:"0.68rem", color:"#6b7280", lineHeight:1.45 }}>
                                 {a.body}
@@ -638,7 +643,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       </div>
                     )}
                     <button
-                      onClick={() => { markOne(n.id); setShowNotifs(false); router.push(n.href); }}
+                      onClick={() => { if (!confirmDiscard()) return; markOne(n.id); setShowNotifs(false); router.push(n.href); }}
                       style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"11px 16px", border:"none",
                         borderBottom:`1px solid ${BG}`, background:isRead ? "#fff" : "#f6f9ff",
                         cursor:"pointer", textAlign:"left" }}
@@ -661,7 +666,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               {notifs.length > 8 && (
                 <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
                   {isHQ ? (
-                    <button onClick={() => { setShowNotifs(false); router.push("/hq/audit"); }}
+                    <button onClick={() => { if (!confirmDiscard()) return; setShowNotifs(false); router.push("/hq/audit"); }}
                       style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:PRIMARY, fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>
                       ดูบันทึกการใช้งานทั้งหมด →
                     </button>
@@ -718,7 +723,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   ...(isHQ ? [{ Icon: UserCircle, label: "โปรไฟล์", href: "/profile" }] : []),
                   { Icon: Settings,    label:"ตั้งค่า",  href: isHQ ? "/hq/settings" : "/settings" },
                 ].map(item => (
-                  <button key={item.label} onClick={() => { setShowUser(false); router.push(item.href); }}
+                  <button key={item.label} onClick={() => { if (!confirmDiscard()) return; setShowUser(false); router.push(item.href); }}
                     style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"9px 16px", border:"none", background:"none", cursor:"pointer", color:STEEL, fontSize:"0.8rem", fontWeight:600, textAlign:"left" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = BG; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; }}>

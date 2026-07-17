@@ -11,6 +11,7 @@ import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, NOTIF_META, NOTIF_PRE
 import { CURRENT_DEALER } from "@/lib/useNetworkData";
 import { useRole } from "@/context/RoleContext";
 import { fileToResizedDataURL } from "@/lib/imageResize";
+import { useUnsavedGuard } from "@/lib/useUnsavedGuard";
 
 // ป้ายตำแหน่งตาม role (ใช้ในบัญชีดีลเลอร์)
 const ROLE_LABEL: Record<string, string> = {
@@ -819,6 +820,8 @@ export default function SettingsPage() {
   const report = useCallback((a: SectionApi | null) => setApi(a), []);
   const showToast = useCallback((m: string) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2400); }, []);
   const dirty = !!api?.dirty;
+  // เตือนตอนออกจากหน้า/ปิดแท็บด้วย — เดิมเตือนแค่ตอนสลับแท็บ กดเมนู sidebar ออกไปงานหายเงียบ
+  useUnsavedGuard(dirty);
 
   // เตือนก่อนออกจากแท็บถ้ายังไม่บันทึก (แนวเดียวกับหน้าตั้งค่า HQ)
   function switchTab(next: SettingTab) {
