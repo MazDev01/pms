@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { use } from "react";
 import {
-  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
+  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@/lib/mock";
 import { dealerLeaderboard, HQ_DEALERS_KEY } from "@/lib/mock";
@@ -390,7 +390,12 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
             <span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{dealer.code}</span>
             {isAtRisk && <span className="badge" style={BADGE("#fee2e2", "#dc2626")}>🔴 ล้าหลังเป้า</span>}
             {isWarn   && <span className="badge" style={BADGE("#fef3cd", "#d97706")}>⚠ ระวัง</span>}
-            {dealer.status === "inactive" && <span className="badge" style={BADGE("#f0f0f5", "#9ca3af")}>ปิดใช้งาน</span>}
+            {/* ป้าย/สี มาจาก @/lib/mock แหล่งเดียว — ให้ตรงกับตารางหน้า /hq/dealers เป๊ะ */}
+            {dealer.status === "inactive" && (
+              <span className="badge" style={BADGE(dealerStatusColor.inactive.bg, dealerStatusColor.inactive.color)}>
+                {dealerStatusLabel.inactive}
+              </span>
+            )}
           </div>
           <p>
             ภาค{dealer.region} · {dealer.activeProjects} โอกาสการขาย · อัตราปิดการขาย {dealer.winRate}% · ติดตามตรงเวลา {dealer.onTimePct}%

@@ -267,7 +267,7 @@ export type HQNotifChannels = { email: boolean; inapp: boolean };
 export const HQ_NOTIF_KEY = "hq_notifications_v2";
 export const HQ_NOTIF_UPDATED_EVENT = "bpms-hq-notif-updated";
 export const HQ_NOTIF_EVENTS: { key: string; label: string; desc: string }[] = [
-  { key: "dealer",  label: "จัดการตัวแทน",         desc: "สร้าง แก้ไข หรือระงับตัวแทนในเครือ" },
+  { key: "dealer",  label: "จัดการตัวแทน",         desc: "สร้าง แก้ไข หรือปิดใช้งานตัวแทนในเครือ" },
   { key: "pricing", label: "ราคากลาง",              desc: "ปรับราคากลางของแม่แบบทั้งเครือ" },
   { key: "target",  label: "เป้าหมายและการตั้งค่า", desc: "แก้เป้ายอดขายเครือ หรือการตั้งค่าระบบ" },
   { key: "catalog", label: "แม่แบบและแคตตาล็อก",    desc: "เพิ่ม แก้ไข หรือลบแม่แบบสินค้า" },
@@ -909,8 +909,26 @@ export type DealerRow = {
   winRate: number;
   activeProjects: number;
   onTimePct: number;
-  status: "active" | "inactive";
+  status: DealerStatus;
   credentials: DealerCredentials;
+};
+
+// ─── สถานะตัวแทน (แหล่งเดียว) — มี 2 สถานะเท่านั้น ตามข้อมูลจริง ────────────────
+// เดิมค่า "inactive" ค่าเดียวถูกเรียก 3 ชื่อคนละที่: "ไม่ใช้งาน" (ตาราง/ตัวกรอง)
+// "ปิดใช้งาน" (ฟอร์ม/หน้ารายละเอียด) และ "ระงับตัวแทน" (บันทึกการใช้งาน)
+// → ยึด "ปิดใช้งาน" คำเดียว เพราะเป็นคำที่ปุ่ม/ฟอร์ม/UsersPanel ใช้อยู่แล้ว และเป็นคู่ตรงข้ามของ "เปิดใช้งาน"
+//
+// ไม่มีสถานะ "ระงับ" (suspended) — DealerRow ไม่มีฟิลด์รองรับ
+// (เดิมหน้า /hq/dealers ฮาร์ดโค้ด CRI ให้เป็น "ระงับ" ทั้งที่ข้อมูลจริงบอกว่า active
+//  → ตัวแทนรายเดียวกันขึ้นคนละสถานะในคนละหน้า · ถ้าต้องการ 3 สถานะจริง ต้องเพิ่มฟิลด์ก่อน)
+export type DealerStatus = "active" | "inactive";
+export const dealerStatusLabel: Record<DealerStatus, string> = {
+  active:   "เปิดใช้งาน",
+  inactive: "ปิดใช้งาน",
+};
+export const dealerStatusColor: Record<DealerStatus, { bg: string; color: string }> = {
+  active:   { bg: "#e5faf0", color: "#059669" },
+  inactive: { bg: "#f0f0f5", color: "#6b7280" },
 };
 
 // คีย์เก็บรายชื่อตัวแทน (แหล่งเดียว — ทุกหน้า HQ ต้องอ่านคีย์นี้)

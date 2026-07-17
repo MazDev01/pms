@@ -16,7 +16,7 @@ const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.",
 // ประวัติตั้งต้น (แสดงทันทีก่อนมี action จริง) — action จริงจะถูก prepend ทับ
 const SEED: AuditEntry[] = [
   { id: 5, user: "วิชัย ประสิทธิ์", role: "HQ_MANAGEMENT", action: "แก้ราคากลาง", target: "โรงงาน · ฿6,800 → ฿7,000", at: "30 มิ.ย. 2569 · 09:22" },
-  { id: 3, user: "วิชัย ประสิทธิ์", role: "HQ_MANAGEMENT", action: "ระงับตัวแทน", target: "RYG (ระยองสตีลเวิร์คส์)", at: "29 มิ.ย. 2569 · 17:05" },
+  { id: 3, user: "วิชัย ประสิทธิ์", role: "HQ_MANAGEMENT", action: "ปิดใช้งานตัวแทน", target: "RYG (ระยองสตีลเวิร์คส์)", at: "29 มิ.ย. 2569 · 17:05" },
   { id: 2, user: "กิตติ พรมมา", role: "HQ_MANAGEMENT", action: "เพิ่มผู้ใช้ HQ", target: "weerapol@benjamin.co.th", at: "29 มิ.ย. 2569 · 14:30" },
   { id: 1, user: "อารยา สุขวิเศษ", role: "HQ_MANAGEMENT", action: "แก้เป้าเครือ", target: "฿260M → ฿280M (ปี 2569)", at: "28 มิ.ย. 2569 · 11:12" },
 ];

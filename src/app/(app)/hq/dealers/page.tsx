@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, type DealerRow, type DealerCredentials, type HQTargets } from "@/lib/mock";
+import {
+  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
+  type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
+} from "@/lib/mock";
 import { dealerLeaderboard, HQ_DEALERS_KEY } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { useRole } from "@/context/RoleContext";
@@ -24,33 +27,19 @@ const REGION_TARGET_DEFAULT: Record<string, number> = {
 };
 const regionDefaultTarget = (region: string) => REGION_TARGET_DEFAULT[region] ?? 30_000_000;
 
-// ── Dealer status (LOCAL to this page) ──────────────────────────
-// mock's DealerRow.status is only "active" | "inactive". เพิ่มสถานะที่ 3 ("suspended")
-// แบบ deterministic โดยไม่แก้ mock: override ตามรหัสตัวแทน (ไม่ใช้ random)
-type DealerStatus = "active" | "inactive" | "suspended";
-const STATUS_OVERRIDE: Record<string, DealerStatus> = {
-  CRI: "suspended", // ตัวแทนเชียงราย — ระงับใช้งาน (ตัวอย่างสถานะ "ระงับ")
-};
-// derive สถานะที่แสดงผลจากข้อมูล dealer: ให้ inactive จาก mock/แก้ไข ชนะ override เสมอ
-function dealerStatus(d: { code: string; status: "active" | "inactive" }): DealerStatus {
-  if (d.status === "inactive") return "inactive";
-  return STATUS_OVERRIDE[d.code] ?? "active";
-}
-const STATUS_META: Record<DealerStatus, { label: string; color: string; bg: string }> = {
-  active:    { label: "ใช้งาน",    color: "#059669", bg: "#e5faf0" },
-  inactive:  { label: "ไม่ใช้งาน", color: "#6b7280", bg: "#f0f0f5" },
-  suspended: { label: "ระงับ",     color: "#dc2626", bg: "#fee2e2" },
-};
+// ── Dealer status ───────────────────────────────────────────────
+// คำเรียก/สี มาจาก @/lib/mock (แหล่งเดียว) — หน้ารายละเอียดตัวแทนใช้ชุดเดียวกัน
+// สถานะจริงมี 2 ค่าเท่านั้นตาม DealerRow.status — ไม่มี "ระงับ" (ดูเหตุผลใน mock.ts)
+const dealerStatus = (d: { status: DealerStatus }): DealerStatus => d.status;
 const STATUS_PILLS: { value: DealerStatus | "all"; label: string }[] = [
-  { value: "all",       label: "ทั้งหมด" },
-  { value: "active",    label: "ใช้งาน" },
-  { value: "inactive",  label: "ไม่ใช้งาน" },
-  { value: "suspended", label: "ระงับ" },
+  { value: "all",      label: "ทั้งหมด" },
+  { value: "active",   label: dealerStatusLabel.active },
+  { value: "inactive", label: dealerStatusLabel.inactive },
 ];
 
 function StatusBadge({ status }: { status: DealerStatus }) {
-  const m = STATUS_META[status];
-  return <span className="badge" style={{ background: m.bg, color: m.color }}>{m.label}</span>;
+  const c = dealerStatusColor[status];
+  return <span className="badge" style={{ background: c.bg, color: c.color }}>{dealerStatusLabel[status]}</span>;
 }
 
 // ── Sub-components ──────────────────────────────────────────────
@@ -222,7 +211,8 @@ export default function HQDealersPage() {
   function toggleStatus(d: DealerRow) {
     const next = d.status === "active" ? "inactive" : "active";
     setDealers(prev => prev.map(x => x.id === d.id ? { ...x, status: next } : x));
-    logAudit(next === "active" ? "เปิดใช้งานตัวแทน" : "ระงับตัวแทน", `${d.code} · ${d.name}`);
+    // บันทึกให้ตรงกับสิ่งที่เกิดขึ้นจริง — เดิมเขียน "ระงับตัวแทน" ทั้งที่สั่ง "ปิดใช้งาน" (คนละคำกับที่ผู้ใช้กด)
+    logAudit(next === "active" ? "เปิดใช้งานตัวแทน" : "ปิดใช้งานตัวแทน", `${d.code} · ${d.name}`);
   }
 
   function enterDealer(d: DealerRow) {
@@ -251,7 +241,7 @@ export default function HQDealersPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
-            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials.email,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,STATUS_META[dealerStatus(d)].label])} />
+            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials.email,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,dealerStatusLabel[d.status]])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มตัวแทน
           </button>
@@ -435,8 +425,8 @@ export default function HQDealersPage() {
 
               <InputField label="สถานะ">
                 <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
-                  <option value="active">เปิดใช้งาน</option>
-                  <option value="inactive">ปิดใช้งาน</option>
+                  <option value="active">{dealerStatusLabel.active}</option>
+                  <option value="inactive">{dealerStatusLabel.inactive}</option>
                 </select>
               </InputField>
 
