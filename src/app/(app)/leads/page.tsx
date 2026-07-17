@@ -23,7 +23,7 @@ import { useRole } from "@/context/RoleContext";
 import {
   Plus, Search, X,
   CheckCircle2, User, ArrowRight, Building2,
-  MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, PhoneCall, Package, Layers,
+  MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, Package, Layers,
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown,
@@ -1765,8 +1765,8 @@ export default function LeadsPage() {
                     </div>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, flexWrap:"wrap" }}>
-                    {/* หัว = การกระทำด่วนเท่านั้น · Won/Lost/ใบเสนอราคา อยู่แถบล่าง (ไม่ซ้ำ) */}
-                    <a href={c.phone ? `tel:${c.phone}` : undefined} title="โทรหา" style={{ ...qa, textDecoration:"none", pointerEvents:c.phone?"auto":"none", opacity:c.phone?1:.5 }}><PhoneCall size={13} /> โทร</a>
+                    {/* หัว = การกระทำด่วนเท่านั้น · Won/Lost/ใบเสนอราคา อยู่แถบล่าง (ไม่ซ้ำ)
+                        ปุ่ม "โทร" (tel: ลิงก์) ถูกเอาออก (บอสสั่ง 17 ก.ค. 69) — เบอร์โทรยังอยู่ในการ์ดข้อมูลลูกค้า แท็บภาพรวม */}
                     <button title="สร้างนัดหมาย" onClick={()=>{ setDTab("timeline"); setApptAdding(true); }} style={qa}><CalendarClock size={13} /> นัดหมาย</button>
                     {isCustomer && (
                       <button title="ดูโปรไฟล์ลูกค้า" onClick={()=>{ closePanel(); router.push(c.customerId ? `/customers?open=${c.customerId}` : "/customers"); }} style={qa}><CheckCircle2 size={13} /> ลูกค้า</button>
