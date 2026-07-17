@@ -17,6 +17,7 @@ import { useAuditEntries, type AuditEntry } from "@/lib/useAudit";
 import { confirmDiscard } from "@/lib/useUnsavedGuard";
 import { useHQAlerts } from "@/lib/useHQAlerts";
 import { type HQAlert } from "@/lib/hqAlerts";
+import { CURRENT_DEALER } from "@/lib/useNetworkData";
 
 // ── mock "วันนี้" (deterministic) ────────────────────────────────
 const MOCK_TODAY = "2026-06-30";
@@ -316,7 +317,19 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const roleLabel = isHQ ? "ผู้บริหาร HQ"
     : ({ DEALER_ADMIN: "ผู้จัดการตัวแทน", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
   // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
-  const { leads: liveLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
+  const { leads: allLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
+
+  // ── ขอบเขตข้อมูลของลีด (สำคัญ) ────────────────────────────────────────────
+  // SalesContext ถือลีดของ "ทั้งเครือ" 10 สาขา — ตัวแทนต้องเห็นเฉพาะสมุดงานตัวเอง
+  // กติกาเดียวกับ DealerDashboard/หน้า /leads: ไม่มี dealerCode = ลีดที่ตัวแทนสร้างเอง → ของสาขาตัวเอง
+  // HQ เห็นทั้งเครือตามปกติ
+  //
+  // เดิม Topbar ใช้ allLeads ตรง ๆ ทั้งกระดิ่งและช่องค้นหา → ตัวแทน CNX เห็นลีดของ RYG/MST
+  // พร้อมชื่อผู้ติดต่อ เบอร์ มูลค่าดีล และชื่อเซลส์สาขาอื่น (ยืนยันด้วยเทสต์: ระยอง/ตาก โผล่ในกระดิ่ง CNX)
+  const liveLeads = useMemo(
+    () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
+    [allLeads, isHQ],
+  );
   const auditEntries = useAuditEntries(); // สำหรับ HQ — บันทึกการใช้งาน
   // กฎแจ้งเตือน 6 ข้อของทั้งเครือ — แหล่งเดียวกับการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ
   const hqAlerts = useHQAlerts();
