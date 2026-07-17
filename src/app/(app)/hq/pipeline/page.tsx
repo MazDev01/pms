@@ -167,8 +167,10 @@ export default function SalesAnalyticsPage() {
     [netLeads, codes, btSel],
   );
 
-  const regionOpts = useMemo(() => [...new Set(allDealers.map(d => d.region))].sort(), [allDealers]);
-  const provOpts = useMemo(() => [...new Set(allDealers.map(d => d.province))].sort(), [allDealers]);
+  // filter(Boolean) จำเป็น ไม่ใช่กันไว้เฉย ๆ — ตัวแทนที่บันทึกไว้ก่อนมีฟิลด์ province/region จะได้ค่า undefined
+  // กลายเป็น <option> ที่เลือกแล้วกรองอะไรไม่ได้ + React เตือน "unique key" (key={undefined})
+  const regionOpts = useMemo(() => [...new Set(allDealers.map(d => d.region).filter(Boolean))].sort(), [allDealers]);
+  const provOpts = useMemo(() => [...new Set(allDealers.map(d => d.province).filter(Boolean))].sort(), [allDealers]);
   const btOpts = useMemo(() => [...new Set(netQuotes.map(x => x.productLine).filter(Boolean))].sort(), [netQuotes]);
 
   // ── สถิติรายตัวแทน — แหล่งเดียวของทุกกราฟ/ตาราง (คำนวณครั้งเดียว) ──

@@ -15,6 +15,10 @@ export type ActivityTimelineItem = {
   type: string;
   text: string;
   time: string;
+  /** ป้ายกำกับเฉพาะรายการ — ใส่เมื่อข้อความบนป้ายไม่ใช่ชื่อประเภทตายตัว
+   *  (เช่น บันทึกการใช้งาน: ป้ายต้องเป็นชื่อการกระทำจริง "แก้ราคากลาง" ไม่ใช่คำว่า "บันทึก")
+   *  ไม่ใส่ = ใช้ชื่อประเภทตาม ACTIVITY_META เหมือนเดิม */
+  label?: string;
 };
 
 // แต่ละประเภทกิจกรรม — ไอคอน + สีเน้น (CI) + คำอธิบายภาษาไทย
@@ -71,7 +75,7 @@ export function ActivityTimeline({ items }: { items: ActivityTimelineItem[] }) {
                   letterSpacing: "0.04em", color: meta.color,
                   background: meta.bg, borderRadius: 6, padding: "2px 7px",
                 }}>
-                  {meta.label}
+                  {item.label ?? meta.label}
                 </span>
                 <span style={{ fontSize: "0.65rem", color: MUTED }}>{item.time}</span>
               </div>

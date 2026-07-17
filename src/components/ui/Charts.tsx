@@ -555,6 +555,23 @@ export function Donut({ segments, centerLabel, centerValue, size = 190 }: {
 
 /** Line – Trend (สไตล์ shadcn statistics) — เส้นตรงต่อจุด + เส้นประแนวตั้ง + จุดปลายแบบวงแหวน
  *  minimal · เหมาะกับการ์ดสถิติที่เน้นตัวเลข · data = {month,value} */
+// viewBox กว้างเท่าที่การ์ดกว้างจริง (วัดด้วย ResizeObserver) — ไม่ตรึง 1180
+// svg เป็น height:"auto" → ความสูงจริง = ความกว้างการ์ด × H/W · ตรึง W=1180 ไว้ = การ์ดยิ่งแคบกราฟยิ่งเตี้ย
+// (การ์ด 528px เคยได้กราฟสูงแค่ 206px ทั้งที่ขอ height=460 แล้วเหลือที่ว่างท้ายการ์ด 209px)
+// วัดแล้ว W = ความกว้างจริง → สเกล 1:1 · กราฟสูงเท่า height ที่ขอ · ตัวอักษรได้ขนาดจริงตามที่เขียนไว้
+function useMeasuredWidth(fallback: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, width: w || fallback };
+}
+
 export function LineTrendChart({
   data, unit = "M", height = 300, color = NAVY,
 }: {
@@ -564,12 +581,14 @@ export function LineTrendChart({
   const [drawn, setDrawn] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+  const { ref: wrapRef, width: vw } = useMeasuredWidth(1180);
+  const narrow = vw < 800;
 
   const n = data.length;
   const vals = data.map(d => d.value);
   const max = Math.max(...vals, 0);
   const lo = 0, hi = niceCeil(max * 1.15) || 1;           // แกน Y เริ่มที่ 0 + เผื่อหัว (สไตล์ Chateau MRR) เส้นไม่ชิดขอบบน
-  const W = 1180, H = height, pL = 56, pR = 40, pT = 26, pB = 40;
+  const W = vw, H = height, pL = narrow ? 46 : 56, pR = narrow ? 16 : 40, pT = 26, pB = 40;
   const cW = W - pL - pR, cH = H - pT - pB;
   const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
   const cy = (v: number) => pT + (1 - (v - lo) / (hi - lo)) * cH;
@@ -585,6 +604,7 @@ export function LineTrendChart({
   const fmt = (v: number) => `฿${Math.round(v * 10) / 10}${unit}`;
 
   return (
+    <div ref={wrapRef} style={{ width: "100%" }}>
     <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="line chart">
       <defs>
         <linearGradient id={grad} x1="0" y1="0" x2="0" y2="1">
@@ -648,6 +668,7 @@ export function LineTrendChart({
           onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(h => h === i ? null : h)} />
       ))}
     </svg>
+    </div>
   );
 }
 

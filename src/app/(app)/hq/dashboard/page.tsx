@@ -15,7 +15,7 @@ import {
   type MonthRange,
 } from "@/components/ui/MonthRangeToggle";
 import {
-  dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy,
+  dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy, hqAuditCategory,
   type DealerRow, type HQTargets,
 } from "@/lib/mock";
 import { usePersistentState } from "@/lib/usePersistentState";
@@ -25,6 +25,7 @@ import { SalesTrendChart } from "@/components/ui/SalesTrendChart";
 import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads } from "@/lib/useNetworkData";
 
 import { useSales } from "@/context/SalesContext";
+import { useAuditEntries } from "@/lib/useAudit";
 import { fmtBaht, parseBaht } from "@/lib/format";
 
 const PRIMARY = "#003366";
@@ -343,20 +344,35 @@ export default function HQDashboard() {
     };
   }, [barRange, scopedQuotes, allNetLeads]);
 
-  // กิจกรรมล่าสุดทั้งเครือ (จากใบเสนอราคาล่าสุด)
+  // ── กิจกรรมล่าสุด = "บันทึกการใช้งาน" (Audit Log) แหล่งเดียวกับหน้า /hq/audit ──
+  // เดิมการ์ดนี้อ่านจากใบเสนอราคา (ความเคลื่อนไหวการขาย) — บอสสั่งให้ใช้บันทึกการใช้งานแทน 17 ก.ค. 69
+  // ป้ายบนไทม์ไลน์ = ชื่อการกระทำจริงของ audit ("แก้ราคากลาง") · ไอคอน/สีแยกตามโมดูล (hqAuditCategory)
+  // เวลาเก็บเป็น "30 มิ.ย. 2569 · 09:22" → parseThaiDate อ่านส่วนหน้าได้ ใช้กรองตามช่วงเวลาของหน้าได้เลย
+  const auditEntries = useAuditEntries();
+  const AUDIT_ICON: Record<string, string> = {
+    dealer: "meeting",   // ตัวแทน → ไอคอนกลุ่มคน
+    users: "meeting",
+    pricing: "quote",    // ราคากลาง/แม่แบบ → ไอคอนเอกสาร
+    catalog: "quote",
+    target: "status",    // เป้า/ตั้งค่า → ไอคอนเปลี่ยนสถานะ
+  };
   const recentActivities = useMemo<ActivityTimelineItem[]>(() => {
-    const typeOf = (st: string) => st === "won" ? "status" : st === "lost" ? "status" : "quote";
-    const textOf = (q: typeof winQuotes[number]) => {
-      const who = q.customer;
-      if (q.status === "won") return `${who} · ปิดการขายสำเร็จ (${fmtBaht(q.valueNum)})`;
-      if (q.status === "lost") return `${who} · ปิดการขายไม่สำเร็จ`;
-      return `${who} · ${fmtBaht(q.valueNum)}`;
+    const inRange = (at: string) => {
+      const d = parseThaiDate(at);
+      return !d || (d >= timeRange.start && d <= timeRange.end); // อ่านวันไม่ได้ = ไม่ตัดทิ้ง
     };
-    return [...winQuotes]
-      .sort((a, b) => (parseThaiDate(b.createdAt)?.getTime() ?? 0) - (parseThaiDate(a.createdAt)?.getTime() ?? 0))
+    return auditEntries
+      .filter(e => inRange(e.at))
       .slice(0, 7)
-      .map((q, i) => ({ id: `${q.dealerCode}-${i}`, type: typeOf(q.status), text: textOf(q), time: q.createdAt }));
-  }, [winQuotes]);
+      .map(e => ({
+        id: e.id,
+        type: AUDIT_ICON[hqAuditCategory(e.action)] ?? "note",
+        label: e.action,
+        text: `${e.user} · ${e.target}`,
+        time: e.at,
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditEntries, timeRange]);
 
   const topDealers = useMemo(() => rankedWin.slice(0, 5), [rankedWin]);
 
@@ -442,7 +458,10 @@ export default function HQDashboard() {
     <div className="erp">
       <div className="page-head">
         <div>
-          <p style={{ margin: 0 }}>{selDealer ? `มุมมองตัวแทน: ${selDealer.name.replace("Benjamin ", "")} (${selDealer.code})` : "ภาพรวมทุกตัวแทน · ทุกตัวเลขคำนวณตามช่วงเวลาที่เลือก"} · {timeRange.subtitle}</p>
+          {/* เดิมเขียนว่า "ทุกตัวเลขคำนวณตามช่วงเวลาที่เลือก" ซึ่งไม่จริง — การ์ดที่มีปุ่มช่วงของตัวเอง
+              (ลีด·ใบเสนอราคา·ปิดการขาย · เป้าหมายเทียบยอดขายจริง) และการ์ด "สัดส่วนตัวแทนจำหน่าย" ที่ใช้ยอดสะสมทั้งปี
+              ไม่ได้อิงตัวกรองบนแถบบน — ทุกใบกำกับไว้ที่ใบของมันเองแล้ว */}
+          <p style={{ margin: 0 }}>{selDealer ? `มุมมองตัวแทน: ${selDealer.name.replace("Benjamin ", "")} (${selDealer.code})` : "ภาพรวมทุกตัวแทน · การ์ดที่ไม่ได้กำกับเป็นอย่างอื่น คำนวณตามช่วงเวลาที่เลือก"} · {timeRange.subtitle}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {/* เลือกดูภาพรวมทั้งเครือ หรือเจาะรายตัวแทน — ตัวเลือกเฉพาะหน้านี้ (UI เดียวกับตัวกรองเวลา) */}
@@ -496,24 +515,40 @@ export default function HQDashboard() {
       <div className="hq-row2a" style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-body" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-start", paddingTop: "1.15rem" }}>
-            <SalesTrendChart title={trendTitle} desc={trendDesc} monthly={trendMonthly} height={460} />
+            {/* height = ความสูงจริงของกราฟเป็น px (หลัง LineTrendChart วัดความกว้างการ์ดเอง)
+                395 = ที่ว่างในการ์ดหลังหักหัวข้อ/ปุ่มช่วงเวลา — พอดีกับการ์ด "สัดส่วนตัวแทนจำหน่าย" ที่อยู่คู่กัน */}
+            <SalesTrendChart title={trendTitle} desc={trendDesc} monthly={trendMonthly} height={395} />
           </div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">สัดส่วนตัวแทนจำหน่าย</div>
-            <Link href="/hq/dealers" className="btn btn-secondary btn-sm">จัดการ →</Link></div>
+          <div className="card-header">
+            <div>
+              <div className="card-title">สัดส่วนตัวแทนจำหน่าย</div>
+              {/* การ์ดนี้ไม่ขึ้นกับตัวกรองเวลา — จำนวนตัวแทนไม่มีวันที่ให้กรอง และยอดขายใช้ยอดสะสมทั้งปี
+                  (ค่าเดียวกับ revenueActual ที่หน้า /hq/dealers ใช้) · ต้องกำกับไว้ ไม่งั้นขัดกับคำโปรยบนหัวหน้า */}
+              <div className="card-desc">จำนวนตัวแทนแยกตามภาค — ไม่ขึ้นกับตัวกรองช่วงเวลา</div>
+            </div>
+            <Link href="/hq/dealers" className="btn btn-secondary btn-sm">จัดการ →</Link>
+          </div>
           <div className="card-body" style={{ paddingTop: 4 }}>
             {(() => {
               const totC = regions.reduce((s, r) => s + r.count, 0) || 1;
-              const segs = regions.map((r, i) => ({ label: regionDisplay(r.region), value: r.count, color: RAMP[i % RAMP.length], revenue: r.revenue, pct: Math.round(r.count / totC * 100) }));
+              // สีผูกกับ "ภาค" ไม่ใช่ลำดับ — โดนัทกับแถบล่างเรียงคนละแบบ ถ้าสีอิง index ภาคเดียวกันจะคนละสีในสองที่
+              const colorOf = new Map(regions.map((r, i) => [r.region, RAMP[i % RAMP.length]]));
+              const segs = regions.map(r => ({ region: r.region, label: regionDisplay(r.region), value: r.count, color: colorOf.get(r.region)!, revenue: r.revenue, pct: Math.round(r.count / totC * 100) }));
+              // โดนัท/legend โชว์ "จำนวนตัวแทน" → ต้องเรียงตามจำนวนตัวแทน
+              // (เดิมเรียงตามยอดขายแต่โชว์จำนวน → legend ออกมา 12,12,7,5,7,5 เหมือนไม่ได้เรียง คนอ่านนึกว่าพัง)
+              const byCount = [...segs].sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "th"));
+              // แถบล่างโชว์ "ยอดขาย" → เรียงตามยอดขาย · แสดงครบทุกภาค ไม่ตัดเงียบ
+              const byRev = [...segs].sort((a, b) => b.revenue - a.revenue);
               const maxRev = Math.max(...segs.map(s => s.revenue), 1);
               return (
                 <>
                   {/* โดนัทสัดส่วน + legend (สไตล์ Chateau) */}
                   <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <Donut segments={segs} centerLabel="ตัวแทน" centerValue={`${totalDealers}`} size={140} />
+                    <Donut segments={byCount} centerLabel="ตัวแทน" centerValue={`${totalDealers}`} size={140} />
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                      {segs.map(s => (
+                      {byCount.map(s => (
                         <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
                           <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
                           <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
@@ -523,11 +558,12 @@ export default function HQDashboard() {
                       ))}
                     </div>
                   </div>
-                  {/* ยอดขายตามภูมิภาค (bars ใต้โดนัท เหมือน "รายได้ตาม Plan") */}
+                  {/* ยอดขายตามภูมิภาค (bars ใต้โดนัท เหมือน "รายได้ตาม Plan")
+                      แสดงครบทุกภาค — เดิม slice(0,3) ตัดทิ้ง 3 ภาคโดยไม่บอก (ขัดกฎ "ห้ามตัดเงียบ" ของโปรเจกต์) */}
                   <div style={{ borderTop: "1px solid #f0f4f8", marginTop: 16, paddingTop: 13 }}>
-                    <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 11 }}>ยอดขายตามภูมิภาค <span style={{ fontWeight: 400 }}>(ต่อปี)</span></div>
+                    <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 11 }}>ยอดขายตามภูมิภาค <span style={{ fontWeight: 400 }}>(ยอดสะสมทั้งปี · ทุกภาค)</span></div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-                      {segs.slice(0, 3).map(s => (
+                      {byRev.map(s => (
                         <div key={s.label}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
                             <span style={{ color: "#374151", fontWeight: 600 }}>{s.label}</span>
@@ -618,7 +654,18 @@ export default function HQDashboard() {
               ariaLabel="ยอดขายแยกตามประเภทอาคาร" />
           </div>
         </div>
-        {/* การ์ด "เหตุผลปิดการขายไม่สำเร็จ" เอาออกตามที่บอสสั่ง */}
+        {/* การ์ด "เหตุผลปิดการขายไม่สำเร็จ" เอาออกตามที่บอสสั่ง → ช่องที่ว่างใส่ "กิจกรรมล่าสุด" แทน
+            (recentActivities คำนวณไว้อยู่แล้วแต่ไม่เคยถูกเรนเดอร์ — โค้ดตายมาตลอด) */}
+        <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
+          <div className="card-header">
+            <div className="card-title">กิจกรรมล่าสุด</div>
+            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>จากบันทึกการใช้งาน · ตามตัวกรองด้านบน</span>
+          </div>
+          {/* ล้นแล้วเลื่อนในการ์ด — ห้ามให้การ์ดยืดจนแถวสูงไม่เท่ากัน (กติกาเดียวกับ .chart-scroll) */}
+          <div className="card-body chart-scroll" style={{ paddingTop: 4, flex: 1, minHeight: 0 }}>
+            <ActivityTimeline items={recentActivities} />
+          </div>
+        </div>
       </div>
 
     </div>
