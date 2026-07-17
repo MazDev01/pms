@@ -154,11 +154,11 @@ export default function DealerLoginPage() {
           <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* ปุ่ม RYG/CRI ถูกลบตามคำสั่ง (17 ก.ค. 69) — ระบบมีบัญชีตัวแทนที่เล่นได้จริงรายเดียว (CNX)
+              สองปุ่มนั้นกดแล้วได้สมุดงานของ CNX อยู่ดี = หลอกว่าเข้าเป็นสาขาอื่นทั้งที่ไม่ใช่ */}
           {[
             { label: "ผู้ดูแลสำนักงานใหญ่", sub: "Benjamin HQ Management · admin@benjamin.com", role: "hq" as const, redirect: "/hq/dashboard", color: "#2D2D2D" },
             { label: "ตัวแทนเชียงใหม่", sub: "ตัวแทน CNX · cnx@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
-            { label: "ตัวแทนระยอง สตีล", sub: "ตัวแทน RYG · ryg@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
-            { label: "ตัวแทนเชียงราย เมทัล", sub: "ตัวแทน CRI · cri@dealer.com", role: "dealer" as const, redirect: "/dashboard", color: "#003366" },
           ].map((d, i) => (
             <button key={i} type="button"
               onClick={() => { login(d.role); router.push(d.redirect); }}

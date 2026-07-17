@@ -113,12 +113,13 @@ export default function DealerDashboard() {
   // ── กราฟใหญ่ 2 ใบ ── แต่ละใบมีปุ่มช่วงย้อนหลังของตัวเอง (3/6/12 เดือน) เป็นอิสระจากกัน
   // ไม่ผูกกับตัวกรองช่วงเวลาบนแถบบน — เป็นกราฟแนวโน้ม ต้องเห็นย้อนหลังเสมอ
   const [lqRange, setLqRange] = useState<MonthRange>(6);
-  const [salesRange, setSalesRange] = useState<MonthRange>(6);
+  // กราฟยอดขายรายเดือนตรึงที่ 6 เดือน — ปุ่ม 3/6/12 ถูกถอดออกตามคำสั่ง (17 ก.ค. 69) เฉพาะใบนี้
+  const SALES_RANGE: MonthRange = 6;
 
   // ยอดขายรายเดือน (ล้านบาท): กราฟเส้น + เส้นประเป้าพาดผ่าน — จุดเขียว = เดือนที่ถึงเป้า
   const salesData = useMemo(
-    () => lastNMonths(salesRange, MOCK_TODAY).map(b => ({ label: b.label, value: Math.round(((wonByKey.get(b.key) ?? 0) / 1e6) * 10) / 10 })),
-    [salesRange, wonByKey],
+    () => lastNMonths(SALES_RANGE, MOCK_TODAY).map(b => ({ label: b.label, value: Math.round(((wonByKey.get(b.key) ?? 0) / 1e6) * 10) / 10 })),
+    [wonByKey],
   );
   const monthTargetM = Math.round((monthTarget / 1e6) * 10) / 10;
   // ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา: แท่งคู่รายเดือน (จำนวนรายการ ไม่ใช่บาท)
@@ -353,12 +354,9 @@ export default function DealerDashboard() {
         <div style={card}>
           <div style={hd}>
             <span style={title}>ยอดขายรายเดือน</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <MonthRangeToggle value={salesRange} onChange={setSalesRange} label="ช่วงเวลากราฟยอดขายรายเดือน" />
-              {more("/quotations")}
-            </span>
+            {more("/quotations")}
           </div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>ยอดปิดการขายแต่ละเดือน · {monthRangeSubtitle(salesRange, MOCK_TODAY)} · เส้นประ = เป้าหมายรายเดือน · ชี้ที่เดือนเพื่อดูตัวเลข</div>
+          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>ยอดปิดการขายแต่ละเดือน · {monthRangeSubtitle(SALES_RANGE, MOCK_TODAY)} · เส้นประ = เป้าหมายรายเดือน · ชี้ที่เดือนเพื่อดูตัวเลข</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <SalesLineChart data={salesData} target={monthTargetM} height={260}
               fmt={v => `฿${v.toFixed(1)}M`} targetLabel="เป้า/เดือน" />

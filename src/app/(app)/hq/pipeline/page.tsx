@@ -215,36 +215,32 @@ export default function SalesAnalyticsPage() {
   }, [quotes, dealers, allDealers.length, targets.annualTarget]);
 
   // ── Section 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — สลับมุมมองได้ 4 แบบ ──
+  // "อัตราแปลง" ที่เคยต่อท้ายแต่ละแถวถูกตัดออก (บอสสั่ง 17 ก.ค. 69) — มันคิดจากสถานะลีด
+  // (ถึงขั้นเสนอราคาขึ้นไป ÷ ลีดทั้งหมด) ไม่ใช่เลขคู่ "ลีด / ใบ" ที่โชว์อยู่ข้างหน้า คนอ่านเลยตีความผิด
+  // และ seed วนสถานะเท่า ๆ กันจนได้ 50% แทบทุกแถว ไม่มีสาระให้เทียบ
   const leadVsQuote = useMemo(() => {
     if (view === "month") {
       const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
-      const lM = Array(12).fill(0), qM = Array(12).fill(0), upM = Array(12).fill(0);
+      const lM = Array(12).fill(0), qM = Array(12).fill(0);
       leads.forEach(l => {
         const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
         lM[d.getMonth()]++;
-        if (QUOTED_UP.includes(l.status)) upM[d.getMonth()]++;
       });
       quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (d) qM[d.getMonth()]++; });
       return TH_ABBR.slice(a, b + 1).map((m, i) => ({
         key: m, label: m, a: lM[a + i], b: qM[a + i],
-        note: lM[a + i] ? `อัตราแปลง ${Math.round(upM[a + i] / lM[a + i] * 100)}%` : undefined,
       }));
     }
     const keyOf = (code: string) => view === "dealer" ? code
       : view === "region" ? (DEALER_META.get(code)?.region ?? "—")
       : (DEALER_META.get(code)?.province ?? "—");
-    // up = ลีดที่ไปถึงขั้น "เสนอราคา" ขึ้นไป — ใช้คิดอัตราแปลง (นิยามเดียวกับหน้าลูกค้าเป้าหมายทั้งเครือ)
-    const m = new Map<string, { a: number; b: number; up: number }>();
-    const bump = (k: string, f: "a" | "b" | "up") => { const r = m.get(k) ?? { a: 0, b: 0, up: 0 }; r[f]++; m.set(k, r); };
-    leads.forEach(l => {
-      bump(keyOf(l.dealerCode ?? ""), "a");
-      if (QUOTED_UP.includes(l.status)) bump(keyOf(l.dealerCode ?? ""), "up");
-    });
+    const m = new Map<string, { a: number; b: number }>();
+    const bump = (k: string, f: "a" | "b") => { const r = m.get(k) ?? { a: 0, b: 0 }; r[f]++; m.set(k, r); };
+    leads.forEach(l => bump(keyOf(l.dealerCode ?? ""), "a"));
     quotes.forEach(x => bump(keyOf(x.dealerCode), "b"));
     return [...m.entries()].map(([k, v]) => ({
       key: k, a: v.a, b: v.b,
       label: view === "dealer" ? `${k} – ${DEALER_META.get(k)?.name ?? k}` : view === "region" ? regionDisplay(k) : k,
-      note: v.a ? `อัตราแปลง ${Math.round(v.up / v.a * 100)}%` : undefined,
       onClick: view === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
     })).sort((x, y) => y.a - x.a);
   }, [view, leads, quotes, DEALER_META, timeRange, router]);

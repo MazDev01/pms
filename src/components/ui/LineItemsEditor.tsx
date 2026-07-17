@@ -12,6 +12,10 @@ const PRIMARY = "#003366";
 const BORDER = "#e5e7eb";
 const fmt = (n: number) => n.toLocaleString("th-TH");
 
+// หน่วยมาตรฐานของงานขายอาคารสำเร็จรูป — แคตตาล็อก HQ คิดราคาเป็น ตร.ม. เป็นหลัก
+// ที่เหลือคือหน่วยที่ใช้จริงตอนแตกรายการย่อย (งานเสริม/อุปกรณ์/เหมาทั้งหลัง)
+const UNIT_OPTIONS = ["ตร.ม.", "เมตร", "จุด", "ชุด", "ชิ้น", "งาน", "หลัง", "รายการ"];
+
 // showCatalog=false → ซ่อนทั้งปุ่ม "เลือกจากแคตตาล็อก" และปุ่มลบรายการ (บอสสั่ง)
 // ใช้ตอน BOQ ตั้งต้นมาจากแม่แบบของลูกค้าแล้ว — เพิ่มไม่ได้ก็ไม่ควรลบได้ ไม่งั้นลบแล้วเอากลับไม่ได้
 // ยังแก้ชื่อ/จำนวน/ราคาต่อหน่วยได้ตามปกติ
@@ -75,7 +79,15 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
               <tr key={i} style={{ borderTop: `1px solid #f1f5f9` }}>
                 <td style={{ padding: "5px 8px" }}><input style={inp} value={it.name} onChange={e => set(i, { name: e.target.value })} placeholder="ชื่อรายการ" /></td>
                 <td style={{ padding: "5px 6px" }}><input type="number" min={0} style={{ ...inp, textAlign: "right" }} value={it.qty || ""} onChange={e => set(i, { qty: Number(e.target.value) })} /></td>
-                <td style={{ padding: "5px 6px" }}><input style={inp} value={it.unit} onChange={e => set(i, { unit: e.target.value })} /></td>
+                {/* หน่วย = ดรอปดาวน์ (บอสสั่ง 17 ก.ค. 69: "ทำให้เปลี่ยนหน่วยได้") — เดิมเป็นช่องพิมพ์เปล่า ๆ ไม่มีตัวเลือก
+                    ใบเก่าที่หน่วยไม่อยู่ในลิสต์มาตรฐาน ให้แทรกค่าเดิมเป็นตัวเลือกแรก — ห้ามทำค่าที่บันทึกไว้หาย */}
+                <td style={{ padding: "5px 6px" }}>
+                  <select style={{ ...inp, cursor: "pointer", padding: "6px 4px" }} value={it.unit} onChange={e => set(i, { unit: e.target.value })} aria-label="หน่วย">
+                    {!it.unit && <option value="">— หน่วย —</option>}
+                    {it.unit && !UNIT_OPTIONS.includes(it.unit) && <option value={it.unit}>{it.unit}</option>}
+                    {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </td>
                 <td style={{ padding: "5px 6px" }}><input type="number" min={0} style={{ ...inp, textAlign: "right" }} value={it.unitPrice || ""} onChange={e => set(i, { unitPrice: Number(e.target.value) })} /></td>
                 <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>฿{fmt(it.qty * it.unitPrice)}</td>
                 <td style={{ padding: "5px 4px", textAlign: "center" }}>{showCatalog && <button type="button" onClick={() => del(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 3 }}><Trash2 size={13} /></button>}</td>

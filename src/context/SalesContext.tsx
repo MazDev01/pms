@@ -27,7 +27,7 @@ const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
 // ไม่งั้นเบราว์เซอร์ที่เคยเปิดจะอ่านของเก่าที่บันทึกไว้ทับตลอด แล้วมองไม่เห็นข้อมูลใหม่
 const K = {
   deals:        "sales_deals_v1",
-  leads:        "sales_leads_v1",        // v1 = ลีดชุดที่มี createdAt ครบทุกใบ
+  leads:        "sales_leads_v2",        // v2 = เติมพื้นที่ (area) ครบทุกใบ · v1 = ลีดชุดที่มี createdAt ครบทุกใบ
   customers:    "sales_customers_v1",
   quotations:   "sales_quotations_v1",
   appointments: "sales_appointments_v1", // v1 = นัดหมายชุดที่มี leadId
