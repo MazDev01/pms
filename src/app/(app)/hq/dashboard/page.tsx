@@ -449,10 +449,10 @@ export default function HQDashboard() {
     { label: "ลูกค้าทั้งเครือ", tip: "จำนวนลูกค้าทั้งหมดในเครือ", Icon: Users2, color: "#7C3AED", bg: "#F0EBFB", href: "/hq/customers", value: sc.customers.value, sub1: "ราย" },
     { label: "ดีลที่ปิดการขาย (Won)", tip: "จำนวนดีลที่ปิดการขายสำเร็จในช่วงเวลาที่เลือก", Icon: Trophy, color: "#D97706", bg: "#FEF0E6", href: "/hq/quotations", value: sc.won.value, sub1: "ดีล" },
   ];
-  const kSub: React.CSSProperties = { fontSize: "0.72rem", color: "var(--muted-foreground)" };
-  const kNum: React.CSSProperties = { fontSize: "1.15rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
+  const kSub: React.CSSProperties = { fontSize: "0.8rem", color: "var(--muted-foreground)" };
+  const kNum: React.CSSProperties = { fontSize: "1.25rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
   const kDetail = (href: string) => (
-    <button onClick={() => router.push(href)} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.72rem", fontWeight: 700, color: PRIMARY, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", marginTop: "auto" }}>
+    <button onClick={() => router.push(href)} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.8rem", fontWeight: 700, color: PRIMARY, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", marginTop: "auto" }}>
       ดูรายละเอียด <ChevronRight size={13} />
     </button>
   );
@@ -511,7 +511,7 @@ export default function HQDashboard() {
                   <ProgressRing pct={Math.round(wonValNum / (targets.annualTarget || 1) * 100)} size={50} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(wonValNum)}</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(wonValNum)}</div>
                   <div style={kSub}>ยอดขายปัจจุบัน</div>
                 </div>
                 {kDetail(k.href)}
@@ -573,7 +573,7 @@ export default function HQDashboard() {
                     <Donut segments={byCount} centerLabel="ตัวแทน" centerValue={`${totalDealers}`} size={140} />
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
                       {byCount.map(s => (
-                        <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
+                        <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.8rem" }}>
                           <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
                           <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
                           <span style={{ fontWeight: 800, color: "#1F2937" }}>{s.value}</span>
@@ -585,11 +585,11 @@ export default function HQDashboard() {
                   {/* ยอดขายตามภูมิภาค (bars ใต้โดนัท เหมือน "รายได้ตาม Plan")
                       แสดงครบทุกภาค — เดิม slice(0,3) ตัดทิ้ง 3 ภาคโดยไม่บอก (ขัดกฎ "ห้ามตัดเงียบ" ของโปรเจกต์) */}
                   <div style={{ borderTop: "1px solid #f0f4f8", marginTop: 16, paddingTop: 13 }}>
-                    <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 11 }}>ยอดขายตามภูมิภาค <span style={{ fontWeight: 400 }}>(ยอดสะสมทั้งปี · ทุกภาค)</span></div>
+                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 11 }}>ยอดขายตามภูมิภาค <span style={{ fontWeight: 400 }}>(ยอดสะสมทั้งปี · ทุกภาค)</span></div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
                       {byRev.map(s => (
                         <div key={s.label}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: 3 }}>
                             <span style={{ color: "#374151", fontWeight: 600 }}>{s.label}</span>
                             <span style={{ fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(s.revenue)}</span>
                           </div>
@@ -615,7 +615,7 @@ export default function HQDashboard() {
             <MonthRangeToggle value={barRange} onChange={setBarRange} label="ช่วงเวลากราฟลีด·ใบเสนอราคา·ปิดการขาย" />
           </div>
           {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
-          <div style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
+          <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
             จำนวนรายการต่อเดือน · {monthRangeSubtitle(barRange, APP_NOW)}
           </div>
           <div className="card-body" style={{ paddingTop: 4, flex: 1 }}>
@@ -634,7 +634,7 @@ export default function HQDashboard() {
             <MonthRangeToggle value={tgtRange} onChange={setTgtRange} label="ช่วงเวลากราฟเป้าหมายเทียบยอดขายจริง" />
           </div>
           {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
-          <div style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
+          <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
             หน่วย: ล้านบาท · {monthRangeSubtitle(tgtRange, APP_NOW)} · เป้ารายเดือน = เป้าทั้งปี ÷ 12
           </div>
           {/* ป้ายต้องตรงกับหัวการ์ด — ค่าเริ่มต้นของกราฟคือ "จริง"/"แผน" ซึ่งไม่ใช่คำที่หน้านี้ใช้ */}
@@ -648,28 +648,28 @@ export default function HQDashboard() {
       <div className="hq-row3c" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย Top 10</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
+            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
           <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 9 }}>
-            <div style={{ display: "flex", fontSize: "0.6rem", color: "var(--muted-foreground)", paddingLeft: 26, gap: 8 }}>
+            <div style={{ display: "flex", fontSize: "0.68rem", color: "var(--muted-foreground)", paddingLeft: 26, gap: 8 }}>
               <span style={{ flex: 1 }} /><span style={{ flex: "0 0 44px", textAlign: "right" }}>ยอดขาย</span><span style={{ flex: "0 0 34px", textAlign: "right" }}>% เป้า</span><span style={{ flex: "0 0 44px", textAlign: "right" }}>อัตราปิด</span>
             </div>
             {(() => { const maxRev = Math.max(...rankedWin.map(d => d.revenueW), 1); return rankedWin.slice(0, 10).map((d, i) => (
               <div key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 16, textAlign: "center", fontSize: "0.66rem", fontWeight: 700, color: "#6b7280", flexShrink: 0 }}>{i + 1}</span>
-                <span style={{ flex: "0 0 84px", fontSize: "0.68rem", fontWeight: 700, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name.replace("Benjamin ", "")}</span>
+                <span style={{ width: 16, textAlign: "center", fontSize: "0.74rem", fontWeight: 700, color: "#6b7280", flexShrink: 0 }}>{i + 1}</span>
+                <span style={{ flex: "0 0 84px", fontSize: "0.76rem", fontWeight: 700, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name.replace("Benjamin ", "")}</span>
                 <div style={{ flex: 1, height: 8, background: "var(--muted)", borderRadius: 999, overflow: "hidden", minWidth: 20 }}>
                   <div className="bar-grow" style={{ height: "100%", width: `${Math.round(d.revenueW / maxRev * 100)}%`, background: PRIMARY, borderRadius: 999 }} />
                 </div>
-                <span style={{ flex: "0 0 44px", fontSize: "0.68rem", fontWeight: 800, color: "#1F2937", textAlign: "right" }}>฿{(d.revenueW / 1e6).toFixed(1)}M</span>
-                <span style={{ flex: "0 0 34px", fontSize: "0.66rem", fontWeight: 700, color: PRIMARY, textAlign: "right" }}>{d.tpct}%</span>
-                <span style={{ flex: "0 0 44px", fontSize: "0.66rem", fontWeight: 700, color: "var(--muted-foreground)", textAlign: "right" }}>{d.convW === null ? "—" : `${d.convW}%`}</span>
+                <span style={{ flex: "0 0 44px", fontSize: "0.76rem", fontWeight: 800, color: "#1F2937", textAlign: "right" }}>฿{(d.revenueW / 1e6).toFixed(1)}M</span>
+                <span style={{ flex: "0 0 34px", fontSize: "0.74rem", fontWeight: 700, color: PRIMARY, textAlign: "right" }}>{d.tpct}%</span>
+                <span style={{ flex: "0 0 44px", fontSize: "0.74rem", fontWeight: 700, color: "var(--muted-foreground)", textAlign: "right" }}>{d.convW === null ? "—" : `${d.convW}%`}</span>
               </div>
             )); })()}
           </div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ยอดขายตามประเภทอาคาร</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
+            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
           {/* ใบนี้เป็นต้นแบบของ CategoryRows — แดชบอร์ดตัวแทนใช้คอมโพเนนต์ตัวเดียวกัน (ห้ามแยกมาร์กอัป) */}
           <div className="card-body" style={{ paddingTop: 4 }}>
             <CategoryRows
@@ -683,7 +683,7 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header">
             <div className="card-title">กิจกรรมล่าสุด</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>จากบันทึกการใช้งาน · ตามตัวกรองด้านบน</span>
+            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>จากบันทึกการใช้งาน · ตามตัวกรองด้านบน</span>
           </div>
           {/* กล่องเลื่อน: ตัวเนื้อเป็น absolute → ความสูงของรายการ "ไม่ถูกนับ" เป็นความสูงการ์ด
               จำเป็น เพราะแถวนี้เป็น grid + align-items: stretch ซึ่งคิดความสูงแถวจากการ์ดที่เนื้อสูงสุด
@@ -714,13 +714,13 @@ function GroupedBar({ months, series }: { months: string[]; series: { name: stri
                   style={{ width: 7, height: Math.max(2, Math.round((s.data[mi] ?? 0) / max * 140)), background: s.color, borderRadius: "3px 3px 0 0" }} />
               ))}
             </div>
-            <span style={{ fontSize: "0.6rem", color: "var(--muted-foreground)" }}>{mo}</span>
+            <span style={{ fontSize: "0.68rem", color: "var(--muted-foreground)" }}>{mo}</span>
           </div>
         ))}
       </div>
       <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
         {series.map(s => (
-          <span key={s.name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.64rem", color: "#374151" }}>
+          <span key={s.name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.72rem", color: "#374151" }}>
             <span style={{ width: 9, height: 9, borderRadius: 2, background: s.color }} />{s.name}
           </span>
         ))}
@@ -756,9 +756,9 @@ function StatusBars({ data }: { data: { label: string; color: string; count: num
     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 6, height: 168 }}>
       {data.map(s => (
         <div key={s.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 0 }}>
-          <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#1F2937" }}>{s.count}</span>
+          <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#1F2937" }}>{s.count}</span>
           <div style={{ width: "62%", maxWidth: 30, height: Math.max(4, Math.round(s.count / max * 118)), background: s.color, borderRadius: "6px 6px 0 0" }} />
-          <span style={{ fontSize: "0.6rem", color: "var(--muted-foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{s.label}</span>
+          <span style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{s.label}</span>
         </div>
       ))}
     </div>

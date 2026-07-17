@@ -27,7 +27,7 @@ import {
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown,
-  LayoutList, Columns3, AlarmClock, ChevronRight, Edit2, Ruler,
+  LayoutList, Columns3, AlarmClock, ChevronRight, Ruler,
 } from "lucide-react";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useSales } from "@/context/SalesContext";
@@ -196,6 +196,22 @@ function SortIcon({ field, sortKey, sortDir }: { field:string; sortKey:string; s
 }
 
 // ─── ภาพรวม (แก้ไขในตัว) — ฟอร์มแก้ไขข้อมูลลูกค้าเป้าหมายในแท็บภาพรวมของโมดัลรายละเอียด ─────
+// สไตล์ + Cell ต้องอยู่นอก OverviewEditor — ประกาศข้างในจะได้ "ฟังก์ชันตัวใหม่" ทุกเรนเดอร์
+// React ถือเป็นคนละคอมโพเนนต์ → unmount/mount ลูกใหม่ทุกครั้งที่พิมพ์ → ช่องกรอกหลุดโฟกัสหลังพิมพ์ 1 ตัวอักษร
+// ช่องกรอกไม่มีกรอบของตัวเอง (บอสสั่ง) — กรอบมีแค่ชั้นเดียวคือขอบแถว หน้าตาเหมือนตอนอ่าน
+const OV_INP: React.CSSProperties = { width:"100%", height:26, padding:"0 8px", borderRadius:6, border:"none", outline:"none", fontSize:"0.8rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"transparent", boxSizing:"border-box" };
+const OV_CELL: React.CSSProperties = { display:"flex", alignItems:"center", gap:10, padding:"5px 10px", border:"1px solid #eef1f5", borderRadius:9, background:"#fafbfc", minWidth:0 };
+const OV_CELL_LBL: React.CSSProperties = { fontSize:"0.7rem", color:"#8a929c", fontWeight:600, flexShrink:0 };
+function OvCell({ icon:Ic, label, children }:{ icon: typeof User; label:string; children:React.ReactNode }) {
+  return (
+    <div style={OV_CELL}>
+      <Ic size={14} color="#94a3b8" style={{ flexShrink:0 }} />
+      <span style={OV_CELL_LBL}>{label}</span>
+      <span style={{ flex:1, minWidth:0 }}>{children}</span>
+    </div>
+  );
+}
+
 function OverviewEditor({ lead, persons, onSave }: {
   lead: LeadRow; persons: string[]; onSave: (l: LeadRow) => void;
 }) {
@@ -206,6 +222,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     product: lead.product ?? catalog[0]?.name ?? "", status: lead.status,
     assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
     area: lead.area != null ? String(lead.area) : "",
+    project: lead.project ?? "",
     note: lead.note ?? "", lostReason: lead.lostReason ?? "", logo: lead.logo ?? "",
   });
   const [f, setF] = useState(seed);
@@ -226,34 +243,27 @@ function OverviewEditor({ lead, persons, onSave }: {
     f.product !== (lead.product ?? "") || f.status !== lead.status ||
     f.assigned !== (lead.assigned ?? "") || f.value !== (lead.value ?? "") ||
     f.area !== (lead.area != null ? String(lead.area) : "") ||
+    f.project !== (lead.project ?? "") ||
     f.note !== (lead.note ?? "") || f.lostReason !== (lead.lostReason ?? "") || f.logo !== (lead.logo ?? "");
   // ความคืบหน้า = แหล่งเดียวกับแท็บ "งาน/ความคืบหน้า" (LeadTasks) → เลขตรงกันทุกแท็บ
   const pct = lead.status === "PAID" ? 100 : lead.status === "CANCELLED" ? 0
     : taskProgress(lead.tasks?.length ? lead.tasks : buildLeadTasks());
 
-  const lbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:4 };
-  const inp: React.CSSProperties = { width:"100%", height:26, padding:"0 8px", borderRadius:6, border:"1px solid #e5e7eb", fontSize:"0.8rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
+  const inp = OV_INP;
 
   function save() {
     onSave({
       ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value),
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
       area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
+      project: f.project.trim() || undefined,
       lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined,
     });
   }
 
   // แก้ไข "ในที่เดิม" — ใช้แถวหน้าตาเดียวกับตอนอ่าน (ไอคอน + ป้าย + ค่า) ค่ากลายเป็นช่องกรอก
-  // ไม่เด้งป็อบอัพ (บอสสั่ง — ให้เหมือนหน้าลูกค้า)
-  const cell: React.CSSProperties = { display:"flex", alignItems:"center", gap:10, padding:"5px 10px", border:"1px solid #eef1f5", borderRadius:9, background:"#fafbfc", minWidth:0 };
-  const cellLbl: React.CSSProperties = { fontSize:"0.7rem", color:"#8a929c", fontWeight:600, flexShrink:0 };
-  const Cell = ({ icon:Ic, label, children }:{ icon: typeof User; label:string; children:React.ReactNode }) => (
-    <div style={cell}>
-      <Ic size={14} color="#94a3b8" style={{ flexShrink:0 }} />
-      <span style={cellLbl}>{label}</span>
-      <span style={{ flex:1, minWidth:0 }}>{children}</span>
-    </div>
-  );
+  // ไม่เด้งป็อบอัพ (บอสสั่ง — ให้เหมือนหน้าลูกค้า) · Cell/สไตล์อยู่นอกคอมโพเนนต์ (ดูคอมเมนต์ข้างบน)
+  const cell = OV_CELL, cellLbl = OV_CELL_LBL, Cell = OvCell;
 
   return (
     <div>
@@ -263,10 +273,14 @@ function OverviewEditor({ lead, persons, onSave }: {
           <div style={{ fontSize:"0.62rem", color:"#8a929c", fontWeight:700 }}>มูลค่าประเมิน</div>
           <input value={f.value} onChange={e=>set("value",e.target.value)} placeholder="฿1.4M"
             style={{ ...inp, width:170, marginTop:4, fontSize:"1rem", fontWeight:800, color:"#003366" }} />
-          <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
-            <select value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700 }}>
+          <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap", alignItems:"center" }}>
+            {/* สถานะลอยเดี่ยวนอกแถว — คงกรอบบางไว้ให้รู้ว่ากดได้ (กรอบที่ถอดคือกรอบซ้อนในแถวข้อมูล) */}
+            <select value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", height:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700, border:"1px solid #eef1f5", background:"#fafbfc" }}>
               {(Object.keys(leadStatusLabel) as LeadStatus[]).map(k => <option key={k} value={k}>{leadStatusLabel[k]}</option>)}
             </select>
+            {/* ป้ายความสำคัญ — ย้ายมาจากมุมมองอ่านเดิม (คิดจากมูลค่าที่บันทึกแล้ว ไม่ใช่ค่าที่กำลังพิมพ์) */}
+            {(() => { const pr = leadPriority(lead), pc = priorityColor[pr];
+              return <span style={{ padding:"3px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:pc.bg, color:pc.text }}>ความสำคัญ {priorityLabel[pr]}</span>; })()}
           </div>
         </div>
       </div>
@@ -278,6 +292,14 @@ function OverviewEditor({ lead, persons, onSave }: {
           <span style={cellLbl}>บริษัท</span>
           <span style={{ flex:1, minWidth:0 }}><input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></span>
         </div>
+        {/* ชื่อโครงการมีเฉพาะดีลที่สร้างจากลูกค้าเดิม — โชว์ให้แก้เมื่อมีจริงเท่านั้น (ลีดทั่วไปไม่มีฟิลด์นี้) */}
+        {(lead.project ?? "") !== "" && (
+          <div style={{ gridColumn:"1/-1", ...cell }}>
+            <FileText size={14} color="#94a3b8" style={{ flexShrink:0 }} />
+            <span style={cellLbl}>ชื่อโครงการ</span>
+            <span style={{ flex:1, minWidth:0 }}><input value={f.project} onChange={e=>set("project",e.target.value)} style={inp} /></span>
+          </div>
+        )}
         <Cell icon={User}    label="ผู้ติดต่อ"><input value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></Cell>
         <Cell icon={Phone}   label="โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Cell>
         <Cell icon={Mail}    label="อีเมล"><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" style={inp} /></Cell>
@@ -306,13 +328,16 @@ function OverviewEditor({ lead, persons, onSave }: {
             </select>
           </Cell>
         )}
+        {/* สองแถวนี้ระบบคำนวณ/ประทับเอง — โชว์ไว้ให้ครบเหมือนมุมมองอ่านเดิม แต่แก้ไม่ได้ */}
+        <Cell icon={MessageSquare} label="ติดต่อล่าสุด"><span style={{ display:"block", fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D", textAlign:"right" }}>{lastActivity(lead)}</span></Cell>
+        <Cell icon={CalendarClock} label="สร้างเมื่อ"><span style={{ display:"block", fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D", textAlign:"right" }}>{lead.createdAt || "—"}</span></Cell>
       </div>
 
       {/* หมายเหตุ — ตำแหน่งเดียวกับตอนอ่าน */}
       <div style={{ background:"#f7f9fc", border:"1px solid #eef1f5", borderRadius:10, padding:"10px 12px", marginTop:12 }}>
         <div style={{ fontSize:"0.62rem", color:"#9ca3af", fontWeight:700, marginBottom:4 }}>หมายเหตุ</div>
         <textarea value={f.note} onChange={e=>set("note",e.target.value)} rows={2} placeholder="รายละเอียดเพิ่มเติม…"
-          style={{ ...inp, background:"#fff", resize:"vertical", lineHeight:1.6 }} />
+          style={{ ...inp, height:"auto", resize:"vertical", lineHeight:1.6 }} />
       </div>
 
       {/* รูป/โลโก้ + ปุ่ม — บรรทัดเดียว กันการ์ดขยายตอนสลับโหมด */}
@@ -615,7 +640,6 @@ export default function LeadsPage() {
   // quick filter chips ถูกลบตามที่บอสสั่ง — state นี้ไม่มีใครตั้งค่าได้แล้ว จึงลบทิ้ง
   const [dTab, setDTab] = useState<"overview"|"tasks"|"quotation"|"timeline">("overview"); // แท็บใน drawer รายละเอียด
   const [showAddForm, setShowAddForm] = useState(false);
-  const [leadEdit, setLeadEdit] = useState(false); // ภาพรวม: อ่าน (false) / แก้ไขในที่เดิม (true) — ไม่เด้งป็อบอัพ
 
   // List pagination (LIST view only)
   const PAGE_SIZE = 10;
@@ -631,8 +655,7 @@ export default function LeadsPage() {
 
   // Panel state
   const [selectedLead, setSelectedLead] = useState<LeadRow|null>(null);
-  // ปิดโหมดแก้ไขเมื่อสลับไปลีดอื่น (กันฟอร์มค้างข้ามราย)
-  useEffect(() => { setLeadEdit(false); }, [selectedLead?.id]);
+  // (โหมดแก้ไข/อ่านถูกถอดแล้ว — OverviewEditor reseed เองเมื่อสลับลีดผ่าน useEffect ของมัน)
   const [activeTab, setActiveTab] = useState<"overview"|"tasks"|"report"|"activities"|"appts"|"quotation"|"files">("overview");
   const [editingField, setEditingField] = useState<string|null>(null);
   // Lead Detail (split layout) — refs สำหรับ quick action เลื่อนไปการ์ด + ปิดการขายไม่สำเร็จ (เลือกเหตุผล)
@@ -1616,61 +1639,8 @@ export default function LeadsPage() {
           <ReportEditor lead={c} onSave={saveLead} />
         );
 
-        // ── Tab: ภาพรวม (Overview) — อ่านง่าย ดูรวมๆ · แก้ไขผ่านปุ่ม (เปิดฟอร์ม) ──
-        const tabOverview = (() => {
-          const scO = leadStatusColor[c.status];
-          const priO = leadPriority(c);
-          const pcO = priorityColor[priO];
-          const facts: { icon: typeof User; label: string; value: string }[] = [
-            // ชื่อโครงการมีเฉพาะดีลที่สร้างจากลูกค้าเดิม (กรอกเองตอน "เพิ่มงานขายใหม่") — ลีดทั่วไปไม่มี
-            // จึงโชว์เมื่อมีจริงเท่านั้น ไม่ต้องแขวนแถว "—" ค้างไว้ทุกลีด
-            ...(c.project?.trim() ? [{ icon: Building2, label: "ชื่อโครงการ", value: c.project.trim() }] : []),
-            { icon: User,          label: "ผู้ติดต่อ",     value: c.contact || "—" },
-            { icon: Phone,         label: "โทรศัพท์",     value: c.phone || "—" },
-            { icon: Mail,          label: "อีเมล",        value: c.email || "—" },
-            { icon: MapPin,        label: "จังหวัด",      value: c.province || "—" },
-            { icon: Package,       label: "แม่แบบที่สนใจ", value: c.product || "—" },
-            { icon: Ruler,         label: "พื้นที่",        value: c.area != null ? `${c.area.toLocaleString()} ตร.ม.` : "—" },
-            { icon: Target,        label: "แหล่งที่มา",       value: c.source || "—" },
-            { icon: Users,         label: "ผู้รับผิดชอบ",     value: c.assigned || "—" },
-            { icon: MessageSquare, label: "ติดต่อล่าสุด",     value: lastActivity(c) },
-            { icon: CalendarClock, label: "สร้างเมื่อ",       value: c.createdAt || "—" },
-          ];
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* หัว: มูลค่า + ป้ายสถานะ/ความสำคัญ + ปุ่มแก้ไข */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: "0.62rem", color: "#8a929c", fontWeight: 700 }}>มูลค่าประเมิน</div>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#003366", fontVariantNumeric: "tabular-nums", lineHeight: 1.2 }}>{c.value || "—"}</div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                    <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: "0.65rem", fontWeight: 700, background: scO.bg, color: scO.text }}>{leadStatusLabel[c.status]}</span>
-                    <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: "0.65rem", fontWeight: 700, background: pcO.bg, color: pcO.text }}>ความสำคัญ {priorityLabel[priO]}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* รายละเอียด — แถวป้ายกำกับ (ไอคอน + หัวข้อ : ค่า) อ่านง่ายแบบต้นแบบ · 2 คอลัมน์ */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, borderTop: "1px solid #eef1f5", paddingTop: 14 }}>
-                {facts.map(f => (
-                  <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", border: "1px solid #eef1f5", borderRadius: 9, background: "#fafbfc", minWidth: 0 }}>
-                    <f.icon size={14} color="#94a3b8" style={{ flexShrink: 0 }} />
-                    <span style={{ fontSize: "0.7rem", color: "#8a929c", fontWeight: 600, flexShrink: 0 }}>{f.label}</span>
-                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2D2D2D", flex: 1, minWidth: 0, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.value}>{f.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* หมายเหตุ */}
-              {c.note && (
-                <div style={{ background: "#f7f9fc", border: "1px solid #eef1f5", borderRadius: 10, padding: "10px 12px" }}>
-                  <div style={{ fontSize: "0.62rem", color: "#9ca3af", fontWeight: 700, marginBottom: 4 }}>หมายเหตุ</div>
-                  <div style={{ fontSize: "0.78rem", color: "#4b5563", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{c.note}</div>
-                </div>
-              )}
-            </div>
-          );
-        })();
+        // แท็บภาพรวมแบบอ่านอย่างเดียว (tabOverview) ถูกลบ — การ์ด "ข้อมูลลูกค้า (Overview)"
+        // เรนเดอร์ OverviewEditor ตรง ๆ แล้ว (แก้ไขในที่เดิมได้ตลอด ไม่มีปุ่มสลับโหมด — บอสสั่ง 17 ก.ค. 69)
 
         // ── Tab: กิจกรรม (Activities) — ไทม์ไลน์ ไอคอนตามประเภท + empty state ──
         const ACT_ICON: Record<string, { Icon: typeof Phone; color: string; bg: string }> = {
@@ -1831,15 +1801,12 @@ export default function LeadsPage() {
                 {/* ── TAB: ภาพรวม ── */}
                 <div style={{ padding:16, display:dTab==="overview"?"flex":"none", flexDirection:"column", gap:14 }}>
                   <div style={cardStyle}>
+                    {/* แก้ไขได้ในที่เดิมตลอดเวลา — ปุ่มสลับโหมด "แก้ไขข้อมูล" ถูกถอดออก (บอสสั่ง 17 ก.ค. 69)
+                        ปุ่ม "บันทึกการแก้ไข" ท้ายการ์ดติดไฟเมื่อมีการแก้จริงเท่านั้น */}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                       <div style={{ ...secLabel, marginBottom:0 }}><User size={13} color="#003366" /> ข้อมูลลูกค้า (Overview)</div>
-                      <button onClick={() => setLeadEdit(v => !v)} className="btn btn-secondary btn-sm" style={{ color:"#003366", flexShrink:0 }}>
-                        {leadEdit ? "เสร็จ" : <><Edit2 size={13} /> แก้ไขข้อมูล</>}
-                      </button>
                     </div>
-                    {leadEdit
-                      ? <OverviewEditor lead={c} persons={personsList} onSave={l => { saveLead(l); setLeadEdit(false); }} />
-                      : tabOverview}
+                    <OverviewEditor lead={c} persons={personsList} onSave={saveLead} />
                   </div>
                 </div>
 

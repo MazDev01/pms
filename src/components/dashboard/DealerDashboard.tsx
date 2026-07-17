@@ -216,10 +216,10 @@ export default function DealerDashboard() {
   // ── styles ──
   const card: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: 24, boxShadow: "0 1px 2px rgba(16,40,80,.04)" };
   const hd: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 16, flexWrap: "nowrap" };
-  const title: React.CSSProperties = { fontSize: "0.85rem", fontWeight: 700, color: TEXT, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-  const sub: React.CSSProperties = { fontSize: "0.72rem", color: SUB };
+  const title: React.CSSProperties = { fontSize: "0.92rem", fontWeight: 700, color: TEXT, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+  const sub: React.CSSProperties = { fontSize: "0.8rem", color: SUB };
   // ตัวเลขบนการ์ด KPI — ค่าเดียวกับ kNum ของ /hq/pipeline เป๊ะ ๆ (การ์ด KPI ต้องหน้าตาเหมือนกันทุกหน้า)
-  const num: React.CSSProperties = { fontSize: "1.15rem", fontWeight: 800, color: TEXT, lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
+  const num: React.CSSProperties = { fontSize: "1.25rem", fontWeight: 800, color: TEXT, lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
   // กรอบการ์ด KPI — ใช้คลาส .card ร่วมกับหน้าอื่น (พื้น/ขอบ/มุม/เงา/ยกตอนชี้) แทน inline style เดิม
   // .dash-tile ติดไว้เพื่อกรอบโฟกัสตอนกดด้วยคีย์บอร์ด (.card ไม่มี) — transform ตรงกันทั้งคู่ ไม่ตีกัน
   const kpiCard: React.CSSProperties = {
@@ -241,7 +241,7 @@ export default function DealerDashboard() {
     marginLeft: -8, marginRight: -8, paddingLeft: 8, paddingRight: 8,
   };
   const more = (href: string) => (
-    <button onClick={() => router.push(href)} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "0.7rem", fontWeight: 700, color: SUB, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+    <button onClick={() => router.push(href)} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "0.78rem", fontWeight: 700, color: SUB, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
       ดูทั้งหมด <ChevronRight size={13} />
     </button>
   );
@@ -274,7 +274,7 @@ export default function DealerDashboard() {
   );
   // ข้อความชวนกดท้ายการ์ด KPI — ทั้งใบเป็นปุ่มแล้ว จึงเป็นแค่ป้าย ไม่ใช่ปุ่มซ้อนปุ่ม
   const detailHint = (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.72rem", fontWeight: 700, color: NAVY, marginTop: "auto" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.8rem", fontWeight: 700, color: NAVY, marginTop: "auto" }}>
       ดูรายละเอียด <ChevronRight size={13} />
     </span>
   );
@@ -305,7 +305,7 @@ export default function DealerDashboard() {
                   <ProgressRing pct={achievePct} size={50} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "1.05rem", fontWeight: 800, color: NAVY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{baht(ytdSales)}</div>
+                  <div style={{ fontSize: "1.15rem", fontWeight: 800, color: NAVY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{baht(ytdSales)}</div>
                   <div style={sub}>ยอดขายสะสมทั้งปี</div>
                 </div>
                 {detailHint}
@@ -317,7 +317,7 @@ export default function DealerDashboard() {
                     <KpiLabel label={k.label} tip={k.tip} />
                     <div style={{ ...num, marginTop: 6 }}>{k.value}</div>
                     <div style={{ ...sub, marginTop: 2 }}>{k.sub1}</div>
-                    {k.sub2 && <div style={{ fontSize: "1.05rem", fontWeight: 800, color: TEXT, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{k.sub2}</div>}
+                    {k.sub2 && <div style={{ fontSize: "1.15rem", fontWeight: 800, color: TEXT, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{k.sub2}</div>}
                   </div>
                   <IconBox Icon={k.Icon} color={k.color} bg={k.bg} />
                 </div>
@@ -361,7 +361,7 @@ export default function DealerDashboard() {
             <SalesLineChart data={salesData} target={monthTargetM} height={260}
               fmt={v => `฿${v.toFixed(1)}M`} targetLabel="เป้า/เดือน" />
           </div>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: "0.72rem", color: SUB, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: "0.8rem", color: SUB, flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 2, background: NAVY }} /> ยอดขาย</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: SUCCESS }} /> เดือนที่ถึงเป้า</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 2, background: "#EA580C" }} /> เป้าหมายรายเดือน {baht(monthTarget)}</span>
@@ -417,7 +417,7 @@ export default function DealerDashboard() {
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 168 }}>
                 {dealStatus.map(s => (
                   <button key={s.label} className="dash-row" onClick={() => router.push("/leads")} title={`ดูลูกค้าเป้าหมายขั้นตอน ${s.label}`}
-                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", whiteSpace: "nowrap", background: "none", border: "none", padding: "5px 8px", margin: "0 -8px", cursor: "pointer", fontFamily: "inherit", borderRadius: 8, textAlign: "left" }}>
+                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", whiteSpace: "nowrap", background: "none", border: "none", padding: "5px 8px", margin: "0 -8px", cursor: "pointer", fontFamily: "inherit", borderRadius: 8, textAlign: "left" }}>
                     <span style={{ width: 9, height: 9, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
                     <span style={{ flex: 1, color: TEXT, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
                     <span style={{ fontWeight: 800, color: TEXT, fontVariantNumeric: "tabular-nums" }}>{s.value}</span>
@@ -441,13 +441,13 @@ export default function DealerDashboard() {
                 <button key={l.id} className="dash-row" onClick={() => router.push(`/leads?open=${l.numId}`)} title={`เปิด ${l.company}`} style={rowBtn}>
                   <Thumb logo={l.logo} />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</span>
-                    <span style={{ display: "block", fontSize: "0.68rem", color: SUB }}>สนใจ: {l.product}</span>
-                    <span style={{ display: "block", fontSize: "0.68rem", color: DANGER, fontWeight: 700 }}>ไม่ได้ติดต่อ {daysSinceContact(l)} วัน</span>
+                    <span style={{ display: "block", fontSize: "0.86rem", fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</span>
+                    <span style={{ display: "block", fontSize: "0.76rem", color: SUB }}>สนใจ: {l.product}</span>
+                    <span style={{ display: "block", fontSize: "0.76rem", color: DANGER, fontWeight: 700 }}>ไม่ได้ติดต่อ {daysSinceContact(l)} วัน</span>
                   </span>
                   <span style={{ textAlign: "right", flexShrink: 0 }}>
-                    <span style={{ display: "block", fontSize: "0.65rem", color: SUB }}>มูลค่าโอกาส</span>
-                    <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 800, color: NAVY }}>{l.value}</span>
+                    <span style={{ display: "block", fontSize: "0.72rem", color: SUB }}>มูลค่าโอกาส</span>
+                    <span style={{ display: "block", fontSize: "0.88rem", fontWeight: 800, color: NAVY }}>{l.value}</span>
                   </span>
                 </button>
               ))}
@@ -466,10 +466,10 @@ export default function DealerDashboard() {
                     color={a.type === "follow_up" ? "#2563EB" : a.type === "presentation" ? "#EA580C" : "#7C3AED"}
                     bg={a.type === "follow_up" ? "#E8F0FE" : a.type === "presentation" ? "#FEF0E6" : "#F0EBFB"} />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{apptTypeLabel[a.type]} {a.company}</span>
-                    <span style={{ display: "block", fontSize: "0.68rem", color: SUB, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project}</span>
+                    <span style={{ display: "block", fontSize: "0.86rem", fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{apptTypeLabel[a.type]} {a.company}</span>
+                    <span style={{ display: "block", fontSize: "0.76rem", color: SUB, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project}</span>
                   </span>
-                  <span style={{ fontSize: "0.74rem", fontWeight: 700, color: SUB, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{a.time}</span>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: SUB, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{a.time}</span>
                 </button>
               ))}
             </div>
@@ -485,13 +485,13 @@ export default function DealerDashboard() {
                 <button key={q.id} className="dash-row" onClick={() => router.push("/quotations")} title={`เปิดใบเสนอราคา ${q.id}`} style={rowBtn}>
                   <IconBox Icon={FileText} color={NAVY} bg="#F1F5F9" />
                   <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: "0.76rem", fontWeight: 700, color: TEXT, fontFamily: "monospace" }}>{q.id}</span>
-                    <span style={{ display: "block", fontSize: "0.68rem", color: SUB, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.customer}</span>
-                    <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 800, color: NAVY }}>{q.total}</span>
+                    <span style={{ display: "block", fontSize: "0.84rem", fontWeight: 700, color: TEXT, fontFamily: "monospace" }}>{q.id}</span>
+                    <span style={{ display: "block", fontSize: "0.76rem", color: SUB, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.customer}</span>
+                    <span style={{ display: "block", fontSize: "0.86rem", fontWeight: 800, color: NAVY }}>{q.total}</span>
                   </span>
                   <span style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                     <span className="badge" style={{ background: sc.bg, color: sc.text }}>{quotationStatusLabel[q.status]}</span>
-                    <span style={{ fontSize: "0.65rem", color: SUB }}>{fmtISOToThai(q.date)}</span>
+                    <span style={{ fontSize: "0.72rem", color: SUB }}>{fmtISOToThai(q.date)}</span>
                   </span>
                 </button>
               ); })}
@@ -509,9 +509,9 @@ export default function DealerDashboard() {
                 <button key={i} className="dash-row" onClick={() => router.push(e.href)} title={`ไปที่ ${e.customer}`} style={rowBtn}>
                   <IconBox Icon={e.icon} color={e.color} bg={e.bg} />
                   <span style={{ minWidth: 0, flex: 1 }}>
-                    <span style={{ display: "block", fontSize: "0.76rem", fontWeight: 700, color: TEXT, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
-                    <span style={{ display: "block", fontSize: "0.68rem", color: SUB, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.customer}</span>
-                    <span style={{ display: "block", fontSize: "0.65rem", color: "#94A3B8", marginTop: 2 }}>{fmtISOToThai(e.date)}{e.time ? ` ${e.time}` : ""}</span>
+                    <span style={{ display: "block", fontSize: "0.84rem", fontWeight: 700, color: TEXT, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
+                    <span style={{ display: "block", fontSize: "0.76rem", color: SUB, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.customer}</span>
+                    <span style={{ display: "block", fontSize: "0.72rem", color: "#94A3B8", marginTop: 2 }}>{fmtISOToThai(e.date)}{e.time ? ` ${e.time}` : ""}</span>
                   </span>
                 </button>
               ))}

@@ -396,8 +396,8 @@ export function CategoryRows({
                 {icon}
               </span>
             )}
-            <span style={{ flex: 1, fontSize: "0.72rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
-            <span style={{ fontSize: "0.72rem", fontWeight: 800, color: NAVY, fontVariantNumeric: "tabular-nums" }}>{fmt(d.value)}</span>
+            <span style={{ flex: 1, fontSize: "0.8rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 800, color: NAVY, fontVariantNumeric: "tabular-nums" }}>{fmt(d.value)}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ flex: 1, height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>

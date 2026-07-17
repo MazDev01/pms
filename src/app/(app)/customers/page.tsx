@@ -35,7 +35,7 @@ import {
   Trash2,
   Calendar, FileText, StickyNote, Check, User, Paperclip, Eye, Hash, Printer,
   MapPin, Mail, Coins, Layers, TrendingUp, Percent, PhoneCall, CalendarClock,
-  Users, UserPlus, Package, ChevronRight, History as HistoryIcon, Pencil,
+  Users, UserPlus, Package, ChevronRight, History as HistoryIcon,
 } from "lucide-react";
 import { FilePreviewModal } from "@/components/ui/FilePreviewModal";
 
@@ -156,7 +156,7 @@ function printCustomer(c:CustomerRow, rows:{q:QuotationMock;template:string}[], 
     ["รหัสลูกค้า", code], ["ชื่อ-สกุล", esc(c.name)],
     ["เบอร์โทรศัพท์", esc(c.phone)], ["อีเมล", esc(c.email)], ["ที่อยู่", esc(c.address)],
     ["จังหวัด", esc(c.province)], ["แม่แบบ", esc(c.category)],
-    ["วันที่สมัคร", fmtDate(c.joinDate)], ["ผู้รับผิดชอบ", esc(c.owner)],
+    ["เป็นลูกค้าเมื่อ", fmtDate(c.joinDate)], ["ผู้รับผิดชอบ", esc(c.owner)],
     ["สถานะ", c.status==="active"?"ใช้งาน":"ไม่ใช้งาน"],
   ];
   const total = rows.reduce((s,r)=>s+r.q.totalValue,0);
@@ -274,6 +274,21 @@ const LIFECYCLE_META: Record<LifecycleType,{label:string; fg:string; bg:string}>
 type CustomerForm = Omit<CustomerRow,"id"|"initials"|"color"|"totalValue">;
 
 // ─── ภาพรวม (แก้ไขในตัว) — ฟอร์มแก้ไขข้อมูลลูกค้าในแท็บ "ข้อมูล" ของโมดัลรายละเอียด ───
+// สไตล์ + Row ต้องอยู่นอกคอมโพเนนต์ — ประกาศข้างในจะได้ "ฟังก์ชันตัวใหม่" ทุกเรนเดอร์
+// React ถือเป็นคนละคอมโพเนนต์ → unmount/mount ช่องกรอกใหม่ทุกครั้งที่พิมพ์ → โฟกัสหลุดหลังพิมพ์ 1 ตัวอักษร
+// ช่องกรอกไม่มีกรอบของตัวเอง (บอสสั่ง 17 ก.ค. 69 — มาตรฐานเดียวกับการ์ดภาพรวมหน้าลีด)
+const CU_INP: React.CSSProperties = { width:"100%", height:28, padding:"0 8px", borderRadius:6, border:"none", outline:"none", fontSize:"0.78rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"transparent", boxSizing:"border-box" };
+// แต่ละแถวมีกรอบ + พื้นจาง — โทนเดียวกับช่องข้อมูลหน้าลูกค้าเป้าหมาย (OV_CELL: #fafbfc / ขอบ #eef1f5)
+// บอสสั่ง 17 ก.ค. 69: "เพิ่มกรอบข้างหลังที่มีสีให้ดูง่าย" · โครง "ป้าย : ค่า" เดิมคงไว้ทุกช่อง
+const CU_ROW: React.CSSProperties = { display:"flex", gap:8, alignItems:"center", padding:"6px 10px", minWidth:0, background:"#fafbfc", border:"1px solid #eef1f5", borderRadius:9, marginBottom:6 };
+const CU_KEY: React.CSSProperties = { fontSize:"0.74rem", color:"#8a929c", flex:"0 0 96px" };
+const CU_COLON: React.CSSProperties = { fontSize:"0.74rem", color:"#c7ccd3", flexShrink:0 };
+function CuRow({ label, children }:{ label:string; children:React.ReactNode }) {
+  return (
+    <div style={CU_ROW}><span style={CU_KEY}>{label}</span><span style={CU_COLON}>:</span>
+      <span style={{ flex:1, minWidth:0 }}>{children}</span></div>
+  );
+}
 // สไตล์เดียวกับหน้าลูกค้าเป้าหมาย (OverviewEditor) — แก้ในหน้านี้เลย ไม่มีฟอร์มแยก
 function CustomerOverviewEditor({ customer, code, onSave }:{
   customer: CustomerRow; code: string; onSave: (f: CustomerForm)=>void;
@@ -295,18 +310,9 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
   }
   const dirty = (Object.keys(f) as (keyof CustomerForm)[]).some(k => (f[k] ?? "") !== ((customer as unknown as CustomerForm)[k] ?? ""));
 
-  // กะทัดรัด — ให้แถวตอนแก้ไขสูงใกล้เคียงตอนอ่าน (การ์ดจะได้ไม่ขยายตอนสลับโหมด)
-  const inp: React.CSSProperties = { width:"100%", height:28, padding:"0 8px", borderRadius:6, border:"1px solid #e5e7eb", fontSize:"0.78rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"#fff", boxSizing:"border-box" };
-
   // แก้ไข "ในฟอร์มเดิม" — ตาราง ป้าย : ค่า 2 คอลัมน์ ตำแหน่งเดียวกับตอนอ่าน (ค่ากลายเป็นช่องกรอก)
-  // ห้ามสลับไปฟอร์มคนละหน้าตา (บอสสั่ง)
-  const rowS: React.CSSProperties = { display:"flex", gap:8, alignItems:"center", padding:"3px 0", minWidth:0 };
-  const keyS: React.CSSProperties = { fontSize:"0.74rem", color:"#8a929c", flex:"0 0 96px" };
-  const colonS: React.CSSProperties = { fontSize:"0.74rem", color:"#c7ccd3", flexShrink:0 };
-  const Row = ({ label, children }:{ label:string; children:React.ReactNode }) => (
-    <div style={rowS}><span style={keyS}>{label}</span><span style={colonS}>:</span>
-      <span style={{ flex:1, minWidth:0 }}>{children}</span></div>
-  );
+  // ห้ามสลับไปฟอร์มคนละหน้าตา (บอสสั่ง) · Row/สไตล์อยู่นอกคอมโพเนนต์ (ดูคอมเมนต์ข้างบน)
+  const inp = CU_INP, keyS = CU_KEY, colonS = CU_COLON, Row = CuRow;
 
   return (
     <>
@@ -328,8 +334,11 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
             <select value={f.province} onChange={e=>set("province",e.target.value)} style={{ ...inp, cursor:"pointer" }}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
           </Row>
           <Row label="แม่แบบ"><TemplateSelect value={f.category} onChange={v=>set("category",v)} style={inp} /></Row>
-          <Row label="วันที่สมัคร"><input type="date" value={f.joinDate} onChange={e=>set("joinDate",e.target.value)} style={inp} /></Row>
+          {/* joinDate = วันที่เข้าระบบเป็นลูกค้า — ป้าย "วันที่สมัคร" เดิมชวนเข้าใจผิด (บอสสั่งเปลี่ยน 17 ก.ค. 69) */}
+          <Row label="เป็นลูกค้าเมื่อ"><input type="date" value={f.joinDate} onChange={e=>set("joinDate",e.target.value)} style={inp} /></Row>
           <Row label="ผู้รับผิดชอบ"><PersonPicker value={f.owner} onChange={v=>set("owner",v)} multiple /></Row>
+          {/* แถว "สถานะ" ถูกถอดออกจากการ์ด (บอสสั่ง 17 ก.ค. 69) — สถานะกลับเป็นข้อมูลแสดงผลอย่างเดียว
+              (เหมือนก่อนมีตัวแก้ในที่เดิม: ไม่เคยมี UI แก้สถานะมาก่อน ดรอปดาวน์นี้เพิ่งถูกเพิ่มแล้วถูกสั่งถอด) */}
         </div>
       </div>
       {/* รูป/โลโก้ + ปุ่ม อยู่บรรทัดเดียวกัน — กันการ์ดขยายตอนสลับมาโหมดแก้ไข */}
@@ -391,8 +400,8 @@ export default function CustomersPage(){
   const [sortDir, setSortDir]         = useState<SortDir>("asc");
   const [selected, setSelected]       = useState<CustomerRow|null>(null);
   const [custTab, setCustTab]         = useState<"overview"|"deals"|"quotation"|"timeline">("overview"); // แท็บ detail
-  const [custEdit, setCustEdit]       = useState(false); // ภาพรวม: อ่าน (false) / แก้ไข (true)
-  useEffect(() => { setCustTab("overview"); setCustEdit(false); }, [selected?.id]);
+  // (โหมดอ่าน/แก้ไขถูกถอดแล้ว — การ์ดข้อมูลลูกค้าแก้ในที่เดิมได้ตลอด · CustomerOverviewEditor reseed เองเมื่อสลับลูกค้า)
+  useEffect(() => { setCustTab("overview"); }, [selected?.id]);
   const [page, setPage]               = useState(1);
 
   // เปิดโมดัลจากพารามิเตอร์ ?open=N — ใช้ทั้งตอนโหลดหน้า (ลิงก์เดิม/deep link) และตอนค้นหาจาก Topbar หน้าเดิม
@@ -641,13 +650,7 @@ export default function CustomersPage(){
     setShowNewDeal(false);
     router.push(`/leads?open=${newDeal.numId}`);                     // เปิด Deal Detail ทันที (ไม่ต้องกลับหน้า Lead)
   }
-  function toggleStatus(id:number){
-    const target = data.find(c=>c.id===id);
-    if(!target) return;
-    const updated: CustomerRow = {...target,status:target.status==="active"?"inactive":"active"};
-    ctxUpdateCustomer(updated);
-    setSelected(p=>p&&p.id===id?updated:p);
-  }
+  // toggleStatus ถูกลบ — โค้ดตาย (นิยามไว้แต่ไม่มีใครเรียก) · สถานะลูกค้าเป็นข้อมูลแสดงผลอย่างเดียว
 
   const SortIcon = ({k}:{k:SortKey})=>sortKey===k
     ? (sortDir==="asc"?<ChevronUp size={11} style={{marginLeft:2}}/>:<ChevronDown size={11} style={{marginLeft:2}}/>)
@@ -977,57 +980,17 @@ export default function CustomersPage(){
               {/* ── ข้อมูลลูกค้า (แท็บแรก) = ข้อมูลลูกค้า + ตารางประวัติการปิดการขาย ── */}
               <div style={{ padding:16, display:custTab==="overview"?"flex":"none", flexDirection:"column", gap:14 }}>
                 <div style={cardStyle}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:custEdit?12:2}}>
+                  {/* แก้ไขได้ในที่เดิมตลอดเวลา — ปุ่มสลับโหมด "แก้ไขข้อมูล" ถูกถอดออก (บอสสั่ง 17 ก.ค. 69 · มาตรฐานเดียวกับหน้าลีด)
+                      หัวการ์ด (ยอดขายรวม + ป้ายแม่แบบ) เป็นค่าที่ระบบคำนวณ คงไว้เหนือฟอร์ม · สถานะย้ายไปเป็นดรอปดาวน์ในฟอร์ม */}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
                     <div style={{...secLabel,marginBottom:0}}><User size={13} color={PRIMARY}/> ข้อมูลลูกค้า</div>
-                    <button onClick={()=>setCustEdit(v=>!v)} style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:"0.68rem",fontWeight:700,color:PRIMARY,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>{custEdit?<>เสร็จ</>:<><Pencil size={12}/> แก้ไขข้อมูล</>}</button>
                   </div>
-                  {custEdit ? (
-                    <CustomerOverviewEditor customer={selected} code={custCode} onSave={saveInline} />
-                  ) : (
-                    <>
-                      <div style={{fontSize:"0.62rem",color:"#8a929c",fontWeight:700}}>ยอดขายรวม</div>
-                      <div style={{fontSize:"1.5rem",fontWeight:800,color:PRIMARY,fontVariantNumeric:"tabular-nums",lineHeight:1.2}}>{fmtMoney(totalSales)}</div>
-                      <div style={{display:"flex",gap:6,marginTop:8,marginBottom:12,flexWrap:"wrap"}}>
-                        {selected.category && <span style={{padding:"3px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"#eef3f8",color:PRIMARY}}>{selected.category}</span>}
-                      </div>
-                      {/* ป้าย : ค่า — 2 คอลัมน์ (รูปแบบตามที่บอสส่งมา) · ไม่มีข้อมูล = "—" */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px",borderTop:"1px solid #eef1f5",paddingTop:12}}>
-                        {([
-                          [
-                            { label:"รหัสลูกค้า",   value:custCode },
-                            { label:"ชื่อ-สกุล",    value:selected.name||"—" },
-                            { label:"เบอร์โทรศัพท์", value:selected.phone||"—" },
-                            { label:"อีเมล",       value:selected.email||"—" },
-                          ],
-                          [
-                            { label:"ที่อยู่",      value:selected.address||"—" },
-                            { label:"จังหวัด",     value:selected.province||"—" },
-                            { label:"แม่แบบ",      value:selected.category||"—" },
-                            { label:"วันที่สมัคร",  value:fmtDate(selected.joinDate) },
-                            { label:"ผู้รับผิดชอบ", value:selected.owner||"—" },
-                          ],
-                        ] as { label:string; value:string }[][]).map((col,ci)=>(
-                          <div key={ci} style={{display:"flex",flexDirection:"column"}}>
-                            {col.map(r=>(
-                              <div key={r.label} style={{display:"flex",gap:8,alignItems:"baseline",padding:"7px 0",minWidth:0}}>
-                                <span style={{fontSize:"0.74rem",color:"#8a929c",flex:"0 0 96px"}}>{r.label}</span>
-                                <span style={{fontSize:"0.74rem",color:"#c7ccd3",flexShrink:0}}>:</span>
-                                <span style={{fontSize:"0.8rem",fontWeight:700,color:"#2D2D2D",flex:1,minWidth:0,wordBreak:"break-word"}}>{r.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                        {/* สถานะ — แถวสุดท้ายฝั่งขวา (เป็น badge ไม่ใช่ข้อความ) */}
-                        <div style={{gridColumn:"2",display:"flex",gap:8,alignItems:"center",padding:"7px 0"}}>
-                          <span style={{fontSize:"0.74rem",color:"#8a929c",flex:"0 0 96px"}}>สถานะ</span>
-                          <span style={{fontSize:"0.74rem",color:"#c7ccd3",flexShrink:0}}>:</span>
-                          <span className="badge" style={{background:selected.status==="active"?"#e5faf0":"#f0f0f5",color:selected.status==="active"?"#059669":"#9ca3af"}}>
-                            {selected.status==="active"?"ใช้งาน":"ไม่ใช้งาน"}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <div style={{fontSize:"0.62rem",color:"#8a929c",fontWeight:700}}>ยอดขายรวม</div>
+                  <div style={{fontSize:"1.5rem",fontWeight:800,color:PRIMARY,fontVariantNumeric:"tabular-nums",lineHeight:1.2}}>{fmtMoney(totalSales)}</div>
+                  <div style={{display:"flex",gap:6,marginTop:8,marginBottom:12,flexWrap:"wrap"}}>
+                    {selected.category && <span style={{padding:"3px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"#eef3f8",color:PRIMARY}}>{selected.category}</span>}
+                  </div>
+                  <CustomerOverviewEditor customer={selected} code={custCode} onSave={saveInline} />
                 </div>
 
                 {/* ประวัติการปิดการขาย — ตารางพร้อมรูปแม่แบบ + แถวรวมมูลค่า

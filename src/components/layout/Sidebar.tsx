@@ -191,19 +191,21 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
           style={{ width: "100%", color: "#dc2626", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
           <LogOut size={16} /> <span style={{ flex: 1, textAlign: "left" }}>ออกจากระบบ</span>
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, padding: "14px 8px 4px", borderTop: "1px solid var(--border)" }}>
+        {/* ขนาดต้องพอดีกับแถบข้างตัวแทนที่กว้างแค่ 200px — อวตาร 46px + ฟอนต์ 0.82/0.74
+            เคยกินที่จนชื่อโดนตัดเหลือ "เชียงใหม่ส…" และป้ายบทบาทพับสองบรรทัด (บอสสั่งปรับ 17 ก.ค. 69) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 6, padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
           {profile?.avatar
             /* eslint-disable-next-line @next/next/no-img-element */
-            ? <img src={profile.avatar} alt="" style={{ width: 46, height: 46, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-            : <span style={{ width: 46, height: 46, borderRadius: "50%", flexShrink: 0, background: "var(--primary)", color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.15rem", fontWeight: 900 }}>
+            ? <img src={profile.avatar} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+            : <span style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: "var(--primary)", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 900 }}>
                 {(displayName || "?").trim().charAt(0)}
               </span>}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</div>
-            <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)", fontWeight: 600, marginTop: 1 }}>{isHQ ? "เจ้าของแพลตฟอร์ม" : "เจ้าของบัญชีตัวแทน"}</div>
+            <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={displayName}>{displayName}</div>
+            <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", fontWeight: 600, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isHQ ? "เจ้าของแพลตฟอร์ม" : "เจ้าของบัญชีตัวแทน"}</div>
           </div>
-          <Crown size={18} color="#e11d48" fill="#e11d48" strokeWidth={1.5} style={{ flexShrink: 0 }} />
+          <Crown size={15} color="#e11d48" fill="#e11d48" strokeWidth={1.5} style={{ flexShrink: 0 }} />
         </div>
       </div>
     </aside>
