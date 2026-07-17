@@ -2,20 +2,20 @@
 
 // ─── ฐานข้อมูลลูกค้าทั้งเครือ (Customer Database — หลังปิดการขาย) ──────────────────
 // หน้า /hq/customers เป็น "ฐานข้อมูลลูกค้าหลังปิดการขาย" ไม่ใช่ pipeline
-// → ข้อมูลอาคาร/วันส่งมอบ/ประกัน ทั้งหมด derive จาก "ใบเสนอราคาที่ปิดการขายได้" เท่านั้น
+// → ข้อมูลอาคาร/วันส่งมอบ ทั้งหมด derive จาก "ใบเสนอราคาที่ปิดการขายได้" เท่านั้น
 //
 // แหล่งข้อมูล (ไม่มี seed ใหม่ ไม่มีการกุค่า):
 //   ลูกค้า        = useNetworkCustomers()   (live CNX + seed สาขาอื่น)
 //   ใบเสนอราคา    = useNetworkQuotations()  (live CNX + seed สาขาอื่น)
 //   จับคู่ด้วย     ชื่อลูกค้า + รหัสตัวแทน  (ต้องตรงทั้งคู่ กันข้ามสาขาชื่อซ้ำ)
-//   วันส่งมอบ/ประกัน = warranty.ts (วันปิดการขาย + ระยะส่งมอบ → +10 ปี)
+//   วันส่งมอบ     = delivery.ts (วันปิดการขาย + ระยะส่งมอบ)
 //
-// ลูกค้าที่ไม่มีใบปิดการขายจับคู่ได้ → ไม่มีอาคาร/ส่งมอบ/ประกัน = null → หน้าแสดง "—"
+// ลูกค้าที่ไม่มีใบปิดการขายจับคู่ได้ → ไม่มีอาคาร/ส่งมอบ = null → หน้าแสดง "—"
 // (ห้ามเดาแทน — ลูกค้า seed หลายรายมี dealsWon แต่ไม่มีใบในระบบ ถือว่าไม่มีข้อมูล)
 import { useMemo } from "react";
 import { mainTemplateOf, type HQCustomer, type HQQuotation } from "@/lib/mock";
 import { useNetworkCustomers, useNetworkQuotations } from "@/lib/useNetworkData";
-import { warrantyOf, deliveryDateOf, parseThaiDate, TODAY, type Warranty } from "@/lib/warranty";
+import { deliveryDateOf, parseThaiDate } from "@/lib/delivery";
 
 // ─── ภาค (ข้อเท็จจริงทางภูมิศาสตร์ — ไม่ใช่ข้อมูลธุรกิจที่กุขึ้น) ────────────────────
 export const REGIONS = ["เหนือ", "ตะวันออกเฉียงเหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้"] as const;
@@ -44,7 +44,6 @@ export type PurchasedBuilding = {
   wonDate: string;          // วันปิดการขาย (ไทย)
   wonAt: Date | null;
   deliveredAt: Date | null; // วันส่งมอบ = วันปิดการขาย + ระยะส่งมอบ
-  warranty: Warranty | null;
 };
 
 export type CustomerDbRow = HQCustomer & {
@@ -54,22 +53,10 @@ export type CustomerDbRow = HQCustomer & {
   templates: string[];          // แม่แบบย่อยที่ซื้อ (ไม่ซ้ำ)
   /** วันส่งมอบล่าสุด — ลูกค้าซื้อหลายอาคารจะยึดอาคารที่ส่งมอบทีหลังสุด */
   deliveredAt: Date | null;
-  /** ประกันของอาคารที่ส่งมอบล่าสุด */
-  warranty: Warranty | null;
   lastPurchase: string | null;  // วันปิดการขายล่าสุด (ไทย)
   lastPurchaseAt: Date | null;
   isRepeat: boolean;            // ซื้อซ้ำ = มีอาคารที่ซื้อแล้วมากกว่า 1
 };
-
-/** ประกันใกล้หมด = ยังไม่หมด แต่เหลือไม่ถึง 12 เดือน */
-export function isWarrantyExpiringSoon(w: Warranty | null): boolean {
-  if (!w || w.status !== "active") return false;
-  const exp = parseThaiDate(w.expiry);
-  if (!exp) return false;
-  const limit = new Date(TODAY);
-  limit.setFullYear(limit.getFullYear() + 1);
-  return exp <= limit;
-}
 
 const buildingOf = (q: HQQuotation): PurchasedBuilding => {
   const product = q.productLine ?? "";
@@ -83,7 +70,6 @@ const buildingOf = (q: HQQuotation): PurchasedBuilding => {
     wonDate: q.createdAt,
     wonAt: parseThaiDate(q.createdAt),
     deliveredAt: deliveryDateOf(q.createdAt, q.deliveryTime),
-    warranty: warrantyOf(q.createdAt, q.deliveryTime),
   };
 };
 
@@ -126,7 +112,6 @@ export function useCustomerDb(): CustomerDbRow[] {
         buildingTypes: [...new Set(buildings.map(b => b.buildingType).filter(Boolean))],
         templates: [...new Set(buildings.map(b => b.template).filter((t): t is string => !!t))],
         deliveredAt: latest?.deliveredAt ?? null,
-        warranty: latest?.warranty ?? null,
         lastPurchase: lastBuy?.wonDate ?? null,
         lastPurchaseAt: lastBuy?.wonAt ?? null,
         isRepeat: buildings.length > 1,

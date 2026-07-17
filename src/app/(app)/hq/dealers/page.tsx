@@ -7,9 +7,8 @@ import { usePersistentState } from "@/lib/usePersistentState";
 import { useRole } from "@/context/RoleContext";
 import { useAuditLogger } from "@/lib/useAudit";
 import { ExportMenu } from "@/components/ui/ExportMenu";
-import { CountUp } from "@/components/ui/CountUp";
 import { useRouter } from "next/navigation";
-import { Plus, Search, X, Copy, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock } from "lucide-react";
+import { Plus, Search, X, Copy, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase } from "lucide-react";
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
@@ -119,6 +118,14 @@ function genCredentials(code: string): DealerCredentials {
   return { email: `${code.toLowerCase()}@partner-agent.co.th`, password: `PEB-${code}-${digits}` };
 }
 
+// รหัสผ่านใหม่ตอนรีเซ็ต — deterministic (ไม่สุ่ม) เดโมจึงทวนซ้ำได้
+// nonce = ความยาวรหัสเดิม → กดรีเซ็ตซ้ำได้รหัสใหม่เรื่อย ๆ ไม่วนกลับมาซ้ำของเดิม
+// ฟอร์แมตเดียวกับ genCredentials: PEB-{รหัส}-{4 หลัก}
+function genResetPassword(code: string, nonce: number): string {
+  const sum = code.split("").reduce((s, c) => s + c.charCodeAt(0), 0) + nonce * 7;
+  return `PEB-${code}-${1000 + (sum % 9000)}`;
+}
+
 // ── Main page ───────────────────────────────────────────────────
 
 export default function HQDealersPage() {
@@ -140,7 +147,8 @@ export default function HQDealersPage() {
   // ผู้ใช้แก้ช่องเป้าเองหรือยัง — ถ้ายัง เปลี่ยนภาคจะเติมค่าเริ่มต้นตามภาคให้ (โหมดเพิ่มใหม่เท่านั้น)
   const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
-  const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials } | null>(null);
+  // โมดัลเดียวใช้ 2 กรณี — สร้างตัวแทนใหม่ / รีเซ็ตรหัสผ่าน · ข้อความต้องตรงกับสิ่งที่เพิ่งเกิดจริง
+  const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials; mode: "created" | "reset" } | null>(null);
   const [viewCredsDealer, setViewCredsDealer] = useState<DealerRow | null>(null);
   const [entering, setEntering] = useState<string | null>(null);
   const [selectedDealer, setSelectedDealer] = useState<DealerRow | null>(null);
@@ -186,7 +194,7 @@ export default function HQDealersPage() {
       setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueActual: 0, revenueTarget: form.revenueTarget, winRate: 0, activeProjects: 0, onTimePct: 0, status: form.status, credentials: creds }]);
       logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
       setShowForm(false);
-      setCredsModal({ name: form.name.trim(), creds });
+      setCredsModal({ name: form.name.trim(), creds, mode: "created" });
     }
   }
 
@@ -208,6 +216,16 @@ export default function HQDealersPage() {
     router.push("/dashboard");
   }
 
+  // ออกรหัสผ่านใหม่ให้ตัวแทน แล้วเปิดโมดัลคัดลอกรหัสใหม่ไปแจ้งต่อ
+  function resetPassword(d: DealerRow) {
+    if (!confirm(`ออกรหัสผ่านใหม่ให้ "${d.name}"?\nรหัสเดิมจะใช้เข้าระบบไม่ได้ทันที`)) return;
+    const creds: DealerCredentials = { email: d.credentials.email, password: genResetPassword(d.code, d.credentials.password.length) };
+    setDealers(prev => prev.map(x => x.id === d.id ? { ...x, credentials: creds } : x));
+    logAudit("รีเซ็ตรหัสผ่านตัวแทน", `${d.code} · ${d.name}`);
+    setViewCredsDealer(null);
+    setCredsModal({ name: d.name, creds, mode: "reset" });  // ใช้โมดัลคัดลอกรหัสตัวเดียวกับตอนสร้างตัวแทน
+  }
+
   return (
     <div className="erp">
       {/* Header */}
@@ -225,42 +243,32 @@ export default function HQDealersPage() {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="stat-grid">
-        <div className="stat-card">
-          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#003366", borderRadius: "0 4px 4px 0" }} />
-          <div className="stat-label">ตัวแทนทั้งหมด</div>
-          <div className="stat-value" style={{ color: "#003366" }}><CountUp value={`${dealers.length} ตัวแทน`} /></div>
-          <div className="stat-delta delta-up">เปิดใช้งาน {active.length} ตัวแทน</div>
-        </div>
-        <div className="stat-card">
-          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#059669", borderRadius: "0 4px 4px 0" }} />
-          <div className="stat-label">รายได้รวม</div>
-          <div className="stat-value" style={{ color: "#059669" }}><CountUp value={`฿${(totalRevenue / 1_000_000).toFixed(1)}M`} /></div>
-          <div className="stat-delta" style={{ color: totalPct >= 100 ? "#059669" : "#f59e0b" }}>
-            {totalPct}% ของเป้า ฿{(totalTarget / 1_000_000).toFixed(0)}M
+      {/* ── KPI 4 ใบ — มาตรฐานเดียวกับหน้า HQ อื่นทั้งหมด (แดชบอร์ด · ภาพรวมยอดขาย · ใบเสนอราคา · ลูกค้า) ──
+          เดิมหน้านี้ใช้ .stat-card ของเก่า: แถบสีซ้าย + ตัวเลขสีใหญ่ + หน่วยติดในตัวเลข ("10 ตัวแทน")
+          ซึ่งเป็นที่เดียวในระบบที่ทำแบบนั้น · .stat-grid ยังไม่มี breakpoint ด้วย (จอแคบบีบ 4 ใบค้าง)
+          กติกาของ .hq-kpi4: ป้าย → ตัวเลข (เข้ม ไม่ใส่สี) → หน่วย/บริบท · ไอคอนในกล่องสีจางมุมขวา */}
+      <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
+        {([
+          { label: "ตัวแทนทั้งหมด", value: `${dealers.length}`, sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
+          { label: "รายได้รวม", value: `฿${(totalRevenue / 1_000_000).toFixed(1)}M`, sub: `${totalPct}% ของเป้า ฿${(totalTarget / 1_000_000).toFixed(0)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
+          { label: "โอกาสการขายทั้งหมด", value: `${totalProjects}`, sub: `${active.filter(d => d.activeProjects > 0).length} ตัวแทนมีงาน`, Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
+          { label: "ติดตามตรงเวลา", value: `${avgOnTime}%`, sub: `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยทุกตัวแทน`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
+        ] as const).map(t => (
+          <div key={t.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.label}</div>
+              <div style={{ fontSize: "1.7rem", fontWeight: 800, color: "#1F2937", marginTop: 7, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t.value}</div>
+              <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", marginTop: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.sub}</div>
+            </div>
+            <span style={{ width: 36, height: 36, borderRadius: 10, background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <t.Icon size={18} color={t.color} strokeWidth={2.1} />
+            </span>
           </div>
-        </div>
-        <div className="stat-card">
-          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#f59e0b", borderRadius: "0 4px 4px 0" }} />
-          <div className="stat-label">โอกาสการขายทั้งหมด</div>
-          <div className="stat-value" style={{ color: "#f59e0b" }}><CountUp value={`${totalProjects} โอกาสการขาย`} /></div>
-          <div className="stat-delta" style={{ color: "#6b7280" }}>
-            {active.filter(d => d.activeProjects > 0).length} ตัวแทนมีงาน
-          </div>
-        </div>
-        <div className="stat-card">
-          <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#003366", borderRadius: "0 4px 4px 0" }} />
-          <div className="stat-label">ติดตามตรงเวลา</div>
-          <div className="stat-value" style={{ color: "#003366" }}><CountUp value={`${avgOnTime}%`} /></div>
-          <div className="stat-delta" style={{ color: avgOnTime >= 85 ? "#059669" : avgOnTime >= 70 ? "#f59e0b" : "#dc2626" }}>
-            {avgOnTime >= 85 ? "↑ ดี" : avgOnTime >= 70 ? "— พอใช้" : "↓ ต้องปรับปรุง"} เฉลี่ยทุกตัวแทน
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Toolbar — ค้นหา + ตัวแทน/ภาค/สถานะ รวมแถวเดียว (เหมือนหน้าอื่นทั้งระบบ) */}
-      <div className="card" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
+      <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
         <div className="search-bar">
           <Search size={13} color="#6b7280" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาตัวแทน..." />
@@ -433,20 +441,24 @@ export default function HQDealersPage() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ ...CARD, width: 400, maxWidth: "100%" }}>
             <div style={{ padding: "24px 20px 18px", textAlign: "center" }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#e5faf0", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                <Check size={22} color="#059669" />
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: credsModal.mode === "reset" ? "#fef3cd" : "#e5faf0", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                {credsModal.mode === "reset" ? <Key size={22} color="#b45309" /> : <Check size={22} color="#059669" />}
               </div>
-              <h3 style={{ margin: "0 0 4px", fontWeight: 800, color: "#2D2D2D" }}>สร้างตัวแทนสำเร็จ!</h3>
+              <h3 style={{ margin: "0 0 4px", fontWeight: 800, color: "#2D2D2D" }}>
+                {credsModal.mode === "reset" ? "รีเซ็ตรหัสผ่านแล้ว" : "สร้างตัวแทนสำเร็จ!"}
+              </h3>
               <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: 0 }}>{credsModal.name}</p>
             </div>
             <div style={{ padding: "0 20px 20px" }}>
               <div style={{ background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
                 <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>รหัสเข้าสู่ระบบตัวแทน</div>
                 <CopyField label="อีเมล" value={credsModal.creds.email} />
-                <CopyField label="รหัสผ่านเริ่มต้น" value={credsModal.creds.password} />
+                <CopyField label={credsModal.mode === "reset" ? "รหัสผ่านใหม่" : "รหัสผ่านเริ่มต้น"} value={credsModal.creds.password} />
               </div>
               <div style={{ background: "#fef3cd", border: "1px solid #f59e0b30", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: "0.72rem", color: "#f59e0b", fontWeight: 600 }}>
-                แจ้งรหัสผ่านให้ตัวแทนและแนะนำให้เปลี่ยนรหัสหลังเข้าครั้งแรก
+                {credsModal.mode === "reset"
+                  ? "รหัสเดิมใช้ไม่ได้แล้ว — แจ้งรหัสใหม่ให้ตัวแทนทันที"
+                  : "แจ้งรหัสผ่านให้ตัวแทนและแนะนำให้เปลี่ยนรหัสหลังเข้าครั้งแรก"}
               </div>
               <button onClick={() => setCredsModal(null)} className="btn btn-primary btn-md" style={{ width: "100%", justifyContent: "center" }}>
                 รับทราบ
@@ -602,6 +614,17 @@ export default function HQDealersPage() {
               <CopyField label="รหัสผ่าน" value={viewCredsDealer.credentials.password} />
               <div style={{ fontSize: "0.72rem", color: "#6b7280", background: "#f0f4f8", borderRadius: 8, padding: "8px 12px", marginTop: 4 }}>
                 ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
+              </div>
+              {/* ย้ายมาจากแท็บ "ตัวแทนจำหน่าย" ในหน้าตั้งค่า (แท็บนั้นถูกยุบ — ข้อมูลซ้ำกับหน้านี้ทั้งใบ)
+                  มีผลทันที ไม่ผ่านปุ่มบันทึก · ลงบันทึกการใช้งานทุกครั้ง เพราะเป็นการแตะบัญชีคนอื่น */}
+              <button onClick={() => resetPassword(viewCredsDealer)}
+                style={{ width: "100%", marginTop: 12, padding: "9px", borderRadius: 9, border: "1px solid #fecaca",
+                  background: "#fff", color: "#dc2626", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                <Key size={13} /> รีเซ็ตรหัสผ่าน
+              </button>
+              <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 6, textAlign: "center" }}>
+                รหัสเดิมจะใช้ไม่ได้ทันที — ต้องแจ้งรหัสใหม่ให้ตัวแทน
               </div>
             </div>
           </div>

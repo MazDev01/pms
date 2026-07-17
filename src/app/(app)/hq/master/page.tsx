@@ -239,7 +239,7 @@ export default function HQMasterPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="card" style={{ padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div className="card hq-sticky-filter" style={{ padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div className="search-bar">
           <Search size={13} color={MUTED} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาแม่แบบ..." />

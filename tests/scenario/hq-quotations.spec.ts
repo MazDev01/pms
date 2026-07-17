@@ -82,31 +82,6 @@ test("[ux·hq] คอลัมน์/ตัวกรองจังหวัด 
   await expect(page.getByLabel("จังหวัดตัวแทน")).toBeVisible();
 });
 
-// ช่วงมูลค่าต้องแบ่งไม่ทับกันและไม่ตกหล่น — ผลรวมทุกช่วง = ทั้งหมด
-test("[ux·hq] ตัวกรองช่วงมูลค่าแบ่งครบ ไม่นับซ้ำ", async ({ page }) => {
-  await open(page, "hq", "/hq/quotations");
-  await assertHealthyPage(page, "ใบเสนอราคาทั้งเครือ"); // รอหน้าพร้อมก่อน — กันอ่านตอน React ยังไม่ hydrate
-  // จำนวนใบอ่านจากป้าย "N ใบ" ข้างช่องค้นหา (อัปเดตตามตัวกรองทันที)
-  const shown = page.locator(".hq-sticky-filter").getByText(/^\d+ ใบ$/).first();
-  const total = async () => parseInt((await shown.innerText()).replace(" ใบ", ""), 10);
-
-  await expect(shown).toBeVisible();
-  const all = await total();
-  expect(all, "ต้องมีใบเสนอราคาให้ตรวจ").toBeGreaterThan(0);
-
-  let sum = 0;
-  for (const band of ["lt1m", "1m-3m", "3m-5m", "5m-10m", "gte10m"]) {
-    // กลับไป "ทุกช่วงมูลค่า" ก่อนทุกครั้ง → จำนวนเด้งกลับเป็น all แล้วค่อยเลือกช่วงถัดไป
-    // ทำให้รอได้แน่ ๆ ว่า "ตัวกรองมีผลแล้ว" = ตัวเลขนิ่งและไม่เท่ากับ all ค้างจากรอบก่อน
-    await page.getByLabel("ช่วงมูลค่า").selectOption("all");
-    await expect.poll(() => total(), { timeout: 5_000 }).toBe(all);
-    await page.getByLabel("ช่วงมูลค่า").selectOption(band);
-    // ไม่มีช่วงไหนกินทั้งหมด → ตัวเลขต้องขยับออกจาก all เสมอ ใช้เป็นสัญญาณว่า "กรองแล้วจริง"
-    await expect.poll(() => total(), { timeout: 5_000 }).not.toBe(all);
-    sum += await total();
-  }
-  expect(sum, "ผลรวมทุกช่วงมูลค่าต้องเท่ากับใบทั้งหมด (ไม่ทับกัน/ไม่ตกหล่น)").toBe(all);
-});
 
 // HQ ดูอย่างเดียว — ไม่มีสร้าง/แก้ไข/ลบ/อนุมัติ
 test("[ux·hq] ไม่มีปุ่มสร้าง/แก้ไข/ลบ/อนุมัติ มีแต่ดู", async ({ page }) => {

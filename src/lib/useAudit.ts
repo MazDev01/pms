@@ -5,6 +5,7 @@
 // บันทึกผ่าน useAuditLogger() ในจุด mutation · ดูผ่านหน้า /hq/audit (useAuditEntries)
 import { useCallback, useEffect, useState } from "react";
 import { useRole } from "@/context/RoleContext";
+import { APP_NOW } from "@/context/FilterContext";
 
 export type AuditEntry = { id: number; user: string; role: string; action: string; target: string; at: string };
 const KEY = "hq_audit_log_v1";
@@ -25,10 +26,14 @@ export function loadAudit(): AuditEntry[] {
   try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s) as AuditEntry[]; } catch {}
   return [...SEED];
 }
+// ประทับ "วันนี้" ของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง — กติกาเดียวกับทั้งระบบ
+// เดิมใช้ new Date() → รายการที่เพิ่งบันทึกได้วันจริง (เช่น 17 ก.ค.) ซึ่งอยู่นอกช่วงตัวกรองเวลาของ /hq/audit
+// (ช่วงกว้างสุดจบที่ 30 มิ.ย. 2569) → HQ ทำอะไรไปก็ไม่เห็นในบันทึกของตัวเอง
+// เวลา (ชม.:นาที) ยังใช้นาฬิกาจริงได้ — ใช้เรียงลำดับเหตุการณ์ในวันเดียวกัน ไม่มีผลกับตัวกรองวันที่
 function stampNow(): string {
-  const d = new Date();
-  const hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${TH_MO[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
+  const t = new Date();
+  const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0");
+  return `${APP_NOW.getDate()} ${TH_MO[APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543} · ${hh}:${mm}`;
 }
 export function appendAudit(e: { user: string; role: string; action: string; target: string }) {
   if (typeof window === "undefined") return;

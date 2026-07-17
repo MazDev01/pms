@@ -7,7 +7,7 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Target, TrendingUp, PhoneCall, Activity, Building2,
+  Target, TrendingUp, PhoneCall, Activity, Building2, User,
   CalendarClock, FileText, Trophy, AlarmClock, ChevronRight,
   UserPlus, CheckCircle2, Mail, Info,
 } from "lucide-react";
@@ -15,18 +15,22 @@ import { useSales } from "@/context/SalesContext";
 import { useFilters } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { TopbarActions } from "@/components/layout/TopbarActions";
-import { PlanVsActualBars, SalesLineChart, CategoryBars, Donut, ProgressRing } from "@/components/ui/Charts";
+import { PlanVsActualBars, SalesLineChart, CategoryRows, Donut, ProgressRing } from "@/components/ui/Charts";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
+  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKey,
+  type MonthRange,
+} from "@/components/ui/MonthRangeToggle";
+import {
   loadHQTargets, leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
-  quotationStatusLabel, quotationStatusColor, dealerLeaderboard,
+  quotationStatusLabel, quotationStatusColor, dealerLeaderboard, mainTemplateOf,
 } from "@/lib/mock";
 import { CURRENT_DEALER } from "@/lib/useNetworkData";
 import {
   parseValue, isLeadOpen, needsFollowUp, daysSinceContact,
   MOCK_TODAY, leadCreatedDate, leadLatestDate,
 } from "@/lib/leadMetrics";
-import { useHQLeadRules } from "@/lib/useHQRules";
+import { useLeadRules } from "@/lib/useHQRules";
 
 const NAVY = "#003366", SUCCESS = "#16A34A", DANGER = "#DC2626";
 // แท่ง "ใบเสนอราคา" — #F59E0B เดิม contrast กับพื้นขาวแค่ 2.09:1 (ต่ำกว่าเกณฑ์ 3:1) แท่งจางจนแทบไม่เห็น
@@ -38,24 +42,6 @@ const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.
 const CUR_M = MOCK_TODAY.getMonth();
 const CUR_Y = MOCK_TODAY.getFullYear();
 
-// ── ช่วงย้อนหลัง N เดือน (นับถอยจากเดือนปัจจุบัน) ────────────────────────────
-// คีย์ของถังต้องมี "ปี" เสมอ — ถ้าใช้แต่เลขเดือน ยอด ก.ย. 2568 จะไปทับช่อง ก.ย. 2569
-// (เป็นบั๊กที่โค้ดนี้เคยโดนมาแล้วตอนอ่านแต่ date.slice(5,7))
-const MONTH_RANGES = [3, 6, 12] as const;
-type MonthRange = (typeof MONTH_RANGES)[number];
-const monthKey = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, "0")}`;
-/** ถังเดือนย้อนหลัง n เดือน เรียงเก่า→ใหม่ ปิดท้ายด้วยเดือนปัจจุบัน */
-function lastNMonths(n: number) {
-  return Array.from({ length: n }, (_, i) => {
-    const d = new Date(CUR_Y, CUR_M - (n - 1 - i), 1); // ข้ามปีเองอัตโนมัติเมื่อเลขเดือนติดลบ
-    return { key: monthKey(d.getFullYear(), d.getMonth()), label: THAI_MONTHS[d.getMonth()], year: d.getFullYear() };
-  });
-}
-/** "ม.ค. 2569 – มิ.ย. 2569" — ป้ายแกนบอกแต่ชื่อเดือน ช่วงที่ครอบจึงต้องบอกไว้ใต้หัวข้อ */
-function rangeSubtitle(n: number): string {
-  const b = lastNMonths(n), f = b[0], l = b[b.length - 1];
-  return `${f.label} ${f.year + 543} – ${l.label} ${l.year + 543}`;
-}
 
 // วงแหวนความคืบหน้าใช้ ProgressRing จาก @/components/ui/Charts — แหล่งเดียวร่วมกับแดชบอร์ด HQ
 
@@ -67,7 +53,7 @@ export default function DealerDashboard() {
   const { leads: allLeads, quotations, appointments } = useSales();
   const { timeRange, passes } = useFilters();
   const targets = loadHQTargets();
-  const { followUpAlertDays } = useHQLeadRules(); // กฎ HQ — ตัวแทนแก้เองไม่ได้
+  const { followUpAlertDays } = useLeadRules(CURRENT_DEALER.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
 
   // ── ขอบเขตข้อมูล ─────────────────────────────────────────────────────────
   // สมุดงานของตัวแทนที่ล็อกอินเท่านั้น — กติกาเดียวกับหน้าลูกค้าเป้าหมาย/ปฏิทิน
@@ -131,7 +117,7 @@ export default function DealerDashboard() {
 
   // ยอดขายรายเดือน (ล้านบาท): กราฟเส้น + เส้นประเป้าพาดผ่าน — จุดเขียว = เดือนที่ถึงเป้า
   const salesData = useMemo(
-    () => lastNMonths(salesRange).map(b => ({ label: b.label, value: Math.round(((wonByKey.get(b.key) ?? 0) / 1e6) * 10) / 10 })),
+    () => lastNMonths(salesRange, MOCK_TODAY).map(b => ({ label: b.label, value: Math.round(((wonByKey.get(b.key) ?? 0) / 1e6) * 10) / 10 })),
     [salesRange, wonByKey],
   );
   const monthTargetM = Math.round((monthTarget / 1e6) * 10) / 10;
@@ -144,7 +130,7 @@ export default function DealerDashboard() {
       lC.set(k, (lC.get(k) ?? 0) + 1);
     });
     quotations.forEach(q => { const k = q.date.slice(0, 7); qC.set(k, (qC.get(k) ?? 0) + 1); });
-    return lastNMonths(lqRange).map(b => ({ label: b.label, actual: lC.get(b.key) ?? 0, plan: qC.get(b.key) ?? 0 }));
+    return lastNMonths(lqRange, MOCK_TODAY).map(b => ({ label: b.label, actual: lC.get(b.key) ?? 0, plan: qC.get(b.key) ?? 0 }));
   }, [myLeads, quotations, lqRange]);
 
   const dealStatus = useMemo(() => {
@@ -181,20 +167,24 @@ export default function DealerDashboard() {
       e.quotes++;
       if (q.status === "won") e.quotesWon++;
     });
-    // แท่งแนวตั้งมีที่วางป้ายชื่อจำกัด — เกิน 5 แท่งในการ์ดกว้าง ~370px ชื่อจะชนกัน
+    // โชว์ 5 อันดับแรก — การ์ดนี้ตอบว่า "ใครทำได้ดี/ใครต้องช่วย" ไม่ได้ให้ไล่อ่านทุกคน
+    // (รายชื่อครบอยู่ที่หน้าลูกค้าเป้าหมาย — กด "ดูทั้งหมด" ที่หัวการ์ด)
     return [...m.entries()].map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.won - a.won || b.deals - a.deals).slice(0, 5);
   }, [leadsIn, quotesIn]);
 
-  // ยอดขายตามแม่แบบ = มูลค่าที่ "ปิดการขายสำเร็จ" แยกตามแม่แบบ
-  // เดิมถ้ายังไม่มีรายการที่ปิดสำเร็จจะเอามูลค่าของดีลที่ยังไม่ปิดมาแสดงแทน — ตัวเลขไม่ใช่ยอดขายแต่หัวข้อบอกว่าใช่
+  // ยอดขายตามแม่แบบ = มูลค่า "ใบเสนอราคาที่ปิดการขายได้" แยกตามแม่แบบ
+  // ใช้ใบเสนอราคาชุดเดียวกับ KPI "ยอดขาย" และกราฟยอดขายรายเดือน — ทั้งแดชบอร์ดต้องนิยาม "ยอดขาย" เหมือนกัน
+  // เดิมการ์ดนี้ใบเดียวที่นับจาก "ลีดสถานะ PAID" ซึ่งเป็นคนละชุด → ขึ้นแค่ 2 แม่แบบ
+  // ทั้งที่ในช่วงเดียวกันปิดการขายได้จริง 4 แม่แบบ (ลีดที่ปิดผ่านใบเสนอราคาไม่ได้ถูกตีสถานะ PAID ทุกใบ)
   const salesByProduct = useMemo(() => {
     const m = new Map<string, number>();
-    leadsIn.filter(l => l.status === "PAID").forEach(l => { const k = l.product || "อื่นๆ"; m.set(k, (m.get(k) ?? 0) + parseValue(l.value)); });
-    // จำกัด 5 แท่งด้วยเหตุผลเดียวกับผลงานผู้รับผิดชอบ — ป้ายชื่อแม่แบบยาว
+    quotesIn.filter(q => q.status === "won")
+      .forEach(q => { const k = q.buildingType || "อื่นๆ"; m.set(k, (m.get(k) ?? 0) + q.totalValue); });
+    // 6 อันดับแรก — พอดีกับความสูงการ์ด · รายการครบอยู่ที่หน้าลูกค้า (ปุ่ม "ดูทั้งหมด")
     return [...m.entries()].map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value).slice(0, 5);
-  }, [leadsIn]);
+      .sort((a, b) => b.value - a.value).slice(0, 6);
+  }, [quotesIn]);
   const cmpBaht = (v: number) => v >= 1e6 ? `฿${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `฿${Math.round(v / 1e3)}K` : `฿${v}`;
 
   // ── การ์ดรายการ ──────────────────────────────────────────────────────────
@@ -253,25 +243,6 @@ export default function DealerDashboard() {
     <button onClick={() => router.push(href)} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "0.7rem", fontWeight: 700, color: SUB, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
       ดูทั้งหมด <ChevronRight size={13} />
     </button>
-  );
-  // ปุ่มเลือกช่วงย้อนหลังของกราฟ — ใบละชุด กดแล้วมีผลเฉพาะกราฟใบนั้น
-  const RangeToggle = ({ value, onChange, label }: { value: MonthRange; onChange: (v: MonthRange) => void; label: string }) => (
-    <span role="group" aria-label={label} style={{ display: "inline-flex", gap: 4, flexShrink: 0 }}>
-      {MONTH_RANGES.map(n => {
-        const on = n === value;
-        return (
-          <button key={n} onClick={() => onChange(n)} aria-pressed={on} title={`${label} — ย้อนหลัง ${n} เดือน`}
-            style={{
-              fontFamily: "inherit", fontSize: "0.68rem", fontWeight: 700, whiteSpace: "nowrap",
-              padding: "5px 9px", borderRadius: 8, cursor: "pointer",
-              border: `1px solid ${on ? NAVY : BORDER}`, background: on ? NAVY : "#fff", color: on ? "#fff" : SUB,
-              transition: "background .15s ease, color .15s ease, border-color .15s ease",
-            }}>
-            {n} เดือน
-          </button>
-        );
-      })}
-    </span>
   );
   const IconBox = ({ Icon, color, bg }: { Icon: typeof Target; color: string; bg: string }) => (
     <span style={{ width: 42, height: 42, borderRadius: 12, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -365,18 +336,16 @@ export default function DealerDashboard() {
           <div style={hd}>
             <span style={title}>ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <RangeToggle value={lqRange} onChange={setLqRange} label="ช่วงเวลากราฟลูกค้าเป้าหมายเทียบใบเสนอราคา" />
+              <MonthRangeToggle value={lqRange} onChange={setLqRange} label="ช่วงเวลากราฟลูกค้าเป้าหมายเทียบใบเสนอราคา" />
               {more("/leads")}
             </span>
           </div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>จำนวนรายการต่อเดือน · {rangeSubtitle(lqRange)} · ยิ่งสองแท่งใกล้กัน = เสนอราคาได้มากเทียบกับที่รับเข้ามา</div>
+          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>จำนวนรายการต่อเดือน · {monthRangeSubtitle(lqRange, MOCK_TODAY)} · ยิ่งสองแท่งใกล้กัน = เสนอราคาได้มากเทียบกับที่รับเข้ามา</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <PlanVsActualBars data={leadQuoteData} height={260} aLabel="ลูกค้าเป้าหมาย" bLabel="ใบเสนอราคา"
+            {/* คำอธิบายสีอยู่ใน PlanVsActualBars แล้ว — เดิมเขียนมือซ้ำไว้ใต้การ์ดนี้ใบเดียว
+                (อีก 2 การ์ดที่ใช้กราฟตัวเดียวกันเลยไม่มีคำอธิบายสีมาตลอด) */}
+            <PlanVsActualBars data={leadQuoteData} height={260} aLabel="ลูกค้าเป้าหมายใหม่" bLabel="ใบเสนอราคาที่ออก"
               fmt={v => `${Math.round(v)} รายการ`} highlightExceeded={false} aFill="#2563EB" bFill={AMBER} />
-          </div>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: "0.72rem", color: SUB }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#2563EB" }} /> ลูกค้าเป้าหมายใหม่</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: AMBER }} /> ใบเสนอราคาที่ออก</span>
           </div>
         </div>
 
@@ -385,11 +354,11 @@ export default function DealerDashboard() {
           <div style={hd}>
             <span style={title}>ยอดขายรายเดือน</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <RangeToggle value={salesRange} onChange={setSalesRange} label="ช่วงเวลากราฟยอดขายรายเดือน" />
+              <MonthRangeToggle value={salesRange} onChange={setSalesRange} label="ช่วงเวลากราฟยอดขายรายเดือน" />
               {more("/quotations")}
             </span>
           </div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>ยอดปิดการขายแต่ละเดือน · {rangeSubtitle(salesRange)} · เส้นประ = เป้าหมายรายเดือน · ชี้ที่เดือนเพื่อดูตัวเลข</div>
+          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>ยอดปิดการขายแต่ละเดือน · {monthRangeSubtitle(salesRange, MOCK_TODAY)} · เส้นประ = เป้าหมายรายเดือน · ชี้ที่เดือนเพื่อดูตัวเลข</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <SalesLineChart data={salesData} target={monthTargetM} height={260}
               fmt={v => `฿${v.toFixed(1)}M`} targetLabel="เป้า/เดือน" />
@@ -410,9 +379,9 @@ export default function DealerDashboard() {
           <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>ยอดปิดการขายของแต่ละคน · {timeRange.subtitle}</div>
           {teamPerf.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ไม่มีข้อมูลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <CategoryBars
-                data={teamPerf.map(t => ({ label: t.name, value: t.won, sub: `${t.deals} ดีล · เสนอ ${t.quotes} ใบ` }))}
-                fmt={cmpBaht} height={244} onSelect={() => router.push("/leads")}
+              <CategoryRows
+                data={teamPerf.map(t => ({ label: t.name, value: t.won, note: `${t.deals} ดีล · เสนอ ${t.quotes} ใบ` }))}
+                fmt={cmpBaht} icon={<User size={11} />} onSelect={() => router.push("/leads")}
                 ariaLabel="ยอดปิดการขายของผู้รับผิดชอบแต่ละคน" />
             </div>
           )}
@@ -420,13 +389,22 @@ export default function DealerDashboard() {
 
         {/* ยอดขายตามแม่แบบ */}
         <div style={card}>
-          <div style={hd}><span style={title}>ยอดขายตามแม่แบบ</span>{more("/products")}</div>
+          {/* ไปหน้าลูกค้า ไม่ใช่หน้าสินค้า — แม่แบบพวกนี้มาจากดีลที่ลูกค้าปิดจริง คำถามถัดไปคือ "ใครซื้อ" ไม่ใช่ "สเปกอะไร" */}
+          <div style={hd}><span style={title}>ยอดขายตามแม่แบบ</span>{more("/customers")}</div>
           <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>ยอดปิดการขายแยกตามแม่แบบ · {timeRange.subtitle}</div>
           {salesByProduct.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ยังไม่มีการปิดการขายในช่วงนี้" description="ยอดขายจะขึ้นเมื่อปิดการขายสำเร็จ" compact /> : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <CategoryBars
+              {/* กดแถวไหน = ไปหน้าลูกค้าพร้อมกรองแม่แบบนั้นไว้ให้เลย
+                  ตัวกรองของหน้าลูกค้าเทียบด้วย "แม่แบบหลัก" → ต้องแปลงก่อนส่ง ไม่งั้นแถวที่เป็นแม่แบบย่อย
+                  (เช่น "โรงงานอาหาร" ซึ่งอยู่ใต้ "โรงงาน") จะกรองไม่เจอสักราย */}
+              <CategoryRows
                 data={salesByProduct.map(p => ({ label: p.name, value: p.value }))}
-                fmt={cmpBaht} height={244} onSelect={() => router.push("/products")}
+                fmt={cmpBaht} icon={<Building2 size={11} />}
+                onSelect={i => {
+                  const name = salesByProduct[i]?.name ?? "";
+                  const main = mainTemplateOf(name) || name;
+                  router.push(`/customers?template=${encodeURIComponent(main)}`);
+                }}
                 ariaLabel="ยอดปิดการขายแยกตามแม่แบบ" />
             </div>
           )}

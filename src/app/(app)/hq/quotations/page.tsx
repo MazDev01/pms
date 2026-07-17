@@ -13,7 +13,8 @@ import {
   ALL_REGIONS, ALL_PROVINCES, STATUS_ORDER, type QuoteRow,
 } from "@/lib/hqQuotations";
 import { QuotationKPICards } from "@/components/hq/quotations/QuotationKPICards";
-import { QuotationFilterBar, EMPTY_FILTERS, VALUE_BANDS, type QuotationFilters } from "@/components/hq/quotations/QuotationFilterBar";
+import { QuotationFilterBar, EMPTY_FILTERS, type QuotationFilters } from "@/components/hq/quotations/QuotationFilterBar";
+import { FilterBar } from "@/components/filters/FilterBar";
 import { QuotationAnalytics } from "@/components/hq/quotations/QuotationAnalytics";
 import { QuotationTable } from "@/components/hq/quotations/QuotationTable";
 import { QuotationDrawer } from "@/components/hq/quotations/QuotationDrawer";
@@ -54,11 +55,6 @@ export default function NetworkQuotationPage() {
     if (filters.province !== "all" && r.dealerProvince !== filters.province) return false;
     if (filters.status !== "all" && r.status !== filters.status) return false;
     if (filters.product !== "all" && r.productLine !== filters.product && mainTemplateOf(r.productLine) !== filters.product) return false;
-    if (filters.valueBand !== "all") {
-      const b = VALUE_BANDS.find(v => v.key === filters.valueBand);
-      // ขอบล่างรวม ขอบบนไม่รวม → ช่วงติดกันไม่นับซ้ำ
-      if (b && (r.valueNum < b.min || (b.max != null && r.valueNum >= b.max))) return false;
-    }
     if (filters.search.trim()) {
       const s = filters.search.trim().toLowerCase();
       const hay = `${r.quoteNo} ${r.customer} ${r.dealerName} ${r.dealerCode}`.toLowerCase();
@@ -72,7 +68,7 @@ export default function NetworkQuotationPage() {
 
   // ลีดสำหรับกราฟ "ลีด → ใบเสนอราคา" และ "เหตุผลที่เสียโอกาส"
   // กรองเฉพาะมิติที่ลีดมีจริง: ขอบเขตตัวแทน (ตัวแทน/ภูมิภาค/จังหวัดตัวแทน) + ช่วงเวลา
-  // ไม่กรองด้วยสถานะ/ช่วงมูลค่าของใบเสนอราคา — เป็นคนละเอกสารกัน จะกรองข้ามไม่ได้
+  // ไม่กรองด้วยสถานะของใบเสนอราคา — เป็นคนละเอกสารกัน จะกรองข้ามไม่ได้
   const leadRows = useMemo(() => netLeads.filter(l => {
     const code = l.dealerCode || "";
     if (filters.dealer !== "all" && code !== filters.dealer) return false;
@@ -95,7 +91,9 @@ export default function NetworkQuotationPage() {
         <div>
           <p style={{ margin: 0 }}>ใบเสนอราคาของตัวแทนทุกสาขา · {timeRange.subtitle}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {/* ช่วงเวลาอยู่ที่หัวหน้า — ที่เดียวกับทุกหน้า HQ (แดชบอร์ด/ภาพรวมยอดขาย/ลูกค้าเป้าหมาย) */}
+          <FilterBar dims={[]} />
           <ExportMenu
             filename="hq-network-quotations"
             title="ใบเสนอราคาทั้งเครือ"
@@ -123,6 +121,8 @@ export default function NetworkQuotationPage() {
 
       <QuotationAnalytics rows={rows} trendRows={trendRows} leads={leadRows} />
 
+      {/* ตารางเต็มอยู่ท้ายหน้าตามเดิม (ตามที่บอสสั่ง — ไม่แยกแท็บ)
+          ความยาวหน้าคุมด้วยกฎอื่นแทน: การ์ดกราฟตรึงความสูง S/M/L + กราฟรายการโชว์ Top N */}
       <QuotationTable rows={tableRows} onView={setViewQ} />
 
       {viewQ && <QuotationDrawer quote={viewQ} onClose={() => setViewQ(null)} />}

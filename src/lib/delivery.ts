@@ -1,11 +1,12 @@
-// ─── กฎการส่งมอบและการรับประกัน (แหล่งเดียวของทั้งระบบ) ──────────────────────
+// ─── กฎการส่งมอบ (แหล่งเดียวของทั้งระบบ) ──────────────────────────────────────
 // ยึดตามที่โปรเจกต์ใช้อยู่เดิมในหน้าลูกค้าฝั่งตัวแทน:
-//   วันส่งมอบ   = วันปิดการขาย (won) + ระยะเวลาส่งมอบของใบนั้น (ไม่ระบุ = DEFAULT_DELIVERY_DAYS)
-//   การรับประกัน = โครงสร้าง 10 ปี นับจากวันส่งมอบ (มาตรฐาน PEB)
-// ไม่มีวันปิดการขาย = ยังไม่ส่งมอบ → ไม่มีประกัน (คืน null · ห้ามเดา)
+//   วันส่งมอบ = วันปิดการขาย (won) + ระยะเวลาส่งมอบของใบนั้น (ไม่ระบุ = DEFAULT_DELIVERY_DAYS)
+// ไม่มีวันปิดการขาย = ยังไม่ส่งมอบ (คืน null · ห้ามเดา)
+//
+// เดิมชื่อ warranty.ts และมีเรื่องการรับประกัน 10 ปีอยู่ด้วย — ตัดออกทั้งฟีเจอร์แล้ว
+// (บอสสั่ง 17 ก.ค. 69: ฝั่งตัวแทนไม่มีประกัน HQ ก็ไม่ต้องมี) เหลือเฉพาะการส่งมอบ
 import { DEFAULT_DELIVERY_DAYS } from "./mock";
 
-export const WARRANTY_YEARS = 10;
 export const TODAY = new Date(2026, 5, 30); // "วันนี้" ของระบบ (deterministic)
 
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -30,29 +31,4 @@ export function deliveryDateOf(wonDate?: string, deliveryTime?: string): Date | 
   const out = new Date(d);
   out.setDate(out.getDate() + deliveryDaysOf(deliveryTime));
   return out;
-}
-
-export type Warranty = {
-  status: "active" | "expired";
-  delivered: string;      // วันส่งมอบ (ไทย)
-  expiry: string;         // วันหมดประกัน (ไทย)
-  remainingLabel: string; // "เหลือ 3 ปี 2 เดือน" / "หมดประกันแล้ว"
-};
-
-/** สถานะประกันจากวันปิดการขาย · คืน null ถ้ายังไม่ปิดการขาย (= ยังไม่ส่งมอบ) */
-export function warrantyOf(wonDate?: string, deliveryTime?: string): Warranty | null {
-  const del = deliveryDateOf(wonDate, deliveryTime);
-  if (!del) return null;
-  const exp = new Date(del);
-  exp.setFullYear(exp.getFullYear() + WARRANTY_YEARS);
-
-  const active = exp > TODAY;
-  let remainingLabel = "หมดประกันแล้ว";
-  if (active) {
-    let months = (exp.getFullYear() - TODAY.getFullYear()) * 12 + (exp.getMonth() - TODAY.getMonth());
-    if (exp.getDate() < TODAY.getDate()) months--;
-    const y = Math.floor(months / 12), m = months % 12;
-    remainingLabel = y > 0 ? (m > 0 ? `เหลือ ${y} ปี ${m} เดือน` : `เหลือ ${y} ปี`) : `เหลือ ${Math.max(1, m)} เดือน`;
-  }
-  return { status: active ? "active" : "expired", delivered: toThaiDate(del), expiry: toThaiDate(exp), remainingLabel };
 }

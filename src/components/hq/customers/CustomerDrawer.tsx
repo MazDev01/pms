@@ -3,13 +3,13 @@
 // ─── แผงรายละเอียดลูกค้า (HQ ดูอย่างเดียว) ──────────────────────────────────────
 // แท็บทั้งหมดอ่านจากข้อมูลจริง: ใบที่ปิดการขายได้ + รูปแม่แบบจาก Master Catalog
 // ไม่มีแท็บสัญญา / ใบส่งมอบ / แบบก่อสร้าง — ระบบไม่มีที่เก็บข้อมูลเหล่านั้น
-import { Building2, ShieldCheck, ShieldOff } from "lucide-react";
+import { Building2, Truck } from "lucide-react";
 import { RightDrawer, type DrawerTab } from "@/components/ui/RightDrawer";
 import { customerCode } from "@/lib/mock";
 import { fmtBaht } from "@/lib/format";
-import { toThaiDate } from "@/lib/warranty";
+import { toThaiDate } from "@/lib/delivery";
 import { useMasterCatalog } from "@/lib/useMasterCatalog";
-import { isWarrantyExpiringSoon, type CustomerDbRow, type PurchasedBuilding } from "@/lib/customerDb";
+import { type CustomerDbRow, type PurchasedBuilding } from "@/lib/customerDb";
 
 const PRIMARY = "#003366";
 const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
@@ -121,34 +121,28 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
       ) : <Empty text="ไม่มีใบเสนอราคาที่ปิดการขายได้ผูกกับลูกค้ารายนี้" />,
     },
     {
-      key: "warranty",
-      label: "การส่งมอบ · ประกัน",
-      content: row.buildings.some(b => b.warranty) ? (
+      key: "delivery",
+      label: "การส่งมอบ",
+      content: row.buildings.some(b => b.deliveredAt) ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {row.buildings.filter(b => b.warranty).map(b => {
-            const w = b.warranty!;
-            const soon = isWarrantyExpiringSoon(w);
-            const ok = w.status === "active";
-            const color = !ok ? "#9ca3af" : soon ? "#D97706" : "#059669";
-            return (
-              <div key={b.quoteNo} style={{ border: "1px solid #e9edf2", borderRadius: 10, padding: 11 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-                  {ok ? <ShieldCheck size={15} color={color} /> : <ShieldOff size={15} color={color} />}
-                  <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#2D2D2D" }}>{b.template ?? b.buildingType}</span>
-                  <span style={{ fontSize: "0.66rem", fontWeight: 700, color, marginLeft: "auto" }}>{w.remainingLabel}</span>
-                </div>
-                <Grid>
-                  <Field label="วันส่งมอบ" value={w.delivered} />
-                  <Field label="ประกันถึง" value={w.expiry} />
-                </Grid>
+          {row.buildings.filter(b => b.deliveredAt).map(b => (
+            <div key={b.quoteNo} style={{ border: "1px solid #e9edf2", borderRadius: 10, padding: 11 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+                <Truck size={15} color="#059669" />
+                <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#2D2D2D" }}>{b.template ?? b.buildingType}</span>
+                <span style={{ fontSize: "0.66rem", fontWeight: 700, color: PRIMARY, marginLeft: "auto" }}>{b.quoteNo}</span>
               </div>
-            );
-          })}
+              <Grid>
+                <Field label="วันปิดการขาย" value={b.wonDate} />
+                <Field label="วันส่งมอบ" value={toThaiDate(b.deliveredAt!)} />
+              </Grid>
+            </div>
+          ))}
           <div style={{ fontSize: "0.63rem", color: "#9ca3af" }}>
-            ประกันโครงสร้าง 10 ปีนับจากวันส่งมอบ · วันส่งมอบ = วันปิดการขาย + ระยะเวลาส่งมอบของใบนั้น
+            วันส่งมอบ = วันปิดการขาย + ระยะเวลาส่งมอบของใบนั้น
           </div>
         </div>
-      ) : <Empty text="ยังไม่มีการส่งมอบ — ประกันเริ่มนับเมื่อส่งมอบแล้วเท่านั้น" />,
+      ) : <Empty text="ยังไม่มีการส่งมอบ" />,
     },
     {
       key: "timeline",
@@ -157,7 +151,7 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
           {row.buildings.flatMap(b => [
             { at: b.wonAt, label: `ปิดการขาย ${b.quoteNo}`, sub: `${b.template ?? b.buildingType} · ${fmtBaht(b.value)}`, color: PRIMARY },
-            ...(b.deliveredAt ? [{ at: b.deliveredAt, label: `ส่งมอบ ${b.template ?? b.buildingType}`, sub: b.warranty ? `ประกันถึง ${b.warranty.expiry}` : "", color: "#059669" }] : []),
+            ...(b.deliveredAt ? [{ at: b.deliveredAt, label: `ส่งมอบ ${b.template ?? b.buildingType}`, sub: b.quoteNo, color: "#059669" }] : []),
           ])
             .filter((e): e is { at: Date; label: string; sub: string; color: string } => !!e.at)
             .sort((a, b) => b.at.getTime() - a.at.getTime())

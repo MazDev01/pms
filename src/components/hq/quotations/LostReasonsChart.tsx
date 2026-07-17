@@ -4,9 +4,13 @@
 // ⚠️ ที่มาของข้อมูล: ระบบเก็บ "เหตุผลที่เสียโอกาส" ไว้ที่ "ลีด" (ตอนปิดลีดเป็นไม่สำเร็จ)
 // ไม่ได้เก็บรายใบเสนอราคา → กราฟนี้จึงนับจากลีดที่ปิดไม่สำเร็จ ไม่ใช่จากใบเสนอราคา
 // ต้องกำกับที่มาบนหน้าจอเสมอ ห้ามปล่อยให้เข้าใจว่าเป็นเหตุผลของใบเสนอราคา
-// รายการเหตุผล = ค่าที่ HQ ตั้งไว้ (ตั้งค่า › เส้นทางการขาย) — ใช้ร่วมทุกตัวแทน
-import { useEffect, useState } from "react";
-import { LOST_REASONS, loadLostReasons, type LeadRow } from "@/lib/mock";
+//
+// นับจาก "เหตุผลที่ลีดบันทึกไว้จริง" เท่านั้น — ห้ามเอาไปกรองกับรายการเหตุผลของ HQ (loadLostReasons)
+// ของเดิมทำแบบนั้นแล้วพัง: ลีดในระบบบันทึกคำสั้น ("ราคา") แต่รายการของ HQ เป็นประโยคยาว
+// ("ราคาสูงเกินงบประมาณ") → ไม่แมตช์สักอัน → การ์ดขึ้น "—" ทั้งที่มีลีดปิดไม่สำเร็จ 11 ราย
+// รายการของ HQ มีหน้าที่เป็น "ตัวเลือกตอนปิดดีล" เท่านั้น ไม่ใช่ตัวกรองรายงานย้อนหลัง
+// (วิธีเดียวกับโดนัทที่ /hq/leads และ /hq/pipeline ซึ่งนับจากข้อมูลจริงและแสดงได้ปกติมาตลอด)
+import { type LeadRow } from "@/lib/mock";
 import { parseBaht, fmtBaht } from "@/lib/format";
 import { Donut } from "@/components/ui/Charts";
 
@@ -14,21 +18,22 @@ import { Donut } from "@/components/ui/Charts";
 const RAMP = ["#dc2626", "#ea580c", "#d97706", "#b45309", "#9f1239", "#7c2d12"];
 
 export function LostReasonsChart({ leads }: { leads: LeadRow[] }) {
-  // รายการเหตุผลอยู่ใน localStorage → อ่านหลัง mount (กัน hydration mismatch)
-  const [reasons, setReasons] = useState<string[]>([...LOST_REASONS]);
-  useEffect(() => { setReasons(loadLostReasons()); }, []);
-
   const lost = leads.filter(l => l.status === "CANCELLED");
-  const rows = reasons.map(reason => {
-    const list = lost.filter(l => l.lostReason === reason);
-    return { reason, count: list.length, value: list.reduce((s, l) => s + parseBaht(l.value), 0) };
-  }).filter(r => r.count > 0)
+
+  const m = new Map<string, { count: number; value: number }>();
+  lost.forEach(l => {
+    if (!l.lostReason) return;
+    const r = m.get(l.lostReason) ?? { count: 0, value: 0 };
+    r.count += 1;
+    r.value += parseBaht(l.value);
+    m.set(l.lostReason, r);
+  });
+  const rows = [...m.entries()]
+    .map(([reason, v]) => ({ reason, ...v }))
     .sort((a, b) => b.count - a.count);
 
-  // ลีดที่ปิดไม่สำเร็จแต่ไม่ได้ระบุเหตุผล (หรือระบุค่านอกรายการของ HQ) — แสดงแยก ไม่ยัดรวมกับ "อื่นๆ"
-  const unspecified = lost.filter(l => !l.lostReason || !reasons.includes(l.lostReason)).length;
-  const max = Math.max(...rows.map(r => r.count), 1);
-
+  // ลีดที่ปิดไม่สำเร็จแต่ไม่ได้ระบุเหตุผล — แสดงแยก ไม่ยัดรวมกับ "อื่นๆ"
+  const unspecified = lost.filter(l => !l.lostReason).length;
   const total = rows.reduce((s, r) => s + r.count, 0);
 
   return (
@@ -43,7 +48,12 @@ export function LostReasonsChart({ leads }: { leads: LeadRow[] }) {
           (ชุดสี/รูปแบบเดียวกับ /hq/leads และ /hq/pipeline ให้อ่านเหมือนกันทั้งระบบ) */}
       <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
         {!rows.length ? (
-          <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
+          // ว่างได้ 2 แบบ ต้องบอกให้ตรงกัน: ไม่มีลีดปิดไม่สำเร็จเลย · หรือมีแต่ไม่มีใครระบุเหตุผล
+          <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)", textAlign: "center" }}>
+            {unspecified > 0
+              ? `— ลีดปิดไม่สำเร็จ ${unspecified} ราย ไม่ได้ระบุเหตุผลไว้`
+              : "— ไม่มีลีดที่ปิดไม่สำเร็จในผลกรองนี้"}
+          </div>
         ) : (<>
           <Donut
             segments={rows.map((r, i) => ({ label: r.reason, value: r.count, color: RAMP[i % RAMP.length] }))}

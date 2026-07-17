@@ -25,9 +25,20 @@ for (const [role, path, label] of PAGES) {
 }
 
 // count-up ของ KPI ต้องเรนเดอร์ค่าครบ (ไม่ค้าง 0 / ไม่พังเป็นว่าง)
+// หมายเหตุ: /hq/dealers ย้าย KPI ไปใช้มาตรฐาน .hq-kpi4 แล้ว (ไม่มี CountUp) — หมุดจึงอยู่ที่หน้าที่ยังใช้จริง
 test("[ui·hq] KPI count-up แสดงค่าครบ", async ({ page }) => {
+  await open(page, "hq", "/hq/master");
+  await expect(page.locator(".hqx-kpi").first()).not.toBeEmpty();
+});
+
+// KPI ของ /hq/dealers ต้องเป็นดีไซน์เดียวกับหน้า HQ อื่น: .hq-kpi4 · 4 ใบ · ตัวเลขเข้ม (ไม่ใส่สี) + ไอคอน
+test("[ui·hq] KPI หน้าตัวแทนใช้มาตรฐาน .hq-kpi4 เหมือนหน้าอื่น", async ({ page }) => {
   await open(page, "hq", "/hq/dealers");
-  await expect(page.locator(".stat-value").first()).toContainText("ตัวแทน");
+  const tiles = page.locator(".hq-kpi4 > .card");
+  await expect(tiles).toHaveCount(4);
+  await expect(page.locator(".hq-kpi4").getByText("ตัวแทนทั้งหมด")).toBeVisible();
+  await expect(tiles.first().locator("svg")).toBeVisible();          // ไอคอนในกล่องสีจาง
+  await expect(page.locator(".stat-card")).toHaveCount(0);            // ต้องไม่เหลือการ์ดแบบเก่า
 });
 
 // modal ต้องยึด viewport เต็มจอ (กันบั๊ก: แอนิเมชันหน้าเผลอใส่ transform ที่ .erp → fixed ยึด .erp แทนจอ)
@@ -59,7 +70,7 @@ test("[ui·desktop] modal ลูกค้า HQ ครอบเต็มจอ (
 // สิ่งที่ต้องกันคือ "ไม่มีแอนิเมชันเข้าเลย" (none)
 const ENTRANCE_ANIMS = ["cardIn", "chart-fade-in"];
 for (const [path, selector, label] of [
-  ["/hq/dealers", ".stat-grid > .stat-card", "หน้าตัวแทน (.stat-card)"],
+  ["/hq/dealers/CNX", ".stat-card", "หน้ารายละเอียดตัวแทน (.stat-card)"],
   ["/hq/master", ".hqx-kpis > .hqx-kpi", "หน้าแม่แบบ (.hqx-kpi)"],
 ] as const) {
   test(`[ui·hq] KPI cards ${label} มีแอนิเมชันเข้า`, async ({ page }) => {

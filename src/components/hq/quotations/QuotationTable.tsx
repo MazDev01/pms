@@ -38,7 +38,7 @@ export function QuotationTable({ rows, onView }: {
             <col style={{ width: "8%", minWidth: 94 }} />{/* สถานะ */}
             <col style={{ width: "10%", minWidth: 116 }} />{/* วันที่สร้าง — "27 มิ.ย. 2569" ต้องการ 107px */}
             <col style={{ width: "10%", minWidth: 116 }} />{/* ใช้ได้ถึง */}
-            <col style={{ width: "9%", minWidth: 88 }} />{/* ปุ่มดู */}
+            <col style={{ width: "5%", minWidth: 52 }} />{/* ปุ่มดู — ไอคอนล้วน ไม่ต้องเผื่อที่ให้ข้อความ */}
           </colgroup>
           <thead>
             <tr>
@@ -80,13 +80,15 @@ export function QuotationTable({ rows, onView }: {
                   <td style={{ color: MUTED, fontSize: "0.78rem", whiteSpace: "nowrap" }}>{q.createdAt}</td>
                   <td style={{ color: MUTED, fontSize: "0.78rem", whiteSpace: "nowrap" }}>{q.validUntil ?? "—"}</td>
                   <td>
+                    {/* ปุ่มไอคอนล้วน — ข้อความ "ดู" ซ้ำกับที่ไอคอนสื่ออยู่แล้ว · title/aria-label คงไว้ให้ screen reader */}
                     <button
                       onClick={e => { e.stopPropagation(); onView(q); }}
                       className="btn btn-secondary btn-sm"
                       title="ดูรายละเอียด"
-                      style={{ gap: 4 }}
+                      aria-label="ดูรายละเอียด"
+                      style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}
                     >
-                      <Eye size={13} /> ดู
+                      <Eye size={13} />
                     </button>
                   </td>
                 </tr>

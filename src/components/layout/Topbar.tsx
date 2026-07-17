@@ -7,16 +7,15 @@ import { useSales } from "@/context/SalesContext";
 import {
   dealerLeaderboard, apptTypeLabel, loadUserProfile, PROFILE_UPDATED_EVENT,
   loadNotifPrefs, notifCategoryOf, NOTIF_PREFS_EVENT,
-  loadHQNotifPrefs, hqAuditCategory, HQ_NOTIF_UPDATED_EVENT,
-  loadHQNotifRules, loadHQLeadRules, loadQuoteValidityDays, loadHQDealers, HQ_LEAD_RULES_EVENT,
+  loadHQNotifPrefs, hqAuditCategory, HQ_NOTIF_UPDATED_EVENT, HQ_ALERT_META,
   type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
-  type HQAlertKey, type HQNotifRules, type HQLeadRules,
+  type HQAlertKey,
 } from "@/lib/mock";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown } from "lucide-react";
 import { PRIMARY, STEEL } from "@/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@/lib/useAudit";
-import { useNetworkLeads, useNetworkQuotations } from "@/lib/useNetworkData";
-import { buildHQAlerts, type HQAlert } from "@/lib/hqAlerts";
+import { useHQAlerts } from "@/lib/useHQAlerts";
+import { type HQAlert } from "@/lib/hqAlerts";
 
 // ── mock "วันนี้" (deterministic) ────────────────────────────────
 const MOCK_TODAY = "2026-06-30";
@@ -187,8 +186,7 @@ function buildHQNotifications(entries: AuditEntry[]): Notif[] {
 }
 
 // ── การแจ้งเตือนตามกฎของ HQ (6 เรื่อง · ตั้งที่ /hq/settings → การแจ้งเตือน) ──
-// เนื้อหาคำนวณจากข้อมูลจริงใน @/lib/hqAlerts — ที่นี่แค่ใส่ไอคอน/สี แล้วจัดเป็น Notif
-// id ติดลบ เพื่อไม่ให้ชนกับ id ของบันทึกการใช้งาน (ใช้เป็น key + ตัวจำว่าอ่านแล้ว)
+// เนื้อหาคำนวณจากข้อมูลจริงใน @/lib/hqAlerts — ที่นี่แค่ใส่ไอคอน/สี
 const HQ_ALERT_ICON: Record<HQAlertKey, { el: React.ReactNode; bg: string; color: string }> = {
   unassignedLead: { el: <UserX size={14} />,        bg: "#fdecec", color: "#dc2626" },
   idleLead:       { el: <AlertTriangle size={14} />, bg: "#fff3cd", color: "#d97706" },
@@ -197,21 +195,12 @@ const HQ_ALERT_ICON: Record<HQAlertKey, { el: React.ReactNode; bg: string; color
   targetAchieved: { el: <Target size={14} />,        bg: "#e5faf0", color: "#059669" },
   lostRate:       { el: <TrendingDown size={14} />,  bg: "#fdecec", color: "#dc2626" },
 };
-function buildHQRuleNotifications(alerts: HQAlert[]): Notif[] {
-  return alerts.map((a, i) => {
-    const ic = HQ_ALERT_ICON[a.key];
-    return {
-      id: -(i + 1),
-      iconEl: ic.el, iconBg: ic.bg, iconColor: ic.color,
-      title: a.title,
-      body: a.body,
-      time: "ตามกฎแจ้งเตือนของสำนักงานใหญ่",
-      href: a.href,
-      sortDate: MOCK_TODAY,
-      bucket: "today" as NotifBucket, // สถานะปัจจุบันของเครือ ไม่ใช่เหตุการณ์ในอดีต
-    };
-  });
-}
+// หน่วยนับของแต่ละกฎ — ใบเสนอราคานับเป็น "ใบ" ที่เหลือนับเป็น "ราย"
+const HQ_ALERT_UNIT: Record<HQAlertKey, string> = {
+  unassignedLead: "ราย", idleLead: "ราย", quoteExpiring: "ใบ",
+  dealerIdle: "ราย", targetAchieved: "ราย", lostRate: "ราย",
+};
+const ALERT_PREVIEW = 3; // โชว์ 3 บรรทัดแรกพอให้เห็นว่าใคร — ที่เหลือกดขยาย
 
 type SearchResult = { type: string; label: string; sub: string; href: string };
 
@@ -317,22 +306,6 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     return () => { window.removeEventListener(HQ_NOTIF_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
   }, []);
 
-  // กฎแจ้งเตือน 6 ข้อ + เกณฑ์จากกฎธุรกิจ + รายชื่อตัวแทน — อ่านอย่างเดียวหลัง mount
-  // (ห้าม usePersistentState: มันเขียนกลับ → ค่า seed จะทับของจริงทุกครั้งที่ Topbar mount)
-  const [hqRules, setHqRules] = useState<{ rules: HQNotifRules; leadRules: HQLeadRules; validityDays: number; dealers: DealerRow[] } | null>(null);
-  useEffect(() => {
-    const read = () => setHqRules({ rules: loadHQNotifRules(), leadRules: loadHQLeadRules(), validityDays: loadQuoteValidityDays(), dealers: loadHQDealers() });
-    read();
-    window.addEventListener(HQ_NOTIF_UPDATED_EVENT, read);
-    window.addEventListener(HQ_LEAD_RULES_EVENT, read);
-    window.addEventListener("storage", read);
-    return () => {
-      window.removeEventListener(HQ_NOTIF_UPDATED_EVENT, read);
-      window.removeEventListener(HQ_LEAD_RULES_EVENT, read);
-      window.removeEventListener("storage", read);
-    };
-  }, []);
-
   const displayName = profile?.name || session.name;
   // ชื่อบัญชี = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน (ไม่ใช่ชื่อคน) · HQ ใช้ชื่อผู้ใช้
   const acctName = isHQ ? displayName : session.dealerName;
@@ -344,34 +317,40 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
   const { leads: liveLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
   const auditEntries = useAuditEntries(); // สำหรับ HQ — บันทึกการใช้งาน
-  // ข้อมูลทั้งเครือ (สำหรับกฎแจ้งเตือนฝั่ง HQ) — ลีด/ใบเสนอราคา/ตัวแทนตัวจริงที่หน้า HQ ใช้
-  const networkLeads = useNetworkLeads();
-  const networkQuotes = useNetworkQuotations();
+  // กฎแจ้งเตือน 6 ข้อของทั้งเครือ — แหล่งเดียวกับการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ
+  const hqAlerts = useHQAlerts();
+  // HQ → บันทึกการใช้งาน (ใครทำอะไร) · Dealer → งานขายของตัวเอง
+  // กฎแจ้งเตือน 6 ข้อของ HQ ไม่ได้อยู่ในลิสต์นี้ — เป็น "สถานะปัจจุบันของเครือ" ไม่ใช่เหตุการณ์ในอดีต
+  // จึงแสดงแยกเป็นกลุ่มไว้บนสุดของแผง (ดู alertGroups) ไม่ปนกับไทม์ไลน์วันนี้/เมื่อวาน
   const notifs = useMemo(() => {
-    // HQ → กฎแจ้งเตือน 6 ข้อ (สถานะปัจจุบันของเครือ) + บันทึกการใช้งาน (ใครทำอะไร)
-    // Dealer → งานขายของตัวเอง
     if (isHQ) {
       const shown = hqNotifPrefs
         ? auditEntries.filter(e => hqNotifPrefs[hqAuditCategory(e.action)]?.inapp !== false)
         : auditEntries;
-      const ruleAlerts = hqRules
-        ? buildHQRuleNotifications(buildHQAlerts({
-            leads: networkLeads, quotes: networkQuotes, dealers: hqRules.dealers,
-            rules: hqRules.rules, leadRules: hqRules.leadRules, validityDays: hqRules.validityDays,
-          }))
-        : [];
-      return [...ruleAlerts, ...buildHQNotifications(shown)];
+      return buildHQNotifications(shown);
     }
     const all = buildNotifications(liveLeads, liveQuotations, liveAppointments);
     if (!notifPrefs) return all;
     return all.filter(n => { const c = notifCategoryOf(n.title); return c ? notifPrefs[c] : true; });
-  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs,
-      hqRules, networkLeads, networkQuotes]);
+  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs]);
+
+  // จัดกลุ่มกฎแจ้งเตือนตามเรื่อง — 28 แถวรวดอ่านไม่ไหว · เรียงตามลำดับใน HQ_ALERT_META
+  const alertGroups = useMemo(() => {
+    if (!isHQ) return [];
+    const m = new Map<HQAlertKey, HQAlert[]>();
+    for (const a of hqAlerts) {
+      const arr = m.get(a.key);
+      if (arr) arr.push(a); else m.set(a.key, [a]);
+    }
+    return HQ_ALERT_META.filter(meta => m.has(meta.key))
+      .map(meta => ({ key: meta.key, title: meta.label, items: m.get(meta.key)! }));
+  }, [isHQ, hqAlerts]);
 
   // ── states ──
   const [showSearch, setShowSearch]     = useState(false);
   const [showNotifs, setShowNotifs]     = useState(false);
   const [showAllNotifs, setShowAllNotifs] = useState(false); // ขยายดูการแจ้งเตือนทั้งหมดในแผงเดียวกัน
+  const [openGroup, setOpenGroup] = useState<HQAlertKey | null>(null); // กลุ่ม "ต้องดูด่วน" ที่กางอยู่
   const [showUser,   setShowUser]       = useState(false);
   const [searchQ,    setSearchQ]        = useState("");
   const [readIds,    setReadIds]        = useState<Set<number>>(new Set());
@@ -452,7 +431,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     ];
   }, [q, dealers, liveLeads, liveCustomers, liveQuotations, isHQ]);
 
-  const unreadCount = notifs.filter(n => !readIds.has(n.id)).length;
+  // งานค้างของเครือนับเข้าตัวเลขบนกระดิ่งด้วย — "อ่านแล้ว" กดปิดไม่ได้ เพราะงานยังไม่ได้ถูกจัดการจริง
+  const alertCount = alertGroups.reduce((s, g) => s + g.items.length, 0);
+  const unreadCount = notifs.filter(n => !readIds.has(n.id)).length + alertCount;
 
   function markAll() { setReadIds(new Set(notifs.map(n => n.id))); }
   function markOne(id: number) { setReadIds(prev => new Set([...prev, id])); }
@@ -590,14 +571,58 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           </button>
 
           {/* Notifications panel */}
+          {/* แผงการแจ้งเตือน — 380px: รายการใน "ต้องดูด่วน" ยาว (ชื่อลูกค้า + จำนวนวัน + ผู้รับผิดชอบ)
+              340px เดิมตัดบรรทัดเกือบทุกใบ · maxWidth กันล้นจอแคบ */}
           {showNotifs && (
-            <div style={{ position:"absolute", top:"calc(100% + 10px)", right:0, width:340, background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
+            <div style={{ position:"absolute", top:"calc(100% + 10px)", right:0, width:380, maxWidth:"calc(100vw - 24px)", background:"#fff", borderRadius:14, border:`1px solid ${BORDER}`, boxShadow:"0 16px 48px rgba(0,0,0,.16)", zIndex:300, overflow:"hidden" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:`1px solid ${BORDER}` }}>
                 <span style={{ fontSize:"0.86rem", fontWeight:800, color:STEEL }}>การแจ้งเตือน</span>
                 <button onClick={markAll} style={{ fontSize:"0.72rem", color:PRIMARY, background:"none", border:"none", cursor:"pointer", fontWeight:600 }}>อ่านทั้งหมด</button>
               </div>
-              <div style={{ maxHeight:340, overflowY:"auto" }}>
-                {notifs.length === 0 && (
+              <div style={{ maxHeight:400, overflowY:"auto" }}>
+                {/* ── ต้องดูด่วน — กฎแจ้งเตือนของ HQ จัดกลุ่มตามเรื่อง ──
+                    สถานะปัจจุบันของเครือ ไม่ใช่เหตุการณ์ในอดีต จึงไม่มีจุด "อ่านแล้ว" และไม่เข้าบัคเก็ตวันนี้/เมื่อวาน
+                    (เรื่องจะหายเองเมื่อตัวแทนไปจัดการจริง — กด "อ่านแล้ว" ไม่ได้ทำให้งานเสร็จ) */}
+                {alertGroups.length > 0 && (
+                  <div style={{ borderBottom:`1px solid ${BORDER}` }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px 5px", background:"#fafafa", borderBottom:`1px solid ${BG}` }}>
+                      <span style={{ fontSize:"0.65rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em" }}>ต้องดูด่วน</span>
+                      <span style={{ fontSize:"0.6rem", fontWeight:800, color:"#dc2626", background:"#fdecec", borderRadius:99, padding:"1px 6px", fontVariantNumeric:"tabular-nums" }}>{alertCount}</span>
+                    </div>
+                    {alertGroups.map(g => {
+                      const ic = HQ_ALERT_ICON[g.key];
+                      const expanded = openGroup === g.key;
+                      const shown = expanded ? g.items : g.items.slice(0, ALERT_PREVIEW);
+                      return (
+                        <div key={g.key} style={{ padding:"9px 16px", borderBottom:`1px solid ${BG}` }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                            <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:26, height:26, borderRadius:8, background:ic.bg, color:ic.color, flexShrink:0 }}>{ic.el}</span>
+                            <span style={{ flex:1, minWidth:0, fontSize:"0.78rem", fontWeight:700, color:STEEL }}>{g.title}</span>
+                            <span style={{ fontSize:"0.9rem", fontWeight:800, color:ic.color, fontVariantNumeric:"tabular-nums" }}>{g.items.length}</span>
+                            <span style={{ fontSize:"0.62rem", color:"#9ca3af" }}>{HQ_ALERT_UNIT[g.key]}</span>
+                          </div>
+                          <div style={{ marginLeft:34, marginTop:3, display:"flex", flexDirection:"column" }}>
+                            {shown.map((a, i) => (
+                              <button key={`${a.href}-${i}`}
+                                onClick={() => { setShowNotifs(false); router.push(a.href); }}
+                                style={{ display:"block", width:"100%", padding:"3px 0", border:"none", background:"none", cursor:"pointer", textAlign:"left",
+                                  fontSize:"0.68rem", color:"#6b7280", lineHeight:1.45 }}>
+                                {a.body}
+                              </button>
+                            ))}
+                            {g.items.length > ALERT_PREVIEW && (
+                              <button onClick={() => setOpenGroup(expanded ? null : g.key)}
+                                style={{ alignSelf:"flex-start", marginTop:2, padding:0, border:"none", background:"none", cursor:"pointer", fontSize:"0.64rem", fontWeight:700, color:PRIMARY }}>
+                                {expanded ? "ย่อ" : `ดูอีก ${g.items.length - ALERT_PREVIEW} รายการ`}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {notifs.length === 0 && alertGroups.length === 0 && (
                   <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.8rem", color:"#9ca3af" }}>
                     ไม่มีการแจ้งเตือน
                   </div>

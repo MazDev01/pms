@@ -23,9 +23,11 @@ const PROFILE_DEFAULT: CompanyProfile = {
   website: "www.benjamin.co.th",
 };
 
-type Branch = { name: string; region: string; address: string; status: "เปิดทำการ" | "เร็วๆ นี้" };
+// hq: true = แถวสำนักงานใหญ่ → ที่อยู่มาจากช่อง "ที่อยู่" ด้านบนเสมอ ไม่เก็บซ้ำที่นี่
+// (เดิมฝังที่อยู่ กทม. ไว้ตรงนี้อีกชุด → แก้ที่อยู่บริษัทแล้วแถวนี้ยังโชว์ของเก่า)
+type Branch = { name: string; region: string; address?: string; hq?: boolean; status: "เปิดทำการ" | "เร็วๆ นี้" };
 const BRANCHES: Branch[] = [
-  { name: "สำนักงานใหญ่ (กรุงเทพฯ)", region: "ภาคกลาง",      address: "ถ.รัชดาภิเษก เขตห้วยขวาง กทม.", status: "เปิดทำการ" },
+  { name: "สำนักงานใหญ่ (กรุงเทพฯ)", region: "ภาคกลาง",      hq: true, status: "เปิดทำการ" },
   { name: "สาขาเชียงใหม่",           region: "ภาคเหนือ",      address: "ถ.ซุปเปอร์ไฮเวย์ อ.เมือง เชียงใหม่", status: "เปิดทำการ" },
   { name: "สาขาขอนแก่น",             region: "ภาคตะวันออกเฉียงเหนือ", address: "ถ.มิตรภาพ อ.เมือง ขอนแก่น", status: "เปิดทำการ" },
   { name: "สาขาชลบุรี",              region: "ภาคตะวันออก",   address: "ถ.สุขุมวิท อ.ศรีราชา ชลบุรี",  status: "เปิดทำการ" },
@@ -182,7 +184,8 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
                 <tr key={i}>
                   <td style={{ fontWeight: 600 }}>{b.name}</td>
                   <td style={{ color: "var(--muted-foreground)" }}>{b.region}</td>
-                  <td style={{ color: "var(--muted-foreground)" }}>{b.address}</td>
+                  {/* สำนักงานใหญ่ = ที่อยู่เดียวกับช่องด้านบน (แหล่งเดียว) — ยังไม่กรอก = "—" ไม่เดา */}
+                  <td style={{ color: "var(--muted-foreground)" }}>{(b.hq ? form.address.trim() : b.address) || "—"}</td>
                   <td style={{ textAlign: "right" }}>
                     <span className="badge" style={
                       b.status === "เปิดทำการ"

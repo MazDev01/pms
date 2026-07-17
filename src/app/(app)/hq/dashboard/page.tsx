@@ -8,8 +8,12 @@ import {
   FileText, ChevronRight, Users2, CalendarClock,
   ArrowUpRight, ArrowDownRight, Target, Activity, RefreshCw, Info,
 } from "lucide-react";
-import { PlanVsActualBars, GroupedBarChart, Donut, ProgressRing } from "@/components/ui/Charts";
+import { PlanVsActualBars, GroupedBarChart, Donut, ProgressRing, CategoryRows } from "@/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@/components/ui/ActivityTimeline";
+import {
+  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKeyOf,
+  type MonthRange,
+} from "@/components/ui/MonthRangeToggle";
 import {
   dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy,
   type DealerRow, type HQTargets,
@@ -86,17 +90,23 @@ export default function HQDashboard() {
   const allNetLeads = useNetworkLeads();
   const { appointments } = useSales();
   const totalDealers = allDealers.length;
-  // ── ใบเสนอราคาในช่วงเวลาที่เลือก (แหล่งข้อมูลเดียวของทั้งหน้า) + หน้าต่างก่อนหน้าสำหรับ trend ──
+  // ใบเสนอราคาของตัวแทนที่เลือก — ยังไม่ตัดตามช่วงเวลา
+  // กราฟแนวโน้ม (เส้น/แท่ง) ใช้ชุดนี้ เพราะมีปุ่มช่วงย้อนหลังของตัวเอง ต้องมองข้ามตัวกรองเวลาบนแถบบนได้
+  const scopedQuotes = useMemo(
+    () => selDealer ? netQuotes.filter(q => q.dealerCode === selDealer.code) : netQuotes,
+    [netQuotes, selDealer],
+  );
+
+  // ── ใบเสนอราคาในช่วงเวลาที่เลือก (แหล่งข้อมูลของ KPI/ตาราง/การ์ดอื่นทั้งหน้า) + หน้าต่างก่อนหน้าสำหรับ trend ──
   const { winQuotes, prevQuotes } = useMemo(() => {
     const s = timeRange.start, e = timeRange.end;
     const ps = addDaysD(s, -periodDays), pe = addDaysD(s, -1);
-    const base = selDealer ? netQuotes.filter(q => q.dealerCode === selDealer.code) : netQuotes;
     const inR = (createdAt: string, a: Date, b: Date) => { const d = parseThaiDate(createdAt); return !!d && d >= a && d <= b; };
     return {
-      winQuotes: base.filter(q => inR(q.createdAt, s, e)),
-      prevQuotes: base.filter(q => inR(q.createdAt, ps, pe)),
+      winQuotes: scopedQuotes.filter(q => inR(q.createdAt, s, e)),
+      prevQuotes: scopedQuotes.filter(q => inR(q.createdAt, ps, pe)),
     };
-  }, [netQuotes, timeRange.start, timeRange.end, periodDays, selDealer]);
+  }, [scopedQuotes, timeRange.start, timeRange.end, periodDays]);
 
   // ── Scorecard — คำนวณจากใบเสนอราคาในช่วง · trend = เทียบช่วงก่อนหน้าเท่ากัน ──
   const sc = useMemo(() => {
@@ -310,8 +320,28 @@ export default function HQDashboard() {
     return arr.slice(0, 5).map((p, i) => ({ ...p, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
   }, [winQuotes]);
 
-  // Lead vs Quotation vs Won (รายเดือนในช่วง) — สำหรับกราฟแท่งซ้อน
-  const rangeMonths = useMemo(() => TH_ABBR.slice(timeRange.start.getMonth(), timeRange.end.getMonth() + 1), [timeRange]);
+  // ── กราฟแท่ง "ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)" — ปุ่มช่วงย้อนหลังของตัวเอง ──
+  // ไม่ผูกกับตัวกรองเวลาบนแถบบน (เป็นกราฟแนวโน้ม ต้องเห็นย้อนหลังเสมอ · กติกาเดียวกับแดชบอร์ดตัวแทน)
+  // ถังเดือนใช้คีย์ YYYY-MM — ช่วง 12 เดือนคาบเกี่ยว 2 ปี ถ้านับแต่เลขเดือนยอดปีที่แล้วจะทับปีนี้
+  const [barRange, setBarRange] = useState<MonthRange>(6);
+  const barTrend = useMemo(() => {
+    const buckets = lastNMonths(barRange, APP_NOW);
+    const leadsM = new Map<string, number>(), quotesM = new Map<string, number>(), wonM = new Map<string, number>();
+    const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+    scopedQuotes.forEach(q => {
+      const d = parseThaiDate(q.createdAt); if (!d) return;
+      const k = monthKeyOf(d);
+      bump(quotesM, k);
+      if (q.status === "won") bump(wonM, k);
+    });
+    allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
+    return {
+      months: buckets.map(b => b.label),
+      leads: buckets.map(b => leadsM.get(b.key) ?? 0),
+      quotes: buckets.map(b => quotesM.get(b.key) ?? 0),
+      won: buckets.map(b => wonM.get(b.key) ?? 0),
+    };
+  }, [barRange, scopedQuotes, allNetLeads]);
 
   // กิจกรรมล่าสุดทั้งเครือ (จากใบเสนอราคาล่าสุด)
   const recentActivities = useMemo<ActivityTimelineItem[]>(() => {
@@ -332,14 +362,24 @@ export default function HQDashboard() {
 
   // ── กราฟวิเคราะห์เพิ่มเติม (ตามสเปคใหม่) ──
   // เป้า vs ทำได้จริง รายเดือน (ล้านบาท)
+  // ── กราฟแท่ง "เป้าหมาย เทียบ ยอดขายจริง" — ปุ่มช่วงย้อนหลังของตัวเอง (กติกาเดียวกับกราฟแนวโน้มใบอื่น) ──
+  // เป้ารายเดือน = เป้าทั้งปี ÷ 12 (เท่ากันทุกเดือน) · ยอดจริง = ใบที่ปิดการขายได้ในเดือนนั้น
+  const [tgtRange, setTgtRange] = useState<MonthRange>(6);
   const targetVsActual = useMemo(() => {
     const planM = Math.round(targets.annualTarget / 12 / 1e6 * 10) / 10;
-    const actM = Array(12).fill(0);
-    winQuotes.forEach(q => { if (q.status !== "won") return; const d = parseThaiDate(q.createdAt); if (d) actM[d.getMonth()] += q.valueNum; });
-    const out: { label: string; actual: number; plan: number }[] = [];
-    for (let m = timeRange.start.getMonth(); m <= timeRange.end.getMonth(); m++) out.push({ label: TH_ABBR[m], actual: Math.round(actM[m] / 1e6 * 10) / 10, plan: planM });
-    return out;
-  }, [winQuotes, targets, timeRange]);
+    const actM = new Map<string, number>();
+    scopedQuotes.forEach(q => {
+      if (q.status !== "won") return;
+      const d = parseThaiDate(q.createdAt); if (!d) return;
+      const k = monthKeyOf(d);
+      actM.set(k, (actM.get(k) ?? 0) + q.valueNum);
+    });
+    return lastNMonths(tgtRange, APP_NOW).map(b => ({
+      label: b.label,
+      actual: Math.round((actM.get(b.key) ?? 0) / 1e6 * 10) / 10,
+      plan: planM,
+    }));
+  }, [scopedQuotes, targets, tgtRange]);
 
   // lostReasons ถูกลบพร้อมการ์ด — ไม่มีใครอ่านผลแล้ว
 
@@ -510,21 +550,37 @@ export default function HQDashboard() {
       {/* แถว 2: ลีด·ใบเสนอราคา·ปิดการขาย · เป้าหมายเทียบยอดขายจริง */}
       <div className="hq-row2b" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-header"><div className="card-title">ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)</div></div>
+          <div className="card-header">
+            <div className="card-title">ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)</div>
+            <MonthRangeToggle value={barRange} onChange={setBarRange} label="ช่วงเวลากราฟลีด·ใบเสนอราคา·ปิดการขาย" />
+          </div>
+          {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
+          <div style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
+            จำนวนรายการต่อเดือน · {monthRangeSubtitle(barRange, APP_NOW)}
+          </div>
           <div className="card-body" style={{ paddingTop: 4, flex: 1 }}>
             {/* แท่งกลุ่ม ไม่ใช่แท่งซ้อน — ลีด/ใบเสนอราคา/ปิดการขาย เป็นขั้นของดีลเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
-            <GroupedBarChart months={rangeMonths} vw={820} height={260} fmt={v => `${Math.round(v)}`}
+            <GroupedBarChart months={barTrend.months} vw={820} height={260} fmt={v => `${Math.round(v)}`}
               series={[
-                { name: "ลูกค้าเป้าหมาย (Leads)", color: "#003366", data: monthly.customers },
-                { name: "ใบเสนอราคา (Quotations)", color: "#0891b2", data: monthly.quotes },
-                { name: "ปิดการขาย (Won)", color: "#10B981", data: monthly.won },
+                { name: "ลูกค้าเป้าหมาย (Leads)", color: "#003366", data: barTrend.leads },
+                { name: "ใบเสนอราคา (Quotations)", color: "#0891b2", data: barTrend.quotes },
+                { name: "ปิดการขาย (Won)", color: "#10B981", data: barTrend.won },
               ]} />
           </div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">เป้าหมาย เทียบ ยอดขายจริง</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
-          <div className="card-body" style={{ paddingTop: 8 }}><PlanVsActualBars data={targetVsActual} unit="M" /></div>
+          <div className="card-header">
+            <div className="card-title">เป้าหมาย เทียบ ยอดขายจริง</div>
+            <MonthRangeToggle value={tgtRange} onChange={setTgtRange} label="ช่วงเวลากราฟเป้าหมายเทียบยอดขายจริง" />
+          </div>
+          {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
+          <div style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
+            หน่วย: ล้านบาท · {monthRangeSubtitle(tgtRange, APP_NOW)} · เป้ารายเดือน = เป้าทั้งปี ÷ 12
+          </div>
+          {/* ป้ายต้องตรงกับหัวการ์ด — ค่าเริ่มต้นของกราฟคือ "จริง"/"แผน" ซึ่งไม่ใช่คำที่หน้านี้ใช้ */}
+          <div className="card-body" style={{ paddingTop: 8 }}>
+            <PlanVsActualBars data={targetVsActual} unit="M" aLabel="ยอดขายจริง" bLabel="เป้าหมาย" />
+          </div>
         </div>
       </div>
 
@@ -554,22 +610,12 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ยอดขายตามประเภทอาคาร</div>
             <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
-          <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 12 }}>
-            {buildingPerf.map((p, i) => (
-              <div key={p.product}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: 6, background: p.color + "1a", color: p.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Building2 size={11} /></span>
-                  <span style={{ flex: 1, fontSize: "0.72rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.product}</span>
-                  <span style={{ fontSize: "0.72rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(p.value)}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ flex: 1, height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                    <div className="bar-grow" style={{ height: "100%", width: `${p.pct}%`, background: RAMP[i % RAMP.length], borderRadius: 999 }} />
-                  </div>
-                  <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", minWidth: 44, textAlign: "right", fontWeight: 700 }}>{p.projects} โครงการ</span>
-                </div>
-              </div>
-            ))}
+          {/* ใบนี้เป็นต้นแบบของ CategoryRows — แดชบอร์ดตัวแทนใช้คอมโพเนนต์ตัวเดียวกัน (ห้ามแยกมาร์กอัป) */}
+          <div className="card-body" style={{ paddingTop: 4 }}>
+            <CategoryRows
+              data={buildingPerf.map(p => ({ label: p.product, value: p.value, note: `${p.projects} โครงการ` }))}
+              fmt={fmtBaht} icon={<Building2 size={11} />}
+              ariaLabel="ยอดขายแยกตามประเภทอาคาร" />
           </div>
         </div>
         {/* การ์ด "เหตุผลปิดการขายไม่สำเร็จ" เอาออกตามที่บอสสั่ง */}

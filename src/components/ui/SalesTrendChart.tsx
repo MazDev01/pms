@@ -101,12 +101,21 @@ export function SalesTrendChart({
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
         </div>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
-          {RANGE_PILLS.map(p => (
-            <button key={p.key} onClick={() => setRange(p.key)}
-              className={range === p.key ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
-              style={{ padding: "4px 9px", fontSize: "0.72rem" }}>{p.label}</button>
-          ))}
+        {/* หน้าตาเดียวกับ <MonthRangeToggle> ของกราฟแท่ง — ปุ่มช่วงเวลาทุกใบในระบบต้องเหมือนกัน
+            (ที่นี่ใช้ปุ่มของตัวเอง ไม่ใช้คอมโพเนนต์กลาง เพราะคีย์ช่วงเป็น "3m/6m/12m" ไม่ใช่ตัวเลขเดือน) */}
+        <div role="group" aria-label="ช่วงเวลากราฟแนวโน้มยอดขาย" style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
+          {RANGE_PILLS.map(p => {
+            const on = range === p.key;
+            return (
+              <button key={p.key} type="button" onClick={() => setRange(p.key)} aria-pressed={on}
+                style={{
+                  fontFamily: "inherit", fontSize: "0.68rem", fontWeight: 700, whiteSpace: "nowrap",
+                  padding: "5px 9px", borderRadius: 8, cursor: "pointer",
+                  border: `1px solid ${on ? "#003366" : "#E5E7EB"}`, background: on ? "#003366" : "#fff", color: on ? "#fff" : "#6B7280",
+                  transition: "background .15s ease, color .15s ease, border-color .15s ease",
+                }}>{p.label}</button>
+            );
+          })}
         </div>
       </div>
 

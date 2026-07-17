@@ -1,17 +1,19 @@
-"use client";
+﻿"use client";
 
 // ─── HQ · ตั้งค่า (Enterprise Administration) ──────────────────────────────────
-// แท็บแนวนอน 7 หัวข้อตามพิมพ์เขียว Benjamin PMS (เลย์เอาต์เดียวกับหน้าตั้งค่าตัวแทน /settings):
-//   บริษัท · ผู้ใช้งานและสิทธิ์ · เส้นทางการขาย · ตัวแทนจำหน่าย · เป้าหมายยอดขาย · กฎธุรกิจ · การแจ้งเตือน
+// แท็บแนวนอน 6 หัวข้อ (เลย์เอาต์เดียวกับหน้าตั้งค่าตัวแทน /settings):
+//   บริษัท · ผู้ใช้งานและสิทธิ์ · เส้นทางการขาย · ตัวแทนจำหน่าย · เป้าหมายยอดขาย · การแจ้งเตือน
+// แท็บ "กฎธุรกิจ" ถูกยุบเข้า "เส้นทางการขาย" (เหลือ: เหตุผลปิดไม่สำเร็จ) — คีย์ localStorage เดิมทุกตัว ค่าที่ตั้งไว้ไม่หาย
+// การ์ดที่เป็นข้อความนโยบายล้วน ๆ (นโยบายราคา · ประเภทสินค้าและแม่แบบ) บอสสั่งลบ 17 ก.ค. 69 — ไม่มีช่องตั้งค่า ไม่ต้องมีในหน้าตั้งค่า
+// การ์ด "กฎใบเสนอราคา" (VAT · อายุใบ · เลขที่) บอสสั่งลบ 17 ก.ค. 69 — ค่ายังทำงานอยู่แต่ตรึงที่ค่าตั้งต้น แก้ผ่านหน้าจอไม่ได้แล้ว
 // ตัวแทนไม่มีสิทธิ์เข้าหน้านี้ · ทุกอย่างชิดซ้าย · ปุ่มบันทึก/รีเซ็ตอยู่บนแถบบน
 //
 // ไม่มีในหน้านี้ (ตัดตามสเปก): สินทรัพย์แบรนด์ · โลโก้/ธีม/สี/ฟอนต์ · ความปลอดภัย · SLA · LSA · AI · ส่วนลด
 //
 // กติกาของหน้านี้: ทุกช่องตั้งค่าต้องมีโค้ดอ่านไปใช้จริง — ห้ามมีช่องที่กดแล้วไม่เกิดอะไร
-//   เกณฑ์ 48 ชม. / 7 วัน  → /hq/leads · /leads · แดชบอร์ดตัวแทน (ผ่าน useHQLeadRules)
+//   (เกณฑ์ 48 ชม. / 7 วัน ย้ายไปหน้าตั้งค่าของตัวแทนแล้ว — ตัวแทนตั้งเอง แยกรายสาขา)
 //   กฎแจ้งเตือน 6 ข้อ     → กระดิ่ง HQ (ผ่าน @/lib/hqAlerts)
 //   เหตุผลปิดไม่สำเร็จ     → ตัวเลือกตอนปิดดีลของตัวแทน (loadLostReasons)
-//   VAT / อายุใบ / เลขที่ → ใบเสนอราคาทั้งเครือ
 //   เป้าทั้งปี            → แดชบอร์ด HQ + แดชบอร์ดตัวแทน
 import {
   useState, useEffect, useRef, useCallback, useMemo, useContext,
@@ -19,16 +21,15 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { usePersistentState } from "@/lib/usePersistentState";
-import { useRole } from "@/context/RoleContext";
 import {
   HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
-  HQ_LEAD_RULES_KEY, DEFAULT_HQ_LEAD_RULES, HQ_LEAD_RULES_EVENT,
   HQ_NOTIF_KEY, HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
-  HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, dealerLeaderboard,
+  HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, dealerLeaderboard, loadHQDealers,
   HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE,
-  type HQPolicy, type HQTargets, type HQLeadRules, type HQNotifChannels, type HQNotifRules,
-  type HQAlertKey, type DealerRow, type DealerCredentials, type LeadStatus,
+  HQ_SYSTEM_KEY, DEFAULT_QUOTE_NUMBERING,
+  type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
+  type HQAlertKey, type DealerRow, type LeadStatus,
 } from "@/lib/mock";
 // แท็บ "บริษัท" / "ผู้ใช้งาน" ฝังหน้าจัดการจริงเต็ม
 import { CompanyPanel } from "@/components/hq/CompanyPanel";
@@ -37,10 +38,10 @@ import { TopbarActions } from "@/components/layout/TopbarActions";
 import { useAuditLogger } from "@/lib/useAudit";
 import { SettingsBusCtx as BusCtx, type SectionApi } from "@/lib/settingsBus";
 import {
-  Building2, Users, Store, GitMerge, Target, Bell, SlidersHorizontal, Scale,
-  Save, RotateCcw, Plus, Trash2, Check, X, Copy, Key, LogIn, Eye, Power,
+  Building2, Users, GitMerge, Target, Bell,
+  Save, RotateCcw, Plus, Trash2, Check, X,
   Download, Upload, RefreshCw, Mail, Smartphone, Lock, AlertCircle,
-  ShieldCheck, Package,
+  ShieldCheck,
 } from "lucide-react";
 
 // ── tokens (Benjamin CI) ────────────────────────────────────────────────────
@@ -110,19 +111,6 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
     </button>
   );
 }
-// กติกาที่ระบบบังคับใช้อยู่แล้ว — ไม่ใช่ช่องตั้งค่า
-function PolicyList({ items }: { items: string[] }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-      {items.map((t, i) => (
-        <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 14px", background: "#f8fafc", border: "1px solid #eef1f5", borderRadius: 10 }}>
-          <Check size={15} color={NAVY} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span style={{ fontSize: "0.8rem", color: "#374151", lineHeight: 1.5 }}>{t}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 // แถบบอกว่า "ค่านี้ถูกใช้ที่ไหน" — กันไม่ให้ตั้งค่าแล้วเข้าใจผิดว่าไม่มีผล
 function UsedAt({ children }: { children: ReactNode }) {
   return (
@@ -145,19 +133,37 @@ const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะ�
 // แก้ชื่อ/สี/ลำดับที่นี่ไม่ได้ เพราะคัมบัง/ตาราง/แดชบอร์ด/งานมาตรฐาน ผูกกับสถานะจริงในโค้ด
 // (ของเดิมเป็นตัวแก้ไขที่แก้แล้วไม่มีผลกับหน้าไหนเลย)
 const STAGE_ORDER: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
+// รูปทรงที่ "เก็บลง localStorage" ของเลขที่ใบเสนอราคา — mock.loadQuoteNumbering() แปลงเป็น {prefix,next} ให้ผู้ใช้อ่าน
+// ค่าเริ่มต้นต้องมาจาก DEFAULT_QUOTE_NUMBERING แหล่งเดียว ห้ามพิมพ์ "Q-2026-"/1101 ซ้ำที่นี่ (เคยซ้ำ → แก้ที่เดียวไม่ครบ)
 type SystemCfg = { runningPrefix: string; runningNext: number };
-const DEFAULT_SYSTEM: SystemCfg = { runningPrefix: "Q-2026-", runningNext: 1101 };
+const DEFAULT_SYSTEM: SystemCfg = {
+  runningPrefix: DEFAULT_QUOTE_NUMBERING.prefix,
+  runningNext: DEFAULT_QUOTE_NUMBERING.next,
+};
+// เหตุผลปิดการขายไม่สำเร็จ — ขั้น "ปิดไม่สำเร็จ" เป็นปลายทางหนึ่งของเส้นทางการขาย จึงอยู่แท็บนี้
+// (เดิมอยู่แท็บ "กฎธุรกิจ" ซึ่งยุบไปแล้ว — คีย์ hq_sales_journey เหมือนเดิม ค่าที่ตั้งไว้ไม่หาย)
+type Journey = { lost: string[] };
+const DEFAULT_JOURNEY: Journey = {
+  lost: ["ราคาสูงเกินงบประมาณ", "คู่แข่งให้ข้อเสนอดีกว่า", "งบประมาณไม่พร้อม", "ลูกค้าไม่ตอบสนอง"],
+};
 
 function JourneyTab() {
-  // กฎใบเสนอราคา + เลขที่ใบ อยู่ที่นี่ (ใบเสนอราคาเป็นขั้นหนึ่งของเส้นทางการขาย)
+  // ทุกกฎของเส้นทางการขายรวมที่แท็บนี้: ใบเสนอราคา + เลขที่ใบ · เหตุผลปิดไม่สำเร็จ
   const pol = usePersistentDraft<HQPolicy>(HQ_POLICY_KEY, DEFAULT_HQ_POLICY);
-  const sys = usePersistentDraft<SystemCfg>("hq_system", DEFAULT_SYSTEM);
+  const sys = usePersistentDraft<SystemCfg>(HQ_SYSTEM_KEY, DEFAULT_SYSTEM);
+  const jn = usePersistentDraft<Journey>("hq_sales_journey", DEFAULT_JOURNEY);
+  const [newLost, setNewLost] = useState("");
+  // dep ต้องเป็นฟังก์ชันข้างใน (useCallback แล้ว) ไม่ใช่กล่องที่ usePersistentDraft คืนมา — กล่องใหม่ทุกเรนเดอร์
+  const saveAll = useCallback(() => {
+    pol.save(); sys.save(); jn.save();
+  }, [pol.save, sys.save, jn.save]);
   useReport(useMemo(() => ({
-    dirty: pol.dirty || sys.dirty,
-    save: () => { pol.save(); sys.save(); },
-    reset: () => { pol.reset(); sys.reset(); },
-  }), [pol.dirty, sys.dirty, pol.save, sys.save, pol.reset, sys.reset]));
+    dirty: pol.dirty || sys.dirty || jn.dirty,
+    save: saveAll,
+    reset: () => { pol.reset(); sys.reset(); jn.reset(); },
+  }), [pol.dirty, sys.dirty, jn.dirty, saveAll, pol.reset, sys.reset, jn.reset]));
 
+  const addLost = () => { if (newLost.trim()) { jn.set(p => ({ ...p, lost: [...p.lost, newLost.trim()] })); setNewLost(""); } };
   const active = STAGE_ORDER.filter(s => s !== "PAID" && s !== "CANCELLED");
   const tasksOf = (s: LeadStatus) => LEAD_TASK_TEMPLATE.filter(t => t.stage === s).map(t => t.label);
 
@@ -193,196 +199,47 @@ function JourneyTab() {
         </UsedAt>
       </SectionCard>
 
-      {/* กฎใบเสนอราคา — VAT/อายุใบ/เลขที่ ใช้จริงทั้งเครือ */}
-      <SectionCard icon={<SlidersHorizontal size={19} />} title="กฎใบเสนอราคา (Quotation Rules)" desc="มาตรฐานเอกสารที่ใช้ทั้งเครือ">
-        <Row label="อายุใบเสนอราคาเริ่มต้น" desc="กี่วันก่อนใบเสนอราคาหมดอายุ">
-          {numInput(pol.draft.quoteValidityDays, n => pol.set(p => ({ ...p, quoteValidityDays: n })), "วัน")}
-        </Row>
-        <Row label="ภาษีมูลค่าเพิ่ม (VAT)" desc="อัตรามาตรฐานบนใบเสนอราคาทุกตัวแทน">
-          {numInput(pol.draft.vat, n => pol.set(p => ({ ...p, vat: n })), "%")}
-        </Row>
-        <Row label="คำนำหน้าเลขที่ + เลขถัดไป" desc="รูปแบบเลขที่ใบเสนอราคา (ใช้ทั้งเครือ)">
-          <div style={{ display: "flex", gap: 8 }}>
-            <input className="form-input" style={{ flex: 1 }} value={sys.draft.runningPrefix} onChange={e => sys.set(p => ({ ...p, runningPrefix: e.target.value }))} />
-            <input type="number" className="form-input" style={{ width: 100, textAlign: "right", fontWeight: 700 }} value={sys.draft.runningNext} onChange={e => sys.set(p => ({ ...p, runningNext: Number(e.target.value) }))} />
-          </div>
-        </Row>
-        <PolicyList items={["แบบฟอร์ม PDF มาตรฐานเดียวทั้งเครือ — ใบเสนอราคาของตัวแทนใช้ “ข้อมูลบริษัทของตัวแทน” (ชื่อ / ที่อยู่ / เลขผู้เสียภาษี) เสมอ"]} />
+      {/* การ์ด "กฎการดูแลลูกค้าเป้าหมาย" (48 ชม. / 7 วัน) ถูกย้ายไปหน้าตั้งค่าของตัวแทนตามคำสั่ง
+          เจ้าของกฎเปลี่ยนจาก HQ → ตัวแทน และแยกเป็นรายสาขา (ตั้งที่ /settings → การแจ้งเตือน)
+          HQ ตั้งเกณฑ์นี้ให้ตัวแทนไม่ได้แล้ว · หน้า HQ อ่านเกณฑ์ของแต่ละสาขามาแสดงแทน (ผ่าน useLeadRulesOf)
+          ⚠️ อย่าใส่กลับมาที่นี่ — จะกลายเป็นสองแหล่งที่ขัดกันเอง */}
+
+      {/* การ์ด "กฎใบเสนอราคา (Quotation Rules)" ถูกลบตามคำสั่ง (17 ก.ค. 69)
+          ค่าที่การ์ดนี้เคยแก้ได้ยังทำงานอยู่ แต่ตอนนี้ตรึงที่ค่าตั้งต้น แก้ผ่านหน้าจอไม่ได้แล้ว:
+          · VAT 7%              (DEFAULT_HQ_POLICY.vat) — ใช้คิดภาษีในใบเสนอราคาทุกใบ
+          · อายุใบเสนอราคา 30 วัน (DEFAULT_HQ_POLICY.quoteValidityDays) — ใช้คิดวันหมดอายุ
+          · เลขที่ Q-2026- / 1101 (DEFAULT_QUOTE_NUMBERING) — ใช้ออกเลขใบเสนอราคาใหม่
+          pol/sys ยังคงอยู่ เพราะกลไกบันทึกรวมของหน้านี้ (saveAll/dirty/reset) ใช้ร่วมกับการ์ดอื่น */}
+
+      {/* เหตุผลปิดการขายไม่สำเร็จ — ปลายทาง "ปิดไม่สำเร็จ" ของเส้นทางการขาย (ย้ายมาจากแท็บ "กฎธุรกิจ") */}
+      <SectionCard icon={<X size={19} />} title="เหตุผลปิดการขายไม่สำเร็จ" desc="ตัวเลือกมาตรฐานที่ตัวแทนต้องเลือกตอนปิดดีลไม่สำเร็จ">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+          {jn.draft.lost.map((r, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px" }}>
+              <span style={{ flex: 1, fontSize: "0.8rem", color: STEEL }}>{r}</span>
+              <button onClick={() => jn.set(p => ({ ...p, lost: p.lost.filter((_, x) => x !== i) }))}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 2 }}><Trash2 size={13} /></button>
+            </div>
+          ))}
+          {!jn.draft.lost.length && (
+            <div style={{ fontSize: "0.78rem", color: "#b45309", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "9px 12px" }}>
+              ต้องมีอย่างน้อย 1 เหตุผล — ไม่งั้นตัวแทนจะไม่มีตัวเลือกตอนปิดดีลไม่สำเร็จ
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 420 }}>
+          <input className="form-input" value={newLost} placeholder="เพิ่มเหตุผล…" onChange={e => setNewLost(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") addLost(); }} />
+          <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }} onClick={addLost}><Plus size={14} /></button>
+        </div>
+        <UsedAt>รายการนี้คือตัวเลือกจริงในหน้าปิดดีลของตัวแทน และเป็นที่มาของรายงาน “เหตุผลที่เสียโอกาส”</UsedAt>
       </SectionCard>
 
-      <SectionCard icon={<Lock size={19} />} title="นโยบายราคา (Pricing Policy)" desc="โมเดลราคา — สำนักงานใหญ่ขายให้ตัวแทน ตัวแทนบวกกำไรเอง">
-        <PolicyList items={[
-          "ตัวแทนซื้อสินค้าจากสำนักงานใหญ่ด้วย “ราคากลาง” (Master Price)",
-          "ตัวแทนแก้ราคากลางไม่ได้ — ดูได้อย่างเดียว",
-          "ตัวแทนกำหนดราคาขายต่อให้ลูกค้าเองได้ (บวกกำไรเอง) — ระบบไม่มีส่วนลด ราคาที่เสนอคือราคาสุทธิ",
-          "เส้นทางการขายนี้กำหนดโดยสำนักงานใหญ่ — ตัวแทนแก้ไขไม่ได้ ดูได้อย่างเดียว",
-        ]} />
-      </SectionCard>
+
     </>
   );
 }
 
-// ═══════════════════════ 4 · ตัวแทนจำหน่าย ════════════════════════════════════
-// บัญชีและการเข้าระบบของตัวแทน — รหัส / บริษัท / ภาค / อีเมลเข้าระบบ / สถานะ
-// + ดู · รีเซ็ตรหัสผ่าน · ระงับ · เข้าระบบแทน (โหมดดู)
-// ไม่มีปุ่มเพิ่มลูกค้าเป้าหมาย/เพิ่มลูกค้า (ตามสเปก) · รายชื่อ/ผลงาน/เป้า จัดการที่หน้า “ตัวแทน”
-type DealerDefaults = { defaultQuota: number; allowResetPwd: boolean };
-const DEFAULT_DEALER_DEFAULTS: DealerDefaults = { defaultQuota: 30_000_000, allowResetPwd: true };
-
-// รหัสผ่านใหม่แบบ deterministic (ไม่ใช้ random → เดโมทวนซ้ำได้) — อิงรหัสตัวแทน + ความยาวรหัสเดิม
-function genPassword(code: string, nonce: number): string {
-  const sum = code.split("").reduce((s, c) => s + c.charCodeAt(0), 0) + nonce * 7;
-  return `PEB-${code}-${1000 + (sum % 9000)}`;
-}
-
-function CopyRow({ label, value }: { label: string; value: string }) {
-  const [c, setC] = useState(false);
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 11px" }}>
-        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.84rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis" }}>{value}</span>
-        <button type="button" onClick={() => navigator.clipboard.writeText(value).then(() => { setC(true); setTimeout(() => setC(false), 1500); })}
-          style={{ background: "none", border: "none", cursor: "pointer", color: c ? "#059669" : "#6b7280", padding: 0, display: "flex", flexShrink: 0 }}>
-          {c ? <Check size={14} /> : <Copy size={14} />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DealersTab() {
-  const router = useRouter();
-  const { login } = useRole();
-  const logAudit = useAuditLogger();
-  const toast = useToast();
-  const [dealers, setDealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
-  const dd = usePersistentDraft<DealerDefaults>("hq_dealer_settings", DEFAULT_DEALER_DEFAULTS);
-  useReport(useMemo(() => ({ dirty: dd.dirty, save: dd.save, reset: dd.reset }), [dd.dirty, dd.save, dd.reset]));
-  const [resetInfo, setResetInfo] = useState<{ d: DealerRow; creds: DealerCredentials } | null>(null);
-
-  // การกระทำกับบัญชีมีผลทันที (ไม่ผ่านปุ่มบันทึกกลาง) — และลงบันทึกการใช้งานทุกครั้ง
-  function resetPassword(d: DealerRow) {
-    const creds: DealerCredentials = { email: d.credentials.email, password: genPassword(d.code, d.credentials.password.length) };
-    setDealers(prev => prev.map(x => x.id === d.id ? { ...x, credentials: creds } : x));
-    logAudit("รีเซ็ตรหัสผ่านตัวแทน", `${d.code} · ${d.name}`);
-    setResetInfo({ d, creds });
-  }
-  function toggleSuspend(d: DealerRow) {
-    const next = d.status === "active" ? "inactive" : "active";
-    if (next === "inactive" && !confirm(`ระงับ "${d.name}" ไม่ให้เข้าระบบ?`)) return;
-    setDealers(prev => prev.map(x => x.id === d.id ? { ...x, status: next } : x));
-    logAudit(next === "active" ? "เปิดใช้งานตัวแทน" : "ระงับตัวแทน", `${d.code} · ${d.name}`);
-    toast(next === "active" ? "เปิดใช้งานตัวแทนแล้ว" : "ระงับตัวแทนแล้ว");
-  }
-  function enterDealer(d: DealerRow) {
-    logAudit("เข้าระบบแทนตัวแทน (โหมดดู)", `${d.code} · ${d.name}`);
-    login("dealer");
-    router.push("/dashboard");
-  }
-
-  const iconBtn: React.CSSProperties = {
-    width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-    background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 7, color: NAVY, cursor: "pointer",
-  };
-
-  return (
-    <>
-      <SectionCard icon={<Store size={19} />} title="บัญชีและการเข้าระบบของตัวแทน"
-        desc={`${dealers.length} ตัวแทนในเครือ — ตัวแทน 1 บริษัท = 1 บัญชี`}>
-        <div className="table-wrap" style={{ marginTop: 6 }}>
-          <table>
-            <colgroup>
-              <col style={{ width: "10%", minWidth: 68 }} />
-              <col style={{ width: "26%", minWidth: 150 }} />
-              <col style={{ width: "18%", minWidth: 110 }} />
-              <col style={{ width: "24%", minWidth: 150 }} />
-              <col style={{ width: "10%", minWidth: 84 }} />
-              <col style={{ width: "12%", minWidth: 132 }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>รหัส</th>
-                <th>บริษัท</th>
-                <th>ภาค</th>
-                <th>อีเมลเข้าระบบ</th>
-                <th>สถานะ</th>
-                <th style={{ textAlign: "right" }}>จัดการ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dealers.map(d => (
-                <tr key={d.id}>
-                  <td style={{ fontWeight: 800, color: NAVY, fontFamily: "monospace" }}>{d.code}</td>
-                  <td style={{ fontWeight: 600, color: STEEL }}>{d.name}</td>
-                  <td style={{ color: "#6b7280", fontSize: "0.78rem" }}>{regionDisplay(d.region)}</td>
-                  <td style={{ color: "#6b7280", fontSize: "0.76rem", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{d.credentials.email}</td>
-                  <td>
-                    <span className="badge" style={d.status === "active"
-                      ? { background: "#e5faf0", color: "#059669" }
-                      : { background: "#fee2e2", color: "#dc2626" }}>
-                      {d.status === "active" ? "ใช้งาน" : "ระงับ"}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
-                      <button style={iconBtn} title="ดูรายละเอียด" onClick={() => router.push(`/hq/dealers/${d.code}`)}><Eye size={12} /></button>
-                      <button style={{ ...iconBtn, opacity: dd.draft.allowResetPwd ? 1 : .4, cursor: dd.draft.allowResetPwd ? "pointer" : "not-allowed" }}
-                        title={dd.draft.allowResetPwd ? "รีเซ็ตรหัสผ่าน" : "ปิดการรีเซ็ตรหัสผ่านไว้"}
-                        disabled={!dd.draft.allowResetPwd} onClick={() => resetPassword(d)}><Key size={12} /></button>
-                      <button style={{ ...iconBtn, color: d.status === "active" ? "#dc2626" : "#059669" }}
-                        title={d.status === "active" ? "ระงับ" : "เปิดใช้งาน"} onClick={() => toggleSuspend(d)}><Power size={12} /></button>
-                      <button style={iconBtn} title="เข้าระบบแทนตัวแทน (โหมดดู)" onClick={() => enterDealer(d)}><LogIn size={12} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <UsedAt>เพิ่ม/แก้ไขตัวแทน · จังหวัด · เป้ายอดขาย · ผลงาน จัดการที่หน้า “ตัวแทน” — หน้านี้ดูแลเฉพาะบัญชีและการเข้าระบบ</UsedAt>
-      </SectionCard>
-
-      <SectionCard icon={<SlidersHorizontal size={19} />} title="ค่ามาตรฐานตัวแทนจำหน่าย" desc="ค่าตั้งต้นเวลาสร้างตัวแทนใหม่ + สิทธิ์รวม">
-        <Row label="เป้ายอดขายเริ่มต้น (ต่อปี)" desc="เป้าตั้งต้นของตัวแทนใหม่">
-          {numInput(dd.draft.defaultQuota, n => dd.set(p => ({ ...p, defaultQuota: n })), "บาท", 1_000_000)}
-        </Row>
-        <Row label="เปิดให้รีเซ็ตรหัสผ่านตัวแทนได้" desc="ปิดไว้ = ล็อกปุ่มรีเซ็ตรหัสผ่านในตารางด้านบน">
-          <Toggle on={dd.draft.allowResetPwd} onChange={() => dd.set(p => ({ ...p, allowResetPwd: !p.allowResetPwd }))} />
-        </Row>
-      </SectionCard>
-
-      <SectionCard icon={<ShieldCheck size={19} />} title="นโยบายตัวแทน (Dealer Policy)" desc="สิทธิ์และข้อจำกัดของตัวแทนในเครือ">
-        <PolicyList items={[
-          "ตัวแทน 1 บริษัท = 1 บัญชี — สร้างโดยสำนักงานใหญ่เท่านั้น",
-          "ตัวแทนเปลี่ยนอีเมลเข้าสู่ระบบและรหัสผ่านเองไม่ได้ — ต้องแจ้งสำนักงานใหญ่",
-          "สำนักงานใหญ่รีเซ็ตรหัสผ่าน ระงับบัญชี และเข้าระบบแทนตัวแทนได้",
-          "ทั้งระบบใช้แบรนด์ Benjamin — ตัวแทนเปลี่ยนโลโก้/แบรนด์/ธีมเองไม่ได้",
-          "ตัวแทนแก้แม่แบบและราคากลางของสำนักงานใหญ่ไม่ได้ — ดูได้อย่างเดียว",
-        ]} />
-      </SectionCard>
-
-      {/* รหัสผ่านใหม่หลังรีเซ็ต — ให้คัดลอกไปแจ้งตัวแทน */}
-      {resetInfo && (
-        <div onClick={() => setResetInfo(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
-            <div style={{ background: NAVY, color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><Key size={16} /> รีเซ็ตรหัสผ่านแล้ว</div>
-              <button onClick={() => setResetInfo(null)} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
-            </div>
-            <div style={{ padding: 20 }}>
-              <div style={{ fontSize: "0.82rem", color: "#6b7280", marginBottom: 12 }}>
-                รหัสผ่านใหม่ของ <strong style={{ color: STEEL }}>{resetInfo.d.name}</strong> — แจ้งให้ตัวแทนเปลี่ยนเองหลังเข้าระบบ
-              </div>
-              <CopyRow label="อีเมลเข้าระบบ" value={resetInfo.creds.email} />
-              <CopyRow label="รหัสผ่านใหม่" value={resetInfo.creds.password} />
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
 
 // ═══════════════════════ 5 · เป้าหมายยอดขาย ═══════════════════════════════════
 // เป้าทั้งปี = แหล่งเดียว (แดชบอร์ด HQ/ตัวแทนอ่านค่านี้) · ไตรมาส/เดือน = แบ่งจากเป้าทั้งปี
@@ -449,7 +306,11 @@ function RollupTable({ title, hint, rows, countryTarget }: {
 
 function TargetsTab() {
   const { draft, set, dirty, save, reset } = usePersistentDraft<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
-  const [dealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
+  // แท็บนี้ "อ่านอย่างเดียว" — เป้ารายตัวแทนแก้ที่แท็บตัวแทนจำหน่าย/หน้า /hq/dealers
+  // ห้ามใช้ usePersistentState: มันเขียนกลับตอน mount → กลายเป็นคนเขียน hq_dealers_v3 คนที่ 3
+  // ทั้งที่ไม่เคยแก้ตัวแทนเลย (กติกาเดียวกับที่ mock.ts:893 เตือนไว้)
+  const [dealers, setDealers] = useState<DealerRow[]>(dealerLeaderboard);
+  useEffect(() => { setDealers(loadHQDealers()); }, []);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
   // รวมเป้า/ผลจริงตามพื้นที่ — มาจากเป้ารายตัวแทนที่ตั้งไว้จริง ไม่ได้กุตัวเลข
@@ -481,12 +342,12 @@ function TargetsTab() {
           {numInput(draft.onTimeTarget, n => set(p => ({ ...p, onTimeTarget: n })), "%")}
         </Row>
 
-        {/* ไตรมาส/เดือน = แบ่งจากเป้าทั้งปี — ไม่ให้ตั้งแยก จะได้ไม่ขัดกับเป้าทั้งปี */}
+        {/* ไตรมาส/เดือน = แบ่งจากเป้าทั้งปี — ไม่ให้ตั้งแยก จะได้ไม่ขัดกับเป้าทั้งปี
+            ไม่มีการ์ด "เป้าทั้งปี" ซ้ำตรงนี้ — ค่านั้นคือช่องกรอกด้านบนอยู่แล้ว และมันไม่ใช่ "ส่วนที่แบ่งมา" */}
         <div style={{ marginTop: 18 }}>
           <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#6b7280", marginBottom: 8 }}>แบ่งจากเป้าทั้งปี</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12 }}>
             {[
-              { label: "เป้าทั้งปี", value: fmtB(draft.annualTarget) },
               { label: "เป้าต่อไตรมาส", value: fmtB(Math.round(draft.annualTarget / 4)) },
               { label: "เป้าต่อเดือน", value: fmtB(Math.round(draft.annualTarget / 12)) },
             ].map(s => (
@@ -524,84 +385,6 @@ function TargetsTab() {
   );
 }
 
-// ═══════════════════════ 6 · กฎธุรกิจ ═════════════════════════════════════════
-// กฎที่ระบบบังคับใช้จริงกับทุกตัวแทน — ทุกข้อมีหน้าที่อ่านค่าไปใช้
-// ไม่มี: SLA · LSA · เพดานส่วนลด (ส่วนลดถูกลบทั้งฟีเจอร์ตามคำสั่ง 15 ก.ค. 69)
-// ไม่มี "ลบลีดอัตโนมัติ" — ระบบไม่มีตัวลบจริง จึงเป็นการแจ้งเตือนลีดเงียบแทน
-type Journey = { lost: string[] };
-const DEFAULT_JOURNEY: Journey = {
-  lost: ["ราคาสูงเกินงบประมาณ", "คู่แข่งให้ข้อเสนอดีกว่า", "งบประมาณไม่พร้อม", "ลูกค้าไม่ตอบสนอง"],
-};
-
-function BusinessRulesTab() {
-  const router = useRouter();
-  const lead = usePersistentDraft<HQLeadRules>(HQ_LEAD_RULES_KEY, DEFAULT_HQ_LEAD_RULES);
-  const jn = usePersistentDraft<Journey>("hq_sales_journey", DEFAULT_JOURNEY);
-  const [newLost, setNewLost] = useState("");
-  // บันทึกแล้วยิง event → หน้าลีด/แดชบอร์ดที่เปิดค้างอยู่อัปเดตเกณฑ์ทันที
-  // dep ต้องเป็นฟังก์ชันข้างใน (useCallback แล้ว) ไม่ใช่กล่องที่ usePersistentDraft คืนมา — กล่องใหม่ทุกเรนเดอร์
-  const saveAll = useCallback(() => {
-    lead.save(); jn.save();
-    window.dispatchEvent(new Event(HQ_LEAD_RULES_EVENT));
-  }, [lead.save, jn.save]);
-  useReport(useMemo(() => ({
-    dirty: lead.dirty || jn.dirty,
-    save: saveAll,
-    reset: () => { lead.reset(); jn.reset(); },
-  }), [lead.dirty, jn.dirty, saveAll, lead.reset, jn.reset]));
-
-  const addLost = () => { if (newLost.trim()) { jn.set(p => ({ ...p, lost: [...p.lost, newLost.trim()] })); setNewLost(""); } };
-
-  return (
-    <>
-      <SectionCard icon={<Scale size={19} />} title="กฎการดูแลลูกค้าเป้าหมาย" desc="เกณฑ์กลางที่บังคับใช้กับทุกตัวแทน — ตัวแทนแก้เองไม่ได้">
-        <Row label="ต้องมีผู้รับผิดชอบภายใน" desc="ลีดใหม่ที่ยังไม่มีผู้รับผิดชอบเกินกำหนด → ขึ้นการ์ดเตือน">
-          {numInput(lead.draft.unassignedAlertHours, n => lead.set(p => ({ ...p, unassignedAlertHours: n })), "ชั่วโมง")}
-        </Row>
-        <Row label="เตือนเมื่อลีดไม่มีการติดต่อเกิน" desc="ลีดที่ยังไม่ปิดและเงียบเกินกำหนด → ขึ้นป้าย “ต้องติดตามด่วน”">
-          {numInput(lead.draft.followUpAlertDays, n => lead.set(p => ({ ...p, followUpAlertDays: n })), "วัน")}
-        </Row>
-        <UsedAt>
-          สองเกณฑ์นี้ถูกใช้จริงที่: ลูกค้าเป้าหมายทั้งเครือ · หน้าลูกค้าเป้าหมายของตัวแทน · แดชบอร์ดตัวแทน · กระดิ่งแจ้งเตือน
-          <br />ลีดที่เงียบนานจะถูก “เตือน” เท่านั้น — ระบบไม่ลบลีดอัตโนมัติ (ข้อมูลลูกค้าเป้าหมายไม่หายเอง)
-        </UsedAt>
-      </SectionCard>
-
-      <SectionCard icon={<X size={19} />} title="เหตุผลปิดการขายไม่สำเร็จ" desc="ตัวเลือกมาตรฐานที่ตัวแทนต้องเลือกตอนปิดดีลไม่สำเร็จ">
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-          {jn.draft.lost.map((r, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px" }}>
-              <span style={{ flex: 1, fontSize: "0.8rem", color: STEEL }}>{r}</span>
-              <button onClick={() => jn.set(p => ({ ...p, lost: p.lost.filter((_, x) => x !== i) }))}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 2 }}><Trash2 size={13} /></button>
-            </div>
-          ))}
-          {!jn.draft.lost.length && (
-            <div style={{ fontSize: "0.78rem", color: "#b45309", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "9px 12px" }}>
-              ต้องมีอย่างน้อย 1 เหตุผล — ไม่งั้นตัวแทนจะไม่มีตัวเลือกตอนปิดดีลไม่สำเร็จ
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 420 }}>
-          <input className="form-input" value={newLost} placeholder="เพิ่มเหตุผล…" onChange={e => setNewLost(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") addLost(); }} />
-          <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }} onClick={addLost}><Plus size={14} /></button>
-        </div>
-        <UsedAt>รายการนี้คือตัวเลือกจริงในหน้าปิดดีลของตัวแทน และเป็นที่มาของรายงาน “เหตุผลที่เสียโอกาส”</UsedAt>
-      </SectionCard>
-
-      <SectionCard icon={<Package size={19} />} title="ประเภทสินค้าและแม่แบบ" desc="สำนักงานใหญ่กำหนดแม่แบบและราคากลาง — ตัวแทนดูได้อย่างเดียว"
-        action={<button className="btn btn-secondary btn-sm" onClick={() => router.push("/hq/master")}>เปิดแคตตาล็อกแม่แบบ</button>}>
-        <PolicyList items={[
-          "ประเภทสินค้า/แม่แบบทั้งหมดจัดการที่หน้า “แคตตาล็อกแม่แบบ” ที่เดียว — ไม่ตั้งซ้ำที่นี่",
-          "ตัวแทนเลือกแม่แบบจากแคตตาล็อกกลางเท่านั้น เพิ่ม/แก้แม่แบบเองไม่ได้",
-          "ราคากลางของแม่แบบใช้ร่วมกันทั้งเครือ — เปลี่ยนที่สำนักงานใหญ่แล้วมีผลทุกตัวแทน",
-        ]} />
-      </SectionCard>
-    </>
-  );
-}
-
 // ═══════════════════════ 7 · การแจ้งเตือน ═════════════════════════════════════
 // 2 การ์ด:
 //  1) กฎแจ้งเตือน 6 เรื่อง — คำนวณจากข้อมูลจริง แล้วขึ้นกระดิ่ง HQ (ดู @/lib/hqAlerts)
@@ -612,12 +395,16 @@ const CHANNELS: { k: keyof HQNotifChannels; label: string }[] = [
   { k: "email", label: "อีเมล" },
   { k: "inapp", label: "ในระบบ" },
 ];
-// เกณฑ์ของแต่ละกฎ (ถ้ามี) — 2 ข้อแรกใช้เกณฑ์จาก "กฎธุรกิจ" จึงไม่มีช่องกรอกซ้ำที่นี่
-const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: "quoteExpiringDays" | "dealerIdleDays" | "targetAchievedPct" | "lostRatePct"; unit: string }>> = {
-  quoteExpiring:  { field: "quoteExpiringDays",  unit: "วัน" },
-  dealerIdle:     { field: "dealerIdleDays",     unit: "วัน" },
-  targetAchieved: { field: "targetAchievedPct",  unit: "% ของเป้า" },
-  lostRate:       { field: "lostRatePct",        unit: "%" },
+// เกณฑ์ของแต่ละกฎ (ถ้ามี) — "ผู้รับผิดชอบ" ใช้เกณฑ์จาก "เส้นทางการขาย" จึงไม่มีช่องกรอกซ้ำที่นี่
+// ลีดเงียบมีเกณฑ์ของ HQ เอง (คนละตัวกับกฎติดตาม 7 วันที่บังคับตัวแทน — ดู @/lib/hqAlerts)
+type NumRuleKey = Exclude<keyof HQNotifRules, "alerts">;
+const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: NumRuleKey; unit: string }[]>> = {
+  idleLead:       [{ field: "leadIdleDays",      unit: "วัน" }],
+  quoteExpiring:  [{ field: "quoteExpiringDays", unit: "วัน" }],
+  dealerIdle:     [{ field: "dealerIdleDays",    unit: "วัน" }],
+  targetAchieved: [{ field: "targetAchievedPct", unit: "% ของเป้า" }],
+  // ต้องมีทั้ง % และกลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลีดใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
+  lostRate:       [{ field: "lostRatePct",       unit: "%" }, { field: "lostRateMinClosed", unit: "ลีดขึ้นไป" }],
 };
 
 function NotificationsTab() {
@@ -658,9 +445,11 @@ function NotificationsTab() {
                   <div style={{ fontSize: "0.84rem", fontWeight: 700, color: STEEL }}>{a.label}</div>
                   <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{a.desc}</div>
                 </div>
-                {/* ช่องเกณฑ์ + ช่องทาง — ปิดกฎแล้วจาง สื่อว่าไม่ถูกใช้ */}
-                <div style={{ flex: "0 0 176px", opacity: pref.on ? 1 : .4, pointerEvents: pref.on ? "auto" : "none", transition: "opacity .15s" }}>
-                  {th && numInput(rules.draft[th.field], n => rules.set(p => ({ ...p, [th.field]: n })), th.unit)}
+                {/* ช่องเกณฑ์ + ช่องทาง — ปิดกฎแล้วจาง สื่อว่าไม่ถูกใช้ · บางกฎมีเกณฑ์มากกว่า 1 ช่อง จึงเรียงลง */}
+                <div style={{ flex: "0 0 176px", display: "flex", flexDirection: "column", gap: 6, opacity: pref.on ? 1 : .4, pointerEvents: pref.on ? "auto" : "none", transition: "opacity .15s" }}>
+                  {th?.map(t => (
+                    <div key={t.field}>{numInput(rules.draft[t.field], n => rules.set(p => ({ ...p, [t.field]: n })), t.unit)}</div>
+                  ))}
                 </div>
                 {CHANNELS.map(c => (
                   <div key={c.k} style={{ width: 60, display: "flex", justifyContent: "center", opacity: pref.on ? 1 : .4, pointerEvents: pref.on ? "auto" : "none" }}>
@@ -675,8 +464,9 @@ function NotificationsTab() {
           })}
         </div>
         <UsedAt>
-          เกณฑ์ของ 2 เรื่องแรก (ผู้รับผิดชอบ / ลีดเงียบ) ตั้งที่หัวข้อ “กฎธุรกิจ” — ที่นี่คุมแค่เปิด/ปิดและช่องทาง
-          <br />ช่อง “ในระบบ” คุมกระดิ่งจริง · ช่อง “อีเมล” เก็บค่าไว้ให้ระบบส่งอีเมล (ยังไม่ได้ต่อระบบส่งจริง)
+          เกณฑ์ “ผู้รับผิดชอบ” ตัวแทนแต่ละสาขาตั้งเองที่หน้าตั้งค่าของตัวแทน — ที่นี่คุมแค่เปิด/ปิดและช่องทาง
+          <br />“ลีดเงียบ” ใช้เกณฑ์ของสำนักงานใหญ่ (ช่องด้านขวา) คนละตัวกับกฎติดตาม 7 วันที่บังคับตัวแทน
+          <br />ช่อง “ในระบบ” คุมกระดิ่งจริงและการ์ด “ต้องดูด่วน” บนแดชบอร์ด · ช่อง “อีเมล” เก็บค่าไว้ให้ระบบส่งอีเมล (ยังไม่ได้ต่อระบบส่งจริง)
         </UsedAt>
       </SectionCard>
 
@@ -708,10 +498,12 @@ function NotificationsTab() {
 
 // ═══════════════════════ 1 · บริษัท (+ สำรอง/กู้คืน) ══════════════════════════
 // คีย์จริงที่ใช้ทั้งระบบ → backup/restore ครบจริง
+// ไม่มี "hq_dealer_settings" แล้ว — คีย์นั้นตายไปพร้อมแท็บ "ตัวแทนจำหน่าย" (ไม่มีใครอ่านค่าในนั้นเลย)
 const SETTINGS_KEYS = [
   "hq_company_profile", "hq_users_v4",
-  "hq_dealer_settings", HQ_DEALERS_KEY, "hq_sales_journey", HQ_TARGETS_KEY,
-  HQ_NOTIF_KEY, HQ_NOTIF_RULES_KEY, HQ_LEAD_RULES_KEY, "hq_system", HQ_POLICY_KEY,
+  HQ_DEALERS_KEY, "hq_sales_journey", HQ_TARGETS_KEY,
+  // กฎดูแลลีดไม่อยู่ในสำรองข้อมูลของ HQ แล้ว — เป็นค่าของตัวแทน (คีย์ dealer_lead_rules)
+  HQ_NOTIF_KEY, HQ_NOTIF_RULES_KEY, HQ_SYSTEM_KEY, HQ_POLICY_KEY,
 ];
 function BackupCard() {
   const toast = useToast();
@@ -752,15 +544,16 @@ function CompanyTab() {
 }
 
 // ═══════════════════════ ROOT ═════════════════════════════════════════════════
-// 7 หัวข้อตามสเปก — ไม่มี ความปลอดภัย / SLA / LSA / แบรนด์ / ธีม / AI / ส่วนลด
-type TabKey = "company" | "users" | "journey" | "dealers" | "targets" | "rules" | "notifications";
+// ไม่มี ความปลอดภัย / SLA / LSA / แบรนด์ / ธีม / AI / ส่วนลด
+// แท็บ "ตัวแทนจำหน่าย" ถูกยุบตามคำสั่ง — ทั้งใบซ้ำกับหน้า /hq/dealers (ตารางบัญชี · สลับสถานะ · เข้าระบบแทน)
+//   "รีเซ็ตรหัสผ่าน" ย้ายไปอยู่ในโมดัล "รหัสเข้าระบบ" ของหน้า /hq/dealers แล้ว (ไม่มีที่อื่นมาก่อน)
+//   "ค่ามาตรฐานตัวแทน" (defaultQuota) ถูกลบ — ไม่มีใครอ่านค่านั้นเลย ค่าจริงตอนสร้างตัวแทนอยู่ที่ /hq/dealers
+type TabKey = "company" | "users" | "journey" | "targets" | "notifications";
 const TABS: { key: TabKey; label: string; icon: ReactNode; render: () => ReactNode }[] = [
   { key: "company", label: "บริษัท", icon: <Building2 size={15} />, render: () => <CompanyTab /> },
   { key: "users", label: "ผู้ใช้งานและสิทธิ์", icon: <Users size={15} />, render: () => <UsersPanel embedded /> },
   { key: "journey", label: "เส้นทางการขาย", icon: <GitMerge size={15} />, render: () => <JourneyTab /> },
-  { key: "dealers", label: "ตัวแทนจำหน่าย", icon: <Store size={15} />, render: () => <DealersTab /> },
   { key: "targets", label: "เป้าหมายยอดขาย", icon: <Target size={15} />, render: () => <TargetsTab /> },
-  { key: "rules", label: "กฎธุรกิจ", icon: <Scale size={15} />, render: () => <BusinessRulesTab /> },
   { key: "notifications", label: "การแจ้งเตือน", icon: <Bell size={15} />, render: () => <NotificationsTab /> },
 ];
 

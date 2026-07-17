@@ -14,20 +14,12 @@ import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { customerCode } from "@/lib/mock";
-import { toThaiDate } from "@/lib/warranty";
-import { useCustomerDb, REGIONS, isWarrantyExpiringSoon, type CustomerDbRow } from "@/lib/customerDb";
+import { toThaiDate } from "@/lib/delivery";
+import { useCustomerDb, REGIONS, type CustomerDbRow } from "@/lib/customerDb";
 import { CustomerKPICards } from "@/components/hq/customers/CustomerKPICards";
 import { CustomerAnalytics } from "@/components/hq/customers/CustomerAnalytics";
 import { CustomerTable } from "@/components/hq/customers/CustomerTable";
 import { CustomerDrawer } from "@/components/hq/customers/CustomerDrawer";
-
-type WarrantyFilter = "all" | "active" | "soon" | "expired" | "none";
-
-// ตัวกรองประกันทำงานระดับ "อาคาร" (ลูกค้า 1 รายมีหลายอาคาร สถานะต่างกันได้)
-// ป้ายจึงเขียนว่า "มีอาคาร..." ให้ตรงกับที่กรองจริง — คอลัมน์ในตารางแสดงอาคารที่ส่งมอบล่าสุด
-const WARRANTY_LABEL: Record<Exclude<WarrantyFilter, "all">, string> = {
-  active: "มีอาคารอยู่ในประกัน", soon: "มีอาคารใกล้หมดประกัน", expired: "มีอาคารหมดประกันแล้ว", none: "ยังไม่ส่งมอบ",
-};
 
 export default function HQCustomersPage() {
   const source = useCustomerDb();
@@ -39,7 +31,6 @@ export default function HQCustomersPage() {
   const [provinceSel, setProvinceSel] = useState("all");
   const [typeSel, setTypeSel] = useState("all");
   const [yearSel, setYearSel] = useState("all");        // ปีที่ส่งมอบ
-  const [warrantySel, setWarrantySel] = useState<WarrantyFilter>("all");
   const [viewC, setViewC] = useState<CustomerDbRow | null>(null);
 
   // ตัวเลือกทุกอันสร้างจากข้อมูลจริงในหน้า — ไม่มีรายการค้างที่ไม่มีข้อมูล
@@ -76,19 +67,16 @@ export default function HQCustomersPage() {
         if (provinceSel !== "all" && c.province !== provinceSel) return false;
         if (typeSel !== "all" && !c.buildingTypes.includes(typeSel)) return false;
         if (yearSel !== "all" && !c.buildings.some(b => b.deliveredAt && b.deliveredAt.getFullYear() + 543 === +yearSel)) return false;
-        if (warrantySel !== "all") {
-          // นับระดับอาคาร ให้ตรงกับกราฟ "สถานะประกัน" — ลูกค้ารายเดียวมีได้ทั้งอาคารที่หมดและยังไม่หมด
-          if (warrantySel === "none" && c.buildings.some(b => b.warranty)) return false;
-          if (warrantySel === "active" && !c.buildings.some(b => b.warranty?.status === "active")) return false;
-          if (warrantySel === "soon" && !c.buildings.some(b => isWarrantyExpiringSoon(b.warranty))) return false;
-          if (warrantySel === "expired" && !c.buildings.some(b => b.warranty?.status === "expired")) return false;
-        }
         return true;
       })
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [source, search, dealerSel, regionSel, provinceSel, typeSel, yearSel, warrantySel]);
+  }, [source, search, dealerSel, regionSel, provinceSel, typeSel, yearSel]);
 
-  const selectStyle = { width: "auto", cursor: "pointer" } as const;
+  // ตัวกรอง 5 ช่อง + ช่องค้นหา ต้องอยู่บรรทัดเดียว (แถวนี้ตั้ง flex-wrap: nowrap)
+  //   maxWidth — select ที่ width:auto จะกว้างตามตัวเลือกที่ยาวที่สุด (เช่น "RYG – ตัวแทนระยอง สตีล") ต้องคุมเพดาน
+  //   minWidth: 0 + flexShrink — ให้ยุบตัวลงได้เมื่อจอแคบ แทนที่จะตกบรรทัด (nowrap ทำให้ยุบก่อน ไม่ใช่ wrap)
+  // ขนาดตัวอักษร/ระยะขอบ ใช้สเกลเดียวกับแถบกรองหน้า /hq/pipeline
+  const selectStyle = { width: "auto", flex: "0 1 auto", minWidth: 0, maxWidth: 146, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer" } as const;
 
   return (
     <div className="erp">
@@ -100,14 +88,13 @@ export default function HQCustomersPage() {
           <ExportMenu
             filename="hq-customers"
             title="ลูกค้าทั้งเครือ"
-            headers={["รหัสลูกค้า", "ลูกค้า", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ประเภทอาคาร", "แม่แบบ", "วันที่ส่งมอบ", "ประกัน", "ยอดซื้อรวม", "ซื้อล่าสุด"]}
+            headers={["รหัสลูกค้า", "ลูกค้า", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ประเภทอาคาร", "แม่แบบ", "วันที่ส่งมอบ", "ยอดซื้อรวม", "ซื้อล่าสุด"]}
             rows={filtered.map(c => [
               customerCode(c.dealerCode, c.localId ?? c.id),
               c.name, c.dealerCode, c.dealerName, c.province, c.region ?? "—",
               c.buildingTypes.join(", ") || "—",
               c.templates.join(", ") || "—",
               c.deliveredAt ? toThaiDate(c.deliveredAt) : "—",
-              c.warranty ? (c.warranty.status === "active" ? (isWarrantyExpiringSoon(c.warranty) ? "ใกล้หมด" : "อยู่ในประกัน") : "หมดประกัน") : "—",
               c.totalRevenue,
               c.lastPurchase ?? "—",
             ])}
@@ -117,9 +104,10 @@ export default function HQCustomersPage() {
 
       <CustomerKPICards rows={filtered} />
 
-      {/* ตัวกรอง — ค้นหา + ตัวแทน/ภาค/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ/ประกัน */}
-      <div className="card" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
-        <div className="search-bar">
+      {/* ตัวกรอง — ค้นหา + ตัวแทน/ภาค/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ */}
+      <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "nowrap", padding: "10px 14px" }}>
+        {/* ช่องค้นหายืดกินที่ว่างตอนจอกว้าง และยุบก่อนตัวกรองตอนจอแคบ (จึงไม่ต้องมี spacer คั่น) */}
+        <div className="search-bar" style={{ flex: "1 1 216px", width: "auto", minWidth: 132 }}>
           <Search size={14} color="#9ca3af" strokeWidth={2} />
           <input
             type="text"
@@ -128,7 +116,6 @@ export default function HQCustomersPage() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div style={{ flex: 1 }} />
 
         <select value={dealerSel} onChange={e => setDealerSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกตัวแทน</option>
@@ -159,16 +146,11 @@ export default function HQCustomersPage() {
           {yearOptions.map(y => <option key={y} value={y}>ส่งมอบปี {y}</option>)}
         </select>
 
-        <select value={warrantySel} onChange={e => setWarrantySel(e.target.value as WarrantyFilter)} className="form-select" style={selectStyle}>
-          <option value="all">ทุกสถานะประกัน</option>
-          {(Object.keys(WARRANTY_LABEL) as (keyof typeof WARRANTY_LABEL)[]).map(k => (
-            <option key={k} value={k}>{WARRANTY_LABEL[k]}</option>
-          ))}
-        </select>
       </div>
 
       <CustomerAnalytics rows={filtered} />
 
+      {/* ตารางเต็มอยู่ท้ายหน้าตามเดิม (ตามที่บอสสั่ง — ไม่แยกแท็บ) */}
       <div className="card">
         <CustomerTable rows={filtered} onView={setViewC} />
         {filtered.length > 0 && (

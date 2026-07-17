@@ -4,19 +4,24 @@
 // ภาพรวมลีดของทุกตัวแทน · กรอง (ค้นหา/สถานะ/จังหวัด/ช่วงเวลา) · KPI · กราฟ · ตาราง drill-down
 // ใช้ข้อมูลจริงจาก SalesContext (leads) — HQ ดูอย่างเดียว (Sales CRM เท่านั้น)
 import { useMemo, useState, useEffect } from "react";
+import { TopNRows } from "@/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
-import { Users, PhoneCall, AlarmClock, Percent, Search, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
+import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
 import { useNetworkLeads, useNetworkQuotations } from "@/lib/useNetworkData";
-import { useHQLeadRules } from "@/lib/useHQRules";
+import { useLeadRulesOf } from "@/lib/useHQRules";
 import { unassignedLeads } from "@/lib/hqAlerts";
 import { dealerLeaderboard, fmtISOToThai, type LeadRow } from "@/lib/mock";
 import { regionDisplay } from "@/lib/hqQuotations";  // แหล่งเดียวของชื่อภาค — ไม่ก็อปโค้ดซ้ำ
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { useSales } from "@/context/SalesContext";
 import { loadDealerFiles, DEALER_FILES_EVENT, type DealerFile } from "@/lib/mock";
-import { useFilters } from "@/context/FilterContext";
+import { useFilters, APP_NOW } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
-import { MultiLineChart, Donut } from "@/components/ui/Charts";
+import { GroupedBarChart, Donut } from "@/components/ui/Charts";
+import {
+  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKeyOf,
+  type MonthRange,
+} from "@/components/ui/MonthRangeToggle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { leadStatusLabel, leadStatusColor, type LeadStatus } from "@/lib/mock";
 import { parseBaht, fmtBaht } from "@/lib/format";
@@ -41,7 +46,8 @@ export default function HQLeadsPage() {
   const router = useRouter();
   const { timeRange } = useFilters();
   const leads = useNetworkLeads();
-  const { unassignedAlertHours } = useHQLeadRules(); // เกณฑ์จากกฎธุรกิจ (/hq/settings → กฎธุรกิจ)
+  // เกณฑ์เป็นของแต่ละสาขา (ตัวแทนตั้งเองที่ ตั้งค่า › การแจ้งเตือน) → ถามเป็นรายใบด้วย dealerCode
+  const rulesOf = useLeadRulesOf();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<LeadStatus | "ALL">("ALL");
   const [province, setProvince] = useState<string>("ALL");
@@ -77,11 +83,6 @@ export default function HQLeadsPage() {
   const btOpts = useMemo(() => [...new Set(scoped.map(l => l.product).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th")), [scoped]);
   const srcOpts = useMemo(() => [...new Set(scoped.map(l => l.source || "ไม่ระบุ"))].sort((a, b) => a.localeCompare(b, "th")), [scoped]);
 
-  // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
-  // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง
-  // ตรรกะพร้อมใช้: พอมีลีดที่ assigned ว่างนานเกินเกณฑ์เมื่อไร การ์ดจะเด้งเอง
-  const unassigned = useMemo(() => unassignedLeads(scoped, unassignedAlertHours), [scoped, unassignedAlertHours]);
-
   const provinces = useMemo(() => [...new Set(scoped.map(l => l.province).filter(Boolean))].sort(), [scoped]);
 
   const filtered = useMemo(() => {
@@ -96,6 +97,31 @@ export default function HQLeadsPage() {
       (!q || (l.company + l.contact + l.province + l.product + l.assigned + (l.id ?? "") + (l.dealerCode ?? "")).toLowerCase().includes(q))
     );
   }, [scoped, query, status, province, dealerSel, regionSel, btSel, srcSel]);
+
+  // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
+  // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง
+  // ตรรกะพร้อมใช้: พอมีลีดที่ assigned ว่างนานเกินเกณฑ์เมื่อไร การ์ดจะเด้งเอง
+  // อิง filtered — กรองดูสาขาไหนอยู่ ก็ต้องเตือนเฉพาะสาขานั้น (เตือนถึงสาขาอื่นที่ไม่ได้ดู = เสียงรบกวน)
+  const unassigned = useMemo(() => unassignedLeads(filtered, rulesOf), [filtered, rulesOf]);
+  // ป้ายบอกเกณฑ์ — หน้านี้รวมหลายสาขาที่ตั้งเกณฑ์ต่างกันได้ จึงสรุปเป็นช่วงเมื่อไม่เท่ากัน
+  const unassignedHoursText = useMemo(() => {
+    const hrs = [...new Set(unassigned.map(l => rulesOf(l.dealerCode).unassignedAlertHours))].sort((a, b) => a - b);
+    if (!hrs.length) return "—";
+    return hrs.length === 1 ? `เกิน ${hrs[0]} ชั่วโมง` : `เกิน ${hrs[0]}–${hrs[hrs.length - 1]} ชั่วโมง แล้วแต่สาขา`;
+  }, [unassigned, rulesOf]);
+
+  // ── แถบตัวกรอง — รูปแบบเดียวกับ /hq/pipeline (ดรอปดาวน์กว้างตามข้อความ ไม่ตรึง 150px) ──
+  // ปุ่ม "ล้างตัวกรอง" โผล่เมื่อมีตัวกรองทำงานอยู่จริงเท่านั้น — ไม่งั้นเป็นปุ่มที่กดแล้วไม่เกิดอะไร
+  // ทุกช่องอยู่บรรทัดเดียว: แชร์ความกว้างเท่า ๆ กัน (flex:1) แล้วย่อได้เมื่อจอแคบ
+  // ห้ามใช้ width:"auto" — select จะกว้างตามตัวเลือกที่ยาวที่สุด ("D-001 – ชื่อบริษัทเต็ม") แล้วดันจนตกบรรทัด
+  const leadSel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
+    <select value={v} onChange={e => on(e.target.value)} className="form-input"
+      style={{ flex: "1 1 0", minWidth: 96, maxWidth: 180, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer", textOverflow: "ellipsis" }}>
+      <option value="ALL">{caption}</option>
+      {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  );
+  const anyFilter = !!query.trim() || [status, province, dealerSel, regionSel, btSel, srcSel].some(v => v !== "ALL");
 
   // KPI
   const kpis = useMemo(() => {
@@ -123,7 +149,7 @@ export default function HQLeadsPage() {
     const QUOTED_UP: LeadStatus[] = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
     const m = new Map<string, { leads: number; quoted: number; quotes: number }>();
     const at = (c: string) => m.get(c) ?? (m.set(c, { leads: 0, quoted: 0, quotes: 0 }), m.get(c)!);
-    scoped.forEach(l => {
+    filtered.forEach(l => {
       const r = at(l.dealerCode || "—");
       r.leads++;
       if (QUOTED_UP.includes(l.status)) r.quoted++;
@@ -141,7 +167,7 @@ export default function HQLeadsPage() {
     })).sort((a, b) => b.leads - a.leads);
     const max = Math.max(1, ...arr.flatMap(a => [a.leads, a.quotes]));
     return arr.map(a => ({ ...a, lPct: Math.round(a.leads / max * 100), qPct: Math.round(a.quotes / max * 100) }));
-  }, [scoped, netQuotes, timeRange.start, timeRange.end, DEALER_NAME]);
+  }, [filtered, netQuotes, timeRange.start, timeRange.end, DEALER_NAME]);
   const kpiCards = [
     { label: "ลูกค้าเป้าหมายทั้งหมด", value: `${kpis.total}`, sub: "ทั้งเครือ", Icon: Users, color: "#2563a8", on: status === "ALL", onClick: () => setStatus("ALL") },
     { label: "ลีดใหม่ (เดือนนี้)", value: `${kpis.newThis}`, sub: "รายการ", Icon: PhoneCall, color: "#7c3aed", on: false, onClick: () => setStatus("ALL") },
@@ -152,63 +178,67 @@ export default function HQLeadsPage() {
   // ── Section 7 · แนวโน้มรายเดือน — 4 เส้น: ลีดใหม่ · ใบเสนอราคา · ปิดได้ · ปิดไม่สำเร็จ ──
   // ลีดนับตามเดือนที่สร้าง · ใบเสนอราคานับตามเดือนที่ออก (คนละแหล่ง จับคู่ด้วยเดือน)
   // ช่วงเดือนตัดตามตัวกรองเวลา — ไม่ฟิกซ์ 12 เดือน เพราะระบบมีข้อมูลปี 2569 ปีเดียว
+  // ── กราฟแนวโน้มรายเดือน — ปุ่มช่วงย้อนหลังของตัวเอง (ไม่ผูกกับตัวกรองเวลาบนแถบบน) ──
+  // ถังเดือนใช้คีย์ YYYY-MM — ช่วง 12 เดือนคาบเกี่ยว 2 ปี ถ้านับแต่เลขเดือน ยอดปีที่แล้วจะทับปีนี้
+  const [trendRange, setTrendRange] = useState<MonthRange>(6);
   const trend = useMemo(() => {
-    const newM = Array(12).fill(0), wonM = Array(12).fill(0), lostM = Array(12).fill(0), quoteM = Array(12).fill(0);
-    scoped.forEach(l => {
+    const buckets = lastNMonths(trendRange, APP_NOW);
+    const newM = new Map<string, number>(), wonM = new Map<string, number>(),
+      lostM = new Map<string, number>(), quoteM = new Map<string, number>();
+    const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+    filtered.forEach(l => {
       const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
-      newM[d.getMonth()]++;
-      if (l.status === "PAID") wonM[d.getMonth()]++;
-      if (l.status === "CANCELLED") lostM[d.getMonth()]++;
+      const k = monthKeyOf(d);
+      bump(newM, k);
+      if (l.status === "PAID") bump(wonM, k);
+      if (l.status === "CANCELLED") bump(lostM, k);
     });
-    netQuotes.forEach(q => {
-      const d = parseThaiDate(q.createdAt ?? ""); if (!d) return;
-      quoteM[d.getMonth()]++;
-    });
-    const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
-    const cut = (arr: number[]) => arr.slice(a, b + 1);
-    return { months: TH_ABBR.slice(a, b + 1), newM: cut(newM), wonM: cut(wonM), lostM: cut(lostM), quoteM: cut(quoteM) };
-  }, [scoped, netQuotes, timeRange]);
+    netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d) bump(quoteM, monthKeyOf(d)); });
+    const pick = (m: Map<string, number>) => buckets.map(b => m.get(b.key) ?? 0);
+    return { months: buckets.map(b => b.label), newM: pick(newM), wonM: pick(wonM), lostM: pick(lostM), quoteM: pick(quoteM) };
+  }, [filtered, netQuotes, trendRange]);
 
   // ลีดตามแหล่งที่มา + ตามสถานะ (แท่งแนวนอน)
   const sources = useMemo(() => {
     const m = new Map<string, number>();
-    scoped.forEach(l => m.set(l.source || "ไม่ระบุ", (m.get(l.source || "ไม่ระบุ") ?? 0) + 1));
+    filtered.forEach(l => m.set(l.source || "ไม่ระบุ", (m.get(l.source || "ไม่ระบุ") ?? 0) + 1));
     const arr = [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
     const max = Math.max(...arr.map(a => a.count), 1);
     const total = arr.reduce((s, a) => s + a.count, 0) || 1;
     // pct = เทียบตัวมากสุด (ใช้กับแท่ง) · share = สัดส่วนของทั้งหมด (ใช้กับโดนัท) — คนละความหมาย อย่าสลับ
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [scoped]);
+  }, [filtered]);
 
   const byStatus = useMemo(() => {
     const order: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
-    const max = Math.max(...order.map(s => scoped.filter(l => l.status === s).length), 1);
-    return order.map(s => ({ status: s, count: scoped.filter(l => l.status === s).length, pct: Math.round(scoped.filter(l => l.status === s).length / max * 100) }));
-  }, [scoped]);
+    const count = (s: LeadStatus) => filtered.filter(l => l.status === s).length;
+    const max = Math.max(...order.map(count), 1);
+    return order.map(s => ({ status: s, count: count(s), pct: Math.round(count(s) / max * 100) }));
+  }, [filtered]);
 
   // ── Section 3 · ประเภทอาคารที่ลูกค้าสนใจ ──────────────────────────────────
   // จัดกลุ่มด้วย "แม่แบบที่สนใจ" ของลีด (product) — ใช้ค่าจริงในระบบ ไม่ยุบ/ไม่แปลงชื่อ
   const buildingTypes = useMemo(() => {
     const m = new Map<string, number>();
-    scoped.forEach(l => { const k = l.product || "ไม่ระบุ"; m.set(k, (m.get(k) ?? 0) + 1); });
+    filtered.forEach(l => { const k = l.product || "ไม่ระบุ"; m.set(k, (m.get(k) ?? 0) + 1); });
     const arr = [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
     const max = Math.max(...arr.map(a => a.count), 1);
     const total = arr.reduce((s, a) => s + a.count, 0) || 1;
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [scoped]);
+  }, [filtered]);
 
   // ── Section 4 · เหตุผลที่ปิดการขายไม่สำเร็จ ────────────────────────────────
   // นับเฉพาะลีดที่ปิดไม่สำเร็จ "และบันทึกเหตุผลไว้จริง" — ไม่เดาเหตุผลให้ลีดที่ไม่ได้ระบุ
   // รายการเหตุผลเป็นของ HQ (ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน
   const lostReasons = useMemo(() => {
     const m = new Map<string, number>();
-    scoped.filter(l => l.status === "CANCELLED" && l.lostReason)
+    filtered.filter(l => l.status === "CANCELLED" && l.lostReason)
       .forEach(l => m.set(l.lostReason!, (m.get(l.lostReason!) ?? 0) + 1));
     const arr = [...m.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
     const max = Math.max(...arr.map(a => a.count), 1);
     const total = arr.reduce((s, a) => s + a.count, 0) || 1;
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [scoped]);
+  }, [filtered]);
 
 
   // ── Section 5 · ผลงานตัวแทน (Top 10) ─────────────────────────────────────
@@ -248,22 +278,45 @@ export default function HQLeadsPage() {
         </div>
       </div>
 
-      {/* KPI */}
+      {/* ── KPI ── หน้าตาเดียวกับ /hq/pipeline และแดชบอร์ดตัวแทน (ค่าลอกมาตรง ๆ ห้ามเพี้ยน)
+          แถบสีนำสายตาด้านซ้ายถูกตัดออก — หน้าอื่นไม่มี การ์ด KPI ต้องหน้าตาเหมือนกันทุกหน้า
+          ต่างจากหน้าอื่นตรงที่ "กดเพื่อกรองสถานะได้" → คงปุ่ม + สถานะถูกเลือก (ขอบน้ำเงิน) ไว้ */}
       <div className="dash-kpis" style={{ marginBottom: 16 }}>
         {kpiCards.map(k => (
-          <button key={k.label} onClick={k.onClick} className="card" style={{ position: "relative", overflow: "hidden", padding: "17px 16px 17px 18px", display: "flex", flexDirection: "column", gap: 6, textAlign: "left", cursor: "pointer", fontFamily: "inherit", width: "100%", border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB", boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
-            {/* แถบสีนำสายตาด้านซ้าย — ระบุหมวด KPI ด้วยสี (โพลิชแบบ enterprise) */}
-            <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: k.color, borderRadius: "0 4px 4px 0" }} />
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, width: "100%" }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "0.72rem", color: "#6B7280", fontWeight: 600 }}>{k.label}</div>
-                <div style={{ fontSize: "1.7rem", fontWeight: 800, color: "#1F2937", marginTop: 7, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" }}>{k.value}</div>
-                <div style={{ fontSize: "0.7rem", color: "#6B7280", marginTop: 7 }}>{k.sub}</div>
-              </div>
-              <span style={{ width: 44, height: 44, borderRadius: 13, background: k.color + "17", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><k.Icon size={21} color={k.color} strokeWidth={2.1} /></span>
+          <button key={k.label} onClick={k.onClick} aria-pressed={k.on} className="card clickable" title={`กรอง: ${k.label}`}
+            style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, textAlign: "left", cursor: "pointer", fontFamily: "inherit", width: "100%", border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB", boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.label}</div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1F2937", marginTop: 6, lineHeight: 1.15, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{k.value}</div>
+              <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.sub}</div>
             </div>
+            <span style={{ width: 42, height: 42, borderRadius: 12, background: k.color + "17", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <k.Icon size={20} color={k.color} strokeWidth={2.1} />
+            </span>
           </button>
         ))}
+      </div>
+
+      {/* ── SMART FILTER ── อยู่ใต้ KPI เหมือนหน้าอื่น (/hq/quotations · /hq/pipeline)
+          เดิมแถบนี้อยู่ล่างสุดเหนือตาราง → กราฟทุกใบอยู่ "เหนือ" ตัวกรอง คนอ่านเลยไม่รู้ว่ามันคุมกราฟได้
+          ตอนนี้คุมทั้งหน้า: กราฟ · Top 10 · การ์ดเตือน · ตาราง (KPI ไม่ตามด้วย — มันคือตัวกรองสถานะเอง)
+          ตัวเลือกในดรอปดาวน์สร้างจาก scoped ไม่ใช่ filtered — ไม่งั้นพอเลือกตัวแทนแล้วจะเปลี่ยนกลับไม่ได้ */}
+      <div className="card hq-sticky-filter" style={{ marginBottom: "1.25rem" }}>
+        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 14, paddingBottom: 14 }}>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="ค้นหาบริษัท / จังหวัด / ผู้รับผิดชอบ…"
+            className="form-input" style={{ flex: "1 1 150px", minWidth: 130, maxWidth: 240, padding: "7px 11px", fontSize: "0.74rem" }} />
+          {leadSel(dealerSel, setDealerSel, "ทุกตัวแทน", dealerOpts.map(o => ({ v: o, l: `${o} – ${DEALER_NAME.get(o) ?? o}` })))}
+          {leadSel(regionSel, setRegionSel, "ทุกภูมิภาค", regionOpts.map(o => ({ v: o, l: regionDisplay(o) })))}
+          {leadSel(province, setProvince, "ทุกจังหวัด", provinces.map(p => ({ v: p, l: p })))}
+          {leadSel(btSel, setBtSel, "ทุกประเภทอาคาร", btOpts.map(o => ({ v: o, l: o })))}
+          {leadSel(srcSel, setSrcSel, "ทุกแหล่งที่มา", srcOpts.map(o => ({ v: o, l: o })))}
+          {leadSel(status, v => setStatus(v as LeadStatus | "ALL"), "ทุกสถานะ",
+            (["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"] as LeadStatus[]).map(s => ({ v: s, l: leadStatusLabel[s] })))}
+          {anyFilter && (
+            <button onClick={() => { setQuery(""); setDealerSel("ALL"); setRegionSel("ALL"); setProvince("ALL"); setBtSel("ALL"); setSrcSel("ALL"); setStatus("ALL"); }}
+              className="btn btn-secondary btn-sm" style={{ flexShrink: 0, whiteSpace: "nowrap" }}>ล้างตัวกรอง</button>
+          )}
+        </div>
       </div>
 
       {/* ── เตือน: ลีดยังไม่มีผู้รับผิดชอบเกิน 48 ชม. (กฎ HQ) ──
@@ -277,7 +330,7 @@ export default function HQLeadsPage() {
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#1F2937" }}>ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ</span>
-              <span style={{ display: "block", fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 2 }}>ต้องมอบหมายภายใน {unassignedAlertHours} ชั่วโมงตามกฎสำนักงานใหญ่</span>
+              <span style={{ display: "block", fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 2 }}>เกินเกณฑ์ที่แต่ละสาขาตั้งไว้เอง ({unassignedHoursText})</span>
             </span>
             <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "#dc2626", fontVariantNumeric: "tabular-nums" }}>{unassigned.length}</span>
             <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)" }}>ราย</span>
@@ -285,18 +338,61 @@ export default function HQLeadsPage() {
         </div>
       )}
 
-      {/* ── แถว 1 · ลีดสนใจอะไร ── ประเภทอาคาร (เต็มความกว้าง)
-          กราฟ "ลีด เทียบ ใบเสนอราคา รายตัวแทน" ถูกตัดออก — ข้อมูลซ้ำกับตาราง "ผลงานตัวแทนจำหน่าย (Top 10)"
-          ที่มีครบกว่า (ลีด/ใบเสนอราคา/อัตราแปลง + ยอดขาย) ตามกฎ "ข้อมูลซ้ำให้รวมเป็นที่เดียว"
-          "เทียบรายภูมิภาค" ถูกตัดออกตามคำสั่ง — เหลือใบเดียวจึงกินเต็มแถว ไม่จับคู่ให้ครึ่งขวาว่าง */}
+      {/* ── แถว 3 · แนวโน้ม (แท่งกลุ่ม) | ตามสถานะ (แท่ง) ──
+          เดิมเป็น 3 คอลัมน์ (มีแหล่งที่มาด้วย) — ย้ายแหล่งที่มาไปคู่กับเหตุผลที่แถว 2 เพราะเป็นโดนัทเหมือนกัน */}
+      {/* ── แถว 1 · แนวโน้ม · ตามสถานะ · ประเภทอาคาร ──
+          3 คอลัมน์: แนวโน้มกว้างกว่าเพื่อน (6 เดือน × 4 ชุด = 24 แท่ง ต้องการที่) */}
+      <div className="hq-leads-row" style={{ marginBottom: 12 }}>
+        {/* กราฟเส้นเป็น SVG ที่ย่อ/ขยายตามความกว้างการ์ด → ความสูงจริงไม่เท่า height ที่ส่งเข้าไป
+            การ์ดถูกยืดให้สูงเท่าเพื่อนในแถว จึงเหลือที่ว่างท้ายการ์ด ~190px → จัดกึ่งกลางแนวตั้งแทน */}
+        <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
+          <div className="card-header">
+            <div className="card-title">แนวโน้มลูกค้าเป้าหมายรายเดือน</div>
+            <MonthRangeToggle value={trendRange} onChange={setTrendRange} label="ช่วงเวลากราฟแนวโน้มลูกค้าเป้าหมาย" />
+          </div>
+          {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
+          <div style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
+            {monthRangeSubtitle(trendRange, APP_NOW)}
+          </div>
+          <div className="card-body" style={{ paddingTop: 4, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            {/* vw = ความกว้าง viewBox ต้องใกล้ความกว้างการ์ดจริง (~480px) ไม่งั้น SVG ถูกย่อตามสัดส่วน
+                เดิมไม่ได้ส่ง vw → ใช้ค่าเริ่มต้น 1180 → อัตราส่วน 1180:250 ทำให้กราฟสูงจริงแค่ ~100px ลอยอยู่กลางการ์ด
+                (หน้าอื่นที่การ์ดแคบส่ง vw กันหมดแล้ว — หน้านี้ตกหล่นอยู่หน้าเดียว)
+                แท่งกลุ่ม ไม่ใช่แท่งซ้อน — สี่ชุดนี้เป็นขั้นของลีดเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
+            <GroupedBarChart months={trend.months} vw={560} height={210} fmt={v => `${Math.round(v)}`}
+              series={[
+                { name: "ลีดใหม่", color: "#003366", data: trend.newM },
+                { name: "ใบเสนอราคา", color: "#0891b2", data: trend.quoteM },
+                { name: "ปิดการขาย", color: "#10B981", data: trend.wonM },
+                { name: "ปิดไม่สำเร็จ", color: "#dc2626", data: trend.lostM },
+              ]} />
+          </div>
+        </div>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header"><div className="card-title">ตามสถานะ</div></div>
+          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 10 }}>
+            {byStatus.map(s => { const c = leadStatusColor[s.status]; return (
+              <div key={s.status}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
+                  <span style={{ color: "#374151", fontWeight: 600 }}>{leadStatusLabel[s.status]}</span><span style={{ fontWeight: 800, color: c.text }}>{s.count}</span>
+                </div>
+                <div style={{ height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
+                  <div className="bar-grow" style={{ height: "100%", width: `${s.pct}%`, background: c.text, borderRadius: 999 }} />
+                </div>
+              </div>
+            ); })}
+          </div>
+        </div>
       {/* ⚠️ อย่าทำเป็นโดนัท: ลีดหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
-      <div className="card" style={{ marginBottom: 12 }}>
+      <div className="card chart-l" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
           <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลีดสนใจ · หน่วย: ราย</span></div>
-        <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 11 }}>
+        <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
           {!buildingTypes.length ? (
             <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
-          ) : buildingTypes.map(r => (
+          ) : (
+          <TopNRows topN={6} unit="ประเภท" gap={11}>
+            {buildingTypes.map(r => (
             <div key={r.label}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
                 <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
@@ -308,40 +404,16 @@ export default function HQLeadsPage() {
                 <div className="bar-grow" style={{ height: "100%", width: `${r.pct}%`, background: "#003366", borderRadius: 999 }} />
               </div>
             </div>
-          ))}
+            ))}
+          </TopNRows>
+          )}
+        </div>
         </div>
       </div>
 
-      {/* ── แถว 2 · ทำไมถึงไม่ปิด · มาจากไหน ── โดนัทสองใบ (สัดส่วนของก้อนเดียวทั้งคู่) */}
-      <div className="hq-dealer-charts" style={{ marginBottom: 12, alignItems: "stretch" }}>
-        {/* โดนัท: เหตุผลรวมกันได้ 100% ของลีดที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง */}
-        <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-header"><div className="card-title">เหตุผลที่ปิดการขายไม่สำเร็จ</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เฉพาะลีดที่บันทึกเหตุผลไว้ · หน่วย: ราย</span></div>
-          <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
-            {!lostReasons.length ? (
-              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
-            ) : (<>
-              <Donut
-                segments={lostReasons.map((r, i) => ({ label: r.reason, value: r.count, color: LOST_RAMP[i % LOST_RAMP.length] }))}
-                centerLabel="ปิดไม่สำเร็จ"
-                centerValue={`${lostReasons.reduce((s, r) => s + r.count, 0)}`}
-                size={150}
-              />
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
-                {lostReasons.map((r, i) => (
-                  <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: LOST_RAMP[i % LOST_RAMP.length], flexShrink: 0 }} />
-                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
-                    <span style={{ color: "var(--muted-foreground)", minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.share}%</span>
-                  </div>
-                ))}
-              </div>
-            </>)}
-          </div>
-        </div>
-
+      {/* ── แถว 2 · แหล่งที่มา · เหตุผลที่ไม่ปิด ── โดนัทสองใบ (สัดส่วนของก้อนเดียวทั้งคู่)
+          กริด 2 คอลัมน์เท่ากัน — ไม่ใช่ .hq-leads-row (3 คอลัมน์) เพราะเหลือ 2 ใบแล้วจะเว้าขวา */}
+      <div className="hq-dealer-charts" style={{ marginBottom: 16, alignItems: "stretch" }}>
         {/* โดนัท: แหล่งที่มารวมกัน = ลีดทั้งหมดพอดี → สัดส่วนของก้อนเดียว
             ย้ายมาจากแถว 3 · การ์ดกว้างขึ้น (ครึ่งจอ) → วางโดนัทซ้าย legend ขวา แบบเดียวกับใบข้าง ๆ */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
@@ -369,47 +441,39 @@ export default function HQLeadsPage() {
             </>)}
           </div>
         </div>
-      </div>
-
-      {/* ── แถว 3 · แนวโน้ม (เส้น) | ตามสถานะ (แท่ง) ──
-          เดิมเป็น 3 คอลัมน์ (มีแหล่งที่มาด้วย) — ย้ายแหล่งที่มาไปคู่กับเหตุผลที่แถว 2 เพราะเป็นโดนัทเหมือนกัน */}
-      <div className="hq-row3" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: 12 }}>
-        {/* กราฟเส้นเป็น SVG ที่ย่อ/ขยายตามความกว้างการ์ด → ความสูงจริงไม่เท่า height ที่ส่งเข้าไป
-            การ์ดถูกยืดให้สูงเท่าเพื่อนในแถว จึงเหลือที่ว่างท้ายการ์ด ~190px → จัดกึ่งกลางแนวตั้งแทน */}
+        {/* โดนัท: เหตุผลรวมกันได้ 100% ของลีดที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-header"><div className="card-title">แนวโน้มลูกค้าเป้าหมายรายเดือน</div></div>
-          <div className="card-body" style={{ paddingTop: 4, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            {/* vw = ความกว้าง viewBox ต้องใกล้ความกว้างการ์ดจริง (~480px) ไม่งั้น SVG ถูกย่อตามสัดส่วน
-                เดิมไม่ได้ส่ง vw → ใช้ค่าเริ่มต้น 1180 → อัตราส่วน 1180:250 ทำให้กราฟสูงจริงแค่ ~100px ลอยอยู่กลางการ์ด
-                (หน้าอื่นที่การ์ดแคบส่ง vw กันหมดแล้ว — หน้านี้ตกหล่นอยู่หน้าเดียว) */}
-            <MultiLineChart months={trend.months} vw={560} height={210} fmt={v => `${Math.round(v)}`}
-              series={[
-                { name: "ลีดใหม่", color: "#003366", data: trend.newM },
-                { name: "ใบเสนอราคา", color: "#0891b2", data: trend.quoteM },
-                { name: "ปิดการขาย", color: "#10B981", data: trend.wonM },
-                { name: "ปิดไม่สำเร็จ", color: "#dc2626", data: trend.lostM },
-              ]} />
-          </div>
-        </div>
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">ตามสถานะ</div></div>
-          <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 10 }}>
-            {byStatus.map(s => { const c = leadStatusColor[s.status]; return (
-              <div key={s.status}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
-                  <span style={{ color: "#374151", fontWeight: 600 }}>{leadStatusLabel[s.status]}</span><span style={{ fontWeight: 800, color: c.text }}>{s.count}</span>
-                </div>
-                <div style={{ height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                  <div className="bar-grow" style={{ height: "100%", width: `${s.pct}%`, background: c.text, borderRadius: 999 }} />
-                </div>
+          <div className="card-header"><div className="card-title">เหตุผลที่ปิดการขายไม่สำเร็จ</div>
+            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เฉพาะลีดที่บันทึกเหตุผลไว้ · หน่วย: ราย</span></div>
+          <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+            {!lostReasons.length ? (
+              <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
+            ) : (<>
+              <Donut
+                segments={lostReasons.map((r, i) => ({ label: r.reason, value: r.count, color: LOST_RAMP[i % LOST_RAMP.length] }))}
+                centerLabel="ปิดไม่สำเร็จ"
+                centerValue={`${lostReasons.reduce((s, r) => s + r.count, 0)}`}
+                size={150}
+              />
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
+                {lostReasons.map((r, i) => (
+                  <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: LOST_RAMP[i % LOST_RAMP.length], flexShrink: 0 }} />
+                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</span>
+                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
+                    <span style={{ color: "var(--muted-foreground)", minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.share}%</span>
+                  </div>
+                ))}
               </div>
-            ); })}
+            </>)}
           </div>
         </div>
       </div>
 
-      {/* ── Section 5 · ผลงานตัวแทน Top 10 ── */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      {/* ── แถว 3 · ผลงานตัวแทนจำหน่าย (Top 10) — เต็มความกว้าง ──
+          ตารางนี้มี 6 คอลัมน์ กว้างขั้นต่ำ 674px (colgroup) จึงอยู่ในช่องแคบไม่ได้
+          เคยอยู่ช่องที่ 3 ของกริด (~300px) → เห็นแค่คอลัมน์ "ลีด" ที่เหลือต้องเลื่อนแนวนอน */}
+      <div className="card" style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
         <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย (Top 10)</div>
           <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เรียงตามยอดขายในช่วง</span></div>
         <div className="table-wrap">
@@ -450,71 +514,44 @@ export default function HQLeadsPage() {
         </div>
       </div>
 
-      {/* Toolbar: ค้นหา + กรองสถานะ/จังหวัด */}
-      <div className="card" style={{ borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fafafa", border: "1px solid var(--border,#e6eaf0)", borderRadius: 10, padding: "0 12px", height: 36, width: 300, maxWidth: "100%" }}>
-          <Search size={13} color="#8a929c" />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="ค้นหาบริษัท / จังหวัด / ผู้รับผิดชอบ..." style={{ border: "none", outline: "none", fontSize: "0.8rem", background: "transparent", flex: 1, color: "#2D2D2D" }} />
-          {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#8a929c", display: "flex" }}><X size={12} /></button>}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <select value={dealerSel} onChange={e => setDealerSel(e.target.value)} className="form-input" style={{ height: 36, fontSize: "0.78rem", width: 150 }}>
-            <option value="ALL">ทุกตัวแทน</option>
-            {dealerOpts.map(o => <option key={o} value={o}>{`${o} – ${DEALER_NAME.get(o) ?? o}`}</option>)}
-          </select>
-          <select value={regionSel} onChange={e => setRegionSel(e.target.value)} className="form-input" style={{ height: 36, fontSize: "0.78rem", width: 150 }}>
-            <option value="ALL">ทุกภูมิภาค</option>
-            {regionOpts.map(o => <option key={o} value={o}>{regionDisplay(o)}</option>)}
-          </select>
-          <select value={btSel} onChange={e => setBtSel(e.target.value)} className="form-input" style={{ height: 36, fontSize: "0.78rem", width: 150 }}>
-            <option value="ALL">ทุกประเภทอาคาร</option>
-            {btOpts.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={srcSel} onChange={e => setSrcSel(e.target.value)} className="form-input" style={{ height: 36, fontSize: "0.78rem", width: 150 }}>
-            <option value="ALL">ทุกแหล่งที่มา</option>
-            {srcOpts.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={province} onChange={e => setProvince(e.target.value)} className="form-input" style={{ height: 36, fontSize: "0.78rem", width: 160 }}>
-            <option value="ALL">ทุกจังหวัด</option>
-            {provinces.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select value={status} onChange={e => setStatus(e.target.value as LeadStatus | "ALL")} className="form-input" style={{ height: 36, fontSize: "0.78rem", width: 150 }}>
-            <option value="ALL">ทุกสถานะ</option>
-            {(["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"] as LeadStatus[]).map(s => <option key={s} value={s}>{leadStatusLabel[s]}</option>)}
-          </select>
-        </div>
-      </div>
-
       {/* ── ตารางลีดทั้งเครือ — คอลัมน์ตามสเปก ──
           13 คอลัมน์ต้องการ ~1,500px แต่กรอบมี ~1,012px → เลื่อนแนวนอน (.table-wrap overflow-x:auto)
           ดีกว่าบีบจนอ่านไม่ออก · ความกว้างคุมที่ colgroup เท่านั้น (table-layout:fixed) */}
-      <div className="card" style={{ borderRadius: "0 0 var(--radius-xl) var(--radius-xl)", borderTop: "none", marginBottom: 0 }}>
-        <div className="table-wrap" style={{ borderTop: "none" }}>
+      {/* overflow: hidden — .card มีมุมโค้ง 16px แต่ไม่ตัดเนื้อใน (overflow: visible)
+          หัวตารางพื้นเทาและเส้นแบ่งแถวเป็นมุมเหลี่ยม จึงทาบทับพ้นส่วนโค้งออกมาทั้งสี่มุม = "ตารางทะลุขอบ"
+          เดิมไม่เจอเพราะการ์ดตัดมุมบนทิ้ง (เชื่อมกับแถบตัวกรอง) — พอคืนมุมโค้งครบ อาการเลยโผล่
+          การเลื่อนแนวนอนยังทำงานปกติ เพราะ .table-wrap มี overflow-x: auto เป็นตัวเลื่อนของมันเอง */}
+      <div className="card" style={{ marginBottom: 0, overflow: "hidden" }}>
+        <div className="table-wrap">
           <table>
+            {/* 12 คอลัมน์ · รวม minWidth = 1,188px = ความกว้างกรอบพอดี → ไม่ล้น ไม่ต้องเลื่อน
+                (เดิม 13 คอลัมน์ = 1,440px ล้นไป 252px)
+                ที่ประหยัดมาได้: รวม "รหัสตัวแทน" เข้ากับ "ตัวแทน" (ข้อมูลซ้ำ) −78px · บีบที่เหลือ −174px
+                เพิ่ม/ลบคอลัมน์ต้องแก้ที่นี่เท่านั้น (table-layout: fixed — ใส่ที่ <th> ไม่มีผล)
+                และต้องคุมผลรวม minWidth ไม่ให้เกินกรอบ ไม่งั้นกลับมาล้นอีก */}
             <colgroup>
-              <col style={{ width: "8%", minWidth: 100 }} />{/* รหัสลีด */}
-              <col style={{ width: "6%", minWidth: 78 }} />{/* รหัสตัวแทน */}
-              <col style={{ width: "12%", minWidth: 150 }} />{/* ตัวแทน */}
-              <col style={{ width: "14%", minWidth: 170 }} />{/* ลูกค้า */}
-              <col style={{ width: "8%", minWidth: 100 }} />{/* จังหวัด */}
-              <col style={{ width: "11%", minWidth: 140 }} />{/* ประเภทอาคาร */}
-              <col style={{ width: "8%", minWidth: 106 }} />{/* แหล่งที่มา */}
-              <col style={{ width: "8%", minWidth: 96 }} />{/* มูลค่า */}
-              <col style={{ width: "8%", minWidth: 104 }} />{/* เสนอราคาแล้ว */}
-              <col style={{ width: "9%", minWidth: 112 }} />{/* ติดต่อล่าสุด */}
-              <col style={{ width: "7%", minWidth: 92 }} />{/* เตือน 7 วัน */}
-              <col style={{ width: "9%", minWidth: 118 }} />{/* สถานะ */}
-              <col style={{ width: "6%", minWidth: 74 }} />{/* ดู */}
+              <col style={{ width: "8%", minWidth: 92 }} />{/* รหัสลีด */}
+              <col style={{ width: "15%", minWidth: 178 }} />{/* ตัวแทน (รหัส + ชื่อ) */}
+              <col style={{ width: "13%", minWidth: 150 }} />{/* ลูกค้า */}
+              <col style={{ width: "7%", minWidth: 84 }} />{/* จังหวัด */}
+              <col style={{ width: "10%", minWidth: 112 }} />{/* ประเภทอาคาร */}
+              <col style={{ width: "8%", minWidth: 92 }} />{/* แหล่งที่มา */}
+              <col style={{ width: "7%", minWidth: 84 }} />{/* มูลค่า */}
+              <col style={{ width: "8%", minWidth: 88 }} />{/* เสนอราคาแล้ว */}
+              <col style={{ width: "8%", minWidth: 96 }} />{/* ติดต่อล่าสุด */}
+              <col style={{ width: "7%", minWidth: 86 }} />{/* เตือน 7 วัน */}
+              <col style={{ width: "9%", minWidth: 100 }} />{/* สถานะ */}
+              <col style={{ width: "5%", minWidth: 52 }} />{/* ดู — ไอคอนล้วน (ปุ่ม 28px + padding ของ td) */}
             </colgroup>
             <thead><tr>
-              <th>รหัสลีด</th><th>รหัสตัวแทน</th><th>ตัวแทน</th><th>ลูกค้า</th>
+              <th>รหัสลีด</th><th>ตัวแทน</th><th>ลูกค้า</th>
               <th>จังหวัด</th><th>ประเภทอาคาร</th><th>แหล่งที่มา</th>
               <th className="num">มูลค่า</th><th>เสนอราคาแล้ว</th><th>ติดต่อล่าสุด</th>
               <th>เตือน 7 วัน</th><th>สถานะ</th><th></th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={13} style={{ padding: 0 }}><EmptyState icon={<Users size={26} />} title="ไม่พบลูกค้าเป้าหมาย" description="ลองปรับตัวกรองหรือคำค้น" /></td></tr>
+                <tr><td colSpan={12} style={{ padding: 0 }}><EmptyState icon={<Users size={26} />} title="ไม่พบลูกค้าเป้าหมาย" description="ลองปรับตัวกรองหรือคำค้น" /></td></tr>
               ) : filtered.map(l => {
                 const c = leadStatusColor[l.status];
                 const followUp = NEED_FOLLOWUP.includes(l.status);
@@ -524,8 +561,13 @@ export default function HQLeadsPage() {
                 return (
                   <tr key={l.id} className="clickable" onClick={() => setViewLead(l)} style={{ cursor: "pointer" }}>
                     <td style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY, whiteSpace: "nowrap" }}>{l.id}</td>
-                    <td><span className="badge" style={{ background: "#eef2f7", color: PRIMARY, fontFamily: "monospace" }}>{l.dealerCode || "—"}</span></td>
-                    <td title={DEALER_NAME.get(l.dealerCode ?? "") ?? ""} style={{ color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{DEALER_NAME.get(l.dealerCode ?? "") ?? l.dealerCode ?? "—"}</td>
+                    {/* รหัส + ชื่อตัวแทนรวมเซลล์เดียว — เดิมแยก 2 คอลัมน์ทั้งที่เป็นข้อมูลตัวเดียวกัน กินที่ 228px */}
+                    <td title={DEALER_NAME.get(l.dealerCode ?? "") ?? ""} style={{ overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        <span className="badge" style={{ background: "#eef2f7", color: PRIMARY, fontFamily: "monospace", flexShrink: 0 }}>{l.dealerCode || "—"}</span>
+                        <span style={{ color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{DEALER_NAME.get(l.dealerCode ?? "") ?? l.dealerCode ?? "—"}</span>
+                      </div>
+                    </td>
                     <td title={l.company}>
                       <div style={{ fontWeight: 700, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</div>
                       <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.contact}</div>
@@ -548,8 +590,10 @@ export default function HQLeadsPage() {
                     </td>
                     <td><span className="badge" style={{ background: c.bg, color: c.text, whiteSpace: "nowrap" }}>{leadStatusLabel[l.status]}</span></td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setViewLead(l)} title="ดูรายละเอียด" className="btn btn-secondary btn-sm" style={{ gap: 4, color: PRIMARY }}>
-                        <Eye size={13} /> ดู
+                      {/* ปุ่มไอคอนล้วน — ข้อความ "ดู" ซ้ำกับที่ไอคอนสื่ออยู่แล้ว · title/aria-label คงไว้ให้ screen reader */}
+                      <button onClick={() => setViewLead(l)} title="ดูรายละเอียด" aria-label="ดูรายละเอียด" className="btn btn-secondary btn-sm"
+                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                        <Eye size={13} />
                       </button>
                     </td>
                   </tr>

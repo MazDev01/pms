@@ -5,9 +5,10 @@ import { useState, useRef, useEffect, createContext, useContext, useCallback, us
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save, RotateCcw,
   Upload, UserCheck, FileText, ShieldCheck, Lock, ImagePlus, Bell,
-  Camera, Mail, KeyRound,
+  Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
-import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, loadHQPolicy, DEFAULT_HQ_POLICY, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson } from "@/lib/mock";
+import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, loadHQPolicy, DEFAULT_HQ_POLICY, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@/lib/mock";
+import { CURRENT_DEALER } from "@/lib/useNetworkData";
 import { useRole } from "@/context/RoleContext";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 
@@ -19,7 +20,7 @@ const ROLE_LABEL: Record<string, string> = {
 type SettingTab = "company" | "documents" | "persons" | "notifications";
 
 // ── shared save bus — แท็บที่มีฟอร์มรายงาน {dirty,save,reset} ให้ปุ่มบันทึกกลางบนหัว
-// (แนวเดียวกับหน้าตั้งค่า HQ · แท็บที่บันทึกทันที เช่น ผู้รับผิดชอบ/แจ้งเตือน ไม่ต้องรายงาน)
+// (แนวเดียวกับหน้าตั้งค่า HQ · แท็บที่บันทึกทันที เช่น ผู้รับผิดชอบ ไม่ต้องรายงาน)
 type SectionApi = { dirty: boolean; save: () => void; reset: () => void };
 const SettingsBus = createContext<{ report: (a: SectionApi | null) => void; toast: (m: string) => void }>({ report: () => {}, toast: () => {} });
 function useReport(api: SectionApi) {
@@ -656,48 +657,155 @@ function PersonsTab() {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTIFICATIONS TAB — เปิด/ปิดการแจ้งเตือนแต่ละชนิด (มีผลกับกระดิ่งบน Topbar ทันที)
+// NOTIFICATIONS TAB — เปิด/ปิดการแจ้งเตือนแต่ละชนิด (มีผลกับกระดิ่งบน Topbar)
+// เลย์เอาต์เดียวกับ /hq/settings → การแจ้งเตือน: หัวข้อมีไอคอน · ตารางแถวมีขอบ ·
+// คอลัมน์ "เปิด" ชิดขวา · แถบบอกว่าค่านี้ถูกใช้ที่ไหน · บันทึกด้วยปุ่มกลางบนหัว (ไม่ auto-save)
+// ตัวแทนมีช่องทางเดียวคือกระดิ่งในระบบ — ไม่มีคอลัมน์ "อีเมล" แบบ HQ เพราะไม่มีระบบส่งอีเมลให้ตัวแทน
 // ─────────────────────────────────────────────────────────────────────────────
+function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={onChange}
+      style={{ width: 42, height: 24, borderRadius: 99, border: "none", cursor: "pointer", flexShrink: 0,
+        background: on ? "#003366" : "#d1d5db", position: "relative", transition: "background .15s" }}>
+      <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.25)", transition: "left .15s" }} />
+    </button>
+  );
+}
+
+// แท็บนี้มี 2 การ์ด (สวิตช์แจ้งเตือน + กฎการดูแลลีด) แต่ bus รับ api ได้ทีละตัว
+// จึงต้องถือ state ทั้งสองก้อนที่นี่แล้วรายงานรวมเป็นตัวเดียว — ถ้าแยกกัน useReport
+// ตัวหลังจะทับตัวแรก แล้วปุ่มบันทึกกลางจะเซฟได้แค่การ์ดเดียว (อีกการ์ดกดบันทึกแล้วค่าหาย)
 function NotificationsTab() {
-  const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { setPrefs(loadNotifPrefs()); }, []);
+  const [savedPrefs, setSavedPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
+  const [draft, setDraft] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
+  const [savedRules, setSavedRules] = useState<LeadRules>(DEFAULT_LEAD_RULES);
+  const [rulesDraft, setRulesDraft] = useState<LeadRules>(DEFAULT_LEAD_RULES);
+  const editedRef = useRef(false);
+  const draftRef = useRef(draft); draftRef.current = draft;
+  const savedRef = useRef(savedPrefs); savedRef.current = savedPrefs;
+  const rulesDraftRef = useRef(rulesDraft); rulesDraftRef.current = rulesDraft;
+  const savedRulesRef = useRef(savedRules); savedRulesRef.current = savedRules;
+  // โหลดค่าที่บันทึกไว้หลัง mount — ถ้าผู้ใช้เริ่มแก้แล้ว อย่าทับ draft
+  useEffect(() => {
+    const p = loadNotifPrefs();
+    setSavedPrefs(p);
+    const r = leadRulesOf(loadDealerLeadRulesMap(), CURRENT_DEALER.code);
+    setSavedRules(r);
+    if (!editedRef.current) { setDraft(p); setRulesDraft(r); }
+  }, []);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(savedPrefs)
+    || JSON.stringify(rulesDraft) !== JSON.stringify(savedRules);
+  const save = useCallback(() => {
+    const next = draftRef.current;
+    localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้กระดิ่งบน Topbar อัปเดตทันที
+    const nextRules = rulesDraftRef.current;
+    saveDealerLeadRules(CURRENT_DEALER.code, nextRules); // ยิง event → หน้าลีด/แดชบอร์ด/หน้า HQ อัปเดตทันที
+    editedRef.current = false;
+    setSavedPrefs(next);
+    setSavedRules(nextRules);
+  }, []);
+  const reset = useCallback(() => {
+    editedRef.current = false;
+    setDraft(savedRef.current);
+    setRulesDraft(savedRulesRef.current);
+  }, []);
+  useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
+
   function toggle(k: keyof NotifPrefs) {
-    setPrefs(p => {
-      const next = { ...p, [k]: !p[k] };
-      localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next));
-      window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้ Topbar อัปเดตทันที
-      setSaved(true); setTimeout(() => setSaved(false), 1800);
-      return next;
-    });
+    editedRef.current = true;
+    setDraft(p => ({ ...p, [k]: !p[k] }));
   }
+  const setRule = useCallback((k: keyof LeadRules, n: number) => {
+    editedRef.current = true;
+    setRulesDraft(p => ({ ...p, [k]: n }));
+  }, []);
+
   return (
     <>
       <div className="card-header">
         <div>
-          <div className="card-title">การแจ้งเตือน</div>
-          <div className="card-desc">เลือกชนิดการแจ้งเตือนที่ต้องการรับบนกระดิ่ง — ปิดชนิดที่ไม่ต้องการได้</div>
+          <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: "var(--primary)", display: "flex" }}><Bell size={19} /></span>การแจ้งเตือนของตัวแทน
+          </div>
+          <div className="card-desc">6 เรื่องที่ระบบเฝ้าให้ — คำนวณจากงานขายของตัวแทน แล้วขึ้นที่กระดิ่ง</div>
         </div>
-        {saved && <span style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><Check size={13} /> บันทึกแล้ว</span>}
       </div>
-      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {NOTIF_META.map(n => (
-          <label key={n.key} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 16px", cursor: "pointer" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D" }}>{n.label}</div>
-              <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{n.desc}</div>
+      <div className="card-body">
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
+          <span style={{ width: 42, textAlign: "center" }}>เปิด</span>
+        </div>
+        <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden" }}>
+          {NOTIF_META.map((n, i) => (
+            <div key={n.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderTop: i ? "1px solid #f1f5f9" : "none" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{n.label}</div>
+                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{n.desc}</div>
+              </div>
+              <div style={{ width: 42, display: "flex", justifyContent: "center" }}>
+                <Toggle on={draft[n.key]} onChange={() => toggle(n.key)} />
+              </div>
             </div>
-            {/* toggle switch */}
-            <button type="button" onClick={() => toggle(n.key)} aria-pressed={prefs[n.key]}
-              style={{ width: 42, height: 24, borderRadius: 999, border: "none", cursor: "pointer", flexShrink: 0,
-                background: prefs[n.key] ? "#003366" : "#cbd5e1", position: "relative", transition: "background .15s" }}>
-              <span style={{ position: "absolute", top: 3, left: prefs[n.key] ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
-            </button>
-          </label>
-        ))}
-        <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 2 }}>เปลี่ยนแล้วมีผลกับกระดิ่งแจ้งเตือนทันที (บันทึกอัตโนมัติ)</div>
+          ))}
+        </div>
+        {/* แถบบอกว่าค่านี้ถูกใช้ที่ไหน — แนวเดียวกับ UsedAt ของหน้าตั้งค่า HQ */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.76rem", color: "#6b7280", lineHeight: 1.6 }}>
+          <Lock size={14} color="#003366" style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>ค่านี้คุมกระดิ่งแจ้งเตือนบนแถบบนของตัวแทน · ปิดเรื่องไหน เรื่องนั้นจะไม่ขึ้นกระดิ่ง — กด “บันทึก” บนแถบบนแล้วมีผลทันที</span>
+        </div>
       </div>
+      <LeadRulesCard draft={rulesDraft} set={setRule} />
     </>
+  );
+}
+
+// ─── กฎการดูแลลูกค้าเป้าหมายของสาขานี้ ────────────────────────────────────────
+// ย้ายมาจาก /hq/settings ตามคำสั่ง — เดิม HQ ตั้งค่าเดียวบังคับทุกสาขา ("ตัวแทนแก้เองไม่ได้")
+// ตอนนี้ตัวแทนแต่ละสาขาตั้งเอง เก็บแยกด้วยรหัสสาขา (key: dealer_lead_rules)
+// ⚠️ ค่านี้กระทบหน้า HQ ด้วย — HQ อ่านเกณฑ์ของแต่ละสาขามาคิดทีละใบ (useLeadRulesOf)
+function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRules, n: number) => void }) {
+  const num = (value: number, on: (n: number) => void, unit: string) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <input type="number" min={1} className="form-input" style={{ textAlign: "right", fontWeight: 700 }}
+        value={value} onChange={e => on(Math.max(1, Number(e.target.value)))} />
+      <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
+    </div>
+  );
+  const row = (label: string, desc: string, node: React.ReactNode) => (
+    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", padding: "13px 0", borderTop: "1px solid var(--border,#f1f5f9)" }}>
+      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#2D2D2D" }}>{label}</div>
+        <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{desc}</div>
+      </div>
+      <div style={{ flex: "0 0 340px", maxWidth: "100%" }}>{node}</div>
+    </div>
+  );
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="card-header">
+        <div>
+          <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: "var(--primary)", display: "flex" }}><Scale size={19} /></span>กฎการดูแลลูกค้าเป้าหมาย
+          </div>
+          <div className="card-desc">เกณฑ์ของสาขา {CURRENT_DEALER.name} ({CURRENT_DEALER.code}) — สาขาอื่นตั้งของตัวเองแยกกัน</div>
+        </div>
+      </div>
+      <div className="card-body">
+        {row("ต้องมีผู้รับผิดชอบภายใน", "ลีดใหม่ที่ยังไม่มีผู้รับผิดชอบเกินกำหนด → ขึ้นการ์ดเตือน",
+          num(draft.unassignedAlertHours, n => set("unassignedAlertHours", n), "ชั่วโมง"))}
+        {row("เตือนเมื่อลีดไม่มีการติดต่อเกิน", "ลีดที่ยังไม่ปิดและเงียบเกินกำหนด → ขึ้นป้าย “ต้องติดตามด่วน”",
+          num(draft.followUpAlertDays, n => set("followUpAlertDays", n), "วัน"))}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.76rem", color: "#6b7280", lineHeight: 1.6 }}>
+          <Lock size={14} color="#003366" style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>
+            สองเกณฑ์นี้ถูกใช้จริงที่: หน้าลูกค้าเป้าหมายของสาขา · แดชบอร์ดสาขา · และสำนักงานใหญ่ใช้ดูลีดของสาขานี้ด้วย
+            <br />ลีดที่เงียบนานจะถูก “เตือน” เท่านั้น — ระบบไม่ลบลีดอัตโนมัติ (ข้อมูลลูกค้าเป้าหมายไม่หายเอง)
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 

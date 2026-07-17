@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { NAVY, SILVER, STEEL } from "@/lib/theme";
+
+// ชุดสีไล่สำหรับกราฟที่หนึ่งแถว = หนึ่งหมวด (navy หลัก + สีเสริม ไม่ฉูดฉาด)
+// ชุดเดียวกับที่การ์ด "ยอดขายตามประเภทอาคาร" ของแดชบอร์ด HQ ใช้อยู่
+const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 
 // เพดานแกน Y แบบ "nice number" — ปรับตามขนาดข้อมูลจริง เพื่อให้เส้นเต็มกราฟทั้งค่าน้อย (รายวัน) และค่ามาก (รายเดือน)
 function niceCeil(v: number): number {
@@ -184,9 +188,12 @@ export function PlanVsActualBars({
   const fmt = fmtProp ?? ((v: number) => `฿${Math.round(v * 10) / 10}${unit}`);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
   const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
+  const hasExceeded = highlightExceeded && data.some(d => d.actual > d.plan);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="plan vs actual">
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }}
+        role="img" aria-label={`${aLabel} เทียบ ${bLabel}`}>
       <defs>
         <linearGradient id="pva-navy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2c62ad" /><stop offset="1" stopColor={NAVY} /></linearGradient>
         <linearGradient id="pva-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#34d399" /><stop offset="1" stopColor="#059669" /></linearGradient>
@@ -227,7 +234,26 @@ export function PlanVsActualBars({
           </g>
         );
       })}
-    </svg>
+      </svg>
+
+      {/* คำอธิบายสี — ต้องมีเสมอ ไม่งั้นแท่งคู่ + แท่งเขียวอ่านไม่ออกว่าอันไหนคืออะไร
+          "เกินเป้า" ขึ้นเฉพาะตอนมีเดือนที่เกินจริง — ไม่อธิบายสีที่ไม่ได้อยู่บนจอ */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", justifyContent: "center",
+        marginTop: 12, paddingTop: 12, borderTop: "1px solid #f0f4f8", fontSize: "0.72rem", color: "#6B7280" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: aFill ?? NAVY, flexShrink: 0 }} /> {aLabel}
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: bFill ?? SILVER, flexShrink: 0 }} /> {bLabel}
+        </span>
+        {hasExceeded && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: "#059669", border: "1.5px solid #ECC94B", boxSizing: "border-box", flexShrink: 0 }} />
+            {aLabel}เกิน{bLabel}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -335,82 +361,53 @@ export function ProgressRing({ pct, size = 50, color = NAVY }: { pct: number; si
   );
 }
 
-export type CategoryBar = { label: string; value: number; sub?: string };
-
-/** แท่งแนวตั้งเทียบหมวดหมู่ (จัดอันดับ) — หนึ่งหมวด = หนึ่งแท่ง
+/** แท่งแนวนอนเทียบหมวดหมู่ (จัดอันดับ) — หนึ่งหมวด = หนึ่งแถว เรียงลงมา
  *
- *  ใช้ "สีเดียวทั้งกราฟ" เพราะเป็นชุดข้อมูลเดียว (ยอดขาย) ไม่ใช่หลายชุด
- *  ถ้าไล่สีทีละแท่งตามลำดับในอาร์เรย์ที่เรียงตามยอด = สีผูกกับ "อันดับ" ไม่ใช่ "ตัวตน"
- *  พอยอดขยับจนสลับอันดับ สีจะสลับตามทั้งที่เป็นคน/สินค้าคนเดิม — อ่านผิดง่าย
+ *  รูปแบบเดียวกับการ์ด "ยอดขายตามประเภทอาคาร" ของแดชบอร์ด HQ — แหล่งเดียว ห้ามก๊อปมาร์กอัปไปวางซ้ำ
+ *  แถวหนึ่ง = ไอคอน + ชื่อ + ค่า (บรรทัดบน) · แท่ง + หมายเหตุ (บรรทัดล่าง)
  *
- *  viewBox = ความกว้างจริงของการ์ด (ResizeObserver) → ตัวอักษรคมเท่ากันทุกขนาด
- *  ไม่มีแกน Y เพราะมีไม่กี่แท่ง — ติดตัวเลขไว้บนหัวแท่งตรง ๆ อ่านง่ายกว่าไล่สายตาไปหาแกน
+ *  ทำไมแนวนอน: ชื่อคน/ชื่อแม่แบบภาษาไทยยาว — แท่งแนวตั้งมีที่วางป้ายแค่ ~1 ช่อง ต้องตัดคำทิ้ง
+ *  แนวนอนให้ชื่อเต็มบรรทัดเดียว และเพิ่มรายการได้โดยการ์ดไม่บวม (ต่างจากแนวตั้งที่แท่งจะผอมลงเรื่อย ๆ)
+ *
+ *  สีไล่ตาม RAMP ทีละแถว = สีผูกกับ "อันดับ" ไม่ใช่ "ตัวตน" — พอยอดสลับอันดับ สีจะสลับตาม
+ *  ยอมรับได้เพราะชื่ออยู่ติดแท่งเสมอ (ไม่ต้องใช้สีจำว่าแถวไหนคือใคร ต่างจากกราฟที่มี legend แยก)
  */
-export function CategoryBars({
-  data, fmt, height = 240, color = NAVY, onSelect, ariaLabel,
+export type CategoryRow = { label: string; value: number; note?: string };
+export function CategoryRows({
+  data, fmt, icon, onSelect, ariaLabel,
 }: {
-  data: CategoryBar[];
+  data: CategoryRow[];
   fmt: (v: number) => string;
-  height?: number;
-  color?: string;
+  icon?: ReactNode;
   onSelect?: (i: number) => void;
   ariaLabel: string;
 }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const [drawn, setDrawn] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [vw, setVw] = useState(380); // ค่าตั้งต้นเท่ากันทั้งเซิร์ฟเวอร์/เบราว์เซอร์ → ไม่เกิด hydration mismatch
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setVw(Math.round(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const n = data.length;
-  const W = Math.max(240, vw), H = height;
-  const hasSub = data.some(d => d.sub);
-  const pL = 6, pR = 6, pT = 26, pB = hasSub ? 42 : 30;
-  const cW = W - pL - pR, cH = H - pT - pB;
-  const max = niceCeil(Math.max(...data.map(d => d.value), 1) * 1.08);
-  const slot = cW / n;
-  const bw = Math.min(54, slot * 0.46);
-  const baseY = pT + cH;
-  const yAt = (v: number) => pT + (1 - v / max) * cH;
-  // ตัดชื่อที่ยาวเกินช่อง (ไทย ~5.2px/ตัว ที่ 9.5px) — ชื่อเต็มยังอ่านได้จาก <title> ตอนชี้
-  const maxChars = Math.max(4, Math.floor((slot - 6) / 5.2));
-  const clip = (s: string) => (s.length > maxChars ? `${s.slice(0, maxChars - 1)}…` : s);
-  const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
-
+  const max = Math.max(...data.map(d => d.value), 1);
   return (
-    <div ref={wrapRef}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }}
-        role="img" aria-label={ariaLabel}>
-        <line x1={pL} y1={baseY} x2={W - pR} y2={baseY} stroke="#eef1f5" strokeWidth="1" />
-        {data.map((d, i) => {
-          const cx = pL + slot * i + slot / 2;
-          const h = d.value > 0 ? baseY - yAt(d.value) : 0;
-          const on = hover === i;
-          const full = `${d.label}${d.sub ? ` · ${d.sub}` : ""} — ${fmt(d.value)}`;
-          return (
-            <g key={d.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
-              onClick={() => onSelect?.(i)} style={{ cursor: onSelect ? "pointer" : "default" }}>
-              <title>{full}</title>
-              {on && <rect x={cx - slot / 2 + 2} y={pT - 22} width={slot - 4} height={cH + 22} rx={8} fill="#f2f6fc" />}
-              {/* พื้นที่รับเมาส์เต็มช่อง — เล็งง่ายกว่าตัวแท่ง */}
-              <rect x={cx - slot / 2} y={pT - 22} width={slot} height={cH + 22} fill="transparent" />
-              <text x={cx} y={pT - 9} textAnchor="middle" fontSize="10" fontWeight="800" fill={color}
-                opacity={drawn ? 1 : 0} style={{ transition: "opacity .4s ease .5s" }}>{fmt(d.value)}</text>
-              <rect x={cx - bw / 2} y={drawn ? yAt(d.value) : baseY} width={bw} height={drawn ? h : 0} rx={4}
-                fill={color} opacity={d.value > 0 ? (hover === null || on ? 1 : 0.5) : 0} style={grow} />
-              <text x={cx} y={baseY + 15} textAnchor="middle" fontSize="9.5" fontWeight="600" fill="#6B7280">{clip(d.label)}</text>
-              {d.sub && <text x={cx} y={baseY + 28} textAnchor="middle" fontSize="8.5" fill="#aab2bd">{clip(d.sub)}</text>}
-            </g>
-          );
-        })}
-      </svg>
+    <div role="img" aria-label={ariaLabel}
+      style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {data.map((d, i) => (
+        <div key={d.label} onClick={() => onSelect?.(i)}
+          style={{ cursor: onSelect ? "pointer" : "default" }}
+          title={`${d.label}${d.note ? ` · ${d.note}` : ""} — ${fmt(d.value)}`}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+            {icon && (
+              <span style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, background: RAMP[i % RAMP.length] + "1a", color: RAMP[i % RAMP.length], display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {icon}
+              </span>
+            )}
+            <span style={{ flex: 1, fontSize: "0.72rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</span>
+            <span style={{ fontSize: "0.72rem", fontWeight: 800, color: NAVY, fontVariantNumeric: "tabular-nums" }}>{fmt(d.value)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ flex: 1, height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
+              {/* ยอด 0 = ไม่มีแท่ง (ไม่ใช่แท่งจิ๋ว) — ให้เห็นชัดว่ายังไม่มียอด */}
+              <div className="bar-grow" style={{ height: "100%", width: `${Math.round(d.value / max * 100)}%`, background: RAMP[i % RAMP.length], borderRadius: 999 }} />
+            </div>
+            {d.note && <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>{d.note}</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -893,6 +890,107 @@ export function GroupedBarChart({
             {ser.name}
           </span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** Bar + Line Combo — แท่ง = ยอดรวมของเดือน · เส้น = ส่วนย่อยของยอดนั้น
+ *
+ *  ใช้เมื่อชุด "เส้น" เป็นสับเซตของชุด "แท่ง" (เช่น ใบที่สร้าง vs ใบที่ตอบรับ)
+ *  เส้นจึงอยู่ใต้หัวแท่งเสมอ — ระยะห่างระหว่างเส้นกับหัวแท่งคือ "ส่วนที่ยังไม่ได้/ไม่สำเร็จ" อ่านออกทันที
+ *  ถ้าสองชุดไม่ใช่สับเซตกัน (บวกกันไม่ได้ความหมาย) ให้ใช้ GroupedBarChart แทน — วางข้างกันไม่ทับกัน
+ *
+ *  แกน/ฟอนต์/ระยะขอบ = ชุดเดียวกับ GroupedBarChart เพื่อให้การ์ดในหน้าเดียวกันอ่านเทียบกันได้
+ */
+export function BarLineChart({
+  months, bar, line, fmt = v => `${Math.round(v)}`, height = 340, vw = 1180,
+}: {
+  months: string[];
+  bar: { name: string; color: string; data: number[] };
+  line: { name: string; color: string; data: number[] };
+  fmt?: (v: number) => string;
+  height?: number;
+  vw?: number;
+}) {
+  const [drawn, setDrawn] = useState(false);
+  const [hover, setHover] = useState<number | null>(null);
+  useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+
+  const n = months.length;
+  // เพดานคิดจากค่าสูงสุดของ "แท่ง" อย่างเดียวก็พอ — เส้นเป็นสับเซต จึงไม่มีวันสูงกว่าแท่ง
+  const ceiling = niceCeil(Math.max(...bar.data, ...line.data, 1) * 1.08);
+  const narrow = vw < 800;
+  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 24, pT = 22, pB = narrow ? 34 : 42;
+  const cW = W - pL - pR, cH = H - pT - pB;
+  const band = cW / n;
+  const bw = Math.min(band * 0.5, 34);
+  const yTicks = Array.from({ length: 5 }, (_, i) => (ceiling / 4) * i);
+  const bottomY = pT + cH;
+  const fs = narrow ? 13 : 15;
+  const cx = (i: number) => pL + band * i + band / 2;
+  const yAt = (v: number) => pT + (1 - v / ceiling) * cH;
+  const path = line.data.map((v, i) => `${i === 0 ? "M" : "L"} ${cx(i)} ${yAt(v)}`).join(" ");
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }}
+        role="img" aria-label={`${bar.name} (แท่ง) และ ${line.name} (เส้น)`}>
+        {yTicks.map((v, i) => {
+          const y = pT + (1 - v / ceiling) * cH;
+          return (
+            <g key={i}>
+              <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#eef1f5" strokeWidth={1} />
+              <text x={pL - 10} y={y + 4} textAnchor="end" fontSize={fs} fill="#9ca3af">{fmt(v)}</text>
+            </g>
+          );
+        })}
+
+        {/* แท่งก่อน แล้วค่อยวาดเส้นทับ — เส้นต้องอยู่บนสุดถึงจะอ่านออกตอนค่าใกล้กัน */}
+        {months.map((m, i) => {
+          const val = bar.data[i] ?? 0;
+          const h = (val / ceiling) * cH;
+          const isHover = hover === i;
+          return (
+            <g key={m} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <rect x={pL + band * i} y={pT} width={band} height={cH} fill="transparent" />
+              {/* ค่า 0 = ขีดบาง ๆ ให้เห็นว่าเดือนนั้นมีข้อมูลแต่เป็นศูนย์ (ไม่ใช่ไม่มีข้อมูล) */}
+              <rect x={cx(i) - bw / 2} y={drawn ? bottomY - Math.max(h, val > 0 ? 2 : 1.5) : bottomY}
+                width={bw} height={drawn ? Math.max(h, val > 0 ? 2 : 1.5) : 0}
+                rx={3} fill={bar.color} opacity={val > 0 ? (hover === null || isHover ? 1 : 0.45) : 0.22}
+                style={{ transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" }} />
+              <text x={cx(i)} y={bottomY + (narrow ? 22 : 26)} textAnchor="middle" fontSize={fs} fill="#6b7280">{m}</text>
+            </g>
+          );
+        })}
+
+        <path d={path} fill="none" stroke={line.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+          opacity={drawn ? 1 : 0} style={{ transition: "opacity .5s ease .35s" }} />
+        {line.data.map((v, i) => (
+          <circle key={i} cx={cx(i)} cy={yAt(v)} r={hover === i ? 5 : 3.5}
+            fill="#fff" stroke={line.color} strokeWidth={2}
+            opacity={drawn ? 1 : 0} style={{ transition: "opacity .5s ease .45s, r .15s" }} />
+        ))}
+
+        {/* ตัวเลขโผล่ตอนชี้ — แท่งบอกค่าเหนือหัวแท่ง เส้นบอกค่าใต้จุด กันตัวเลขทับกันตอนค่าใกล้กัน */}
+        {hover !== null && (
+          <g style={{ pointerEvents: "none" }}>
+            <text x={cx(hover)} y={bottomY - (bar.data[hover] ?? 0) / ceiling * cH - 8}
+              textAnchor="middle" fontSize={fs - 1} fontWeight="800" fill={bar.color}>{fmt(bar.data[hover] ?? 0)}</text>
+            <text x={cx(hover)} y={yAt(line.data[hover] ?? 0) + 16}
+              textAnchor="middle" fontSize={fs - 1} fontWeight="800" fill={line.color}>{fmt(line.data[hover] ?? 0)}</text>
+          </g>
+        )}
+      </svg>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 14, paddingTop: 12, borderTop: "1px solid #f0f4f8" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: STEEL }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: bar.color, flexShrink: 0 }} />
+          {bar.name}
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: STEEL }}>
+          <span style={{ width: 14, height: 3, borderRadius: 2, background: line.color, flexShrink: 0 }} />
+          {line.name}
+        </span>
       </div>
     </div>
   );

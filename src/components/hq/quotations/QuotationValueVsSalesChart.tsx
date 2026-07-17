@@ -5,6 +5,7 @@
 // มูลค่าใบเสนอราคา = ทุกใบในตัวกรอง · ยอดขายจริง = เฉพาะใบที่สถานะ "ปิดการขายได้"
 // (ระบบไม่มีตัวเลขยอดขายแยกต่างหาก — ยอดขาย = มูลค่าใบที่ปิดได้ ตามนิยามเดียวกันทั้งหน้า)
 import { aggregate, groupBy, type QuoteRow } from "@/lib/hqQuotations";
+import { TopNRows } from "@/components/hq/TopNRows";
 import { fmtBaht } from "@/lib/format";
 
 const QUOTE_COLOR = "#0891b2";
@@ -21,7 +22,7 @@ export function QuotationValueVsSalesChart({ rows }: { rows: QuoteRow[] }) {
   const max = Math.max(...bars.map(b => b.value), 1);
 
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
+    <div className="card chart-l" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div>
           <div className="card-title">มูลค่าใบเสนอราคา เทียบ ยอดขายจริง</div>
@@ -36,10 +37,12 @@ export function QuotationValueVsSalesChart({ rows }: { rows: QuoteRow[] }) {
           </span>
         </span>
       </div>
-      <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
         {!bars.length ? (
           <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
-        ) : bars.map(b => (
+        ) : (
+        <TopNRows topN={4} unit="ราย" gap={14}>
+          {bars.map(b => (
           <div key={b.code}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem", marginBottom: 4 }}>
               <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -64,7 +67,9 @@ export function QuotationValueVsSalesChart({ rows }: { rows: QuoteRow[] }) {
               <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 54, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(b.wonValue)}</span>
             </div>
           </div>
-        ))}
+          ))}
+        </TopNRows>
+        )}
       </div>
     </div>
   );

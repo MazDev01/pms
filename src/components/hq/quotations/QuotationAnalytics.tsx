@@ -8,11 +8,11 @@
 // ไม่มี "อัตราการเปิดอ่าน" และ "การใช้แม่แบบ" — ระบบไม่มีข้อมูลรองรับทั้งสองอย่าง (ห้ามกุ)
 import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
-import { DealerClosingChart } from "./DealerClosingChart";
 import { QuotationTrendChart } from "./QuotationTrendChart";
 import { QuotationAgingChart } from "./QuotationAgingChart";
 import { LeadsVsQuotationsChart } from "./LeadsVsQuotationsChart";
 import { QuotationValueVsSalesChart } from "./QuotationValueVsSalesChart";
+import { TopNRows } from "@/components/hq/TopNRows";
 import { BuildingTypeChart } from "./BuildingTypeChart";
 import { LostReasonsChart } from "./LostReasonsChart";
 import { aggregate, conversionRate, groupBy, regionDisplay, type QuoteRow } from "@/lib/hqQuotations";
@@ -31,15 +31,17 @@ function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
   const maxC = Math.max(...regions.map(r => r.count), 1);
 
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
+    <div className="card chart-m" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">เทียบรายภูมิภาค</div>
         <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>มูลค่า · จำนวนใบ</span>
       </div>
-      <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
         {!regions.length ? (
           <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
-        ) : regions.map((r, i) => (
+        ) : (
+        <TopNRows topN={4} unit="ภาค" gap={14}>
+          {regions.map((r, i) => (
           <div key={r.region}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem", marginBottom: 4 }}>
               <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{regionDisplay(r.region)}</span>
@@ -57,7 +59,9 @@ function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
               <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 44, textAlign: "right" }}>{r.count} ใบ</span>
             </div>
           </div>
-        ))}
+          ))}
+        </TopNRows>
+        )}
       </div>
     </div>
   );
@@ -149,6 +153,10 @@ export function QuotationAnalytics({ rows, trendRows, leads }: {
 }) {
   return (
     <>
+      {/* แนวโน้ม 12 เดือน มาก่อน — ให้เห็นภาพรวมว่าทั้งเครือกำลังไปทางไหน แล้วค่อยแยกย่อยรายตัวแทน/ภาค/แม่แบบ
+          กินเต็มแถว: กราฟ 12 จุดอ่านง่ายกว่าตอนกว้าง (และไม่มีใบไหนคู่ควรจับคู่ด้วย) */}
+      <QuotationTrendChart rows={trendRows} />
+
       <div className="hq-dealer-charts">
         <LeadsVsQuotationsChart rows={rows} leads={leads} />
         <QuotationValueVsSalesChart rows={rows} />
@@ -157,23 +165,20 @@ export function QuotationAnalytics({ rows, trendRows, leads }: {
       {/* "ใบเสนอราคา รายตัวแทน" (DealerRankingChart) ถูกตัดออก — ข้อมูลซ้ำทั้งใบ:
           มูลค่ารายตัวแทนมีใน "มูลค่าใบเสนอราคา เทียบ ยอดขายจริง" · จำนวนใบมีใน "ลีด → ใบเสนอราคา"
           และตาราง "อันดับตัวแทนจำหน่าย" ท้ายหน้ามีครบทั้งคู่ + อัตราปิดการขาย */}
-      {/* "สถานะใบเสนอราคา แยกตามตัวแทน" (แท่งซ้อน 5 สถานะ) ถูกแทนด้วย DealerClosingChart —
-          ข้อมูลชุดเดียวกัน (ตัวแทน × สถานะ) แต่จัดกลุ่มเป็นผลลัพธ์จริง + เรียงตามจำนวนใบ + บอกอัตราปิด */}
+      {/* "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย" (DealerClosingChart) ถูกตัดออก — ย้ายไปอยู่ที่ /hq/pipeline
+          ซึ่งเป็นเจ้าของเรื่อง "ผลงานตัวแทน / ใครต้องเข้าไปช่วย" (ใบนั้นมีตารางสรุปใต้กราฟด้วย)
+          หน้านี้เหลือเฉพาะเรื่องของตัวเอกสารใบเสนอราคา — อายุใบ / สถานะ / แนวโน้ม / มูลค่า */}
       <div className="hq-dealer-charts">
-        <DealerClosingChart rows={rows} />
         <RegionalComparison rows={rows} />
-      </div>
-
-      <div className="hq-dealer-charts">
         <BuildingTypeChart rows={rows} />
-        <LostReasonsChart leads={leads} />
       </div>
 
       <div className="hq-dealer-charts">
+        <LostReasonsChart leads={leads} />
         <QuotationAgingChart rows={rows} />
-        <QuotationTrendChart rows={trendRows} />
       </div>
 
+      {/* ตารางอันดับปิดท้าย — เป็น "ตัวเลขครบทุกตัวแทน" ที่ให้ไล่อ่านหลังดูกราฟภาพรวมจบแล้ว */}
       <div style={{ marginBottom: 24 }}>
         <TopDealerRanking rows={rows} />
       </div>

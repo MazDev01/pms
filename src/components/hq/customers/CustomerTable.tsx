@@ -5,8 +5,8 @@
 // ช่องที่ไม่มีข้อมูลจริง (ลูกค้าที่ยังไม่มีใบปิดการขาย) ขึ้น "—" ไม่เดาแทน
 import { Eye } from "lucide-react";
 import { customerCode } from "@/lib/mock";
-import { toThaiDate } from "@/lib/warranty";
-import { isWarrantyExpiringSoon, type CustomerDbRow } from "@/lib/customerDb";
+import { toThaiDate } from "@/lib/delivery";
+import { type CustomerDbRow } from "@/lib/customerDb";
 
 const PRIMARY = "#003366";
 const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
@@ -30,19 +30,6 @@ function MultiCell({ values }: { values: string[] }) {
   );
 }
 
-function WarrantyCell({ row }: { row: CustomerDbRow }) {
-  const w = row.warranty;
-  if (!w) return DASH;
-  const soon = isWarrantyExpiringSoon(w);
-  const style = w.status === "expired"
-    ? { background: "#f3f4f6", color: "#6b7280" }
-    : soon
-      ? { background: "#fef3c7", color: "#92400e" }
-      : { background: "#d1fae5", color: "#065f46" };
-  const label = w.status === "expired" ? "หมดประกัน" : soon ? "ใกล้หมด" : "อยู่ในประกัน";
-  return <span className="badge" style={style} title={`${w.remainingLabel} · หมด ${w.expiry}`}>{label}</span>;
-}
-
 export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView: (r: CustomerDbRow) => void }) {
   return (
     <div className="table-wrap" style={{ borderTop: "none" }}>
@@ -58,7 +45,6 @@ export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView:
           <col style={{ width: "10%", minWidth: 104 }} />{/* ประเภทอาคาร */}
           <col style={{ width: "9%", minWidth: 96 }} />{/* แม่แบบ */}
           <col style={{ width: "8%", minWidth: 92 }} />{/* วันที่ส่งมอบ */}
-          <col style={{ width: "7%", minWidth: 88 }} />{/* ประกัน */}
           <col style={{ width: "7%", minWidth: 84 }} />{/* ยอดซื้อรวม */}
           <col style={{ width: "8%", minWidth: 92 }} />{/* ซื้อล่าสุด */}
           <col style={{ width: "4%", minWidth: 56 }} />{/* ปุ่มดู */}
@@ -74,7 +60,6 @@ export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView:
             <th>ประเภทอาคาร</th>
             <th>แม่แบบ</th>
             <th>วันที่ส่งมอบ</th>
-            <th>ประกัน</th>
             <th className="num">ยอดซื้อรวม</th>
             <th>ซื้อล่าสุด</th>
             <th></th>{/* ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ */}
@@ -83,7 +68,7 @@ export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView:
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: "center", padding: "40px 14px", color: "#6b7280" }}>
+              <td colSpan={12} style={{ textAlign: "center", padding: "40px 14px", color: "#6b7280" }}>
                 ไม่พบลูกค้า
               </td>
             </tr>
@@ -101,7 +86,6 @@ export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView:
                 <td><MultiCell values={c.buildingTypes} /></td>
                 <td><MultiCell values={c.templates} /></td>
                 <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.deliveredAt ? toThaiDate(c.deliveredAt) : DASH}</td>
-                <td><WarrantyCell row={c} /></td>
                 <td className="num" style={{ whiteSpace: "nowrap", fontWeight: c.totalRevenue > 0 ? 700 : 400, color: c.totalRevenue > 0 ? PRIMARY : "#6b7280" }}>
                   {c.totalRevenue > 0 ? fmtM(c.totalRevenue) : DASH}
                 </td>

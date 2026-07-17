@@ -16,7 +16,7 @@ import { LeadTasks } from "@/components/ui/LeadTasks";
 import { LeadQuotationsPanel } from "@/components/ui/LeadQuotationsPanel";
 import { PersonPicker, AssigneeAvatars } from "@/components/ui/PersonPicker";
 import { useMasterCatalog } from "@/lib/useMasterCatalog";
-import { useHQLeadRules } from "@/lib/useHQRules";
+import { useLeadRules } from "@/lib/useHQRules";
 import { fileToResizedDataURL } from "@/lib/imageResize";
 import { TemplateSelect } from "@/components/ui/TemplateSelect";
 import { useRole } from "@/context/RoleContext";
@@ -527,7 +527,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 export default function LeadsPage() {
   const router = useRouter();
   const { session } = useRole(); // ผู้ดำเนินการ (บันทึกลง task ที่เช็ก)
-  const { followUpAlertDays } = useHQLeadRules(); // กฎ HQ 7 วัน — ตัวแทนแก้เองไม่ได้
+  const { followUpAlertDays } = useLeadRules(CURRENT_DEALER.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // List state

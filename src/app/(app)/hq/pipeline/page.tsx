@@ -15,8 +15,7 @@ import { useRouter } from "next/navigation";
 import {
   FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
 } from "lucide-react";
-import { MultiLineChart, StackedBarChart, Donut } from "@/components/ui/Charts";
-import { DealerQuotationPerformance } from "@/components/hq/pipeline/DealerQuotationPerformance";
+import { DealerQuotationPerformance, DealerQuotationTable } from "@/components/hq/pipeline/DealerQuotationPerformance";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -37,8 +36,6 @@ const PRIMARY = "#003366";
 const STEEL = "#2D2D2D";
 const MUTED = "var(--muted-foreground)";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
-// โทนแดง-ส้มของโดนัท "เหตุผลที่เสียโอกาส" — ชุดเดียวกับหน้า /hq/leads ให้อ่านเหมือนกันทั้งระบบ
-const LOST_RAMP = ["#dc2626", "#ea580c", "#d97706", "#b45309", "#9f1239", "#7c2d12"];
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const TH_MONTH: Record<string, number> = Object.fromEntries(TH_ABBR.map((m, i) => [m, i]));
 const parseThaiDate = (s: string): Date | null => {
@@ -51,15 +48,26 @@ const QUOTED_UP = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
 const ALL = "ALL";
 
 // ── แท่งแนวนอนคู่ — ใช้ซ้ำใน Section 1 / 2 / 3 (แท่งหลัก + แท่งเทียบ) ──
+// เปิดมาโชว์ครบทุกแถวเลย (บอสสั่ง 17 ก.ค. 69) — ให้อ่านคู่กับตารางข้าง ๆ ที่ก็ลิสต์ครบทุกตัวแทนเหมือนกัน
+// การ์ดไม่ยืดตามจำนวนแถว เพราะความสูงตรึงด้วย .chart-l แล้วให้ .chart-scroll เลื่อนข้างใน
+// (กติกาใน globals.css: ข้อมูลล้น = เลื่อนใน .chart-scroll หรือตัด Top N + ปุ่มดูทั้งหมด — ที่นี่ใช้แบบเลื่อน)
+// ปุ่มย่อกลับเป็น 5 อันดับแรกยังอยู่ เผื่ออยากดูเฉพาะหัวตาราง
+const TOP_N = 5;
 type HRow = { key: string; label: string; a: number; b: number; note?: string; onClick?: () => void };
 function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt }: {
   rows: HRow[]; aLabel: string; bLabel: string; aColor?: string; bColor?: string; fmt: (v: number) => string;
 }) {
+  const [all, setAll] = useState(true);
+  // max คิดจากทุกแถวเสมอ — ไม่งั้นพอกด "ดูทั้งหมด" ความยาวแท่งจะขยับ ทั้งที่ข้อมูลเท่าเดิม
   const max = Math.max(...rows.flatMap(r => [r.a, r.b]), 1);
+  const shown = all ? rows : rows.slice(0, TOP_N);
+  const hidden = rows.length - shown.length;
+  // flex: 1 — เดิมได้ความยืดมาจากคลาส chart-l ของการ์ด พอเลิกล็อกความสูงตายตัวก็ต้องยืดเอง
+  // ไม่งั้นเนื้อในหดตามจำนวนข้อมูล การ์ดเลยเตี้ยกลับไปไม่เท่าเพื่อนในแถวเหมือนเดิม
   return (
-    <div className="card-body" style={{ paddingTop: 4 }}>
+    <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       {/* คำอธิบายสี — ต้องมี ไม่งั้นแท่งคู่อ่านไม่ออกว่าอันไหนคืออะไร */}
-      <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 14, marginBottom: 12, flexShrink: 0 }}>
         {[[aLabel, aColor], [bLabel, bColor]].map(([l, c]) => (
           <span key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.66rem", fontWeight: 700, color: MUTED }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: c, flexShrink: 0 }} /> {l}
@@ -68,9 +76,9 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
       </div>
       {!rows.length ? (
         <EmptyState icon={<Coins size={26} />} title="ไม่พบข้อมูลในช่วงที่เลือก" description="ลองปรับตัวกรอง" compact />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {rows.map(r => (
+      ) : (<>
+        <div className="chart-scroll" style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+          {shown.map(r => (
             <div key={r.key} onClick={r.onClick} style={{ cursor: r.onClick ? "pointer" : "default" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.72rem", marginBottom: 4 }}>
                 <span style={{ color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
@@ -88,7 +96,15 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
             </div>
           ))}
         </div>
-      )}
+        {/* บอกจำนวนที่ซ่อนไว้เสมอ — ห้ามตัดเงียบ ไม่งั้นคนอ่านนึกว่าเห็นครบแล้ว */}
+        {(hidden > 0 || all) && (
+          <button type="button" onClick={() => setAll(v => !v)}
+            style={{ marginTop: 10, flexShrink: 0, alignSelf: "flex-start", background: "none", border: "none", padding: 0,
+              cursor: "pointer", fontFamily: "inherit", fontSize: "0.68rem", fontWeight: 700, color: PRIMARY }}>
+            {all ? "ย่อกลับเป็น 5 อันดับแรก" : `ดูทั้งหมด (อีก ${hidden} ราย)`}
+          </button>
+        )}
+      </>)}
     </div>
   );
 }
@@ -273,52 +289,7 @@ export default function SalesAnalyticsPage() {
     })).sort((x, y) => y.a - x.a);
   }, [tgView, dealers, DEALER_META, router]);
 
-  // ── Section 6 · เทียบรายภูมิภาค — แท่งซ้อน ลีด/ใบเสนอราคา/ปิดได้ ──
-  const regional = useMemo(() => {
-    const rs = [...new Set(perf.map(d => d.region))].sort();
-    const sum = (r: string, f: "leads" | "quotes" | "wonCount") =>
-      perf.filter(d => d.region === r).reduce((s, d) => s + d[f], 0);
-    return {
-      labels: rs.map(regionDisplay),
-      series: [
-        { name: "ลูกค้าเป้าหมาย", color: "#003366", data: rs.map(r => sum(r, "leads")) },
-        { name: "ใบเสนอราคา", color: "#0891b2", data: rs.map(r => sum(r, "quotes")) },
-        { name: "ปิดการขายได้", color: "#10B981", data: rs.map(r => sum(r, "wonCount")) },
-      ],
-    };
-  }, [perf]);
-
-  // ── Section 7 · เหตุผลที่เสียโอกาสการขาย — จากลีดที่บันทึกเหตุผลไว้จริงเท่านั้น ──
-  const lostReasons = useMemo(() => {
-    const m = new Map<string, number>();
-    leads.filter(l => l.status === "CANCELLED" && l.lostReason)
-      .forEach(l => m.set(l.lostReason!, (m.get(l.lostReason!) ?? 0) + 1));
-    const arr = [...m.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
-    const total = arr.reduce((s, r) => s + r.count, 0) || 1;
-    const max = Math.max(...arr.map(a => a.count), 1);
-    return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [leads]);
-
-  // ── Section 8 · แนวโน้มรายเดือน — ลีด/ใบเสนอราคา/ยอดขาย · เท่าที่มีข้อมูล (ไม่ฟิกซ์ 12 เดือน) ──
-  const trend = useMemo(() => {
-    const lM = Array(12).fill(0), qM = Array(12).fill(0), sM = Array(12).fill(0);
-    leads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) lM[d.getMonth()]++; });
-    quotes.forEach(x => {
-      const d = parseThaiDate(x.createdAt); if (!d) return;
-      qM[d.getMonth()]++;
-      if (x.status === "won") sM[d.getMonth()] += x.valueNum;
-    });
-    const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
-    const cut = (arr: number[]) => arr.slice(a, b + 1);
-    return {
-      months: TH_ABBR.slice(a, b + 1),
-      counts: [
-        { name: "ลูกค้าเป้าหมาย", color: "#003366", data: cut(lM) },
-        { name: "ใบเสนอราคา", color: "#0891b2", data: cut(qM) },
-      ],
-      sales: [{ name: "ยอดขาย (ล้านบาท)", color: "#10B981", data: cut(sM).map(v => Math.round(v / 1e5) / 10) }],
-    };
-  }, [leads, quotes, timeRange]);
+  // เดิมมี regional / lostReasons / trend สำหรับกราฟ 4 ใบที่ถูกตัดออก (ข้อมูลซ้ำกับหน้าอื่น) — ลบทิ้งพร้อมกัน
 
   // ── Drawer (View) — เจาะรายตัวแทน ไม่เปลี่ยนหน้า ──
   const [drawer, setDrawer] = useState<typeof perf[number] | null>(null);
@@ -385,7 +356,7 @@ export default function SalesAnalyticsPage() {
 
       {/* ── SMART FILTER ── อยู่ใต้ KPI เหมือนหน้า HQ อื่น (ใบเสนอราคา/ลูกค้า/ตัวแทน)
           เดิมหน้านี้หน้าเดียวที่เอาตัวกรองไว้เหนือ KPI */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
+      <div className="card hq-sticky-filter" style={{ marginBottom: "1.25rem" }}>
         <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 14, paddingBottom: 14 }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหารหัส ชื่อตัวแทน จังหวัด…"
             className="form-input" style={{ width: 240, padding: "7px 11px", fontSize: "0.74rem" }} />
@@ -398,15 +369,19 @@ export default function SalesAnalyticsPage() {
             <button onClick={() => { setQ(""); setDealerSel(ALL); setRegionSel(ALL); setProvSel(ALL); setBtSel(ALL); setSalesSel(ALL); }}
               className="btn btn-secondary btn-sm">ล้างตัวกรอง</button>
           )}
-          <span style={{ fontSize: "0.7rem", color: MUTED, marginLeft: "auto" }}>ตัวแทน {perf.length} จาก {allDealers.length} ราย</span>
         </div>
       </div>
 
-      {/* ── แถว 1 · เปรียบเทียบรายตัวแทน: ลีด→ใบเสนอราคา | มูลค่า→ยอดขายจริง ──
+      {/* ── แถว 1 · วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน — เต็มความกว้าง ──
+          คำถามหลักของหน้า "ใครออกใบเยอะแต่ปิดได้น้อย" จึงขึ้นก่อนเพื่อน
+          แท่งคู่ 10 ตัวแทน · ตัวเลขชุดเดียวกันอยู่ในตารางแถว 3 (แยกการ์ดเพื่อไม่ให้ใบเดียวสูง 1,010px) */}
+      <DealerQuotationPerformance rows={quotePerf} avgConv={kpi.conv} />
+
+      {/* ── แถว 2 · เปรียบเทียบรายตัวแทน: ลีด→ใบเสนอราคา | มูลค่า→ยอดขายจริง ──
           สองใบนี้เป็นแท่งคู่รายตัวแทนเหมือนกันและสูงพอ ๆ กัน จับคู่ไว้แถวเดียว
           (เดิมทั้งหน้าเป็นการ์ดเต็มความกว้าง 8 ใบเรียงซ้อนกัน ยาว 4,800px) */}
       <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
-      <div className="card" style={{ marginBottom: 0 }}>
+      <div className="card chart-m" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</div>
           <div style={{ display: "flex", gap: 5 }}>
@@ -418,7 +393,7 @@ export default function SalesAnalyticsPage() {
       </div>
 
       {/* ── SECTION 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง ── */}
-      <div className="card" style={{ marginBottom: 0 }}>
+      <div className="card chart-m" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">มูลค่าใบเสนอราคา เทียบ ยอดขายจริง · รายตัวแทน</div>
           <span style={{ fontSize: "0.62rem", color: MUTED }}>ในช่วงที่เลือก · คลิกเพื่อเจาะรายตัวแทน</span>
@@ -427,16 +402,15 @@ export default function SalesAnalyticsPage() {
       </div>
       </div>
 
-      {/* ── แถว 1b · วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน ──
-          เต็มความกว้าง: แท่งคู่ 10 ตัวแทน + ตารางสรุปใต้กราฟ
-          ต่างจากแถว 1 ใบขวาตรงที่นับ "จำนวนใบ" ไม่ใช่ "มูลค่า" — คำถามคือออกกี่ใบ ปิดได้กี่ใบ
-          แทนที่การ์ดเดิม "เปิดใบเสนอราคาเยอะ แต่ปิดการขายได้น้อย" ที่โชว์เฉพาะรายที่เข้าเกณฑ์
-          (ข้อมูล/คำถามชุดเดียวกัน · ใบนี้เห็นครบทุกตัวแทนแล้วยังชี้รายที่ต่ำกว่าเฉลี่ยด้วยสีแดงเหมือนเดิม) */}
-      <DealerQuotationPerformance rows={quotePerf} avgConv={kpi.conv} />
-
-      {/* ── แถว 2 · เป้าหมายทั้งปี | อันดับตัวแทน ── */}
+      {/* ── แถว 3 · ตัวเลขการปิดการขาย (ตารางของกราฟแถว 1) | เป้าหมายทั้งปี เทียบ ยอดขายจริง ──
+          โดนัท "เหตุผลที่เสียโอกาสการขาย" ที่เคยอยู่แถวนี้ถูกตัดออก — ซ้ำกับ /hq/leads และ /hq/quotations */}
       <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
-      <div className="card" style={{ marginBottom: 0 }}>
+      <DealerQuotationTable rows={quotePerf} avgConv={kpi.conv} />
+
+      {/* ไม่ใช้ chart-l (ล็อกสูง 420px ตายตัว) — การ์ดคู่กันเป็นตารางที่สูงตามจำนวนตัวแทน
+          ความสูงตายตัวชนะ align-items: stretch เสมอ → การ์ดขวาเตี้ยกว่า เหลือช่องว่างใต้การ์ด
+          ยืดเองด้วย flex column แทน แล้วปล่อยให้ .chart-scroll ข้างในกินที่ที่เหลือ */}
+      <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
         <div className="card-header">
           <div className="card-title">เป้าหมายทั้งปี เทียบ ยอดขายจริง</div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -447,76 +421,13 @@ export default function SalesAnalyticsPage() {
         </div>
         <HBars rows={targetVsActual} aLabel="ยอดขายสะสมทั้งปี" bLabel="เป้าหมายทั้งปี" fmt={fmtBaht} />
       </div>
-
-      {/* โดนัท: เหตุผลรวมกัน = ลีดที่เสียโอกาสทั้งหมดพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง
-          (ชุดสีเดียวกับหน้า /hq/leads เพื่อให้ทั้งระบบอ่านเหมือนกัน) */}
-      <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-        <div className="card-header">
-          <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
-          <span style={{ fontSize: "0.62rem", color: MUTED }}>กำหนดโดย HQ ที่หน้าตั้งค่า · นับเฉพาะลีดที่บันทึกเหตุผลไว้จริง</span>
-        </div>
-        <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
-          {!lostReasons.length ? <div style={{ fontSize: "0.78rem", color: MUTED }}>— ไม่มีลีดที่บันทึกเหตุผลไว้ในขอบเขตนี้</div>
-            : (<>
-              <Donut
-                segments={lostReasons.map((r, i) => ({ label: r.reason, value: r.count, color: LOST_RAMP[i % LOST_RAMP.length] }))}
-                centerLabel="เสียโอกาส"
-                centerValue={`${lostReasons.reduce((s, r) => s + r.count, 0)}`}
-                size={168}
-              />
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
-                {lostReasons.map((r, i) => (
-                  <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: LOST_RAMP[i % LOST_RAMP.length], flexShrink: 0 }} />
-                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
-                    <span style={{ color: MUTED, minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.share}%</span>
-                  </div>
-                ))}
-              </div>
-            </>)}
-        </div>
-      </div>
       </div>
 
-      {/* ── แถว 3 · เทียบรายภูมิภาค — เต็มความกว้าง
-          แท่งซ้อนแนวตั้ง 6 ภาคอ่านง่ายกว่าตอนกว้าง · และเหลือการ์ดคี่ใบเดียวพอดี ไม่ต้องยัดคู่ให้ครึ่งขวาว่าง */}
-      <div className="card" style={{ marginBottom: "1.25rem" }}>
-        <div className="card-header">
-          <div className="card-title">เทียบรายภูมิภาค</div>
-          <span style={{ fontSize: "0.62rem", color: MUTED }}>จำนวนรายการ · ลูกค้าเป้าหมาย / ใบเสนอราคา / ปิดการขายได้</span>
-        </div>
-        <div className="card-body" style={{ paddingTop: 4 }}>
-          {!regional.labels.length
-            ? <EmptyState icon={<Building2 size={26} />} title="ไม่พบข้อมูลภูมิภาค" description="ลองปรับตัวกรอง" compact />
-            : <StackedBarChart months={regional.labels} series={regional.series} height={300} fmt={v => `${Math.round(v)}`} />}
-        </div>
-      </div>
-
-      {/* ── แถว 4 · แนวโน้มรายเดือน — แยกเป็น 2 การ์ดวางข้างกัน (เดิมซ้อนกันในใบเดียว สูง 818px) ── */}
-      <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">แนวโน้มจำนวนรายการ</div>
-            <span style={{ fontSize: "0.62rem", color: MUTED }}>ตามช่วงที่กรอง · แสดงเท่าที่มีข้อมูล</span>
-          </div>
-          <div className="card-body" style={{ paddingTop: 4 }}>
-            {/* vw ต้องใกล้ความกว้างการ์ดจริง (~545px) ไม่งั้น SVG ถูกย่อจนกราฟเตี้ยผิดสัดส่วน */}
-            <MultiLineChart months={trend.months} series={trend.counts} vw={560} height={260} fmt={v => `${Math.round(v)}`} />
-          </div>
-        </div>
-        <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-title">แนวโน้มยอดขาย</div>
-            <span style={{ fontSize: "0.62rem", color: MUTED }}>หน่วย: ล้านบาท</span>
-          </div>
-          <div className="card-body" style={{ paddingTop: 4 }}>
-            <MultiLineChart months={trend.months} series={trend.sales} vw={560} height={260} fmt={v => `${v.toFixed(1)}M`} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── PERFORMANCE TABLE ── */}
+      {/* กราฟที่ถูกตัดออกจากหน้านี้ (ข้อมูลซ้ำ — ดูที่เจ้าของเรื่องแทน):
+          · เหตุผลที่เสียโอกาสการขาย → /hq/leads และ /hq/quotations
+          · เทียบรายภูมิภาค          → /hq/quotations
+          · แนวโน้มจำนวนรายการ/ยอดขาย → แดชบอร์ด HQ (SalesTrendChart + ลีด·ใบเสนอราคา·ปิดการขาย รายเดือน) */}
+      {/* ── PERFORMANCE TABLE — ตารางเต็มท้ายหน้าตามเดิม (ตามที่บอสสั่ง ไม่แยกแท็บ) ── */}
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">ตารางผลงานตัวแทนจำหน่าย</div>

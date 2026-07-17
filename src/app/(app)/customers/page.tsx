@@ -207,22 +207,11 @@ function purchasedGroupsFor(customerId:number, qs:QuotationMock[]): PurchasedGro
     }))
     .sort((a,b)=>b.total-a.total);
 }
-// วันส่งมอบงานล่าสุด — ใช้ดูประวัติการรับประกัน (Warranty)
+// วันส่งมอบงานล่าสุด
 // เดิมบวก "ระยะเวลาส่งมอบ" ของใบเสนอราคา แต่ฟิลด์นั้นถูกลบแล้ว (ไม่เคยมีค่าสักใบ → ผลลัพธ์เท่ากับวันปิดการขายอยู่ดี)
 function deliveryDateFor(customerId:number, qs:QuotationMock[]): string {
   const won = qs.filter(q=>q.customerId===customerId && q.status==="won").sort((a,b)=>a.date<b.date?1:-1)[0];
   return won ? won.date : "—";
-}
-// สถานะการรับประกัน (Warranty Status) — เทียบวันหมดประกันกับวันนี้ (2026-06-30)
-function warrantyStatusFor(customerId:number, qs:QuotationMock[]): { label:string; color:string; bg:string } {
-  const del = deliveryDateFor(customerId, qs);
-  if(del==="—") return { label:"—", color:"#9ca3af", bg:"#f0f0f5" };
-  const end = new Date(del); end.setFullYear(end.getFullYear()+10);
-  const today = new Date(2026, 5, 30);
-  if(end < today) return { label:"หมดประกันแล้ว", color:"#DC3545", bg:"#fee2e2" };
-  const monthsLeft = (end.getFullYear()-today.getFullYear())*12 + (end.getMonth()-today.getMonth());
-  if(monthsLeft <= 12) return { label:"ใกล้หมดประกัน", color:"#FFC107", bg:"#fff8e1" };
-  return { label:"ยังอยู่ในประกัน", color:"#28A745", bg:"#e5faf0" };
 }
 
 // ── Deterministic drawer feeds (จากลูกค้า + quotations + pipelineDeals) ──
@@ -383,6 +372,16 @@ export default function CustomersPage(){
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
   const [query, setQuery]             = useState("");
   const [catFilter, setCatFilter]     = useState("ALL");
+  // มาจากแดชบอร์ด (การ์ด "ยอดขายตามแม่แบบ") → /customers?template=<แม่แบบหลัก> · ตั้งตัวกรองให้ตรงกับแถวที่กดมา
+  // อ่านจาก window.location แทน useSearchParams เพื่อไม่ต้องครอบ <Suspense> ทั้งหน้า
+  // ตั้งค่าเฉพาะแม่แบบที่มีอยู่จริงในแคตตาล็อก — ค่าที่ไม่รู้จักจะทำให้ตัวกรองโชว์ค่าว่างและลิสต์ว่างโดยไม่มีเหตุผล
+  const urlFilterDone = useRef(false);
+  useEffect(() => {
+    if (urlFilterDone.current || !catalog.length) return;
+    urlFilterDone.current = true;
+    const t = new URLSearchParams(window.location.search).get("template");
+    if (t && catalog.some(p => p.name === t)) setCatFilter(t);
+  }, [catalog]);
   // ตัวกรองจังหวัด/ผู้รับผิดชอบ — ตัวเลือกสร้างจากข้อมูลลูกค้าจริงที่มีอยู่ ไม่ใช่รายการตายตัว
   const [provFilter, setProvFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
@@ -559,19 +558,6 @@ export default function CustomersPage(){
     const COLORS = ["#2563EB","#16A34A","#F59E0B","#7C3AED","#EA580C","#0D9488","#94A3B8"];
     return [...m.entries()].sort((a,b)=>b[1]-a[1]).map(([label,value],i)=>({ label, value, color: COLORS[i%COLORS.length], pct: Math.round((value/total)*100) }));
   }, [scoped]);
-  // กราฟ 3 — สถานะการรับประกัน (โดนัท)
-  const warrantySegments = useMemo(() => {
-    const order = [
-      { key:"ยังอยู่ในประกัน", color:"#28A745" },
-      { key:"ใกล้หมดประกัน",   color:"#FFC107" },
-      { key:"หมดประกันแล้ว",   color:"#DC3545" },
-      { key:"—",              color:"#94A3B8" },
-    ];
-    const m = new Map<string, number>();
-    scoped.forEach(c => { const l = warrantyStatusFor(c.id, quotations).label; m.set(l, (m.get(l) ?? 0) + 1); });
-    const total = scoped.length || 1;
-    return order.filter(o => m.get(o.key)).map(o => ({ label: o.key === "—" ? "ยังไม่ส่งมอบ" : o.key, value: m.get(o.key)!, color: o.color, pct: Math.round((m.get(o.key)!/total)*100) }));
-  }, [scoped, quotations]);
 
   // Related data for selected customer
   const relatedQuotations   = selected ? quotations.filter(q=>q.customerId===selected.id) : [];
@@ -1001,7 +987,6 @@ export default function CustomersPage(){
                       <div style={{fontSize:"1.5rem",fontWeight:800,color:PRIMARY,fontVariantNumeric:"tabular-nums",lineHeight:1.2}}>{fmtMoney(totalSales)}</div>
                       <div style={{display:"flex",gap:6,marginTop:8,marginBottom:12,flexWrap:"wrap"}}>
                         {selected.category && <span style={{padding:"3px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:"#eef3f8",color:PRIMARY}}>{selected.category}</span>}
-                        {(() => { const ws = warrantyStatusFor(selected.id, quotations); return ws.label!=="—" ? <span style={{padding:"3px 10px",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:ws.bg,color:ws.color}}>{ws.label}</span> : null; })()}
                       </div>
                       {/* ป้าย : ค่า — 2 คอลัมน์ (รูปแบบตามที่บอสส่งมา) · ไม่มีข้อมูล = "—" */}
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 28px",borderTop:"1px solid #eef1f5",paddingTop:12}}>

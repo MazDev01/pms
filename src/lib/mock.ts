@@ -1,4 +1,4 @@
-// Mock data สำหรับ frontend (ยังไม่เชื่อม backend)
+﻿// Mock data สำหรับ frontend (ยังไม่เชื่อม backend)
 // ─── ROLE / SESSION ───────────────────────────────────────────
 export type UserRole =
   | "SUPER_ADMIN"
@@ -155,25 +155,31 @@ export type HQPolicy = { requireApproval: boolean; vat: number; quoteValidityDay
 export const HQ_POLICY_KEY = "hq_sales_policy";
 export const DEFAULT_HQ_POLICY: HQPolicy = { requireApproval: true, vat: 7, quoteValidityDays: 30 };
 
-// ── กฎธุรกิจของลูกค้าเป้าหมาย (HQ กำหนด · บังคับใช้ทุกตัวแทน) ──────────────────
-// ตั้งที่ /hq/settings → "กฎธุรกิจ" · เกณฑ์สองข้อนี้ถูกอ่านไปใช้จริง:
-//   unassignedAlertHours (48 ชม.) → การ์ด "ยังไม่มีผู้รับผิดชอบ" ที่ /hq/leads
-//   followUpAlertDays (7 วัน)     → ป้าย/การ์ด "ต้องติดตามด่วน" ที่ /hq/leads · /leads · แดชบอร์ดตัวแทน
+// ── กฎการดูแลลูกค้าเป้าหมาย (ตัวแทนตั้งเอง · แยกรายสาขา) ──────────────────────
+// ⚠️ เจ้าของกฎเปลี่ยนแล้ว (บอสสั่ง): เดิมเป็นเกณฑ์กลางที่ HQ ตั้งให้ทุกสาขาใช้ค่าเดียวกัน
+//    ตอนนี้ตัวแทนแต่ละสาขาตั้งของตัวเองที่ /settings → "การแจ้งเตือน" · HQ ตั้งให้ไม่ได้แล้ว
+//    → ห้ามอ่านกฎเป็น "ค่าเดียวทั้งเครือ" อีก ทุกจุดต้องอ่านด้วย dealerCode ของลีดใบนั้น
+//    (หน้า HQ ที่รวมหลายสาขาจะมีหลายเกณฑ์ปนกัน — ห้ามเขียนป้ายว่า "ภายใน N ชั่วโมง" ลอย ๆ)
+// เกณฑ์สองข้อนี้ถูกอ่านไปใช้จริง:
+//   unassignedAlertHours (ค่าเริ่มต้น 48 ชม.) → การ์ด "ยังไม่มีผู้รับผิดชอบ" ที่ /hq/leads + กระดิ่ง HQ
+//   followUpAlertDays (ค่าเริ่มต้น 7 วัน)     → ป้าย/การ์ด "ต้องติดตามด่วน" ที่ /hq/leads · /leads · แดชบอร์ดตัวแทน
 // ไม่มี leadExpirationDays (ลบลีดอัตโนมัติ) — ระบบไม่มีเครื่องมือลบจริง จึงเป็นการแจ้งเตือนแทน
 // ไม่มี autoReminder — ไม่มีตัวส่งเตือนอัตโนมัติจริง (เดิมเป็น toggle ที่ไม่มีใครอ่าน)
-export type HQLeadRules = { followUpAlertDays: number; unassignedAlertHours: number };
-export const HQ_LEAD_RULES_KEY = "hq_lead_rules";
-export const HQ_LEAD_RULES_EVENT = "bpms-hq-lead-rules-updated";
-export const DEFAULT_HQ_LEAD_RULES: HQLeadRules = { followUpAlertDays: 7, unassignedAlertHours: 48 };
+export type LeadRules = { followUpAlertDays: number; unassignedAlertHours: number };
+/** ที่เก็บ = แผนที่ รหัสสาขา → กฎของสาขานั้น · สาขาที่ยังไม่ตั้งเองใช้ค่าเริ่มต้น */
+export type DealerLeadRulesMap = Record<string, LeadRules>;
+export const DEALER_LEAD_RULES_KEY = "dealer_lead_rules";
+export const DEALER_LEAD_RULES_EVENT = "bpms-dealer-lead-rules-updated";
+export const DEFAULT_LEAD_RULES: LeadRules = { followUpAlertDays: 7, unassignedAlertHours: 48 };
 
 // ─── การแจ้งเตือนของสำนักงานใหญ่ (6 เรื่อง) — ตั้งที่ /hq/settings → "การแจ้งเตือน" ──
 // ทุกข้อคำนวณจากข้อมูลจริงและขึ้นกระดิ่ง HQ จริง (ดู @/lib/hqAlerts + Topbar) — ไม่ใช่ toggle เปล่า
-// เกณฑ์ของ 2 ข้อแรกมาจาก HQLeadRules (กฎธุรกิจ) — ที่นี่คุมแค่ "เปิด/ปิด + ช่องทาง"
+// เกณฑ์ของ 2 ข้อแรกเป็นของแต่ละสาขา (ตัวแทนตั้งเองที่ /settings → การแจ้งเตือน) — ที่นี่คุมแค่ "เปิด/ปิด + ช่องทาง"
 export type HQAlertKey = "unassignedLead" | "idleLead" | "quoteExpiring" | "dealerIdle" | "targetAchieved" | "lostRate";
 export type HQAlertPref = { on: boolean; email: boolean; inapp: boolean };
 export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string }[] = [
-  { key: "unassignedLead", label: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ", desc: "ลีดใหม่ยังไม่มีผู้รับผิดชอบเกินกำหนด (เกณฑ์อยู่ที่ “กฎธุรกิจ”)" },
-  { key: "idleLead",       label: "ลูกค้าเป้าหมายไม่มีการติดต่อ",     desc: "ลีดที่ยังไม่ปิด และไม่มีความเคลื่อนไหวเกินกำหนด (เกณฑ์อยู่ที่ “กฎธุรกิจ”)" },
+  { key: "unassignedLead", label: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ", desc: "ลีดใหม่ยังไม่มีผู้รับผิดชอบเกินกำหนด (เกณฑ์อยู่ที่ “เส้นทางการขาย”)" },
+  { key: "idleLead",       label: "ลูกค้าเป้าหมายไม่มีการติดต่อ",     desc: "ลีดที่ยังไม่ปิด และไม่มีความเคลื่อนไหวเกินกำหนด (คนละเกณฑ์กับกฎติดตาม 7 วันของตัวแทน)" },
   { key: "quoteExpiring",  label: "ใบเสนอราคาใกล้หมดอายุ",           desc: "ใบที่ส่งแล้วและจะหมดอายุภายในกำหนด" },
   { key: "dealerIdle",     label: "ตัวแทนไม่มีความเคลื่อนไหว",        desc: "ตัวแทนไม่ออกใบเสนอราคาใหม่เกินกำหนด" },
   { key: "targetAchieved", label: "ตัวแทนทำยอดถึงเป้า",              desc: "ตัวแทนทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี" },
@@ -181,10 +187,12 @@ export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string }[] =
 ];
 export type HQNotifRules = {
   alerts: Record<HQAlertKey, HQAlertPref>;
+  leadIdleDays: number;       // ลีดเงียบเกินกี่วัน HQ ถึงจะเตือน
   quoteExpiringDays: number;  // ใบเสนอราคาจะหมดอายุภายในกี่วัน
   dealerIdleDays: number;     // ตัวแทนไม่มีใบเสนอราคาใหม่เกินกี่วัน
   targetAchievedPct: number;  // ตัวแทนทำได้ถึงกี่ % ของเป้าทั้งปี
   lostRatePct: number;        // ตัวแทนปิดไม่สำเร็จเกินกี่ % ของลีดที่ปิดแล้ว
+  lostRateMinClosed: number;  // ต้องปิดลีดอย่างน้อยกี่ใบถึงจะคิด % ได้ (กันตัวแทนที่ปิด 1 ใบแล้วแพ้ = 100%)
 };
 export const HQ_NOTIF_RULES_KEY = "hq_notif_rules_v2";
 const alertPref = (on: boolean, email: boolean): HQAlertPref => ({ on, email, inapp: true });
@@ -197,7 +205,8 @@ export const DEFAULT_HQ_NOTIF_RULES: HQNotifRules = {
     targetAchieved: alertPref(true, false),
     lostRate:       alertPref(true, true),
   },
-  quoteExpiringDays: 7, dealerIdleDays: 30, targetAchievedPct: 100, lostRatePct: 40,
+  leadIdleDays: 30, quoteExpiringDays: 7, dealerIdleDays: 30, targetAchievedPct: 100,
+  lostRatePct: 40, lostRateMinClosed: 5,
 };
 export function loadHQNotifRules(): HQNotifRules {
   if (typeof window === "undefined") return { ...DEFAULT_HQ_NOTIF_RULES };
@@ -209,10 +218,22 @@ export function loadHQNotifRules(): HQNotifRules {
   return { ...DEFAULT_HQ_NOTIF_RULES };
 }
 
-export function loadHQLeadRules(): HQLeadRules {
-  if (typeof window === "undefined") return { ...DEFAULT_HQ_LEAD_RULES };
-  try { const s = localStorage.getItem(HQ_LEAD_RULES_KEY); if (s) return { ...DEFAULT_HQ_LEAD_RULES, ...JSON.parse(s) }; } catch {}
-  return { ...DEFAULT_HQ_LEAD_RULES };
+/** กฎของทุกสาขาที่ตั้งไว้ (สาขาที่ไม่มีคีย์ = ยังไม่เคยตั้งเอง → ใช้ค่าเริ่มต้น) */
+export function loadDealerLeadRulesMap(): DealerLeadRulesMap {
+  if (typeof window === "undefined") return {};
+  try { const s = localStorage.getItem(DEALER_LEAD_RULES_KEY); if (s) return JSON.parse(s) as DealerLeadRulesMap; } catch {}
+  return {};
+}
+/** กฎของสาขาเดียว — ใช้ที่นี่ที่เดียวเวลาจะรู้ว่า "ลีดใบนี้ใช้เกณฑ์อะไร" */
+export function leadRulesOf(map: DealerLeadRulesMap, dealerCode: string | undefined): LeadRules {
+  return { ...DEFAULT_LEAD_RULES, ...(dealerCode ? map[dealerCode] : undefined) };
+}
+export function saveDealerLeadRules(dealerCode: string, rules: LeadRules) {
+  if (typeof window === "undefined") return;
+  const map = loadDealerLeadRulesMap();
+  map[dealerCode] = rules;
+  localStorage.setItem(DEALER_LEAD_RULES_KEY, JSON.stringify(map));
+  window.dispatchEvent(new Event(DEALER_LEAD_RULES_EVENT));
 }
 export function loadHQPolicy(): HQPolicy {
   if (typeof window === "undefined") return { ...DEFAULT_HQ_POLICY };
@@ -707,7 +728,10 @@ export type SolutionProduct = {
   id: string; name: string; spec: string;
   price: number; unit: string; effectiveDate: string; priceHistory: SolutionPriceHistory[];
   subtypes?: string[];   // แม่แบบย่อยภายใต้แม่แบบหลัก (เช่น "โรงงาน" → "โรงงานอาหาร") · เลือกได้ในฟอร์ม
-  image?: string;        // รูปแม่แบบ (data URL ย่อขนาดแล้ว) — แสดงบนการ์ดแคตตาล็อก
+  // รูปแม่แบบ — รับได้ 2 แบบ (<img src> รองรับทั้งคู่):
+  //   • path ไฟล์ เช่น "/templates/factory.svg" = ภาพลายเส้นตั้งต้นของระบบ (ยังไม่ใช่ภาพถ่ายผลงานจริง)
+  //   • data URL = รูปที่ HQ อัปโหลดเอง (ย่อขนาดแล้ว) — อัปทับเมื่อไรก็แทนที่ภาพลายเส้นทันที
+  image?: string;
   subtypeImages?: Record<string, string>; // รูปรายแม่แบบย่อย (คีย์ = ชื่อแม่แบบย่อย) · HQ ใส่ได้รายอัน · fallback = image หลัก
 };
 
@@ -737,12 +761,12 @@ export function loadMasterCatalog(): SolutionProduct[] {
   return solutionProducts;
 }
 export const solutionProducts: SolutionProduct[] = [
-  { id: "tpl-1", name: "โกดังสำเร็จรูป", spec: "โครงสร้างเหล็กระบบข้อต่อสลักเกลียว ไม่มีเสากลาง เพิ่มพื้นที่ใช้สอย · เหมาะคลังสินค้า โกดังเก็บสินค้าเกษตร และโกดังอุตสาหกรรม", price: 5100, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4950, effectiveDate: "1 ม.ค. 2569", note: "ปรับตามราคาเหล็ก" }, { price: 4800, effectiveDate: "1 ก.ค. 2568" } ], subtypes: ["โกดังเก็บสินค้าทั่วไป", "โกดังเก็บสินค้าเกษตร", "โกดังห้องเย็น", "คลังกระจายสินค้า", "โกดังเก็บวัตถุดิบ"] },
-  { id: "tpl-2", name: "โรงงาน", spec: "รองรับมาตรฐานโรงงานผลิตคุณภาพสูง และโรงงานอัจฉริยะที่เชื่อมต่อระบบอัตโนมัติได้ · ช่วงเสากว้าง รับน้ำหนักเครนได้", price: 6800, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6600, effectiveDate: "1 ม.ค. 2569" }, { price: 6400, effectiveDate: "1 ก.ค. 2568" } ], subtypes: ["โรงงานอาหาร", "โรงงานผลิตเหล็ก", "โรงงานพลาสติก", "โรงงานสิ่งทอ", "โรงงานอิเล็กทรอนิกส์", "โรงงานยา", "โรงงานทั่วไป"] },
-  { id: "tpl-3", name: "อาคารสำเร็จรูปทุกประเภท", spec: "ปรับผังใช้งานได้หลายรูปแบบ เช่น สำนักงาน โรงเรียน สถานพยาบาล และอาคารพาณิชย์ · โครงเหล็กมาตรฐาน ติดตั้งเร็ว", price: 6200, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6000, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["อาคารสำนักงาน", "โชว์รูม", "อาคารพาณิชย์", "อาคารเรียน", "สถานพยาบาล"] },
-  { id: "tpl-4", name: "งานตามแบบของลูกค้า", spec: "ออกแบบผังตามความต้องการเฉพาะโครงการของลูกค้า · ปรับผนัง ประตู และช่องเปิดได้ตามแบบ", price: 7000, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6800, effectiveDate: "1 ม.ค. 2569", note: "ราคาเริ่มต้นแบบพิเศษ" } ], subtypes: ["ออกแบบเฉพาะโครงการ", "อาคารผสมผสาน", "งานโครงสร้างพิเศษ"] },
-  { id: "tpl-5", name: "งานรีโนเวท", spec: "ปรับปรุงและต่อเติมอาคารระบบสำเร็จรูปเดิมให้ใช้งานได้ดีขึ้น ประหยัดกว่าสร้างใหม่ · ประเมินหน้างานก่อนเสนอราคา", price: 4500, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4300, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["ปรับปรุงโกดังเดิม", "ต่อเติมอาคาร", "เปลี่ยนหลังคา", "เสริมโครงสร้าง"] },
-  { id: "tpl-6", name: "สนามกีฬาในร่ม", spec: "โครงสร้างช่วงกว้างไม่มีเสากลางขวางกั้น เพดานสูง เหมาะสนามกีฬาในร่มทุกรูปแบบ", price: 7400, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 7150, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["โรงยิมอเนกประสงค์", "สนามแบดมินตัน", "สนามบาสเกตบอล", "สระว่ายน้ำในร่ม"] },
+  { image: "/templates/warehouse.svg", id: "tpl-1", name: "โกดังสำเร็จรูป", spec: "โครงสร้างเหล็กระบบข้อต่อสลักเกลียว ไม่มีเสากลาง เพิ่มพื้นที่ใช้สอย · เหมาะคลังสินค้า โกดังเก็บสินค้าเกษตร และโกดังอุตสาหกรรม", price: 5100, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4950, effectiveDate: "1 ม.ค. 2569", note: "ปรับตามราคาเหล็ก" }, { price: 4800, effectiveDate: "1 ก.ค. 2568" } ], subtypes: ["โกดังเก็บสินค้าทั่วไป", "โกดังเก็บสินค้าเกษตร", "โกดังห้องเย็น", "คลังกระจายสินค้า", "โกดังเก็บวัตถุดิบ"] },
+  { image: "/templates/factory.svg", id: "tpl-2", name: "โรงงาน", spec: "รองรับมาตรฐานโรงงานผลิตคุณภาพสูง และโรงงานอัจฉริยะที่เชื่อมต่อระบบอัตโนมัติได้ · ช่วงเสากว้าง รับน้ำหนักเครนได้", price: 6800, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6600, effectiveDate: "1 ม.ค. 2569" }, { price: 6400, effectiveDate: "1 ก.ค. 2568" } ], subtypes: ["โรงงานอาหาร", "โรงงานผลิตเหล็ก", "โรงงานพลาสติก", "โรงงานสิ่งทอ", "โรงงานอิเล็กทรอนิกส์", "โรงงานยา", "โรงงานทั่วไป"] },
+  { image: "/templates/building.svg", id: "tpl-3", name: "อาคารสำเร็จรูปทุกประเภท", spec: "ปรับผังใช้งานได้หลายรูปแบบ เช่น สำนักงาน โรงเรียน สถานพยาบาล และอาคารพาณิชย์ · โครงเหล็กมาตรฐาน ติดตั้งเร็ว", price: 6200, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6000, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["อาคารสำนักงาน", "โชว์รูม", "อาคารพาณิชย์", "อาคารเรียน", "สถานพยาบาล"] },
+  { image: "/templates/custom.svg", id: "tpl-4", name: "งานตามแบบของลูกค้า", spec: "ออกแบบผังตามความต้องการเฉพาะโครงการของลูกค้า · ปรับผนัง ประตู และช่องเปิดได้ตามแบบ", price: 7000, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 6800, effectiveDate: "1 ม.ค. 2569", note: "ราคาเริ่มต้นแบบพิเศษ" } ], subtypes: ["ออกแบบเฉพาะโครงการ", "อาคารผสมผสาน", "งานโครงสร้างพิเศษ"] },
+  { image: "/templates/renovate.svg", id: "tpl-5", name: "งานรีโนเวท", spec: "ปรับปรุงและต่อเติมอาคารระบบสำเร็จรูปเดิมให้ใช้งานได้ดีขึ้น ประหยัดกว่าสร้างใหม่ · ประเมินหน้างานก่อนเสนอราคา", price: 4500, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 4300, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["ปรับปรุงโกดังเดิม", "ต่อเติมอาคาร", "เปลี่ยนหลังคา", "เสริมโครงสร้าง"] },
+  { image: "/templates/sports.svg", id: "tpl-6", name: "สนามกีฬาในร่ม", spec: "โครงสร้างช่วงกว้างไม่มีเสากลางขวางกั้น เพดานสูง เหมาะสนามกีฬาในร่มทุกรูปแบบ", price: 7400, unit: "ตร.ม.", effectiveDate: "1 มิ.ย. 2569", priceHistory: [ { price: 7150, effectiveDate: "1 ม.ค. 2569" } ], subtypes: ["โรงยิมอเนกประสงค์", "สนามแบดมินตัน", "สนามบาสเกตบอล", "สระว่ายน้ำในร่ม"] },
 ];
 
 // แม่แบบย่อย → แม่แบบหลัก · ใช้ roll-up ตอนจัดกลุ่ม/นับ/กรองตามแม่แบบ (แหล่งเดียวทั้งระบบ)
@@ -793,7 +817,7 @@ export type QuotationMock = {
   expiry?: string;   // วันหมดอายุใบเสนอราคา (Expiry Date)
   note?: string;        // หมายเหตุ
   // paymentTerms / deliveryTime ถูกลบตามที่บอสสั่ง — มีที่เก็บแต่ไม่มีช่องกรอก ขึ้น "—" ทุกใบ
-  // (HQCustomer.deliveryTime เป็นคนละตัว ฝั่ง HQ ยังใช้คิดประกันอยู่ ไม่แตะ)
+  // (HQCustomer.deliveryTime เป็นคนละตัว ฝั่ง HQ ยังใช้คิดวันส่งมอบอยู่ ไม่แตะ)
   issuer?: IssuerProfile; // สแนปช็อตโปรไฟล์บริษัทผู้ออก ณ ตอนสร้าง — ใบเก่าคงชื่อเดิมแม้เปลี่ยนโปรไฟล์
 };
 
@@ -1308,7 +1332,7 @@ export const hqAllCustomers: HQCustomer[] = [
 // ─── HQ ALL QUOTATIONS ───────────────────────────────────────────────────────
 
 // ระยะเวลาส่งมอบมาตรฐาน (วัน) — HQ กำหนดเป็นกฎธุรกิจ ใช้เมื่อใบเสนอราคาไม่ได้ระบุ deliveryTime ไว้เอง
-// วันส่งมอบ = วันปิดการขาย + ระยะเวลานี้ · การรับประกันโครงสร้าง 10 ปีนับจากวันส่งมอบ (มาตรฐาน PEB)
+// วันส่งมอบ = วันปิดการขาย + ระยะเวลานี้ (ดู delivery.ts)
 export const DEFAULT_DELIVERY_DAYS = 90;
 
 export type HQQuotation = {
@@ -1372,7 +1396,7 @@ export const hqAllQuotations: HQQuotation[] = [
   // (เดิม hqAllCustomers บอกว่าลูกค้าซื้อแล้วกี่ดีล/กี่บาท แต่ไม่มีใบรองรับ → /hq/customers ขึ้น "—" ทั้งแถว)
   // กติกา: จำนวนใบ = dealsWon · ผลรวม valueNum = totalRevenue (ไม่คิดยอดขายขึ้นใหม่)
   //        ผู้ขาย = คนของสาขานั้นที่มีอยู่แล้ว · productLine = แม่แบบ/แม่แบบย่อยใน Master Catalog เท่านั้น
-  // ลูกค้าที่ซื้อหลายดีล จะมีดีลเก่าย้อนไปหลายปี → ประกัน 10 ปีจึงมีทั้งหมดอายุแล้ว/ใกล้หมด/ยังคุ้มครอง
+  // ลูกค้าที่ซื้อหลายดีล จะมีดีลเก่าย้อนไปหลายปี → วันส่งมอบจึงกระจายหลายปี
   { id:"HQ-Q37", quoteNo:"Q-2014-0012", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"บ.อุตสาหกรรมไทย จก.",    valueNum:3200000,  status:"won",             createdAt:"12 ก.พ. 2557",  salesperson:"สมชาย ว.",     productLine:"โกดังเก็บวัตถุดิบ" },
   { id:"HQ-Q38", quoteNo:"Q-2014-0038", dealerCode:"MST", dealerName:"แม่สอดเมทัลเวิร์ค",    customer:"หจก. แม่สอดพาณิชย์",     valueNum:2100000,  status:"won",             createdAt:"5 มิ.ย. 2557",  salesperson:"อนันต์ ส.",    productLine:"อาคารพาณิชย์" },
   { id:"HQ-Q39", quoteNo:"Q-2015-0019", dealerCode:"RYG", dealerName:"ระยองสตีลเวิร์คส์",     customer:"หจก. ไอซ์โลจิสติกส์",    valueNum:3000000,  status:"won",             createdAt:"8 มี.ค. 2558",  salesperson:"สมชาย ว.",     productLine:"โกดังห้องเย็น" },

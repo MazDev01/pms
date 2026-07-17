@@ -11,12 +11,29 @@ import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 //   พอ React รัน effect ซ้ำ (dev/StrictMode) รอบสองจะอ่านค่าที่ถูกทับไปแล้ว → ค่าที่ผู้ใช้บันทึกไว้หายถาวร
 //   (เจอจริงตอนทดสอบ: ตั้งกฎ 1000 วัน → เปิดหน้าตั้งค่าใหม่ → เด้งกลับเป็น 7)
 //   ใช้ state แทน: commit แรก hydrated = false จึงยังไม่เขียน · เขียนรอบแรกเกิดหลังค่าที่โหลดถูก commit แล้ว
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+// เติมฟิลด์ที่ "ค่าที่บันทึกไว้" ไม่มี ด้วยค่าเริ่มต้น — จำเป็น เพราะ blob ใน localStorage ของผู้ใช้
+// ถูกบันทึกไว้ตั้งแต่ก่อนโค้ดจะเพิ่มฟิลด์ใหม่ ถ้าเอามาใช้ทั้งก้อนดิบ ๆ ฟิลด์ใหม่จะเป็น undefined
+// → <input value={undefined}> กลายเป็น uncontrolled (React เตือน + ช่องนั้นแก้ไม่ติด) และเลขที่หายไปทำให้คำนวณเพี้ยน
+// (เจอจริง: เพิ่ม leadIdleDays/lostRateMinClosed ใน HQNotifRules แต่คีย์ hq_notif_rules_v2 เดิมยังอยู่ในเครื่องผู้ใช้)
+// recursive เฉพาะ object ธรรมดา · array ทับทั้งก้อน (เช่น รายชื่อตัวแทน — ลบแถวแล้วต้องลบจริง ไม่ใช่โผล่กลับมา)
+export function withDefaults<T>(initial: T, stored: unknown): T {
+  if (!isPlainObject(initial) || !isPlainObject(stored)) return (stored === undefined ? initial : stored) as T;
+  const out: Record<string, unknown> = { ...initial };
+  for (const k of Object.keys(stored)) {
+    out[k] = k in initial ? withDefaults((initial as Record<string, unknown>)[k], stored[k]) : stored[k];
+  }
+  return out as T;
+}
+
 export function usePersistentState<T>(key: string, initial: T): [T, Dispatch<SetStateAction<T>>] {
   const [state, setState] = useState<T>(initial);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try { const s = localStorage.getItem(key); if (s) setState(JSON.parse(s) as T); } catch {}
+    try { const s = localStorage.getItem(key); if (s) setState(withDefaults(initial, JSON.parse(s))); } catch {}
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
