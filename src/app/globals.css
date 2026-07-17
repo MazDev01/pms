@@ -1033,6 +1033,33 @@ textarea:focus-visible {
 }
 @media (max-width:640px){
   .stat-grid, .kpi-bar { grid-template-columns:1fr; }
+
+  /* ── มือถือ: กันข้อความถูกบีบจนแตกบรรทัดละคำ ────────────────────────────────
+     .page-head / .card-header เป็น flex row ที่ "ไม่มี flex-wrap" → พอจอแคบ
+     ลูกสองตัว (ข้อความ | ปุ่ม) แย่งพื้นที่กัน ตัวข้อความหดจนเหลือ min-content
+     ผลจริงที่ 375px: หัวการ์ดกลายเป็น "ใบ / เสนอ / ราคา" และคำโปรยหน้ากลายเป็น
+     คอลัมน์ผอมบรรทัดละคำ ("ภาพ / รวม / ลูกค้า / เป้า / หมาย …")
+     แก้: ให้ขึ้นบรรทัดใหม่แทนการหด — ข้อความได้เต็มความกว้าง ปุ่มลงไปแถวล่าง */
+  .page-head { flex-direction:column; align-items:stretch; gap:0.75rem; }
+  .page-head > div:last-child { justify-content:flex-start; flex-wrap:wrap; }
+  .card-header { flex-wrap:wrap; gap:8px 10px; }
+  .card-header > * { min-width:0; }
+
+  /* แถบบน: ชื่อหน้า nowrap + ฝั่งขวา flex-shrink:0 → ล้นขอบขวาจนชื่อโปรไฟล์โดนตัด
+     → ให้ชื่อหน้าหดและตัดด้วย … แทนการดันจนล้น · ซ่อนชื่อ/บทบาทในปุ่มโปรไฟล์ (เหลือรูป) */
+  .erp-topbar { gap:0.4rem; padding-left:1rem; padding-right:1rem; }
+  .erp-topbar .topbar-title { font-size:1.05rem; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  /* กล่องชื่อ/บทบาทในปุ่มโปรไฟล์ = div ตัวเดียวใน .user-chip ที่ไม่มี class
+     (รูปโปรไฟล์เป็น .avatar เสมอ ไม่ว่าจะเป็น <img> หรือ <div> ตัวย่อ)
+     เจาะด้วย :not([class]) แทนการไปเติม class ใน JSX — แตะ CSS อย่างเดียว ไม่ต้องแก้คอมโพเนนต์ */
+  .user-chip > div:not([class]) { display:none; }
+
+  /* ตัวกรอง: ดรอปดาวน์ตั้ง width:auto ทำให้ความกว้างไม่เท่ากัน เรียงลงมาแล้วดูกระดาก
+     บนมือถือให้เต็มความกว้างเป็นแถวเดียวกันทั้งหมด — อ่านง่ายและกดง่ายกว่า
+     (ต้อง !important เพราะหน้าเหล่านั้นตั้ง width มาแบบ inline style) */
+  .card .form-select, .card .form-input, .search-bar {
+    width:100% !important; min-width:0 !important; max-width:100% !important;
+  }
 }
 
 /* ── Mobile nav: hamburger + slide-in drawer (≤768px) ── */
