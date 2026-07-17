@@ -1019,12 +1019,11 @@ export default function LeadsPage() {
 
         {/* ── สรุป 4 ตัวชี้วัด — ทั้งการ์ดคือปุ่มกรอง (กดซ้ำ = ล้าง) · ไม่มีลิงก์ซ้ำในการ์ด ── */}
         <div className="dash-kpis" style={{ marginBottom: 16 }}>
+          {/* สถานะ "ถูกเลือก" คุมด้วย .kpi-toggle + aria-pressed ใน globals.css — ห้ามใส่ border/boxShadow เป็น inline */}
           {leadKpis.map(k => (
-            <button key={k.label} onClick={k.onClick} title={k.on ? "กดอีกครั้งเพื่อล้างตัวกรอง" : `กรอง: ${k.label}`}
-              className="card" style={{ padding:"16px 14px", display:"flex", flexDirection:"column", gap:6, textAlign:"left",
-                cursor:"pointer", fontFamily:"inherit", width:"100%",
-                border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB",
-                boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
+            <button key={k.label} onClick={k.onClick} aria-pressed={k.on} title={k.on ? "กดอีกครั้งเพื่อล้างตัวกรอง" : `กรอง: ${k.label}`}
+              className="card clickable kpi-toggle" style={{ padding:"16px 14px", display:"flex", flexDirection:"column", gap:6, textAlign:"left",
+                cursor:"pointer", fontFamily:"inherit", width:"100%" }}>
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10, width:"100%" }}>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:"0.72rem", color:"#6B7280" }}>{k.label}</div>

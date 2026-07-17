@@ -393,6 +393,14 @@ body {
   --sh:0 1px 2px rgba(16,40,80,.04), 0 10px 24px -14px rgba(16,40,80,.12); --sh-md:0 2px 4px rgba(16,40,80,.05), 0 18px 34px -16px rgba(16,40,80,.20);
   /* spacing scale — การ์ดห่าง 24, section ห่าง 32, padding การ์ด 20-24 */
   --space-card:14px; --space-section:18px; --pad-card:22px;
+
+  /* ── hover ของการ์ด — มาตรฐานเดียวทั้งแอป (บอสสั่ง 17 ก.ค. 69) ──
+     ต้นแบบ = การ์ด KPI แดชบอร์ดตัวแทน (.dash-tile) · ยกลอย 2px + เงานุ่ม + ขอบเข้มขึ้นนิด
+     ห้ามนิยามค่า hover เองรายหน้า/รายตระกูลการ์ด — แก้ที่ 3 ตัวแปรนี้ที่เดียว มีผลทุกใบ */
+  --card-lift: translateY(-2px);
+  --card-lift-sh: 0 10px 26px rgba(16,40,80,.10);
+  --card-lift-bd: #C7D2E0;
+  --card-lift-tr: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease, border-color .18s ease;
 }
 
 /* Facebook-style thin scrollbar (whole app) */
@@ -523,19 +531,45 @@ body {
 
 /* ─── Card ─── */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--sh);
-  transition: box-shadow .3s cubic-bezier(.4,0,.2,1), transform .3s cubic-bezier(.4,0,.2,1), border-color .3s; }
-/* Chateau-style card hover — ยกตัวนุ่มๆ + เงาซ้อน + ขอบสีแบรนด์จาง (navy #003366 ตาม CI · แพทเทิร์นจาก chateau-platform) */
-.card:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(16,40,80,.05), 0 12px 22px -10px rgba(16,40,80,.16); border-color: rgba(0,51,102,.2); }
+  transition: var(--card-lift-tr); }
 .card.clickable { cursor: pointer; text-decoration: none; }
-.card.clickable:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
-@media (prefers-reduced-motion: reduce) { .card:hover, .card.clickable:hover { transform: none; } }
+
+/* ── hover ของการ์ดทุกใบทั้งแอป — จุดเดียวที่นิยามเอฟเฟกต์นี้ ──
+   เดิมแต่ละตระกูลการ์ดตั้งค่าเอง (ยกตั้งแต่ -1px ถึง -3px คนละเงา) → ชี้การ์ดคนละใบได้ความรู้สึกคนละแบบ
+   ตอนนี้ทุกตระกูลใช้ token ชุดเดียวกัน (--card-lift*) · เพิ่มการ์ดตระกูลใหม่ = เติม selector ที่นี่ ห้ามเขียน hover เอง */
+.card:hover,
+.card.clickable:hover,
+.dash-tile:hover,
+.tpl-card:hover,
+.stat-card:hover,
+.hqx-kpi:hover,
+.hqx-fcard:hover,
+.kc.clickable:hover,
+.pms-dash .kc.clickable:hover,
+.pms-dash .cc:hover,
+.cust-card:hover {
+  transform: var(--card-lift); box-shadow: var(--card-lift-sh); border-color: var(--card-lift-bd);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card:hover, .card.clickable:hover, .dash-tile:hover, .tpl-card:hover, .stat-card:hover,
+  .hqx-kpi:hover, .hqx-fcard:hover, .kc.clickable:hover, .pms-dash .kc.clickable:hover,
+  .pms-dash .cc:hover, .cust-card:hover { transform: none; }
+}
+
+/* ── การ์ด KPI ที่กดเพื่อกรองได้ (ลีด · ใบเสนอราคา · ลีดทั้งเครือ) ──
+   สถานะ "ถูกเลือก" = วงแหวนน้ำเงิน · ต้องเป็นคลาส ห้ามกลับไปใช้ inline style:
+   inline ชนะ CSS เสมอ → เงา/ขอบตอน hover จะถูกทับ การ์ดเลยยกลอยแบบไม่มีเงา (เอฟเฟกต์เสียไปครึ่ง)
+   ใช้ border-color อย่างเดียว ไม่เปลี่ยนความหนา — กันการ์ดขยับตอนเลือก */
+.kpi-toggle[aria-pressed="true"] { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,.08); }
+/* ชี้ใบที่เลือกอยู่ → ได้ทั้งวงแหวนและเงายกลอย (ซ้อนกัน ไม่ทับกัน) */
+.kpi-toggle[aria-pressed="true"]:hover { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,.08), var(--card-lift-sh); }
 /* utilities แบบ Chateau (navy) — glass + gradient text สำหรับจุดที่อยากเน้น */
 .glass { background: rgba(255,255,255,.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .gradient-primary-text { background: linear-gradient(135deg, #003366 0%, #00243f 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
 /* แคตตาล็อกแม่แบบ — การ์ดพรีเมียม */
-.tpl-card { transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
-.tpl-card:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0,51,102,.14); border-color: #b9cbe2; }
+.tpl-card { transition: var(--card-lift-tr); }
+/* ค่า hover มาจากกฎรวมด้านบน — ที่นี่เหลือแค่ซูมรูปฮีโร่ ซึ่งเป็นของเฉพาะการ์ดแคตตาล็อก */
 .tpl-card:hover .tpl-hero { transform: scale(1.03); }
 .tpl-hero { transition: transform .25s ease; }
 .tpl-clamp2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -657,9 +691,7 @@ body {
   padding: 20px; position: relative; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s;
 }
 .stat-card.clickable { cursor: pointer; }
-/* KPI cards ยกตัวนุ่มๆ ตอน hover — โพลิชแบบ enterprise CRM (ทุกหน้าที่ใช้ .stat-card) */
-.stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); }
-@media (prefers-reduced-motion: reduce) { .stat-card:hover { transform: none; } }
+/* hover ของ .stat-card มาจากกฎรวมด้านบน (--card-lift*) — อย่านิยามซ้ำที่นี่ */
 .stat-card .stat-icon {
   width: 42px; height: 42px; border-radius: var(--radius-lg);
   background: var(--accent); color: var(--primary);
@@ -812,7 +844,7 @@ body {
   box-shadow: 0 1px 2px rgba(16,40,80,.04), 0 12px 26px -16px rgba(16,40,80,.16);
   transition: transform .16s ease, box-shadow .16s ease;
 }
-.hqx-kpi:hover { transform: translateY(-2px); box-shadow: 0 1px 2px rgba(16,40,80,.05), 0 18px 34px -18px rgba(16,40,80,.26); }
+/* hover: กฎรวมด้านบน (--card-lift*) */
 .hqx-kpi > .acc { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 0 4px 4px 0; }
 .hqx-kpi > .ic { width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .hqx-kpi .v { font-size: 1.55rem; font-weight: 800; line-height: 1; letter-spacing: -.01em; color: var(--foreground); font-variant-numeric: tabular-nums; }
@@ -826,7 +858,7 @@ body {
   transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
   box-shadow: 0 1px 2px rgba(16,40,80,.03);
 }
-.hqx-fcard:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -16px rgba(16,40,80,.24); }
+/* hover: กฎรวมด้านบน (--card-lift*) */
 .hqx-fcard.on { border-width: 1.5px; }
 .hqx-fcard > .top { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
 
@@ -910,8 +942,7 @@ body {
 
 /* KPI card — 3-card dual-row footer */
 .pms-dash .kc { background:#fff; border-radius:var(--r); padding:24px; border:1px solid var(--border); box-shadow:var(--sh); transition:transform .2s cubic-bezier(.4,0,.2,1), box-shadow .2s cubic-bezier(.4,0,.2,1), border-color .2s; text-decoration:none; }
-.pms-dash .kc.clickable { cursor:pointer; }
-.pms-dash .kc.clickable:hover { transform:translateY(-2px); box-shadow:var(--sh-md); border-color:rgba(0,51,102,.16); }
+.pms-dash .kc.clickable { cursor:pointer; } /* hover: กฎรวมด้านบน (--card-lift*) */
 .pms-dash .kc-hd { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; }
 .pms-dash .kc-lbl { font-size:.76rem; font-weight:600; color:var(--sub); }
 .pms-dash .kc-sel { font-size:.68rem; border:1px solid var(--border); border-radius:99px; padding:3px 10px; color:var(--sub); cursor:pointer; display:inline-flex; align-items:center; gap:4px; background:#fff; font-family:inherit; }
@@ -939,8 +970,7 @@ body {
 @media (prefers-reduced-motion: reduce) { .ring-arc { transition: none; } }
 
 /* chart card */
-.pms-dash .cc { background:#fff; border-radius:var(--r); padding:24px; border:1px solid var(--border); box-shadow:var(--sh); transition:box-shadow .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1); }
-.pms-dash .cc:hover { box-shadow:var(--sh-md); transform:translateY(-1px); }
+.pms-dash .cc { background:#fff; border-radius:var(--r); padding:24px; border:1px solid var(--border); box-shadow:var(--sh); transition:var(--card-lift-tr); } /* hover: กฎรวมด้านบน (--card-lift*) */
 .pms-dash .cc-hd { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
 .pms-dash .cc-title { font-size:.9rem; font-weight:700; color:var(--text); }
 .pms-dash .cc-legend { display:flex; align-items:center; gap:14px; }
@@ -1057,8 +1087,7 @@ textarea:focus-visible {
 @media (max-width:1000px){ .kpi-row { grid-template-columns:repeat(2,1fr); } }
 @media (max-width:680px){ .kpi-row { grid-template-columns:repeat(2,1fr); } }
 .kc { background:#fff; border-radius:var(--r); padding:var(--pad-card); border:1px solid var(--border); box-shadow:var(--sh); transition:transform .18s, box-shadow .18s; text-decoration:none; display:block; }
-.kc.clickable { cursor:pointer; }
-.kc.clickable:hover { transform:translateY(-2px); box-shadow:var(--sh-md); }
+.kc.clickable { cursor:pointer; } /* hover: กฎรวมด้านบน (--card-lift*) */
 .kc-hd { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; }
 .kc-lbl { font-size:.74rem; font-weight:600; color:var(--sub); }
 .kc-val { font-size:1.7rem; font-weight:800; color:var(--text); line-height:1; }
@@ -1116,8 +1145,8 @@ textarea:focus-visible {
 .cust-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 1024px) { .cust-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px)  { .cust-grid { grid-template-columns: 1fr; } }
-.cust-card { transition: box-shadow .15s, border-color .15s; }
-.cust-card:hover { box-shadow: 0 6px 22px rgba(0,51,102,.13); border-color: rgba(0,51,102,.20); }
+.cust-card { transition: var(--card-lift-tr); }
+/* hover: กฎรวมด้านบน (--card-lift*) — ที่นี่เหลือแค่ซูมรูป ซึ่งเป็นของเฉพาะการ์ดลูกค้า */
 .cust-card img { transition: transform .3s; }
 .cust-card:hover img { transform: scale(1.04); }
 
@@ -1143,8 +1172,7 @@ textarea:focus-visible {
 
 /* ── แดชบอร์ดตัวแทน — การ์ด/แถวที่กดได้ ──
    .dash-tile = ทั้งใบเป็นปุ่ม (ยกขึ้นตอนชี้) · .dash-row = แถวในรายการ (ไฮไลต์ตอนชี้) */
-.dash-tile { transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease, border-color .18s ease; }
-.dash-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(16,40,80,.10); border-color: #C7D2E0; }
+.dash-tile { transition: var(--card-lift-tr); } /* hover: กฎรวมด้านบน (--card-lift*) — ใบนี้คือต้นแบบของทั้งแอป */
 .dash-tile:active { transform: translateY(0); }
 .dash-tile:focus-visible, .dash-row:focus-visible { outline: 2px solid #003366; outline-offset: 2px; }
 .dash-row { transition: background .15s ease; }

@@ -315,9 +315,11 @@ export default function HQLeadsPage() {
           แถบสีนำสายตาด้านซ้ายถูกตัดออก — หน้าอื่นไม่มี การ์ด KPI ต้องหน้าตาเหมือนกันทุกหน้า
           ต่างจากหน้าอื่นตรงที่ "กดเพื่อกรองสถานะได้" → คงปุ่ม + สถานะถูกเลือก (ขอบน้ำเงิน) ไว้ */}
       <div className="dash-kpis" style={{ marginBottom: 16 }}>
+        {/* สถานะ "ถูกเลือก" คุมด้วย .kpi-toggle + aria-pressed ใน globals.css — ห้ามใส่ border/boxShadow เป็น inline
+            (inline ชนะ CSS → hover ยกลอยจะไม่มีเงา) */}
         {kpiCards.map(k => (
-          <button key={k.label} onClick={k.onClick} aria-pressed={k.on} className="card clickable" title={`กรอง: ${k.label}`}
-            style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, textAlign: "left", cursor: "pointer", fontFamily: "inherit", width: "100%", border: k.on ? "1.5px solid #003366" : "1px solid #E5E7EB", boxShadow: k.on ? "0 0 0 3px rgba(0,51,102,.08)" : undefined }}>
+          <button key={k.label} onClick={k.onClick} aria-pressed={k.on} className="card clickable kpi-toggle" title={`กรอง: ${k.label}`}
+            style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, textAlign: "left", cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.label}</div>
               <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1F2937", marginTop: 6, lineHeight: 1.15, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{k.value}</div>

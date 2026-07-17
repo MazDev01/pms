@@ -214,7 +214,10 @@ export default function DealerDashboard() {
   }, [leadsIn, apptsIn, quotesIn]);
 
   // ── styles ──
-  const card: React.CSSProperties = { background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 16, padding: 24, boxShadow: "0 1px 2px rgba(16,40,80,.04)" };
+  // การ์ดเนื้อหาบนแดชบอร์ด — พื้น/ขอบ/มุม/เงา + hover ยกลอย มาจากคลาส .card ใน globals.css (มาตรฐานเดียวทั้งแอป)
+  // ห้ามกลับไปตั้ง background/border/borderRadius/boxShadow เป็น inline: inline ชนะ CSS → hover จะไม่ทำงาน
+  // (นี่คือเหตุผลที่การ์ดกลุ่มนี้เคยไม่ยกลอยตอนชี้ ทั้งที่ทั้งแอปยกหมดแล้ว)
+  const card: React.CSSProperties = { padding: 24 };
   const hd: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 16, flexWrap: "nowrap" };
   const title: React.CSSProperties = { fontSize: "0.92rem", fontWeight: 700, color: TEXT, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
   const sub: React.CSSProperties = { fontSize: "0.8rem", color: SUB };
@@ -333,7 +336,7 @@ export default function DealerDashboard() {
           แยกการ์ดเพราะคนละหน่วย: จำนวนรายการ (แท่งคู่) กับ บาท (เส้น) */}
       <div className="dash-charts-2" style={{ marginBottom: 24 }}>
         {/* ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — จำนวนรายการ */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}>
             <span style={title}>ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -351,7 +354,7 @@ export default function DealerDashboard() {
         </div>
 
         {/* ยอดขายรายเดือน — กราฟเส้น + เส้นประเป้าหมาย */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}>
             <span style={title}>ยอดขายรายเดือน</span>
             {more("/quotations")}
@@ -372,7 +375,7 @@ export default function DealerDashboard() {
       {/* SECTION 3 — ผลงานผู้รับผิดชอบ · ยอดขายตามแม่แบบ · ขั้นตอนการขาย */}
       <div className="dash-charts" style={{ marginBottom: 24 }}>
         {/* ผลงานผู้รับผิดชอบ */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}><span style={title}>ผลงานผู้รับผิดชอบ</span>{more("/leads")}</div>
           <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>ยอดปิดการขายของแต่ละคน · {timeRange.subtitle}</div>
           {teamPerf.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ไม่มีข้อมูลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
@@ -386,7 +389,7 @@ export default function DealerDashboard() {
         </div>
 
         {/* ยอดขายตามแม่แบบ */}
-        <div style={card}>
+        <div className="card" style={card}>
           {/* ไปหน้าลูกค้า ไม่ใช่หน้าสินค้า — แม่แบบพวกนี้มาจากดีลที่ลูกค้าปิดจริง คำถามถัดไปคือ "ใครซื้อ" ไม่ใช่ "สเปกอะไร" */}
           <div style={hd}><span style={title}>ยอดขายตามแม่แบบ</span>{more("/customers")}</div>
           <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>ยอดปิดการขายแยกตามแม่แบบ · {timeRange.subtitle}</div>
@@ -409,7 +412,7 @@ export default function DealerDashboard() {
         </div>
 
         {/* ขั้นตอนการขาย (โดนัท) */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}><span style={title}>ขั้นตอนการขาย</span>{more("/leads")}</div>
           {dealStatus.length === 0 ? <EmptyState icon={<Target size={26} />} title="ไม่มีดีลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
@@ -433,7 +436,7 @@ export default function DealerDashboard() {
       {/* SECTION 4 — 4 การ์ดรายการ (แถวเดียว) */}
       <div className="dash-cards" style={{ marginBottom: 24 }}>
         {/* ต้องติดตามด่วน — เกณฑ์วันมาจากกฎ HQ ไม่ใช่เลขตายตัว */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6, flexShrink: 1 }}><AlarmClock size={15} color={DANGER} style={{ flexShrink: 0 }} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>ต้องติดตามด่วน (เกิน {followUpAlertDays} วัน)</span></span>{more("/leads")}</div>
           {urgentLeads.length === 0 ? <EmptyState icon={<PhoneCall size={26} />} title="ไม่มีรายการค้าง" description={`ทุกรายติดต่อใน ${followUpAlertDays} วัน`} compact /> : (
             <div style={listWrap}>
@@ -456,7 +459,7 @@ export default function DealerDashboard() {
         </div>
 
         {/* งานที่ต้องทำวันนี้ */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><CalendarClock size={15} color={NAVY} /> งานที่ต้องทำวันนี้</span>{more("/calendar")}</div>
           {todayTasks.length === 0 ? <EmptyState icon={<CheckCircle2 size={26} />} title="ไม่มีงานวันนี้" description="—" compact /> : (
             <div style={listWrap}>
@@ -477,7 +480,7 @@ export default function DealerDashboard() {
         </div>
 
         {/* ใบเสนอราคาล่าสุด */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><FileText size={15} color={NAVY} /> ใบเสนอราคาล่าสุด</span>{more("/quotations")}</div>
           {latestQuotes.length === 0 ? <EmptyState icon={<FileText size={26} />} title="ไม่มีใบเสนอราคาในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={listWrap}>
@@ -501,7 +504,7 @@ export default function DealerDashboard() {
 
         {/* กิจกรรมล่าสุด — ย้ายจากการ์ดเต็มความกว้างมาเป็นใบที่ 4 ของแถวนี้ (แทน "ดีลที่มูลค่าสูงสุด")
             ใช้แถวแบบเดียวกับการ์ดพี่น้องในแถว (ไม่ตีกรอบรายบรรทัด) ให้จังหวะสายตาเสมอกัน */}
-        <div style={card}>
+        <div className="card" style={card}>
           <div style={hd}><span style={{ ...title, display: "flex", alignItems: "center", gap: 6 }}><Activity size={15} color={NAVY} /> กิจกรรมล่าสุด</span>{more("/leads")}</div>
           {recent.length === 0 ? <EmptyState icon={<Activity size={26} />} title="ไม่มีกิจกรรมในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={listWrap}>
