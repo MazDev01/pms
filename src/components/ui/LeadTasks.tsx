@@ -6,11 +6,16 @@ import {
   buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, loadLostReasons,
   type LeadRow, type LeadTask,
 } from "@/lib/mock";
+import { APP_NOW } from "@/context/FilterContext";
 
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-function stamp(d: Date) {
-  const hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
+// วันประทับ = "วันนี้" ของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง — กติกาเดียวกับ useAudit/ทั้งระบบ
+// เดิมใช้ new Date() → task ที่เพิ่งติ๊กได้วันจริง (เช่น 20 ก.ค. 2569) ล้ำ "วันนี้" ของระบบ + ไม่ตรงกับ doneAt
+// ที่ระบบเติมอัตโนมัติ (30 มิ.ย.) · เวลา (ชม.:นาที) ยังใช้นาฬิกาจริงได้ — ไว้เรียงเหตุการณ์ในวันเดียวกัน
+function stampNow() {
+  const t = new Date();
+  const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0");
+  return `${APP_NOW.getDate()} ${THAI_MONTHS[APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543} · ${hh}:${mm}`;
 }
 
 // Task-driven Sales Journey — เช็ก Task → บันทึกเวลา/ผู้ทำ → คำนวณ % → เลื่อน Stage อัตโนมัติ
@@ -42,7 +47,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
       if (!canUncheck(i)) { setHint("ยกเลิกได้เฉพาะขั้นล่าสุด — ต้องยกเลิกขั้นถัดไปก่อน"); return; }
     }
     setHint("");
-    const now = stamp(new Date());
+    const now = stampNow();
     const next = tasks.map(t => t.key === key
       ? (t.done
           ? { ...t, done: false, doneAt: undefined, doneBy: undefined }
@@ -53,7 +58,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
   }
 
   function close(outcome: "won" | "lost", reason?: string) {
-    const now = stamp(new Date());
+    const now = stampNow();
     // ปิดการขาย → ทุก task ถือว่าเสร็จ = 100% · stage = Won / Lost
     const next = tasks.map(t => ({ ...t, done: true, doneAt: t.doneAt ?? now, doneBy: t.doneBy ?? performedBy }));
     onSave({ ...lead, tasks: next, status: outcome === "won" ? "PAID" : "CANCELLED", lostReason: outcome === "lost" ? (reason ?? "") : undefined });

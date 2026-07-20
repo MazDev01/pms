@@ -5,16 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Phone, BarChart2, Package,
-  Settings, GitMerge, ScrollText, ChevronDown, Check, Users,
+  Settings, GitMerge, ScrollText, Users,
   CalendarDays, FolderOpen, Building2, History, LogOut, Crown,
 } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import { loadUserProfile, PROFILE_UPDATED_EVENT, type UserProfile } from "@/lib/mock";
-
-const ROLE_OPTIONS: { key: "dealer" | "hq"; dot: string; label: string }[] = [
-  { key: "dealer", dot: "#ECC94B", label: "Dealer · ตัวแทน" },
-  { key: "hq",     dot: "#059669", label: "HQ · สำนักงานใหญ่" },
-];
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
 type NavGroup = { group: string; items: NavItem[] };
@@ -74,8 +69,7 @@ const HQ_NAV: NavGroup[] = [
 export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boolean; onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isHQ, currentKey, switchSession, session, logout } = useRole();
-  const [roleOpen, setRoleOpen] = useState(false);
+  const { isHQ, session, logout } = useRole();
   // แถบเมนูใช้แบรนด์ Benjamin มาตรฐานเดียวเสมอทุกบทบาท (ดู .sidebar-brand ด้านล่าง)
   // — เดิมอ่านโลโก้/ชื่อแบรนด์จาก localStorage มาเก็บใน state แต่ไม่เคยเอาไปแสดง (โค้ดตาย) จึงเอาออก
   // โปรไฟล์ผู้ใช้ (/profile) → ชื่อ/รูปในการ์ดเจ้าของท้าย sidebar อัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
@@ -94,14 +88,6 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
     return () => { window.removeEventListener(PROFILE_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
   }, [session.dealerCode, session.name]);
 
-  function handleSwitch(key: "hq" | "dealer") {
-    setRoleOpen(false);
-    if (key !== currentKey) {
-      switchSession(key);
-      router.push(key === "hq" ? "/hq/dashboard" : "/dashboard");
-    }
-  }
-
   const nav = isHQ ? HQ_NAV : DEALER_NAV;
   // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน · HQ ใช้ชื่อผู้ใช้
   const displayName = isHQ ? (profile?.name || session.name) : session.dealerName;
@@ -118,52 +104,6 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
           <h1>BENJAMIN</h1>
           <span>{isHQ ? "PRE-ENGINEERED BUILDING" : "EASYBUILD"}</span>
         </div>
-      </div>
-
-      {/* Role switcher */}
-      <div style={{ padding: "0.6rem 0.7rem 0.2rem", position: "relative" }}>
-        <button
-          onClick={() => setRoleOpen(o => !o)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, width: "100%",
-            background: "var(--muted)", borderRadius: 8, padding: "7px 10px",
-            border: "1px solid var(--border)", cursor: "pointer", textAlign: "left",
-          }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: isHQ ? "#059669" : "#ECC94B" }} />
-          <span style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 700, flex: 1 }}>
-            {isHQ ? "HQ · สำนักงานใหญ่" : "Dealer · ตัวแทน"}
-          </span>
-          <ChevronDown size={14} style={{ color: "var(--muted-foreground)", flexShrink: 0, transform: roleOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
-        </button>
-
-        {roleOpen && (
-          <>
-            <div onClick={() => setRoleOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
-            <div style={{
-              position: "absolute", top: "calc(100% - 0.1rem)", left: "0.7rem", right: "0.7rem", zIndex: 50,
-              background: "#fff", borderRadius: 10, padding: 4, border: "1px solid var(--border)",
-              boxShadow: "0 12px 32px rgba(0,0,0,.12)",
-            }}>
-              {ROLE_OPTIONS.map(opt => {
-                const active = currentKey === opt.key;
-                return (
-                  <button key={opt.key} onClick={() => handleSwitch(opt.key)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%",
-                      padding: "8px 10px", borderRadius: 7, border: "none", cursor: "pointer", textAlign: "left",
-                      background: active ? "rgba(0,51,102,0.08)" : "transparent",
-                    }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: opt.dot }} />
-                    <span style={{ fontSize: "0.72rem", flex: 1, color: active ? "#003366" : "#475569", fontWeight: active ? 700 : 500 }}>
-                      {opt.label}
-                    </span>
-                    {active && <Check size={14} style={{ color: "#003366", flexShrink: 0 }} />}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
       </div>
 
       {/* Nav */}

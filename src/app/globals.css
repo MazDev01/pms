@@ -1228,3 +1228,20 @@ textarea:focus-visible {
   .dash-tile:hover { transform: none; }
 }
 
+/* ── Login page (redesign) — keyframes ใช้ผ่าน Tailwind arbitrary animate-[...] ──
+   ใช้แทน framer-motion (โปรเจกต์ไม่มี dep นั้น) · gate ด้วย prefers-reduced-motion ท้ายบล็อก */
+@keyframes auth-fade-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes auth-card-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes auth-blob-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(32px, -44px) scale(1.08); }
+  66%      { transform: translate(-24px, 22px) scale(0.95); }
+}
+@keyframes auth-blob-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-40px, 34px) scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[auth-"] { animation: none !important; opacity: 1 !important; transform: none !important; }
+}
+

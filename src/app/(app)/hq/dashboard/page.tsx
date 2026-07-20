@@ -195,18 +195,20 @@ export default function HQDashboard() {
   const trendTitle = selDealer ? `ยอดขาย ${selDealer.name.replace("Benjamin ", "")} รายเดือน` : "ยอดขายรวมทั้งเครือ รายเดือน";
   const trendDesc = selDealer ? `เฉพาะตัวแทน ${selDealer.code} (ล้านบาท)` : "มูลค่าที่ปิดได้ทุกตัวแทนรวมกัน (ล้านบาท)";
 
-  // ผลงานรายภาค (รายได้ในช่วง)
+  // ผลงานรายภาค — count = จำนวนตัวแทน (โดนัท) · revenue = ยอดขาย "ทั้งปีจริง" (annualWonByDealer)
+  // ต้องใช้ยอดทั้งปี ไม่ใช่ revenueW (ในช่วงตัวกรอง) เพราะการ์ดนี้กำกับ "ไม่ขึ้นกับตัวกรองช่วงเวลา"
+  // และแถบข้างล่างติดป้าย "ยอดสะสมทั้งปี" — ถ้าใช้ revenueW จะหดตามตัวกรอง ขัดกับป้ายตัวเอง
   const regions = useMemo(() => {
     const m = new Map<string, { revenue: number; count: number }>();
     rankedWin.forEach(d => {
       const r = m.get(d.region) ?? { revenue: 0, count: 0 };
-      r.revenue += d.revenueW; r.count += 1;
+      r.revenue += annualWonByDealer.get(d.code) ?? 0; r.count += 1;
       m.set(d.region, r);
     });
     const arr = [...m.entries()].map(([region, v]) => ({ region, ...v })).sort((a, b) => b.revenue - a.revenue);
     const max = Math.max(...arr.map(a => a.revenue), 1);
     return arr.map(a => ({ ...a, pct: Math.round((a.revenue / max) * 100) }));
-  }, [rankedWin]);
+  }, [rankedWin, annualWonByDealer]);
 
   // สัดส่วนมูลค่าตามแม่แบบ (มูลค่าใบเสนอราคาในช่วง แยกตาม productLine)
   const productAgg = useMemo(() => {
@@ -333,6 +335,9 @@ export default function HQDashboard() {
   const wonValNum = useMemo(() => winQuotes.filter(q => q.status === "won").reduce((s, q) => s + q.valueNum, 0), [winQuotes]);
   const goalPeriod = Math.round(targets.annualTarget * periodDays / 365) || 1;
   const achievementPct = Math.round(wonValNum / goalPeriod * 100);
+  // ยอดปิดได้สะสม "ทั้งปีนี้" (ไม่ขึ้นกับตัวกรองเวลา) — ใช้กับการ์ดเป้าหมายทั้งปี/วงแหวน % เป้า
+  // กฎระบบ: เป้าเป็นรายปี ห้ามเทียบกับยอดแค่ในช่วงตัวกรอง (ตารางอันดับตัวแทนใช้หลักเดียวกัน — annualWonByDealer)
+  const annualWonTotal = useMemo(() => { let s = 0; annualWonByDealer.forEach(v => (s += v)); return s; }, [annualWonByDealer]);
 
   // ประเภทอาคาร + จำนวนโครงการ
   const buildingPerf = useMemo(() => {
@@ -508,11 +513,11 @@ export default function HQDashboard() {
                     <div style={{ ...kNum, marginTop: 6 }}>{fmtBaht(targets.annualTarget)}</div>
                     <div style={{ ...kSub, marginTop: 2 }}>เป้าหมายทั้งปี</div>
                   </div>
-                  <ProgressRing pct={Math.round(wonValNum / (targets.annualTarget || 1) * 100)} size={50} />
+                  <ProgressRing pct={Math.round(annualWonTotal / (targets.annualTarget || 1) * 100)} size={50} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(wonValNum)}</div>
-                  <div style={kSub}>ยอดขายปัจจุบัน</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(annualWonTotal)}</div>
+                  <div style={kSub}>ยอดขายสะสมทั้งปีนี้</div>
                 </div>
                 {kDetail(k.href)}
               </>

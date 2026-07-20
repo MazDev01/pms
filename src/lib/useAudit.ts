@@ -8,7 +8,11 @@ import { useRole } from "@/context/RoleContext";
 import { APP_NOW } from "@/context/FilterContext";
 
 export type AuditEntry = { id: number; user: string; role: string; action: string; target: string; at: string };
-const KEY = "hq_audit_log_v1";
+// v2: SEED เดิม (v1) มีรายการของฟีเจอร์ที่ถูกลบแล้ว ("ตั้งเพดานส่วนลด") + คำเก่า ("ระงับตัวแทน")
+// loadAudit อ่าน localStorage ก่อน SEED → เบราว์เซอร์เก่าจะเห็นของค้างตลอดแม้ SEED ในโค้ดสะอาดแล้ว
+// ขึ้นเวอร์ชันคีย์ + ลบคีย์เก่าทิ้ง เพื่อบังคับ re-seed จาก SEED ปัจจุบัน (กติกา version-key ของทั้งระบบ)
+const KEY = "hq_audit_log_v2";
+const KEY_OLD = ["hq_audit_log_v1"];
 const EVENT = "bpms-audit-updated";
 const MAX = 300;
 const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -23,6 +27,7 @@ const SEED: AuditEntry[] = [
 
 export function loadAudit(): AuditEntry[] {
   if (typeof window === "undefined") return [];
+  try { KEY_OLD.forEach(k => localStorage.removeItem(k)); } catch {} // ล้าง seed เก่าที่มีของฟีเจอร์ที่ลบแล้ว
   try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s) as AuditEntry[]; } catch {}
   return [...SEED];
 }

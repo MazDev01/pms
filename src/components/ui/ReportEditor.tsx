@@ -5,13 +5,16 @@
 // รายงานเก็บที่ LeadRow.report = ผูกกับ "ดีล" ไม่ใช่ลูกค้า → 1 ลูกค้ามีหลายดีล แต่ละดีลมีรายงานของตัวเอง
 import { useState, useRef, useEffect } from "react";
 import { buildLeadReport, type LeadRow } from "@/lib/mock";
+import { APP_NOW } from "@/context/FilterContext";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const thaiDateStr = (d: Date) => `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`;
+// วันหัวรายงาน = "วันนี้" ของระบบ (APP_NOW) ไม่ใช่นาฬิกาเครื่อง — เดิม new Date() ได้วันจริงที่ล้ำยุคข้อมูล
+const todayStr = () => thaiDateStr(APP_NOW);
 
 export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: LeadRow) => void }) {
   // ถ้ายังไม่มีรายงาน (ลีดเก่า) → เปิดด้วยเทมเพลตมาตรฐาน (พรีฟิลจากข้อมูลลีด) ให้แก้ต่อได้
-  const initial = () => lead.report ?? buildLeadReport(lead, thaiDateStr(new Date()));
+  const initial = () => lead.report ?? buildLeadReport(lead, todayStr());
   const [text, setText] = useState(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { setText(initial()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [lead.id]);
@@ -27,7 +30,7 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
     setText(before + insert + after);
     requestAnimationFrame(() => { el.focus(); const c = (before + insert).length; el.setSelectionRange(c, c); });
   }
-  function resetTemplate() { setText(buildLeadReport(lead, thaiDateStr(new Date()))); }
+  function resetTemplate() { setText(buildLeadReport(lead, todayStr())); }
 
   const lbl: React.CSSProperties = { display: "block", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 6 };
 

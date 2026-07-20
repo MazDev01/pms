@@ -48,6 +48,12 @@ const CUR_Y = MOCK_TODAY.getFullYear();
 // จำนวนเงินเต็มจำนวน (฿10,000,000) — ใช้บนการ์ด KPI ตาม design reference
 function baht(v: number): string { return `฿${Math.round(v).toLocaleString("en-US")}`; }
 
+// วันที่ท้องถิ่นเป็น ISO (YYYY-MM-DD) — ห้ามใช้ Date.toISOString() เพราะมันแปลงเป็น UTC ก่อน
+// โซนไทย (UTC+7) จะทำให้ midnight local ถอยไปเป็นวันก่อนหน้า (30 มิ.ย. → 29 มิ.ย.) = off-by-one
+function localISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function DealerDashboard() {
   const router = useRouter();
   const { leads: allLeads, quotations, appointments } = useSales();
@@ -197,7 +203,7 @@ export default function DealerDashboard() {
   const recent = useMemo(() => {
     type Ev = { kind: string; icon: typeof FileText; title: string; customer: string; date: string; time?: string; color: string; bg: string; href: string };
     const ev: Ev[] = [];
-    leadsIn.forEach(l => ev.push({ kind: "lead", icon: UserPlus, title: "สร้างลูกค้าเป้าหมายใหม่", customer: l.company, date: leadCreatedDate(l).toISOString().slice(0, 10), color: "#2563EB", bg: "#E8F0FE", href: `/leads?open=${l.numId}` }));
+    leadsIn.forEach(l => ev.push({ kind: "lead", icon: UserPlus, title: "สร้างลูกค้าเป้าหมายใหม่", customer: l.company, date: localISO(leadCreatedDate(l)), color: "#2563EB", bg: "#E8F0FE", href: `/leads?open=${l.numId}` }));
     // นัดหมายต้องอยู่ในช่วงเวลาที่เลือกด้วย — ไม่งั้นการ์ด "ล่าสุด" โผล่นัดของเดือนหน้าทั้งที่เลือกดูถึงแค่ มิ.ย.
     apptsIn.forEach(a => ev.push({ kind: "appt", icon: CalendarClock, title: "นัดหมาย", customer: a.company, date: a.date, time: a.time, color: "#7C3AED", bg: "#F0EBFB", href: "/calendar" }));
     quotesIn.forEach(q => {

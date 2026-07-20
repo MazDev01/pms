@@ -12,12 +12,13 @@ const LABEL: React.CSSProperties = {
 };
 
 export default function HQLoginPage() {
-  const { login } = useRole();
+  const { login, signIn } = useRole();
   const router = useRouter();
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
 
   const inputStyle = (field: string): React.CSSProperties => ({
@@ -35,14 +36,17 @@ export default function HQLoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
     setTimeout(() => {
-      login("hq");
-      router.push("/hq/dashboard");
-    }, 700);
+      const r = signIn(email, password);
+      if (r.ok) router.push(r.session.scopeAll ? "/hq/dashboard" : "/dashboard");
+      else { setError(r.error); setLoading(false); }
+    }, 500);
   };
 
   return (
+    <div style={{ minHeight: "100vh", background: "#fafafa", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
     <div style={{ width: "100%", maxWidth: 380 }}>
       {/* Logo */}
       <div style={{ textAlign: "center", marginBottom: 32 }}>
@@ -140,6 +144,13 @@ export default function HQLoginPage() {
             </button>
           </div>
 
+          {/* Error */}
+          {error && (
+            <div role="alert" style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 10, padding: "9px 12px", fontSize: "0.76rem", fontWeight: 600 }}>
+              {error}
+            </div>
+          )}
+
           {/* Submit */}
           <button
             type="submit"
@@ -185,6 +196,11 @@ export default function HQLoginPage() {
         </button>
       </div>
 
+      {/* Demo password hint */}
+      <p style={{ textAlign: "center", fontSize: "0.65rem", color: "#9ca3af", marginTop: 10 }}>
+        ล็อกอินเอง: <b style={{ color: "#6b7280" }}>admin@benjamin.com</b> + รหัส demo <b style={{ color: "#6b7280" }}>benjamin</b>
+      </p>
+
       {/* Back to dealer */}
       <p style={{ textAlign: "center", marginTop: 24 }}>
         <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.72rem", color: "#6b7280", textDecoration: "none" }}>
@@ -194,6 +210,7 @@ export default function HQLoginPage() {
       <p style={{ textAlign: "center", fontSize: "0.65rem", color: "#C0C0C0", marginTop: 12 }}>
         © 2569 Benjamin PEB Steel Co., Ltd.
       </p>
+    </div>
     </div>
   );
 }

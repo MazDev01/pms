@@ -170,7 +170,11 @@ export default function HQDealersPage() {
   const totalRevenue = filtered.reduce((s, d) => s + d.revenueActual, 0);
   const totalTarget = filtered.reduce((s, d) => s + d.revenueTarget, 0);
   const totalProjects = filtered.reduce((s, d) => s + d.activeProjects, 0);
-  const avgOnTime = active.length > 0 ? Math.round(active.reduce((s, d) => s + d.onTimePct, 0) / active.length) : 0;
+  // เฉลี่ยเฉพาะตัวแทนที่ "มีข้อมูล" (onTimePct > 0) — ตัวที่เป็น 0 = ยังไม่มีข้อมูล (ตารางแสดง "—")
+  // เอามาเฉลี่ยเป็น 0 ไม่ได้ = เอา 0 สวมรอย "—" · ไม่มีใครมีข้อมูล → null → การ์ดแสดง "—"
+  const ratedOnTime = active.filter(d => d.onTimePct > 0);
+  const avgOnTime: number | null = ratedOnTime.length > 0
+    ? Math.round(ratedOnTime.reduce((s, d) => s + d.onTimePct, 0) / ratedOnTime.length) : null;
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
   function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "กลาง", revenueTarget: regionDefaultTarget("กลาง"), status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
@@ -254,10 +258,10 @@ export default function HQDealersPage() {
           กติกาของ .hq-kpi4: ป้าย → ตัวเลข (เข้ม ไม่ใส่สี) → หน่วย/บริบท · ไอคอนในกล่องสีจางมุมขวา */}
       <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
         {([
-          { label: "ตัวแทนทั้งหมด", value: `${dealers.length}`, sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
+          { label: "ตัวแทนทั้งหมด", value: `${filtered.length}`, sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
           { label: "รายได้รวม", value: `฿${(totalRevenue / 1_000_000).toFixed(1)}M`, sub: `${totalPct}% ของเป้า ฿${(totalTarget / 1_000_000).toFixed(0)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
           { label: "โอกาสการขายทั้งหมด", value: `${totalProjects}`, sub: `${active.filter(d => d.activeProjects > 0).length} ตัวแทนมีงาน`, Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
-          { label: "ติดตามตรงเวลา", value: `${avgOnTime}%`, sub: `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยทุกตัวแทน`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
+          { label: "ติดตามตรงเวลา", value: avgOnTime === null ? "—" : `${avgOnTime}%`, sub: avgOnTime === null ? "ยังไม่มีข้อมูล" : `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยเท่าที่มีข้อมูล`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
         ] as const).map(t => (
           <div key={t.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
             <div style={{ minWidth: 0 }}>

@@ -50,7 +50,8 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
   const max = Math.max(...data.map(d => d.value));
   const last = data[data.length - 1];
   const prev = data[data.length - 2];
-  const delta = prev ? Math.round(((last.value - prev.value) / prev.value) * 100) : 0;
+  // prev.value === 0 → หารศูนย์ได้ Infinity/NaN → โชว์ "—" แทน (ห้ามเรนเดอร์ +Infinity%/NaN%)
+  const delta = prev && prev.value > 0 ? Math.round(((last.value - prev.value) / prev.value) * 100) : null;
 
   return (
     <div>
@@ -72,12 +73,18 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
         ))}
       </div>
       <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
-        {delta >= 0
-          ? <TrendingUp size={12} color="#059669" />
-          : <TrendingDown size={12} color="#dc2626" />}
-        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: delta >= 0 ? "#059669" : "#dc2626" }}>
-          {delta >= 0 ? "+" : ""}{delta}% เทียบเดือนก่อน
-        </span>
+        {delta === null ? (
+          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#9ca3af" }}>— เทียบเดือนก่อน</span>
+        ) : (
+          <>
+            {delta >= 0
+              ? <TrendingUp size={12} color="#059669" />
+              : <TrendingDown size={12} color="#dc2626" />}
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: delta >= 0 ? "#059669" : "#dc2626" }}>
+              {delta >= 0 ? "+" : ""}{delta}% เทียบเดือนก่อน
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

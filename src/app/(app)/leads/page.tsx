@@ -1481,7 +1481,9 @@ export default function LeadsPage() {
           onClose={()=>setShowAddForm(false)}
           onSave={(l)=>{
             // กำหนด id/numId แบบ max+1 กันชนกับลีดเดิม (แทน Math.random)
-            const nid = Math.max(0, ...leadsData.map(x=>x.numId)) + 1;
+            // ต้องคิดจาก allLeads (ดิบ ทุกสถานะ/ทุกสาขา) — ไม่ใช่ leadsData ที่ตัด PAID ออก
+            // ไม่งั้นถ้าลีด numId สูงสุดถูกปิดเป็น PAID แล้ว nid จะซ้ำกับลีดเดิม (ไฟล์/ลิงก์ ?open= สับสน)
+            const nid = Math.max(0, ...allLeads.map(x=>x.numId)) + 1;
             // สร้าง "รายงานการติดตาม" + "Report Checklist (Task)" อัตโนมัติทุกครั้งที่สร้าง Lead
             // createdAt ต้องมีตั้งแต่ตอนสร้าง — ไม่มีแล้วหน้าไหนก็โชว์ "สร้างเมื่อ —"
             // และ leadCreatedDate() จะไปสังเคราะห์วันจาก numId แทน (ได้วันย้อนหลังหลายเดือน)

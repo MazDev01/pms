@@ -80,16 +80,21 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
     if (code !== CURRENT_DEALER.code) {
       return dealerDetails[code] ?? { code, monthlySales: [], leads: [], projects: [], quotes: [] };
     }
-    // CNX = ข้อมูลสดจาก SalesContext ทั้งหมด
+    // CNX = ข้อมูลสดจาก SalesContext
+    // SalesContext.leads ถือลีด "ทั้งเครือ" (initialLeads = mock.leads รวม seed สาขาอื่น 45 ราย)
+    // ต้องกรองเหลือเฉพาะของ CNX ก่อน ไม่งั้นหน้าเจาะสาขา CNX ฝั่ง HQ จะโชว์ลีดของ RYG/MST ปนเข้ามา
+    // (ลีดที่ไม่มี dealerCode = ตัวแทน CNX สร้างเอง — กติกาเดียวกับ Topbar/Dashboard/หน้า /leads)
+    // quotations ใน SalesContext เป็นของ CNX อยู่แล้ว (seed อ้าง customerId 1-13 ของ CNX) จึงไม่ต้องกรอง
+    const cnxLeads = leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code);
     const quotes: DealerQuoteItem[] = quotations.map(q => ({
       quoteNo: q.id, customer: q.customer, product: q.buildingType || q.project,
       valueNum: q.totalValue, status: q.status, date: fmtISOToThai(q.date),
     }));
-    const leadItems: DealerLeadItem[] = leads.map(l => ({
+    const leadItems: DealerLeadItem[] = cnxLeads.map(l => ({
       id: l.id, name: l.company || l.name, province: l.province, product: l.product,
       valueNum: parseBaht(l.value), status: LEAD_TO_ITEM[l.status], assignedAt: l.createdAt ?? "—",
     }));
-    const projects: DealerProjectItem[] = leads.filter(l => l.status !== "CANCELLED").map(l => ({
+    const projects: DealerProjectItem[] = cnxLeads.filter(l => l.status !== "CANCELLED").map(l => ({
       id: l.id, name: l.company || l.name, product: l.product, valueNum: parseBaht(l.value),
       progress: LEAD_PROGRESS[l.status], status: l.status === "PAID" ? "completed" : "in_progress",
     }));

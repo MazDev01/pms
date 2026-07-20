@@ -11,6 +11,7 @@ import { LineItemsEditor } from "@/components/ui/LineItemsEditor";
 import { AssigneeAvatars, PersonPicker } from "@/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@/lib/quotationPrint";
 import { useSales } from "@/context/SalesContext";
+import { CURRENT_DEALER } from "@/lib/useNetworkData";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useFilters, FilterProvider } from "@/context/FilterContext";
 import { FilterBar } from "@/components/filters/FilterBar";
@@ -292,10 +293,16 @@ function QuotationsPageInner(){
   const router = useRouter();
   const { timeRange, passes } = useFilters();
   const {
-    quotations: data, customers, leads,
+    quotations: data, customers, leads: allLeads,
     addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
     updateCustomer, updateLead,
   } = useSales();
+  // SalesContext ถือลีดทั้งเครือ — หน้านี้เป็นของตัวแทน (CNX) ต้องมองเฉพาะลีดตัวเอง
+  // ไม่งั้น lookup ผู้รับผิดชอบด้วยชื่อบริษัท (ownerOf/saveQ) ไปเจอ+เขียนทับลีดสาขาอื่นที่ชื่อซ้ำ
+  const leads = useMemo(
+    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
+    [allLeads],
+  );
   const [query, setQuery]           = useState("");
   const [filterStatus, setFilterStatus] = useState<QuotationStatus|"ALL">("ALL");
   // ตัวกรองในแถบ FilterRow — ตัวเลือกสร้างจากใบเสนอราคาจริงที่มีอยู่

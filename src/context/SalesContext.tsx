@@ -16,6 +16,16 @@ import {
 import { loadIssuer } from "@/lib/quotationPrint";
 import { usePersistentState } from "@/lib/usePersistentState";
 import { parseBaht } from "@/lib/format";
+import { APP_NOW_ISO } from "@/context/FilterContext";
+
+// timestamp ของ DealActivity — วันที่ยึด "วันนี้" ของระบบ (APP_NOW) ไม่ใช่นาฬิกาเครื่อง (กติกาเดียวกับทั้งระบบ)
+// เวลา (ชม.:นาที:วินาที) ใช้นาฬิกาจริงได้ ไว้เรียงลำดับเหตุการณ์ในวันเดียวกัน
+// ปัจจุบันค่านี้ยังไม่ถูก render ที่ไหน แต่ตรึงไว้กันเป็นบั๊กถ้าถูกนำไปแสดง/กรองภายหลัง
+function activityStamp(): string {
+  const t = new Date();
+  const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0"), ss = String(t.getSeconds()).padStart(2, "0");
+  return `${APP_NOW_ISO}T${hh}:${mm}:${ss}`;
+}
 
 // ใบเสนอราคาเดิม (seed) = ออกภายใต้โปรไฟล์บริษัทตั้งต้น → ตรึงชื่อไว้ ไม่เปลี่ยนตามโปรไฟล์ที่แก้ทีหลัง
 const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
@@ -130,7 +140,7 @@ export function SalesProvider({
       if (d.id !== dealId) return d;
       const task = d.tasks.find(t => t.id === taskId);
       const tasks = d.tasks.map(t => t.id !== taskId ? t : { ...t, done });
-      const now = new Date().toISOString();
+      const now = activityStamp();
       const acts: DealActivity[] = [];
       if (task) {
         acts.push({
@@ -159,7 +169,7 @@ export function SalesProvider({
 
   const moveDealStage = useCallback((dealId: number, stageId: number) => {
     const stageName = pipelineStages.find(s => s.id === stageId)?.name ?? stageId;
-    const now = new Date().toISOString();
+    const now = activityStamp();
     setDeals(prev => prev.map(d =>
       d.id !== dealId ? d : {
         ...d,
@@ -222,7 +232,7 @@ export function SalesProvider({
   const closeDeal = useCallback((dealId: number, outcome: "won" | "lost", lostReason?: string) => {
     const wonStage  = pipelineStages.find(s => s.id === 7)!;
     const lostStage = pipelineStages.find(s => s.id === 8)!;
-    const now = new Date().toISOString();
+    const now = activityStamp();
     setDeals(prev => prev.map(d =>
       d.id !== dealId ? d : {
         ...d,
@@ -267,7 +277,7 @@ export function SalesProvider({
   }, [leadDealMap, leads, convertLeadToCustomer]);
 
   const updateDealNotes = useCallback((dealId: number, notes: string) => {
-    const now = new Date().toISOString();
+    const now = activityStamp();
     setDeals(prev => prev.map(d =>
       d.id !== dealId ? d : {
         ...d,
@@ -282,7 +292,7 @@ export function SalesProvider({
   }, []);
 
   const addDealFile = useCallback((dealId: number, file: { name: string; size: string }) => {
-    const now = new Date().toISOString();
+    const now = activityStamp();
     setDeals(prev => prev.map(d =>
       d.id !== dealId ? d : {
         ...d,
@@ -304,7 +314,7 @@ export function SalesProvider({
 
     const id = nextDealId;
     setNextDealId(n => n + 1);
-    const now = new Date().toISOString();
+    const now = activityStamp();
 
     const newDeal: PipelineDealMock = {
       id,
@@ -394,6 +404,11 @@ export function SalesProvider({
   const completeLeadQuoteTasks = useCallback((quotation: QuotationMock, keys: string[]) => {
     const RANK: Partial<Record<LeadRow["status"], number>> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4 };
     setLeads(prev => prev.map(l => {
+      // กันเขียนข้ามสาขา: SalesContext ถือลีดทั้งเครือ (seed สาขาอื่นมี dealerCode) แต่ใบเสนอราคาที่ทริกฟังก์ชันนี้
+      // เป็นของตัวแทนที่เล่นได้ (CNX) เสมอ → ต้องแตะเฉพาะลีดของ CNX (ไม่มี dealerCode = CNX สร้างเอง)
+      // ไม่งั้น match ด้วย company ชื่อซ้ำ/พิมพ์เอง จะเลื่อนสถานะ+ประทับผู้ทำทับลีดของสาขาอื่น
+      // (คู่แฝดฝั่งเขียนของบั๊กรั่วข้ามสาขา — ดู branch-isolation.spec.ts · "CNX" = CURRENT_DEALER.code)
+      if (l.dealerCode && l.dealerCode !== "CNX") return l;
       const match = (quotation.customerId != null && quotation.customerId !== 0 && l.customerId === quotation.customerId)
         || l.company === quotation.customer;
       if (!match || l.status === "PAID" || l.status === "CANCELLED") return l;
