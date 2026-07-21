@@ -19,7 +19,7 @@ import { useTableLayout, type Col } from "@pms/shared/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/components/ui/ActivityTimeline";
 import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { LeadQuotationsPanel } from "@pms/shared/components/ui/LeadQuotationsPanel";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
@@ -378,6 +378,7 @@ export default function CustomersPage(){
     addLead, updateLead, addCustomer: ctxAddCustomer,
     updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
   const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
@@ -864,7 +865,7 @@ export default function CustomersPage(){
           .sort((a,b) => a.q.date < b.q.date ? 1 : -1);
         const purchasedTotal = purchasedRows.reduce((s,r)=>s+r.q.totalValue,0);
         // รหัสลูกค้า = รูปแบบแสดงผลของ id จริง (ไม่ใช่ฟิลด์ใหม่)
-        const custCode = customerCode(CURRENT_DEALER.code, selected.id); // แหล่งเดียวกับฝั่ง HQ
+        const custCode = customerCode(currentDealer.code, selected.id); // แหล่งเดียวกับฝั่ง HQ
 
         // ตารางประวัติการปิดการขาย — # / เลขที่ใบ / ชื่องาน+รูปแม่แบบ / วันที่ซื้อ / ราคา / ดู · ปิดท้ายด้วยแถวรวม
         // ไม่มีคอลัมน์ "สถานะ" (บอสสั่งตัด — สถานะแบบ โอน/ผ่อน/จอง เป็นของธุรกิจอสังหา ระบบนี้ไม่มี)

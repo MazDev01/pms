@@ -11,7 +11,7 @@ import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
 import { AssigneeAvatars, PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@pms/shared/lib/quotationPrint";
 import { useSales } from "@pms/shared/context/SalesContext";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { useFilters, FilterProvider } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -297,11 +297,12 @@ function QuotationsPageInner(){
     addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
     updateCustomer, updateLead,
   } = useSales();
-  // SalesContext ถือลีดทั้งเครือ — หน้านี้เป็นของตัวแทน (CNX) ต้องมองเฉพาะลีดตัวเอง
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
+  // SalesContext ถือลีดทั้งเครือ — หน้านี้เป็นของตัวแทน ต้องมองเฉพาะลีดตัวเอง
   // ไม่งั้น lookup ผู้รับผิดชอบด้วยชื่อบริษัท (ownerOf/saveQ) ไปเจอ+เขียนทับลีดสาขาอื่นที่ชื่อซ้ำ
   const leads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
-    [allLeads],
+    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    [allLeads, currentDealer.code],
   );
   const [query, setQuery]           = useState("");
   const [filterStatus, setFilterStatus] = useState<QuotationStatus|"ALL">("ALL");
