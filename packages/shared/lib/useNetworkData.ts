@@ -7,14 +7,22 @@
 import { useMemo } from "react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  dealerDetails, fmtISOToThai, hqAllQuotations, hqAllCustomers,
+  dealerDetails, dealerLeaderboard, fmtISOToThai, hqAllQuotations, hqAllCustomers,
   type HQQuotation, type HQCustomer, type LeadStatus, type LeadRow,
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@pms/shared/lib/mock";
 import { parseBaht } from "@pms/shared/lib/format";
 
-// ดีลเลอร์หลักของเดโม — SalesContext แทนสมุดงานของสาขานี้
+// ดีลเลอร์หลักของเดโม (สาขาที่ลีด/ใบไม่ระบุ dealerCode ถือเป็นของสาขานี้)
 export const CURRENT_DEALER = { code: "CNX", name: "เชียงใหม่สตีลบิลด์" };
+
+// multi-tenant: บันทึกที่สาขาอื่นสร้างจริง (SalesContext ติด dealerCode) → HQ ต้องระบุสาขาให้ถูก
+// ชื่อสาขาจากรายชื่อกลาง · CNX คงชื่อเดิม (CURRENT_DEALER.name) กันชื่อเพี้ยนจากที่เคยแสดง
+const DEALER_NAME_BY_CODE = new Map(dealerLeaderboard.map(d => [d.code, d.name]));
+function dealerInfoOf(code: string | undefined) {
+  const c = code ?? CURRENT_DEALER.code;
+  return { code: c, name: c === CURRENT_DEALER.code ? CURRENT_DEALER.name : (DEALER_NAME_BY_CODE.get(c) ?? c) };
+}
 
 // ใบเสนอราคาทั้งเครือ = ใบที่ดีลเลอร์สร้างจริง (map เป็นสาขา CNX) + seed สาขาอื่นที่ไม่ซ้ำเลขที่
 export function useNetworkQuotations(): HQQuotation[] {
@@ -22,12 +30,13 @@ export function useNetworkQuotations(): HQQuotation[] {
   return useMemo(() => {
     const live: HQQuotation[] = quotations.map(q => {
       const lead = leads.find(l => (q.dealId != null && l.numId === q.dealId) || (q.customerId > 0 && l.customerId === q.customerId));
+      const dl = dealerInfoOf(q.dealerCode); // สาขาเจ้าของใบจริง (undefined = CNX)
       return {
         id: `LIVE-${q.id}`, quoteNo: q.id,
-        dealerCode: CURRENT_DEALER.code, dealerName: CURRENT_DEALER.name,
+        dealerCode: dl.code, dealerName: dl.name,
         customer: q.customer, valueNum: q.totalValue,
         status: q.status, createdAt: fmtISOToThai(q.date),
-        salesperson: lead?.assigned ?? `ตัวแทน ${CURRENT_DEALER.code}`,
+        salesperson: lead?.assigned ?? `ตัวแทน ${dl.code}`,
         productLine: q.buildingType || q.project,
         // รายละเอียดราคาจริงของใบที่ดีลเลอร์สร้าง → HQ เจาะดูรายการสินค้าได้
         materialCost: q.materialCost, lineItems: q.lineItems,
@@ -49,16 +58,19 @@ export function useNetworkLeads(): LeadRow[] {
 export function useNetworkCustomers(): HQCustomer[] {
   const { customers, quotations } = useSales();
   return useMemo(() => {
-    const live: HQCustomer[] = customers.map(c => ({
-      // id = คีย์ฝั่ง HQ (กันชนกับ seed) · localId = เลขนับจริงของสาขา → ใช้ออกรหัสลูกค้า
-      id: 10000 + c.id, localId: c.id, name: c.company,
-      dealerCode: CURRENT_DEALER.code, dealerName: CURRENT_DEALER.name,
-      province: c.province,
-      dealsWon: quotations.filter(q => q.customerId === c.id && q.status === "won").length,
-      totalRevenue: c.totalValue,
-      status: c.status === "inactive" ? "inactive" : "active",
-      lastContact: "30 มิ.ย. 2569", segment: "sme",
-    }));
+    const live: HQCustomer[] = customers.map(c => {
+      const dl = dealerInfoOf(c.dealerCode); // สาขาเจ้าของลูกค้าจริง (undefined = CNX)
+      return {
+        // id = คีย์ฝั่ง HQ (กันชนกับ seed) · localId = เลขนับจริงของสาขา → ใช้ออกรหัสลูกค้า
+        id: 10000 + c.id, localId: c.id, name: c.company,
+        dealerCode: dl.code, dealerName: dl.name,
+        province: c.province,
+        dealsWon: quotations.filter(q => q.customerId === c.id && q.status === "won").length,
+        totalRevenue: c.totalValue,
+        status: c.status === "inactive" ? "inactive" : "active",
+        lastContact: "30 มิ.ย. 2569", segment: "sme",
+      };
+    });
     // กันซ้ำด้วย dealerCode ไม่ใช่ชื่อ — ชื่อสะกดต่างนิดเดียวก็หลุด
     // (เคยมี "บ.ไทยสตีล" ใน seed กับ "บจ. ไทยสตีล" ในสมุดสด แล้ว HQ นับเป็น 2 ราย)
     // ลูกค้าของสาขาที่เล่นได้มาจากสมุดสดเสมอ → seed ของสาขานั้นไม่ต้องเอามาต่อท้าย
