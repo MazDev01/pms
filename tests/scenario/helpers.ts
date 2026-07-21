@@ -8,9 +8,13 @@ export async function loginAs(page: Page, role: "hq" | "dealer") {
   }, role);
 }
 
+// โมโนเรโป: แอปตัวแทน (dealer) รันที่ :3001 · แอปสำนักงานใหญ่ (hq) รันที่ :3002
+// open() เลือก origin ตาม role ให้เอง (path เป็น /leads, /hq/... ก็ยิงถูกแอป) — localStorage แยกตาม origin อยู่แล้ว
+const APP_ORIGIN = { hq: "http://localhost:3002", dealer: "http://localhost:3001" } as const;
+
 export async function open(page: Page, role: "hq" | "dealer", path: string) {
   await loginAs(page, role);
-  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await page.goto(APP_ORIGIN[role] + path, { waitUntil: "domcontentloaded" });
 }
 
 // เปิดฟอร์ม "สร้างใบเสนอราคาใหม่" — ตอนนี้อยู่ในแผงรายละเอียดลูกค้าเป้าหมาย (แท็บใบเสนอราคา)

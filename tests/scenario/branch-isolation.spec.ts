@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { open } from "./helpers";
-import { leads as allLeads } from "../../src/lib/mock";
+import { leads as allLeads } from "../../packages/shared/lib/mock";
 
 // ── ขอบเขตข้อมูลข้ามสาขา (regression) — บั๊กประเภท "กระดิ่ง/หน้า HQ รั่วข้ามสาขา" ──
 // SalesContext.leads ถือลีดทั้งเครือ (mock.leads รวม seed สาขาอื่น) — ทุก surface ของตัวแทน
