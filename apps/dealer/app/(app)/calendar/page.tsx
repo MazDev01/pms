@@ -4,7 +4,7 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { useState, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { ChevronLeft, ChevronRight, Clock, MapPin, CalendarDays, CalendarCheck, Plus, X, User, Phone, Building2, GitBranch, Users, Edit2, Trash2 } from "lucide-react";
@@ -456,11 +456,12 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
 function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: AppointmentMock; defaultDate: string; onSave: (a: AppointmentMock) => void; onClose: () => void }) {
   const isEdit = !!initial;
   const { session } = useRole(); // ผู้รับผิดชอบเริ่มต้น = ผู้ใช้ที่ล็อกอิน
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
   const { leads: allLeads } = useSales();
   // เลือกได้เฉพาะลีดของตัวแทนที่ล็อกอิน — ไม่ให้เห็นลีดของตัวแทนรายอื่นทั้งเครือ
   const leads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
-    [allLeads],
+    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    [allLeads, currentDealer.code],
   );
   const [leadId, setLeadId] = useState<number | undefined>(initial?.leadId);
   const [company, setCompany] = useState(initial?.company ?? "");

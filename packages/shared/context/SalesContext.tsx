@@ -4,6 +4,7 @@ import {
   createContext, useContext, useState, useCallback, useRef, useEffect,
   type ReactNode,
 } from "react";
+import { useRole } from "@pms/shared/context/RoleContext";
 import {
   pipelineDeals, pipelineStages,
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER,
@@ -111,6 +112,9 @@ export function SalesProvider({
 }) {
   const [deals, setDeals]           = usePersistentState<PipelineDealMock[]>(K.deals, pipelineDeals);
   const [leads, setLeads]           = usePersistentState<LeadRow[]>(K.leads, initialLeads);
+  // สาขาที่ล็อกอิน (multi-tenant) — ฝั่งเขียนแตะเฉพาะลีดของสาขานี้ (ลีดไม่ระบุ dealerCode = ของ CNX)
+  const { dealerCode } = useRole();
+  const myDealerCode = dealerCode || "CNX";
   // ref สำหรับอ่านค่า leads ล่าสุดใน callback โดยไม่ต้องพึ่ง closure (ใช้ใน updateLeadStatus)
   const leadsRef = useRef(leads);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
@@ -407,8 +411,8 @@ export function SalesProvider({
       // กันเขียนข้ามสาขา: SalesContext ถือลีดทั้งเครือ (seed สาขาอื่นมี dealerCode) แต่ใบเสนอราคาที่ทริกฟังก์ชันนี้
       // เป็นของตัวแทนที่เล่นได้ (CNX) เสมอ → ต้องแตะเฉพาะลีดของ CNX (ไม่มี dealerCode = CNX สร้างเอง)
       // ไม่งั้น match ด้วย company ชื่อซ้ำ/พิมพ์เอง จะเลื่อนสถานะ+ประทับผู้ทำทับลีดของสาขาอื่น
-      // (คู่แฝดฝั่งเขียนของบั๊กรั่วข้ามสาขา — ดู branch-isolation.spec.ts · "CNX" = CURRENT_DEALER.code)
-      if (l.dealerCode && l.dealerCode !== "CNX") return l;
+      // (คู่แฝดฝั่งเขียนของบั๊กรั่วข้ามสาขา — ดู branch-isolation.spec.ts) · แตะเฉพาะลีดของสาขาที่ล็อกอิน
+      if ((l.dealerCode ?? "CNX") !== myDealerCode) return l;
       const match = (quotation.customerId != null && quotation.customerId !== 0 && l.customerId === quotation.customerId)
         || l.company === quotation.customer;
       if (!match || l.status === "PAID" || l.status === "CANCELLED") return l;
@@ -427,7 +431,7 @@ export function SalesProvider({
       const status = (RANK[next] ?? 0) > (RANK[l.status] ?? 0) ? next : l.status;
       return { ...l, tasks, status };
     }));
-  }, []);
+  }, [myDealerCode]);
 
   // ── Quotation mutations ──────────────────────────────────────────
   const addQuotation = useCallback((quotation: QuotationMock) => {

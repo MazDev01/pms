@@ -17,7 +17,7 @@ import { useAuditEntries, type AuditEntry } from "@pms/shared/lib/useAudit";
 import { confirmDiscard } from "@pms/shared/lib/useUnsavedGuard";
 import { useHQAlerts } from "@pms/shared/lib/useHQAlerts";
 import { type HQAlert } from "@pms/shared/lib/hqAlerts";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 
 // ── mock "วันนี้" (deterministic) ────────────────────────────────
 const MOCK_TODAY = "2026-06-30";
@@ -275,6 +275,7 @@ const HQ_PAGES: PageEntry[] = [
 
 export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const { session, isHQ, logout } = useRole();
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน — กระดิ่งฝั่งตัวแทน scope ด้วย code นี้
   const router = useRouter();
   const pathname = usePathname();
 
@@ -327,8 +328,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // เดิม Topbar ใช้ allLeads ตรง ๆ ทั้งกระดิ่งและช่องค้นหา → ตัวแทน CNX เห็นลีดของ RYG/MST
   // พร้อมชื่อผู้ติดต่อ เบอร์ มูลค่าดีล และชื่อเซลส์สาขาอื่น (ยืนยันด้วยเทสต์: ระยอง/ตาก โผล่ในกระดิ่ง CNX)
   const liveLeads = useMemo(
-    () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
-    [allLeads, isHQ],
+    () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    [allLeads, isHQ, currentDealer.code],
   );
   const auditEntries = useAuditEntries(); // สำหรับ HQ — บันทึกการใช้งาน
   // กฎแจ้งเตือน 6 ข้อของทั้งเครือ — แหล่งเดียวกับการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ

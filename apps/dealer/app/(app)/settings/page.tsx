@@ -8,7 +8,7 @@ import {
   Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
 import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, loadHQPolicy, DEFAULT_HQ_POLICY, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { useUnsavedGuard } from "@pms/shared/lib/useUnsavedGuard";
@@ -686,14 +686,15 @@ function NotificationsTab() {
   const savedRef = useRef(savedPrefs); savedRef.current = savedPrefs;
   const rulesDraftRef = useRef(rulesDraft); rulesDraftRef.current = rulesDraft;
   const savedRulesRef = useRef(savedRules); savedRulesRef.current = savedRules;
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน — กฎแจ้งเตือนเป็นของสาขานี้
   // โหลดค่าที่บันทึกไว้หลัง mount — ถ้าผู้ใช้เริ่มแก้แล้ว อย่าทับ draft
   useEffect(() => {
     const p = loadNotifPrefs();
     setSavedPrefs(p);
-    const r = leadRulesOf(loadDealerLeadRulesMap(), CURRENT_DEALER.code);
+    const r = leadRulesOf(loadDealerLeadRulesMap(), currentDealer.code);
     setSavedRules(r);
     if (!editedRef.current) { setDraft(p); setRulesDraft(r); }
-  }, []);
+  }, [currentDealer.code]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedPrefs)
     || JSON.stringify(rulesDraft) !== JSON.stringify(savedRules);
@@ -702,11 +703,11 @@ function NotificationsTab() {
     localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้กระดิ่งบน Topbar อัปเดตทันที
     const nextRules = rulesDraftRef.current;
-    saveDealerLeadRules(CURRENT_DEALER.code, nextRules); // ยิง event → หน้าลีด/แดชบอร์ด/หน้า HQ อัปเดตทันที
+    saveDealerLeadRules(currentDealer.code, nextRules); // ยิง event → หน้าลีด/แดชบอร์ด/หน้า HQ อัปเดตทันที
     editedRef.current = false;
     setSavedPrefs(next);
     setSavedRules(nextRules);
-  }, []);
+  }, [currentDealer.code]);
   const reset = useCallback(() => {
     editedRef.current = false;
     setDraft(savedRef.current);
@@ -766,6 +767,7 @@ function NotificationsTab() {
 // ตอนนี้ตัวแทนแต่ละสาขาตั้งเอง เก็บแยกด้วยรหัสสาขา (key: dealer_lead_rules)
 // ⚠️ ค่านี้กระทบหน้า HQ ด้วย — HQ อ่านเกณฑ์ของแต่ละสาขามาคิดทีละใบ (useLeadRulesOf)
 function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRules, n: number) => void }) {
+  const currentDealer = useCurrentDealer(); // ชื่อ/รหัสสาขาที่ล็อกอิน (แสดงบนหัวการ์ด)
   const num = (value: number, on: (n: number) => void, unit: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <input type="number" min={1} className="form-input" style={{ textAlign: "right", fontWeight: 700 }}
@@ -790,7 +792,7 @@ function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRu
           <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: "var(--primary)", display: "flex" }}><Scale size={19} /></span>กฎการดูแลลูกค้าเป้าหมาย
           </div>
-          <div className="card-desc">เกณฑ์ของสาขา {CURRENT_DEALER.name} ({CURRENT_DEALER.code}) — สาขาอื่นตั้งของตัวเองแยกกัน</div>
+          <div className="card-desc">เกณฑ์ของสาขา {currentDealer.name} ({currentDealer.code}) — สาขาอื่นตั้งของตัวเองแยกกัน</div>
         </div>
       </div>
       <div className="card-body">
