@@ -39,7 +39,7 @@ import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRo
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
 import { leadCreatedDate } from "@pms/shared/lib/leadMetrics";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
@@ -579,7 +579,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 export default function LeadsPage() {
   const router = useRouter();
   const { session } = useRole(); // ผู้ดำเนินการ (บันทึกลง task ที่เช็ก)
-  const { followUpAlertDays } = useLeadRules(CURRENT_DEALER.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — scope ข้อมูล/กฎด้วย code นี้
+  const { followUpAlertDays } = useLeadRules(currentDealer.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // List state
@@ -593,8 +594,8 @@ export default function LeadsPage() {
   // ลีดที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
   // สมุดงานของสาขาตัวเอง "ทุกสถานะ" (รวมที่ปิดการขายสำเร็จแล้ว) — ใช้คิดอัตราปิดการขาย
   const myAllLeads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
-    [allLeads],
+    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    [allLeads, currentDealer.code],
   );
   const leadsData = useMemo(() => myAllLeads.filter(l => l.status !== "PAID"), [myAllLeads]);
 
@@ -1487,7 +1488,8 @@ export default function LeadsPage() {
             // สร้าง "รายงานการติดตาม" + "Report Checklist (Task)" อัตโนมัติทุกครั้งที่สร้าง Lead
             // createdAt ต้องมีตั้งแต่ตอนสร้าง — ไม่มีแล้วหน้าไหนก็โชว์ "สร้างเมื่อ —"
             // และ leadCreatedDate() จะไปสังเคราะห์วันจาก numId แทน (ได้วันย้อนหลังหลายเดือน)
-            const withIds = { ...l, numId: nid, id: `#L-${40321 + nid}`, createdAt: l.createdAt || thaiDateStr(APP_NOW) };
+            // ติด dealerCode ของสาขาที่ล็อกอิน → ลีดใหม่เป็นของสาขานั้น (multi-tenant) ไม่ตกเป็นของ CNX
+            const withIds = { ...l, dealerCode: currentDealer.code, numId: nid, id: `#L-${40321 + nid}`, createdAt: l.createdAt || thaiDateStr(APP_NOW) };
             addLead({
               ...withIds,
               report: l.report || buildLeadReport(withIds, thaiDateStr(APP_NOW)),

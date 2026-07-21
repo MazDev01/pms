@@ -25,7 +25,7 @@ import {
   loadHQTargets, leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
   quotationStatusLabel, quotationStatusColor, dealerLeaderboard, mainTemplateOf,
 } from "@pms/shared/lib/mock";
-import { CURRENT_DEALER } from "@pms/shared/lib/useNetworkData";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   parseValue, isLeadOpen, needsFollowUp, daysSinceContact,
   MOCK_TODAY, leadCreatedDate, leadLatestDate,
@@ -59,7 +59,8 @@ export default function DealerDashboard() {
   const { leads: allLeads, quotations, appointments } = useSales();
   const { timeRange, passes } = useFilters();
   const targets = loadHQTargets();
-  const { followUpAlertDays } = useLeadRules(CURRENT_DEALER.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
+  const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
+  const { followUpAlertDays } = useLeadRules(currentDealer.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
 
   // ── ขอบเขตข้อมูล ─────────────────────────────────────────────────────────
   // สมุดงานของตัวแทนที่ล็อกอินเท่านั้น — กติกาเดียวกับหน้าลูกค้าเป้าหมาย/ปฏิทิน
@@ -67,8 +68,8 @@ export default function DealerDashboard() {
   // เดิมอ่าน leads จาก context ตรง ๆ → แดชบอร์ดนับของทั้งเครือ 10 สาขา ตัวเลขเลยไม่ตรงหน้า /leads
   // ใบเสนอราคา/นัดหมายไม่มี dealerCode ในข้อมูล → เป็นของสาขาตัวเองอยู่แล้ว (ตรงกับหน้า /quotations)
   const myLeads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code),
-    [allLeads],
+    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    [allLeads, currentDealer.code],
   );
 
   // ── ช่วงเวลา (ตัวเลือกบนแถบบน) ────────────────────────────────────────────
@@ -94,9 +95,9 @@ export default function DealerDashboard() {
   // ── KPI ── เป้าหมาย = รายปีของตัวแทนรายนี้ (HQ ตั้งที่ /hq/dealers) · ยอดขาย = สะสมตั้งแต่ต้นปี (YTD)
   // ไม่เฉลี่ย/ไม่หารตามช่วงตัวกรอง — เทียบ YTD กับเป้าทั้งปีเสมอ
   const annualTarget = useMemo(() => {
-    const me = dealerLeaderboard.find(d => d.code === CURRENT_DEALER.code);
+    const me = dealerLeaderboard.find(d => d.code === currentDealer.code);
     return me?.revenueTarget ?? targets.annualTarget ?? 0;
-  }, [targets.annualTarget]);
+  }, [targets.annualTarget, currentDealer.code]);
   const monthTarget = annualTarget / 12; // เส้นเป้าหมายรายเดือนในกราฟยอดขาย
   // สะสมตั้งแต่ต้นปีถึงเดือนปัจจุบัน (ม.ค. → เดือนนี้ ของปีนี้เท่านั้น) — ไม่เกี่ยวกับปุ่มช่วงของกราฟ
   const ytdSales = useMemo(
@@ -295,7 +296,7 @@ export default function DealerDashboard() {
         <FilterBar dims={[]} />
       </TopbarActions>
       <p className="page-sub" style={{ marginBottom: 16 }}>
-        สมุดงานของ {CURRENT_DEALER.name} · {timeRange.subtitle}
+        สมุดงานของ {currentDealer.name} · {timeRange.subtitle}
       </p>
 
       {/* SECTION 1 — 4 KPI (ทั้งใบกดได้) */}
