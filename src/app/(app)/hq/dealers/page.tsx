@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AdminGate } from "@/components/layout/AdminGate";
 import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
@@ -132,7 +133,11 @@ function genResetPassword(code: string, nonce: number): string {
 
 // ── Main page ───────────────────────────────────────────────────
 
+// จัดการตัวแทน (แก้ไข/รีเซ็ตรหัส/ลบ) = ต้องมีสิทธิ์ dealers:manage — HQ_STAFF เข้าไม่ได้
 export default function HQDealersPage() {
+  return <AdminGate perm="dealers:manage"><HQDealersPageInner /></AdminGate>;
+}
+function HQDealersPageInner() {
   const { login } = useRole();
   const logAudit = useAuditLogger(); // บันทึกการกระทำของ admin
   const router = useRouter();

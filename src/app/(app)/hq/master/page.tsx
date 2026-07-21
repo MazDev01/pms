@@ -5,6 +5,7 @@
 // อ่านจากคีย์เดียวกันทันที · ขอบเขต Sales เท่านั้น (ไม่มี lead time/การส่งมอบ)
 import { useState } from "react";
 import { usePersistentState } from "@/lib/usePersistentState";
+import { AdminGate } from "@/components/layout/AdminGate";
 import { solutionProducts, MASTER_CATALOG_KEY, type SolutionProduct } from "@/lib/mock";
 import { useAuditLogger } from "@/lib/useAudit";
 import { fileToResizedDataURL } from "@/lib/imageResize";
@@ -137,7 +138,11 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
+// แก้ราคากลาง/แคตตาล็อกส่วนกลาง = ต้องมีสิทธิ์ catalog:edit — HQ_STAFF เข้าไม่ได้
 export default function HQMasterPage() {
+  return <AdminGate perm="catalog:edit"><HQMasterPageInner /></AdminGate>;
+}
+function HQMasterPageInner() {
   const [catalog, setCatalog] = usePersistentState<SolutionProduct[]>(MASTER_CATALOG_KEY, solutionProducts);
   const logAudit = useAuditLogger(); // บันทึกการแก้แม่แบบ/ราคากลาง
   const [q, setQ] = useState("");

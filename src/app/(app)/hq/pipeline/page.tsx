@@ -220,16 +220,20 @@ export default function SalesAnalyticsPage() {
   // และ seed วนสถานะเท่า ๆ กันจนได้ 50% แทบทุกแถว ไม่มีสาระให้เทียบ
   const leadVsQuote = useMemo(() => {
     if (view === "month") {
-      const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
-      const lM = Array(12).fill(0), qM = Array(12).fill(0);
-      leads.forEach(l => {
-        const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
-        lM[d.getMonth()]++;
-      });
-      quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (d) qM[d.getMonth()]++; });
-      return TH_ABBR.slice(a, b + 1).map((m, i) => ({
-        key: m, label: m, a: lM[a + i], b: qM[a + i],
-      }));
+      // bucket ด้วย key "ปี-เดือน" + เดินทีละเดือน start→end — เดิม getMonth()+slice(a,b+1) พังเมื่อช่วงข้ามปี (a>b → []) และยอดคนละปีทับกัน
+      const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+      const lM = new Map<string, number>(), qM = new Map<string, number>();
+      leads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (!d) return; lM.set(mk(d), (lM.get(mk(d)) ?? 0) + 1); });
+      quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (!d) return; qM.set(mk(d), (qM.get(mk(d)) ?? 0) + 1); });
+      const out: { key: string; label: string; a: number; b: number }[] = [];
+      const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), 1);
+      const end = new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), 1);
+      while (cur <= end) {
+        const k = `${cur.getFullYear()}-${cur.getMonth()}`;
+        out.push({ key: k, label: TH_ABBR[cur.getMonth()], a: lM.get(k) ?? 0, b: qM.get(k) ?? 0 });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return out;
     }
     const keyOf = (code: string) => view === "dealer" ? code
       : view === "region" ? (DEALER_META.get(code)?.region ?? "—")

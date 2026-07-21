@@ -1,31 +1,16 @@
 {
-  "name": "pms-benjamin",
-  "version": "0.1.0",
+  "name": "benjamin-pms",
   "private": true,
+  "packageManager": "pnpm@11.15.1",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "scenario": "playwright test",
-    "scenario:ui": "playwright test --ui",
-    "scenario:report": "playwright show-report"
-  },
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "framer-motion": "^12.42.2",
-    "lucide-react": "^0.469.0",
-    "next": "^15.3.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "dev": "turbo dev",
+    "dev:hq": "turbo dev --filter=hq",
+    "dev:dealer": "turbo dev --filter=dealer",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@tailwindcss/postcss": "^4.0.0",
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.0"
+    "turbo": "^2.3.0"
   }
 }

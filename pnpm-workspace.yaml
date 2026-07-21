@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# ตัดสินใจชัด: ไม่รัน build script ของ sharp (native) — Next build ทำงานได้โดยไม่ต้องมี
+allowBuilds:
+  sharp: false

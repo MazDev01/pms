@@ -180,15 +180,21 @@ export default function HQDashboard() {
 
   // ยอดขายรายเดือนในช่วง (ล้านบาท) ป้อนกราฟแนวโน้ม — สรุปจาก won ในช่วงที่เลือก
   const trendMonthly = useMemo(() => {
-    const byMonth = new Map<number, number>();
+    // bucket ด้วย key "ปี-เดือน" — เดิมใช้ getMonth() ล้วน + วน m=start..end ทำให้ช่วง "ข้ามปี" พัง
+    // (เช่น พ.ย.2568–ก.พ.2569 → for(10..1) ไม่รัน = กราฟยุบเหลือจุดเดียว · และยอดคนละปีเดือนเดียวกันทับกัน)
+    const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+    const byKey = new Map<string, number>();
     winQuotes.forEach(q => {
       if (q.status !== "won") return;
       const d = parseThaiDate(q.createdAt); if (!d) return;
-      byMonth.set(d.getMonth(), (byMonth.get(d.getMonth()) ?? 0) + q.valueNum);
+      byKey.set(mk(d), (byKey.get(mk(d)) ?? 0) + q.valueNum);
     });
     const pts: { month: string; value: number }[] = [];
-    for (let m = timeRange.start.getMonth(); m <= timeRange.end.getMonth(); m++) {
-      pts.push({ month: TH_ABBR[m], value: Math.round((byMonth.get(m) ?? 0) / 1e6 * 10) / 10 });
+    const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), 1);
+    const end = new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), 1);
+    while (cur <= end) {
+      pts.push({ month: TH_ABBR[cur.getMonth()], value: Math.round((byKey.get(`${cur.getFullYear()}-${cur.getMonth()}`) ?? 0) / 1e6 * 10) / 10 });
+      cur.setMonth(cur.getMonth() + 1);
     }
     return pts.length ? pts : [{ month: TH_ABBR[timeRange.end.getMonth()], value: 0 }];
   }, [winQuotes, timeRange.start, timeRange.end]);

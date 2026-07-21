@@ -21,6 +21,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { usePersistentState } from "@/lib/usePersistentState";
+import { AdminGate } from "@/components/layout/AdminGate";
 import {
   HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
@@ -553,7 +554,11 @@ const TABS: { key: TabKey; label: string; icon: ReactNode; render: () => ReactNo
   { key: "notifications", label: "การแจ้งเตือน", icon: <Bell size={15} />, render: () => <NotificationsTab /> },
 ];
 
+// ตั้งค่าส่วนกลาง (ผู้ใช้/นโยบาย/เป้า/ตัวแทน) = ต้องมีสิทธิ์ hq:all_data — HQ_STAFF เข้าไม่ได้
 export default function HQSettingsPage() {
+  return <AdminGate perm="hq:all_data"><HQSettingsPageInner /></AdminGate>;
+}
+function HQSettingsPageInner() {
   const [tab, setTab] = useState<TabKey>("company");
   const [api, setApi] = useState<SectionApi | null>(null);
   const [toast, setToastMsg] = useState<string | null>(null);
