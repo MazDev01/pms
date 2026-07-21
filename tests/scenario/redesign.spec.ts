@@ -60,7 +60,8 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
   await page.waitForTimeout(800);
 
-  await page.goto("/quotations", { waitUntil: "domcontentloaded" });
+  // ใบสร้างบนแอปตัวแทน (:3001) → localStorage อยู่ origin นั้น ต้องเปิด /quotations ของ :3001 (ไม่ใช่ baseURL :3002 = HQ)
+  await page.goto("http://localhost:3001/quotations", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
   // ใบที่เพิ่งสร้าง = ร่าง → กรองสถานะร่างเพื่อเจาะให้ตรงใบใหม่
   const joined = (await page.locator("tbody tr").first().locator("td").allInnerTexts()).join(" | ");
@@ -96,7 +97,8 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
   await page.waitForTimeout(800);
 
-  await page.goto("/quotations", { waitUntil: "domcontentloaded" });
+  // ใบสร้างบนแอปตัวแทน (:3001) → localStorage อยู่ origin นั้น ต้องเปิด /quotations ของ :3001 (ไม่ใช่ baseURL :3002 = HQ)
+  await page.goto("http://localhost:3001/quotations", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
   // ตารางเรียงใบใหม่สุดไว้บน → แถวแรกต้องลงวันที่ของ "วันนี้" ระบบ
   const joined = (await page.locator("tbody tr").first().locator("td").allInnerTexts()).join(" | ");

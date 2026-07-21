@@ -24,7 +24,7 @@ test("[ux·hq] มีกราฟครบตามที่ข้อมูล�
   for (const title of [
     "ลีด → ใบเสนอราคา รายตัวแทน",
     "มูลค่าใบเสนอราคา เทียบ ยอดขายจริง",
-    "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย",
+    // "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย" ถูกย้ายไป /hq/pipeline (ดูเทสต์ด้านล่าง) — ไม่อยู่หน้านี้แล้ว
     "ประเภทอาคาร",
     "เทียบรายภูมิภาค",
     "เหตุผลที่เสียโอกาสการขาย",
@@ -36,25 +36,16 @@ test("[ux·hq] มีกราฟครบตามที่ข้อมูล�
   }
 });
 
-// กราฟ "ออกใบเยอะ แต่ปิดได้น้อย" — กันอ่านผิดว่า "ใบที่ยังรอลูกค้าตอบ" = "ปิดไม่ได้"
-// ตัวเลขต้องตรงกับคอลัมน์ "อัตราปิดการขาย" ในตารางอันดับ (นิยามเดียวกัน: ตอบรับ ÷ ใบที่ส่งแล้ว)
-test("[ux·hq] กราฟออกใบเยอะแต่ปิดน้อย แยก 'ยังรอตอบ' ออกจาก 'ปิดไม่ได้'", async ({ page }) => {
-  await open(page, "hq", "/hq/quotations");
-  const card = page.locator(".card").filter({ hasText: "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย" }).first();
+// วิเคราะห์การปิดการขายรายตัวแทน (เดิมเป็นการ์ด "ออกใบเยอะ แต่ปิดได้น้อย" บน /hq/quotations)
+// ถูกย้ายไป /hq/pipeline เป็น DealerQuotationPerformance → ตาราง"ตัวเลขการปิดการขาย รายตัวแทน"
+// (ปิดได้ / ปิดไม่ได้ / อัตราปิด รายตัวแทน) — ตรวจว่ากราฟยังอยู่และมีคอลัมน์ครบ
+test("[ux·hq] วิเคราะห์การปิดการขายรายตัวแทน (ย้ายไป /hq/pipeline)", async ({ page }) => {
+  await open(page, "hq", "/hq/pipeline");
+  const card = page.locator(".card").filter({ hasText: "ตัวเลขการปิดการขาย รายตัวแทน" }).first();
   await expect(card).toBeVisible();
-  // ต้องมีคำอธิบายสีครบ 4 กลุ่ม — "ยังรอลูกค้าตอบ" ต้องเป็นกลุ่มแยก ไม่ถูกเหมารวมเป็นล้มเหลว
-  for (const l of ["ปิดได้", "ปิดไม่ได้", "หมดอายุ", "ยังรอลูกค้าตอบ"]) {
-    await expect(card.getByText(l, { exact: true }), `ต้องแยกกลุ่ม "${l}"`).toBeVisible();
+  for (const l of ["ปิดได้", "ปิดไม่ได้", "อัตราปิด"]) {
+    await expect(card.getByText(l, { exact: true }).first(), `ต้องมีคอลัมน์ "${l}"`).toBeVisible();
   }
-  // แต่ละแถวบอกตัวหารชัด (ปิดได้ X / Y ใบ) — ตรวจสอบย้อนได้ ไม่ใช่ % ลอย ๆ
-  await expect(card.getByText(/ปิดได้ \d+ \/ \d+ ใบ/).first()).toBeVisible();
-
-  // ตัวแทนแถวแรก (ออกใบเยอะสุด) ต้องมี % ตรงกับตารางอันดับของหน้าเดียวกัน
-  const first = (await card.getByText(/ปิดได้ \d+ \/ \d+ ใบ\d+%/).first().innerText()).replace(/\s/g, "");
-  const m = /ปิดได้(\d+)\/(\d+)ใบ(\d+)%/.exec(first);
-  expect(m, `อ่านแถวแรกไม่ได้: ${first}`).not.toBeNull();
-  const [, won, sent, pct] = m!.map(Number);
-  expect(Math.round((won / sent) * 100), "% ต้องคำนวณจากตัวเลขที่แสดงจริง").toBe(pct);
 });
 
 // ข้อมูลไม่รองรับ / บอสสั่งลบ — ห้ามกลับมา (ถ้าจะเอากลับต้องมีข้อมูลจริงรองรับก่อน)
@@ -99,7 +90,8 @@ test("[ux·hq] ไม่มีปุ่มสร้าง/แก้ไข/ลบ
 // ชื่อ "ดูรายละเอียดตัวแทน" ซึ่ง match คำว่า "ดู" ได้เหมือนกัน แต่พาไปหน้าตัวแทน
 test("[ux·hq] ลิ้นชักดูใบเสนอราคา อ่านอย่างเดียว", async ({ page }) => {
   await open(page, "hq", "/hq/quotations");
-  await page.getByRole("button", { name: "ดู", exact: true }).first().click();
+  // ปุ่มดูในตารางใบเสนอราคา = ปุ่มไอคอนล้วน aria-label="ดูรายละเอียด" (ตารางอันดับใช้ "ดูรายละเอียดตัวแทน" คนละตัว)
+  await page.getByRole("button", { name: "ดูรายละเอียด", exact: true }).first().click();
   const drawer = page.getByRole("dialog", { name: "รายละเอียดใบเสนอราคา" });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText("ข้อมูลใบเสนอราคา")).toBeVisible();
