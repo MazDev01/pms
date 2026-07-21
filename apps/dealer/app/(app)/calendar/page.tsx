@@ -460,7 +460,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const { leads: allLeads } = useSales();
   // เลือกได้เฉพาะลีดของตัวแทนที่ล็อกอิน — ไม่ให้เห็นลีดของตัวแทนรายอื่นทั้งเครือ
   const leads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
     [allLeads, currentDealer.code],
   );
   const [leadId, setLeadId] = useState<number | undefined>(initial?.leadId);

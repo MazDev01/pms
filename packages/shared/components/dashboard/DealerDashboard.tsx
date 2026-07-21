@@ -68,7 +68,7 @@ export default function DealerDashboard() {
   // เดิมอ่าน leads จาก context ตรง ๆ → แดชบอร์ดนับของทั้งเครือ 10 สาขา ตัวเลขเลยไม่ตรงหน้า /leads
   // ใบเสนอราคา/นัดหมายไม่มี dealerCode ในข้อมูล → เป็นของสาขาตัวเองอยู่แล้ว (ตรงกับหน้า /quotations)
   const myLeads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
     [allLeads, currentDealer.code],
   );
 

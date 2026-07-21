@@ -709,6 +709,7 @@ export type CustomerRow = {
   totalValue:number; contacts?:CustomerContact[];
   logo?:string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลด/แก้ไขในแท็บ "ข้อมูล"
   imported?:boolean; // ลูกค้าเดิมที่นำเข้า/คีย์มือ (ไม่ได้ผ่าน Lead→Won) — สำหรับข้อมูลลูกค้าก่อนมีระบบ
+  dealerCode?:string; // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (สมุดงานเดิม)
 };
 
 export const initialCustomers: CustomerRow[] = [
@@ -825,6 +826,7 @@ export type QuotationMock = {
   // paymentTerms / deliveryTime ถูกลบตามที่บอสสั่ง — มีที่เก็บแต่ไม่มีช่องกรอก ขึ้น "—" ทุกใบ
   // (HQCustomer.deliveryTime เป็นคนละตัว ฝั่ง HQ ยังใช้คิดวันส่งมอบอยู่ ไม่แตะ)
   issuer?: IssuerProfile; // สแนปช็อตโปรไฟล์บริษัทผู้ออก ณ ตอนสร้าง — ใบเก่าคงชื่อเดิมแม้เปลี่ยนโปรไฟล์
+  dealerCode?: string; // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (สมุดงานเดิม)
 };
 
 // สถานะใบเสนอราคาตามสเปก: Draft / Sent / Viewed / Accepted / Rejected / Expired

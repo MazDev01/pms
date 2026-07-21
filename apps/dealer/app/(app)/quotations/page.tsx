@@ -293,15 +293,17 @@ function QuotationsPageInner(){
   const router = useRouter();
   const { timeRange, passes } = useFilters();
   const {
-    quotations: data, customers, leads: allLeads,
+    quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
     addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
     updateCustomer, updateLead,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
-  // SalesContext ถือลีดทั้งเครือ — หน้านี้เป็นของตัวแทน ต้องมองเฉพาะลีดตัวเอง
-  // ไม่งั้น lookup ผู้รับผิดชอบด้วยชื่อบริษัท (ownerOf/saveQ) ไปเจอ+เขียนทับลีดสาขาอื่นที่ชื่อซ้ำ
+  // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน — RYG ไม่เห็นใบ/ลูกค้า/ลีดของ CNX (undefined = ของ CNX)
+  // (ลีด lookup ผู้รับผิดชอบด้วยชื่อบริษัท — ถ้าไม่กรอง ownerOf/saveQ ไปเจอ+เขียนทับลีดสาขาอื่นชื่อซ้ำ)
+  const data = useMemo(() => allQuotationsRaw.filter(q => (q.dealerCode ?? "CNX") === currentDealer.code), [allQuotationsRaw, currentDealer.code]);
+  const customers = useMemo(() => allCustomersRaw.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomersRaw, currentDealer.code]);
   const leads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
     [allLeads, currentDealer.code],
   );
   const [query, setQuery]           = useState("");

@@ -594,7 +594,7 @@ export default function LeadsPage() {
   // ลีดที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
   // สมุดงานของสาขาตัวเอง "ทุกสถานะ" (รวมที่ปิดการขายสำเร็จแล้ว) — ใช้คิดอัตราปิดการขาย
   const myAllLeads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? currentDealer.code) === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
     [allLeads, currentDealer.code],
   );
   const leadsData = useMemo(() => myAllLeads.filter(l => l.status !== "PAID"), [myAllLeads]);

@@ -215,6 +215,7 @@ export function SalesProvider({
       color: CUSTOMER_PALETTE[newId % CUSTOMER_PALETTE.length],
       totalValue: parseBaht(lead.value),
       logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลีดมาด้วย
+      dealerCode: lead.dealerCode ?? "CNX", // ลูกค้าเป็นของสาขาเดียวกับลีดที่ปิดการขาย (multi-tenant)
     };
     setCustomers(prev => [...prev, newCustomer]);
     if (removeLead) {
@@ -391,8 +392,9 @@ export function SalesProvider({
 
   // ── Customer mutations ───────────────────────────────────────────
   const addCustomer = useCallback((customer: CustomerRow) => {
-    setCustomers(prev => [...prev, customer]);
-  }, []);
+    // ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ลูกค้าใหม่เป็นของสาขานั้น
+    setCustomers(prev => [...prev, { ...customer, dealerCode: customer.dealerCode ?? myDealerCode }]);
+  }, [myDealerCode]);
 
   const updateCustomer = useCallback((customer: CustomerRow) => {
     setCustomers(prev => prev.map(c => c.id !== customer.id ? c : customer));
@@ -436,12 +438,14 @@ export function SalesProvider({
   // ── Quotation mutations ──────────────────────────────────────────
   const addQuotation = useCallback((quotation: QuotationMock) => {
     // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง — ใบใหม่ใช้ชื่อปัจจุบัน, ใบเก่าคงชื่อเดิมเมื่อเปลี่ยนโปรไฟล์ทีหลัง
-    const stamped = quotation.issuer ? quotation : { ...quotation, issuer: loadIssuer() };
+    // + ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ใบใหม่เป็นของสาขานั้น
+    const base = quotation.issuer ? quotation : { ...quotation, issuer: loadIssuer() };
+    const stamped = { ...base, dealerCode: base.dealerCode ?? myDealerCode };
     setQuotations(prev => [stamped, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
     completeLeadQuoteTasks(quotation, quotation.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
     syncAddQuotationFile(stamped); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลีด/ลูกค้า
-  }, [completeLeadQuoteTasks]);
+  }, [completeLeadQuoteTasks, myDealerCode]);
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));

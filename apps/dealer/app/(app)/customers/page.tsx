@@ -373,12 +373,17 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
 export default function CustomersPage(){
   const router = useRouter();
   const {
-    customers: data, quotations, deals, leads,
+    customers: allCustomers, quotations: allQuotations, deals, leads: allLeadsRaw,
     appointments,
     addLead, updateLead, addCustomer: ctxAddCustomer,
     updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
+  // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
+  // undefined = ของ CNX (สมุดงานเดิม) · ที่เหลือกรองด้วย dealerCode ตรง ๆ
+  const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomers, currentDealer.code]);
+  const quotations = useMemo(() => allQuotations.filter(q => (q.dealerCode ?? "CNX") === currentDealer.code), [allQuotations, currentDealer.code]);
+  const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code), [allLeadsRaw, currentDealer.code]);
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
   const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
