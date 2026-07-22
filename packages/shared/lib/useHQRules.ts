@@ -12,16 +12,18 @@
 // ที่นี่จึงอ่านอย่างเดียว + ฟัง event ตอนกดบันทึก และ storage ตอนเปลี่ยนจากแท็บอื่น
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  loadDealerLeadRulesMap, leadRulesOf, DEALER_LEAD_RULES_EVENT,
+  leadRulesOf, DEALER_LEAD_RULES_EVENT,
   type LeadRules, type DealerLeadRulesMap,
 } from "@pms/shared/lib/mock";
+import { settings as settingsRepo } from "@pms/shared/lib/data";
 
 /** แผนที่กฎของทุกสาขา — ใช้ในหน้า HQ ที่รวมลีดหลายสาขาไว้ด้วยกัน */
 export function useDealerLeadRulesMap(): DealerLeadRulesMap {
   // เริ่มที่ว่างเสมอ → SSR กับ client render แรกตรงกัน (กัน hydration mismatch)
   const [map, setMap] = useState<DealerLeadRulesMap>({});
   useEffect(() => {
-    const read = () => setMap(loadDealerLeadRulesMap());
+    // อ่านผ่าน repository (local: localStorage · supabase: DB)
+    const read = () => { settingsRepo.getLeadRulesMap().then(setMap).catch(() => {}); };
     read();
     window.addEventListener(DEALER_LEAD_RULES_EVENT, read);
     window.addEventListener("storage", read);

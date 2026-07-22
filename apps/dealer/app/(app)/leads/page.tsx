@@ -40,6 +40,7 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
 import { leadCreatedDate } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { persons as personsRepo, files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
@@ -683,22 +684,21 @@ export default function LeadsPage() {
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   const [previewFile, setPreviewFile] = useState<DealerFile | null>(null);
   useEffect(() => {
-    setDealerFiles(loadDealerFiles());
-    const sync = () => setDealerFiles(loadDealerFiles());
+    // ไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB)
+    const sync = () => { filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles).catch(() => {}); };
+    sync();
     window.addEventListener(DEALER_FILES_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => { window.removeEventListener(DEALER_FILES_EVENT, sync); window.removeEventListener("storage", sync); };
-  }, []);
+  }, [currentDealer.code]);
 
-  // Persons registry (loaded from localStorage, fallback to mock)
+  // Persons registry — พนักงานขายของสาขานี้ ผ่าน repository (local: localStorage · supabase: DB)
   const [personsList, setPersonsList] = useState<string[]>(DEFAULT_PERSONS);
   useEffect(() => {
-    const s = localStorage.getItem(RP_STORAGE_KEY);
-    if (s) try {
-      const arr: ResponsiblePerson[] = JSON.parse(s);
-      setPersonsList(arr.filter(p => p.active).map(p => p.name));
-    } catch {}
-  }, []);
+    personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
+      .then(arr => { const names = arr.filter(p => p.active).map(p => p.name); if (names.length) setPersonsList(names); })
+      .catch(() => {});
+  }, [currentDealer.code]);
 
   // Inline status dropdown (table view)
   const [openStatusId, setOpenStatusId] = useState<string|null>(null);
@@ -875,12 +875,15 @@ export default function LeadsPage() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !current) return;
     const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
-    addDealerFile({
-      name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
-      project: current.company || current.name, uploadedBy: current.assigned || "คุณ",
-      uploadedAt: APP_NOW_ISO, source: "lead", recordId: current.numId,
-    });
-    setDealerFiles(loadDealerFiles());
+    // อัปโหลด bytes เข้า Storage ก่อน (local คืน null = เก็บแค่ metadata) แล้วบันทึก metadata
+    void fileStorage.upload(currentDealer.code, f).catch(() => null)
+      .then(storagePath => filesRepo.add({
+        name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
+        project: current.company || current.name, uploadedBy: current.assigned || "คุณ",
+        uploadedAt: APP_NOW_ISO, source: "lead", recordId: current.numId, dealerCode: currentDealer.code,
+        ...(storagePath ? { storagePath } : {}),
+      }))
+      .then(() => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles)).catch(() => {});
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 

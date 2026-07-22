@@ -23,7 +23,8 @@ import {
   loadDealerFiles, DEALER_FILES_EVENT, fmtISOToThai,
   type DealerRow, type HQTargets, type DealerFile,
 } from "@pms/shared/lib/mock";
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo, settings as settingsRepo, files as filesRepo } from "@pms/shared/lib/data";
 import { useFilters } from "@pms/shared/context/FilterContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -112,8 +113,8 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
 export default function SalesAnalyticsPage() {
   const router = useRouter();
   const { timeRange, inRange } = useFilters();
-  const [allDealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
-  const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), dealerLeaderboard);
+  const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
 
   const netQuotes = useNetworkQuotations();
   const netLeads = useNetworkLeads();
@@ -123,7 +124,7 @@ export default function SalesAnalyticsPage() {
   // ไฟล์แนบ — ใช้เฉพาะใน Drawer (ผูกกับลีดด้วย recordId = numId)
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   useEffect(() => {
-    const read = () => setDealerFiles(loadDealerFiles());
+    const read = () => { filesRepo.list({ isHQ: true }).then(setDealerFiles).catch(() => {}); }; // HQ เห็นไฟล์ทั้งเครือ
     read();
     window.addEventListener(DEALER_FILES_EVENT, read);
     return () => window.removeEventListener(DEALER_FILES_EVENT, read);

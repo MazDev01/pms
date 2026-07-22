@@ -63,6 +63,7 @@ export type ResponsiblePerson = {
   email: string;
   active: boolean;
   avatar?: string; // รูปโปรไฟล์ (data URL) — ไม่บังคับ, ถ้าไม่มีใช้อักษรย่อ
+  dealerCode?: string; // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (พนักงานขายเป็นของแต่ละสาขา)
 };
 
 // โหลดรายชื่อผู้รับผิดชอบจาก localStorage (ที่ตั้งค่าในหน้า Settings) — fallback = mock
@@ -372,6 +373,8 @@ export type DealerFile = {
   source: DealerFileSource; // มาจากไหน: ลูกค้าเป้าหมาย / ลูกค้า / อัปโหลดตรง
   recordId?: number;        // ผูกกับ customer.id หรือ lead.numId
   customerId?: number;      // คงไว้เพื่อความเข้ากันได้ย้อนหลัง
+  dealerCode?: string;      // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (คลังไฟล์เดิม)
+  storagePath?: string;     // พาธไฟล์จริงใน Supabase Storage (dealer-files/{dealerCode}/...) — โหมด local ไม่มี
 };
 export const DEALER_FILES_KEY = "dealer_files_v1";
 export const DEALER_FILES_EVENT = "bpms-files-updated";
@@ -438,7 +441,7 @@ export function removeDealerFile(id: number) {
 
 // ─── Auto-link: ใบเสนอราคา → ไฟล์ (หมวด "ใบเสนอราคา") ผูกกับลีด/ลูกค้าอัตโนมัติ ──────
 // สร้างใบ → มีไฟล์โผล่ในแท็บ "ไฟล์" ของลีด/ลูกค้า + หน้าไฟล์กลางทันที · ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง
-const AUTO_FILE_BY = "ระบบ · จากใบเสนอราคา";
+export const AUTO_FILE_BY = "ระบบ · จากใบเสนอราคา";
 export function quotationToFile(q: QuotationMock): Omit<DealerFile, "id"> {
   const isLead = !!q.dealId;
   return {
@@ -1008,6 +1011,7 @@ export type AppointmentMock = {
   project: string; buildingType: string; area: number; province: string;
   date: string; time: string; type: ApptType; assigned: string;
   status: ApptStatus; note: string;
+  dealerCode?: string; // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (สมุดงานเดิม)
 };
 
 export const appointments: AppointmentMock[] = [

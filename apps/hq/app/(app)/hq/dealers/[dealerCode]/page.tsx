@@ -8,8 +8,9 @@ import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@pms/shared/lib/mock";
-import { dealerLeaderboard, HQ_DEALERS_KEY } from "@pms/shared/lib/mock";
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
+import { dealerLeaderboard } from "@pms/shared/lib/mock";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useNetworkDealerDetail, useNetworkCustomers } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
@@ -94,7 +95,7 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
 
 function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDetail }) {
   // เกณฑ์ Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
-  const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;
   const barColor  = targetPct >= 80 ? "#059669" : targetPct >= 50 ? "#003366" : "#dc2626";
   const isAtRisk  = targetPct < 50;
@@ -368,7 +369,7 @@ type TabKey = typeof TABS[number]["key"];
 export default function DealerDrillDownPage({ params }: { params: Promise<{ dealerCode: string }> }) {
   const { dealerCode } = use(params);
   // อ่านจากชุดที่ persist (HQ_DEALERS_KEY) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
-  const [dealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
+  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), dealerLeaderboard);
   const [tab, setTab] = useState<TabKey>("overview");
   const code = dealerCode.toUpperCase();
   const dealer = dealers.find(d => d.code === code) ?? dealerLeaderboard.find(d => d.code === code);

@@ -99,10 +99,12 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
 
   // ใบสร้างบนแอปตัวแทน (:3001) → localStorage อยู่ origin นั้น ต้องเปิด /quotations ของ :3001 (ไม่ใช่ baseURL :3002 = HQ)
   await page.goto("http://localhost:3001/quotations", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(800);
+  // การสร้างใบเป็น async (ขอเลขที่ผ่าน repo + บันทึก) → รอแบบ poll ไม่ใช่ timeout ตายตัว (กันเทสต์วูบ)
   // ตารางเรียงใบใหม่สุดไว้บน → แถวแรกต้องลงวันที่ของ "วันนี้" ระบบ
-  const joined = (await page.locator("tbody tr").first().locator("td").allInnerTexts()).join(" | ");
-  expect(joined, "ใบที่สร้างใหม่ต้องลงวันที่ 30 มิ.ย. (วันนี้ของระบบ)").toContain("30 มิ.ย.");
+  await expect.poll(
+    async () => (await page.locator("tbody tr").first().locator("td").allInnerTexts()).join(" | "),
+    { message: "ใบที่สร้างใหม่ต้องลงวันที่ 30 มิ.ย. (วันนี้ของระบบ)", timeout: 10_000 },
+  ).toContain("30 มิ.ย.");
 });
 
 // Smart filter: ลีดขาดติดต่อ >7/14/30 วัน — จำนวนอยู่บนการ์ด KPI "เกิน 7 วัน" (ไม่ซ้ำ)

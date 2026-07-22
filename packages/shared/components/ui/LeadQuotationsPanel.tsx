@@ -17,7 +17,7 @@ const MOCK_TODAY = "2026-06-30";
 type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 
 export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRow; customer?: CustomerRow; onToast?: (m: string) => void }) {
-  const { quotations, addQuotation, updateQuotation, deleteQuotation } = useSales();
+  const { quotations, addQuotation, updateQuotation, deleteQuotation, newQuoteId } = useSales();
   const catalog = useMasterCatalog(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
@@ -82,10 +82,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
       : (q.dealId === subj.dealId || (q.dealId == null && ((subj.customerId && q.customerId === subj.customerId) || q.customer === subj.company))))
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  function nextQId() {
-    const nums = quotations.map(q => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
-    return `Q-2026-${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`;
-  }
+  // เลขที่ใบถัดไป — ผ่าน context (supabase: RPC next_quote_no atomic กันเลขชนข้ามสาขา · local: max+1)
+  const nextQId = () => newQuoteId();
   // มูลค่างาน (ก่อน VAT) = ผลรวมรายการสินค้า — ระบบไม่มีส่วนลดแล้ว
   function netTotal(f: FormState) { return parseBaht(f.price); }
 
@@ -99,7 +97,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     setMode("edit");
   }
 
-  function save() {
+  async function save() {
     const net = netTotal(form);
     if (mode === "edit" && editing) {
       updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
@@ -108,8 +106,9 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
       onToast?.("บันทึกใบเสนอราคาแล้ว");
     } else {
       // สร้างใหม่ — ออกใบในนาม subject (ลีด/ลูกค้า) · ผูก customerId/dealId ตามบริบท
+      const id = await nextQId();
       addQuotation({
-        id: nextQId(), customer: subj.company, project: form.project || defProject(),
+        id, customer: subj.company, project: form.project || defProject(),
         total: "฿" + net.toLocaleString("th-TH"), totalValue: net, materialCost: parseBaht(form.price),
         // พื้นที่ = จำนวนของรายการ BOQ ที่คิดเป็น ตร.ม. (เดิม hardcode 0 → พื้นที่หายไปจากใบ)
         province: subj.province, buildingType: form.buildingType,
@@ -123,8 +122,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     setMode("list");
   }
 
-  function duplicate(q: QuotationMock) {
-    addQuotation({ ...q, id: nextQId(), status: "draft", revision: "V1", date: MOCK_TODAY });
+  async function duplicate(q: QuotationMock) {
+    addQuotation({ ...q, id: await nextQId(), status: "draft", revision: "V1", date: MOCK_TODAY });
     onToast?.("ทำสำเนาใบเสนอราคาแล้ว");
   }
 

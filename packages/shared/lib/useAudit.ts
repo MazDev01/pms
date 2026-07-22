@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
+import { audit as auditRepo } from "@pms/shared/lib/data";
 
 export type AuditEntry = { id: number; user: string; role: string; action: string; target: string; at: string };
 // v2: SEED เดิม (v1) มีรายการของฟีเจอร์ที่ถูกลบแล้ว ("ตั้งเพดานส่วนลด") + คำเก่า ("ระงับตัวแทน")
@@ -49,23 +50,26 @@ export function appendAudit(e: { user: string; role: string; action: string; tar
   try { window.dispatchEvent(new Event(EVENT)); } catch {}
 }
 
-// hook สำหรับ "บันทึก" — ใช้ชื่อ/บทบาทของผู้ใช้ปัจจุบันจาก session อัตโนมัติ
+// hook สำหรับ "บันทึก" — ใช้ชื่อ/บทบาทของผู้ใช้ปัจจุบันจาก session อัตโนมัติ · เขียนผ่าน repository
+// (local: appendAudit เดิม · supabase: insert DB) แล้วยิง event ให้หน้า/กระดิ่งอัปเดตทันที
 export function useAuditLogger() {
   const { session, role } = useRole();
   return useCallback((action: string, target: string) => {
-    appendAudit({ user: session.name, role, action, target });
+    auditRepo.append({ user: session.name, role, action, target })
+      .then(() => { try { window.dispatchEvent(new Event(EVENT)); } catch {} })
+      .catch((e) => console.error("[audit.append]", e));
   }, [session.name, role]);
 }
 
-// hook สำหรับ "ดู" — โหลด + ฟังอัปเดตแบบเรียลไทม์
+// hook สำหรับ "ดู" — โหลดผ่าน repository + ฟังอัปเดตแบบเรียลไทม์
 export function useAuditEntries(): AuditEntry[] {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   useEffect(() => {
-    setEntries(loadAudit());
-    const sync = () => setEntries(loadAudit());
-    window.addEventListener(EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => { window.removeEventListener(EVENT, sync); window.removeEventListener("storage", sync); };
+    const read = () => { auditRepo.list().then(setEntries).catch((e) => console.error("[audit.list]", e)); };
+    read();
+    window.addEventListener(EVENT, read);
+    window.addEventListener("storage", read);
+    return () => { window.removeEventListener(EVENT, read); window.removeEventListener("storage", read); };
   }, []);
   return entries;
 }

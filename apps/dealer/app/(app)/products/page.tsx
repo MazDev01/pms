@@ -6,7 +6,8 @@ import {
   Package, FileText, Download, Search, Lock, X, History, CalendarClock,
 } from "lucide-react";
 import { useEffect } from "react";
-import { solutionProducts, loadMasterCatalog, type SolutionProduct } from "@pms/shared/lib/mock";
+import { type SolutionProduct } from "@pms/shared/lib/mock";
+import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { TemplateHero } from "@pms/shared/components/ui/TemplateHero";
 
 // ── Design tokens ─────────────────────────────────────────────
@@ -24,9 +25,8 @@ export default function DealerProductsPage() {
   const [viewP, setViewP] = useState<Product | null>(null);
   const [historyP, setHistoryP] = useState<Product | null>(null);
   const [subView, setSubView] = useState<{ parent: Product; sub: string } | null>(null); // ดูรายละเอียดแม่แบบย่อย
-  // แคตตาล็อกเดียวทั้งเครือ — อ่านชุดที่ HQ แก้ไข (MASTER_CATALOG_KEY) · fallback = mock
-  const [PRODUCTS, setPRODUCTS] = useState<Product[]>(solutionProducts);
-  useEffect(() => { setPRODUCTS(loadMasterCatalog()); }, []);
+  // แคตตาล็อกเดียวทั้งเครือ — อ่านผ่าน repository (local: localStorage · supabase: DB)
+  const PRODUCTS = useMasterCatalog();
 
   // ดาวน์โหลดเอกสารแม่แบบ (เปิดหน้าพิมพ์ · ไทยล้วน)
   function downloadSpec(p: Product) {

@@ -6,10 +6,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  loadHQNotifRules, loadDealerLeadRulesMap, leadRulesOf, loadQuoteValidityDays, loadHQDealers,
+  leadRulesOf,
   HQ_NOTIF_UPDATED_EVENT, DEALER_LEAD_RULES_EVENT,
   type HQNotifRules, type DealerLeadRulesMap, type DealerRow,
 } from "@pms/shared/lib/mock";
+import { settings as settingsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
 import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { buildHQAlerts, type HQAlert } from "@pms/shared/lib/hqAlerts";
 
@@ -20,12 +21,17 @@ type HQRules = { rules: HQNotifRules; leadRulesMap: DealerLeadRulesMap; validity
 export function useHQRules(): HQRules | null {
   const [hqRules, setHqRules] = useState<HQRules | null>(null);
   useEffect(() => {
-    const read = () => setHqRules({
-      rules: loadHQNotifRules(),
-      leadRulesMap: loadDealerLeadRulesMap(),
-      validityDays: loadQuoteValidityDays(),
-      dealers: loadHQDealers(),
-    });
+    // อ่านผ่าน repository (local: localStorage · supabase: DB) — รวมทั้ง 4 แหล่งเป็นชุดเดียว
+    const read = () => {
+      Promise.all([
+        settingsRepo.getNotifRules(),
+        settingsRepo.getLeadRulesMap(),
+        settingsRepo.getQuoteValidityDays(),
+        dealersRepo.list(),
+      ]).then(([rules, leadRulesMap, validityDays, dealers]) =>
+        setHqRules({ rules, leadRulesMap, validityDays, dealers }),
+      ).catch(() => {});
+    };
     read();
     window.addEventListener(HQ_NOTIF_UPDATED_EVENT, read);
     window.addEventListener(DEALER_LEAD_RULES_EVENT, read);

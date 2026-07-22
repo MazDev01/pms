@@ -18,7 +18,8 @@ import {
   dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy, hqAuditCategory,
   type DealerRow, type HQTargets,
 } from "@pms/shared/lib/mock";
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar, SelectFilter } from "@pms/shared/components/filters/FilterBar";
 import { SalesTrendChart } from "@pms/shared/components/ui/SalesTrendChart";
@@ -70,9 +71,9 @@ export default function HQDashboard() {
   const router = useRouter();
   const { timeRange } = useFilters();
   // ข้อมูลตัวแทน = ชุดเดียวกับหน้า "ตัวแทน" (persist ผ่าน HQ_DEALERS_KEY) — คุณสมบัติคงที่ (ชื่อ/ภาค/เป้าทั้งปี/สถานะ)
-  const [allDealers] = usePersistentState<DealerRow[]>(HQ_DEALERS_KEY, dealerLeaderboard);
+  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), dealerLeaderboard);
   // เป้าหมายที่ HQ ตั้งไว้ (แหล่งเดียว) — ใช้เป็นเกณฑ์สี Win rate แทนการ hardcode
-  const [targets] = usePersistentState<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
   // เกณฑ์การแจ้งเตือน (ตั้งที่ /hq/settings → การแจ้งเตือน) — อ่านหลัง mount กัน hydration mismatch
   // notifRules ถูกลบพร้อมการ์ดแจ้งเตือน — เกณฑ์เตือนไม่มีใครอ่านแล้ว
   // ตัวเลือกตัวแทนเฉพาะหน้านี้ (แต่ละหน้า HQ เลือกแยกกัน ไม่จำข้ามหน้า)

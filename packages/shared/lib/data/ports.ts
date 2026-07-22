@@ -17,13 +17,15 @@ export interface CatalogRepo {
   save(all: SolutionProduct[]): Promise<void>;
 }
 export interface FilesRepo {
-  list(): Promise<DealerFile[]>;
+  list(scope?: Scope): Promise<DealerFile[]>;
   add(f: Omit<DealerFile, "id">): Promise<DealerFile>;
+  update(f: DealerFile): Promise<void>;
   remove(id: number): Promise<void>;
 }
 export interface PersonsRepo {
-  list(): Promise<ResponsiblePerson[]>;
-  save(all: ResponsiblePerson[]): Promise<void>;
+  list(scope?: Scope): Promise<ResponsiblePerson[]>;
+  // แทนที่รายชื่อ "ของสาขานั้น" ทั้งชุด (ตรา dealer_code ให้ · supabase: ลบของสาขาแล้วใส่ใหม่ · RLS dealer-own)
+  save(all: ResponsiblePerson[], dealerCode: string): Promise<void>;
 }
 export interface SettingsRepo {
   getPolicy(): Promise<HQPolicy>;
@@ -32,6 +34,10 @@ export interface SettingsRepo {
   getLeadRulesMap(): Promise<DealerLeadRulesMap>;
   saveLeadRules(dealerCode: string, rules: LeadRules): Promise<void>;
   getQuoteValidityDays(): Promise<number>;
+  // เขียนนโยบายระดับเครือ (HQ เท่านั้น — RLS is_hq ฝั่ง supabase · singleton id=1)
+  savePolicy(policy: HQPolicy): Promise<void>;
+  saveTargets(targets: HQTargets): Promise<void>;
+  saveNotifRules(rules: HQNotifRules): Promise<void>;
 }
 export interface AuditRepo {
   list(): Promise<AuditEntry[]>;
@@ -54,6 +60,7 @@ export interface QuotationsRepo {
   update(row: QuotationMock): Promise<QuotationMock>;
   remove(id: string): Promise<void>;
   setStatus(id: string, status: QuotationMock["status"]): Promise<void>;
+  nextQuoteNo(dealer: string): Promise<string>; // เลขที่ใบต่อสาขาแบบ atomic (supabase=RPC · local=max+1)
 }
 export interface CustomersRepo {
   list(scope?: Scope): Promise<CustomerRow[]>;
@@ -68,8 +75,26 @@ export interface AppointmentsRepo {
   remove(id: number): Promise<void>;
 }
 
+// ── ไฟล์จริง (bytes) ใน Supabase Storage — bucket dealer-files/{dealerCode}/... ──
+// โหมด local ไม่มี Storage → upload/signedUrl คืน null (เก็บแค่ metadata เหมือนเดิม · หน้าจอต้องรองรับ null)
+export interface StoragePort {
+  upload(dealerCode: string, file: File): Promise<string | null>; // คืน storagePath
+  signedUrl(path: string): Promise<string | null>;                // ลิงก์ดาวน์โหลดชั่วคราว
+  remove(path: string): Promise<void>;
+}
+
+// ── Realtime — ฟังการเปลี่ยนแปลงของตารางงานขายข้ามเครื่อง (supabase) ──
+// โหมด local ไม่มี Realtime → subscribe คืนฟังก์ชันเปล่า (ยังใช้ event bus ของ localStorage เหมือนเดิม)
+export type SalesTable = "leads" | "quotations" | "customers" | "appointments";
+export interface RealtimePort {
+  /** เรียก onChange(table) ทุกครั้งที่ตารางนั้นเปลี่ยน (RLS กรองให้แล้ว) · คืนฟังก์ชัน unsubscribe */
+  subscribeSales(onChange: (table: SalesTable) => void): () => void;
+}
+
 // ── รวมทุก repository เป็น adapter เดียว ──
 export interface DataAdapter {
+  storage: StoragePort;
+  realtime: RealtimePort;
   dealers: DealersRepo;
   catalog: CatalogRepo;
   files: FilesRepo;

@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { ChevronDown, Check } from "lucide-react";
-import { loadResponsiblePersons, type ResponsiblePerson } from "@pms/shared/lib/mock";
+import { type ResponsiblePerson } from "@pms/shared/lib/mock";
+import { persons as personsRepo } from "@pms/shared/lib/data";
+import { useRole } from "@pms/shared/context/RoleContext";
 
 const NAVY = "#003366";
 
@@ -24,8 +26,9 @@ export function PersonAvatar({ name, avatar, size = 26 }: { name: string; avatar
 export function AssigneeAvatars({ value, size = 22, showName = true, max = 3 }: {
   value: string; size?: number; showName?: boolean; max?: number;
 }) {
+  const { dealerCode, isHQ } = useRole();
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
-  useEffect(() => { setPersons(loadResponsiblePersons()); }, []);
+  useEffect(() => { personsRepo.list({ dealerCode, isHQ }).then(setPersons).catch(() => {}); }, [dealerCode, isHQ]);
   const names = value ? value.split(",").map(s => s.trim()).filter(Boolean) : [];
   if (names.length === 0) return <span style={{ color: "#9ca3af", fontSize: "0.72rem" }}>—</span>;
   return (
@@ -58,11 +61,12 @@ export function PersonPicker({ value, onChange, style, placeholder = "เลื�
   placeholder?: string;
   multiple?: boolean;
 }) {
+  const { dealerCode, isHQ } = useRole();
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setPersons(loadResponsiblePersons().filter(p => p.active)); }, []);
+  useEffect(() => { personsRepo.list({ dealerCode, isHQ }).then(list => setPersons(list.filter(p => p.active))).catch(() => {}); }, [dealerCode, isHQ]);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };

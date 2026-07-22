@@ -5,9 +5,10 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   initialCustomers as customers,
-  loadDealerFiles, saveDealerFiles, addDealerFile, removeDealerFile,
   DEALER_FILES_EVENT, type DealerFile,
 } from "@pms/shared/lib/mock";
+import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
   FileText, FileSpreadsheet, Image, Plus,
@@ -99,24 +100,25 @@ function guessExt(name: string): FileExt {
 
 // ดาวน์โหลดเอกสาร (ระบบ frontend/mock) — สร้างไฟล์สรุปข้อมูลให้ดาวน์โหลดจริง
 
-function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; onClose: () => void }) {
+function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File | null) => void; onClose: () => void }) {
   const [name, setName]     = useState("");
   const [size, setSize]     = useState("");
   const [cat, setCat]       = useState<FileCategory>("อื่นๆ");
   const [project, setProj]  = useState("");
+  const [blob, setBlob]     = useState<File | null>(null); // ไฟล์จริง → อัปโหลดเข้า Storage (โหมด supabase)
 
-  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
+  function pick(f: File | undefined) {
     if (!f) return;
+    setBlob(f);
     setName(f.name);
     setSize(f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`);
   }
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    pick(e.dataTransfer.files[0]);
+  }
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setName(f.name);
-    setSize(f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`);
+    pick(e.target.files?.[0]);
   }
 
   function save() {
@@ -130,7 +132,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock) => void; o
       uploadedBy: "คุณ",
       uploadedAt: APP_NOW_ISO,
       source: "upload",
-    });
+    }, blob);
     onClose();
   }
 
@@ -418,6 +420,14 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
           </div>
           {/* Footer */}
           <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
+            {/* มีไฟล์จริงใน Storage เท่านั้นจึงโหลดได้ (โหมด local เก็บแค่ metadata → ไม่ขึ้นปุ่มนี้) */}
+            {file.storagePath && (
+              <button className="btn btn-secondary btn-md" onClick={() => {
+                void fileStorage.signedUrl(file.storagePath!)
+                  .then(url => { if (url) window.open(url, "_blank", "noopener"); })
+                  .catch(() => {});
+              }}>ดาวน์โหลดไฟล์จริง</button>
+            )}
             <button onClick={onClose} className="btn btn-primary btn-md">ปิด</button>
           </div>
         </div>
@@ -430,15 +440,19 @@ export default function FilesPage() {
   const router = useRouter();
   // คลังไฟล์รวม — ดึงไฟล์ที่แนบไว้กับลูกค้า/ลูกค้าเป้าหมายมารวมกัน (ไม่สร้างใหม่)
   // เริ่มว่างแล้วโหลดหลัง mount — กัน hydration mismatch (localStorage อ่านได้เฉพาะ client)
+  const currentDealer = useCurrentDealer(); // คลังไฟล์เป็นของสาขานี้ (multi-tenant)
   const [files, setFiles] = useState<FileMock[]>([]);
   const [loaded, setLoaded] = useState(false); // false = กำลังโหลด (แสดง Skeleton)
+  // อ่านไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB · RLS สาขาตัวเอง)
+  const reloadFiles = () => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setFiles).catch(() => {});
   useEffect(() => {
-    setFiles(loadDealerFiles()); setLoaded(true);
-    const sync = () => setFiles(loadDealerFiles());
+    reloadFiles().then(() => setLoaded(true));
+    const sync = () => { void reloadFiles(); };
     window.addEventListener(DEALER_FILES_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => { window.removeEventListener(DEALER_FILES_EVENT, sync); window.removeEventListener("storage", sync); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDealer.code]);
   const [query,   setQuery]   = useState("");
   const [catFilter, setCat]   = useState<FileCategory | "ALL">("ALL");
   // extFilter ถูกลบพร้อมชิปสรุป + select "ทุกประเภท" — ไม่เหลือ UI ที่ตั้งค่าได้ จึงเป็นโค้ดตาย
@@ -493,11 +507,14 @@ export default function FilesPage() {
     return c;
   }, [files]);
 
-  function deleteFile(id: number) { removeDealerFile(id); setFiles(loadDealerFiles()); setDelId(null); }
-  function updateFile(updated: FileMock) {
-    const next = loadDealerFiles().map(x => x.id === updated.id ? updated : x);
-    saveDealerFiles(next); setFiles(next);
+  function deleteFile(id: number) {
+    // ลบไฟล์จริงใน Storage ด้วย (ถ้ามี) แล้วค่อยลบ metadata
+    const target = files.find(f => f.id === id);
+    const dropObject = target?.storagePath ? fileStorage.remove(target.storagePath).catch(() => {}) : Promise.resolve();
+    void dropObject.then(() => filesRepo.remove(id)).then(reloadFiles).catch(() => {});
+    setDelId(null);
   }
+  function updateFile(updated: FileMock) { void filesRepo.update(updated).then(reloadFiles); }
 
   return (
     <div className="erp">
@@ -737,9 +754,15 @@ export default function FilesPage() {
       )}
 
       {/* Upload modal */}
-      {upload && <UploadModal onUpload={f => {
-        addDealerFile({ name: f.name, size: f.size, ext: f.ext, category: f.category, project: f.project, uploadedBy: f.uploadedBy, uploadedAt: f.uploadedAt, source: "upload" });
-        setFiles(loadDealerFiles());
+      {upload && <UploadModal onUpload={(f, blob) => {
+        // อัปโหลด bytes เข้า Storage ก่อน (โหมด local คืน null = เก็บแค่ metadata เหมือนเดิม) แล้วค่อยบันทึก metadata
+        void (blob ? fileStorage.upload(currentDealer.code, blob).catch(() => null) : Promise.resolve(null))
+          .then(storagePath => filesRepo.add({
+            name: f.name, size: f.size, ext: f.ext, category: f.category, project: f.project,
+            uploadedBy: f.uploadedBy, uploadedAt: f.uploadedAt, source: "upload",
+            dealerCode: currentDealer.code, ...(storagePath ? { storagePath } : {}),
+          }))
+          .then(reloadFiles).catch(() => {});
       }} onClose={() => setUpload(false)} />}
 
       {/* Edit modal */}

@@ -20,6 +20,7 @@ import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/compone
 import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { LeadQuotationsPanel } from "@pms/shared/components/ui/LeadQuotationsPanel";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
@@ -468,12 +469,13 @@ export default function CustomersPage(){
   const [viewAppt, setViewAppt] = useState<AppointmentMock | null>(null);
   const [viewNote, setViewNote] = useState<NoteMock | null>(null);
   useEffect(() => {
-    setDealerFiles(loadDealerFiles());
-    const sync = () => setDealerFiles(loadDealerFiles());
+    // ไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB)
+    const sync = () => { filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles).catch(() => {}); };
+    sync();
     window.addEventListener(DEALER_FILES_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => { window.removeEventListener(DEALER_FILES_EVENT, sync); window.removeEventListener("storage", sync); };
-  }, []);
+  }, [currentDealer.code]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rightQuoteRef = useRef<HTMLDivElement|null>(null);
   const rightApptRef  = useRef<HTMLDivElement|null>(null);
@@ -481,12 +483,15 @@ export default function CustomersPage(){
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !selected) return;
     const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
-    addDealerFile({
-      name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
-      project: selected.company || selected.name, uploadedBy: selected.owner || "คุณ",
-      uploadedAt: APP_NOW_ISO, source: "customer", recordId: selected.id, customerId: selected.id,
-    });
-    setDealerFiles(loadDealerFiles());
+    // อัปโหลด bytes เข้า Storage ก่อน (local คืน null = เก็บแค่ metadata) แล้วบันทึก metadata
+    void fileStorage.upload(currentDealer.code, f).catch(() => null)
+      .then(storagePath => filesRepo.add({
+        name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
+        project: selected.company || selected.name, uploadedBy: selected.owner || "คุณ",
+        uploadedAt: APP_NOW_ISO, source: "customer", recordId: selected.id, customerId: selected.id, dealerCode: currentDealer.code,
+        ...(storagePath ? { storagePath } : {}),
+      }))
+      .then(() => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles)).catch(() => {});
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
   // ไฟล์ของลูกค้าที่เลือก — ผูกด้วย customerId หรือแนบตรงกับลูกค้า

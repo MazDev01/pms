@@ -17,10 +17,12 @@
 //   เป้าทั้งปี            → แดชบอร์ด HQ + แดชบอร์ดตัวแทน
 import {
   useState, useEffect, useRef, useCallback, useMemo, useContext,
-  type ReactNode,
+  type ReactNode, type Dispatch, type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
+import { useRepoState } from "@pms/shared/lib/useRepoState";
+import { settings as settingsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
   HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
@@ -59,8 +61,7 @@ function useReport(api: SectionApi) {
 function useToast() { return useContext(BusCtx).toast; }
 
 // draft = state ที่แก้ไขได้ + เทียบกับค่าที่บันทึกไว้ (dirty) → ใช้กับ Save/Reset กลาง
-function usePersistentDraft<T>(key: string, initial: T) {
-  const [saved, setSaved] = usePersistentState<T>(key, initial);
+function useDraft<T>(saved: T, setSaved: Dispatch<SetStateAction<T>>) {
   const [draft, setDraft] = useState<T>(saved);
   const editedRef = useRef(false);
   const draftRef = useRef(draft); draftRef.current = draft;
@@ -72,6 +73,16 @@ function usePersistentDraft<T>(key: string, initial: T) {
   const save = useCallback(() => setSaved(draftRef.current), [setSaved]);
   const reset = useCallback(() => { editedRef.current = false; setDraft(savedRef.current); }, []);
   return { draft, set, dirty, save, reset };
+}
+// draft ที่ persist ผ่าน localStorage (สำหรับตั้งค่าที่ยังไม่ย้ายเข้า repo — ระบบ/เส้นทางการขาย)
+function usePersistentDraft<T>(key: string, initial: T) {
+  const [saved, setSaved] = usePersistentState<T>(key, initial);
+  return useDraft(saved, setSaved);
+}
+// draft ที่ persist ผ่าน repository (local: localStorage · supabase: DB · RLS is_hq) — นโยบาย/เป้า/กฎแจ้งเตือน
+function useRepoDraft<T>(load: () => Promise<T>, save: (v: T) => void, initial: T) {
+  const [saved, setSaved] = useRepoState<T>(load, save, initial);
+  return useDraft(saved, setSaved);
 }
 
 // ── reusable UI ───────────────────────────────────────────────────────────────
@@ -151,7 +162,7 @@ const DEFAULT_JOURNEY: Journey = {
 
 function JourneyTab() {
   // ทุกกฎของเส้นทางการขายรวมที่แท็บนี้: ใบเสนอราคา + เลขที่ใบ · เหตุผลปิดไม่สำเร็จ
-  const pol = usePersistentDraft<HQPolicy>(HQ_POLICY_KEY, DEFAULT_HQ_POLICY);
+  const pol = useRepoDraft<HQPolicy>(() => settingsRepo.getPolicy(), (v) => settingsRepo.savePolicy(v), DEFAULT_HQ_POLICY);
   const sys = usePersistentDraft<SystemCfg>(HQ_SYSTEM_KEY, DEFAULT_SYSTEM);
   const jn = usePersistentDraft<Journey>("hq_sales_journey", DEFAULT_JOURNEY);
   const [newLost, setNewLost] = useState("");
@@ -307,12 +318,12 @@ function RollupTable({ title, hint, rows, countryTarget }: {
 }
 
 function TargetsTab() {
-  const { draft, set, dirty, save, reset } = usePersistentDraft<HQTargets>(HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS);
+  const { draft, set, dirty, save, reset } = useRepoDraft<HQTargets>(() => settingsRepo.getTargets(), (v) => settingsRepo.saveTargets(v), DEFAULT_HQ_TARGETS);
   // แท็บนี้ "อ่านอย่างเดียว" — เป้ารายตัวแทนแก้ที่แท็บตัวแทนจำหน่าย/หน้า /hq/dealers
   // ห้ามใช้ usePersistentState: มันเขียนกลับตอน mount → กลายเป็นคนเขียน hq_dealers_v3 คนที่ 3
   // ทั้งที่ไม่เคยแก้ตัวแทนเลย (กติกาเดียวกับที่ mock.ts:893 เตือนไว้)
   const [dealers, setDealers] = useState<DealerRow[]>(dealerLeaderboard);
-  useEffect(() => { setDealers(loadHQDealers()); }, []);
+  useEffect(() => { dealersRepo.list().then(setDealers).catch(() => {}); }, []);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
   // รวมเป้า/ผลจริงตามพื้นที่ — มาจากเป้ารายตัวแทนที่ตั้งไว้จริง ไม่ได้กุตัวเลข
@@ -411,7 +422,7 @@ const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: NumRuleKey; unit: str
 
 function NotificationsTab() {
   const ch = usePersistentDraft<Notifs>(HQ_NOTIF_KEY, DEFAULT_HQ_NOTIFS);
-  const rules = usePersistentDraft<HQNotifRules>(HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES);
+  const rules = useRepoDraft<HQNotifRules>(() => settingsRepo.getNotifRules(), (v) => settingsRepo.saveNotifRules(v), DEFAULT_HQ_NOTIF_RULES);
   // บันทึกแล้วยิง event → กระดิ่ง HQ อัปเดตทันที (Topbar ฟัง HQ_NOTIF_UPDATED_EVENT)
   // dep ต้องเป็น "ฟังก์ชันข้างใน" ไม่ใช่ตัวกล่องที่ usePersistentDraft คืนมา
   // กล่องเป็น object literal ใหม่ทุกเรนเดอร์ → ถ้า dep เป็น rules/ch ทั้งก้อน saveAndBroadcast

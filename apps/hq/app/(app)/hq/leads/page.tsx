@@ -15,7 +15,8 @@ import { dealerLeaderboard, fmtISOToThai, type LeadRow } from "@pms/shared/lib/m
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";  // แหล่งเดียวของชื่อภาค — ไม่ก็อปโค้ดซ้ำ
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useSales } from "@pms/shared/context/SalesContext";
-import { loadDealerFiles, DEALER_FILES_EVENT, type DealerFile } from "@pms/shared/lib/mock";
+import { DEALER_FILES_EVENT, type DealerFile } from "@pms/shared/lib/mock";
+import { files as filesRepo } from "@pms/shared/lib/data";
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { GroupedBarChart, Donut } from "@pms/shared/components/ui/Charts";
@@ -73,7 +74,7 @@ export default function HQLeadsPage() {
   const { appointments } = useSales();
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   useEffect(() => {
-    const read = () => setDealerFiles(loadDealerFiles());
+    const read = () => { filesRepo.list({ isHQ: true }).then(setDealerFiles).catch(() => {}); }; // HQ เห็นไฟล์ทั้งเครือ
     read();
     window.addEventListener(DEALER_FILES_EVENT, read);
     return () => window.removeEventListener(DEALER_FILES_EVENT, read);

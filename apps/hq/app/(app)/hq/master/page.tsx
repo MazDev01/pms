@@ -4,9 +4,10 @@
 // HQ แก้ไขที่นี่ → persist ลง MASTER_CATALOG_KEY → Dealer (/products + dropdown ฟอร์ม)
 // อ่านจากคีย์เดียวกันทันที · ขอบเขต Sales เท่านั้น (ไม่มี lead time/การส่งมอบ)
 import { useState } from "react";
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
+import { useRepoState } from "@pms/shared/lib/useRepoState";
+import { catalog as catalogRepo } from "@pms/shared/lib/data";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
-import { solutionProducts, MASTER_CATALOG_KEY, type SolutionProduct } from "@pms/shared/lib/mock";
+import { solutionProducts, type SolutionProduct } from "@pms/shared/lib/mock";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
@@ -143,7 +144,8 @@ export default function HQMasterPage() {
   return <AdminGate perm="catalog:edit"><HQMasterPageInner /></AdminGate>;
 }
 function HQMasterPageInner() {
-  const [catalog, setCatalog] = usePersistentState<SolutionProduct[]>(MASTER_CATALOG_KEY, solutionProducts);
+  // อ่าน/เขียนผ่าน repository (local: localStorage · supabase: DB · RLS: เขียนได้เฉพาะ HQ)
+  const [catalog, setCatalog] = useRepoState<SolutionProduct[]>(() => catalogRepo.list(), (v) => catalogRepo.save(v), solutionProducts);
   const logAudit = useAuditLogger(); // บันทึกการแก้แม่แบบ/ราคากลาง
   const [q, setQ] = useState("");
 

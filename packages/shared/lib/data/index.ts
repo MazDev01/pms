@@ -14,6 +14,8 @@ import type { DataAdapter } from "./ports";
 
 const adapter: DataAdapter = DATA_SOURCE === "supabase" ? SupabaseAdapter : LocalAdapter;
 
+export const storage = adapter.storage;   // ไฟล์จริง (bytes) — local: no-op · supabase: Storage
+export const realtime = adapter.realtime; // ฟังการเปลี่ยนแปลงสด — local: no-op · supabase: postgres_changes
 export const dealers = adapter.dealers;
 export const catalog = adapter.catalog;
 export const files = adapter.files;
@@ -26,7 +28,7 @@ export const customers = adapter.customers;
 export const appointments = adapter.appointments;
 
 export type {
-  DataAdapter, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo,
+  DataAdapter, StoragePort, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo,
   SettingsRepo, AuditRepo, LeadsRepo, QuotationsRepo, CustomersRepo, AppointmentsRepo,
 } from "./ports";
 export type { Scope } from "./types";

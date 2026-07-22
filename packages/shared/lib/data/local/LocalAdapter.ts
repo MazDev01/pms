@@ -5,9 +5,10 @@
 import {
   loadHQDealers, HQ_DEALERS_KEY,
   loadMasterCatalog, MASTER_CATALOG_KEY,
-  loadDealerFiles, addDealerFile, removeDealerFile,
+  loadDealerFiles, saveDealerFiles, addDealerFile, removeDealerFile,
   loadResponsiblePersons, RP_STORAGE_KEY,
   loadHQPolicy, loadHQTargets, loadHQNotifRules,
+  HQ_POLICY_KEY, HQ_TARGETS_KEY, HQ_NOTIF_RULES_KEY,
   loadDealerLeadRulesMap, saveDealerLeadRules, loadQuoteValidityDays,
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
@@ -36,12 +37,23 @@ const SALES = {
   appointments: "sales_appointments_v1",
 } as const;
 
-function scopeLeads(list: LeadRow[], scope?: Scope): LeadRow[] {
+// กรองตามสาขา (multi-tenant) — dealer เห็นเฉพาะสาขาตัวเอง · HQ เห็นทั้งหมด
+// แถวไม่ระบุ dealerCode = สมุดงานเดิมของ CNX (ห้าม default เป็น scope.dealerCode ไม่งั้นไม่ติดสาขา
+// จะรั่วโผล่ทุกสาขา — คู่แฝดฝั่งอ่านของบั๊ก branch-isolation)
+function scopeByDealer<T extends { dealerCode?: string }>(list: T[], scope?: Scope): T[] {
   if (!scope || scope.isHQ || !scope.dealerCode) return list;
-  return list.filter(l => (l.dealerCode ?? scope.dealerCode) === scope.dealerCode);
+  return list.filter(r => (r.dealerCode ?? "CNX") === scope.dealerCode);
 }
 
 export const LocalAdapter: DataAdapter = {
+  // โหมด local ไม่มี Storage — เก็บแค่ metadata (คืน null ให้หน้าจอรู้ว่าไม่มีไฟล์จริงให้โหลด)
+  storage: {
+    upload: () => ok(null),
+    signedUrl: () => ok(null),
+    remove: () => done(),
+  },
+  // โหมด local ไม่มี Realtime — ข้อมูลอยู่ในเครื่องเดียว (ข้ามแท็บใช้ event bus/storage event เหมือนเดิม)
+  realtime: { subscribeSales: () => () => {} },
   dealers: {
     list: () => ok(loadHQDealers()),
     save: (all) => { writeKey(HQ_DEALERS_KEY, all); return done(); },
@@ -51,13 +63,20 @@ export const LocalAdapter: DataAdapter = {
     save: (all) => { writeKey(MASTER_CATALOG_KEY, all); return done(); },
   },
   files: {
-    list: () => ok(loadDealerFiles()),
+    list: (scope) => ok(scopeByDealer(loadDealerFiles(), scope)),
     add: (f) => ok(addDealerFile(f)),
+    update: (f) => { saveDealerFiles(loadDealerFiles().map(x => x.id === f.id ? f : x)); return done(); },
     remove: (id) => { removeDealerFile(id); return done(); },
   },
   persons: {
-    list: () => ok(loadResponsiblePersons()),
-    save: (all) => { writeKey(RP_STORAGE_KEY, all); return done(); },
+    list: (scope) => ok(scopeByDealer(loadResponsiblePersons(), scope)),
+    // แทนที่เฉพาะพนักงานของสาขานี้ (คงของสาขาอื่นไว้) + ตรา dealerCode ให้ทุกคน
+    save: (all, dealerCode) => {
+      const others = loadResponsiblePersons().filter(p => (p.dealerCode ?? "CNX") !== dealerCode);
+      const mine = all.map(p => ({ ...p, dealerCode }));
+      writeKey(RP_STORAGE_KEY, [...others, ...mine]);
+      return done();
+    },
   },
   settings: {
     getPolicy: () => ok(loadHQPolicy()),
@@ -66,6 +85,9 @@ export const LocalAdapter: DataAdapter = {
     getLeadRulesMap: () => ok(loadDealerLeadRulesMap()),
     saveLeadRules: (code, rules) => { saveDealerLeadRules(code, rules); return done(); },
     getQuoteValidityDays: () => ok(loadQuoteValidityDays()),
+    savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); return done(); },
+    saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); return done(); },
+    saveNotifRules: (r) => { writeKey(HQ_NOTIF_RULES_KEY, r); return done(); },
   },
   audit: {
     list: () => ok(loadAudit()),
@@ -74,7 +96,7 @@ export const LocalAdapter: DataAdapter = {
 
   // งานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) · เขียนลง localStorage คีย์เดียวกับ SalesContext
   leads: {
-    list: (scope) => ok(scopeLeads(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)),
+    list: (scope) => ok(scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)),
     create: (row) => {
       const list = readKey<LeadRow[]>(SALES.leads, leadSeed);
       writeKey(SALES.leads, [row, ...list]);
@@ -97,7 +119,7 @@ export const LocalAdapter: DataAdapter = {
     },
   },
   quotations: {
-    list: () => ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed)),
+    list: (scope) => ok(scopeByDealer(readKey<QuotationMock[]>(SALES.quotations, quoteSeed), scope)),
     create: (row) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       writeKey(SALES.quotations, [row, ...list]);
@@ -118,9 +140,15 @@ export const LocalAdapter: DataAdapter = {
       writeKey(SALES.quotations, list.map((q) => (q.id === id ? { ...q, status } : q)));
       return done();
     },
+    // เลขที่ใบถัดไป = max ของเลขท้าย +1 (เทียบเท่า nextQId เดิมในหน้าจอ) · dealer ไม่ใช้ในโหมด local
+    nextQuoteNo: () => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const nums = list.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
+      return ok(`Q-2026-${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`);
+    },
   },
   customers: {
-    list: () => ok(readKey<CustomerRow[]>(SALES.customers, initialCustomers)),
+    list: (scope) => ok(scopeByDealer(readKey<CustomerRow[]>(SALES.customers, initialCustomers), scope)),
     create: (row) => {
       const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
       writeKey(SALES.customers, [row, ...list]);
@@ -138,7 +166,7 @@ export const LocalAdapter: DataAdapter = {
     },
   },
   appointments: {
-    list: () => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed)),
+    list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),
     create: (row) => {
       const list = readKey<AppointmentMock[]>(SALES.appointments, apptSeed);
       writeKey(SALES.appointments, [row, ...list]);

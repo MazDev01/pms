@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, loadHQPolicy, DEFAULT_HQ_POLICY, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { useUnsavedGuard } from "@pms/shared/lib/useUnsavedGuard";
@@ -430,6 +431,7 @@ function reindexPersons(arr: unknown): ResponsiblePerson[] {
 }
 
 function PersonsTab() {
+  const currentDealer = useCurrentDealer(); // พนักงานขายเป็นของสาขานี้ (multi-tenant)
   const [persons, setPersons] = useState<ResponsiblePerson[]>(RP_INITIAL);
   const [editId,    setEditId]    = useState<number | null>(null);
   const [editName,  setEditName]  = useState("");
@@ -452,13 +454,14 @@ function PersonsTab() {
   }
 
   useEffect(() => {
-    const s = localStorage.getItem(RP_STORAGE_KEY);
-    if (s) try { setPersons(reindexPersons(JSON.parse(s))); } catch {}
-  }, []);
+    // พนักงานขายของสาขานี้ — อ่านผ่าน repository (local: localStorage · supabase: DB · RLS สาขาตัวเอง)
+    personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
+      .then(list => setPersons(reindexPersons(list))).catch(() => {});
+  }, [currentDealer.code]);
 
   function save(updated: ResponsiblePerson[]) {
     setPersons(updated);
-    localStorage.setItem(RP_STORAGE_KEY, JSON.stringify(updated));
+    void personsRepo.save(updated, currentDealer.code); // แทนที่ทั้งชุดของสาขานี้
   }
   function startEdit(p: ResponsiblePerson) {
     setEditId(p.id); setEditName(p.name ?? ""); setEditTitle(p.title ?? "");
@@ -691,9 +694,13 @@ function NotificationsTab() {
   useEffect(() => {
     const p = loadNotifPrefs();
     setSavedPrefs(p);
-    const r = leadRulesOf(loadDealerLeadRulesMap(), currentDealer.code);
-    setSavedRules(r);
-    if (!editedRef.current) { setDraft(p); setRulesDraft(r); }
+    if (!editedRef.current) setDraft(p);
+    // กฎดูแลลูกค้าเป้าหมาย — อ่านผ่าน repository (local: localStorage · supabase: DB)
+    settingsRepo.getLeadRulesMap().then(map => {
+      const r = leadRulesOf(map, currentDealer.code);
+      setSavedRules(r);
+      if (!editedRef.current) setRulesDraft(r);
+    }).catch(() => {});
   }, [currentDealer.code]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedPrefs)
@@ -703,7 +710,7 @@ function NotificationsTab() {
     localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้กระดิ่งบน Topbar อัปเดตทันที
     const nextRules = rulesDraftRef.current;
-    saveDealerLeadRules(currentDealer.code, nextRules); // ยิง event → หน้าลีด/แดชบอร์ด/หน้า HQ อัปเดตทันที
+    void settingsRepo.saveLeadRules(currentDealer.code, nextRules); // local: ยิง event ให้หน้าอื่นอัปเดตทันที · supabase: RLS dealer-own
     editedRef.current = false;
     setSavedPrefs(next);
     setSavedRules(nextRules);
