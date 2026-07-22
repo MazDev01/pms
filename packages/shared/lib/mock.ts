@@ -155,6 +155,9 @@ export function loadLostReasons(): string[] {
 export type HQPolicy = { requireApproval: boolean; vat: number; quoteValidityDays: number };
 export const HQ_POLICY_KEY = "hq_sales_policy";
 export const DEFAULT_HQ_POLICY: HQPolicy = { requireApproval: true, vat: 7, quoteValidityDays: 30 };
+// HQ บันทึกนโยบาย/เป้า/กฎแจ้งเตือน → ยิง event นี้ให้หน้าที่เปิดค้างอยู่ใช้ค่าใหม่ทันที
+// (โหมด local ได้เฉพาะ origin เดียวกัน · ข้ามแอปต้องใช้ supabase + Realtime)
+export const HQ_SETTINGS_EVENT = "bpms-hq-settings-updated";
 
 // ── กฎการดูแลลูกค้าเป้าหมาย (ตัวแทนตั้งเอง · แยกรายสาขา) ──────────────────────
 // ⚠️ เจ้าของกฎเปลี่ยนแล้ว (บอสสั่ง): เดิมเป็นเกณฑ์กลางที่ HQ ตั้งให้ทุกสาขาใช้ค่าเดียวกัน
@@ -457,10 +460,6 @@ export function syncAddQuotationFile(q: QuotationMock) {
   if (loadDealerFiles().some(f => f.category === "ใบเสนอราคา" && f.name.includes(q.id))) return; // กันซ้ำ
   addDealerFile(quotationToFile(q));
 }
-export function syncRemoveQuotationFile(id: string) {
-  const f = loadDealerFiles().find(x => x.category === "ใบเสนอราคา" && x.name.includes(id) && x.uploadedBy === AUTO_FILE_BY);
-  if (f) removeDealerFile(f.id); // ลบเฉพาะไฟล์ที่ระบบสร้างเอง (ไม่แตะไฟล์ที่ผู้ใช้แนบเอง)
-}
 
 // ─── Global: โปรไฟล์ผู้ออกใบเสนอราคา (บริษัทดีลเลอร์) ────────────────
 // แหล่งเดียว — ใช้ทั้งหน้าใบเสนอราคา และใบเสนอราคาแบบ inline ในหน้า Lead
@@ -480,18 +479,6 @@ export const kpis = [
   { key: "win", label: "อัตราปิดการขาย", value: "35%", delta: 4.2, icon: "award" },
   { key: "projects", label: "โอกาสการขายที่กำลังดำเนินการ", value: "5", delta: 16.4, icon: "building" },
 ] as const;
-
-// ยอดขาย/ลีด รายเดือน (กราฟเส้น)
-export const salesByMonth = [
-  { month: "ม.ค.", value: 820 },
-  { month: "ก.พ.", value: 640 },
-  { month: "มี.ค.", value: 980 },
-  { month: "เม.ย.", value: 1200 },
-  { month: "พ.ค.", value: 760 },
-  { month: "มิ.ย.", value: 1080 },
-  { month: "ก.ค.", value: 900 },
-  { month: "ส.ค.", value: 1320 },
-];
 
 export type LeadRow = {
   id: string;
@@ -748,6 +735,10 @@ export type SolutionProduct = {
 // ─── Master Catalog (แหล่งเดียว) ─────────────────────────────────
 // HQ (หน้า /hq/master) เป็นผู้แก้ไขแม่แบบ/ราคากลาง → persist ลง localStorage คีย์นี้
 // Dealer (/products + dropdown ในฟอร์ม) อ่านจากคีย์เดียวกัน — fallback = solutionProducts
+// แจ้งเตือนเมื่อแคตตาล็อกถูกแก้ (HQ กดบันทึกที่ /hq/master) → หน้าอื่นที่เปิดค้างอยู่โหลดใหม่ทันที
+// ⚠️ ข้ามแอปไม่ได้ในโหมด local: ตัวแทน(:3001)กับ HQ(:3002) คนละ origin → localStorage แยกกัน
+//    ถ้าต้องการให้ HQ แก้แล้วตัวแทนเห็น ต้องใช้ NEXT_PUBLIC_DATA_SOURCE=supabase (ฐานเดียวกัน + Realtime)
+export const MASTER_CATALOG_EVENT = "bpms-catalog-updated";
 export const MASTER_CATALOG_KEY = "master_catalog_v2";   // v2: เพิ่มแม่แบบย่อย (subtypes)
 export function loadMasterCatalog(): SolutionProduct[] {
   if (typeof window === "undefined") return solutionProducts;
@@ -915,7 +906,10 @@ export type DealerRow = {
   activeProjects: number;
   onTimePct: number;
   status: DealerStatus;
-  credentials: DealerCredentials;
+  // บัญชีเข้าระบบของตัวแทน — มีเฉพาะโหมด local (mock) เท่านั้น
+  // โหมด supabase: รหัสผ่านถูก hash อยู่ใน Supabase Auth · ตาราง dealers ไม่เก็บ (และห้ามเก็บ)
+  // → หน้าจอต้องรองรับกรณีไม่มีค่า (แสดง "—") ห้าม assume ว่ามีเสมอ
+  credentials?: DealerCredentials;
 };
 
 // ─── สถานะตัวแทน (แหล่งเดียว) — มี 2 สถานะเท่านั้น ตามข้อมูลจริง ────────────────
@@ -981,14 +975,6 @@ export const dealerLeaderboard: DealerRow[] = [
 // ยอดขายรายเดือน (รวมทั้งเครือ)
 // (hqSalesByMonth ถูกลบ — HQ dashboard คำนวณเทรนด์จากใบเสนอราคาจริงแล้ว)
 
-// กิจกรรมล่าสุดทั้งเครือ
-export type ActivityKind = "win" | "lead" | "approve" | "assign";
-export type ActivityItem = {
-  kind: ActivityKind;
-  text: string;
-  branch: string;
-  time: string;
-};
 
 // ─── APPOINTMENTS ─────────────────────────────────────────────
 export type ApptType = "visit" | "design_meet" | "presentation" | "contract_sign" | "close" | "follow_up";
@@ -1289,35 +1275,10 @@ export const dealerDetails: Record<string, DealerDetail> = {
   },
 };
 
-// ─── PIPELINE FUNNEL ─────────────────────────────────────────
-export type PipelineStage = {
-  key: string;
-  label: string;
-  count: number;
-  valueNum: number;
-  color: string;
-};
-export const hqPipelineStages: PipelineStage[] = [
-  { key: "contacted",   label: "ติดต่อแล้ว",         count: 42, valueNum: 94200000, color: "#8fa3c0" },
-  { key: "requirement", label: "รวบรวมความต้องการ", count: 28, valueNum: 62400000, color: "#5b7fa6" },
-  { key: "quoted",      label: "เสนอราคา",          count: 16, valueNum: 38600000, color: "#4d7aa8" },
-  { key: "negotiation", label: "เจรจาต่อรอง",       count: 9,  valueNum: 22100000, color: "#1a5b8f" },
-  { key: "won",         label: "ปิดการขาย",         count: 5,  valueNum: 14300000, color: "#003366" },
-];
+// ─── PIPELINE FUNNEL — ถูกลบทั้งหัวข้อ ───────────────────────
+// ตัวเลข funnel/เป้า/เหตุผลเสียโอกาส เคยเป็นค่าคงที่ค้างไว้ที่นี่ ตอนนี้อ่านจากของจริงหมดแล้ว:
+// ขั้นตอนการขาย → lead.status · เป้า → loadHQTargets() · เหตุผลเสียโอกาส → loadLostReasons()
 
-// (hqDealSummary ถูกลบ — ค่า annualTarget ซ้ำกับ hq_targets · เป้าใช้ที่เดียว: loadHQTargets())
-
-// (hqPipelineLostReasons ถูกลบ — เหตุผลเสียโอกาสใช้ที่ HQ จัดการที่เดียว: hq_sales_journey → loadLostReasons)
-
-export type PipelineByProduct = { product: string; count: number; valueNum: number; color: string };
-export const hqPipelineByProduct: PipelineByProduct[] = [
-  { product: "โรงงาน",   count: 14, valueNum: 32400000, color: "#003366" },
-  { product: "โกดังสำเร็จรูป",  count: 12, valueNum: 24600000, color: "#0a4f8c" },
-  { product: "งานตามแบบของลูกค้า",     count: 8,  valueNum: 18900000, color: "#1e6fbf" },
-  { product: "อาคารสำเร็จรูปทุกประเภท",     count: 5,  valueNum: 11200000, color: "#8fa3b8" },
-  { product: "งานรีโนเวท",    count: 2,  valueNum: 5800000,  color: "#82b4e3" },
-  { product: "สนามกีฬาในร่ม", count: 1,  valueNum: 1300000,  color: "#b8d4f0" },
-];
 
 // ─── HQ ALL CUSTOMERS ────────────────────────────────────────────────────────
 
@@ -1456,209 +1417,8 @@ export const hqAllQuotations: HQQuotation[] = [
   { id:"HQ-Q51", quoteNo:"Q-2026-0045", dealerCode:"NSN", dealerName:"นครสวรรค์เอ็นจิเนียริ่ง", customer:"เทศบาลเมืองนครสวรรค์", valueNum:900000,   status:"won",             createdAt:"28 ก.พ. 2569",  salesperson:"ธีรพล อ.",     productLine:"อาคารสำนักงาน" },
 ];
 
-
-// ─── DEALER PIPELINE (ported from pms-benjamin) ───────────────────────────────
-export type PipelineOutcome = "active" | "won" | "lost";
-export type PipelineTask = { id: number; text: string; done: boolean };
-export type PipelineFile = { name: string; size: string };
-
-export type DealActivityType =
-  | "deal_created" | "stage_change" | "task_done" | "task_undone"
-  | "note_added"   | "file_added"   | "won"        | "lost";
-
-export type DealActivity = {
-  id: number;
-  type: DealActivityType;
-  text: string;
-  timestamp: string;
-};
-
-export type PipelineDealMock = {
-  id: number;
-  customerId: number;
-  customer: string;
-  project: string;
-  value: number;
-  stageId: number;
-  assigned: string;
-  dealer: string;
-  dealerColor: string;
-  tasks: PipelineTask[];
-  files: PipelineFile[];
-  outcome: PipelineOutcome;
-  createdAt: string;
-  lostReason?: string;
-  notes?: string;
-  activities?: DealActivity[];
-};
-
-export type DealStage = { id: number; name: string; color: string };
-
-export const pipelineStages: DealStage[] = [
-  { id: 2, name: "ติดต่อแล้ว",           color: "#475569" },
-  { id: 4, name: "รวบรวมความต้องการ",   color: "#003366" },
-  { id: 5, name: "เสนอราคา",            color: "#4338ca" },
-  { id: 9, name: "ติดตามผล",            color: "#d97706" },
-  { id: 6, name: "เจรจาต่อรอง",         color: "#b45309" },
-  { id: 7, name: "ปิดการขาย",           color: "#059669" },
-  { id: 8, name: "ไม่ได้งาน",           color: "#dc2626" },
-];
-
-export const pipelineDeals: PipelineDealMock[] = [
-  // ── ตัวแทน เชียงใหม่สตีลบิลด์ ──
-  {
-    id: 1, customerId: 3, customer: "หจก. ราชบุรีโลหะ", project: "โกดังสำเร็จรูป ราชบุรี",
-    value: 760000, stageId: 2, assigned: "วิภา", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "active", createdAt: "2026-06-20",
-    notes: "ลูกค้าสนใจระบบอาคารสำเร็จรูป สำหรับโกดังขนาด 1,200 ตร.ม. ต้องการส่งของให้เร็วที่สุด",
-    files: [],
-    tasks: [
-      { id: 1, text: "โทรหาลูกค้าครั้งแรก",    done: true  },
-      { id: 2, text: "ส่งแม่แบบให้ลูกค้า",  done: true  },
-      { id: 3, text: "นัดประชุมออนไลน์",        done: false },
-    ],
-    activities: [
-      { id: 1, type: "deal_created",  text: "สร้างโอกาสการขายใหม่", timestamp: "2026-06-20T09:00:00" },
-      { id: 2, type: "task_done",     text: "เสร็จงาน: โทรหาลูกค้าครั้งแรก", timestamp: "2026-06-20T10:30:00" },
-      { id: 3, type: "task_done",     text: "เสร็จงาน: ส่งแม่แบบให้ลูกค้า", timestamp: "2026-06-21T11:00:00" },
-      { id: 4, type: "stage_change",  text: "ย้ายขั้นตอน → ติดต่อแล้ว", timestamp: "2026-06-21T11:05:00" },
-    ],
-  },
-  {
-    id: 2, customerId: 7, customer: "บจ. อุตรดิตถ์โลหะ", project: "อาคารสำเร็จรูป อุตรดิตถ์",
-    value: 2800000, stageId: 4, assigned: "วิภา", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "active", createdAt: "2026-06-15",
-    files: [{ name: "presentation.pdf", size: "2.1MB" }],
-    tasks: [
-      { id: 4, text: "นำเสนอโซลูชัน",  done: true  },
-      { id: 5, text: "ส่งตัวอย่างผลิตภัณฑ์", done: true  },
-      { id: 6, text: "เยี่ยมชมสถานที่",  done: false },
-      { id: 7, text: "สรุปความต้องการ", done: false },
-    ],
-  },
-  {
-    id: 3, customerId: 6, customer: "บจ. แม่สอดโลหะ", project: "อาคารสำเร็จรูป แม่สอด",
-    value: 4100000, stageId: 4, assigned: "สมชาย", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "active", createdAt: "2026-06-10",
-    files: [],
-    tasks: [
-      { id: 8,  text: "นำเสนอโซลูชัน",              done: true },
-      { id: 9,  text: "สำรวจความต้องการลูกค้า",        done: true },
-      { id: 10, text: "จัดทำ BOQ ประกอบการเสนอราคา",  done: true },
-    ],
-  },
-  {
-    id: 4, customerId: 2, customer: "บจ. ซีซีเอส", project: "อาคารสำเร็จรูป บจ. ซีซีเอส เชียงใหม่",
-    value: 3200000, stageId: 5, assigned: "กาญจนา", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "active", createdAt: "2026-05-28",
-    notes: "ลูกค้าต้องการอาคารสำเร็จรูป 3 หลัง แต่ละหลัง 800 ตร.ม. ขอส่วนลดสั่งซื้อจำนวนมาก 5%",
-    files: [{ name: "quotation_Q2026-0095.pdf", size: "1.4MB" }, { name: "specs.xlsx", size: "340KB" }],
-    tasks: [
-      { id: 11, text: "จัดทำใบเสนอราคา",        done: true  },
-      { id: 12, text: "ส่งใบเสนอราคาให้ลูกค้า", done: true  },
-      { id: 13, text: "ติดตามผล",               done: false },
-      { id: 14, text: "อธิบาย spec เพิ่มเติม",  done: false },
-    ],
-    activities: [
-      { id: 10, type: "deal_created",  text: "สร้างโอกาสการขายใหม่", timestamp: "2026-05-28T08:30:00" },
-      { id: 11, type: "stage_change",  text: "ย้ายขั้นตอน → นัดประชุม", timestamp: "2026-06-01T14:00:00" },
-      { id: 12, type: "task_done",     text: "เสร็จงาน: จัดทำใบเสนอราคา", timestamp: "2026-06-10T16:00:00" },
-      { id: 13, type: "file_added",    text: "อัปโหลดไฟล์: quotation_Q2026-0095.pdf", timestamp: "2026-06-10T16:05:00" },
-      { id: 14, type: "stage_change",  text: "ย้ายขั้นตอน → เสนอราคา", timestamp: "2026-06-11T09:00:00" },
-      { id: 15, type: "task_done",     text: "เสร็จงาน: ส่งใบเสนอราคาให้ลูกค้า", timestamp: "2026-06-11T09:30:00" },
-    ],
-  },
-  {
-    id: 5, customerId: 4, customer: "บจ. สมุทรโกดัง", project: "อาคารสำเร็จรูป ปากน้ำ",
-    value: 2000000, stageId: 6, assigned: "สมชาย", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "active", createdAt: "2026-05-20",
-    files: [{ name: "contract_draft.docx", size: "520KB" }],
-    tasks: [
-      { id: 15, text: "เจรจาเงื่อนไขราคา", done: true  },
-      { id: 16, text: "ปรับแก้สัญญา",      done: true  },
-      { id: 17, text: "นัดเซ็นสัญญา",      done: false },
-    ],
-  },
-  {
-    id: 6, customerId: 1, customer: "บจ. ไทยสตีล", project: "อาคารสำเร็จรูป บจ. ไทยสตีล",
-    value: 1800000, stageId: 6, assigned: "วิชัย", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "active", createdAt: "2026-05-01",
-    files: [{ name: "signed_contract.pdf", size: "1.8MB" }],
-    tasks: [
-      { id: 18, text: "ลูกค้าอนุมัติในหลักการ", done: true },
-      { id: 19, text: "เตรียมเอกสารสัญญา",      done: true },
-      { id: 20, text: "เซ็นสัญญาสำเร็จ",        done: true },
-    ],
-  },
-  {
-    id: 7, customerId: 5, customer: "VCS Asia Co., Ltd.", project: "โกดังสำเร็จรูป ระยอง VCS Asia",
-    value: 6200000, stageId: 7, assigned: "วิชัย", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "won", createdAt: "2025-11-10", files: [], tasks: [],
-  },
-  {
-    id: 8, customerId: 8, customer: "บจ. นครสวรรค์โลหะ", project: "โรงงานสำเร็จรูป นครสวรรค์",
-    value: 5400000, stageId: 7, assigned: "สมชาย", dealer: "เชียงใหม่สตีลบิลด์", dealerColor: "#003366",
-    outcome: "won", createdAt: "2026-04-05", files: [], tasks: [],
-  },
-  // ── ตัวแทน นนทบุรีเมทัลเวิร์ค ──
-  {
-    id: 9, customerId: 0, customer: "บจ. ไทยสตีล", project: "อาคารสำเร็จรูป เฟส 2 นนทบุรี",
-    value: 3500000, stageId: 2, assigned: "ปรีดา", dealer: "นนทบุรีเมทัลเวิร์ค", dealerColor: "#f59e0b",
-    outcome: "active", createdAt: "2026-06-18",
-    files: [],
-    tasks: [
-      { id: 30, text: "ส่งเอกสารข้อเสนอ",  done: true  },
-      { id: 31, text: "นัดประชุมลูกค้า",       done: false },
-    ],
-  },
-  {
-    id: 10, customerId: 0, customer: "บจ. ซีซีเอส", project: "อาคารสำเร็จรูป นนทบุรี",
-    value: 5800000, stageId: 5, assigned: "สายชล", dealer: "นนทบุรีเมทัลเวิร์ค", dealerColor: "#f59e0b",
-    outcome: "active", createdAt: "2026-05-15",
-    files: [{ name: "BOQ_NTB.xlsx", size: "512KB" }, { name: "quote_v2.pdf", size: "1.1MB" }],
-    tasks: [
-      { id: 32, text: "จัดทำ BOQ ละเอียด",    done: true  },
-      { id: 33, text: "ส่งใบเสนอราคา",        done: true  },
-      { id: 34, text: "นำเสนอต่อ MD",         done: false },
-      { id: 35, text: "ขอ final approval",     done: false },
-    ],
-  },
-  {
-    id: 11, customerId: 0, customer: "VCS Asia Co., Ltd.", project: "คลังสินค้า นนทบุรี",
-    value: 9200000, stageId: 6, assigned: "ปรีดา", dealer: "นนทบุรีเมทัลเวิร์ค", dealerColor: "#f59e0b",
-    outcome: "active", createdAt: "2026-04-20",
-    files: [{ name: "contract_VCS_NTB.pdf", size: "2.3MB" }],
-    tasks: [
-      { id: 36, text: "เจรจาเงื่อนไข",        done: true },
-      { id: 37, text: "ปรับ scope งาน",        done: true },
-      { id: 38, text: "เซ็นสัญญา",            done: false },
-    ],
-  },
-  // ── ตัวแทน ระยองสตีลเวิร์คส์ ──
-  {
-    id: 12, customerId: 0, customer: "บจ. สมุทรโกดัง", project: "อาคารสำเร็จรูป ระยองตะวันออก",
-    value: 4400000, stageId: 4, assigned: "มานิตย์", dealer: "ระยองสตีลเวิร์คส์", dealerColor: "#22c55e",
-    outcome: "active", createdAt: "2026-06-08",
-    files: [{ name: "layout_Rayong.dwg", size: "6.1MB" }],
-    tasks: [
-      { id: 40, text: "นำเสนอโซลูชัน",             done: true  },
-      { id: 41, text: "เยี่ยมชมสถานที่ลูกค้า",        done: true  },
-      { id: 42, text: "สรุปความต้องการและข้อกำหนด",   done: false },
-    ],
-  },
-  {
-    id: 13, customerId: 0, customer: "หจก. ราชบุรีโลหะ", project: "คลังสินค้าเขต EEC",
-    value: 7100000, stageId: 7, assigned: "มานิตย์", dealer: "ระยองสตีลเวิร์คส์", dealerColor: "#22c55e",
-    outcome: "won", createdAt: "2026-03-10",
-    files: [{ name: "signed_eec.pdf", size: "1.9MB" }],
-    tasks: [
-      { id: 43, text: "เซ็นสัญญา", done: true },
-      { id: 44, text: "รับมัดจำ",  done: true },
-    ],
-  },
-];
-
-
+// (DEALER PIPELINE ถูกลบทั้งบล็อก — ยุบกระดานดีลเข้ากับลีด: lead.status + tasks เป็นแหล่งเดียว
+//  ไม่มี PipelineDealMock/pipelineDeals/pipelineStages/DealActivity อีกแล้ว · ดู SalesContext)
 
 // ─── DEALER NOTES (ported from pms-benjamin) ──────────────────────────────────
 export type NoteCategory = "ลูกค้า" | "โอกาสการขาย" | "ประชุม" | "ทั่วไป";

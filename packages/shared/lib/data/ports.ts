@@ -61,15 +61,20 @@ export interface QuotationsRepo {
   remove(id: string): Promise<void>;
   setStatus(id: string, status: QuotationMock["status"]): Promise<void>;
   nextQuoteNo(dealer: string): Promise<string>; // เลขที่ใบต่อสาขาแบบ atomic (supabase=RPC · local=max+1)
+  /** ปิดใบที่ "ส่งแล้ว" และเลยวันหมดอายุ → สถานะ expired · asOf = วันนี้ของระบบ (YYYY-MM-DD) · คืนจำนวนใบที่ปิด */
+  expireOverdue(asOf: string, scope?: Scope): Promise<number>;
 }
 export interface CustomersRepo {
   list(scope?: Scope): Promise<CustomerRow[]>;
+  // เลข id ถัดไปของสาขา — supabase: RPC atomic (กันชนเมื่อสร้างพร้อมกัน) · local: max+1
+  nextId(dealerCode: string): Promise<number>;
   create(row: CustomerRow): Promise<CustomerRow>;
   update(row: CustomerRow): Promise<CustomerRow>;
   remove(id: number): Promise<void>;
 }
 export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;
+  nextId(dealerCode: string): Promise<number>;
   create(row: AppointmentMock): Promise<AppointmentMock>;
   update(row: AppointmentMock): Promise<AppointmentMock>;
   remove(id: number): Promise<void>;
@@ -86,9 +91,24 @@ export interface StoragePort {
 // ── Realtime — ฟังการเปลี่ยนแปลงของตารางงานขายข้ามเครื่อง (supabase) ──
 // โหมด local ไม่มี Realtime → subscribe คืนฟังก์ชันเปล่า (ยังใช้ event bus ของ localStorage เหมือนเดิม)
 export type SalesTable = "leads" | "quotations" | "customers" | "appointments";
+
+// การเปลี่ยนแปลงราย "แถว" — พก record มาด้วย เพื่อให้หน้าจอ patch เฉพาะแถวนั้น
+// (เดิมส่งแค่ชื่อตาราง → ต้องโหลดทั้งตารางใหม่ทุก event ซึ่งไม่ไหวเมื่อข้อมูลเยอะ · H2)
+// แถวที่ส่งมาถูก RLS กรองแล้ว = เห็นเฉพาะที่มีสิทธิ์เห็น
+export type SalesChange =
+  | { table: "leads";        type: "INSERT" | "UPDATE"; row: LeadRow }
+  | { table: "quotations";   type: "INSERT" | "UPDATE"; row: QuotationMock }
+  | { table: "customers";    type: "INSERT" | "UPDATE"; row: CustomerRow }
+  | { table: "appointments"; type: "INSERT" | "UPDATE"; row: AppointmentMock }
+  | { table: SalesTable;     type: "DELETE"; id: string | number };
+
 export interface RealtimePort {
-  /** เรียก onChange(table) ทุกครั้งที่ตารางนั้นเปลี่ยน (RLS กรองให้แล้ว) · คืนฟังก์ชัน unsubscribe */
-  subscribeSales(onChange: (table: SalesTable) => void): () => void;
+  /** เรียก onChange ทุกครั้งที่มีแถวเปลี่ยน (RLS กรองให้แล้ว) · คืนฟังก์ชัน unsubscribe */
+  subscribeSales(onChange: (change: SalesChange) => void): () => void;
+  /** แคตตาล็อกแม่แบบ/ราคากลางเปลี่ยน (HQ แก้ที่ /hq/master) → ทุกหน้าที่ใช้ catalog อัปเดตตาม */
+  subscribeCatalog(onChange: () => void): () => void;
+  /** นโยบาย/เป้า/กฎแจ้งเตือนของ HQ เปลี่ยน → ฝั่งตัวแทนใช้ค่าใหม่ทันที (VAT/อายุใบมีผลกับการคิดเงิน) */
+  subscribeSettings(onChange: () => void): () => void;
 }
 
 // ── รวมทุก repository เป็น adapter เดียว ──

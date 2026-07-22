@@ -233,8 +233,11 @@ function HQDealersPageInner() {
 
   // ออกรหัสผ่านใหม่ให้ตัวแทน แล้วเปิดโมดัลคัดลอกรหัสใหม่ไปแจ้งต่อ
   function resetPassword(d: DealerRow) {
+    // โหมด supabase: รหัสผ่านถูก hash อยู่ใน Supabase Auth — ออกรหัสใหม่จากหน้านี้ไม่ได้
+    const cur = d.credentials;
+    if (!cur) { alert("บัญชีนี้จัดการรหัสผ่านผ่านระบบยืนยันตัวตน (Supabase Auth)\nรีเซ็ตรหัสผ่านจากหน้านี้ไม่ได้"); return; }
     if (!confirm(`ออกรหัสผ่านใหม่ให้ "${d.name}"?\nรหัสเดิมจะใช้เข้าระบบไม่ได้ทันที`)) return;
-    const creds: DealerCredentials = { email: d.credentials.email, password: genResetPassword(d.code, d.credentials.password.length) };
+    const creds: DealerCredentials = { email: cur.email, password: genResetPassword(d.code, cur.password.length) };
     setDealers(prev => prev.map(x => x.id === d.id ? { ...x, credentials: creds } : x));
     logAudit("รีเซ็ตรหัสผ่านตัวแทน", `${d.code} · ${d.name}`);
     setViewCredsDealer(null);
@@ -251,7 +254,7 @@ function HQDealersPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
-            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials.email,d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,dealerStatusLabel[d.status]])} />
+            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials?.email ?? "—",d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,dealerStatusLabel[d.status]])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มตัวแทน
           </button>
@@ -588,8 +591,9 @@ function HQDealersPageInner() {
                 {/* Credentials */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px" }}>
                   <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
-                  <CopyField label="อีเมล" value={d.credentials.email} />
-                  <CopyField label="รหัสผ่าน" value={d.credentials.password} secret />
+                  <CopyField label="อีเมล" value={d.credentials?.email ?? "—"} />
+                  {/* โหมด supabase ไม่มีรหัสผ่านให้แสดง (hash อยู่ใน Auth) — ขึ้น "—" ตามจริง ห้ามกุ */}
+                  <CopyField label="รหัสผ่าน" value={d.credentials?.password ?? "—"} secret />
                 </div>
               </div>
 
@@ -625,8 +629,8 @@ function HQDealersPageInner() {
               <button onClick={() => setViewCredsDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={16} /></button>
             </div>
             <div style={{ padding: "16px 20px" }}>
-              <CopyField label="อีเมล" value={viewCredsDealer.credentials.email} />
-              <CopyField label="รหัสผ่าน" value={viewCredsDealer.credentials.password} />
+              <CopyField label="อีเมล" value={viewCredsDealer.credentials?.email ?? "—"} />
+              <CopyField label="รหัสผ่าน" value={viewCredsDealer.credentials?.password ?? "—"} />
               <div style={{ fontSize: "0.72rem", color: "#6b7280", background: "#f0f4f8", borderRadius: 8, padding: "8px 12px", marginTop: 4 }}>
                 ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
               </div>

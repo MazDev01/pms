@@ -22,7 +22,7 @@ import {
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
-  loadHQTargets, leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
+  leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
   quotationStatusLabel, quotationStatusColor, dealerLeaderboard, mainTemplateOf,
 } from "@pms/shared/lib/mock";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
@@ -31,6 +31,7 @@ import {
   MOCK_TODAY, leadCreatedDate, leadLatestDate,
 } from "@pms/shared/lib/leadMetrics";
 import { useLeadRules } from "@pms/shared/lib/useHQRules";
+import { useHQTargets } from "@pms/shared/lib/useHQConfig";
 
 const NAVY = "#003366", SUCCESS = "#16A34A", DANGER = "#DC2626";
 // แท่ง "ใบเสนอราคา" — #F59E0B เดิม contrast กับพื้นขาวแค่ 2.09:1 (ต่ำกว่าเกณฑ์ 3:1) แท่งจางจนแทบไม่เห็น
@@ -58,7 +59,7 @@ export default function DealerDashboard() {
   const router = useRouter();
   const { leads: allLeads, quotations, appointments } = useSales();
   const { timeRange, passes } = useFilters();
-  const targets = loadHQTargets();
+  const targets = useHQTargets(); // เป้าจาก HQ ผ่าน repo (โหมด supabase = ค่าจริงใน DB ไม่ใช่ default)
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
   const { followUpAlertDays } = useLeadRules(currentDealer.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
 

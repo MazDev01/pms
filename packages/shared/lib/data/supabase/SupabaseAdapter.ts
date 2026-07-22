@@ -8,7 +8,7 @@ import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
 import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import type { DataAdapter } from "../ports";
-import type { SalesTable } from "../ports";
+import type { SalesTable, SalesChange } from "../ports";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, DealerLeadRulesMap, LeadRules,
@@ -27,13 +27,32 @@ function fmtAuditAt(iso: string): string {
   return `${d.getDate()} ${TH_MO_AUDIT[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
 }
 
+// PostgREST คืนสูงสุดต่อคำขอ (ค่าเริ่มต้น 1,000 แถว) — ถ้าไม่ไล่ทีละหน้า ข้อมูลจะถูก "ตัดเงียบ ๆ"
+// ผู้ใช้เห็นแค่ 1,000 แถวแรกโดยไม่มีคำเตือน (C2)
+const PAGE_ROWS = 1000;
+type RowsResult = { data: unknown[] | null; error: { message: string } | null };
+
+// ไล่ดึงทุกหน้าจนครบ · ต้องมี ORDER ที่เสถียรเสมอ ไม่งั้นแบ่งหน้าแล้วแถวซ้ำ/ตกหล่นได้
+// (Postgres ไม่รับประกันลำดับถ้าไม่ระบุ order)
+async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult>): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await run(from, from + PAGE_ROWS - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Row[];
+    out.push(...rows);
+    if (rows.length < PAGE_ROWS) break;
+  }
+  return out;
+}
+
 // select ทั้งตาราง + กรองตาม scope (ตัวแทน = เฉพาะสาขาตัวเอง · HQ = ทั้งหมด) → แปลงเป็น camelCase
-async function selectScoped<T>(table: string, scope?: Scope, col = "dealer_code"): Promise<T[]> {
-  const base = sb().from(table).select("*");
-  const q = scope && !scope.isHQ && scope.dealerCode ? base.eq(col, scope.dealerCode) : base;
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return toCamelList<T>((data ?? []) as Row[]);
+async function selectScoped<T>(table: string, scope?: Scope, col = "dealer_code", orderCol = "id"): Promise<T[]> {
+  const rows = await pageAll((from, to) => {
+    const base = sb().from(table).select("*").order(orderCol, { ascending: true }).range(from, to);
+    return scope && !scope.isHQ && scope.dealerCode ? base.eq(col, scope.dealerCode) : base;
+  });
+  return toCamelList<T>(rows);
 }
 
 async function must(p: PromiseLike<{ error: { message: string } | null }>): Promise<void> {
@@ -104,7 +123,21 @@ function rowToAppt(row: Row): AppointmentMock {
   return a as unknown as AppointmentMock;
 }
 
+// เลข id ถัดไปต่อสาขาแบบ atomic — DB เป็นคนออกให้ (กันชนเมื่อสร้างพร้อมกันในสาขาเดียวกัน)
+async function nextEntityId(dealerCode: string, entity: "customers" | "appointments"): Promise<number> {
+  const { data, error } = await sb().rpc("next_entity_id", { p_dealer: dealerCode, p_entity: entity });
+  if (error) throw new Error(error.message);
+  return Number(data);
+}
+
 const FILES_BUCKET = "dealer-files";
+
+// ชื่อช่อง Realtime ต้องไม่ซ้ำกันต่อการ subscribe หนึ่งครั้ง
+// ถ้าใช้ชื่อตายตัว: หลายคอมโพเนนต์ที่ subscribe พร้อมกัน (เช่น useHQPolicy + useQuoteValidityDays
+// ในหน้าเดียว) จะได้ channel instance เดิมที่ subscribe ไปแล้ว → เติม .on() ไม่ได้
+// ("cannot add postgres_changes callbacks after subscribe()") และตัวหลังจะไม่ได้รับ event เลย
+let channelSeq = 0;
+const topic = (base: string) => `${base}-${++channelSeq}`;
 
 export const SupabaseAdapter: DataAdapter = {
   // ไฟล์จริงใน Storage — พาธขึ้นต้นด้วยรหัสสาขาเสมอ (Storage RLS คุมด้วย foldername[1])
@@ -129,19 +162,59 @@ export const SupabaseAdapter: DataAdapter = {
   },
   // Realtime — ช่องเดียวฟังครบ 4 ตารางงานขาย · RLS กรอง event ให้ตามสาขาที่ล็อกอินอยู่แล้ว
   realtime: {
+    // ส่ง "แถวที่เปลี่ยน" มาให้เลย (แปลงเป็น type ของแอปแล้ว) → หน้าจอ patch เฉพาะแถว ไม่ต้องโหลดทั้งตาราง
+    // DELETE ได้ record เดิมมาด้วยเพราะตั้ง replica identity full ไว้ใน 0011
     subscribeSales: (onChange) => {
-      const tables: SalesTable[] = ["leads", "quotations", "customers", "appointments"];
-      const ch = sb().channel("sales-changes");
-      for (const t of tables) {
-        ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange(t));
+      const toRow: Record<SalesTable, (r: Row) => unknown> = {
+        leads: rowToLead,
+        quotations: rowToQuote,
+        appointments: rowToAppt,
+        customers: (r) => toCamel<CustomerRow>(r),
+      };
+      const ch = sb().channel(topic("sales-changes"));
+      for (const t of Object.keys(toRow) as SalesTable[]) {
+        ch.on("postgres_changes", { event: "*", schema: "public", table: t }, (p) => {
+          if (p.eventType === "DELETE") {
+            const id = (p.old as Row | undefined)?.id;
+            if (id != null) onChange({ table: t, type: "DELETE", id: id as string | number });
+            return;
+          }
+          onChange({
+            table: t,
+            type: p.eventType as "INSERT" | "UPDATE",
+            row: toRow[t](p.new as Row),
+          } as SalesChange);
+        });
+      }
+      ch.subscribe();
+      return () => { void sb().removeChannel(ch); };
+    },
+    subscribeCatalog: (onChange) => {
+      const ch = sb().channel(topic("catalog-changes"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "master_catalog" }, () => onChange());
+      ch.subscribe();
+      return () => { void sb().removeChannel(ch); };
+    },
+    subscribeSettings: (onChange) => {
+      const ch = sb().channel(topic("settings-changes"));
+      for (const t of ["hq_policy", "hq_targets", "hq_notif_rules"]) {
+        ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
       }
       ch.subscribe();
       return () => { void sb().removeChannel(ch); };
     },
   },
   dealers: {
-    list: () => selectScoped<DealerRow>("dealers"),
-    save: (all) => must(sb().from("dealers").upsert(toSnakeList(all as unknown as Row[]))),
+    // ตาราง dealers ใช้ code เป็น PK — ไม่มีคอลัมน์ id (แต่ DealerRow ของแอปมี id และ mock ตั้ง id = code เสมอ)
+    // ถ้าไม่เติมให้ ทุกแถวจะได้ id = undefined → React key ซ้ำ + หน้าจอที่อ้าง d.id พัง
+    list: async () => (await selectScoped<DealerRow>("dealers", undefined, "dealer_code", "code")).map(d => ({ ...d, id: d.id ?? d.code })),
+    // ตัดฟิลด์ที่ไม่มีคอลัมน์ใน DB ออกก่อน upsert:
+    //   • id          — ตารางใช้ code เป็น PK
+    //   • credentials — รหัสผ่านอยู่ใน Supabase Auth (hash) ห้ามเก็บซ้ำในตารางนี้
+    save: (all) => must(sb().from("dealers").upsert(
+      all.map(d => { const r = toSnake(d as unknown as Row); delete r.id; delete r.credentials; return r; }),
+      { onConflict: "code" },
+    )),
   },
   catalog: {
     list: () => selectScoped<SolutionProduct>("master_catalog"),
@@ -178,7 +251,8 @@ export const SupabaseAdapter: DataAdapter = {
     saveTargets: (t) => must(sb().from("hq_targets").upsert({ id: 1, ...toSnake(t as unknown as Row) })),
     saveNotifRules: (r) => must(sb().from("hq_notif_rules").upsert({ id: 1, ...toSnake(r as unknown as Row) })),
     getLeadRulesMap: async () => {
-      const rows = await selectScoped<{ dealerCode: string } & LeadRules>("dealer_lead_rules", { isHQ: true });
+      // ตารางนี้ใช้ dealer_code เป็น PK — ไม่มีคอลัมน์ id จึงต้องระบุคอลัมน์เรียงเอง
+      const rows = await selectScoped<{ dealerCode: string } & LeadRules>("dealer_lead_rules", { isHQ: true }, "dealer_code", "dealer_code");
       const map: DealerLeadRulesMap = {};
       for (const r of rows) map[r.dealerCode] = r;
       return map;
@@ -193,9 +267,9 @@ export const SupabaseAdapter: DataAdapter = {
   audit: {
     // อ่านเรียงล่าสุดก่อน (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ
     list: async () => {
-      const { data, error } = await sb().from("audit_log").select("*").order("id", { ascending: false });
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as Row[]).map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
+      const rows = await pageAll((from, to) =>
+        sb().from("audit_log").select("*").order("id", { ascending: false }).range(from, to));
+      return rows.map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
     },
     // ประทับ at ด้วย "วันนี้ของระบบ" (APP_NOW) + เวลาจริง → รายการอยู่ในช่วงตัวกรอง /hq/audit (แช่แข็งเวลา)
     append: (e) => {
@@ -209,11 +283,11 @@ export const SupabaseAdapter: DataAdapter = {
   // leads ใช้ mapper เฉพาะ (leadToRow/rowToLead) เพราะ id เป็น text + createdAt/area ต้องแปลงพิเศษ
   leads: {
     list: async (scope) => {
-      const base = sb().from("leads").select("*");
-      const q = scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as Row[]).map(rowToLead);
+      const rows = await pageAll((from, to) => {
+        const base = sb().from("leads").select("*").order("id", { ascending: true }).range(from, to);
+        return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
+      });
+      return rows.map(rowToLead);
     },
     create: async (row) => {
       const { data, error } = await sb().from("leads").insert(leadToRow(row)).select().single();
@@ -230,11 +304,11 @@ export const SupabaseAdapter: DataAdapter = {
   },
   quotations: {
     list: async (scope) => {
-      const base = sb().from("quotations").select("*");
-      const q = scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as Row[]).map(rowToQuote);
+      const rows = await pageAll((from, to) => {
+        const base = sb().from("quotations").select("*").order("id", { ascending: true }).range(from, to);
+        return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
+      });
+      return rows.map(rowToQuote);
     },
     create: async (row) => {
       const { data, error } = await sb().from("quotations").insert(quoteToRow(row)).select().single();
@@ -248,6 +322,12 @@ export const SupabaseAdapter: DataAdapter = {
     },
     remove: (id) => must(sb().from("quotations").delete().eq("id", id)),
     setStatus: (id, status) => must(sb().from("quotations").update({ status }).eq("id", id)),
+    // ปิดใบที่เลยวันหมดอายุ — RLS ทำให้แต่ละสาขาปิดได้เฉพาะใบของตัวเอง (0019)
+    expireOverdue: async (asOf) => {
+      const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf });
+      if (error) throw new Error(error.message);
+      return Number(data ?? 0);
+    },
     // เลขที่ใบต่อสาขาแบบ atomic (กันเลขชนเมื่อออกพร้อมกัน/ข้ามสาขา) — RPC ที่ DB (0003)
     nextQuoteNo: async (dealer) => {
       const { data, error } = await sb().rpc("next_quote_no", { p_dealer: dealer });
@@ -257,17 +337,19 @@ export const SupabaseAdapter: DataAdapter = {
   },
   customers: {
     list: (scope) => selectScoped<CustomerRow>("customers", scope),
+    nextId: (dealerCode) => nextEntityId(dealerCode, "customers"),
     create: (row) => insertRow<CustomerRow>("customers", row),
     update: (row) => updateRow<CustomerRow>("customers", row.id, row),
     remove: (id) => must(sb().from("customers").delete().eq("id", id)),
   },
   appointments: {
+    nextId: (dealerCode) => nextEntityId(dealerCode, "appointments"),
     list: async (scope) => {
-      const base = sb().from("appointments").select("*");
-      const q = scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as Row[]).map(rowToAppt);
+      const rows = await pageAll((from, to) => {
+        const base = sb().from("appointments").select("*").order("id", { ascending: true }).range(from, to);
+        return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
+      });
+      return rows.map(rowToAppt);
     },
     create: async (row) => {
       const { data, error } = await sb().from("appointments").insert(apptToRow(row)).select().single();

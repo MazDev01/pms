@@ -4,11 +4,11 @@
 // เป็น adapter เริ่มต้น (NEXT_PUBLIC_DATA_SOURCE=local) · พฤติกรรมเท่าเดิม แค่รวมเข้าท่อเดียว
 import {
   loadHQDealers, HQ_DEALERS_KEY,
-  loadMasterCatalog, MASTER_CATALOG_KEY,
+  loadMasterCatalog, MASTER_CATALOG_KEY, MASTER_CATALOG_EVENT,
   loadDealerFiles, saveDealerFiles, addDealerFile, removeDealerFile,
   loadResponsiblePersons, RP_STORAGE_KEY,
   loadHQPolicy, loadHQTargets, loadHQNotifRules,
-  HQ_POLICY_KEY, HQ_TARGETS_KEY, HQ_NOTIF_RULES_KEY,
+  HQ_POLICY_KEY, HQ_TARGETS_KEY, HQ_NOTIF_RULES_KEY, HQ_SETTINGS_EVENT,
   loadDealerLeadRulesMap, saveDealerLeadRules, loadQuoteValidityDays,
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
@@ -40,6 +40,11 @@ const SALES = {
 // กรองตามสาขา (multi-tenant) — dealer เห็นเฉพาะสาขาตัวเอง · HQ เห็นทั้งหมด
 // แถวไม่ระบุ dealerCode = สมุดงานเดิมของ CNX (ห้าม default เป็น scope.dealerCode ไม่งั้นไม่ติดสาขา
 // จะรั่วโผล่ทุกสาขา — คู่แฝดฝั่งอ่านของบั๊ก branch-isolation)
+// แจ้งหน้าอื่นใน origin เดียวกันว่าค่าตั้งค่าระดับเครือเปลี่ยน (โหมด supabase ใช้ Realtime แทน)
+function fireSettings() {
+  try { window.dispatchEvent(new Event(HQ_SETTINGS_EVENT)); } catch {}
+}
+
 function scopeByDealer<T extends { dealerCode?: string }>(list: T[], scope?: Scope): T[] {
   if (!scope || scope.isHQ || !scope.dealerCode) return list;
   return list.filter(r => (r.dealerCode ?? "CNX") === scope.dealerCode);
@@ -53,14 +58,20 @@ export const LocalAdapter: DataAdapter = {
     remove: () => done(),
   },
   // โหมด local ไม่มี Realtime — ข้อมูลอยู่ในเครื่องเดียว (ข้ามแท็บใช้ event bus/storage event เหมือนเดิม)
-  realtime: { subscribeSales: () => () => {} },
+  // (หน้าจอฝั่ง local ใช้ event/storage ของ origin ตัวเองแทน — ดู useMasterCatalog)
+  realtime: { subscribeSales: () => () => {}, subscribeCatalog: () => () => {}, subscribeSettings: () => () => {} },
   dealers: {
     list: () => ok(loadHQDealers()),
     save: (all) => { writeKey(HQ_DEALERS_KEY, all); return done(); },
   },
   catalog: {
     list: () => ok(loadMasterCatalog()),
-    save: (all) => { writeKey(MASTER_CATALOG_KEY, all); return done(); },
+    // บันทึกแล้วยิง event → หน้าอื่น (origin เดียวกัน) ที่ใช้ useMasterCatalog โหลดใหม่ทันที
+    save: (all) => {
+      writeKey(MASTER_CATALOG_KEY, all);
+      try { window.dispatchEvent(new Event(MASTER_CATALOG_EVENT)); } catch {}
+      return done();
+    },
   },
   files: {
     list: (scope) => ok(scopeByDealer(loadDealerFiles(), scope)),
@@ -85,9 +96,10 @@ export const LocalAdapter: DataAdapter = {
     getLeadRulesMap: () => ok(loadDealerLeadRulesMap()),
     saveLeadRules: (code, rules) => { saveDealerLeadRules(code, rules); return done(); },
     getQuoteValidityDays: () => ok(loadQuoteValidityDays()),
-    savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); return done(); },
-    saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); return done(); },
-    saveNotifRules: (r) => { writeKey(HQ_NOTIF_RULES_KEY, r); return done(); },
+    // ยิง event หลังบันทึก → หน้าอื่น (origin เดียวกัน) ที่ใช้ค่านโยบาย/เป้า อัปเดตทันที
+    savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); fireSettings(); return done(); },
+    saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); fireSettings(); return done(); },
+    saveNotifRules: (r) => { writeKey(HQ_NOTIF_RULES_KEY, r); fireSettings(); return done(); },
   },
   audit: {
     list: () => ok(loadAudit()),
@@ -140,6 +152,19 @@ export const LocalAdapter: DataAdapter = {
       writeKey(SALES.quotations, list.map((q) => (q.id === id ? { ...q, status } : q)));
       return done();
     },
+    // ปิดใบที่เลยวันหมดอายุ (โหมด local ทำกับชุดของสาขานั้น)
+    expireOverdue: (asOf, scope) => {
+      const all = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      let n = 0;
+      const next = all.map(q => {
+        const mine = !scope || scope.isHQ || !scope.dealerCode || (q.dealerCode ?? "CNX") === scope.dealerCode;
+        const overdue = q.status === "sent_to_client" && !!q.expiry && /^\d{4}-\d{2}-\d{2}$/.test(q.expiry) && q.expiry < asOf;
+        if (mine && overdue) { n++; return { ...q, status: "expired" as const }; }
+        return q;
+      });
+      if (n) writeKey(SALES.quotations, next);
+      return ok(n);
+    },
     // เลขที่ใบถัดไป = max ของเลขท้าย +1 (เทียบเท่า nextQId เดิมในหน้าจอ) · dealer ไม่ใช้ในโหมด local
     nextQuoteNo: () => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
@@ -149,6 +174,11 @@ export const LocalAdapter: DataAdapter = {
   },
   customers: {
     list: (scope) => ok(scopeByDealer(readKey<CustomerRow[]>(SALES.customers, initialCustomers), scope)),
+    // โหมด local มีผู้ใช้คนเดียวต่อเครื่อง → max+1 พอ (โหมด supabase ใช้ RPC atomic)
+    nextId: (dealerCode) => {
+      const mine = scopeByDealer(readKey<CustomerRow[]>(SALES.customers, initialCustomers), { dealerCode, isHQ: false });
+      return ok(mine.reduce((m, c) => Math.max(m, c.id), 0) + 1);
+    },
     create: (row) => {
       const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
       writeKey(SALES.customers, [row, ...list]);
@@ -167,6 +197,10 @@ export const LocalAdapter: DataAdapter = {
   },
   appointments: {
     list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),
+    nextId: (dealerCode) => {
+      const mine = scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), { dealerCode, isHQ: false });
+      return ok(mine.reduce((m, a) => Math.max(m, a.id), 0) + 1);
+    },
     create: (row) => {
       const list = readKey<AppointmentMock[]>(SALES.appointments, apptSeed);
       writeKey(SALES.appointments, [row, ...list]);

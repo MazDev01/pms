@@ -28,11 +28,15 @@ export function loadIssuer(): IssuerProfile {
 
 // อ่านการตั้งค่าเอกสาร (ตรา/ลายเซ็น/prefix/เลขรัน) — fallback = DEFAULT_DOC
 // VAT บังคับมาจากนโยบาย HQ เสมอ (HQ คุมอัตราภาษีทั้งเครือ · ตัวแทนแก้ไม่ได้)
-export function loadDoc(): DocProfile {
+// vatPercent: ส่งมาจากหน้าจอ (useHQPolicy) — เป็นค่าจริงที่ HQ ตั้งไว้
+// ถ้าไม่ส่งมา จะ fallback อ่าน localStorage ซึ่งถูกเฉพาะโหมด local เท่านั้น
+// (โหมด supabase นโยบายอยู่ใน DB → ต้องส่งค่ามาเสมอ ไม่งั้นได้ค่า default = คิด VAT ผิด)
+export function loadDoc(vatPercent?: number): DocProfile {
   if (typeof window === "undefined") return { ...DEFAULT_DOC };
   let doc = { ...DEFAULT_DOC };
   try { const s = localStorage.getItem(DOC_KEY); if (s) doc = { ...DEFAULT_DOC, ...JSON.parse(s) }; } catch {}
-  try { const vat = loadHQPolicy().vat; if (typeof vat === "number" && vat >= 0) doc.vatPercent = vat; } catch {}
+  if (typeof vatPercent === "number" && vatPercent >= 0) doc.vatPercent = vatPercent;
+  else try { const vat = loadHQPolicy().vat; if (typeof vat === "number" && vat >= 0) doc.vatPercent = vat; } catch {}
   return doc;
 }
 
@@ -166,9 +170,10 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 
 // พิมพ์ใบเสนอราคา — โหลด issuer + doc จาก localStorage เอง แล้วเปิดหน้าต่างพิมพ์
 // ใช้ตัวนี้เพื่อความสม่ำเสมอ (VAT/ตรา/ลายเซ็น มาจากการตั้งค่าจริงเสมอ)
-export function printQuotation(q: QuotationMock, cust?: PrintCustomer) {
+// vatPercent: ส่ง VAT จาก useHQPolicy() มาด้วยเสมอ (ค่าจริงของ HQ) — ดู loadDoc
+export function printQuotation(q: QuotationMock, cust?: PrintCustomer, vatPercent?: number) {
   // ใช้สแนปช็อตผู้ออกที่ตรึงไว้กับใบ (ถ้ามี) — ใบเก่าคงชื่อเดิม; ไม่มีค่อย fallback โปรไฟล์ปัจจุบัน
-  const html = buildQuotationHTML(q, q.issuer ?? loadIssuer(), cust, loadDoc(), loadWordmark());
+  const html = buildQuotationHTML(q, q.issuer ?? loadIssuer(), cust, loadDoc(vatPercent), loadWordmark());
   const w = window.open("", "_blank"); if (!w) return;
   w.document.write(html); w.document.close();
 }

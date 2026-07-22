@@ -4,13 +4,15 @@ import { useState } from "react";
 import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  quotationStatusLabel, quotationStatusColor, loadHQPolicy,
+  quotationStatusLabel, quotationStatusColor,
   type LeadRow, type CustomerRow, type QuotationMock, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
+import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 
 const MOCK_TODAY = "2026-06-30";
 
@@ -22,7 +24,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const policy = loadHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ
+  const policy = useHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ (อ่านผ่าน repo + อัปเดตตาม HQ)
 
   // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
   const subj = lead ? {
@@ -44,8 +46,6 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   // ไม่ได้ตั้งไว้ค่อยประกอบจากแม่แบบ + ชื่อบริษัท (ยังแก้ในช่องได้ตามเดิม)
   const defProject = () => subj.project?.trim() || (subj.product ? `${subj.product} — ${subj.company}` : subj.company);
   const readOnly = subj.kind === "customer"; // แท็บใบเสนอราคาของ "ลูกค้า" = ดูอย่างเดียว (ไม่แก้/สร้าง/ลบ)
-  const viewLineItems = (q: QuotationMock): QuoteLineItem[] => q.lineItems ?? (q.materialCost > 0
-    ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
 
   // ตั้งต้น BOQ จากข้อมูลลูกค้าเป้าหมายเลย ไม่ต้องให้ไปเลือกแคตตาล็อกเอง (บอสสั่ง)
   // โครงสร้าง BOQ ที่ถูก: ราคา/หน่วย = ราคากลางของ HQ (คงที่) · จำนวน = พื้นที่ (ตัวแปร)
@@ -65,7 +65,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     const seed: QuoteLineItem[] = subj.product && rate > 0 && qty > 0
       ? [{ name: subj.product, qty: Math.max(1, qty), unit: prod!.unit, unitPrice: rate }]
       : [];
-    const total = seed.reduce((s, it) => s + it.qty * it.unitPrice, 0);
+    const total = boqSubtotal(seed);
     return {
       project: defProject(), buildingType: subj.product,
       items: String(seed.length), price: total > 0 ? String(total) : "",
@@ -90,8 +90,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   function openCreate() { setEditing(null); setForm(emptyForm()); setMode("create"); }
   function openEdit(q: QuotationMock) {
     setEditing(q);
-    const lineItems: QuoteLineItem[] = q.lineItems ?? (q.materialCost > 0
-      ? [{ name: q.buildingType || "รายการ", qty: q.area || 1, unit: q.area ? "ตร.ม." : "รายการ", unitPrice: q.area ? Math.round(q.materialCost / q.area) : q.materialCost }] : []);
+    const lineItems: QuoteLineItem[] = boqLineItems(q);
     setForm({ project: q.project, buildingType: q.buildingType, items: String(lineItems.length),
       price: String(q.materialCost || q.totalValue), expiry: q.expiry ?? "", note: q.note ?? "", lineItems });
     setMode("edit");
@@ -212,7 +211,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   // ── มุมมองอ่านอย่างเดียว (View) — เลย์เอาต์เดียวกับฟอร์ม แต่อ่านอย่างเดียว (มีตาราง BOQ) ──
   if (mode === "view" && editing) {
     const q = editing; const c = quotationStatusColor[q.status];
-    const lis = viewLineItems(q);
+    const lis = boqLineItems(q);
     const subtotal = lis.reduce((s, it) => s + it.qty * it.unitPrice, 0) || q.materialCost || q.totalValue;
     const th: React.CSSProperties = { textAlign: "left", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", padding: "8px 10px", background: "#f7f9fc", whiteSpace: "nowrap" };
     const td: React.CSSProperties = { fontSize: "0.78rem", color: "#2D2D2D", padding: "9px 10px", borderTop: "1px solid #eef0f4" };
@@ -282,7 +281,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province })} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
+          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
           {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
           {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
             <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
@@ -329,7 +328,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
                     {([
                       { ic: <Eye size={13} />, t: "ดู", fn: () => { setEditing(q); setMode("view"); } },
                       ...(readOnly ? [] : [{ ic: <Pencil size={13} />, t: "แก้ไข", fn: () => openEdit(q) }]),
-                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }) },
+                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat) },
                       ...(readOnly ? [] : [
                         { ic: <Copy size={13} />, t: "ทำสำเนา", fn: () => duplicate(q) },
                         { ic: <Trash2 size={13} />, t: "ลบ", fn: () => setConfirmDel(q.id), danger: true },

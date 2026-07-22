@@ -7,11 +7,12 @@ import {
   notes, buildLeadTasks, leadStatusLabel, leadStatusColor,
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, loadHQPolicy, customerCode,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
-  type QuotationMock, type QuoteLineItem, type PipelineDealMock, type LeadRow,
+  type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile,
   type AppointmentMock, type NoteMock,
 } from "@pms/shared/lib/mock";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
+import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
@@ -20,6 +21,7 @@ import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/compone
 import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { LeadQuotationsPanel } from "@pms/shared/components/ui/LeadQuotationsPanel";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
@@ -108,13 +110,6 @@ const COLS: Col[] = [
 
 // ── Derived (deterministic) per-customer values ──────────────
 // ทุกฟังก์ชันรับ qs = ใบเสนอราคาจาก context (แหล่งความจริงเดียว) เพื่อให้ค่าตอบ runtime
-// ลูกค้า "ใช้งานอยู่" จริงหรือไม่ — มีดีลที่กำลังดำเนินการ หรือใบเสนอราคาที่ยังไม่ปิด (ไม่นับที่แพ้/หมดอายุ)
-// ใช้ผลนี้คู่กับ c.status ที่บันทึกไว้ (ถ้ามีกิจกรรมจริงถือว่าใช้งานอยู่เสมอ แม้ status จะถูกตั้งเป็น "ไม่ใช้งาน")
-function hasOpenActivity(customerId:number, deals:PipelineDealMock[], qs:QuotationMock[]){
-  const hasActiveDeal = deals.some(d=>d.customerId===customerId && d.outcome==="active");
-  const hasOpenQuote  = qs.some(q=>q.customerId===customerId && (q.status==="draft"||q.status==="sent_to_client"));
-  return hasActiveDeal || hasOpenQuote;
-}
 // จำนวนใบเสนอราคาของลูกค้า
 function quotationCountFor(customerId:number, qs:QuotationMock[]){
   return qs.filter(q=>q.customerId===customerId).length;
@@ -125,19 +120,10 @@ function lastActivityFor(customerId:number, joinDate:string, qs:QuotationMock[])
   if(dates.length===0) return joinDate || "—";
   return dates.reduce((a,b)=>a>b?a:b);
 }
-// ดีลปัจจุบัน — ดีลที่ยัง active ของลูกค้า (เอาตัวแรกตามลำดับ deterministic)
-function currentDealFor(customerId:number, deals:PipelineDealMock[]){
-  return deals.find(d=>d.customerId===customerId && d.outcome==="active") ?? null;
-}
 // ── Per-customer metrics (deterministic, derived) ────────────
 // ยอดขายรวม — ผลรวม totalValue ของใบเสนอราคาที่ปิดการขาย (won)
 function totalSalesFor(customerId:number, qs:QuotationMock[]){
   return qs.filter(q=>q.customerId===customerId && q.status==="won").reduce((s,q)=>s+q.totalValue,0);
-}
-// จำนวนดีลที่กำลังดำเนินการ — deals (context) ที่ outcome==="active"
-// สรุปดีลของลูกค้าจาก leads (Deal = LeadRow ผูก customerId) — total/active/won
-function activeDealsCountFor(customerId:number, deals:PipelineDealMock[]){
-  return deals.filter(d=>d.customerId===customerId && d.outcome==="active").length;
 }
 // จำนวนใบเสนอราคาที่ปิดการขายแล้ว (won)
 function wonQuotationCountFor(customerId:number, qs:QuotationMock[]){
@@ -217,42 +203,22 @@ function deliveryDateFor(customerId:number, qs:QuotationMock[]): string {
   return won ? won.date : "—";
 }
 
-// ── Deterministic drawer feeds (จากลูกค้า + quotations + pipelineDeals) ──
-// ไทม์ไลน์กิจกรรม — สร้างจากใบเสนอราคาและดีลของลูกค้า (deterministic)
-function activityItemsFor(customerId:number, joinDate:string, qs:QuotationMock[], deals:PipelineDealMock[]): ActivityTimelineItem[] {
+// ── Deterministic drawer feeds (จากลูกค้า + quotations + leads) ──
+// ไทม์ไลน์กิจกรรม — สร้างจากใบเสนอราคาและลีดที่ผูกกับลูกค้ารายนี้ (deterministic)
+function activityItemsFor(customerId:number, joinDate:string, qs:QuotationMock[], ls:LeadRow[]): ActivityTimelineItem[] {
   const items: ActivityTimelineItem[] = [];
   // จากใบเสนอราคา
   qs.filter(q=>q.customerId===customerId).forEach(q=>{
     items.push({ id:`q-${q.id}`, type:"quote", text:`ใบเสนอราคา ${q.id} — ${q.project} (${quotationStatusLabel[q.status]})`, time:fmtDate(q.date) });
     if(q.status==="won") items.push({ id:`w-${q.id}`, type:"status", text:`ปิดการขายสำเร็จ — ${q.project}`, time:fmtDate(q.date) });
   });
-  // จากดีลใน pipeline
-  deals.filter(d=>d.customerId===customerId).forEach(d=>{
-    items.push({ id:`d-${d.id}`, type:"status", text:`โอกาสการขาย: ${d.project} · ${fmtMoney(d.value)}`, time:fmtDate(d.createdAt) });
+  // จากดีล = ลูกค้าเป้าหมายที่ผูกกับลูกค้ารายนี้ (แหล่งเดียว ไม่มีกระดาน pipeline แยกอีกแล้ว)
+  ls.filter(l=>l.customerId===customerId).forEach(l=>{
+    items.push({ id:`d-${l.id}`, type:"status", text:`โอกาสการขาย: ${l.project || l.company} · ${l.value}`, time:l.createdAt ?? "—" });
   });
   // จุดเริ่มต้น: วันที่เพิ่มลูกค้า
   items.push({ id:"joined", type:"note", text:"เพิ่มลูกค้าเข้าระบบ", time:fmtDate(joinDate) });
   return items;
-}
-// รายการงาน (จากดีลของลูกค้าใน context) — deterministic
-function taskItemsFor(customerId:number, deals:PipelineDealMock[]){
-  return deals
-    .filter(d=>d.customerId===customerId)
-    .flatMap(d=>(d.tasks ?? []).map(t=>({ id:`${d.id}-${t.id}`, text:t.text, done:t.done, deal:d.project })));
-}
-// ประวัติ (deterministic) — เรียงจากเหตุการณ์ของลูกค้า
-function historyItemsFor(customerId:number, joinDate:string, qs:QuotationMock[], deals:PipelineDealMock[]){
-  const rows: {label:string; date:string}[] = [
-    { label:"เพิ่มลูกค้าเข้าระบบ", date:joinDate },
-  ];
-  qs.filter(q=>q.customerId===customerId).forEach(q=>{
-    rows.push({ label:`ออกใบเสนอราคา ${q.id}`, date:q.date });
-    if(q.status==="won") rows.push({ label:`ปิดการขาย ${q.id}`, date:q.date });
-  });
-  deals.filter(d=>d.customerId===customerId).forEach(d=>{
-    rows.push({ label:`สร้างโอกาสการขาย ${d.project}`, date:d.createdAt });
-  });
-  return rows.filter(r=>r.date && r.date!=="—").sort((a,b)=>a.date<b.date?1:-1);
 }
 
 // ── ลูกค้าใหม่ / ลูกค้าเดิม ───────────────
@@ -374,12 +340,13 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
 export default function CustomersPage(){
   const router = useRouter();
   const {
-    customers: allCustomers, quotations: allQuotations, deals, leads: allLeadsRaw,
+    customers: allCustomers, quotations: allQuotations, leads: allLeadsRaw,
     appointments,
     addLead, updateLead, addCustomer: ctxAddCustomer,
     updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
+  const hqPolicy = useHQPolicy(); // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
   // undefined = ของ CNX (สมุดงานเดิม) · ที่เหลือกรองด้วย dealerCode ตรง ๆ
   const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomers, currentDealer.code]);
@@ -932,7 +899,7 @@ export default function CustomersPage(){
             )}
           </>
         );
-        const timelineItems = activityItemsFor(selected.id, selected.joinDate, quotations, deals);
+        const timelineItems = activityItemsFor(selected.id, selected.joinDate, quotations, allLeadsRaw);
 
         return (
         <>
@@ -1225,10 +1192,9 @@ export default function CustomersPage(){
         const secL: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
         const sc = quotationStatusColor[q.status];
         // BOQ — ใบที่ไม่มี lineItems เก็บไว้ ใช้ materialCost ปั้นเป็นรายการเดียว (ตรรกะเดียวกับหน้าใบเสนอราคา)
-        const lis: QuoteLineItem[] = q.lineItems ?? (q.materialCost>0
-          ? [{ name:q.buildingType||"รายการ", qty:q.area||1, unit:q.area?"ตร.ม.":"รายการ", unitPrice:q.area?Math.round(q.materialCost/q.area):q.materialCost }] : []);
-        const boqTotal = lis.reduce((s,li)=>s+li.qty*li.unitPrice, 0);
-        const vatPct = loadHQPolicy().vat;   // VAT = นโยบาย HQ (ตัวแทนตั้งเองไม่ได้)
+        const lis: QuoteLineItem[] = boqLineItems(q);
+        const boqTotal = boqSubtotal(lis);
+        const vatPct = hqPolicy.vat;   // VAT = นโยบาย HQ (ตัวแทนตั้งเองไม่ได้ · อ่านผ่าน repo)
         // ดีลที่ผูกกับใบนี้ → ไทม์ไลน์กิจกรรมจริงของดีล
         const deal = customerDeals.find(l => (q.dealId!=null && l.numId===q.dealId)) ?? customerDeals.find(l=>l.company===q.customer);
         const acts = deal?.activities ?? [];
@@ -1399,7 +1365,7 @@ export default function CustomersPage(){
                   <div style={cardS}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                       <div style={{...secL,marginBottom:0}}><FileText size={13} color={PRIMARY}/> ใบเสนอราคา</div>
-                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province })}
+                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, hqPolicy.vat)}
                         className="btn btn-secondary btn-sm" style={{color:PRIMARY}}><Printer size={12}/> พิมพ์ PDF</button>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 20px",marginBottom:12}}>

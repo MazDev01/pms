@@ -16,6 +16,7 @@ import { LeadTasks } from "@pms/shared/components/ui/LeadTasks";
 import { LeadQuotationsPanel } from "@pms/shared/components/ui/LeadQuotationsPanel";
 import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { useLeadRules } from "@pms/shared/lib/useHQRules";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
@@ -374,6 +375,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 }) {
   const isEdit = !!initial;
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง
+  const { customers } = useSales();   // สมุดลูกค้าของสาขา — ใช้เตือนว่าบริษัทนี้เป็นลูกค้าอยู่แล้ว
+  const myDealer = useCurrentDealer();
   const [form, setForm] = useState({
     company: initial?.company ?? "", contact: initial?.contact ?? "",
     phone: initial?.phone ?? "", email: initial?.email ?? "",
@@ -387,6 +390,15 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     logo: initial?.logo ?? "",
   });
   const logoInputRef = useRef<HTMLInputElement>(null);
+  // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้เป็นลูกค้าอยู่แล้ว — กันเปิดลีดซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
+  // แค่บอก ไม่ได้ห้าม (บางทีก็อยากเปิดลีดใหม่จริง ๆ) · ทางที่ถูกคือกด "สร้างดีลใหม่" จากหน้าลูกค้า
+  const dupHint = useMemo(() => {
+    if (isEdit || !form.company.trim()) return "";
+    const { exact, similar } = matchCustomers(customers, form.company, myDealer.code);
+    if (exact)        return `"${exact.company}" เป็นลูกค้าอยู่แล้ว — ปิดการขายได้ ระบบจะผูกเข้ากับลูกค้ารายเดิมให้ ไม่สร้างซ้ำ`;
+    if (similar[0])   return `ชื่อใกล้เคียงกับลูกค้าเดิม "${similar[0].company}" — ถ้าเป็นบริษัทเดียวกัน ควรกด "สร้างดีลใหม่" จากหน้าลูกค้าแทน`;
+    return "";
+  }, [isEdit, form.company, customers, myDealer.code]);
   function set(k: keyof typeof form, v: string) { setForm(p=>({...p,[k]:v})); }
   async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -423,6 +435,10 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   const labelStyle: React.CSSProperties = {
     display:"block", fontSize:"0.65rem", fontWeight:700,
     color:"#374151", marginBottom:4, textTransform:"uppercase", letterSpacing:"0.04em",
+  };
+  const dupHintStyle: React.CSSProperties = {
+    marginTop:6, padding:"7px 10px", borderRadius:8, background:"#fff8ed",
+    border:"1px solid #fcd9a4", color:"#8a5a10", fontSize:"0.7rem", lineHeight:1.5,
   };
   const secHead: React.CSSProperties = {
     gridColumn:"1/-1", fontSize:"0.7rem", fontWeight:800, color:"#003366",
@@ -486,6 +502,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 <label style={labelStyle}>บริษัท *</label>
                 <input value={form.company} onChange={e=>set("company",e.target.value)}
                   placeholder="เช่น บริษัท ตัวอย่าง จำกัด" style={inputStyle} autoFocus />
+                {dupHint && <div style={dupHintStyle}>{dupHint}</div>}
               </div>
               <div>
                 <label style={labelStyle}>จังหวัด</label>

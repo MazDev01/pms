@@ -12,6 +12,13 @@ import {
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@pms/shared/lib/mock";
 import { parseBaht } from "@pms/shared/lib/format";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+
+// โหมด supabase = ข้อมูลจริงทุกสาขาอยู่ใน DB แล้ว (SalesContext ฝั่ง HQ โหลดมาทั้งเครือ)
+// → ห้ามเอา seed จำลอง (hqAllQuotations/hqAllCustomers/dealerDetails) มาผสมเด็ดขาด
+//   ไม่งั้น HQ จะเห็น "ข้อมูลที่ไม่มีอยู่จริง" ปนกับของจริง (กติกา: ห้ามกุข้อมูล)
+// โหมด local = ยังเป็นเดโม → คงพฤติกรรมเดิมไว้ให้หน้าจอมีข้อมูลให้ดู
+const USE_SEED = DATA_SOURCE !== "supabase";
 
 // ดีลเลอร์หลักของเดโม (สาขาที่ลีด/ใบไม่ระบุ dealerCode ถือเป็นของสาขานี้)
 export const CURRENT_DEALER = { code: "CNX", name: "เชียงใหม่สตีลบิลด์" };
@@ -42,6 +49,7 @@ export function useNetworkQuotations(): HQQuotation[] {
         materialCost: q.materialCost, lineItems: q.lineItems,
       };
     });
+    if (!USE_SEED) return live; // supabase: ใบทุกสาขามาจาก DB จริงแล้ว
     const liveNos = new Set(live.map(l => l.quoteNo));
     return [...live, ...hqAllQuotations.filter(h => !liveNos.has(h.quoteNo))];
   }, [quotations, leads]);
@@ -71,6 +79,7 @@ export function useNetworkCustomers(): HQCustomer[] {
         lastContact: "30 มิ.ย. 2569", segment: "sme",
       };
     });
+    if (!USE_SEED) return live; // supabase: ลูกค้าทุกสาขามาจาก DB จริงแล้ว
     // กันซ้ำด้วย dealerCode ไม่ใช่ชื่อ — ชื่อสะกดต่างนิดเดียวก็หลุด
     // (เคยมี "บ.ไทยสตีล" ใน seed กับ "บจ. ไทยสตีล" ในสมุดสด แล้ว HQ นับเป็น 2 ราย)
     // ลูกค้าของสาขาที่เล่นได้มาจากสมุดสดเสมอ → seed ของสาขานั้นไม่ต้องเอามาต่อท้าย
@@ -88,31 +97,30 @@ const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.",
 export function useNetworkDealerDetail(code: string): DealerDetail {
   const { leads, quotations } = useSales();
   return useMemo(() => {
-    // สาขาอื่น (ไม่ใช่ดีลเลอร์ที่เล่นได้) → seed เดิม
-    if (code !== CURRENT_DEALER.code) {
+    // โหมด local (เดโม): มีข้อมูลสดเฉพาะสาขาที่เล่นได้ (CNX) — สาขาอื่นใช้ seed จำลอง
+    // โหมด supabase: ทุกสาขามีข้อมูลจริงใน DB → สร้างจากข้อมูลจริงเสมอ (ห้ามใช้ seed)
+    if (USE_SEED && code !== CURRENT_DEALER.code) {
       return dealerDetails[code] ?? { code, monthlySales: [], leads: [], projects: [], quotes: [] };
     }
-    // CNX = ข้อมูลสดจาก SalesContext
-    // SalesContext.leads ถือลีด "ทั้งเครือ" (initialLeads = mock.leads รวม seed สาขาอื่น 45 ราย)
-    // ต้องกรองเหลือเฉพาะของ CNX ก่อน ไม่งั้นหน้าเจาะสาขา CNX ฝั่ง HQ จะโชว์ลีดของ RYG/MST ปนเข้ามา
-    // (ลีดที่ไม่มี dealerCode = ตัวแทน CNX สร้างเอง — กติกาเดียวกับ Topbar/Dashboard/หน้า /leads)
-    // quotations ใน SalesContext เป็นของ CNX อยู่แล้ว (seed อ้าง customerId 1-13 ของ CNX) จึงไม่ต้องกรอง
-    const cnxLeads = leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === CURRENT_DEALER.code);
-    const quotes: DealerQuoteItem[] = quotations.map(q => ({
+    // กรองเหลือเฉพาะของสาขานี้ — SalesContext ฝั่ง HQ ถือข้อมูลทั้งเครือ
+    // (ลีด/ใบที่ไม่ระบุ dealerCode = ของสาขา CNX ตามกติกาเดิม)
+    const mine = leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === code);
+    const myQuotes = quotations.filter(q => (q.dealerCode ?? CURRENT_DEALER.code) === code);
+    const quotes: DealerQuoteItem[] = myQuotes.map(q => ({
       quoteNo: q.id, customer: q.customer, product: q.buildingType || q.project,
       valueNum: q.totalValue, status: q.status, date: fmtISOToThai(q.date),
     }));
-    const leadItems: DealerLeadItem[] = cnxLeads.map(l => ({
+    const leadItems: DealerLeadItem[] = mine.map(l => ({
       id: l.id, name: l.company || l.name, province: l.province, product: l.product,
       valueNum: parseBaht(l.value), status: LEAD_TO_ITEM[l.status], assignedAt: l.createdAt ?? "—",
     }));
-    const projects: DealerProjectItem[] = cnxLeads.filter(l => l.status !== "CANCELLED").map(l => ({
+    const projects: DealerProjectItem[] = mine.filter(l => l.status !== "CANCELLED").map(l => ({
       id: l.id, name: l.company || l.name, product: l.product, valueNum: parseBaht(l.value),
       progress: LEAD_PROGRESS[l.status], status: l.status === "PAID" ? "completed" : "in_progress",
     }));
-    // ยอดขายรายเดือน (พันบาท) จากใบเสนอราคาที่ปิดได้ · แสดง ม.ค.–มิ.ย. (mock วันนี้ = มิ.ย.)
+    // ยอดขายรายเดือน (พันบาท) จากใบเสนอราคาที่ปิดได้ของสาขานี้ · แสดง ม.ค.–มิ.ย. (mock วันนี้ = มิ.ย.)
     const byMonth = new Map<number, number>();
-    quotations.forEach(q => {
+    myQuotes.forEach(q => {
       if (q.status !== "won") return;
       const m = parseInt((q.date || "").slice(5, 7)) - 1;
       if (!isNaN(m)) byMonth.set(m, (byMonth.get(m) ?? 0) + q.totalValue);

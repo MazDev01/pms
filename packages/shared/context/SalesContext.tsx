@@ -6,32 +6,23 @@ import {
 } from "react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
-  pipelineDeals, pipelineStages,
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
   quotationToFile, AUTO_FILE_BY,
-  type PipelineDealMock, type LeadRow, type DealActivity,
+  type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock,
 } from "@pms/shared/lib/mock";
 import { loadIssuer } from "@pms/shared/lib/quotationPrint";
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { parseBaht } from "@pms/shared/lib/format";
+import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, realtime } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 // โหมด backend — supabase: ลีดมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
 const USE_SUPABASE = DATA_SOURCE === "supabase";
-
-// timestamp ของ DealActivity — วันที่ยึด "วันนี้" ของระบบ (APP_NOW) ไม่ใช่นาฬิกาเครื่อง (กติกาเดียวกับทั้งระบบ)
-// เวลา (ชม.:นาที:วินาที) ใช้นาฬิกาจริงได้ ไว้เรียงลำดับเหตุการณ์ในวันเดียวกัน
-// ปัจจุบันค่านี้ยังไม่ถูก render ที่ไหน แต่ตรึงไว้กันเป็นบั๊กถ้าถูกนำไปแสดง/กรองภายหลัง
-function activityStamp(): string {
-  const t = new Date();
-  const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0"), ss = String(t.getSeconds()).padStart(2, "0");
-  return `${APP_NOW_ISO}T${hh}:${mm}:${ss}`;
-}
 
 // ใบเสนอราคาเดิม (seed) = ออกภายใต้โปรไฟล์บริษัทตั้งต้น → ตรึงชื่อไว้ ไม่เปลี่ยนตามโปรไฟล์ที่แก้ทีหลัง
 const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
@@ -41,41 +32,15 @@ const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
 // ── คีย์เก็บข้อมูลงานขายลง localStorage — กด F5 แล้วข้อมูลต้องไม่หาย ──────────────
 // สำคัญ: ถ้าแก้ "ข้อมูลตั้งต้น" ใน mock.ts (เพิ่มฟิลด์/แก้ค่า) ต้องขึ้นเลขเวอร์ชันคีย์ด้วย
 // ไม่งั้นเบราว์เซอร์ที่เคยเปิดจะอ่านของเก่าที่บันทึกไว้ทับตลอด แล้วมองไม่เห็นข้อมูลใหม่
-const K = {
-  deals:        "sales_deals_v1",
-  leads:        "sales_leads_v2",        // v2 = เติมพื้นที่ (area) ครบทุกใบ · v1 = ลีดชุดที่มี createdAt ครบทุกใบ
-  customers:    "sales_customers_v1",
-  quotations:   "sales_quotations_v1",
-  appointments: "sales_appointments_v1", // v1 = นัดหมายชุดที่มี leadId
-  leadDealMap:  "sales_lead_deal_map_v1",
-  nextDealId:   "sales_next_deal_id_v1",
-  checklists:   "sales_lead_checklists_v1",
-};
-
 // ─── Types ─────────────────────────────────────────────────────────
-export type DealSource = "pipeline" | "lead";
-export type ChecklistItem = { id: string; text: string; done: boolean };
+// โดเมนที่เขียนผ่าน repo — ใช้บอกว่าต้องดึงชุดไหนกลับมาทับเมื่อบันทึกล้มเหลว
+export type SyncEntity = "leads" | "quotations" | "customers" | "appointments";
 
+// ── กระดาน Pipeline/Deals ถูกยุบเข้ากับ "ลูกค้าเป้าหมาย" แล้ว ──────────────────
+// เหตุผล: เดิมมีสองที่ที่บอกว่าดีลไปถึงไหน (deal.stageId/tasks กับ lead.status/tasks)
+//         = ความจริงซ้ำซ้อน · และ deals เก็บแค่ใน localStorage เครื่องเดียว HQ ไม่เคยเห็น
+// ตอนนี้ LeadRow เป็นแหล่งเดียว (status + tasks + activities + customerId)
 export type SalesContextType = {
-  // Deals
-  deals: PipelineDealMock[];
-  addDeal: (deal: PipelineDealMock) => void;
-  updateDealTask: (dealId: number, taskId: number, done: boolean) => void;
-  moveDealStage: (dealId: number, stageId: number) => void;
-  closeDeal: (dealId: number, outcome: "won" | "lost", lostReason?: string) => void;
-  updateDealNotes: (dealId: number, notes: string) => void;
-  addDealFile: (dealId: number, file: { name: string; size: string }) => void;
-  logDealActivity: (dealId: number, entry: Omit<DealActivity, "id">) => void;
-
-  // Lead → Deal connection
-  leadDealMap: Record<string, number>; // leadId → dealId
-  openDealFromLead: (lead: LeadRow) => PipelineDealMock;
-  getDealForLead: (leadId: string) => PipelineDealMock | undefined;
-
-  // Lead checklists (persisted in context so leads ↔ pipeline sync)
-  leadChecklists: Record<string, ChecklistItem[]>;
-  updateLeadChecklist: (leadId: string, items: ChecklistItem[]) => void;
-
   // Leads (lifted state so both pages share it)
   leads: LeadRow[];
   updateLeadStatus: (leadId: string, status: LeadRow["status"]) => void;
@@ -106,7 +71,11 @@ export type SalesContextType = {
   deleteAppointment: (id: number) => void;
 
   // Lead → Customer conversion (creates a REAL customer)
-  convertLeadToCustomer: (lead: LeadRow, removeLead?: boolean) => CustomerRow;
+  convertLeadToCustomer: (lead: LeadRow, removeLead?: boolean) => Promise<CustomerRow>;
+
+  // สถานะการบันทึกล้มเหลว (C1) — หน้าจอกลาง (AppShell) เอาไปแสดงเตือนผู้ใช้
+  syncError: string | null;
+  clearSyncError: () => void;
 };
 
 const SalesContext = createContext<SalesContextType | null>(null);
@@ -118,7 +87,6 @@ export function SalesProvider({
   children: ReactNode;
   initialLeads: LeadRow[];
 }) {
-  const [deals, setDeals]           = usePersistentState<PipelineDealMock[]>(K.deals, pipelineDeals);
   // สาขาที่ล็อกอิน (multi-tenant) + auth พร้อมหรือยัง (hydrated) — โหลดลีดตามขอบเขตสาขา
   const { dealerCode, isHQ, hydrated } = useRole();
   const myDealerCode = dealerCode || "CNX";
@@ -141,15 +109,20 @@ export function SalesProvider({
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
 
-  // เขียนทะลุถึง repo — optimistic: อัปเดต UI ก่อน แล้ว persist เบื้องหลัง (จับ error ไม่ให้ UI ล้ม)
+  // ── การบันทึกล้มเหลว ต้อง "ดัง" เสมอ (C1) ────────────────────────────────
+  // เดิม: .catch(console.error) → RLS ปฏิเสธ/เน็ตหลุด แล้วผู้ใช้ยังเห็นข้อมูลบนจอเหมือนบันทึกสำเร็จ
+  // ตอนนี้: แจ้งผู้ใช้ + ดึงของจริงจาก repo มาทับ เพื่อไม่ให้จอค้างอยู่กับค่าที่ไม่ได้ถูกบันทึก
+  const [syncError, setSyncError] = useState<string | null>(null);
+  // late-bind: ตัวรายงานถูกประกอบหลัง state ทุกตัวถูกประกาศ (ดู useEffect ด้านล่าง)
+  const failRef = useRef<(entity: SyncEntity, op: string, e: unknown) => void>(() => {});
+  const onFail = (entity: SyncEntity, op: string) => (e: unknown) => failRef.current(entity, op, e);
+
+  // เขียนทะลุถึง repo — optimistic: อัปเดต UI ก่อน แล้ว persist เบื้องหลัง
   const persistLead = useRef({
-    create: (l: LeadRow) => { void leadsRepo.create(l).catch((e) => console.error("[leads.create]", e)); },
-    update: (l: LeadRow) => { void leadsRepo.update(l).catch((e) => console.error("[leads.update]", e)); },
-    remove: (id: string) => { void leadsRepo.remove(id).catch((e) => console.error("[leads.remove]", e)); },
+    create: (l: LeadRow) => { void leadsRepo.create(l).catch(onFail("leads", "สร้างลูกค้าเป้าหมาย")); },
+    update: (l: LeadRow) => { void leadsRepo.update(l).catch(onFail("leads", "แก้ไขลูกค้าเป้าหมาย")); },
+    remove: (id: string) => { void leadsRepo.remove(id).catch(onFail("leads", "ลบลูกค้าเป้าหมาย")); },
   }).current;
-  const [leadDealMap, setLeadDealMap] = usePersistentState<Record<string, number>>(K.leadDealMap, {});
-  const [nextDealId, setNextDealId] = usePersistentState<number>(K.nextDealId, pipelineDeals.length + 1);
-  const [leadChecklists, setLeadChecklists] = usePersistentState<Record<string, ChecklistItem[]>>(K.checklists, {});
   // ── Customers (Phase 2) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
   // Lead→Won: โหมด supabase มี trigger on_quote_won ที่ DB เป็นตัวสำรอง (upsert by id) — แอปยังสร้างลูกค้า
@@ -164,9 +137,9 @@ export function SalesProvider({
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
   const persistCustomer = useRef({
-    create: (c: CustomerRow) => { void customersRepo.create(c).catch((e) => console.error("[customers.create]", e)); },
-    update: (c: CustomerRow) => { void customersRepo.update(c).catch((e) => console.error("[customers.update]", e)); },
-    remove: (id: number) => { void customersRepo.remove(id).catch((e) => console.error("[customers.remove]", e)); },
+    create: (c: CustomerRow) => { void customersRepo.create(c).catch(onFail("customers", "สร้างลูกค้า")); },
+    update: (c: CustomerRow) => { void customersRepo.update(c).catch(onFail("customers", "แก้ไขลูกค้า")); },
+    remove: (id: number) => { void customersRepo.remove(id).catch(onFail("customers", "ลบลูกค้า")); },
   }).current;
   // ── Quotations (Phase 3) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา · setStatus→won จะทริก on_quote_won ที่ DB (สร้างลูกค้าอัตโนมัติ)
@@ -176,16 +149,23 @@ export function SalesProvider({
   useEffect(() => {
     if (!hydrated) return;
     let alive = true;
-    quotationsRepo.list({ dealerCode, isHQ })
+    // ปิดใบที่เลยวันหมดอายุก่อนโหลด (H5) — ใช้ "วันนี้ของระบบ" (APP_NOW) ให้ตรงกับที่หน้าจอแสดง
+    // ตัวแทนเท่านั้นที่ปิดได้ (RLS) · HQ ข้ามไป เพราะเขียนงานขายไม่ได้อยู่แล้ว
+    const scope = { dealerCode, isHQ };
+    const prepare = isHQ
+      ? Promise.resolve(0)
+      : quotationsRepo.expireOverdue(APP_NOW_ISO, scope).catch(() => 0);
+    prepare
+      .then(() => quotationsRepo.list(scope))
       .then((rows) => { if (alive) setQuotations(rows); })
       .catch((e) => { if (alive) console.error("[quotations.list]", e); });
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
   const persistQuote = useRef({
-    create: (q: QuotationMock) => { void quotationsRepo.create(q).catch((e) => console.error("[quotations.create]", e)); },
-    update: (q: QuotationMock) => { void quotationsRepo.update(q).catch((e) => console.error("[quotations.update]", e)); },
-    remove: (id: string) => { void quotationsRepo.remove(id).catch((e) => console.error("[quotations.remove]", e)); },
-    setStatus: (id: string, status: QuotationStatus) => { void quotationsRepo.setStatus(id, status).catch((e) => console.error("[quotations.setStatus]", e)); },
+    create: (q: QuotationMock) => { void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
+    update: (q: QuotationMock) => { void quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
+    remove: (id: string) => { void quotationsRepo.remove(id).catch(onFail("quotations", "ลบใบเสนอราคา")); },
+    setStatus: (id: string, status: QuotationStatus) => { void quotationsRepo.setStatus(id, status).catch(onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")); },
   }).current;
   // auto-link ไฟล์ใบเสนอราคา (metadata) ผ่าน repository — แทน syncAddQuotationFile/Remove เดิม (Phase 6)
   const fileScopeRef = useRef({ dealerCode, isHQ, myDealerCode });
@@ -218,88 +198,54 @@ export function SalesProvider({
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
   const persistAppt = useRef({
-    create: (a: AppointmentMock) => { void appointmentsRepo.create(a).catch((e) => console.error("[appointments.create]", e)); },
-    update: (a: AppointmentMock) => { void appointmentsRepo.update(a).catch((e) => console.error("[appointments.update]", e)); },
-    remove: (id: number) => { void appointmentsRepo.remove(id).catch((e) => console.error("[appointments.remove]", e)); },
+    create: (a: AppointmentMock) => { void appointmentsRepo.create(a).catch(onFail("appointments", "สร้างนัดหมาย")); },
+    update: (a: AppointmentMock) => { void appointmentsRepo.update(a).catch(onFail("appointments", "แก้ไขนัดหมาย")); },
+    remove: (id: number) => { void appointmentsRepo.remove(id).catch(onFail("appointments", "ลบนัดหมาย")); },
   }).current;
 
-  // ── Realtime (Phase 7) — มีคนแก้ข้อมูลจากเครื่องอื่น → โหลดตารางนั้นใหม่ ──
+  // ประกอบตัวรายงานความล้มเหลว (C1) — ทำหลัง state ครบทุกตัวแล้วจึงรู้จัก setter ทั้งหมด
+  // หน้าที่: แจ้งผู้ใช้ + ดึงชุดข้อมูลจริงจาก repo มาทับ (ยกเลิก optimistic ที่ไม่ได้ถูกบันทึก)
+  useEffect(() => {
+    failRef.current = (entity, op, e) => {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error(`[${entity}] ${op}`, e);
+      setSyncError(`บันทึกไม่สำเร็จ: ${op} — ${detail}`);
+      const scope = { dealerCode, isHQ };
+      if (entity === "leads") leadsRepo.list(scope).then(setLeads).catch(() => {});
+      else if (entity === "quotations") quotationsRepo.list(scope).then(setQuotations).catch(() => {});
+      else if (entity === "customers") customersRepo.list(scope).then(setCustomers).catch(() => {});
+      else appointmentsRepo.list(scope).then(setAppointments).catch(() => {});
+    };
+  }, [dealerCode, isHQ]);
+
+  // ── Realtime — มีคนแก้ข้อมูลจากเครื่องอื่น → อัปเดตเฉพาะแถวนั้น ──
   // supabase: postgres_changes (RLS กรอง event ตามสาขาให้แล้ว) · local: no-op (ยังใช้ event bus เดิม)
   useEffect(() => {
     if (!hydrated) return;
-    const scope = { dealerCode, isHQ };
-    return realtime.subscribeSales((table) => {
-      if (table === "leads") leadsRepo.list(scope).then(setLeads).catch(() => {});
-      else if (table === "quotations") quotationsRepo.list(scope).then(setQuotations).catch(() => {});
-      else if (table === "customers") customersRepo.list(scope).then(setCustomers).catch(() => {});
-      else appointmentsRepo.list(scope).then(setAppointments).catch(() => {});
+    // patch เฉพาะแถวที่เปลี่ยน (H2) — เดิมโหลดทั้งตารางใหม่ทุก event ซึ่งไม่ไหวเมื่อข้อมูลเยอะ
+    // แถวที่ได้มาถูก RLS กรองแล้ว (เห็นเฉพาะที่มีสิทธิ์) จึงนำมาใส่ได้เลย
+    const upsert = <T extends { id: string | number }>(list: T[], row: T): T[] => {
+      const i = list.findIndex(x => x.id === row.id);
+      return i >= 0 ? list.map((x, j) => (j === i ? row : x)) : [row, ...list];
+    };
+    return realtime.subscribeSales((ch) => {
+      if (ch.type === "DELETE") {
+        if (ch.table === "leads") setLeads(prev => prev.filter(l => l.id !== ch.id));
+        else if (ch.table === "quotations") setQuotations(prev => prev.filter(q => q.id !== ch.id));
+        else if (ch.table === "customers") setCustomers(prev => prev.filter(c => c.id !== ch.id));
+        else setAppointments(prev => prev.filter(a => a.id !== ch.id));
+        return;
+      }
+      if (ch.table === "leads") setLeads(prev => upsert(prev, ch.row));
+      else if (ch.table === "quotations") setQuotations(prev => upsert(prev, ch.row));
+      else if (ch.table === "customers") setCustomers(prev => upsert(prev, ch.row));
+      else setAppointments(prev => upsert(prev, ch.row));
     });
   }, [hydrated, dealerCode, isHQ]);
-  // ── Activity helper ─────────────────────────────────────────────
-  const logDealActivity = useCallback((dealId: number, entry: Omit<DealActivity, "id">) => {
-    setDeals(prev => prev.map(d =>
-      d.id !== dealId ? d : {
-        ...d,
-        activities: [{ id: Date.now(), ...entry }, ...(d.activities ?? [])],
-      }
-    ));
-  }, []);
-
-  // ── Deal mutations ───────────────────────────────────────────────
-  const addDeal = useCallback((deal: PipelineDealMock) => {
-    setDeals(prev => [deal, ...prev]);
-  }, []);
-
-  const updateDealTask = useCallback((dealId: number, taskId: number, done: boolean) => {
-    setDeals(prev => prev.map(d => {
-      if (d.id !== dealId) return d;
-      const task = d.tasks.find(t => t.id === taskId);
-      const tasks = d.tasks.map(t => t.id !== taskId ? t : { ...t, done });
-      const now = activityStamp();
-      const acts: DealActivity[] = [];
-      if (task) {
-        acts.push({
-          id: Date.now(),
-          type: done ? "task_done" : "task_undone",
-          text: `${done ? "เสร็จงาน" : "ยังไม่เสร็จ"}: ${task.text}`,
-          timestamp: now,
-        });
-      }
-      // ── เลื่อนขั้นตอนอัตโนมัติตามความคืบหน้า (เฉพาะดีลที่ยัง active · ไม่ auto-ปิดการขาย) ──
-      let stageId = d.stageId;
-      const ACTIVE_STAGES = [2, 4, 5, 9, 6]; // ติดต่อ → รวบรวม → เสนอราคา → ติดตาม → เจรจา
-      if (d.outcome === "active" && tasks.length) {
-        const doneCount = tasks.filter(t => t.done).length;
-        const idx = Math.min(ACTIVE_STAGES.length - 1, Math.floor((doneCount / tasks.length) * ACTIVE_STAGES.length));
-        const nextStage = ACTIVE_STAGES[idx];
-        if (nextStage !== d.stageId) {
-          stageId = nextStage;
-          const stageName = pipelineStages.find(s => s.id === nextStage)?.name ?? nextStage;
-          acts.unshift({ id: Date.now() + 1, type: "stage_change", text: `เลื่อนขั้นตอนอัตโนมัติ → ${stageName}`, timestamp: now });
-        }
-      }
-      return { ...d, tasks, stageId, activities: [...acts, ...(d.activities ?? [])] };
-    }));
-  }, []);
-
-  const moveDealStage = useCallback((dealId: number, stageId: number) => {
-    const stageName = pipelineStages.find(s => s.id === stageId)?.name ?? stageId;
-    const now = activityStamp();
-    setDeals(prev => prev.map(d =>
-      d.id !== dealId ? d : {
-        ...d,
-        stageId,
-        activities: [
-          { id: Date.now(), type: "stage_change", text: `ย้ายขั้นตอน → ${stageName}`, timestamp: now },
-          ...(d.activities ?? []),
-        ],
-      }
-    ));
-  }, []);
-
   // ── Lead → Customer conversion (creates a REAL customer) ─────────
   // removeLead = true → "เปลี่ยนลีดเป็นลูกค้า" (ลบออกจากรายการลูกค้าเป้าหมาย) · false → แค่ผูกลูกค้าให้ลีด (คงลีดไว้ เช่นตอนสร้างใบเสนอราคา)
-  const convertLeadToCustomer = useCallback((lead: LeadRow, removeLead = false): CustomerRow => {
+  // async เพราะเลข id ลูกค้าออกจาก DB แบบ atomic ต่อสาขา (C5) — กันชนเมื่อสร้างพร้อมกัน
+  const convertLeadToCustomer = useCallback(async (lead: LeadRow, removeLead = false): Promise<CustomerRow> => {
     // ถ้าลีดมี customerId ที่มีอยู่แล้ว → คืนลูกค้าเดิม (ไม่สร้างซ้ำ)
     if (lead.customerId != null) {
       const existing = customers.find(c => c.id === lead.customerId);
@@ -308,7 +254,41 @@ export function SalesProvider({
         return existing;
       }
     }
-    const newId = customers.reduce((m, c) => Math.max(m, c.id), 0) + 1;
+    const ownerDealer = lead.dealerCode ?? myDealerCode;
+    // ลีดยังไม่ผูกลูกค้า แต่บริษัทนี้อาจเป็นลูกค้าอยู่แล้ว (เปิดลีดใหม่เอง แทนที่จะกด "สร้างดีลใหม่")
+    // ชื่อตรงเป๊ะภายในสาขาเดียวกัน = บริษัทเดียวกัน → ผูกเข้ากับลูกค้าเดิม ไม่แตกเป็นลูกค้าซ้ำอีกราย
+    // (ไม่แตะข้อมูลลูกค้าเดิม — ยอด/ประวัติของเขาเป็นของจริงที่สะสมไว้แล้ว)
+    // ปิดท้ายเหมือนกันทั้งกรณีลูกค้าใหม่และลูกค้าเดิม: จัดการตัวลีด + ผูกใบเสนอราคาที่ออกไว้ก่อนหน้า
+    const finish = (customerId: number) => {
+      if (removeLead) {
+        // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
+        setLeads(prev => prev.filter(l => l.id !== lead.id));
+        persistLead.remove(lead.id);
+      } else {
+        // แค่ผูกลูกค้าให้ลีด (ยังเป็นลูกค้าเป้าหมายอยู่)
+        setLeads(prev => prev.map(l => l.id !== lead.id ? l : { ...l, customerId }));
+        persistLead.update({ ...lead, customerId });
+      }
+      // ผูกใบเสนอราคาที่ออกก่อน WON (customerId=0 ในนามบริษัทลีด) เข้ากับลูกค้ารายนี้ย้อนหลัง + persist
+      setQuotations(prev => {
+        const relinked: QuotationMock[] = [];
+        const next = prev.map(q => {
+          if ((!q.customerId || q.customerId === 0) && q.customer === lead.company) {
+            const nq = { ...q, customerId };
+            relinked.push(nq);
+            return nq;
+          }
+          return q;
+        });
+        relinked.forEach(q => persistQuote.update(q));
+        return next;
+      });
+    };
+
+    const dup = matchCustomers(customers, lead.company, ownerDealer).exact;
+    if (dup) { finish(dup.id); return dup; }
+
+    const newId = await customersRepo.nextId(ownerDealer);
     // ลูกค้า = ลีดที่ปิดการขายสำเร็จ → พาข้อมูลตัวตนจากลีดมาให้ครบ (รูป/มูลค่าดีลที่ปิดได้)
     const newCustomer: CustomerRow = {
       id: newId,
@@ -330,172 +310,9 @@ export function SalesProvider({
     };
     setCustomers(prev => [...prev, newCustomer]);
     persistCustomer.create(newCustomer); // Lead→Won สร้างลูกค้าข้อมูลครบ (supabase: RLS with-check ใช้ dealerCode นี้)
-    if (removeLead) {
-      // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
-      setLeads(prev => prev.filter(l => l.id !== lead.id));
-      persistLead.remove(lead.id);
-    } else {
-      // แค่ผูกลูกค้าให้ลีด (ยังเป็นลูกค้าเป้าหมายอยู่)
-      setLeads(prev => prev.map(l => l.id !== lead.id ? l : { ...l, customerId: newId }));
-      persistLead.update({ ...lead, customerId: newId });
-    }
-    // ผูกใบเสนอราคาที่ออกก่อน WON (customerId=0 ในนามบริษัทลีด) เข้ากับลูกค้าใหม่ย้อนหลัง + persist
-    setQuotations(prev => {
-      const relinked: QuotationMock[] = [];
-      const next = prev.map(q => {
-        if ((!q.customerId || q.customerId === 0) && q.customer === lead.company) {
-          const nq = { ...q, customerId: newId };
-          relinked.push(nq);
-          return nq;
-        }
-        return q;
-      });
-      relinked.forEach(q => persistQuote.update(q));
-      return next;
-    });
+    finish(newId);
     return newCustomer;
-  }, [customers, persistCustomer, persistLead, persistQuote]);
-
-  const closeDeal = useCallback((dealId: number, outcome: "won" | "lost", lostReason?: string) => {
-    const wonStage  = pipelineStages.find(s => s.id === 7)!;
-    const lostStage = pipelineStages.find(s => s.id === 8)!;
-    const now = activityStamp();
-    setDeals(prev => prev.map(d =>
-      d.id !== dealId ? d : {
-        ...d,
-        outcome,
-        lostReason: outcome === "lost" ? lostReason : undefined,
-        stageId: outcome === "won" ? wonStage.id : lostStage.id,
-        tasks: outcome === "won" ? d.tasks.map(t => ({ ...t, done: true })) : d.tasks,
-        activities: [
-          {
-            id: Date.now(),
-            type: outcome,
-            text: outcome === "won"
-              ? "ปิดการขายสำเร็จ ✅"
-              : `ปิดการขายไม่สำเร็จ — ${lostReason ?? "ไม่ระบุ"}`,
-            timestamp: now,
-          },
-          ...(d.activities ?? []),
-        ],
-      }
-    ));
-
-    // ผูกลีดของดีล (ถ้ามี)
-    const entry = Object.entries(leadDealMap).find(([, did]) => did === dealId);
-    if (entry) {
-      const [leadId] = entry;
-      const lead = leads.find(l => l.id === leadId);
-      if (outcome === "won") {
-        // ปิดการขายสำเร็จ → เปลี่ยนลีดเป็นลูกค้าเต็มตัว (ออกจากรายการลูกค้าเป้าหมาย),
-        // ผูกดีลกับลูกค้าใหม่ และตั้งใบเสนอราคาที่เกี่ยวข้องเป็น "ตอบรับ" (won)
-        if (lead) {
-          const customer = convertLeadToCustomer(lead, true);
-          setDeals(prev => prev.map(d => d.id === dealId ? { ...d, customerId: customer.id } : d));
-          setQuotations(prev => {
-            const won: QuotationMock[] = [];
-            const next = prev.map(q => {
-              if (q.customerId === customer.id && q.status !== "won") {
-                const w = { ...q, status: "won" as const };
-                won.push(w);
-                return w;
-              }
-              return q;
-            });
-            won.forEach(q => persistQuote.update(q)); // persist + (supabase) ทริก on_quote_won ที่ id ลูกค้าเดียวกัน
-            return next;
-          });
-        }
-      } else if (lead) {
-        // ปิดการขายไม่สำเร็จ → ตั้งลีดเป็นไม่ได้งาน (ยังอยู่ในรายการลูกค้าเป้าหมาย)
-        setLeads(prev => prev.map(l => l.id !== leadId ? l : { ...l, status: "CANCELLED" }));
-        persistLead.update({ ...lead, status: "CANCELLED" });
-      }
-    }
-  }, [leadDealMap, leads, convertLeadToCustomer, persistLead, persistQuote]);
-
-  const updateDealNotes = useCallback((dealId: number, notes: string) => {
-    const now = activityStamp();
-    setDeals(prev => prev.map(d =>
-      d.id !== dealId ? d : {
-        ...d,
-        notes,
-        activities: [
-          { id: Date.now(), type: "note_added", text: "อัปเดตบันทึก", timestamp: now },
-          ...(d.activities ?? []).filter(a => a.type !== "note_added" ||
-            a.timestamp !== (d.activities ?? [])[0]?.timestamp),
-        ],
-      }
-    ));
-  }, []);
-
-  const addDealFile = useCallback((dealId: number, file: { name: string; size: string }) => {
-    const now = activityStamp();
-    setDeals(prev => prev.map(d =>
-      d.id !== dealId ? d : {
-        ...d,
-        files: [...d.files, file],
-        activities: [
-          { id: Date.now(), type: "file_added", text: `อัปโหลดไฟล์: ${file.name}`, timestamp: now },
-          ...(d.activities ?? []),
-        ],
-      }
-    ));
-  }, []);
-
-  // ── Lead → Deal connection ───────────────────────────────────────
-  const openDealFromLead = useCallback((lead: LeadRow): PipelineDealMock => {
-    const existingId = leadDealMap[lead.id];
-    if (existingId) {
-      return deals.find(d => d.id === existingId)!;
-    }
-
-    const id = nextDealId;
-    setNextDealId(n => n + 1);
-    const now = activityStamp();
-
-    const newDeal: PipelineDealMock = {
-      id,
-      customerId: lead.customerId ?? 0,
-      customer:   lead.company,
-      project:    `${lead.product} — ${lead.company}`,
-      value:      parseLeadValue(lead.value),
-      stageId:    2,
-      assigned:   lead.assigned,
-      dealer:     "ตัวแทนของฉัน",
-      dealerColor: "#003366",
-      tasks: (leadChecklists[lead.id]?.length
-        ? leadChecklists[lead.id].map((item, i) => ({ id: id * 100 + i, text: item.text, done: item.done }))
-        : DEFAULT_TASKS.map((text, i) => ({ id: id * 100 + i, text, done: false }))
-      ),
-      files:      [],
-      outcome:    "active",
-      createdAt:  "2026-06-30", // ตรึงตามวัน "ปัจจุบัน" ของ mock เพื่อให้ดีลใหม่อยู่ในช่วงตัวกรองเริ่มต้น
-      notes:      "",
-      activities: [
-        { id: Date.now(), type: "deal_created", text: `สร้างโอกาสการขายจากลูกค้าเป้าหมาย: ${lead.company}`, timestamp: now },
-      ],
-    };
-
-    setDeals(prev => [newDeal, ...prev]);
-    setLeadDealMap(prev => ({ ...prev, [lead.id]: id }));
-    setLeads(prev => prev.map(l =>
-      l.id !== lead.id ? l : { ...l, status: "QUOTED" }
-    ));
-    persistLead.update({ ...lead, status: "QUOTED" });
-
-    return newDeal;
-  }, [leadDealMap, deals, nextDealId, leadChecklists]);
-
-  const getDealForLead = useCallback((leadId: string) => {
-    const dealId = leadDealMap[leadId];
-    return dealId != null ? deals.find(d => d.id === dealId) : undefined;
-  }, [leadDealMap, deals]);
-
-  // ── Lead checklist ──────────────────────────────────────────────
-  const updateLeadChecklist = useCallback((leadId: string, items: ChecklistItem[]) => {
-    setLeadChecklists(prev => ({ ...prev, [leadId]: items }));
-  }, []);
+  }, [customers, myDealerCode, persistCustomer, persistLead, persistQuote]);
 
   // ── Lead mutations ───────────────────────────────────────────────
   const updateLeadStatus = useCallback((leadId: string, status: LeadRow["status"]) => {
@@ -507,7 +324,7 @@ export function SalesProvider({
     setLeads(prev => prev.map(l => l.id !== leadId ? l : updated));
     persistLead.update(updated); // สถานะ + tasks เปลี่ยน → update ทั้งแถว (แทน setStatus)
     if (status === "PAID" && lead.customerId == null) {
-      setTimeout(() => convertLeadToCustomer({ ...lead, status }, false), 0);
+      setTimeout(() => { void convertLeadToCustomer({ ...lead, status }, false); }, 0);
     }
   }, [convertLeadToCustomer, persistLead]);
 
@@ -523,7 +340,7 @@ export function SalesProvider({
     persistLead.update(lead);
     // ปิดการขายสำเร็จ → สร้างลูกค้า (เฉพาะยังไม่เป็นลูกค้า)
     if (lead.status === "PAID" && lead.customerId == null) {
-      setTimeout(() => convertLeadToCustomer(lead, false), 0);
+      setTimeout(() => { void convertLeadToCustomer(lead, false); }, 0);
     }
   }, [convertLeadToCustomer, persistLead]);
 
@@ -545,7 +362,20 @@ export function SalesProvider({
     persistCustomer.update(customer);
   }, [persistCustomer]);
 
+  // ลบลูกค้า — ต้องไม่ทิ้ง "ข้อมูลกำพร้า" ไว้ (H1)
+  // DB ยังผูก FK ระหว่างใบเสนอราคา/ลีด กับลูกค้าไม่ได้ (customerId ใช้ 0 แทน "ยังไม่มีลูกค้า")
+  // จึงต้องกันที่ชั้นแอป: มีใบเสนอราคา/ลีดผูกอยู่ = ลบไม่ได้ ต้องจัดการของที่ผูกก่อน
   const deleteCustomer = useCallback((id: number) => {
+    const linkedQuotes = quotationsRef.current.filter(q => q.customerId === id).length;
+    const linkedLeads = leadsRef.current.filter(l => l.customerId === id).length;
+    if (linkedQuotes || linkedLeads) {
+      const parts = [
+        linkedQuotes ? `ใบเสนอราคา ${linkedQuotes} ใบ` : "",
+        linkedLeads ? `ลูกค้าเป้าหมาย ${linkedLeads} รายการ` : "",
+      ].filter(Boolean).join(" และ ");
+      setSyncError(`ลบลูกค้าไม่ได้ — ยังมี${parts}ผูกอยู่ · กรุณาย้าย/ลบรายการเหล่านั้นก่อน`);
+      return;
+    }
     setCustomers(prev => prev.filter(c => c.id !== id));
     persistCustomer.remove(id);
   }, [persistCustomer]);
@@ -648,15 +478,12 @@ export function SalesProvider({
 
   return (
     <SalesContext.Provider value={{
-      deals, addDeal, updateDealTask, moveDealStage, closeDeal,
-      updateDealNotes, addDealFile, logDealActivity,
-      leadDealMap, openDealFromLead, getDealForLead,
-      leadChecklists, updateLeadChecklist,
       leads, updateLeadStatus, addLead, updateLead, deleteLead,
       customers, addCustomer, updateCustomer, deleteCustomer,
       quotations, addQuotation, updateQuotation, deleteQuotation, setQuotationStatus, newQuoteId,
       appointments, addAppointment, updateAppointment, deleteAppointment,
       convertLeadToCustomer,
+      syncError, clearSyncError: () => setSyncError(null),
     }}>
       {children}
     </SalesContext.Provider>

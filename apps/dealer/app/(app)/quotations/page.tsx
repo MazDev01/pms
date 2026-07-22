@@ -3,15 +3,17 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteValidityDays, loadQuoteNumbering,
-  loadHQPolicy, DEFAULT_ISSUER, ISSUER_KEY,
+  quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteNumbering,
+  DEFAULT_ISSUER, ISSUER_KEY,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
+import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { AssigneeAvatars, PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@pms/shared/lib/quotationPrint";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { useHQPolicy, useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { useFilters, FilterProvider } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -99,13 +101,15 @@ function fmtDate(d:string){ if(!d||d==="—") return "—"; const [y,m,day]=d.sp
 // ทำให้ 9 คอลัมน์พอดีกรอบโดยไม่ต้องเลื่อนแนวนอน · แผงรายละเอียด/เอกสารพิมพ์ยังใช้วันที่เต็มมีปี
 function fmtDateShort(d:string){ if(!d||d==="—") return "—"; const [,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]}`; }
 // วันหมดอายุที่ใช้แสดงผล — ใบที่กรอกวันเองใช้ค่านั้น · ใบที่ไม่ได้กรอก (11 จาก 17 ใบใน seed)
-// คำนวณจาก วันที่สร้าง + อายุใบเสนอราคา (ค่ากลางจากตั้งค่า loadQuoteValidityDays) ตามที่บอสสั่ง
+// คำนวณจาก วันที่สร้าง + อายุใบเสนอราคา (ค่ากลางจาก HQ ผ่าน useQuoteValidityDays) ตามที่บอสสั่ง
 // ไม่ใช่การเดา — "อายุใบเสนอราคา" เป็นนโยบายจริงในหน้าตั้งค่า และเป็นกฎที่ใช้ตอนสร้างใบใหม่อยู่แล้ว
-function expiryOf(q:{date:string;expiry?:string}):string{
+// validityDays ส่งเข้ามาจากหน้าจอ (useQuoteValidityDays) — ห้ามอ่าน localStorage ตรงนี้
+// เพราะโหมด supabase ค่าจริงอยู่ใน DB ที่ HQ ตั้งไว้ ไม่ใช่ค่า default ในเครื่อง
+function expiryOf(q:{date:string;expiry?:string}, validityDays:number):string{
   if(q.expiry) return q.expiry;
   if(!q.date) return "";
   const d=new Date(q.date); if(isNaN(d.getTime())) return "";
-  d.setDate(d.getDate()+loadQuoteValidityDays());
+  d.setDate(d.getDate()+validityDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 function nextQId(data:QuotationMock[]){
@@ -118,8 +122,8 @@ function nextQId(data:QuotationMock[]){
 // ── Add / Edit Modal ──────────────────────────────────────────
 const TODAY = "2026-06-30";
 // วันหมดอายุเริ่มต้น = วันนี้ + อายุใบเสนอราคา (จากกฎการขาย settings) → ISO
-function defaultExpiry(): string {
-  const d = new Date(TODAY); d.setDate(d.getDate() + loadQuoteValidityDays());
+function defaultExpiry(validityDays:number): string {
+  const d = new Date(TODAY); d.setDate(d.getDate() + validityDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 // ชื่อโครงการแนะนำจากลูกค้า — "{แม่แบบ} — {บริษัท}" (เหมือนตอนสร้างใบเสนอจากลีด) · แก้ได้
@@ -127,9 +131,9 @@ function suggestProject(c?:CustomerRow):string{
   if(!c) return "";
   return c.category ? `${c.category} — ${c.company}` : c.company;
 }
-function buildBlank(customers:CustomerRow[]): QForm {
+function buildBlank(customers:CustomerRow[], validityDays:number): QForm {
   const c=customers[0];
-  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(), owner:c?.owner??"" };
+  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(validityDays), owner:c?.owner??"" };
 }
 
 function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:{
@@ -292,6 +296,9 @@ export default function QuotationsPage(){
 function QuotationsPageInner(){
   const router = useRouter();
   const { timeRange, passes } = useFilters();
+  // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — VAT/อายุใบมีผลกับการคิดเงิน
+  const hqPolicy = useHQPolicy();
+  const validityDays = useQuoteValidityDays();
   const {
     quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
     addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
@@ -464,7 +471,8 @@ function QuotationsPageInner(){
     const w=window.open("","_blank","width=880,height=1040");
     if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
     // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
-    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,docProfile,loadWordmark()));
+    // VAT บังคับใช้ค่าของ HQ เสมอ (docProfile มาจาก localStorage ของสาขา — ตัวแทนตั้ง VAT เองไม่ได้)
+    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:hqPolicy.vat},loadWordmark()));
     w.document.close();
   }
 
@@ -475,9 +483,7 @@ function QuotationsPageInner(){
     // ผู้รับผิดชอบมาจากลูกค้าที่ใบนี้ผูกอยู่ (ใบไม่มีฟิลด์นี้)
     const owner = ownerOf(q);
     // ใบเก่าที่ไม่มี lineItems → สังเคราะห์เป็น 1 รายการจาก แม่แบบ/พื้นที่/มูลค่า (แก้ต่อได้)
-    const lineItems:QuoteLineItem[] = q.lineItems ?? (q.materialCost>0
-      ? [{ name:q.buildingType||"รายการ", qty:q.area||1, unit:q.area?"ตร.ม.":"รายการ", unitPrice:q.area?Math.round(q.materialCost/q.area):q.materialCost }]
-      : []);
+    const lineItems:QuoteLineItem[] = boqLineItems(q);
     return {customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,lineItems,revision:q.revision??"V1",expiry:q.expiry??"",owner};
   }
 
@@ -665,7 +671,7 @@ function QuotationsPageInner(){
                         <td title={fmtDate(q.date)} style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{fmtDateShort(q.date)}</td>
                         )}
                         {!hiddenCols.includes("expiry")&&(() => {
-                          const ex = expiryOf(q);
+                          const ex = expiryOf(q, validityDays);
                           return <td title={ex?fmtDate(ex):undefined} style={{fontSize:"0.72rem",color:MUTED,whiteSpace:"nowrap"}}>{ex?fmtDateShort(ex):"—"}</td>;
                         })()}
                         <td onClick={e=>e.stopPropagation()}>
@@ -763,12 +769,10 @@ function QuotationsPageInner(){
         const secLabel: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
         const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
         const fmtBaht = (n:number) => "฿"+Math.round(n).toLocaleString("th-TH");
-        const lineItems: QuoteLineItem[] = selected.lineItems ?? (selected.materialCost>0
-          ? [{ name:selected.buildingType||"รายการ", qty:selected.area||1, unit:selected.area?"ตร.ม.":"รายการ", unitPrice:selected.area?Math.round(selected.materialCost/selected.area):selected.materialCost }]
-          : []);
-        const subtotal = lineItems.reduce((s,li)=>s+li.qty*li.unitPrice, 0);
+        const lineItems: QuoteLineItem[] = boqLineItems(selected);
+        const subtotal = boqSubtotal(lineItems);
         const net = subtotal;                            // = totalValue (มูลค่างาน ก่อน VAT) — ไม่มีส่วนลด
-        const vatPct = loadHQPolicy().vat;
+        const vatPct = hqPolicy.vat;
         const vatAmt = Math.round(net*vatPct/100);
         const grand = net + vatAmt;                      // ยอดรวมสุทธิ (รวม VAT) — ตรงกับเอกสารพิมพ์
         const sc = quotationStatusColor[selected.status];
@@ -834,7 +838,7 @@ function QuotationsPageInner(){
                       ["พื้นที่", `${selected.area?.toLocaleString()} ตร.ม.`],
                       ["จำนวนรายการ", `${selected.items} รายการ`],
                       ["วันที่ออก", fmtDate(selected.date)],
-                      ["วันหมดอายุ", expiryOf(selected)?fmtDate(expiryOf(selected)):"—"],
+                      ["วันหมดอายุ", expiryOf(selected,validityDays)?fmtDate(expiryOf(selected,validityDays)):"—"],
                     ] as [string,string][]).map(([k,v])=>(
                       <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"7px 0",borderBottom:"1px solid #f0f4f8",fontSize:"0.76rem"}}>
                         <span style={{color:"#8a929c"}}>{k}</span><span style={{fontWeight:700,color:STEEL,textAlign:"right"}}>{v}</span>
