@@ -11,6 +11,10 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "incremental": true
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pms/shared/*": ["packages/shared/*"]
+    }
   }
 }

@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@pms/shared"],
-  typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
   // แอป HQ: หน้า login อยู่ที่ /hq/login (ไม่มี /login เปล่า) — ให้ AuthGuard (แชร์) เด้งมาที่นี่แทน /login
   env: { NEXT_PUBLIC_LOGIN_PATH: "/hq/login" },

@@ -35,6 +35,19 @@ async function one<T>(table: string): Promise<T | null> {
   return data ? toCamel<T>(data as Row) : null;
 }
 
+// insert 1 แถว → คืนแถวที่ DB บันทึกจริง (id/created_at ที่ DB สร้างให้) เป็น camelCase
+async function insertRow<T>(table: string, row: T): Promise<T> {
+  const { data, error } = await sb().from(table).insert(toSnake(row as unknown as Row)).select().single();
+  if (error) throw new Error(error.message);
+  return toCamel<T>(data as Row);
+}
+// update ทั้งแถวตาม id → คืนแถวหลังอัปเดต
+async function updateRow<T>(table: string, id: string | number, row: T): Promise<T> {
+  const { data, error } = await sb().from(table).update(toSnake(row as unknown as Row)).eq("id", id).select().single();
+  if (error) throw new Error(error.message);
+  return toCamel<T>(data as Row);
+}
+
 export const SupabaseAdapter: DataAdapter = {
   dealers: {
     list: () => selectScoped<DealerRow>("dealers"),
@@ -83,8 +96,31 @@ export const SupabaseAdapter: DataAdapter = {
     append: (e) => must(sb().from("audit_log").insert(toSnake(e as unknown as Row))),
   },
 
-  leads: { list: (scope) => selectScoped<LeadRow>("leads", scope) },
-  quotations: { list: (scope) => selectScoped<QuotationMock>("quotations", scope) },
-  customers: { list: (scope) => selectScoped<CustomerRow>("customers", scope) },
-  appointments: { list: (scope) => selectScoped<AppointmentMock>("appointments", scope) },
+  // งานขาย — RLS ที่ DB คุมขอบเขต (insert ต้องมี dealer_code = สาขา session · with-check)
+  leads: {
+    list: (scope) => selectScoped<LeadRow>("leads", scope),
+    create: (row) => insertRow<LeadRow>("leads", row),
+    update: (row) => updateRow<LeadRow>("leads", row.id, row),
+    remove: (id) => must(sb().from("leads").delete().eq("id", id)),
+    setStatus: (id, status) => must(sb().from("leads").update({ status }).eq("id", id)),
+  },
+  quotations: {
+    list: (scope) => selectScoped<QuotationMock>("quotations", scope),
+    create: (row) => insertRow<QuotationMock>("quotations", row),
+    update: (row) => updateRow<QuotationMock>("quotations", row.id, row),
+    remove: (id) => must(sb().from("quotations").delete().eq("id", id)),
+    setStatus: (id, status) => must(sb().from("quotations").update({ status }).eq("id", id)),
+  },
+  customers: {
+    list: (scope) => selectScoped<CustomerRow>("customers", scope),
+    create: (row) => insertRow<CustomerRow>("customers", row),
+    update: (row) => updateRow<CustomerRow>("customers", row.id, row),
+    remove: (id) => must(sb().from("customers").delete().eq("id", id)),
+  },
+  appointments: {
+    list: (scope) => selectScoped<AppointmentMock>("appointments", scope),
+    create: (row) => insertRow<AppointmentMock>("appointments", row),
+    update: (row) => updateRow<AppointmentMock>("appointments", row.id, row),
+    remove: (id) => must(sb().from("appointments").delete().eq("id", id)),
+  },
 };

@@ -54,26 +54,26 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   const busy = loading || quick !== null;
   const go = (scopeAll: boolean) => router.push(scopeAll ? "/hq/dashboard" : "/dashboard");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    setTimeout(() => {
-      const r = signIn(email.trim(), password);
-      if (r.ok) go(r.session.scopeAll);
-      else { setError(r.error); setLoading(false); }
-    }, 400);
+    // signIn เป็น async แล้ว — โหมด supabase รอ signInWithPassword จริง · โหมด local เร็วทันที
+    const r = await signIn(email.trim(), password);
+    if (r.ok) go(r.session.scopeAll);
+    else { setError(r.error); setLoading(false); }
   }
 
   // ปุ่มบัญชีทดลอง — เข้าสู่ระบบทันทีตามบทบาท (ปุ่มเขียน "เข้าสู่ระบบ" จึงต้องเข้าจริง)
   // เติมช่องอีเมล/รหัสให้เห็นด้วยว่าล็อกอินด้วยบัญชีไหน แล้วเข้าระบบเลย
-  function quickLogin(role: DemoRole, demoEmail: string) {
+  async function quickLogin(role: DemoRole, demoEmail: string) {
     if (busy) return;
     setError(null);
     setEmail(demoEmail);
     setPassword(DEMO_PASSWORD);
     setQuick(role);
-    setTimeout(() => { login(role); go(role === "hq"); }, 350);
+    await login(role);
+    go(role === "hq");
   }
 
   const inputWrap =

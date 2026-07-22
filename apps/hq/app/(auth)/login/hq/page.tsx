@@ -34,15 +34,14 @@ export default function HQLoginPage() {
     transition: "all .15s",
   });
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    setTimeout(() => {
-      const r = signIn(email, password);
-      if (r.ok) router.push(r.session.scopeAll ? "/hq/dashboard" : "/dashboard");
-      else { setError(r.error); setLoading(false); }
-    }, 500);
+    // signIn เป็น async แล้ว — โหมด supabase รอ signInWithPassword จริง · โหมด local เร็วทันที
+    const r = await signIn(email, password);
+    if (r.ok) router.push(r.session.scopeAll ? "/hq/dashboard" : "/dashboard");
+    else { setError(r.error); setLoading(false); }
   };
 
   return (

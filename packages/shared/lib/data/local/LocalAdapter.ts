@@ -72,9 +72,87 @@ export const LocalAdapter: DataAdapter = {
     append: (e) => { appendAudit(e); return done(); },
   },
 
-  // งานขาย — อ่านอย่างเดียวใน Step 0 (fallback = seed) · CRUD ต่อผ่าน SalesContext ใน Step 1
-  leads: { list: (scope) => ok(scopeLeads(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)) },
-  quotations: { list: () => ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed)) },
-  customers: { list: () => ok(readKey<CustomerRow[]>(SALES.customers, initialCustomers)) },
-  appointments: { list: () => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed)) },
+  // งานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) · เขียนลง localStorage คีย์เดียวกับ SalesContext
+  leads: {
+    list: (scope) => ok(scopeLeads(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)),
+    create: (row) => {
+      const list = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      writeKey(SALES.leads, [row, ...list]);
+      return ok(row);
+    },
+    update: (row) => {
+      const list = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      writeKey(SALES.leads, list.map((l) => (l.id === row.id ? row : l)));
+      return ok(row);
+    },
+    remove: (id) => {
+      const list = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      writeKey(SALES.leads, list.filter((l) => l.id !== id));
+      return done();
+    },
+    setStatus: (id, status) => {
+      const list = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      writeKey(SALES.leads, list.map((l) => (l.id === id ? { ...l, status } : l)));
+      return done();
+    },
+  },
+  quotations: {
+    list: () => ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed)),
+    create: (row) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      writeKey(SALES.quotations, [row, ...list]);
+      return ok(row);
+    },
+    update: (row) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      writeKey(SALES.quotations, list.map((q) => (q.id === row.id ? row : q)));
+      return ok(row);
+    },
+    remove: (id) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      writeKey(SALES.quotations, list.filter((q) => q.id !== id));
+      return done();
+    },
+    setStatus: (id, status) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      writeKey(SALES.quotations, list.map((q) => (q.id === id ? { ...q, status } : q)));
+      return done();
+    },
+  },
+  customers: {
+    list: () => ok(readKey<CustomerRow[]>(SALES.customers, initialCustomers)),
+    create: (row) => {
+      const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      writeKey(SALES.customers, [row, ...list]);
+      return ok(row);
+    },
+    update: (row) => {
+      const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      writeKey(SALES.customers, list.map((c) => (c.id === row.id ? row : c)));
+      return ok(row);
+    },
+    remove: (id) => {
+      const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      writeKey(SALES.customers, list.filter((c) => c.id !== id));
+      return done();
+    },
+  },
+  appointments: {
+    list: () => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed)),
+    create: (row) => {
+      const list = readKey<AppointmentMock[]>(SALES.appointments, apptSeed);
+      writeKey(SALES.appointments, [row, ...list]);
+      return ok(row);
+    },
+    update: (row) => {
+      const list = readKey<AppointmentMock[]>(SALES.appointments, apptSeed);
+      writeKey(SALES.appointments, list.map((a) => (a.id === row.id ? row : a)));
+      return ok(row);
+    },
+    remove: (id) => {
+      const list = readKey<AppointmentMock[]>(SALES.appointments, apptSeed);
+      writeKey(SALES.appointments, list.filter((a) => a.id !== id));
+      return done();
+    },
+  },
 };

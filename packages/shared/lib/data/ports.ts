@@ -38,11 +38,35 @@ export interface AuditRepo {
   append(e: Omit<AuditEntry, "id" | "at">): Promise<void>;
 }
 
-// ── โดเมนงานขาย — Step 0 มี list (อ่าน) · CRUD เต็มต่อผ่าน SalesContext ใน Step 1 ──
-export interface LeadsRepo { list(scope?: Scope): Promise<LeadRow[]>; }
-export interface QuotationsRepo { list(scope?: Scope): Promise<QuotationMock[]>; }
-export interface CustomersRepo { list(scope?: Scope): Promise<CustomerRow[]>; }
-export interface AppointmentsRepo { list(scope?: Scope): Promise<AppointmentMock[]>; }
+// ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
+// write ทุกตัว implement ทั้ง LocalAdapter (localStorage) และ SupabaseAdapter (insert/update/delete)
+// ฝั่ง Supabase: dealer_code ต้องตรงสาขา session (บังคับด้วย RLS with-check ที่ DB)
+export interface LeadsRepo {
+  list(scope?: Scope): Promise<LeadRow[]>;
+  create(row: LeadRow): Promise<LeadRow>;
+  update(row: LeadRow): Promise<LeadRow>;
+  remove(id: string): Promise<void>;
+  setStatus(id: string, status: LeadRow["status"]): Promise<void>;
+}
+export interface QuotationsRepo {
+  list(scope?: Scope): Promise<QuotationMock[]>;
+  create(row: QuotationMock): Promise<QuotationMock>;
+  update(row: QuotationMock): Promise<QuotationMock>;
+  remove(id: string): Promise<void>;
+  setStatus(id: string, status: QuotationMock["status"]): Promise<void>;
+}
+export interface CustomersRepo {
+  list(scope?: Scope): Promise<CustomerRow[]>;
+  create(row: CustomerRow): Promise<CustomerRow>;
+  update(row: CustomerRow): Promise<CustomerRow>;
+  remove(id: number): Promise<void>;
+}
+export interface AppointmentsRepo {
+  list(scope?: Scope): Promise<AppointmentMock[]>;
+  create(row: AppointmentMock): Promise<AppointmentMock>;
+  update(row: AppointmentMock): Promise<AppointmentMock>;
+  remove(id: number): Promise<void>;
+}
 
 // ── รวมทุก repository เป็น adapter เดียว ──
 export interface DataAdapter {

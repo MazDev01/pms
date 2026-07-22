@@ -3,6 +3,21 @@
 > **วิธีใช้เอกสารนี้:** ไฟล์เดียวจบ — คัดลอกทั้งหมดไปวางให้ AI ตัวไหนก็ได้ แล้วมันจะเข้าใจโครงสร้าง โมดูล ฟังก์ชัน และกระบวนการทำงานของโปรเจกต์ทั้งหมด โดยไม่ต้องเปิดซอร์สอ่านเอง
 > **ที่มา:** เขียนจากการอ่านโค้ดจริงทั้ง ~90 ไฟล์ (~24,000 บรรทัด) ไม่มีการเดา — ทุกจุดอ้างอิง `ไฟล์:บรรทัด`
 > **สถานะ:** ระบบเป็น **Sales CRM ล้วน (Lead → Won/Lost)** ยังไม่เชื่อม backend จริง — ข้อมูลทั้งหมดเป็น mock + persist ผ่าน `localStorage`/`sessionStorage`
+> **อัปเดตล่าสุด: 17 ก.ค. 2569** — ดูสรุปสิ่งที่เปลี่ยนที่ **[ภาคผนวก B](#ภาคผนวก-b--การเปลี่ยนแปลงล่าสุด)** ท้ายไฟล์
+
+> ⚠️ **โครงย้ายเป็น pnpm monorepo แล้ว** — เอกสารด้านล่างหลายที่ยังอ้าง path แบบเดิม (`src/…`). โค้ดจริงย้ายไปตามตารางนี้ (ตรรกะ/เนื้อหาไม่เปลี่ยน เปลี่ยนแค่ที่อยู่):
+>
+> | path เดิมในเอกสาร | path จริงปัจจุบัน |
+> |---|---|
+> | `src/lib/*` | `packages/shared/lib/*` |
+> | `src/context/*` | `packages/shared/context/*` |
+> | `src/components/*` | `packages/shared/components/*` |
+> | `src/app/globals.css` | `packages/shared/globals.css` |
+> | `src/app/(app)/hq/**` (หน้า HQ) | `apps/hq/app/(app)/hq/**` |
+> | `src/app/(app)/**` (หน้า Dealer) | `apps/dealer/app/(app)/**` |
+> | `src/app/(auth)/**` | `apps/{hq,dealer}/app/(auth)/**` (แยกกันแต่ละแอป) |
+>
+> import ในโค้ดใช้ alias **`@pms/shared`** (เช่น `import { useSales } from "@pms/shared/context/SalesContext"`) แทน `@/…` เดิม
 
 ---
 
@@ -56,42 +71,50 @@ RoleProvider (ใครล็อกอิน + สิทธิ์)
 
 | รายการ | ค่า | อ้างอิง |
 |---|---|---|
-| Framework | Next.js `^15.3.0` (App Router) + `--turbopack` ตอน dev | `package.json` |
-| UI runtime | React `^19.0.0` | `package.json` |
-| ภาษา | TypeScript `^5.7.0` | `package.json` |
-| สไตล์ | **plain CSS** (`src/app/globals.css` 1230 บรรทัด) — ไม่ใช้ Tailwind แม้ติดตั้งไว้ | |
-| กราฟ | **SVG เขียนเอง** (`Charts.tsx`) — ไม่ใช้ Recharts/ไลบรารีกราฟ | |
-| ไอคอน | `lucide-react` | |
-| ทดสอบ | `@playwright/test` (scenario harness) | `tests/scenario/` |
-| ฟอนต์ | `Noto_Sans_Thai` (next/font) ตัวแปร `--font-noto-thai` | `src/app/layout.tsx` |
+| โครงสร้าง | **pnpm monorepo + Turborepo** — `apps/hq`, `apps/dealer`, `packages/shared` | `pnpm-workspace.yaml`, `turbo.json` |
+| Package manager | **pnpm@11.15.1** (ไม่ใช่ npm แล้ว) | root `package.json` |
+| Framework | Next.js `^15.3.0` (App Router) | `apps/*/package.json` |
+| UI runtime | React `^19.0.0` | |
+| ภาษา | TypeScript (base config ที่ `tsconfig.base.json`) | |
+| แอนิเมชัน | `framer-motion` `^12.42.2` (เพิ่มเข้ามาตอนแยก monorepo) | `apps/*/package.json` |
+| สไตล์ | **plain CSS** (`packages/shared/globals.css`) — ไม่ใช้ Tailwind | |
+| กราฟ | **SVG เขียนเอง** (`packages/shared/components/ui/Charts.tsx`) — ไม่ใช้ Recharts | |
+| ไอคอน | `lucide-react` `^0.469.0` | |
+| ทดสอบ | `@playwright/test` (scenario harness) | `tests/` |
+| โค้ดร่วม 2 แอป | ทั้ง HQ และ Dealer import ตรรกะ/คอมโพเนนต์/CSS จาก **`@pms/shared`** (`workspace:*`) | |
 
-**สคริปต์:** `npm run dev` (next dev --turbopack) · `npm run build` · `npm start` · `npm run scenario` (playwright test)
+**2 แอปแยก port กัน:**
+| แอป | โฟลเดอร์ | port dev | ขอบเขต URL |
+|---|---|---|---|
+| **Dealer** | `apps/dealer` | **3001** | root (`/dashboard`, `/leads`, …) |
+| **HQ** | `apps/hq` | **3002** | `/hq/*` |
 
-> ⚠️ **ห้ามรัน `next build` ระหว่าง dev server ทำงาน** — Turbopack เขียนทับ `.next` ทำให้ทุกหน้า 500
+**สคริปต์ (รันจาก root):** `pnpm dev` (turbo dev — รันทั้งสองแอปพร้อมกัน) · `pnpm dev:hq` · `pnpm dev:dealer` · `pnpm build` · `pnpm typecheck` · `pnpm lint`
+
+> ⚠️ **ห้ามรัน `next build` ระหว่าง dev server ทำงาน** — เขียนทับ `.next` ทำให้ทุกหน้า 500
+> ℹ️ **เดิมเป็นแอปเดียว** (`src/app/(app)/…` มีทั้ง Dealer + HQ ใต้ route group เดียว) — ย้ายเป็น 2 แอปเพื่อ deploy/คุมสิทธิ์แยกกัน แต่ **แชร์ `packages/shared` ทั้งหมด** ตรรกะจึงเหมือนเดิมทุกอย่าง
 
 ---
 
 ## 2. โครงสร้าง Routing
 
-**ลำดับ layout ซ้อนกัน:**
+**แต่ละแอปมี layout ของตัวเอง แต่ทรี Provider เหมือนกัน** (RoleProvider/SalesProvider/FilterProvider มาจาก `@pms/shared/context`):
 ```
-RootLayout (src/app/layout.tsx) → <html lang="th"> + ฟอนต์ไทย
+RootLayout (apps/{hq,dealer}/app/layout.tsx) → <html lang="th"> + ฟอนต์ไทย + import @pms/shared/globals.css
  └─ RoleProvider
     └─ SalesProvider (initialLeads = leads จาก mock)
        ├─ (app)/layout.tsx  → AuthGuard → AppShell → [FilterProvider ต่อหน้า] → children
-       │   └─ (app)/hq/layout.tsx → กัน non-HQ (redirect /dashboard)
+       │   └─ (เฉพาะ apps/hq) (app)/hq/layout.tsx → กัน non-HQ (redirect)
        └─ (auth)/layout.tsx → กล่องกลางจอ (หน้า login)
 ```
 
-| ไฟล์ | หน้าที่ |
+**หน้าจริงในแต่ละแอป (page.tsx):**
+| แอป | หน้า |
 |---|---|
-| `src/app/layout.tsx` | Root: ครอบ `RoleProvider` → `SalesProvider` ทั้งแอป · โหลด `leads` จาก mock เป็น initial |
-| `src/app/page.tsx` | `/` → `redirect("/dashboard")` |
-| `src/app/(app)/layout.tsx` | ครอบ `AuthGuard` → `AppShell` |
-| `src/app/(app)/hq/layout.tsx` | client; ถ้า `hydrated && !isHQ` → `router.replace("/dashboard")` (กัน Dealer เข้าโซน HQ) |
-| `src/app/(auth)/layout.tsx` | layout หน้า auth — จัดกึ่งกลางจอ ไม่มี shell |
+| **Dealer** (`apps/dealer/app/(app)/`) | `dashboard` · `leads` (+`leads/[id]`) · `quotations` · `customers` (+`customers/[id]`) · `products` · `calendar` · `files` · `settings` · `profile` |
+| **HQ** (`apps/hq/app/(app)/hq/`) | `dashboard` · `leads` · `quotations` · `customers` · `pipeline` (ภาพรวมยอดขาย) · `dealers` (+`[dealerCode]`) · `master` (แคตตาล็อกแม่แบบ) · `audit` (บันทึกการใช้งาน) · `settings` · `company` · `users` |
 
-**การแยกโซน:** Dealer = root-level (`/dashboard /leads /quotations /customers /products /calendar /files /settings /profile`) · HQ = ใต้ `/hq/*` · ทั้งคู่ใช้ `(app)` route group เดียวกัน (แชร์ AuthGuard + AppShell + Provider tree)
+> หมายเหตุ: apps/hq ยังมี `(app)/dashboard` ( redirect) และหน้า `(auth)/login`, `(auth)/hq/login` ของตัวเอง · หน้า HQ ทั้งหมดอยู่ใต้ `/hq/*`
 **Redirect:** `/`→`/dashboard` · ยังไม่ล็อกอิน→`/login` (AuthGuard) · Dealer หลงเข้า `/hq/*`→`/dashboard`
 
 ---
@@ -525,5 +548,34 @@ HQ ทำ action สำคัญ (เพิ่ม/แก้/ลบ ตัวแ�
 3. **JSX comment ในตำแหน่ง expression** `{cond && ( {/* ... */} <div>)` — **tsc ผ่าน แต่ `next build` พัง** · วางคอมเมนต์เหนือ expression
 4. **แก้ seed mock.ts** ต้องขึ้นเลขเวอร์ชัน storage key ไม่งั้น localStorage เก่าทับ
 5. **hook อ่านกฎห้ามใช้ `usePersistentState`** (เขียนกลับทับค่าจริงตอน mount) — ใช้ `load*()` + ฟัง event แทน
-6. **ตาราง `table-layout:fixed`** — ความกว้างแก้ที่ `<colgroup><col>` เท่านั้น (ใส่ที่ `<th>` ไม่มีผล)
+6. **ตาราง `table-layout:fixed`** — ความกว้างแก้ที่ `<colgroup><col>` เท่านั้น (ใส่ที่ `<th>` ไม่มีผล) · เพิ่ม/ลบคอลัมน์ต้องอัปเดต col ให้จำนวนตรงกับ th/td
 7. **inline `style={{gridTemplateColumns}}` ชนะ media query เสมอ** — เป็นต้นเหตุ KPI ถูกตัดที่ /hq/master, /hq/users บนมือถือ
+8. **การ์ดในแถว grid `align-items:stretch` จะยืดตามเนื้อที่สูงสุด** — ถ้าอยากให้เนื้อ "เลื่อนในการ์ด" ต้องทำกล่องเนื้อเป็น `position:absolute; inset:0` ใน parent `position:relative; flex:1` ไม่งั้นการ์ดยืดจนไม่มีวันเกิดแถบเลื่อน
+9. **`withDefaults()` ใน usePersistentState** merge ค่าที่บันทึกไว้กับ default แบบไล่ชั้น — เพิ่มฟิลด์ใหม่ในออบเจ็กต์ตั้งค่าได้โดยไม่ต้องขึ้นเวอร์ชันคีย์ (แต่ array ยังทับทั้งก้อน — ลบแถวต้องลบจริง)
+
+---
+
+## ภาคผนวก B — การเปลี่ยนแปลงล่าสุด
+
+รายการนี้ทับเนื้อหาด้านบนตรงจุดที่ขัดกัน (ด้านบนเขียนไว้ก่อนการเปลี่ยนแปลง) — เรียงใหม่→เก่า
+
+**โครงสร้าง**
+- **แยกเป็น pnpm monorepo** — `apps/hq` (port 3002) + `apps/dealer` (port 3001) + `packages/shared` · ทั้งคู่ import จาก `@pms/shared` (ดูตาราง path map ด้านบนสุด)
+
+**กฎธุรกิจที่ถูกลบทั้งฟีเจอร์ (อย่าใส่กลับถ้าไม่มีฟิลด์จริง)**
+- **ส่วนลด (discount)** — ลบหมดทั้งระบบ (15 ก.ค.) · ราคาที่เสนอ = ราคาสุทธิ
+- **การรับประกัน (warranty)** — ลบหมด (ฝั่งดีลเลอร์ไม่มี HQ ก็ไม่ต้องมี) · ไฟล์ `lib/warranty.ts` เปลี่ยนชื่อเป็น **`lib/delivery.ts`** (เหลือแค่ "การส่งมอบ" = วันปิดการขาย + ระยะส่งมอบ · ไม่มี +10 ปีแล้ว) · โดนัท/คอลัมน์/ตัวกรอง/แท็บ "ประกัน" ที่ /hq/customers และป้ายฝั่งดีลเลอร์ถูกถอดออก
+- **Forecast / คาดการณ์รายได้** — ไม่มีวันคาดปิดการขายในระบบ
+
+**หน้าตั้งค่า HQ (`/hq/settings`)** — เหลือ **5 แท็บ** (บริษัท · ผู้ใช้งานและสิทธิ์ · เส้นทางการขาย · เป้าหมายยอดขาย · การแจ้งเตือน)
+- ยุบแท็บ "กฎธุรกิจ" เข้า "เส้นทางการขาย" (กฎดูแลลีด + เหตุผลปิดไม่สำเร็จ) · ลบแท็บ "ตัวแทนจำหน่าย" (จัดการที่ `/hq/dealers` ที่เดียว)
+- ลบการ์ดข้อความล้วน: นโยบายราคา · ประเภทสินค้าและแม่แบบ · กฎใบเสนอราคา (VAT/อายุใบ/เลขที่ยังทำงานอยู่แต่ตรึงค่าตั้งต้น ไม่มี UI ตั้งค่าแล้ว)
+
+**ฟีเจอร์ใหม่/แก้บั๊ก**
+- **ลีดมีฟิลด์ `area` (พื้นที่ ตร.ม.)** — กรอกตอนเพิ่ม/แก้ลีด (optional · ว่าง = undefined ไม่ใช่ 0) · ส่งต่อเป็น "จำนวนตั้งต้น" ของ BOQ ตอนออกใบเสนอราคา (แม่แบบหน่วย ตร.ม.) · แก้ทับได้ · พื้นที่บนใบยึดตาม BOQ ตอนบันทึกเสมอ · มีคอลัมน์ในตารางลีด (ซ่อนได้)
+- **`HQ_DEALERS_KEY` → `hq_dealers_v4`** + `purgeOldDealerKeys()` ล้าง v2/v3 ตอนเข้าแอป — แก้บั๊กตัวแทนผี 48 ราย (รหัส D101–D138) ที่ค้างใน localStorage เครื่องเก่า · ระบบมีตัวแทน **10 ราย** จริง
+- **`LostReasonsChart`** นับจากเหตุผลที่ลีดบันทึกไว้จริง (ไม่กรองกับรายการเหตุผลของ HQ) — เดิมคำสั้น "ราคา" ไม่แมตช์ประโยคยาว "ราคาสูงเกินงบประมาณ" ทำให้การ์ดว่าง
+- **กราฟแท่ง `GroupedBarChart`** (แท่งกลุ่ม ไม่ใช่แท่งซ้อน) — ใช้กับลีด/ใบเสนอราคา/ปิดการขายรายเดือน (เป็นขั้นของดีลเดียวกัน บวกกันไม่มีความหมาย)
+- **`MonthRangeToggle`** (`components/ui/`) — ปุ่มช่วง 3/6/12 เดือน แหล่งเดียวของทั้งระบบ · ใช้กับกราฟแนวโน้มที่ **ไม่ผูกกับตัวกรองเวลาบนแถบบน** (ต้องเขียนช่วงที่ครอบใต้หัวข้อด้วย `monthRangeSubtitle`) · ถังเดือนใช้คีย์ `YYYY-MM` กันข้ามปีทับกัน
+- **แดชบอร์ด HQ การ์ด "กิจกรรมล่าสุด"** ดึงจาก **บันทึกการใช้งาน** (audit log · `useAuditEntries`) แหล่งเดียวกับ `/hq/audit` — ไม่ใช่ความเคลื่อนไหวการขายแล้ว
+- **ปุ่ม "ดู" ในตาราง /hq/leads · /hq/quotations** เป็นไอคอนลูกตาล้วน (คง `title`/`aria-label`)

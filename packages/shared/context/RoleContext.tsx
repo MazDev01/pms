@@ -4,19 +4,25 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock";
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { sbSignIn, sbDemoSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
+
+// โหมด backend — supabase = auth จริง (JWT) · local = mock เดิม (localStorage)
+const USE_SUPABASE = DATA_SOURCE === "supabase";
 
 type RoleContextType = {
   session: MockSession;
   isLoggedIn: boolean;
-  hydrated: boolean;
+  hydrated: boolean;   // true = ฟื้น session เสร็จ (auth พร้อม → ค่อย query เพื่อกัน RLS คืนว่าง)
+  loading: boolean;    // true = ยังฟื้น session ไม่เสร็จ (= !hydrated) — ให้ useAuth ใช้
   isHQ: boolean;
   role: UserRole;
   dealerCode: string;
   can: (permission: Permission) => boolean;
-  signIn: (email: string, password: string) => AuthResult;
-  login: (key: "hq" | "dealer") => void;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  login: (key: "hq" | "dealer") => Promise<void>;
   logout: () => void;
-  switchSession: (key: "hq" | "dealer") => void;
+  switchSession: (key: "hq" | "dealer") => Promise<void>;
   currentKey: "hq" | "dealer";
 };
 
@@ -31,8 +37,27 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // กู้ session จาก localStorage ตอน mount
+  // กู้ session ตอน mount — โหมด supabase ฟื้นจาก JWT · โหมด local ฟื้นจาก localStorage
   useEffect(() => {
+    if (USE_SUPABASE) {
+      let alive = true;
+      sbRestore()
+        .then((s) => {
+          if (!alive) return;
+          if (s) { setSession(s); setIsLoggedIn(true); }
+          setHydrated(true);
+        })
+        .catch(() => { if (alive) setHydrated(true); });
+      // ติดตาม login/logout/refresh (เช่น token หมดอายุ) → ซิงก์ session ให้เสมอ
+      const unsub = sbOnChange((s) => {
+        if (!alive) return;
+        if (s) { setSession(s); setIsLoggedIn(true); }
+        else { setIsLoggedIn(false); }
+      });
+      return () => { alive = false; unsub(); };
+    }
+
+    // ── โหมด local (mock) ──
     try {
       const loggedIn = localStorage.getItem(STORAGE_LOGIN) === "true";
       // 1) session เต็มจากการ login ด้วยบัญชีจริง
@@ -59,20 +84,33 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   };
 
   // login ด้วยอีเมล/รหัสผ่านจริง → session ตามบทบาทของบัญชี
-  const signIn = (email: string, password: string): AuthResult => {
+  // supabase: signInWithPassword (JWT) · local: mock authenticate + persist localStorage
+  const signIn = async (email: string, password: string): Promise<AuthResult> => {
+    if (USE_SUPABASE) {
+      const r = await sbSignIn(email, password);
+      if (r.ok) { setSession(r.session); setIsLoggedIn(true); }
+      return r;
+    }
     const r = authenticate(email, password);
     if (r.ok) { setSession(r.session); setIsLoggedIn(true); persist(r.session); }
     return r;
   };
 
-  // เข้าด่วนด้วย session สำเร็จรูป (ปุ่มเดโม / สลับบทบาทใน Sidebar)
-  const login = (key: "hq" | "dealer") => {
+  // เข้าด่วนด้วยบัญชีเดโม (ปุ่มในหน้า login / สลับบทบาทใน Sidebar)
+  // supabase: signInWithPassword ด้วยบัญชีเดโมที่ seed ไว้ · local: session สำเร็จรูป
+  const login = async (key: "hq" | "dealer"): Promise<void> => {
+    if (USE_SUPABASE) {
+      const r = await sbDemoSignIn(key);
+      if (r.ok) { setSession(r.session); setIsLoggedIn(true); }
+      return;
+    }
     const s = sessions[key];
     setSession(s); setIsLoggedIn(true); persist(s);
   };
 
   const logout = () => {
     setIsLoggedIn(false);
+    if (USE_SUPABASE) { void sbSignOut(); return; }
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_LOGIN);
     localStorage.removeItem(STORAGE_SESSION);
@@ -84,6 +122,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         session,
         isLoggedIn,
         hydrated,
+        loading: !hydrated,
         isHQ: session.scopeAll,
         role: session.role,
         dealerCode: session.dealerCode,
@@ -104,4 +143,12 @@ export function useRole() {
   const ctx = useContext(RoleContext);
   if (!ctx) throw new Error("useRole must be used inside RoleProvider");
   return ctx;
+}
+
+// useAuth — มุมมอง "ผู้ใช้ปัจจุบัน" ที่กระชับ (ตาม Master Plan Phase 0)
+// user = session ปัจจุบัน · dealerCode/role/isHQ มาจาก JWT (supabase) หรือ mock (local)
+// loading = ยังฟื้น session ไม่เสร็จ → หน้า/query ควรรอก่อน
+export function useAuth() {
+  const { session, dealerCode, role, isHQ, loading } = useRole();
+  return { user: session, dealerCode, role, isHQ, loading };
 }
