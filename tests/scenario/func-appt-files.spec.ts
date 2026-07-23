@@ -48,37 +48,48 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
   assertNoErrors(errs, "สร้างนัดหมาย");
 });
 
-test("[func] อัปโหลดไฟล์แนบ → ไบต์ขึ้น Storage และมีแถวใน DB", async ({ page }) => {
+test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้น Storage และมีแถวใน DB", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
+  const COMPANY = tagged("ลีดไฟล์");
   const FILENAME = "ZZTEST-เอกสารทดสอบ.txt";
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
-  await page.goto(`${DEALER_ORIGIN}/files`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
 
-  // หน้า /files เป็น "คลังรวม" อ่านอย่างเดียว — ดึงไฟล์ที่แนบไว้กับลีด/ลูกค้ามารวมกัน
-  // การแนบไฟล์จริงอยู่ในแผงรายละเอียดลีด ยังไม่ได้เขียนเทสต์ทางนั้น (ดูหมายเหตุท้ายไฟล์)
-  const input = page.locator('input[type="file"]').first();
-  if (await input.count() === 0) {
-    test.skip(true, "หน้าคลังไฟล์ไม่มีช่องอัปโหลด (อัปโหลดอยู่ที่แผงลีด) — ยังไม่ได้เขียนเทสต์ทางนั้น");
-    return;
-  }
+  // ต้องมีลีดก่อน — การแนบไฟล์อยู่ในลิ้นชักรายละเอียดลีด ไม่ใช่หน้าคลังไฟล์
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
+  await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณไฟล์");
+  await page.getByRole("button", { name: "บันทึก" }).click();
+  await waitRow(sb, "leads", { company: COMPANY });
 
-  await input.setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("benjamin test") });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+
+  // ส่วน "ไฟล์" อยู่ท้ายลิ้นชัก · ปุ่มอาจยังไม่อยู่ในระยะมองเห็น แต่ input มีอยู่ใน DOM แล้ว
+  // (input ถูกซ่อนไว้โดยตั้งใจ — ปุ่มเป็นตัวสั่งเปิดหน้าต่างเลือกไฟล์)
+  // ตัวที่ไม่มี accept คือช่องแนบไฟล์ทั่วไป · ที่มี accept="image/*" คือช่องอัปโหลดโลโก้
+  const fileInput = page.locator('input[type="file"]:not([accept])').first();
+  await expect(fileInput, "ลิ้นชักลีดต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 15_000 });
+  await fileInput
+    .setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("benjamin test") });
 
   // แถว metadata ต้องลง DB
-  const row = await waitRow<{ dealer_code: string; storage_path: string | null; name: string }>(
+  const f = await waitRow<{ dealer_code: string; storage_path: string | null }>(
     sb, "files", { name: FILENAME }, 25_000);
-  expect(row.dealer_code, "ไฟล์ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
+  expect(f.dealer_code, "ไฟล์ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
 
-  // และไบต์ต้องอยู่ใน Storage จริง — ไม่ใช่แค่ metadata ลอย ๆ
-  expect(row.storage_path, "ต้องมีพาธไฟล์ใน Storage").toBeTruthy();
-  expect(row.storage_path!.startsWith("RYG/"), "พาธต้องขึ้นต้นด้วยรหัสสาขา (Storage RLS คุมด้วยโฟลเดอร์)").toBe(true);
-  const signed = await sb.storage.from("dealer-files").createSignedUrl(row.storage_path!, 60);
+  // และไบต์ต้องอยู่ใน Storage จริง — ไม่ใช่ metadata ลอย ๆ
+  expect(f.storage_path, "ต้องมีพาธไฟล์ใน Storage").toBeTruthy();
+  expect(f.storage_path!.startsWith("RYG/"),
+    "พาธต้องขึ้นต้นด้วยรหัสสาขา (Storage RLS คุมด้วยชื่อโฟลเดอร์)").toBe(true);
+  const signed = await sb.storage.from("dealer-files").createSignedUrl(f.storage_path!, 60);
   expect(signed.error, `ดึงไฟล์จาก Storage ไม่ได้: ${JSON.stringify(signed.error)}`).toBeNull();
 
-  assertNoErrors(errs, "อัปโหลดไฟล์");
+  assertNoErrors(errs, "แนบไฟล์ที่ลีด");
 });
 
 // หมายเหตุความครอบคลุม — ยังไม่ได้เทสต์:
@@ -87,6 +98,5 @@ test("[func] อัปโหลดไฟล์แนบ → ไบต์ขึ�
 //     และกดเลือกวันที่ ก็ยังไม่เจอ · ยังแยกไม่ได้ว่าเป็นเทสต์เลือก selector ผิด
 //     หรือปฏิทินไม่แสดงนัดจริง — ต้องตรวจด้วยตาก่อน ไม่เดา
 //   • แก้/ลบนัดหมายผ่านหน้าจอ
-//   • อัปโหลด/ลบไฟล์แนบ — ทำที่แผงรายละเอียดลีด ไม่ใช่หน้าคลังไฟล์
-//     ต้องยืนยันทั้งแถวใน files และไบต์ใน Storage (พาธต้องขึ้นต้นด้วยรหัสสาขา)
+//   • ลบไฟล์แนบผ่านหน้าจอ (ต้องลบทั้งแถวใน files และไบต์ใน Storage)
 //   • แท็บการแจ้งเตือนในหน้าตั้งค่าตัวแทน
