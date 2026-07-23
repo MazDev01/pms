@@ -6,7 +6,7 @@ import {
 } from "react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
-  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, loadQuoteNumbering,
+  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, DEFAULT_QUOTE_NUMBERING,
   type IssuerProfile,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
   quotationToFile, AUTO_FILE_BY,
@@ -465,15 +465,22 @@ export function SalesProvider({
   // เดิมเรียก loadIssuer() ซึ่งอ่าน localStorage → โหมด supabase ได้ค่าเริ่มต้นของโปรเจกต์เสมอ
   // = ใบเสนอราคาที่ส่งลูกค้าขึ้นชื่อบริษัทผิด (ชื่อสาขาเดโม แทนชื่อสาขาจริง)
   const issuerRef = useRef<IssuerProfile>(DEFAULT_ISSUER);
+  // คำนำหน้าเลขที่ก็เป็นของสาขาเช่นกัน — ต้องอ่านจากที่เดียวกับหัวกระดาษ
+  // เดิมใช้ loadQuoteNumbering() ที่อ่าน localStorage → ตัวแทนตั้งคำนำหน้าไว้ใน DB แล้ว
+  // แต่เวลาออกใบยังได้ค่าจากเครื่อง (คนละค่ากับที่หน้าตั้งค่าแสดง)
+  const quotePrefixRef = useRef<string>(DEFAULT_QUOTE_NUMBERING.prefix);
   useEffect(() => {
     if (!hydrated) return;
     dealerSettingsRepo.get(myDealerCode)
-      .then(cfg => { issuerRef.current = cfg.issuer; })
+      .then(cfg => {
+        issuerRef.current = cfg.issuer;
+        if (cfg.document?.quotePrefix) quotePrefixRef.current = cfg.document.quotePrefix;
+      })
       .catch(e => console.error("[dealerSettings.get]", e));
   }, [hydrated, myDealerCode]);
 
   const newQuoteId = useCallback(
-    () => quotationsRepo.nextQuoteNo(myDealerCode, loadQuoteNumbering().prefix),
+    () => quotationsRepo.nextQuoteNo(myDealerCode, quotePrefixRef.current),
     [myDealerCode],
   );
 

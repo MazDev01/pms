@@ -7,7 +7,8 @@ import { useState } from "react";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { catalog as catalogRepo } from "@pms/shared/lib/data";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
-import { solutionProducts, type SolutionProduct } from "@pms/shared/lib/mock";
+// เริ่มด้วยรายการว่าง — เดิมตั้งต้นด้วยชุดตัวอย่าง ทำให้เห็นแม่แบบปลอมกะพริบก่อนของจริงมา
+import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
@@ -145,7 +146,7 @@ export default function HQMasterPage() {
 }
 function HQMasterPageInner() {
   // อ่าน/เขียนผ่าน repository (local: localStorage · supabase: DB · RLS: เขียนได้เฉพาะ HQ)
-  const [catalog, setCatalog] = useRepoState<SolutionProduct[]>(() => catalogRepo.list(), (v) => catalogRepo.save(v), solutionProducts);
+  const [catalog, setCatalog] = useRepoState<SolutionProduct[]>(() => catalogRepo.list(), (v) => catalogRepo.save(v), []);
   const logAudit = useAuditLogger(); // บันทึกการแก้แม่แบบ/ราคากลาง
   const [q, setQ] = useState("");
 

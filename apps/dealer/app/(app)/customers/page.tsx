@@ -17,6 +17,7 @@ import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 const noteColorOf = (cat: string) =>
   (noteCategoryColor as Record<string, { bg: string; text: string; dot: string }>)[cat] ?? noteCategoryColor["ทั่วไป"];
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import type { CustomerNote } from "@pms/shared/lib/data/types";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
@@ -355,6 +356,8 @@ export default function CustomersPage(){
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
   const userProfile = useUserProfile();
+  const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา — ต้องส่งเข้าเอกสารพิมพ์
+  const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document, wordmark: dealerCfg.settings.wordmark };
   const hqPolicy = useHQPolicy();
   const customerNotes = useCustomerNotes(userProfile.profile.name); // โน้ตลูกค้าผ่าน repo (ผู้เขียน = ผู้ใช้ที่ล็อกอิน) // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
@@ -1377,7 +1380,7 @@ export default function CustomersPage(){
                   <div style={cardS}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                       <div style={{...secL,marginBottom:0}}><FileText size={13} color={PRIMARY}/> ใบเสนอราคา</div>
-                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, hqPolicy.vat)}
+                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, hqPolicy.vat, printCfg)}
                         className="btn btn-secondary btn-sm" style={{color:PRIMARY}}><Printer size={12}/> พิมพ์ PDF</button>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 20px",marginBottom:12}}>

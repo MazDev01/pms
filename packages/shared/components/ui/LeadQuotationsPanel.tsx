@@ -13,6 +13,7 @@ import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 
 const MOCK_TODAY = "2026-06-30";
 
@@ -25,6 +26,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const policy = useHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ (อ่านผ่าน repo + อัปเดตตาม HQ)
+  const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา (ผ่าน repo)
+  const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document, wordmark: dealerCfg.settings.wordmark };
 
   // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
   const subj = lead ? {
@@ -281,7 +284,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
+          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat, printCfg)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
           {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
           {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
             <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
@@ -328,7 +331,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
                     {([
                       { ic: <Eye size={13} />, t: "ดู", fn: () => { setEditing(q); setMode("view"); } },
                       ...(readOnly ? [] : [{ ic: <Pencil size={13} />, t: "แก้ไข", fn: () => openEdit(q) }]),
-                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat) },
+                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat, printCfg) },
                       ...(readOnly ? [] : [
                         { ic: <Copy size={13} />, t: "ทำสำเนา", fn: () => duplicate(q) },
                         { ic: <Trash2 size={13} />, t: "ลบ", fn: () => setConfirmDel(q.id), danger: true },

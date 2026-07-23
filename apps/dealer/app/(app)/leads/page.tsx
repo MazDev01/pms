@@ -4,9 +4,9 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   leadStatusLabel, leadStatusColor,
-  responsiblePersons, RP_STORAGE_KEY,
+  RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
-  solutionProducts, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
+  buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
 } from "@pms/shared/lib/mock";
@@ -384,7 +384,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   const [form, setForm] = useState({
     company: initial?.company ?? "", contact: initial?.contact ?? "",
     phone: initial?.phone ?? "", email: initial?.email ?? "",
-    province: initial?.province ?? "กรุงเทพฯ", product: initial?.product ?? solutionProducts[0].name,
+    province: initial?.province ?? "กรุงเทพฯ", product: initial?.product ?? catalog[0]?.name ?? "",
     value: initial?.value ?? "",
     // เก็บเป็นสตริง ให้ปล่อยว่างได้ (= ยังไม่รู้พื้นที่) — ตอนบันทึกค่อยแปลงเป็นตัวเลข
     area: initial?.area != null ? String(initial.area) : "",

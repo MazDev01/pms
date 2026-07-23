@@ -171,9 +171,22 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 // พิมพ์ใบเสนอราคา — โหลด issuer + doc จาก localStorage เอง แล้วเปิดหน้าต่างพิมพ์
 // ใช้ตัวนี้เพื่อความสม่ำเสมอ (VAT/ตรา/ลายเซ็น มาจากการตั้งค่าจริงเสมอ)
 // vatPercent: ส่ง VAT จาก useHQPolicy() มาด้วยเสมอ (ค่าจริงของ HQ) — ดู loadDoc
-export function printQuotation(q: QuotationMock, cust?: PrintCustomer, vatPercent?: number) {
+/** ตั้งค่าของสาขาที่ใช้ประกอบเอกสาร — ผู้เรียกต้องส่งมาจาก useDealerSettings()
+ *  ไม่ส่งมา = ตกไปอ่าน localStorage ซึ่งถูกเฉพาะโหมด local (โหมดจริงค่าอยู่ใน DB) */
+export type PrintSettings = { issuer?: IssuerProfile; doc?: DocProfile; wordmark?: string };
+
+export function printQuotation(q: QuotationMock, cust?: PrintCustomer, vatPercent?: number, settings?: PrintSettings) {
   // ใช้สแนปช็อตผู้ออกที่ตรึงไว้กับใบ (ถ้ามี) — ใบเก่าคงชื่อเดิม; ไม่มีค่อย fallback โปรไฟล์ปัจจุบัน
-  const html = buildQuotationHTML(q, q.issuer ?? loadIssuer(), cust, loadDoc(vatPercent), loadWordmark());
+  //
+  // settings ต้องส่งมาจากหน้าจอเสมอในโหมดจริง — เดิมฟังก์ชันนี้อ่าน localStorage เอง
+  // ทำให้ "ใบเดียวกัน" พิมพ์จากหน้าลูกค้า/แผงลีด ได้หัวกระดาษคนละชุดกับพิมพ์จากหน้าใบเสนอราคา
+  // (หน้าใบเสนอราคาส่งค่าจาก DB มาแล้ว · อีกสองที่ยังได้ค่าเริ่มต้นของโปรเจกต์)
+  const issuer = q.issuer ?? settings?.issuer ?? loadIssuer();
+  const doc = settings?.doc
+    ? { ...settings.doc, vatPercent: typeof vatPercent === "number" && vatPercent >= 0 ? vatPercent : settings.doc.vatPercent }
+    : loadDoc(vatPercent);
+  const wordmark = settings?.wordmark ?? loadWordmark();
+  const html = buildQuotationHTML(q, issuer, cust, doc, wordmark);
   const w = window.open("", "_blank"); if (!w) return;
   w.document.write(html); w.document.close();
 }

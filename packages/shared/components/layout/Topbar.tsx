@@ -8,13 +8,14 @@ import { useSales } from "@pms/shared/context/SalesContext";
 import {
   apptTypeLabel,
   notifCategoryOf,
-  loadHQNotifPrefs, hqAuditCategory, HQ_NOTIF_UPDATED_EVENT, HQ_ALERT_META,
+  DEFAULT_HQ_NOTIFS, DEFAULT_HQ_NOTIF_RULES, hqAuditCategory, HQ_ALERT_META,
+  type HQNotifRules,
   type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
   type HQAlertKey,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
-import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown } from "lucide-react";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@pms/shared/lib/useAudit";
@@ -295,14 +296,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const notifPrefs: NotifPrefs | null = dealerCfg.loaded ? dealerCfg.settings.notifPrefs : null;
 
   // ตั้งค่าการแจ้งเตือนของ HQ (หมวดจาก Audit Log) — กรองกระดิ่งฝั่ง HQ ตาม toggle "ในระบบ"
-  const [hqNotifPrefs, setHqNotifPrefs] = useState<Record<string, HQNotifChannels> | null>(null);
-  useEffect(() => {
-    const read = () => setHqNotifPrefs(loadHQNotifPrefs());
-    read();
-    window.addEventListener(HQ_NOTIF_UPDATED_EVENT, read);
-    window.addEventListener("storage", read);
-    return () => { window.removeEventListener(HQ_NOTIF_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
-  }, []);
+  // อ่านผ่าน repo — เดิม loadHQNotifPrefs() อ่าน localStorage ของเครื่องที่ใช้
+  const hqRules = useRepoValue<HQNotifRules>(() => settingsRepo.getNotifRules(), DEFAULT_HQ_NOTIF_RULES);
+  const hqNotifPrefs: Record<string, HQNotifChannels> | null =
+    { ...DEFAULT_HQ_NOTIFS, ...(hqRules.channels ?? {}) };
 
   const displayName = profile?.name || session.name;
   // ชื่อบัญชี = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน (ไม่ใช่ชื่อคน) · HQ ใช้ชื่อผู้ใช้

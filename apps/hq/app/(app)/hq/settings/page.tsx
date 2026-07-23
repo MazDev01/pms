@@ -421,7 +421,7 @@ const CHANNELS: { k: keyof HQNotifChannels; label: string }[] = [
 ];
 // เกณฑ์ของแต่ละกฎ (ถ้ามี) — "ผู้รับผิดชอบ" ใช้เกณฑ์จาก "เส้นทางการขาย" จึงไม่มีช่องกรอกซ้ำที่นี่
 // ลีดเงียบมีเกณฑ์ของ HQ เอง (คนละตัวกับกฎติดตาม 7 วันที่บังคับตัวแทน — ดู @pms/shared/lib/hqAlerts)
-type NumRuleKey = Exclude<keyof HQNotifRules, "alerts">;
+type NumRuleKey = Exclude<keyof HQNotifRules, "alerts" | "channels">;
 const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: NumRuleKey; unit: string }[]>> = {
   idleLead:       [{ field: "leadIdleDays",      unit: "วัน" }],
   quoteExpiring:  [{ field: "quoteExpiringDays", unit: "วัน" }],
@@ -432,21 +432,25 @@ const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: NumRuleKey; unit: str
 };
 
 function NotificationsTab() {
-  const ch = usePersistentDraft<Notifs>(HQ_NOTIF_KEY, DEFAULT_HQ_NOTIFS);
+  // ช่องทางแจ้งเตือน (อีเมล/ในระบบ) เก็บรวมกับ hq_notif_rules ใน DB แล้ว
+  // เดิมอยู่ใน localStorage คีย์ hq_notifications_v2 → ผู้ดูแลคนหนึ่งตั้งไว้ อีกคนไม่เห็น
   const rules = useRepoDraft<HQNotifRules>(() => settingsRepo.getNotifRules(), (v) => settingsRepo.saveNotifRules(v), DEFAULT_HQ_NOTIF_RULES);
+  const chDraft: Notifs = { ...DEFAULT_HQ_NOTIFS, ...(rules.draft.channels ?? {}) };
+  const setCh = (key: string, patch: Partial<HQNotifChannels>) =>
+    rules.set(p => ({ ...p, channels: { ...DEFAULT_HQ_NOTIFS, ...(p.channels ?? {}), [key]: { ...DEFAULT_HQ_NOTIFS[key], ...(p.channels?.[key] ?? {}), ...patch } } }));
   // บันทึกแล้วยิง event → กระดิ่ง HQ อัปเดตทันที (Topbar ฟัง HQ_NOTIF_UPDATED_EVENT)
   // dep ต้องเป็น "ฟังก์ชันข้างใน" ไม่ใช่ตัวกล่องที่ usePersistentDraft คืนมา
   // กล่องเป็น object literal ใหม่ทุกเรนเดอร์ → ถ้า dep เป็น rules/ch ทั้งก้อน saveAndBroadcast
   // จะใหม่ทุกเรนเดอร์ → useMemo ของ api ใหม่ → useReport ยิง setApi → เรนเดอร์ใหม่ = วนไม่จบ
   const saveAndBroadcast = useCallback(() => {
-    ch.save(); rules.save();
+    rules.save();
     window.dispatchEvent(new Event(HQ_NOTIF_UPDATED_EVENT));
-  }, [ch.save, rules.save]);
+  }, [rules.save]);
   useReport(useMemo(() => ({
-    dirty: ch.dirty || rules.dirty,
+    dirty: rules.dirty,
     save: saveAndBroadcast,
-    reset: () => { ch.reset(); rules.reset(); },
-  }), [ch.dirty, rules.dirty, saveAndBroadcast, ch.reset, rules.reset]));
+    reset: () => rules.reset(),
+  }), [rules.dirty, saveAndBroadcast, rules.reset]));
 
   const setAlert = (k: HQAlertKey, patch: Partial<{ on: boolean; email: boolean; inapp: boolean }>) =>
     rules.set(p => ({ ...p, alerts: { ...p.alerts, [k]: { ...p.alerts[k], ...patch } } }));
@@ -503,8 +507,8 @@ function NotificationsTab() {
               </div>
               {CHANNELS.map(c => (
                 <div key={c.k} style={{ width: 60, display: "flex", justifyContent: "center" }}>
-                  <Toggle on={ch.draft[ev.key]?.[c.k] ?? false}
-                    onChange={() => ch.set(p => ({ ...p, [ev.key]: { ...p[ev.key], [c.k]: !p[ev.key]?.[c.k] } }))} />
+                  <Toggle on={chDraft[ev.key]?.[c.k] ?? false}
+                    onChange={() => setCh(ev.key, { [c.k]: !chDraft[ev.key]?.[c.k] })} />
                 </div>
               ))}
             </div>

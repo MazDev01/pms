@@ -203,6 +203,9 @@ export type HQNotifRules = {
   targetAchievedPct: number;  // ตัวแทนทำได้ถึงกี่ % ของเป้าทั้งปี
   lostRatePct: number;        // ตัวแทนปิดไม่สำเร็จเกินกี่ % ของลีดที่ปิดแล้ว
   lostRateMinClosed: number;  // ต้องปิดลีดอย่างน้อยกี่ใบถึงจะคิด % ได้ (กันตัวแทนที่ปิด 1 ใบแล้วแพ้ = 100%)
+  // ช่องทางแจ้งเตือนของแต่ละเรื่อง (อีเมล/ในระบบ) — ย้ายจาก localStorage คีย์ hq_notifications_v2
+  // เดิมผู้ดูแลคนหนึ่งตั้งไว้ อีกคนไม่เห็น และล้างเบราว์เซอร์แล้วกลับไปค่าเริ่มต้น
+  channels?: Record<string, HQNotifChannels>;
 };
 export const HQ_NOTIF_RULES_KEY = "hq_notif_rules_v2";
 const alertPref = (on: boolean, email: boolean): HQAlertPref => ({ on, email, inapp: true });
