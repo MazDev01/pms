@@ -43,7 +43,10 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
   const row = await waitRow<{ dealer_code: string; id: number }>(
     sb, "appointments", { province: CUSTOMER }, 20_000);
   expect(row.dealer_code, "นัดใหม่ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
-  expect(row.id, "เลขนัดต้องมาจากตัวนับของ DB").toBeGreaterThan(0);
+  // เลขต้องมาจากตัวนับของ DB (next_entity_id) ไม่ใช่ Date.now()
+  // ค่าจาก Date.now() เป็นเลข 13 หลัก (~1.7e12) — เลขนับของสาขาต้องเล็กกว่ามาก
+  expect(row.id, "เลขนัดต้องมาจากตัวนับของสาขา").toBeGreaterThan(0);
+  expect(row.id, "เลขนัดต้องไม่ใช่ timestamp (Date.now)").toBeLessThan(1_000_000);
 
   assertNoErrors(errs, "สร้างนัดหมาย");
 });

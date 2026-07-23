@@ -63,6 +63,9 @@ export type SalesContextType = {
   deleteQuotation: (id: string) => void;
   setQuotationStatus: (id: string, status: QuotationStatus) => void;
   newQuoteId: () => Promise<string>; // เลขที่ใบถัดไป — supabase: RPC atomic ต่อสาขา · local: max+1
+  /** เลขนัดหมายถัดไปของสาขา — ออกจาก DB แบบ atomic เหมือนเลขลูกค้า/เลขที่ใบ
+   *  (เดิมหน้าปฏิทินใช้ Date.now() · หน้าลีดใช้ max+1 — คนละแบบและไม่กันชนจริง) */
+  newAppointmentId: () => Promise<number>;
 
 
 
@@ -485,6 +488,12 @@ export function SalesProvider({
     [myDealerCode],
   );
 
+  // เลขนัดถัดไป — ให้ DB เป็นคนออกให้ (atomic ต่อสาขา) แบบเดียวกับลูกค้าและใบเสนอราคา
+  const newAppointmentId = useCallback(
+    () => appointmentsRepo.nextId(myDealerCode),
+    [myDealerCode],
+  );
+
   // ── Appointment mutations (Phase 4) — เขียนทะลุถึง repo ──────────
   const addAppointment = useCallback((appt: AppointmentMock) => {
     // ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — นัดใหม่เป็นของสาขานั้น (RLS with-check ฝั่ง supabase)
@@ -506,6 +515,7 @@ export function SalesProvider({
       leads, updateLeadStatus, addLead, updateLead, deleteLead,
       customers, addCustomer, updateCustomer, deleteCustomer,
       quotations, addQuotation, updateQuotation, deleteQuotation, setQuotationStatus, newQuoteId,
+      newAppointmentId,
       appointments, addAppointment, updateAppointment, deleteAppointment,
       convertLeadToCustomer,
       syncError, clearSyncError: () => setSyncError(null),

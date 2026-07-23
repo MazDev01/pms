@@ -609,7 +609,7 @@ export default function LeadsPage() {
   // List state
   const {
     leads: allLeads, addLead, updateLead, deleteLead: removeLead, updateLeadStatus,
-    appointments, addAppointment, quotations,
+    appointments, addAppointment, newAppointmentId, quotations,
   } = useSales();
   // ปิดการขายสำเร็จ = เป็น "ลูกค้า" แล้ว → ไม่แสดงในหน้าลูกค้าเป้าหมาย (ไปอยู่ที่ /customers)
   // สมุดงานของ "ตัวแทนที่ล็อกอิน" เท่านั้น — กรองด้วย dealerCode
@@ -1589,9 +1589,9 @@ export default function LeadsPage() {
         // ── Tab: นัดหมาย — นัดกับลูกค้าเป้าหมายก่อนปิดการขาย (แสดงในปฏิทิน+แจ้งเตือนด้วย) ──
         const leadAppts = appointments.filter(a => a.leadId === c.numId)
           .slice().sort((a, b) => (a.date + a.time) < (b.date + b.time) ? 1 : -1);
-        const saveAppt = () => {
+        const saveAppt = async () => {
           addAppointment({
-            id: Math.max(0, ...appointments.map(a => a.id)) + 1,
+            id: await newAppointmentId(), // เลขจาก DB แบบ atomic — เดิมใช้ max+1 ของชุดที่โหลดมา
             leadId: c.numId,
             company: c.company, contact: c.contact ?? "", phone: c.phone ?? "", province: c.province ?? "",
             project: apptForm.title.trim() || apptTypeLabel[apptForm.type],

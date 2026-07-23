@@ -100,7 +100,11 @@ export async function cleanup(sb: SupabaseClient, dealerCode: string) {
   await sb.from("customer_notes").delete().like("title", `%${TAG}%`);
   await sb.from("quotations").delete().eq("dealer_code", dealerCode).like("customer", `%${TAG}%`);
   await sb.from("quotations").delete().eq("dealer_code", dealerCode).like("id", `%${TAG}%`);
-  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("customer", `%${TAG}%`);
+  // appointments ไม่มีคอลัมน์ customer (ของจริงคือ company/province)
+  // เดิมสั่งลบด้วย customer → PostgREST ตอบ error เงียบ ๆ แถวทดสอบเก่าจึงค้างสะสม
+  // แล้วทำให้เทสต์รอบถัดไปไปเจอแถวเก่าแทนแถวที่เพิ่งสร้าง (เคยหลงคิดว่าโค้ดออกเลขผิด)
+  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("company", `%${TAG}%`);
+  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("province", `%${TAG}%`);
   await sb.from("customers").delete().eq("dealer_code", dealerCode).like("company", `%${TAG}%`);
   await sb.from("leads").delete().eq("dealer_code", dealerCode).like("company", `%${TAG}%`);
   await sb.from("leads").delete().like("id", `%${TAG}%`);
