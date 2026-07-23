@@ -232,7 +232,16 @@ export const SupabaseAdapter: DataAdapter = {
     // แถวที่หน้าจอเอาออกจากอาร์เรย์ต้องถูกลบใน DB ด้วย ไม่งั้นกดลบแล้วกลับมาหลังรีเฟรช
     // (โหมด local เขียนทับทั้งก้อนอยู่แล้ว → ถ้าไม่ทำแบบนี้ สองโหมดพฤติกรรมต่างกัน)
     save: async (all) => {
-      const rows = all.map(d => { const r = toSnake(d as unknown as Row); delete r.id; delete r.credentials; return r; });
+      // ตัด created_at ทิ้งด้วย — DB เป็นเจ้าของ (default now()) และห้ามให้แอปเขียนทับ
+      //
+      // ⚠️ ถ้าไม่ตัด: upsert เป็น bulk · PostgREST รวมชุดคอลัมน์จาก "ทุกแถว" ให้เท่ากัน
+      //    สาขาเดิมที่โหลดมาจาก DB มี created_at · สาขาใหม่ที่เพิ่งกรอกในฟอร์มไม่มี
+      //    → แถวใหม่ถูกเติมเป็น null → ชน not-null → เพิ่มตัวแทนใหม่ไม่สำเร็จเลยสักครั้ง
+      const rows = all.map(d => {
+        const r = toSnake(d as unknown as Row);
+        delete r.id; delete r.credentials; delete r.created_at;
+        return r;
+      });
       await must(sb().from("dealers").upsert(rows, { onConflict: "code" }));
       await deleteMissing("dealers", "code", rows.map(r => String(r.code)));
     },
@@ -240,7 +249,8 @@ export const SupabaseAdapter: DataAdapter = {
   catalog: {
     list: () => selectScoped<SolutionProduct>("master_catalog"),
     save: async (all) => {
-      const rows = toSnakeList(all as unknown as Row[]);
+      // เหตุผลเดียวกับ dealers.save — created_at เป็นของ DB (ดูคำอธิบายด้านบน)
+      const rows = toSnakeList(all as unknown as Row[]).map(r => { const c = { ...r }; delete c.created_at; return c; });
       await must(sb().from("master_catalog").upsert(rows));
       await deleteMissing("master_catalog", "id", rows.map(r => String(r.id)));
     },

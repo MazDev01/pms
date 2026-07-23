@@ -35,6 +35,12 @@ export function useRepoState<T>(
   useEffect(() => {
     let alive = true;
     load()
+      // ผลการโหลดทับ state เสมอ แม้ผู้ใช้เพิ่งแก้ไปก่อนโหลดเสร็จ
+      //
+      // ⚠️ เคยลองให้ "ของที่ผู้ใช้แก้ชนะ" แล้วอันตรายกว่ามาก: repo กลุ่มนี้เป็นแบบ
+      //    "แทนที่ทั้งชุด" — ถ้าผู้ใช้กดเพิ่มก่อนโหลดจบ state จะมีแค่แถวใหม่แถวเดียว
+      //    แล้ว save จะสั่งลบของจริงที่เหลือทั้งหมด (รอดมาได้เพราะ FK ของไฟล์กันไว้เฉย ๆ)
+      //    ยอมให้การแก้ที่เกิดก่อนโหลดจบหายไป ดีกว่าเสี่ยงลบข้อมูลจริง
       .then((v) => { if (alive) { dirtyRef.current = false; setState(v); setLoaded(true); } })
       .catch((e) => { if (alive) logRepoRead("useRepoState.load", e); });
     return () => { alive = false; };
