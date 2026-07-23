@@ -9,6 +9,7 @@ import {
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@pms/shared/lib/mock";
 import { useRepoValue, useRepoValueLoaded } from "@pms/shared/lib/useRepoState";
+import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useNetworkDealerDetail, useNetworkCustomers } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
@@ -95,7 +96,9 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
 function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDetail }) {
   // เกณฑ์ Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
-  const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;
+  // ผลงานจริงจากใบเสนอราคา/ลีด — คอลัมน์ revenue_actual/win_rate/… ในตาราง dealers เป็นค่าเดโม
+  const perf = useDealerPerformance().get(dealer.code) ?? EMPTY_PERF;
+  const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
   const barColor  = targetPct >= 80 ? "#059669" : targetPct >= 50 ? "#003366" : "#dc2626";
   const isAtRisk  = targetPct < 50;
 
@@ -107,7 +110,7 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: "1.3rem", fontWeight: 800, color: "#2D2D2D" }}>฿{(dealer.revenueActual / 1_000_000).toFixed(1)}M</span>
+              <span style={{ fontSize: "1.3rem", fontWeight: 800, color: "#2D2D2D" }}>฿{(perf.revenue / 1_000_000).toFixed(1)}M</span>
               <span style={{ fontSize: "1rem", fontWeight: 700, color: barColor }}>{targetPct}%</span>
             </div>
             <div style={{ height: 8, background: "#f0f0f5", borderRadius: 99, overflow: "hidden" }}>
@@ -131,9 +134,10 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
 
       {/* Stats */}
       {[
-        { label: "โอกาสการขายที่กำลังดำเนินการ", value: String(dealer.activeProjects),  unit: "โอกาสการขาย",     color: "#003366" },
-        { label: "อัตราปิดการขาย",     value: String(dealer.winRate),         unit: "%",       color: dealer.winRate >= targets.winRateTarget ? "#059669" : "#dc2626" },
-        { label: "ติดตามตรงเวลา",         value: String(dealer.onTimePct),       unit: "%",       color: dealer.onTimePct >= targets.onTimeTarget ? "#059669" : dealer.onTimePct >= targets.onTimeTarget - 20 ? "#f59e0b" : "#dc2626" },
+        // ยังไม่มีข้อมูลให้วัด = "—" ไม่ใช่ 0% (0% แปลว่าวัดแล้วได้ศูนย์ ซึ่งคนละความหมาย)
+        { label: "โอกาสการขายที่กำลังดำเนินการ", value: String(perf.openLeads),  unit: "โอกาสการขาย",     color: "#003366" },
+        { label: "อัตราปิดการขาย",     value: perf.winRate === null ? "—" : String(perf.winRate),   unit: perf.winRate === null ? "" : "%", color: (perf.winRate ?? 0) >= targets.winRateTarget ? "#059669" : "#dc2626" },
+        { label: "ติดตามตรงเวลา",         value: perf.onTimePct === null ? "—" : String(perf.onTimePct), unit: perf.onTimePct === null ? "" : "%", color: perf.onTimePct === null ? "#C0C0C0" : perf.onTimePct >= targets.onTimeTarget ? "#059669" : perf.onTimePct >= targets.onTimeTarget - 20 ? "#f59e0b" : "#dc2626" },
         { label: "ใบเสนอราคา",         value: String(detail?.quotes.length ?? 0),   unit: "ใบ",      color: "#2D2D2D" },
       ].map(s => (
         <div key={s.label} className="stat-card">
@@ -369,6 +373,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   const { dealerCode } = use(params);
   // อ่านจากชุดที่ persist (HQ_DEALERS_KEY) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
   const { value: dealers, loaded } = useRepoValueLoaded<DealerRow[]>(() => dealersRepo.list(), []);
+  const perfMap = useDealerPerformance();
   const [tab, setTab] = useState<TabKey>("overview");
   const code = dealerCode.toUpperCase();
   const dealer = dealers.find(d => d.code === code);
@@ -380,7 +385,8 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   if (!loaded) return <div className="erp" />;
   if (!dealer) return notFound();
 
-  const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;
+  const perf = perfMap.get(code) ?? EMPTY_PERF;
+  const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
   const isAtRisk  = targetPct < 50;
   const isWarn    = targetPct >= 50 && targetPct < 70;
 
@@ -407,7 +413,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
             )}
           </div>
           <p>
-            ภาค{dealer.region} · {dealer.activeProjects} โอกาสการขาย · อัตราปิดการขาย {dealer.winRate}% · ติดตามตรงเวลา {dealer.onTimePct}%
+            ภาค{dealer.region} · {perf.openLeads} โอกาสการขาย · อัตราปิดการขาย {perf.winRate === null ? "—" : `${perf.winRate}%`} · ติดตามตรงเวลา {perf.onTimePct === null ? "—" : `${perf.onTimePct}%`}
           </p>
         </div>
       </div>

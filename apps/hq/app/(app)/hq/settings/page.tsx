@@ -22,6 +22,7 @@ import {
 import { useRouter } from "next/navigation";
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
+import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { settings as settingsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
@@ -327,6 +328,9 @@ function TargetsTab() {
   // ห้ามใช้ usePersistentState: มันเขียนกลับตอน mount → กลายเป็นคนเขียน hq_dealers_v3 คนที่ 3
   // ทั้งที่ไม่เคยแก้ตัวแทนเลย (กติกาเดียวกับที่ mock.ts:893 เตือนไว้)
   const [dealers, setDealers] = useState<DealerRow[]>([]); // ของจริงมาจาก repo — ห้ามตั้งต้นด้วย seed
+  // "ทำได้จริง" = ยอดจากใบที่ปิดการขายได้ ไม่ใช่คอลัมน์ revenue_actual ที่ seed ไว้
+  const perf = useDealerPerformance();
+  const actualOf = (code: string) => (perf.get(code) ?? EMPTY_PERF).revenue;
   useEffect(() => { dealersRepo.list().then(setDealers).catch(() => {}); }, []);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
@@ -336,14 +340,14 @@ function TargetsTab() {
     dealers.forEach(d => {
       const k = regionDisplay(d.region) || "ไม่ระบุ";
       const r = m.get(k) ?? { target: 0, actual: 0, dealers: 0 };
-      r.target += d.revenueTarget; r.actual += d.revenueActual; r.dealers += 1;
+      r.target += d.revenueTarget; r.actual += actualOf(d.code); r.dealers += 1;
       m.set(k, r);
     });
     return [...m.entries()].map(([key, v]) => ({ key, ...v }));
   }, [dealers]);
-  const byDealer = useMemo(() => dealers.map(d => ({ key: `${d.code} · ${d.name}`, target: d.revenueTarget, actual: d.revenueActual, dealers: 1 })), [dealers]);
+  const byDealer = useMemo(() => dealers.map(d => ({ key: `${d.code} · ${d.name}`, target: d.revenueTarget, actual: actualOf(d.code), dealers: 1 })), [dealers, perf]);
 
-  const totalActual = dealers.reduce((s, d) => s + d.revenueActual, 0);
+  const totalActual = dealers.reduce((s, d) => s + actualOf(d.code), 0);
   const achievement = draft.annualTarget > 0 ? Math.round(totalActual / draft.annualTarget * 100) : 0;
 
   return (

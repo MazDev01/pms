@@ -7,7 +7,9 @@ import {
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
+import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
@@ -64,8 +66,9 @@ function RevBar({ actual, target }: { actual: number; target: number }) {
   );
 }
 
-function OnTimeBadge({ pct }: { pct: number }) {
-  if (pct === 0) return <span style={{ color: "#C0C0C0", fontSize: "0.8rem" }}>—</span>;
+// ยังไม่มีข้อมูลให้วัด = "—" (null) · ห้ามแสดง 0% เพราะ 0% แปลว่า "วัดแล้วได้ศูนย์"
+function OnTimeBadge({ pct }: { pct: number | null }) {
+  if (pct === null) return <span style={{ color: "#C0C0C0", fontSize: "0.8rem" }}>—</span>;
   const color = pct >= 85 ? "#059669" : pct >= 70 ? "#f59e0b" : "#dc2626";
   return (
     <span className="badge" style={{ background: color + "22", color }}>
@@ -162,24 +165,32 @@ function HQDealersPageInner() {
   const [entering, setEntering] = useState<string | null>(null);
   const [selectedDealer, setSelectedDealer] = useState<DealerRow | null>(null);
 
+  // ผลงานจริงจากใบเสนอราคา/ลีด — ห้ามอ่าน d.revenueActual / d.winRate / d.activeProjects อีก
+  // (คอลัมน์พวกนั้นเป็นค่าเดโมที่ seed ไว้ ไม่ขยับตามข้อมูลจริง และขัดกับหน้าแดชบอร์ด)
+  const perf = useDealerPerformance();
+  const perfOf = (code: string) => perf.get(code) ?? EMPTY_PERF;
+
   // Filter + sort — กรองจริงด้วยสถานะ/ภาค/ค้นหา (local ในหน้านี้ทั้งหมด)
   const filtered = dealers.filter(d => {
     if (statusFilter !== "all" && dealerStatus(d) !== statusFilter) return false;
     if (regionFilter !== "ทั้งหมด" && d.region !== regionFilter) return false;
     if (q && !`${d.code} ${d.name} ${d.province} ${d.region}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => b.revenueActual - a.revenueActual);
+  }).sort((a, b) => perfOf(b.code).revenue - perfOf(a.code).revenue);
 
   // Stats — คำนวณจากชุดที่กรองแล้ว (ตัวเลขสะสมจริง ไม่สเกลตามช่วงเวลา)
   const active = filtered.filter(d => dealerStatus(d) === "active");
-  const totalRevenue = filtered.reduce((s, d) => s + d.revenueActual, 0);
+  const totalRevenue = filtered.reduce((s, d) => s + perfOf(d.code).revenue, 0);
   const totalTarget = filtered.reduce((s, d) => s + d.revenueTarget, 0);
-  const totalProjects = filtered.reduce((s, d) => s + d.activeProjects, 0);
+  const totalProjects = filtered.reduce((s, d) => s + perfOf(d.code).openLeads, 0);
   // เฉลี่ยเฉพาะตัวแทนที่ "มีข้อมูล" (onTimePct > 0) — ตัวที่เป็น 0 = ยังไม่มีข้อมูล (ตารางแสดง "—")
   // เอามาเฉลี่ยเป็น 0 ไม่ได้ = เอา 0 สวมรอย "—" · ไม่มีใครมีข้อมูล → null → การ์ดแสดง "—"
-  const ratedOnTime = active.filter(d => d.onTimePct > 0);
-  const avgOnTime: number | null = ratedOnTime.length > 0
-    ? Math.round(ratedOnTime.reduce((s, d) => s + d.onTimePct, 0) / ratedOnTime.length) : null;
+  // เฉลี่ยเฉพาะสาขาที่ "มีข้อมูลให้วัด" — สาขาที่ยังไม่มีลีด/ใบ ไม่เอา 0 มาถ่วงค่าเฉลี่ย
+  const avgOf = (pick: (c: string) => number | null): number | null => {
+    const vals = active.map(d => pick(d.code)).filter((v): v is number => v !== null);
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+  };
+  const avgOnTime = avgOf(c => perfOf(c).onTimePct);
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
   function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "กลาง", revenueTarget: regionDefaultTarget("กลาง"), status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
@@ -204,7 +215,7 @@ function HQDealersPageInner() {
       setShowForm(false);
     } else {
       const creds = genCredentials(code);
-      setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueActual: 0, revenueTarget: form.revenueTarget, winRate: 0, activeProjects: 0, onTimePct: 0, status: form.status, credentials: creds }]);
+      setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status, credentials: creds }]);
       logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
       setShowForm(false);
       setCredsModal({ name: form.name.trim(), creds, mode: "created" });
@@ -224,7 +235,24 @@ function HQDealersPageInner() {
     logAudit(next === "active" ? "เปิดใช้งานตัวแทน" : "ปิดใช้งานตัวแทน", `${d.code} · ${d.name}`);
   }
 
+  // "เข้าระบบแทนตัวแทน" — ทำได้เฉพาะโหมดเดโมเท่านั้น
+  //
+  // เดิมปุ่มนี้เรียก login("dealer") ซึ่งเข้าด้วยบัญชีเดโมตัวเดียวเสมอ (CNX)
+  // ไม่ว่าจะกดจากแถวไหน → HQ กดที่แถว RYG แล้วไปเห็นข้อมูล CNX โดยไม่รู้ตัว = อันตรายกว่าไม่มีปุ่ม
+  //
+  // ทำให้ถูกต้องในโหมดจริงไม่ได้ด้วย: รหัสผ่านตัวแทนถูก hash อยู่ใน Supabase Auth
+  // การสวมสิทธิ์ต้องใช้ service_role ซึ่งอยู่ฝั่ง client ไม่ได้เด็ดขาด
+  const canImpersonate = DATA_SOURCE !== "supabase";
   function enterDealer(d: DealerRow) {
+    if (!canImpersonate) {
+      alert([
+        `เข้าระบบแทน "${d.name}" จากหน้านี้ไม่ได้`,
+        "",
+        "รหัสผ่านของตัวแทนถูกเข้ารหัสไว้ในระบบยืนยันตัวตน สำนักงานใหญ่จึงสวมสิทธิ์ไม่ได้",
+        "ถ้าต้องการดูข้อมูลของสาขานี้ ให้กดปุ่มดูรายละเอียดตัวแทนแทน",
+      ].join("\n"));
+      return;
+    }
     setEntering(d.id);
     login("dealer");
     router.push("/dashboard");
@@ -253,7 +281,7 @@ function HQDealersPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
-            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials?.email ?? "—",d.revenueActual,d.revenueTarget,d.winRate,d.activeProjects,dealerStatusLabel[d.status]])} />
+            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials?.email ?? "—",perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มตัวแทน
           </button>
@@ -268,7 +296,7 @@ function HQDealersPageInner() {
         {([
           { label: "ตัวแทนทั้งหมด", value: `${filtered.length}`, sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
           { label: "รายได้รวม", value: `฿${(totalRevenue / 1_000_000).toFixed(1)}M`, sub: `${totalPct}% ของเป้า ฿${(totalTarget / 1_000_000).toFixed(0)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
-          { label: "โอกาสการขายทั้งหมด", value: `${totalProjects}`, sub: `${active.filter(d => d.activeProjects > 0).length} ตัวแทนมีงาน`, Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
+          { label: "โอกาสการขายทั้งหมด", value: `${totalProjects}`, sub: `${active.filter(d => perfOf(d.code).openLeads > 0).length} ตัวแทนมีงาน`, Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
           { label: "ติดตามตรงเวลา", value: avgOnTime === null ? "—" : `${avgOnTime}%`, sub: avgOnTime === null ? "ยังไม่มีข้อมูล" : `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยเท่าที่มีข้อมูล`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
         ] as const).map(t => (
           <div key={t.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
@@ -343,22 +371,24 @@ function HQDealersPageInner() {
                   <td>
                     <span className="badge" style={{ background: "#f0f0f5", color: "#6b7280" }}>{d.region}</span>
                   </td>
-                  <td><RevBar actual={d.revenueActual} target={d.revenueTarget} /></td>
+                  <td><RevBar actual={perfOf(d.code).revenue} target={d.revenueTarget} /></td>
                   <td>
-                    {d.activeProjects > 0
-                      ? <span style={{ fontWeight: 700, color: "#2D2D2D", fontSize: "0.86rem" }}>{d.activeProjects}<span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 500 }}> โอกาสการขาย</span></span>
+                    {perfOf(d.code).openLeads > 0
+                      ? <span style={{ fontWeight: 700, color: "#2D2D2D", fontSize: "0.86rem" }}>{perfOf(d.code).openLeads}<span style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 500 }}> โอกาสการขาย</span></span>
                       : <span style={{ color: "#C0C0C0", fontSize: "0.8rem" }}>—</span>}
                   </td>
-                  <td><OnTimeBadge pct={d.onTimePct} /></td>
+                  <td><OnTimeBadge pct={perfOf(d.code).onTimePct} /></td>
                   <td>
                     <StatusBadge status={dealerStatus(d)} />
                   </td>
                   <td style={{ overflow: "visible" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", justifyContent: "flex-end" }}>
-                      <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id} title="เข้าระบบตัวแทน"
-                        className="btn btn-primary btn-sm" style={{ opacity: entering === d.id ? 0.6 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
-                        <LogIn size={12} /> {entering === d.id ? "..." : "เข้าระบบ"}
-                      </button>
+                      {canImpersonate && (
+                        <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id} title="เข้าระบบตัวแทน (โหมดเดโมเท่านั้น)"
+                          className="btn btn-primary btn-sm" style={{ opacity: entering === d.id ? 0.6 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                          <LogIn size={12} /> {entering === d.id ? "..." : "เข้าระบบ"}
+                        </button>
+                      )}
                       <button onClick={e => { e.stopPropagation(); router.push(`/hq/dealers/${d.code}`); }} title="ดูรายละเอียดตัวแทน"
                         style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 7, color: "#003366", cursor: "pointer" }}>
                         <BarChart2 size={12} />
@@ -488,11 +518,15 @@ function HQDealersPageInner() {
       {/* ── Dealer Detail Drawer ── */}
       {selectedDealer && (() => {
         const d = selectedDealer;
-        const revPct = d.revenueTarget > 0 ? Math.round(d.revenueActual / d.revenueTarget * 100) : 0;
+        const dPerf = perfOf(d.code);
+        const revPct = d.revenueTarget > 0 ? Math.round(dPerf.revenue / d.revenueTarget * 100) : 0;
         const revColor = revPct >= 100 ? "#059669" : revPct >= 75 ? "#003366" : revPct >= 50 ? "#f59e0b" : "#dc2626";
-        const tier = revPct >= 90 && d.onTimePct >= 85
+        // ระดับผลงานตัดสินจาก % เป้า + อัตราปิดการขาย (ข้อมูลที่ระบบมีจริง)
+        // เดิมใช้ onTimePct = อัตราส่งมอบตรงเวลา ซึ่งเป็นตัวชี้วัดงานก่อสร้าง ไม่มีในระบบขายล้วนนี้
+        const wr = dPerf.winRate ?? 0;
+        const tier = revPct >= 90 && wr >= 50
           ? { label: "ตัวแทนดีเด่น", color: "#059669", bg: "#e5faf0" }
-          : revPct >= 70 && d.onTimePct >= 70
+          : revPct >= 70 && wr >= 35
           ? { label: "ผลงานดี", color: "#003366", bg: "#dce5f0" }
           : revPct >= 50
           ? { label: "กำลังพัฒนา", color: "#f59e0b", bg: "#fef3cd" }
@@ -522,7 +556,7 @@ function HQDealersPageInner() {
                 <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
                   <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ยอดขายเทียบเป้าหมาย</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                    <span style={{ fontSize: "1.5rem", fontWeight: 800, color: revColor }}>฿{(d.revenueActual / 1_000_000).toFixed(1)}M</span>
+                    <span style={{ fontSize: "1.5rem", fontWeight: 800, color: revColor }}>฿{(dPerf.revenue / 1_000_000).toFixed(1)}M</span>
                     <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>เป้า ฿{(d.revenueTarget / 1_000_000).toFixed(0)}M</span>
                   </div>
                   <div style={{ height: 8, background: "#e5e7eb", borderRadius: 99, overflow: "hidden", marginBottom: 5 }}>
@@ -534,15 +568,15 @@ function HQDealersPageInner() {
                 {/* 3 metrics */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
                   <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: d.winRate >= targets.winRateTarget ? "#059669" : d.winRate >= targets.winRateTarget - 15 ? "#f59e0b" : "#dc2626" }}>{d.winRate}%</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: wr >= targets.winRateTarget ? "#059669" : wr >= targets.winRateTarget - 15 ? "#f59e0b" : "#dc2626" }}>{dPerf.winRate === null ? "—" : `${wr}%`}</div>
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>อัตราปิดการขาย</div>
                   </div>
                   <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: d.onTimePct >= targets.onTimeTarget ? "#059669" : d.onTimePct >= targets.onTimeTarget - 15 ? "#f59e0b" : d.onTimePct === 0 ? "#C0C0C0" : "#dc2626" }}>{d.onTimePct === 0 ? "—" : `${d.onTimePct}%`}</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: dPerf.onTimePct === null ? "#C0C0C0" : dPerf.onTimePct >= targets.onTimeTarget ? "#059669" : dPerf.onTimePct >= targets.onTimeTarget - 15 ? "#f59e0b" : "#dc2626" }}>{dPerf.onTimePct === null ? "—" : `${dPerf.onTimePct}%`}</div>
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>ติดตามตรงเวลา</div>
                   </div>
                   <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366" }}>{d.activeProjects}</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366" }}>{dPerf.openLeads}</div>
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>โอกาสการขาย</div>
                   </div>
                 </div>
@@ -570,17 +604,17 @@ function HQDealersPageInner() {
                       <Trophy size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ถึงเป้าหมายแล้ว! ยอดขายเกินเป้า {revPct - 100}%</span>
                     </div>
                   )}
-                  {d.onTimePct > 0 && d.onTimePct < 70 && (
+                  {dPerf.onTimePct !== null && dPerf.onTimePct < 70 && (
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#dc2626" }}>
                       <Clock size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>อัตราติดตามตรงเวลาต่ำ ควรตรวจสอบโอกาสการขายที่ค้างคา</span>
                     </div>
                   )}
-                  {d.winRate < 25 && (
+                  {wr < 25 && dPerf.winRate !== null && (
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#f59e0b" }}>
                       <Target size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>อัตราปิดการขายต่ำกว่าค่าเฉลี่ยเครือ — ควรพิจารณาฝึกสอนทีมขาย</span>
                     </div>
                   )}
-                  {revPct >= 88 && d.onTimePct >= 85 && (
+                  {revPct >= 88 && (dPerf.onTimePct ?? 0) >= 85 && (
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", color: "#059669" }}>
                       <Award size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ตัวแทนผลงานดีเด่น — สามารถใช้เป็นต้นแบบให้ตัวแทนอื่นได้</span>
                     </div>

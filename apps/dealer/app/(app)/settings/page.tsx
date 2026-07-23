@@ -7,7 +7,8 @@ import {
   Upload, UserCheck, FileText, ShieldCheck, Lock, ImagePlus, Bell,
   Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
-import { responsiblePersons as RP_INITIAL, RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, loadHQPolicy, DEFAULT_HQ_POLICY, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
+import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
+import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -279,10 +280,12 @@ function ImageUploadBox({
 function DocumentsTab() {
   const [doc, setDoc] = useState<DocumentSettings>(DOC_DEFAULT);
   const [baseline, setBaseline] = useState(""); // สแนปช็อตค่าที่บันทึกล่าสุด → ใช้เทียบ dirty
-  const [hq, setHq] = useState<HQPolicy>(DEFAULT_HQ_POLICY); // ใช้เฉพาะ VAT ที่ HQ ล็อก · เลขที่/อายุใบ ตัวแทนคุมเอง
+  // VAT ที่ HQ ล็อก — ต้องอ่านผ่าน repo (useHQPolicy) เท่านั้น
+  // เดิม loadHQPolicy() อ่าน localStorage ของ :3001 แต่ HQ เขียนที่ :3002 → ได้ default 7% เสมอ
+  // ทั้งที่ช่องนี้ติดไอคอนกุญแจ + ป้าย "HQ" บอกผู้ใช้ว่าเป็นค่าจริงของสำนักงานใหญ่
+  const hq = useHQPolicy();
 
   useEffect(() => {
-    setHq(loadHQPolicy());
     let d = DOC_DEFAULT;
     const s = localStorage.getItem(DOCUMENT_KEY);
     if (s) try { d = { ...DOC_DEFAULT, ...JSON.parse(s) }; } catch {}
@@ -426,13 +429,15 @@ function DocumentsTab() {
 // รับ persons จาก localStorage แล้ว "จัด id ใหม่ให้ไม่ซ้ำ" (index+1) — กัน key ซ้ำจากข้อมูลเก่าที่เคยบันทึกผิด
 // RP id ใช้เป็น React key/แก้-ลบภายในหน้านี้เท่านั้น (ลีด/ลูกค้าอ้างด้วย "ชื่อ" ไม่ใช่ id) จึง reindex ได้ปลอดภัย
 function reindexPersons(arr: unknown): ResponsiblePerson[] {
-  if (!Array.isArray(arr)) return RP_INITIAL;
+  if (!Array.isArray(arr)) return []; // ไม่มีข้อมูล = ว่าง (เดิมคืนพนักงานตัวอย่าง 5 คน)
   return arr.map((p: ResponsiblePerson, i) => ({ ...p, id: i + 1 }));
 }
 
 function PersonsTab() {
   const currentDealer = useCurrentDealer(); // พนักงานขายเป็นของสาขานี้ (multi-tenant)
-  const [persons, setPersons] = useState<ResponsiblePerson[]>(RP_INITIAL);
+  // เริ่มว่างเสมอ — เดิมตั้งต้นด้วยพนักงานตัวอย่าง 5 คน ถ้าโหลดพลาดแล้วผู้ใช้กดแก้/เพิ่ม
+  // save() จะเขียนคนปลอมทั้ง 5 ลง DB จริง
+  const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [editId,    setEditId]    = useState<number | null>(null);
   const [editName,  setEditName]  = useState("");
   const [editTitle, setEditTitle] = useState("");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { solutionProducts, MASTER_CATALOG_EVENT, type SolutionProduct } from "./mock";
+import { MASTER_CATALOG_EVENT, type SolutionProduct } from "./mock";
 import { catalog as catalogRepo, realtime } from "./data";
 
 // แคตตาล็อกแม่แบบ/ราคากลาง "แหล่งเดียว" — HQ แก้ที่ /hq/master → ทุก dropdown/หน้าแม่แบบเห็นชุดเดียวกัน
@@ -11,7 +11,9 @@ import { catalog as catalogRepo, realtime } from "./data";
 //     ⚠️ โหมด local ตัวแทน(:3001) กับ HQ(:3002) คนละ origin → localStorage แยกกัน จึงไม่เห็นกัน
 //        ถ้าต้องการให้ HQ แก้แล้วตัวแทนเปลี่ยนตาม ต้องตั้ง NEXT_PUBLIC_DATA_SOURCE=supabase
 export function useMasterCatalog(): SolutionProduct[] {
-  const [catalog, setCatalog] = useState<SolutionProduct[]>(solutionProducts);
+  // เริ่มว่างเสมอ — เดิมตั้งต้นด้วยชุดตัวอย่าง ทำให้เห็นแม่แบบปลอมกะพริบก่อนของจริงมา
+  // และถ้า query ล้มเหลว จะค้างอยู่กับชุดตัวอย่างตลอด (ตกไปถึง dropdown "แม่แบบ" ทุกหน้า)
+  const [catalog, setCatalog] = useState<SolutionProduct[]>([]);
 
   useEffect(() => {
     let alive = true;

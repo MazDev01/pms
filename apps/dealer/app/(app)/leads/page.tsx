@@ -51,7 +51,9 @@ const ALL_STATUSES: LeadStatus[] = [
   "WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"
 ];
 // ความคืบหน้าตามขั้นตอน (module-level เพื่อใช้ใน OverviewEditor) — PAID=100, CANCELLED=0
-const DEFAULT_PERSONS = responsiblePersons.filter(p => p.active).map(p => p.name);
+// (DEFAULT_PERSONS ถูกลบ — เดิมเป็นพนักงาน 5 คนจากชุดตัวอย่าง
+//  ตาราง responsible_persons ว่าง = ไม่มีวันถูกแทนที่ → ตัวแทนเลือกชื่อคนที่ไม่มีอยู่จริง
+//  แล้วชื่อนั้นถูกบันทึกลงลีดใน DB จริง)
 // Lead Source ตามสเปก: Facebook / Website / LINE / Walk-in / Referral / Exhibition / Other
 // สีของแต่ละแหล่งที่มา (โดนัท) — วนใช้ตามลำดับจำนวนมาก→น้อย
 const SOURCE_COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#0D9488", "#94A3B8"];
@@ -387,7 +389,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     // เก็บเป็นสตริง ให้ปล่อยว่างได้ (= ยังไม่รู้พื้นที่) — ตอนบันทึกค่อยแปลงเป็นตัวเลข
     area: initial?.area != null ? String(initial.area) : "",
     status: (initial?.status ?? "WAITING") as LeadStatus,
-    assigned: initial?.assigned ?? persons[0] ?? "สมชาย เชียงใหม่",
+    assigned: initial?.assigned ?? persons[0] ?? "",  // ไม่มีทะเบียนพนักงาน = ไม่ระบุ (ห้ามยัดชื่อสมมติลง DB)
     source: initial?.source ?? "เว็บไซต์", note: initial?.note ?? "",
     logo: initial?.logo ?? "",
   });
@@ -713,10 +715,12 @@ export default function LeadsPage() {
   }, [currentDealer.code]);
 
   // Persons registry — พนักงานขายของสาขานี้ ผ่าน repository (local: localStorage · supabase: DB)
-  const [personsList, setPersonsList] = useState<string[]>(DEFAULT_PERSONS);
+  // ยังไม่มีพนักงานในทะเบียน = รายการว่าง (ไปเพิ่มที่ ตั้งค่า › ผู้รับผิดชอบ)
+  // ห้ามใส่ค่าตั้งต้นปลอม และห้ามใช้ `if (names.length)` — ทะเบียนว่างต้องแปลว่าว่างจริง
+  const [personsList, setPersonsList] = useState<string[]>([]);
   useEffect(() => {
     personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
-      .then(arr => { const names = arr.filter(p => p.active).map(p => p.name); if (names.length) setPersonsList(names); })
+      .then(arr => setPersonsList(arr.filter(p => p.active).map(p => p.name)))
       .catch(() => {});
   }, [currentDealer.code]);
 

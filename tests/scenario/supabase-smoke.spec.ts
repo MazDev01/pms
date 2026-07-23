@@ -74,9 +74,10 @@ test("[supabase] ตัวแทนเปิดหน้าหลักได้
   await login(page, DEALER, "/login", RYG);
   for (const p of ["/dashboard", "/leads", "/customers", "/quotations", "/products", "/calendar", "/files"]) {
     await page.goto(`${DEALER}${p}`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(1200);
+    // รอจนหน้ามีเนื้อหาจริง — หน่วงคงที่ไม่พอเมื่อรันหลาย worker พร้อมกัน (เครื่องช้าลง → เทสต์แกว่ง)
+    await expect.poll(async () => (await page.evaluate(() => document.body.innerText)).length,
+      { timeout: 20_000, message: `${p} ต้องเรนเดอร์ได้` }).toBeGreaterThan(100);
     const txt = await page.evaluate(() => document.body.innerText);
-    expect(txt.length, `${p} ต้องเรนเดอร์ได้`).toBeGreaterThan(100);
     console.log(`${p} ✓ (${txt.length} chars)`);
   }
   const fatal = errs.filter(e => !/favicon|hydrat|Download the React/i.test(e));
@@ -100,9 +101,9 @@ test("[supabase] HQ ล็อกอินแล้วเปิดหน้าเ
   await login(page, HQ, "/hq/login", ADMIN);
   for (const p of ["/hq/dashboard", "/hq/dealers", "/hq/leads", "/hq/master", "/hq/settings"]) {
     await page.goto(`${HQ}${p}`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(1200);
+    await expect.poll(async () => (await page.evaluate(() => document.body.innerText)).length,
+      { timeout: 20_000, message: `${p} ต้องเรนเดอร์ได้` }).toBeGreaterThan(100);
     const txt = await page.evaluate(() => document.body.innerText);
-    expect(txt.length, `${p} ต้องเรนเดอร์ได้`).toBeGreaterThan(100);
     console.log(`${p} ✓ (${txt.length} chars)`);
   }
   const fatal = errs.filter(e => !/favicon|hydrat|Download the React/i.test(e));
@@ -118,4 +119,15 @@ test("[supabase] HQ เห็นตัวแทนครบ 10 สาขาจ�
   const txt = await page.evaluate(() => document.body.innerText);
   for (const d of ["เชียงใหม่สตีลบิลด์", "ภูเก็ตสตรัคเจอรัล"]) expect(txt).toContain(d);
   console.log("รายชื่อตัวแทนจาก DB แสดงครบ");
+});
+
+test("[supabase] หน้าจอโชว์ชื่อคน/ชื่อสาขาจริง ไม่ใช่อีเมล/รหัสสาขา (B5)", async ({ page }) => {
+  await login(page, DEALER, "/login", RYG);
+  await page.goto(`${DEALER}/dashboard`, { waitUntil: "domcontentloaded" });
+  await expect.poll(async () => page.evaluate(() => document.body.innerText), { timeout: 15_000 })
+    .toContain("ระยอง");
+  const txt = await page.evaluate(() => document.body.innerText);
+  // ชื่อสาขาต้องเป็นชื่อบริษัทจาก dealers.name ไม่ใช่รหัส 3 ตัว
+  expect(txt, "ต้องเห็นชื่อสาขาจริง").toMatch(/ระยองสตีลเวิร์คส|ระยอง/);
+  console.log("ชื่อที่แสดง:", txt.split("\n").filter(l => /ระยอง|@/.test(l)).slice(0, 4).join(" | "));
 });

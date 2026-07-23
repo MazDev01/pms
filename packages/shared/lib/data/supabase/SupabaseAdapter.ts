@@ -130,6 +130,15 @@ async function nextEntityId(dealerCode: string, entity: "customers" | "appointme
   return Number(data);
 }
 
+// ลบแถวที่ "หายไปจากชุดที่ส่งมา" — ใช้กับ repo แบบแทนที่ทั้งชุด (dealers/catalog)
+// ชุดว่าง = ผู้ใช้ลบหมดจริง ๆ ก็ได้ แต่ก็เป็นอาการของโหลดพลาดแล้ว state ยังว่างได้เหมือนกัน
+// จึงไม่ลบอะไรเลยเมื่อชุดว่าง — ปลอดภัยกว่าล้างทั้งตารางเพราะบั๊กฝั่งหน้าจอ
+async function deleteMissing(table: string, keyCol: string, keep: string[]): Promise<void> {
+  if (!keep.length) return;
+  const list = keep.map(k => `"${k.replace(/"/g, '\\"')}"`).join(",");
+  await must(sb().from(table).delete().not(keyCol, "in", `(${list})`));
+}
+
 const FILES_BUCKET = "dealer-files";
 
 // ชื่อช่อง Realtime ต้องไม่ซ้ำกันต่อการ subscribe หนึ่งครั้ง
@@ -197,7 +206,10 @@ export const SupabaseAdapter: DataAdapter = {
     },
     subscribeSettings: (onChange) => {
       const ch = sb().channel(topic("settings-changes"));
-      for (const t of ["hq_policy", "hq_targets", "hq_notif_rules"]) {
+      // ต้องครบทุกตารางที่ HQ เป็นเจ้าของและตัวแทนต้องใช้ตาม
+      // (0021 เปิด Realtime ให้ hq_sales_journey ไว้แล้ว แต่ฝั่ง client ลืมฟัง
+      //  → เหตุผลปิดการขายที่ HQ แก้ ตัวแทนไม่เห็นจนกว่าจะรีโหลดหน้า)
+      for (const t of ["hq_policy", "hq_targets", "hq_notif_rules", "hq_sales_journey"]) {
         ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
       }
       ch.subscribe();
@@ -211,14 +223,22 @@ export const SupabaseAdapter: DataAdapter = {
     // ตัดฟิลด์ที่ไม่มีคอลัมน์ใน DB ออกก่อน upsert:
     //   • id          — ตารางใช้ code เป็น PK
     //   • credentials — รหัสผ่านอยู่ใน Supabase Auth (hash) ห้ามเก็บซ้ำในตารางนี้
-    save: (all) => must(sb().from("dealers").upsert(
-      all.map(d => { const r = toSnake(d as unknown as Row); delete r.id; delete r.credentials; return r; }),
-      { onConflict: "code" },
-    )),
+    // save = "แทนที่ทั้งชุด" ตามสัญญาของ port — upsert อย่างเดียวไม่พอ
+    // แถวที่หน้าจอเอาออกจากอาร์เรย์ต้องถูกลบใน DB ด้วย ไม่งั้นกดลบแล้วกลับมาหลังรีเฟรช
+    // (โหมด local เขียนทับทั้งก้อนอยู่แล้ว → ถ้าไม่ทำแบบนี้ สองโหมดพฤติกรรมต่างกัน)
+    save: async (all) => {
+      const rows = all.map(d => { const r = toSnake(d as unknown as Row); delete r.id; delete r.credentials; return r; });
+      await must(sb().from("dealers").upsert(rows, { onConflict: "code" }));
+      await deleteMissing("dealers", "code", rows.map(r => String(r.code)));
+    },
   },
   catalog: {
     list: () => selectScoped<SolutionProduct>("master_catalog"),
-    save: (all) => must(sb().from("master_catalog").upsert(toSnakeList(all as unknown as Row[]))),
+    save: async (all) => {
+      const rows = toSnakeList(all as unknown as Row[]);
+      await must(sb().from("master_catalog").upsert(rows));
+      await deleteMissing("master_catalog", "id", rows.map(r => String(r.id)));
+    },
   },
   files: {
     list: (scope) => selectScoped<DealerFile>("files", scope),
@@ -336,8 +356,12 @@ export const SupabaseAdapter: DataAdapter = {
       return Number(data ?? 0);
     },
     // เลขที่ใบต่อสาขาแบบ atomic (กันเลขชนเมื่อออกพร้อมกัน/ข้ามสาขา) — RPC ที่ DB (0003)
-    nextQuoteNo: async (dealer) => {
-      const { data, error } = await sb().rpc("next_quote_no", { p_dealer: dealer });
+    nextQuoteNo: async (dealer, prefix) => {
+      // ตัวนับเดินหน้าใน DB แบบ atomic ต่อสาขา · คำนำหน้าเป็นของตัวแทน (ส่งมาจากผู้เรียก)
+      // ไม่ส่ง p_prefix = ฟังก์ชันใช้ค่า default ของมันเอง → คำนำหน้าที่ตัวแทนตั้งไว้จะถูกละเลย
+      const args: Record<string, unknown> = { p_dealer: dealer };
+      if (prefix) args.p_prefix = prefix;
+      const { data, error } = await sb().rpc("next_quote_no", args);
       if (error) throw new Error(error.message);
       return String(data);
     },

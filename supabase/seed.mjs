@@ -38,9 +38,10 @@ const USERS = [
 async function main() {
   // 1) ตาราง dealers
   const rows = DEALERS.map(d => ({
+    // ยอดขาย/อัตราปิด/โอกาส/ติดตามตรงเวลา ไม่ seed แล้ว — เป็นค่าที่คำนวณจากใบเสนอราคา/ลีดจริง
+    // (เดิม seed ตัวเลขสมมติไว้ แล้วหน้า HQ เอามาโชว์เป็น "ยอดขายจริง" ทั้งที่ไม่มีใบสักใบ)
     code:d.code, name:d.name, province:d.province, region:d.region,
-    revenue_actual:d.revenueActual, revenue_target:d.revenueTarget, win_rate:d.winRate,
-    active_projects:d.activeProjects, on_time_pct:d.onTimePct, status:d.status,
+    revenue_target:d.revenueTarget, status:d.status,
   }));
   const { error: de } = await admin.from("dealers").upsert(rows, { onConflict: "code" });
   if (de) throw new Error("dealers: " + de.message);

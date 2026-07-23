@@ -66,11 +66,13 @@ export function idleDealers(dealers: DealerRow[], quotes: HQQuotation[], days: n
   return out.sort((a, b) => b.idleDays - a.idleDays);
 }
 
-/** ตัวแทนที่ทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี */
-export function dealersAtTarget(dealers: DealerRow[], pct: number) {
+/** ตัวแทนที่ทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี
+ *  revenueOf = ยอดขายจริงของสาขา (จากใบที่ปิดการขายได้) — ห้ามอ่าน d.revenueActual
+ *  เพราะคอลัมน์นั้นเป็นค่าเดโมที่ seed ไว้ จะทำให้เด้งแจ้งเตือน "ทำยอดถึงเป้า" ทั้งที่ยังไม่มียอดจริง */
+export function dealersAtTarget(dealers: DealerRow[], pct: number, revenueOf: (code: string) => number) {
   return dealers
     .filter(d => d.revenueTarget > 0)
-    .map(d => ({ d, achieved: Math.round((d.revenueActual / d.revenueTarget) * 100) }))
+    .map(d => ({ d, actual: revenueOf(d.code), achieved: Math.round((revenueOf(d.code) / d.revenueTarget) * 100) }))
     .filter(x => x.achieved >= pct)
     .sort((a, b) => b.achieved - a.achieved);
 }
@@ -99,6 +101,8 @@ export function buildHQAlerts(input: {
   rules: HQNotifRules;
   /** เกณฑ์รายสาขา — ตัวแทนแต่ละรายตั้งเอง จึงต้องถามด้วยรหัสสาขาของลีดใบนั้น */
   rulesOf: (dealerCode: string | undefined) => LeadRules;
+  /** ยอดขายจริงรายสาขา (คำนวณจากใบที่ปิดได้) */
+  revenueOf: (dealerCode: string) => number;
   validityDays: number;
 }): HQAlert[] {
   const { leads, quotes, dealers, rules, rulesOf, validityDays } = input;
@@ -148,11 +152,11 @@ export function buildHQAlerts(input: {
     }
   }
   if (on("targetAchieved")) {
-    for (const { d, achieved } of dealersAtTarget(dealers, rules.targetAchievedPct)) {
+    for (const { d, actual, achieved } of dealersAtTarget(dealers, rules.targetAchievedPct, input.revenueOf)) {
       out.push({
         key: "targetAchieved",
         title: "ตัวแทนทำยอดถึงเป้า",
-        body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(d.revenueActual)} จาก ${fmtB(d.revenueTarget)})`,
+        body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(actual)} จาก ${fmtB(d.revenueTarget)})`,
         href: `/hq/dealers/${d.code}`,
       });
     }

@@ -1,37 +1,65 @@
 "use client";
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 
 // state ที่ผูกกับ repository (data layer) — drop-in แทน usePersistentState สำหรับข้อมูลระดับเครือ (HQ)
-//   • โหลดจาก repo ตอน mount (async) · เขียนกลับผ่าน repo ทุกครั้งที่เปลี่ยน (หลัง hydrate)
+//   • โหลดจาก repo ตอน mount (async) · เขียนกลับ "เฉพาะเมื่อผู้ใช้แก้จริง" หลังโหลดสำเร็จแล้ว
 //   • โหมด local: repo = LocalAdapter (localStorage) → พฤติกรรมเท่า usePersistentState เดิมเป๊ะ
 //   • โหมด supabase: repo = DB (RLS) → อ่าน/เขียนจริงข้ามเครื่อง
-//
-// hydrated เป็น state (ไม่ใช่ ref) จงใจ — กันเขียนค่า default ทับก่อนโหลดเสร็จ (กติกาเดียวกับ usePersistentState)
+// การบันทึกล้มเหลวของข้อมูลระดับเครือ — แจ้งผ่าน event เดียวกันทั้งแอป
+// (SalesContext มี syncError ของตัวเองสำหรับงานขายอยู่แล้ว · นี่คือคู่ขนานสำหรับ repo อื่น)
+export const REPO_SAVE_ERROR_EVENT = "pms:repo-save-error";
+export function reportRepoSaveError(e: unknown): void {
+  const msg = e instanceof Error ? e.message : String(e);
+  console.error("[useRepoState.save]", e);
+  if (typeof window === "undefined") return;
+  try { window.dispatchEvent(new CustomEvent(REPO_SAVE_ERROR_EVENT, { detail: msg })); } catch {}
+}
+
 export function useRepoState<T>(
   load: () => Promise<T>,
   save: (value: T) => void,
   initial: T,
 ): [T, Dispatch<SetStateAction<T>>] {
   const [state, setState] = useState<T>(initial);
-  const [hydrated, setHydrated] = useState(false);
+  // "โหลดสำเร็จแล้ว" เท่านั้นจึงจะเขียนกลับได้ — โหลดล้มเหลวไม่นับ
+  // เดิมใช้ hydrated ตัวเดียวและตั้งเป็น true ใน .catch ด้วย → query ล้ม (เน็ตหลุด/RLS ปฏิเสธ)
+  // แล้ว effect ข้างล่างยิง save(state) ทันทีโดยที่ state ยังเป็นค่า initial
+  // = เอาค่าตั้งต้น (ซึ่งบางหน้าเป็นชุด mock) upsert ทับของจริงใน DB
+  const [loaded, setLoaded] = useState(false);
+  // กันเขียนซ้ำโดยไม่มีใครสั่ง: หลังโหลดเสร็จ state เปลี่ยนค่าเพราะ "ผลลัพธ์การโหลด" ไม่ใช่การแก้ของผู้ใช้
+  // ถ้า save ทุกครั้งที่ state เปลี่ยน จะ upsert ทั้งตารางกลับไปทุกครั้งที่เปิดหน้า
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
     load()
-      .then((v) => { if (alive) { setState(v); setHydrated(true); } })
-      .catch((e) => { if (alive) { console.error("[useRepoState.load]", e); setHydrated(true); } });
+      .then((v) => { if (alive) { dirtyRef.current = false; setState(v); setLoaded(true); } })
+      .catch((e) => { if (alive) console.error("[useRepoState.load]", e); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return; // อย่าเพิ่งเขียนทับด้วยค่า default ก่อนโหลดเสร็จ
-    save(state);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, hydrated]);
+  // ห่อ setState เพื่อรู้ว่าการเปลี่ยนครั้งนี้มาจากผู้ใช้ (ไม่ใช่จากการโหลด)
+  const setAndMark = useCallback<Dispatch<SetStateAction<T>>>((v) => {
+    dirtyRef.current = true;
+    setState(v);
+  }, []);
 
-  return [state, setState];
+  useEffect(() => {
+    if (!loaded || !dirtyRef.current) return;
+    // การบันทึกล้มเหลวต้องดัง — เดิมเป็น fire-and-forget: RLS ปฏิเสธ/เน็ตหลุดแล้วเงียบสนิท
+    // ผู้ใช้เห็นของหายจากจอ (state เปลี่ยนแล้ว) แล้วเข้าใจว่าลบสำเร็จ ทั้งที่ DB ไม่ได้ถูกแตะ
+    try {
+      const r = save(state) as unknown;
+      if (r && typeof (r as Promise<void>).then === "function") {
+        void (r as Promise<void>).catch(e => reportRepoSaveError(e));
+      }
+    } catch (e) { reportRepoSaveError(e); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, loaded]);
+
+  return [state, setAndMark];
 }
 
 // อ่านอย่างเดียว (ไม่เขียนกลับ) — สำหรับหน้าที่แค่แสดงผลข้อมูลระดับเครือ

@@ -13,8 +13,8 @@ import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useFilters } from "@pms/shared/context/FilterContext";
 import { useNetworkQuotations, useNetworkLeads } from "@pms/shared/lib/useNetworkData";
 import {
-  toQuoteRows, aggregate, regionDisplay, regionOfDealer, provinceOfDealer,
-  ALL_REGIONS, ALL_PROVINCES, STATUS_ORDER, type QuoteRow,
+  toQuoteRows, aggregate, regionDisplay, dealerLookups,
+  STATUS_ORDER, type QuoteRow,
 } from "@pms/shared/lib/hqQuotations";
 import { QuotationKPICards } from "@pms/shared/components/hq/quotations/QuotationKPICards";
 import { QuotationFilterBar, EMPTY_FILTERS, type QuotationFilters } from "@pms/shared/components/hq/quotations/QuotationFilterBar";
@@ -34,9 +34,11 @@ export default function NetworkQuotationPage() {
   // โหมด supabase เลยได้ค่า default 30 วันเสมอ ไม่ใช่ค่าจริงที่ HQ ตั้งไว้ → วันหมดอายุบนหน้าเพี้ยน)
   const validityDays = useQuoteValidityDays();
   // รายชื่อตัวแทนจากทะเบียนจริง (เดิมถอดจากใบเสนอราคา mock → เห็นสาขาที่ไม่มีอยู่จริง)
-  const ALL_DEALERS = useRepoValue<DealerRow[]>(() => dealersRepo.list(), [])
-    .map(d => ({ code: d.code, name: d.name }))
-    .sort((a, b) => a.code.localeCompare(b.code));
+  const ALL_DEALERS_FULL = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  const ALL_DEALERS = useMemo(
+    () => ALL_DEALERS_FULL.map(d => ({ code: d.code, name: d.name })).sort((a, b) => a.code.localeCompare(b.code)),
+    [ALL_DEALERS_FULL],
+  );
 
   // เปิดหน้าด้วย ?dealer=CODE (กดมาจากแดชบอร์ด/การ์ดสถิติ) → กรองตัวแทนนั้นให้เลย
   // เก็บค่าจาก URL ไว้ก่อน แล้วค่อยใช้ตอนทะเบียนตัวแทนโหลดเสร็จ
@@ -52,7 +54,9 @@ export default function NetworkQuotationPage() {
     setPendingDealer(null);
   }, [pendingDealer, ALL_DEALERS]);
 
-  const allRows = useMemo(() => toQuoteRows(netQuotes, validityDays), [netQuotes, validityDays]);
+  // ภาค/จังหวัดมาจากทะเบียนตัวแทนจริง — สาขาที่ HQ เพิ่งเพิ่มต้องโผล่ในตัวกรองด้วย
+  const look = useMemo(() => dealerLookups(ALL_DEALERS_FULL), [ALL_DEALERS_FULL]);
+  const allRows = useMemo(() => toQuoteRows(netQuotes, validityDays, look), [netQuotes, validityDays, look]);
 
   const products = useMemo(
     () => [...new Set(allRows.map(r => mainTemplateOf(r.productLine)))].sort(),
@@ -83,8 +87,8 @@ export default function NetworkQuotationPage() {
   const leadRows = useMemo(() => netLeads.filter(l => {
     const code = l.dealerCode || "";
     if (filters.dealer !== "all" && code !== filters.dealer) return false;
-    if (filters.region !== "all" && regionOfDealer(code) !== filters.region) return false;
-    if (filters.province !== "all" && provinceOfDealer(code) !== filters.province) return false;
+    if (filters.region !== "all" && look.regionOf(code) !== filters.region) return false;
+    if (filters.province !== "all" && look.provinceOf(code) !== filters.province) return false;
     return l.createdAt ? inRange(l.createdAt) : true;
   }), [netLeads, filters.dealer, filters.region, filters.province, inRange]);
 
@@ -124,8 +128,8 @@ export default function NetworkQuotationPage() {
         filters={filters}
         onChange={setFilters}
         dealers={ALL_DEALERS}
-        regions={ALL_REGIONS}
-        provinces={ALL_PROVINCES}
+        regions={look.allRegions}
+        provinces={look.allProvinces}
         products={products}
         resultCount={rows.length}
       />

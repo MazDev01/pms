@@ -12,6 +12,9 @@ import {
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@pms/shared/lib/mock";
 import { parseBaht } from "@pms/shared/lib/format";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import type { DealerRow } from "@pms/shared/lib/data/types";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 // โหมด supabase = ข้อมูลจริงทุกสาขาอยู่ใน DB แล้ว (SalesContext ฝั่ง HQ โหลดมาทั้งเครือ)
@@ -24,16 +27,25 @@ const USE_SEED = DATA_SOURCE !== "supabase";
 export const CURRENT_DEALER = { code: "CNX", name: "เชียงใหม่สตีลบิลด์" };
 
 // multi-tenant: บันทึกที่สาขาอื่นสร้างจริง (SalesContext ติด dealerCode) → HQ ต้องระบุสาขาให้ถูก
-// ชื่อสาขาจากรายชื่อกลาง · CNX คงชื่อเดิม (CURRENT_DEALER.name) กันชื่อเพี้ยนจากที่เคยแสดง
-const DEALER_NAME_BY_CODE = new Map(dealerLeaderboard.map(d => [d.code, d.name]));
-function dealerInfoOf(code: string | undefined) {
-  const c = code ?? CURRENT_DEALER.code;
-  return { code: c, name: c === CURRENT_DEALER.code ? CURRENT_DEALER.name : (DEALER_NAME_BY_CODE.get(c) ?? c) };
+//
+// ชื่อสาขาต้องมาจากทะเบียนจริง — เดิมสร้าง Map จากชุด seed ตอน import โมดูล
+// สาขาที่ HQ เพิ่มใหม่จึงแสดงเป็นรหัส 3 ตัวแทนชื่อบริษัท และแก้ชื่อแล้วก็ไม่เปลี่ยนตาม
+// อ่านไม่ได้/ยังไม่โหลด → ใช้รหัสสาขาไปก่อน (ไม่กุชื่อขึ้นมาเอง)
+function useDealerInfo() {
+  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  return useMemo(() => {
+    const byCode = new Map(dealers.map(d => [d.code, d.name]));
+    return (code: string | undefined) => {
+      const c = code ?? CURRENT_DEALER.code;
+      return { code: c, name: byCode.get(c) ?? c };
+    };
+  }, [dealers]);
 }
 
 // ใบเสนอราคาทั้งเครือ = ใบที่ดีลเลอร์สร้างจริง (map เป็นสาขา CNX) + seed สาขาอื่นที่ไม่ซ้ำเลขที่
 export function useNetworkQuotations(): HQQuotation[] {
   const { quotations, leads } = useSales();
+  const dealerInfoOf = useDealerInfo();
   return useMemo(() => {
     const live: HQQuotation[] = quotations.map(q => {
       const lead = leads.find(l => (q.dealId != null && l.numId === q.dealId) || (q.customerId > 0 && l.customerId === q.customerId));
@@ -65,6 +77,7 @@ export function useNetworkLeads(): LeadRow[] {
 // ลูกค้าทั้งเครือ = ลูกค้าที่ดีลเลอร์สร้างจริง (สาขา CNX) + seed สาขาอื่นที่ไม่ซ้ำชื่อ
 export function useNetworkCustomers(): HQCustomer[] {
   const { customers, quotations } = useSales();
+  const dealerInfoOf = useDealerInfo();
   return useMemo(() => {
     const live: HQCustomer[] = customers.map(c => {
       const dl = dealerInfoOf(c.dealerCode); // สาขาเจ้าของลูกค้าจริง (undefined = CNX)
@@ -76,7 +89,9 @@ export function useNetworkCustomers(): HQCustomer[] {
         dealsWon: quotations.filter(q => q.customerId === c.id && q.status === "won").length,
         totalRevenue: c.totalValue,
         status: c.status === "inactive" ? "inactive" : "active",
-        lastContact: "30 มิ.ย. 2569", segment: "sme",
+        // ระบบยังไม่บันทึก "วันติดต่อล่าสุด" ของลูกค้า (มีแต่ของลีด) → ไม่มีข้อมูลก็ต้องขึ้น "—"
+        // เดิมยัดวันเดียวกันให้ลูกค้าทุกรายทั้งเครือ = ค่าที่กุขึ้นมา
+        lastContact: "—", segment: "sme",
       };
     });
     if (!USE_SEED) return live; // supabase: ลูกค้าทุกสาขามาจาก DB จริงแล้ว

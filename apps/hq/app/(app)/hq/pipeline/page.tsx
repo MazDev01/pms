@@ -24,6 +24,7 @@ import {
   type DealerRow, type HQTargets, type DealerFile,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { dealers as dealersRepo, settings as settingsRepo, files as filesRepo } from "@pms/shared/lib/data";
 import { useFilters } from "@pms/shared/context/FilterContext";
 import { useSales } from "@pms/shared/context/SalesContext";
@@ -114,6 +115,9 @@ export default function SalesAnalyticsPage() {
   const router = useRouter();
   const { timeRange, inRange } = useFilters();
   const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  // ยอดขายจริงรายสาขา — จากใบที่ปิดการขายได้ ไม่ใช่คอลัมน์ revenue_actual ที่ seed ไว้
+  const dealerPerf = useDealerPerformance();
+  const perfOf = (code: string) => dealerPerf.get(code) ?? EMPTY_PERF;
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
 
   const netQuotes = useNetworkQuotations();
@@ -153,7 +157,7 @@ export default function SalesAnalyticsPage() {
       (dealerSel === ALL || d.code === dealerSel) &&
       (regionSel === ALL || d.region === regionSel) &&
       (provSel === ALL || d.province === provSel) &&
-      (salesSel === ALL || (SALES_BANDS.find(b => b.v === salesSel)?.hit(d.revenueActual) ?? true)) &&
+      (salesSel === ALL || (SALES_BANDS.find(b => b.v === salesSel)?.hit(perfOf(d.code).revenue) ?? true)) &&
       (!s || (d.code + d.name + d.province + d.region).toLowerCase().includes(s)),
     );
   }, [allDealers, q, dealerSel, regionSel, provSel, salesSel, SALES_BANDS]);
@@ -193,7 +197,8 @@ export default function SalesAnalyticsPage() {
       lostCount: lost.length,   // ปฏิเสธจริงเท่านั้น — ไม่ใช่ "ใบทั้งหมด − ปิดได้"
       wonVal: won.reduce((s, x) => s + x.valueNum, 0),
       conv: closed ? Math.round(won.length / closed * 100) : null,
-      tpct: d.revenueTarget > 0 ? Math.round(d.revenueActual / d.revenueTarget * 100) : 0,
+      revenueActual: perfOf(d.code).revenue,
+      tpct: d.revenueTarget > 0 ? Math.round(perfOf(d.code).revenue / d.revenueTarget * 100) : 0,
       latest: latest ? `${latest.getDate()} ${TH_ABBR[latest.getMonth()]} ${latest.getFullYear() + 543}` : "—",
     };
   }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads]);
@@ -203,7 +208,7 @@ export default function SalesAnalyticsPage() {
     const won = quotes.filter(x => x.status === "won");
     const lost = quotes.filter(x => x.status === "lost");
     const closed = won.length + lost.length;
-    const actual = dealers.reduce((s, d) => s + d.revenueActual, 0);
+    const actual = dealers.reduce((s, d) => s + perfOf(d.code).revenue, 0);
     // เป้าทั้งเครือใช้ค่าที่ HQ ตั้งไว้ · แต่ถ้ากรองเหลือบางตัวแทน ต้องรวมเป้าเฉพาะรายนั้น ไม่งั้น % ผิด
     const filtered = dealers.length !== allDealers.length;
     const target = filtered ? dealers.reduce((s, d) => s + d.revenueTarget, 0) : targets.annualTarget;
@@ -282,7 +287,7 @@ export default function SalesAnalyticsPage() {
     dealers.forEach(d => {
       const k = keyOf(d);
       const r = m.get(k) ?? { a: 0, b: 0 };
-      r.a += d.revenueActual; r.b += d.revenueTarget;
+      r.a += perfOf(d.code).revenue; r.b += d.revenueTarget;
       m.set(k, r);
     });
     return [...m.entries()].map(([k, v]) => ({

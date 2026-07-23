@@ -5,23 +5,34 @@
 //  · ไม่มีการติดตามการเปิดอ่าน — สถานะ "เปิดอ่านแล้ว" กับอัตราการเปิดอ่านถูกลบทั้งฟีเจอร์แล้ว
 //  · ไม่มีวันที่ลูกค้าตอบรับ/ปฏิเสธ — คำนวณ "จำนวนวันที่ใช้ปิดดีล" ไม่ได้
 //  · ใบของสาขาอื่น (seed) ไม่มีรายการสินค้า → ให้แสดง "—" ห้ามเดาขึ้นมาเอง
-import { dealerLeaderboard, type HQQuotation, type QuotationStatus } from "@pms/shared/lib/mock";
+import { type HQQuotation, type QuotationStatus } from "@pms/shared/lib/mock";
 import { parseDate, APP_NOW } from "@pms/shared/context/FilterContext";
 
 const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 export const fmtThaiDate = (d: Date) => `${d.getDate()} ${TH_MO[d.getMonth()]} ${d.getFullYear() + 543}`;
 
-// ภูมิภาคของใบเสนอราคา = ภาคของตัวแทนที่ออกใบ (ใบเสนอราคาไม่มีฟิลด์ภาค/จังหวัดของตัวเอง)
-const REGION_BY_DEALER = new Map(dealerLeaderboard.map(d => [d.code, d.region]));
-export const regionOfDealer = (code: string) => REGION_BY_DEALER.get(code) ?? "ไม่ระบุ";
-
-// จังหวัดของใบเสนอราคา = จังหวัดของ "ตัวแทนที่ออกใบ" ไม่ใช่จังหวัดลูกค้า/หน้างาน
-// (ใบเสนอราคาไม่เก็บจังหวัดของตัวเอง — ทุกที่ที่แสดงต้องกำกับให้ชัดว่าเป็นจังหวัดตัวแทน)
-const PROVINCE_BY_DEALER = new Map(dealerLeaderboard.map(d => [d.code, d.province]));
-export const provinceOfDealer = (code: string) => PROVINCE_BY_DEALER.get(code) ?? "ไม่ระบุ";
-export const ALL_PROVINCES = [...new Set(dealerLeaderboard.map(d => d.province))].sort();
 export const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะวันออกเฉียงเหนือ" : r === "ไม่ระบุ" ? r : `ภาค${r}`;
-export const ALL_REGIONS = [...new Set(dealerLeaderboard.map(d => d.region))];
+
+// ภาค/จังหวัดของใบเสนอราคา = ของ "ตัวแทนที่ออกใบ" (ใบไม่มีฟิลด์ภาค/จังหวัดของตัวเอง)
+//
+// เดิมสร้าง Map จากชุด seed ตอน import โมดูล → สาขาที่ HQ เพิ่มใหม่จะได้ภาค "ไม่ระบุ"
+// และจังหวัดไม่โผล่ในตัวกรองเลย · ตอนนี้รับทะเบียนตัวแทนจริงเข้ามาแทน
+export type DealerLookups = {
+  regionOf: (code: string) => string;
+  provinceOf: (code: string) => string;
+  allRegions: string[];
+  allProvinces: string[];
+};
+export function dealerLookups(dealers: { code: string; region: string; province: string }[]): DealerLookups {
+  const byRegion = new Map(dealers.map(d => [d.code, d.region]));
+  const byProvince = new Map(dealers.map(d => [d.code, d.province]));
+  return {
+    regionOf: code => byRegion.get(code) ?? "ไม่ระบุ",
+    provinceOf: code => byProvince.get(code) ?? "ไม่ระบุ",
+    allRegions: [...new Set(dealers.map(d => d.region))].filter(Boolean),
+    allProvinces: [...new Set(dealers.map(d => d.province))].filter(Boolean).sort(),
+  };
+}
 
 // ส่งแล้ว = ทุกสถานะที่ไม่ใช่ร่าง · ค้างอยู่ = ส่งแล้วแต่ลูกค้ายังไม่ตอบ
 export const isSent = (q: HQQuotation) => q.status !== "draft";
@@ -56,7 +67,7 @@ export type QuoteRow = HQQuotation & {
 };
 
 /** แปลงใบเสนอราคาดิบ → แถวที่หน้า HQ ใช้ (validityDays มาจากนโยบาย HQ — อ่านฝั่ง client) */
-export function toQuoteRows(quotes: HQQuotation[], validityDays: number): QuoteRow[] {
+export function toQuoteRows(quotes: HQQuotation[], validityDays: number, look: DealerLookups): QuoteRow[] {
   return quotes.map(q => {
     const createdDate = parseDate(q.createdAt);
     const agingDays = createdDate
@@ -70,8 +81,8 @@ export function toQuoteRows(quotes: HQQuotation[], validityDays: number): QuoteR
     }
     return {
       ...q,
-      region: regionOfDealer(q.dealerCode),
-      dealerProvince: provinceOfDealer(q.dealerCode),
+      region: look.regionOf(q.dealerCode),
+      dealerProvince: look.provinceOf(q.dealerCode),
       createdDate, agingDays, validUntil,
       sent: isSent(q), pending: isPending(q),
     };

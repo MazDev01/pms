@@ -11,6 +11,7 @@ import {
   type HQNotifRules, type DealerLeadRulesMap, type DealerRow,
 } from "@pms/shared/lib/mock";
 import { settings as settingsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
+import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { buildHQAlerts, type HQAlert } from "@pms/shared/lib/hqAlerts";
 
@@ -50,12 +51,14 @@ export function useHQAlerts(): HQAlert[] {
   const hqRules = useHQRules();
   const networkLeads = useNetworkLeads();
   const networkQuotes = useNetworkQuotations();
+  const perf = useDealerPerformance();
   return useMemo(() => {
     if (!hqRules) return [];
     return buildHQAlerts({
       leads: networkLeads, quotes: networkQuotes, dealers: hqRules.dealers,
       rules: hqRules.rules, validityDays: hqRules.validityDays,
       rulesOf: code => leadRulesOf(hqRules.leadRulesMap, code),
+      revenueOf: code => (perf.get(code) ?? EMPTY_PERF).revenue,
     });
-  }, [hqRules, networkLeads, networkQuotes]);
+  }, [hqRules, networkLeads, networkQuotes, perf]);
 }

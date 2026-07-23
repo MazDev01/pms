@@ -46,12 +46,37 @@ function sessionFromToken(accessToken: string, email: string): MockSession {
   const dealerCode = typeof c.dealer_code === "string" ? c.dealer_code : "";
   const hq = isHQRole(role) || dealerCode === "";
   return {
-    name: email,
+    name: email,                                    // ชื่อจริงเติมทีหลังจาก profiles.name
     role,
-    dealerName: hq ? "Benjamin HQ" : dealerCode,
+    dealerName: hq ? "Benjamin HQ" : dealerCode,    // ชื่อสาขาจริงเติมทีหลังจาก dealers.name
     dealerCode,
     scopeAll: hq,
   };
+}
+
+// JWT พก dealer_code/role มาให้ แต่ไม่มี "ชื่อ" — ต้องอ่านจากตารางเอง
+// ไม่งั้นหน้าจอโชว์ "cnx@dealer.com" แทนชื่อคน และ "CNX" แทน "บจ. เชียงใหม่สตีลบิลด์"
+// อ่านไม่ได้ (เน็ต/RLS) → คงค่าเดิมไว้ ดีกว่าล็อกอินไม่ผ่านเพราะเรื่องชื่อ
+async function withNames(base: MockSession, userId: string): Promise<MockSession> {
+  const sb = getSupabase();
+  const out = { ...base };
+  // ใช้ user id จาก JWT (claim sub) — ห้ามเรียก auth.getUser() เพราะเป็นคำขอเครือข่ายเพิ่มอีกหนึ่ง
+  // ที่ถูกยกเลิกเมื่อผู้ใช้เปลี่ยนหน้าระหว่างรอ แล้วโผล่เป็น console error "Failed to fetch"
+  if (userId) {
+    try {
+      const { data } = await sb.from("profiles").select("name").eq("id", userId).maybeSingle();
+      const n = (data as { name?: string } | null)?.name?.trim();
+      if (n) out.name = n;
+    } catch { /* คงอีเมลไว้ */ }
+  }
+  if (!out.scopeAll && base.dealerCode) {
+    try {
+      const { data } = await sb.from("dealers").select("name").eq("code", base.dealerCode).maybeSingle();
+      const n = (data as { name?: string } | null)?.name?.trim();
+      if (n) out.dealerName = n;
+    } catch { /* คงรหัสสาขาไว้ */ }
+  }
+  return out;
 }
 
 /** เข้าสู่ระบบด้วยอีเมล/รหัสผ่านจริง (Supabase Auth) */
@@ -61,6 +86,8 @@ export async function sbSignIn(email: string, password: string): Promise<AuthRes
     password,
   });
   if (error || !data.session) return { ok: false, error: error?.message ?? ERR_GENERIC };
+  // คืน session ทันที ไม่รอ query ชื่อ — ไม่งั้นทุกหน้าหลังล็อกอินช้าขึ้นเพราะรอ 2 คำขอ
+  // ชื่อจริงมาทีหลังผ่าน sbOnChange (RoleContext อัปเดต session ให้เอง)
   return { ok: true, session: sessionFromToken(data.session.access_token, data.user?.email ?? email) };
 }
 
@@ -79,13 +106,18 @@ export async function sbRestore(): Promise<MockSession | null> {
   const { data } = await getSupabase().auth.getSession();
   const s = data.session;
   if (!s) return null;
-  return sessionFromToken(s.access_token, s.user?.email ?? "");
+  return sessionFromToken(s.access_token, s.user?.email ?? ""); // ชื่อจริงตามมาทาง sbOnChange
 }
 
 /** ติดตามการเปลี่ยนสถานะ auth (login/logout/token refresh) — คืนฟังก์ชัน unsubscribe */
 export function sbOnChange(cb: (session: MockSession | null) => void): () => void {
   const { data } = getSupabase().auth.onAuthStateChange((_event, s) => {
-    cb(s ? sessionFromToken(s.access_token, s.user?.email ?? "") : null);
+    if (!s) { cb(null); return; }
+    const base = sessionFromToken(s.access_token, s.user?.email ?? "");
+    cb(base);                                   // ใช้งานต่อได้ทันที (ชื่อยังเป็นอีเมล/รหัสสาขา)
+    void withNames(base, s.user?.id ?? "").then(full => {  // ได้ชื่อจริงแล้วค่อยส่งซ้ำ
+      if (full.name !== base.name || full.dealerName !== base.dealerName) cb(full);
+    });
   });
   return () => data.subscription.unsubscribe();
 }

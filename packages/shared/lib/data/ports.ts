@@ -63,7 +63,9 @@ export interface QuotationsRepo {
   update(row: QuotationMock): Promise<QuotationMock>;
   remove(id: string): Promise<void>;
   setStatus(id: string, status: QuotationMock["status"]): Promise<void>;
-  nextQuoteNo(dealer: string): Promise<string>; // เลขที่ใบต่อสาขาแบบ atomic (supabase=RPC · local=max+1)
+  /** เลขที่ใบต่อสาขาแบบ atomic (supabase=RPC · local=max+1)
+   *  prefix = คำนำหน้าที่ "ตัวแทน" ตั้งเอง (ตั้งค่า › ใบเสนอราคา) — ผู้เรียกส่งมาให้ ไม่ใช่ adapter ไปอ่านเอง */
+  nextQuoteNo(dealer: string, prefix?: string): Promise<string>;
   /** ปิดใบที่ "ส่งแล้ว" และเลยวันหมดอายุ → สถานะ expired · asOf = วันนี้ของระบบ (YYYY-MM-DD) · คืนจำนวนใบที่ปิด */
   expireOverdue(asOf: string, scope?: Scope): Promise<number>;
 }

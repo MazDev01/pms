@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  quotationStatusLabel, quotationStatusColor, leadStatusLabel, loadQuoteNumbering,
+  quotationStatusLabel, quotationStatusColor, leadStatusLabel,
   DEFAULT_ISSUER, ISSUER_KEY,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
@@ -112,13 +112,10 @@ function expiryOf(q:{date:string;expiry?:string}, validityDays:number):string{
   d.setDate(d.getDate()+validityDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-function nextQId(data:QuotationMock[]){
-  // รูปแบบเลขที่ = HQ กำหนด (แหล่งเดียว loadQuoteNumbering) · ตัวแทนแก้ไม่ได้
-  const { prefix, next: startNo } = loadQuoteNumbering();
-  const nums = data.map(q=>{ const mt=q.id.match(/(\d+)\s*$/); return mt?parseInt(mt[1]):0; });
-  const next = Math.max(startNo - 1, ...nums, 0) + 1;
-  return `${prefix}${String(next).padStart(4,"0")}`;
-}
+// (nextQId ถูกลบ — เดิมแอปมีตัวออกเลขสองระบบที่ให้คำตอบคนละชุด:
+//  หน้านี้นับจากแถวที่โหลดมา + ค่าตั้งต้นใน localStorage → Q-2026-1101
+//  ส่วนแผงใบเสนอราคาในหน้าลีดใช้ newQuoteId() = RPC ของ DB → Q-2026-0001
+//  ออกใบจากคนละหน้าจึงได้เลขคนละชุด และชนกันเองได้ · ตอนนี้เหลือทางเดียวคือ newQuoteId())
 // ── Add / Edit Modal ──────────────────────────────────────────
 const TODAY = "2026-06-30";
 // วันหมดอายุเริ่มต้น = วันนี้ + อายุใบเสนอราคา (จากกฎการขาย settings) → ISO
@@ -302,7 +299,7 @@ function QuotationsPageInner(){
   const {
     quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
     addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
-    updateCustomer, updateLead,
+    updateCustomer, updateLead, newQuoteId,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน — RYG ไม่เห็นใบ/ลูกค้า/ลีดของ CNX (undefined = ของ CNX)
@@ -409,7 +406,7 @@ function QuotationsPageInner(){
 
   function openEdit(q:QuotationMock){ setEditingQ(q); setShowModal(true); }
 
-  function saveQ(form:QForm){
+  async function saveQ(form:QForm){
     // owner ไม่ใช่ฟิลด์ของใบเสนอราคา — แยกออกก่อน ไม่งั้นจะติดไปกับ QuotationMock เป็นฟิลด์ขยะ
     const { owner, ...qf } = form;
     const tv=qf.materialCost;
@@ -419,7 +416,8 @@ function QuotationsPageInner(){
       updateQuotation(updated);
       setSelected(p=>p?.id===editingQ.id?updated:p);
     } else {
-      const newQ:QuotationMock={...qf,revision:qf.revision,expiry:qf.expiry,id:nextQId(data),total,totalValue:tv};
+      // เลขที่ใบออกจาก DB แบบ atomic ต่อสาขา (แหล่งเดียวกับที่ออกใบจากหน้าลีด)
+      const newQ:QuotationMock={...qf,revision:qf.revision,expiry:qf.expiry,id:await newQuoteId(),total,totalValue:tv};
       addQuotation(newQ);
     }
     // ผู้รับผิดชอบ → เขียนกลับที่ "ต้นทาง" ตามที่บอสสั่ง (ใบเสนอราคาไม่มีฟิลด์นี้)

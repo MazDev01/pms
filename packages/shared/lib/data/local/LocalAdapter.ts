@@ -169,10 +169,10 @@ export const LocalAdapter: DataAdapter = {
       return ok(n);
     },
     // เลขที่ใบถัดไป = max ของเลขท้าย +1 (เทียบเท่า nextQId เดิมในหน้าจอ) · dealer ไม่ใช้ในโหมด local
-    nextQuoteNo: () => {
+    nextQuoteNo: (_dealer, prefix) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       const nums = list.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
-      return ok(`Q-2026-${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`);
+      return ok(`${prefix || "Q-2026-"}${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`);
     },
   },
   customers: {

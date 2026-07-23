@@ -6,7 +6,7 @@ import {
 } from "react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
-  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER,
+  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, loadQuoteNumbering,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
   quotationToFile, AUTO_FILE_BY,
   type LeadRow,
@@ -458,7 +458,12 @@ export function SalesProvider({
   }, [completeLeadQuoteTasks, persistQuote]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
-  const newQuoteId = useCallback(() => quotationsRepo.nextQuoteNo(myDealerCode), [myDealerCode]);
+  // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB
+  // อ่าน localStorage ตรงนี้ได้ เพราะเป็นค่าของ "สาขาตัวเอง" ใน origin เดียวกัน ไม่ใช่ค่าที่ HQ เป็นเจ้าของ
+  const newQuoteId = useCallback(
+    () => quotationsRepo.nextQuoteNo(myDealerCode, loadQuoteNumbering().prefix),
+    [myDealerCode],
+  );
 
   // ── Appointment mutations (Phase 4) — เขียนทะลุถึง repo ──────────
   const addAppointment = useCallback((appt: AppointmentMock) => {
