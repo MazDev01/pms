@@ -321,7 +321,10 @@ export default function CalendarPage() {
               <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.92rem" }}>
                 <CalendarDays size={15} color={PRIMARY} /> {selectedDate === TODAY ? "วันนี้" : `${parseInt(selectedDate.split("-")[2])} ${THAI_MONTHS[parseYmd(selectedDate).getMonth()]}`}
               </div>
-              <button onClick={() => setAddOpen(true)} className="btn btn-secondary btn-sm" style={{ color: PRIMARY, padding: "5px 9px" }}><Plus size={13} /></button>
+              {/* ปุ่มไอคอนล้วนต้องมีชื่อกำกับ — นี่เป็นทางเดียวที่สร้างนัดหมายได้
+                  ถ้าไม่มี คนที่ใช้โปรแกรมอ่านหน้าจอจะไม่รู้ว่าปุ่มนี้ทำอะไร */}
+              <button onClick={() => setAddOpen(true)} title="เพิ่มกิจกรรม" aria-label="เพิ่มกิจกรรม"
+                className="btn btn-secondary btn-sm" style={{ color: PRIMARY, padding: "5px 9px" }}><Plus size={13} /></button>
             </div>
             {selectedAppts.length === 0 ? (
               <div className="card-body" style={{ fontSize: "0.8rem", color: MUTED, textAlign: "center", padding: "18px 0 22px" }}>ไม่มีนัดหมายวันนี้</div>
