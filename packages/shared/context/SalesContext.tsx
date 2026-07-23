@@ -7,18 +7,19 @@ import {
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, loadQuoteNumbering,
+  type IssuerProfile,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
   quotationToFile, AUTO_FILE_BY,
   type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock,
 } from "@pms/shared/lib/mock";
-import { loadIssuer } from "@pms/shared/lib/quotationPrint";
+
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { parseBaht } from "@pms/shared/lib/format";
 import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
-import { leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, realtime } from "@pms/shared/lib/data";
+import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, realtime } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 // โหมด backend — supabase: ลีดมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
@@ -422,7 +423,7 @@ export function SalesProvider({
   const addQuotation = useCallback((quotation: QuotationMock) => {
     // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง — ใบใหม่ใช้ชื่อปัจจุบัน, ใบเก่าคงชื่อเดิมเมื่อเปลี่ยนโปรไฟล์ทีหลัง
     // + ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ใบใหม่เป็นของสาขานั้น
-    const base = quotation.issuer ? quotation : { ...quotation, issuer: loadIssuer() };
+    const base = quotation.issuer ? quotation : { ...quotation, issuer: issuerRef.current };
     const stamped = { ...base, dealerCode: base.dealerCode ?? myDealerCode };
     setQuotations(prev => [stamped, ...prev]);
     persistQuote.create(stamped);
@@ -460,6 +461,17 @@ export function SalesProvider({
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
   // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB
   // อ่าน localStorage ตรงนี้ได้ เพราะเป็นค่าของ "สาขาตัวเอง" ใน origin เดียวกัน ไม่ใช่ค่าที่ HQ เป็นเจ้าของ
+  // หัวกระดาษของสาขา — โหลดผ่าน repo ไว้ล่วงหน้า เพื่อสแนปช็อตลงใบตอนสร้าง (addQuotation เป็น sync)
+  // เดิมเรียก loadIssuer() ซึ่งอ่าน localStorage → โหมด supabase ได้ค่าเริ่มต้นของโปรเจกต์เสมอ
+  // = ใบเสนอราคาที่ส่งลูกค้าขึ้นชื่อบริษัทผิด (ชื่อสาขาเดโม แทนชื่อสาขาจริง)
+  const issuerRef = useRef<IssuerProfile>(DEFAULT_ISSUER);
+  useEffect(() => {
+    if (!hydrated) return;
+    dealerSettingsRepo.get(myDealerCode)
+      .then(cfg => { issuerRef.current = cfg.issuer; })
+      .catch(e => console.error("[dealerSettings.get]", e));
+  }, [hydrated, myDealerCode]);
+
   const newQuoteId = useCallback(
     () => quotationsRepo.nextQuoteNo(myDealerCode, loadQuoteNumbering().prefix),
     [myDealerCode],

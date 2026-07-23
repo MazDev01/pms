@@ -5,7 +5,9 @@
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
 import { getSupabase } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
-import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REASONS } from "@pms/shared/lib/mock";
+import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REASONS,
+  DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
+import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import type { DataAdapter } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
@@ -13,6 +15,7 @@ import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, DealerLeadRulesMap, LeadRules,
   AuditEntry, LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope,
+  DealerSettings, UserProfile,
 } from "../types";
 
 const sb = () => getSupabase();
@@ -290,6 +293,65 @@ export const SupabaseAdapter: DataAdapter = {
       return row?.lost?.length ? row.lost : [...LOST_REASONS];
     },
     saveLostReasons: (lost) => must(sb().from("hq_sales_journey").upsert({ id: 1, lost })),
+  },
+  // ตั้งค่าของสาขา — แถวเดียวต่อ dealer_code · RLS คุมว่าแก้ได้เฉพาะของตัวเอง
+  // เก็บเป็น jsonb ราย "กลุ่ม" จึงไม่ต้องแปลง snake/camel ข้างใน (ปล่อยผ่านทั้งก้อน)
+  dealerSettings: {
+    get: async (dealerCode) => {
+      const { data, error } = await sb().from("dealer_settings")
+        .select("issuer,document,wordmark,logo,notif_prefs").eq("dealer_code", dealerCode).maybeSingle();
+      if (error) throw new Error(error.message);
+      const r = (data ?? {}) as Record<string, unknown>;
+      // ยังไม่เคยตั้งค่า = คืนค่ากลาง (หน้าจอจะได้มีอะไรให้แก้ ไม่ใช่ฟอร์มว่างเปล่า)
+      return {
+        issuer:     { ...DEFAULT_ISSUER, ...(r.issuer as object ?? {}) },
+        document:   { ...DEFAULT_DOC, ...(r.document as object ?? {}) },
+        wordmark:   (r.wordmark as string) ?? "",
+        logo:       (r.logo as string) ?? "",
+        notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...(r.notif_prefs as object ?? {}) },
+      } as DealerSettings;
+    },
+    save: async (dealerCode, patch) => {
+      const row: Row = { dealer_code: dealerCode, updated_at: new Date().toISOString() };
+      if (patch.issuer)                 row.issuer = patch.issuer;
+      if (patch.document)               row.document = patch.document;
+      if (patch.wordmark !== undefined) row.wordmark = patch.wordmark;
+      if (patch.logo !== undefined)     row.logo = patch.logo;
+      if (patch.notifPrefs)             row.notif_prefs = patch.notifPrefs;
+      await must(sb().from("dealer_settings").upsert(row, { onConflict: "dealer_code" }));
+    },
+  },
+  // โปรไฟล์ของผู้ใช้ที่ล็อกอิน — แถวใน profiles ที่ id ตรงกับ auth user
+  // อีเมลล็อกอินอยู่ใน auth.users (แก้จากที่นี่ไม่ได้) · contact_email = อีเมลติดต่อที่ผู้ใช้ตั้งเอง
+  profile: {
+    get: async () => {
+      // getSession() อ่าน session จากเครื่อง — ห้ามใช้ getUser() ที่ยิง /auth/v1/user ทุกครั้ง
+      // (hook นี้ทำงานทุกหน้าผ่าน Sidebar/Topbar → คำขอถูกยกเลิกตอนเปลี่ยนหน้า
+      //  แล้วโผล่เป็น console error "Failed to fetch" เป็นร้อยรายการ)
+      const { data: sess } = await sb().auth.getSession();
+      const id = sess.session?.user?.id;
+      if (!id) return null;
+      const { data, error } = await sb().from("profiles")
+        .select("name,phone,contact_email,avatar").eq("id", id).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return null;
+      const r = data as Record<string, unknown>;
+      return {
+        name: (r.name as string) ?? "",
+        email: ((r.contact_email as string) || sess.session?.user?.email) ?? "",
+        phone: (r.phone as string) ?? "",
+        avatar: (r.avatar as string) || undefined,
+      } as UserProfile;
+    },
+    save: async (p) => {
+      const { data: sess } = await sb().auth.getSession();
+      const id = sess.session?.user?.id;
+      if (!id) throw new Error("ยังไม่ได้เข้าสู่ระบบ");
+      // อัปเดตเฉพาะฟิลด์ส่วนตัว — role/dealer_code ไม่ส่งไป (และ trigger ที่ DB กันไว้อีกชั้น)
+      await must(sb().from("profiles")
+        .update({ name: p.name, phone: p.phone, contact_email: p.email, avatar: p.avatar ?? null })
+        .eq("id", id));
+    },
   },
   audit: {
     // อ่านเรียงล่าสุดก่อน (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ

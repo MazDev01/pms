@@ -7,8 +7,10 @@ import {
   Upload, UserCheck, FileText, ShieldCheck, Lock, ImagePlus, Bell,
   Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
-import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, loadNotifPrefs, profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
+import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -65,32 +67,30 @@ function CompanyTab() {
   const [pwNote, setPwNote] = useState(false);
   const [baseline, setBaseline] = useState("");
   const avatarRef = useRef<HTMLInputElement>(null);
+  const dealerCfg = useDealerSettings(); // ข้อมูลบริษัท/โลโก้/เอกสารของสาขา (ผ่าน repo)
+  const userProfile = useUserProfile();  // โปรไฟล์ผู้ใช้ (ผ่าน repo)
 
+  // ข้อมูลบริษัท/โลโก้ของสาขา อ่านผ่าน repo (โหมด supabase = DB) — เดิมอยู่ใน localStorage เครื่องเดียว
   useEffect(() => {
-    let f = COMPANY_DEFAULT, l = "", w = "";
-    const s = localStorage.getItem(COMPANY_KEY);
-    if (s) try { f = { ...COMPANY_DEFAULT, ...JSON.parse(s) }; } catch {}
-    const ls = localStorage.getItem(LOGO_KEY); if (ls) l = ls;
-    const ws = localStorage.getItem(WORDMARK_KEY); if (ws) w = ws;
-    const p = loadUserProfile(session.dealerCode, session.name);
+    if (!dealerCfg.loaded) return;
+    const f = { ...COMPANY_DEFAULT, ...dealerCfg.settings.issuer } as CompanyProfile;
+    const l = dealerCfg.settings.logo;
+    const w = dealerCfg.settings.wordmark;
+    const p = userProfile.loaded ? userProfile.profile : prof;
     setForm(f); setLogo(l); setWordmark(w); setProf(p);
     setBaseline(JSON.stringify({ form: f, logo: l, wordmark: w, prof: p }));
-  }, [session.dealerCode, session.name]);
+  }, [dealerCfg.loaded, dealerCfg.settings, userProfile.loaded, userProfile.profile, session.dealerCode, session.name]);
 
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
     setForm(p => ({ ...p, [k]: v }));
   }
   const save = useCallback(() => {
-    try {
-      localStorage.setItem(COMPANY_KEY, JSON.stringify(form));
-      if (logo) localStorage.setItem(LOGO_KEY, logo); else localStorage.removeItem(LOGO_KEY);
-      if (wordmark) localStorage.setItem(WORDMARK_KEY, wordmark); else localStorage.removeItem(WORDMARK_KEY);
-      const cleanProf: UserProfile = { name: prof.name.trim() || session.name, email: prof.email.trim() || defaultProfileEmail(session.dealerCode), phone: prof.phone.trim(), avatar: prof.avatar };
-      localStorage.setItem(profileKey(session.dealerCode), JSON.stringify(cleanProf));
-    } catch {
-      alert("บันทึกไม่สำเร็จ — รูปมีขนาดใหญ่เกินไป กรุณาใช้รูปที่เล็กลง");
-      return;
-    }
+    const cleanProf: UserProfile = { name: prof.name.trim() || session.name, email: prof.email.trim() || defaultProfileEmail(session.dealerCode), phone: prof.phone.trim(), avatar: prof.avatar };
+    void userProfile.save(cleanProf)
+      .catch(() => alert("บันทึกโปรไฟล์ไม่สำเร็จ — รูปอาจมีขนาดใหญ่เกินไป"));
+    // ข้อมูลบริษัท/โลโก้ = ของสาขา เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่เงียบแล้วจอขึ้นว่าบันทึกแล้ว
+    void dealerCfg.save({ issuer: form, logo, wordmark })
+      .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     window.dispatchEvent(new Event("bpms-company-updated"));
     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
     setBaseline(JSON.stringify({ form, logo, wordmark, prof }));
@@ -284,23 +284,25 @@ function DocumentsTab() {
   // เดิม loadHQPolicy() อ่าน localStorage ของ :3001 แต่ HQ เขียนที่ :3002 → ได้ default 7% เสมอ
   // ทั้งที่ช่องนี้ติดไอคอนกุญแจ + ป้าย "HQ" บอกผู้ใช้ว่าเป็นค่าจริงของสำนักงานใหญ่
   const hq = useHQPolicy();
+  const dealerCfg = useDealerSettings(); // ตั้งค่าเอกสารของสาขา (ผ่าน repo)
 
+  // ตั้งค่าเอกสารของสาขา อ่านผ่าน repo — เดิมอยู่ใน localStorage เครื่องเดียว
   useEffect(() => {
-    let d = DOC_DEFAULT;
-    const s = localStorage.getItem(DOCUMENT_KEY);
-    if (s) try { d = { ...DOC_DEFAULT, ...JSON.parse(s) }; } catch {}
+    if (!dealerCfg.loaded) return;
+    const d = { ...DOC_DEFAULT, ...dealerCfg.settings.document } as DocumentSettings;
     setDoc(d);
     setBaseline(JSON.stringify(d));
-  }, []);
+  }, [dealerCfg.loaded, dealerCfg.settings]);
 
   function set<K extends keyof DocumentSettings>(k: K, v: DocumentSettings[K]) {
     setDoc(p => ({ ...p, [k]: v }));
   }
 
   const save = useCallback(() => {
-    localStorage.setItem(DOCUMENT_KEY, JSON.stringify(doc));
+    void dealerCfg.save({ document: doc })
+      .catch(e => alert("บันทึกตั้งค่าเอกสารไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     setBaseline(JSON.stringify(doc));
-  }, [doc]);
+  }, [doc, dealerCfg]);
   const dirty = baseline !== "" && JSON.stringify(doc) !== baseline;
   const reset = useCallback(() => {
     if (!baseline) return;
@@ -695,24 +697,29 @@ function NotificationsTab() {
   const rulesDraftRef = useRef(rulesDraft); rulesDraftRef.current = rulesDraft;
   const savedRulesRef = useRef(savedRules); savedRulesRef.current = savedRules;
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน — กฎแจ้งเตือนเป็นของสาขานี้
+  const notifCfg = useDealerSettings();
   // โหลดค่าที่บันทึกไว้หลัง mount — ถ้าผู้ใช้เริ่มแก้แล้ว อย่าทับ draft
   useEffect(() => {
-    const p = loadNotifPrefs();
-    setSavedPrefs(p);
-    if (!editedRef.current) setDraft(p);
+    // การแจ้งเตือนของสาขา — ผ่าน repo เช่นกัน (เดิม localStorage เครื่องเดียว)
+    if (notifCfg.loaded) {
+      const p = notifCfg.settings.notifPrefs;
+      setSavedPrefs(p);
+      if (!editedRef.current) setDraft(p);
+    }
     // กฎดูแลลูกค้าเป้าหมาย — อ่านผ่าน repository (local: localStorage · supabase: DB)
     settingsRepo.getLeadRulesMap().then(map => {
       const r = leadRulesOf(map, currentDealer.code);
       setSavedRules(r);
       if (!editedRef.current) setRulesDraft(r);
     }).catch(() => {});
-  }, [currentDealer.code]);
+  }, [currentDealer.code, notifCfg.loaded, notifCfg.settings]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedPrefs)
     || JSON.stringify(rulesDraft) !== JSON.stringify(savedRules);
   const save = useCallback(() => {
     const next = draftRef.current;
-    localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next));
+    void notifCfg.save({ notifPrefs: next })
+      .catch(e => alert("บันทึกการแจ้งเตือนไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้กระดิ่งบน Topbar อัปเดตทันที
     const nextRules = rulesDraftRef.current;
     void settingsRepo.saveLeadRules(currentDealer.code, nextRules); // local: ยิง event ให้หน้าอื่นอัปเดตทันที · supabase: RLS dealer-own

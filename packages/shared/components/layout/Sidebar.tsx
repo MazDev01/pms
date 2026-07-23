@@ -9,7 +9,8 @@ import {
   CalendarDays, FolderOpen, Building2, History, LogOut, Crown,
 } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
-import { loadUserProfile, PROFILE_UPDATED_EVENT, type UserProfile } from "@pms/shared/lib/mock";
+import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import { type UserProfile } from "@pms/shared/lib/mock";
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
 type NavGroup = { group: string; items: NavItem[] };
@@ -73,20 +74,15 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   // แถบเมนูใช้แบรนด์ Benjamin มาตรฐานเดียวเสมอทุกบทบาท (ดู .sidebar-brand ด้านล่าง)
   // — เดิมอ่านโลโก้/ชื่อแบรนด์จาก localStorage มาเก็บใน state แต่ไม่เคยเอาไปแสดง (โค้ดตาย) จึงเอาออก
   // โปรไฟล์ผู้ใช้ (/profile) → ชื่อ/รูปในการ์ดเจ้าของท้าย sidebar อัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  // โปรไฟล์ผ่าน repo — เดิมอ่าน localStorage ต่อสาขา (ผู้ใช้ในสาขาเดียวกันทับกันเอง)
+  const { profile } = useUserProfile();
 
   useEffect(() => {
     router.prefetch("/hq/dashboard");
     router.prefetch("/dashboard");
   }, [router]);
 
-  useEffect(() => {
-    const read = () => setProfile(loadUserProfile(session.dealerCode, session.name));
-    read();
-    window.addEventListener(PROFILE_UPDATED_EVENT, read);
-    window.addEventListener("storage", read);
-    return () => { window.removeEventListener(PROFILE_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
-  }, [session.dealerCode, session.name]);
+
 
   const nav = isHQ ? HQ_NAV : DEALER_NAV;
   // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน · HQ ใช้ชื่อผู้ใช้

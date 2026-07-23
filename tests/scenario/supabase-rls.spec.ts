@@ -258,3 +258,68 @@ test("[schema] ตาราง dealers ไม่มีคอลัมน์ KPI 
   // เป้าทั้งปียังต้องอยู่ — เป็นค่าที่ HQ กรอกเอง คำนวณจากที่ไหนไม่ได้
   expect(Object.keys(row), "revenue_target ต้องยังอยู่").toContain("revenue_target");
 });
+
+test("[dealer-settings] หัวกระดาษ/เอกสารของสาขาเก็บที่ DB · สาขาอื่นแตะไม่ได้ (0024)", async () => {
+  const ryg = await signIn(RYG);
+  const cnx = await signIn(CNX);
+  const hq  = await signIn(ADMIN);
+  const issuer = { company: "บจ. ทดสอบอัตโนมัติ", address: "ที่อยู่ทดสอบ", phone: "000", taxId: "0000000000000" };
+  try {
+    // สาขาบันทึกหัวกระดาษของตัวเองได้
+    const up = await ryg.from("dealer_settings")
+      .upsert({ dealer_code: "RYG", issuer, document: { quotePrefix: "RYG-" } }, { onConflict: "dealer_code" }).select();
+    expect(up.error, `RYG บันทึกไม่ได้: ${JSON.stringify(up.error)}`).toBeNull();
+
+    // อ่านกลับมาได้ครบ — นี่คือสิ่งที่ทำให้ "ย้ายเครื่องแล้วหัวกระดาษไม่หาย"
+    const mine = (await ryg.from("dealer_settings").select("issuer,document").eq("dealer_code", "RYG")).data?.[0];
+    expect((mine?.issuer as typeof issuer)?.company).toBe(issuer.company);
+    expect((mine?.document as { quotePrefix: string })?.quotePrefix).toBe("RYG-");
+
+    // สาขาอื่นแก้ไม่ได้ และมองไม่เห็นด้วย
+    const hack = await cnx.from("dealer_settings").update({ issuer: { company: "โดนแก้" } }).eq("dealer_code", "RYG").select();
+    expect(wasBlocked(hack), "CNX ต้องแก้หัวกระดาษของ RYG ไม่ได้").toBe(true);
+    expect(((await cnx.from("dealer_settings").select("dealer_code").eq("dealer_code", "RYG")).data ?? []).length,
+      "CNX ต้องมองไม่เห็นตั้งค่าของ RYG").toBe(0);
+
+    // HQ อ่านได้ (ดูแลทั้งเครือ) แต่แก้ไม่ได้ — เป็นข้อมูลบริษัทของสาขา
+    expect(((await hq.from("dealer_settings").select("dealer_code").eq("dealer_code", "RYG")).data ?? []).length).toBe(1);
+    const byHQ = await hq.from("dealer_settings").update({ issuer: { company: "HQ แก้" } }).eq("dealer_code", "RYG").select();
+    expect(wasBlocked(byHQ), "HQ ต้องแก้หัวกระดาษของตัวแทนไม่ได้").toBe(true);
+  } finally {
+    await ryg.from("dealer_settings").delete().eq("dealer_code", "RYG");
+  }
+});
+
+test("[profile] ผู้ใช้แก้โปรไฟล์ตัวเองได้ แต่ยกระดับสิทธิ์/ย้ายสาขาตัวเองไม่ได้ (0026)", async () => {
+  const sb = await signIn(RYG);
+  const { data: sess } = await sb.auth.getSession();
+  const uid = sess.session?.user?.id;
+  expect(uid, "ต้องมี session").toBeTruthy();
+
+  const before = (await sb.from("profiles").select("name,role,dealer_code").eq("id", uid!).maybeSingle()).data as
+    { name: string; role: string; dealer_code: string } | null;
+  expect(before, "ต้องมีโปรไฟล์ของผู้ใช้นี้").toBeTruthy();
+
+  try {
+    // แก้ข้อมูลส่วนตัวได้ — นี่คือสิ่งที่ทำให้ "ชื่อ/รูปไม่หายเมื่อย้ายเครื่อง"
+    const ok = await sb.from("profiles").update({ name: "ทดสอบอัตโนมัติ", phone: "000" }).eq("id", uid!).select();
+    expect(ok.error, `แก้โปรไฟล์ตัวเองไม่ได้: ${JSON.stringify(ok.error)}`).toBeNull();
+    expect(ok.data?.length).toBe(1);
+
+    // ยกระดับตัวเองเป็นผู้ดูแลระบบไม่ได้ (RLS จำกัดแถวได้ แต่จำกัดคอลัมน์ไม่ได้ → ต้องมี trigger กัน)
+    const esc = await sb.from("profiles").update({ role: "SUPER_ADMIN" }).eq("id", uid!).select();
+    expect(wasBlocked(esc), "ต้องยกระดับสิทธิ์ตัวเองไม่ได้").toBe(true);
+
+    // ย้ายตัวเองไปสาขาอื่นไม่ได้ (ไม่งั้นเห็นข้อมูลสาขาอื่นทันทีเพราะ RLS อิง dealer_code)
+    const move = await sb.from("profiles").update({ dealer_code: "CNX" }).eq("id", uid!).select();
+    expect(wasBlocked(move), "ต้องย้ายสาขาตัวเองไม่ได้").toBe(true);
+
+    // ของจริงต้องไม่เปลี่ยน
+    const after = (await sb.from("profiles").select("role,dealer_code").eq("id", uid!).maybeSingle()).data as
+      { role: string; dealer_code: string };
+    expect(after.role).toBe(before!.role);
+    expect(after.dealer_code).toBe(before!.dealer_code);
+  } finally {
+    await sb.from("profiles").update({ name: before!.name, phone: "" }).eq("id", uid!);
+  }
+});

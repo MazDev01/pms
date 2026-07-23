@@ -13,8 +13,27 @@ import {
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
+import { profileKey, PROFILE_UPDATED_EVENT, type UserProfile } from "@pms/shared/lib/mock";
+
+// โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
+function currentDealerCode(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const s = localStorage.getItem("pms_session_v2");
+    if (s) return (JSON.parse(s) as { dealerCode?: string }).dealerCode ?? "";
+  } catch {}
+  return "";
+}
+function firePropfile() {
+  try { window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)); } catch {}
+}
 import type { DataAdapter } from "../ports";
-import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope } from "../types";
+import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings } from "../types";
+import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY } from "@pms/shared/lib/mock";
+import { DEFAULT_DOC, DOC_KEY, WORDMARK_KEY } from "@pms/shared/lib/quotationPrint";
+
+// โลโก้ไอคอนบนแถบเมนู — คีย์เดิมของหน้าตั้งค่าตัวแทน
+const LOGO_KEY = "dealer_company_logo_v2";
 
 const ok = <T>(v: T): Promise<T> => Promise.resolve(v);
 const done = (): Promise<void> => Promise.resolve();
@@ -103,6 +122,30 @@ export const LocalAdapter: DataAdapter = {
     savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); fireSettings(); return done(); },
     saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); fireSettings(); return done(); },
     saveNotifRules: (r) => { writeKey(HQ_NOTIF_RULES_KEY, r); fireSettings(); return done(); },
+  },
+  // ตั้งค่าของสาขา — โหมด local เก็บ 4 คีย์เดิมไว้เหมือนเดิม (ค่าที่ผู้ใช้เคยตั้งไม่หาย)
+  // ไม่แยกตามสาขา เพราะเครื่องหนึ่งใช้สาขาเดียวอยู่แล้วในโหมดเดโม
+  dealerSettings: {
+    get: () => ok<DealerSettings>({
+      issuer: readKey(ISSUER_KEY, DEFAULT_ISSUER),
+      document: { ...DEFAULT_DOC, ...readKey(DOC_KEY, DEFAULT_DOC) },
+      wordmark: readKey<string>(WORDMARK_KEY, ""),
+      logo: readKey<string>(LOGO_KEY, ""),
+      notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...readKey(NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS) },
+    }),
+    save: (_dealerCode, patch) => {
+      if (patch.issuer)     writeKey(ISSUER_KEY, patch.issuer);
+      if (patch.document)   writeKey(DOC_KEY, patch.document);
+      if (patch.wordmark !== undefined) writeKey(WORDMARK_KEY, patch.wordmark);
+      if (patch.logo !== undefined)     writeKey(LOGO_KEY, patch.logo);
+      if (patch.notifPrefs) writeKey(NOTIF_PREFS_KEY, patch.notifPrefs);
+      return done();
+    },
+  },
+  // โหมด local: คีย์เดิมต่อสาขา (พฤติกรรมเท่าเดิม ค่าที่เคยตั้งไม่หาย)
+  profile: {
+    get: () => ok(readKey<UserProfile | null>(profileKey(currentDealerCode()), null)),
+    save: (p) => { writeKey(profileKey(currentDealerCode()), p); firePropfile(); return done(); },
   },
   audit: {
     list: () => ok(loadAudit()),

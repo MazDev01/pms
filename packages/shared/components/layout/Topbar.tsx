@@ -3,15 +3,17 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  apptTypeLabel, loadUserProfile, PROFILE_UPDATED_EVENT,
-  loadNotifPrefs, notifCategoryOf, NOTIF_PREFS_EVENT,
+  apptTypeLabel,
+  notifCategoryOf,
   loadHQNotifPrefs, hqAuditCategory, HQ_NOTIF_UPDATED_EVENT, HQ_ALERT_META,
   type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
   type HQAlertKey,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown } from "lucide-react";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
@@ -282,24 +284,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const pathname = usePathname();
 
   // โปรไฟล์ที่ผู้ใช้บันทึกไว้ (/profile) → ชื่อ/รูปบน Topbar อัปเดตทันทีเมื่อบันทึก
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  useEffect(() => {
-    const read = () => setProfile(loadUserProfile(session.dealerCode, session.name));
-    read();
-    window.addEventListener(PROFILE_UPDATED_EVENT, read);
-    window.addEventListener("storage", read);
-    return () => { window.removeEventListener(PROFILE_UPDATED_EVENT, read); window.removeEventListener("storage", read); };
-  }, [session.dealerCode, session.name]);
+  // โปรไฟล์ผ่าน repo — เดิมอ่าน localStorage ต่อสาขา (ผู้ใช้ในสาขาเดียวกันทับกันเอง)
+  const { profile } = useUserProfile();
+
 
   // ตั้งค่าการแจ้งเตือน (เปิด/ปิดแต่ละชนิด) — อัปเดตทันทีเมื่อบันทึกในหน้าตั้งค่า
-  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs | null>(null);
-  useEffect(() => {
-    const read = () => setNotifPrefs(loadNotifPrefs());
-    read();
-    window.addEventListener(NOTIF_PREFS_EVENT, read);
-    window.addEventListener("storage", read);
-    return () => { window.removeEventListener(NOTIF_PREFS_EVENT, read); window.removeEventListener("storage", read); };
-  }, []);
+  // อ่านผ่าน repo — เดิม loadNotifPrefs() อ่าน localStorage ตรง ๆ
+  // (ยังฟัง NOTIF_PREFS_EVENT อยู่ เพราะหน้าตั้งค่ายิง event นี้ตอนกดบันทึก → กระดิ่งอัปเดตทันที)
+  const dealerCfg = useDealerSettings();
+  const notifPrefs: NotifPrefs | null = dealerCfg.loaded ? dealerCfg.settings.notifPrefs : null;
 
   // ตั้งค่าการแจ้งเตือนของ HQ (หมวดจาก Audit Log) — กรองกระดิ่งฝั่ง HQ ตาม toggle "ในระบบ"
   const [hqNotifPrefs, setHqNotifPrefs] = useState<Record<string, HQNotifChannels> | null>(null);

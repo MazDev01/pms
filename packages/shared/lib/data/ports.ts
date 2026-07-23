@@ -5,6 +5,7 @@ import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap,
   AuditEntry, LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope,
+  DealerSettings, UserProfile,
 } from "./types";
 
 // ── โดเมนอ้างอิง/ตั้งค่า (ห่อ loader เดิมได้ทันที — Step 0) ──
@@ -42,6 +43,23 @@ export interface SettingsRepo {
   saveTargets(targets: HQTargets): Promise<void>;
   saveNotifRules(rules: HQNotifRules): Promise<void>;
 }
+// ── ตั้งค่าของตัวแทนแต่ละสาขา (หัวกระดาษ/เอกสาร/โลโก้/แจ้งเตือน) ──
+// เดิมอยู่ใน localStorage ของเครื่องที่ใช้ → ล้างเบราว์เซอร์/ย้ายเครื่องแล้วหาย
+// เจ้าของคือ "สาขา" ไม่ใช่ผู้ใช้คนใดคนหนึ่ง · HQ อ่านได้แต่แก้ไม่ได้ (RLS ที่ DB บังคับ)
+export interface DealerSettingsRepo {
+  get(dealerCode: string): Promise<DealerSettings>;
+  /** บันทึกเฉพาะกลุ่มที่ส่งมา (patch) — ไม่ต้องส่งครบทุกกลุ่ม */
+  save(dealerCode: string, patch: Partial<DealerSettings>): Promise<void>;
+}
+
+// ── โปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่ (ชื่อ/เบอร์/อีเมลติดต่อ/รูป) ──
+// เดิมอยู่ใน localStorage และผูกกับ "สาขา" ไม่ใช่ "คน" → ผู้ใช้ในสาขาเดียวกันทับกันเอง
+// เขียนได้เฉพาะโปรไฟล์ตัวเอง · บทบาท/สาขา แก้เองไม่ได้ (trigger ที่ DB กัน)
+export interface ProfileRepo {
+  get(): Promise<UserProfile | null>;
+  save(p: UserProfile): Promise<void>;
+}
+
 export interface AuditRepo {
   list(): Promise<AuditEntry[]>;
   append(e: Omit<AuditEntry, "id" | "at">): Promise<void>;
@@ -125,6 +143,8 @@ export interface DataAdapter {
   files: FilesRepo;
   persons: PersonsRepo;
   settings: SettingsRepo;
+  dealerSettings: DealerSettingsRepo;
+  profile: ProfileRepo;
   audit: AuditRepo;
   leads: LeadsRepo;
   quotations: QuotationsRepo;

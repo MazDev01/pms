@@ -6,8 +6,9 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
-  profileKey, loadUserProfile, defaultProfileEmail, PROFILE_UPDATED_EVENT, type UserProfile,
+  defaultProfileEmail, type UserProfile,
 } from "@pms/shared/lib/mock";
+import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
@@ -30,8 +31,9 @@ export default function ProfilePage() {
   // ฝั่งตัวแทน: โปรไฟล์ส่วนตัวถูกรวมเป็น "บัญชีดีลเลอร์" ในหน้าตั้งค่าแล้ว → ส่งไปที่นั่น (HQ ยังใช้หน้านี้)
   useEffect(() => { if (!isHQ) router.replace("/settings"); }, [isHQ, router]);
   // เริ่มด้วยค่า default (deterministic — server/client ตรงกัน) แล้วโหลดจาก localStorage หลัง mount กัน hydration mismatch
+  const userProfile = useUserProfile(); // อ่าน/เขียนผ่าน repo (โหมด supabase = ตาราง profiles)
   const [form, setForm] = useState<UserProfile>({ name: session.name, email: defaultProfileEmail(session.dealerCode), phone: "" });
-  useEffect(() => { setForm(loadUserProfile(session.dealerCode, session.name)); }, [session.dealerCode, session.name]);
+  useEffect(() => { if (userProfile.loaded) setForm(userProfile.profile); }, [userProfile.loaded, userProfile.profile]);
   const [saved, setSaved] = useState(false);
   const [pw, setPw] = useState({ cur: "", next: "", confirm: "" });
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -54,10 +56,9 @@ export default function ProfilePage() {
       phone: form.phone.trim(),
       avatar: form.avatar,
     };
-    try {
-      localStorage.setItem(profileKey(session.dealerCode), JSON.stringify(clean));
-      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)); // ให้ Topbar อัปเดตทันที
-    } catch {}
+    // เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่กลืน error แล้วขึ้นว่าบันทึกแล้ว
+    void userProfile.save(clean)
+      .catch(e => alert("บันทึกโปรไฟล์ไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     setForm(clean);
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);

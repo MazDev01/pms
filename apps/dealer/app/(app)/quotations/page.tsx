@@ -4,13 +4,14 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor, leadStatusLabel,
-  DEFAULT_ISSUER, ISSUER_KEY,
+  DEFAULT_ISSUER,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { AssigneeAvatars, PersonPicker } from "@pms/shared/components/ui/PersonPicker";
-import { buildQuotationHTML, DEFAULT_DOC, DOC_KEY, loadWordmark, type DocProfile } from "@pms/shared/lib/quotationPrint";
+import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/lib/quotationPrint";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useHQPolicy, useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
@@ -295,6 +296,7 @@ function QuotationsPageInner(){
   const { timeRange, passes } = useFilters();
   // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — VAT/อายุใบมีผลกับการคิดเงิน
   const hqPolicy = useHQPolicy();
+  const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
   const validityDays = useQuoteValidityDays();
   const {
     quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
@@ -336,15 +338,12 @@ function QuotationsPageInner(){
   useEffect(()=>{ if(!toast) return; const t=setTimeout(()=>setToast(null),2600); return ()=>clearTimeout(t); },[toast]);
 
 
-  // ผู้ออกใบเสนอราคา = โปรไฟล์บริษัทของสาขา (แก้ที่หน้า "โปรไฟล์บริษัท") — อ่านจาก localStorage คีย์เดียวกัน
+  // ผู้ออกใบเสนอราคา + ตั้งค่าเอกสาร = ของสาขา อ่านผ่าน repo (โหมด supabase เก็บที่ DB)
+  // เดิมอ่าน localStorage ตรง ๆ → ล้างเบราว์เซอร์/ย้ายเครื่องแล้วหัวกระดาษหายทั้งหมด
   useEffect(() => {
-    const s = localStorage.getItem(ISSUER_KEY);
-    if (s) { try { setIssuer({ ...DEFAULT_ISSUER, ...JSON.parse(s) }); } catch {} }
-    const d = localStorage.getItem(DOC_KEY);
-    // spread ทั้งก้อนทับค่าเริ่มต้น (แบบเดียวกับ loadDoc()) — เดิมหยิบทีละฟิลด์แบบเขียนชื่อไว้ตายตัว
-    // พอหน้าตั้งค่าเพิ่มฟิลด์ใหม่ (termsAndConditions/validityDays) มันเลยตกหล่น ไม่ถึงเอกสารพิมพ์
-    if (d) { try { setDocProfile({ ...DEFAULT_DOC, ...JSON.parse(d) }); } catch {} }
-  }, []);
+    setIssuer(dealerCfg.settings.issuer);
+    setDocProfile(dealerCfg.settings.document);
+  }, [dealerCfg.settings]);
 
   function handleSort(k:SortKey){ if(sortKey===k) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortKey(k);setSortDir("asc");} }
   const SortIcon=({k}:{k:SortKey})=>sortKey===k?(sortDir==="asc"?<ChevronUp size={10} style={{marginLeft:2}}/>:<ChevronDown size={10} style={{marginLeft:2}}/>):<ChevronDown size={10} style={{marginLeft:2,opacity:.3}}/>;
@@ -470,7 +469,7 @@ function QuotationsPageInner(){
     if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
     // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
     // VAT บังคับใช้ค่าของ HQ เสมอ (docProfile มาจาก localStorage ของสาขา — ตัวแทนตั้ง VAT เองไม่ได้)
-    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:hqPolicy.vat},loadWordmark()));
+    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:hqPolicy.vat},dealerCfg.settings.wordmark));
     w.document.close();
   }
 
