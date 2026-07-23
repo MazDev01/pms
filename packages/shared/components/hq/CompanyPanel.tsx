@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
 import { Building2, Check, Save, MapPin, Image as ImageIcon } from "lucide-react";
 import { useReportSection } from "@pms/shared/lib/settingsBus";
 
 // โลโก้ Benjamin เป็นแบรนด์มาตรฐานเดียว (ไฟล์ static) — ไม่มีคีย์เก็บโลโก้ที่อัปโหลดอีกแล้ว
 // ตัดทิ้งตามสเปก Enterprise: การ์ด "สินทรัพย์แบรนด์" (โลโก้ดาวน์โหลด / สี CI / ฟอนต์)
 //   — เป็นการตั้งค่าธีม/สี/ฟอนต์ ซึ่งสเปกสั่งเอาออกทั้งหมด
-const PROFILE_KEY = "hq_company_profile";
+// (PROFILE_KEY ถูกลบ — ข้อมูลบริษัทย้ายไปตาราง hq_company แล้ว อ่าน/เขียนผ่าน repo)
 
 type CompanyProfile = {
   name: string; address: string; taxId: string;
@@ -40,12 +41,20 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
   const [saved, setSaved] = useState(false);
   const [baseline, setBaseline] = useState(""); // สแนปช็อตค่าที่บันทึกล่าสุด → ใช้เทียบ dirty (โหมดฝัง)
 
+  // อ่านผ่าน repo — เดิมอยู่ใน localStorage ของ :3002 เท่านั้น
+  // ล้างเบราว์เซอร์แล้วหาย และตัวแทน (:3001) ไม่มีทางเห็นชื่อบริษัทแม่
   useEffect(() => {
-    let f = PROFILE_DEFAULT;
-    const s = localStorage.getItem(PROFILE_KEY);
-    if (s) try { f = { ...PROFILE_DEFAULT, ...JSON.parse(s) }; } catch {}
-    setForm(f);
-    setBaseline(JSON.stringify({ form: f }));
+    let alive = true;
+    hqCompanyRepo.get()
+      .then(c => {
+        if (!alive) return;
+        // แถวว่าง (ยังไม่เคยกรอก) → ใช้ค่าเริ่มต้นให้ฟอร์มมีอะไรให้แก้
+        const f = c.name ? { ...PROFILE_DEFAULT, ...c } : PROFILE_DEFAULT;
+        setForm(f);
+        setBaseline(JSON.stringify({ form: f }));
+      })
+      .catch(e => console.error("[hqCompany.get]", e));
+    return () => { alive = false; };
   }, []);
 
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
@@ -53,7 +62,8 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
     setSaved(false);
   }
   const save = useCallback(() => {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(form));
+    void hqCompanyRepo.save(form)
+      .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     window.dispatchEvent(new Event("bpms-company-updated")); // ให้ Sidebar HQ อัปเดตชื่อทันที
     setBaseline(JSON.stringify({ form }));
     setSaved(true);

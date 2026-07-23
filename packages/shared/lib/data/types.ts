@@ -20,6 +20,41 @@ export type DealerSettings = {
   notifPrefs: _Notif;   // การแจ้งเตือนที่สาขาเปิด/ปิดเอง
 };
 
+// ข้อมูลบริษัทของสำนักงานใหญ่ (แถวเดียวทั้งระบบ)
+export type HQCompany = {
+  name: string; address: string; taxId: string;
+  phone: string; email: string; website: string;
+};
+
+// โน้ตของลูกค้า — ของแต่ละสาขา
+export type CustomerNote = {
+  id: number;
+  dealerCode?: string;
+  customerId?: number;
+  title: string;
+  content: string;
+  category: string;
+  pinned: boolean;
+  color: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ผู้ใช้ในระบบ (แถวใน profiles) — หน้า /hq/users ใช้แสดง "คนที่ล็อกอินได้จริง"
+export type SystemUser = {
+  id: string;               // = auth user id
+  name: string;
+  email: string;            // อีเมลที่ใช้ล็อกอิน (จาก auth) — แก้จากหน้านี้ไม่ได้
+  phone: string;
+  role: string;             // user_role enum: SUPER_ADMIN | HQ_MANAGEMENT | HQ_STAFF | DEALER_*
+  department: string;
+  dealerCode: string;       // "" = ผู้ใช้ฝั่งสำนักงานใหญ่
+  status: "active" | "inactive";
+  createdAt: string;
+  avatar?: string;
+};
+
 // ขอบเขตข้อมูล — ส่งเข้าทุก query ที่ผูกกับสาขา
 // วันนี้ LocalAdapter ใช้ filter · เฟส B ส่งให้ RLS ที่ Supabase คุมแทน
 export type Scope = { dealerCode?: string; isHQ?: boolean };

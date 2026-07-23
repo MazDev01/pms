@@ -4,13 +4,20 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import {
-  notes, buildLeadTasks, leadStatusLabel, leadStatusColor,
+  buildLeadTasks, leadStatusLabel, leadStatusColor,
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, loadHQPolicy, customerCode,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
   type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile,
-  type AppointmentMock, type NoteMock,
+  type AppointmentMock,
 } from "@pms/shared/lib/mock";
+import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
+
+// หมวดโน้ตจาก DB เป็นข้อความอิสระ — หมวดที่ไม่รู้จักต้องไม่ทำหน้าพัง ให้ใช้สีของ "ทั่วไป"
+const noteColorOf = (cat: string) =>
+  (noteCategoryColor as Record<string, { bg: string; text: string; dot: string }>)[cat] ?? noteCategoryColor["ทั่วไป"];
+import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import type { CustomerNote } from "@pms/shared/lib/data/types";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
@@ -347,7 +354,9 @@ export default function CustomersPage(){
     updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
-  const hqPolicy = useHQPolicy(); // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
+  const userProfile = useUserProfile();
+  const hqPolicy = useHQPolicy();
+  const customerNotes = useCustomerNotes(userProfile.profile.name); // โน้ตลูกค้าผ่าน repo (ผู้เขียน = ผู้ใช้ที่ล็อกอิน) // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
   // undefined = ของ CNX (สมุดงานเดิม) · ที่เหลือกรองด้วย dealerCode ตรง ๆ
   const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomers, currentDealer.code]);
@@ -435,7 +444,7 @@ export default function CustomersPage(){
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   const [previewFile, setPreviewFile] = useState<DealerFile | null>(null);
   const [viewAppt, setViewAppt] = useState<AppointmentMock | null>(null);
-  const [viewNote, setViewNote] = useState<NoteMock | null>(null);
+  const [viewNote, setViewNote] = useState<CustomerNote | null>(null);
   useEffect(() => {
     // ไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB)
     const sync = () => { filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles).catch(() => {}); };
@@ -560,8 +569,9 @@ export default function CustomersPage(){
   // ลีดทุกสถานะของลูกค้ารายนี้ — ใช้ผูกใบเสนอราคากลับไปหาลีด (คนละชุดกับการ์ด "งานขายทั้งหมด")
   const customerDeals = selected ? leads.filter(l=>l.customerId===selected.id||l.company===selected.company) : [];
   const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company) : [];
-  // โน้ตยังไม่มีที่เก็บจริงใน DB — โหมด supabase จึงต้องไม่เอาชุดตัวอย่างมาแปะกับลูกค้าจริง (ห้ามกุข้อมูล)
-  const relatedNotes        = selected && DATA_SOURCE !== "supabase" ? notes.filter(n=>n.customerId===selected.id) : [];
+  // โน้ตของลูกค้ารายนี้ — จากตาราง customer_notes (ของสาขาตัวเอง)
+  // เดิมไม่มีที่เก็บจริง จึงต้องปิดแท็บไว้ในโหมด supabase · ตอนนี้จดได้จริงและอยู่ข้ามเครื่อง
+  const relatedNotes        = selected ? customerNotes.notes.filter(n=>n.customerId===selected.id) : [];
 
   // บันทึกการแก้ไขในตัว (จากแท็บ "ข้อมูล" ของโมดัลรายละเอียด)
   function saveInline(form: CustomerForm){
@@ -1063,7 +1073,7 @@ export default function CustomersPage(){
                   ):(
                     <div style={{display:"flex",flexDirection:"column",gap:8}}>
                       {relatedNotes.map(n=>{
-                        const c=noteCategoryColor[n.category];
+                        const c=noteColorOf(n.category);
                         return (
                           <button key={n.id} type="button" onClick={()=>setViewNote(n)} title="กดเพื่อดูโน้ตเต็ม"
                             style={{padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
@@ -1640,7 +1650,7 @@ export default function CustomersPage(){
               <button onClick={()=>setViewNote(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:7,width:28,height:28,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={13}/></button>
             </div>
             <div style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:8,borderBottom:`1px solid #f0f4f8`,flexWrap:"wrap"}}>
-              <span className="badge" style={{background:noteCategoryColor[viewNote.category].bg,color:noteCategoryColor[viewNote.category].text}}>{viewNote.category}</span>
+              <span className="badge" style={{background:noteColorOf(viewNote.category).bg,color:noteColorOf(viewNote.category).text}}>{viewNote.category}</span>
               <span style={{fontSize:"0.68rem",color:MUTED}}>โดย {viewNote.author}</span>
               <span style={{fontSize:"0.68rem",color:MUTED,marginLeft:"auto"}}>แก้ไขล่าสุด {viewNote.updatedAt}</span>
             </div>

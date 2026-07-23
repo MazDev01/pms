@@ -5,7 +5,7 @@ import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap,
   AuditEntry, LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope,
-  DealerSettings, UserProfile,
+  DealerSettings, UserProfile, HQCompany, CustomerNote, SystemUser,
 } from "./types";
 
 // ── โดเมนอ้างอิง/ตั้งค่า (ห่อ loader เดิมได้ทันที — Step 0) ──
@@ -58,6 +58,33 @@ export interface DealerSettingsRepo {
 export interface ProfileRepo {
   get(): Promise<UserProfile | null>;
   save(p: UserProfile): Promise<void>;
+}
+
+// ── ข้อมูลบริษัทของสำนักงานใหญ่ — อ่านได้ทุกคน เขียนเฉพาะผู้มีสิทธิ์แก้ข้อมูลกลาง ──
+export interface HQCompanyRepo {
+  get(): Promise<HQCompany>;
+  save(c: HQCompany): Promise<void>;
+}
+
+// ── โน้ตลูกค้า (ของแต่ละสาขา) ──
+export interface NotesRepo {
+  list(scope?: Scope): Promise<CustomerNote[]>;
+  create(n: Omit<CustomerNote, "id">): Promise<CustomerNote>;
+  update(n: CustomerNote): Promise<CustomerNote>;
+  remove(id: number): Promise<void>;
+}
+
+// ── ผู้ใช้ในระบบ (หน้า /hq/users) ──
+// อ่านได้ = HQ · แก้บทบาท/สถานะ/แผนก ได้เฉพาะ SUPER_ADMIN (บังคับที่ RLS)
+//
+// ⚠️ สร้าง/ลบบัญชีจริงทำจากฝั่ง client ไม่ได้ — ต้องใช้ service_role ซึ่งห้ามอยู่ในเบราว์เซอร์
+//    (แอปจึงต้องปิดปุ่มพวกนั้นในโหมดจริง ไม่ใช่ปล่อยให้กดแล้วเข้าใจว่าสำเร็จ)
+export interface UsersRepo {
+  list(): Promise<SystemUser[]>;
+  /** แก้ได้เฉพาะ บทบาท/สถานะ/แผนก/ชื่อ — อีเมลล็อกอินอยู่ที่ระบบยืนยันตัวตน */
+  update(u: Pick<SystemUser, "id" | "name" | "role" | "department" | "status">): Promise<void>;
+  /** สร้าง/ลบบัญชีได้ไหมในโหมดนี้ — โหมดเดโมได้ · โหมดจริงต้องทำที่ระบบยืนยันตัวตน */
+  canCreate(): boolean;
 }
 
 export interface AuditRepo {
@@ -145,6 +172,9 @@ export interface DataAdapter {
   settings: SettingsRepo;
   dealerSettings: DealerSettingsRepo;
   profile: ProfileRepo;
+  hqCompany: HQCompanyRepo;
+  notes: NotesRepo;
+  users: UsersRepo;
   audit: AuditRepo;
   leads: LeadsRepo;
   quotations: QuotationsRepo;

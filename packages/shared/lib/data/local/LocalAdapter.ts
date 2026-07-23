@@ -13,7 +13,7 @@ import {
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
-import { profileKey, PROFILE_UPDATED_EVENT, type UserProfile } from "@pms/shared/lib/mock";
+import { profileKey, PROFILE_UPDATED_EVENT, sessions, type UserProfile } from "@pms/shared/lib/mock";
 
 // โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
 function currentDealerCode(): string {
@@ -28,7 +28,12 @@ function firePropfile() {
   try { window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)); } catch {}
 }
 import type { DataAdapter } from "../ports";
-import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings } from "../types";
+import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser } from "../types";
+
+const HQ_COMPANY_KEY = "hq_company_profile";
+const NOTES_KEY = "customer_notes_v1";
+const HQ_USERS_KEY = "hq_users_v4";
+const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC, DOC_KEY, WORDMARK_KEY } from "@pms/shared/lib/quotationPrint";
 
@@ -146,6 +151,52 @@ export const LocalAdapter: DataAdapter = {
   profile: {
     get: () => ok(readKey<UserProfile | null>(profileKey(currentDealerCode()), null)),
     save: (p) => { writeKey(profileKey(currentDealerCode()), p); firePropfile(); return done(); },
+  },
+  // ข้อมูลบริษัท HQ — โหมด local ใช้คีย์เดิม (ค่าที่เคยตั้งไม่หาย)
+  hqCompany: {
+    get: () => ok(readKey<HQCompany>(HQ_COMPANY_KEY, EMPTY_HQ_COMPANY)),
+    save: (c) => { writeKey(HQ_COMPANY_KEY, c); fireSettings(); return done(); },
+  },
+  // โน้ตลูกค้า — โหมด local เก็บเป็นอาร์เรย์เดียวในเครื่อง (เดิมไม่มีที่เก็บเลย)
+  notes: {
+    list: (scope) => ok(scopeByDealer(readKey<CustomerNote[]>(NOTES_KEY, []), scope)),
+    create: (n) => {
+      const all = readKey<CustomerNote[]>(NOTES_KEY, []);
+      const row = { ...n, id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1 } as CustomerNote;
+      writeKey(NOTES_KEY, [row, ...all]);
+      return ok(row);
+    },
+    update: (n) => {
+      writeKey(NOTES_KEY, readKey<CustomerNote[]>(NOTES_KEY, []).map(x => x.id === n.id ? n : x));
+      return ok(n);
+    },
+    remove: (id) => {
+      writeKey(NOTES_KEY, readKey<CustomerNote[]>(NOTES_KEY, []).filter(x => x.id !== id));
+      return done();
+    },
+  },
+  // โหมดเดโม: รายชื่ออยู่ในเครื่อง สร้าง/ลบได้ (ไม่มีระบบยืนยันตัวตนจริงให้ผูก)
+  users: {
+    // โหมดเดโม: ผู้ใช้ที่ "ล็อกอินได้จริง" คือบัญชีเดโมใน sessions — ไม่ใช่รายชื่อที่กุขึ้นมา
+    // (ผู้ใช้ที่เพิ่มจากหน้าจอเก็บทับลงคีย์เดิม)
+    list: () => {
+      const saved = readKey<SystemUser[]>(HQ_USERS_KEY, []);
+      if (saved.length) return ok(saved);
+      const demo: SystemUser[] = Object.entries(sessions)
+        .filter(([, v]) => !v.dealerCode)
+        .map(([key, v]) => ({
+          id: `demo-${key}`, name: v.name, email: "", phone: "",
+          role: v.role, department: "", dealerCode: "",
+          status: "active" as const, createdAt: "", avatar: undefined,
+        }));
+      return ok(demo);
+    },
+    update: (u) => {
+      const all = readKey<SystemUser[]>(HQ_USERS_KEY, []);
+      writeKey(HQ_USERS_KEY, all.map(x => x.id === u.id ? { ...x, ...u } : x));
+      return done();
+    },
+    canCreate: () => true,
   },
   audit: {
     list: () => ok(loadAudit()),

@@ -15,8 +15,10 @@ import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, DealerLeadRulesMap, LeadRules,
   AuditEntry, LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope,
-  DealerSettings, UserProfile,
+  DealerSettings, UserProfile, HQCompany, CustomerNote, SystemUser,
 } from "../types";
+
+const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 
 const sb = () => getSupabase();
 type Row = Record<string, unknown>;
@@ -352,6 +354,41 @@ export const SupabaseAdapter: DataAdapter = {
         .update({ name: p.name, phone: p.phone, contact_email: p.email, avatar: p.avatar ?? null })
         .eq("id", id));
     },
+  },
+  hqCompany: {
+    get: async () => (await one<HQCompany>("hq_company")) ?? EMPTY_HQ_COMPANY,
+    save: (c) => must(sb().from("hq_company").upsert({ id: 1, ...toSnake(c as unknown as Row) })),
+  },
+  notes: {
+    list: (scope) => selectScoped<CustomerNote>("customer_notes", scope),
+    create: (n) => insertRow<CustomerNote>("customer_notes", n as CustomerNote),
+    update: (n) => updateRow<CustomerNote>("customer_notes", n.id, n),
+    remove: (id) => must(sb().from("customer_notes").delete().eq("id", id)),
+  },
+  users: {
+    list: async () => {
+      // อีเมลล็อกอินอยู่ใน auth.users ซึ่ง client อ่านไม่ได้ (ต้อง service_role)
+      // → แสดง contact_email ที่ผู้ใช้ตั้งเอง ไม่มีก็ขึ้น "—" ไม่กุอีเมลขึ้นมา
+      const rows = await pageAll((from, to) =>
+        sb().from("profiles").select("*").order("created_at", { ascending: true }).range(from, to));
+      return rows.map(r => ({
+        id: String(r.id),
+        name: (r.name as string) || "",
+        email: (r.contact_email as string) || "",
+        phone: (r.phone as string) || "",
+        role: (r.role as string) || "",
+        department: (r.department as string) || "",
+        dealerCode: (r.dealer_code as string) || "",
+        status: ((r.status as string) === "inactive" ? "inactive" : "active") as SystemUser["status"],
+        createdAt: (r.created_at as string) || "",
+        avatar: (r.avatar as string) || undefined,
+      }));
+    },
+    update: (u) => must(sb().from("profiles")
+      .update({ name: u.name, role: u.role, department: u.department, status: u.status })
+      .eq("id", u.id)),
+    // สร้าง/ลบบัญชีต้องใช้ service_role — ห้ามอยู่ฝั่ง client เด็ดขาด
+    canCreate: () => false,
   },
   audit: {
     // อ่านเรียงล่าสุดก่อน (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ

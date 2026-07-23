@@ -3,12 +3,15 @@
 // ─── HQ · ผู้ใช้งานและสิทธิ์ (HQ Users เท่านั้น) ─────────────────────────────────
 // บริหารผู้ใช้ของ "สำนักงานใหญ่" เท่านั้น — ไม่แสดงผู้ใช้ Dealer (ดีลเลอร์จัดการใน Workspace ตัวเอง
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
+import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
+import { users as usersRepo } from "@pms/shared/lib/data";
+import type { UserRole } from "@pms/shared/lib/mock";
 import {
   Users, Shield, Check, X, Plus, Search, KeyRound, Copy, RefreshCw, MoreHorizontal,
   Eye, Pencil, Power, Clock, LogIn, UserPlus, Phone, ImagePlus,
@@ -20,20 +23,21 @@ const BORDER = "#e5e7eb";
 const MUTED = "#6b7280";
 const MOCK_TODAY = "30 มิ.ย. 2569";
 
-// ── Roles (HQ เท่านั้น · 5) ──────────────────────────────────────────────────────
-type RoleKey = "super_admin" | "executive" | "sales_manager" | "central_sales" | "system_officer";
+// ── Roles (HQ เท่านั้น · 3 บทบาทจริงในระบบ) ─────────────────────────────────────
+// บทบาทต้องเป็นชุดเดียวกับที่ระบบบังคับใช้จริง (user_role ใน DB + ROLE_PERMISSIONS)
+// เดิมหน้านี้มีคำศัพท์บทบาทของตัวเอง 5 แบบ (sales_manager / central_sales / …)
+// ซึ่งไม่มีอยู่จริงในระบบเลย → ตั้งบทบาทให้ใครก็ไม่มีผลกับสิทธิ์ที่ได้จริง
+type RoleKey = "SUPER_ADMIN" | "HQ_MANAGEMENT" | "HQ_STAFF";
 type UserStatus = "active" | "inactive";
 const ROLES: { key: RoleKey; en: string; th: string; tone: string }[] = [
-  { key: "super_admin",    en: "Super Admin",   th: "Super Admin",       tone: "#003366" },
-  { key: "executive",      en: "Executive",     th: "ผู้บริหาร",           tone: "#7c3aed" },
-  { key: "sales_manager",  en: "Sales Manager", th: "ผู้จัดการฝ่ายขาย",    tone: "#0369a1" },
-  { key: "central_sales",  en: "Central Sales", th: "ฝ่ายขายส่วนกลาง",     tone: "#0891b2" },
-  { key: "system_officer", en: "System Officer", th: "เจ้าหน้าที่ระบบ",     tone: "#d97706" },
+  { key: "SUPER_ADMIN",   en: "Super Admin",  th: "ผู้ดูแลระบบ",        tone: "#003366" },
+  { key: "HQ_MANAGEMENT", en: "HQ Management", th: "ผู้บริหารสำนักงานใหญ่", tone: "#7c3aed" },
+  { key: "HQ_STAFF",      en: "HQ Staff",      th: "เจ้าหน้าที่สำนักงานใหญ่", tone: "#0891b2" },
 ];
 const ROLE_BY_KEY = Object.fromEntries(ROLES.map(r => [r.key, r])) as Record<RoleKey, typeof ROLES[number]>;
 const DEPARTMENTS = ["บริหาร", "ฝ่ายขาย", "ปฏิบัติการ", "ไอทีและระบบ", "การเงิน"];
 const defaultDept = (role: RoleKey): string =>
-  role === "executive" ? "บริหาร" : role === "sales_manager" || role === "central_sales" ? "ฝ่ายขาย" : "ไอทีและระบบ";
+  role === "HQ_MANAGEMENT" ? "บริหาร" : role === "HQ_STAFF" ? "ฝ่ายขาย" : "ไอทีและระบบ";
 
 // ── Permission model: role → module → level → CRUD-E ────────────────────────────
 type Cap = { v: boolean; c: boolean; e: boolean; d: boolean; x: boolean };
@@ -46,36 +50,40 @@ const LEVEL_CAP: Record<string, Cap> = {
 };
 // โมดูลในตารางสิทธิ์ = 7 หัวข้อตามสเปก Enterprise (ไม่มีเมนู "ความปลอดภัย" แยก)
 const MODULE_LIST = ["แดชบอร์ด", "ตัวแทน", "ลูกค้าเป้าหมาย", "ลูกค้า", "ใบเสนอราคา", "รายงาน", "ตั้งค่า"];
-const ROLE_MODULES: Record<RoleKey, Partial<Record<string, keyof typeof LEVEL_CAP>>> = {
-  super_admin: Object.fromEntries(MODULE_LIST.map(m => [m, "full"])),
-  executive: Object.fromEntries(MODULE_LIST.map(m => [m, m === "ตั้งค่า" ? "none" : "view"])),
-  sales_manager: { "แดชบอร์ด": "view", "ตัวแทน": "view", "ลูกค้าเป้าหมาย": "manage", "ลูกค้า": "manage", "ใบเสนอราคา": "manage", "รายงาน": "manage" },
-  central_sales: { "แดชบอร์ด": "view", "ลูกค้าเป้าหมาย": "edit", "ลูกค้า": "edit", "ใบเสนอราคา": "edit" },
-  system_officer: { "แดชบอร์ด": "view", "ตั้งค่า": "full" },
+// ตารางสิทธิ์คำนวณจาก ROLE_PERMISSIONS ซึ่งเป็นชุดเดียวกับที่ RLS ที่ DB บังคับ
+//
+// เดิมตารางนี้เขียนไว้ตายตัวและ "ขัดกับของจริง" — บอกว่าผู้จัดการฝ่ายขายจัดการลีด/ลูกค้า/
+// ใบเสนอราคาได้ ทั้งที่ทุกบทบาทฝั่งสำนักงานใหญ่เขียนงานขายไม่ได้เลย (ดู C3)
+// ใครอ่านตารางนี้แล้วเชื่อ จะเข้าใจสิทธิ์ของทีมตัวเองผิดทั้งหมด
+const MODULE_PERMS: Record<string, { read: Permission; create?: Permission; update?: Permission; del?: Permission }> = {
+  "แดชบอร์ด":       { read: "reports:view" },
+  "ตัวแทน":         { read: "reports:view", create: "dealers:manage", update: "dealers:manage", del: "dealers:manage" },
+  "ลูกค้าเป้าหมาย": { read: "leads:read", create: "leads:create", update: "leads:update", del: "leads:delete" },
+  "ลูกค้า":         { read: "customers:read", create: "customers:create", update: "customers:update", del: "customers:delete" },
+  "ใบเสนอราคา":     { read: "quotations:read", create: "quotations:create", update: "quotations:update", del: "quotations:delete" },
+  "รายงาน":         { read: "reports:view" },
+  "ตั้งค่า":        { read: "hq:all_data", create: "catalog:edit", update: "catalog:edit", del: "catalog:edit" },
 };
-const capOf = (role: RoleKey, module: string): Cap => LEVEL_CAP[ROLE_MODULES[role][module] ?? "none"];
+const capOf = (role: RoleKey, module: string): Cap => {
+  const m = MODULE_PERMS[module];
+  if (!m) return LEVEL_CAP.none;
+  const has = (perm?: Permission) => !!perm && hasPermission(role as UserRole, perm);
+  const v = has(m.read);
+  return { v, c: v && has(m.create), e: v && has(m.update), d: v && has(m.del), x: v };
+};
 const roleSummary: Record<RoleKey, string> = {
-  super_admin: "จัดการทุกอย่างในระบบ",
-  executive: "ดูข้อมูลทั้งหมด · ไม่มีสิทธิ์จัดการระบบ",
-  sales_manager: "จัดการฝ่ายขาย · ดูแดชบอร์ด",
-  central_sales: "จัดการลูกค้าเป้าหมาย · ลูกค้า · ใบเสนอราคา",
-  system_officer: "ตั้งค่าระบบ · จัดการผู้ใช้",
+  SUPER_ADMIN:   "จัดการทุกอย่างในระบบ · แก้ข้อมูลกลางและผู้ใช้ได้",
+  HQ_MANAGEMENT: "ดูงานขายทั้งเครือ · แก้ข้อมูลกลาง (แคตตาล็อก/ตัวแทน/นโยบาย) ได้",
+  HQ_STAFF:      "ดูงานขายทั้งเครือได้อย่างเดียว · แก้ข้อมูลกลางไม่ได้",
 };
 
 // ไม่มีฟิลด์ "เข้าใช้ล่าสุด" — ระบบไม่ได้บันทึกเวลาเข้าสู่ระบบจริง (เดิมเป็นข้อความ seed ตายตัวที่ไม่มีอะไรอัปเดต)
 type AppUser = {
-  id: number; name: string; email: string; phone: string; role: RoleKey; department: string;
+  id: string; name: string; email: string; phone: string; role: RoleKey; department: string;
   status: UserStatus; createdAt: string; avatar?: string;
 };
-const USERS_INIT: AppUser[] = [
-  { id: 1, name: "อารยา สุขวิเศษ",   email: "araya@benjamin.co.th",   phone: "081-234-5678", role: "super_admin",    department: "ไอทีและระบบ", status: "active",   createdAt: "1 ม.ค. 2568" },
-  { id: 2, name: "วิชัย ประสิทธิ์",   email: "wichai@benjamin.co.th",  phone: "081-000-1111", role: "executive",      department: "บริหาร",      status: "active",   createdAt: "1 ม.ค. 2568" },
-  { id: 3, name: "กิตติ พรมมา",       email: "kitti@benjamin.co.th",   phone: "082-345-6789", role: "sales_manager",  department: "ฝ่ายขาย",     status: "active",   createdAt: "12 ม.ค. 2568" },
-  { id: 4, name: "ประภัสสร ดาวรุ่ง",  email: "prapas@benjamin.co.th",  phone: "083-456-7890", role: "central_sales",  department: "ฝ่ายขาย",     status: "active",   createdAt: "3 ก.พ. 2568" },
-  { id: 5, name: "วีรพล มั่นคง",      email: "weerapol@benjamin.co.th", phone: "084-567-8901", role: "central_sales", department: "ฝ่ายขาย",     status: "active",   createdAt: "20 ก.พ. 2568" },
-  { id: 6, name: "สุดา เจริญพร",      email: "suda@benjamin.co.th",    phone: "085-678-9012", role: "system_officer", department: "ไอทีและระบบ", status: "active",   createdAt: "5 มี.ค. 2568" },
-  { id: 7, name: "มานพ ทองดี",        email: "manop@benjamin.co.th",   phone: "086-789-0123", role: "sales_manager",  department: "ฝ่ายขาย",     status: "inactive", createdAt: "1 เม.ย. 2568" },
-];
+// (USERS_INIT ถูกลบ — เดิมเป็นผู้ใช้สมมติ 7 คนที่ไม่มีอยู่จริงในระบบยืนยันตัวตน
+//  หน้านี้เลยบริหารรายชื่อที่ล็อกอินไม่ได้ และลบชื่อออกก็ไม่ได้ตัดสิทธิ์ใครจริง ๆ)
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 function genTempPassword(seed: string): string {
@@ -118,7 +126,7 @@ type UserForm = { firstName: string; lastName: string; email: string; phone: str
 function UserDialog({ initial, onSave, onClose }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">) => void; onClose: () => void }) {
   const [f, setF] = useState<UserForm>(() => {
     if (initial) { const [fn, ...ln] = initial.name.split(" "); return { firstName: fn, lastName: ln.join(" "), email: initial.email, phone: initial.phone, role: initial.role, department: initial.department, tempPassword: "", status: initial.status, avatar: initial.avatar }; }
-    return { firstName: "", lastName: "", email: "", phone: "", role: "central_sales", department: "ฝ่ายขาย", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
+    return { firstName: "", lastName: "", email: "", phone: "", role: "HQ_STAFF", department: "ฝ่ายขาย", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
   });
   const fileRef = useRef<HTMLInputElement>(null);
   async function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) { const file = e.target.files?.[0]; e.target.value = ""; if (!file) return; setF(p => ({ ...p, avatar: undefined })); const url = await fileToResizedDataURL(file, 160); setF(p => ({ ...p, avatar: url })); }
@@ -181,7 +189,23 @@ type SortKey = "name" | "createdAt";
 const PAGE_SIZE = 8;
 
 export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
-  const [users, setUsers] = usePersistentState<AppUser[]>("hq_users_v4", USERS_INIT);
+  // ผู้ใช้จริงในระบบ (ตาราง profiles) — เฉพาะฝั่งสำนักงานใหญ่ (dealerCode ว่าง)
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const canCreate = usersRepo.canCreate();
+  useEffect(() => {
+    let alive = true;
+    usersRepo.list()
+      .then(rows => {
+        if (!alive) return;
+        setUsers(rows.filter(u => !u.dealerCode).map(u => ({
+          id: u.id, name: u.name, email: u.email, phone: u.phone,
+          role: (ROLE_BY_KEY[u.role as RoleKey] ? u.role : "HQ_STAFF") as RoleKey,
+          department: u.department, status: u.status, createdAt: u.createdAt, avatar: u.avatar,
+        })));
+      })
+      .catch(e => console.error("[users.list]", e));
+    return () => { alive = false; };
+  }, []);
   const logAudit = useAuditLogger();
 
   const [q, setQ] = useState("");
@@ -196,7 +220,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [detailUser, setDetailUser] = useState<AppUser | null>(null);
   const [resetInfo, setResetInfo] = useState<{ user: AppUser; pw: string } | null>(null);
   const [menu, setMenu] = useState<{ user: AppUser; x: number; y: number } | null>(null);
-  const [matrixRole, setMatrixRole] = useState<RoleKey>("super_admin");
+  const [matrixRole, setMatrixRole] = useState<RoleKey>("SUPER_ADMIN");
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -218,10 +242,24 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const curPage = Math.min(page, pageCount);
   const pageRows = filtered.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
 
-  const update = (id: number, patch: Partial<AppUser>) => setUsers(prev => prev.map(u => u.id === id ? { ...u, ...patch } : u));
-  function saveUser(id: number | null, data: Omit<AppUser, "id" | "createdAt">) {
-    if (id !== null) { update(id, data); logAudit("แก้ไขผู้ใช้", data.email); }
-    else { const nid = users.reduce((m, u) => Math.max(m, u.id), 0) + 1; setUsers(prev => [{ id: nid, ...data, createdAt: MOCK_TODAY }, ...prev]); logAudit("เพิ่มผู้ใช้ HQ", data.email); }
+  const update = (id: string, patch: Partial<AppUser>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...patch } : u));
+    const cur = users.find(u => u.id === id);
+    if (!cur) return;
+    const next = { ...cur, ...patch };
+    void usersRepo.update({ id, name: next.name, role: next.role, department: next.department, status: next.status })
+      .catch(e => alert("บันทึกผู้ใช้ไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+  };
+  function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
+    if (id !== null) { update(id, data); logAudit("แก้ไขผู้ใช้", data.email); return; }
+    // สร้างบัญชีใหม่ต้องผ่านระบบยืนยันตัวตน (ต้องใช้ service_role ซึ่งอยู่ฝั่งเบราว์เซอร์ไม่ได้)
+    if (!canCreate) {
+      alert("เพิ่มผู้ใช้จากหน้านี้ไม่ได้\n\nบัญชีเข้าระบบถูกจัดการโดยระบบยืนยันตัวตน — ต้องสร้างบัญชีที่นั่นก่อน แล้วชื่อจะขึ้นในหน้านี้เอง");
+      return;
+    }
+    const nid = String(Date.now());
+    setUsers(prev => [{ id: nid, ...data, createdAt: MOCK_TODAY }, ...prev]);
+    logAudit("เพิ่มผู้ใช้ HQ", data.email);
   }
   function toggleStatus(u: AppUser) { update(u.id, { status: u.status === "active" ? "inactive" : "active" }); logAudit(u.status === "active" ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้", u.email); }
   function resetPassword(u: AppUser) { const pw = genTempPassword(u.email + Date.now()); setResetInfo({ user: u, pw }); logAudit("รีเซ็ตรหัสผ่านผู้ใช้", u.email); }

@@ -13,11 +13,20 @@ import { SUPABASE_URL, SUPABASE_ANON, RYG, CNX, ADMIN, skipReason, type Account 
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 
-async function signIn(who: Account): Promise<SupabaseClient> {
-  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { error } = await sb.auth.signInWithPassword(who);
-  if (error) throw new Error(`ล็อกอิน ${who.email} ไม่ผ่าน: ${error.message}`);
-  return sb;
+// ใช้ client เดิมซ้ำต่อหนึ่งบัญชี — ชุดนี้มีหลายสิบเทสต์ ถ้าล็อกอินใหม่ทุกครั้ง
+// Supabase Auth จะตอบ "Request rate limit reached" แล้วเทสต์ตกแบบสุ่ม (ไม่ใช่บั๊กของแอป)
+const clients = new Map<string, Promise<SupabaseClient>>();
+function signIn(who: Account): Promise<SupabaseClient> {
+  const cached = clients.get(who.email);
+  if (cached) return cached;
+  const p = (async () => {
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await sb.auth.signInWithPassword(who);
+    if (error) throw new Error(`ล็อกอิน ${who.email} ไม่ผ่าน: ${error.message}`);
+    return sb;
+  })();
+  clients.set(who.email, p);
+  return p;
 }
 
 // PostgREST ปฏิเสธการเขียนที่ผิด RLS ได้สองแบบ: ตอบ error ตรง ๆ หรือเงียบแล้วไม่มีแถวถูกแตะ
@@ -321,5 +330,51 @@ test("[profile] ผู้ใช้แก้โปรไฟล์ตัวเอ�
     expect(after.dealer_code).toBe(before!.dealer_code);
   } finally {
     await sb.from("profiles").update({ name: before!.name, phone: "" }).eq("id", uid!);
+  }
+});
+
+test("[notes] โน้ตลูกค้าเก็บที่ DB · สาขาอื่นเห็นไม่ได้ · HQ อ่านได้แต่เขียนไม่ได้ (0028)", async () => {
+  const ryg = await signIn(RYG);
+  const cnx = await signIn(CNX);
+  const hq  = await signIn(ADMIN);
+  let id: number | null = null;
+  try {
+    const ins = await ryg.from("customer_notes")
+      .insert({ dealer_code: "RYG", customer_id: 1, title: "โน้ตทดสอบ", content: "เนื้อหา", author: "อัตโนมัติ" })
+      .select().single();
+    expect(ins.error, `สร้างโน้ตไม่ได้: ${JSON.stringify(ins.error)}`).toBeNull();
+    id = (ins.data as { id: number }).id;
+
+    // สาขาอื่นมองไม่เห็นและแก้ไม่ได้
+    expect(((await cnx.from("customer_notes").select("id").eq("id", id)).data ?? []).length,
+      "CNX ต้องมองไม่เห็นโน้ตของ RYG").toBe(0);
+    const hack = await cnx.from("customer_notes").update({ content: "โดนแก้" }).eq("id", id).select();
+    expect(wasBlocked(hack), "CNX ต้องแก้โน้ตของ RYG ไม่ได้").toBe(true);
+
+    // HQ อ่านได้ทั้งเครือ แต่เขียนงานขายไม่ได้ (นิยามเดียวกับลีด/ใบเสนอราคา)
+    expect(((await hq.from("customer_notes").select("id").eq("id", id)).data ?? []).length).toBe(1);
+    const byHQ = await hq.from("customer_notes").update({ content: "HQ แก้" }).eq("id", id).select();
+    expect(wasBlocked(byHQ), "HQ ต้องแก้โน้ตของตัวแทนไม่ได้").toBe(true);
+  } finally {
+    if (id !== null) await ryg.from("customer_notes").delete().eq("id", id);
+  }
+});
+
+test("[hq-company] ข้อมูลบริษัท HQ อ่านได้ทุกคน · เขียนเฉพาะผู้มีสิทธิ์ข้อมูลกลาง (0028)", async () => {
+  const hq = await signIn(ADMIN);
+  const dealer = await signIn(RYG);
+  const before = (await hq.from("hq_company").select("name").eq("id", 1)).data?.[0] as { name: string };
+  expect(before, "ต้องมีแถวข้อมูลบริษัท (0028 seed ให้)").toBeTruthy();
+  try {
+    // ตัวแทนอ่านได้ (อ้างอิงชื่อบริษัทแม่) แต่แก้ไม่ได้
+    expect(((await dealer.from("hq_company").select("name").eq("id", 1)).data ?? []).length).toBe(1);
+    const blocked = await dealer.from("hq_company").update({ name: "ตัวแทนแก้" }).eq("id", 1).select();
+    expect(wasBlocked(blocked), "ตัวแทนต้องแก้ข้อมูลบริษัท HQ ไม่ได้").toBe(true);
+
+    const ok = await hq.from("hq_company").update({ name: "ทดสอบอัตโนมัติ" }).eq("id", 1).select();
+    expect(ok.error).toBeNull();
+    expect(ok.data?.length).toBe(1);
+  } finally {
+    await hq.from("hq_company").update({ name: before.name }).eq("id", 1);
   }
 });

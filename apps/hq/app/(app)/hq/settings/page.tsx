@@ -23,7 +23,9 @@ import { useRouter } from "next/navigation";
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
-import { settings as settingsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
+import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
+import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import type { HQCompany } from "@pms/shared/lib/data/types";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
   HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
@@ -32,6 +34,7 @@ import {
   HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, loadHQDealers,
   HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE,
   HQ_SYSTEM_KEY, DEFAULT_QUOTE_NUMBERING, HQ_JOURNEY_KEY, LOST_REASONS,
+  type SolutionProduct,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
   type HQAlertKey, type DealerRow, type LeadStatus,
 } from "@pms/shared/lib/mock";
@@ -523,29 +526,76 @@ const SETTINGS_KEYS = [
 ];
 function BackupCard() {
   const toast = useToast();
-  function exportAll() {
-    const out: Record<string, unknown> = {};
-    SETTINGS_KEYS.forEach(k => { try { const s = localStorage.getItem(k); if (s) out[k] = JSON.parse(s); } catch {} });
-    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "benjamin-settings-backup.json"; a.click(); URL.revokeObjectURL(a.href);
-    toast("ส่งออกการตั้งค่าแล้ว");
+
+  // สำรอง/กู้คืน "ค่าจริงที่ระบบใช้อยู่" — อ่านผ่าน repo ทั้งหมด
+  // เดิมอ่าน/เขียน localStorage ตรง ๆ ซึ่งพังไปแล้วตั้งแต่ค่าพวกนี้ย้ายเข้า DB:
+  //   ส่งออกได้ไฟล์ว่าง · นำเข้าไม่มีผล · "คืนค่าเริ่มต้น" ขึ้น confirm แล้วไม่เกิดอะไรขึ้น
+  async function exportAll() {
+    try {
+      const [policy, targets, notifRules, lostReasons, company, dealers, catalog] = await Promise.all([
+        settingsRepo.getPolicy(), settingsRepo.getTargets(), settingsRepo.getNotifRules(),
+        settingsRepo.getLostReasons(), hqCompanyRepo.get(), dealersRepo.list(), catalogRepo.list(),
+      ]);
+      const out = { version: 1, exportedAt: APP_NOW_ISO, policy, targets, notifRules, lostReasons, company, dealers, catalog };
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "benjamin-settings-backup.json"; a.click();
+      URL.revokeObjectURL(a.href);
+      toast("ส่งออกการตั้งค่าแล้ว");
+    } catch (e) {
+      toast("ส่งออกไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e)));
+    }
   }
+
   function importAll(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
     const r = new FileReader();
-    r.onload = () => { try { const obj = JSON.parse(String(r.result)); Object.entries(obj).forEach(([k, v]) => { if (SETTINGS_KEYS.includes(k)) localStorage.setItem(k, JSON.stringify(v)); }); toast("นำเข้าสำเร็จ — กำลังโหลดใหม่"); setTimeout(() => location.reload(), 900); } catch { toast("ไฟล์ไม่ถูกต้อง"); } };
+    r.onload = async () => {
+      let obj: Record<string, unknown>;
+      try { obj = JSON.parse(String(r.result)) as Record<string, unknown>; }
+      catch { toast("ไฟล์ไม่ถูกต้อง"); return; }
+      // เขียนเฉพาะส่วนที่มีในไฟล์ — ไฟล์เก่าที่ไม่มีบางหัวข้อต้องไม่ไปล้างของที่ตั้งไว้แล้ว
+      try {
+        const jobs: Promise<unknown>[] = [];
+        if (obj.policy)       jobs.push(settingsRepo.savePolicy(obj.policy as HQPolicy));
+        if (obj.targets)      jobs.push(settingsRepo.saveTargets(obj.targets as HQTargets));
+        if (obj.notifRules)   jobs.push(settingsRepo.saveNotifRules(obj.notifRules as HQNotifRules));
+        if (Array.isArray(obj.lostReasons)) jobs.push(settingsRepo.saveLostReasons(obj.lostReasons as string[]));
+        if (obj.company)      jobs.push(hqCompanyRepo.save(obj.company as HQCompany));
+        if (Array.isArray(obj.dealers)) jobs.push(dealersRepo.save(obj.dealers as DealerRow[]));
+        if (Array.isArray(obj.catalog)) jobs.push(catalogRepo.save(obj.catalog as SolutionProduct[]));
+        await Promise.all(jobs);
+        toast("นำเข้าสำเร็จ — กำลังโหลดใหม่");
+        setTimeout(() => location.reload(), 900);
+      } catch (err) {
+        toast("นำเข้าไม่สำเร็จ: " + (err instanceof Error ? err.message : String(err)));
+      }
+    };
     r.readAsText(file);
   }
-  function restoreDefaults() {
-    if (!confirm("คืนค่าเริ่มต้นทั้งหมด? การตั้งค่าปัจจุบันจะถูกลบ")) return;
-    SETTINGS_KEYS.forEach(k => localStorage.removeItem(k)); location.reload();
+
+  async function restoreDefaults() {
+    if (!confirm("คืนค่าเริ่มต้นของนโยบาย เป้าหมาย กฎแจ้งเตือน และเหตุผลปิดการขาย?\n\nทะเบียนตัวแทนและแคตตาล็อกจะไม่ถูกแตะ")) return;
+    try {
+      await Promise.all([
+        settingsRepo.savePolicy(DEFAULT_HQ_POLICY),
+        settingsRepo.saveTargets(DEFAULT_HQ_TARGETS),
+        settingsRepo.saveNotifRules(DEFAULT_HQ_NOTIF_RULES),
+        settingsRepo.saveLostReasons([...LOST_REASONS]),
+      ]);
+      toast("คืนค่าเริ่มต้นแล้ว — กำลังโหลดใหม่");
+      setTimeout(() => location.reload(), 900);
+    } catch (e) {
+      toast("คืนค่าไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e)));
+    }
   }
+
   return (
     <SectionCard icon={<RefreshCw size={19} />} title="สำรองและกู้คืนข้อมูล" desc="ส่งออก/นำเข้าการตั้งค่าทั้งหมดของสำนักงานใหญ่">
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-        <button className="btn btn-secondary btn-md" onClick={exportAll}><Download size={14} /> ส่งออก (สำรองข้อมูล)</button>
+        <button className="btn btn-secondary btn-md" onClick={() => void exportAll()}><Download size={14} /> ส่งออก (สำรองข้อมูล)</button>
         <label className="btn btn-secondary btn-md" style={{ cursor: "pointer" }}><Upload size={14} /> นำเข้า (กู้คืน)<input type="file" accept="application/json" style={{ display: "none" }} onChange={importAll} /></label>
-        <button className="btn btn-md" style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }} onClick={restoreDefaults}><RotateCcw size={14} /> คืนค่าเริ่มต้นทั้งหมด</button>
+        <button className="btn btn-md" style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }} onClick={() => void restoreDefaults()}><RotateCcw size={14} /> คืนค่าเริ่มต้น (นโยบาย/เป้า/แจ้งเตือน)</button>
       </div>
     </SectionCard>
   );
