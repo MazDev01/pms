@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
 import { Building2, Check, Save, MapPin, Image as ImageIcon } from "lucide-react";
 import { useReportSection } from "@pms/shared/lib/settingsBus";
@@ -53,7 +54,7 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
         setForm(f);
         setBaseline(JSON.stringify({ form: f }));
       })
-      .catch(e => console.error("[hqCompany.get]", e));
+      .catch(e => logRepoRead("hqCompany.get", e));
     return () => { alive = false; };
   }, []);
 

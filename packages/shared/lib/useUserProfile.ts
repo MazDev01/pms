@@ -7,6 +7,7 @@
 //   • ล้างเบราว์เซอร์/ย้ายเครื่อง = ชื่อกับรูปหาย จอกลับไปแสดงอีเมลแทนชื่อ
 // ตอนนี้อ่าน/เขียนผ่าน repository → โหมด supabase เก็บที่ตาราง profiles ผูกกับบัญชีผู้ใช้
 import { useCallback, useEffect, useState } from "react";
+import { logRepoRead } from "./repoLog";
 import { profile as repo } from "./data";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { defaultProfileEmail, PROFILE_UPDATED_EVENT, type UserProfile } from "./mock";
@@ -33,7 +34,7 @@ export function useUserProfile(): UseUserProfile {
     const read = () => {
       repo.get()
         .then(p => { if (alive) { if (p) setProfile({ ...fallback, ...p }); setLoaded(true); } })
-        .catch(e => { if (alive) console.error("[profile.get]", e); });
+        .catch(e => { if (alive) logRepoRead("profile.get", e); });
     };
     read();
     window.addEventListener(PROFILE_UPDATED_EVENT, read);

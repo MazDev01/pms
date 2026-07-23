@@ -7,6 +7,7 @@
 //   ใบเสนอราคาที่ส่งลูกค้าจะไม่มีชื่อบริษัท ไม่มีตราประทับ ไม่มีลายเซ็น
 // ตอนนี้อ่าน/เขียนผ่าน repository → โหมด supabase เก็บที่ DB ผูกกับรหัสสาขา
 import { useCallback, useEffect, useState } from "react";
+import { logRepoRead } from "./repoLog";
 import { dealerSettings as repo } from "./data";
 import { useCurrentDealer } from "./useCurrentDealer";
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, NOTIF_PREFS_EVENT } from "./mock";
@@ -41,7 +42,7 @@ export function useDealerSettings(): UseDealerSettings {
     const read = () => {
       repo.get(dealer.code)
         .then(v => { if (alive) { setSettings(v); setLoaded(true); } })
-        .catch(e => { if (alive) console.error("[dealerSettings.get]", e); });
+        .catch(e => { if (alive) logRepoRead("dealerSettings.get", e); });
     };
     read();
     const onEvt = () => read();

@@ -4,6 +4,7 @@
 // บริหารผู้ใช้ของ "สำนักงานใหญ่" เท่านั้น — ไม่แสดงผู้ใช้ Dealer (ดีลเลอร์จัดการใน Workspace ตัวเอง
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
 import { useState, useMemo, useRef, useEffect } from "react";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
@@ -203,7 +204,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
           department: u.department, status: u.status, createdAt: u.createdAt, avatar: u.avatar,
         })));
       })
-      .catch(e => console.error("[users.list]", e));
+      .catch(e => logRepoRead("users.list", e));
     return () => { alive = false; };
   }, []);
   const logAudit = useAuditLogger();

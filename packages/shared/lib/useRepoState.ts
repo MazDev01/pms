@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
+import { logRepoRead } from "./repoLog";
 
 // state ที่ผูกกับ repository (data layer) — drop-in แทน usePersistentState สำหรับข้อมูลระดับเครือ (HQ)
 //   • โหลดจาก repo ตอน mount (async) · เขียนกลับ "เฉพาะเมื่อผู้ใช้แก้จริง" หลังโหลดสำเร็จแล้ว
@@ -35,7 +36,7 @@ export function useRepoState<T>(
     let alive = true;
     load()
       .then((v) => { if (alive) { dirtyRef.current = false; setState(v); setLoaded(true); } })
-      .catch((e) => { if (alive) console.error("[useRepoState.load]", e); });
+      .catch((e) => { if (alive) logRepoRead("useRepoState.load", e); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -78,7 +79,7 @@ export function useRepoValueLoaded<T>(load: () => Promise<T>, initial: T): { val
     let alive = true;
     load()
       .then((v) => { if (alive) { setValue(v); setLoaded(true); } })
-      .catch((e) => { if (alive) { console.error("[useRepoValueLoaded.load]", e); setLoaded(true); } });
+      .catch((e) => { if (alive) { logRepoRead("useRepoValueLoaded.load", e); setLoaded(true); } });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

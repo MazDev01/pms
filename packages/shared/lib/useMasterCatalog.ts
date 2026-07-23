@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logRepoRead } from "./repoLog";
 import { MASTER_CATALOG_EVENT, type SolutionProduct } from "./mock";
 import { catalog as catalogRepo, realtime } from "./data";
 
@@ -21,7 +22,7 @@ export function useMasterCatalog(): SolutionProduct[] {
     const read = () => {
       catalogRepo.list()
         .then((rows) => { if (alive) setCatalog(rows); })
-        .catch((e) => console.error("[catalog.list]", e));
+        .catch((e) => logRepoRead("catalog.list", e));
     };
     read();
 

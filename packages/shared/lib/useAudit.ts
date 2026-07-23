@@ -4,6 +4,7 @@
 // HQ มีผู้ใช้หลายคน → ทุก action สำคัญของ admin ถูกบันทึกลง localStorage (พร้อมต่อ Supabase)
 // บันทึกผ่าน useAuditLogger() ในจุด mutation · ดูผ่านหน้า /hq/audit (useAuditEntries)
 import { useCallback, useEffect, useState } from "react";
+import { logRepoRead } from "./repoLog";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { audit as auditRepo } from "@pms/shared/lib/data";
@@ -65,7 +66,7 @@ export function useAuditLogger() {
 export function useAuditEntries(): AuditEntry[] {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   useEffect(() => {
-    const read = () => { auditRepo.list().then(setEntries).catch((e) => console.error("[audit.list]", e)); };
+    const read = () => { auditRepo.list().then(setEntries).catch((e) => logRepoRead("audit.list", e)); };
     read();
     window.addEventListener(EVENT, read);
     window.addEventListener("storage", read);

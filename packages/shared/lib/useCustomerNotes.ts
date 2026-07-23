@@ -4,6 +4,7 @@
 // โหมด supabase จึงต้องปิดแท็บโน้ตไว้เฉย ๆ (ผู้ใช้จดอะไรไม่ได้)
 // ตอนนี้เก็บที่ตาราง customer_notes ผูกกับสาขา (RLS: สาขาเห็น/แก้ของตัวเอง · HQ อ่านได้)
 import { useCallback, useEffect, useState } from "react";
+import { logRepoRead } from "./repoLog";
 import { notes as repo, realtime } from "./data";
 import { useCurrentDealer } from "./useCurrentDealer";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -25,7 +26,7 @@ export function useCustomerNotes(author = ""): UseCustomerNotes {
   const read = useCallback(() => {
     repo.list({ dealerCode: dealer.code, isHQ: false })
       .then(rows => { setNotes(rows); setLoaded(true); })
-      .catch(e => console.error("[notes.list]", e));
+      .catch(e => logRepoRead("notes.list", e));
   }, [dealer.code]);
 
   useEffect(() => {

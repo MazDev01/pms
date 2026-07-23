@@ -4,6 +4,7 @@ import {
   createContext, useContext, useState, useCallback, useRef, useEffect,
   type ReactNode,
 } from "react";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, DEFAULT_QUOTE_NUMBERING,
@@ -106,7 +107,7 @@ export function SalesProvider({
     let alive = true;
     leadsRepo.list({ dealerCode, isHQ })
       .then((rows) => { if (alive) setLeads(rows); })
-      .catch((e) => { if (alive) console.error("[leads.list]", e); });
+      .catch((e) => { if (alive) logRepoRead("leads.list", e); });
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
 
@@ -134,7 +135,7 @@ export function SalesProvider({
     let alive = true;
     customersRepo.list({ dealerCode, isHQ })
       .then((rows) => { if (alive) setCustomers(rows); })
-      .catch((e) => { if (alive) console.error("[customers.list]", e); });
+      .catch((e) => { if (alive) logRepoRead("customers.list", e); });
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
   const persistCustomer = useRef({
@@ -159,7 +160,7 @@ export function SalesProvider({
     prepare
       .then(() => quotationsRepo.list(scope))
       .then((rows) => { if (alive) setQuotations(rows); })
-      .catch((e) => { if (alive) console.error("[quotations.list]", e); });
+      .catch((e) => { if (alive) logRepoRead("quotations.list", e); });
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
   const persistQuote = useRef({
@@ -195,7 +196,7 @@ export function SalesProvider({
     let alive = true;
     appointmentsRepo.list({ dealerCode, isHQ })
       .then((rows) => { if (alive) setAppointments(rows); })
-      .catch((e) => { if (alive) console.error("[appointments.list]", e); });
+      .catch((e) => { if (alive) logRepoRead("appointments.list", e); });
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
   const persistAppt = useRef({
@@ -476,7 +477,7 @@ export function SalesProvider({
         issuerRef.current = cfg.issuer;
         if (cfg.document?.quotePrefix) quotePrefixRef.current = cfg.document.quotePrefix;
       })
-      .catch(e => console.error("[dealerSettings.get]", e));
+      .catch(e => logRepoRead("dealerSettings.get", e));
   }, [hydrated, myDealerCode]);
 
   const newQuoteId = useCallback(
