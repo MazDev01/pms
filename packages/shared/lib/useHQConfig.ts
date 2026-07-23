@@ -9,7 +9,7 @@
 //   hook นี้อ่านผ่าน repository + ติดตามการแก้ (Realtime ฝั่ง supabase · event ฝั่ง local)
 import { useEffect, useState } from "react";
 import {
-  DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, HQ_SETTINGS_EVENT,
+  DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, HQ_SETTINGS_EVENT, LOST_REASONS,
   type HQPolicy, type HQTargets,
 } from "./mock";
 import { settings as settingsRepo, realtime } from "./data";
@@ -48,4 +48,10 @@ export function useHQTargets(): HQTargets {
 /** อายุใบเสนอราคา (วัน) — ใช้คำนวณวันหมดอายุของใบ */
 export function useQuoteValidityDays(): number {
   return useHQValue<number>(() => settingsRepo.getQuoteValidityDays(), DEFAULT_HQ_POLICY.quoteValidityDays);
+}
+
+/** เหตุผล "ปิดการขายไม่สำเร็จ" ที่ HQ กำหนด — ตัวแทนเลือกจากรายการนี้เท่านั้น
+ *  เดิมอ่าน localStorage ตรง ๆ ซึ่งเป็นคนละ origin กับที่ HQ เขียน → ค่าที่ตั้งไม่เคยไปถึงตัวแทน */
+export function useLostReasons(): string[] {
+  return useHQValue<string[]>(() => settingsRepo.getLostReasons(), [...LOST_REASONS]);
 }

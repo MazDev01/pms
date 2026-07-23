@@ -4,9 +4,9 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  initialCustomers as customers,
   DEALER_FILES_EVENT, type DealerFile,
 } from "@pms/shared/lib/mock";
+import { useSales } from "@pms/shared/context/SalesContext";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
@@ -441,6 +441,7 @@ export default function FilesPage() {
   // คลังไฟล์รวม — ดึงไฟล์ที่แนบไว้กับลูกค้า/ลูกค้าเป้าหมายมารวมกัน (ไม่สร้างใหม่)
   // เริ่มว่างแล้วโหลดหลัง mount — กัน hydration mismatch (localStorage อ่านได้เฉพาะ client)
   const currentDealer = useCurrentDealer(); // คลังไฟล์เป็นของสาขานี้ (multi-tenant)
+  const { customers } = useSales(); // ชื่อลูกค้าจากข้อมูลจริง (เดิมอ่านจากชุด seed → โหมด supabase ได้ชื่อผิดคน)
   const [files, setFiles] = useState<FileMock[]>([]);
   const [loaded, setLoaded] = useState(false); // false = กำลังโหลด (แสดง Skeleton)
   // อ่านไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB · RLS สาขาตัวเอง)

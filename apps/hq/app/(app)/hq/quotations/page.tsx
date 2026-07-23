@@ -4,7 +4,11 @@
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
 // จึงมีแค่ ดู / วิเคราะห์ / เปรียบเทียบ / ส่งออก — ไม่มีปุ่มสร้าง แก้ไข ลบ อนุมัติ
 import { useState, useMemo, useEffect } from "react";
-import { hqAllQuotations, loadQuoteValidityDays, quotationStatusLabel, mainTemplateOf } from "@pms/shared/lib/mock";
+import { quotationStatusLabel, mainTemplateOf } from "@pms/shared/lib/mock";
+import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import type { DealerRow } from "@pms/shared/lib/data/types";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useFilters } from "@pms/shared/context/FilterContext";
 import { useNetworkQuotations, useNetworkLeads } from "@pms/shared/lib/useNetworkData";
@@ -19,10 +23,6 @@ import { QuotationAnalytics } from "@pms/shared/components/hq/quotations/Quotati
 import { QuotationTable } from "@pms/shared/components/hq/quotations/QuotationTable";
 import { QuotationDrawer } from "@pms/shared/components/hq/quotations/QuotationDrawer";
 
-const ALL_DEALERS = [...new Map(hqAllQuotations.map(q => [q.dealerCode, q.dealerName])).entries()]
-  .map(([code, name]) => ({ code, name }))
-  .sort((a, b) => a.code.localeCompare(b.code));
-
 export default function NetworkQuotationPage() {
   const { inRange, timeRange } = useFilters();
   const netQuotes = useNetworkQuotations();
@@ -30,16 +30,27 @@ export default function NetworkQuotationPage() {
   const [filters, setFilters] = useState<QuotationFilters>(EMPTY_FILTERS);
   const [viewQ, setViewQ] = useState<QuoteRow | null>(null);
 
-  // นโยบาย HQ อยู่ใน localStorage → อ่านหลัง mount (กัน hydration mismatch)
-  const [validityDays, setValidityDays] = useState(30);
-  useEffect(() => { setValidityDays(loadQuoteValidityDays()); }, []);
+  // อายุใบเสนอราคา = นโยบาย HQ — อ่านผ่าน repo (เดิมอ่าน localStorage ตรง ๆ
+  // โหมด supabase เลยได้ค่า default 30 วันเสมอ ไม่ใช่ค่าจริงที่ HQ ตั้งไว้ → วันหมดอายุบนหน้าเพี้ยน)
+  const validityDays = useQuoteValidityDays();
+  // รายชื่อตัวแทนจากทะเบียนจริง (เดิมถอดจากใบเสนอราคา mock → เห็นสาขาที่ไม่มีอยู่จริง)
+  const ALL_DEALERS = useRepoValue<DealerRow[]>(() => dealersRepo.list(), [])
+    .map(d => ({ code: d.code, name: d.name }))
+    .sort((a, b) => a.code.localeCompare(b.code));
 
   // เปิดหน้าด้วย ?dealer=CODE (กดมาจากแดชบอร์ด/การ์ดสถิติ) → กรองตัวแทนนั้นให้เลย
+  // เก็บค่าจาก URL ไว้ก่อน แล้วค่อยใช้ตอนทะเบียนตัวแทนโหลดเสร็จ
+  // (ทะเบียนมาจาก repo = ยังว่างตอนเรนเดอร์แรก · ถ้าเช็คทันทีแล้วล้าง URL ทิ้ง ตัวกรองจะไม่ติดเลย)
+  const [pendingDealer, setPendingDealer] = useState<string | null>(null);
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("dealer");
-    if (code && ALL_DEALERS.some(d => d.code === code)) setFilters(f => ({ ...f, dealer: code }));
-    if (code) window.history.replaceState(null, "", "/hq/quotations");
+    if (code) { setPendingDealer(code); window.history.replaceState(null, "", "/hq/quotations"); }
   }, []);
+  useEffect(() => {
+    if (!pendingDealer || !ALL_DEALERS.length) return;
+    if (ALL_DEALERS.some(d => d.code === pendingDealer)) setFilters(f => ({ ...f, dealer: pendingDealer }));
+    setPendingDealer(null);
+  }, [pendingDealer, ALL_DEALERS]);
 
   const allRows = useMemo(() => toQuoteRows(netQuotes, validityDays), [netQuotes, validityDays]);
 

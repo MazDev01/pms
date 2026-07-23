@@ -19,7 +19,7 @@ import { DealerQuotationPerformance, DealerQuotationTable } from "@pms/shared/co
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import {
-  dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY,
+  HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY,
   loadDealerFiles, DEALER_FILES_EVENT, fmtISOToThai,
   type DealerRow, type HQTargets, type DealerFile,
 } from "@pms/shared/lib/mock";
@@ -113,7 +113,7 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
 export default function SalesAnalyticsPage() {
   const router = useRouter();
   const { timeRange, inRange } = useFilters();
-  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), dealerLeaderboard);
+  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
 
   const netQuotes = useNetworkQuotations();

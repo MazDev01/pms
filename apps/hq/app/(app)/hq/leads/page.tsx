@@ -11,7 +11,10 @@ import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetwor
 import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
 import { unassignedLeads } from "@pms/shared/lib/hqAlerts";
 import { needsFollowUp } from "@pms/shared/lib/leadMetrics";
-import { dealerLeaderboard, fmtISOToThai, type LeadRow } from "@pms/shared/lib/mock";
+import { fmtISOToThai, type LeadRow } from "@pms/shared/lib/mock";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import type { DealerRow } from "@pms/shared/lib/data/types";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";  // แหล่งเดียวของชื่อภาค — ไม่ก็อปโค้ดซ้ำ
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useSales } from "@pms/shared/context/SalesContext";
@@ -80,8 +83,9 @@ export default function HQLeadsPage() {
     return () => window.removeEventListener(DEALER_FILES_EVENT, read);
   }, []);
 
-  // ภาคของตัวแทน — ใช้ทั้งตัวกรองภาคและ Section 6 (แหล่งเดียว ไม่คำนวณซ้ำ)
-  const REGION_OF = useMemo(() => new Map(dealerLeaderboard.map(d => [d.code, d.region])), []);
+  // ภาค/ชื่อของตัวแทน — จากทะเบียนตัวแทนจริง (เดิมอ่านจากชุด seed → โหมด supabase ได้ภาคของสาขาที่ไม่มีอยู่จริง)
+  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  const REGION_OF = useMemo(() => new Map(allDealers.map(d => [d.code, d.region])), [allDealers]);
 
   // ตัวเลือกตัวกรอง — สร้างจากลีดจริงที่มีในช่วง ไม่ hardcode
   const dealerOpts = useMemo(() => [...new Set(scoped.map(l => l.dealerCode).filter(Boolean))].sort() as string[], [scoped]);
@@ -158,7 +162,7 @@ export default function HQLeadsPage() {
   //   2) ใบเสนอราคา seed ของสาขาอื่นไม่ได้ผูกกับลีด → เอามาหารกันคนละชุดข้อมูล
   // สถานะของลีดบอกเองว่าเคยเสนอราคาแล้วหรือยัง — ใช้แหล่งเดียว ไม่มีทางเกิน 100%
   const netQuotes = useNetworkQuotations();
-  const DEALER_NAME = useMemo(() => new Map(dealerLeaderboard.map(d => [d.code, d.name])), []);
+  const DEALER_NAME = useMemo(() => new Map(allDealers.map(d => [d.code, d.name])), [allDealers]);
   const leadVsQuote = useMemo(() => {
     const QUOTED_UP: LeadStatus[] = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
     const m = new Map<string, { leads: number; quoted: number; quotes: number }>();

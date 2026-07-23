@@ -1,0 +1,51 @@
+"use client";
+
+// ตัวเลือกของแถบตัวกรอง — ต้องมาจากข้อมูลจริงเสมอ
+//
+// เดิมเป็นค่าคงที่ระดับโมดูลใน FilterContext ที่คำนวณจากชุด seed ตอน import
+// โหมด supabase จึงเห็น "ตัวแทน/จังหวัด/ผู้รับผิดชอบ" ที่ไม่มีอยู่จริงในระบบ (กติกา: ห้ามกุข้อมูล)
+// ย้ายมาเป็น hook อ่านผ่าน repository → โหมด supabase ได้ของจริงจาก DB
+// ส่วนโหมด local ยังได้ชุดเดิม เพราะ LocalAdapter อ่านจาก seed อยู่แล้ว (พฤติกรรมไม่เปลี่ยน)
+import { useMemo } from "react";
+import { useSales } from "@pms/shared/context/SalesContext";
+import { useMasterCatalog } from "./useMasterCatalog";
+import { useRepoValue } from "./useRepoState";
+import { dealers as dealersRepo, persons as personsRepo } from "./data";
+import type { DealerRow, ResponsiblePerson } from "./data/types";
+
+export type Option = { value: string; label: string };
+
+const byThai = (a: string, b: string) => a.localeCompare(b, "th");
+
+/** ตัวแทนทั้งเครือ — จากทะเบียนตัวแทนจริง */
+export function useDealerOptions(): Option[] {
+  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  return useMemo(() => dealers.map(d => ({ value: d.code, label: d.name })), [dealers]);
+}
+
+/** แม่แบบ — จากแคตตาล็อกกลางที่ HQ ดูแล (แหล่งเดียวกับฟอร์มลีด/ใบเสนอราคา) */
+export function useProductOptions(): Option[] {
+  const catalog = useMasterCatalog();
+  return useMemo(() => catalog.map(p => ({ value: p.name, label: p.name })), [catalog]);
+}
+
+/** จังหวัด — เก็บจากจังหวัดที่ "มีอยู่จริง" ในลูกค้า/ใบเสนอราคา/ลีด ไม่ใช่รายชื่อจังหวัดทั้งประเทศ */
+export function useProvinceOptions(): Option[] {
+  const { customers, quotations, leads } = useSales();
+  return useMemo(() => {
+    const set = new Set<string>();
+    customers.forEach(c => c.province && set.add(c.province));
+    quotations.forEach(q => q.province && set.add(q.province));
+    leads.forEach(l => l.province && set.add(l.province));
+    return [...set].sort(byThai).map(p => ({ value: p, label: p }));
+  }, [customers, quotations, leads]);
+}
+
+/** ผู้รับผิดชอบที่ยังทำงานอยู่ — จากทะเบียนพนักงานของสาขา */
+export function usePersonOptions(): Option[] {
+  const persons = useRepoValue<ResponsiblePerson[]>(() => personsRepo.list(), []);
+  return useMemo(
+    () => persons.filter(p => p.active).map(p => ({ value: p.name, label: p.name })),
+    [persons],
+  );
+}

@@ -28,9 +28,9 @@ import {
   HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
   HQ_NOTIF_KEY, HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
-  HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, dealerLeaderboard, loadHQDealers,
+  HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, loadHQDealers,
   HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE,
-  HQ_SYSTEM_KEY, DEFAULT_QUOTE_NUMBERING,
+  HQ_SYSTEM_KEY, DEFAULT_QUOTE_NUMBERING, HQ_JOURNEY_KEY, LOST_REASONS,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
   type HQAlertKey, type DealerRow, type LeadStatus,
 } from "@pms/shared/lib/mock";
@@ -155,16 +155,20 @@ const DEFAULT_SYSTEM: SystemCfg = {
 };
 // เหตุผลปิดการขายไม่สำเร็จ — ขั้น "ปิดไม่สำเร็จ" เป็นปลายทางหนึ่งของเส้นทางการขาย จึงอยู่แท็บนี้
 // (เดิมอยู่แท็บ "กฎธุรกิจ" ซึ่งยุบไปแล้ว — คีย์ hq_sales_journey เหมือนเดิม ค่าที่ตั้งไว้ไม่หาย)
+// เก็บผ่าน repository — เดิมเขียนลง localStorage ของ origin ฝั่ง HQ ซึ่งตัวแทน (คนละ origin)
+// อ่านไม่เห็นเลย รายการที่ตั้งไว้จึงไม่เคยมีผลกับใคร (ค่าเริ่มต้นใช้ LOST_REASONS แหล่งเดียวกับตัวแทน)
 type Journey = { lost: string[] };
-const DEFAULT_JOURNEY: Journey = {
-  lost: ["ราคาสูงเกินงบประมาณ", "คู่แข่งให้ข้อเสนอดีกว่า", "งบประมาณไม่พร้อม", "ลูกค้าไม่ตอบสนอง"],
-};
+const DEFAULT_JOURNEY: Journey = { lost: [...LOST_REASONS] };
 
 function JourneyTab() {
   // ทุกกฎของเส้นทางการขายรวมที่แท็บนี้: ใบเสนอราคา + เลขที่ใบ · เหตุผลปิดไม่สำเร็จ
   const pol = useRepoDraft<HQPolicy>(() => settingsRepo.getPolicy(), (v) => settingsRepo.savePolicy(v), DEFAULT_HQ_POLICY);
   const sys = usePersistentDraft<SystemCfg>(HQ_SYSTEM_KEY, DEFAULT_SYSTEM);
-  const jn = usePersistentDraft<Journey>("hq_sales_journey", DEFAULT_JOURNEY);
+  const jn = useRepoDraft<Journey>(
+    async () => ({ lost: await settingsRepo.getLostReasons() }),
+    (v) => { void settingsRepo.saveLostReasons(v.lost); },
+    DEFAULT_JOURNEY,
+  );
   const [newLost, setNewLost] = useState("");
   // dep ต้องเป็นฟังก์ชันข้างใน (useCallback แล้ว) ไม่ใช่กล่องที่ usePersistentDraft คืนมา — กล่องใหม่ทุกเรนเดอร์
   const saveAll = useCallback(() => {
@@ -322,7 +326,7 @@ function TargetsTab() {
   // แท็บนี้ "อ่านอย่างเดียว" — เป้ารายตัวแทนแก้ที่แท็บตัวแทนจำหน่าย/หน้า /hq/dealers
   // ห้ามใช้ usePersistentState: มันเขียนกลับตอน mount → กลายเป็นคนเขียน hq_dealers_v3 คนที่ 3
   // ทั้งที่ไม่เคยแก้ตัวแทนเลย (กติกาเดียวกับที่ mock.ts:893 เตือนไว้)
-  const [dealers, setDealers] = useState<DealerRow[]>(dealerLeaderboard);
+  const [dealers, setDealers] = useState<DealerRow[]>([]); // ของจริงมาจาก repo — ห้ามตั้งต้นด้วย seed
   useEffect(() => { dealersRepo.list().then(setDealers).catch(() => {}); }, []);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
@@ -509,7 +513,7 @@ function NotificationsTab() {
 // ไม่มี "hq_dealer_settings" แล้ว — คีย์นั้นตายไปพร้อมแท็บ "ตัวแทนจำหน่าย" (ไม่มีใครอ่านค่าในนั้นเลย)
 const SETTINGS_KEYS = [
   "hq_company_profile", "hq_users_v4",
-  HQ_DEALERS_KEY, "hq_sales_journey", HQ_TARGETS_KEY,
+  HQ_DEALERS_KEY, HQ_JOURNEY_KEY, HQ_TARGETS_KEY,
   // กฎดูแลลีดไม่อยู่ในสำรองข้อมูลของ HQ แล้ว — เป็นค่าของตัวแทน (คีย์ dealer_lead_rules)
   HQ_NOTIF_KEY, HQ_NOTIF_RULES_KEY, HQ_SYSTEM_KEY, HQ_POLICY_KEY,
 ];

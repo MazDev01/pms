@@ -39,3 +39,20 @@ export function useRepoValue<T>(load: () => Promise<T>, initial: T): T {
   const [state] = useRepoState<T>(load, () => {}, initial);
   return state;
 }
+
+// เหมือน useRepoValue แต่บอกด้วยว่าโหลดเสร็จหรือยัง
+// จำเป็นเมื่อ "ไม่เจอข้อมูล" กับ "ยังโหลดไม่เสร็จ" ต้องแยกกัน — เช่นหน้าที่ตัดสินใจ 404
+// (ถ้าไม่แยก หน้าจะเด้ง 404 ตั้งแต่เรนเดอร์แรกที่ค่ายังว่างอยู่เสมอ)
+export function useRepoValueLoaded<T>(load: () => Promise<T>, initial: T): { value: T; loaded: boolean } {
+  const [value, setValue] = useState<T>(initial);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    load()
+      .then((v) => { if (alive) { setValue(v); setLoaded(true); } })
+      .catch((e) => { if (alive) { console.error("[useRepoValueLoaded.load]", e); setLoaded(true); } });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return { value, loaded };
+}

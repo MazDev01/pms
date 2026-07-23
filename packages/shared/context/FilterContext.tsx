@@ -4,7 +4,7 @@ import {
   createContext, useContext, useState, useMemo, useCallback, useEffect,
   type ReactNode,
 } from "react";
-import { dealerLeaderboard, hqAllCustomers, initialCustomers as customers, quotations, responsiblePersons, solutionProducts, mainTemplateOf } from "@pms/shared/lib/mock";
+import { mainTemplateOf } from "@pms/shared/lib/mock";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -105,25 +105,9 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
   return { preset, start, end, label: PRESET_LABEL[preset], subtitle, factor };
 }
 
-// ── Option lists (สร้างจากข้อมูลจริง) ──
-export const DEALER_OPTIONS: { value: string; label: string }[] =
-  dealerLeaderboard.map(d => ({ value: d.code, label: d.name }));
-
-// แหล่งเดียว (single source): ตัวเลือกสินค้า = 6 แม่แบบหลักจาก solutionProducts — ตรงกับฟอร์มลูกค้าเป้าหมาย/ใบเสนอราคาทั้งระบบ
-export const PRODUCT_OPTIONS: { value: string; label: string }[] =
-  solutionProducts.map(p => ({ value: p.name, label: p.name }));
-
-export const PROVINCE_OPTIONS: { value: string; label: string }[] = (() => {
-  const set = new Set<string>();
-  hqAllCustomers.forEach(c => c.province && set.add(c.province));
-  customers.forEach(c => c.province && set.add(c.province));
-  quotations.forEach(q => q.province && set.add(q.province));
-  return [...set].sort((a, b) => a.localeCompare(b, "th")).map(p => ({ value: p, label: p }));
-})();
-
-// ผู้รับผิดชอบ (Responsible Person) — เฉพาะคนที่ยัง active
-export const PERSON_OPTIONS: { value: string; label: string }[] =
-  responsiblePersons.filter(p => p.active).map(p => ({ value: p.name, label: p.name }));
+// ── Option lists ──
+// ย้ายไป lib/useFilterOptions.ts แล้ว — เดิมคำนวณจากชุด seed ตอน import โมดูล
+// ทำให้โหมด supabase เห็นตัวแทน/จังหวัด/ผู้รับผิดชอบที่ไม่มีอยู่จริง (ห้ามกุข้อมูล)
 
 // ── Filter state ──
 export type FilterDim = "dealer" | "province" | "product" | "status" | "person";

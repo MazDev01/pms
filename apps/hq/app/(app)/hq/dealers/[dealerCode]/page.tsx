@@ -8,8 +8,7 @@ import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@pms/shared/lib/mock";
-import { dealerLeaderboard } from "@pms/shared/lib/mock";
-import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { useRepoValue, useRepoValueLoaded } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useNetworkDealerDetail, useNetworkCustomers } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
@@ -369,14 +368,16 @@ type TabKey = typeof TABS[number]["key"];
 export default function DealerDrillDownPage({ params }: { params: Promise<{ dealerCode: string }> }) {
   const { dealerCode } = use(params);
   // อ่านจากชุดที่ persist (HQ_DEALERS_KEY) — ตัวแทนที่ HQ เพิ่มใหม่ต้องเปิดหน้านี้ได้ ไม่ใช่ 404
-  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), dealerLeaderboard);
+  const { value: dealers, loaded } = useRepoValueLoaded<DealerRow[]>(() => dealersRepo.list(), []);
   const [tab, setTab] = useState<TabKey>("overview");
   const code = dealerCode.toUpperCase();
-  const dealer = dealers.find(d => d.code === code) ?? dealerLeaderboard.find(d => d.code === code);
+  const dealer = dealers.find(d => d.code === code);
   // รายละเอียดตัวแทนแบบเชื่อมต่อ: CNX = ข้อมูลสด (leads/projects/quotes/ยอดรายเดือน) · สาขาอื่น = seed
   const detail = useNetworkDealerDetail(code);
   const custs = useNetworkCustomers().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (แหล่งเดียว)
 
+  // ทะเบียนตัวแทนมาจาก repo (async) — ต้องรอโหลดจบก่อน ไม่งั้นเรนเดอร์แรกเด้ง 404 ทุกครั้ง
+  if (!loaded) return <div className="erp" />;
   if (!dealer) return notFound();
 
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(dealer.revenueActual / dealer.revenueTarget * 100)) : 0;

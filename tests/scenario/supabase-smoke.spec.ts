@@ -1,16 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { RYG, ADMIN, skipReason, type Account } from "./supabaseEnv";
 
-// ชุดนี้ต้องรันกับ backend จริงเท่านั้น — ถ้าแอปตั้งเป็นโหมด local ให้ข้ามทั้งไฟล์
-// (อ่านจาก .env.local ของแอปตัวแทน ซึ่งเป็นตัวกำหนดว่าหน้าเว็บใช้ข้อมูลจากไหน)
-function dataSource(): string {
-  try {
-    const env = readFileSync(path.join(__dirname, "../../apps/dealer/.env.local"), "utf8");
-    return /^NEXT_PUBLIC_DATA_SOURCE\s*=\s*(\S+)/m.exec(env)?.[1] ?? "local";
-  } catch { return "local"; }
-}
-test.skip(dataSource() !== "supabase", "ข้ามเพราะแอปตั้งเป็นโหมด local (ชุดนี้ทดสอบ backend จริง)");
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 
 // ── สโมคเทสต์โหมด supabase — พิสูจน์ว่า "ตัวแอปจริง" ใช้งานได้กับ backend จริง ────────
 // ต่างจากเทสต์ชุดอื่นที่รันโหมด local (mock): ชุดนี้ล็อกอินด้วยบัญชีจริงผ่านหน้าจอ
@@ -18,8 +9,6 @@ test.skip(dataSource() !== "supabase", "ข้ามเพราะแอปต�
 // รันเมื่อ NEXT_PUBLIC_DATA_SOURCE=supabase เท่านั้น — ถ้าเป็น local ให้ข้าม
 const DEALER = "http://localhost:3001";
 const HQ = "http://localhost:3002";
-const RYG = { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" };
-const ADMIN = { email: "admin@benjamin.com", password: "benjamin" };
 
 // เก็บ error ของหน้า (crash/exception) เพื่อฟ้องว่าแอปพังเงียบ ๆ ไหม
 function trackErrors(page: Page): string[] {
@@ -31,7 +20,7 @@ function trackErrors(page: Page): string[] {
 
 // ล็อกอินผ่านหน้าจอจริง แล้วรอจนออกจากหน้า login
 // ถ้าไม่ออก ให้ดึงข้อความ error ที่ฟอร์มโชว์มาใส่ใน assertion (จะได้รู้สาเหตุจริง ไม่ใช่แค่ timeout)
-async function login(page: Page, origin: string, path: string, who: { email: string; password: string }) {
+async function login(page: Page, origin: string, path: string, who: Account) {
   await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" });
   // รอให้ React hydrate เสร็จก่อนแตะฟอร์ม — กรอกก่อน hydrate แล้ว controlled input จะถูกล้างทิ้ง
   // แล้วฟอร์มถูกส่งไปเปล่า ๆ (Supabase ตอบ "missing email or phone" · โผล่เป็น console error ด้วย)

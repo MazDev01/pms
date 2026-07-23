@@ -7,7 +7,7 @@ import {
   loadMasterCatalog, MASTER_CATALOG_KEY, MASTER_CATALOG_EVENT,
   loadDealerFiles, saveDealerFiles, addDealerFile, removeDealerFile,
   loadResponsiblePersons, RP_STORAGE_KEY,
-  loadHQPolicy, loadHQTargets, loadHQNotifRules,
+  loadHQPolicy, loadHQTargets, loadHQNotifRules, loadLostReasons, HQ_JOURNEY_KEY,
   HQ_POLICY_KEY, HQ_TARGETS_KEY, HQ_NOTIF_RULES_KEY, HQ_SETTINGS_EVENT,
   loadDealerLeadRulesMap, saveDealerLeadRules, loadQuoteValidityDays,
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
@@ -96,6 +96,9 @@ export const LocalAdapter: DataAdapter = {
     getLeadRulesMap: () => ok(loadDealerLeadRulesMap()),
     saveLeadRules: (code, rules) => { saveDealerLeadRules(code, rules); return done(); },
     getQuoteValidityDays: () => ok(loadQuoteValidityDays()),
+    getLostReasons: () => ok(loadLostReasons()),
+    // เก็บรูปเดิม { lost: [...] } เพื่อไม่ให้ค่าที่ HQ เคยตั้งไว้หายไป
+    saveLostReasons: (lost) => { writeKey(HQ_JOURNEY_KEY, { lost }); fireSettings(); return done(); },
     // ยิง event หลังบันทึก → หน้าอื่น (origin เดียวกัน) ที่ใช้ค่านโยบาย/เป้า อัปเดตทันที
     savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); fireSettings(); return done(); },
     saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); fireSettings(); return done(); },

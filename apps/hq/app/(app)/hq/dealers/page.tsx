@@ -6,7 +6,6 @@ import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
-import { dealerLeaderboard } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -143,7 +142,7 @@ function HQDealersPageInner() {
   const logAudit = useAuditLogger(); // บันทึกการกระทำของ admin
   const router = useRouter();
 
-  const [dealers, setDealers] = useRepoState<DealerRow[]>(() => dealersRepo.list(), (v) => dealersRepo.save(v), dealerLeaderboard);
+  const [dealers, setDealers] = useRepoState<DealerRow[]>(() => dealersRepo.list(), (v) => dealersRepo.save(v), []);
   // เกณฑ์สี Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
   const [q, setQ] = useState("");

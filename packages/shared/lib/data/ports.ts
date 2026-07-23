@@ -34,6 +34,9 @@ export interface SettingsRepo {
   getLeadRulesMap(): Promise<DealerLeadRulesMap>;
   saveLeadRules(dealerCode: string, rules: LeadRules): Promise<void>;
   getQuoteValidityDays(): Promise<number>;
+  /** เหตุผล "ปิดการขายไม่สำเร็จ" ที่ HQ ตั้ง — ตัวแทนใช้ร่วมกันทั้งเครือ (เขียนได้เฉพาะ HQ) */
+  getLostReasons(): Promise<string[]>;
+  saveLostReasons(lost: string[]): Promise<void>;
   // เขียนนโยบายระดับเครือ (HQ เท่านั้น — RLS is_hq ฝั่ง supabase · singleton id=1)
   savePolicy(policy: HQPolicy): Promise<void>;
   saveTargets(targets: HQTargets): Promise<void>;

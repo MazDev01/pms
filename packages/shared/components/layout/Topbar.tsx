@@ -5,12 +5,14 @@ import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  dealerLeaderboard, apptTypeLabel, loadUserProfile, PROFILE_UPDATED_EVENT,
+  apptTypeLabel, loadUserProfile, PROFILE_UPDATED_EVENT,
   loadNotifPrefs, notifCategoryOf, NOTIF_PREFS_EVENT,
   loadHQNotifPrefs, hqAuditCategory, HQ_NOTIF_UPDATED_EVENT, HQ_ALERT_META,
   type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
   type HQAlertKey,
 } from "@pms/shared/lib/mock";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown } from "lucide-react";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@pms/shared/lib/useAudit";
@@ -391,8 +393,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // ── dealer list derived from mock ──
-  const dealers = dealerLeaderboard;
+  // รายชื่อตัวแทนในผลค้นหา — จากทะเบียนจริง ไม่ใช่ชุดตัวอย่าง
+  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
 
   // ── search results (grouped, ≥2 chars, up to 5 per group) ──
   const q = searchQ.trim().toLowerCase();

@@ -6,7 +6,7 @@ import {
   leadStatusLabel, leadStatusColor,
   responsiblePersons, RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
-  solutionProducts, loadLostReasons, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
+  solutionProducts, buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
 } from "@pms/shared/lib/mock";
@@ -18,6 +18,7 @@ import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonP
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { useLeadRules } from "@pms/shared/lib/useHQRules";
+import { useLostReasons } from "@pms/shared/lib/useHQConfig";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -218,6 +219,7 @@ function OverviewEditor({ lead, persons, onSave }: {
   lead: LeadRow; persons: string[]; onSave: (l: LeadRow) => void;
 }) {
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง (HQ แก้ → เห็นตรงกัน)
+  const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ผ่าน repo)
   const seed = () => ({
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
     email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
@@ -326,7 +328,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           <Cell icon={XCircle} label="เหตุผลที่เสีย">
             <select value={f.lostReason} onChange={e=>set("lostReason",e.target.value)} style={inp}>
               <option value="">— เลือก —</option>
-              {loadLostReasons().map(r => <option key={r} value={r}>{r}</option>)}
+              {lostReasons.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Cell>
         )}
@@ -599,6 +601,7 @@ export default function LeadsPage() {
   const { session } = useRole(); // ผู้ดำเนินการ (บันทึกลง task ที่เช็ก)
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — scope ข้อมูล/กฎด้วย code นี้
   const { followUpAlertDays } = useLeadRules(currentDealer.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
+  const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ผ่าน repo)
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // List state
@@ -1876,7 +1879,7 @@ export default function LeadsPage() {
                   <div style={{ padding:"16px 18px" }}>
                     <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                      {loadLostReasons().map(r => (
+                      {lostReasons.map(r => (
                         <button key={r} onClick={()=>setQuickLostReason(r)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
                           border:`1px solid ${quickLostReason===r ? "#dc2626" : "#e5e7eb"}`, background:quickLostReason===r ? "#fee2e2" : "#fff", color:quickLostReason===r ? "#dc2626" : "#2D2D2D", fontWeight:quickLostReason===r ? 700 : 400 }}>{r}</button>
                       ))}

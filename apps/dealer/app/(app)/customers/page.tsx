@@ -11,6 +11,7 @@ import {
   type CustomerRow, type DealerFile,
   type AppointmentMock, type NoteMock,
 } from "@pms/shared/lib/mock";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { useSales } from "@pms/shared/context/SalesContext";
@@ -559,7 +560,8 @@ export default function CustomersPage(){
   // ลีดทุกสถานะของลูกค้ารายนี้ — ใช้ผูกใบเสนอราคากลับไปหาลีด (คนละชุดกับการ์ด "งานขายทั้งหมด")
   const customerDeals = selected ? leads.filter(l=>l.customerId===selected.id||l.company===selected.company) : [];
   const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company) : [];
-  const relatedNotes        = selected ? notes.filter(n=>n.customerId===selected.id) : [];
+  // โน้ตยังไม่มีที่เก็บจริงใน DB — โหมด supabase จึงต้องไม่เอาชุดตัวอย่างมาแปะกับลูกค้าจริง (ห้ามกุข้อมูล)
+  const relatedNotes        = selected && DATA_SOURCE !== "supabase" ? notes.filter(n=>n.customerId===selected.id) : [];
 
   // บันทึกการแก้ไขในตัว (จากแท็บ "ข้อมูล" ของโมดัลรายละเอียด)
   function saveInline(form: CustomerForm){

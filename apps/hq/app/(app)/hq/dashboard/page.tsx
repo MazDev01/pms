@@ -15,7 +15,7 @@ import {
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
-  dealerLeaderboard, HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy, hqAuditCategory,
+  HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy, hqAuditCategory,
   type DealerRow, type HQTargets,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -71,7 +71,7 @@ export default function HQDashboard() {
   const router = useRouter();
   const { timeRange } = useFilters();
   // ข้อมูลตัวแทน = ชุดเดียวกับหน้า "ตัวแทน" (persist ผ่าน HQ_DEALERS_KEY) — คุณสมบัติคงที่ (ชื่อ/ภาค/เป้าทั้งปี/สถานะ)
-  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), dealerLeaderboard);
+  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
   // เป้าหมายที่ HQ ตั้งไว้ (แหล่งเดียว) — ใช้เป็นเกณฑ์สี Win rate แทนการ hardcode
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
   // เกณฑ์การแจ้งเตือน (ตั้งที่ /hq/settings → การแจ้งเตือน) — อ่านหลัง mount กัน hydration mismatch

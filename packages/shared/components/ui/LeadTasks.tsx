@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
-  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, loadLostReasons,
+  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel,
   type LeadRow, type LeadTask,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
+import { useLostReasons } from "@pms/shared/lib/useHQConfig";
 
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // วันประทับ = "วันนี้" ของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง — กติกาเดียวกับ useAudit/ทั้งระบบ
@@ -22,6 +23,7 @@ function stampNow() {
 export function LeadTasks({ lead, performedBy, onSave }: {
   lead: LeadRow; performedBy: string; onSave: (l: LeadRow) => void;
 }) {
+  const lostReasons = useLostReasons(); // รายการที่ HQ กำหนด (อ่านผ่าน repo — ไม่ใช่ localStorage ของ origin ตัวเอง)
   const tasks: LeadTask[] = lead.tasks?.length ? lead.tasks : buildLeadTasks();
   const closed = lead.status === "PAID" || lead.status === "CANCELLED";
   const pct = closed ? 100 : taskProgress(tasks);
@@ -160,7 +162,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
           <div style={{ padding: "12px 14px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca" }}>
             <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {loadLostReasons().map(r => (
+              {lostReasons.map(r => (
                 <button key={r} type="button" onClick={() => setLostReason(r)}
                   style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
                     border: `1px solid ${lostReason === r ? "#dc2626" : "#e5e7eb"}`, background: lostReason === r ? "#fee2e2" : "#fff",

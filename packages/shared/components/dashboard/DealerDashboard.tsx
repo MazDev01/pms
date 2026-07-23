@@ -23,8 +23,11 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
   leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
-  quotationStatusLabel, quotationStatusColor, dealerLeaderboard, mainTemplateOf,
+  quotationStatusLabel, quotationStatusColor, mainTemplateOf,
 } from "@pms/shared/lib/mock";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import type { DealerRow } from "@pms/shared/lib/data/types";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   parseValue, isLeadOpen, needsFollowUp, daysSinceContact,
@@ -95,10 +98,13 @@ export default function DealerDashboard() {
 
   // ── KPI ── เป้าหมาย = รายปีของตัวแทนรายนี้ (HQ ตั้งที่ /hq/dealers) · ยอดขาย = สะสมตั้งแต่ต้นปี (YTD)
   // ไม่เฉลี่ย/ไม่หารตามช่วงตัวกรอง — เทียบ YTD กับเป้าทั้งปีเสมอ
+  // เป้าของสาขานี้ต้องมาจากทะเบียนตัวแทนจริงที่ HQ ตั้งไว้ (เดิมอ่านจากชุด seed
+  // โหมด supabase เลยเทียบ YTD กับเป้าปลอม → เปอร์เซ็นต์ความคืบหน้าผิดทั้งแดชบอร์ด)
+  const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
   const annualTarget = useMemo(() => {
-    const me = dealerLeaderboard.find(d => d.code === currentDealer.code);
+    const me = allDealers.find(d => d.code === currentDealer.code);
     return me?.revenueTarget ?? targets.annualTarget ?? 0;
-  }, [targets.annualTarget, currentDealer.code]);
+  }, [allDealers, targets.annualTarget, currentDealer.code]);
   const monthTarget = annualTarget / 12; // เส้นเป้าหมายรายเดือนในกราฟยอดขาย
   // สะสมตั้งแต่ต้นปีถึงเดือนปัจจุบัน (ม.ค. → เดือนนี้ ของปีนี้เท่านั้น) — ไม่เกี่ยวกับปุ่มช่วงของกราฟ
   const ytdSales = useMemo(

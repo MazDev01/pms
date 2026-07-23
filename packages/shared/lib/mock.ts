@@ -133,12 +133,18 @@ export const TAGS: { key: TagKey; label: string; bg: string; color: string }[] =
 ];
 
 // ─── Global: Lost Reasons (เหตุผลที่เสียโอกาสการขาย) ────────────────
-export const LOST_REASONS = ["ราคา", "คู่แข่ง", "งบประมาณ", "ลูกค้าเลื่อน", "ติดต่อไม่ได้", "อื่นๆ"] as const;
-// เหตุผลปิดการขายไม่สำเร็จ (Lost) — จัดการโดย HQ (หน้า HQ ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน · fallback = ค่าเริ่มต้น
+// ค่าเริ่มต้นชุดเดียวทั้งระบบ — เดิมฝั่ง HQ กับฝั่งตัวแทนมีคนละชุด ผู้ใช้เลยเห็นไม่ตรงกัน
+export const LOST_REASONS = [
+  "ราคาสูงเกินงบประมาณ", "คู่แข่งให้ข้อเสนอดีกว่า", "งบประมาณไม่พร้อม", "ลูกค้าไม่ตอบสนอง",
+] as const;
+export const HQ_JOURNEY_KEY = "hq_sales_journey";
+// เหตุผลปิดการขายไม่สำเร็จ (Lost) — จัดการโดย HQ (หน้า HQ ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน
+// อ่านตรงจาก localStorage แบบนี้ใช้ได้เฉพาะโหมด local · ทุกหน้าจอต้องเรียกผ่าน useLostReasons()
+// (คนละ origin = คนละกล่องเก็บของ ค่าที่ HQ ตั้งไม่มีทางข้ามมาเองได้ — ดู useHQConfig)
 export function loadLostReasons(): string[] {
   if (typeof window === "undefined") return [...LOST_REASONS];
   try {
-    const s = localStorage.getItem("hq_sales_journey");
+    const s = localStorage.getItem(HQ_JOURNEY_KEY);
     if (s) {
       const d = JSON.parse(s);
       if (Array.isArray(d?.lost) && d.lost.length) {

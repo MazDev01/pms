@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { CalendarDays, ChevronDown, Check, X } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { useDealerOptions, useProductOptions, useProvinceOptions, usePersonOptions } from "@pms/shared/lib/useFilterOptions";
 import {
   useFilters, TIME_PRESETS, type TimePreset, type FilterDim,
-  DEALER_OPTIONS, PROVINCE_OPTIONS, PRODUCT_OPTIONS, PERSON_OPTIONS, ALL,
+  ALL,
 } from "@pms/shared/context/FilterContext";
 
 type Opt = { value: string; label: string };
@@ -242,6 +243,12 @@ export function FilterBar({
     activeCount, reset,
   } = useFilters();
 
+  // ตัวเลือกจากข้อมูลจริง (repo) — ผู้เรียกยัง override ผ่าน prop ได้เหมือนเดิม
+  const liveDealers = useDealerOptions();
+  const liveProducts = useProductOptions();
+  const liveProvinces = useProvinceOptions();
+  const livePersons = usePersonOptions();
+
   const defaultDims: FilterDim[] = isHQ
     ? ["dealer", "province", "product", "status"]
     : ["product", "status"];
@@ -256,15 +263,15 @@ export function FilterBar({
 
       {show.includes("dealer") && (
         <SelectFilter caption="ตัวแทน" value={dealer}
-          options={dealerOptions ?? DEALER_OPTIONS} onChange={setDealer} />
+          options={dealerOptions ?? liveDealers} onChange={setDealer} />
       )}
       {show.includes("province") && (
         <SelectFilter caption="จังหวัด" value={province}
-          options={provinceOptions ?? PROVINCE_OPTIONS} onChange={setProvince} />
+          options={provinceOptions ?? liveProvinces} onChange={setProvince} />
       )}
       {show.includes("product") && (
         <SelectFilter caption="แม่แบบ" value={product}
-          options={productOptions ?? PRODUCT_OPTIONS} onChange={setProduct} />
+          options={productOptions ?? liveProducts} onChange={setProduct} />
       )}
       {show.includes("status") && statusOptions && statusOptions.length > 0 && (
         <SelectFilter caption="สถานะ" value={status}
@@ -272,7 +279,7 @@ export function FilterBar({
       )}
       {show.includes("person") && (
         <SelectFilter caption="ผู้รับผิดชอบ" value={person}
-          options={personOptions ?? PERSON_OPTIONS} onChange={setPerson} />
+          options={personOptions ?? livePersons} onChange={setPerson} />
       )}
 
       {activeCount > 0 && (

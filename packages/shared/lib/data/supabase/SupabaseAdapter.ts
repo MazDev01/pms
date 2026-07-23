@@ -5,7 +5,7 @@
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
 import { getSupabase } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
-import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES } from "@pms/shared/lib/mock";
+import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REASONS } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import type { DataAdapter } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
@@ -263,6 +263,13 @@ export const SupabaseAdapter: DataAdapter = {
       const p = await one<HQPolicy>("hq_policy");
       return p?.quoteValidityDays ?? 30;
     },
+    // lost เป็น text[] ของ Postgres — ไม่ต้องแปลงคีย์ (คอลัมน์เดียว ชื่อตรงอยู่แล้ว)
+    // แถวยังไม่ถูก seed / รายการว่าง → ใช้ค่าเริ่มต้นกลาง ไม่ปล่อยให้ตัวแทนได้ dropdown เปล่า
+    getLostReasons: async () => {
+      const row = await one<{ lost?: string[] }>("hq_sales_journey");
+      return row?.lost?.length ? row.lost : [...LOST_REASONS];
+    },
+    saveLostReasons: (lost) => must(sb().from("hq_sales_journey").upsert({ id: 1, lost })),
   },
   audit: {
     // อ่านเรียงล่าสุดก่อน (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ

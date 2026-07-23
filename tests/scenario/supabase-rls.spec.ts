@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { SUPABASE_URL, SUPABASE_ANON, RYG, CNX, ADMIN, skipReason, type Account } from "./supabaseEnv";
 
 // กฎความปลอดภัยที่ "มีจริงเฉพาะโหมด supabase" — RLS / สิทธิ์เขียน / FK / ตัวนับเลขที่ (M5)
 //
@@ -12,29 +11,10 @@ import path from "node:path";
 // ตารางงานขายบน DB จริงยังว่าง (ไม่ยัด mock ลงของจริง) → เทสต์ที่ต้องมีข้อมูล
 // จะสร้างแถวของตัวเองแล้วลบทิ้งเสมอ ไม่งั้นจะ "ผ่านเพราะไม่มีอะไรให้เจอ" ซึ่งไม่ได้พิสูจน์อะไรเลย
 
-function env(key: string): string {
-  try {
-    const raw = readFileSync(path.join(__dirname, "../../apps/dealer/.env.local"), "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const i = line.indexOf("=");
-      if (i > 0 && line.slice(0, i).trim() === key) return line.slice(i + 1).trim();
-    }
-    return "";
-  } catch { return ""; }
-}
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 
-const URL = env("NEXT_PUBLIC_SUPABASE_URL");
-const ANON = env("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-
-test.skip(env("NEXT_PUBLIC_DATA_SOURCE") !== "supabase" || !URL || !ANON,
-  "ข้ามเพราะแอปตั้งเป็นโหมด local (ชุดนี้ทดสอบกฎที่ฐานข้อมูลจริง)");
-
-const RYG   = { email: "sales@rayongsteel.co.th",  password: "PEB-RYG-4821" };
-const CNX   = { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" };
-const ADMIN = { email: "admin@benjamin.com",       password: "benjamin" };
-
-async function signIn(who: { email: string; password: string }): Promise<SupabaseClient> {
-  const sb = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+async function signIn(who: Account): Promise<SupabaseClient> {
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const { error } = await sb.auth.signInWithPassword(who);
   if (error) throw new Error(`ล็อกอิน ${who.email} ไม่ผ่าน: ${error.message}`);
   return sb;
@@ -168,5 +148,27 @@ test("[rpc] ใบที่ส่งแล้วและเลยกำหน�
       "ใบที่เลยกำหนดต้องกลายเป็นหมดอายุ").toBe("expired");
   } finally {
     await ryg.from("quotations").delete().eq("id", id);
+  }
+});
+
+test("[hq→dealer] เหตุผลปิดการขายไม่สำเร็จที่ HQ ตั้ง ไปถึงตัวแทนจริง (0021)", async () => {
+  const hq = await signIn(ADMIN);
+  const dealer = await signIn(RYG);
+  const before = (await hq.from("hq_sales_journey").select("lost").eq("id", 1)).data?.[0]?.lost as string[];
+  expect(before, "ต้องมีแถวตั้งค่าอยู่แล้ว (0021 seed ให้)").toBeTruthy();
+
+  const probe = [...before, "เทสต์อัตโนมัติ-ห้ามค้าง"];
+  try {
+    // ตัวแทนแก้เองไม่ได้
+    const blocked = await dealer.from("hq_sales_journey").update({ lost: probe }).eq("id", 1).select();
+    expect(wasBlocked(blocked), "ตัวแทนต้องแก้รายการเหตุผลไม่ได้").toBe(true);
+
+    // HQ แก้ได้ แล้วตัวแทนต้องอ่านเห็นค่าใหม่ (คนละ session — พิสูจน์ว่าไม่ได้ผ่าน localStorage)
+    const saved = await hq.from("hq_sales_journey").update({ lost: probe }).eq("id", 1).select();
+    expect(saved.error).toBeNull();
+    const seen = (await dealer.from("hq_sales_journey").select("lost").eq("id", 1)).data?.[0]?.lost as string[];
+    expect(seen, "ตัวแทนต้องเห็นรายการที่ HQ เพิ่งตั้ง").toEqual(probe);
+  } finally {
+    await hq.from("hq_sales_journey").update({ lost: before }).eq("id", 1);
   }
 });
