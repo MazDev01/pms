@@ -11,11 +11,17 @@ import type {
 // ── โดเมนอ้างอิง/ตั้งค่า (ห่อ loader เดิมได้ทันที — Step 0) ──
 export interface DealersRepo {
   list(): Promise<DealerRow[]>;
+  /** เพิ่ม/แก้ (upsert) ตามชุดที่ส่งมา — "ไม่" ลบแถวที่ไม่ได้ส่งมา */
   save(all: DealerRow[]): Promise<void>;
+  /** ลบสาขา — ต้องสั่งตรง ๆ ห้ามให้ระบบเดาจากการที่แถวหายไปจากอาร์เรย์ */
+  remove(code: string): Promise<void>;
 }
 export interface CatalogRepo {
   list(): Promise<SolutionProduct[]>;
+  /** เพิ่ม/แก้ (upsert) ตามชุดที่ส่งมา — "ไม่" ลบแถวที่ไม่ได้ส่งมา */
   save(all: SolutionProduct[]): Promise<void>;
+  /** ลบแม่แบบ — ต้องสั่งตรง ๆ (ดูเหตุผลที่ DealersRepo.remove) */
+  remove(id: string): Promise<void>;
 }
 export interface FilesRepo {
   list(scope?: Scope): Promise<DealerFile[]>;

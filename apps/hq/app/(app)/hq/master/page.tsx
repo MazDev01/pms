@@ -210,8 +210,12 @@ function HQMasterPageInner() {
   }
   function deleteProduct() {
     if (!delTarget) return;
-    setCatalog(prev => prev.filter(p => p.id !== delTarget.id));
-    logAudit("ลบแม่แบบ", delTarget.name);
+    // สั่งลบตรง ๆ (เหตุผลเดียวกับหน้าตัวแทน — ห้ามอนุมานการลบจากอาร์เรย์ที่หายไป)
+    const target = delTarget;
+    void catalogRepo.remove(target.id)
+      .then(() => setCatalog(prev => prev.filter(p => p.id !== target.id)))
+      .catch(e => alert("ลบแม่แบบไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+    logAudit("ลบแม่แบบ", target.name);
     setDelTarget(null);
   }
 

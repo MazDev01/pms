@@ -87,12 +87,18 @@ export const LocalAdapter: DataAdapter = {
   dealers: {
     list: () => ok(loadHQDealers()),
     save: (all) => { writeKey(HQ_DEALERS_KEY, all); return done(); },
+    remove: (code) => { writeKey(HQ_DEALERS_KEY, loadHQDealers().filter(d => d.code !== code)); return done(); },
   },
   catalog: {
     list: () => ok(loadMasterCatalog()),
     // บันทึกแล้วยิง event → หน้าอื่น (origin เดียวกัน) ที่ใช้ useMasterCatalog โหลดใหม่ทันที
     save: (all) => {
       writeKey(MASTER_CATALOG_KEY, all);
+      try { window.dispatchEvent(new Event(MASTER_CATALOG_EVENT)); } catch {}
+      return done();
+    },
+    remove: (id) => {
+      writeKey(MASTER_CATALOG_KEY, loadMasterCatalog().filter(p => p.id !== id));
       try { window.dispatchEvent(new Event(MASTER_CATALOG_EVENT)); } catch {}
       return done();
     },

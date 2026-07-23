@@ -224,7 +224,11 @@ function HQDealersPageInner() {
 
   function remove(d: DealerRow) {
     if (!confirm(`ลบ "${d.name}" ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
-    setDealers(prev => prev.filter(x => x.id !== d.id));
+    // สั่งลบตรง ๆ — เดิมแค่เอาออกจากอาร์เรย์แล้วให้ชั้นข้อมูลเดาว่าต้องลบอะไร
+    // การเดาแบบนั้นทำให้ "โหลดยังไม่เสร็จแล้วผู้ใช้แก้" กลายเป็นคำสั่งลบทั้งตาราง
+    void dealersRepo.remove(d.code)
+      .then(() => setDealers(prev => prev.filter(x => x.id !== d.id)))
+      .catch(e => alert("ลบตัวแทนไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     logAudit("ลบตัวแทน", `${d.code} · ${d.name}`);
   }
 

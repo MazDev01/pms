@@ -135,15 +135,6 @@ async function nextEntityId(dealerCode: string, entity: "customers" | "appointme
   return Number(data);
 }
 
-// ลบแถวที่ "หายไปจากชุดที่ส่งมา" — ใช้กับ repo แบบแทนที่ทั้งชุด (dealers/catalog)
-// ชุดว่าง = ผู้ใช้ลบหมดจริง ๆ ก็ได้ แต่ก็เป็นอาการของโหลดพลาดแล้ว state ยังว่างได้เหมือนกัน
-// จึงไม่ลบอะไรเลยเมื่อชุดว่าง — ปลอดภัยกว่าล้างทั้งตารางเพราะบั๊กฝั่งหน้าจอ
-async function deleteMissing(table: string, keyCol: string, keep: string[]): Promise<void> {
-  if (!keep.length) return;
-  const list = keep.map(k => `"${k.replace(/"/g, '\\"')}"`).join(",");
-  await must(sb().from(table).delete().not(keyCol, "in", `(${list})`));
-}
-
 const FILES_BUCKET = "dealer-files";
 
 // ชื่อช่อง Realtime ต้องไม่ซ้ำกันต่อการ subscribe หนึ่งครั้ง
@@ -228,9 +219,12 @@ export const SupabaseAdapter: DataAdapter = {
     // ตัดฟิลด์ที่ไม่มีคอลัมน์ใน DB ออกก่อน upsert:
     //   • id          — ตารางใช้ code เป็น PK
     //   • credentials — รหัสผ่านอยู่ใน Supabase Auth (hash) ห้ามเก็บซ้ำในตารางนี้
-    // save = "แทนที่ทั้งชุด" ตามสัญญาของ port — upsert อย่างเดียวไม่พอ
-    // แถวที่หน้าจอเอาออกจากอาร์เรย์ต้องถูกลบใน DB ด้วย ไม่งั้นกดลบแล้วกลับมาหลังรีเฟรช
-    // (โหมด local เขียนทับทั้งก้อนอยู่แล้ว → ถ้าไม่ทำแบบนี้ สองโหมดพฤติกรรมต่างกัน)
+    // save = "เพิ่ม/แก้เท่าที่ส่งมา" เท่านั้น · การลบต้องเรียก remove() ตรง ๆ
+    //
+    // ⚠️ เคยทำเป็น "แทนที่ทั้งชุด" คือลบทุกแถวที่ไม่ได้อยู่ในอาร์เรย์ที่ส่งมา — อันตรายมาก
+    //    ถ้าหน้าจอยังโหลดทะเบียนไม่เสร็จแล้วผู้ใช้กดเพิ่ม อาร์เรย์จะมีแค่แถวใหม่แถวเดียว
+    //    → สั่งลบสาขาจริงที่เหลือทั้งหมด (เคยเกิดจริง รอดเพราะ FK ของตารางไฟล์กันไว้เฉย ๆ)
+    //    การลบต้องมาจากเจตนาของผู้ใช้เท่านั้น ห้ามอนุมานจาก "แถวหายไปจากอาร์เรย์"
     save: async (all) => {
       // ตัด created_at ทิ้งด้วย — DB เป็นเจ้าของ (default now()) และห้ามให้แอปเขียนทับ
       //
@@ -243,8 +237,8 @@ export const SupabaseAdapter: DataAdapter = {
         return r;
       });
       await must(sb().from("dealers").upsert(rows, { onConflict: "code" }));
-      await deleteMissing("dealers", "code", rows.map(r => String(r.code)));
     },
+    remove: (code) => must(sb().from("dealers").delete().eq("code", code)),
   },
   catalog: {
     list: () => selectScoped<SolutionProduct>("master_catalog"),
@@ -252,8 +246,8 @@ export const SupabaseAdapter: DataAdapter = {
       // เหตุผลเดียวกับ dealers.save — created_at เป็นของ DB (ดูคำอธิบายด้านบน)
       const rows = toSnakeList(all as unknown as Row[]).map(r => { const c = { ...r }; delete c.created_at; return c; });
       await must(sb().from("master_catalog").upsert(rows));
-      await deleteMissing("master_catalog", "id", rows.map(r => String(r.id)));
     },
+    remove: (id) => must(sb().from("master_catalog").delete().eq("id", id)),
   },
   files: {
     list: (scope) => selectScoped<DealerFile>("files", scope),

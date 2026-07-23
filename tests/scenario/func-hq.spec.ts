@@ -70,8 +70,12 @@ test("[func·hq] ลบตัวแทนผ่านหน้าจอ → ห�
   const row = page.locator("tbody tr").filter({ hasText: DEALER_NAME }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });
 
-  page.once("dialog", d => d.accept()); // ยืนยันการลบ
-  await row.getByTitle(/ลบ/).first().click();
+  // รับทุกกล่องโต้ตอบ — ทั้งกล่องยืนยัน และกล่องแจ้ง error ถ้าลบไม่ผ่าน (จะได้เห็นสาเหตุ)
+  const dialogs: string[] = [];
+  page.on("dialog", d => { dialogs.push(d.message().slice(0, 120)); void d.accept(); });
+  await row.getByTitle("ลบ").first().click();
+  await page.waitForTimeout(2500);
+  console.log("กล่องโต้ตอบ:", JSON.stringify(dialogs));
 
   await waitGone(sb, "dealers", { code: CODE }, 20_000);
   assertNoErrors(errs, "ลบตัวแทน");
@@ -140,4 +144,34 @@ test("[func·hq] HQ เปิดหน้างานขายได้ แต�
   }
 
   assertNoErrors(errs, "หน้าใบเสนอราคา HQ");
+});
+
+test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเบียนโหลดเสร็จ' ต้องไม่ลบสาขาจริง", async ({ page }) => {
+  // กับดักเดิม: save เคยเป็น "แทนที่ทั้งชุด" → ถ้าผู้ใช้กดเพิ่มก่อนโหลดจบ
+  // อาร์เรย์จะมีแค่แถวใหม่แถวเดียว แล้วสั่งลบสาขาจริงที่เหลือทั้งหมด
+  // (เคยเกิดจริง เห็นเป็น DELETE ...code=not.in.("ZZT") · รอดเพราะ FK ของตารางไฟล์)
+  const errs = watchErrors(page);
+  const sb = await db(ADMIN);
+  const before = ((await sb.from("dealers").select("code")).data ?? []).length;
+  expect(before, "ต้องมีสาขาจริงอยู่ก่อน").toBeGreaterThan(1);
+
+  try {
+    await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
+    // จงใจ "ไม่รอ" ให้ทะเบียนโหลดเสร็จ แล้วรีบกดเพิ่มทันที
+    await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
+    await page.getByPlaceholder("เช่น BKK").fill(CODE);
+    await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(DEALER_NAME);
+    await page.getByPlaceholder("เช่น ระยอง").fill("ระยอง");
+    await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
+    await page.waitForTimeout(4000);
+
+    const after = ((await sb.from("dealers").select("code")).data ?? []).map(d => d.code);
+    expect(after.length, `สาขาจริงต้องอยู่ครบ (ก่อน ${before} หลัง ${after.length})`)
+      .toBeGreaterThanOrEqual(before);
+
+    assertNoErrors(errs, "เพิ่มก่อนโหลดเสร็จ");
+  } finally {
+    await sb.from("dealers").delete().eq("code", CODE);
+  }
 });
