@@ -25,7 +25,16 @@ export default defineConfig({
   webServer: {
     command: "npm run dev",       // turbo dev — สตาร์ท dealer(:3001)+hq(:3002)
     url: "http://localhost:3002",  // รอ HQ app พร้อม
-    reuseExistingServer: true,   // มีเซิร์ฟเวอร์อยู่แล้ว = ใช้ตัวนั้น ไม่สตาร์ทซ้ำ
+    // ⚠️ ห้ามเปิด reuseExistingServer — เคยทำให้ผลเทสต์หลอกมาแล้ว
+    //
+    // NEXT_PUBLIC_* ถูกฝังลงบันเดิลตอนสตาร์ตเซิร์ฟเวอร์ ไม่ได้อ่านใหม่ตอนรัน
+    // ถ้าสลับ NEXT_PUBLIC_DATA_SOURCE ใน .env.local แล้วใช้เซิร์ฟเวอร์ตัวเดิมต่อ
+    // เทสต์จะยิงใส่แอปที่ยังเป็นโหมดเก่า → "ผ่าน/ไม่ผ่าน" ไม่ตรงกับสิ่งที่ตั้งใจวัด
+    // (เคยหลงสรุปว่าปฏิทินไม่แสดงนัด ทั้งที่กำลังวัดแอปโหมด local ซึ่งอ่านชุดตัวอย่าง)
+    //
+    // อีกกรณี: รันสองชุดพร้อมกัน ชุดที่จบก่อนจะปิดเซิร์ฟเวอร์ที่อีกชุดใช้อยู่
+    // → ERR_CONNECTION_REFUSED กลางคัน
+    reuseExistingServer: false,
     timeout: 180_000,            // คอมไพล์ครั้งแรกนานได้
     stdout: "ignore",
     stderr: "pipe",
