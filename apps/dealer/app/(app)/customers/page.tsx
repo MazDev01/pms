@@ -359,7 +359,10 @@ export default function CustomersPage(){
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา — ต้องส่งเข้าเอกสารพิมพ์
   const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document, wordmark: dealerCfg.settings.wordmark };
   const hqPolicy = useHQPolicy();
-  const customerNotes = useCustomerNotes(userProfile.profile.name); // โน้ตลูกค้าผ่าน repo (ผู้เขียน = ผู้ใช้ที่ล็อกอิน) // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
+  const customerNotes = useCustomerNotes(userProfile.profile.name);
+  const [addingNote, setAddingNote] = useState(false);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteBody, setNoteBody] = useState(""); // โน้ตลูกค้าผ่าน repo (ผู้เขียน = ผู้ใช้ที่ล็อกอิน) // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
   // undefined = ของ CNX (สมุดงานเดิม) · ที่เหลือกรองด้วย dealerCode ตรง ๆ
   const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomers, currentDealer.code]);
@@ -989,6 +992,79 @@ export default function CustomersPage(){
                 {/* ประวัติการปิดการขาย — ตารางพร้อมรูปแม่แบบ + แถวรวมมูลค่า
                     ยังไม่มีโครงการ = ไม่ต้องโชว์การ์ดเปล่า (ดูได้ที่แท็บ "ประวัติการปิดการขาย") */}
                 {purchasedRows.length>0 && <div style={cardStyle}>{purchasedTable}</div>}
+                <div style={cardStyle}>
+                  <div style={{...secLabel, justifyContent:"space-between"}}>
+                    <span style={{display:"flex",alignItems:"center",gap:6}}><StickyNote size={13} color={PRIMARY}/> โน้ต / รายงานติดตาม</span>
+                    <button type="button" onClick={()=>setAddingNote(true)} className="btn btn-secondary btn-sm" style={{color:PRIMARY}}>
+                      <Plus size={12}/> เพิ่มโน้ต
+                    </button>
+                  </div>
+                  {/* ฟอร์มเพิ่มโน้ต — เดิมมีแต่ส่วนแสดงผล ตารางกับ repo พร้อมแล้วแต่ไม่มีทางเพิ่มจากหน้าจอ */}
+                  {addingNote && (
+                    <div style={{marginBottom:10,padding:12,borderRadius:10,background:"#f8f9fb",border:"1px solid #eef0f4",display:"flex",flexDirection:"column",gap:8}}>
+                      <input value={noteTitle} onChange={e=>setNoteTitle(e.target.value)} placeholder="หัวข้อโน้ต"
+                        style={{width:"100%",border:"1px solid #e5e7eb",borderRadius:8,padding:"7px 10px",fontSize:"0.8rem",outline:"none",fontFamily:"inherit"}}/>
+                      <textarea value={noteBody} onChange={e=>setNoteBody(e.target.value)} placeholder="รายละเอียดการติดตาม" rows={3}
+                        style={{width:"100%",border:"1px solid #e5e7eb",borderRadius:8,padding:"7px 10px",fontSize:"0.8rem",outline:"none",fontFamily:"inherit",resize:"vertical"}}/>
+                      <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+                        <button type="button" onClick={()=>{setAddingNote(false);setNoteTitle("");setNoteBody("");}} className="btn btn-secondary btn-sm" style={{color:"#374151"}}>ยกเลิก</button>
+                        <button type="button" disabled={!noteTitle.trim()} className="btn btn-primary btn-sm"
+                          style={{opacity:noteTitle.trim()?1:.5,cursor:noteTitle.trim()?"pointer":"not-allowed"}}
+                          onClick={async()=>{
+                            try {
+                              await customerNotes.add({ title:noteTitle.trim(), content:noteBody.trim(), category:"ลูกค้า", color:"#003366", customerId:selected.id });
+                              setAddingNote(false); setNoteTitle(""); setNoteBody("");
+                            } catch(e){ alert("บันทึกโน้ตไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))); }
+                          }}>บันทึกโน้ต</button>
+                      </div>
+                    </div>
+                  )}
+                  {relatedNotes.length===0 && !addingNote?(
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"18px 0"}}>ยังไม่มีโน้ต</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {relatedNotes.map(n=>{
+                        const c=noteColorOf(n.category);
+                        return (
+                          <button key={n.id} type="button" onClick={()=>setViewNote(n)} title="กดเพื่อดูโน้ตเต็ม"
+                            style={{padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
+                            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#eef2f7";}}
+                            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                              <span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
+                              <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.title}</span>
+                              <span style={{fontSize:"0.65rem",color:MUTED}}>{n.updatedAt}</span>
+                              <Eye size={13} color={PRIMARY} style={{flexShrink:0}}/>
+                            </div>
+                            <div style={{fontSize:"0.72rem",color:"#4b5563",whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:70,overflow:"hidden"}}>{n.content}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div ref={rightApptRef} style={cardStyle}>
+                  <div style={secLabel}><CalendarClock size={13} color={PRIMARY}/> นัดหมาย</div>
+                  {relatedAppointments.length===0?(
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"14px 0"}}>ยังไม่มีนัดหมาย</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {relatedAppointments.map(a=>(
+                        <button key={a.id} onClick={()=>setViewAppt(a)} title="กดเพื่อดูรายละเอียดนัดหมาย"
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
+                          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#e5faf0";}}
+                          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL}}>{a.project}</div>
+                            <div style={{fontSize:"0.65rem",color:MUTED,marginTop:2}}>{apptTypeLabel[a.type]} · {fmtISOToThai(a.date)} · {a.time} น.</div>
+                          </div>
+                          <span className="badge" style={{flexShrink:0,background:"#dce5f0",color:PRIMARY}}>{a.status==="upcoming"?"กำลังจะมาถึง":a.status==="done"?"เสร็จแล้ว":"ยกเลิก"}</span>
+                          <Eye size={14} color={PRIMARY} style={{flexShrink:0}}/>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* ── ดีล/โครงการ ── */}
@@ -1068,54 +1144,6 @@ export default function CustomersPage(){
                   {timelineItems.length===0
                     ? <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"18px 0"}}>ยังไม่มีกิจกรรม</div>
                     : <ActivityTimeline items={timelineItems} />}
-                </div>
-                <div style={cardStyle}>
-                  <div style={secLabel}><StickyNote size={13} color={PRIMARY}/> โน้ต / รายงานติดตาม</div>
-                  {relatedNotes.length===0?(
-                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"18px 0"}}>ยังไม่มีโน้ต</div>
-                  ):(
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      {relatedNotes.map(n=>{
-                        const c=noteColorOf(n.category);
-                        return (
-                          <button key={n.id} type="button" onClick={()=>setViewNote(n)} title="กดเพื่อดูโน้ตเต็ม"
-                            style={{padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
-                            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#eef2f7";}}
-                            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                              <span style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
-                              <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.title}</span>
-                              <span style={{fontSize:"0.65rem",color:MUTED}}>{n.updatedAt}</span>
-                              <Eye size={13} color={PRIMARY} style={{flexShrink:0}}/>
-                            </div>
-                            <div style={{fontSize:"0.72rem",color:"#4b5563",whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:70,overflow:"hidden"}}>{n.content}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                <div ref={rightApptRef} style={cardStyle}>
-                  <div style={secLabel}><CalendarClock size={13} color={PRIMARY}/> นัดหมาย</div>
-                  {relatedAppointments.length===0?(
-                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"14px 0"}}>ยังไม่มีนัดหมาย</div>
-                  ):(
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      {relatedAppointments.map(a=>(
-                        <button key={a.id} onClick={()=>setViewAppt(a)} title="กดเพื่อดูรายละเอียดนัดหมาย"
-                          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}
-                          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="#e5faf0";}}
-                          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="#f8f9fb";}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:"0.72rem",fontWeight:700,color:STEEL}}>{a.project}</div>
-                            <div style={{fontSize:"0.65rem",color:MUTED,marginTop:2}}>{apptTypeLabel[a.type]} · {fmtISOToThai(a.date)} · {a.time} น.</div>
-                          </div>
-                          <span className="badge" style={{flexShrink:0,background:"#dce5f0",color:PRIMARY}}>{a.status==="upcoming"?"กำลังจะมาถึง":a.status==="done"?"เสร็จแล้ว":"ยกเลิก"}</span>
-                          <Eye size={14} color={PRIMARY} style={{flexShrink:0}}/>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <div style={cardStyle}>
                   <div style={secLabel}><Paperclip size={13} color={PRIMARY}/> ไฟล์</div>

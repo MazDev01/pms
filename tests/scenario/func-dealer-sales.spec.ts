@@ -1,0 +1,111 @@
+import { test, expect } from "@playwright/test";
+import { RYG, skipReason } from "./supabaseEnv";
+import {
+  DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
+  db, waitRow, waitGone, cleanup, tagged,
+} from "./funcHelpers";
+
+// ── เทสต์เชิงฟังก์ชัน: "กดใช้งานจริงบนหน้าจอ แล้วข้อมูลลง DB จริงไหม" ──
+//
+// ต่างจากชุดอื่น:
+//   • supabase-rls  = ยิง API ตรง พิสูจน์กฎที่ DB (ไม่ผ่านหน้าจอ)
+//   • ชุด UI โหมด local = ตรวจการแสดงผล (ไม่แตะ backend)
+//   • ชุดนี้        = กดปุ่มบนหน้าจอ → ยืนยันที่ DB → ลบทิ้ง
+//
+// ทุกเทสต์สร้างข้อมูลของตัวเองแล้วเก็บกวาด เพราะรันกับฐานข้อมูลจริง
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
+test.setTimeout(180_000);
+test.describe.configure({ mode: "serial" }); // แชร์สมุดงานสาขาเดียวกัน — รันขนานจะกวนกันเอง
+
+const COMPANY = tagged("ลีดวงจร");
+
+test.beforeAll(async () => { await cleanup(await db(RYG), "RYG"); });
+test.afterAll(async () => { await cleanup(await db(RYG), "RYG"); });
+
+test("[func] สร้างลีดผ่านหน้าจอ → ลงฐานข้อมูลจริง", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(RYG);
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  await expect(page.getByText("กรอกข้อมูลลูกค้าเป้าหมาย")).toBeVisible();
+
+  await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
+  await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
+  await page.getByRole("button", { name: "บันทึก" }).click();
+
+  // ต้องอยู่ใน DB — ไม่ใช่แค่โผล่บนจอ
+  const row = await waitRow<{ company: string; dealer_code: string; status: string }>(
+    sb, "leads", { company: COMPANY });
+  expect(row.dealer_code, "ลีดใหม่ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
+  expect(row.status, "ลีดใหม่เริ่มที่ 'ติดต่อแล้ว'").toBe("WAITING");
+
+  assertNoErrors(errs, "สร้างลีด");
+});
+
+test("[func] แก้ลีดผ่านหน้าจอ → ค่าใหม่ลงฐานข้อมูล", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(RYG);
+  const PHONE = "081-999-0001";
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row, "ลีดที่สร้างไว้ต้องโผล่ในตาราง").toBeVisible({ timeout: 15_000 });
+  await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+
+  // แผงรายละเอียดแก้ในที่เดิม (ไม่มีปุ่มสลับโหมด) — พิมพ์แล้วปุ่มบันทึกถึงจะกดได้
+  const phone = page.getByPlaceholder("0XX-XXX-XXXX").first();
+  await expect(phone).toBeVisible({ timeout: 10_000 });
+  await phone.fill(PHONE);
+  await page.getByRole("button", { name: "บันทึกการแก้ไข" }).first().click();
+
+  await expect.poll(async () => {
+    const { data } = await sb.from("leads").select("phone").eq("company", COMPANY).limit(1);
+    return data?.[0]?.phone;
+  }, { timeout: 15_000, message: "เบอร์ที่แก้ต้องถูกบันทึกลง DB" }).toBe(PHONE);
+
+  assertNoErrors(errs, "แก้ลีด");
+});
+
+test("[func] เลื่อนสถานะลีด → สถานะใหม่ลงฐานข้อมูล", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(RYG);
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole("button", { name: /▾/ }).first().click();
+  await page.getByRole("button", { name: "รวบรวมความต้องการ", exact: true }).first().click();
+
+  await expect.poll(async () => {
+    const { data } = await sb.from("leads").select("status").eq("company", COMPANY).limit(1);
+    return data?.[0]?.status;
+  }, { timeout: 15_000, message: "สถานะต้องถูกบันทึกลง DB" }).toBe("BULLET");
+
+  assertNoErrors(errs, "เลื่อนสถานะ");
+});
+
+test("[func] ลบลีดผ่านหน้าจอ → หายจากฐานข้อมูลจริง", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(RYG);
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  page.once("dialog", d => d.accept()); // ยืนยันการลบ
+  await row.getByTitle("ลบลูกค้าเป้าหมาย").first().click();
+
+  await waitGone(sb, "leads", { company: COMPANY });
+  assertNoErrors(errs, "ลบลีด");
+});

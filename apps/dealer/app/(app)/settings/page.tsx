@@ -302,7 +302,9 @@ function DocumentsTab() {
     void dealerCfg.save({ document: doc })
       .catch(e => alert("บันทึกตั้งค่าเอกสารไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
     setBaseline(JSON.stringify(doc));
-  }, [doc, dealerCfg]);
+    // dep ต้องเป็น dealerCfg.save (useCallback ที่เสถียร) ไม่ใช่ dealerCfg ทั้งก้อน
+    // เพราะ hook คืน object ใหม่ทุกเรนเดอร์ → save ใหม่ทุกเรนเดอร์ → useMemo/useReport ยิงซ้ำ = เรนเดอร์วนไม่จบ
+  }, [doc, dealerCfg.save]);
   const dirty = baseline !== "" && JSON.stringify(doc) !== baseline;
   const reset = useCallback(() => {
     if (!baseline) return;
