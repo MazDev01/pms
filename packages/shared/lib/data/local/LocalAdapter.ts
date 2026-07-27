@@ -360,7 +360,7 @@ export const LocalAdapter: DataAdapter = {
       const search = (f.search ?? "").trim().toLowerCase();
       const plOf = (q: QuotationMock): string | null => { const bt = (q.buildingType ?? "").trim(); return bt ? bt : (q.project ?? null); };
       const dateOf = (q: QuotationMock) => /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "")?.[1];
-      const dM = new Map<string, { count: number; value: number; sent: number; won: number; lost: number; wonVal: number }>();
+      const dM = new Map<string, { count: number; value: number; sent: number; won: number; lost: number; wonVal: number; latest: string | null }>();
       const mM = new Map<string, { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number }>();
       const pM = new Map<string | null, { value: number; projects: number }>();
       const agM = new Map<string, { count: number; value: number }>();
@@ -375,9 +375,10 @@ export const LocalAdapter: DataAdapter = {
         if (search && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(search) && !f.searchDealers?.includes(q.dealerCode ?? "CNX")) continue;
         const code = q.dealerCode ?? "CNX", v = q.totalValue ?? 0;
         const y = Number(d.slice(0, 4)), mo = Number(d.slice(5, 7)) - 1;
-        let dr = dM.get(code); if (!dr) { dr = { count: 0, value: 0, sent: 0, won: 0, lost: 0, wonVal: 0 }; dM.set(code, dr); }
+        let dr = dM.get(code); if (!dr) { dr = { count: 0, value: 0, sent: 0, won: 0, lost: 0, wonVal: 0, latest: null as string | null }; dM.set(code, dr); }
         dr.count++; dr.value += v; if (q.status !== "draft") dr.sent++;
         if (q.status === "won") { dr.won++; dr.wonVal += v; } if (q.status === "lost") dr.lost++;
+        if (!dr.latest || d > dr.latest) dr.latest = d; // วันใบล่าสุด (ISO)
         const mk = `${y}-${mo}`; let mr = mM.get(mk); if (!mr) { mr = { y, m: mo, quotes: 0, won: 0, lost: 0, wonVal: 0 }; mM.set(mk, mr); }
         mr.quotes++; if (q.status === "won") { mr.won++; mr.wonVal += v; } if (q.status === "lost") mr.lost++;
         let pr = pM.get(pl); if (!pr) { pr = { value: 0, projects: 0 }; pM.set(pl, pr); } pr.value += v; pr.projects++;

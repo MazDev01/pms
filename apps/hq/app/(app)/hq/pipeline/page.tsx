@@ -29,7 +29,7 @@ import { dealers as dealersRepo, settings as settingsRepo, files as filesRepo } 
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
-import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary } from "@pms/shared/lib/useNetworkData";
+import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary, useLeadSummary } from "@pms/shared/lib/useNetworkData";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBaht } from "@pms/shared/lib/format";
 import { useEffect } from "react";
@@ -186,15 +186,25 @@ export default function SalesAnalyticsPage() {
     dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end), asOf: isoDateOf(APP_NOW),
   }), [codes, btSel, timeRange.start, timeRange.end]));
   const byDealer = useMemo(() => qSummary ? new Map(qSummary.byDealer.map(d => [d.dealerCode, d])) : null, [qSummary]);
+  // ลีดรายสาขา (leads/quoted) ที่ DB — ตัวกรองชุดเดียวกับ leads (codes + product · ไม่กรองเวลา)
+  const leadSum = useLeadSummary(useMemo(() => ({ dealerCodes: [...codes], product: btSel !== ALL ? btSel : undefined }), [codes, btSel]));
+  const leadByDealer = useMemo(() => leadSum ? new Map(leadSum.byDealer.map(d => [d.dealerCode, d])) : null, [leadSum]);
 
   // ── สถิติรายตัวแทน — แหล่งเดียวของทุกกราฟ/ตาราง (คำนวณครั้งเดียว) ──
   const perf = useMemo(() => dealers.map(d => {
     const dq = quotes.filter(x => x.dealerCode === d.code);
     const dl = leads.filter(l => l.dealerCode === d.code);
-    // ใบเสนอราคาล่าสุด — ไม่มีฟิลด์ "อัปเดตล่าสุด" ในระบบ จึงใช้ค่านี้ (คง client — summary ไม่มีวันล่าสุด)
-    const latest = dq.map(x => parseThaiDate(x.createdAt)).filter(Boolean).sort((a, b) => +b! - +a!)[0] ?? null;
+    const lbd = leadByDealer?.get(d.code);
     // นับ/รวมยอด: supabase = จาก byDealer (parity) · ไม่มี = client จาก dq
     const a = byDealer?.get(d.code);
+    // ใบเสนอราคาล่าสุด: supabase = byDealer.latest (ISO) · fallback = client dq
+    let latestStr = "—";
+    if (a) {
+      if (a.latest) { const p = a.latest.split("-").map(Number); latestStr = `${p[2]} ${TH_ABBR[p[1] - 1]} ${p[0] + 543}`; }
+    } else {
+      const latest = dq.map(x => parseThaiDate(x.createdAt)).filter(Boolean).sort((x, y) => +y! - +x!)[0] ?? null;
+      if (latest) latestStr = `${latest.getDate()} ${TH_ABBR[latest.getMonth()]} ${latest.getFullYear() + 543}`;
+    }
     const quotesN = a ? a.count : dq.length;
     const quoteVal = a ? a.value : dq.reduce((s, x) => s + x.valueNum, 0);
     const wonCount = a ? a.won : dq.filter(x => x.status === "won").length;
@@ -203,8 +213,8 @@ export default function SalesAnalyticsPage() {
     const closed = wonCount + lostCount;
     return {
       ...d,
-      leads: dl.length,
-      quoted: dl.filter(l => QUOTED_UP.includes(l.status)).length,
+      leads: lbd ? lbd.leads : dl.length,
+      quoted: lbd ? lbd.quoted : dl.filter(l => QUOTED_UP.includes(l.status)).length,
       quotes: quotesN,
       quoteVal,
       wonCount,
@@ -213,9 +223,9 @@ export default function SalesAnalyticsPage() {
       conv: closed ? Math.round(wonCount / closed * 100) : null,
       revenueActual: perfOf(d.code).revenue,
       tpct: d.revenueTarget > 0 ? Math.round(perfOf(d.code).revenue / d.revenueTarget * 100) : 0,
-      latest: latest ? `${latest.getDate()} ${TH_ABBR[latest.getMonth()]} ${latest.getFullYear() + 543}` : "—",
+      latest: latestStr,
     };
-  }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads, byDealer]);
+  }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads, byDealer, leadByDealer]);
 
   // ── Executive KPI (4 การ์ด — ตัด Forecast ออก ไม่มีข้อมูล · ตัด "ตัวแทนยอดขายสูงสุด" ตามคำสั่ง) ──
   const kpi = useMemo(() => {
@@ -239,12 +249,17 @@ export default function SalesAnalyticsPage() {
   // (ถึงขั้นเสนอราคาขึ้นไป ÷ ลีดทั้งหมด) ไม่ใช่เลขคู่ "ลีด / ใบ" ที่โชว์อยู่ข้างหน้า คนอ่านเลยตีความผิด
   // และ seed วนสถานะเท่า ๆ กันจนได้ 50% แทบทุกแถว ไม่มีสาระให้เทียบ
   const leadVsQuote = useMemo(() => {
+    const useRpc = leadSum && qSummary; // ลีด (leadSum, all-time) + ใบ (qSummary, ในช่วง) ที่ DB · ไม่งั้น client
     if (view === "month") {
-      // bucket ด้วย key "ปี-เดือน" + เดินทีละเดือน start→end — เดิม getMonth()+slice(a,b+1) พังเมื่อช่วงข้ามปี (a>b → []) และยอดคนละปีทับกัน
-      const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
       const lM = new Map<string, number>(), qM = new Map<string, number>();
-      leads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (!d) return; lM.set(mk(d), (lM.get(mk(d)) ?? 0) + 1); });
-      quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (!d) return; qM.set(mk(d), (qM.get(mk(d)) ?? 0) + 1); });
+      if (useRpc) {
+        leadSum.byMonth.forEach(r => lM.set(`${r.y}-${r.m}`, r.created));
+        qSummary.byMonth.forEach(r => qM.set(`${r.y}-${r.m}`, r.quotes));
+      } else {
+        const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+        leads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (!d) return; lM.set(mk(d), (lM.get(mk(d)) ?? 0) + 1); });
+        quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (!d) return; qM.set(mk(d), (qM.get(mk(d)) ?? 0) + 1); });
+      }
       const out: { key: string; label: string; a: number; b: number }[] = [];
       const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), 1);
       const end = new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), 1);
@@ -259,15 +274,20 @@ export default function SalesAnalyticsPage() {
       : view === "region" ? (DEALER_META.get(code)?.region ?? "—")
       : (DEALER_META.get(code)?.province ?? "—");
     const m = new Map<string, { a: number; b: number }>();
-    const bump = (k: string, f: "a" | "b") => { const r = m.get(k) ?? { a: 0, b: 0 }; r[f]++; m.set(k, r); };
-    leads.forEach(l => bump(keyOf(l.dealerCode ?? ""), "a"));
-    quotes.forEach(x => bump(keyOf(x.dealerCode), "b"));
+    const add = (k: string, f: "a" | "b", n: number) => { const r = m.get(k) ?? { a: 0, b: 0 }; r[f] += n; m.set(k, r); };
+    if (useRpc) {
+      leadSum.byDealer.forEach(d => add(keyOf(d.dealerCode), "a", d.leads));
+      qSummary.byDealer.forEach(d => add(keyOf(d.dealerCode), "b", d.count));
+    } else {
+      leads.forEach(l => add(keyOf(l.dealerCode ?? ""), "a", 1));
+      quotes.forEach(x => add(keyOf(x.dealerCode), "b", 1));
+    }
     return [...m.entries()].map(([k, v]) => ({
       key: k, a: v.a, b: v.b,
       label: view === "dealer" ? `${k} – ${DEALER_META.get(k)?.name ?? k}` : view === "region" ? regionDisplay(k) : k,
       onClick: view === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
     })).sort((x, y) => y.a - x.a);
-  }, [view, leads, quotes, DEALER_META, timeRange, router]);
+  }, [view, leadSum, qSummary, leads, quotes, DEALER_META, timeRange, router]);
 
   // ── Section 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง (รายตัวแทน) ──
   const quoteVsSales = useMemo(() => perf.map(d => ({

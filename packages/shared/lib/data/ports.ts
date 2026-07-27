@@ -135,7 +135,7 @@ export interface DashboardQuoteSummary {
   byProduct: QuoteProductRow[];
 }
 /** สรุปใบเสนอราคา "หลังกรอง" สำหรับ /hq/quotations (M9 Phase 2) — ป้อน analytics ทั้งหน้า */
-export interface QuoteDealerRow { dealerCode: string; count: number; value: number; sent: number; won: number; lost: number; wonVal: number; }
+export interface QuoteDealerRow { dealerCode: string; count: number; value: number; sent: number; won: number; lost: number; wonVal: number; latest?: string | null; }
 export interface QuoteAgingRow { bucket: string; count: number; value: number; }
 export interface HQQuotationsSummary {
   byDealer: QuoteDealerRow[];

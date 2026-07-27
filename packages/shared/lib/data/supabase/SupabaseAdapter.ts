@@ -525,6 +525,7 @@ export const SupabaseAdapter: DataAdapter = {
         byDealer: (d.byDealer ?? []).map(r => ({
           dealerCode: String(r.dealer_code), count: Number(r.count), value: Number(r.value),
           sent: Number(r.sent), won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
+          latest: (r.latest as string) ?? null,
         })),
         byMonth: (d.byMonth ?? []).map(r => ({
           y: Number(r.y), m: Number(r.m), quotes: Number(r.quotes), won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
