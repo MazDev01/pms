@@ -12,10 +12,15 @@
 //
 // ลูกค้าที่ไม่มีใบปิดการขายจับคู่ได้ → ไม่มีอาคาร/ส่งมอบ = null → หน้าแสดง "—"
 // (ห้ามเดาแทน — ลูกค้า seed หลายรายมี dealsWon แต่ไม่มีใบในระบบ ถือว่าไม่มีข้อมูล)
-import { useMemo } from "react";
-import { mainTemplateOf, type HQCustomer, type HQQuotation } from "@pms/shared/lib/mock";
+import { useMemo, useState, useEffect } from "react";
+import { mainTemplateOf, fmtISOToThai, type HQCustomer } from "@pms/shared/lib/mock";
 import { useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
+import { useSales } from "@pms/shared/context/SalesContext";
 import { deliveryDateOf, parseThaiDate } from "@pms/shared/lib/delivery";
+import { metrics as metricsRepo } from "@pms/shared/lib/data";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import type { WonBuildingRaw } from "@pms/shared/lib/data/ports";
 
 // ─── ภาค (ข้อเท็จจริงทางภูมิศาสตร์ — ไม่ใช่ข้อมูลธุรกิจที่กุขึ้น) ────────────────────
 export const REGIONS = ["เหนือ", "ตะวันออกเฉียงเหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้"] as const;
@@ -58,7 +63,9 @@ export type CustomerDbRow = HQCustomer & {
   isRepeat: boolean;            // ซื้อซ้ำ = มีอาคารที่ซื้อแล้วมากกว่า 1
 };
 
-const buildingOf = (q: HQQuotation): PurchasedBuilding => {
+// ข้อมูลขั้นต่ำที่ใช้สร้าง 1 อาคาร — HQQuotation ก็เข้าได้ (fallback) · rollup จาก DB map มาให้ (M9 Phase 2)
+type BuildingSrc = { quoteNo: string; productLine: string; valueNum: number; createdAt: string; deliveryTime?: string };
+const buildingOf = (q: BuildingSrc): PurchasedBuilding => {
   const product = q.productLine ?? "";
   const main = mainTemplateOf(product) || product;
   return {
@@ -73,6 +80,21 @@ const buildingOf = (q: HQQuotation): PurchasedBuilding => {
   };
 };
 
+// จับกลุ่มใบ won ตามลูกค้าที่ DB (M9 Phase 2) — supabase เท่านั้น · local คืน null → ใช้ client group เดิม
+// reactive: refetch เมื่อ quotations เปลี่ยน (trigger = อาร์เรย์จาก SalesContext)
+function useCustomerRollup(trigger: unknown): Map<string, WonBuildingRaw[]> | null {
+  const [rollup, setRollup] = useState<Map<string, WonBuildingRaw[]> | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setRollup(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      metricsRepo.customerRollup().then(r => { if (alive) setRollup(r); }).catch(e => logRepoRead("metrics.customerRollup", e));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+  }, [trigger]);
+  return rollup;
+}
+
 /**
  * ลูกค้าทั้งเครือ + ข้อมูลหลังปิดการขายที่ derive จากใบเสนอราคาจริง
  * ไม่มีใบปิดการขาย = buildings ว่าง → ทุกช่องหลังปิดการขายเป็น null
@@ -80,20 +102,30 @@ const buildingOf = (q: HQQuotation): PurchasedBuilding => {
 export function useCustomerDb(): CustomerDbRow[] {
   const customers = useNetworkCustomers();
   const quotations = useNetworkQuotations();
+  const { salesVersion } = useSales();
+  const rollup = useCustomerRollup(salesVersion); // supabase: group ที่ DB · local/ยังไม่กลับ: null
 
   return useMemo(() => {
-    // จัดใบที่ "ปิดการขายได้" เข้ากลุ่มตาม ชื่อลูกค้า + รหัสตัวแทน
-    const wonByCustomer = new Map<string, HQQuotation[]>();
-    quotations.forEach(q => {
-      if (q.status !== "won") return;
-      const key = `${q.dealerCode}|${q.customer}`;
-      const list = wonByCustomer.get(key);
-      if (list) list.push(q);
-      else wonByCustomer.set(key, [q]);
-    });
+    // อาคารต่อลูกค้า (BuildingSrc):
+    //   supabase → จาก rollup (group ที่ DB) · date(ISO) → createdAt ไทยด้วย fmtISOToThai (เท่า useNetworkQuotations)
+    //   local/ยังไม่กลับ → จัดใบ won ฝั่ง client ตาม (รหัสตัวแทน|ชื่อลูกค้า) เหมือนเดิม
+    const srcByCustomer = new Map<string, BuildingSrc[]>();
+    if (rollup) {
+      for (const [key, raws] of rollup) {
+        srcByCustomer.set(key, raws.map(r => ({ quoteNo: r.quoteNo, productLine: r.productLine, valueNum: r.valueNum, createdAt: fmtISOToThai(r.date) })));
+      }
+    } else {
+      quotations.forEach(q => {
+        if (q.status !== "won") return;
+        const key = `${q.dealerCode}|${q.customer}`;
+        const b: BuildingSrc = { quoteNo: q.quoteNo, productLine: q.productLine ?? "", valueNum: q.valueNum, createdAt: q.createdAt, deliveryTime: q.deliveryTime };
+        const list = srcByCustomer.get(key);
+        if (list) list.push(b); else srcByCustomer.set(key, [b]);
+      });
+    }
 
     return customers.map((c): CustomerDbRow => {
-      const won = wonByCustomer.get(`${c.dealerCode}|${c.name}`) ?? [];
+      const won = srcByCustomer.get(`${c.dealerCode}|${c.name}`) ?? [];
       // เรียงตามวันปิดการขาย เก่า → ใหม่ (ใบที่อ่านวันไม่ได้ไปท้ายสุด)
       const buildings = won
         .map(buildingOf)

@@ -16,7 +16,7 @@ import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { DealerRow } from "@pms/shared/lib/data/types";
-import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult } from "@pms/shared/lib/data/ports";
+import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters } from "@pms/shared/lib/data/ports";
 import { metrics as metricsRepo2, quotations as quotationsRepo } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
@@ -26,7 +26,7 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): Map<string, QuoteRangeRow> | null {
-  const { quotations } = useSales();
+  const { salesVersion } = useSales();
   const s = isoDate(start), e = isoDate(end);
   const [rows, setRows] = useState<Map<string, QuoteRangeRow> | null>(null);
   useEffect(() => {
@@ -38,14 +38,34 @@ export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): M
         .catch(err => logRepoRead("metrics.networkQuoteRange", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [s, e, dealer, quotations]);
+  }, [s, e, dealer, salesVersion]);
   return rows;
+}
+
+// สรุปลีด "หลังกรอง" ที่ DB สำหรับ /hq/leads — M9 Phase 2 · supabase เท่านั้น · local คืน null → client fallback
+// reactive: refetch เมื่อ leads เปลี่ยน หรือ filters เปลี่ยน
+export function useLeadSummary(filters: LeadSummaryFilters): LeadSummary | null {
+  const { salesVersion } = useSales();
+  const key = JSON.stringify(filters);
+  const [summary, setSummary] = useState<LeadSummary | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      metricsRepo2.leadSummary(filters)
+        .then(r => { if (alive) setSummary(r); })
+        .catch(err => logRepoRead("metrics.leadSummary", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, salesVersion]);
+  return summary;
 }
 
 // สรุปใบ "หลังกรอง" ที่ DB สำหรับ /hq/quotations (byDealer/byMonth/byProduct/aging) — M9 Phase 2
 // supabase เท่านั้น · local คืน null → หน้าใช้ client fallback (คำนวณจาก rows เดิม)
 export function useHQQuotationsSummary(filters: QuoteSummaryFilters): HQQuotationsSummary | null {
-  const { quotations } = useSales();
+  const { salesVersion } = useSales();
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<HQQuotationsSummary | null>(null);
   useEffect(() => {
@@ -58,13 +78,13 @@ export function useHQQuotationsSummary(filters: QuoteSummaryFilters): HQQuotatio
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, quotations]);
+  }, [key, salesVersion]);
   return summary;
 }
 
 // หน้าเดียวของตารางใบ (paged/filtered/sorted ที่ DB) — M9 Phase 2 · supabase เท่านั้น · local คืน null
 export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
-  const { quotations } = useSales();
+  const { salesVersion } = useSales();
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<QuoteListResult | null>(null);
   useEffect(() => {
@@ -77,14 +97,14 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, quotations]);
+  }, [key, salesVersion]);
   return page;
 }
 
 // สรุปใบในช่วง (byMonth/byStatus/byProduct) ที่ DB รอบเดียว — ป้อนหลายการ์ด (M9)
 // supabase เท่านั้น · local คืน null → dashboard คงคำนวณจาก winQuotes เดิม
 export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string): DashboardQuoteSummary | null {
-  const { quotations } = useSales();
+  const { salesVersion } = useSales();
   const s = isoDate(start), e = isoDate(end);
   const [summary, setSummary] = useState<DashboardQuoteSummary | null>(null);
   useEffect(() => {
@@ -96,7 +116,7 @@ export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string
         .catch(err => logRepoRead("metrics.dashboardQuoteSummary", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [s, e, dealer, quotations]);
+  }, [s, e, dealer, salesVersion]);
   return summary;
 }
 

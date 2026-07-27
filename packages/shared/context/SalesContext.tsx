@@ -88,6 +88,11 @@ export type SalesContextType = {
   // สถานะการบันทึกล้มเหลว (C1) — หน้าจอกลาง (AppShell) เอาไปแสดงเตือนผู้ใช้
   syncError: string | null;
   clearSyncError: () => void;
+
+  // สัญญาณ "ข้อมูลขายเปลี่ยน" (M9 Phase 4) — ตัวเลขเดียวที่ bump เมื่อโหลด/เขียน/realtime
+  //   hook ที่รวมยอดที่ DB (RPC) ผูก refetch กับตัวนี้แทนการจับ array ตรง ๆ
+  //   → ก้าวต่อไปตัดการโหลด array เต็มของ HQ ได้ โดย reactivity ไม่พัง (เปลี่ยนต้นทาง bump เป็น realtime)
+  salesVersion: number;
 };
 
 const SalesContext = createContext<SalesContextType | null>(null);
@@ -125,6 +130,11 @@ export function SalesProvider({
   // เดิม: .catch(console.error) → RLS ปฏิเสธ/เน็ตหลุด แล้วผู้ใช้ยังเห็นข้อมูลบนจอเหมือนบันทึกสำเร็จ
   // ตอนนี้: แจ้งผู้ใช้ + ดึงของจริงจาก repo มาทับ เพื่อไม่ให้จอค้างอยู่กับค่าที่ไม่ได้ถูกบันทึก
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // M9 Phase 4: สัญญาณข้อมูลขายเปลี่ยน — ตอนนี้ derive จากอาร์เรย์ (bump เมื่อโหลด/เขียน/realtime เปลี่ยน array)
+  //   พฤติกรรมเท่าเดิมกับที่ hook เคยจับ [leads,quotations] · เฟสถัดไปเปลี่ยนต้นทาง bump เป็น realtime ตรง
+  //   (effect ที่ bump อยู่หลังประกาศ array ทั้ง 4 — กัน TDZ)
+  const [salesVersion, setSalesVersion] = useState(0);
   // late-bind: ตัวรายงานถูกประกอบหลัง state ทุกตัวถูกประกาศ (ดู useEffect ด้านล่าง)
   const failRef = useRef<(entity: SyncEntity, op: string, e: unknown) => void>(() => {});
   const onFail = (entity: SyncEntity, op: string) => (e: unknown) => failRef.current(entity, op, e);
@@ -218,6 +228,8 @@ export function SalesProvider({
       .catch((e) => { if (alive) logRepoRead("appointments.list", e); });
     return () => { alive = false; };
   }, [hydrated, dealerCode, isHQ]);
+  // bump สัญญาณเมื่อข้อมูลขายชุดใดเปลี่ยน (โหลด/เขียน/realtime) — hook RPC ผูก refetch กับ salesVersion
+  useEffect(() => { setSalesVersion(v => v + 1); }, [leads, quotations, customers, appointments]);
   const persistAppt = useRef({
     create: (a: AppointmentMock) => { void appointmentsRepo.create(a).catch(onFail("appointments", "สร้างนัดหมาย")); },
     update: (a: AppointmentMock) => { void appointmentsRepo.update(a).catch(onFail("appointments", "แก้ไขนัดหมาย")); },
@@ -557,6 +569,7 @@ export function SalesProvider({
       appointments, addAppointment, updateAppointment, deleteAppointment,
       convertLeadToCustomer,
       syncError, clearSyncError: () => setSyncError(null),
+      salesVersion,
     }}>
       {children}
     </SalesContext.Provider>

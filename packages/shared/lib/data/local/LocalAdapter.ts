@@ -13,6 +13,7 @@ import {
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
+import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { profileKey, PROFILE_UPDATED_EVENT, sessions, type UserProfile } from "@pms/shared/lib/mock";
 
 // โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
@@ -215,15 +216,17 @@ export const LocalAdapter: DataAdapter = {
   //   หมายเหตุ: โหมด local, useDealerPerformance ยังใช้เส้นทางคำนวณ client เดิม (ผสม seed สาขาอื่น)
   //   ตัวนี้จึงไว้ให้พอร์ตครบ/คนอื่นเรียกได้ — คิดเฉพาะข้อมูล live (ไม่รวม seed)
   metrics: {
-    dealerRollup: (year) => {
+    dealerRollup: (year, opts) => {
       const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
-      const m = new Map<string, { quotes: number; won: number; lost: number; revenue: number; openLeads: number }>();
+      const m = new Map<string, { quotes: number; won: number; lost: number; revenue: number; openLeads: number; staleLeads: number }>();
       const get = (code: string) => {
         let r = m.get(code);
-        if (!r) { r = { quotes: 0, won: 0, lost: 0, revenue: 0, openLeads: 0 }; m.set(code, r); }
+        if (!r) { r = { quotes: 0, won: 0, lost: 0, revenue: 0, openLeads: 0, staleLeads: 0 }; m.set(code, r); }
         return r;
       };
+      const asOfMs = opts ? Date.parse(opts.asOf) : Date.parse("2026-06-30");
+      const defDays = opts?.defaultDays ?? 7;
       for (const q of qs) {
         const r = get(q.dealerCode ?? "CNX");
         r.quotes += 1;
@@ -237,8 +240,61 @@ export const LocalAdapter: DataAdapter = {
       }
       for (const l of ls) {
         if (l.status === "PAID" || l.status === "CANCELLED") continue;
-        get(l.dealerCode ?? "CNX").openLeads += 1;
+        const code = l.dealerCode ?? "CNX";
+        const r = get(code); r.openLeads += 1;
+        // stale = needsFollowUp: วันติดต่อล่าสุด (max activities ?? createdAt) เงียบเกินเกณฑ์
+        const actMs = (l.activities ?? []).map(a => parseThaiDateLocal(a.date)?.getTime()).filter((x): x is number => x != null);
+        const lastMs = actMs.length ? Math.max(...actMs) : parseThaiDateLocal(l.createdAt ?? "")?.getTime() ?? null;
+        if (lastMs != null) {
+          const days = Math.floor((asOfMs - lastMs) / 86_400_000);
+          const thr = opts?.perDealer?.[code] ?? defDays;
+          if (days > thr) r.staleLeads += 1;
+        }
       }
+      return ok(m);
+    },
+    leadSummary: (f) => {
+      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const search = (f.search ?? "").trim().toLowerCase();
+      const isoOf = (l: LeadRow) => { const d = parseThaiDateLocal(l.createdAt ?? ""); return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null; };
+      const rows = ls.filter(l => {
+        const iso = isoOf(l);
+        if (iso && f.dateStart && iso < f.dateStart) return false;
+        if (iso && f.dateEnd && iso > f.dateEnd) return false;
+        if (f.dealerCodes?.length && !f.dealerCodes.includes(l.dealerCode ?? "CNX")) return false;
+        if (f.province && l.province !== f.province) return false;
+        if (f.product && l.product !== f.product) return false;
+        if (f.source && (l.source || "ไม่ระบุ") !== f.source) return false;
+        if (f.status && l.status !== f.status) return false;
+        if (search && !`${l.company ?? ""} ${l.contact ?? ""} ${l.province ?? ""} ${l.product ?? ""} ${l.assigned ?? ""} ${l.id ?? ""} ${l.dealerCode ?? ""}`.toLowerCase().includes(search)) return false;
+        return true;
+      });
+      const cnt = <K extends string>(key: (l: LeadRow) => K) => { const m = new Map<K, number>(); rows.forEach(l => m.set(key(l), (m.get(key(l)) ?? 0) + 1)); return m; };
+      const statusM = cnt(l => l.status);
+      const sourceM = cnt(l => (l.source || "ไม่ระบุ"));
+      const productM = cnt(l => (l.product || "ไม่ระบุ"));
+      const lostM = new Map<string, number>();
+      rows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => lostM.set(l.lostReason!, (lostM.get(l.lostReason!) ?? 0) + 1));
+      const monthM = new Map<string, { y: number; m: number; created: number; won: number; lost: number }>();
+      rows.forEach(l => { const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return; const y = d.getFullYear(), m = d.getMonth(), k = `${y}-${m}`; let r = monthM.get(k); if (!r) { r = { y, m, created: 0, won: 0, lost: 0 }; monthM.set(k, r); } r.created++; if (l.status === "PAID") r.won++; if (l.status === "CANCELLED") r.lost++; });
+      return ok({
+        byStatus: [...statusM.entries()].map(([status, count]) => ({ status, count })),
+        bySource: [...sourceM.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
+        byProduct: [...productM.entries()].map(([product, count]) => ({ product, count })).sort((a, b) => b.count - a.count),
+        byLostReason: [...lostM.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+        byMonth: [...monthM.values()],
+      });
+    },
+    customerRollup: () => {
+      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const m = new Map<string, { quoteNo: string; productLine: string; valueNum: number; date: string }[]>();
+      for (const q of qs) {
+        if (q.status !== "won") continue;
+        const key = `${q.dealerCode ?? "CNX"}|${q.customer ?? ""}`;
+        const b = { quoteNo: q.id, productLine: (q.buildingType || q.project) ?? "", valueNum: q.totalValue ?? 0, date: q.date ?? "" };
+        const arr = m.get(key); if (arr) arr.push(b); else m.set(key, [b]);
+      }
+      for (const arr of m.values()) arr.sort((a, b) => a.date.localeCompare(b.date)); // order by date (ตรง jsonb_agg order by)
       return ok(m);
     },
     networkQuoteRange: (start, end, dealer) => {

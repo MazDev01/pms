@@ -25,3 +25,6 @@ playwright/.cache/
 
 # debug/scratch scripts
 _m.mjs
+
+# Claude Code personal local settings
+.claude/settings.local.json

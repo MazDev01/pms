@@ -7,7 +7,8 @@ import { useMemo, useState, useEffect } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
 import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
-import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
+import { useNetworkLeads, useNetworkQuotations, useLeadSummary } from "@pms/shared/lib/useNetworkData";
+import type { LeadSummaryFilters } from "@pms/shared/lib/data/ports";
 import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
 import { unassignedLeads } from "@pms/shared/lib/hqAlerts";
 import { needsFollowUp } from "@pms/shared/lib/leadMetrics";
@@ -115,6 +116,24 @@ export default function HQLeadsPage() {
     (!overdueOnly || needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays))
   ), [kpiBase, status, overdueOnly, rulesOf]);
 
+  // ── M9 Phase 2: สรุปลีดหลังกรองที่ DB (supabase) · local/overdue/ระหว่างโหลด = client fallback ──
+  const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const leadDealerCodes = useMemo<string[] | undefined>(() => {
+    let codes: string[] | undefined;
+    const restrict = (pred: (c: string) => boolean) => { codes = (codes ?? allDealers.map(d => d.code)).filter(pred); };
+    if (dealerSel !== "ALL") restrict(c => c === dealerSel);
+    if (regionSel !== "ALL") restrict(c => REGION_OF.get(c) === regionSel);
+    return codes;
+  }, [dealerSel, regionSel, allDealers, REGION_OF]);
+  const baseF: LeadSummaryFilters = {
+    dealerCodes: leadDealerCodes, province: province === "ALL" ? undefined : province,
+    product: btSel === "ALL" ? undefined : btSel, source: srcSel === "ALL" ? undefined : srcSel,
+    search: query.trim() || undefined, dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+  };
+  const sumBase = useLeadSummary(baseF);                                              // KPI (kpiBase — ไม่กรอง status/overdue)
+  const sumCharts = useLeadSummary({ ...baseF, status: status === "ALL" ? undefined : status }); // กราฟ (filtered)
+  const chartSummary = overdueOnly ? null : sumCharts;                               // overdue → client (พึ่ง last_contact + เกณฑ์)
+
   // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
   // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง
   // ตรรกะพร้อมใช้: พอมีลีดที่ assigned ว่างนานเกินเกณฑ์เมื่อไร การ์ดจะเด้งเอง
@@ -143,15 +162,22 @@ export default function HQLeadsPage() {
   // KPI — คิดจาก kpiBase (ตามตัวกรองขอบเขต) ไม่ใช่ scoped (ทั้งเครือ)
   // เดิมคิดจาก scoped → กรองเหลือตัวแทนเดียว ตารางหด 25→7 แถว แต่ KPI นิ่งที่ 61/24/42% คนอ่านเข้าใจผิด
   const kpis = useMemo(() => {
+    const followUp = kpiBase.filter(l => needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays)).length; // client เสมอ (พึ่ง activities+เกณฑ์)
+    const lastM = timeRange.end.getMonth();
+    if (sumBase) { // supabase: total/won/lost/newThis จาก DB
+      const byS = new Map(sumBase.byStatus.map(r => [r.status, r.count]));
+      const total = sumBase.byStatus.reduce((s, r) => s + r.count, 0);
+      const won = byS.get("PAID") ?? 0, lost = byS.get("CANCELLED") ?? 0, closed = won + lost;
+      const newThis = sumBase.byMonth.filter(r => r.m === lastM).reduce((s, r) => s + r.created, 0);
+      return { total, followUp, newThis, conv: closed ? Math.round(won / closed * 100) : 0 };
+    }
     const total = kpiBase.length;
     const won = kpiBase.filter(l => l.status === "PAID").length;
     const lost = kpiBase.filter(l => l.status === "CANCELLED").length;
     const closed = won + lost;
-    const followUp = kpiBase.filter(l => needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays)).length;
-    const lastM = timeRange.end.getMonth();
     const newThis = kpiBase.filter(l => { const d = parseThaiDate(l.createdAt ?? ""); return d && d.getMonth() === lastM; }).length;
     return { total, followUp, newThis, conv: closed ? Math.round(won / closed * 100) : 0 };
-  }, [kpiBase, timeRange.end, rulesOf]);
+  }, [sumBase, kpiBase, timeRange.end, rulesOf]);
 
   // ── Section 1 · ลีด เทียบ ใบเสนอราคา รายตัวแทน ─────────────────────────────
   // สาขาไหนรับลีดเยอะแต่ออกใบเสนอราคาน้อย = จุดที่ผู้บริหารต้องเร่ง
@@ -224,59 +250,67 @@ export default function HQLeadsPage() {
     const newM = new Map<string, number>(), wonM = new Map<string, number>(),
       lostM = new Map<string, number>(), quoteM = new Map<string, number>();
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-    filtered.forEach(l => {
-      const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
-      const k = monthKeyOf(d);
-      bump(newM, k);
-      if (l.status === "PAID") bump(wonM, k);
-      if (l.status === "CANCELLED") bump(lostM, k);
-    });
+    // ใบเสนอราคา (quoteM) มาจาก netQuotes เสมอ (คนละ entity)
     netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d) bump(quoteM, monthKeyOf(d)); });
+    if (chartSummary) { // ลีด: จาก byMonth ที่ DB (key YYYY-MM)
+      chartSummary.byMonth.forEach(r => { const k = `${r.y}-${String(r.m + 1).padStart(2, "0")}`; newM.set(k, r.created); wonM.set(k, r.won); lostM.set(k, r.lost); });
+    } else {
+      filtered.forEach(l => {
+        const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
+        const k = monthKeyOf(d);
+        bump(newM, k);
+        if (l.status === "PAID") bump(wonM, k);
+        if (l.status === "CANCELLED") bump(lostM, k);
+      });
+    }
     const pick = (m: Map<string, number>) => buckets.map(b => m.get(b.key) ?? 0);
     return { months: buckets.map(b => b.label), newM: pick(newM), wonM: pick(wonM), lostM: pick(lostM), quoteM: pick(quoteM) };
-  }, [filtered, netQuotes, trendRange]);
+  }, [chartSummary, filtered, netQuotes, trendRange]);
 
   // ลีดตามแหล่งที่มา + ตามสถานะ (แท่งแนวนอน)
   const sources = useMemo(() => {
-    const m = new Map<string, number>();
-    filtered.forEach(l => m.set(l.source || "ไม่ระบุ", (m.get(l.source || "ไม่ระบุ") ?? 0) + 1));
-    const arr = [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+    const base = chartSummary
+      ? chartSummary.bySource.map(r => ({ label: r.source, count: r.count }))
+      : (() => { const m = new Map<string, number>(); filtered.forEach(l => m.set(l.source || "ไม่ระบุ", (m.get(l.source || "ไม่ระบุ") ?? 0) + 1)); return [...m.entries()].map(([label, count]) => ({ label, count })); })();
+    const arr = [...base].sort((a, b) => b.count - a.count);
     const max = Math.max(...arr.map(a => a.count), 1);
     const total = arr.reduce((s, a) => s + a.count, 0) || 1;
     // pct = เทียบตัวมากสุด (ใช้กับแท่ง) · share = สัดส่วนของทั้งหมด (ใช้กับโดนัท) — คนละความหมาย อย่าสลับ
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [filtered]);
+  }, [chartSummary, filtered]);
 
   const byStatus = useMemo(() => {
     const order: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
-    const count = (s: LeadStatus) => filtered.filter(l => l.status === s).length;
+    const byS = chartSummary ? new Map(chartSummary.byStatus.map(r => [r.status, r.count])) : null;
+    const count = (s: LeadStatus) => byS ? (byS.get(s) ?? 0) : filtered.filter(l => l.status === s).length;
     const max = Math.max(...order.map(count), 1);
     return order.map(s => ({ status: s, count: count(s), pct: Math.round(count(s) / max * 100) }));
-  }, [filtered]);
+  }, [chartSummary, filtered]);
 
   // ── Section 3 · ประเภทอาคารที่ลูกค้าสนใจ ──────────────────────────────────
   // จัดกลุ่มด้วย "แม่แบบที่สนใจ" ของลีด (product) — ใช้ค่าจริงในระบบ ไม่ยุบ/ไม่แปลงชื่อ
   const buildingTypes = useMemo(() => {
-    const m = new Map<string, number>();
-    filtered.forEach(l => { const k = l.product || "ไม่ระบุ"; m.set(k, (m.get(k) ?? 0) + 1); });
-    const arr = [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+    const base = chartSummary
+      ? chartSummary.byProduct.map(r => ({ label: r.product, count: r.count }))
+      : (() => { const m = new Map<string, number>(); filtered.forEach(l => { const k = l.product || "ไม่ระบุ"; m.set(k, (m.get(k) ?? 0) + 1); }); return [...m.entries()].map(([label, count]) => ({ label, count })); })();
+    const arr = [...base].sort((a, b) => b.count - a.count);
     const max = Math.max(...arr.map(a => a.count), 1);
     const total = arr.reduce((s, a) => s + a.count, 0) || 1;
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [filtered]);
+  }, [chartSummary, filtered]);
 
   // ── Section 4 · เหตุผลที่ปิดการขายไม่สำเร็จ ────────────────────────────────
   // นับเฉพาะลีดที่ปิดไม่สำเร็จ "และบันทึกเหตุผลไว้จริง" — ไม่เดาเหตุผลให้ลีดที่ไม่ได้ระบุ
   // รายการเหตุผลเป็นของ HQ (ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน
   const lostReasons = useMemo(() => {
-    const m = new Map<string, number>();
-    filtered.filter(l => l.status === "CANCELLED" && l.lostReason)
-      .forEach(l => m.set(l.lostReason!, (m.get(l.lostReason!) ?? 0) + 1));
-    const arr = [...m.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+    const base = chartSummary
+      ? chartSummary.byLostReason.map(r => ({ reason: r.reason, count: r.count }))
+      : (() => { const m = new Map<string, number>(); filtered.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => m.set(l.lostReason!, (m.get(l.lostReason!) ?? 0) + 1)); return [...m.entries()].map(([reason, count]) => ({ reason, count })); })();
+    const arr = [...base].sort((a, b) => b.count - a.count);
     const max = Math.max(...arr.map(a => a.count), 1);
     const total = arr.reduce((s, a) => s + a.count, 0) || 1;
     return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
-  }, [filtered]);
+  }, [chartSummary, filtered]);
 
 
   // ── Section 5 · ผลงานตัวแทน (Top 10) ─────────────────────────────────────

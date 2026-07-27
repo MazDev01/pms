@@ -110,7 +110,11 @@ export interface DealerRollup {
   revenue: number;
   /** ลีดที่ยังไม่ปิด (status ไม่ใช่ PAID/CANCELLED) */
   openLeads: number;
+  /** ลีดเปิดที่เงียบเกินเกณฑ์ (needsFollowUp) — ใช้คิด onTimePct = (open−stale)/open */
+  staleLeads: number;
 }
+/** พารามิเตอร์คิด stale (onTimePct) — as_of + เกณฑ์วันรายสาขา (rules[code] ?? default) */
+export interface DealerRollupOpts { asOf: string; defaultDays: number; perDealer: Record<string, number>; }
 /** สถิติใบเสนอราคารายสาขา "ในช่วงวันที่" — ป้อน Scorecard (ผลรวม) + dealerStats ของ /hq/dashboard */
 export interface QuoteRangeRow {
   quotes: number;
@@ -151,10 +155,29 @@ export interface QuoteSummaryFilters {
   dateEnd?: string;
   asOf?: string; // "วันนี้ของระบบ" (APP_NOW ISO) สำหรับคิดอายุใบ
 }
+/** อาคารที่ลูกค้าซื้อ (ใบ won) — ดิบจาก DB · client คิด mainTemplate/วันส่งมอบต่อ (M9 Phase 2) */
+export interface WonBuildingRaw { quoteNo: string; productLine: string; valueNum: number; date: string; }
+/** สรุปลีด "หลังกรอง" สำหรับ /hq/leads (M9 Phase 2) */
+export interface LeadMonthRow { y: number; m: number; created: number; won: number; lost: number; }
+export interface LeadSummary {
+  byStatus: { status: string; count: number }[];
+  bySource: { source: string; count: number }[];
+  byProduct: { product: string; count: number }[];
+  byLostReason: { reason: string; count: number }[];
+  byMonth: LeadMonthRow[];
+}
+export interface LeadSummaryFilters {
+  dealerCodes?: string[]; province?: string; product?: string; source?: string;
+  search?: string; status?: string; dateStart?: string; dateEnd?: string;
+}
 export interface MetricsRepo {
   /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง
    *  scope คุมด้วย RLS ฝั่ง supabase (ตัวแทน=สาขาตน · HQ=ทั้งเครือ) เหมือนที่ client เคยเห็น */
-  dealerRollup(year: number): Promise<Map<string, DealerRollup>>;
+  dealerRollup(year: number, opts?: DealerRollupOpts): Promise<Map<string, DealerRollup>>;
+  /** สรุปลีดหลังกรอง (byStatus/bySource/byProduct/byLostReason/byMonth) — ป้อน analytics หน้า /hq/leads */
+  leadSummary(filters: LeadSummaryFilters): Promise<LeadSummary>;
+  /** ใบ won จับกลุ่มตามลูกค้า (key = `${dealerCode}|${customer}`) — ป้อน useCustomerDb (M9 Phase 2) */
+  customerRollup(): Promise<Map<string, WonBuildingRaw[]>>;
   /** สรุปใบหลังกรอง (byDealer/byMonth/byProduct/aging) — ป้อน analytics หน้า /hq/quotations (M9 Phase 2) */
   hqQuotationsSummary(filters: QuoteSummaryFilters): Promise<HQQuotationsSummary>;
   /** สถิติใบในช่วง [start,end] (ISO YYYY-MM-DD, inclusive) รายสาขา (key = dealerCode)

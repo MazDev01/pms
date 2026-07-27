@@ -20,7 +20,7 @@ import { useSales } from "@pms/shared/context/SalesContext";
 import { settings as settingsRepo, metrics as metricsRepo } from "./data";
 import { DATA_SOURCE } from "./data/config";
 import { logRepoRead } from "./repoLog";
-import type { DealerRollup } from "./data/ports";
+import type { DealerRollup, DealerRollupOpts } from "./data/ports";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { DEFAULT_LEAD_RULES, type LeadStatus, type DealerLeadRulesMap } from "./mock";
 
@@ -30,19 +30,21 @@ import { DEFAULT_LEAD_RULES, type LeadStatus, type DealerLeadRulesMap } from "./
 //     → ตัวเลขบนจอไม่ค้างหลังสร้าง/ปิดใบ · debounce รวมการเปลี่ยนถี่ ๆ ให้ยิง RPC ครั้งเดียว
 //   • ยังพึ่ง array ที่โหลดอยู่เป็น "สัญญาณเปลี่ยน" (transitional) — เฟสถัดไปตัด array แล้วเปลี่ยนไปฟัง realtime ตรง
 //   • โหมด local คืน null → useDealerPerformance คงเส้นทางคำนวณ client เดิม (เดโมผสม seed สาขาอื่น ห้ามหาย)
-function useDealerRollup(year: number): Map<string, DealerRollup> | null {
-  const { leads, quotations } = useSales();
+function useDealerRollup(year: number, opts: DealerRollupOpts): Map<string, DealerRollup> | null {
+  const { salesVersion } = useSales();
+  const optsKey = JSON.stringify(opts);
   const [rollup, setRollup] = useState<Map<string, DealerRollup> | null>(null);
   useEffect(() => {
     if (DATA_SOURCE !== "supabase") { setRollup(null); return; }
     let alive = true;
     const t = setTimeout(() => {
-      metricsRepo.dealerRollup(year)
+      metricsRepo.dealerRollup(year, opts)
         .then(r => { if (alive) setRollup(r); })
         .catch(e => logRepoRead("metrics.dealerRollup", e));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [year, leads, quotations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, optsKey, salesVersion]);
   return rollup;
 }
 
@@ -72,8 +74,14 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
   const leads = useNetworkLeads();
   // เกณฑ์ค้างติดต่อของแต่ละสาขา — สาขาที่ไม่ได้ตั้งเองใช้ค่ากลาง
   const rules = useRepoValue<DealerLeadRulesMap>(() => settingsRepo.getLeadRulesMap(), {});
-  // rollup จาก DB (supabase เท่านั้น · local = null) — เป็นแหล่งจริงของ 5 ฟิลด์เมื่อพร้อม (M9 Phase 1)
-  const serverRollup = useDealerRollup(APP_NOW.getFullYear());
+  // rollup จาก DB (supabase เท่านั้น · local = null) — แหล่งจริงของ quotes/won/lost/revenue/openLeads + stale (onTimePct)
+  // ส่งเกณฑ์รายสาขา (rules) + as_of ให้ DB คิด stale = needsFollowUp (ตอนนี้มี last_contact_at แล้ว · 0046)
+  const rollupOpts = useMemo<DealerRollupOpts>(() => ({
+    asOf: `${APP_NOW.getFullYear()}-${String(APP_NOW.getMonth() + 1).padStart(2, "0")}-${String(APP_NOW.getDate()).padStart(2, "0")}`,
+    defaultDays: DEFAULT_LEAD_RULES.followUpAlertDays,
+    perDealer: Object.fromEntries(Object.entries(rules).map(([code, r]) => [code, r.followUpAlertDays])),
+  }), [rules]);
+  const serverRollup = useDealerRollup(APP_NOW.getFullYear(), rollupOpts);
 
   return useMemo(() => {
     const m = new Map<string, DealerPerf>();
@@ -111,16 +119,15 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
       r.onTimePct = onTime(code, r.openLeads);
     }
 
-    // supabase: ยึด rollup จาก DB เป็นแหล่งจริงของ quotes/won/lost/revenue/openLeads (+winRate อนุพัทธ์)
-    //   onTimePct ยังคำนวณ client (พึ่งวันติดต่อล่าสุดใน activities — ยัง port ไม่ได้จนกว่าจะ normalize วันที่)
-    //   ค่าที่คำนวณ client ด้านบนทำหน้าที่เป็นค่าเริ่มต้น (กันจอว่างระหว่าง RPC ยังไม่กลับ) แล้ว DB ทับเมื่อพร้อม
+    // supabase: ยึด rollup จาก DB เป็นแหล่งจริงของ quotes/won/lost/revenue/openLeads + onTimePct (จาก stale)
+    //   ค่าที่คำนวณ client ด้านบนเป็นค่าเริ่มต้น (กันจอว่างระหว่าง RPC ยังไม่กลับ) แล้ว DB ทับเมื่อพร้อม
     if (serverRollup) {
       for (const [code, sr] of serverRollup) {
         const r = get(code);
         r.quotes = sr.quotes; r.won = sr.won; r.lost = sr.lost; r.revenue = sr.revenue; r.openLeads = sr.openLeads;
         const closed = sr.won + sr.lost;
         r.winRate = closed ? Math.round((sr.won / closed) * 100) : null;
-        r.onTimePct = onTime(code, sr.openLeads);
+        r.onTimePct = sr.openLeads > 0 ? Math.round(((sr.openLeads - sr.staleLeads) / sr.openLeads) * 100) : null;
       }
     }
     return m;

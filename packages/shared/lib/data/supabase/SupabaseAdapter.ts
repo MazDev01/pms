@@ -9,7 +9,7 @@ import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REA
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
-import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary } from "../ports";
+import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, WonBuildingRaw, LeadSummary } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
@@ -443,15 +443,47 @@ export const SupabaseAdapter: DataAdapter = {
 
   // rollup รายสาขา (M9 Phase 1) — รวมยอดที่ DB ผ่าน RPC dealer_rollup · RLS คุม scope (ตัวแทน=สาขาตน · HQ=ทั้งเครือ)
   metrics: {
-    dealerRollup: async (year) => {
-      const { data, error } = await sb().rpc("dealer_rollup", { p_year: year });
+    dealerRollup: async (year, opts) => {
+      const { data, error } = await sb().rpc("dealer_rollup", {
+        p_year: year,
+        p_as_of: opts?.asOf ?? "2026-06-30",
+        p_default_days: opts?.defaultDays ?? 7,
+        p_follow_up_days: opts?.perDealer ?? null,
+      });
       if (error) throw new Error(error.message);
       const m = new Map<string, DealerRollup>();
       for (const r of (data as Row[]) ?? []) {
         m.set(String(r.dealer_code), {
           quotes: Number(r.quotes), won: Number(r.won), lost: Number(r.lost),
-          revenue: Number(r.revenue), openLeads: Number(r.open_leads),
+          revenue: Number(r.revenue), openLeads: Number(r.open_leads), staleLeads: Number(r.stale_leads),
         });
+      }
+      return m;
+    },
+    leadSummary: async (f) => {
+      const { data, error } = await sb().rpc("lead_summary", {
+        p_dealer_codes: f.dealerCodes ?? null, p_province: f.province ?? null, p_product: f.product ?? null,
+        p_source: f.source ?? null, p_search: (f.search ?? "").trim() || null, p_status: f.status ?? null,
+        p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { byStatus?: Row[]; bySource?: Row[]; byProduct?: Row[]; byLostReason?: Row[]; byMonth?: Row[] };
+      return {
+        byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count) })),
+        bySource: (d.bySource ?? []).map(r => ({ source: String(r.source), count: Number(r.count) })),
+        byProduct: (d.byProduct ?? []).map(r => ({ product: String(r.product), count: Number(r.count) })),
+        byLostReason: (d.byLostReason ?? []).map(r => ({ reason: String(r.reason), count: Number(r.count) })),
+        byMonth: (d.byMonth ?? []).map(r => ({ y: Number(r.y), m: Number(r.m), created: Number(r.new), won: Number(r.won), lost: Number(r.lost) })),
+      };
+    },
+    customerRollup: async () => {
+      const { data, error } = await sb().rpc("customer_rollup");
+      if (error) throw new Error(error.message);
+      const m = new Map<string, WonBuildingRaw[]>();
+      for (const r of (data as Row[]) ?? []) {
+        m.set(`${r.dealer_code}|${r.customer ?? ""}`, ((r.buildings as WonBuildingRaw[]) ?? []).map(b => ({
+          quoteNo: String(b.quoteNo), productLine: String(b.productLine ?? ""), valueNum: Number(b.valueNum), date: String(b.date ?? ""),
+        })));
       }
       return m;
     },

@@ -49,7 +49,9 @@ export const audit = adapter.audit;
 // rollup รายสาขา (M9 Phase 1) — dedup ตามปี: หลาย component (แดชบอร์ด/แจ้งเตือน/กระดิ่ง) ขอปีเดียวกันพร้อมกัน ยิงจริงครั้งเดียว
 const _metrics = adapter.metrics;
 export const metrics: MetricsRepo = {
-  dealerRollup: (year) => dedupeRead(`metrics.dealerRollup:${year}`, () => _metrics.dealerRollup(year)),
+  dealerRollup: (year, opts) => dedupeRead(`metrics.dealerRollup:${year}:${opts ? JSON.stringify(opts) : ""}`, () => _metrics.dealerRollup(year, opts)),
+  customerRollup: () => dedupeRead("metrics.customerRollup", () => _metrics.customerRollup()),
+  leadSummary: (f) => dedupeRead(`metrics.leadSummary:${JSON.stringify(f)}`, () => _metrics.leadSummary(f)),
   networkQuoteRange: (start, end, dealer) =>
     dedupeRead(`metrics.networkQuoteRange:${start}:${end}:${dealer ?? ""}`, () => _metrics.networkQuoteRange(start, end, dealer)),
   dashboardQuoteSummary: (start, end, dealer) =>
