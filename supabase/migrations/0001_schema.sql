@@ -1,15 +1,16 @@
--- Benjamin PMS — Schema (เฟส B) · รันบน Supabase SQL editor
+-- Benjamin PMS — Schema (เฟส B) · idempotent (รันซ้ำ/db push ทับ DB ที่ bootstrap ด้วยมือได้)
 -- คอลัมน์เป็น snake_case · โค้ดแอปแปลงเป็น camelCase ด้วย mappers.ts
 -- jsonb = ฟิลด์ที่เป็น array/object (tasks, line_items, price_history, contacts, issuer ...)
 
 -- ── ENUMS ─────────────────────────────────────────────────────────────
-create type user_role       as enum ('SUPER_ADMIN','HQ_MANAGEMENT','HQ_STAFF','DEALER_ADMIN','DEALER_SALES','DEALER_SITE');
-create type lead_status      as enum ('WAITING','BULLET','QUOTED','FOLLOWUP','NEGO','PAID','CANCELLED');
-create type quotation_status as enum ('draft','sent_to_client','won','lost','expired');
-create type dealer_status    as enum ('active','inactive');
+-- guard ทีละตัว: ถ้ามีอยู่แล้ว (bootstrap ด้วยมือ) ข้ามไป ไม่ให้ db push halt
+do $$ begin create type user_role       as enum ('SUPER_ADMIN','HQ_MANAGEMENT','HQ_STAFF','DEALER_ADMIN','DEALER_SALES','DEALER_SITE'); exception when duplicate_object then null; end $$;
+do $$ begin create type lead_status      as enum ('WAITING','BULLET','QUOTED','FOLLOWUP','NEGO','PAID','CANCELLED'); exception when duplicate_object then null; end $$;
+do $$ begin create type quotation_status as enum ('draft','sent_to_client','won','lost','expired'); exception when duplicate_object then null; end $$;
+do $$ begin create type dealer_status    as enum ('active','inactive'); exception when duplicate_object then null; end $$;
 
 -- ── PROFILES (1:1 กับ auth.users — ตัวตัดสินสิทธิ์) ────────────────────
-create table profiles (
+create table if not exists profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   role        user_role   not null default 'DEALER_SALES',
   dealer_code text        not null default '',
@@ -20,7 +21,7 @@ create table profiles (
 );
 
 -- ── DEALERS ───────────────────────────────────────────────────────────
-create table dealers (
+create table if not exists dealers (
   code           text primary key,
   name           text not null,
   province       text,
@@ -35,7 +36,7 @@ create table dealers (
 );
 
 -- ── MASTER CATALOG (ราคากลาง — HQ เป็นเจ้าของ) ────────────────────────
-create table master_catalog (
+create table if not exists master_catalog (
   id             text primary key,
   name           text not null,
   spec           text,
@@ -49,7 +50,7 @@ create table master_catalog (
 );
 
 -- ── RESPONSIBLE PERSONS (พนักงานขายของสาขา — ไม่ใช่ user login) ────────
-create table responsible_persons (
+create table if not exists responsible_persons (
   id          bigint generated always as identity primary key,
   dealer_code text not null,
   name        text not null,
@@ -61,7 +62,7 @@ create table responsible_persons (
 );
 
 -- ── FILES ─────────────────────────────────────────────────────────────
-create table files (
+create table if not exists files (
   id           bigint generated always as identity primary key,
   dealer_code  text not null,
   name         text not null,
@@ -78,7 +79,7 @@ create table files (
 );
 
 -- ── LEADS ─────────────────────────────────────────────────────────────
-create table leads (
+create table if not exists leads (
   id          bigint primary key,
   dealer_code text not null,
   num_id      integer,
@@ -106,7 +107,7 @@ create table leads (
 );
 
 -- ── QUOTATIONS ────────────────────────────────────────────────────────
-create table quotations (
+create table if not exists quotations (
   id            text primary key,
   dealer_code   text not null,
   quote_no      text,
@@ -133,7 +134,7 @@ create table quotations (
 );
 
 -- ── CUSTOMERS ─────────────────────────────────────────────────────────
-create table customers (
+create table if not exists customers (
   id          bigint primary key,
   dealer_code text not null,
   name        text,
@@ -157,7 +158,7 @@ create table customers (
 );
 
 -- ── APPOINTMENTS ──────────────────────────────────────────────────────
-create table appointments (
+create table if not exists appointments (
   id            bigint primary key,
   dealer_code   text not null,
   company       text,
@@ -177,21 +178,21 @@ create table appointments (
 );
 
 -- ── SETTINGS ระดับเครือ (singleton row id=1) ──────────────────────────
-create table hq_policy (
+create table if not exists hq_policy (
   id integer primary key default 1,
   require_approval boolean default true,
   vat integer default 7,
   quote_validity_days integer default 30,
   check (id = 1)
 );
-create table hq_targets (
+create table if not exists hq_targets (
   id integer primary key default 1,
   annual_target numeric default 260000000,
   win_rate_target integer default 40,
   on_time_target integer default 85,
   check (id = 1)
 );
-create table hq_notif_rules (
+create table if not exists hq_notif_rules (
   id integer primary key default 1,
   alerts jsonb default '{}',
   lead_idle_days integer default 30,
@@ -202,14 +203,14 @@ create table hq_notif_rules (
   lost_rate_min_closed integer default 5,
   check (id = 1)
 );
-create table dealer_lead_rules (
+create table if not exists dealer_lead_rules (
   dealer_code text primary key,
   follow_up_alert_days integer default 7,
   unassigned_alert_hours integer default 48
 );
 
 -- ── AUDIT LOG ─────────────────────────────────────────────────────────
-create table audit_log (
+create table if not exists audit_log (
   id      bigint generated always as identity primary key,
   "user"  text,
   role    text,
@@ -219,8 +220,8 @@ create table audit_log (
 );
 
 -- ── INDEXES (คิวรีตาม dealer_code / status บ่อย) ──────────────────────
-create index idx_leads_dealer        on leads(dealer_code);
-create index idx_quotations_dealer   on quotations(dealer_code);
-create index idx_customers_dealer    on customers(dealer_code);
-create index idx_appointments_dealer on appointments(dealer_code);
-create index idx_files_dealer        on files(dealer_code);
+create index if not exists idx_leads_dealer        on leads(dealer_code);
+create index if not exists idx_quotations_dealer   on quotations(dealer_code);
+create index if not exists idx_customers_dealer    on customers(dealer_code);
+create index if not exists idx_appointments_dealer on appointments(dealer_code);
+create index if not exists idx_files_dealer        on files(dealer_code);
