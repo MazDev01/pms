@@ -118,3 +118,36 @@ export async function POST(req: NextRequest) {
   // คืนรหัสให้หน้าจอโชว์ให้ก๊อปไปแจ้งตัวแทน (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน)
   return NextResponse.json({ ok: true, email, password });
 }
+
+// ── ลบตัวแทน "พร้อมบัญชีเข้าระบบ" (hard delete) ────────────────────────────────────
+// เดิม: ลบตัวแทนทำได้แค่ลบแถว dealers (ผ่าน RLS) → บัญชี auth ของสาขายังค้าง = บัญชีกำพร้า
+//   (ล็อกอินได้แต่ไม่มีสาขา · และรหัสสาขาเดิมกลับมาสร้างซ้ำไม่ได้เพราะอีเมลชนบัญชีเก่า)
+// ที่นี่ลบให้ครบ: auth user ของผู้ใช้สังกัดสาขานี้ (profile หายตาม FK cascade) + แถว dealers
+export async function DELETE(req: NextRequest) {
+  if (!SUPABASE_URL || !SERVICE_KEY) {
+    return bad(501, "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์ (SUPABASE_SERVICE_ROLE_KEY) — ลบตัวแทนจากที่นี่ยังไม่ได้");
+  }
+  const admin: SupabaseClient = createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // ยืนยันตัวตน + สิทธิ์ของผู้เรียกที่เซิร์ฟเวอร์ (เหมือน POST — ห้ามเชื่อหน้าจอ)
+  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return bad(401, "unauthorized");
+  const { data: caller, error: authErr } = await admin.auth.getUser(token);
+  if (authErr || !caller.user) return bad(401, "unauthorized");
+  const { data: prof } = await admin.from("profiles").select("role").eq("id", caller.user.id).maybeSingle();
+  if (!prof || !CAN_MANAGE_DEALERS.has(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
+
+  const code = (new URL(req.url).searchParams.get("code") ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2,5}$/.test(code)) return bad(400, "รหัสตัวแทนไม่ถูกต้อง");
+
+  // ลบบัญชี auth ของผู้ใช้ทุกคนที่สังกัดสาขานี้ (profile หายตาม cascade) แล้วค่อยลบแถว dealers
+  const { data: members } = await admin.from("profiles").select("id").eq("dealer_code", code);
+  for (const m of members ?? []) {
+    try { await admin.auth.admin.deleteUser(String(m.id)); } catch { /* best-effort — ลบให้ครบเท่าที่ได้ */ }
+  }
+  const { error } = await admin.from("dealers").delete().eq("code", code);
+  if (error) return bad(400, `ลบตัวแทนไม่สำเร็จ: ${error.message}`);
+  return NextResponse.json({ ok: true });
+}

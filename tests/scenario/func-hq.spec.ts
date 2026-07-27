@@ -16,8 +16,20 @@ const DEALER_NAME = `${TAG}-สาขาทดสอบ`;
 const NEW_CODE = "ZZC";                  // สร้างผ่าน UI (แยกรหัสกับ fixture กันชน)
 const NEW_NAME = `${TAG}-สาขาสร้างใหม่`;
 
+// ลบตัวแทน "พร้อมบัญชี auth" ผ่าน route (service_role) — test harness ไม่ถือ service_role เอง
+// จึงลบ auth user ที่ NEW_CODE สร้างไว้ผ่าน DELETE /api/admin/dealers ได้ · ทำให้เทสต์ H5 รันซ้ำได้ไม่ทิ้ง orphan
+async function purgeDealerAccount(code: string) {
+  const sb = await db(ADMIN);
+  const token = (await sb.auth.getSession()).data.session?.access_token ?? "";
+  await fetch(`${HQ_ORIGIN}/api/admin/dealers?code=${code}`, {
+    method: "DELETE", headers: { authorization: `Bearer ${token}` },
+  }).catch(() => { /* best-effort cleanup */ });
+}
+
 test.beforeAll(async () => {
   const sb = await db(ADMIN);
+  // ล้างของค้างจากรอบก่อน: NEW_CODE ลบทั้งบัญชี auth+แถว (route) · CODE เป็น fixture ใส่ตรงไม่มี auth
+  await purgeDealerAccount(NEW_CODE);
   await sb.from("dealers").delete().in("code", [CODE, NEW_CODE]);
   await sb.from("master_catalog").delete().like("name", `%${TAG}%`);
   // fixture: สาขาที่ "มีอยู่แล้ว" สำหรับเทสต์ตัวกรอง/ลบ — ใส่ตรงผ่าน ADMIN
@@ -26,6 +38,8 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   const sb = await db(ADMIN);
+  // NEW_CODE: ลบบัญชี auth ที่เทสต์สร้างด้วย (กัน orphan) · แล้วเก็บกวาดแถวที่เหลือ
+  await purgeDealerAccount(NEW_CODE);
   await sb.from("dealers").delete().in("code", [CODE, NEW_CODE]);
   await sb.from("master_catalog").delete().like("name", `%${TAG}%`);
 });
@@ -197,7 +211,7 @@ test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเ�
   //   501 ที่แอปจัดการแล้ว (ขึ้น error ในฟอร์ม) เบราว์เซอร์ยัง log "resource 501" เป็นเสียงรบกวน
   const BCODE = "ZZB"; // รหัสอิสระ ไม่ชนกับ fixture/เทสต์อื่น
   const sb = await db(ADMIN);
-  await sb.from("dealers").delete().eq("code", BCODE);
+  await purgeDealerAccount(BCODE); // ล้างของค้างรอบก่อน: บัญชี auth + แถว (กัน orphan)
   const before = ((await sb.from("dealers").select("code")).data ?? []).length;
   expect(before, "ต้องมีสาขาจริงอยู่ก่อน").toBeGreaterThan(1);
 
@@ -216,7 +230,7 @@ test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเ�
     expect(after.length, `สาขาจริงต้องอยู่ครบ (ก่อน ${before} หลัง ${after.length})`)
       .toBeGreaterThanOrEqual(before);
   } finally {
-    await sb.from("dealers").delete().eq("code", BCODE);
+    await purgeDealerAccount(BCODE); // ลบบัญชี auth ที่การกดสร้างอาจสร้างไว้ด้วย (กัน orphan)
   }
 });
 
