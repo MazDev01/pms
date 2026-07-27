@@ -13,14 +13,14 @@ import {
   quotationToFile, AUTO_FILE_BY,
   type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
-  type AppointmentMock,
+  type AppointmentMock, type DealerFile,
 } from "@pms/shared/lib/mock";
 
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { parseBaht } from "@pms/shared/lib/format";
 import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
-import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, realtime } from "@pms/shared/lib/data";
+import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 // โหมด backend — supabase: ลีดมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
@@ -357,7 +357,7 @@ export function SalesProvider({
       await customersRepo.create(newCustomer); // Lead→Won สร้างลูกค้าข้อมูลครบ (RLS with-check ใช้ dealerCode นี้)
     } catch (e) {
       onFail("customers", "สร้างลูกค้า")(e); // แจ้ง + ดึงชุดจริงมาทับ · ไม่ relink ใบ (กัน FK violate)
-      return newCustomer;
+      throw e; // ให้ผู้เรียกรู้ว่าล้มเหลว — เส้นทางปิดการขาย (won) จะได้ไม่ mark won ทั้งที่ไม่มีลูกค้า
     }
     finish(newId);
     return newCustomer;
@@ -373,7 +373,7 @@ export function SalesProvider({
     setLeads(prev => prev.map(l => l.id !== leadId ? l : updated));
     persistLead.update(updated); // สถานะ + tasks เปลี่ยน → update ทั้งแถว (แทน setStatus)
     if (status === "PAID" && lead.customerId == null) {
-      setTimeout(() => { void convertLeadToCustomer({ ...lead, status }, false); }, 0);
+      setTimeout(() => { void convertLeadToCustomer({ ...lead, status }, false).catch(() => { /* onFail แจ้งแล้ว */ }); }, 0);
     }
   }, [convertLeadToCustomer, persistLead]);
 
@@ -389,14 +389,33 @@ export function SalesProvider({
     persistLead.update(lead);
     // ปิดการขายสำเร็จ → สร้างลูกค้า (เฉพาะยังไม่เป็นลูกค้า)
     if (lead.status === "PAID" && lead.customerId == null) {
-      setTimeout(() => { void convertLeadToCustomer(lead, false); }, 0);
+      setTimeout(() => { void convertLeadToCustomer(lead, false).catch(() => { /* onFail แจ้งแล้ว */ }); }, 0);
     }
   }, [convertLeadToCustomer, persistLead]);
 
+  // เก็บกวาดไฟล์ที่ผูกกับเรคคอร์ดที่ถูกลบ (metadata + ไบต์ใน Storage) — กันไฟล์กำพร้า (A2.1)
+  //   files.record_id เป็น polymorphic (ลีด/ลูกค้า) ผูก FK/cascade ที่ DB ไม่ได้ จึงเก็บที่ชั้นแอป
+  //   best-effort: ล้มเหลว = แค่เหลือไฟล์กำพร้าเหมือนเดิม (ไม่บล็อกการลบเรคคอร์ด)
+  const cleanupFilesFor = useCallback(async (match: (f: DealerFile) => boolean) => {
+    const s = fileScopeRef.current;
+    try {
+      const all = await filesRepo.list({ dealerCode: s.dealerCode, isHQ: s.isHQ });
+      await Promise.all(all.filter(match).map(async (f) => {
+        try {
+          if (f.storagePath) await fileStorage.remove(f.storagePath); // ลบไบต์ก่อน (เหมือนหน้าไฟล์)
+          await filesRepo.remove(f.id);
+        } catch (e) { console.warn("[cleanupFiles] ลบไฟล์กำพร้าไม่สำเร็จ", e); }
+      }));
+    } catch (e) { console.warn("[cleanupFiles] อ่านรายการไฟล์ไม่สำเร็จ", e); }
+  }, []);
+
   const deleteLead = useCallback((leadId: string) => {
+    const lead = leadsRef.current.find(l => l.id === leadId);
     setLeads(prev => prev.filter(l => l.id !== leadId));
     persistLead.remove(leadId);
-  }, [persistLead]);
+    // ลบไฟล์ที่แนบกับลีดนี้ (source=lead · record_id = numId ของลีด)
+    if (lead?.numId != null) void cleanupFilesFor(f => f.source === "lead" && f.recordId === lead.numId);
+  }, [persistLead, cleanupFilesFor]);
 
   // ── Customer mutations (Phase 2) — เขียนทะลุถึง repo ──────────────
   const addCustomer = useCallback((customer: CustomerRow) => {
@@ -427,7 +446,9 @@ export function SalesProvider({
     }
     setCustomers(prev => prev.filter(c => c.id !== id));
     persistCustomer.remove(id);
-  }, [persistCustomer]);
+    // ลบไฟล์ที่แนบกับลูกค้ารายนี้ (source=customer · record_id/customer_id = id ของลูกค้า)
+    void cleanupFilesFor(f => f.source === "customer" && (f.recordId === id || f.customerId === id));
+  }, [persistCustomer, cleanupFilesFor]);
 
   // ── Quotation → เช็กงานของลีดอัตโนมัติ ─────────────────────────────
   // สร้างใบเสนอราคา = ติ๊ก "จัดทำใบเสนอราคา" · ส่งใบเสนอราคา = ติ๊ก "ส่งใบเสนอราคา"
@@ -495,31 +516,40 @@ export function SalesProvider({
   }, [persistQuote, syncQuoteFile]);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
-    persistQuote.setStatus(id, status);
     const target = quotationsRef.current.find(q => q.id === id);
-    setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status }));
-    if (!target || status === "draft") return;
+    const prevStatus = target?.status;
+    setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status })); // optimistic UI
+    if (!target || status === "draft") { persistQuote.setStatus(id, status); return; }
     // เปลี่ยนเป็นสถานะหลังการส่ง → ติ๊ก จัดทำ/ส่งใบเสนอราคา ให้ลีดอัตโนมัติ
     // (setTimeout กัน StrictMode เรียกซ้ำระหว่าง updater)
     const snap = { ...target, status };
     setTimeout(() => completeLeadQuoteTasks(snap, ["makeQuote", "sendQuote"]), 0);
 
     // "ลูกค้าตอบรับ" (won) บนใบเสนอราคา → สร้าง/ผูกลูกค้าให้ลีดต้นทาง ผ่านเส้นทางเดียว
-    // กับการปิดจากลิ้นชักลีด (convertLeadToCustomer) — ได้ id จริง ข้อมูลครบ กันซ้ำ
+    // กับการปิดจากลิ้นชักลีด (convertLeadToCustomer) — ได้ id จริง ข้อมูลครบ กันซ้ำ (trigger ถูกลบ 0033)
     //
-    // เดิมพึ่ง trigger on_quote_won ที่ DB ซึ่งสร้างลูกค้า id=0 ไร้ชื่อ + นับยอดซ้ำ (C6)
-    // trigger ถูกลบใน 0033 แล้ว การสร้างลูกค้าทั้งหมดจึงมาอยู่ที่นี่ที่เดียว
-    //
-    // เงื่อนไข: ทำเฉพาะใบที่ "ยังไม่ผูกลูกค้า" (customerId 0/ว่าง = ออกให้ลีด)
-    //   ใบที่ผูกลูกค้าอยู่แล้วไม่ต้องสร้างอะไร · หาลีดจาก dealId (numId) ก่อน แล้วค่อยชื่อบริษัท
-    //   ปล่อยให้ convertLeadToCustomer กันซ้ำเอง (dedup + เช็ก lead.customerId != null)
-    if (status === "won" && !(target.customerId && target.customerId > 0)) {
-      const lead = leadsRef.current.find(l =>
-        (target.dealId != null && l.numId === target.dealId) || l.company === target.customer);
-      if (lead && lead.customerId == null) {
-        setTimeout(() => { void convertLeadToCustomer(lead, false); }, 0);
-      }
+    // ⚠️ atomicity เส้นทางเงินหลัก: ต้อง "สร้าง/ผูกลูกค้าสำเร็จก่อน" แล้วค่อย mark won ที่ DB
+    //   ถ้าสร้างลูกค้าไม่ลง DB → ไม่ mark won + ย้อนสถานะใบใน UI (กัน "won ค้างโดยไม่มีลูกค้า")
+    //   เดิมยิง setStatus(won) ทันทีแบบ fire-and-forget แล้วค่อยสร้างลูกค้าใน setTimeout แยก —
+    //   พลาดกลางทาง = ใบเป็น won แต่ไม่มีลูกค้า (หรือกลับกัน) เงียบ ๆ
+    const linkable = status === "won" && !(target.customerId && target.customerId > 0);
+    const lead = linkable
+      ? leadsRef.current.find(l => (target.dealId != null && l.numId === target.dealId) || l.company === target.customer)
+      : undefined;
+    if (lead && lead.customerId == null) {
+      void (async () => {
+        try {
+          await convertLeadToCustomer(lead, false); // สร้าง/ผูกลูกค้า (dedup · idempotent)
+          persistQuote.setStatus(id, status);        // สำเร็จแล้วค่อย mark won ที่ DB
+        } catch {
+          // ลูกค้าไม่ลง DB → ย้อนสถานะใบ ไม่ mark won (convertLeadToCustomer แจ้ง error เองแล้ว)
+          setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? "sent_to_client" }));
+        }
+      })();
+      return;
     }
+    // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลีดต้นทาง) — mark สถานะตามปกติ
+    persistQuote.setStatus(id, status);
   }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)

@@ -142,12 +142,26 @@ export async function DELETE(req: NextRequest) {
   const code = (new URL(req.url).searchParams.get("code") ?? "").trim().toUpperCase();
   if (!/^[A-Z]{2,5}$/.test(code)) return bad(400, "รหัสตัวแทนไม่ถูกต้อง");
 
-  // ลบบัญชี auth ของผู้ใช้ทุกคนที่สังกัดสาขานี้ (profile หายตาม cascade) แล้วค่อยลบแถว dealers
+  // ── กันทำลายครึ่งทาง ──
+  // dealer FK เป็น on delete restrict (0018) — ถ้าสาขายังมีข้อมูลงานขาย แถว dealers ลบไม่ได้
+  // เดิมลบ auth users "ก่อน" แล้วค่อยลบแถว → พอแถวลบไม่ได้ = บัญชี login หายไปแล้วแต่สาขายังอยู่
+  // (สาขากำพร้าไม่มีคนเข้าได้ · ย้อนไม่ได้) → ต้องเช็ก + ลบแถวให้สำเร็จ "ก่อน" แตะ auth
+  for (const t of ["leads", "quotations", "customers", "appointments", "files"]) {
+    const { count } = await admin.from(t).select("dealer_code", { count: "exact", head: true }).eq("dealer_code", code);
+    if ((count ?? 0) > 0) {
+      return bad(409, `สาขา "${code}" ยังมีข้อมูล (${t}) — ต้องย้าย/ลบข้อมูลก่อนจึงจะลบสาขาได้`);
+    }
+  }
+  // ค่าตั้งของสาขาเอง (FK restrict เช่นกัน) — ลบก่อนแถว dealers
+  await admin.from("responsible_persons").delete().eq("dealer_code", code);
+  await admin.from("dealer_lead_rules").delete().eq("dealer_code", code);
+  // ลบแถว dealers ก่อน — จุดที่อาจ fail · สำเร็จแล้วค่อยแตะ auth ที่ย้อนไม่ได้
+  const { error } = await admin.from("dealers").delete().eq("code", code);
+  if (error) return bad(400, `ลบตัวแทนไม่สำเร็จ: ${error.message}`);
+  // ลบบัญชี auth ของผู้ใช้สังกัดสาขา (profile หายตาม cascade) — ทำท้ายสุด
   const { data: members } = await admin.from("profiles").select("id").eq("dealer_code", code);
   for (const m of members ?? []) {
     try { await admin.auth.admin.deleteUser(String(m.id)); } catch { /* best-effort — ลบให้ครบเท่าที่ได้ */ }
   }
-  const { error } = await admin.from("dealers").delete().eq("code", code);
-  if (error) return bad(400, `ลบตัวแทนไม่สำเร็จ: ${error.message}`);
   return NextResponse.json({ ok: true });
 }

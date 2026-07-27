@@ -159,6 +159,15 @@ const FILES_BUCKET = "dealer-files";
 let channelSeq = 0;
 const topic = (base: string) => `${base}-${++channelSeq}`;
 
+// สถานะการ subscribe realtime — เดิม ch.subscribe() ทิ้ง status callback
+// → CHANNEL_ERROR/TIMED_OUT (เน็ตหลุด/timeout) เงียบสนิท ข้อมูลค้างไม่อัปเดตสดโดยไม่มีสัญญาณ
+// อย่างน้อยต้อง log ให้เห็น (CLOSED เป็นการปิดปกติตอน removeChannel — ไม่เตือน)
+function onSubStatus(status: string) {
+  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+    console.warn(`[realtime] channel ${status} — ข้อมูลอาจไม่อัปเดตสดจนกว่าจะรีเฟรชหน้า`);
+  }
+}
+
 export const SupabaseAdapter: DataAdapter = {
   // ไฟล์จริงใน Storage — พาธขึ้นต้นด้วยรหัสสาขาเสมอ (Storage RLS คุมด้วย foldername[1])
   storage: {
@@ -206,13 +215,13 @@ export const SupabaseAdapter: DataAdapter = {
           } as SalesChange);
         });
       }
-      ch.subscribe();
+      ch.subscribe(onSubStatus);
       return () => { void sb().removeChannel(ch); };
     },
     subscribeCatalog: (onChange) => {
       const ch = sb().channel(topic("catalog-changes"))
         .on("postgres_changes", { event: "*", schema: "public", table: "master_catalog" }, () => onChange());
-      ch.subscribe();
+      ch.subscribe(onSubStatus);
       return () => { void sb().removeChannel(ch); };
     },
     subscribeSettings: (onChange) => {
@@ -223,21 +232,21 @@ export const SupabaseAdapter: DataAdapter = {
       for (const t of ["hq_policy", "hq_targets", "hq_notif_rules", "hq_sales_journey"]) {
         ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
       }
-      ch.subscribe();
+      ch.subscribe(onSubStatus);
       return () => { void sb().removeChannel(ch); };
     },
     // โน้ตลูกค้า — RLS กรอง event ให้เห็นเฉพาะของสาขาตัวเอง (0028 เปิด Realtime + replica identity full)
     subscribeNotes: (onChange) => {
       const ch = sb().channel(topic("notes-changes"))
         .on("postgres_changes", { event: "*", schema: "public", table: "customer_notes" }, () => onChange());
-      ch.subscribe();
+      ch.subscribe(onSubStatus);
       return () => { void sb().removeChannel(ch); };
     },
     // ตั้งค่าของสาขา — 0024 เปิด Realtime + replica identity full · RLS กรองเฉพาะของสาขาตัวเอง (M4)
     subscribeDealerSettings: (onChange) => {
       const ch = sb().channel(topic("dealer-settings-changes"))
         .on("postgres_changes", { event: "*", schema: "public", table: "dealer_settings" }, () => onChange());
-      ch.subscribe();
+      ch.subscribe(onSubStatus);
       return () => { void sb().removeChannel(ch); };
     },
   },
@@ -293,11 +302,12 @@ export const SupabaseAdapter: DataAdapter = {
       const rows = await selectScoped<ResponsiblePerson>("responsible_persons", scope);
       return rows.map((p, i) => ({ ...p, id: i + 1 })); // reindex เป็น 1..n (แอปใช้ id เป็น index ท้องถิ่น)
     },
-    // แทนที่ทั้งชุดของสาขา: ลบของสาขา (RLS = เฉพาะสาขาตัวเอง) แล้วใส่ใหม่ (ไม่ส่ง id — DB gen identity)
+    // แทนที่ทั้งชุดของสาขาแบบ atomic ผ่าน RPC (ลบ+ใส่ใหม่ใน transaction เดียว)
+    //   เดิมเป็น delete แล้ว insert 2 คำสั่งแยก — crash กลางทาง = พนักงานของสาขาหายทั้งชุด (0060)
     save: async (all, dealerCode) => {
-      await must(sb().from("responsible_persons").delete().eq("dealer_code", dealerCode));
-      const rows = all.map(p => { const r = toSnake({ ...p, dealerCode } as unknown as Row); delete r.id; return r; });
-      if (rows.length) await must(sb().from("responsible_persons").insert(rows));
+      // ส่งเฉพาะฟิลด์ที่ RPC ใช้ (name/title/phone/email/active/avatar) — id/dealerCode ให้ RPC จัดการ
+      const rows = all.map(({ id: _id, dealerCode: _dc, ...rest }) => rest);
+      await must(sb().rpc("replace_responsible_persons", { p_dealer: dealerCode, p_rows: rows }));
     },
   },
   settings: {
