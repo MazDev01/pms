@@ -537,6 +537,23 @@ export const SupabaseAdapter: DataAdapter = {
         byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), count: Number(r.count) })),
       };
     },
+    hqAlerts: async (f) => {
+      const { data, error } = await sb().rpc("hq_alerts", {
+        p_as_of: f.asOf ?? "2026-06-30",
+        p_unassigned_default_hours: f.unassignedDefaultHours ?? 48, p_unassigned_per_dealer: f.unassignedPerDealer ?? null,
+        p_lead_idle_days: f.leadIdleDays ?? 30, p_quote_validity_days: f.quoteValidityDays ?? 30,
+        p_quote_expiring_days: f.quoteExpiringDays ?? 7, p_dealer_idle_days: f.dealerIdleDays ?? 30,
+      });
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { unassigned?: Row[]; idle?: Row[]; expiring?: Row[]; dealer_latest?: Row[]; lost_rate?: Row[] };
+      return {
+        unassigned: (d.unassigned ?? []).map(r => ({ numId: Number(r.num_id), company: String(r.company ?? ""), province: String(r.province ?? ""), value: String(r.value ?? "") })),
+        idle: (d.idle ?? []).map(r => ({ numId: Number(r.num_id), company: String(r.company ?? ""), assigned: String(r.assigned ?? ""), idleDays: Number(r.idle_days) })),
+        expiring: (d.expiring ?? []).map(r => ({ quoteNo: String(r.quote_no), customer: String(r.customer ?? ""), value: Number(r.value), dealerCode: (r.dealer_code as string) ?? null, daysLeft: Number(r.days_left) })),
+        dealerLatest: (d.dealer_latest ?? []).map(r => ({ dealerCode: String(r.dealer_code), idleDays: Number(r.idle_days) })),
+        lostRate: (d.lost_rate ?? []).map(r => ({ dealerCode: String(r.dealer_code), lost: Number(r.lost), closed: Number(r.closed) })),
+      };
+    },
     hqQuotationsSummary: async (f) => {
       const { data, error } = await sb().rpc("hq_quotations_summary", {
         p_status: f.status ?? null, p_dealer_codes: f.dealerCodes ?? null, p_product_lines: f.productLines ?? null,
@@ -687,6 +704,16 @@ export const SupabaseAdapter: DataAdapter = {
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
       }, "appointments");
       return rows.map(rowToAppt);
+    },
+    listForDealer: async (dealerCode) => {
+      const { data, error } = await sb().from("appointments").select("*").eq("dealer_code", dealerCode).order("id", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as Row[]).map(rowToAppt);
+    },
+    listForLead: async (leadId) => {
+      const { data, error } = await sb().from("appointments").select("*").eq("lead_id", leadId).order("id", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as Row[]).map(rowToAppt);
     },
     create: async (row) => {
       const { data, error } = await sb().from("appointments").insert(apptToRow(row)).select().single();

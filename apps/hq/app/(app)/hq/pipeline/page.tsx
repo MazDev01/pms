@@ -29,7 +29,7 @@ import { dealers as dealersRepo, settings as settingsRepo, files as filesRepo } 
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
-import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary, useLeadSummary } from "@pms/shared/lib/useNetworkData";
+import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary, useLeadSummary, useDealerDrawerData } from "@pms/shared/lib/useNetworkData";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBaht } from "@pms/shared/lib/format";
 import { useEffect } from "react";
@@ -49,6 +49,8 @@ const parseThaiDate = (s: string): Date | null => {
 };
 const QUOTED_UP = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
 const ALL = "ALL";
+// ตัวกรองว่าง (ทั้งเครือ ทุกช่วง) — อ้างอิงคงที่ ดึง product_line ทั้งหมดครั้งเดียว
+const EMPTY_QF = {};
 
 // ── แท่งแนวนอนคู่ — ใช้ซ้ำใน Section 1 / 2 / 3 (แท่งหลัก + แท่งเทียบ) ──
 // เปิดมาโชว์ครบทุกแถวเลย (บอสสั่ง 17 ก.ค. 69) — ให้อ่านคู่กับตารางข้าง ๆ ที่ก็ลิสต์ครบทุกตัวแทนเหมือนกัน
@@ -177,7 +179,11 @@ export default function SalesAnalyticsPage() {
   // กลายเป็น <option> ที่เลือกแล้วกรองอะไรไม่ได้ + React เตือน "unique key" (key={undefined})
   const regionOpts = useMemo(() => [...new Set(allDealers.map(d => d.region).filter(Boolean))].sort(), [allDealers]);
   const provOpts = useMemo(() => [...new Set(allDealers.map(d => d.province).filter(Boolean))].sort(), [allDealers]);
-  const btOpts = useMemo(() => [...new Set(netQuotes.map(x => x.productLine).filter(Boolean))].sort(), [netQuotes]);
+  // ตัวเลือกประเภทอาคาร — product_line ทั้งหมดในเครือ · supabase: hq_quotations_summary(ว่าง).byProduct · local: netQuotes
+  const allProdSummary = useHQQuotationsSummary(EMPTY_QF);
+  const btOpts = useMemo(() => (allProdSummary
+    ? allProdSummary.byProduct.map(p => p.product ?? "").filter(Boolean)
+    : [...new Set(netQuotes.map(x => x.productLine).filter(Boolean))]).sort(), [allProdSummary, netQuotes]);
 
   // สถิติใบรายตัวแทน "หลังกรอง" ที่ DB (M9 Phase 2) — supabase · local/ยังไม่กลับ = client จาก quotes
   // ตัวกรอง = ชุดเดียวกับ quotes: dealerCodes (codes ที่ผ่านตัวกรอง) · productLines (btSel) · ช่วงเวลา
@@ -336,6 +342,8 @@ export default function SalesAnalyticsPage() {
 
   // ── Drawer (View) — เจาะรายตัวแทน ไม่เปลี่ยนหน้า ──
   const [drawer, setDrawer] = useState<typeof perf[number] | null>(null);
+  // ข้อมูลรายสาขาใน drawer — supabase: ดึงตรงจาก repo (M9 Phase 4) · local/ยังไม่กลับ: กรอง array เดิม
+  const drawerData = useDealerDrawerData(drawer?.code ?? null);
   const anyFilter = q.trim() !== "" || [dealerSel, regionSel, provSel, btSel, salesSel].some(v => v !== ALL);
 
   const kNum: React.CSSProperties = { fontSize: "1.15rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
@@ -543,10 +551,10 @@ export default function SalesAnalyticsPage() {
 
       {/* ── DRAWER — เจาะรายตัวแทน (อ่านอย่างเดียว ไม่มีแก้/ลบ) ── */}
       {drawer && <DealerDrawer d={drawer} onClose={() => setDrawer(null)}
-        customers={netCustomers.filter(c => c.dealerCode === drawer.code)}
-        leads={netLeads.filter(l => l.dealerCode === drawer.code)}
-        quotes={netQuotes.filter(x => x.dealerCode === drawer.code)}
-        appointments={appointments} files={dealerFiles} onOpenDealer={() => router.push(`/hq/dealers/${drawer.code}`)} />}
+        customers={drawerData ? drawerData.customers : netCustomers.filter(c => c.dealerCode === drawer.code)}
+        leads={drawerData ? drawerData.leads : netLeads.filter(l => l.dealerCode === drawer.code)}
+        quotes={drawerData ? drawerData.quotes : netQuotes.filter(x => x.dealerCode === drawer.code)}
+        appointments={drawerData ? drawerData.appointments : appointments} files={dealerFiles} onOpenDealer={() => router.push(`/hq/dealers/${drawer.code}`)} />}
     </div>
   );
 }

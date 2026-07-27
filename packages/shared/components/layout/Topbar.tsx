@@ -21,6 +21,7 @@ import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@pms/shared/lib/useAudit";
 import { confirmDiscard } from "@pms/shared/lib/useUnsavedGuard";
 import { useHQAlerts } from "@pms/shared/lib/useHQAlerts";
+import { useHQSearch } from "@pms/shared/lib/useNetworkData";
 import { type HQAlert } from "@pms/shared/lib/hqAlerts";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 
@@ -360,6 +361,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const [openGroup, setOpenGroup] = useState<HQAlertKey | null>(null); // กลุ่ม "ต้องดูด่วน" ที่กางอยู่
   const [showUser,   setShowUser]       = useState(false);
   const [searchQ,    setSearchQ]        = useState("");
+  // ค้นหาฝั่ง HQ — ดึงตรงจาก repo ตามคำค้น (M9 Phase 4) · dealer/local ใช้ array ของ SalesContext เหมือนเดิม
+  const hqSearch = useHQSearch(isHQ ? searchQ : "");
   const [readIds,    setReadIds]        = useState<Set<number>>(new Set());
 
   const notifsRef = useRef<HTMLDivElement>(null);
@@ -391,8 +394,12 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const results: SearchResult[] = useMemo(() => {
     if (q.length < 1) return [];
     const has = (s?: string) => (s ?? "").toLowerCase().includes(q);
+    // แหล่งค้นหา: HQ (supabase) = ผลจาก repo ที่ match แล้ว · dealer/local = array ของ SalesContext (สกอปสาขา)
+    const srcLeads = hqSearch ? hqSearch.leads : liveLeads;
+    const srcCustomers = hqSearch ? hqSearch.customers : liveCustomers;
+    const srcQuotations = hqSearch ? hqSearch.quotes : liveQuotations;
     // ลูกค้าไม่มี owner field → หาผู้รับผิดชอบจากลีดที่ผูก customerId เดียวกัน
-    const ownerOfCustomer = (cid: number) => liveLeads.find(l => l.customerId === cid)?.assigned;
+    const ownerOfCustomer = (cid: number) => srcLeads.find(l => l.customerId === cid)?.assigned;
     return [
       // หน้า/เมนู — ค้นหาได้ทุกหน้าในระบบตามบทบาท (นำทางไปหน้านั้นทันที)
       ...(isHQ ? HQ_PAGES : DEALER_PAGES)
@@ -400,7 +407,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         .slice(0, 6)
         .map(p => ({ type: "หน้า", label: p.label, sub: "เปิดหน้านี้", href: p.href })),
       // ลีด — match company/contact/name/phone/ผู้รับผิดชอบ
-      ...liveLeads
+      ...srcLeads
         .filter((l: LeadRow) => has(l.name) || has(l.company) || has(l.contact) || has(l.phone) || has(l.assigned))
         .slice(0, 5)
         .map((l: LeadRow) => {
@@ -413,7 +420,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           return { type: "ลูกค้าเป้าหมาย", label: l.company, sub, href: `/leads?open=${l.numId}` };
         }),
       // ลูกค้า — match company/name/province/phone/ผู้รับผิดชอบ (ผ่านลีดที่ผูกกัน)
-      ...liveCustomers
+      ...srcCustomers
         .filter((c: CustomerRow) => has(c.company) || has(c.name) || has(c.province) || has(c.phone) || has(ownerOfCustomer(c.id)))
         .slice(0, 5)
         .map((c: CustomerRow) => {
@@ -426,7 +433,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           return { type: "ลูกค้า", label: c.company, sub, href: `/customers?open=${c.id}` };
         }),
       // ใบเสนอราคา — match id (เลขที่ใบเสนอราคา)/customer/project
-      ...liveQuotations
+      ...srcQuotations
         .filter((qt: QuotationMock) => has(qt.id) || has(qt.customer) || has(qt.project))
         .slice(0, 5)
         .map((qt: QuotationMock) => ({ type: "ใบเสนอราคา", label: qt.id, sub: `${qt.customer} · ${qt.total}`, href: "/quotations" })),
@@ -436,7 +443,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         .slice(0, 5)
         .map((d: DealerRow) => ({ type: "ตัวแทน", label: d.name, sub: `${d.code} · ${d.region}`, href: `/hq/dealers/${d.code}` })) : []),
     ];
-  }, [q, dealers, liveLeads, liveCustomers, liveQuotations, isHQ]);
+  }, [q, dealers, liveLeads, liveCustomers, liveQuotations, isHQ, hqSearch]);
 
   // งานค้างของเครือนับเข้าตัวเลขบนกระดิ่งด้วย — "อ่านแล้ว" กดปิดไม่ได้ เพราะงานยังไม่ได้ถูกจัดการจริง
   const alertCount = alertGroups.reduce((s, g) => s + g.items.length, 0);

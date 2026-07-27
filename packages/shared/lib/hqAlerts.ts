@@ -6,6 +6,7 @@ import {
   type HQAlertKey, type HQNotifRules, type LeadRules,
   type LeadRow, type DealerRow, type HQQuotation,
 } from "@pms/shared/lib/mock";
+import type { HQAlertsData } from "@pms/shared/lib/data/ports";
 import { parseDate, APP_NOW } from "@pms/shared/context/FilterContext";
 import { leadCreatedDate, daysSinceContact, isLeadOpen } from "@pms/shared/lib/leadMetrics";
 
@@ -99,6 +100,54 @@ export function dealersHighLostRate(dealers: DealerRow[], leads: LeadRow[], pct:
     if (rate >= pct) out.push({ d, rate, lost: s.lost, closed: s.closed });
   }
   return out.sort((a, b) => b.rate - a.rate);
+}
+
+/** ประกอบการแจ้งเตือนจาก "ผู้สมัคร" ที่ DB คิดมาให้ (M9 Phase 4) — ตรรกะ/ข้อความเดียวกับ buildHQAlerts
+ *  ต่างกันแค่ต้นทางข้อมูล: unassigned/idle/expiring/dealerLatest/lostRate มาจาก RPC แทนการวน array
+ *  targetAchieved ยังคิด client จาก revenueOf (ยอดจริง) + ทะเบียนตัวแทน */
+export function assembleHQAlerts(data: HQAlertsData, input: {
+  dealers: DealerRow[];
+  rules: HQNotifRules;
+  revenueOf: (dealerCode: string) => number;
+}): HQAlert[] {
+  const { dealers, rules, revenueOf } = input;
+  const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
+  const dOf = new Map(dealers.map(d => [d.code, d]));
+  const out: HQAlert[] = [];
+  if (on("unassignedLead")) for (const l of data.unassigned) out.push({
+    key: "unassignedLead", title: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ",
+    body: `${l.company} · ${l.province} · ${l.value}`, href: `/hq/leads?open=${l.numId}`,
+  });
+  if (on("idleLead")) for (const l of data.idle) out.push({
+    key: "idleLead", title: "ลูกค้าเป้าหมายไม่มีการติดต่อ",
+    body: `${l.company} · ไม่ได้ติดต่อ ${l.idleDays} วัน · ผู้รับผิดชอบ ${l.assigned || "—"}`, href: `/hq/leads?open=${l.numId}`,
+  });
+  if (on("quoteExpiring")) for (const q of data.expiring) out.push({
+    key: "quoteExpiring", title: "ใบเสนอราคาใกล้หมดอายุ",
+    body: `${q.quoteNo} · ${q.customer} · ${fmtB(q.value)} · เหลือ ${q.daysLeft} วัน`, href: "/hq/quotations",
+  });
+  if (on("dealerIdle")) for (const r of [...data.dealerLatest].sort((a, b) => b.idleDays - a.idleDays)) {
+    const d = dOf.get(r.dealerCode);
+    if (d && r.idleDays > rules.dealerIdleDays) out.push({
+      key: "dealerIdle", title: "ตัวแทนไม่มีความเคลื่อนไหว",
+      body: `${d.code} · ${d.name} — ไม่ออกใบเสนอราคาใหม่ ${r.idleDays} วัน`, href: `/hq/dealers/${d.code}`,
+    });
+  }
+  if (on("targetAchieved")) for (const { d, actual, achieved } of dealersAtTarget(dealers, rules.targetAchievedPct, revenueOf)) out.push({
+    key: "targetAchieved", title: "ตัวแทนทำยอดถึงเป้า",
+    body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(actual)} จาก ${fmtB(d.revenueTarget)})`, href: `/hq/dealers/${d.code}`,
+  });
+  if (on("lostRate")) {
+    const rows = data.lostRate
+      .map(r => ({ d: dOf.get(r.dealerCode), rate: r.closed ? Math.round((r.lost / r.closed) * 100) : 0, lost: r.lost, closed: r.closed }))
+      .filter(x => x.d && x.closed >= Math.max(1, rules.lostRateMinClosed) && x.rate >= rules.lostRatePct)
+      .sort((a, b) => b.rate - a.rate);
+    for (const x of rows) out.push({
+      key: "lostRate", title: "อัตราปิดการขายไม่สำเร็จสูง",
+      body: `${x.d!.code} · ${x.d!.name} — ปิดไม่สำเร็จ ${x.rate}% (${x.lost} จาก ${x.closed} ลีดที่ปิดแล้ว)`, href: `/hq/dealers/${x.d!.code}`,
+    });
+  }
+  return out;
 }
 
 /** รวมการแจ้งเตือนทั้ง 6 ข้อตามกฎที่เปิดไว้ (เฉพาะข้อที่ inapp = ขึ้นกระดิ่ง) */

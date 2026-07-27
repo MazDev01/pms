@@ -11,7 +11,7 @@ import {
 import { useRepoValue, useRepoValueLoaded } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { useNetworkDealerDetail, useNetworkCustomers } from "@pms/shared/lib/useNetworkData";
+import { useNetworkDealerDetail, useNetworkCustomersDb } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
 
@@ -379,7 +379,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   const dealer = dealers.find(d => d.code === code);
   // รายละเอียดตัวแทนแบบเชื่อมต่อ: CNX = ข้อมูลสด (leads/projects/quotes/ยอดรายเดือน) · สาขาอื่น = seed
   const detail = useNetworkDealerDetail(code);
-  const custs = useNetworkCustomers().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (แหล่งเดียว)
+  const custs = useNetworkCustomersDb().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (repo-backed · M9 Phase 4)
 
   // ทะเบียนตัวแทนมาจาก repo (async) — ต้องรอโหลดจบก่อน ไม่งั้นเรนเดอร์แรกเด้ง 404 ทุกครั้ง
   if (!loaded) return <div className="erp" />;

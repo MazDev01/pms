@@ -398,6 +398,36 @@ export const LocalAdapter: DataAdapter = {
       rows.forEach(l => { const c = l.dealerCode ?? "CNX"; m.set(c, (m.get(c) ?? 0) + 1); });
       return ok({ total: rows.length, byDealer: [...m.entries()].map(([dealerCode, count]) => ({ dealerCode, count })).sort((a, b) => b.count - a.count) });
     },
+    hqAlerts: (f) => {
+      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const asOf = f.asOf ? new Date(f.asOf) : new Date(2026, 5, 30);
+      const DAY = 86_400_000;
+      const isOpen = (s: string) => s !== "PAID" && s !== "CANCELLED";
+      const lastContactOf = (l: LeadRow) => {
+        const ds = (l.activities ?? []).map(a => parseThaiDateLocal(a.date)).filter((d): d is Date => !!d);
+        const created = parseThaiDateLocal(l.createdAt ?? "");
+        return ds.length ? new Date(Math.max(...ds.map(d => d.getTime()))) : created;
+      };
+      const unassigned = ls.filter(l => !l.assigned?.trim() && isOpen(l.status) && parseThaiDateLocal(l.createdAt ?? "")
+        && (asOf.getTime() - parseThaiDateLocal(l.createdAt ?? "")!.getTime()) / 3_600_000 > (f.unassignedPerDealer?.[l.dealerCode ?? "CNX"] ?? f.unassignedDefaultHours ?? 48))
+        .map(l => ({ numId: l.numId, company: l.company || l.name, province: l.province, value: l.value }));
+      const idle = ls.filter(l => { if (!isOpen(l.status)) return false; const lc = lastContactOf(l); return lc && (asOf.getTime() - lc.getTime()) / DAY > (f.leadIdleDays ?? 30); })
+        .map(l => ({ numId: l.numId, company: l.company || l.name, assigned: l.assigned, idleDays: Math.floor((asOf.getTime() - lastContactOf(l)!.getTime()) / DAY) }));
+      const validity = f.quoteValidityDays ?? 30, within = f.quoteExpiringDays ?? 7;
+      const expiring = qs.filter(q => q.status === "sent_to_client").map(q => {
+        const d = /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "")?.[1]; if (!d) return null;
+        const daysLeft = Math.round((new Date(d).getTime() + validity * DAY - asOf.getTime()) / DAY);
+        return daysLeft >= 0 && daysLeft <= within ? { quoteNo: q.id, customer: q.customer, value: q.totalValue ?? 0, dealerCode: q.dealerCode ?? null, daysLeft } : null;
+      }).filter((x): x is NonNullable<typeof x> => !!x);
+      const latestM = new Map<string, number>();
+      qs.forEach(q => { if (!q.dealerCode) return; const d = /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "")?.[1]; if (!d) return; const t = new Date(d).getTime(); if (!latestM.has(q.dealerCode) || t > latestM.get(q.dealerCode)!) latestM.set(q.dealerCode, t); });
+      const dealerLatest = [...latestM.entries()].map(([dealerCode, t]) => ({ dealerCode, idleDays: Math.floor((asOf.getTime() - t) / DAY) }));
+      const lostM = new Map<string, { lost: number; closed: number }>();
+      ls.forEach(l => { if (!l.dealerCode || isOpen(l.status)) return; const r = lostM.get(l.dealerCode) ?? { lost: 0, closed: 0 }; if (l.status === "CANCELLED") r.lost++; r.closed++; lostM.set(l.dealerCode, r); });
+      const lostRate = [...lostM.entries()].map(([dealerCode, x]) => ({ dealerCode, ...x }));
+      return ok({ unassigned, idle, expiring, dealerLatest, lostRate });
+    },
     hqQuotationsSummary: (f) => {
       const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       const asOfMs = Date.parse(f.asOf ?? "2026-06-30");
@@ -609,6 +639,8 @@ export const LocalAdapter: DataAdapter = {
   },
   appointments: {
     list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),
+    listForDealer: (dealerCode) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => (a.dealerCode ?? "CNX") === dealerCode)),
+    listForLead: (leadId) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => a.leadId === leadId)),
     nextId: (dealerCode) => {
       const mine = scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), { dealerCode, isHQ: false });
       return ok(mine.reduce((m, a) => Math.max(m, a.id), 0) + 1);

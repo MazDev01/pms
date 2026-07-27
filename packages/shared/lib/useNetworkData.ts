@@ -17,7 +17,8 @@ import { dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult, NetworkCustomerSummary, UnassignedSummary, UnassignedFilters } from "@pms/shared/lib/data/ports";
-import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo } from "@pms/shared/lib/data";
+import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo, customers as customersRepo, appointments as appointmentsRepo } from "@pms/shared/lib/data";
+import type { CustomerRow, AppointmentMock, QuotationMock } from "@pms/shared/lib/data/types";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 // ── aggregate ใบในช่วงวันที่ที่ DB (M9) — supabase เท่านั้น · local คืน null (คงเส้นทาง winQuotes เดิม) ──
@@ -275,6 +276,36 @@ export function useNetworkCustomers(): HQCustomer[] {
   }, [customers, quotations]);
 }
 
+// ลูกค้าทั้งเครือสำหรับหน้า /hq/customers — ดึงตรงจาก repo (RLS = ทั้งเครือ) ไม่ผ่าน array ของ SalesContext
+// เพื่อให้ gate SalesContext ฝั่ง HQ ได้ (M9 Phase 4) · local ยังใช้ useNetworkCustomers (สมุดสด + seed) เพื่อ reactivity
+// dealsWon ไม่ถูกใช้ในหน้านี้ (นับอาคารจริงจาก customer_rollup แทน) → ตั้ง 0 ได้
+export function useNetworkCustomersDb(): HQCustomer[] {
+  const local = useNetworkCustomers();
+  const { salesVersion } = useSales();
+  const dealerInfoOf = useDealerInfo();
+  const [rows, setRows] = useState<CustomerRow[] | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setRows(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      customersRepo.list({ isHQ: true, dealerCode: undefined }).then(r => { if (alive) setRows(r); }).catch(err => logRepoRead("customers.list", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+  }, [salesVersion]);
+  return useMemo(() => {
+    if (!rows) return local; // local mode หรือ supabase ระหว่างโหลด
+    return rows.map(c => {
+      const dl = dealerInfoOf(c.dealerCode);
+      return {
+        id: 10000 + c.id, localId: c.id, name: c.company, dealerCode: dl.code, dealerName: dl.name,
+        province: c.province, dealsWon: 0, totalRevenue: c.totalValue,
+        status: c.status === "inactive" ? "inactive" : "active" as HQCustomer["status"],
+        lastContact: "—", segment: "sme" as HQCustomer["segment"],
+      };
+    });
+  }, [rows, local, dealerInfoOf]);
+}
+
 // ─── รายละเอียดตัวแทน (เจาะรายสาขา) — CNX = ข้อมูลสด · สาขาอื่น = seed ────────────
 const LEAD_TO_ITEM: Record<LeadStatus, DealerLeadItem["status"]> = {
   WAITING: "contacted", BULLET: "contacted", QUOTED: "quoted", FOLLOWUP: "quoted", NEGO: "quoted", PAID: "won", CANCELLED: "lost",
@@ -283,17 +314,29 @@ const LEAD_PROGRESS: Record<LeadStatus, number> = { WAITING: 15, BULLET: 30, QUO
 const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 export function useNetworkDealerDetail(code: string): DealerDetail {
-  const { leads, quotations } = useSales();
+  const { leads, quotations, salesVersion } = useSales();
+  // supabase: ดึงลีด/ใบของสาขานี้ตรงจาก repo (RLS = ทั้งเครือ) — ไม่พึ่ง array ทั้งเครือของ SalesContext (M9 Phase 4)
+  // local/ยังไม่กลับ: ใช้ array ของ SalesContext เหมือนเดิม (สาขา CNX มีข้อมูลสด · อื่น ๆ ใช้ seed ด้านล่าง)
+  const [fetched, setFetched] = useState<{ leads: LeadRow[]; quotes: QuotationMock[] } | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setFetched(null); return; }
+    let alive = true;
+    Promise.all([
+      leadsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
+      quotationsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
+    ]).then(([lp, qp]) => { if (alive) setFetched({ leads: lp.rows, quotes: qp.rows }); })
+      .catch(e => logRepoRead("dealerDetail", e));
+    return () => { alive = false; };
+  }, [code, salesVersion]);
   return useMemo(() => {
     // โหมด local (เดโม): มีข้อมูลสดเฉพาะสาขาที่เล่นได้ (CNX) — สาขาอื่นใช้ seed จำลอง
     // โหมด supabase: ทุกสาขามีข้อมูลจริงใน DB → สร้างจากข้อมูลจริงเสมอ (ห้ามใช้ seed)
     if (USE_SEED && code !== CURRENT_DEALER.code) {
       return dealerDetails[code] ?? { code, monthlySales: [], leads: [], projects: [], quotes: [] };
     }
-    // กรองเหลือเฉพาะของสาขานี้ — SalesContext ฝั่ง HQ ถือข้อมูลทั้งเครือ
-    // (ลีด/ใบที่ไม่ระบุ dealerCode = ของสาขา CNX ตามกติกาเดิม)
-    const mine = leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === code);
-    const myQuotes = quotations.filter(q => (q.dealerCode ?? CURRENT_DEALER.code) === code);
+    // supabase: จากที่ดึงตรง (fetched) · local: กรอง array ของ SalesContext (CNX = ลีด/ใบไม่ระบุ dealerCode)
+    const mine = fetched ? fetched.leads : leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === code);
+    const myQuotes = fetched ? fetched.quotes : quotations.filter(q => (q.dealerCode ?? CURRENT_DEALER.code) === code);
     const quotes: DealerQuoteItem[] = myQuotes.map(q => ({
       quoteNo: q.id, customer: q.customer, product: q.buildingType || q.project,
       valueNum: q.totalValue, status: q.status, date: fmtISOToThai(q.date),
@@ -315,5 +358,81 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
     });
     const monthlySales = TH_MO.slice(0, 6).map((month, i) => ({ month, value: Math.round((byMonth.get(i) ?? 0) / 1000) }));
     return { code, monthlySales, leads: leadItems, projects, quotes };
-  }, [code, leads, quotations]);
+  }, [code, fetched, leads, quotations]);
+}
+
+// ── ข้อมูลรายสาขาสำหรับ DealerDrawer หน้า /hq/pipeline (customers/leads/quotes/appointments) ──
+// supabase: ดึงตรงจาก repo เมื่อเปิด drawer (code != null) — ไม่พึ่ง array ทั้งเครือ (M9 Phase 4)
+// local/ยังไม่กลับ/ปิด drawer (code=null): คืน null → หน้าใช้เส้นทาง filter array เดิม
+export type DealerDrawerData = {
+  customers: { id: number; name: string; province: string; dealsWon: number; totalRevenue: number }[];
+  leads: { numId: number; company: string; status: string }[];
+  quotes: { quoteNo: string; customer: string; valueNum: number; status: string; createdAt: string }[];
+  appointments: AppointmentMock[];
+};
+export function useDealerDrawerData(code: string | null): DealerDrawerData | null {
+  const { salesVersion } = useSales();
+  const [data, setData] = useState<DealerDrawerData | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase" || !code) { setData(null); return; }
+    let alive = true;
+    Promise.all([
+      customersRepo.list({ isHQ: true }),
+      leadsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
+      quotationsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
+      appointmentsRepo.listForDealer(code),
+    ]).then(([cs, lp, qp, appts]) => {
+      if (!alive) return;
+      setData({
+        customers: cs.filter(c => (c.dealerCode ?? CURRENT_DEALER.code) === code)
+          .map(c => ({ id: c.id, name: c.company, province: c.province, dealsWon: 0, totalRevenue: c.totalValue })),
+        leads: lp.rows.map(l => ({ numId: l.numId, company: l.company, status: l.status })),
+        quotes: qp.rows.map(q => ({ quoteNo: q.id, customer: q.customer, valueNum: q.totalValue, status: q.status, createdAt: fmtISOToThai(q.date) })),
+        appointments: appts,
+      });
+    }).catch(e => logRepoRead("dealerDrawerData", e));
+    return () => { alive = false; };
+  }, [code, salesVersion]);
+  return data;
+}
+
+// ค้นหาทั่วระบบฝั่ง HQ (spotlight) — ดึงเฉพาะที่ match คำค้นจาก repo (bounded) ไม่พึ่ง array ทั้งเครือ (M9 Phase 4)
+// supabase เท่านั้น · local/ไม่ใช่ HQ/คำสั้น = คืนว่าง → Topbar ใช้ array ของ SalesContext เอง (dealer scope)
+export function useHQSearch(query: string): { leads: LeadRow[]; quotes: QuotationMock[]; customers: CustomerRow[] } | null {
+  const [res, setRes] = useState<{ leads: LeadRow[]; quotes: QuotationMock[]; customers: CustomerRow[] } | null>(null);
+  useEffect(() => {
+    const q = query.trim();
+    if (DATA_SOURCE !== "supabase" || q.length < 2) { setRes(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      Promise.all([
+        leadsRepo.listPage(undefined, { limit: 6, offset: 0, search: q }),
+        quotationsRepo.listPage(undefined, { limit: 6, offset: 0, search: q }),
+        customersRepo.list({ isHQ: true }),
+      ]).then(([lp, qp, cs]) => {
+        if (!alive) return;
+        const ql = q.toLowerCase();
+        setRes({
+          leads: lp.rows,
+          quotes: qp.rows,
+          customers: cs.filter(c => `${c.company ?? ""} ${c.name ?? ""} ${c.province ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(ql)).slice(0, 6),
+        });
+      }).catch(e => logRepoRead("hqSearch", e));
+    }, 200);
+    return () => { alive = false; clearTimeout(t); };
+  }, [query]);
+  return res;
+}
+
+// นัดหมายของลีดหนึ่ง (drawer ดูลีด หน้า /hq/leads) — supabase: ดึงตรง · local/ยังไม่กลับ: null → ใช้ appointments array เดิม
+export function useLeadAppointments(leadNumId: number | null): AppointmentMock[] | null {
+  const { salesVersion } = useSales();
+  const [appts, setAppts] = useState<AppointmentMock[] | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase" || leadNumId == null) { setAppts(null); return; }
+    let alive = true;
+    appointmentsRepo.listForLead(leadNumId).then(r => { if (alive) setAppts(r); }).catch(e => logRepoRead("appointments.listForLead", e));
+    return () => { alive = false; };
+  }, [leadNumId, salesVersion]);
+  return appts;
 }

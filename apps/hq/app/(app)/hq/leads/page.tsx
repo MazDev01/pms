@@ -7,7 +7,7 @@ import { useMemo, useState, useEffect } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
 import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
-import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange, useUnassignedLeads } from "@pms/shared/lib/useNetworkData";
+import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange, useUnassignedLeads, useDashboardQuoteSummary, useLeadAppointments } from "@pms/shared/lib/useNetworkData";
 import type { LeadSummaryFilters, LeadListOpts } from "@pms/shared/lib/data/ports";
 import { DEFAULT_LEAD_RULES } from "@pms/shared/lib/mock";
 import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
@@ -26,7 +26,7 @@ import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { GroupedBarChart, Donut } from "@pms/shared/components/ui/Charts";
 import {
-  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKeyOf,
+  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKeyOf, monthKey,
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
@@ -48,6 +48,9 @@ const parseThaiDate = (s: string): Date | null => {
 };
 const ACTIVE: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO"];
 const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// ช่วงกว้างคงที่สำหรับสรุปใบรายเดือน (กราฟแนวโน้มลีด) — อ้างอิงคงที่ กัน hook รีเฟตช์
+const TREND_QUOTE_START = new Date(2000, 0, 1);
+const TREND_QUOTE_END = new Date(2999, 11, 31);
 // "ต้องติดตาม" = ลีดที่ยังไม่ปิด และเงียบเกินเกณฑ์ของสาขาเจ้าของลีด (needsFollowUp)
 // ⚠️ ห้ามกลับไปใช้รายการสถานะ: เดิมเป็น ["WAITING","FOLLOWUP"] ซึ่งไม่ได้นับวันเลย
 //    แต่ป้ายเขียนว่า ">7 วัน" → ตัวเลขไม่ตรงกับคำ และไม่ตรงกับที่ตัวแทนเห็นบนหน้าตัวเอง
@@ -78,6 +81,8 @@ export default function HQLeadsPage() {
   // นัดหมาย + ไฟล์ — ใช้แสดงใน Drawer เท่านั้น (HQ ดูอย่างเดียว)
   // นัดหมายผูกด้วย leadId · ไฟล์ผูกด้วย source="lead" + recordId — ทั้งคู่คือ numId ของลีด
   const { appointments } = useSales();
+  // นัดหมายของลีดที่กำลังเปิด drawer — supabase: ดึงตรง (M9 Phase 4) · local/ยังไม่กลับ: กรอง appointments array เดิม
+  const drawerAppts = useLeadAppointments(viewLead?.numId ?? null);
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   useEffect(() => {
     const read = () => { filesRepo.list({ isHQ: true }).then(setDealerFiles).catch(() => {}); }; // HQ เห็นไฟล์ทั้งเครือ
@@ -293,13 +298,16 @@ export default function HQLeadsPage() {
   // ── กราฟแนวโน้มรายเดือน — ปุ่มช่วงย้อนหลังของตัวเอง (ไม่ผูกกับตัวกรองเวลาบนแถบบน) ──
   // ถังเดือนใช้คีย์ YYYY-MM — ช่วง 12 เดือนคาบเกี่ยว 2 ปี ถ้านับแต่เลขเดือน ยอดปีที่แล้วจะทับปีนี้
   const [trendRange, setTrendRange] = useState<MonthRange>(6);
+  // ใบเสนอราคารายเดือนทั้งเครือ (คนละ entity กับลีด ไม่ผูกตัวกรองลีด) — supabase: byMonth ที่ DB · local: netQuotes
+  const quoteTrendSum = useDashboardQuoteSummary(TREND_QUOTE_START, TREND_QUOTE_END, undefined);
   const trend = useMemo(() => {
     const buckets = lastNMonths(trendRange, APP_NOW);
     const newM = new Map<string, number>(), wonM = new Map<string, number>(),
       lostM = new Map<string, number>(), quoteM = new Map<string, number>();
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-    // ใบเสนอราคา (quoteM) มาจาก netQuotes เสมอ (คนละ entity)
-    netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d) bump(quoteM, monthKeyOf(d)); });
+    // ใบเสนอราคา (quoteM): supabase = byMonth ที่ DB (key YYYY-MM) · local/ยังไม่กลับ = netQuotes
+    if (quoteTrendSum) { for (const r of quoteTrendSum.byMonth) quoteM.set(monthKey(r.y, r.m), r.quotes); }
+    else netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d) bump(quoteM, monthKeyOf(d)); });
     if (chartSummary) { // ลีด: จาก byMonth ที่ DB (key YYYY-MM)
       chartSummary.byMonth.forEach(r => { const k = `${r.y}-${String(r.m + 1).padStart(2, "0")}`; newM.set(k, r.created); wonM.set(k, r.won); lostM.set(k, r.lost); });
     } else {
@@ -313,7 +321,7 @@ export default function HQLeadsPage() {
     }
     const pick = (m: Map<string, number>) => buckets.map(b => m.get(b.key) ?? 0);
     return { months: buckets.map(b => b.label), newM: pick(newM), wonM: pick(wonM), lostM: pick(lostM), quoteM: pick(quoteM) };
-  }, [chartSummary, filtered, netQuotes, trendRange]);
+  }, [chartSummary, filtered, quoteTrendSum, netQuotes, trendRange]);
 
   // ลีดตามแหล่งที่มา + ตามสถานะ (แท่งแนวนอน)
   const sources = useMemo(() => {
@@ -850,7 +858,7 @@ export default function HQLeadsPage() {
             ประวัตินัดหมาย
           </div>
             {(() => {
-              const appts = appointments.filter(a => a.leadId === l.numId);
+              const appts = drawerAppts ?? appointments.filter(a => a.leadId === l.numId);
               return !appts.length ? (
                 <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)" }}>— ไม่มีนัดหมาย</div>
               ) : (

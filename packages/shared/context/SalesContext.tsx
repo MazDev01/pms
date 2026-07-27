@@ -107,6 +107,12 @@ export function SalesProvider({
   // สาขาที่ล็อกอิน (multi-tenant) + auth พร้อมหรือยัง (hydrated) — โหลดลีดตามขอบเขตสาขา
   const { dealerCode, isHQ, hydrated, isLoggedIn } = useRole();
   const myDealerCode = dealerCode || "CNX";
+  // ── M9 Phase 4 (unload) — HQ ในโหมด supabase ไม่โหลด array งานขายทั้งเครืออีกต่อไป ──
+  // ทุก surface ของ HQ อ่านผ่าน RPC/รายการแบ่งหน้าที่ DB แล้ว (dashboard/quotations/leads/pipeline/
+  //   customers/dealers-detail/กระดิ่งแจ้งเตือน/ค้นหา) → ไม่ต้องถือ leads/quotations/customers/appointments
+  //   ของทั้ง 10 สาขาไว้ในหน่วยความจำ · reactivity มาจาก realtime → bump salesVersion (hook RPC refetch)
+  // ตัวแทน (ไม่ใช่ HQ) และโหมด local ยังโหลดตามเดิม (ต้องใช้ array ทำ CRUD หน้าตัวแทน)
+  const gateHQ = USE_SUPABASE && isHQ;
 
   // ── Leads (Phase 1) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS ที่ DB คืนเฉพาะลีดสาขาตัวเอง (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
@@ -118,13 +124,13 @@ export function SalesProvider({
 
   // โหลดลีดเมื่อ auth พร้อม + รีโหลดเมื่อสลับสาขา (login คนละบัญชี) — scope ส่งให้ repo (RLS ฝั่ง supabase)
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || gateHQ) return; // HQ/supabase: ไม่โหลดลีดทั้งเครือ (อ่านผ่าน RPC แทน)
     let alive = true;
     leadsRepo.list({ dealerCode, isHQ })
       .then((rows) => { if (alive) setLeads(rows); })
       .catch((e) => { if (alive) logRepoRead("leads.list", e); });
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ]);
 
   // ── การบันทึกล้มเหลว ต้อง "ดัง" เสมอ (C1) ────────────────────────────────
   // เดิม: .catch(console.error) → RLS ปฏิเสธ/เน็ตหลุด แล้วผู้ใช้ยังเห็นข้อมูลบนจอเหมือนบันทึกสำเร็จ
@@ -151,13 +157,13 @@ export function SalesProvider({
   //           trigger on_quote_won ที่ DB ถูกลบใน 0033 (เดิมสร้างลูกค้า id=0 ไร้ชื่อ + นับยอดซ้ำ · C6)
   const [customers, setCustomers]   = useState<CustomerRow[]>(USE_SUPABASE ? [] : initialCustomers);
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || gateHQ) return; // HQ/supabase: ลูกค้าทั้งเครืออ่านผ่าน repo ที่หน้า /hq/customers เอง
     let alive = true;
     customersRepo.list({ dealerCode, isHQ })
       .then((rows) => { if (alive) setCustomers(rows); })
       .catch((e) => { if (alive) logRepoRead("customers.list", e); });
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ]);
   const persistCustomer = useRef({
     create: (c: CustomerRow) => { void customersRepo.create(c).catch(onFail("customers", "สร้างลูกค้า")); },
     update: (c: CustomerRow) => { void customersRepo.update(c).catch(onFail("customers", "แก้ไขลูกค้า")); },
@@ -169,7 +175,7 @@ export function SalesProvider({
   const quotationsRef = useRef(quotations);
   useEffect(() => { quotationsRef.current = quotations; }, [quotations]);
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || gateHQ) return; // HQ/supabase: ใบทั้งเครืออ่านผ่าน RPC (summary/listPage) แทน array
     let alive = true;
     // ปิดใบที่เลยวันหมดอายุก่อนโหลด (H5) — ใช้ "วันนี้ของระบบ" (APP_NOW) ให้ตรงกับที่หน้าจอแสดง
     // ตัวแทนเท่านั้นที่ปิดได้ (RLS) · HQ ข้ามไป เพราะเขียนงานขายไม่ได้อยู่แล้ว
@@ -191,7 +197,7 @@ export function SalesProvider({
       .then((rows) => { if (alive) setQuotations(rows); })
       .catch((e) => { if (alive) logRepoRead("quotations.list", e); });
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, isLoggedIn]);
+  }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ]);
   const persistQuote = useRef({
     create: (q: QuotationMock) => { void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
     update: (q: QuotationMock) => { void quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
@@ -221,13 +227,13 @@ export function SalesProvider({
   // supabase: RLS แยกสาขา · local: LocalAdapter กรอง + เก็บ localStorage
   const [appointments, setAppointments] = useState<AppointmentMock[]>(USE_SUPABASE ? [] : seedAppointments);
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || gateHQ) return; // HQ/supabase: นัดหมายดึงเฉพาะที่ต้องใช้ (per-lead/per-dealer) ที่หน้า
     let alive = true;
     appointmentsRepo.list({ dealerCode, isHQ })
       .then((rows) => { if (alive) setAppointments(rows); })
       .catch((e) => { if (alive) logRepoRead("appointments.list", e); });
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ]);
   // bump สัญญาณเมื่อข้อมูลขายชุดใดเปลี่ยน (โหลด/เขียน/realtime) — hook RPC ผูก refetch กับ salesVersion
   useEffect(() => { setSalesVersion(v => v + 1); }, [leads, quotations, customers, appointments]);
   const persistAppt = useRef({
@@ -262,6 +268,8 @@ export function SalesProvider({
       return i >= 0 ? list.map((x, j) => (j === i ? row : x)) : [row, ...list];
     };
     return realtime.subscribeSales((ch) => {
+      // HQ/supabase (gate): ไม่ถือ array แล้ว → มีอะไรเปลี่ยนทั้งเครือ ก็แค่ bump ให้ hook RPC refetch
+      if (gateHQ) { setSalesVersion(v => v + 1); return; }
       if (ch.type === "DELETE") {
         if (ch.table === "leads") setLeads(prev => prev.filter(l => l.id !== ch.id));
         else if (ch.table === "quotations") setQuotations(prev => prev.filter(q => q.id !== ch.id));
@@ -274,7 +282,7 @@ export function SalesProvider({
       else if (ch.table === "customers") setCustomers(prev => upsert(prev, ch.row));
       else setAppointments(prev => upsert(prev, ch.row));
     });
-  }, [hydrated, dealerCode, isHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ]);
   // ── Lead → Customer conversion (creates a REAL customer) ─────────
   // removeLead = true → "เปลี่ยนลีดเป็นลูกค้า" (ลบออกจากรายการลูกค้าเป้าหมาย) · false → แค่ผูกลูกค้าให้ลีด (คงลีดไว้ เช่นตอนสร้างใบเสนอราคา)
   // async เพราะเลข id ลูกค้าออกจาก DB แบบ atomic ต่อสาขา (C5) — กันชนเมื่อสร้างพร้อมกัน

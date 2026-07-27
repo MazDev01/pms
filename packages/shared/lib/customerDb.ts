@@ -14,7 +14,7 @@
 // (ห้ามเดาแทน — ลูกค้า seed หลายรายมี dealsWon แต่ไม่มีใบในระบบ ถือว่าไม่มีข้อมูล)
 import { useMemo, useState, useEffect } from "react";
 import { mainTemplateOf, fmtISOToThai, type HQCustomer } from "@pms/shared/lib/mock";
-import { useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
+import { useNetworkCustomersDb, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { deliveryDateOf, parseThaiDate } from "@pms/shared/lib/delivery";
 import { metrics as metricsRepo } from "@pms/shared/lib/data";
@@ -100,7 +100,7 @@ function useCustomerRollup(trigger: unknown): Map<string, WonBuildingRaw[]> | nu
  * ไม่มีใบปิดการขาย = buildings ว่าง → ทุกช่องหลังปิดการขายเป็น null
  */
 export function useCustomerDb(): CustomerDbRow[] {
-  const customers = useNetworkCustomers();
+  const customers = useNetworkCustomersDb();
   const quotations = useNetworkQuotations();
   const { salesVersion } = useSales();
   const rollup = useCustomerRollup(salesVersion); // supabase: group ที่ DB · local/ยังไม่กลับ: null

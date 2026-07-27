@@ -189,6 +189,18 @@ export interface UnassignedFilters {
   dealerCodes?: string[]; province?: string; product?: string; source?: string;
   search?: string; dateStart?: string; dateEnd?: string;
 }
+/** ผู้สมัครของกฎแจ้งเตือน HQ (คำนวณที่ DB) — client ประกอบเป็นข้อความ + toggle (M9 Phase 4) */
+export interface HQAlertsData {
+  unassigned: { numId: number; company: string; province: string; value: string }[];
+  idle: { numId: number; company: string; assigned: string; idleDays: number }[];
+  expiring: { quoteNo: string; customer: string; value: number; dealerCode: string | null; daysLeft: number }[];
+  dealerLatest: { dealerCode: string; idleDays: number }[];
+  lostRate: { dealerCode: string; lost: number; closed: number }[];
+}
+export interface HQAlertsFilters {
+  asOf?: string; unassignedDefaultHours?: number; unassignedPerDealer?: Record<string, number>;
+  leadIdleDays?: number; quoteValidityDays?: number; quoteExpiringDays?: number; dealerIdleDays?: number;
+}
 export interface MetricsRepo {
   /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง
    *  scope คุมด้วย RLS ฝั่ง supabase (ตัวแทน=สาขาตน · HQ=ทั้งเครือ) เหมือนที่ client เคยเห็น */
@@ -208,6 +220,8 @@ export interface MetricsRepo {
   networkCustomerSummary(): Promise<NetworkCustomerSummary>;
   /** ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ปลดการ์ดเตือน /hq/leads ออกจาก netLeads array (M9 Phase 4) */
   unassignedLeads(filters: UnassignedFilters): Promise<UnassignedSummary>;
+  /** ผู้สมัครกฎแจ้งเตือน HQ (unassigned/idle/expiring/dealerLatest/lostRate) — ปลดกระดิ่ง HQ ออกจาก array (M9 Phase 4) */
+  hqAlerts(filters: HQAlertsFilters): Promise<HQAlertsData>;
 }
 
 // ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
@@ -287,6 +301,10 @@ export interface CustomersRepo {
 }
 export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;
+  /** นัดหมายของสาขาหนึ่ง (HQ เจาะดูตัวแทน) — ดึงเฉพาะที่ต้องใช้ ไม่ต้องโหลดทั้งเครือ (M9 Phase 4) */
+  listForDealer(dealerCode: string): Promise<AppointmentMock[]>;
+  /** นัดหมายของลีดหนึ่ง (drawer ดูลีด) — ผูกด้วย lead_id = numId (M9 Phase 4) */
+  listForLead(leadId: number): Promise<AppointmentMock[]>;
   nextId(dealerCode: string): Promise<number>;
   create(row: AppointmentMock): Promise<AppointmentMock>;
   update(row: AppointmentMock): Promise<AppointmentMock>;
