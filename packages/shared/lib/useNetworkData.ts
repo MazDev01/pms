@@ -16,8 +16,8 @@ import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { DealerRow } from "@pms/shared/lib/data/types";
-import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters } from "@pms/shared/lib/data/ports";
-import { metrics as metricsRepo2, quotations as quotationsRepo } from "@pms/shared/lib/data";
+import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult } from "@pms/shared/lib/data/ports";
+import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 // ── aggregate ใบในช่วงวันที่ที่ DB (M9) — supabase เท่านั้น · local คืน null (คงเส้นทาง winQuotes เดิม) ──
@@ -40,6 +40,25 @@ export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): M
     return () => { alive = false; clearTimeout(t); };
   }, [s, e, dealer, salesVersion]);
   return rows;
+}
+
+// หน้าเดียวของตารางลีด (paged/filtered ที่ DB) — M9 Phase 4 · supabase เท่านั้น · local คืน null
+export function useLeadsPage(opts: LeadListOpts): LeadListResult | null {
+  const { salesVersion } = useSales();
+  const key = JSON.stringify(opts);
+  const [page, setPage] = useState<LeadListResult | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setPage(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      leadsRepo.listPage(undefined, opts)
+        .then(r => { if (alive) setPage(r); })
+        .catch(err => logRepoRead("leads.listPage", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, salesVersion]);
+  return page;
 }
 
 // สรุปลีด "หลังกรอง" ที่ DB สำหรับ /hq/leads — M9 Phase 2 · supabase เท่านั้น · local คืน null → client fallback

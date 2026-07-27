@@ -277,12 +277,15 @@ export const LocalAdapter: DataAdapter = {
       rows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => lostM.set(l.lostReason!, (lostM.get(l.lostReason!) ?? 0) + 1));
       const monthM = new Map<string, { y: number; m: number; created: number; won: number; lost: number }>();
       rows.forEach(l => { const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return; const y = d.getFullYear(), m = d.getMonth(), k = `${y}-${m}`; let r = monthM.get(k); if (!r) { r = { y, m, created: 0, won: 0, lost: 0 }; monthM.set(k, r); } r.created++; if (l.status === "PAID") r.won++; if (l.status === "CANCELLED") r.lost++; });
+      const dealerM = new Map<string, { leads: number; quoted: number }>();
+      rows.forEach(l => { const code = l.dealerCode ?? "CNX"; let r = dealerM.get(code); if (!r) { r = { leads: 0, quoted: 0 }; dealerM.set(code, r); } r.leads++; if (["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status)) r.quoted++; });
       return ok({
         byStatus: [...statusM.entries()].map(([status, count]) => ({ status, count })),
         bySource: [...sourceM.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
         byProduct: [...productM.entries()].map(([product, count]) => ({ product, count })).sort((a, b) => b.count - a.count),
         byLostReason: [...lostM.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
         byMonth: [...monthM.values()],
+        byDealer: [...dealerM.entries()].map(([dealerCode, x]) => ({ dealerCode, ...x })),
       });
     },
     customerRollup: () => {
@@ -396,6 +399,36 @@ export const LocalAdapter: DataAdapter = {
   // งานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) · เขียนลง localStorage คีย์เดียวกับ SalesContext
   leads: {
     list: (scope) => ok(scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)),
+    // หน้าเดียว + กรอง (M9 Phase 4) — mirror leads_page ฝั่ง DB
+    listPage: (scope, opts) => {
+      const search = (opts.search ?? "").trim().toLowerCase();
+      const isoOf = (l: LeadRow) => { const d = parseThaiDateLocal(l.createdAt ?? ""); return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null; };
+      const lastMs = (l: LeadRow) => { const a = (l.activities ?? []).map(x => parseThaiDateLocal(x.date)?.getTime()).filter((x): x is number => x != null); return a.length ? Math.max(...a) : (parseThaiDateLocal(l.createdAt ?? "")?.getTime() ?? null); };
+      const asOfMs = Date.parse(opts.asOf ?? "2026-06-30"), defDays = opts.defaultDays ?? 7;
+      let arr = scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), scope).filter(l => {
+        const iso = isoOf(l);
+        if (iso && opts.dateStart && iso < opts.dateStart) return false;
+        if (iso && opts.dateEnd && iso > opts.dateEnd) return false;
+        if (opts.status && l.status !== opts.status) return false;
+        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(l.dealerCode ?? "CNX")) return false;
+        if (opts.province && l.province !== opts.province) return false;
+        if (opts.product && l.product !== opts.product) return false;
+        if (opts.source && (l.source || "ไม่ระบุ") !== opts.source) return false;
+        if (search && !`${l.company ?? ""} ${l.contact ?? ""} ${l.province ?? ""} ${l.product ?? ""} ${l.assigned ?? ""} ${l.id ?? ""} ${l.dealerCode ?? ""}`.toLowerCase().includes(search)) return false;
+        if (opts.overdue) {
+          if (l.status === "PAID" || l.status === "CANCELLED") return false;
+          const lm = lastMs(l); if (lm == null) return false;
+          const thr = opts.perDealer?.[l.dealerCode ?? "CNX"] ?? defDays;
+          if (!(Math.floor((asOfMs - lm) / 86_400_000) > thr)) return false;
+        }
+        return true;
+      });
+      arr = [...arr].sort((a, b) => {
+        const am = parseThaiDateLocal(a.createdAt ?? "")?.getTime() ?? -Infinity, bm = parseThaiDateLocal(b.createdAt ?? "")?.getTime() ?? -Infinity;
+        return am !== bm ? bm - am : (b.numId ?? 0) - (a.numId ?? 0);
+      });
+      return ok({ rows: arr.slice(opts.offset, opts.offset + opts.limit), total: arr.length });
+    },
     // num_id ถัดไป — โหมด local เครื่องเดียว → max+1 ของสาขานั้นพอ (supabase ใช้ RPC atomic)
     nextNumId: (dealerCode) => {
       const mine = scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), { dealerCode, isHQ: false });

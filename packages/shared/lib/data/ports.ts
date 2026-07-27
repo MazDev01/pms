@@ -165,6 +165,8 @@ export interface LeadSummary {
   byProduct: { product: string; count: number }[];
   byLostReason: { reason: string; count: number }[];
   byMonth: LeadMonthRow[];
+  /** รายสาขา — leads=จำนวนลีด · quoted=ถึงขั้นเสนอราคาขึ้นไป (QUOTED_UP) · ป้อน leadVsQuote/dealerPerf */
+  byDealer: { dealerCode: string; leads: number; quoted: number }[];
 }
 export interface LeadSummaryFilters {
   dealerCodes?: string[]; province?: string; product?: string; source?: string;
@@ -190,8 +192,27 @@ export interface MetricsRepo {
 // ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
 // write ทุกตัว implement ทั้ง LocalAdapter (localStorage) และ SupabaseAdapter (insert/update/delete)
 // ฝั่ง Supabase: dealer_code ต้องตรงสาขา session (บังคับด้วย RLS with-check ที่ DB)
+/** ตัวเลือกดึงลีดแบบ "แบ่งหน้า + กรอง ที่ DB" (M9 Phase 4) — ผู้เรียก resolve region→dealerCodes มาก่อน
+ *  overdue (needsFollowUp) กรองที่ DB ด้วย last_contact_at + เกณฑ์รายสาขา (asOf/defaultDays/perDealer) */
+export interface LeadListOpts {
+  limit: number;
+  offset: number;
+  status?: string;
+  dealerCodes?: string[];
+  province?: string;
+  product?: string;
+  source?: string;             // "ไม่ระบุ" = source ว่าง
+  search?: string;             // ilike company/contact/province/product/assigned/id/dealer_code
+  dateStart?: string;
+  dateEnd?: string;
+  overdue?: boolean;           // เฉพาะลีดเปิดที่เงียบเกินเกณฑ์
+  asOf?: string; defaultDays?: number; perDealer?: Record<string, number>;
+}
+export interface LeadListResult { rows: LeadRow[]; total: number; }
 export interface LeadsRepo {
   list(scope?: Scope): Promise<LeadRow[]>;
+  /** หน้าเดียวของลีด + จำนวนรวมหลังกรอง (M9 Phase 4) — supabase: query ที่ DB · local: filter/sort/slice */
+  listPage(scope: Scope | undefined, opts: LeadListOpts): Promise<LeadListResult>;
   /** เลข num_id ถัดไปของสาขาแบบ atomic (M7) — supabase: RPC next_entity_id · local: max+1
    *  id ที่แสดง (#L-....) แอป derive จาก num_id นี้ · เดิม Math.max+1 ฝั่ง client ชนกันได้ */
   nextNumId(dealerCode: string): Promise<number>;

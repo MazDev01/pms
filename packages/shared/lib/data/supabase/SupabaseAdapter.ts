@@ -467,13 +467,14 @@ export const SupabaseAdapter: DataAdapter = {
         p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
       });
       if (error) throw new Error(error.message);
-      const d = (data ?? {}) as { byStatus?: Row[]; bySource?: Row[]; byProduct?: Row[]; byLostReason?: Row[]; byMonth?: Row[] };
+      const d = (data ?? {}) as { byStatus?: Row[]; bySource?: Row[]; byProduct?: Row[]; byLostReason?: Row[]; byMonth?: Row[]; byDealer?: Row[] };
       return {
         byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count) })),
         bySource: (d.bySource ?? []).map(r => ({ source: String(r.source), count: Number(r.count) })),
         byProduct: (d.byProduct ?? []).map(r => ({ product: String(r.product), count: Number(r.count) })),
         byLostReason: (d.byLostReason ?? []).map(r => ({ reason: String(r.reason), count: Number(r.count) })),
         byMonth: (d.byMonth ?? []).map(r => ({ y: Number(r.y), m: Number(r.m), created: Number(r.new), won: Number(r.won), lost: Number(r.lost) })),
+        byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), leads: Number(r.leads), quoted: Number(r.quoted) })),
       };
     },
     customerRollup: async () => {
@@ -543,6 +544,21 @@ export const SupabaseAdapter: DataAdapter = {
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
       }, "leads");
       return rows.map(rowToLead);
+    },
+    listPage: async (scope, opts) => {
+      const { data, error } = await sb().rpc("leads_page", {
+        p_limit: opts.limit, p_offset: opts.offset,
+        p_status: opts.status ?? null,
+        p_dealer_codes: opts.dealerCodes ?? (scope && !scope.isHQ && scope.dealerCode ? [scope.dealerCode] : null),
+        p_province: opts.province ?? null, p_product: opts.product ?? null, p_source: opts.source ?? null,
+        p_search: (opts.search ?? "").trim() || null,
+        p_date_start: opts.dateStart ?? null, p_date_end: opts.dateEnd ?? null,
+        p_overdue: opts.overdue ?? false, p_as_of: opts.asOf ?? "2026-06-30",
+        p_default_days: opts.defaultDays ?? 7, p_follow_up_days: opts.perDealer ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { total?: number; rows?: Row[] };
+      return { rows: (d.rows ?? []).map(rowToLead), total: Number(d.total ?? 0) };
     },
     nextNumId: (dealerCode) => nextEntityId(dealerCode, "leads"),
     create: async (row) => {

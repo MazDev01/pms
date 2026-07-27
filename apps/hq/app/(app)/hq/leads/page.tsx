@@ -7,8 +7,9 @@ import { useMemo, useState, useEffect } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
 import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
-import { useNetworkLeads, useNetworkQuotations, useLeadSummary } from "@pms/shared/lib/useNetworkData";
-import type { LeadSummaryFilters } from "@pms/shared/lib/data/ports";
+import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange } from "@pms/shared/lib/useNetworkData";
+import type { LeadSummaryFilters, LeadListOpts } from "@pms/shared/lib/data/ports";
+import { DEFAULT_LEAD_RULES } from "@pms/shared/lib/mock";
 import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
 import { unassignedLeads } from "@pms/shared/lib/hqAlerts";
 import { needsFollowUp } from "@pms/shared/lib/leadMetrics";
@@ -134,6 +135,26 @@ export default function HQLeadsPage() {
   const sumCharts = useLeadSummary({ ...baseF, status: status === "ALL" ? undefined : status }); // กราฟ (filtered)
   const chartSummary = overdueOnly ? null : sumCharts;                               // overdue → client (พึ่ง last_contact + เกณฑ์)
 
+  // ── ตารางลีด: แบ่งหน้าที่ DB (M9 Phase 4) · local/ยังไม่กลับ = filtered (client) ──
+  const LEADS_PAGE = 25;
+  const [leadPage, setLeadPage] = useState(0);
+  const perDealerDays = useMemo(() => Object.fromEntries(allDealers.map(d => [d.code, rulesOf(d.code).followUpAlertDays])), [allDealers, rulesOf]);
+  const leadOpts: LeadListOpts = useMemo(() => ({
+    limit: LEADS_PAGE, offset: leadPage * LEADS_PAGE,
+    status: status === "ALL" ? undefined : status, dealerCodes: leadDealerCodes,
+    province: province === "ALL" ? undefined : province, product: btSel === "ALL" ? undefined : btSel,
+    source: srcSel === "ALL" ? undefined : srcSel, search: query.trim() || undefined,
+    dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+    overdue: overdueOnly, asOf: isoDateOf(APP_NOW), defaultDays: DEFAULT_LEAD_RULES.followUpAlertDays, perDealer: perDealerDays,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [leadPage, status, leadDealerCodes, province, btSel, srcSel, query, timeRange.start, timeRange.end, overdueOnly, perDealerDays]);
+  const leadsPage = useLeadsPage(leadOpts);
+  const leadTableKey = JSON.stringify({ ...leadOpts, offset: 0 });
+  useEffect(() => { setLeadPage(0); }, [leadTableKey]); // เปลี่ยนตัวกรอง → หน้า 1
+  const displayLeads = leadsPage?.rows ?? filtered;
+  const leadTotal = leadsPage ? leadsPage.total : filtered.length;
+  const leadPagination = leadsPage ? { page: leadPage, pageCount: Math.max(1, Math.ceil(leadTotal / LEADS_PAGE)), total: leadTotal, onPage: setLeadPage } : null;
+
   // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
   // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง
   // ตรรกะพร้อมใช้: พอมีลีดที่ assigned ว่างนานเกินเกณฑ์เมื่อไร การ์ดจะเด้งเอง
@@ -189,21 +210,18 @@ export default function HQLeadsPage() {
   // สถานะของลีดบอกเองว่าเคยเสนอราคาแล้วหรือยัง — ใช้แหล่งเดียว ไม่มีทางเกิน 100%
   const netQuotes = useNetworkQuotations();
   const DEALER_NAME = useMemo(() => new Map(allDealers.map(d => [d.code, d.name])), [allDealers]);
+  // ใบ/ยอดขายรายสาขาในช่วง ที่ DB (M9 Phase 4) — supabase · local/ยังไม่กลับ = netQuotes (client)
+  const rangeByDealer = useNetworkQuoteRange(timeRange.start, timeRange.end);
   const leadVsQuote = useMemo(() => {
     const QUOTED_UP: LeadStatus[] = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
     const m = new Map<string, { leads: number; quoted: number; quotes: number }>();
     const at = (c: string) => m.get(c) ?? (m.set(c, { leads: 0, quoted: 0, quotes: 0 }), m.get(c)!);
-    filtered.forEach(l => {
-      const r = at(l.dealerCode || "—");
-      r.leads++;
-      if (QUOTED_UP.includes(l.status)) r.quoted++;
-    });
-    // จำนวนใบเสนอราคาที่ออกจริงในช่วง (แสดงคู่กันเพื่อดูปริมาณงาน — ไม่เอาไปหารเป็น %)
-    netQuotes.forEach(q => {
-      const d = parseThaiDate(q.createdAt ?? "");
-      if (d && (d < timeRange.start || d > timeRange.end)) return;
-      at(q.dealerCode).quotes++;
-    });
+    // ลีด/ถึงขั้นเสนอราคา รายสาขา: supabase = byDealer (chartSummary) · overdue/local = filtered
+    if (chartSummary) { chartSummary.byDealer.forEach(d => { const r = at(d.dealerCode); r.leads = d.leads; r.quoted = d.quoted; }); }
+    else filtered.forEach(l => { const r = at(l.dealerCode || "—"); r.leads++; if (QUOTED_UP.includes(l.status)) r.quoted++; });
+    // จำนวนใบในช่วง รายสาขา: supabase = rangeByDealer · local = netQuotes
+    if (rangeByDealer) { for (const [code, v] of rangeByDealer) at(code).quotes = v.quotes; }
+    else netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d && (d < timeRange.start || d > timeRange.end)) return; at(q.dealerCode).quotes++; });
     const arr = [...m.entries()].map(([code, v]) => ({
       code, name: DEALER_NAME.get(code) ?? code,
       leads: v.leads, quotes: v.quotes,
@@ -211,7 +229,7 @@ export default function HQLeadsPage() {
     })).sort((a, b) => b.leads - a.leads);
     const max = Math.max(1, ...arr.flatMap(a => [a.leads, a.quotes]));
     return arr.map(a => ({ ...a, lPct: Math.round(a.leads / max * 100), qPct: Math.round(a.quotes / max * 100) }));
-  }, [filtered, netQuotes, timeRange.start, timeRange.end, DEALER_NAME]);
+  }, [chartSummary, filtered, rangeByDealer, netQuotes, timeRange.start, timeRange.end, DEALER_NAME]);
   // เกณฑ์เป็นของแต่ละสาขา → หน้านี้ที่รวมหลายสาขาต้องสรุปเป็นช่วง ไม่ใช่เลขเดียว
   const followUpSub = useMemo(() => {
     const ds = [...new Set(kpiBase.map(l => rulesOf(l.dealerCode).followUpAlertDays))].sort((a, b) => a - b);
@@ -317,7 +335,8 @@ export default function HQLeadsPage() {
   // ใช้ leadVsQuote ที่คำนวณไว้แล้ว (แหล่งเดียว ไม่คำนวณซ้ำ) + ยอดขายจากใบที่ตอบรับ
   const dealerPerf = useMemo(() => {
     const sales = new Map<string, number>();
-    netQuotes.forEach(q => {
+    if (rangeByDealer) { for (const [code, v] of rangeByDealer) sales.set(code, v.wonVal); } // supabase
+    else netQuotes.forEach(q => { // local/ยังไม่กลับ
       const d = parseThaiDate(q.createdAt ?? "");
       if (d && (d < timeRange.start || d > timeRange.end)) return;
       if (q.status === "won") sales.set(q.dealerCode, (sales.get(q.dealerCode) ?? 0) + q.valueNum);
@@ -326,7 +345,7 @@ export default function HQLeadsPage() {
       .map(d => ({ ...d, sales: sales.get(d.code) ?? 0 }))
       .sort((a, b) => b.sales - a.sales)
       .slice(0, 10);
-  }, [leadVsQuote, netQuotes, timeRange.start, timeRange.end]);
+  }, [leadVsQuote, rangeByDealer, netQuotes, timeRange.start, timeRange.end]);
 
   return (
     <div className="erp">
@@ -625,9 +644,9 @@ export default function HQLeadsPage() {
               <th>ต้องติดตาม</th><th>สถานะ</th><th></th>
             </tr></thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {displayLeads.length === 0 ? (
                 <tr><td colSpan={12} style={{ padding: 0 }}><EmptyState icon={<Users size={26} />} title="ไม่พบลูกค้าเป้าหมาย" description="ลองปรับตัวกรองหรือคำค้น" /></td></tr>
-              ) : filtered.map(l => {
+              ) : displayLeads.map(l => {
                 const c = leadStatusColor[l.status];
                 const followUp = needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays);
                 const quoted = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status);
@@ -677,6 +696,15 @@ export default function HQLeadsPage() {
             </tbody>
           </table>
         </div>
+        {leadPagination && leadPagination.pageCount > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderTop: "1px solid #f2f4f7", fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>ทั้งหมด {leadPagination.total.toLocaleString()} ลีด · หน้า {leadPagination.page + 1}/{leadPagination.pageCount}</span>
+            <span style={{ display: "flex", gap: 6 }}>
+              <button className="btn btn-secondary btn-sm" disabled={leadPagination.page <= 0} onClick={() => leadPagination.onPage(leadPagination.page - 1)}>ก่อนหน้า</button>
+              <button className="btn btn-secondary btn-sm" disabled={leadPagination.page >= leadPagination.pageCount - 1} onClick={() => leadPagination.onPage(leadPagination.page + 1)}>ถัดไป</button>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Drawer · ดูรายละเอียดลีด (HQ ดูอย่างเดียว — ไม่มีแก้/ลบ/มอบหมาย) ──
