@@ -20,7 +20,6 @@ import {
   type ReactNode, type Dispatch, type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";

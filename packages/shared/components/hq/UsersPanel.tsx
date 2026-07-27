@@ -3,7 +3,7 @@
 // ─── HQ · ผู้ใช้งานและสิทธิ์ (HQ Users เท่านั้น) ─────────────────────────────────
 // บริหารผู้ใช้ของ "สำนักงานใหญ่" เท่านั้น — ไม่แสดงผู้ใช้ Dealer (ดีลเลอร์จัดการใน Workspace ตัวเอง
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
@@ -13,10 +13,11 @@ import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { users as usersRepo } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
+import { createHQUser, deleteHQUser } from "@pms/shared/lib/adminApi";
 import type { UserRole } from "@pms/shared/lib/mock";
 import {
   Users, Shield, Check, X, Plus, Search, KeyRound, Copy, RefreshCw, MoreHorizontal,
-  Eye, Pencil, Power, Clock, LogIn, UserPlus, Phone, ImagePlus,
+  Eye, EyeOff, Pencil, Power, Clock, LogIn, UserPlus, Phone, ImagePlus, Trash2, AlertTriangle,
 } from "lucide-react";
 
 const PRIMARY = "#003366";
@@ -173,13 +174,13 @@ function UserDialog({ initial, onSave, onClose }: { initial?: AppUser; onSave: (
 }
 
 // ── Action dropdown (fixed-position, ไม่โดน clip) ────────────────────────────────
-function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; onClose: () => void; items: { label: string; icon: React.ReactNode; onClick: () => void }[] }) {
+function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; onClose: () => void; items: { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean }[] }) {
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 300 }} />
       <div style={{ position: "fixed", top: pos.y, left: pos.x, zIndex: 301, background: "#fff", borderRadius: 12, border: `1px solid ${BORDER}`, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, minWidth: 190, transform: "translateX(-100%)" }}>
         {items.map((it, i) => (
-          <button key={i} onClick={() => { it.onClick(); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, color: STEEL, textAlign: "left", fontFamily: "inherit" }} onMouseEnter={e => (e.currentTarget.style.background = "#f5f7fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>{it.icon} {it.label}</button>
+          <button key={i} onClick={() => { it.onClick(); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, color: it.danger ? "#dc2626" : STEEL, textAlign: "left", fontFamily: "inherit" }} onMouseEnter={e => (e.currentTarget.style.background = it.danger ? "#fef2f2" : "#f5f7fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>{it.icon} {it.label}</button>
         ))}
       </div>
     </>
@@ -194,20 +195,16 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // ผู้ใช้จริงในระบบ (ตาราง profiles) — เฉพาะฝั่งสำนักงานใหญ่ (dealerCode ว่าง)
   const [users, setUsers] = useState<AppUser[]>([]);
   const canCreate = usersRepo.canCreate();
-  useEffect(() => {
-    let alive = true;
+  const reload = useCallback(() => {
     usersRepo.list()
-      .then(rows => {
-        if (!alive) return;
-        setUsers(rows.filter(u => !u.dealerCode).map(u => ({
-          id: u.id, name: u.name, email: u.email, phone: u.phone,
-          role: (ROLE_BY_KEY[u.role as RoleKey] ? u.role : "HQ_STAFF") as RoleKey,
-          department: u.department, status: u.status, createdAt: u.createdAt, avatar: u.avatar,
-        })));
-      })
+      .then(rows => setUsers(rows.filter(u => !u.dealerCode).map(u => ({
+        id: u.id, name: u.name, email: u.email, phone: u.phone,
+        role: (ROLE_BY_KEY[u.role as RoleKey] ? u.role : "HQ_STAFF") as RoleKey,
+        department: u.department, status: u.status, createdAt: u.createdAt, avatar: u.avatar,
+      }))))
       .catch(e => logRepoRead("users.list", e));
-    return () => { alive = false; };
   }, []);
+  useEffect(() => { reload(); }, [reload]);
   const logAudit = useAuditLogger();
 
   const [q, setQ] = useState("");
@@ -223,6 +220,8 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [resetInfo, setResetInfo] = useState<{ user: AppUser } | null>(null);
   const [menu, setMenu] = useState<{ user: AppUser; x: number; y: number } | null>(null);
   const [matrixRole, setMatrixRole] = useState<RoleKey>("SUPER_ADMIN");
+  const [creds, setCreds] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -254,7 +253,9 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   };
   function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
     if (id !== null) { update(id, data); logAudit("แก้ไขผู้ใช้", data.email); return; }
-    // สร้างบัญชีใหม่ต้องผ่านระบบยืนยันตัวตน (ต้องใช้ service_role ซึ่งอยู่ฝั่งเบราว์เซอร์ไม่ได้)
+    // โหมดจริง (supabase): สร้างบัญชีเข้าระบบจริงผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ (service_role)
+    if (DATA_SOURCE === "supabase") { void createRemote(data); return; }
+    // โหมดเดโม (local): ไม่มีระบบยืนยันตัวตนจริง — เพิ่มไว้ในมุมมองพอให้ทดลอง UI
     if (!canCreate) {
       alert("เพิ่มผู้ใช้จากหน้านี้ไม่ได้\n\nบัญชีเข้าระบบถูกจัดการโดยระบบยืนยันตัวตน — ต้องสร้างบัญชีที่นั่นก่อน แล้วชื่อจะขึ้นในหน้านี้เอง");
       return;
@@ -262,6 +263,28 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     const nid = String(Date.now());
     setUsers(prev => [{ id: nid, ...data, createdAt: MOCK_TODAY }, ...prev]);
     logAudit("เพิ่มผู้ใช้ HQ", data.email);
+  }
+  // สร้างบัญชีเข้าระบบจริง — รหัสผ่านสุ่มที่เซิร์ฟเวอร์ กลับมาโชว์ครั้งเดียวใน modal
+  async function createRemote(data: Omit<AppUser, "id" | "createdAt">) {
+    const res = await createHQUser({
+      name: data.name, email: data.email, phone: data.phone, role: data.role,
+      department: data.department, status: data.status, avatar: data.avatar,
+    });
+    if (!res.ok) { alert("เพิ่มผู้ใช้ไม่สำเร็จ: " + res.error); return; }
+    logAudit("เพิ่มผู้ใช้ HQ", res.email);
+    setCreds({ name: data.name, email: res.email, password: res.password });
+    reload();
+  }
+  // ลบผู้ใช้ HQ จริง — supabase: ลบ auth+profile ผ่าน route · local: เอาออกจากมุมมอง
+  async function doDelete(u: AppUser): Promise<{ ok: boolean; error?: string }> {
+    if (DATA_SOURCE === "supabase") {
+      const r = await deleteHQUser(u.id);
+      if (!r.ok) return { ok: false, error: r.error };
+      logAudit("ลบผู้ใช้ HQ", u.email); reload(); return { ok: true };
+    }
+    setUsers(prev => prev.filter(x => x.id !== u.id));
+    logAudit("ลบผู้ใช้ HQ", u.email);
+    return { ok: true };
   }
   function toggleStatus(u: AppUser) { update(u.id, { status: u.status === "active" ? "inactive" : "active" }); logAudit(u.status === "active" ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้", u.email); }
   // H4 — รีเซ็ตรหัสผ่าน = "ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล" (ไม่ใช่ออกรหัสปลอมแล้วโชว์แบบเดิม)
@@ -374,13 +397,14 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
         </div>
       </div>
 
-      {/* Action dropdown (ห้ามลบจริง — ใช้ปิดใช้งาน) */}
+      {/* Action dropdown — ปิดใช้งาน (พักบัญชี) แยกจาก "ลบ" (ลบถาวรพร้อมยืนยัน) */}
       {menu && (
         <ActionMenu pos={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)} items={[
           { label: "ดูรายละเอียด", icon: <Eye size={14} />, onClick: () => setDetailUser(menu.user) },
           { label: "แก้ไข", icon: <Pencil size={14} />, onClick: () => setDialogUser(menu.user) },
           { label: "รีเซ็ตรหัสผ่าน", icon: <KeyRound size={14} />, onClick: () => resetPassword(menu.user) },
           { label: menu.user.status === "active" ? "ปิดใช้งาน" : "เปิดใช้งาน", icon: <Power size={14} />, onClick: () => toggleStatus(menu.user) },
+          { label: "ลบผู้ใช้", icon: <Trash2 size={14} />, danger: true, onClick: () => setDeleteTarget(menu.user) },
         ]} />
       )}
 
@@ -394,6 +418,93 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
           onSent={email => logAudit("ส่งลิงก์รีเซ็ตรหัสผ่าน", email)}
           onClose={() => setResetInfo(null)} />
       )}
+
+      {/* บัญชีใหม่: โชว์อีเมล+รหัสผ่านครั้งเดียว ให้ HQ ก๊อปไปแจ้งผู้ใช้ */}
+      {creds && <NewCredsDialog name={creds.name} email={creds.email} password={creds.password} onClose={() => setCreds(null)} />}
+
+      {/* ลบผู้ใช้ HQ — ต้องพิมพ์อีเมลยืนยัน (กันลบพลาด) */}
+      {deleteTarget && (
+        <DeleteUserDialog user={deleteTarget} onConfirm={() => doDelete(deleteTarget)} onClose={() => setDeleteTarget(null)} />
+      )}
+    </div>
+  );
+}
+
+// ── บัญชีใหม่: โชว์รหัสเข้าระบบครั้งเดียว (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน) ──────────
+function NewCredsDialog({ name, email, password, onClose }: { name: string; email: string; password: string; onClose: () => void }) {
+  const [shown, setShown] = useState(false);
+  const [copied, setCopied] = useState("");
+  const copy = (label: string, value: string) => navigator.clipboard.writeText(value).then(() => { setCopied(label); setTimeout(() => setCopied(""), 1600); });
+  const row = (label: string, value: string, secret = false) => (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: "0.72rem", color: MUTED, marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 11px" }}>
+        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.84rem", fontWeight: 700, color: STEEL, letterSpacing: "0.03em", overflow: "hidden", textOverflow: "ellipsis" }}>{secret && !shown ? "••••••••••••" : value}</span>
+        {secret && <button type="button" onClick={() => setShown(v => !v)} title={shown ? "ซ่อน" : "แสดง"} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, padding: 0, display: "flex" }}>{shown ? <EyeOff size={14} /> : <Eye size={14} />}</button>}
+        <button type="button" onClick={() => copy(label, value)} title={`คัดลอก${label}`} style={{ background: "none", border: "none", cursor: "pointer", color: copied === label ? "#059669" : MUTED, padding: 0, display: "flex" }}>{copied === label ? <Check size={14} /> : <Copy size={14} />}</button>
+      </div>
+    </div>
+  );
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+        <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><UserPlus size={16} /> สร้างบัญชีแล้ว</div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ fontSize: "0.82rem", color: MUTED, marginBottom: 14, lineHeight: 1.6 }}>
+            บัญชีเข้าระบบของ <strong style={{ color: STEEL }}>{name}</strong> พร้อมใช้แล้ว · <strong style={{ color: "#b45309" }}>รหัสนี้แสดงครั้งเดียว</strong> — ก๊อปไปแจ้งผู้ใช้ แล้วให้เปลี่ยนเองหลังเข้าครั้งแรก
+          </div>
+          {row("อีเมลเข้าสู่ระบบ", email)}
+          {row("รหัสผ่านชั่วคราว", password, true)}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <button onClick={onClose} className="btn btn-primary btn-md">เสร็จสิ้น</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ลบผู้ใช้ HQ (ถาวร) — พิมพ์อีเมลยืนยันก่อน · เซิร์ฟเวอร์กันลบตัวเอง/SUPER_ADMIN คนสุดท้ายอีกชั้น ──
+function DeleteUserDialog({ user, onConfirm, onClose }: { user: AppUser; onConfirm: () => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
+  const [typed, setTyped] = useState("");
+  const [state, setState] = useState<"idle" | "deleting">("idle");
+  const [err, setErr] = useState("");
+  const match = typed.trim().toLowerCase() === (user.email || "").trim().toLowerCase() && !!user.email;
+  async function go() {
+    if (!match) return;
+    setErr(""); setState("deleting");
+    const r = await onConfirm();
+    if (!r.ok) { setState("idle"); setErr(r.error || "ลบไม่สำเร็จ"); return; }
+    onClose();
+  }
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+        <div style={{ background: "#dc2626", color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><AlertTriangle size={16} /> ลบผู้ใช้ถาวร</div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ fontSize: "0.82rem", color: STEEL, marginBottom: 6, lineHeight: 1.6 }}>
+            กำลังจะลบ <strong>{user.name}</strong> ({user.email || "ไม่มีอีเมล"}) — <strong style={{ color: "#dc2626" }}>บัญชีเข้าระบบจะถูกลบถาวร ล็อกอินไม่ได้อีก</strong> และย้อนกลับไม่ได้
+          </div>
+          {!user.email && <div style={{ fontSize: "0.76rem", color: "#b45309", marginBottom: 10 }}>ผู้ใช้นี้ไม่มีอีเมลติดต่อในระบบ — ยืนยันด้วยการพิมพ์ไม่ได้ กรุณาปิดใช้งานแทน หรือเพิ่มอีเมลก่อน</div>}
+          <label style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, display: "block", marginBottom: 5 }}>พิมพ์อีเมลของผู้ใช้เพื่อยืนยัน</label>
+          <input value={typed} onChange={e => { setTyped(e.target.value); setErr(""); }} placeholder={user.email || "—"} disabled={!user.email}
+            style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: user.email ? "#fff" : "#f3f4f6" }} />
+          {err && <div style={{ fontSize: "0.74rem", color: "#dc2626", fontWeight: 600, marginTop: 8 }}>{err}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
+            <button onClick={() => void go()} disabled={!match || state === "deleting"} className="btn btn-md"
+              style={{ background: "#dc2626", color: "#fff", border: "none", ...(!match || state === "deleting" ? { opacity: .5, cursor: "not-allowed" } : { cursor: "pointer" }) }}>
+              <Trash2 size={14} /> {state === "deleting" ? "กำลังลบ…" : "ลบถาวร"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
