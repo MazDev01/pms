@@ -1,5 +1,8 @@
 # Benjamin PMS — ตั้งค่า Supabase Backend (เฟส B)
 
+> ⚠️ **ขั้นตอน go-live ปัจจุบันอยู่ที่ [OPERATOR-SETUP.md](./OPERATOR-SETUP.md)** — ครอบคลุม migration ครบ 0001→0057,
+> service_role สำหรับ route admin, hook, buckets, seed, และวิธียืนยัน · รายการ "ขั้นตอนติดตั้ง" ด้านล่างนี้เป็นฉบับเก่า (แค่ 0001–0003) เก็บไว้อ้างอิงบริบท
+>
 > ไฟล์ในโฟลเดอร์นี้ = ทุกอย่างที่ **เตรียมไว้ก่อนเชื่อม backend** · เอกสารออกแบบเต็ม: [../BACKEND-DESIGN.md](../BACKEND-DESIGN.md)
 
 ## ไฟล์
