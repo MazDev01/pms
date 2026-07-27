@@ -9,7 +9,7 @@ import {
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { createDealerAccount } from "@pms/shared/lib/adminApi";
+import { createDealerAccount, deleteDealerAccount } from "@pms/shared/lib/adminApi";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
@@ -248,7 +248,17 @@ function HQDealersPageInner() {
 
   function remove(d: DealerRow) {
     if (!confirm(`ลบ "${d.name}" ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
-    // สั่งลบตรง ๆ — เดิมแค่เอาออกจากอาร์เรย์แล้วให้ชั้นข้อมูลเดาว่าต้องลบอะไร
+    // โหมดจริง (supabase): ลบผ่าน route เซิร์ฟเวอร์ (service_role) → ลบบัญชี auth ของสาขาด้วย
+    //   ไม่ทิ้งบัญชีกำพร้า · เดิม dealersRepo.remove ลบได้แค่แถว dealers (RLS) บัญชียังค้าง
+    if (DATA_SOURCE === "supabase") {
+      void deleteDealerAccount(d.code).then(res => {
+        if (!res.ok) { alert("ลบตัวแทนไม่สำเร็จ: " + res.error); return; }
+        setDealers(prev => prev.filter(x => x.id !== d.id));
+        logAudit("ลบตัวแทน", `${d.code} · ${d.name}`);
+      });
+      return;
+    }
+    // โหมดเดโม (local): ลบตรง ๆ — เดิมแค่เอาออกจากอาร์เรย์แล้วให้ชั้นข้อมูลเดาว่าต้องลบอะไร
     // การเดาแบบนั้นทำให้ "โหลดยังไม่เสร็จแล้วผู้ใช้แก้" กลายเป็นคำสั่งลบทั้งตาราง
     void dealersRepo.remove(d.code)
       .then(() => setDealers(prev => prev.filter(x => x.id !== d.id)))
@@ -494,7 +504,7 @@ function HQDealersPageInner() {
               </div>
 
               <InputField label="สถานะ">
-                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as DealerStatus }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                   <option value="active">{dealerStatusLabel.active}</option>
                   <option value="inactive">{dealerStatusLabel.inactive}</option>
                 </select>

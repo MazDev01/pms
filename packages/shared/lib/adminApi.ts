@@ -98,3 +98,24 @@ export async function deleteHQUser(id: string): Promise<{ ok: true } | { ok: fal
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/** ลบตัวแทนจริง (auth ของผู้ใช้สังกัดสาขา + แถว dealers) ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์
+ *  เดิมลบผ่าน repo ตรง ๆ ได้แค่แถว dealers → บัญชี auth ของสาขายังค้างเป็นบัญชีกำพร้า */
+export async function deleteDealerAccount(code: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (DATA_SOURCE !== "supabase") {
+    return { ok: false, error: "โหมดเดโม: ลบบัญชีจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
+  }
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch(`/api/admin/dealers?code=${encodeURIComponent(code)}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
