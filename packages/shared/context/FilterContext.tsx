@@ -65,12 +65,8 @@ export type TimeRange = {
   end: Date;         // inclusive
   label: string;     // สั้น เช่น "30 วันล่าสุด"
   subtitle: string;  // อธิบาย เช่น "1 มิ.ย. 2026 – 30 มิ.ย. 2026"
-  factor: number;    // ตัวคูณสำหรับสเกล KPI ที่เป็นตัวเลข hardcode (30 วัน = 1.0)
 };
-
-const PRESET_FACTOR: Record<Exclude<TimePreset, "custom">, number> = {
-  today: 0.05, last7: 0.23, thisMonth: 1.0, thisYear: 5.24,
-};
+// (เดิมมี factor สำหรับสเกล KPI ตัวเลข hardcode ตามช่วงเวลา — ไม่มีใครอ่านแล้ว KPI คำนวณสดจากข้อมูลจริง · ตัดออก L5)
 
 function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: string): TimeRange {
   const now = startOfDay(APP_NOW);
@@ -91,18 +87,10 @@ function buildTimeRange(preset: TimePreset, customStart?: string, customEnd?: st
     }
   }
 
-  let factor: number;
-  if (preset === "custom") {
-    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
-    factor = Math.max(0.05, Math.round((days / 30) * 100) / 100);
-  } else {
-    factor = PRESET_FACTOR[preset];
-  }
-
   const sameDay = start.getTime() === end.getTime();
   const subtitle = sameDay ? fmtTH(start) : `${fmtTH(start)} – ${fmtTH(end)}`;
 
-  return { preset, start, end, label: PRESET_LABEL[preset], subtitle, factor };
+  return { preset, start, end, label: PRESET_LABEL[preset], subtitle };
 }
 
 // ── Option lists ──

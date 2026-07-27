@@ -26,6 +26,10 @@ import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 // โหมด backend — supabase: ลีดมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
 const USE_SUPABASE = DATA_SOURCE === "supabase";
 
+// ปิดใบหมดอายุ = คำสั่ง "เขียน" — ทำครั้งเดียวพอต่อสาขาต่อ session (M5)
+// เดิมยิงทุกครั้งที่ mount/สลับสาขา → เขียนซ้ำโดยไม่จำเป็น (ยิ่งหลายแท็บยิ่งบ่อย)
+const expiredThisSession = new Set<string>();
+
 // ใบเสนอราคาเดิม (seed) = ออกภายใต้โปรไฟล์บริษัทตั้งต้น → ตรึงชื่อไว้ ไม่เปลี่ยนตามโปรไฟล์ที่แก้ทีหลัง
 const seedQuotationsStamped: QuotationMock[] = seedQuotations.map(q =>
   q.issuer ? q : { ...q, issuer: { ...DEFAULT_ISSUER } }
@@ -46,6 +50,9 @@ export type SalesContextType = {
   // Leads (lifted state so both pages share it)
   leads: LeadRow[];
   updateLeadStatus: (leadId: string, status: LeadRow["status"]) => void;
+  /** เลข num_id ถัดไปของสาขาแบบ atomic (M7) — id ที่แสดง (#L-…) derive จากค่านี้
+   *  เดิมหน้าจอใช้ Math.max+1 ฝั่ง client → สร้างลีดพร้อมกันในสาขาเดียว num_id/id ชนกันได้ */
+  newLeadNumId: () => Promise<number>;
   addLead: (lead: LeadRow) => void;
   updateLead: (lead: LeadRow) => void;
   deleteLead: (leadId: string) => void;
@@ -58,11 +65,11 @@ export type SalesContextType = {
 
   // Quotations (lifted — one shared list app-wide)
   quotations: QuotationMock[];
-  addQuotation: (quotation: QuotationMock) => void;
+  /** สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) · รับ draft ที่ยังไม่มี id · คืนใบที่บันทึกจริง */
+  createQuotation: (draft: Omit<QuotationMock, "id">) => Promise<QuotationMock>;
   updateQuotation: (quotation: QuotationMock) => void;
   deleteQuotation: (id: string) => void;
   setQuotationStatus: (id: string, status: QuotationStatus) => void;
-  newQuoteId: () => Promise<string>; // เลขที่ใบถัดไป — supabase: RPC atomic ต่อสาขา · local: max+1
   /** เลขนัดหมายถัดไปของสาขา — ออกจาก DB แบบ atomic เหมือนเลขลูกค้า/เลขที่ใบ
    *  (เดิมหน้าปฏิทินใช้ Date.now() · หน้าลีดใช้ max+1 — คนละแบบและไม่กันชนจริง) */
   newAppointmentId: () => Promise<number>;
@@ -93,7 +100,7 @@ export function SalesProvider({
   initialLeads: LeadRow[];
 }) {
   // สาขาที่ล็อกอิน (multi-tenant) + auth พร้อมหรือยัง (hydrated) — โหลดลีดตามขอบเขตสาขา
-  const { dealerCode, isHQ, hydrated } = useRole();
+  const { dealerCode, isHQ, hydrated, isLoggedIn } = useRole();
   const myDealerCode = dealerCode || "CNX";
 
   // ── Leads (Phase 1) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
@@ -130,8 +137,8 @@ export function SalesProvider({
   }).current;
   // ── Customers (Phase 2) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
-  // Lead→Won: โหมด supabase มี trigger on_quote_won ที่ DB เป็นตัวสำรอง (upsert by id) — แอปยังสร้างลูกค้า
-  //           แบบข้อมูลครบผ่าน repo เหมือนเดิม (ไม่กุข้อมูล) · id ชนกันข้ามสาขา = ข้อควรระวัง (ดูสรุป)
+  // Lead→Won: แอปเป็นแหล่งเดียวที่สร้างลูกค้า (convertLeadToCustomer) — ข้อมูลครบ · id จริงจากตัวนับ DB
+  //           trigger on_quote_won ที่ DB ถูกลบใน 0033 (เดิมสร้างลูกค้า id=0 ไร้ชื่อ + นับยอดซ้ำ · C6)
   const [customers, setCustomers]   = useState<CustomerRow[]>(USE_SUPABASE ? [] : initialCustomers);
   useEffect(() => {
     if (!hydrated) return;
@@ -147,7 +154,7 @@ export function SalesProvider({
     remove: (id: number) => { void customersRepo.remove(id).catch(onFail("customers", "ลบลูกค้า")); },
   }).current;
   // ── Quotations (Phase 3) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
-  // supabase: RLS แยกสาขา · setStatus→won จะทริก on_quote_won ที่ DB (สร้างลูกค้าอัตโนมัติ)
+  // supabase: RLS แยกสาขา · setStatus→won ให้แอปสร้างลูกค้าเอง (ดู setQuotationStatus · trigger ถูกลบ 0033)
   const [quotations, setQuotations] = useState<QuotationMock[]>(USE_SUPABASE ? [] : seedQuotationsStamped);
   const quotationsRef = useRef(quotations);
   useEffect(() => { quotationsRef.current = quotations; }, [quotations]);
@@ -156,16 +163,25 @@ export function SalesProvider({
     let alive = true;
     // ปิดใบที่เลยวันหมดอายุก่อนโหลด (H5) — ใช้ "วันนี้ของระบบ" (APP_NOW) ให้ตรงกับที่หน้าจอแสดง
     // ตัวแทนเท่านั้นที่ปิดได้ (RLS) · HQ ข้ามไป เพราะเขียนงานขายไม่ได้อยู่แล้ว
+    //
+    // ⚠️ ต้องเช็ก isLoggedIn ด้วย ไม่ใช่แค่ hydrated
+    //    hydrated = "ฟื้น session เสร็จแล้ว" ซึ่งเป็น true แม้ผลลัพธ์คือ "ไม่มี session"
+    //    AuthGuard ก็ยังเรนเดอร์ลูกไว้ (แค่ซ่อนด้วย CSS) → หน้า login จึงยิง RPC ตัวนี้
+    //    ในสถานะยังไม่ล็อกอินทุกครั้ง = สั่ง "เขียน" โดยไม่มีตัวตน
+    //    เดิมผ่านเงียบ ๆ เพราะ RLS ทำให้แก้ 0 แถว · พอปิดสิทธิ์ anon (0031) จึงโผล่เป็น 401
     const scope = { dealerCode, isHQ };
-    const prepare = isHQ
+    // ปิดใบหมดอายุครั้งเดียวพอต่อสาขาต่อ session (M5) — HQ/ยังไม่ล็อกอิน ไม่ต้องทำ
+    const skipExpire = isHQ || !isLoggedIn || expiredThisSession.has(myDealerCode);
+    if (!skipExpire) expiredThisSession.add(myDealerCode);
+    const prepare = skipExpire
       ? Promise.resolve(0)
-      : quotationsRepo.expireOverdue(APP_NOW_ISO, scope).catch(() => 0);
+      : quotationsRepo.expireOverdue(APP_NOW_ISO, scope).catch(() => { expiredThisSession.delete(myDealerCode); return 0; });
     prepare
       .then(() => quotationsRepo.list(scope))
       .then((rows) => { if (alive) setQuotations(rows); })
       .catch((e) => { if (alive) logRepoRead("quotations.list", e); });
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ]);
+  }, [hydrated, dealerCode, isHQ, isLoggedIn]);
   const persistQuote = useRef({
     create: (q: QuotationMock) => { void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
     update: (q: QuotationMock) => { void quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
@@ -314,7 +330,15 @@ export function SalesProvider({
       dealerCode: lead.dealerCode ?? "CNX", // ลูกค้าเป็นของสาขาเดียวกับลีดที่ปิดการขาย (multi-tenant)
     };
     setCustomers(prev => [...prev, newCustomer]);
-    persistCustomer.create(newCustomer); // Lead→Won สร้างลูกค้าข้อมูลครบ (supabase: RLS with-check ใช้ dealerCode นี้)
+    // ⚠️ ต้อง "รอ" ลูกค้าลง DB จริงก่อน relink ใบเสนอราคา (M6):
+    //   FK (dealer_code, customer_id) → customers บังคับว่าใบที่ผูก customerId ต้องมีลูกค้าอยู่ก่อน
+    //   เดิมยิงสร้างลูกค้า + อัปเดตใบพร้อมกันแบบ optimistic → ใบอาจถึง DB ก่อนลูกค้า = FK violate
+    try {
+      await customersRepo.create(newCustomer); // Lead→Won สร้างลูกค้าข้อมูลครบ (RLS with-check ใช้ dealerCode นี้)
+    } catch (e) {
+      onFail("customers", "สร้างลูกค้า")(e); // แจ้ง + ดึงชุดจริงมาทับ · ไม่ relink ใบ (กัน FK violate)
+      return newCustomer;
+    }
     finish(newId);
     return newCustomer;
   }, [customers, myDealerCode, persistCustomer, persistLead, persistQuote]);
@@ -424,17 +448,19 @@ export function SalesProvider({
   }, [myDealerCode, persistLead]);
 
   // ── Quotation mutations ──────────────────────────────────────────
-  const addQuotation = useCallback((quotation: QuotationMock) => {
-    // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง — ใบใหม่ใช้ชื่อปัจจุบัน, ใบเก่าคงชื่อเดิมเมื่อเปลี่ยนโปรไฟล์ทีหลัง
-    // + ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ใบใหม่เป็นของสาขานั้น
-    const base = quotation.issuer ? quotation : { ...quotation, issuer: issuerRef.current };
-    const stamped = { ...base, dealerCode: base.dealerCode ?? myDealerCode };
-    setQuotations(prev => [stamped, ...prev]);
-    persistQuote.create(stamped);
+  // สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) — รับ draft ที่ "ยังไม่มี id" · DB เป็นคนออกเลข
+  // เดิมแยกเป็น newQuoteId() แล้ว addQuotation(withId) → insert ล้มหลังออกเลข = เลขหาย
+  // ตอนนี้เดินผ่าน createNumbered ทางเดียว: await ให้บันทึกจริงก่อน แล้วค่อยอัปเดตจอ (ไม่ optimistic แต่ถูกต้อง)
+  const createQuotation = useCallback(async (draft: Omit<QuotationMock, "id">): Promise<QuotationMock> => {
+    // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง + ติด dealerCode สาขาที่ล็อกอิน (multi-tenant)
+    const base = { ...draft, issuer: draft.issuer ?? issuerRef.current, dealerCode: draft.dealerCode ?? myDealerCode };
+    const created = await quotationsRepo.createNumbered(myDealerCode, quotePrefixRef.current, base);
+    setQuotations(prev => [created, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
-    completeLeadQuoteTasks(quotation, quotation.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
-    syncQuoteFile.add(stamped); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลีด/ลูกค้า
-  }, [completeLeadQuoteTasks, myDealerCode, persistQuote, syncQuoteFile]);
+    completeLeadQuoteTasks(created, created.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
+    syncQuoteFile.add(created); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลีด/ลูกค้า
+    return created;
+  }, [completeLeadQuoteTasks, myDealerCode, syncQuoteFile]);
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));
@@ -449,18 +475,32 @@ export function SalesProvider({
   }, [persistQuote, syncQuoteFile]);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
-    persistQuote.setStatus(id, status); // supabase: won → ทริก on_quote_won สร้างลูกค้าที่ DB
-    setQuotations(prev => {
-      const target = prev.find(q => q.id === id);
-      // เปลี่ยนเป็นสถานะหลังการส่ง → ติ๊ก จัดทำ/ส่งใบเสนอราคา ให้ลีดอัตโนมัติ
-      // (setTimeout กัน StrictMode เรียกซ้ำระหว่าง updater)
-      if (target && status !== "draft") {
-        const snap = { ...target, status };
-        setTimeout(() => completeLeadQuoteTasks(snap, ["makeQuote", "sendQuote"]), 0);
+    persistQuote.setStatus(id, status);
+    const target = quotationsRef.current.find(q => q.id === id);
+    setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status }));
+    if (!target || status === "draft") return;
+    // เปลี่ยนเป็นสถานะหลังการส่ง → ติ๊ก จัดทำ/ส่งใบเสนอราคา ให้ลีดอัตโนมัติ
+    // (setTimeout กัน StrictMode เรียกซ้ำระหว่าง updater)
+    const snap = { ...target, status };
+    setTimeout(() => completeLeadQuoteTasks(snap, ["makeQuote", "sendQuote"]), 0);
+
+    // "ลูกค้าตอบรับ" (won) บนใบเสนอราคา → สร้าง/ผูกลูกค้าให้ลีดต้นทาง ผ่านเส้นทางเดียว
+    // กับการปิดจากลิ้นชักลีด (convertLeadToCustomer) — ได้ id จริง ข้อมูลครบ กันซ้ำ
+    //
+    // เดิมพึ่ง trigger on_quote_won ที่ DB ซึ่งสร้างลูกค้า id=0 ไร้ชื่อ + นับยอดซ้ำ (C6)
+    // trigger ถูกลบใน 0033 แล้ว การสร้างลูกค้าทั้งหมดจึงมาอยู่ที่นี่ที่เดียว
+    //
+    // เงื่อนไข: ทำเฉพาะใบที่ "ยังไม่ผูกลูกค้า" (customerId 0/ว่าง = ออกให้ลีด)
+    //   ใบที่ผูกลูกค้าอยู่แล้วไม่ต้องสร้างอะไร · หาลีดจาก dealId (numId) ก่อน แล้วค่อยชื่อบริษัท
+    //   ปล่อยให้ convertLeadToCustomer กันซ้ำเอง (dedup + เช็ก lead.customerId != null)
+    if (status === "won" && !(target.customerId && target.customerId > 0)) {
+      const lead = leadsRef.current.find(l =>
+        (target.dealId != null && l.numId === target.dealId) || l.company === target.customer);
+      if (lead && lead.customerId == null) {
+        setTimeout(() => { void convertLeadToCustomer(lead, false); }, 0);
       }
-      return prev.map(q => q.id !== id ? q : { ...q, status });
-    });
-  }, [completeLeadQuoteTasks, persistQuote]);
+    }
+  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
   // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB
@@ -483,16 +523,14 @@ export function SalesProvider({
       .catch(e => logRepoRead("dealerSettings.get", e));
   }, [hydrated, myDealerCode]);
 
-  const newQuoteId = useCallback(
-    () => quotationsRepo.nextQuoteNo(myDealerCode, quotePrefixRef.current),
-    [myDealerCode],
-  );
-
   // เลขนัดถัดไป — ให้ DB เป็นคนออกให้ (atomic ต่อสาขา) แบบเดียวกับลูกค้าและใบเสนอราคา
   const newAppointmentId = useCallback(
     () => appointmentsRepo.nextId(myDealerCode),
     [myDealerCode],
   );
+
+  // เลข num_id ถัดไปของลีด — atomic ต่อสาขา (M7) แบบเดียวกับลูกค้า/นัด/ใบเสนอราคา
+  const newLeadNumId = useCallback(() => leadsRepo.nextNumId(myDealerCode), [myDealerCode]);
 
   // ── Appointment mutations (Phase 4) — เขียนทะลุถึง repo ──────────
   const addAppointment = useCallback((appt: AppointmentMock) => {
@@ -512,9 +550,9 @@ export function SalesProvider({
 
   return (
     <SalesContext.Provider value={{
-      leads, updateLeadStatus, addLead, updateLead, deleteLead,
+      leads, updateLeadStatus, newLeadNumId, addLead, updateLead, deleteLead,
       customers, addCustomer, updateCustomer, deleteCustomer,
-      quotations, addQuotation, updateQuotation, deleteQuotation, setQuotationStatus, newQuoteId,
+      quotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
       newAppointmentId,
       appointments, addAppointment, updateAppointment, deleteAppointment,
       convertLeadToCustomer,
@@ -537,16 +575,3 @@ function deriveInitials(name: string): string {
   return name.replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
 }
 
-function parseLeadValue(v: string): number {
-  return parseBaht(v);
-}
-
-const DEFAULT_TASKS = [
-  "ติดต่อลูกค้าและแนะนำตัว",
-  "ส่งแม่แบบและข้อมูลผลิตภัณฑ์",
-  "นัดประชุมนำเสนอ",
-  "สำรวจความต้องการลูกค้า",
-  "จัดทำใบเสนอราคา",
-  "ส่งใบเสนอราคาให้ลูกค้า",
-  "ติดตามผลใบเสนอราคา",
-];

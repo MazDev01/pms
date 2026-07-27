@@ -1,7 +1,7 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
@@ -475,6 +475,8 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const [type, setType] = useState<ApptType>(initial?.type ?? "visit");
   const [province, setProvince] = useState(initial?.province ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
+  const savingRef = useRef(false); // กันกดปุ่มบันทึกซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard แบบ synchronous)
+  const [saving, setSaving] = useState(false); // ไว้ disable ปุ่มให้เห็น (visual)
 
   // เลือกลูกค้าเป้าหมาย → ผูก leadId แล้วเติมชื่อบริษัท/ผู้ติดต่อ/เบอร์/จังหวัดอัตโนมัติ
   // เลือกด้วย numId ไม่ใช่ชื่อบริษัท — ชื่อซ้ำกันได้ และแก้ชื่อทีหลังแล้วจะขาดจากกัน
@@ -488,6 +490,11 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   }
 
   async function save() {
+    // กันกดซ้ำ (H8): ระหว่างรอเลขนัดจาก DB ปุ่มยังคลิกได้ · กด 2 ครั้ง = 2 นัด/เลขหาย 1
+    // ref กันเข้าซ้ำแบบ synchronous ก่อน React re-render ทัน
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true);
+    try {
     const name = company.trim() || initial?.company || "กิจกรรมใหม่";
     // เลขนัดใหม่ออกจาก DB แบบ atomic (เหมือนเลขลูกค้า/เลขที่ใบเสนอราคา)
     // เดิมใช้ Date.now() ซึ่งได้เลข 13 หลักที่ไม่ใช่ "เลขนับของสาขา" และคนละแบบกับหน้าลีด
@@ -507,6 +514,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
       date, time, type,
       note: note.trim(),
     });
+    } finally { savingRef.current = false; setSaving(false); } // React 19 ไม่เตือน setState หลัง unmount
   }
 
   return (
@@ -555,7 +563,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
           </div>
           <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
-            <button onClick={save} className="btn btn-primary btn-md">{isEdit ? <><Edit2 size={13} /> บันทึก</> : <><Plus size={13} /> เพิ่มกิจกรรม</>}</button>
+            <button onClick={save} disabled={saving} className="btn btn-primary btn-md" style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}>{isEdit ? <><Edit2 size={13} /> บันทึก</> : <><Plus size={13} /> เพิ่มกิจกรรม</>}</button>
           </div>
         </div>
       </div>

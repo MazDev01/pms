@@ -11,6 +11,11 @@ export default defineConfig({
   outputDir: "node_modules/.cache/playwright-results",
   fullyParallel: true,
   workers: 3, // 3 persona ทำงานพร้อมกัน
+  // รันซ้ำ 1 ครั้งเฉพาะเทสต์ที่ล้ม — ไม่ใช่การกลบบั๊ก:
+  //   ชุด supabase รันหลาย spec ขนานกัน ถล่ม dev server ตัวเดียวที่คอมไพล์ route ครั้งแรกไปด้วย
+  //   test แรกที่แตะ route เย็น ๆ ใต้ 3 browser พร้อมกันเลยช้าเกิน timeout เป็นครั้งคราว (latency ของสภาพทดสอบ)
+  //   บั๊กจริงจะล้มทั้งครั้งแรกและครั้งรัน (retry ไม่ช่วย) · เฉพาะ latency ชั่วคราวเท่านั้นที่ผ่านตอน retry
+  retries: 1,
   timeout: 30_000,
   expect: { timeout: 8_000 },
   reporter: [["list"]],

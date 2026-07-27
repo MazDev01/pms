@@ -4,19 +4,16 @@
 // เสนอราคาไปเท่าไร ปิดได้จริงเท่าไร
 // มูลค่าใบเสนอราคา = ทุกใบในตัวกรอง · ยอดขายจริง = เฉพาะใบที่สถานะ "ปิดการขายได้"
 // (ระบบไม่มีตัวเลขยอดขายแยกต่างหาก — ยอดขาย = มูลค่าใบที่ปิดได้ ตามนิยามเดียวกันทั้งหน้า)
-import { aggregate, groupBy, type QuoteRow } from "@pms/shared/lib/hqQuotations";
+import { type DealerAgg } from "@pms/shared/lib/hqQuotations";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { fmtBaht } from "@pms/shared/lib/format";
 
 const QUOTE_COLOR = "#0891b2";
 const SALES_COLOR = "#059669";
 
-export function QuotationValueVsSalesChart({ rows }: { rows: QuoteRow[] }) {
-  const bars = [...groupBy(rows, r => r.dealerCode).entries()]
-    .map(([code, list]) => {
-      const agg = aggregate(list);
-      return { code, name: list[0].dealerName, value: agg.value, wonValue: agg.wonValue };
-    })
+export function QuotationValueVsSalesChart({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
+  const bars = [...dealerAgg]
+    .map(d => ({ code: d.code, name: d.name, value: d.value, wonValue: d.wonValue }))
     .sort((a, b) => b.value - a.value);
 
   const max = Math.max(...bars.map(b => b.value), 1);

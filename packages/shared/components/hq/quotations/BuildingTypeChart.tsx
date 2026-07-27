@@ -3,16 +3,12 @@
 // ─── #5 ประเภทอาคาร ───────────────────────────────────────────────────────────
 // ใบเสนอราคาส่วนใหญ่เป็นอาคารประเภทใด — จัดกลุ่มด้วยแม่แบบหลัก (mainTemplateOf)
 // เพื่อรวมชนิดย่อย เช่น "โรงงานอาหาร" → "โรงงาน" ให้เป็นกลุ่มเดียวกัน
-import { aggregate, groupBy, type QuoteRow } from "@pms/shared/lib/hqQuotations";
-import { mainTemplateOf } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0f766e", "#b45309"];
 
-export function BuildingTypeChart({ rows }: { rows: QuoteRow[] }) {
-  const types = [...groupBy(rows, r => mainTemplateOf(r.productLine) || "ไม่ระบุ").entries()]
-    .map(([type, list]) => ({ type, ...aggregate(list) }))
-    .sort((a, b) => b.count - a.count);
+// types = จัดกลุ่มตามแม่แบบหลัก (mainTemplateOf) มาแล้ว เรียงตามจำนวนใบ — คำนวณที่ DB (M9 Phase 2) หรือฝั่ง client (local)
+export function BuildingTypeChart({ types }: { types: { type: string; count: number; value: number }[] }) {
   const max = Math.max(...types.map(t => t.count), 1);
 
   return (

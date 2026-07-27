@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, waitGone, cleanup, tagged,
+  db, waitRow, waitGone, cleanup, specNS, nsTag,
 } from "./funcHelpers";
 
 // ── เทสต์เชิงฟังก์ชัน: "กดใช้งานจริงบนหน้าจอ แล้วข้อมูลลง DB จริงไหม" ──
@@ -17,10 +17,13 @@ test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน")
 test.setTimeout(180_000);
 test.describe.configure({ mode: "serial" }); // แชร์สมุดงานสาขาเดียวกัน — รันขนานจะกวนกันเอง
 
-const COMPANY = tagged("ลีดวงจร");
+// ช่องข้อมูลเฉพาะสเปกนี้ — กัน cleanup ข้ามไปลบข้อมูลของสเปกอื่นที่รันขนานกัน (ดู funcHelpers)
+const NS = specNS("SALES");
+const tg = nsTag(NS);
+const COMPANY = tg("ลีดวงจร");
 
-test.beforeAll(async () => { await cleanup(await db(RYG), "RYG"); });
-test.afterAll(async () => { await cleanup(await db(RYG), "RYG"); });
+test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
 test("[func] สร้างลีดผ่านหน้าจอ → ลงฐานข้อมูลจริง", async ({ page }) => {
   const errs = watchErrors(page);

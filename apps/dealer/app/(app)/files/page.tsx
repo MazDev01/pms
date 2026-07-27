@@ -8,6 +8,7 @@ import {
 } from "@pms/shared/lib/mock";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
@@ -509,11 +510,21 @@ export default function FilesPage() {
   }, [files]);
 
   function deleteFile(id: number) {
-    // ลบไฟล์จริงใน Storage ด้วย (ถ้ามี) แล้วค่อยลบ metadata
     const target = files.find(f => f.id === id);
-    const dropObject = target?.storagePath ? fileStorage.remove(target.storagePath).catch(() => {}) : Promise.resolve();
-    void dropObject.then(() => filesRepo.remove(id)).then(reloadFiles).catch(() => {});
     setDelId(null);
+    void (async () => {
+      try {
+        // ลบไบต์ใน Storage ก่อน — ล้มเหลวต้อง "หยุด" ไม่ลบ metadata ทิ้ง (H2)
+        // เดิม .catch(()=>{}) กลืน error แล้วลบ metadata ต่อเสมอ → แถวหาย แต่ไบต์ยังค้างใน bucket
+        // กลายเป็นไฟล์กำพร้าที่อ้างไม่ถึงอีก · และผู้ใช้เข้าใจว่าลบเอกสารลูกค้าแล้วทั้งที่ยังดึงได้
+        if (target?.storagePath) await fileStorage.remove(target.storagePath);
+        await filesRepo.remove(id);
+        await reloadFiles();
+      } catch (e) {
+        reportRepoSaveError(e); // ล้มเหลวต้องดัง — AppShell ขึ้นแถบเตือนกลาง
+        await reloadFiles();    // ดึงสถานะจริงมาแสดง (ไฟล์ยังอยู่)
+      }
+    })();
   }
   function updateFile(updated: FileMock) { void filesRepo.update(updated).then(reloadFiles); }
 
@@ -756,14 +767,26 @@ export default function FilesPage() {
 
       {/* Upload modal */}
       {upload && <UploadModal onUpload={(f, blob) => {
-        // อัปโหลด bytes เข้า Storage ก่อน (โหมด local คืน null = เก็บแค่ metadata เหมือนเดิม) แล้วค่อยบันทึก metadata
-        void (blob ? fileStorage.upload(currentDealer.code, blob).catch(() => null) : Promise.resolve(null))
-          .then(storagePath => filesRepo.add({
-            name: f.name, size: f.size, ext: f.ext, category: f.category, project: f.project,
-            uploadedBy: f.uploadedBy, uploadedAt: f.uploadedAt, source: "upload",
-            dealerCode: currentDealer.code, ...(storagePath ? { storagePath } : {}),
-          }))
-          .then(reloadFiles).catch(() => {});
+        void (async () => {
+          // upload คืน path (supabase) หรือ null (local ไม่มี Storage — เก็บแค่ metadata)
+          // และ "โยน error" ถ้าอัปโหลดจริงไม่สำเร็จ (RLS/quota/เน็ต) — ห้ามกลืนเป็น null (H1)
+          // เดิม .catch(()=>null) กลืน error แล้วบันทึก metadata ต่อโดยไม่มี storagePath
+          // → ไฟล์โผล่ในรายการเหมือนสำเร็จ แต่ไบต์ไม่เคยถูกเก็บ ปุ่มดาวน์โหลดหายเฉย ๆ
+          let storagePath: string | null = null;
+          try {
+            storagePath = blob ? await fileStorage.upload(currentDealer.code, blob) : null;
+            await filesRepo.add({
+              name: f.name, size: f.size, ext: f.ext, category: f.category, project: f.project,
+              uploadedBy: f.uploadedBy, uploadedAt: f.uploadedAt, source: "upload",
+              dealerCode: currentDealer.code, ...(storagePath ? { storagePath } : {}),
+            });
+            await reloadFiles();
+          } catch (e) {
+            // อัปโหลดสำเร็จแต่บันทึก metadata ไม่ผ่าน → เก็บไบต์กำพร้าออกด้วย
+            if (storagePath) await fileStorage.remove(storagePath).catch(() => {});
+            reportRepoSaveError(e);
+          }
+        })();
       }} onClose={() => setUpload(false)} />}
 
       {/* Edit modal */}

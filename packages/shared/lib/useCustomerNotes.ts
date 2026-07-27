@@ -32,7 +32,10 @@ export function useCustomerNotes(author = ""): UseCustomerNotes {
   useEffect(() => {
     read();
     // โน้ตเป็นงานร่วมกัน — เปิดสองแท็บ/สองเครื่องต้องเห็นตรงกัน
-    return realtime.subscribeSales(() => read());
+    // ⚠️ ต้องเป็น subscribeNotes ไม่ใช่ subscribeSales (H6):
+    //   เดิมฟัง subscribeSales ซึ่งไม่มี customer_notes → (ก) โน้ตจากเครื่องอื่นไม่เห็นจนรีเฟรช
+    //   (ข) ลีด/ใบเสนอราคาขยับแม้แต่แถวเดียวก็โหลดโน้ตใหม่ทั้งชุดโดยไม่จำเป็น
+    return realtime.subscribeNotes(() => read());
   }, [read]);
 
   const add: UseCustomerNotes["add"] = useCallback(async (n) => {

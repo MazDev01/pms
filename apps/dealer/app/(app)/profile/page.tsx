@@ -9,6 +9,8 @@ import {
   defaultProfileEmail, type UserProfile,
 } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import { sbChangeOwnPassword } from "@pms/shared/lib/supabaseAuth";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
@@ -64,10 +66,22 @@ export default function ProfilePage() {
     setTimeout(() => setSaved(false), 2200);
   }
 
-  function changePassword() {
+  const [pwBusy, setPwBusy] = useState(false);
+  async function changePassword() {
+    if (pwBusy) return;
     if (!pw.cur || !pw.next) { setPwMsg({ ok: false, text: "กรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่" }); return; }
-    if (pw.next.length < 6) { setPwMsg({ ok: false, text: "รหัสผ่านใหม่ต้องยาวอย่างน้อย 6 ตัวอักษร" }); return; }
+    if (pw.next.length < 8) { setPwMsg({ ok: false, text: "รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร" }); return; }
     if (pw.next !== pw.confirm) { setPwMsg({ ok: false, text: "ยืนยันรหัสผ่านใหม่ไม่ตรงกัน" }); return; }
+
+    // H3 — เปลี่ยนรหัสจริงในโหมด supabase (ยืนยันรหัสปัจจุบันก่อน) · โหมดเดโมไม่มีระบบยืนยันตัวตนจริง
+    if (DATA_SOURCE !== "supabase") {
+      setPwMsg({ ok: false, text: "โหมดเดโม: เปลี่ยนรหัสผ่านจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" });
+      return;
+    }
+    setPwBusy(true);
+    const r = await sbChangeOwnPassword(pw.cur, pw.next);
+    setPwBusy(false);
+    if (!r.ok) { setPwMsg({ ok: false, text: r.error }); return; }
     setPw({ cur: "", next: "", confirm: "" });
     setPwMsg({ ok: true, text: "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว" });
     setTimeout(() => setPwMsg(null), 2600);
@@ -213,7 +227,7 @@ export default function ProfilePage() {
                   {pwMsg.text}
                 </div>
               )}
-              <button className="btn btn-secondary btn-md" onClick={changePassword} style={{ color: STEEL }}><KeyRound size={14} /> เปลี่ยนรหัสผ่าน</button>
+              <button className="btn btn-secondary btn-md" onClick={() => void changePassword()} disabled={pwBusy} style={{ color: STEEL, ...(pwBusy ? { opacity: .6, cursor: "not-allowed" } : {}) }}><KeyRound size={14} /> {pwBusy ? "กำลังเปลี่ยน…" : "เปลี่ยนรหัสผ่าน"}</button>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.65rem", color: "#9ca3af" }}>
                 <ShieldCheck size={11} /> รหัสผ่านถูกเข้ารหัสและไม่ถูกจัดเก็บเป็นข้อความธรรมดา
               </div>

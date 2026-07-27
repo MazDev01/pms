@@ -10,23 +10,53 @@
 import { DATA_SOURCE } from "./config";
 import { LocalAdapter } from "./local/LocalAdapter";
 import { SupabaseAdapter } from "./supabase/SupabaseAdapter";
-import type { DataAdapter } from "./ports";
+import { dedupeRead } from "./dedupe";
+import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo } from "./ports";
 
 const adapter: DataAdapter = DATA_SOURCE === "supabase" ? SupabaseAdapter : LocalAdapter;
 
 export const storage = adapter.storage;   // ไฟล์จริง (bytes) — local: no-op · supabase: Storage
 export const realtime = adapter.realtime; // ฟังการเปลี่ยนแปลงสด — local: no-op · supabase: postgres_changes
-export const dealers = adapter.dealers;
-export const catalog = adapter.catalog;
+
+// ── H7 · รวมคำขออ่านที่ไม่มีพารามิเตอร์ ให้ยิงจริงครั้งเดียวเมื่อเกิดพร้อมกัน (in-flight dedup) ──
+// จุดเดียวครอบทุก caller · เฉพาะ read ที่ "ไม่มี arg" (การเขียน/read ที่มี scope ไม่แตะ · ดู dedupe.ts)
+const _dealers = adapter.dealers, _catalog = adapter.catalog, _settings = adapter.settings;
+export const dealers: DealersRepo = {
+  ..._dealers,
+  list: () => dedupeRead("dealers.list", () => _dealers.list()),
+};
+export const catalog: CatalogRepo = {
+  ..._catalog,
+  list: () => dedupeRead("catalog.list", () => _catalog.list()),
+};
+export const settings: SettingsRepo = {
+  ..._settings,
+  getPolicy:            () => dedupeRead("settings.getPolicy", () => _settings.getPolicy()),
+  getTargets:           () => dedupeRead("settings.getTargets", () => _settings.getTargets()),
+  getNotifRules:        () => dedupeRead("settings.getNotifRules", () => _settings.getNotifRules()),
+  getLeadRulesMap:      () => dedupeRead("settings.getLeadRulesMap", () => _settings.getLeadRulesMap()),
+  getQuoteValidityDays: () => dedupeRead("settings.getQuoteValidityDays", () => _settings.getQuoteValidityDays()),
+  getLostReasons:       () => dedupeRead("settings.getLostReasons", () => _settings.getLostReasons()),
+};
 export const files = adapter.files;
 export const persons = adapter.persons;
-export const settings = adapter.settings;
 export const dealerSettings = adapter.dealerSettings;
 export const profile = adapter.profile;
 export const hqCompany = adapter.hqCompany;
 export const notes = adapter.notes;
 export const users = adapter.users;
 export const audit = adapter.audit;
+// rollup รายสาขา (M9 Phase 1) — dedup ตามปี: หลาย component (แดชบอร์ด/แจ้งเตือน/กระดิ่ง) ขอปีเดียวกันพร้อมกัน ยิงจริงครั้งเดียว
+const _metrics = adapter.metrics;
+export const metrics: MetricsRepo = {
+  dealerRollup: (year) => dedupeRead(`metrics.dealerRollup:${year}`, () => _metrics.dealerRollup(year)),
+  networkQuoteRange: (start, end, dealer) =>
+    dedupeRead(`metrics.networkQuoteRange:${start}:${end}:${dealer ?? ""}`, () => _metrics.networkQuoteRange(start, end, dealer)),
+  dashboardQuoteSummary: (start, end, dealer) =>
+    dedupeRead(`metrics.dashboardQuoteSummary:${start}:${end}:${dealer ?? ""}`, () => _metrics.dashboardQuoteSummary(start, end, dealer)),
+  hqQuotationsSummary: (f) =>
+    dedupeRead(`metrics.hqQuotationsSummary:${JSON.stringify(f)}`, () => _metrics.hqQuotationsSummary(f)),
+};
 export const leads = adapter.leads;
 export const quotations = adapter.quotations;
 export const customers = adapter.customers;
@@ -34,6 +64,6 @@ export const appointments = adapter.appointments;
 
 export type {
   DataAdapter, StoragePort, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo,
-  SettingsRepo, AuditRepo, LeadsRepo, QuotationsRepo, CustomersRepo, AppointmentsRepo,
+  SettingsRepo, AuditRepo, MetricsRepo, DealerRollup, LeadsRepo, QuotationsRepo, CustomersRepo, AppointmentsRepo,
 } from "./ports";
 export type { Scope } from "./types";

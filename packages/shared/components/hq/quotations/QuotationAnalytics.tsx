@@ -15,7 +15,7 @@ import { QuotationValueVsSalesChart } from "./QuotationValueVsSalesChart";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { BuildingTypeChart } from "./BuildingTypeChart";
 import { LostReasonsChart } from "./LostReasonsChart";
-import { aggregate, conversionRate, groupBy, regionDisplay, type QuoteRow } from "@pms/shared/lib/hqQuotations";
+import { conversionRate, sumAggs, regionDisplay, type DealerAgg, type AgingBucket } from "@pms/shared/lib/hqQuotations";
 import type { LeadRow } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 
@@ -23,9 +23,11 @@ const PRIMARY = "#003366";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 
 // ── #6 เทียบรายภูมิภาค — จำนวนใบ · มูลค่า ──
-function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
-  const regions = [...groupBy(rows, r => r.region).entries()]
-    .map(([region, list]) => ({ region, ...aggregate(list) }))
+function RegionalComparison({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
+  const byRegion = new Map<string, DealerAgg[]>();
+  dealerAgg.forEach(d => { const a = byRegion.get(d.region); if (a) a.push(d); else byRegion.set(d.region, [d]); });
+  const regions = [...byRegion.entries()]
+    .map(([region, list]) => ({ region, ...sumAggs(list) }))
     .sort((a, b) => b.value - a.value);
   const maxV = Math.max(...regions.map(r => r.value), 1);
   const maxC = Math.max(...regions.map(r => r.count), 1);
@@ -69,11 +71,9 @@ function RegionalComparison({ rows }: { rows: QuoteRow[] }) {
 
 // ── #3 อันดับตัวแทน — 10 อันดับแรก: ใบเสนอราคา · มูลค่า · ตอบรับ · อัตราปิดการขาย ──
 const TOP_N = 10;
-function TopDealerRanking({ rows }: { rows: QuoteRow[] }) {
+function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
   const router = useRouter();
-  const all = [...groupBy(rows, r => r.dealerCode).entries()]
-    .map(([code, list]) => ({ code, name: list[0].dealerName, region: list[0].region, ...aggregate(list) }))
-    .sort((a, b) => b.value - a.value);
+  const all = [...dealerAgg].sort((a, b) => b.value - a.value);
   const ranked = all.slice(0, TOP_N);
   const hidden = all.length - ranked.length;  // บอกจำนวนที่ไม่ได้แสดง — ห้ามตัดเงียบ
 
@@ -146,20 +146,22 @@ function TopDealerRanking({ rows }: { rows: QuoteRow[] }) {
   );
 }
 
-export function QuotationAnalytics({ rows, trendRows, leads }: {
-  rows: QuoteRow[];
-  trendRows: QuoteRow[];
+export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, leads }: {
+  dealerAgg: DealerAgg[];
+  productTypes: { type: string; count: number; value: number }[];
+  aging: { key: AgingBucket; count: number; value: number }[];
+  trend: { months: string[]; bar: number[]; line: number[] };
   leads: LeadRow[];
 }) {
   return (
     <>
       {/* แนวโน้ม 12 เดือน มาก่อน — ให้เห็นภาพรวมว่าทั้งเครือกำลังไปทางไหน แล้วค่อยแยกย่อยรายตัวแทน/ภาค/แม่แบบ
           กินเต็มแถว: กราฟ 12 จุดอ่านง่ายกว่าตอนกว้าง (และไม่มีใบไหนคู่ควรจับคู่ด้วย) */}
-      <QuotationTrendChart rows={trendRows} />
+      <QuotationTrendChart trend={trend} />
 
       <div className="hq-dealer-charts">
-        <LeadsVsQuotationsChart rows={rows} leads={leads} />
-        <QuotationValueVsSalesChart rows={rows} />
+        <LeadsVsQuotationsChart dealerAgg={dealerAgg} leads={leads} />
+        <QuotationValueVsSalesChart dealerAgg={dealerAgg} />
       </div>
 
       {/* "ใบเสนอราคา รายตัวแทน" (DealerRankingChart) ถูกตัดออก — ข้อมูลซ้ำทั้งใบ:
@@ -169,18 +171,18 @@ export function QuotationAnalytics({ rows, trendRows, leads }: {
           ซึ่งเป็นเจ้าของเรื่อง "ผลงานตัวแทน / ใครต้องเข้าไปช่วย" (ใบนั้นมีตารางสรุปใต้กราฟด้วย)
           หน้านี้เหลือเฉพาะเรื่องของตัวเอกสารใบเสนอราคา — อายุใบ / สถานะ / แนวโน้ม / มูลค่า */}
       <div className="hq-dealer-charts">
-        <RegionalComparison rows={rows} />
-        <BuildingTypeChart rows={rows} />
+        <RegionalComparison dealerAgg={dealerAgg} />
+        <BuildingTypeChart types={productTypes} />
       </div>
 
       <div className="hq-dealer-charts">
         <LostReasonsChart leads={leads} />
-        <QuotationAgingChart rows={rows} />
+        <QuotationAgingChart aging={aging} />
       </div>
 
       {/* ตารางอันดับปิดท้าย — เป็น "ตัวเลขครบทุกตัวแทน" ที่ให้ไล่อ่านหลังดูกราฟภาพรวมจบแล้ว */}
       <div style={{ marginBottom: 24 }}>
-        <TopDealerRanking rows={rows} />
+        <TopDealerRanking dealerAgg={dealerAgg} />
       </div>
     </>
   );

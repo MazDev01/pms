@@ -24,7 +24,7 @@ function currentDealerCode(): string {
   } catch {}
   return "";
 }
-function firePropfile() {
+function fireProfile() {
   try { window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)); } catch {}
 }
 import type { DataAdapter } from "../ports";
@@ -83,7 +83,7 @@ export const LocalAdapter: DataAdapter = {
   },
   // โหมด local ไม่มี Realtime — ข้อมูลอยู่ในเครื่องเดียว (ข้ามแท็บใช้ event bus/storage event เหมือนเดิม)
   // (หน้าจอฝั่ง local ใช้ event/storage ของ origin ตัวเองแทน — ดู useMasterCatalog)
-  realtime: { subscribeSales: () => () => {}, subscribeCatalog: () => () => {}, subscribeSettings: () => () => {} },
+  realtime: { subscribeSales: () => () => {}, subscribeCatalog: () => () => {}, subscribeSettings: () => () => {}, subscribeNotes: () => () => {}, subscribeDealerSettings: () => () => {} },
   dealers: {
     list: () => ok(loadHQDealers()),
     save: (all) => { writeKey(HQ_DEALERS_KEY, all); return done(); },
@@ -156,7 +156,7 @@ export const LocalAdapter: DataAdapter = {
   // โหมด local: คีย์เดิมต่อสาขา (พฤติกรรมเท่าเดิม ค่าที่เคยตั้งไม่หาย)
   profile: {
     get: () => ok(readKey<UserProfile | null>(profileKey(currentDealerCode()), null)),
-    save: (p) => { writeKey(profileKey(currentDealerCode()), p); firePropfile(); return done(); },
+    save: (p) => { writeKey(profileKey(currentDealerCode()), p); fireProfile(); return done(); },
   },
   // ข้อมูลบริษัท HQ — โหมด local ใช้คีย์เดิม (ค่าที่เคยตั้งไม่หาย)
   hqCompany: {
@@ -205,13 +205,146 @@ export const LocalAdapter: DataAdapter = {
     canCreate: () => true,
   },
   audit: {
-    list: () => ok(loadAudit()),
+    // local: loadAudit เพดาน MAX=300 อยู่แล้ว · เคารพ limit เพื่อพฤติกรรมตรงกับ supabase (M8)
+    list: (limit) => ok(limit ? loadAudit().slice(0, limit) : loadAudit()),
     append: (e) => { appendAudit(e); return done(); },
+  },
+
+  // rollup รายสาขา (M9 Phase 1) — คำนวณจาก array ใน localStorage (live-only, ทั้งหมด = มุมมอง HQ)
+  // สูตรตรงกับ SQL dealer_rollup + useDealerPerformance เป๊ะ (parity):
+  //   หมายเหตุ: โหมด local, useDealerPerformance ยังใช้เส้นทางคำนวณ client เดิม (ผสม seed สาขาอื่น)
+  //   ตัวนี้จึงไว้ให้พอร์ตครบ/คนอื่นเรียกได้ — คิดเฉพาะข้อมูล live (ไม่รวม seed)
+  metrics: {
+    dealerRollup: (year) => {
+      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const m = new Map<string, { quotes: number; won: number; lost: number; revenue: number; openLeads: number }>();
+      const get = (code: string) => {
+        let r = m.get(code);
+        if (!r) { r = { quotes: 0, won: 0, lost: 0, revenue: 0, openLeads: 0 }; m.set(code, r); }
+        return r;
+      };
+      for (const q of qs) {
+        const r = get(q.dealerCode ?? "CNX");
+        r.quotes += 1;
+        if (q.status === "won") {
+          r.won += 1;
+          // ปีของ date แบบ literal (ตรงกับ fmtISOToThai→parseThaiDate ที่ client ใช้)
+          const yr = /^(\d{4})-\d{2}-\d{2}/.exec(q.date || "")?.[1];
+          if (yr && Number(yr) === year) r.revenue += q.totalValue ?? 0;
+        }
+        if (q.status === "lost") r.lost += 1;
+      }
+      for (const l of ls) {
+        if (l.status === "PAID" || l.status === "CANCELLED") continue;
+        get(l.dealerCode ?? "CNX").openLeads += 1;
+      }
+      return ok(m);
+    },
+    networkQuoteRange: (start, end, dealer) => {
+      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const m = new Map<string, { quotes: number; won: number; lost: number; wonVal: number; quoteVal: number }>();
+      for (const q of qs) {
+        const md = /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "");
+        if (!md) continue;
+        const d = md[1];
+        if (d < start || d > end) continue; // ISO string เทียบตามลำดับ = เทียบวันได้ตรง
+        const code = q.dealerCode ?? "CNX";
+        if (dealer && code !== dealer) continue;
+        let r = m.get(code);
+        if (!r) { r = { quotes: 0, won: 0, lost: 0, wonVal: 0, quoteVal: 0 }; m.set(code, r); }
+        const v = q.totalValue ?? 0;
+        r.quotes += 1; r.quoteVal += v;
+        if (q.status === "won") { r.won += 1; r.wonVal += v; }
+        if (q.status === "lost") r.lost += 1;
+      }
+      return ok(m);
+    },
+    dashboardQuoteSummary: (start, end, dealer) => {
+      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const monthM = new Map<string, { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number }>();
+      const statusM = new Map<string, { count: number; value: number }>();
+      const prodM = new Map<string | null, { value: number; projects: number }>();
+      for (const q of qs) {
+        const md = /^(\d{4})-(\d{2})-(\d{2})/.exec(q.date || "");
+        if (!md) continue;
+        const dstr = `${md[1]}-${md[2]}-${md[3]}`;
+        if (dstr < start || dstr > end) continue;
+        const code = q.dealerCode ?? "CNX";
+        if (dealer && code !== dealer) continue;
+        const v = q.totalValue ?? 0;
+        const y = Number(md[1]), m = Number(md[2]) - 1; // 0..11 ให้ตรง getMonth()
+        const mk = `${y}-${m}`;
+        let mm = monthM.get(mk);
+        if (!mm) { mm = { y, m, quotes: 0, won: 0, lost: 0, wonVal: 0 }; monthM.set(mk, mm); }
+        mm.quotes += 1;
+        if (q.status === "won") { mm.won += 1; mm.wonVal += v; }
+        if (q.status === "lost") mm.lost += 1;
+        let sm = statusM.get(q.status);
+        if (!sm) { sm = { count: 0, value: 0 }; statusM.set(q.status, sm); }
+        sm.count += 1; sm.value += v;
+        const raw = q.buildingType || q.project; // productLine = buildingType || project
+        const product = raw ? raw : null;         // ว่าง/undefined → null (ตรงกับ nullif ใน SQL)
+        let pm = prodM.get(product);
+        if (!pm) { pm = { value: 0, projects: 0 }; prodM.set(product, pm); }
+        pm.value += v; pm.projects += 1;
+      }
+      return ok({
+        byMonth: [...monthM.values()],
+        byStatus: [...statusM.entries()].map(([status, x]) => ({ status, ...x })),
+        byProduct: [...prodM.entries()].map(([product, x]) => ({ product, ...x })).sort((a, b) => b.value - a.value),
+      });
+    },
+    hqQuotationsSummary: (f) => {
+      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const asOfMs = Date.parse(f.asOf ?? "2026-06-30");
+      const search = (f.search ?? "").trim().toLowerCase();
+      const plOf = (q: QuotationMock): string | null => { const bt = (q.buildingType ?? "").trim(); return bt ? bt : (q.project ?? null); };
+      const dateOf = (q: QuotationMock) => /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "")?.[1];
+      const dM = new Map<string, { count: number; value: number; sent: number; won: number; lost: number; wonVal: number }>();
+      const mM = new Map<string, { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number }>();
+      const pM = new Map<string | null, { value: number; projects: number }>();
+      const agM = new Map<string, { count: number; value: number }>();
+      for (const q of qs) {
+        const d = dateOf(q); if (!d) continue;
+        if (f.status && q.status !== f.status) continue;
+        if (f.dealerCodes?.length && !f.dealerCodes.includes(q.dealerCode ?? "CNX")) continue;
+        const pl = plOf(q);
+        if (f.productLines?.length && (pl == null || !f.productLines.includes(pl))) continue;
+        if (f.dateStart && d < f.dateStart) continue;
+        if (f.dateEnd && d > f.dateEnd) continue;
+        if (search && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(search) && !f.searchDealers?.includes(q.dealerCode ?? "CNX")) continue;
+        const code = q.dealerCode ?? "CNX", v = q.totalValue ?? 0;
+        const y = Number(d.slice(0, 4)), mo = Number(d.slice(5, 7)) - 1;
+        let dr = dM.get(code); if (!dr) { dr = { count: 0, value: 0, sent: 0, won: 0, lost: 0, wonVal: 0 }; dM.set(code, dr); }
+        dr.count++; dr.value += v; if (q.status !== "draft") dr.sent++;
+        if (q.status === "won") { dr.won++; dr.wonVal += v; } if (q.status === "lost") dr.lost++;
+        const mk = `${y}-${mo}`; let mr = mM.get(mk); if (!mr) { mr = { y, m: mo, quotes: 0, won: 0, lost: 0, wonVal: 0 }; mM.set(mk, mr); }
+        mr.quotes++; if (q.status === "won") { mr.won++; mr.wonVal += v; } if (q.status === "lost") mr.lost++;
+        let pr = pM.get(pl); if (!pr) { pr = { value: 0, projects: 0 }; pM.set(pl, pr); } pr.value += v; pr.projects++;
+        if (q.status === "sent_to_client") {
+          const days = Math.max(0, Math.round((asOfMs - Date.parse(d)) / 86_400_000));
+          const bucket = days <= 7 ? "0-7" : days <= 14 ? "8-14" : days <= 30 ? "15-30" : "30+";
+          let ar = agM.get(bucket); if (!ar) { ar = { count: 0, value: 0 }; agM.set(bucket, ar); } ar.count++; ar.value += v;
+        }
+      }
+      return ok({
+        byDealer: [...dM.entries()].map(([dealerCode, x]) => ({ dealerCode, ...x })).sort((a, b) => b.value - a.value),
+        byMonth: [...mM.values()],
+        byProduct: [...pM.entries()].map(([product, x]) => ({ product, ...x })).sort((a, b) => b.value - a.value),
+        aging: [...agM.entries()].map(([bucket, x]) => ({ bucket, ...x })),
+      });
+    },
   },
 
   // งานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) · เขียนลง localStorage คีย์เดียวกับ SalesContext
   leads: {
     list: (scope) => ok(scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)),
+    // num_id ถัดไป — โหมด local เครื่องเดียว → max+1 ของสาขานั้นพอ (supabase ใช้ RPC atomic)
+    nextNumId: (dealerCode) => {
+      const mine = scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), { dealerCode, isHQ: false });
+      return ok(mine.reduce((m, l) => Math.max(m, l.numId), 0) + 1);
+    },
     create: (row) => {
       const list = readKey<LeadRow[]>(SALES.leads, leadSeed);
       writeKey(SALES.leads, [row, ...list]);
@@ -235,6 +368,32 @@ export const LocalAdapter: DataAdapter = {
   },
   quotations: {
     list: (scope) => ok(scopeByDealer(readKey<QuotationMock[]>(SALES.quotations, quoteSeed), scope)),
+    // หน้าเดียว + กรอง/เรียง (M9 Phase 2) — mirror ตรรกะ supabase เป๊ะ
+    listPage: (scope, opts) => {
+      const s = (opts.search ?? "").trim().toLowerCase();
+      const dateOf = (q: QuotationMock) => /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "")?.[1];
+      const plOf = (q: QuotationMock) => { const bt = (q.buildingType ?? "").trim(); return bt ? bt : (q.project ?? undefined); };
+      let arr = scopeByDealer(readKey<QuotationMock[]>(SALES.quotations, quoteSeed), scope).filter(q => {
+        if (opts.status && q.status !== opts.status) return false;
+        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(q.dealerCode ?? "CNX")) return false;
+        if (opts.productLines?.length) { const pl = plOf(q); if (pl === undefined || !opts.productLines.includes(pl)) return false; }
+        const d = dateOf(q);
+        if (opts.dateStart && (!d || d < opts.dateStart)) return false;
+        if (opts.dateEnd && (!d || d > opts.dateEnd)) return false;
+        if (s && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(s) && !opts.searchDealers?.includes(q.dealerCode ?? "CNX")) return false;
+        return true;
+      });
+      const col = opts.sort?.col ?? "date", asc = (opts.sort?.dir ?? "desc") === "asc";
+      arr = [...arr].sort((a, b) => {
+        let c: number;
+        if (col === "total_value") c = (a.totalValue ?? 0) - (b.totalValue ?? 0);
+        else c = String((a as unknown as Record<string, unknown>)[col] ?? "").localeCompare(String((b as unknown as Record<string, unknown>)[col] ?? ""));
+        c = asc ? c : -c;
+        if (c === 0) return String(a.id).localeCompare(String(b.id)); // secondary = id "ขึ้นเสมอ" (ตรง supabase order("id"))
+        return c;
+      });
+      return ok({ rows: arr.slice(opts.offset, opts.offset + opts.limit), total: arr.length });
+    },
     create: (row) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       writeKey(SALES.quotations, [row, ...list]);
@@ -273,6 +432,15 @@ export const LocalAdapter: DataAdapter = {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       const nums = list.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
       return ok(`${prefix || "Q-2026-"}${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`);
+    },
+    // ออกเลข + insert (เธรดเดียวในเบราว์เซอร์ = atomic โดยธรรมชาติ ไม่มีเลขหาย)
+    createNumbered: (dealer, prefix, row) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const nums = list.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
+      const id = `${prefix || "Q-2026-"}${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`;
+      const created = { ...row, id, dealerCode: dealer } as QuotationMock;
+      writeKey(SALES.quotations, [created, ...list]);
+      return ok(created);
     },
   },
   customers: {

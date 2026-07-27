@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor, leadStatusLabel,
@@ -135,10 +135,11 @@ function buildBlank(customers:CustomerRow[], validityDays:number): QForm {
 }
 
 function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:{
-  initial:QForm; title:string; onSave:(f:QForm)=>void; onClose:()=>void; customers:CustomerRow[];
+  initial:QForm; title:string; onSave:(f:QForm)=>void|Promise<void>; onClose:()=>void; customers:CustomerRow[];
   quoteId?:string; // เลขที่ใบ — โชว์อย่างเดียว แก้ไม่ได้ (HQ กำหนดรูปแบบ/เลขรัน)
 }){
   const [form,setForm]=useState<QForm>(initial);
+  const [busy,setBusy]=useState(false); // กันกดบันทึกซ้ำ + รอออกเลขที่ใบจาก DB (H8)
   const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.8rem",outline:"none",color:STEEL,boxSizing:"border-box"};
   const LBL:React.CSSProperties={fontSize:"0.65rem",fontWeight:700,color:MUTED,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
   function set<K extends keyof QForm>(k:K,v:QForm[K]){setForm(p=>({...p,[k]:v}));}
@@ -150,7 +151,13 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
     // ผู้รับผิดชอบตามลูกค้าที่เลือก (ดึงมาโชว์ให้ตรงกับตาราง — แก้ต่อได้)
     setForm(p=>({...p,customerId:c.id,customer:c.company,province:c.province||p.province,buildingType:c.category||p.buildingType,project:suggestProject(c),owner:c.owner??""}));
   }
-  function submit(){if(!form.customer||!form.project)return; onSave({...form, items:form.lineItems.length, materialCost:total}); onClose();}
+  async function submit(){
+    if(!form.customer||!form.project||busy)return;
+    setBusy(true);
+    // await ให้ออกเลข+บันทึกเสร็จก่อนปิด — ปิดทันทีแบบเดิมทำให้กดซ้ำได้ระหว่างรอเลขจาก DB
+    try { await onSave({...form, items:form.lineItems.length, materialCost:total}); onClose(); }
+    finally { setBusy(false); }
+  }
   return (
     <>
       <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.4)",zIndex:200}}/>
@@ -242,7 +249,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
           </div>
           <div style={{padding:"13px 22px",borderTop:`1px solid ${BORDER}`,display:"flex",gap:8,justifyContent:"flex-end",background:"#fafafa"}}>
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
-            <button onClick={submit} className="btn btn-primary btn-md">บันทึก</button>
+            <button onClick={()=>void submit()} disabled={busy} className="btn btn-primary btn-md" style={busy?{opacity:.6,cursor:"not-allowed"}:undefined}>{busy?"กำลังบันทึก…":"บันทึก"}</button>
           </div>
         </div>
       </div>
@@ -300,8 +307,8 @@ function QuotationsPageInner(){
   const validityDays = useQuoteValidityDays();
   const {
     quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
-    addQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
-    updateCustomer, updateLead, newQuoteId,
+    createQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
+    updateCustomer, updateLead,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน — RYG ไม่เห็นใบ/ลูกค้า/ลีดของ CNX (undefined = ของ CNX)
@@ -319,6 +326,7 @@ function QuotationsPageInner(){
   const [ownerFilter, setOwnerFilter] = useState("ALL");
   const [provFilter, setProvFilter]   = useState("ALL");
   const [view, setView]             = useState<"list"|"card">("list");
+  const savingQRef = useRef(false); // กันกดบันทึกใบซ้ำระหว่างรอเลขที่ใบจาก DB (H8)
   const [sortKey, setSortKey]       = useState<SortKey>("date");
   const [sortDir, setSortDir]       = useState<SortDir>("desc");
   const [page, setPage]             = useState(1);
@@ -406,6 +414,9 @@ function QuotationsPageInner(){
   function openEdit(q:QuotationMock){ setEditingQ(q); setShowModal(true); }
 
   async function saveQ(form:QForm){
+    if (savingQRef.current) return; // กันกดซ้ำระหว่างรอเลขที่ใบจาก DB (H8)
+    savingQRef.current = true;
+    try {
     // owner ไม่ใช่ฟิลด์ของใบเสนอราคา — แยกออกก่อน ไม่งั้นจะติดไปกับ QuotationMock เป็นฟิลด์ขยะ
     const { owner, ...qf } = form;
     const tv=qf.materialCost;
@@ -415,9 +426,8 @@ function QuotationsPageInner(){
       updateQuotation(updated);
       setSelected(p=>p?.id===editingQ.id?updated:p);
     } else {
-      // เลขที่ใบออกจาก DB แบบ atomic ต่อสาขา (แหล่งเดียวกับที่ออกใบจากหน้าลีด)
-      const newQ:QuotationMock={...qf,revision:qf.revision,expiry:qf.expiry,id:await newQuoteId(),total,totalValue:tv};
-      addQuotation(newQ);
+      // ออกเลข + insert แบบ atomic (H8) — draft ไม่มี id · DB เป็นคนออกเลขให้ในทรานแซกชันเดียว
+      await createQuotation({...qf,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv});
     }
     // ผู้รับผิดชอบ → เขียนกลับที่ "ต้นทาง" ตามที่บอสสั่ง (ใบเสนอราคาไม่มีฟิลด์นี้)
     // ปิดการขายแล้ว → เขียนที่ลูกค้า · ยังเป็นลีด → เขียนที่ลีด
@@ -437,6 +447,7 @@ function QuotationsPageInner(){
         setToast(`บันทึกแล้ว · เปลี่ยนผู้รับผิดชอบของลูกค้าเป้าหมาย ${lead.company} เป็น ${owner||"—"}`);
       }
     }
+    } finally { savingQRef.current = false; }
   }
   function changeStatus(id:string,s:QuotationStatus){
     setQuotationStatus(id,s);

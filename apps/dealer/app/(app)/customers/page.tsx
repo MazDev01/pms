@@ -351,7 +351,7 @@ export default function CustomersPage(){
   const {
     customers: allCustomers, quotations: allQuotations, leads: allLeadsRaw,
     appointments,
-    addLead, updateLead, addCustomer: ctxAddCustomer,
+    addLead, updateLead, newLeadNumId, addCustomer: ctxAddCustomer,
     updateCustomer: ctxUpdateCustomer, deleteCustomer: ctxDeleteCustomer,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
@@ -623,9 +623,9 @@ export default function CustomersPage(){
     setShowNewDeal(true);
   }
   // สร้างดีล = ลีดใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
-  function createDeal(){
+  async function createDeal(){
     const c=dealCustomer; if(!c||!dealForm.product) return;
-    const nid=Math.max(0,...leads.map(l=>l.numId))+1;
+    const nid=await newLeadNumId(); // num_id atomic ต่อสาขา (M7) — เลิก Math.max+1 ที่ชนได้
     const product=dealForm.product;
     const newDeal: LeadRow={
       id:`#L-${40321+nid}`, numId:nid,
@@ -1603,7 +1603,7 @@ export default function CustomersPage(){
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowNewDeal(false)}>ยกเลิก</button>
-              <button className="btn btn-primary btn-md" onClick={createDeal} disabled={!dealForm.product}><Plus size={14}/> สร้างโครงการ</button>
+              <button className="btn btn-primary btn-md" onClick={()=>void createDeal()} disabled={!dealForm.product}><Plus size={14}/> สร้างโครงการ</button>
             </div>
           </div>
         </div>

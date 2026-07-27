@@ -11,7 +11,7 @@ import {
 import { PlanVsActualBars, GroupedBarChart, Donut, ProgressRing, CategoryRows } from "@pms/shared/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/components/ui/ActivityTimeline";
 import {
-  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKeyOf,
+  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKeyOf, monthKey,
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
@@ -23,7 +23,8 @@ import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/li
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar, SelectFilter } from "@pms/shared/components/filters/FilterBar";
 import { SalesTrendChart } from "@pms/shared/components/ui/SalesTrendChart";
-import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads } from "@pms/shared/lib/useNetworkData";
+import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads, useNetworkQuoteRange, useDashboardQuoteSummary } from "@pms/shared/lib/useNetworkData";
+import { useDealerPerformance } from "@pms/shared/lib/useDealerPerformance";
 
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useAuditEntries } from "@pms/shared/lib/useAudit";
@@ -90,6 +91,12 @@ export default function HQDashboard() {
   const netQuotes = useNetworkQuotations(); // ใบที่ดีลเลอร์สร้างจริง + seed เครือ (แหล่งเดียว)
   const netCustomers = useNetworkCustomers();
   const allNetLeads = useNetworkLeads();
+  // aggregate ใบในช่วง/ช่วงก่อนหน้า ที่ DB (M9 · supabase เท่านั้น · local = null → ใช้ winQuotes ฝั่ง client)
+  // ป้อน Scorecard (ผลรวม) + dealerStats — parity กับ winQuotes เป๊ะ จึงตรงกับการ์ดอื่นที่ยังใช้ winQuotes
+  const curRange = useNetworkQuoteRange(timeRange.start, timeRange.end, selDealer?.code);
+  const prevRange = useNetworkQuoteRange(addDaysD(timeRange.start, -periodDays), addDaysD(timeRange.start, -1), selDealer?.code);
+  // สรุปใบในช่วง (byStatus/byProduct/byMonth) ที่ DB — ป้อน productAgg/buildingPerf/quoteStatus/pipeline/wonVal
+  const quoteSummary = useDashboardQuoteSummary(timeRange.start, timeRange.end, selDealer?.code);
   const { appointments } = useSales();
   const totalDealers = allDealers.length;
   // ใบเสนอราคาของตัวแทนที่เลือก — ยังไม่ตัดตามช่วงเวลา
@@ -110,6 +117,39 @@ export default function HQDashboard() {
     };
   }, [scopedQuotes, timeRange.start, timeRange.end, periodDays]);
 
+  // ── ชุดสรุปใบในช่วง (สถานะ/แม่แบบ/รายเดือน) — supabase: จาก RPC dashboard_quote_summary · local/ยังไม่กลับ: จาก winQuotes ──
+  // parity เดียวกันจึงให้ผลตรงกับการ์ดที่ยังใช้ winQuotes · ประกาศก่อน consumer ทุกตัว (trendMonthly ใช้ตั้งแต่ต้น)
+  const statusAgg = useMemo(() => {
+    const m = new Map<string, { count: number; value: number }>();
+    if (quoteSummary) { for (const r of quoteSummary.byStatus) m.set(r.status, { count: r.count, value: r.value }); return m; }
+    winQuotes.forEach(q => { const r = m.get(q.status) ?? { count: 0, value: 0 }; r.count += 1; r.value += q.valueNum; m.set(q.status, r); });
+    return m;
+  }, [quoteSummary, winQuotes]);
+  const productArr = useMemo(() => {
+    if (quoteSummary) return quoteSummary.byProduct.map(r => ({ product: (r.product ?? undefined) as string, value: r.value, projects: r.projects }));
+    const m = new Map<string, { value: number; projects: number }>();
+    winQuotes.forEach(q => { const r = m.get(q.productLine) ?? { value: 0, projects: 0 }; r.value += q.valueNum; r.projects += 1; m.set(q.productLine, r); });
+    return [...m.entries()].map(([product, v]) => ({ product, ...v })).sort((a, b) => b.value - a.value);
+  }, [quoteSummary, winQuotes]);
+  // byMonth ราย (ปี,เดือน) — supabase: จาก RPC · local/ยังไม่กลับ: จาก winQuotes (parity เดียวกัน)
+  const monthAgg = useMemo(() => {
+    if (quoteSummary) return quoteSummary.byMonth;
+    const map = new Map<string, { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number }>();
+    winQuotes.forEach(q => {
+      const d = parseThaiDate(q.createdAt); if (!d) return;
+      const y = d.getFullYear(), m = d.getMonth(), key = `${y}-${m}`;
+      let r = map.get(key); if (!r) { r = { y, m, quotes: 0, won: 0, lost: 0, wonVal: 0 }; map.set(key, r); }
+      r.quotes += 1; if (q.status === "won") { r.won += 1; r.wonVal += q.valueNum; } if (q.status === "lost") r.lost += 1;
+    });
+    return [...map.values()];
+  }, [quoteSummary, winQuotes]);
+  // ยุบเป็นรายเดือนปฏิทิน 0-11 (รวมข้ามปีในช่วง) สำหรับ series/sparkline/bottomMetrics
+  const monthCal = useMemo(() => {
+    const quotes = Array(12).fill(0), won = Array(12).fill(0), lost = Array(12).fill(0), wonVal = Array(12).fill(0);
+    for (const r of monthAgg) { quotes[r.m] += r.quotes; won[r.m] += r.won; lost[r.m] += r.lost; wonVal[r.m] += r.wonVal; }
+    return { quotes, won, lost, wonVal };
+  }, [monthAgg]);
+
   // ── Scorecard — คำนวณจากใบเสนอราคาในช่วง · trend = เทียบช่วงก่อนหน้าเท่ากัน ──
   const sc = useMemo(() => {
     const statsOf = (arr: typeof winQuotes) => {
@@ -122,7 +162,15 @@ export default function HQDashboard() {
         lost: lost.length, conv: closed ? Math.round((won.length / closed) * 100) : 0,
       };
     };
-    const cur = statsOf(winQuotes), prev = statsOf(prevQuotes);
+    // supabase: รวมจาก rollup ช่วงที่ DB (parity) · local/ยังไม่กลับ: คำนวณจาก winQuotes เดิม
+    const sumRange = (rng: typeof curRange, client: typeof winQuotes) => {
+      if (!rng) return statsOf(client);
+      let quotes = 0, quoteVal = 0, won = 0, wonVal = 0, lost = 0;
+      for (const r of rng.values()) { quotes += r.quotes; quoteVal += r.quoteVal; won += r.won; wonVal += r.wonVal; lost += r.lost; }
+      const closed = won + lost;
+      return { quotes, quoteVal, won, wonVal, lost, conv: closed ? Math.round((won / closed) * 100) : 0 };
+    };
+    const cur = sumRange(curRange, winQuotes), prev = sumRange(prevRange, prevQuotes);
     const pctf = (c: number, p: number) => p > 0 ? Math.round(((c - p) / p) * 100) : (c > 0 ? 100 : 0);
     return {
       dealers:   { value: `${totalDealers}`, trend: 0 },
@@ -134,11 +182,16 @@ export default function HQDashboard() {
       lost:      { value: `${cur.lost}`, trend: pctf(cur.lost, prev.lost) },
       conv:      { value: `${cur.conv}%`, trend: pctf(cur.conv, prev.conv) },
     };
-  }, [winQuotes, prevQuotes, totalDealers, allNetLeads.length, netCustomers.length]);
+  }, [winQuotes, prevQuotes, curRange, prevRange, totalDealers, allNetLeads.length, netCustomers.length]);
 
   // ── สถิติรายตัวแทนในช่วง — คำนวณจากใบเสนอราคาจริง (รายได้=มูลค่า won · อัตราปิด=won/(won+lost)) ──
   const dealerStats = useMemo(() => {
     const m = new Map<string, { revenue: number; total: number; won: number; lost: number }>();
+    // supabase: มาจาก rollup ช่วงที่ DB (parity) · local/ยังไม่กลับ: คำนวณจาก winQuotes เดิม
+    if (curRange) {
+      for (const [code, r] of curRange) m.set(code, { revenue: r.wonVal, total: r.quotes, won: r.won, lost: r.lost });
+      return m;
+    }
     winQuotes.forEach(q => {
       const r = m.get(q.dealerCode) ?? { revenue: 0, total: 0, won: 0, lost: 0 };
       r.total += 1;
@@ -147,19 +200,20 @@ export default function HQDashboard() {
       m.set(q.dealerCode, r);
     });
     return m;
-  }, [winQuotes]);
+  }, [winQuotes, curRange]);
 
   // ยอดขายสะสมทั้งปีจริง รายตัวแทน — สำหรับ "% เป้า" (เป้าเป็นรายปี ห้ามเทียบกับยอดแค่ในช่วงตัวกรอง)
+  // มาจาก rollup กลาง (useDealerPerformance.revenue = Σ มูลค่า won ปีนี้ รายสาขา) — supabase คิดที่ DB (M9)
+  // scope selDealer: มีตัวแทนที่เลือก = คงเฉพาะสาขานั้น (เท่าพฤติกรรมเดิมที่กรองผ่าน scopedQuotes)
+  const dealerPerf = useDealerPerformance();
   const annualWonByDealer = useMemo(() => {
     const m = new Map<string, number>();
-    scopedQuotes.forEach(q => {
-      if (q.status !== "won") return;
-      const d = parseThaiDate(q.createdAt);
-      if (!d || d.getFullYear() !== APP_NOW.getFullYear()) return;
-      m.set(q.dealerCode, (m.get(q.dealerCode) ?? 0) + q.valueNum);
-    });
+    for (const [code, p] of dealerPerf) {
+      if (selDealer && code !== selDealer.code) continue;
+      m.set(code, p.revenue);
+    }
     return m;
-  }, [scopedQuotes]);
+  }, [dealerPerf, selDealer]);
 
   // อันดับตัวแทน — ทุกคอลัมน์คำนวณจากใบเสนอราคาจริง (บอสสั่ง 17 ก.ค. 69: "ให้แสดงค่าข้อมูลจริง")
   // เดิมใช้ค่าซีดตายตัวของ DealerRow (revenueActual/winRate) → ตัวเลขไม่ขยับตามช่วงเวลา
@@ -181,15 +235,9 @@ export default function HQDashboard() {
 
   // ยอดขายรายเดือนในช่วง (ล้านบาท) ป้อนกราฟแนวโน้ม — สรุปจาก won ในช่วงที่เลือก
   const trendMonthly = useMemo(() => {
-    // bucket ด้วย key "ปี-เดือน" — เดิมใช้ getMonth() ล้วน + วน m=start..end ทำให้ช่วง "ข้ามปี" พัง
-    // (เช่น พ.ย.2568–ก.พ.2569 → for(10..1) ไม่รัน = กราฟยุบเหลือจุดเดียว · และยอดคนละปีเดือนเดียวกันทับกัน)
-    const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+    // bucket ด้วย key "ปี-เดือน" (ข้ามปีไม่พัง) → ยอด won ต่อเดือน · byKey = wonVal ต่อ (ปี,เดือน)
     const byKey = new Map<string, number>();
-    winQuotes.forEach(q => {
-      if (q.status !== "won") return;
-      const d = parseThaiDate(q.createdAt); if (!d) return;
-      byKey.set(mk(d), (byKey.get(mk(d)) ?? 0) + q.valueNum);
-    });
+    for (const r of monthAgg) byKey.set(`${r.y}-${r.m}`, (byKey.get(`${r.y}-${r.m}`) ?? 0) + r.wonVal);
     const pts: { month: string; value: number }[] = [];
     const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), 1);
     const end = new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), 1);
@@ -198,7 +246,7 @@ export default function HQDashboard() {
       cur.setMonth(cur.getMonth() + 1);
     }
     return pts.length ? pts : [{ month: TH_ABBR[timeRange.end.getMonth()], value: 0 }];
-  }, [winQuotes, timeRange.start, timeRange.end]);
+  }, [monthAgg, timeRange.start, timeRange.end]);
   const trendTitle = selDealer ? `ยอดขาย ${selDealer.name.replace("Benjamin ", "")} รายเดือน` : "ยอดขายรวมทั้งเครือ รายเดือน";
   const trendDesc = selDealer ? `เฉพาะตัวแทน ${selDealer.code} (ล้านบาท)` : "มูลค่าที่ปิดได้ทุกตัวแทนรวมกัน (ล้านบาท)";
 
@@ -218,19 +266,13 @@ export default function HQDashboard() {
   }, [rankedWin, annualWonByDealer]);
 
   // สัดส่วนมูลค่าตามแม่แบบ (มูลค่าใบเสนอราคาในช่วง แยกตาม productLine)
-  const productAgg = useMemo(() => {
-    const m = new Map<string, number>();
-    winQuotes.forEach(q => m.set(q.productLine, (m.get(q.productLine) ?? 0) + q.valueNum));
-    const arr = [...m.entries()].map(([product, valueNum]) => ({ product, valueNum })).sort((a, b) => b.valueNum - a.valueNum);
-    return arr.map((p, i) => ({ ...p, color: RAMP[i % RAMP.length] }));
-  }, [winQuotes]);
+  const productAgg = useMemo(
+    () => productArr.map((p, i) => ({ product: p.product, valueNum: p.value, color: RAMP[i % RAMP.length] })),
+    [productArr],
+  );
 
   // ── ใบเสนอราคา เทียบ ปิดการขาย (รายเดือน) + การวิเคราะห์การแปลง (Funnel เป็นแถบ) ──
-  const quoteWonSeries = useMemo(() => {
-    const qC = Array(12).fill(0), wC = Array(12).fill(0);
-    winQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (!d) return; const m = d.getMonth(); qC[m]++; if (q.status === "won") wC[m]++; });
-    return { qC, wC };
-  }, [winQuotes]);
+  const quoteWonSeries = useMemo(() => ({ qC: monthCal.quotes, wC: monthCal.won }), [monthCal]);
   // ── Sales Journey Pipeline — การ์ดขั้นตอนแนวนอน (ไม่ใช่ funnel/กรวย) ──
   const journeyStages = useMemo(() => {
     const rank: Record<string, number> = { WAITING: 1, BULLET: 2, QUOTED: 3, FOLLOWUP: 3, NEGO: 4, PAID: 5 };
@@ -255,13 +297,16 @@ export default function HQDashboard() {
     });
   }, [allNetLeads]);
 
-  // ── Lead vs Quotation (รายเดือน) ──
+  // ── Lead vs Quotation (รายเดือน) — นับทุกใบทั้งเครือ ทุกช่วง แยกตามเดือนปฏิทิน ──
+  // qC จาก summary ทั้งเครือทุกช่วง (dealer=undefined) — supabase · local/ยังไม่กลับ = netQuotes เดิม
+  const allQuoteSummary = useDashboardQuoteSummary(new Date(1970, 0, 1), new Date(2999, 11, 31), undefined);
   const leadQuoteSeries = useMemo(() => {
     const lC = Array(12).fill(0), qC = Array(12).fill(0);
     allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) lC[d.getMonth()]++; });
-    netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (d) qC[d.getMonth()]++; });
+    if (allQuoteSummary) { for (const r of allQuoteSummary.byMonth) qC[r.m] += r.quotes; }
+    else netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (d) qC[d.getMonth()]++; });
     return { lC, qC };
-  }, [allNetLeads, netQuotes]);
+  }, [allNetLeads, allQuoteSummary, netQuotes]);
 
   // ── สถานะใบเสนอราคา (กราฟแท่ง) — สีตามสเปค: ร่าง เทา · ส่ง navy · ตอบรับ เขียว · ปฏิเสธ แดง · หมดอายุ ส้ม ──
   const quoteStatus = useMemo(() => {
@@ -272,8 +317,8 @@ export default function HQDashboard() {
       { k: "lost",           label: "ปฏิเสธ",   color: "#dc2626" },
       { k: "expired",        label: "หมดอายุ",  color: "#d97706" },
     ];
-    return order.map(o => ({ ...o, count: winQuotes.filter(q => q.status === o.k).length }));
-  }, [winQuotes]);
+    return order.map(o => ({ ...o, count: statusAgg.get(o.k)?.count ?? 0 }));
+  }, [statusAgg]);
 
   // ── ยอดขายตามประเภทอาคาร (Top 5) + % ──
   const templateTotal = useMemo(() => productAgg.reduce((s, p) => s + p.valueNum, 0), [productAgg]);
@@ -284,14 +329,13 @@ export default function HQDashboard() {
   // ── ชุดข้อมูลรายเดือนสำหรับ sparkline บนการ์ด KPI ──
   const monthly = useMemo(() => {
     const mo = (s: string) => { const d = parseThaiDate(s); return d ? d.getMonth() : -1; };
-    const salesM = Array(12).fill(0), quotesM = Array(12).fill(0), wonM = Array(12).fill(0), lostM = Array(12).fill(0), leadsM = Array(12).fill(0);
-    winQuotes.forEach(q => { const m = mo(q.createdAt); if (m < 0) return; quotesM[m]++; if (q.status === "won") { wonM[m]++; salesM[m] += q.valueNum; } if (q.status === "lost") lostM[m]++; });
+    const leadsM = Array(12).fill(0); // ส่วนใบมาจาก monthCal (DB) · ส่วนลีดยังนับ client
     allNetLeads.forEach(l => { const m = mo(l.createdAt ?? ""); if (m >= 0) leadsM[m]++; });
     const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
     const slice = (arr: number[]) => arr.slice(a, b + 1);
-    const convM = wonM.map((w, i) => (w + lostM[i]) ? Math.round(w / (w + lostM[i]) * 100) : 0);
-    return { sales: slice(salesM.map(v => v / 1e6)), quotes: slice(quotesM), customers: slice(leadsM), won: slice(wonM), lost: slice(lostM), conv: slice(convM) };
-  }, [winQuotes, allNetLeads, timeRange]);
+    const convM = monthCal.won.map((w, i) => (w + monthCal.lost[i]) ? Math.round(w / (w + monthCal.lost[i]) * 100) : 0);
+    return { sales: slice(monthCal.wonVal.map(v => v / 1e6)), quotes: slice(monthCal.quotes), customers: slice(leadsM), won: slice(monthCal.won), lost: slice(monthCal.lost), conv: slice(convM) };
+  }, [monthCal, allNetLeads, timeRange]);
 
   // ยอดขายตามจังหวัด (Top 6) — จากลูกค้าในเครือ
   const provinceTop6 = useMemo(() => {
@@ -311,35 +355,35 @@ export default function HQDashboard() {
       { k: "lost",           label: "ปฏิเสธ",   color: "#dc2626" },
       { k: "expired",        label: "หมดอายุ",  color: "#d97706" },
     ];
-    const rows = defs.map(d => { const arr = winQuotes.filter(q => q.status === d.k); return { ...d, count: arr.length, value: arr.reduce((s, q) => s + q.valueNum, 0) }; });
+    const rows = defs.map(d => { const s = statusAgg.get(d.k) ?? { count: 0, value: 0 }; return { ...d, count: s.count, value: s.value }; });
     const maxV = Math.max(...rows.map(r => r.value), 1);
     return { rows: rows.map(r => ({ ...r, pct: Math.round(r.value / maxV * 100) })), totalC: rows.reduce((s, r) => s + r.count, 0), totalV: rows.reduce((s, r) => s + r.value, 0) };
-  }, [winQuotes]);
+  }, [statusAgg]);
 
   // แถบล่าง — ตัวชี้วัดรอง (เดือนล่าสุดในช่วง + เทียบเดือนก่อนหน้า)
   const bottomMetrics = useMemo(() => {
     const lm = timeRange.end.getMonth();
     const cnt = (arr: string[], m: number) => arr.filter(s => { const d = parseThaiDate(s); return d && d.getMonth() === m; }).length;
+    const at = (arr: number[], m: number) => (m >= 0 && m < 12) ? arr[m] : 0; // ส่วนใบจาก monthCal (DB)
     const leadDates = allNetLeads.map(l => l.createdAt ?? "");
-    const quoteDates = winQuotes.map(q => q.createdAt);
-    const wonThis = winQuotes.filter(q => q.status === "won" && (() => { const d = parseThaiDate(q.createdAt); return d && d.getMonth() === lm; })()).length;
-    const wonPrev = winQuotes.filter(q => q.status === "won" && (() => { const d = parseThaiDate(q.createdAt); return d && d.getMonth() === lm - 1; })()).length;
-    const wonArr = winQuotes.filter(q => q.status === "won");
+    const wonThis = at(monthCal.won, lm), wonPrev = at(monthCal.won, lm - 1);
+    const totalWon = monthCal.won.reduce((s, x) => s + x, 0);
+    const wonValTotal = statusAgg.get("won")?.value ?? 0; // = Σ wonVal ในช่วง → avgDeal = ยอดรวม ÷ จำนวน won
     const pct = (c: number, p: number) => p > 0 ? Math.round((c - p) / p * 100) : (c > 0 ? 100 : 0);
     const nl = cnt(leadDates, lm), nlP = cnt(leadDates, lm - 1);
-    const nq = cnt(quoteDates, lm), nqP = cnt(quoteDates, lm - 1);
+    const nq = at(monthCal.quotes, lm), nqP = at(monthCal.quotes, lm - 1);
     return {
       totalLeads: allNetLeads.length,
       newLeads: nl, newLeadsTrend: pct(nl, nlP),
       newCustomers: wonThis, newCustomersTrend: pct(wonThis, wonPrev),
       newQuotes: nq, newQuotesTrend: pct(nq, nqP),
-      avgDeal: wonArr.length ? Math.round(wonArr.reduce((s, q) => s + q.valueNum, 0) / wonArr.length) : 0,
+      avgDeal: totalWon ? Math.round(wonValTotal / totalWon) : 0,
       cycleDays: 28,
     };
-  }, [allNetLeads, winQuotes, timeRange]);
+  }, [allNetLeads, monthCal, statusAgg, timeRange]);
 
   // ── เป้าหมายทั้งเครือ + Achievement ──
-  const wonValNum = useMemo(() => winQuotes.filter(q => q.status === "won").reduce((s, q) => s + q.valueNum, 0), [winQuotes]);
+  const wonValNum = useMemo(() => statusAgg.get("won")?.value ?? 0, [statusAgg]);
   const goalPeriod = Math.round(targets.annualTarget * periodDays / 365) || 1;
   const achievementPct = Math.round(wonValNum / goalPeriod * 100);
   // ยอดปิดได้สะสม "ทั้งปีนี้" (ไม่ขึ้นกับตัวกรองเวลา) — ใช้กับการ์ดเป้าหมายทั้งปี/วงแหวน % เป้า
@@ -348,27 +392,24 @@ export default function HQDashboard() {
 
   // ประเภทอาคาร + จำนวนโครงการ
   const buildingPerf = useMemo(() => {
-    const m = new Map<string, { value: number; projects: number }>();
-    winQuotes.forEach(q => { const r = m.get(q.productLine) ?? { value: 0, projects: 0 }; r.value += q.valueNum; r.projects += 1; m.set(q.productLine, r); });
-    const arr = [...m.entries()].map(([product, v]) => ({ product, ...v })).sort((a, b) => b.value - a.value);
-    const max = Math.max(...arr.map(a => a.value), 1);
-    return arr.slice(0, 5).map((p, i) => ({ ...p, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
-  }, [winQuotes]);
+    const max = Math.max(...productArr.map(a => a.value), 1);
+    return productArr.slice(0, 5).map((p, i) => ({ product: p.product, value: p.value, projects: p.projects, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
+  }, [productArr]);
 
   // ── กราฟแท่ง "ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)" — ปุ่มช่วงย้อนหลังของตัวเอง ──
   // ไม่ผูกกับตัวกรองเวลาบนแถบบน (เป็นกราฟแนวโน้ม ต้องเห็นย้อนหลังเสมอ · กติกาเดียวกับแดชบอร์ดตัวแทน)
   // ถังเดือนใช้คีย์ YYYY-MM — ช่วง 12 เดือนคาบเกี่ยว 2 ปี ถ้านับแต่เลขเดือนยอดปีที่แล้วจะทับปีนี้
   const [barRange, setBarRange] = useState<MonthRange>(6);
+  // สรุปใบในหน้าต่าง barRange ที่ DB (byMonth) — supabase · local/ยังไม่กลับ = scopedQuotes เดิม
+  const barSummary = useDashboardQuoteSummary(
+    new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() - (barRange - 1), 1),
+    new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() + 1, 0), selDealer?.code);
   const barTrend = useMemo(() => {
     const buckets = lastNMonths(barRange, APP_NOW);
     const leadsM = new Map<string, number>(), quotesM = new Map<string, number>(), wonM = new Map<string, number>();
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-    scopedQuotes.forEach(q => {
-      const d = parseThaiDate(q.createdAt); if (!d) return;
-      const k = monthKeyOf(d);
-      bump(quotesM, k);
-      if (q.status === "won") bump(wonM, k);
-    });
+    if (barSummary) { for (const r of barSummary.byMonth) { const k = monthKey(r.y, r.m); quotesM.set(k, r.quotes); wonM.set(k, r.won); } }
+    else scopedQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (!d) return; const k = monthKeyOf(d); bump(quotesM, k); if (q.status === "won") bump(wonM, k); });
     allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
     return {
       months: buckets.map(b => b.label),
@@ -376,7 +417,7 @@ export default function HQDashboard() {
       quotes: buckets.map(b => quotesM.get(b.key) ?? 0),
       won: buckets.map(b => wonM.get(b.key) ?? 0),
     };
-  }, [barRange, scopedQuotes, allNetLeads]);
+  }, [barRange, barSummary, scopedQuotes, allNetLeads]);
 
   // ── กิจกรรมล่าสุด = "บันทึกการใช้งาน" (Audit Log) แหล่งเดียวกับหน้า /hq/audit ──
   // เดิมการ์ดนี้อ่านจากใบเสนอราคา (ความเคลื่อนไหวการขาย) — บอสสั่งให้ใช้บันทึกการใช้งานแทน 17 ก.ค. 69
@@ -417,21 +458,25 @@ export default function HQDashboard() {
   // ── กราฟแท่ง "เป้าหมาย เทียบ ยอดขายจริง" — ปุ่มช่วงย้อนหลังของตัวเอง (กติกาเดียวกับกราฟแนวโน้มใบอื่น) ──
   // เป้ารายเดือน = เป้าทั้งปี ÷ 12 (เท่ากันทุกเดือน) · ยอดจริง = ใบที่ปิดการขายได้ในเดือนนั้น
   const [tgtRange, setTgtRange] = useState<MonthRange>(6);
+  // สรุปใบในหน้าต่าง tgtRange ที่ DB (byMonth.wonVal) — supabase · local/ยังไม่กลับ = scopedQuotes เดิม
+  const tgtSummary = useDashboardQuoteSummary(
+    new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() - (tgtRange - 1), 1),
+    new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() + 1, 0), selDealer?.code);
   const targetVsActual = useMemo(() => {
     const planM = Math.round(targets.annualTarget / 12 / 1e6 * 10) / 10;
     const actM = new Map<string, number>();
-    scopedQuotes.forEach(q => {
+    if (tgtSummary) { for (const r of tgtSummary.byMonth) actM.set(monthKey(r.y, r.m), r.wonVal); }
+    else scopedQuotes.forEach(q => {
       if (q.status !== "won") return;
       const d = parseThaiDate(q.createdAt); if (!d) return;
-      const k = monthKeyOf(d);
-      actM.set(k, (actM.get(k) ?? 0) + q.valueNum);
+      actM.set(monthKeyOf(d), (actM.get(monthKeyOf(d)) ?? 0) + q.valueNum);
     });
     return lastNMonths(tgtRange, APP_NOW).map(b => ({
       label: b.label,
       actual: Math.round((actM.get(b.key) ?? 0) / 1e6 * 10) / 10,
       plan: planM,
     }));
-  }, [scopedQuotes, targets, tgtRange]);
+  }, [scopedQuotes, tgtSummary, targets, tgtRange]);
 
   // lostReasons ถูกลบพร้อมการ์ด — ไม่มีใครอ่านผลแล้ว
 

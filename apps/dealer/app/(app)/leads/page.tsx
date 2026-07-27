@@ -43,6 +43,7 @@ import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
 import { leadCreatedDate } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
@@ -608,7 +609,7 @@ export default function LeadsPage() {
 
   // List state
   const {
-    leads: allLeads, addLead, updateLead, deleteLead: removeLead, updateLeadStatus,
+    leads: allLeads, addLead, updateLead, deleteLead: removeLead, updateLeadStatus, newLeadNumId,
     appointments, addAppointment, newAppointmentId, quotations,
   } = useSales();
   // ปิดการขายสำเร็จ = เป็น "ลูกค้า" แล้ว → ไม่แสดงในหน้าลูกค้าเป้าหมาย (ไปอยู่ที่ /customers)
@@ -691,6 +692,8 @@ export default function LeadsPage() {
   // ฟอร์มนัดหมายในแท็บนัดหมายของลีด (นัดก่อนปิดการขาย)
   const [apptAdding, setApptAdding] = useState(false);
   const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
+  const apptSavingRef = useRef(false); // กันกดบันทึกนัดซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard synchronous)
+  const [apptSaving, setApptSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const [draft, setDraft] = useState<LeadRow|null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -899,16 +902,26 @@ export default function LeadsPage() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !current) return;
     const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
-    // อัปโหลด bytes เข้า Storage ก่อน (local คืน null = เก็บแค่ metadata) แล้วบันทึก metadata
-    void fileStorage.upload(currentDealer.code, f).catch(() => null)
-      .then(storagePath => filesRepo.add({
-        name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
-        project: current.company || current.name, uploadedBy: current.assigned || "คุณ",
-        uploadedAt: APP_NOW_ISO, source: "lead", recordId: current.numId, dealerCode: currentDealer.code,
-        ...(storagePath ? { storagePath } : {}),
-      }))
-      .then(() => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles)).catch(() => {});
+    const lead = current;
     if (fileInputRef.current) fileInputRef.current.value = "";
+    void (async () => {
+      // upload คืน path (supabase) หรือ null (local) · โยน error ถ้าอัปโหลดจริงไม่สำเร็จ — ห้ามกลืน (H1)
+      // เดิม .catch(()=>null) → ไฟล์โผล่ในลิ้นชักเหมือนสำเร็จ แต่ไบต์ไม่เคยขึ้น Storage
+      let storagePath: string | null = null;
+      try {
+        storagePath = await fileStorage.upload(currentDealer.code, f);
+        await filesRepo.add({
+          name: f.name, size, ext: extOfName(f.name), category: guessFileCategory(f.name),
+          project: lead.company || lead.name, uploadedBy: lead.assigned || "คุณ",
+          uploadedAt: APP_NOW_ISO, source: "lead", recordId: lead.numId, dealerCode: currentDealer.code,
+          ...(storagePath ? { storagePath } : {}),
+        });
+        await filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles);
+      } catch (err) {
+        if (storagePath) await fileStorage.remove(storagePath).catch(() => {}); // กันไบต์กำพร้า
+        reportRepoSaveError(err);
+      }
+    })();
   }
 
   // Status dropdown
@@ -1507,11 +1520,10 @@ export default function LeadsPage() {
       {showAddForm && (
         <LeadFormModal
           onClose={()=>setShowAddForm(false)}
-          onSave={(l)=>{
-            // กำหนด id/numId แบบ max+1 กันชนกับลีดเดิม (แทน Math.random)
-            // ต้องคิดจาก allLeads (ดิบ ทุกสถานะ/ทุกสาขา) — ไม่ใช่ leadsData ที่ตัด PAID ออก
-            // ไม่งั้นถ้าลีด numId สูงสุดถูกปิดเป็น PAID แล้ว nid จะซ้ำกับลีดเดิม (ไฟล์/ลิงก์ ?open= สับสน)
-            const nid = Math.max(0, ...allLeads.map(x=>x.numId)) + 1;
+          onSave={async (l)=>{
+            // num_id ออกจากตัวนับ atomic ของ DB (M7) — เลิก Math.max+1 ฝั่ง client ที่ชนกันได้
+            // เมื่อสร้างลีดพร้อมกันในสาขาเดียว · id ที่แสดง (#L-…) derive จาก num_id นี้
+            const nid = await newLeadNumId();
             // สร้าง "รายงานการติดตาม" + "Report Checklist (Task)" อัตโนมัติทุกครั้งที่สร้าง Lead
             // createdAt ต้องมีตั้งแต่ตอนสร้าง — ไม่มีแล้วหน้าไหนก็โชว์ "สร้างเมื่อ —"
             // และ leadCreatedDate() จะไปสังเคราะห์วันจาก numId แทน (ได้วันย้อนหลังหลายเดือน)
@@ -1590,6 +1602,9 @@ export default function LeadsPage() {
         const leadAppts = appointments.filter(a => a.leadId === c.numId)
           .slice().sort((a, b) => (a.date + a.time) < (b.date + b.time) ? 1 : -1);
         const saveAppt = async () => {
+          if (apptSavingRef.current) return; // กันกดซ้ำระหว่างรอเลขนัดจาก DB (H8)
+          apptSavingRef.current = true; setApptSaving(true);
+          try {
           addAppointment({
             id: await newAppointmentId(), // เลขจาก DB แบบ atomic — เดิมใช้ max+1 ของชุดที่โหลดมา
             leadId: c.numId,
@@ -1602,6 +1617,7 @@ export default function LeadsPage() {
           setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
           setApptAdding(false);
           setToast("บันทึกนัดหมายแล้ว");
+          } finally { apptSavingRef.current = false; setApptSaving(false); }
         };
         const aInp: React.CSSProperties = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"8px 11px", fontSize:"0.8rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" };
         const aLbl: React.CSSProperties = { display:"block", fontSize:"0.65rem", fontWeight:700, color:"#6b7280", marginBottom:5 };
@@ -1632,7 +1648,7 @@ export default function LeadsPage() {
                 </div>
                 <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
                   <button onClick={() => setApptAdding(false)} className="btn btn-secondary btn-sm">ยกเลิก</button>
-                  <button onClick={saveAppt} className="btn btn-primary btn-sm"><Check size={13} /> บันทึกนัดหมาย</button>
+                  <button onClick={saveAppt} disabled={apptSaving} className="btn btn-primary btn-sm" style={apptSaving ? { opacity: .6, cursor: "not-allowed" } : undefined}><Check size={13} /> บันทึกนัดหมาย</button>
                 </div>
                 <div style={{ fontSize:"0.65rem", color:"#9ca3af", marginTop:8 }}>ผู้รับผิดชอบ: {c.assigned || session.name} · นัดหมายจะแสดงในปฏิทินด้วย</div>
               </div>

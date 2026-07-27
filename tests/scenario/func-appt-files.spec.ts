@@ -1,8 +1,9 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, tagged,
+  db, waitRow, cleanup, specNS, nsTag,
 } from "./funcHelpers";
 
 // นัดหมาย + ไฟล์แนบ — สองส่วนสุดท้ายของงานตัวแทนที่ยังไม่มีเทสต์เชิงฟังก์ชัน
@@ -11,19 +12,14 @@ test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน")
 test.setTimeout(240_000);
 test.describe.configure({ mode: "serial" });
 
-const CUSTOMER = tagged("นัดหมาย");
+// ช่องข้อมูลเฉพาะสเปกนี้ — กัน cleanup ข้ามไปลบข้อมูลของสเปกอื่นที่รันขนานกัน (ดู funcHelpers)
+const NS = specNS("APPT");
+const tg = nsTag(NS);
+const CUSTOMER = tg("นัดหมาย");
 
-test.beforeAll(async () => { await cleanup(await db(RYG), "RYG"); });
-test.afterAll(async () => {
-  const sb = await db(RYG);
-  await cleanup(sb, "RYG");
-  // ไฟล์ทดสอบ: ลบทั้งแถวใน DB และไบต์ใน Storage
-  const { data } = await sb.from("files").select("id,storage_path").like("name", `%ZZTEST%`);
-  for (const f of data ?? []) {
-    if (f.storage_path) await sb.storage.from("dealer-files").remove([f.storage_path as string]);
-    await sb.from("files").delete().eq("id", f.id);
-  }
-});
+// cleanup() ล้างทั้งแถว files และไบต์ใน Storage ให้แล้ว (ดู funcHelpers) · ลบเฉพาะช่อง NS
+test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
 test("[func] สร้างนัดหมายผ่านหน้าจอ → ลง DB ของสาขา", async ({ page }) => {
   const errs = watchErrors(page);
@@ -54,8 +50,8 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
 test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้น Storage และมีแถวใน DB", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
-  const COMPANY = tagged("ลีดไฟล์");
-  const FILENAME = "ZZTEST-เอกสารทดสอบ.txt";
+  const COMPANY = tg("ลีดไฟล์");
+  const FILENAME = `${NS}-เอกสารทดสอบ.txt`;
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
@@ -95,11 +91,96 @@ test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้�
   assertNoErrors(errs, "แนบไฟล์ที่ลีด");
 });
 
+// เปิดลิ้นชักลีดที่ชื่อ company แล้วคืน locator ช่องแนบไฟล์ (ใช้ซ้ำในเทสต์ไฟล์ล้มเหลว)
+async function openLeadFileInput(page: Page, sb: SupabaseClient, company: string) {
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
+  await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณไฟล์ล้ม");
+  await page.getByRole("button", { name: "บันทึก" }).click();
+  await waitRow(sb, "leads", { company });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  const row = page.locator("tbody tr").filter({ hasText: company }).first();
+  await expect(row).toBeVisible({ timeout: 25_000 });
+  await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  const input = page.locator('input[type="file"]:not([accept])').first();
+  await expect(input, "ลิ้นชักลีดต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 25_000 });
+  return input;
+}
+
+// H1 — อัปโหลดล้มเหลว "ต้องดัง" และ "ไม่ทิ้งไฟล์ผี"
+// เดิม .catch(()=>null) กลืน error ของ Storage แล้วบันทึก metadata ต่อ → ไฟล์โผล่ในรายการ
+// เหมือนสำเร็จ แต่ไบต์ไม่เคยถูกเก็บ ปุ่มดาวน์โหลดหายเฉย ๆ โดยไม่มีคำอธิบาย
+test("[func] อัปโหลดไฟล์ล้มเหลว → ขึ้นแถบเตือน + ไม่เหลือ metadata ผีใน DB (H1)", async ({ page }) => {
+  const sb = await db(RYG);
+  const COMPANY = tg("ไฟล์อัปล้ม");
+  const FILENAME = `${NS}-อัปโหลดล้ม.txt`;
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  const fileInput = await openLeadFileInput(page, sb, COMPANY);
+
+  // บังคับให้ Storage ปฏิเสธการอัปโหลด (จำลอง RLS/quota/เน็ตหลุด) — ต้องดักก่อนแนบไฟล์
+  await page.route("**/storage/v1/object/**", (r) =>
+    r.request().method() === "POST"
+      ? r.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "forced upload fail" }) })
+      : r.continue());
+
+  await fileInput.setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("x") });
+
+  // 1) ล้มเหลวต้องดัง — แถบเตือนกลางของ AppShell
+  // (กรอง hasText: Next.js มี div role=alert ซ่อนไว้อีกตัว (__next-route-announcer__) จะชน strict mode)
+  await expect(page.getByRole("alert").filter({ hasText: "บันทึกไม่สำเร็จ" }),
+    "อัปโหลดล้มต้องขึ้นแถบเตือน").toBeVisible({ timeout: 15_000 });
+
+  // 2) ต้องไม่มีแถว metadata ผีค้างใน DB
+  await page.waitForTimeout(1500); // เผื่อ add ยิงตามหลัง (ต้องไม่เกิดขึ้น)
+  const rows = (await sb.from("files").select("id").eq("dealer_code", "RYG").eq("name", FILENAME)).data ?? [];
+  expect(rows.length, "อัปโหลดล้มแล้วต้องไม่เหลือไฟล์ผีใน DB").toBe(0);
+});
+
+// H2 — ลบไบต์ไม่สำเร็จ ต้อง "ไม่ลบ metadata" (ไม่งั้นเหลือไบต์กำพร้าที่อ้างไม่ถึง)
+test("[func] ลบไฟล์แต่ลบไบต์ไม่สำเร็จ → ยังคง metadata ไว้ + ขึ้นแถบเตือน (H2)", async ({ page }) => {
+  const sb = await db(RYG);
+  const COMPANY = tg("ไฟล์ลบล้ม");
+  const FILENAME = `${NS}-ลบไบต์ล้ม.txt`;
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  const fileInput = await openLeadFileInput(page, sb, COMPANY);
+
+  // แนบไฟล์จริง (สำเร็จ) — ต้องมีทั้งแถวใน DB และไบต์ใน Storage ก่อน
+  await fileInput.setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("benjamin") });
+  const f = await waitRow<{ id: number; storage_path: string | null }>(sb, "files", { name: FILENAME }, 20_000);
+  expect(f.storage_path, "ต้องอัปโหลดไบต์สำเร็จก่อน").toBeTruthy();
+
+  // ไปหน้าคลังไฟล์ → รอไฟล์โผล่
+  await page.goto(`${DEALER_ORIGIN}/files`, { waitUntil: "domcontentloaded" });
+  await expect.poll(async () => page.evaluate(() => document.body.innerText),
+    { timeout: 20_000, message: "ไฟล์ต้องโผล่ในคลัง" }).toContain(FILENAME);
+
+  // บังคับให้ Storage ปฏิเสธการลบไบต์ (DELETE) — การลบ metadata ต้องไม่เกิดขึ้นตาม
+  await page.route("**/storage/v1/object/**", (r) =>
+    r.request().method() === "DELETE"
+      ? r.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "forced delete fail" }) })
+      : r.continue());
+
+  const card = page.locator("*", { hasText: FILENAME }).filter({ has: page.getByRole("button", { name: "ลบ" }) }).last();
+  await card.getByRole("button", { name: "ลบ" }).first().click();
+  await page.getByRole("button", { name: "ลบไฟล์" }).click();
+
+  // 1) ล้มเหลวต้องดัง (กรอง hasText เลี่ยง __next-route-announcer__ ที่ก็เป็น role=alert)
+  await expect(page.getByRole("alert").filter({ hasText: "บันทึกไม่สำเร็จ" }),
+    "ลบไบต์ล้มต้องขึ้นแถบเตือน").toBeVisible({ timeout: 15_000 });
+
+  // 2) metadata ต้องยังอยู่ (ไม่ลบทิ้งทั้งที่ไบต์ยังลบไม่ได้)
+  await page.waitForTimeout(1500);
+  const still = (await sb.from("files").select("id").eq("id", f.id)).data ?? [];
+  expect(still.length, "ลบไบต์ไม่สำเร็จ ต้องไม่ลบ metadata ทิ้ง").toBe(1);
+});
+
 // หมายเหตุความครอบคลุม — ยังไม่ได้เทสต์:
 //   • "นัดที่บันทึกไว้แสดงบนปฏิทิน" — เขียนแล้วแต่หาไม่เจอบนหน้าจอ
 //     ลองทั้งกด "วันนี้" (เพราะวันนี้ของระบบตรึงที่ 30 มิ.ย. 2569 คนละเดือนกับนาฬิกาจริง)
 //     และกดเลือกวันที่ ก็ยังไม่เจอ · ยังแยกไม่ได้ว่าเป็นเทสต์เลือก selector ผิด
 //     หรือปฏิทินไม่แสดงนัดจริง — ต้องตรวจด้วยตาก่อน ไม่เดา
 //   • แก้/ลบนัดหมายผ่านหน้าจอ
-//   • ลบไฟล์แนบผ่านหน้าจอ (ต้องลบทั้งแถวใน files และไบต์ใน Storage)
 //   • แท็บการแจ้งเตือนในหน้าตั้งค่าตัวแทน

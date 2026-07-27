@@ -186,8 +186,16 @@ test("[multi-tenant] สองสาขาสร้างลีด/ใบเส�
   const ryg = await signIn(RYG);
   const cnx = await signIn(CNX);
   // เลขที่แอปออกให้ "ลีดแรก" ของทุกสาขาเหมือนกัน เพราะนับจากลีดที่ตัวเองเห็น (RLS กรองรายสาขา)
-  const LID = "#L-40322";
-  const QID = "Q-2026-0001";
+  // ⚠️ ห้ามใช้เลขที่แอปออกให้จริง — "#L-40322" / "Q-2026-0001" คือเลขใบแรกเมื่อตารางว่าง
+  //    เทสต์ func-* สร้างลีด/ใบผ่านหน้าจอด้วย worker คนละตัวในเวลาเดียวกัน แล้วได้เลขชุดเดียวกันพอดี
+  //    → ชน leads_pkey แบบสุ่ม · รันเดี่ยวผ่าน รันรวมพัง = เทสต์ที่เชื่อผลไม่ได้
+  //    ประเด็นของเทสต์นี้คือ "สองสาขาใช้เลขเดียวกันได้" ตัวเลขเป็นอะไรก็ได้ ขอแค่ทั้งคู่ใช้ตัวเดียวกัน
+  //    จึงใช้รูปแบบที่ตัวออกเลขของแอปไม่มีทางสร้างได้ (มีตัวอักษรตรงส่วนที่แอปใช้ตัวเลขล้วน)
+  //
+  //    และต้องไม่มีคำว่า ZZTEST อยู่ในเลขด้วย — เป็นแท็กที่ funcHelpers.cleanup() ใช้กวาดข้อมูล
+  //    (`leads.delete().like("id", "%ZZTEST%")`) เทสต์ชุด func-* จะลบแถวของเทสต์นี้ทิ้งกลางคัน
+  const LID = "#L-RLSPAIR";
+  const QID = "Q-RLSPAIR-01";
   try {
     const a = await ryg.from("leads").insert({ id: LID, dealer_code: "RYG", company: "ทดสอบ RYG", status: "WAITING" }).select();
     const b = await cnx.from("leads").insert({ id: LID, dealer_code: "CNX", company: "ทดสอบ CNX", status: "WAITING" }).select();

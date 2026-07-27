@@ -3,7 +3,7 @@
 // ─── HQ · บันทึกการใช้งาน (Audit Log) — ตรวจว่า admin ของ HQ ทำอะไรไปบ้าง ──────
 import { useMemo, useState } from "react";
 import { ScrollText, Search, X, User, Activity } from "lucide-react";
-import { useAuditEntries } from "@pms/shared/lib/useAudit";
+import { useAuditEntries, AUDIT_READ_CAP } from "@pms/shared/lib/useAudit";
 import { hqAuditCategory, HQ_NOTIF_EVENTS } from "@pms/shared/lib/mock";
 import { useFilters, APP_NOW, parseDate } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -101,6 +101,13 @@ export default function HQAuditPage() {
           {users.map(u => <option key={u} value={u}>{u}</option>)}
         </select>
       </div>
+
+      {/* ชนเพดานอ่าน (M8) — แจ้งชัด ไม่ตัดเงียบ: กำลังดูเฉพาะล่าสุด N รายการ */}
+      {entries.length >= AUDIT_READ_CAP && (
+        <div className="card" style={{ padding: "9px 14px", marginBottom: 12, fontSize: "0.76rem", color: "#92400e", background: "#fff8e6", border: "1px solid #fde68a" }}>
+          แสดงเฉพาะ {AUDIT_READ_CAP.toLocaleString()} รายการล่าสุด (ตัวกรอง/ค้นหาทำงานบนช่วงนี้) — บันทึกที่เก่ากว่านี้ยังอยู่ในระบบ
+        </div>
+      )}
 
       {/* ตาราง */}
       <div className="card">

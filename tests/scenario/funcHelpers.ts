@@ -63,9 +63,12 @@ export function db(who: Account): Promise<SupabaseClient> {
   return p;
 }
 
-/** รอจนแถวโผล่ใน DB — การเขียนผ่าน UI เป็น async ต้องรอ ไม่ใช่เช็คทันที */
+/** รอจนแถวโผล่ใน DB — การเขียนผ่าน UI เป็น async ต้องรอ ไม่ใช่เช็คทันที
+ *  ค่าเริ่มต้น 25s: เทสต์ทั้งชุดรันหลาย worker ถล่ม dev server ตัวเดียวที่คอมไพล์ route ครั้งแรกไปด้วย
+ *  การเขียน optimistic → propagate ถึง DB จึงช้าเป็นครั้งคราว · 15s เดิมตึงเกินตอนรันขนานเต็มชุด
+ *  (เป็น latency ของสภาพทดสอบ ไม่ใช่บั๊ก · ตัว test มี budget 180–240s เหลือเฟือ) */
 export async function waitRow<T = Record<string, unknown>>(
-  sb: SupabaseClient, table: string, match: Record<string, unknown>, timeoutMs = 15_000,
+  sb: SupabaseClient, table: string, match: Record<string, unknown>, timeoutMs = 25_000,
 ): Promise<T> {
   const started = Date.now();
   let last: unknown = null;
@@ -92,20 +95,38 @@ export async function waitGone(
 }
 
 /** ป้ายกำกับของข้อมูลทดสอบ — ใช้ค้นหาและกวาดทิ้งได้แน่นอน */
+// TAG = คำนำหน้าร่วมของ "ทุก" ข้อมูลทดสอบ — สวีปทั้งหมดได้ด้วย %ZZTEST%
 export const TAG = "ZZTEST";
 export const tagged = (s: string) => `${TAG}-${s}`;
 
-/** กวาดข้อมูลทดสอบทิ้งทุกตาราง — เรียกทั้งก่อนและหลังชุดเทสต์ */
-export async function cleanup(sb: SupabaseClient, dealerCode: string) {
-  await sb.from("customer_notes").delete().like("title", `%${TAG}%`);
-  await sb.from("quotations").delete().eq("dealer_code", dealerCode).like("customer", `%${TAG}%`);
-  await sb.from("quotations").delete().eq("dealer_code", dealerCode).like("id", `%${TAG}%`);
+// ⚠️ ทุกสเปก func-* รันกับ RYG ตัวจริงตัวเดียวกัน และ playwright รันหลายไฟล์ขนานกัน (workers>1)
+//   ถ้าใช้ tag ร่วม "ZZTEST" แล้ว cleanup ลบตาม tag นั้น → สเปกหนึ่งจะลบข้อมูลของอีกสเปก
+//   ที่กำลังรันอยู่กลางคัน (func-dealer-sales เขียนคอมเมนต์เตือนไว้เอง)
+//   → แต่ละสเปกต้องมี "ช่องของตัวเอง": specNS("APPT") = "ZZTEST-APPT" แล้วตั้งชื่อข้อมูลใต้ช่องนั้น
+//     cleanup(sb, dealer, ns) จะลบเฉพาะ %ZZTEST-APPT% ไม่แตะของสเปกอื่น (ยัง sweep รวมด้วย %ZZTEST% ได้)
+export const specNS = (name: string) => `${TAG}-${name}`;
+export const nsTag = (ns: string) => (s: string) => `${ns}-${s}`;
+
+/** กวาดข้อมูลทดสอบทิ้งทุกตาราง — เรียกทั้งก่อนและหลังชุดเทสต์ · tag = ช่องของสเปก (ค่าเริ่มต้น = ร่วม) */
+export async function cleanup(sb: SupabaseClient, dealerCode: string, tag: string = TAG) {
+  await sb.from("customer_notes").delete().like("title", `%${tag}%`);
+  await sb.from("quotations").delete().eq("dealer_code", dealerCode).like("customer", `%${tag}%`);
+  await sb.from("quotations").delete().eq("dealer_code", dealerCode).like("id", `%${tag}%`);
   // appointments ไม่มีคอลัมน์ customer (ของจริงคือ company/province)
   // เดิมสั่งลบด้วย customer → PostgREST ตอบ error เงียบ ๆ แถวทดสอบเก่าจึงค้างสะสม
   // แล้วทำให้เทสต์รอบถัดไปไปเจอแถวเก่าแทนแถวที่เพิ่งสร้าง (เคยหลงคิดว่าโค้ดออกเลขผิด)
-  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("company", `%${TAG}%`);
-  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("province", `%${TAG}%`);
-  await sb.from("customers").delete().eq("dealer_code", dealerCode).like("company", `%${TAG}%`);
-  await sb.from("leads").delete().eq("dealer_code", dealerCode).like("company", `%${TAG}%`);
-  await sb.from("leads").delete().like("id", `%${TAG}%`);
+  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("company", `%${tag}%`);
+  await sb.from("appointments").delete().eq("dealer_code", dealerCode).like("province", `%${tag}%`);
+  await sb.from("customers").delete().eq("dealer_code", dealerCode).like("company", `%${tag}%`);
+  await sb.from("leads").delete().eq("dealer_code", dealerCode).like("company", `%${tag}%`);
+  await sb.from("leads").delete().like("id", `%${tag}%`);
+  // ไฟล์ทดสอบ: ลบทั้งแถวใน DB และไบต์ใน Storage (ชื่อไฟล์ทดสอบมี tag)
+  //   เดิม cleanup ไม่แตะตาราง files → แถวเก่าสะสมข้ามรัน แล้ว waitRow(files) ไปเจอแถวเก่า
+  //   ที่ไบต์ถูก afterAll รอบก่อนลบไปแล้ว → signedUrl ล้ม (เทสต์ happy path แกว่งแบบสุ่ม)
+  const { data: testFiles } = await sb.from("files").select("id,storage_path")
+    .eq("dealer_code", dealerCode).like("name", `%${tag}%`);
+  for (const tf of testFiles ?? []) {
+    if (tf.storage_path) await sb.storage.from("dealer-files").remove([tf.storage_path as string]);
+    await sb.from("files").delete().eq("id", tf.id);
+  }
 }

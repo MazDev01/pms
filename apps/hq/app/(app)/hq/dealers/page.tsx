@@ -9,6 +9,7 @@ import {
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
+import { createDealerAccount } from "@pms/shared/lib/adminApi";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
@@ -159,6 +160,7 @@ function HQDealersPageInner() {
   // ผู้ใช้แก้ช่องเป้าเองหรือยัง — ถ้ายัง เปลี่ยนภาคจะเติมค่าเริ่มต้นตามภาคให้ (โหมดเพิ่มใหม่เท่านั้น)
   const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
+  const [creating, setCreating] = useState(false); // กำลังสร้างบัญชีที่เซิร์ฟเวอร์ — กันกดปุ่มซ้ำระหว่างรอ
   // โมดัลเดียวใช้ 2 กรณี — สร้างตัวแทนใหม่ / รีเซ็ตรหัสผ่าน · ข้อความต้องตรงกับสิ่งที่เพิ่งเกิดจริง
   const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials; mode: "created" | "reset" } | null>(null);
   const [viewCredsDealer, setViewCredsDealer] = useState<DealerRow | null>(null);
@@ -201,7 +203,7 @@ function HQDealersPageInner() {
     setForm(f => ({ ...f, region, revenueTarget: (!editTarget && !targetTouched) ? regionDefaultTarget(region) : f.revenueTarget }));
   }
 
-  function save() {
+  async function save() {
     const code = form.code.trim().toUpperCase();
     if (!code) { setFormErr("ต้องระบุรหัสตัวแทน"); return; }
     if (!form.name.trim()) { setFormErr("ต้องระบุชื่อตัวแทน"); return; }
@@ -213,13 +215,35 @@ function HQDealersPageInner() {
       setDealers(prev => prev.map(d => d.id === editTarget.id ? { ...d, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status } : d));
       logAudit("แก้ไขตัวแทน", `${code} · ${form.name.trim()}`);
       setShowForm(false);
-    } else {
-      const creds = genCredentials(code);
-      setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status, credentials: creds }]);
+      return;
+    }
+
+    // ── สร้างตัวแทนใหม่ ──
+    // โหมดจริง: ต้องสร้าง "บัญชีเข้าระบบ" ด้วย ซึ่งทำได้เฉพาะที่เซิร์ฟเวอร์ (service_role) → เรียก route (H5)
+    //   เดิมสร้างแค่แถว dealers + โชว์รหัสปลอม → ตัวแทนล็อกอินไม่ได้เลย (บั๊ก H5)
+    if (DATA_SOURCE === "supabase") {
+      setCreating(true);
+      setFormErr("");
+      const res = await createDealerAccount({
+        code, name: form.name.trim(), province: form.province.trim(),
+        region: form.region, revenueTarget: form.revenueTarget,
+      });
+      setCreating(false);
+      if (!res.ok) { setFormErr(res.error); return; } // ล้มเหลวต้องบอกจริง คงฟอร์มไว้ให้แก้
+      await dealersRepo.list().then(setDealers).catch(() => {}); // route เพิ่งเพิ่มแถวที่เซิร์ฟเวอร์ → ดึงชุดจริง
       logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
       setShowForm(false);
-      setCredsModal({ name: form.name.trim(), creds, mode: "created" });
+      // รหัสจริงจากเซิร์ฟเวอร์ (บัญชีล็อกอินได้แล้วจริง) — โชว์ให้ก๊อปไปแจ้งครั้งเดียว
+      setCredsModal({ name: form.name.trim(), creds: { email: res.email, password: res.password }, mode: "created" });
+      return;
     }
+
+    // โหมดเดโม (local): ไม่มีบัญชีจริงให้ผูก — คงพฤติกรรมเดิมไว้เล่นได้
+    const creds = genCredentials(code);
+    setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status, credentials: creds }]);
+    logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
+    setShowForm(false);
+    setCredsModal({ name: form.name.trim(), creds, mode: "created" });
   }
 
   function remove(d: DealerRow) {
@@ -477,9 +501,10 @@ function HQDealersPageInner() {
               </InputField>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-                <button onClick={() => setShowForm(false)} className="btn btn-secondary btn-md">ยกเลิก</button>
-                <button onClick={save} className="btn btn-primary btn-md">
-                  {editTarget ? "บันทึกการแก้ไข" : "สร้างตัวแทน"}
+                <button onClick={() => setShowForm(false)} disabled={creating} className="btn btn-secondary btn-md">ยกเลิก</button>
+                <button onClick={() => void save()} disabled={creating} className="btn btn-primary btn-md"
+                  style={creating ? { opacity: .6, cursor: "not-allowed" } : undefined}>
+                  {editTarget ? "บันทึกการแก้ไข" : creating ? "กำลังสร้างบัญชี…" : "สร้างตัวแทน"}
                 </button>
               </div>
             </div>

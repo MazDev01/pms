@@ -94,8 +94,74 @@ export interface UsersRepo {
 }
 
 export interface AuditRepo {
-  list(): Promise<AuditEntry[]>;
+  /** อ่านบันทึกล่าสุดสูงสุด `limit` รายการ (ใหม่→เก่า) — audit_log โตไม่จำกัด จึงมีเพดานอ่านเสมอ (M8)
+   *  ไม่ส่ง limit = ใช้ค่า default ของ adapter · หน้า /hq/audit แจ้งเมื่อชนเพดาน (ไม่ตัดเงียบ) */
+  list(limit?: number): Promise<AuditEntry[]>;
   append(e: Omit<AuditEntry, "id" | "at">): Promise<void>;
+}
+
+// ── ตัวชี้วัดที่รวมยอดที่ DB (M9 Phase 1) — client ไม่ต้องดึงทุกแถวมารวมเอง ──
+/** rollup ผลงานรายสาขา — นิยามตรงกับ useDealerPerformance (parity บังคับ) */
+export interface DealerRollup {
+  quotes: number;
+  won: number;
+  lost: number;
+  /** Σ มูลค่าใบ won ที่ปีของ date = ปีที่ขอ */
+  revenue: number;
+  /** ลีดที่ยังไม่ปิด (status ไม่ใช่ PAID/CANCELLED) */
+  openLeads: number;
+}
+/** สถิติใบเสนอราคารายสาขา "ในช่วงวันที่" — ป้อน Scorecard (ผลรวม) + dealerStats ของ /hq/dashboard */
+export interface QuoteRangeRow {
+  quotes: number;
+  won: number;
+  lost: number;
+  /** Σ total_value ของใบ won ในช่วง */
+  wonVal: number;
+  /** Σ total_value ของทุกใบในช่วง */
+  quoteVal: number;
+}
+/** สรุปใบเสนอราคาของ /hq/dashboard ในช่วง — 3 ชุด ป้อนได้หลายการ์ดในรอบเดียว */
+export interface QuoteMonthRow { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number; }
+export interface QuoteStatusRow { status: string; count: number; value: number; }
+export interface QuoteProductRow { product: string | null; value: number; projects: number; }
+export interface DashboardQuoteSummary {
+  byMonth: QuoteMonthRow[];
+  byStatus: QuoteStatusRow[];
+  byProduct: QuoteProductRow[];
+}
+/** สรุปใบเสนอราคา "หลังกรอง" สำหรับ /hq/quotations (M9 Phase 2) — ป้อน analytics ทั้งหน้า */
+export interface QuoteDealerRow { dealerCode: string; count: number; value: number; sent: number; won: number; lost: number; wonVal: number; }
+export interface QuoteAgingRow { bucket: string; count: number; value: number; }
+export interface HQQuotationsSummary {
+  byDealer: QuoteDealerRow[];
+  byMonth: QuoteMonthRow[];
+  byProduct: QuoteProductRow[];
+  aging: QuoteAgingRow[];
+}
+/** ชุดกรองของหน้า quotations — derived filter (region/province/ชื่อ→dealerCodes · product→productLines) resolve มาก่อน */
+export interface QuoteSummaryFilters {
+  status?: string;
+  dealerCodes?: string[];
+  productLines?: string[];
+  search?: string;
+  /** รหัสตัวแทนที่ชื่อ/รหัส match คำค้น — OR เข้ากับ id/customer (ให้ search ตรงกับ client ที่ค้นชื่อตัวแทนได้) */
+  searchDealers?: string[];
+  dateStart?: string;
+  dateEnd?: string;
+  asOf?: string; // "วันนี้ของระบบ" (APP_NOW ISO) สำหรับคิดอายุใบ
+}
+export interface MetricsRepo {
+  /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง
+   *  scope คุมด้วย RLS ฝั่ง supabase (ตัวแทน=สาขาตน · HQ=ทั้งเครือ) เหมือนที่ client เคยเห็น */
+  dealerRollup(year: number): Promise<Map<string, DealerRollup>>;
+  /** สรุปใบหลังกรอง (byDealer/byMonth/byProduct/aging) — ป้อน analytics หน้า /hq/quotations (M9 Phase 2) */
+  hqQuotationsSummary(filters: QuoteSummaryFilters): Promise<HQQuotationsSummary>;
+  /** สถิติใบในช่วง [start,end] (ISO YYYY-MM-DD, inclusive) รายสาขา (key = dealerCode)
+   *  dealer ระบุ = ดูตัวแทนรายตัว (selDealer) · ไม่ระบุ = ทั้ง scope · parity กับ winQuotes ฝั่ง client */
+  networkQuoteRange(start: string, end: string, dealer?: string): Promise<Map<string, QuoteRangeRow>>;
+  /** สรุปใบในช่วง (byMonth/byStatus/byProduct) รอบเดียว — ป้อนการ์ด dashboard หลายใบ (M9) */
+  dashboardQuoteSummary(start: string, end: string, dealer?: string): Promise<DashboardQuoteSummary>;
 }
 
 // ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
@@ -103,13 +169,33 @@ export interface AuditRepo {
 // ฝั่ง Supabase: dealer_code ต้องตรงสาขา session (บังคับด้วย RLS with-check ที่ DB)
 export interface LeadsRepo {
   list(scope?: Scope): Promise<LeadRow[]>;
+  /** เลข num_id ถัดไปของสาขาแบบ atomic (M7) — supabase: RPC next_entity_id · local: max+1
+   *  id ที่แสดง (#L-....) แอป derive จาก num_id นี้ · เดิม Math.max+1 ฝั่ง client ชนกันได้ */
+  nextNumId(dealerCode: string): Promise<number>;
   create(row: LeadRow): Promise<LeadRow>;
   update(row: LeadRow): Promise<LeadRow>;
   remove(id: string): Promise<void>;
   setStatus(id: string, status: LeadRow["status"]): Promise<void>;
 }
+/** ตัวเลือกดึงใบแบบ "แบ่งหน้า + กรอง + เรียง ที่ DB" (M9 Phase 2) — ผู้เรียก resolve derived filter มาก่อน
+ *  (region/province/ชื่อตัวแทน → dealerCodes · product → productLines) เหลือแต่คอลัมน์จริงส่งให้ DB */
+export interface QuoteListOpts {
+  limit: number;
+  offset: number;
+  sort?: { col: "date" | "total_value" | "status" | "id"; dir: "asc" | "desc" };
+  status?: string;              // สถานะเดียว (เว้น = ทุกสถานะ)
+  dealerCodes?: string[];       // dealer_code in (...) — จาก dealer/region/province/ค้นหาชื่อ
+  productLines?: string[];      // product_line in (...) — จาก product filter (รวม mainTemplate ที่ resolve แล้ว)
+  search?: string;              // ilike บน id/customer
+  searchDealers?: string[];     // รหัสตัวแทนที่ชื่อ/รหัส match คำค้น — OR เข้ากับ search (ค้นชื่อตัวแทน)
+  dateStart?: string;           // ISO YYYY-MM-DD (inclusive) บนคอลัมน์ date
+  dateEnd?: string;
+}
+export interface QuoteListResult { rows: QuotationMock[]; total: number; }
 export interface QuotationsRepo {
   list(scope?: Scope): Promise<QuotationMock[]>;
+  /** หน้าเดียวของใบ + จำนวนรวมหลังกรอง (M9 Phase 2) — supabase: query ที่ DB · local: filter/sort/slice array */
+  listPage(scope: Scope | undefined, opts: QuoteListOpts): Promise<QuoteListResult>;
   create(row: QuotationMock): Promise<QuotationMock>;
   update(row: QuotationMock): Promise<QuotationMock>;
   remove(id: string): Promise<void>;
@@ -117,6 +203,10 @@ export interface QuotationsRepo {
   /** เลขที่ใบต่อสาขาแบบ atomic (supabase=RPC · local=max+1)
    *  prefix = คำนำหน้าที่ "ตัวแทน" ตั้งเอง (ตั้งค่า › ใบเสนอราคา) — ผู้เรียกส่งมาให้ ไม่ใช่ adapter ไปอ่านเอง */
   nextQuoteNo(dealer: string, prefix?: string): Promise<string>;
+  /** ออกเลขที่ใบ + insert ใน "ทรานแซกชันเดียว" (atomic) — insert ล้ม = เลขไม่หาย (H8)
+   *  รับ row ที่ "ยังไม่มี id" (DB เป็นคนออกเลขให้) · คืนใบที่บันทึกจริงพร้อมเลขที่
+   *  supabase: RPC create_quotation (ออกเลข+insert รวด) · local: max+1 แล้ว insert (เธรดเดียว = atomic) */
+  createNumbered(dealer: string, prefix: string | undefined, row: Omit<QuotationMock, "id">): Promise<QuotationMock>;
   /** ปิดใบที่ "ส่งแล้ว" และเลยวันหมดอายุ → สถานะ expired · asOf = วันนี้ของระบบ (YYYY-MM-DD) · คืนจำนวนใบที่ปิด */
   expireOverdue(asOf: string, scope?: Scope): Promise<number>;
 }
@@ -165,6 +255,12 @@ export interface RealtimePort {
   subscribeCatalog(onChange: () => void): () => void;
   /** นโยบาย/เป้า/กฎแจ้งเตือนของ HQ เปลี่ยน → ฝั่งตัวแทนใช้ค่าใหม่ทันที (VAT/อายุใบมีผลกับการคิดเงิน) */
   subscribeSettings(onChange: () => void): () => void;
+  /** โน้ตลูกค้าเปลี่ยน (เพิ่ม/แก้/ลบ จากอีกแท็บ/อีกเครื่อง) → โหลดโน้ตใหม่
+   *  แยกช่องจาก subscribeSales เพราะโน้ตไม่ได้อยู่ในสี่ตารางงานขาย (0028 เปิด Realtime ให้แล้ว) */
+  subscribeNotes(onChange: () => void): () => void;
+  /** ตั้งค่าของสาขา (หัวกระดาษ/เอกสาร/โลโก้/แจ้งเตือน) เปลี่ยนจากอีกแท็บ/อีกเครื่อง → โหลดใหม่ (M4)
+   *  0024 เปิด Realtime ให้ dealer_settings แล้ว · RLS กรองให้เห็นเฉพาะของสาขาตัวเอง */
+  subscribeDealerSettings(onChange: () => void): () => void;
 }
 
 // ── รวมทุก repository เป็น adapter เดียว ──
@@ -182,6 +278,7 @@ export interface DataAdapter {
   notes: NotesRepo;
   users: UsersRepo;
   audit: AuditRepo;
+  metrics: MetricsRepo;
   leads: LeadsRepo;
   quotations: QuotationsRepo;
   customers: CustomersRepo;

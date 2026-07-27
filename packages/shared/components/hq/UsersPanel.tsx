@@ -5,13 +5,14 @@
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
 import { useState, useMemo, useRef, useEffect } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { users as usersRepo } from "@pms/shared/lib/data";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 import type { UserRole } from "@pms/shared/lib/mock";
 import {
   Users, Shield, Check, X, Plus, Search, KeyRound, Copy, RefreshCw, MoreHorizontal,
@@ -219,7 +220,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [dialogUser, setDialogUser] = useState<AppUser | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<AppUser | null>(null);
-  const [resetInfo, setResetInfo] = useState<{ user: AppUser; pw: string } | null>(null);
+  const [resetInfo, setResetInfo] = useState<{ user: AppUser } | null>(null);
   const [menu, setMenu] = useState<{ user: AppUser; x: number; y: number } | null>(null);
   const [matrixRole, setMatrixRole] = useState<RoleKey>("SUPER_ADMIN");
 
@@ -263,7 +264,9 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     logAudit("เพิ่มผู้ใช้ HQ", data.email);
   }
   function toggleStatus(u: AppUser) { update(u.id, { status: u.status === "active" ? "inactive" : "active" }); logAudit(u.status === "active" ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้", u.email); }
-  function resetPassword(u: AppUser) { const pw = genTempPassword(u.email + Date.now()); setResetInfo({ user: u, pw }); logAudit("รีเซ็ตรหัสผ่านผู้ใช้", u.email); }
+  // H4 — รีเซ็ตรหัสผ่าน = "ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล" (ไม่ใช่ออกรหัสปลอมแล้วโชว์แบบเดิม)
+  // เดิม genTempPassword() สร้างสตริงที่ล็อกอินไม่ได้จริง + ลง audit ว่ารีเซ็ตแล้วทั้งที่ไม่เคยส่งไปที่ระบบยืนยันตัวตน
+  function resetPassword(u: AppUser) { setResetInfo({ user: u }); }
 
   const th = (label: string, key?: SortKey) => (
     <th style={key ? { cursor: "pointer", userSelect: "none" } : undefined} onClick={key ? () => setSort(s => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" })) : undefined}>
@@ -385,18 +388,68 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       {addOpen && <UserDialog onSave={data => saveUser(null, data)} onClose={() => setAddOpen(false)} />}
       {dialogUser && <UserDialog initial={dialogUser} onSave={data => saveUser(dialogUser.id, data)} onClose={() => setDialogUser(null)} />}
 
-      {/* Reset password result (แสดงรหัสใหม่ให้คัดลอก) */}
+      {/* Reset password = ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล (H4) */}
       {resetInfo && (
-        <div onClick={() => setResetInfo(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
-            <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}><div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><KeyRound size={16} /> รีเซ็ตรหัสผ่านแล้ว</div><button onClick={() => setResetInfo(null)} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button></div>
-            <div style={{ padding: 20 }}>
-              <div style={{ fontSize: "0.82rem", color: MUTED, marginBottom: 12 }}>รหัสผ่านชั่วคราวใหม่ของ <strong style={{ color: STEEL }}>{resetInfo.user.name}</strong> — แจ้งให้ผู้ใช้เปลี่ยนเองหลังเข้าระบบ</div>
-              <CopyField label="รหัสผ่านชั่วคราว" value={resetInfo.pw} />
-            </div>
-          </div>
-        </div>
+        <ResetEmailDialog user={resetInfo.user}
+          onSent={email => logAudit("ส่งลิงก์รีเซ็ตรหัสผ่าน", email)}
+          onClose={() => setResetInfo(null)} />
       )}
+    </div>
+  );
+}
+
+// ── H4 · ส่งลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล ─────────────────────────────────────────
+// อ่าน "อีเมลล็อกอิน" จาก auth.users ที่ฝั่ง client ไม่ได้ (ต้อง service_role) → ให้ผู้ดูแลยืนยันอีเมล
+// (เติมอีเมลติดต่อไว้เป็นค่าเริ่มต้น) แล้วส่งลิงก์ · Supabase ตอบสำเร็จแม้ไม่พบอีเมล (กัน enumeration)
+function ResetEmailDialog({ user, onSent, onClose }: { user: AppUser; onSent: (email: string) => void; onClose: () => void }) {
+  const [email, setEmail] = useState(user.email || "");
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [err, setErr] = useState("");
+  async function send() {
+    setErr("");
+    if (DATA_SOURCE !== "supabase") { setErr("โหมดเดโม: ส่งลิงก์รีเซ็ตจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)"); return; }
+    setState("sending");
+    const r = await sbSendPasswordReset(email);
+    if (!r.ok) { setState("idle"); setErr(r.error); return; }
+    setState("sent"); onSent(email.trim().toLowerCase());
+  }
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+        <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><KeyRound size={16} /> รีเซ็ตรหัสผ่าน</div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: 20 }}>
+          {state === "sent" ? (
+            <div style={{ textAlign: "center" }}>
+              <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#e7f6ee", display: "flex", alignItems: "center", justifyContent: "center", margin: "4px auto 12px" }}><Check size={22} color="#059669" /></div>
+              <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL, marginBottom: 6 }}>ส่งลิงก์แล้ว</div>
+              <div style={{ fontSize: "0.78rem", color: MUTED, lineHeight: 1.6 }}>
+                ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ <strong style={{ color: STEEL }}>{email}</strong> แล้ว · ผู้ใช้กดลิงก์ในอีเมลเพื่อตั้งรหัสเอง
+              </div>
+              <button onClick={onClose} className="btn btn-secondary btn-md" style={{ marginTop: 16 }}>ปิด</button>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: "0.82rem", color: MUTED, marginBottom: 12 }}>
+                ส่งลิงก์ตั้งรหัสผ่านใหม่ให้ <strong style={{ color: STEEL }}>{user.name}</strong> — ยืนยันอีเมลที่ใช้เข้าสู่ระบบ
+              </div>
+              <label style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, display: "block", marginBottom: 5 }}>อีเมลเข้าสู่ระบบ</label>
+              <input value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} placeholder="name@benjamin.co.th"
+                style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              {err && <div style={{ fontSize: "0.74rem", color: "#dc2626", fontWeight: 600, marginTop: 8 }}>{err}</div>}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
+                <button onClick={() => void send()} disabled={state === "sending" || !email} className="btn btn-primary btn-md"
+                  style={state === "sending" || !email ? { opacity: .6, cursor: "not-allowed" } : undefined}>
+                  {state === "sending" ? "กำลังส่ง…" : "ส่งลิงก์รีเซ็ต"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

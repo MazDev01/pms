@@ -9,7 +9,7 @@ import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REA
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
-import type { DataAdapter } from "../ports";
+import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
@@ -39,7 +39,12 @@ type RowsResult = { data: unknown[] | null; error: { message: string } | null };
 
 // ไล่ดึงทุกหน้าจนครบ · ต้องมี ORDER ที่เสถียรเสมอ ไม่งั้นแบ่งหน้าแล้วแถวซ้ำ/ตกหล่นได้
 // (Postgres ไม่รับประกันลำดับถ้าไม่ระบุ order)
-async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult>): Promise<Row[]> {
+// ── กันเบราว์เซอร์ค้าง (M8) ──
+// pageAll วนดึงทีละ PAGE_ROWS จน "หมดตาราง" — ที่สเกลใหญ่ (หลายแสนแถว) โหลดทั้งก้อนเข้าหน่วยความจำ
+// = แท็บค้าง/ตาย · ใส่เพดานแข็ง: เกินแล้ว "หยุด + เตือนดังในคอนโซล" (ไม่เงียบ) แทนที่จะค้างจนตาย
+// การแก้จริงที่สเกลนั้นคือ server-side paging/aggregate (M8 เต็ม/M9) ไม่ใช่ดันเพดานนี้ให้สูงขึ้น
+const PAGE_HARD_CAP = 50000;
+async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult>, label = "table"): Promise<Row[]> {
   const out: Row[] = [];
   for (let from = 0; ; from += PAGE_ROWS) {
     const { data, error } = await run(from, from + PAGE_ROWS - 1);
@@ -47,6 +52,10 @@ async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult
     const rows = (data ?? []) as Row[];
     out.push(...rows);
     if (rows.length < PAGE_ROWS) break;
+    if (out.length >= PAGE_HARD_CAP) {
+      console.warn(`[pageAll] "${label}" เกิน ${PAGE_HARD_CAP.toLocaleString()} แถว — หยุดโหลดเพื่อกันเบราว์เซอร์ค้าง · ข้อมูลที่ได้ไม่ครบ ต้องทำ server-side paging/aggregate (M8/M9)`);
+      break;
+    }
   }
   return out;
 }
@@ -56,7 +65,7 @@ async function selectScoped<T>(table: string, scope?: Scope, col = "dealer_code"
   const rows = await pageAll((from, to) => {
     const base = sb().from(table).select("*").order(orderCol, { ascending: true }).range(from, to);
     return scope && !scope.isHQ && scope.dealerCode ? base.eq(col, scope.dealerCode) : base;
-  });
+  }, table);
   return toCamelList<T>(rows);
 }
 
@@ -105,13 +114,19 @@ function rowToLead(row: Row): LeadRow {
 // ── quotations: QuotationMock ↔ DB — area number↔text (คอลัมน์ area เป็น text) ──
 function quoteToRow(q: QuotationMock): Row {
   const r = toSnake(q as unknown as Row);
+  delete r.product_line; // คอลัมน์ generated (0041) — เขียนไม่ได้ · เผลอส่งไป Postgres จะปฏิเสธทั้งคำสั่ง
   if (r.area != null) r.area = String(r.area);
+  // customer_id: แอปใช้ 0 = "ยังไม่มีลูกค้า" (ออกใบให้ลีด) → เก็บเป็น NULL ที่ DB (M6)
+  // เพื่อให้ใส่ FK (dealer_code, customer_id) → customers ได้ · 0 ไม่ใช่ id ลูกค้าจริง (เริ่มที่ 1)
+  if (!r.customer_id) r.customer_id = null;
   return r;
 }
 function rowToQuote(row: Row): QuotationMock {
   const q = toCamel<Record<string, unknown>>(row);
   if (typeof q.area === "string" && q.area !== "") q.area = Number(q.area);
   else if (q.area === "" || q.area === null) q.area = 0;
+  // NULL จาก DB → 0 ที่แอปคาดหวัง (ตรรกะฝั่งแอปยังใช้ 0 เหมือนเดิม ไม่ต้องแก้ทั้งแอป)
+  if (q.customerId == null) q.customerId = 0;
   return q as unknown as QuotationMock;
 }
 
@@ -129,7 +144,7 @@ function rowToAppt(row: Row): AppointmentMock {
 }
 
 // เลข id ถัดไปต่อสาขาแบบ atomic — DB เป็นคนออกให้ (กันชนเมื่อสร้างพร้อมกันในสาขาเดียวกัน)
-async function nextEntityId(dealerCode: string, entity: "customers" | "appointments"): Promise<number> {
+async function nextEntityId(dealerCode: string, entity: "customers" | "appointments" | "leads"): Promise<number> {
   const { data, error } = await sb().rpc("next_entity_id", { p_dealer: dealerCode, p_entity: entity });
   if (error) throw new Error(error.message);
   return Number(data);
@@ -208,6 +223,20 @@ export const SupabaseAdapter: DataAdapter = {
       for (const t of ["hq_policy", "hq_targets", "hq_notif_rules", "hq_sales_journey"]) {
         ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
       }
+      ch.subscribe();
+      return () => { void sb().removeChannel(ch); };
+    },
+    // โน้ตลูกค้า — RLS กรอง event ให้เห็นเฉพาะของสาขาตัวเอง (0028 เปิด Realtime + replica identity full)
+    subscribeNotes: (onChange) => {
+      const ch = sb().channel(topic("notes-changes"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "customer_notes" }, () => onChange());
+      ch.subscribe();
+      return () => { void sb().removeChannel(ch); };
+    },
+    // ตั้งค่าของสาขา — 0024 เปิด Realtime + replica identity full · RLS กรองเฉพาะของสาขาตัวเอง (M4)
+    subscribeDealerSettings: (onChange) => {
+      const ch = sb().channel(topic("dealer-settings-changes"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "dealer_settings" }, () => onChange());
       ch.subscribe();
       return () => { void sb().removeChannel(ch); };
     },
@@ -374,7 +403,7 @@ export const SupabaseAdapter: DataAdapter = {
       // อีเมลล็อกอินอยู่ใน auth.users ซึ่ง client อ่านไม่ได้ (ต้อง service_role)
       // → แสดง contact_email ที่ผู้ใช้ตั้งเอง ไม่มีก็ขึ้น "—" ไม่กุอีเมลขึ้นมา
       const rows = await pageAll((from, to) =>
-        sb().from("profiles").select("*").order("created_at", { ascending: true }).range(from, to));
+        sb().from("profiles").select("*").order("created_at", { ascending: true }).range(from, to), "profiles");
       return rows.map(r => ({
         id: String(r.id),
         name: (r.name as string) || "",
@@ -395,17 +424,81 @@ export const SupabaseAdapter: DataAdapter = {
     canCreate: () => false,
   },
   audit: {
-    // อ่านเรียงล่าสุดก่อน (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ
-    list: async () => {
-      const rows = await pageAll((from, to) =>
-        sb().from("audit_log").select("*").order("id", { ascending: false }).range(from, to));
-      return rows.map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
+    // อ่านล่าสุดสูงสุด limit รายการ (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ
+    // audit_log เป็นตาราง append-only ที่โตไม่จำกัด (ทุก action ของ HQ ตลอดกาล) — เดิม pageAll ดึงทั้งหมด
+    // จึงมีเพดานอ่านเสมอ (M8) · หน้า /hq/audit แจ้งผู้ใช้เมื่อชนเพดาน (ไม่ตัดเงียบ)
+    list: async (limit = 5000) => {
+      const { data, error } = await sb().from("audit_log")
+        .select("*").order("id", { ascending: false }).range(0, Math.max(0, limit - 1));
+      if (error) throw new Error(error.message);
+      return (data as Row[]).map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
     },
     // ประทับ at ด้วย "วันนี้ของระบบ" (APP_NOW) + เวลาจริง → รายการอยู่ในช่วงตัวกรอง /hq/audit (แช่แข็งเวลา)
     append: (e) => {
       const t = new Date();
       const at = new Date(APP_NOW.getFullYear(), APP_NOW.getMonth(), APP_NOW.getDate(), t.getHours(), t.getMinutes(), t.getSeconds());
       return must(sb().from("audit_log").insert({ ...toSnake(e as unknown as Row), at: at.toISOString() }));
+    },
+  },
+
+  // rollup รายสาขา (M9 Phase 1) — รวมยอดที่ DB ผ่าน RPC dealer_rollup · RLS คุม scope (ตัวแทน=สาขาตน · HQ=ทั้งเครือ)
+  metrics: {
+    dealerRollup: async (year) => {
+      const { data, error } = await sb().rpc("dealer_rollup", { p_year: year });
+      if (error) throw new Error(error.message);
+      const m = new Map<string, DealerRollup>();
+      for (const r of (data as Row[]) ?? []) {
+        m.set(String(r.dealer_code), {
+          quotes: Number(r.quotes), won: Number(r.won), lost: Number(r.lost),
+          revenue: Number(r.revenue), openLeads: Number(r.open_leads),
+        });
+      }
+      return m;
+    },
+    networkQuoteRange: async (start, end, dealer) => {
+      const { data, error } = await sb().rpc("network_quote_range", { p_start: start, p_end: end, p_dealer: dealer ?? null });
+      if (error) throw new Error(error.message);
+      const m = new Map<string, QuoteRangeRow>();
+      for (const r of (data as Row[]) ?? []) {
+        m.set(String(r.dealer_code), {
+          quotes: Number(r.quotes), won: Number(r.won), lost: Number(r.lost),
+          wonVal: Number(r.won_val), quoteVal: Number(r.quote_val),
+        });
+      }
+      return m;
+    },
+    dashboardQuoteSummary: async (start, end, dealer) => {
+      const { data, error } = await sb().rpc("dashboard_quote_summary", { p_start: start, p_end: end, p_dealer: dealer ?? null });
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { byMonth?: Row[]; byStatus?: Row[]; byProduct?: Row[] };
+      return {
+        byMonth: (d.byMonth ?? []).map(r => ({
+          y: Number(r.y), m: Number(r.m), quotes: Number(r.quotes),
+          won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
+        })),
+        byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count), value: Number(r.value) })),
+        byProduct: (d.byProduct ?? []).map(r => ({ product: (r.product as string) ?? null, value: Number(r.value), projects: Number(r.projects) })),
+      };
+    },
+    hqQuotationsSummary: async (f) => {
+      const { data, error } = await sb().rpc("hq_quotations_summary", {
+        p_status: f.status ?? null, p_dealer_codes: f.dealerCodes ?? null, p_product_lines: f.productLines ?? null,
+        p_search: (f.search ?? "").trim() || null, p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
+        p_as_of: f.asOf ?? "2026-06-30", p_search_dealers: f.searchDealers ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { byDealer?: Row[]; byMonth?: Row[]; byProduct?: Row[]; aging?: Row[] };
+      return {
+        byDealer: (d.byDealer ?? []).map(r => ({
+          dealerCode: String(r.dealer_code), count: Number(r.count), value: Number(r.value),
+          sent: Number(r.sent), won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
+        })),
+        byMonth: (d.byMonth ?? []).map(r => ({
+          y: Number(r.y), m: Number(r.m), quotes: Number(r.quotes), won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
+        })),
+        byProduct: (d.byProduct ?? []).map(r => ({ product: (r.product as string) ?? null, value: Number(r.value), projects: Number(r.projects) })),
+        aging: (d.aging ?? []).map(r => ({ bucket: String(r.bucket), count: Number(r.count), value: Number(r.value) })),
+      };
     },
   },
 
@@ -416,9 +509,10 @@ export const SupabaseAdapter: DataAdapter = {
       const rows = await pageAll((from, to) => {
         const base = sb().from("leads").select("*").order("id", { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
-      });
+      }, "leads");
       return rows.map(rowToLead);
     },
+    nextNumId: (dealerCode) => nextEntityId(dealerCode, "leads"),
     create: async (row) => {
       const { data, error } = await sb().from("leads").insert(leadToRow(row)).select().single();
       if (error) throw new Error(error.message);
@@ -437,8 +531,29 @@ export const SupabaseAdapter: DataAdapter = {
       const rows = await pageAll((from, to) => {
         const base = sb().from("quotations").select("*").order("id", { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
-      });
+      }, "quotations");
       return rows.map(rowToQuote);
+    },
+    // หน้าเดียว + กรอง/เรียง ที่ DB (M9 Phase 2) — RLS คุม scope · derived filter ถูก resolve เป็นคอลัมน์จริงมาแล้ว
+    listPage: async (scope, opts) => {
+      const s = (opts.search ?? "").trim().replace(/[,()%*\\]/g, " ").trim(); // กันตัวอักษรที่ทำ or() พัง
+      let q = sb().from("quotations").select("*", { count: "exact" });
+      if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
+      if (opts.status) q = q.eq("status", opts.status);
+      if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
+      if (opts.productLines?.length) q = q.in("product_line", opts.productLines);
+      if (opts.dateStart) q = q.gte("date", opts.dateStart);
+      if (opts.dateEnd) q = q.lte("date", opts.dateEnd);
+      if (s) {
+        const parts = [`id.ilike.%${s}%`, `customer.ilike.%${s}%`];
+        if (opts.searchDealers?.length) parts.push(`dealer_code.in.(${opts.searchDealers.join(",")})`);
+        q = q.or(parts.join(","));
+      }
+      const col = opts.sort?.col ?? "date", asc = (opts.sort?.dir ?? "desc") === "asc";
+      q = q.order(col, { ascending: asc }).order("id", { ascending: true }).range(opts.offset, opts.offset + opts.limit - 1);
+      const { data, error, count } = await q;
+      if (error) throw new Error(error.message);
+      return { rows: (data as Row[]).map(rowToQuote), total: count ?? 0 };
     },
     create: async (row) => {
       const { data, error } = await sb().from("quotations").insert(quoteToRow(row)).select().single();
@@ -457,6 +572,16 @@ export const SupabaseAdapter: DataAdapter = {
       const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf });
       if (error) throw new Error(error.message);
       return Number(data ?? 0);
+    },
+    // ออกเลข + insert รวด (atomic) — RPC ที่ DB (0034) · insert ล้ม = ตัวนับ rollback ไม่เดิน (H8)
+    createNumbered: async (dealer, prefix, row) => {
+      const payload = quoteToRow(row as unknown as QuotationMock);
+      delete payload.id; delete payload.created_at; delete payload.dealer_code; // DB เป็นคนออกให้
+      const { data, error } = await sb().rpc("create_quotation", {
+        p_dealer: dealer, p_prefix: prefix ?? "Q-2026-", p_payload: payload,
+      });
+      if (error) throw new Error(error.message);
+      return rowToQuote(data as Row);
     },
     // เลขที่ใบต่อสาขาแบบ atomic (กันเลขชนเมื่อออกพร้อมกัน/ข้ามสาขา) — RPC ที่ DB (0003)
     nextQuoteNo: async (dealer, prefix) => {
@@ -482,7 +607,7 @@ export const SupabaseAdapter: DataAdapter = {
       const rows = await pageAll((from, to) => {
         const base = sb().from("appointments").select("*").order("id", { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
-      });
+      }, "appointments");
       return rows.map(rowToAppt);
     },
     create: async (row) => {

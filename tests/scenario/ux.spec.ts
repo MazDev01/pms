@@ -118,10 +118,11 @@ test("[ux·hq] หน้าผู้ใช้ HQ เฉพาะ HQ + stat/matri
   await expect(page.getByText("Permission Matrix", { exact: false })).toBeVisible();
   // ต้องไม่มีผู้ใช้ของ Dealer (role เซลส์ตัวแทนหายไป)
   await expect(page.getByText("เซลส์ตัวแทน")).toHaveCount(0);
-  // action dropdown → รีเซ็ตรหัสผ่าน → modal รหัสใหม่
+  // action dropdown → รีเซ็ตรหัสผ่าน → โมดัล "ส่งลิงก์อีเมล" (H4 · เดิมเป็นรหัสชั่วคราวปลอม)
   await page.getByRole("button", { name: "จัดการ" }).first().click();
   await page.getByRole("button", { name: "รีเซ็ตรหัสผ่าน" }).click();
-  await expect(page.getByText("รีเซ็ตรหัสผ่านแล้ว")).toBeVisible();
+  await expect(page.getByRole("button", { name: "ส่งลิงก์รีเซ็ต" })).toBeVisible();
+  await expect(page.getByText("รหัสผ่านชั่วคราว")).toHaveCount(0); // ไม่มีรหัสปลอมแบบเดิมแล้ว
 });
 
 // กันปุ่มซ้ำ: หัวข้อ "บริษัท" ของ HQ ฝังหน้าเต็ม → ต้องมีปุ่ม "บันทึก" เดียว (ปุ่มกลางบนหัว) ไม่ใช่สองปุ่ม

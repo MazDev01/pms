@@ -81,14 +81,22 @@ export function dealersAtTarget(dealers: DealerRow[], pct: number, revenueOf: (c
  *  minClosed = กลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลีดใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
  *  (ก่อนมีเกณฑ์นี้ กฎเด้ง 10 จาก 10 ตัวแทนด้วยข้อความ "1 จาก 1 ลีด" = เตือนทุกคนเท่ากับไม่เตือนใคร) */
 export function dealersHighLostRate(dealers: DealerRow[], leads: LeadRow[], pct: number, minClosed: number) {
+  // นับ ปิดไม่สำเร็จ/ปิดแล้ว ต่อสาขา "รอบเดียว" แทนการวน leads.filter ในลูป dealers (M10: O(n×m) → O(n+m))
+  const stat = new Map<string, { lost: number; closed: number }>();
+  for (const l of leads) {
+    if (l.status !== "CANCELLED" && l.status !== "PAID") continue; // นับเฉพาะลีดที่ปิดแล้ว
+    const key = l.dealerCode ?? "";
+    const s = stat.get(key) ?? { lost: 0, closed: 0 };
+    if (l.status === "CANCELLED") s.lost += 1;
+    s.closed += 1;
+    stat.set(key, s);
+  }
   const out: { d: DealerRow; rate: number; lost: number; closed: number }[] = [];
   for (const d of dealers) {
-    const mine = leads.filter(l => l.dealerCode === d.code);
-    const lost = mine.filter(l => l.status === "CANCELLED").length;
-    const closed = lost + mine.filter(l => l.status === "PAID").length;
-    if (closed < Math.max(1, minClosed)) continue; // ข้อมูลน้อยเกินกว่าจะสรุป
-    const rate = Math.round((lost / closed) * 100);
-    if (rate >= pct) out.push({ d, rate, lost, closed });
+    const s = stat.get(d.code) ?? { lost: 0, closed: 0 };
+    if (s.closed < Math.max(1, minClosed)) continue; // ข้อมูลน้อยเกินกว่าจะสรุป
+    const rate = Math.round((s.lost / s.closed) * 100);
+    if (rate >= pct) out.push({ d, rate, lost: s.lost, closed: s.closed });
   }
   return out.sort((a, b) => b.rate - a.rate);
 }

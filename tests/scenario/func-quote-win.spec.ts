@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, tagged,
+  db, waitRow, cleanup, specNS, nsTag,
 } from "./funcHelpers";
 
 // โซ่ธุรกิจหลักของทั้งระบบ: ลีด → ใบเสนอราคา (BOQ) → ปิดการขาย → ลูกค้า
@@ -11,10 +11,13 @@ test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน")
 test.setTimeout(240_000);
 test.describe.configure({ mode: "serial" });
 
-const COMPANY = tagged("โซ่ขาย");
+// ช่องข้อมูลเฉพาะสเปกนี้ — กัน cleanup ข้ามไปลบข้อมูลของสเปกอื่นที่รันขนานกัน (ดู funcHelpers)
+const NS = specNS("QUOTE");
+const tg = nsTag(NS);
+const COMPANY = tg("โซ่ขาย");
 
-test.beforeAll(async () => { await cleanup(await db(RYG), "RYG"); });
-test.afterAll(async () => { await cleanup(await db(RYG), "RYG"); });
+test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
 test("[func] ออกใบเสนอราคาจากลีด → ใบลง DB พร้อมรายการสินค้า", async ({ page }) => {
   const errs = watchErrors(page);
@@ -72,6 +75,13 @@ test("[func] ปิดการขายสำเร็จ → ลูกค้�
   expect(cust.dealer_code, "ลูกค้าต้องเป็นของสาขาเดียวกับลีด").toBe("RYG");
   expect(cust.id, "เลขลูกค้าต้องมาจากตัวนับของ DB").toBeGreaterThan(0);
 
+  // M6 — ใบที่ออกให้ลีด (customer_id เดิม NULL) ต้องถูก relink เข้ากับลูกค้าใหม่
+  //   และ FK (dealer_code, customer_id) → customers ต้องยอมรับ (ลูกค้าถูกสร้างก่อน relink แล้ว)
+  //   ถ้า FK ปฏิเสธ/ยังไม่ relink → customer_id จะไม่เท่ากับ cust.id → poll หมดเวลา
+  await expect.poll(async () =>
+    (await sb.from("quotations").select("customer_id").eq("dealer_code", "RYG").eq("customer", COMPANY)).data?.[0]?.customer_id,
+    { timeout: 15_000, message: "ใบต้องถูกผูกกับลูกค้าใหม่ (relink) และ FK ต้องยอมรับ" }).toBe(cust.id);
+
   assertNoErrors(errs, "ปิดการขาย");
 });
 
@@ -86,10 +96,63 @@ test("[func] ลูกค้าที่เกิดจากการปิด�
   assertNoErrors(errs, "หน้าลูกค้า");
 });
 
+// เส้นทางปิดการขายเส้นที่สอง: กด "ลูกค้าตอบรับ ✓" บน "หน้าใบเสนอราคา" (ไม่ใช่ลิ้นชักลีด)
+// เดิมเส้นนี้พึ่ง trigger on_quote_won ที่ DB ซึ่งสร้างลูกค้า id=0 ไร้ชื่อ (C6)
+// ตอนนี้ trigger ถูกลบแล้ว แอปต้องสร้างลูกค้าผ่าน convertLeadToCustomer เอง (id จริง ข้อมูลครบ)
+test("[func] ปิดการขายจากหน้าใบเสนอราคา → ลูกค้าถูกสร้าง id จริง ไม่ใช่ 0 (C6)", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(RYG);
+  const COMP = tg("ตอบรับบนใบ");
+
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+
+  // 1) ลีดใหม่ + ออกใบเสนอราคาจากลีด (ใบผูก dealId ของลีด · customerId = 0)
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMP);
+  await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณตอบรับ");
+  await page.getByRole("button", { name: "บันทึก" }).click();
+  await waitRow(sb, "leads", { company: COMP });
+
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  const lrow = page.locator("tbody tr").filter({ hasText: COMP }).first();
+  await expect(lrow).toBeVisible({ timeout: 25_000 });
+  await lrow.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
+  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
+  const q = await waitRow<{ id: string }>(sb, "quotations", { customer: COMP });
+
+  // 2) ไปหน้าใบเสนอราคา → ส่งใบ (ร่าง → ส่งแล้ว) เพื่อให้ปุ่ม "ลูกค้าตอบรับ" โผล่
+  await page.goto(`${DEALER_ORIGIN}/quotations`, { waitUntil: "domcontentloaded" });
+  const qrow = page.locator("tbody tr").filter({ hasText: COMP }).first();
+  await expect(qrow).toBeVisible({ timeout: 25_000 });
+  await qrow.getByRole("button", { name: "ส่งให้ลูกค้า" }).first().click();
+  await expect.poll(async () =>
+    (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
+    { timeout: 25_000, message: "ใบต้องเป็น 'ส่งแล้ว'" }).toBe("sent_to_client");
+
+  // 3) เปิดลิ้นชักใบ → กด "ลูกค้าตอบรับ ✓"
+  await qrow.click();
+  await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
+
+  // 4) ลูกค้าต้องถูกสร้างด้วย id จริง (> 0) ไม่ใช่ 0 — และไม่มีลูกค้าผี id=0 โผล่
+  const cust = await waitRow<{ company: string; id: number; name: string | null }>(
+    sb, "customers", { company: COMP }, 20_000);
+  expect(cust.id, "เลขลูกค้าต้องมาจากตัวนับของ DB ไม่ใช่ 0 (ลูกค้าผีของ trigger เดิม)").toBeGreaterThan(0);
+  expect(cust.name, "ลูกค้าต้องมีชื่อ — ไม่ใช่ NULL แบบที่ trigger สร้าง").toBeTruthy();
+
+  const ghost = (await sb.from("customers").select("id").eq("dealer_code", "RYG").eq("id", 0)).data ?? [];
+  expect(ghost.length, "ต้องไม่มีลูกค้าผี id=0 ในสาขา").toBe(0);
+
+  assertNoErrors(errs, "ปิดการขายจากหน้าใบเสนอราคา");
+});
+
 test("[func] เพิ่มโน้ตให้ลูกค้า → โน้ตลง DB", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
-  const TITLE = tagged("โน้ตทดสอบ");
+  const TITLE = tg("โน้ตทดสอบ");
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });

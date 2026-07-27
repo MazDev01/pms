@@ -11,41 +11,83 @@ test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน")
 test.setTimeout(240_000);
 test.describe.configure({ mode: "serial" });
 
-const CODE = "ZZT";                      // รหัสสาขาทดสอบ (ไม่ชนของจริง 10 สาขา)
+const CODE = "ZZT";                      // fixture สำหรับเทสต์ "ตัวกรอง/ลบ" — ใส่ตรง ๆ ใน beforeAll
 const DEALER_NAME = `${TAG}-สาขาทดสอบ`;
+const NEW_CODE = "ZZC";                  // สร้างผ่าน UI (แยกรหัสกับ fixture กันชน)
+const NEW_NAME = `${TAG}-สาขาสร้างใหม่`;
 
 test.beforeAll(async () => {
   const sb = await db(ADMIN);
-  await sb.from("dealers").delete().eq("code", CODE);
+  await sb.from("dealers").delete().in("code", [CODE, NEW_CODE]);
   await sb.from("master_catalog").delete().like("name", `%${TAG}%`);
+  // fixture: สาขาที่ "มีอยู่แล้ว" สำหรับเทสต์ตัวกรอง/ลบ — ใส่ตรงผ่าน ADMIN
+  // (การสร้างตัวแทน "พร้อมบัญชี" ต้องใช้ service_role ที่เซิร์ฟเวอร์ · เทสต์ตัวกรอง/ลบไม่ควรผูกกับเรื่องนั้น)
+  await sb.from("dealers").insert({ code: CODE, name: DEALER_NAME, province: "ระยอง", region: "ตะวันออก", status: "active" });
 });
 test.afterAll(async () => {
   const sb = await db(ADMIN);
-  await sb.from("dealers").delete().eq("code", CODE);
+  await sb.from("dealers").delete().in("code", [CODE, NEW_CODE]);
   await sb.from("master_catalog").delete().like("name", `%${TAG}%`);
 });
 
-test("[func·hq] เพิ่มตัวแทนผ่านหน้าจอ → ลง DB", async ({ page }) => {
-  const errs = watchErrors(page);
+// H5 — สร้างตัวแทน "พร้อมบัญชีเข้าระบบ" ต้องทำผ่าน route เซิร์ฟเวอร์ (service_role)
+// เทสต์นี้ทน "ทั้งสองสภาพ" ได้:
+//   • ตั้ง service_role แล้ว → โมดัลรหัส + ตัวแทนลง DB จริง (บัญชีล็อกอินได้)
+//   • ยังไม่ตั้ง → ต้องขึ้น error จริง และ "ไม่มีตัวแทนผี" ใน DB (เดิมโชว์รหัสปลอมทั้งที่ล็อกอินไม่ได้ = บั๊ก H5)
+test("[func·hq] สร้างตัวแทน = สร้างบัญชีจริง (มี key→ลง DB · ไม่มี key→error ไม่ทิ้งตัวแทนผี) (H5)", async ({ page }) => {
   const sb = await db(ADMIN);
 
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
   await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
-  // รอจน "สาขาจริงจาก DB" ขึ้นก่อน — แถวในตารางอย่างเดียวเชื่อไม่ได้ (เรนเดอร์ก่อนโหลดจบ)
-  // ถ้ากดเพิ่มก่อนทะเบียนโหลดจบ การแก้จะถูกผลการโหลดทับ (ดูคำอธิบายใน useRepoState)
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 25_000, message: "ทะเบียนตัวแทนต้องโหลดเสร็จก่อน" }).toContain("ระยองสตีลเวิร์คส์");
   await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
 
-  await page.getByPlaceholder("เช่น BKK").fill(CODE);
-  await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(DEALER_NAME);
+  await page.getByPlaceholder("เช่น BKK").fill(NEW_CODE);
+  await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(NEW_NAME);
   await page.getByPlaceholder("เช่น ระยอง").fill("ระยอง");
   await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
 
-  const row = await waitRow<{ code: string; name: string }>(sb, "dealers", { code: CODE });
-  expect(row.name, "ชื่อสาขาต้องตรงกับที่กรอก").toBe(DEALER_NAME);
+  // ผลอย่างใดอย่างหนึ่ง: โมดัลสำเร็จ (มี key) หรือ ข้อความ error ในฟอร์ม (ไม่มี key)
+  const okModal = page.getByText("สร้างตัวแทนสำเร็จ");
+  const errMsg = page.getByText(/service_role|ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์/i);
+  await expect(okModal.or(errMsg).first(), "ต้องเห็นผลจริงอย่างใดอย่างหนึ่ง").toBeVisible({ timeout: 25_000 });
 
-  assertNoErrors(errs, "เพิ่มตัวแทน");
+  const rows = (await sb.from("dealers").select("code,name").eq("code", NEW_CODE)).data ?? [];
+  if (await okModal.isVisible()) {
+    expect(rows.length, "ตั้ง key แล้ว → ตัวแทนต้องลง DB").toBe(1);
+    expect(rows[0].name).toBe(NEW_NAME);
+  } else {
+    expect(rows.length, "ไม่มี key → ต้องไม่เหลือตัวแทนผีใน DB (บัญชีล็อกอินไม่ได้)").toBe(0);
+  }
+});
+
+// H5 — ประตูความปลอดภัยของ route (durable ทั้งสองสภาพ):
+//   ไม่มี token = ห้ามผ่านเด็ดขาด · token ของตัวแทน (ไม่ใช่ HQ) ก็ห้ามสร้างตัวแทน
+//   ตั้ง key แล้ว → 401/403 · ยังไม่ตั้ง → 501 · ทั้งหมดต้อง "ไม่ใช่ 200" และไม่มีสาขาเกิดขึ้น
+test("[func·hq] route สร้างตัวแทนปฏิเสธคำขอที่ไม่มีสิทธิ์ (H5)", async ({ request }) => {
+  const sb = await db(ADMIN);
+  const payload = { code: "ZZX", name: "ทดสอบสิทธิ์", province: "กรุงเทพฯ", region: "กลาง", revenueTarget: 0 };
+  try {
+    // 1) ไม่มี token
+    const noAuth = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, { data: payload });
+    expect(noAuth.status(), "ไม่มี token ต้องไม่ผ่าน").not.toBe(200);
+    expect([401, 501], `สถานะที่ยอมรับ (ได้ ${noAuth.status()})`).toContain(noAuth.status());
+
+    // 2) token ของ "ตัวแทน" (ไม่ใช่ HQ) — ต้องไม่มีสิทธิ์สร้างตัวแทน
+    const rygToken = (await (await db(RYG)).auth.getSession()).data.session?.access_token ?? "";
+    const asDealer = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
+      headers: { authorization: `Bearer ${rygToken}` }, data: payload,
+    });
+    expect(asDealer.status(), "ตัวแทนสร้างตัวแทนไม่ได้").not.toBe(200);
+    expect([403, 501], `สถานะที่ยอมรับ (ได้ ${asDealer.status()})`).toContain(asDealer.status());
+
+    // ไม่ว่ากรณีไหน ต้องไม่มีสาขา ZZX เกิดขึ้น
+    const rows = (await sb.from("dealers").select("code").eq("code", "ZZX")).data ?? [];
+    expect(rows.length, "คำขอที่ถูกปฏิเสธต้องไม่สร้างสาขา").toBe(0);
+  } finally {
+    await sb.from("dealers").delete().eq("code", "ZZX");
+  }
 });
 
 test("[func·hq] สาขาที่เพิ่งเพิ่ม โผล่ในตัวกรองของหน้าอื่นทันที", async ({ page }) => {
@@ -150,8 +192,12 @@ test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเ�
   // กับดักเดิม: save เคยเป็น "แทนที่ทั้งชุด" → ถ้าผู้ใช้กดเพิ่มก่อนโหลดจบ
   // อาร์เรย์จะมีแค่แถวใหม่แถวเดียว แล้วสั่งลบสาขาจริงที่เหลือทั้งหมด
   // (เคยเกิดจริง เห็นเป็น DELETE ...code=not.in.("ZZT") · รอดเพราะ FK ของตารางไฟล์)
-  const errs = watchErrors(page);
+  // — จุดประสงค์ของเทสต์นี้คือ "จำนวนสาขาต้องไม่ลด" เท่านั้น
+  //   ไม่เช็ก console error เพราะการกดสร้างจริงจะยิง route (ตั้ง key แล้ว→200 · ยังไม่ตั้ง→501)
+  //   501 ที่แอปจัดการแล้ว (ขึ้น error ในฟอร์ม) เบราว์เซอร์ยัง log "resource 501" เป็นเสียงรบกวน
+  const BCODE = "ZZB"; // รหัสอิสระ ไม่ชนกับ fixture/เทสต์อื่น
   const sb = await db(ADMIN);
+  await sb.from("dealers").delete().eq("code", BCODE);
   const before = ((await sb.from("dealers").select("code")).data ?? []).length;
   expect(before, "ต้องมีสาขาจริงอยู่ก่อน").toBeGreaterThan(1);
 
@@ -160,8 +206,8 @@ test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเ�
     // จงใจ "ไม่รอ" ให้ทะเบียนโหลดเสร็จ แล้วรีบกดเพิ่มทันที
     await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
-    await page.getByPlaceholder("เช่น BKK").fill(CODE);
-    await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(DEALER_NAME);
+    await page.getByPlaceholder("เช่น BKK").fill(BCODE);
+    await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(`${TAG}-ก่อนโหลด`);
     await page.getByPlaceholder("เช่น ระยอง").fill("ระยอง");
     await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
     await page.waitForTimeout(4000);
@@ -169,9 +215,30 @@ test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเ�
     const after = ((await sb.from("dealers").select("code")).data ?? []).map(d => d.code);
     expect(after.length, `สาขาจริงต้องอยู่ครบ (ก่อน ${before} หลัง ${after.length})`)
       .toBeGreaterThanOrEqual(before);
-
-    assertNoErrors(errs, "เพิ่มก่อนโหลดเสร็จ");
   } finally {
-    await sb.from("dealers").delete().eq("code", CODE);
+    await sb.from("dealers").delete().eq("code", BCODE);
   }
+});
+
+// H4 — รีเซ็ตรหัสผ่านผู้ใช้ HQ = "ส่งลิงก์ทางอีเมล" (ไม่ใช่โชว์รหัสปลอมแบบเดิม)
+// ไม่กด "ส่ง" จริงในเทสต์ เพื่อเลี่ยง rate limit อีเมลของ Supabase — ตรวจแค่ว่า UI เปลี่ยนเป็นแบบส่งอีเมล
+test("[func·hq] รีเซ็ตรหัสผ่านผู้ใช้ = โมดัลส่งลิงก์อีเมล ไม่ใช่รหัสชั่วคราวปลอม (H4)", async ({ page }) => {
+  await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
+  await page.goto(`${HQ_ORIGIN}/hq/users`, { waitUntil: "domcontentloaded" });
+
+  const firstRow = page.locator("tbody tr").first();
+  await expect(firstRow, "ต้องมีผู้ใช้ในตาราง").toBeVisible({ timeout: 25_000 });
+  await firstRow.getByRole("button", { name: "จัดการ" }).click();
+  await page.getByRole("button", { name: "รีเซ็ตรหัสผ่าน" }).click();
+
+  // โมดัลใหม่ = ส่งลิงก์อีเมล (มีปุ่ม "ส่งลิงก์รีเซ็ต") · ต้องไม่มี "รหัสผ่านชั่วคราว" แบบเก่า
+  await expect(page.getByRole("button", { name: "ส่งลิงก์รีเซ็ต" }), "ต้องเป็นโมดัลส่งอีเมล").toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("รหัสผ่านชั่วคราว"), "ต้องไม่มีรหัสปลอมแบบเดิม").toHaveCount(0);
+});
+
+// H4 — หน้าปลายทางของลิงก์รีเซ็ต: เปิดตรงโดยไม่มี recovery token → ต้องบอกว่าลิงก์ไม่ถูกต้อง (ไม่ค้าง/ไม่พัง)
+test("[func·hq] หน้า /reset-password เปิดตรงโดยไม่มี token → แจ้งลิงก์ไม่ถูกต้อง (H4)", async ({ page }) => {
+  await page.goto(`${HQ_ORIGIN}/reset-password`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("ลิงก์ไม่ถูกต้องหรือหมดอายุ"), "ไม่มี token ต้องแจ้งลิงก์ไม่ถูกต้อง")
+    .toBeVisible({ timeout: 10_000 });
 });

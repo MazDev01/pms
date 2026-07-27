@@ -1,0 +1,24 @@
+"use client";
+
+// รวมคำขอ "อ่าน" ที่เหมือนกันและค้างอยู่พร้อมกัน ให้ยิงจริงครั้งเดียว (in-flight dedup) — H7
+//
+// อาการ: เปิดหน้า HQ หนึ่งหน้า มีหลายคอมโพเนนต์ (Topbar · แดชบอร์ด · useNetworkData ·
+//   useFilterOptions · หน้า HQ อีกหลายหน้า) เรียก dealers.list() / settings.getTargets() ฯลฯ
+//   พร้อมกัน → ยิง select เดียวกัน 4–6 รอบซ้อน
+//
+// วิธีที่ปลอดภัยสุด: dedup "เฉพาะช่วงที่คำขอค้างอยู่" (in-flight) ไม่แคชข้ามเวลา
+//   • คำขอที่ค้างอยู่ → ผู้เรียกถัดไปแชร์ promise เดิม (ยิงจริงครั้งเดียว)
+//   • คำขอเสร็จ (settle) → ล้าง key ทันที → เรียกครั้งต่อไปได้ค่าสด
+//   → ไม่มีปัญหา staleness เลย เพราะไม่เคยคืน "ค่าเก่า" ให้ใคร มีแต่ "รวมคำขอที่เกิดพร้อมกัน"
+//
+// ใช้กับ read ที่ "ไม่มีพารามิเตอร์" เท่านั้น (dealers.list · settings.get* · catalog.list)
+// read ที่มี scope/args ต่างกันห้าม dedup ด้วย key เดียว (จะคืนข้อมูลผิดชุด)
+const inflight = new Map<string, Promise<unknown>>();
+
+export function dedupeRead<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const hit = inflight.get(key);
+  if (hit) return hit as Promise<T>;
+  const p = Promise.resolve().then(run).finally(() => { inflight.delete(key); });
+  inflight.set(key, p);
+  return p;
+}

@@ -2,6 +2,11 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# อย่าพยายามลบ+ติดตั้ง deps ใหม่อัตโนมัติก่อนรันสคริปต์
+# ในสภาพไม่มี TTY (playwright webServer / CI) การตรวจนี้จะ purge node_modules แล้วล้ม
+# (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY) เราจัดการติดตั้งเองด้วย pnpm install อยู่แล้ว
+verifyDepsBeforeRun: false
+
 # ตัดสินใจชัด: ไม่รัน build script ของ sharp (native) — Next build ทำงานได้โดยไม่ต้องมี
 allowBuilds:
   sharp: false

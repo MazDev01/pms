@@ -5,14 +5,14 @@
 // ลีด = ลีดจริงในระบบที่ผูก dealerCode · ใบเสนอราคา = ใบของสาขานั้นในตัวกรองปัจจุบัน
 // อัตรา = ใบเสนอราคา ÷ ลีด (เกิน 100% ได้ — ลีดหนึ่งรายออกใบได้หลายใบ)
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
-import { groupBy, type QuoteRow } from "@pms/shared/lib/hqQuotations";
+import { type DealerAgg } from "@pms/shared/lib/hqQuotations";
 import type { LeadRow } from "@pms/shared/lib/mock";
 
 const QUOTE_COLOR = "#003366";
 const LEAD_COLOR = "#94a3b8";
 
-export function LeadsVsQuotationsChart({ rows, leads }: { rows: QuoteRow[]; leads: LeadRow[] }) {
-  const quoteByDealer = groupBy(rows, r => r.dealerCode);
+export function LeadsVsQuotationsChart({ dealerAgg, leads }: { dealerAgg: DealerAgg[]; leads: LeadRow[] }) {
+  const quoteByDealer = new Map(dealerAgg.map(d => [d.code, d]));
   const leadByDealer = new Map<string, number>();
   leads.forEach(l => {
     const code = l.dealerCode || "";
@@ -21,15 +21,12 @@ export function LeadsVsQuotationsChart({ rows, leads }: { rows: QuoteRow[]; lead
 
   // แสดงทุกสาขาที่มีลีดหรือมีใบเสนอราคาอย่างน้อยหนึ่งอย่าง
   const codes = [...new Set([...quoteByDealer.keys(), ...leadByDealer.keys()])];
-  const bars = codes.map(code => {
-    const quotes = quoteByDealer.get(code) ?? [];
-    return {
-      code,
-      name: quotes[0]?.dealerName ?? code,
-      leads: leadByDealer.get(code) ?? 0,
-      quotes: quotes.length,
-    };
-  }).sort((a, b) => b.quotes - a.quotes || b.leads - a.leads);
+  const bars = codes.map(code => ({
+    code,
+    name: quoteByDealer.get(code)?.name ?? code,
+    leads: leadByDealer.get(code) ?? 0,
+    quotes: quoteByDealer.get(code)?.count ?? 0,
+  })).sort((a, b) => b.quotes - a.quotes || b.leads - a.leads);
 
   const max = Math.max(...bars.map(b => Math.max(b.leads, b.quotes)), 1);
 

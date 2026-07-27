@@ -78,11 +78,6 @@ function useDraft<T>(saved: T, setSaved: Dispatch<SetStateAction<T>>) {
   const reset = useCallback(() => { editedRef.current = false; setDraft(savedRef.current); }, []);
   return { draft, set, dirty, save, reset };
 }
-// draft ที่ persist ผ่าน localStorage (สำหรับตั้งค่าที่ยังไม่ย้ายเข้า repo — ระบบ/เส้นทางการขาย)
-function usePersistentDraft<T>(key: string, initial: T) {
-  const [saved, setSaved] = usePersistentState<T>(key, initial);
-  return useDraft(saved, setSaved);
-}
 // draft ที่ persist ผ่าน repository (local: localStorage · supabase: DB · RLS is_hq) — นโยบาย/เป้า/กฎแจ้งเตือน
 function useRepoDraft<T>(load: () => Promise<T>, save: (v: T) => void, initial: T) {
   const [saved, setSaved] = useRepoState<T>(load, save, initial);
@@ -150,13 +145,6 @@ const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะ�
 // แก้ชื่อ/สี/ลำดับที่นี่ไม่ได้ เพราะคัมบัง/ตาราง/แดชบอร์ด/งานมาตรฐาน ผูกกับสถานะจริงในโค้ด
 // (ของเดิมเป็นตัวแก้ไขที่แก้แล้วไม่มีผลกับหน้าไหนเลย)
 const STAGE_ORDER: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
-// รูปทรงที่ "เก็บลง localStorage" ของเลขที่ใบเสนอราคา — mock.loadQuoteNumbering() แปลงเป็น {prefix,next} ให้ผู้ใช้อ่าน
-// ค่าเริ่มต้นต้องมาจาก DEFAULT_QUOTE_NUMBERING แหล่งเดียว ห้ามพิมพ์ "Q-2026-"/1101 ซ้ำที่นี่ (เคยซ้ำ → แก้ที่เดียวไม่ครบ)
-type SystemCfg = { runningPrefix: string; runningNext: number };
-const DEFAULT_SYSTEM: SystemCfg = {
-  runningPrefix: DEFAULT_QUOTE_NUMBERING.prefix,
-  runningNext: DEFAULT_QUOTE_NUMBERING.next,
-};
 // เหตุผลปิดการขายไม่สำเร็จ — ขั้น "ปิดไม่สำเร็จ" เป็นปลายทางหนึ่งของเส้นทางการขาย จึงอยู่แท็บนี้
 // (เดิมอยู่แท็บ "กฎธุรกิจ" ซึ่งยุบไปแล้ว — คีย์ hq_sales_journey เหมือนเดิม ค่าที่ตั้งไว้ไม่หาย)
 // เก็บผ่าน repository — เดิมเขียนลง localStorage ของ origin ฝั่ง HQ ซึ่งตัวแทน (คนละ origin)
@@ -165,24 +153,21 @@ type Journey = { lost: string[] };
 const DEFAULT_JOURNEY: Journey = { lost: [...LOST_REASONS] };
 
 function JourneyTab() {
-  // ทุกกฎของเส้นทางการขายรวมที่แท็บนี้: ใบเสนอราคา + เลขที่ใบ · เหตุผลปิดไม่สำเร็จ
+  // ทุกกฎของเส้นทางการขายรวมที่แท็บนี้: นโยบาย (VAT/อายุใบ) · เหตุผลปิดไม่สำเร็จ
+  // (เดิมมี sys=เลขรันใบเสนอราคาใน localStorage แต่การ์ดที่แก้ค่านั้นถูกลบไปแล้ว → เป็น plumbing ตาย ตัดออก · L6)
   const pol = useRepoDraft<HQPolicy>(() => settingsRepo.getPolicy(), (v) => settingsRepo.savePolicy(v), DEFAULT_HQ_POLICY);
-  const sys = usePersistentDraft<SystemCfg>(HQ_SYSTEM_KEY, DEFAULT_SYSTEM);
   const jn = useRepoDraft<Journey>(
     async () => ({ lost: await settingsRepo.getLostReasons() }),
     (v) => { void settingsRepo.saveLostReasons(v.lost); },
     DEFAULT_JOURNEY,
   );
   const [newLost, setNewLost] = useState("");
-  // dep ต้องเป็นฟังก์ชันข้างใน (useCallback แล้ว) ไม่ใช่กล่องที่ usePersistentDraft คืนมา — กล่องใหม่ทุกเรนเดอร์
-  const saveAll = useCallback(() => {
-    pol.save(); sys.save(); jn.save();
-  }, [pol.save, sys.save, jn.save]);
+  const saveAll = useCallback(() => { pol.save(); jn.save(); }, [pol.save, jn.save]);
   useReport(useMemo(() => ({
-    dirty: pol.dirty || sys.dirty || jn.dirty,
+    dirty: pol.dirty || jn.dirty,
     save: saveAll,
-    reset: () => { pol.reset(); sys.reset(); jn.reset(); },
-  }), [pol.dirty, sys.dirty, jn.dirty, saveAll, pol.reset, sys.reset, jn.reset]));
+    reset: () => { pol.reset(); jn.reset(); },
+  }), [pol.dirty, jn.dirty, saveAll, pol.reset, jn.reset]));
 
   const addLost = () => { if (newLost.trim()) { jn.set(p => ({ ...p, lost: [...p.lost, newLost.trim()] })); setNewLost(""); } };
   const active = STAGE_ORDER.filter(s => s !== "PAID" && s !== "CANCELLED");
@@ -520,14 +505,7 @@ function NotificationsTab() {
 }
 
 // ═══════════════════════ 1 · บริษัท (+ สำรอง/กู้คืน) ══════════════════════════
-// คีย์จริงที่ใช้ทั้งระบบ → backup/restore ครบจริง
-// ไม่มี "hq_dealer_settings" แล้ว — คีย์นั้นตายไปพร้อมแท็บ "ตัวแทนจำหน่าย" (ไม่มีใครอ่านค่าในนั้นเลย)
-const SETTINGS_KEYS = [
-  "hq_company_profile", "hq_users_v4",
-  HQ_DEALERS_KEY, HQ_JOURNEY_KEY, HQ_TARGETS_KEY,
-  // กฎดูแลลีดไม่อยู่ในสำรองข้อมูลของ HQ แล้ว — เป็นค่าของตัวแทน (คีย์ dealer_lead_rules)
-  HQ_NOTIF_KEY, HQ_NOTIF_RULES_KEY, HQ_SYSTEM_KEY, HQ_POLICY_KEY,
-];
+// สำรอง/กู้คืนอ่าน-เขียนผ่าน repo ทั้งหมด (ดู exportAll/importAll) ไม่พึ่งรายชื่อคีย์ localStorage อีกแล้ว
 function BackupCard() {
   const toast = useToast();
 

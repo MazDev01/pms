@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
@@ -20,11 +20,13 @@ const MOCK_TODAY = "2026-06-30";
 type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 
 export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRow; customer?: CustomerRow; onToast?: (m: string) => void }) {
-  const { quotations, addQuotation, updateQuotation, deleteQuotation, newQuoteId } = useSales();
+  const { quotations, createQuotation, updateQuotation, deleteQuotation } = useSales();
   const catalog = useMasterCatalog(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const savingRef = useRef(false); // กันกดออกใบซ้ำระหว่างรอเลขที่ใบจาก DB (H8 · guard synchronous)
+  const [saving, setSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const policy = useHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ (อ่านผ่าน repo + อัปเดตตาม HQ)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา (ผ่าน repo)
   const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document, wordmark: dealerCfg.settings.wordmark };
@@ -85,8 +87,6 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
       : (q.dealId === subj.dealId || (q.dealId == null && ((subj.customerId && q.customerId === subj.customerId) || q.customer === subj.company))))
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  // เลขที่ใบถัดไป — ผ่าน context (supabase: RPC next_quote_no atomic กันเลขชนข้ามสาขา · local: max+1)
-  const nextQId = () => newQuoteId();
   // มูลค่างาน (ก่อน VAT) = ผลรวมรายการสินค้า — ระบบไม่มีส่วนลดแล้ว
   function netTotal(f: FormState) { return parseBaht(f.price); }
 
@@ -100,6 +100,9 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
   }
 
   async function save() {
+    if (savingRef.current) return; // กันกดซ้ำระหว่างรอเลขที่ใบจาก DB (H8)
+    savingRef.current = true; setSaving(true);
+    try {
     const net = netTotal(form);
     if (mode === "edit" && editing) {
       updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
@@ -107,10 +110,9 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
         expiry: form.expiry || "", note: form.note || undefined });
       onToast?.("บันทึกใบเสนอราคาแล้ว");
     } else {
-      // สร้างใหม่ — ออกใบในนาม subject (ลีด/ลูกค้า) · ผูก customerId/dealId ตามบริบท
-      const id = await nextQId();
-      addQuotation({
-        id, customer: subj.company, project: form.project || defProject(),
+      // สร้างใหม่ — ออกเลข + insert แบบ atomic (H8) · ออกใบในนาม subject (ลีด/ลูกค้า)
+      await createQuotation({
+        customer: subj.company, project: form.project || defProject(),
         total: "฿" + net.toLocaleString("th-TH"), totalValue: net, materialCost: parseBaht(form.price),
         // พื้นที่ = จำนวนของรายการ BOQ ที่คิดเป็น ตร.ม. (เดิม hardcode 0 → พื้นที่หายไปจากใบ)
         province: subj.province, buildingType: form.buildingType,
@@ -122,11 +124,18 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
       onToast?.("สร้างใบเสนอราคาเรียบร้อย");
     }
     setMode("list");
+    } finally { savingRef.current = false; setSaving(false); }
   }
 
   async function duplicate(q: QuotationMock) {
-    addQuotation({ ...q, id: await nextQId(), status: "draft", revision: "V1", date: MOCK_TODAY });
-    onToast?.("ทำสำเนาใบเสนอราคาแล้ว");
+    if (savingRef.current) return; // กันกดซ้ำระหว่างรอเลขที่ใบจาก DB (H8)
+    savingRef.current = true; setSaving(true);
+    try {
+      // ทำสำเนา = ออกใบใหม่แบบ atomic (ไม่พก id เดิม — DB ออกเลขใหม่ให้)
+      const { id: _drop, ...rest } = q;
+      await createQuotation({ ...rest, status: "draft", revision: "V1", date: MOCK_TODAY });
+      onToast?.("ทำสำเนาใบเสนอราคาแล้ว");
+    } finally { savingRef.current = false; setSaving(false); }
   }
 
   // ส่งใบเสนอราคาให้ลูกค้า → สถานะเป็น "ส่งแล้ว" (เลื่อน stage + ติ๊กงานให้ลีดอัตโนมัติผ่าน context)
@@ -205,7 +214,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>ยกเลิก</button>
-          <button onClick={save} className="btn btn-primary btn-sm"><FilePlus size={13} /> {mode === "edit" ? "บันทึก" : "สร้างใบเสนอราคา"}</button>
+          <button onClick={save} disabled={saving} className="btn btn-primary btn-sm" style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}><FilePlus size={13} /> {mode === "edit" ? "บันทึก" : "สร้างใบเสนอราคา"}</button>
         </div>
       </div>
     );

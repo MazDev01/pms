@@ -94,6 +94,17 @@ export type QuoteAgg = {
   count: number; value: number; sent: number; accepted: number; rejected: number;
   wonValue: number;  // มูลค่าเฉพาะใบที่ปิดการขายได้ = "ยอดขายจริง" ที่เทียบกับมูลค่าใบเสนอราคา
 };
+// รายตัวแทน = QuoteAgg + ข้อมูลตัวแทน (ใช้ป้อน analytics เมื่อรวมยอดที่ DB · M9 Phase 2)
+export type DealerAgg = QuoteAgg & { code: string; name: string; region: string };
+export const EMPTY_AGG: QuoteAgg = { count: 0, value: 0, sent: 0, accepted: 0, rejected: 0, wonValue: 0 };
+/** รวม QuoteAgg หลายก้อน (เช่น รายตัวแทน → ยอดรวม/รายภูมิภาค) */
+export function sumAggs(list: QuoteAgg[]): QuoteAgg {
+  return list.reduce<QuoteAgg>((a, d) => ({
+    count: a.count + d.count, value: a.value + d.value, sent: a.sent + d.sent,
+    accepted: a.accepted + d.accepted, rejected: a.rejected + d.rejected, wonValue: a.wonValue + d.wonValue,
+  }), { ...EMPTY_AGG });
+}
+
 export function aggregate(rows: QuoteRow[]): QuoteAgg {
   const sent = rows.filter(r => r.sent).length;
   return {

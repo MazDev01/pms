@@ -12,13 +12,39 @@
 //   อัตราปิด  = ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) · ยังไม่มีใบรู้ผล = null (แสดง "—" ไม่ใช่ 0%)
 //   โอกาสที่ดำเนินอยู่ = ลีดที่ยังไม่ปิด (ไม่ใช่ "โครงการ" — ระบบนี้จบที่ปิดการขาย)
 //   % เป้า    = ยอดปิดได้สะสมทั้งปี ÷ เป้าทั้งปีที่ HQ ตั้ง (เป้าเป็นรายปี ห้ามหดตามตัวกรองเวลา)
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useNetworkQuotations, useNetworkLeads } from "./useNetworkData";
 import { parseThaiDate, needsFollowUp, isLeadOpen } from "./leadMetrics";
 import { useRepoValue } from "./useRepoState";
-import { settings as settingsRepo } from "./data";
+import { useSales } from "@pms/shared/context/SalesContext";
+import { settings as settingsRepo, metrics as metricsRepo } from "./data";
+import { DATA_SOURCE } from "./data/config";
+import { logRepoRead } from "./repoLog";
+import type { DealerRollup } from "./data/ports";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { DEFAULT_LEAD_RULES, type LeadStatus, type DealerLeadRulesMap } from "./mock";
+
+// rollup รายสาขาจาก DB (M9 Phase 1) — supabase เท่านั้น
+//   • รวมยอดที่ DB (RPC dealer_rollup) แทนการวนรวมทุกแถวฝั่ง client
+//   • reactive/invalidation: refetch เมื่อ leads/quotations ใน SalesContext เปลี่ยน (write/realtime/โหลด)
+//     → ตัวเลขบนจอไม่ค้างหลังสร้าง/ปิดใบ · debounce รวมการเปลี่ยนถี่ ๆ ให้ยิง RPC ครั้งเดียว
+//   • ยังพึ่ง array ที่โหลดอยู่เป็น "สัญญาณเปลี่ยน" (transitional) — เฟสถัดไปตัด array แล้วเปลี่ยนไปฟัง realtime ตรง
+//   • โหมด local คืน null → useDealerPerformance คงเส้นทางคำนวณ client เดิม (เดโมผสม seed สาขาอื่น ห้ามหาย)
+function useDealerRollup(year: number): Map<string, DealerRollup> | null {
+  const { leads, quotations } = useSales();
+  const [rollup, setRollup] = useState<Map<string, DealerRollup> | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setRollup(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      metricsRepo.dealerRollup(year)
+        .then(r => { if (alive) setRollup(r); })
+        .catch(e => logRepoRead("metrics.dealerRollup", e));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+  }, [year, leads, quotations]);
+  return rollup;
+}
 
 export type DealerPerf = {
   /** ยอดขายสะสมทั้งปีนี้ (บาท) — จากใบที่ปิดการขายได้จริง */
@@ -46,6 +72,8 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
   const leads = useNetworkLeads();
   // เกณฑ์ค้างติดต่อของแต่ละสาขา — สาขาที่ไม่ได้ตั้งเองใช้ค่ากลาง
   const rules = useRepoValue<DealerLeadRulesMap>(() => settingsRepo.getLeadRulesMap(), {});
+  // rollup จาก DB (supabase เท่านั้น · local = null) — เป็นแหล่งจริงของ 5 ฟิลด์เมื่อพร้อม (M9 Phase 1)
+  const serverRollup = useDealerRollup(APP_NOW.getFullYear());
 
   return useMemo(() => {
     const m = new Map<string, DealerPerf>();
@@ -74,15 +102,29 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
       const days = (rules[code] ?? DEFAULT_LEAD_RULES).followUpAlertDays;
       if (needsFollowUp(l, days)) stale.set(code, (stale.get(code) ?? 0) + 1);
     }
+    const onTime = (code: string, openLeads: number) => openLeads > 0
+      ? Math.round(((openLeads - (stale.get(code) ?? 0)) / openLeads) * 100)
+      : null;
     for (const [code, r] of m) {
       const closed = r.won + r.lost;
       r.winRate = closed ? Math.round((r.won / closed) * 100) : null;
-      r.onTimePct = r.openLeads > 0
-        ? Math.round(((r.openLeads - (stale.get(code) ?? 0)) / r.openLeads) * 100)
-        : null;
+      r.onTimePct = onTime(code, r.openLeads);
+    }
+
+    // supabase: ยึด rollup จาก DB เป็นแหล่งจริงของ quotes/won/lost/revenue/openLeads (+winRate อนุพัทธ์)
+    //   onTimePct ยังคำนวณ client (พึ่งวันติดต่อล่าสุดใน activities — ยัง port ไม่ได้จนกว่าจะ normalize วันที่)
+    //   ค่าที่คำนวณ client ด้านบนทำหน้าที่เป็นค่าเริ่มต้น (กันจอว่างระหว่าง RPC ยังไม่กลับ) แล้ว DB ทับเมื่อพร้อม
+    if (serverRollup) {
+      for (const [code, sr] of serverRollup) {
+        const r = get(code);
+        r.quotes = sr.quotes; r.won = sr.won; r.lost = sr.lost; r.revenue = sr.revenue; r.openLeads = sr.openLeads;
+        const closed = sr.won + sr.lost;
+        r.winRate = closed ? Math.round((sr.won / closed) * 100) : null;
+        r.onTimePct = onTime(code, sr.openLeads);
+      }
     }
     return m;
-  }, [quotes, leads, rules]);
+  }, [quotes, leads, rules, serverRollup]);
 }
 
 /** % ความคืบหน้าเทียบเป้าทั้งปี — ไม่มีเป้า = null (แสดง "—" ไม่ใช่ 0%) */

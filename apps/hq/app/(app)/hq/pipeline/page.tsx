@@ -26,10 +26,10 @@ import {
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { dealers as dealersRepo, settings as settingsRepo, files as filesRepo } from "@pms/shared/lib/data";
-import { useFilters } from "@pms/shared/context/FilterContext";
+import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
-import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers } from "@pms/shared/lib/useNetworkData";
+import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary } from "@pms/shared/lib/useNetworkData";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBaht } from "@pms/shared/lib/format";
 import { useEffect } from "react";
@@ -39,6 +39,7 @@ const STEEL = "#2D2D2D";
 const MUTED = "var(--muted-foreground)";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const TH_MONTH: Record<string, number> = Object.fromEntries(TH_ABBR.map((m, i) => [m, i]));
 const parseThaiDate = (s: string): Date | null => {
   const mt = /^(\d{1,2})\s+(\S+)\s+(\d{4})/.exec((s || "").trim());
@@ -178,47 +179,60 @@ export default function SalesAnalyticsPage() {
   const provOpts = useMemo(() => [...new Set(allDealers.map(d => d.province).filter(Boolean))].sort(), [allDealers]);
   const btOpts = useMemo(() => [...new Set(netQuotes.map(x => x.productLine).filter(Boolean))].sort(), [netQuotes]);
 
+  // สถิติใบรายตัวแทน "หลังกรอง" ที่ DB (M9 Phase 2) — supabase · local/ยังไม่กลับ = client จาก quotes
+  // ตัวกรอง = ชุดเดียวกับ quotes: dealerCodes (codes ที่ผ่านตัวกรอง) · productLines (btSel) · ช่วงเวลา
+  const qSummary = useHQQuotationsSummary(useMemo(() => ({
+    dealerCodes: [...codes], productLines: btSel !== ALL ? [btSel] : undefined,
+    dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end), asOf: isoDateOf(APP_NOW),
+  }), [codes, btSel, timeRange.start, timeRange.end]));
+  const byDealer = useMemo(() => qSummary ? new Map(qSummary.byDealer.map(d => [d.dealerCode, d])) : null, [qSummary]);
+
   // ── สถิติรายตัวแทน — แหล่งเดียวของทุกกราฟ/ตาราง (คำนวณครั้งเดียว) ──
   const perf = useMemo(() => dealers.map(d => {
     const dq = quotes.filter(x => x.dealerCode === d.code);
     const dl = leads.filter(l => l.dealerCode === d.code);
-    const won = dq.filter(x => x.status === "won");
-    const lost = dq.filter(x => x.status === "lost");
-    const closed = won.length + lost.length;
-    // ใบเสนอราคาล่าสุด — ไม่มีฟิลด์ "อัปเดตล่าสุด" ในระบบ จึงใช้ค่านี้และตั้งชื่อคอลัมน์ให้ตรงกับที่มันเป็นจริง
+    // ใบเสนอราคาล่าสุด — ไม่มีฟิลด์ "อัปเดตล่าสุด" ในระบบ จึงใช้ค่านี้ (คง client — summary ไม่มีวันล่าสุด)
     const latest = dq.map(x => parseThaiDate(x.createdAt)).filter(Boolean).sort((a, b) => +b! - +a!)[0] ?? null;
+    // นับ/รวมยอด: supabase = จาก byDealer (parity) · ไม่มี = client จาก dq
+    const a = byDealer?.get(d.code);
+    const quotesN = a ? a.count : dq.length;
+    const quoteVal = a ? a.value : dq.reduce((s, x) => s + x.valueNum, 0);
+    const wonCount = a ? a.won : dq.filter(x => x.status === "won").length;
+    const lostCount = a ? a.lost : dq.filter(x => x.status === "lost").length;
+    const wonVal = a ? a.wonVal : dq.filter(x => x.status === "won").reduce((s, x) => s + x.valueNum, 0);
+    const closed = wonCount + lostCount;
     return {
       ...d,
       leads: dl.length,
       quoted: dl.filter(l => QUOTED_UP.includes(l.status)).length,
-      quotes: dq.length,
-      quoteVal: dq.reduce((s, x) => s + x.valueNum, 0),
-      wonCount: won.length,
-      lostCount: lost.length,   // ปฏิเสธจริงเท่านั้น — ไม่ใช่ "ใบทั้งหมด − ปิดได้"
-      wonVal: won.reduce((s, x) => s + x.valueNum, 0),
-      conv: closed ? Math.round(won.length / closed * 100) : null,
+      quotes: quotesN,
+      quoteVal,
+      wonCount,
+      lostCount,   // ปฏิเสธจริงเท่านั้น — ไม่ใช่ "ใบทั้งหมด − ปิดได้"
+      wonVal,
+      conv: closed ? Math.round(wonCount / closed * 100) : null,
       revenueActual: perfOf(d.code).revenue,
       tpct: d.revenueTarget > 0 ? Math.round(perfOf(d.code).revenue / d.revenueTarget * 100) : 0,
       latest: latest ? `${latest.getDate()} ${TH_ABBR[latest.getMonth()]} ${latest.getFullYear() + 543}` : "—",
     };
-  }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads]);
+  }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads, byDealer]);
 
   // ── Executive KPI (4 การ์ด — ตัด Forecast ออก ไม่มีข้อมูล · ตัด "ตัวแทนยอดขายสูงสุด" ตามคำสั่ง) ──
   const kpi = useMemo(() => {
-    const won = quotes.filter(x => x.status === "won");
-    const lost = quotes.filter(x => x.status === "lost");
-    const closed = won.length + lost.length;
+    // รวมจาก perf (มาจาก byDealer ที่ DB เมื่อพร้อม · client เมื่อ fallback) — ชุดเดียวกับตาราง/กราฟ
+    const wonCount = perf.reduce((s, d) => s + d.wonCount, 0), lostCount = perf.reduce((s, d) => s + d.lostCount, 0);
+    const closed = wonCount + lostCount;
     const actual = dealers.reduce((s, d) => s + perfOf(d.code).revenue, 0);
     // เป้าทั้งเครือใช้ค่าที่ HQ ตั้งไว้ · แต่ถ้ากรองเหลือบางตัวแทน ต้องรวมเป้าเฉพาะรายนั้น ไม่งั้น % ผิด
     const filtered = dealers.length !== allDealers.length;
     const target = filtered ? dealers.reduce((s, d) => s + d.revenueTarget, 0) : targets.annualTarget;
     return {
-      wonVal: won.reduce((s, x) => s + x.valueNum, 0), wonCount: won.length,
-      quotes: quotes.length, quoteVal: quotes.reduce((s, x) => s + x.valueNum, 0),
-      conv: closed ? Math.round(won.length / closed * 100) : null,
+      wonVal: perf.reduce((s, d) => s + d.wonVal, 0), wonCount,
+      quotes: perf.reduce((s, d) => s + d.quotes, 0), quoteVal: perf.reduce((s, d) => s + d.quoteVal, 0),
+      conv: closed ? Math.round(wonCount / closed * 100) : null,
       actual, target, tpct: target > 0 ? Math.round(actual / target * 100) : 0, filtered,
     };
-  }, [quotes, dealers, allDealers.length, targets.annualTarget]);
+  }, [perf, dealers, allDealers.length, targets.annualTarget]);
 
   // ── Section 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — สลับมุมมองได้ 4 แบบ ──
   // "อัตราแปลง" ที่เคยต่อท้ายแต่ละแถวถูกตัดออก (บอสสั่ง 17 ก.ค. 69) — มันคิดจากสถานะลีด

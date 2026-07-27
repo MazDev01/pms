@@ -4,18 +4,24 @@
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
 // จึงมีแค่ ดู / วิเคราะห์ / เปรียบเทียบ / ส่งออก — ไม่มีปุ่มสร้าง แก้ไข ลบ อนุมัติ
 import { useState, useMemo, useEffect } from "react";
-import { quotationStatusLabel, mainTemplateOf } from "@pms/shared/lib/mock";
+import { quotationStatusLabel, mainTemplateOf, fmtISOToThai, type HQQuotation } from "@pms/shared/lib/mock";
+import type { QuotationMock } from "@pms/shared/lib/data/types";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
+import type { QuoteSummaryFilters, QuoteListOpts } from "@pms/shared/lib/data/ports";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
-import { useFilters } from "@pms/shared/context/FilterContext";
-import { useNetworkQuotations, useNetworkLeads } from "@pms/shared/lib/useNetworkData";
+import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
+import { useNetworkQuotations, useNetworkLeads, useHQQuotationsSummary, useQuotationsPage } from "@pms/shared/lib/useNetworkData";
 import {
-  toQuoteRows, aggregate, regionDisplay, dealerLookups,
-  STATUS_ORDER, type QuoteRow,
+  toQuoteRows, aggregate, sumAggs, groupBy, agingBucketOf, regionDisplay, dealerLookups,
+  STATUS_ORDER, type QuoteRow, type DealerAgg, type AgingBucket,
 } from "@pms/shared/lib/hqQuotations";
+
+const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+const QPAGE_SIZE = 20;
+const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 import { QuotationKPICards } from "@pms/shared/components/hq/quotations/QuotationKPICards";
 import { QuotationFilterBar, EMPTY_FILTERS, type QuotationFilters } from "@pms/shared/components/hq/quotations/QuotationFilterBar";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -98,7 +104,99 @@ export default function NetworkQuotationPage() {
     return (b.createdDate?.getTime() ?? 0) - (a.createdDate?.getTime() ?? 0);
   }), [rows]);
 
-  const agg = useMemo(() => aggregate(rows), [rows]);
+  // ── M9 Phase 2: resolve derived filter → คอลัมน์จริง ให้ DB รวมยอด/แบ่งหน้าได้ ──
+  const nameOf = useMemo(() => new Map(ALL_DEALERS_FULL.map(d => [d.code, d.name])), [ALL_DEALERS_FULL]);
+  const resolvedDealerCodes = useMemo<string[] | undefined>(() => {
+    let codes: string[] | undefined;
+    const restrict = (pred: (c: string) => boolean) => { codes = (codes ?? ALL_DEALERS_FULL.map(d => d.code)).filter(pred); };
+    if (filters.dealer !== "all") restrict(c => c === filters.dealer);
+    if (filters.region !== "all") restrict(c => look.regionOf(c) === filters.region);
+    if (filters.province !== "all") restrict(c => look.provinceOf(c) === filters.province);
+    return codes;
+  }, [filters.dealer, filters.region, filters.province, ALL_DEALERS_FULL, look]);
+  const resolvedProductLines = useMemo<string[] | undefined>(() => {
+    if (filters.product === "all") return undefined;
+    const set = new Set<string>();
+    allRows.forEach(r => { if (r.productLine === filters.product || mainTemplateOf(r.productLine) === filters.product) set.add(r.productLine); });
+    return [...set];
+  }, [filters.product, allRows]);
+  const search = filters.search.trim();
+  const searchDealers = useMemo<string[] | undefined>(() => {
+    if (!search) return undefined;
+    const s = search.toLowerCase();
+    return ALL_DEALERS_FULL.filter(d => d.name.toLowerCase().includes(s) || d.code.toLowerCase().includes(s)).map(d => d.code);
+  }, [search, ALL_DEALERS_FULL]);
+
+  const status = filters.status === "all" ? undefined : filters.status;
+  const baseFilters: QuoteSummaryFilters = { status, dealerCodes: resolvedDealerCodes, productLines: resolvedProductLines, search: search || undefined, searchDealers, asOf: isoDateOf(APP_NOW) };
+  const qFilters: QuoteSummaryFilters = { ...baseFilters, dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end) };
+  const summary = useHQQuotationsSummary(qFilters);       // มีเวลา → analytics/KPI/ตาราง
+  const trendSummary = useHQQuotationsSummary(baseFilters); // ไม่มีเวลา → กราฟแนวโน้ม 12 เดือน
+
+  // dealerAgg = รายตัวแทน (supabase: DB · local/ยังไม่กลับ: client จาก rows) → ป้อน KPI/ภูมิภาค/อันดับ/ลีดเทียบใบ/มูลค่า
+  const dealerAgg = useMemo<DealerAgg[]>(() => {
+    if (summary) return summary.byDealer.map(d => ({
+      code: d.dealerCode, name: nameOf.get(d.dealerCode) ?? d.dealerCode, region: look.regionOf(d.dealerCode),
+      count: d.count, value: d.value, sent: d.sent, accepted: d.won, rejected: d.lost, wonValue: d.wonVal,
+    }));
+    return [...groupBy(rows, r => r.dealerCode).entries()].map(([code, list]) => ({ code, name: list[0].dealerName, region: list[0].region, ...aggregate(list) }));
+  }, [summary, rows, nameOf, look]);
+  const agg = useMemo(() => sumAggs(dealerAgg), [dealerAgg]);
+
+  const productTypes = useMemo(() => {
+    const m = new Map<string, { count: number; value: number }>();
+    if (summary) summary.byProduct.forEach(p => { const t = mainTemplateOf(p.product ?? "") || "ไม่ระบุ"; const r = m.get(t) ?? { count: 0, value: 0 }; r.count += p.projects; r.value += p.value; m.set(t, r); });
+    else rows.forEach(r => { const t = mainTemplateOf(r.productLine) || "ไม่ระบุ"; const x = m.get(t) ?? { count: 0, value: 0 }; x.count += 1; x.value += r.valueNum; m.set(t, x); });
+    return [...m.entries()].map(([type, x]) => ({ type, ...x })).sort((a, b) => b.count - a.count);
+  }, [summary, rows]);
+
+  const aging = useMemo(() => {
+    if (summary) return summary.aging.map(a => ({ key: a.bucket as AgingBucket, count: a.count, value: a.value }));
+    const m = new Map<AgingBucket, { count: number; value: number }>();
+    rows.filter(r => r.pending && r.agingDays != null).forEach(r => { const k = agingBucketOf(r.agingDays!); const x = m.get(k) ?? { count: 0, value: 0 }; x.count += 1; x.value += r.valueNum; m.set(k, x); });
+    return [...m.entries()].map(([key, x]) => ({ key, ...x }));
+  }, [summary, rows]);
+
+  const trend = useMemo(() => {
+    const slots: { label: string; y: number; m: number }[] = [];
+    for (let i = 11; i >= 0; i--) { const d = new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() - i, 1); slots.push({ label: TH_ABBR[d.getMonth()], y: d.getFullYear(), m: d.getMonth() }); }
+    const bar = Array(12).fill(0), line = Array(12).fill(0);
+    if (trendSummary) {
+      const byKey = new Map(trendSummary.byMonth.map(r => [`${r.y}-${r.m}`, r]));
+      slots.forEach((s, i) => { const r = byKey.get(`${s.y}-${s.m}`); if (r) { bar[i] = r.quotes; line[i] = r.won; } });
+    } else {
+      slots.forEach((s, i) => {
+        bar[i] = trendRows.filter(r => r.createdDate && r.createdDate.getFullYear() === s.y && r.createdDate.getMonth() === s.m).length;
+        line[i] = trendRows.filter(r => r.status === "won" && r.createdDate && r.createdDate.getFullYear() === s.y && r.createdDate.getMonth() === s.m).length;
+      });
+    }
+    return { months: slots.map(s => s.label), bar, line };
+  }, [trendSummary, trendRows]);
+
+  // ตาราง: supabase = แบ่งหน้าที่ DB (listPage) · local/ยังไม่กลับ = tableRows (client, ทั้งชุด)
+  const [tablePage, setTablePage] = useState(0);
+  const tableKey = JSON.stringify(qFilters);
+  useEffect(() => { setTablePage(0); }, [tableKey]); // เปลี่ยนตัวกรอง → กลับหน้า 1
+  const listOpts = useMemo<QuoteListOpts>(() => ({
+    limit: QPAGE_SIZE, offset: tablePage * QPAGE_SIZE, sort: { col: "date", dir: "desc" },
+    status, dealerCodes: resolvedDealerCodes, productLines: resolvedProductLines, search: search || undefined, searchDealers,
+    dateStart: qFilters.dateStart, dateEnd: qFilters.dateEnd,
+  }), [tablePage, tableKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageResult = useQuotationsPage(listOpts);
+  // แถวจาก listPage เป็น QuotationMock ดิบ → map เป็น HQQuotation (เท่า useNetworkQuotations) ก่อน toQuoteRows
+  const mapToHQ = (q: QuotationMock): HQQuotation => {
+    const lead = netLeads.find(l => (q.dealId != null && l.numId === q.dealId) || ((q.customerId ?? 0) > 0 && l.customerId === q.customerId));
+    const code = q.dealerCode ?? "CNX";
+    return {
+      id: `LIVE-${q.id}`, quoteNo: q.id, dealerCode: code, dealerName: nameOf.get(code) ?? code,
+      customer: q.customer, valueNum: q.totalValue, status: q.status, createdAt: fmtISOToThai(q.date),
+      salesperson: lead?.assigned ?? `ตัวแทน ${code}`, productLine: q.buildingType || q.project || "",
+      materialCost: q.materialCost, lineItems: q.lineItems,
+    };
+  };
+  const displayRows = useMemo(() => pageResult ? toQuoteRows(pageResult.rows.map(mapToHQ), validityDays, look) : tableRows, [pageResult, tableRows, validityDays, look]); // eslint-disable-line react-hooks/exhaustive-deps
+  const totalRows = pageResult ? pageResult.total : tableRows.length;
+  const pagination = pageResult ? { page: tablePage, pageCount: Math.max(1, Math.ceil(totalRows / QPAGE_SIZE)), total: totalRows, onPage: setTablePage } : undefined;
 
   return (
     <div className="erp">
@@ -131,14 +229,15 @@ export default function NetworkQuotationPage() {
         regions={look.allRegions}
         provinces={look.allProvinces}
         products={products}
-        resultCount={rows.length}
+        resultCount={agg.count}
       />
 
-      <QuotationAnalytics rows={rows} trendRows={trendRows} leads={leadRows} />
+      <QuotationAnalytics dealerAgg={dealerAgg} productTypes={productTypes} aging={aging} trend={trend} leads={leadRows} />
 
       {/* ตารางเต็มอยู่ท้ายหน้าตามเดิม (ตามที่บอสสั่ง — ไม่แยกแท็บ)
-          ความยาวหน้าคุมด้วยกฎอื่นแทน: การ์ดกราฟตรึงความสูง S/M/L + กราฟรายการโชว์ Top N */}
-      <QuotationTable rows={tableRows} onView={setViewQ} />
+          ความยาวหน้าคุมด้วยกฎอื่นแทน: การ์ดกราฟตรึงความสูง S/M/L + กราฟรายการโชว์ Top N
+          supabase = แบ่งหน้าที่ DB (listPage) · local = ทั้งชุด (tableRows) */}
+      <QuotationTable rows={displayRows} onView={setViewQ} pagination={pagination} />
 
       {viewQ && <QuotationDrawer quote={viewQ} onClose={() => setViewQ(null)} />}
     </div>

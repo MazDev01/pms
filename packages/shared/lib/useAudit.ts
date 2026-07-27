@@ -10,6 +10,8 @@ import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { audit as auditRepo } from "@pms/shared/lib/data";
 
 export type AuditEntry = { id: number; user: string; role: string; action: string; target: string; at: string };
+// เพดานอ่าน audit_log (M8) — ตารางนี้ append-only โตไม่จำกัด · หน้า /hq/audit แจ้งเมื่อชนเพดาน (ไม่ตัดเงียบ)
+export const AUDIT_READ_CAP = 5000;
 // v2: SEED เดิม (v1) มีรายการของฟีเจอร์ที่ถูกลบแล้ว ("ตั้งเพดานส่วนลด") + คำเก่า ("ระงับตัวแทน")
 // loadAudit อ่าน localStorage ก่อน SEED → เบราว์เซอร์เก่าจะเห็นของค้างตลอดแม้ SEED ในโค้ดสะอาดแล้ว
 // ขึ้นเวอร์ชันคีย์ + ลบคีย์เก่าทิ้ง เพื่อบังคับ re-seed จาก SEED ปัจจุบัน (กติกา version-key ของทั้งระบบ)
@@ -19,19 +21,13 @@ const EVENT = "bpms-audit-updated";
 const MAX = 300;
 const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-// ประวัติตั้งต้น (แสดงทันทีก่อนมี action จริง) — action จริงจะถูก prepend ทับ
-const SEED: AuditEntry[] = [
-  { id: 5, user: "วิชัย ประสิทธิ์", role: "HQ_MANAGEMENT", action: "แก้ราคากลาง", target: "โรงงาน · ฿6,800 → ฿7,000", at: "30 มิ.ย. 2569 · 09:22" },
-  { id: 3, user: "วิชัย ประสิทธิ์", role: "HQ_MANAGEMENT", action: "ปิดใช้งานตัวแทน", target: "RYG (ระยองสตีลเวิร์คส์)", at: "29 มิ.ย. 2569 · 17:05" },
-  { id: 2, user: "กิตติ พรมมา", role: "HQ_MANAGEMENT", action: "เพิ่มผู้ใช้ HQ", target: "weerapol@benjamin.co.th", at: "29 มิ.ย. 2569 · 14:30" },
-  { id: 1, user: "อารยา สุขวิเศษ", role: "HQ_MANAGEMENT", action: "แก้เป้าเครือ", target: "฿260M → ฿280M (ปี 2569)", at: "28 มิ.ย. 2569 · 11:12" },
-];
-
+// ไม่มีชุดตั้งต้น (SEED) แล้ว — เดิมมีรายการบันทึกตรวจสอบสมมติ 4 รายการ (ชื่อคน/เหตุการณ์/วันที่)
+// ที่แสดงเหมือนของจริง = ขัดกติกา "ห้ามกุข้อมูล" (M3) · ยังไม่มี action จริง = โชว์สถานะว่าง
 export function loadAudit(): AuditEntry[] {
   if (typeof window === "undefined") return [];
   try { KEY_OLD.forEach(k => localStorage.removeItem(k)); } catch {} // ล้าง seed เก่าที่มีของฟีเจอร์ที่ลบแล้ว
   try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s) as AuditEntry[]; } catch {}
-  return [...SEED];
+  return [];
 }
 // ประทับ "วันนี้" ของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง — กติกาเดียวกับทั้งระบบ
 // เดิมใช้ new Date() → รายการที่เพิ่งบันทึกได้วันจริง (เช่น 17 ก.ค.) ซึ่งอยู่นอกช่วงตัวกรองเวลาของ /hq/audit
@@ -62,15 +58,16 @@ export function useAuditLogger() {
   }, [session.name, role]);
 }
 
-// hook สำหรับ "ดู" — โหลดผ่าน repository + ฟังอัปเดตแบบเรียลไทม์
-export function useAuditEntries(): AuditEntry[] {
+// hook สำหรับ "ดู" — โหลดล่าสุดสูงสุด limit รายการผ่าน repository + ฟังอัปเดตแบบเรียลไทม์
+// default = AUDIT_READ_CAP · กระดิ่ง/แดชบอร์ดที่ต้องการแค่ล่าสุดไม่กี่รายการก็ถูกจำกัดตามไปด้วย (M8)
+export function useAuditEntries(limit: number = AUDIT_READ_CAP): AuditEntry[] {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   useEffect(() => {
-    const read = () => { auditRepo.list().then(setEntries).catch((e) => logRepoRead("audit.list", e)); };
+    const read = () => { auditRepo.list(limit).then(setEntries).catch((e) => logRepoRead("audit.list", e)); };
     read();
     window.addEventListener(EVENT, read);
     window.addEventListener("storage", read);
     return () => { window.removeEventListener(EVENT, read); window.removeEventListener("storage", read); };
-  }, []);
+  }, [limit]);
   return entries;
 }

@@ -8,7 +8,7 @@
 // ตอนนี้อ่าน/เขียนผ่าน repository → โหมด supabase เก็บที่ DB ผูกกับรหัสสาขา
 import { useCallback, useEffect, useState } from "react";
 import { logRepoRead } from "./repoLog";
-import { dealerSettings as repo } from "./data";
+import { dealerSettings as repo, realtime } from "./data";
 import { useCurrentDealer } from "./useCurrentDealer";
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, NOTIF_PREFS_EVENT } from "./mock";
 import { DEFAULT_DOC } from "./quotationPrint";
@@ -50,11 +50,14 @@ export function useDealerSettings(): UseDealerSettings {
     // หน้าตั้งค่ายิง event นี้ตอนกดบันทึกการแจ้งเตือน (กระดิ่งบน Topbar ต้องอัปเดตทันที)
     window.addEventListener(NOTIF_PREFS_EVENT, onEvt);
     window.addEventListener("storage", onEvt);
+    // ข้ามเครื่อง/ข้ามแท็บจริง (M4) — supabase: Realtime · local: no-op (ใช้ window event ข้างบนพอ)
+    const unsub = realtime.subscribeDealerSettings(() => read());
     return () => {
       alive = false;
       window.removeEventListener(DEALER_SETTINGS_EVENT, onEvt);
       window.removeEventListener(NOTIF_PREFS_EVENT, onEvt);
       window.removeEventListener("storage", onEvt);
+      unsub();
     };
   }, [dealer.code]);
 

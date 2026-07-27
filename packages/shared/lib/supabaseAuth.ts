@@ -109,6 +109,59 @@ export async function sbRestore(): Promise<MockSession | null> {
   return sessionFromToken(s.access_token, s.user?.email ?? ""); // ชื่อจริงตามมาทาง sbOnChange
 }
 
+// ── H4 · รีเซ็ตรหัสผ่านด้วย "ลิงก์ทางอีเมล" (ไม่ต้องใช้ service_role) ──────────────
+// ผู้ดูแลกดรีเซ็ต → ระบบส่งลิงก์ไปที่อีเมลล็อกอินของผู้ใช้ → ผู้ใช้กดลิงก์แล้วตั้งรหัสเอง
+// ปลอดภัยกว่าการออกรหัสชั่วคราว (ไม่มีใครเห็น/ถือรหัสของคนอื่น) และทำจากฝั่ง client ได้
+// เดิม (บั๊ก H4): สร้างสตริงรหัสปลอมแล้วโชว์ให้ก๊อป — ไม่เคยส่งไปที่ระบบยืนยันตัวตนเลย ล็อกอินไม่ได้
+export type ResetResult = { ok: true } | { ok: false; error: string };
+
+/** ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมล · redirect กลับมาหน้า /reset-password ของแอปเดียวกัน */
+export async function sbSendPasswordReset(email: string): Promise<ResetResult> {
+  const e = email.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(e)) return { ok: false, error: "อีเมลไม่ถูกต้อง" };
+  try {
+    const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined;
+    const { error } = await getSupabase().auth.resetPasswordForEmail(e, { redirectTo });
+    // Supabase ตอบสำเร็จเสมอแม้ไม่พบอีเมล (กัน user enumeration) — ถือว่าส่งแล้ว
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** ตั้งรหัสผ่านใหม่ของ "ผู้ใช้ปัจจุบัน" — ใช้ในหน้า /reset-password หลังกดลิงก์ (มี recovery session แล้ว) */
+export async function sbUpdatePassword(newPassword: string): Promise<ResetResult> {
+  if (newPassword.length < 8) return { ok: false, error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" };
+  try {
+    const { error } = await getSupabase().auth.updateUser({ password: newPassword });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ── H3 · เปลี่ยนรหัสผ่านตัวเอง (จากหน้าโปรไฟล์ ขณะล็อกอินอยู่) ──────────────────────
+// เดิม (บั๊ก H3): หน้าโปรไฟล์ตรวจความยาว/ความตรงกันแล้วขึ้น "เปลี่ยนแล้ว" ทันที
+//   โดยไม่เคยเรียกระบบยืนยันตัวตนเลย → ล็อกอินด้วยรหัสใหม่ไม่ได้
+// ปลอดภัยขึ้น: ยืนยัน "รหัสปัจจุบัน" ด้วยการ sign-in ซ้ำก่อน (กัน session ที่ถูกขโมยเปลี่ยนรหัสง่าย ๆ)
+// แล้วค่อย updateUser · Supabase เองไม่บังคับรหัสเดิม เราจึงเช็กเองที่ชั้นนี้
+export async function sbChangeOwnPassword(current: string, next: string): Promise<ResetResult> {
+  if (next.length < 8) return { ok: false, error: "รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร" };
+  const sb = getSupabase();
+  const { data: sess } = await sb.auth.getSession();
+  const email = sess.session?.user?.email;
+  if (!email) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  // ยืนยันรหัสปัจจุบัน
+  const { error: reauth } = await sb.auth.signInWithPassword({ email, password: current });
+  if (reauth) return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+  // ตั้งรหัสใหม่
+  const { error } = await sb.auth.updateUser({ password: next });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** ติดตามการเปลี่ยนสถานะ auth (login/logout/token refresh) — คืนฟังก์ชัน unsubscribe */
 export function sbOnChange(cb: (session: MockSession | null) => void): () => void {
   const { data } = getSupabase().auth.onAuthStateChange((_event, s) => {

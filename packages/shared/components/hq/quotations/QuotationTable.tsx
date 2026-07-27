@@ -11,9 +11,11 @@ import type { QuoteRow } from "@pms/shared/lib/hqQuotations";
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
 
-export function QuotationTable({ rows, onView }: {
+export function QuotationTable({ rows, onView, pagination }: {
   rows: QuoteRow[];
   onView: (q: QuoteRow) => void;
+  // M9 Phase 2: มี = แบ่งหน้าที่ DB (supabase) → แสดงตัวควบคุมหน้า · ไม่มี = แสดงทั้งชุด (local)
+  pagination?: { page: number; pageCount: number; total: number; onPage: (p: number) => void };
 }) {
   return (
     <div className="card" style={{ marginBottom: 0 }}>
@@ -97,6 +99,15 @@ export function QuotationTable({ rows, onView }: {
           </tbody>
         </table>
       </div>
+      {pagination && pagination.pageCount > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderTop: "1px solid #f2f4f7", fontSize: "0.72rem", color: MUTED }}>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>ทั้งหมด {pagination.total.toLocaleString()} ใบ · หน้า {pagination.page + 1}/{pagination.pageCount}</span>
+          <span style={{ display: "flex", gap: 6 }}>
+            <button className="btn btn-secondary btn-sm" disabled={pagination.page <= 0} onClick={() => pagination.onPage(pagination.page - 1)}>ก่อนหน้า</button>
+            <button className="btn btn-secondary btn-sm" disabled={pagination.page >= pagination.pageCount - 1} onClick={() => pagination.onPage(pagination.page + 1)}>ถัดไป</button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
