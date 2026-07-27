@@ -26,5 +26,10 @@ playwright/.cache/
 # debug/scratch scripts
 _m.mjs
 
-# Claude Code personal local settings
+# Claude Code personal local settings + เครื่องมือส่วนตัว
 .claude/settings.local.json
+.claude/hooks/
+
+# เครื่องมือ/ข้อมูลส่วนตัว (ไม่ผูกกับโปรเจกต์)
+.vscode/
+note/
