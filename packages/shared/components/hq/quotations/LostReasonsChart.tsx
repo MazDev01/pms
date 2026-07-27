@@ -10,30 +10,21 @@
 // ("ราคาสูงเกินงบประมาณ") → ไม่แมตช์สักอัน → การ์ดขึ้น "—" ทั้งที่มีลีดปิดไม่สำเร็จ 11 ราย
 // รายการของ HQ มีหน้าที่เป็น "ตัวเลือกตอนปิดดีล" เท่านั้น ไม่ใช่ตัวกรองรายงานย้อนหลัง
 // (วิธีเดียวกับโดนัทที่ /hq/leads และ /hq/pipeline ซึ่งนับจากข้อมูลจริงและแสดงได้ปกติมาตลอด)
-import { type LeadRow } from "@pms/shared/lib/mock";
-import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
+import { fmtBaht } from "@pms/shared/lib/format";
 import { Donut } from "@pms/shared/components/ui/Charts";
 
 // โทนแดง-ส้ม ชุดเดียวกับโดนัท "เหตุผล" ที่ /hq/leads และ /hq/pipeline
 const RAMP = ["#dc2626", "#ea580c", "#d97706", "#b45309", "#9f1239", "#7c2d12"];
 
-export function LostReasonsChart({ leads }: { leads: LeadRow[] }) {
-  const lost = leads.filter(l => l.status === "CANCELLED");
-
-  const m = new Map<string, { count: number; value: number }>();
-  lost.forEach(l => {
-    if (!l.lostReason) return;
-    const r = m.get(l.lostReason) ?? { count: 0, value: 0 };
-    r.count += 1;
-    r.value += parseBaht(l.value);
-    m.set(l.lostReason, r);
-  });
-  const rows = [...m.entries()]
-    .map(([reason, v]) => ({ reason, ...v }))
-    .sort((a, b) => b.count - a.count);
-
-  // ลีดที่ปิดไม่สำเร็จแต่ไม่ได้ระบุเหตุผล — แสดงแยก ไม่ยัดรวมกับ "อื่นๆ"
-  const unspecified = lost.filter(l => !l.lostReason).length;
+// reasons = เหตุผล+จำนวน+มูลค่า (จากลีดปิดไม่สำเร็จที่ระบุเหตุผล) · unspecified = ปิดไม่สำเร็จแต่ไม่ระบุ
+// totalLost = ลีดปิดไม่สำเร็จทั้งหมด · supabase: lead_summary (byLostReason/byStatus) · local: นับจาก leadRows
+export function LostReasonsChart({ reasons, unspecified, totalLost }: {
+  reasons: { reason: string; count: number; value: number }[];
+  unspecified: number;
+  totalLost: number;
+}) {
+  const rows = [...reasons].sort((a, b) => b.count - a.count);
+  const lost = { length: totalLost };
   const total = rows.reduce((s, r) => s + r.count, 0);
 
   return (

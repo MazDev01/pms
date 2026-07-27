@@ -16,7 +16,6 @@ import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { BuildingTypeChart } from "./BuildingTypeChart";
 import { LostReasonsChart } from "./LostReasonsChart";
 import { conversionRate, sumAggs, regionDisplay, type DealerAgg, type AgingBucket } from "@pms/shared/lib/hqQuotations";
-import type { LeadRow } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 
 const PRIMARY = "#003366";
@@ -146,12 +145,15 @@ function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
   );
 }
 
-export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, leads }: {
+export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, leadsByDealer, lostReasons, unspecifiedLost, totalLost }: {
   dealerAgg: DealerAgg[];
   productTypes: { type: string; count: number; value: number }[];
   aging: { key: AgingBucket; count: number; value: number }[];
   trend: { months: string[]; bar: number[]; line: number[] };
-  leads: LeadRow[];
+  leadsByDealer: Record<string, number>;
+  lostReasons: { reason: string; count: number; value: number }[];
+  unspecifiedLost: number;
+  totalLost: number;
 }) {
   return (
     <>
@@ -160,7 +162,7 @@ export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, lead
       <QuotationTrendChart trend={trend} />
 
       <div className="hq-dealer-charts">
-        <LeadsVsQuotationsChart dealerAgg={dealerAgg} leads={leads} />
+        <LeadsVsQuotationsChart dealerAgg={dealerAgg} leadsByDealer={leadsByDealer} />
         <QuotationValueVsSalesChart dealerAgg={dealerAgg} />
       </div>
 
@@ -176,7 +178,7 @@ export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, lead
       </div>
 
       <div className="hq-dealer-charts">
-        <LostReasonsChart leads={leads} />
+        <LostReasonsChart reasons={lostReasons} unspecified={unspecifiedLost} totalLost={totalLost} />
         <QuotationAgingChart aging={aging} />
       </div>
 

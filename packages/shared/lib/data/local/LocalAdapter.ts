@@ -14,6 +14,7 @@ import {
 } from "@pms/shared/lib/mock";
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
+import { parseBaht } from "@pms/shared/lib/format";
 import { profileKey, PROFILE_UPDATED_EVENT, sessions, type UserProfile } from "@pms/shared/lib/mock";
 
 // โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
@@ -271,19 +272,24 @@ export const LocalAdapter: DataAdapter = {
       });
       const cnt = <K extends string>(key: (l: LeadRow) => K) => { const m = new Map<K, number>(); rows.forEach(l => m.set(key(l), (m.get(key(l)) ?? 0) + 1)); return m; };
       const statusM = cnt(l => l.status);
+      const statusValM = new Map<string, number>();
+      rows.forEach(l => statusValM.set(l.status, (statusValM.get(l.status) ?? 0) + parseBaht(l.value)));
       const sourceM = cnt(l => (l.source || "ไม่ระบุ"));
       const productM = cnt(l => (l.product || "ไม่ระบุ"));
-      const lostM = new Map<string, number>();
-      rows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => lostM.set(l.lostReason!, (lostM.get(l.lostReason!) ?? 0) + 1));
+      const provM = new Map<string, number>();
+      rows.forEach(l => { const p = (l.province ?? "").trim(); if (p) provM.set(p, (provM.get(p) ?? 0) + 1); });
+      const lostM = new Map<string, { count: number; value: number }>();
+      rows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => { const r = lostM.get(l.lostReason!) ?? { count: 0, value: 0 }; r.count += 1; r.value += parseBaht(l.value); lostM.set(l.lostReason!, r); });
       const monthM = new Map<string, { y: number; m: number; created: number; won: number; lost: number }>();
       rows.forEach(l => { const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return; const y = d.getFullYear(), m = d.getMonth(), k = `${y}-${m}`; let r = monthM.get(k); if (!r) { r = { y, m, created: 0, won: 0, lost: 0 }; monthM.set(k, r); } r.created++; if (l.status === "PAID") r.won++; if (l.status === "CANCELLED") r.lost++; });
       const dealerM = new Map<string, { leads: number; quoted: number }>();
       rows.forEach(l => { const code = l.dealerCode ?? "CNX"; let r = dealerM.get(code); if (!r) { r = { leads: 0, quoted: 0 }; dealerM.set(code, r); } r.leads++; if (["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status)) r.quoted++; });
       return ok({
-        byStatus: [...statusM.entries()].map(([status, count]) => ({ status, count })),
+        byStatus: [...statusM.entries()].map(([status, count]) => ({ status, count, value: statusValM.get(status) ?? 0 })),
         bySource: [...sourceM.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
         byProduct: [...productM.entries()].map(([product, count]) => ({ product, count })).sort((a, b) => b.count - a.count),
-        byLostReason: [...lostM.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+        byProvince: [...provM.entries()].map(([province, count]) => ({ province, count })).sort((a, b) => a.province.localeCompare(b.province)),
+        byLostReason: [...lostM.entries()].map(([reason, x]) => ({ reason, ...x })).sort((a, b) => b.count - a.count),
         byMonth: [...monthM.values()],
         byDealer: [...dealerM.entries()].map(([dealerCode, x]) => ({ dealerCode, ...x })),
       });
@@ -353,6 +359,44 @@ export const LocalAdapter: DataAdapter = {
         byStatus: [...statusM.entries()].map(([status, x]) => ({ status, ...x })),
         byProduct: [...prodM.entries()].map(([product, x]) => ({ product, ...x })).sort((a, b) => b.value - a.value),
       });
+    },
+    networkCustomerSummary: () => {
+      const cs = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      const provM = new Map<string, { revenue: number; count: number }>();
+      for (const c of cs) {
+        const p = (c.province ?? "").trim() || "ไม่ระบุ";
+        let r = provM.get(p);
+        if (!r) { r = { revenue: 0, count: 0 }; provM.set(p, r); }
+        r.revenue += c.totalValue || 0; r.count += 1;
+      }
+      return ok({
+        total: cs.length,
+        byProvince: [...provM.entries()].map(([province, x]) => ({ province, ...x })).sort((a, b) => b.revenue - a.revenue),
+      });
+    },
+    unassignedLeads: (f) => {
+      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const asOf = f.asOf ? new Date(f.asOf) : new Date(2026, 5, 30);
+      const search = (f.search ?? "").trim().toLowerCase();
+      const rows = ls.filter(l => {
+        if (l.assigned?.trim()) return false;
+        if (l.status === "PAID" || l.status === "CANCELLED") return false; // isLeadOpen
+        const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return false;
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (f.dateStart && iso < f.dateStart) return false;
+        if (f.dateEnd && iso > f.dateEnd) return false;
+        const code = l.dealerCode ?? "CNX";
+        if (f.dealerCodes?.length && !f.dealerCodes.includes(code)) return false;
+        if (f.province && l.province !== f.province) return false;
+        if (f.product && l.product !== f.product) return false;
+        if (f.source && (l.source || "ไม่ระบุ") !== f.source) return false;
+        if (search && !`${l.company ?? ""} ${l.contact ?? ""} ${l.province ?? ""} ${l.product ?? ""} ${l.id ?? ""} ${code}`.toLowerCase().includes(search)) return false;
+        const hours = f.perDealer?.[code] ?? f.defaultHours ?? 48;
+        return (asOf.getTime() - d.getTime()) / 3_600_000 > hours;
+      });
+      const m = new Map<string, number>();
+      rows.forEach(l => { const c = l.dealerCode ?? "CNX"; m.set(c, (m.get(c) ?? 0) + 1); });
+      return ok({ total: rows.length, byDealer: [...m.entries()].map(([dealerCode, count]) => ({ dealerCode, count })).sort((a, b) => b.count - a.count) });
     },
     hqQuotationsSummary: (f) => {
       const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
@@ -516,6 +560,13 @@ export const LocalAdapter: DataAdapter = {
       });
       if (n) writeKey(SALES.quotations, next);
       return ok(n);
+    },
+    salesperson: (quoteId) => {
+      const q = readKey<QuotationMock[]>(SALES.quotations, quoteSeed).find(x => x.id === quoteId);
+      if (!q) return ok(null);
+      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const lead = ls.find(l => (q.dealId != null && l.numId === q.dealId) || ((q.customerId ?? 0) > 0 && l.customerId === q.customerId));
+      return ok(lead?.assigned ?? null);
     },
     // เลขที่ใบถัดไป = max ของเลขท้าย +1 (เทียบเท่า nextQId เดิมในหน้าจอ) · dealer ไม่ใช้ในโหมด local
     nextQuoteNo: (_dealer, prefix) => {

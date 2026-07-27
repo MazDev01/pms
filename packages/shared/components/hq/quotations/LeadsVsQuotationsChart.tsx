@@ -6,18 +6,14 @@
 // อัตรา = ใบเสนอราคา ÷ ลีด (เกิน 100% ได้ — ลีดหนึ่งรายออกใบได้หลายใบ)
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { type DealerAgg } from "@pms/shared/lib/hqQuotations";
-import type { LeadRow } from "@pms/shared/lib/mock";
 
 const QUOTE_COLOR = "#003366";
 const LEAD_COLOR = "#94a3b8";
 
-export function LeadsVsQuotationsChart({ dealerAgg, leads }: { dealerAgg: DealerAgg[]; leads: LeadRow[] }) {
+// leadsByDealer = จำนวนลีดต่อรหัสสาขา (supabase: lead_summary.byDealer · local: นับจาก leadRows)
+export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg: DealerAgg[]; leadsByDealer: Record<string, number> }) {
   const quoteByDealer = new Map(dealerAgg.map(d => [d.code, d]));
-  const leadByDealer = new Map<string, number>();
-  leads.forEach(l => {
-    const code = l.dealerCode || "";
-    if (code) leadByDealer.set(code, (leadByDealer.get(code) ?? 0) + 1);
-  });
+  const leadByDealer = new Map<string, number>(Object.entries(leadsByDealer));
 
   // แสดงทุกสาขาที่มีลีดหรือมีใบเสนอราคาอย่างน้อยหนึ่งอย่าง
   const codes = [...new Set([...quoteByDealer.keys(), ...leadByDealer.keys()])];

@@ -15,6 +15,9 @@ export type ExportMenuProps = {
   title?: string;
   headers: string[];
   rows: Cell[][];
+  /** ดึงแถวแบบ async ตอนกด export (เช่น supabase ที่แบ่งหน้า — ต้องไปเอาทั้งชุดจาก DB ก่อน)
+   *  ถ้าไม่ส่ง จะใช้ rows ที่ให้มาตรง ๆ (พฤติกรรมเดิมทุกหน้า) */
+  getRows?: () => Promise<Cell[][]>;
   /** ปรับสไตล์ปุ่ม trigger */
   small?: boolean;
   /** รายการเสริมท้ายเมนู (เช่น นำเข้า CSV / เพิ่มลูกค้าเดิม) */
@@ -37,8 +40,9 @@ function downloadBlob(blob: Blob, name: string) {
 const esc = (c: Cell) => String(c ?? "");
 
 /** Export ตาราง — CSV / Excel / PDF (frontend-only, ไม่ง้อ backend) */
-export function ExportMenu({ filename, title, headers, rows, small, extraActions, extraLabel }: ExportMenuProps) {
+export function ExportMenu({ filename, title, headers, rows, getRows, small, extraActions, extraLabel }: ExportMenuProps) {
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,27 +51,33 @@ export function ExportMenu({ filename, title, headers, rows, small, extraActions
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  function exportCSV() {
-    const csv = [headers, ...rows]
+  // ดึงแถวจริงตอนกด — supabase ใช้ getRows (ทั้งชุดจาก DB) · หน้าอื่นใช้ rows ตรง ๆ
+  const resolveRows = async (): Promise<Cell[][]> => (getRows ? await getRows() : rows);
+
+  async function exportCSV() {
+    const data = await resolveRows();
+    const csv = [headers, ...data]
       .map(r => r.map(c => `"${esc(c).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
     downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `${filename}.csv`);
     setOpen(false);
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const data = await resolveRows();
     const thead = `<tr>${headers.map(h => `<th style="background:#003366;color:#fff;padding:6px 10px;text-align:left">${esc(h)}</th>`).join("")}</tr>`;
-    const tbody = rows.map(r => `<tr>${r.map(c => `<td style="padding:5px 10px;border:1px solid #e5e7eb">${esc(c)}</td>`).join("")}</tr>`).join("");
+    const tbody = data.map(r => `<tr>${r.map(c => `<td style="padding:5px 10px;border:1px solid #e5e7eb">${esc(c)}</td>`).join("")}</tr>`).join("");
     const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table>${thead}${tbody}</table></body></html>`;
     downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), `${filename}.xls`);
     setOpen(false);
   }
 
-  function exportPDF() {
+  async function exportPDF() {
+    const data = await resolveRows();
     const win = window.open("", "_blank", "width=1000,height=700");
     if (!win) { setOpen(false); return; }
     const thead = `<tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>`;
-    const tbody = rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+    const tbody = data.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
     win.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title ?? filename)}</title>
       <style>
         *{font-family:"Noto Sans Thai","Sarabun",system-ui,sans-serif;box-sizing:border-box}
@@ -80,7 +90,7 @@ export function ExportMenu({ filename, title, headers, rows, small, extraActions
         tr:nth-child(even) td{background:#f8f9fb}
       </style></head><body>
       <h1>${esc(title ?? filename)}</h1>
-      <div class="sub">ระบบ PMS · ${rows.length} รายการ</div>
+      <div class="sub">ระบบ PMS · ${data.length} รายการ</div>
       <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
       <script>window.onload=function(){window.print()}</script>
       </body></html>`);
@@ -88,10 +98,13 @@ export function ExportMenu({ filename, title, headers, rows, small, extraActions
     setOpen(false);
   }
 
+  // ห่อ handler ให้กันกดซ้ำระหว่างดึงข้อมูล (getRows เป็น async)
+  const run = (fn: () => void | Promise<void>) => async () => { if (busy) return; setBusy(true); try { await fn(); } finally { setBusy(false); } };
+
   const OPTS = [
-    { label: "PDF", desc: "พิมพ์ / บันทึกเป็น PDF", Icon: Printer, fn: exportPDF },
-    { label: "Excel", desc: "ไฟล์ .xls", Icon: FileSpreadsheet, fn: exportExcel },
-    { label: "CSV", desc: "ไฟล์ .csv", Icon: FileText, fn: exportCSV },
+    { label: "PDF", desc: "พิมพ์ / บันทึกเป็น PDF", Icon: Printer, fn: run(exportPDF) },
+    { label: "Excel", desc: "ไฟล์ .xls", Icon: FileSpreadsheet, fn: run(exportExcel) },
+    { label: "CSV", desc: "ไฟล์ .csv", Icon: FileText, fn: run(exportCSV) },
   ];
 
   return (

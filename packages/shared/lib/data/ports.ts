@@ -160,10 +160,12 @@ export interface WonBuildingRaw { quoteNo: string; productLine: string; valueNum
 /** สรุปลีด "หลังกรอง" สำหรับ /hq/leads (M9 Phase 2) */
 export interface LeadMonthRow { y: number; m: number; created: number; won: number; lost: number; }
 export interface LeadSummary {
-  byStatus: { status: string; count: number }[];
+  byStatus: { status: string; count: number; value: number }[];
   bySource: { source: string; count: number }[];
   byProduct: { product: string; count: number }[];
-  byLostReason: { reason: string; count: number }[];
+  byLostReason: { reason: string; count: number; value: number }[];
+  /** จังหวัด (ลูกค้า) ที่มีลีด — ป้อนตัวเลือกดรอปดาวน์ "จังหวัด" หน้า /hq/leads (M9 Phase 4) */
+  byProvince: { province: string; count: number }[];
   byMonth: LeadMonthRow[];
   /** รายสาขา — leads=จำนวนลีด · quoted=ถึงขั้นเสนอราคาขึ้นไป (QUOTED_UP) · ป้อน leadVsQuote/dealerPerf */
   byDealer: { dealerCode: string; leads: number; quoted: number }[];
@@ -171,6 +173,21 @@ export interface LeadSummary {
 export interface LeadSummaryFilters {
   dealerCodes?: string[]; province?: string; product?: string; source?: string;
   search?: string; status?: string; dateStart?: string; dateEnd?: string;
+}
+/** สรุปลูกค้าทั้งเครือ — total (จำนวนลูกค้า) + ยอดขายรายจังหวัด · ป้อน KPI ลูกค้า + provinceTop6 (M9 Phase 4) */
+export interface NetworkCustomerSummary {
+  total: number;
+  byProvince: { province: string; revenue: number; count: number }[];
+}
+/** ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) */
+export interface UnassignedSummary {
+  total: number;
+  byDealer: { dealerCode: string; count: number }[];
+}
+export interface UnassignedFilters {
+  asOf?: string; defaultHours?: number; perDealer?: Record<string, number>;
+  dealerCodes?: string[]; province?: string; product?: string; source?: string;
+  search?: string; dateStart?: string; dateEnd?: string;
 }
 export interface MetricsRepo {
   /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง
@@ -187,6 +204,10 @@ export interface MetricsRepo {
   networkQuoteRange(start: string, end: string, dealer?: string): Promise<Map<string, QuoteRangeRow>>;
   /** สรุปใบในช่วง (byMonth/byStatus/byProduct) รอบเดียว — ป้อนการ์ด dashboard หลายใบ (M9) */
   dashboardQuoteSummary(start: string, end: string, dealer?: string): Promise<DashboardQuoteSummary>;
+  /** สรุปลูกค้าทั้งเครือ (total + byProvince) — ปลด dashboard ออกจาก netCustomers array (M9 Phase 4) */
+  networkCustomerSummary(): Promise<NetworkCustomerSummary>;
+  /** ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ปลดการ์ดเตือน /hq/leads ออกจาก netLeads array (M9 Phase 4) */
+  unassignedLeads(filters: UnassignedFilters): Promise<UnassignedSummary>;
 }
 
 // ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
@@ -253,6 +274,8 @@ export interface QuotationsRepo {
   createNumbered(dealer: string, prefix: string | undefined, row: Omit<QuotationMock, "id">): Promise<QuotationMock>;
   /** ปิดใบที่ "ส่งแล้ว" และเลยวันหมดอายุ → สถานะ expired · asOf = วันนี้ของระบบ (YYYY-MM-DD) · คืนจำนวนใบที่ปิด */
   expireOverdue(asOf: string, scope?: Scope): Promise<number>;
+  /** ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
+  salesperson(quoteId: string): Promise<string | null>;
 }
 export interface CustomersRepo {
   list(scope?: Scope): Promise<CustomerRow[]>;

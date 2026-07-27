@@ -58,6 +58,8 @@ export const metrics: MetricsRepo = {
     dedupeRead(`metrics.dashboardQuoteSummary:${start}:${end}:${dealer ?? ""}`, () => _metrics.dashboardQuoteSummary(start, end, dealer)),
   hqQuotationsSummary: (f) =>
     dedupeRead(`metrics.hqQuotationsSummary:${JSON.stringify(f)}`, () => _metrics.hqQuotationsSummary(f)),
+  networkCustomerSummary: () => dedupeRead("metrics.networkCustomerSummary", () => _metrics.networkCustomerSummary()),
+  unassignedLeads: (f) => dedupeRead(`metrics.unassignedLeads:${JSON.stringify(f)}`, () => _metrics.unassignedLeads(f)),
 };
 export const leads = adapter.leads;
 export const quotations = adapter.quotations;

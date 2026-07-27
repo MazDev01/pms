@@ -467,12 +467,13 @@ export const SupabaseAdapter: DataAdapter = {
         p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
       });
       if (error) throw new Error(error.message);
-      const d = (data ?? {}) as { byStatus?: Row[]; bySource?: Row[]; byProduct?: Row[]; byLostReason?: Row[]; byMonth?: Row[]; byDealer?: Row[] };
+      const d = (data ?? {}) as { byStatus?: Row[]; bySource?: Row[]; byProduct?: Row[]; byProvince?: Row[]; byLostReason?: Row[]; byMonth?: Row[]; byDealer?: Row[] };
       return {
-        byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count) })),
+        byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count), value: Number(r.value) })),
         bySource: (d.bySource ?? []).map(r => ({ source: String(r.source), count: Number(r.count) })),
         byProduct: (d.byProduct ?? []).map(r => ({ product: String(r.product), count: Number(r.count) })),
-        byLostReason: (d.byLostReason ?? []).map(r => ({ reason: String(r.reason), count: Number(r.count) })),
+        byProvince: (d.byProvince ?? []).map(r => ({ province: String(r.province), count: Number(r.count) })),
+        byLostReason: (d.byLostReason ?? []).map(r => ({ reason: String(r.reason), count: Number(r.count), value: Number(r.value) })),
         byMonth: (d.byMonth ?? []).map(r => ({ y: Number(r.y), m: Number(r.m), created: Number(r.new), won: Number(r.won), lost: Number(r.lost) })),
         byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), leads: Number(r.leads), quoted: Number(r.quoted) })),
       };
@@ -511,6 +512,29 @@ export const SupabaseAdapter: DataAdapter = {
         })),
         byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count), value: Number(r.value) })),
         byProduct: (d.byProduct ?? []).map(r => ({ product: (r.product as string) ?? null, value: Number(r.value), projects: Number(r.projects) })),
+      };
+    },
+    networkCustomerSummary: async () => {
+      const { data, error } = await sb().rpc("network_customer_summary");
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { total?: number; byProvince?: Row[] };
+      return {
+        total: Number(d.total ?? 0),
+        byProvince: (d.byProvince ?? []).map(r => ({ province: String(r.province), revenue: Number(r.revenue), count: Number(r.count) })),
+      };
+    },
+    unassignedLeads: async (f) => {
+      const { data, error } = await sb().rpc("unassigned_leads", {
+        p_as_of: f.asOf ?? "2026-06-30", p_default_hours: f.defaultHours ?? 48, p_per_dealer: f.perDealer ?? null,
+        p_dealer_codes: f.dealerCodes ?? null, p_province: f.province ?? null, p_product: f.product ?? null,
+        p_source: f.source ?? null, p_search: (f.search ?? "").trim() || null,
+        p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const d = (data ?? {}) as { total?: number; byDealer?: Row[] };
+      return {
+        total: Number(d.total ?? 0),
+        byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), count: Number(r.count) })),
       };
     },
     hqQuotationsSummary: async (f) => {
@@ -621,6 +645,11 @@ export const SupabaseAdapter: DataAdapter = {
       const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf });
       if (error) throw new Error(error.message);
       return Number(data ?? 0);
+    },
+    salesperson: async (quoteId) => {
+      const { data, error } = await sb().rpc("quotation_salesperson", { p_quote_id: quoteId });
+      if (error) throw new Error(error.message);
+      return (data as string | null) ?? null;
     },
     // ออกเลข + insert รวด (atomic) — RPC ที่ DB (0034) · insert ล้ม = ตัวนับ rollback ไม่เดิน (H8)
     createNumbered: async (dealer, prefix, row) => {

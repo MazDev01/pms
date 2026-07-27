@@ -23,7 +23,7 @@ import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/li
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar, SelectFilter } from "@pms/shared/components/filters/FilterBar";
 import { SalesTrendChart } from "@pms/shared/components/ui/SalesTrendChart";
-import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads, useNetworkQuoteRange, useDashboardQuoteSummary } from "@pms/shared/lib/useNetworkData";
+import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads, useNetworkQuoteRange, useDashboardQuoteSummary, useLeadSummary, useNetworkCustomerSummary } from "@pms/shared/lib/useNetworkData";
 import { useDealerPerformance } from "@pms/shared/lib/useDealerPerformance";
 
 import { useSales } from "@pms/shared/context/SalesContext";
@@ -33,6 +33,8 @@ import { fmtBaht, parseBaht } from "@pms/shared/lib/format";
 const PRIMARY = "#003366";
 // palette หลายสีสำหรับกราฟรายภาค/แม่แบบ — navy หลัก + สีเสริม (ไม่ฉูดฉาด)
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
+// ลีดทั้งเครือทุกช่วง (ตัวกรองว่าง) — อ้างอิงคงที่ กัน useLeadSummary รีเฟตช์ทุกเรนเดอร์
+const EMPTY_LEAD_FILTER = {};
 const TH_MONTH: Record<string, number> = { "ม.ค.": 0, "ก.พ.": 1, "มี.ค.": 2, "เม.ย.": 3, "พ.ค.": 4, "มิ.ย.": 5, "ก.ค.": 6, "ส.ค.": 7, "ก.ย.": 8, "ต.ค.": 9, "พ.ย.": 10, "ธ.ค.": 11 };
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const parseThaiDate = (s: string): Date | null => {
@@ -97,6 +99,22 @@ export default function HQDashboard() {
   const prevRange = useNetworkQuoteRange(addDaysD(timeRange.start, -periodDays), addDaysD(timeRange.start, -1), selDealer?.code);
   // สรุปใบในช่วง (byStatus/byProduct/byMonth) ที่ DB — ป้อน productAgg/buildingPerf/quoteStatus/pipeline/wonVal
   const quoteSummary = useDashboardQuoteSummary(timeRange.start, timeRange.end, selDealer?.code);
+  // สรุปลีดทั้งเครือ (ทุกสถานะ ทุกช่วง — ไม่ผูก selDealer เท่าพฤติกรรม allNetLeads เดิม) + ลูกค้าทั้งเครือ ที่ DB
+  //   ปลด journeyStages/leadQuoteSeries/monthly/bottomMetrics/barTrend/provinceTop6 ออกจาก array (M9 Phase 4)
+  //   null (local/ยังไม่โหลด) → useMemo แต่ละใบ fallback คำนวณจาก allNetLeads/netCustomers เดิม
+  const dashLeadSum = useLeadSummary(EMPTY_LEAD_FILTER);
+  const custSummary = useNetworkCustomerSummary();
+  // ลีดรายเดือนปฏิทิน (index 0..11, รวมทุกปี ให้ตรง getMonth ฝั่ง client) + จำนวนลีดรวม จาก lead_summary
+  const leadCal = useMemo(() => {
+    if (!dashLeadSum) return null;
+    const m = Array(12).fill(0);
+    for (const r of dashLeadSum.byMonth) m[r.m] += r.created;
+    return m;
+  }, [dashLeadSum]);
+  const leadTotal = useMemo(
+    () => dashLeadSum ? dashLeadSum.byStatus.reduce((s, r) => s + r.count, 0) : null,
+    [dashLeadSum],
+  );
   const { appointments } = useSales();
   const totalDealers = allDealers.length;
   // ใบเสนอราคาของตัวแทนที่เลือก — ยังไม่ตัดตามช่วงเวลา
@@ -174,15 +192,15 @@ export default function HQDashboard() {
     const pctf = (c: number, p: number) => p > 0 ? Math.round(((c - p) / p) * 100) : (c > 0 ? 100 : 0);
     return {
       dealers:   { value: `${totalDealers}`, trend: 0 },
-      leads:     { value: `${allNetLeads.length}`, trend: 0 },
-      customers: { value: `${netCustomers.length}`, trend: 0 },
+      leads:     { value: `${leadTotal ?? allNetLeads.length}`, trend: 0 },
+      customers: { value: `${custSummary?.total ?? netCustomers.length}`, trend: 0 },
       quotes:    { value: `${cur.quotes}`, trend: pctf(cur.quotes, prev.quotes) },
       wonVal:    { value: fmtBaht(cur.wonVal), trend: pctf(cur.wonVal, prev.wonVal) },
       won:       { value: `${cur.won}`, trend: pctf(cur.won, prev.won) },
       lost:      { value: `${cur.lost}`, trend: pctf(cur.lost, prev.lost) },
       conv:      { value: `${cur.conv}%`, trend: pctf(cur.conv, prev.conv) },
     };
-  }, [winQuotes, prevQuotes, curRange, prevRange, totalDealers, allNetLeads.length, netCustomers.length]);
+  }, [winQuotes, prevQuotes, curRange, prevRange, totalDealers, leadTotal, allNetLeads.length, custSummary?.total, netCustomers.length]);
 
   // ── สถิติรายตัวแทนในช่วง — คำนวณจากใบเสนอราคาจริง (รายได้=มูลค่า won · อัตราปิด=won/(won+lost)) ──
   const dealerStats = useMemo(() => {
@@ -277,7 +295,6 @@ export default function HQDashboard() {
   const journeyStages = useMemo(() => {
     const rank: Record<string, number> = { WAITING: 1, BULLET: 2, QUOTED: 3, FOLLOWUP: 3, NEGO: 4, PAID: 5 };
     const rk = (s: string) => rank[s] ?? 0;
-    const total = allNetLeads.length;
     const defs = [
       { label: "ลูกค้าเป้าหมาย", r: 0 },
       { label: "ติดต่อแล้ว", r: 1 },
@@ -286,6 +303,16 @@ export default function HQDashboard() {
       { label: "เจรจาต่อรอง", r: 4 },
       { label: "ปิดการขาย", r: 5 },
     ];
+    // supabase: cumulative จาก byStatus (count + value=Σ parse_baht) ที่ DB · local/ยังไม่กลับ: จาก array เดิม
+    if (dashLeadSum) {
+      const total = dashLeadSum.byStatus.reduce((s, r) => s + r.count, 0);
+      return defs.map(d => {
+        const rows = dashLeadSum.byStatus.filter(r => rk(r.status) >= d.r); // r=0 → รวมทุกสถานะ (rk>=0 เสมอ)
+        const count = rows.reduce((s, r) => s + r.count, 0);
+        return { label: d.label, count, pct: total ? Math.round((count / total) * 100) : 0, value: rows.reduce((s, r) => s + r.value, 0) };
+      });
+    }
+    const total = allNetLeads.length;
     return defs.map(d => {
       const arr = d.r === 0 ? allNetLeads : allNetLeads.filter(l => rk(l.status) >= d.r);
       return {
@@ -295,18 +322,19 @@ export default function HQDashboard() {
         value: arr.reduce((s, l) => s + parseBaht(l.value), 0),
       };
     });
-  }, [allNetLeads]);
+  }, [dashLeadSum, allNetLeads]);
 
   // ── Lead vs Quotation (รายเดือน) — นับทุกใบทั้งเครือ ทุกช่วง แยกตามเดือนปฏิทิน ──
   // qC จาก summary ทั้งเครือทุกช่วง (dealer=undefined) — supabase · local/ยังไม่กลับ = netQuotes เดิม
   const allQuoteSummary = useDashboardQuoteSummary(new Date(1970, 0, 1), new Date(2999, 11, 31), undefined);
   const leadQuoteSeries = useMemo(() => {
     const lC = Array(12).fill(0), qC = Array(12).fill(0);
-    allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) lC[d.getMonth()]++; });
+    if (leadCal) { for (let i = 0; i < 12; i++) lC[i] = leadCal[i]; }        // supabase: lead_summary.byMonth
+    else allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) lC[d.getMonth()]++; });
     if (allQuoteSummary) { for (const r of allQuoteSummary.byMonth) qC[r.m] += r.quotes; }
     else netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (d) qC[d.getMonth()]++; });
     return { lC, qC };
-  }, [allNetLeads, allQuoteSummary, netQuotes]);
+  }, [leadCal, allNetLeads, allQuoteSummary, netQuotes]);
 
   // ── สถานะใบเสนอราคา (กราฟแท่ง) — สีตามสเปค: ร่าง เทา · ส่ง navy · ตอบรับ เขียว · ปฏิเสธ แดง · หมดอายุ ส้ม ──
   const quoteStatus = useMemo(() => {
@@ -329,22 +357,28 @@ export default function HQDashboard() {
   // ── ชุดข้อมูลรายเดือนสำหรับ sparkline บนการ์ด KPI ──
   const monthly = useMemo(() => {
     const mo = (s: string) => { const d = parseThaiDate(s); return d ? d.getMonth() : -1; };
-    const leadsM = Array(12).fill(0); // ส่วนใบมาจาก monthCal (DB) · ส่วนลีดยังนับ client
-    allNetLeads.forEach(l => { const m = mo(l.createdAt ?? ""); if (m >= 0) leadsM[m]++; });
+    const leadsM = Array(12).fill(0); // ใบมาจาก monthCal (DB) · ลีด: supabase=leadCal(DB) · local/ยังไม่กลับ=array
+    if (leadCal) { for (let i = 0; i < 12; i++) leadsM[i] = leadCal[i]; }
+    else allNetLeads.forEach(l => { const m = mo(l.createdAt ?? ""); if (m >= 0) leadsM[m]++; });
     const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
     const slice = (arr: number[]) => arr.slice(a, b + 1);
     const convM = monthCal.won.map((w, i) => (w + monthCal.lost[i]) ? Math.round(w / (w + monthCal.lost[i]) * 100) : 0);
     return { sales: slice(monthCal.wonVal.map(v => v / 1e6)), quotes: slice(monthCal.quotes), customers: slice(leadsM), won: slice(monthCal.won), lost: slice(monthCal.lost), conv: slice(convM) };
-  }, [monthCal, allNetLeads, timeRange]);
+  }, [monthCal, leadCal, allNetLeads, timeRange]);
 
-  // ยอดขายตามจังหวัด (Top 6) — จากลูกค้าในเครือ
+  // ยอดขายตามจังหวัด (Top 6) — จากลูกค้าในเครือ · supabase: network_customer_summary.byProvince · local: array
   const provinceTop6 = useMemo(() => {
-    const m = new Map<string, number>();
-    netCustomers.forEach(c => m.set(c.province, (m.get(c.province) ?? 0) + (c.totalRevenue || 0)));
-    const arr = [...m.entries()].map(([province, value]) => ({ province, value })).sort((a, b) => b.value - a.value);
+    const arr = custSummary
+      ? custSummary.byProvince.map(p => ({ province: p.province, value: p.revenue }))
+      : (() => {
+          const m = new Map<string, number>();
+          netCustomers.forEach(c => m.set(c.province, (m.get(c.province) ?? 0) + (c.totalRevenue || 0)));
+          return [...m.entries()].map(([province, value]) => ({ province, value }));
+        })();
+    arr.sort((a, b) => b.value - a.value);
     const max = Math.max(...arr.map(a => a.value), 1);
     return arr.slice(0, 6).map(p => ({ ...p, pct: Math.round(p.value / max * 100) }));
-  }, [netCustomers]);
+  }, [custSummary, netCustomers]);
 
   // สถานะ Pipeline โดยรวม — จำนวน + มูลค่า ต่อสถานะ (แถบแนวนอน)
   const pipeline = useMemo(() => {
@@ -365,22 +399,23 @@ export default function HQDashboard() {
     const lm = timeRange.end.getMonth();
     const cnt = (arr: string[], m: number) => arr.filter(s => { const d = parseThaiDate(s); return d && d.getMonth() === m; }).length;
     const at = (arr: number[], m: number) => (m >= 0 && m < 12) ? arr[m] : 0; // ส่วนใบจาก monthCal (DB)
-    const leadDates = allNetLeads.map(l => l.createdAt ?? "");
+    const leadDates = leadCal ? null : allNetLeads.map(l => l.createdAt ?? ""); // supabase ใช้ leadCal แทน
     const wonThis = at(monthCal.won, lm), wonPrev = at(monthCal.won, lm - 1);
     const totalWon = monthCal.won.reduce((s, x) => s + x, 0);
     const wonValTotal = statusAgg.get("won")?.value ?? 0; // = Σ wonVal ในช่วง → avgDeal = ยอดรวม ÷ จำนวน won
     const pct = (c: number, p: number) => p > 0 ? Math.round((c - p) / p * 100) : (c > 0 ? 100 : 0);
-    const nl = cnt(leadDates, lm), nlP = cnt(leadDates, lm - 1);
+    const nl  = leadCal ? at(leadCal, lm)     : cnt(leadDates!, lm);
+    const nlP = leadCal ? at(leadCal, lm - 1) : cnt(leadDates!, lm - 1);
     const nq = at(monthCal.quotes, lm), nqP = at(monthCal.quotes, lm - 1);
     return {
-      totalLeads: allNetLeads.length,
+      totalLeads: leadTotal ?? allNetLeads.length,
       newLeads: nl, newLeadsTrend: pct(nl, nlP),
       newCustomers: wonThis, newCustomersTrend: pct(wonThis, wonPrev),
       newQuotes: nq, newQuotesTrend: pct(nq, nqP),
       avgDeal: totalWon ? Math.round(wonValTotal / totalWon) : 0,
       cycleDays: 28,
     };
-  }, [allNetLeads, monthCal, statusAgg, timeRange]);
+  }, [leadCal, leadTotal, allNetLeads, monthCal, statusAgg, timeRange]);
 
   // ── เป้าหมายทั้งเครือ + Achievement ──
   const wonValNum = useMemo(() => statusAgg.get("won")?.value ?? 0, [statusAgg]);
@@ -410,14 +445,16 @@ export default function HQDashboard() {
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
     if (barSummary) { for (const r of barSummary.byMonth) { const k = monthKey(r.y, r.m); quotesM.set(k, r.quotes); wonM.set(k, r.won); } }
     else scopedQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (!d) return; const k = monthKeyOf(d); bump(quotesM, k); if (q.status === "won") bump(wonM, k); });
-    allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
+    // ลีดต่อเดือน (คีย์ YYYY-MM): supabase = lead_summary.byMonth (all-time ครอบคลุมหน้าต่าง barRange) · local = array
+    if (dashLeadSum) { for (const r of dashLeadSum.byMonth) leadsM.set(monthKey(r.y, r.m), r.created); }
+    else allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
     return {
       months: buckets.map(b => b.label),
       leads: buckets.map(b => leadsM.get(b.key) ?? 0),
       quotes: buckets.map(b => quotesM.get(b.key) ?? 0),
       won: buckets.map(b => wonM.get(b.key) ?? 0),
     };
-  }, [barRange, barSummary, scopedQuotes, allNetLeads]);
+  }, [barRange, barSummary, dashLeadSum, scopedQuotes, allNetLeads]);
 
   // ── กิจกรรมล่าสุด = "บันทึกการใช้งาน" (Audit Log) แหล่งเดียวกับหน้า /hq/audit ──
   // เดิมการ์ดนี้อ่านจากใบเสนอราคา (ความเคลื่อนไหวการขาย) — บอสสั่งให้ใช้บันทึกการใช้งานแทน 17 ก.ค. 69
@@ -491,13 +528,6 @@ export default function HQDashboard() {
     for (let i = 0; i < 3; i++) { mi = (mi + 1) % 12; nextMo.push(TH_ABBR[mi]); }
     return { months: [...trendMonthly.map(p => p.month), ...nextMo], data: [...vals, ...proj], splitAt: vals.length };
   }, [trendMonthly, timeRange]);
-
-  // ใบเสนอราคาล่าสุด
-  const recentQuotes = useMemo(() => [...winQuotes]
-    .sort((a, b) => (parseThaiDate(b.createdAt)?.getTime() ?? 0) - (parseThaiDate(a.createdAt)?.getTime() ?? 0)).slice(0, 6), [winQuotes]);
-
-  // ลีดที่ยังไม่ติดต่อ (Inactive) — WAITING/FOLLOWUP
-  const inactiveLeads = useMemo(() => allNetLeads.filter(l => l.status === "WAITING" || l.status === "FOLLOWUP").slice(0, 6), [allNetLeads]);
 
   // การ์ด KPI 6 ใบ — ดีไซน์เดียวกับแดชบอร์ดตัวแทน (ไอคอนพาสเทล · (i) คำอธิบาย · การ์ดเป้าหมายเป็นวงแหวน · "ดูรายละเอียด")
   const kpiCards = [

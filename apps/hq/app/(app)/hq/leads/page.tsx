@@ -7,7 +7,7 @@ import { useMemo, useState, useEffect } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
 import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
-import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange } from "@pms/shared/lib/useNetworkData";
+import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange, useUnassignedLeads } from "@pms/shared/lib/useNetworkData";
 import type { LeadSummaryFilters, LeadListOpts } from "@pms/shared/lib/data/ports";
 import { DEFAULT_LEAD_RULES } from "@pms/shared/lib/mock";
 import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
@@ -15,7 +15,7 @@ import { unassignedLeads } from "@pms/shared/lib/hqAlerts";
 import { needsFollowUp } from "@pms/shared/lib/leadMetrics";
 import { fmtISOToThai, type LeadRow } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
-import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import { dealers as dealersRepo, leads as leadsRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";  // แหล่งเดียวของชื่อภาค — ไม่ก็อปโค้ดซ้ำ
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
@@ -47,6 +47,7 @@ const parseThaiDate = (s: string): Date | null => {
   return new Date(y, TH_MONTH[mt[2]], +mt[1]);
 };
 const ACTIVE: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO"];
+const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 // "ต้องติดตาม" = ลีดที่ยังไม่ปิด และเงียบเกินเกณฑ์ของสาขาเจ้าของลีด (needsFollowUp)
 // ⚠️ ห้ามกลับไปใช้รายการสถานะ: เดิมเป็น ["WAITING","FOLLOWUP"] ซึ่งไม่ได้นับวันเลย
 //    แต่ป้ายเขียนว่า ">7 วัน" → ตัวเลขไม่ตรงกับคำ และไม่ตรงกับที่ตัวแทนเห็นบนหน้าตัวเอง
@@ -89,13 +90,23 @@ export default function HQLeadsPage() {
   const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
   const REGION_OF = useMemo(() => new Map(allDealers.map(d => [d.code, d.region])), [allDealers]);
 
-  // ตัวเลือกตัวกรอง — สร้างจากลีดจริงที่มีในช่วง ไม่ hardcode
-  const dealerOpts = useMemo(() => [...new Set(scoped.map(l => l.dealerCode).filter(Boolean))].sort() as string[], [scoped]);
-  const regionOpts = useMemo(() => [...new Set(scoped.map(l => REGION_OF.get(l.dealerCode ?? "")).filter(Boolean))].sort() as string[], [scoped, REGION_OF]);
-  const btOpts = useMemo(() => [...new Set(scoped.map(l => l.product).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th")), [scoped]);
-  const srcOpts = useMemo(() => [...new Set(scoped.map(l => l.source || "ไม่ระบุ"))].sort((a, b) => a.localeCompare(b, "th")), [scoped]);
-
-  const provinces = useMemo(() => [...new Set(scoped.map(l => l.province).filter(Boolean))].sort(), [scoped]);
+  // ตัวเลือกตัวกรอง — จากลีดจริงในช่วง (ไม่ hardcode) · supabase: lead_summary (เวลาอย่างเดียว) · local/ยังไม่กลับ: scoped
+  const optsSummary = useLeadSummary(useMemo(() => ({ dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end) }), [timeRange.start, timeRange.end]));
+  const dealerOpts = useMemo(() => (optsSummary
+    ? [...new Set(optsSummary.byDealer.map(d => d.dealerCode))]
+    : [...new Set(scoped.map(l => l.dealerCode).filter(Boolean))] as string[]).sort(), [optsSummary, scoped]);
+  const regionOpts = useMemo(() => (optsSummary
+    ? [...new Set(optsSummary.byDealer.map(d => REGION_OF.get(d.dealerCode)).filter(Boolean))]
+    : [...new Set(scoped.map(l => REGION_OF.get(l.dealerCode ?? "")).filter(Boolean))]).sort() as string[], [optsSummary, scoped, REGION_OF]);
+  const btOpts = useMemo(() => (optsSummary
+    ? optsSummary.byProduct.map(p => p.product).filter(p => p !== "ไม่ระบุ")
+    : [...new Set(scoped.map(l => l.product).filter(Boolean))]).sort((a, b) => a.localeCompare(b, "th")), [optsSummary, scoped]);
+  const srcOpts = useMemo(() => (optsSummary
+    ? optsSummary.bySource.map(s => s.source)
+    : [...new Set(scoped.map(l => l.source || "ไม่ระบุ"))]).sort((a, b) => a.localeCompare(b, "th")), [optsSummary, scoped]);
+  const provinces = useMemo(() => (optsSummary
+    ? optsSummary.byProvince.map(p => p.province)
+    : [...new Set(scoped.map(l => l.province).filter(Boolean))]).sort(), [optsSummary, scoped]);
 
   // ฐานของ KPI = ตัวกรอง "ขอบเขต" ทุกตัว (ตัวแทน · ภูมิภาค · จังหวัด · ประเภทอาคาร · แหล่งที่มา · ค้นหา)
   // แต่ยังไม่กรองด้วย "สถานะ" และ "ต้องติดตามด่วน" — สองอันนั้นคือปุ่มของการ์ด KPI เอง
@@ -118,7 +129,6 @@ export default function HQLeadsPage() {
   ), [kpiBase, status, overdueOnly, rulesOf]);
 
   // ── M9 Phase 2: สรุปลีดหลังกรองที่ DB (supabase) · local/overdue/ระหว่างโหลด = client fallback ──
-  const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const leadDealerCodes = useMemo<string[] | undefined>(() => {
     let codes: string[] | undefined;
     const restrict = (pred: (c: string) => boolean) => { codes = (codes ?? allDealers.map(d => d.code)).filter(pred); };
@@ -155,17 +165,37 @@ export default function HQLeadsPage() {
   const leadTotal = leadsPage ? leadsPage.total : filtered.length;
   const leadPagination = leadsPage ? { page: leadPage, pageCount: Math.max(1, Math.ceil(leadTotal / LEADS_PAGE)), total: leadTotal, onPage: setLeadPage } : null;
 
+  // จำนวน "ต้องติดตามด่วน" (ในขอบเขต kpiBase, ไม่กรอง status) ที่ DB — overdue=true, นับรวม (limit 1 พอ)
+  //   supabase: leads_page.total · local/ยังไม่กลับ: นับจาก kpiBase ฝั่ง client
+  const followUpOpts: LeadListOpts = useMemo(() => ({
+    limit: 1, offset: 0, dealerCodes: leadDealerCodes,
+    province: province === "ALL" ? undefined : province, product: btSel === "ALL" ? undefined : btSel,
+    source: srcSel === "ALL" ? undefined : srcSel, search: query.trim() || undefined,
+    dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+    overdue: true, asOf: isoDateOf(APP_NOW), defaultDays: DEFAULT_LEAD_RULES.followUpAlertDays, perDealer: perDealerDays,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [leadDealerCodes, province, btSel, srcSel, query, timeRange.start, timeRange.end, perDealerDays]);
+  const followUpPage = useLeadsPage(followUpOpts);
+
   // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
-  // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง
-  // ตรรกะพร้อมใช้: พอมีลีดที่ assigned ว่างนานเกินเกณฑ์เมื่อไร การ์ดจะเด้งเอง
-  // อิง filtered — กรองดูสาขาไหนอยู่ ก็ต้องเตือนเฉพาะสาขานั้น (เตือนถึงสาขาอื่นที่ไม่ได้ดู = เสียงรบกวน)
-  const unassigned = useMemo(() => unassignedLeads(filtered, rulesOf), [filtered, rulesOf]);
+  // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง · ตรรกะพร้อมใช้ พอมีลีด assigned ว่างเกินเกณฑ์ การ์ดจะเด้ง
+  // อิงขอบเขต kpiBase (ตัวแทน/ภาค/จังหวัด/แม่แบบ/แหล่ง/ค้นหา + ช่วงเวลา) — ไม่ผูกสถานะ (เตือนไร้ผู้รับผิดชอบ ไม่เกี่ยวสถานะ)
+  const perDealerHours = useMemo(() => Object.fromEntries(allDealers.map(d => [d.code, rulesOf(d.code).unassignedAlertHours])), [allDealers, rulesOf]);
+  const unassignedSummary = useUnassignedLeads(useMemo(() => ({
+    asOf: isoDateOf(APP_NOW), defaultHours: DEFAULT_LEAD_RULES.unassignedAlertHours, perDealer: perDealerHours,
+    dealerCodes: leadDealerCodes, province: province === "ALL" ? undefined : province,
+    product: btSel === "ALL" ? undefined : btSel, source: srcSel === "ALL" ? undefined : srcSel,
+    search: query.trim() || undefined, dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+  }), [perDealerHours, leadDealerCodes, province, btSel, srcSel, query, timeRange.start, timeRange.end]));
+  const unassignedClient = useMemo(() => unassignedLeads(kpiBase, rulesOf), [kpiBase, rulesOf]);
+  const unassignedCount = unassignedSummary ? unassignedSummary.total : unassignedClient.length;
   // ป้ายบอกเกณฑ์ — หน้านี้รวมหลายสาขาที่ตั้งเกณฑ์ต่างกันได้ จึงสรุปเป็นช่วงเมื่อไม่เท่ากัน
   const unassignedHoursText = useMemo(() => {
-    const hrs = [...new Set(unassigned.map(l => rulesOf(l.dealerCode).unassignedAlertHours))].sort((a, b) => a - b);
+    const codes = unassignedSummary ? unassignedSummary.byDealer.map(d => d.dealerCode) : unassignedClient.map(l => l.dealerCode ?? "");
+    const hrs = [...new Set(codes.map(c => rulesOf(c).unassignedAlertHours))].sort((a, b) => a - b);
     if (!hrs.length) return "—";
     return hrs.length === 1 ? `เกิน ${hrs[0]} ชั่วโมง` : `เกิน ${hrs[0]}–${hrs[hrs.length - 1]} ชั่วโมง แล้วแต่สาขา`;
-  }, [unassigned, rulesOf]);
+  }, [unassignedSummary, unassignedClient, rulesOf]);
 
   // ── แถบตัวกรอง — รูปแบบเดียวกับ /hq/pipeline (ดรอปดาวน์กว้างตามข้อความ ไม่ตรึง 150px) ──
   // ปุ่ม "ล้างตัวกรอง" โผล่เมื่อมีตัวกรองทำงานอยู่จริงเท่านั้น — ไม่งั้นเป็นปุ่มที่กดแล้วไม่เกิดอะไร
@@ -183,7 +213,7 @@ export default function HQLeadsPage() {
   // KPI — คิดจาก kpiBase (ตามตัวกรองขอบเขต) ไม่ใช่ scoped (ทั้งเครือ)
   // เดิมคิดจาก scoped → กรองเหลือตัวแทนเดียว ตารางหด 25→7 แถว แต่ KPI นิ่งที่ 61/24/42% คนอ่านเข้าใจผิด
   const kpis = useMemo(() => {
-    const followUp = kpiBase.filter(l => needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays)).length; // client เสมอ (พึ่ง activities+เกณฑ์)
+    const followUp = followUpPage ? followUpPage.total : kpiBase.filter(l => needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays)).length; // supabase: leads_page overdue · local: client
     const lastM = timeRange.end.getMonth();
     if (sumBase) { // supabase: total/won/lost/newThis จาก DB
       const byS = new Map(sumBase.byStatus.map(r => [r.status, r.count]));
@@ -198,7 +228,7 @@ export default function HQLeadsPage() {
     const closed = won + lost;
     const newThis = kpiBase.filter(l => { const d = parseThaiDate(l.createdAt ?? ""); return d && d.getMonth() === lastM; }).length;
     return { total, followUp, newThis, conv: closed ? Math.round(won / closed * 100) : 0 };
-  }, [sumBase, kpiBase, timeRange.end, rulesOf]);
+  }, [sumBase, followUpPage, kpiBase, timeRange.end, rulesOf]);
 
   // ── Section 1 · ลีด เทียบ ใบเสนอราคา รายตัวแทน ─────────────────────────────
   // สาขาไหนรับลีดเยอะแต่ออกใบเสนอราคาน้อย = จุดที่ผู้บริหารต้องเร่ง
@@ -347,6 +377,22 @@ export default function HQLeadsPage() {
       .slice(0, 10);
   }, [leadVsQuote, rangeByDealer, netQuotes, timeRange.start, timeRange.end]);
 
+  // Export — หนึ่งแถวต่อลีด (คอลัมน์ตรงกับตาราง) · supabase: ดึงทั้งชุดที่กรองจาก DB ตอนกด · local: จาก filtered
+  const leadToCells = (l: LeadRow) => [
+    l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
+    l.province, l.product, l.source || "—", l.value || "—",
+    ["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status) ? "เสนอแล้ว" : "—",
+    l.activities?.length ? l.activities[0].date : "—",
+    needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays) ? "ต้องติดตาม" : "—",
+    l.assigned || "—", leadStatusLabel[l.status],
+  ];
+  const exportGetRows = leadsPage
+    ? async () => {
+        const all = await leadsRepo.listPage(undefined, { ...leadOpts, limit: Math.max(1, leadTotal), offset: 0 });
+        return all.rows.map(leadToCells);
+      }
+    : undefined;
+
   return (
     <div className="erp">
       <div className="page-head">
@@ -358,14 +404,7 @@ export default function HQLeadsPage() {
           {/* ส่งออก = สิ่งที่เห็นบนจอตอนนี้ (ผ่านตัวกรองทุกตัวแล้ว) · คอลัมน์เรียงตรงกับตาราง */}
           <ExportMenu filename="hq-leads" title="ลูกค้าเป้าหมายทั้งเครือ"
             headers={["รหัสลีด","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","ต้องติดตาม","ผู้รับผิดชอบ","สถานะ"]}
-            rows={filtered.map(l => [
-              l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
-              l.province, l.product, l.source || "—", l.value || "—",
-              ["QUOTED","FOLLOWUP","NEGO","PAID"].includes(l.status) ? "เสนอแล้ว" : "—",
-              l.activities?.length ? l.activities[0].date : "—",
-              needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays) ? "ต้องติดตาม" : "—",
-              l.assigned || "—", leadStatusLabel[l.status],
-            ])} />
+            rows={filtered.map(leadToCells)} getRows={exportGetRows} />
         </div>
       </div>
 
@@ -416,7 +455,7 @@ export default function HQLeadsPage() {
       {/* ── เตือน: ลีดยังไม่มีผู้รับผิดชอบเกิน 48 ชม. (กฎ HQ) ──
           อยู่บนสุดใต้ KPI — เป็นเรื่องต้องรีบ ไม่ควรให้ต้องเลื่อนผ่านกราฟ 4 ใบกว่าจะเจอ
           แสดงเฉพาะตอนมีจริง — ไม่มี = ไม่ขึ้นการ์ดเปล่า */}
-      {unassigned.length > 0 && (
+      {unassignedCount > 0 && (
         <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid #dc2626" }}>
           <div className="card-body" style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px" }}>
             <span style={{ width: 34, height: 34, borderRadius: 9, background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -426,7 +465,7 @@ export default function HQLeadsPage() {
               <span style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#1F2937" }}>ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ</span>
               <span style={{ display: "block", fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 2 }}>เกินเกณฑ์ที่แต่ละสาขาตั้งไว้เอง ({unassignedHoursText})</span>
             </span>
-            <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "#dc2626", fontVariantNumeric: "tabular-nums" }}>{unassigned.length}</span>
+            <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "#dc2626", fontVariantNumeric: "tabular-nums" }}>{unassignedCount}</span>
             <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)" }}>ราย</span>
           </div>
         </div>

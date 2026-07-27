@@ -16,7 +16,7 @@ import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { DealerRow } from "@pms/shared/lib/data/types";
-import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult } from "@pms/shared/lib/data/ports";
+import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult, NetworkCustomerSummary, UnassignedSummary, UnassignedFilters } from "@pms/shared/lib/data/ports";
 import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
@@ -120,6 +120,21 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
   return page;
 }
 
+// ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4)
+// supabase เท่านั้น · local คืน null → หน้าใช้ค่า salesperson เดิมของ row (มาจาก array อยู่แล้ว)
+export function useQuotationSalesperson(quoteId: string | null): string | null {
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase" || !quoteId) { setName(null); return; }
+    let alive = true;
+    quotationsRepo.salesperson(quoteId)
+      .then(r => { if (alive) setName(r); })
+      .catch(err => logRepoRead("quotations.salesperson", err));
+    return () => { alive = false; };
+  }, [quoteId]);
+  return name;
+}
+
 // สรุปใบในช่วง (byMonth/byStatus/byProduct) ที่ DB รอบเดียว — ป้อนหลายการ์ด (M9)
 // supabase เท่านั้น · local คืน null → dashboard คงคำนวณจาก winQuotes เดิม
 export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string): DashboardQuoteSummary | null {
@@ -136,6 +151,42 @@ export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string
     }, 150);
     return () => { alive = false; clearTimeout(t); };
   }, [s, e, dealer, salesVersion]);
+  return summary;
+}
+
+// ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) · supabase เท่านั้น → null=fallback
+export function useUnassignedLeads(filters: UnassignedFilters): UnassignedSummary | null {
+  const { salesVersion } = useSales();
+  const key = JSON.stringify(filters);
+  const [summary, setSummary] = useState<UnassignedSummary | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      metricsRepo2.unassignedLeads(filters)
+        .then(r => { if (alive) setSummary(r); })
+        .catch(err => logRepoRead("metrics.unassignedLeads", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, salesVersion]);
+  return summary;
+}
+
+// สรุปลูกค้าทั้งเครือ (total + byProvince) — ป้อน KPI ลูกค้า + provinceTop6 หน้า dashboard (M9 Phase 4)
+export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
+  const { salesVersion } = useSales();
+  const [summary, setSummary] = useState<NetworkCustomerSummary | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      metricsRepo.networkCustomerSummary()
+        .then(r => { if (alive) setSummary(r); })
+        .catch(err => logRepoRead("metrics.networkCustomerSummary", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+  }, [salesVersion]);
   return summary;
 }
 
