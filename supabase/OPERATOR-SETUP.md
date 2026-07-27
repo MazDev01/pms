@@ -89,6 +89,16 @@ $env:SUPABASE_SERVICE_ROLE_KEY="<key>"; node supabase/seed-catalog.mjs
 
 ---
 
+## 8) ความปลอดภัย — ลด JWT TTL (ปิดช่อง stale-JWT · R2)
+เมื่อ HQ "ปิดใช้งาน" บัญชี/สาขา: เขียนถูกตัดทันที + ออก token ใหม่ไม่ได้ (0032) แต่ **access token เดิม
+ยังอ่านได้จนหมดอายุ** (ค่าเริ่มต้น Supabase = 3600s ≈ 1 ชม.) — JWT ไม่มีบัญชีดำ ตัดกลางคันไม่ได้
+
+**ลดหน้าต่างนี้:** Dashboard → **Authentication → Sessions/Settings → Access token (JWT) expiry** = `300` (5 นาที)
+- หน้าต่างอ่านหลังปิดบัญชีเหลือ ~5 นาที (จาก 1 ชม.) · ไม่ต้องแก้โค้ด
+- ผลข้างเคียงน้อย: client ต่ออายุด้วย refresh token เงียบ ๆ ถี่ขึ้น (ไม่ต้องล็อกอินใหม่)
+- ปิดสนิท 100% ต้องใส่ `is_account_active()` ใน read policy ทุกตาราง (migration กว้าง · ย้อน decision perf
+  ของ 0032) — ทำเฉพาะเมื่อ threat model ต้องการ hard cutoff จริง ๆ
+
 ## สถานะจริง (ตรวจ read-only บนโปรเจกต์ `yhhhcrvhkforwsagojho` — 27 ก.ค. 69)
 - [x] ขั้น 2 — **migrations รันแล้ว** (ทุกตารางมีครบ: profiles/dealers/quotations/leads/master_catalog/audit_log/appointments)
 - [x] ขั้น 3 — **access-token hook เปิดอยู่** (JWT มี claim `user_role`/`dealer_code` · RLS ทำงาน: HQ เห็นทั้งเครือ, anon เห็น 0)
