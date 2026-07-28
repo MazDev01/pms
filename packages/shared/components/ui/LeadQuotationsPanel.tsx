@@ -22,7 +22,14 @@ const MOCK_TODAY = APP_NOW_ISO;
 
 type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 
-export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRow; customer?: CustomerRow; onToast?: (m: string) => void }) {
+// ต้องส่งมาอย่างใดอย่างหนึ่งเท่านั้น (lead หรือ customer) — เดิม prop เป็น optional ทั้งคู่แยกกัน
+//   TS ไม่บังคับ จึงต้องใช้ customer! เดาเอาว่ามาแน่ ๆ ตอนไม่มี lead (พังถ้ามีคนเรียกผิดในอนาคต)
+//   ตอนนี้เป็น discriminated union — เรียกไม่ครบ/เรียกทั้งคู่ = TS error ตั้งแต่คอมไพล์ ไม่ต้องพึ่ง !
+type LeadQuotationsPanelProps =
+  | { lead: LeadRow; customer?: undefined; onToast?: (m: string) => void }
+  | { lead?: undefined; customer: CustomerRow; onToast?: (m: string) => void };
+
+export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsPanelProps) {
   const { quotations, createQuotation, updateQuotation, deleteQuotation } = useSales();
   const catalog = useMasterCatalog(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
@@ -43,10 +50,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: { lead?: LeadRo
     area: lead.area,                         // พื้นที่ที่กรอกไว้ตอนเพิ่มลีด — ใช้เป็นจำนวนตั้งต้นของ BOQ
     project: lead.project,                   // ชื่อโครงการที่ตัวแทนตั้งไว้ตอนสร้างดีล (ถ้ามี)
   } : {
-    kind: "customer" as const, company: customer!.company, contact: customer!.name, phone: customer!.phone, email: customer!.email,
-    province: customer!.province, assigned: customer!.owner, product: customer!.category || "",
-    customerId: customer!.id, dealId: undefined as number | undefined,
-    value: customer!.totalValue ? String(customer!.totalValue) : "",
+    kind: "customer" as const, company: customer.company, contact: customer.name, phone: customer.phone, email: customer.email,
+    province: customer.province, assigned: customer.owner, product: customer.category || "",
+    customerId: customer.id, dealId: undefined as number | undefined,
+    value: customer.totalValue ? String(customer.totalValue) : "",
     area: undefined as number | undefined,   // ลูกค้า (ปิดการขายแล้ว) ไม่มีพื้นที่ตั้งต้น — ใบเสนอราคาของลูกค้าดูอย่างเดียวอยู่แล้ว
     project: undefined as string | undefined,
   };

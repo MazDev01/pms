@@ -23,14 +23,16 @@ import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { WonBuildingRaw } from "@pms/shared/lib/data/ports";
 
 // ─── ภาค (ข้อเท็จจริงทางภูมิศาสตร์ — ไม่ใช่ข้อมูลธุรกิจที่กุขึ้น) ────────────────────
-export const REGIONS = ["เหนือ", "ตะวันออกเฉียงเหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้"] as const;
+// สะกดให้ตรงกับ dealer.region (mock.ts seed / hq/dealers / hq/pipeline) = "อีสาน" ไม่ใช่ "ตะวันออกเฉียงเหนือ"
+//   เดิมสะกดคนละแบบ → ของสองระบบเทียบกันไม่ตรง (regionDisplay ต้อง special-case "อีสาน" อยู่แล้วเพื่อขยายชื่อเต็ม) · 1.4
+export const REGIONS = ["เหนือ", "อีสาน", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้"] as const;
 export type Region = (typeof REGIONS)[number];
 
 const REGION_OF: Record<string, Region> = {};
 const put = (region: Region, provinces: string[]) => provinces.forEach(p => { REGION_OF[p] = region; });
 
 put("เหนือ", ["เชียงใหม่", "เชียงราย", "ลำปาง", "ลำพูน", "แม่ฮ่องสอน", "น่าน", "พะเยา", "แพร่", "อุตรดิตถ์"]);
-put("ตะวันออกเฉียงเหนือ", ["กาฬสินธุ์", "ขอนแก่น", "ชัยภูมิ", "นครพนม", "นครราชสีมา", "บึงกาฬ", "บุรีรัมย์", "มหาสารคาม", "มุกดาหาร", "ยโสธร", "ร้อยเอ็ด", "เลย", "ศรีสะเกษ", "สกลนคร", "สุรินทร์", "หนองคาย", "หนองบัวลำภู", "อำนาจเจริญ", "อุดรธานี", "อุบลราชธานี"]);
+put("อีสาน", ["กาฬสินธุ์", "ขอนแก่น", "ชัยภูมิ", "นครพนม", "นครราชสีมา", "บึงกาฬ", "บุรีรัมย์", "มหาสารคาม", "มุกดาหาร", "ยโสธร", "ร้อยเอ็ด", "เลย", "ศรีสะเกษ", "สกลนคร", "สุรินทร์", "หนองคาย", "หนองบัวลำภู", "อำนาจเจริญ", "อุดรธานี", "อุบลราชธานี"]);
 put("กลาง", ["กรุงเทพมหานคร", "กรุงเทพฯ", "กำแพงเพชร", "ชัยนาท", "นครนายก", "นครปฐม", "นครสวรรค์", "นนทบุรี", "ปทุมธานี", "พระนครศรีอยุธยา", "พิจิตร", "พิษณุโลก", "เพชรบูรณ์", "ลพบุรี", "สมุทรปราการ", "สมุทรสงคราม", "สมุทรสาคร", "สระบุรี", "สิงห์บุรี", "สุโขทัย", "สุพรรณบุรี", "อ่างทอง", "อุทัยธานี"]);
 put("ตะวันออก", ["จันทบุรี", "ฉะเชิงเทรา", "ชลบุรี", "ตราด", "ปราจีนบุรี", "ระยอง", "สระแก้ว"]);
 put("ตะวันตก", ["กาญจนบุรี", "ตาก", "ประจวบคีรีขันธ์", "เพชรบุรี", "ราชบุรี"]);
@@ -131,9 +133,10 @@ export function useCustomerDb(): CustomerDbRow[] {
         .map(buildingOf)
         .sort((a, b) => (a.wonAt?.getTime() ?? 0) - (b.wonAt?.getTime() ?? 0));
 
+      // type predicate แทน .filter(b => b.deliveredAt) เฉย ๆ — ให้ TS แคบชนิดจริง ไม่ต้องพึ่ง ! ต่อจากนี้
       const latest = [...buildings]
-        .filter(b => b.deliveredAt)
-        .sort((a, b) => a.deliveredAt!.getTime() - b.deliveredAt!.getTime())
+        .filter((b): b is PurchasedBuilding & { deliveredAt: Date } => !!b.deliveredAt)
+        .sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime())
         .pop() ?? null;
       const lastBuy = [...buildings].filter(b => b.wonAt).pop() ?? null;
 
@@ -149,5 +152,7 @@ export function useCustomerDb(): CustomerDbRow[] {
         isRepeat: buildings.length > 1,
       };
     });
-  }, [customers, quotations]);
+    // rollup โหลด async (supabase) — ต้องอยู่ใน deps ไม่งั้น memo คืนผลตอน rollup ยังเป็น null
+    // → /hq/customers โชว์อาคาร/ประวัติซื้อว่างทั้งที่มีดีลปิดแล้ว (race กับ salesVersion) · M2
+  }, [customers, quotations, rollup]);
 }

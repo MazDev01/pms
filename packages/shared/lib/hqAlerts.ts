@@ -138,13 +138,14 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
     body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(actual)} จาก ${fmtB(d.revenueTarget)})`, href: `/hq/dealers/${d.code}`,
   });
   if (on("lostRate")) {
+    // type predicate แทน x.d && ... เฉย ๆ — ให้ TS แคบชนิด d: DealerRow|undefined → DealerRow ไม่ต้องพึ่ง !
     const rows = data.lostRate
       .map(r => ({ d: dOf.get(r.dealerCode), rate: r.closed ? Math.round((r.lost / r.closed) * 100) : 0, lost: r.lost, closed: r.closed }))
-      .filter(x => x.d && x.closed >= Math.max(1, rules.lostRateMinClosed) && x.rate >= rules.lostRatePct)
+      .filter((x): x is typeof x & { d: DealerRow } => !!x.d && x.closed >= Math.max(1, rules.lostRateMinClosed) && x.rate >= rules.lostRatePct)
       .sort((a, b) => b.rate - a.rate);
     for (const x of rows) out.push({
       key: "lostRate", title: "อัตราปิดการขายไม่สำเร็จสูง",
-      body: `${x.d!.code} · ${x.d!.name} — ปิดไม่สำเร็จ ${x.rate}% (${x.lost} จาก ${x.closed} ลีดที่ปิดแล้ว)`, href: `/hq/dealers/${x.d!.code}`,
+      body: `${x.d.code} · ${x.d.name} — ปิดไม่สำเร็จ ${x.rate}% (${x.lost} จาก ${x.closed} ลีดที่ปิดแล้ว)`, href: `/hq/dealers/${x.d.code}`,
     });
   }
   return out;
