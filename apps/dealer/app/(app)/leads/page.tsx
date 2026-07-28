@@ -1125,18 +1125,21 @@ export default function LeadsPage() {
           <div className="card">
             <div className={`table-wrap${density === "compact" ? " dense" : ""}`}>
               <table>
+                {/* เดิมเป็น % ล้วนทุกคอลัมน์ — พอจอแคบ (768px) บีบสัดส่วนจนตัวอักษรเหลือตัวเดียว+จุดไข่ปลา
+                    แทนที่จะดัน .table-wrap ให้ scroll (ต่างจากตาราง /customers ที่ตั้ง minWidth ครบทุกคอลัมน์)
+                    → เติม minWidth ให้ครบเหมือนกัน */}
                 <colgroup>
-                  <col style={{width:"18%"}} />
-                  {!hiddenCols.includes("province") && <col style={{width:"9%"}} />}
-                  {!hiddenCols.includes("source")   && <col style={{width:"10%"}} />}
-                  {!hiddenCols.includes("product")  && <col style={{width:"13%"}} />}
-                  {!hiddenCols.includes("area")     && <col style={{width:"8%"}} />}
-                  <col style={{width:"13%"}} />
-                  <col style={{width:"13%"}} />
-                  <col style={{width:"11%"}} />
-                  <col style={{width:"12%"}} />
-                  {!hiddenCols.includes("activity") && <col style={{width:"9%"}} />}
-                  <col style={{width:"12%"}} />
+                  <col style={{width:"18%", minWidth:180}} />{/* บริษัท / ผู้ติดต่อ */}
+                  {!hiddenCols.includes("province") && <col style={{width:"9%", minWidth:90}} />}
+                  {!hiddenCols.includes("source")   && <col style={{width:"10%", minWidth:100}} />}
+                  {!hiddenCols.includes("product")  && <col style={{width:"13%", minWidth:110}} />}
+                  {!hiddenCols.includes("area")     && <col style={{width:"8%", minWidth:100}} />}
+                  <col style={{width:"13%", minWidth:90}} />{/* ขั้นตอน */}
+                  <col style={{width:"13%", minWidth:110}} />{/* ความคืบหน้า */}
+                  <col style={{width:"11%", minWidth:90}} />{/* มูลค่า */}
+                  <col style={{width:"12%", minWidth:110}} />{/* ผู้รับผิดชอบ */}
+                  {!hiddenCols.includes("activity") && <col style={{width:"9%", minWidth:100}} />}
+                  <col style={{width:"12%", minWidth:48}} />{/* ปุ่มลบ */}
                 </colgroup>
                 <thead>
                   <tr>

@@ -369,17 +369,20 @@ function HQDealersPageInner() {
       <div className="card">
         <div className="table-wrap">
           <table>
-            {/* เพิ่มคอลัมน์ "จังหวัด" → เกลี่ย % ใหม่ทั้งชุด (รวมต้องได้ 100) */}
+            {/* เพิ่มคอลัมน์ "จังหวัด" → เกลี่ย % ใหม่ทั้งชุด (รวมต้องได้ 100)
+                เดิมมีแค่คอลัมน์ "จังหวัด"/ปุ่ม ที่ตั้ง minWidth ไว้ — คอลัมน์อื่นเป็น % ล้วน
+                พอจอแคบ (768px) จึงบีบสัดส่วนจนตัวอักษรเหลือตัวเดียว+จุดไข่ปลา แทนที่จะดัน .table-wrap ให้ scroll
+                (ต่างจากตาราง /customers ที่ตั้ง minWidth ครบทุกคอลัมน์) → เติม minWidth ให้ครบเหมือนกัน */}
             <colgroup>
-              <col style={{ width: "4%" }} />
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "9%", minWidth: 96 }} />
-              <col style={{ width: "7%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "7%" }} />
+              <col style={{ width: "4%", minWidth: 32 }} />{/* # */}
+              <col style={{ width: "6%", minWidth: 64 }} />{/* รหัส */}
+              <col style={{ width: "14%", minWidth: 190 }} />{/* ชื่อตัวแทน */}
+              <col style={{ width: "9%", minWidth: 96 }} />{/* จังหวัด */}
+              <col style={{ width: "7%", minWidth: 64 }} />{/* ภาค */}
+              <col style={{ width: "13%", minWidth: 130 }} />{/* ยอด / เป้า */}
+              <col style={{ width: "9%", minWidth: 130 }} />{/* โอกาสการขาย */}
+              <col style={{ width: "9%", minWidth: 140 }} />{/* ติดตามตรงเวลา */}
+              <col style={{ width: "7%", minWidth: 76 }} />{/* สถานะ */}
               {/* คอลัมน์ปุ่ม: เข้าระบบ + ไอคอน 4 ปุ่ม ต้องการ ~230px — ให้พื้นที่พอ ไม่ล้นออกนอกตาราง */}
               <col style={{ width: "22%", minWidth: 268 }} />
             </colgroup>
