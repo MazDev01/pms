@@ -287,7 +287,9 @@ export interface QuotationsRepo {
    *  supabase: RPC create_quotation (ออกเลข+insert รวด) · local: max+1 แล้ว insert (เธรดเดียว = atomic) */
   createNumbered(dealer: string, prefix: string | undefined, row: Omit<QuotationMock, "id">): Promise<QuotationMock>;
   /** ปิดใบที่ "ส่งแล้ว" และเลยวันหมดอายุ → สถานะ expired · asOf = วันนี้ของระบบ (YYYY-MM-DD) · คืนจำนวนใบที่ปิด */
-  expireOverdue(asOf: string, scope?: Scope): Promise<number>;
+  // validityDays: อายุใบเสนอราคาเริ่มต้น (นโยบาย HQ) — ใช้เป็น "หมดอายุ" ของใบที่ไม่ได้กรอก expiry เอง
+  //   (นิยามเดียวกับที่ hq_alerts ใช้เตือน "ใกล้หมดอายุ" — ไม่งั้นสองจุดเห็นวันหมดอายุคนละวัน)
+  expireOverdue(asOf: string, scope?: Scope, validityDays?: number): Promise<number>;
   /** ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
   salesperson(quoteId: string): Promise<string | null>;
 }

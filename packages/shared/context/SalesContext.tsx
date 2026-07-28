@@ -10,7 +10,7 @@ import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, DEFAULT_QUOTE_NUMBERING,
   type IssuerProfile,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
-  quotationToFile, AUTO_FILE_BY, fmtISOToThai,
+  quotationToFile, AUTO_FILE_BY, fmtISOToThai, DEFAULT_DEALER_CODE,
   type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock, type DealerFile,
@@ -20,6 +20,7 @@ import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { parseBaht } from "@pms/shared/lib/format";
 import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
@@ -106,7 +107,9 @@ export function SalesProvider({
 }) {
   // สาขาที่ล็อกอิน (multi-tenant) + auth พร้อมหรือยัง (hydrated) — โหลดลีดตามขอบเขตสาขา
   const { dealerCode, isHQ, hydrated, isLoggedIn } = useRole();
-  const myDealerCode = dealerCode || "CNX";
+  const myDealerCode = dealerCode || DEFAULT_DEALER_CODE;
+  // อายุใบเสนอราคา (นโยบาย HQ) — ใบที่ไม่ได้กรอก expiry เอง ใช้ค่านี้คำนวณวันหมดอายุ (0067)
+  const quoteValidityDays = useQuoteValidityDays();
   // ── M9 Phase 4 (unload) — HQ ในโหมด supabase ไม่โหลด array งานขายทั้งเครืออีกต่อไป ──
   // ทุก surface ของ HQ อ่านผ่าน RPC/รายการแบ่งหน้าที่ DB แล้ว (dashboard/quotations/leads/pipeline/
   //   customers/dealers-detail/กระดิ่งแจ้งเตือน/ค้นหา) → ไม่ต้องถือ leads/quotations/customers/appointments
@@ -191,13 +194,13 @@ export function SalesProvider({
     if (!skipExpire) expiredThisSession.add(myDealerCode);
     const prepare = skipExpire
       ? Promise.resolve(0)
-      : quotationsRepo.expireOverdue(APP_NOW_ISO, scope).catch(() => { expiredThisSession.delete(myDealerCode); return 0; });
+      : quotationsRepo.expireOverdue(APP_NOW_ISO, scope, quoteValidityDays).catch(() => { expiredThisSession.delete(myDealerCode); return 0; });
     prepare
       .then(() => quotationsRepo.list(scope))
       .then((rows) => { if (alive) setQuotations(rows); })
       .catch((e) => { if (alive) logRepoRead("quotations.list", e); });
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ]);
+  }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays]);
   const persistQuote = useRef({
     create: (q: QuotationMock) => { void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
     update: (q: QuotationMock) => { void quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
@@ -362,7 +365,7 @@ export function SalesProvider({
       color: CUSTOMER_PALETTE[newId % CUSTOMER_PALETTE.length],
       totalValue: parseBaht(lead.value),
       logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลีดมาด้วย
-      dealerCode: lead.dealerCode ?? "CNX", // ลูกค้าเป็นของสาขาเดียวกับลีดที่ปิดการขาย (multi-tenant)
+      dealerCode: lead.dealerCode ?? DEFAULT_DEALER_CODE, // ลูกค้าเป็นของสาขาเดียวกับลีดที่ปิดการขาย (multi-tenant)
     };
     setCustomers(prev => [...prev, newCustomer]);
     // ⚠️ ต้อง "รอ" ลูกค้าลง DB จริงก่อน relink ใบเสนอราคา (M6):
@@ -481,7 +484,7 @@ export function SalesProvider({
       // กันเขียนข้ามสาขา: repo คืนเฉพาะลีดสาขาที่ล็อกอินอยู่แล้ว แต่กันไว้อีกชั้น (ลีดไม่ระบุ dealerCode = CNX)
       // ไม่งั้น match ด้วย company ชื่อซ้ำ/พิมพ์เอง จะเลื่อนสถานะ+ประทับผู้ทำทับลีดของสาขาอื่น
       // (คู่แฝดฝั่งเขียนของบั๊กรั่วข้ามสาขา — ดู branch-isolation.spec.ts) · แตะเฉพาะลีดของสาขาที่ล็อกอิน
-      if ((l.dealerCode ?? "CNX") !== myDealerCode) return l;
+      if ((l.dealerCode ?? DEFAULT_DEALER_CODE) !== myDealerCode) return l;
       const match = (quotation.customerId != null && quotation.customerId !== 0 && l.customerId === quotation.customerId)
         || l.company === quotation.customer;
       if (!match || l.status === "PAID" || l.status === "CANCELLED") return l;

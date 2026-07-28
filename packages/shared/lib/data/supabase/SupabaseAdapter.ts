@@ -669,8 +669,9 @@ export const SupabaseAdapter: DataAdapter = {
     remove: (id) => must(sb().from("quotations").delete().eq("id", id)),
     setStatus: (id, status) => must(sb().from("quotations").update({ status }).eq("id", id)),
     // ปิดใบที่เลยวันหมดอายุ — RLS ทำให้แต่ละสาขาปิดได้เฉพาะใบของตัวเอง (0019)
-    expireOverdue: async (asOf) => {
-      const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf });
+    //   validityDays = ใบที่ไม่ได้กรอก expiry เอง ใช้ date+validityDays แทน (นิยามเดียวกับ hq_alerts) · 0067
+    expireOverdue: async (asOf, _scope, validityDays) => {
+      const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf, p_validity_days: validityDays ?? 30 });
       if (error) throw new Error(error.message);
       return Number(data ?? 0);
     },

@@ -15,7 +15,7 @@ import {
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
-import { profileKey, PROFILE_UPDATED_EVENT, sessions, type UserProfile } from "@pms/shared/lib/mock";
+import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE, type UserProfile } from "@pms/shared/lib/mock";
 
 // โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
 function currentDealerCode(): string {
@@ -73,7 +73,20 @@ function fireSettings() {
 
 function scopeByDealer<T extends { dealerCode?: string }>(list: T[], scope?: Scope): T[] {
   if (!scope || scope.isHQ || !scope.dealerCode) return list;
-  return list.filter(r => (r.dealerCode ?? "CNX") === scope.dealerCode);
+  return list.filter(r => (r.dealerCode ?? DEFAULT_DEALER_CODE) === scope.dealerCode);
+}
+
+// "วันหมดอายุ" ของใบเสนอราคา — นิยามเดียวที่ใช้ทั้ง expireOverdue และ hqAlerts (expiring)
+//   ใบที่กรอก expiry เอง (รูปแบบ YYYY-MM-DD) → ใช้ค่านั้น
+//   ไม่ได้กรอก (ค่าเริ่มต้นฟอร์ม = ว่าง) → date สร้างใบ + validityDays (นโยบาย HQ)
+//   คืน null ถ้าคำนวณไม่ได้เลย (ทั้ง expiry และ date ใช้ไม่ได้)
+function effectiveExpiryOf(q: { expiry?: string; date: string }, validityDays: number): string | null {
+  if (q.expiry && /^\d{4}-\d{2}-\d{2}$/.test(q.expiry)) return q.expiry;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(q.date || "");
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  d.setDate(d.getDate() + validityDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export const LocalAdapter: DataAdapter = {
@@ -115,7 +128,7 @@ export const LocalAdapter: DataAdapter = {
     list: (scope) => ok(scopeByDealer(loadResponsiblePersons(), scope)),
     // แทนที่เฉพาะพนักงานของสาขานี้ (คงของสาขาอื่นไว้) + ตรา dealerCode ให้ทุกคน
     save: (all, dealerCode) => {
-      const others = loadResponsiblePersons().filter(p => (p.dealerCode ?? "CNX") !== dealerCode);
+      const others = loadResponsiblePersons().filter(p => (p.dealerCode ?? DEFAULT_DEALER_CODE) !== dealerCode);
       const mine = all.map(p => ({ ...p, dealerCode }));
       writeKey(RP_STORAGE_KEY, [...others, ...mine]);
       return done();
@@ -229,7 +242,7 @@ export const LocalAdapter: DataAdapter = {
       const asOfMs = opts ? Date.parse(opts.asOf) : Date.parse("2026-06-30");
       const defDays = opts?.defaultDays ?? 7;
       for (const q of qs) {
-        const r = get(q.dealerCode ?? "CNX");
+        const r = get(q.dealerCode ?? DEFAULT_DEALER_CODE);
         r.quotes += 1;
         if (q.status === "won") {
           r.won += 1;
@@ -241,7 +254,7 @@ export const LocalAdapter: DataAdapter = {
       }
       for (const l of ls) {
         if (l.status === "PAID" || l.status === "CANCELLED") continue;
-        const code = l.dealerCode ?? "CNX";
+        const code = l.dealerCode ?? DEFAULT_DEALER_CODE;
         const r = get(code); r.openLeads += 1;
         // stale = needsFollowUp: วันติดต่อล่าสุด (max activities ?? createdAt) เงียบเกินเกณฑ์
         const actMs = (l.activities ?? []).map(a => parseThaiDateLocal(a.date)?.getTime()).filter((x): x is number => x != null);
@@ -262,7 +275,7 @@ export const LocalAdapter: DataAdapter = {
         const iso = isoOf(l);
         if (iso && f.dateStart && iso < f.dateStart) return false;
         if (iso && f.dateEnd && iso > f.dateEnd) return false;
-        if (f.dealerCodes?.length && !f.dealerCodes.includes(l.dealerCode ?? "CNX")) return false;
+        if (f.dealerCodes?.length && !f.dealerCodes.includes(l.dealerCode ?? DEFAULT_DEALER_CODE)) return false;
         if (f.province && l.province !== f.province) return false;
         if (f.product && l.product !== f.product) return false;
         if (f.source && (l.source || "ไม่ระบุ") !== f.source) return false;
@@ -283,7 +296,7 @@ export const LocalAdapter: DataAdapter = {
       const monthM = new Map<string, { y: number; m: number; created: number; won: number; lost: number }>();
       rows.forEach(l => { const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return; const y = d.getFullYear(), m = d.getMonth(), k = `${y}-${m}`; let r = monthM.get(k); if (!r) { r = { y, m, created: 0, won: 0, lost: 0 }; monthM.set(k, r); } r.created++; if (l.status === "PAID") r.won++; if (l.status === "CANCELLED") r.lost++; });
       const dealerM = new Map<string, { leads: number; quoted: number }>();
-      rows.forEach(l => { const code = l.dealerCode ?? "CNX"; let r = dealerM.get(code); if (!r) { r = { leads: 0, quoted: 0 }; dealerM.set(code, r); } r.leads++; if (["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status)) r.quoted++; });
+      rows.forEach(l => { const code = l.dealerCode ?? DEFAULT_DEALER_CODE; let r = dealerM.get(code); if (!r) { r = { leads: 0, quoted: 0 }; dealerM.set(code, r); } r.leads++; if (QUOTED_UP.includes(l.status)) r.quoted++; });
       return ok({
         byStatus: [...statusM.entries()].map(([status, count]) => ({ status, count, value: statusValM.get(status) ?? 0 })),
         bySource: [...sourceM.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
@@ -299,7 +312,7 @@ export const LocalAdapter: DataAdapter = {
       const m = new Map<string, { quoteNo: string; productLine: string; valueNum: number; date: string }[]>();
       for (const q of qs) {
         if (q.status !== "won") continue;
-        const key = `${q.dealerCode ?? "CNX"}|${q.customer ?? ""}`;
+        const key = `${q.dealerCode ?? DEFAULT_DEALER_CODE}|${q.customer ?? ""}`;
         const b = { quoteNo: q.id, productLine: (q.buildingType || q.project) ?? "", valueNum: q.totalValue ?? 0, date: q.date ?? "" };
         const arr = m.get(key); if (arr) arr.push(b); else m.set(key, [b]);
       }
@@ -314,7 +327,7 @@ export const LocalAdapter: DataAdapter = {
         if (!md) continue;
         const d = md[1];
         if (d < start || d > end) continue; // ISO string เทียบตามลำดับ = เทียบวันได้ตรง
-        const code = q.dealerCode ?? "CNX";
+        const code = q.dealerCode ?? DEFAULT_DEALER_CODE;
         if (dealer && code !== dealer) continue;
         let r = m.get(code);
         if (!r) { r = { quotes: 0, won: 0, lost: 0, wonVal: 0, quoteVal: 0 }; m.set(code, r); }
@@ -335,7 +348,7 @@ export const LocalAdapter: DataAdapter = {
         if (!md) continue;
         const dstr = `${md[1]}-${md[2]}-${md[3]}`;
         if (dstr < start || dstr > end) continue;
-        const code = q.dealerCode ?? "CNX";
+        const code = q.dealerCode ?? DEFAULT_DEALER_CODE;
         if (dealer && code !== dealer) continue;
         const v = q.totalValue ?? 0;
         const y = Number(md[1]), m = Number(md[2]) - 1; // 0..11 ให้ตรง getMonth()
@@ -385,7 +398,7 @@ export const LocalAdapter: DataAdapter = {
         const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         if (f.dateStart && iso < f.dateStart) return false;
         if (f.dateEnd && iso > f.dateEnd) return false;
-        const code = l.dealerCode ?? "CNX";
+        const code = l.dealerCode ?? DEFAULT_DEALER_CODE;
         if (f.dealerCodes?.length && !f.dealerCodes.includes(code)) return false;
         if (f.province && l.province !== f.province) return false;
         if (f.product && l.product !== f.product) return false;
@@ -395,7 +408,7 @@ export const LocalAdapter: DataAdapter = {
         return (asOf.getTime() - d.getTime()) / 3_600_000 > hours;
       });
       const m = new Map<string, number>();
-      rows.forEach(l => { const c = l.dealerCode ?? "CNX"; m.set(c, (m.get(c) ?? 0) + 1); });
+      rows.forEach(l => { const c = l.dealerCode ?? DEFAULT_DEALER_CODE; m.set(c, (m.get(c) ?? 0) + 1); });
       return ok({ total: rows.length, byDealer: [...m.entries()].map(([dealerCode, count]) => ({ dealerCode, count })).sort((a, b) => b.count - a.count) });
     },
     hqAlerts: (f) => {
@@ -409,15 +422,25 @@ export const LocalAdapter: DataAdapter = {
         const created = parseThaiDateLocal(l.createdAt ?? "");
         return ds.length ? new Date(Math.max(...ds.map(d => d.getTime()))) : created;
       };
-      const unassigned = ls.filter(l => !l.assigned?.trim() && isOpen(l.status) && parseThaiDateLocal(l.createdAt ?? "")
-        && (asOf.getTime() - parseThaiDateLocal(l.createdAt ?? "")!.getTime()) / 3_600_000 > (f.unassignedPerDealer?.[l.dealerCode ?? "CNX"] ?? f.unassignedDefaultHours ?? 48))
-        .map(l => ({ numId: l.numId, company: l.company || l.name, province: l.province, value: l.value }));
-      const idle = ls.filter(l => { if (!isOpen(l.status)) return false; const lc = lastContactOf(l); return lc && (asOf.getTime() - lc.getTime()) / DAY > (f.leadIdleDays ?? 30); })
-        .map(l => ({ numId: l.numId, company: l.company || l.name, assigned: l.assigned, idleDays: Math.floor((asOf.getTime() - lastContactOf(l)!.getTime()) / DAY) }));
+      // คำนวณวันที่แค่ครั้งเดียวต่อลีด (เดิม parse/lastContactOf ซ้ำ 2 รอบใน filter+map แล้วใช้ ! ยืนยันว่าไม่ null
+      //   ทั้งที่ map เป็นคนละ pass จาก filter — พึ่ง purity ของฟังก์ชันเฉย ๆ ไม่ได้การันตีจาก type)
+      const unassigned = ls
+        .filter(l => !l.assigned?.trim() && isOpen(l.status))
+        .map(l => ({ l, created: parseThaiDateLocal(l.createdAt ?? "") }))
+        .filter((x): x is { l: LeadRow; created: Date } => !!x.created
+          && (asOf.getTime() - x.created.getTime()) / 3_600_000 > (f.unassignedPerDealer?.[x.l.dealerCode ?? DEFAULT_DEALER_CODE] ?? f.unassignedDefaultHours ?? 48))
+        .map(({ l }) => ({ numId: l.numId, company: l.company || l.name, province: l.province, value: l.value }));
+      const idle = ls
+        .filter(l => isOpen(l.status))
+        .map(l => ({ l, lc: lastContactOf(l) }))
+        .filter((x): x is { l: LeadRow; lc: Date } => !!x.lc && (asOf.getTime() - x.lc.getTime()) / DAY > (f.leadIdleDays ?? 30))
+        .map(({ l, lc }) => ({ numId: l.numId, company: l.company || l.name, assigned: l.assigned, idleDays: Math.floor((asOf.getTime() - lc.getTime()) / DAY) }));
       const validity = f.quoteValidityDays ?? 30, within = f.quoteExpiringDays ?? 7;
+      // นิยามเดียวกับ expireOverdue (effectiveExpiryOf) — เดิมใช้ date+validity เสมอ ไม่สนใจ expiry ที่กรอกเอง
+      //   ใบที่ตั้ง expiry เองไว้ไกลจากวันนี้ ก็ยังโดนเตือน "ใกล้หมดอายุ" ผิด ๆ ตาม date+validity
       const expiring = qs.filter(q => q.status === "sent_to_client").map(q => {
-        const d = /^(\d{4}-\d{2}-\d{2})/.exec(q.date || "")?.[1]; if (!d) return null;
-        const daysLeft = Math.round((new Date(d).getTime() + validity * DAY - asOf.getTime()) / DAY);
+        const eff = effectiveExpiryOf(q, validity); if (!eff) return null;
+        const daysLeft = Math.round((new Date(eff + "T00:00:00").getTime() - asOf.getTime()) / DAY);
         return daysLeft >= 0 && daysLeft <= within ? { quoteNo: q.id, customer: q.customer, value: q.totalValue ?? 0, dealerCode: q.dealerCode ?? null, daysLeft } : null;
       }).filter((x): x is NonNullable<typeof x> => !!x);
       const latestM = new Map<string, number>();
@@ -441,13 +464,13 @@ export const LocalAdapter: DataAdapter = {
       for (const q of qs) {
         const d = dateOf(q); if (!d) continue;
         if (f.status && q.status !== f.status) continue;
-        if (f.dealerCodes?.length && !f.dealerCodes.includes(q.dealerCode ?? "CNX")) continue;
+        if (f.dealerCodes?.length && !f.dealerCodes.includes(q.dealerCode ?? DEFAULT_DEALER_CODE)) continue;
         const pl = plOf(q);
         if (f.productLines?.length && (pl == null || !f.productLines.includes(pl))) continue;
         if (f.dateStart && d < f.dateStart) continue;
         if (f.dateEnd && d > f.dateEnd) continue;
-        if (search && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(search) && !f.searchDealers?.includes(q.dealerCode ?? "CNX")) continue;
-        const code = q.dealerCode ?? "CNX", v = q.totalValue ?? 0;
+        if (search && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(search) && !f.searchDealers?.includes(q.dealerCode ?? DEFAULT_DEALER_CODE)) continue;
+        const code = q.dealerCode ?? DEFAULT_DEALER_CODE, v = q.totalValue ?? 0;
         const y = Number(d.slice(0, 4)), mo = Number(d.slice(5, 7)) - 1;
         let dr = dM.get(code); if (!dr) { dr = { count: 0, value: 0, sent: 0, won: 0, lost: 0, wonVal: 0, latest: null as string | null }; dM.set(code, dr); }
         dr.count++; dr.value += v; if (q.status !== "draft") dr.sent++;
@@ -485,7 +508,7 @@ export const LocalAdapter: DataAdapter = {
         if (iso && opts.dateStart && iso < opts.dateStart) return false;
         if (iso && opts.dateEnd && iso > opts.dateEnd) return false;
         if (opts.status && l.status !== opts.status) return false;
-        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(l.dealerCode ?? "CNX")) return false;
+        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(l.dealerCode ?? DEFAULT_DEALER_CODE)) return false;
         if (opts.province && l.province !== opts.province) return false;
         if (opts.product && l.product !== opts.product) return false;
         if (opts.source && (l.source || "ไม่ระบุ") !== opts.source) return false;
@@ -493,7 +516,7 @@ export const LocalAdapter: DataAdapter = {
         if (opts.overdue) {
           if (l.status === "PAID" || l.status === "CANCELLED") return false;
           const lm = lastMs(l); if (lm == null) return false;
-          const thr = opts.perDealer?.[l.dealerCode ?? "CNX"] ?? defDays;
+          const thr = opts.perDealer?.[l.dealerCode ?? DEFAULT_DEALER_CODE] ?? defDays;
           if (!(Math.floor((asOfMs - lm) / 86_400_000) > thr)) return false;
         }
         return true;
@@ -539,12 +562,12 @@ export const LocalAdapter: DataAdapter = {
       const plOf = (q: QuotationMock) => { const bt = (q.buildingType ?? "").trim(); return bt ? bt : (q.project ?? undefined); };
       let arr = scopeByDealer(readKey<QuotationMock[]>(SALES.quotations, quoteSeed), scope).filter(q => {
         if (opts.status && q.status !== opts.status) return false;
-        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(q.dealerCode ?? "CNX")) return false;
+        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(q.dealerCode ?? DEFAULT_DEALER_CODE)) return false;
         if (opts.productLines?.length) { const pl = plOf(q); if (pl === undefined || !opts.productLines.includes(pl)) return false; }
         const d = dateOf(q);
         if (opts.dateStart && (!d || d < opts.dateStart)) return false;
         if (opts.dateEnd && (!d || d > opts.dateEnd)) return false;
-        if (s && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(s) && !opts.searchDealers?.includes(q.dealerCode ?? "CNX")) return false;
+        if (s && !`${q.id} ${q.customer ?? ""}`.toLowerCase().includes(s) && !opts.searchDealers?.includes(q.dealerCode ?? DEFAULT_DEALER_CODE)) return false;
         return true;
       });
       const col = opts.sort?.col ?? "date", asc = (opts.sort?.dir ?? "desc") === "asc";
@@ -579,12 +602,15 @@ export const LocalAdapter: DataAdapter = {
       return done();
     },
     // ปิดใบที่เลยวันหมดอายุ (โหมด local ทำกับชุดของสาขานั้น)
-    expireOverdue: (asOf, scope) => {
+    //   "หมดอายุ" = expiry ที่กรอกเอง ถ้ามี · ไม่กรอก (ค่าเริ่มต้นฟอร์ม) = date + validityDays (นโยบาย HQ)
+    //   เดิมอ่านแต่ expiry → ใบที่ไม่ได้กรอก expiry (ส่วนใหญ่) ไม่มีวันหมดอายุเองเลย ไม่ตรงกับที่ hq_alerts เตือน
+    expireOverdue: (asOf, scope, validityDays = 30) => {
       const all = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       let n = 0;
       const next = all.map(q => {
-        const mine = !scope || scope.isHQ || !scope.dealerCode || (q.dealerCode ?? "CNX") === scope.dealerCode;
-        const overdue = q.status === "sent_to_client" && !!q.expiry && /^\d{4}-\d{2}-\d{2}$/.test(q.expiry) && q.expiry < asOf;
+        const mine = !scope || scope.isHQ || !scope.dealerCode || (q.dealerCode ?? DEFAULT_DEALER_CODE) === scope.dealerCode;
+        const effectiveExpiry = effectiveExpiryOf(q, validityDays);
+        const overdue = q.status === "sent_to_client" && !!effectiveExpiry && effectiveExpiry < asOf;
         if (mine && overdue) { n++; return { ...q, status: "expired" as const }; }
         return q;
       });
@@ -639,7 +665,7 @@ export const LocalAdapter: DataAdapter = {
   },
   appointments: {
     list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),
-    listForDealer: (dealerCode) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => (a.dealerCode ?? "CNX") === dealerCode)),
+    listForDealer: (dealerCode) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => (a.dealerCode ?? DEFAULT_DEALER_CODE) === dealerCode)),
     listForLead: (leadId) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => a.leadId === leadId)),
     nextId: (dealerCode) => {
       const mine = scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), { dealerCode, isHQ: false });
