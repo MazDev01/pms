@@ -132,6 +132,18 @@ test("[rpc] เลข id ลูกค้าเดินหน้าทีละ�
   expect(Number(b.data) - Number(a.data), "เรียกสองครั้งต้องได้เลขต่างกัน 1").toBe(1);
 });
 
+test("[rpc-guard] ตัวแทนเรียก RPC 'ออกเลข/สร้างใบ' ของสาขาอื่นไม่ได้ (dealer mismatch)", async () => {
+  // ยิง RPC ตรงเหมือนผู้ไม่หวังดี — guard ที่ฟังก์ชัน (security definer) ต้องปฏิเสธ ไม่ใช่แค่ RLS
+  //   next_entity_id (0016) · next_quote_no (0031) · create_quotation (0034) มี dealer-match guard
+  const cnx = await signIn(CNX); // ล็อกอินสาขา CNX แล้วพยายามทำของสาขา RYG
+  const idOfRYG = await cnx.rpc("next_entity_id", { p_dealer: "RYG", p_entity: "customers" });
+  expect(idOfRYG.error, "CNX ออกเลข id ลูกค้าของ RYG ไม่ได้").not.toBeNull();
+  const quoteNoOfRYG = await cnx.rpc("next_quote_no", { p_dealer: "RYG" });
+  expect(quoteNoOfRYG.error, "CNX ออกเลขที่ใบของ RYG ไม่ได้").not.toBeNull();
+  const createForRYG = await cnx.rpc("create_quotation", { p_dealer: "RYG", p_prefix: "Q-2026-", p_payload: { customer: "เทสต์อัตโนมัติ" } });
+  expect(createForRYG.error, "CNX สร้างใบเสนอราคาให้ RYG ไม่ได้").not.toBeNull();
+});
+
 test("[rpc] ใบที่ส่งแล้วและเลยกำหนด ถูกปิดเป็น 'หมดอายุ' · HQ สั่งไม่ได้ (H5+C3)", async () => {
   const ryg = await signIn(RYG);
   const hq  = await signIn(ADMIN);
