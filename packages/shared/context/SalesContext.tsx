@@ -322,6 +322,21 @@ export function SalesProvider({
           return q;
         });
         relinked.forEach(q => persistQuote.update(q));
+        // R6: ยอดลูกค้า = ผลรวมใบเสนอราคาที่ปิดได้ (won) ของลูกค้ารายนี้ — รองรับ "ปิดหลายดีล"
+        //   เดิม total_value ตั้งครั้งเดียวตอนสร้าง = เท่าดีลแรก · ที่นี่รวมสดจาก next (relink แล้ว)
+        //   guard wonTotal>0: ปิดจากลีดที่ไม่มีใบ (won=0) ไม่ล้างค่าที่ตั้งตอนสร้าง (parseBaht(lead.value))
+        //   (persist ใน updater = ตามแบบ persistQuote ข้างบน · StrictMode เรียกซ้ำ = เขียนค่าเดิม idempotent)
+        const wonTotal = next
+          .filter(q => q.customerId === customerId && q.status === "won")
+          .reduce((s, q) => s + (q.totalValue ?? 0), 0);
+        if (wonTotal > 0) {
+          setCustomers(cp => {
+            const nc = cp.map(c => c.id === customerId ? { ...c, totalValue: wonTotal } : c);
+            const cust = nc.find(c => c.id === customerId);
+            if (cust) persistCustomer.update(cust);
+            return nc;
+          });
+        }
         return next;
       });
     };
@@ -550,7 +565,21 @@ export function SalesProvider({
     }
     // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลีดต้นทาง) — mark สถานะตามปกติ
     persistQuote.setStatus(id, status);
-  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote]);
+    // R6: won บนใบที่ "ผูกลูกค้าเดิมอยู่แล้ว" (ดีลที่ 2+) → รวมยอดลูกค้าใหม่ (finish() ไม่ครอบเคสนี้)
+    //   ใบอื่นที่ won ของลูกค้า (จาก ref) + ใบนี้ที่กำลัง won — นับใบนี้ครั้งเดียว (q.id !== id แล้วบวก target)
+    if (status === "won" && target.customerId && target.customerId > 0) {
+      const cid = target.customerId;
+      const wonTotal = quotationsRef.current
+        .filter(q => q.customerId === cid && q.status === "won" && q.id !== id)
+        .reduce((s, q) => s + (q.totalValue ?? 0), 0) + (target.totalValue ?? 0);
+      setCustomers(prev => {
+        const nc = prev.map(c => c.id === cid ? { ...c, totalValue: wonTotal } : c);
+        const cust = nc.find(c => c.id === cid);
+        if (cust) persistCustomer.update(cust);
+        return nc;
+      });
+    }
+  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote, persistCustomer]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
   // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB
