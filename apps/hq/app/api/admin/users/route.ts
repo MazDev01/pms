@@ -51,8 +51,17 @@ async function must(p: PromiseLike<{ error: { message: string } | null }>) {
 }
 
 // ตรวจ service_role + ยืนยันตัวตน/สิทธิ์ของผู้เรียก — คืน client(admin) กับ id ผู้เรียก หรือ Response error
+// บันทึก audit ฝั่งเซิร์ฟเวอร์แบบ "การันตี" — สร้าง/ลบผู้ใช้ HQ ต้องมีร่องรอยเสมอ
+// (เดิมพึ่ง client useAuditLogger หลัง route คืน · fire-and-forget · ล้มเหลว=ไม่มีบันทึก)
+// service_role ข้าม RLS insert ได้ · best-effort: audit ล้มต้องไม่ทำให้งานหลักพัง
+async function audit(admin: SupabaseClient, prof: { role?: string; name?: string } | null, action: string, target: string) {
+  try {
+    await admin.from("audit_log").insert({ user: prof?.name ?? "", role: prof?.role ?? "", action, target });
+  } catch { /* best-effort */ }
+}
+
 async function authorize(req: NextRequest): Promise<
-  | { ok: true; admin: SupabaseClient; callerId: string }
+  | { ok: true; admin: SupabaseClient; callerId: string; prof: { role?: string; name?: string } }
   | { ok: false; res: NextResponse }
 > {
   if (!SUPABASE_URL || !SERVICE_KEY) {
@@ -65,18 +74,18 @@ async function authorize(req: NextRequest): Promise<
   if (!token) return { ok: false, res: bad(401, "unauthorized") };
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return { ok: false, res: bad(401, "unauthorized") };
-  const { data: prof } = await admin.from("profiles").select("role").eq("id", caller.user.id).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
   if (!prof || !CAN_MANAGE_USERS.has(String(prof.role))) {
     return { ok: false, res: bad(403, "ไม่มีสิทธิ์จัดการผู้ใช้สำนักงานใหญ่") };
   }
-  return { ok: true, admin, callerId: caller.user.id };
+  return { ok: true, admin, callerId: caller.user.id, prof };
 }
 
 // ── สร้างผู้ใช้ HQ + บัญชีเข้าระบบจริง ──
 export async function POST(req: NextRequest) {
   const auth = await authorize(req);
   if (!auth.ok) return auth.res;
-  const { admin } = auth;
+  const { admin, prof } = auth;
 
   const body = (await req.json().catch(() => null)) as null | {
     name?: string; email?: string; phone?: string; role?: string; department?: string;
@@ -118,6 +127,7 @@ export async function POST(req: NextRequest) {
   }
 
   // คืนรหัสให้หน้าจอโชว์ครั้งเดียว (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน)
+  await audit(admin, prof, "เพิ่มผู้ใช้ HQ", email);
   return NextResponse.json({ ok: true, id: uid, email, password });
 }
 
@@ -125,13 +135,13 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const auth = await authorize(req);
   if (!auth.ok) return auth.res;
-  const { admin, callerId } = auth;
+  const { admin, callerId, prof } = auth;
 
   const id = (new URL(req.url).searchParams.get("id") ?? "").trim();
   if (!id) return bad(400, "ไม่ได้ระบุผู้ใช้ที่จะลบ");
   if (id === callerId) return bad(400, "ลบบัญชีของตัวเองไม่ได้");
 
-  const { data: target } = await admin.from("profiles").select("role, dealer_code").eq("id", id).maybeSingle();
+  const { data: target } = await admin.from("profiles").select("role, dealer_code, name").eq("id", id).maybeSingle();
   if (!target) return bad(404, "ไม่พบผู้ใช้นี้");
   // route นี้จัดการเฉพาะผู้ใช้สำนักงานใหญ่ — บัญชีตัวแทนต้องจัดการที่หน้า /hq/dealers
   if (String(target.dealer_code ?? "")) return bad(400, "นี่เป็นบัญชีตัวแทน — จัดการที่หน้า “ตัวแทน”");
@@ -146,5 +156,6 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) return bad(400, `ลบบัญชีไม่สำเร็จ: ${error.message}`);
+  await audit(admin, prof, "ลบผู้ใช้ HQ", String(target.name ?? id));
   return NextResponse.json({ ok: true });
 }

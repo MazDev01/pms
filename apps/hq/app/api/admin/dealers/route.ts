@@ -29,6 +29,15 @@ function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
 
+// บันทึก audit ฝั่งเซิร์ฟเวอร์แบบ "การันตี" — เหตุการณ์บัญชีสำคัญ(สร้าง/ลบตัวแทน) ต้องมีร่องรอยเสมอ
+// เดิมพึ่ง client useAuditLogger หลัง route คืน (fire-and-forget · ล้มเหลว=ไม่มีบันทึก · dealer audit ไม่ได้เลย)
+// service_role ข้าม RLS insert ได้ · best-effort: audit ล้มต้องไม่ทำให้งานหลักพัง
+async function audit(admin: SupabaseClient, prof: { role?: string; name?: string } | null, action: string, target: string) {
+  try {
+    await admin.from("audit_log").insert({ user: prof?.name ?? "", role: prof?.role ?? "", action, target });
+  } catch { /* best-effort */ }
+}
+
 // รหัสผ่านตั้งต้นที่แข็งแรง — ออกที่เซิร์ฟเวอร์ ไม่ให้ client กำหนด (กันรหัสอ่อน/เดาได้)
 // ตัวแทนต้องเปลี่ยนเองหลังเข้าครั้งแรก
 function strongPassword(): string {
@@ -65,7 +74,7 @@ export async function POST(req: NextRequest) {
   if (!token) return bad(401, "unauthorized");
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return bad(401, "unauthorized");
-  const { data: prof } = await admin.from("profiles").select("role").eq("id", caller.user.id).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
   if (!prof || !CAN_MANAGE_DEALERS.has(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
 
   // ── 2) ตรวจ payload ──
@@ -115,6 +124,7 @@ export async function POST(req: NextRequest) {
     return bad(400, `สร้างทะเบียน/โปรไฟล์ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  await audit(admin, prof, "สร้างตัวแทน", `${code} · ${name}`);
   // คืนรหัสให้หน้าจอโชว์ให้ก๊อปไปแจ้งตัวแทน (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน)
   return NextResponse.json({ ok: true, email, password });
 }
@@ -136,7 +146,7 @@ export async function DELETE(req: NextRequest) {
   if (!token) return bad(401, "unauthorized");
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return bad(401, "unauthorized");
-  const { data: prof } = await admin.from("profiles").select("role").eq("id", caller.user.id).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
   if (!prof || !CAN_MANAGE_DEALERS.has(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
 
   const code = (new URL(req.url).searchParams.get("code") ?? "").trim().toUpperCase();
@@ -163,5 +173,6 @@ export async function DELETE(req: NextRequest) {
   for (const m of members ?? []) {
     try { await admin.auth.admin.deleteUser(String(m.id)); } catch { /* best-effort — ลบให้ครบเท่าที่ได้ */ }
   }
+  await audit(admin, prof, "ลบตัวแทน", code);
   return NextResponse.json({ ok: true });
 }

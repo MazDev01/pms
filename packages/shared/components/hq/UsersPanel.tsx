@@ -271,7 +271,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       department: data.department, status: data.status, avatar: data.avatar,
     });
     if (!res.ok) { alert("เพิ่มผู้ใช้ไม่สำเร็จ: " + res.error); return; }
-    logAudit("เพิ่มผู้ใช้ HQ", res.email);
+    // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
     setCreds({ name: data.name, email: res.email, password: res.password });
     reload();
   }
@@ -280,7 +280,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     if (DATA_SOURCE === "supabase") {
       const r = await deleteHQUser(u.id);
       if (!r.ok) return { ok: false, error: r.error };
-      logAudit("ลบผู้ใช้ HQ", u.email); reload(); return { ok: true };
+      reload(); return { ok: true }; // audit บันทึกที่ route (server-side · การันตี) แล้ว
     }
     setUsers(prev => prev.filter(x => x.id !== u.id));
     logAudit("ลบผู้ใช้ HQ", u.email);

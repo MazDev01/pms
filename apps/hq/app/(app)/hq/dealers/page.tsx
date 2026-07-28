@@ -231,7 +231,7 @@ function HQDealersPageInner() {
       setCreating(false);
       if (!res.ok) { setFormErr(res.error); return; } // ล้มเหลวต้องบอกจริง คงฟอร์มไว้ให้แก้
       await dealersRepo.list().then(setDealers).catch(() => {}); // route เพิ่งเพิ่มแถวที่เซิร์ฟเวอร์ → ดึงชุดจริง
-      logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
+      // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
       setShowForm(false);
       // รหัสจริงจากเซิร์ฟเวอร์ (บัญชีล็อกอินได้แล้วจริง) — โชว์ให้ก๊อปไปแจ้งครั้งเดียว
       setCredsModal({ name: form.name.trim(), creds: { email: res.email, password: res.password }, mode: "created" });
@@ -254,7 +254,7 @@ function HQDealersPageInner() {
       void deleteDealerAccount(d.code).then(res => {
         if (!res.ok) { alert("ลบตัวแทนไม่สำเร็จ: " + res.error); return; }
         setDealers(prev => prev.filter(x => x.id !== d.id));
-        logAudit("ลบตัวแทน", `${d.code} · ${d.name}`);
+        // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
       });
       return;
     }
