@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 
 const FORGOT_MSG = "กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th";
 const DEMO_PASSWORD = "benjamin";
@@ -50,6 +52,10 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [quick, setQuick] = useState<DemoRole | null>(null);
+  // "ลืมรหัสผ่าน?" — โหมด supabase ส่งลิงก์ตั้งรหัสใหม่ทางอีเมลจริง (H4/sbSendPasswordReset)
+  //   โหมด local (เดโม) ไม่มีระบบยืนยันตัวตนจริงให้ส่งอีเมล → คงข้อความ "ติดต่อ HQ" เดิมไว้
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const busy = loading || quick !== null;
   const go = (scopeAll: boolean) => router.push(scopeAll ? "/hq/dashboard" : "/dashboard");
@@ -74,6 +80,23 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setQuick(role);
     await login(role);
     go(role === "hq");
+  }
+
+  // ใช้อีเมลในช่องที่กรอกไว้แล้ว — ไม่ต้องเปิดฟอร์มใหม่ซ้อน
+  async function handleForgot() {
+    if (DATA_SOURCE !== "supabase") { alert(FORGOT_MSG); return; } // โหมดเดโมไม่มีอีเมลจริงให้ส่ง
+    const e = email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(e)) {
+      setForgotMsg({ ok: false, text: "กรอกอีเมลในช่องด้านบนก่อน แล้วกด \"ลืมรหัสผ่าน?\" อีกครั้ง" });
+      return;
+    }
+    setForgotBusy(true);
+    setForgotMsg(null);
+    const r = await sbSendPasswordReset(e);
+    setForgotBusy(false);
+    setForgotMsg(r.ok
+      ? { ok: true, text: `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${e} แล้ว — เปิดอีเมลเพื่อตั้งรหัสใหม่` }
+      : { ok: false, text: r.error });
   }
 
   const inputWrap =
@@ -126,11 +149,17 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                   className="h-4 w-4 rounded border-slate-300 accent-[#0e2a5c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40" />
                 จดจำฉันไว้ในระบบ
               </label>
-              <button type="button" onClick={() => alert(FORGOT_MSG)}
-                className="text-[0.85rem] font-bold text-[#1d4ed8] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 rounded">
-                ลืมรหัสผ่าน?
+              <button type="button" onClick={handleForgot} disabled={forgotBusy}
+                className="text-[0.85rem] font-bold text-[#1d4ed8] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 rounded disabled:opacity-60">
+                {forgotBusy ? "กำลังส่ง…" : "ลืมรหัสผ่าน?"}
               </button>
             </div>
+
+            {forgotMsg && (
+              <p role="alert" className={`rounded-xl border px-3.5 py-2.5 text-sm font-medium ${forgotMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-600"}`}>
+                {forgotMsg.text}
+              </p>
+            )}
 
             {error && (
               <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>
