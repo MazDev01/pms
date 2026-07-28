@@ -15,7 +15,8 @@ import {
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
-import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE, type UserProfile } from "@pms/shared/lib/mock";
+import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE,
+  DEFAULT_LEAD_RULES, DEFAULT_HQ_NOTIF_RULES, DEFAULT_HQ_POLICY, type UserProfile } from "@pms/shared/lib/mock";
 
 // โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
 function currentDealerCode(): string {
@@ -240,7 +241,7 @@ export const LocalAdapter: DataAdapter = {
         return r;
       };
       const asOfMs = opts ? Date.parse(opts.asOf) : Date.parse("2026-06-30");
-      const defDays = opts?.defaultDays ?? 7;
+      const defDays = opts?.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays;
       for (const q of qs) {
         const r = get(q.dealerCode ?? DEFAULT_DEALER_CODE);
         r.quotes += 1;
@@ -404,7 +405,7 @@ export const LocalAdapter: DataAdapter = {
         if (f.product && l.product !== f.product) return false;
         if (f.source && (l.source || "ไม่ระบุ") !== f.source) return false;
         if (search && !`${l.company ?? ""} ${l.contact ?? ""} ${l.province ?? ""} ${l.product ?? ""} ${l.id ?? ""} ${code}`.toLowerCase().includes(search)) return false;
-        const hours = f.perDealer?.[code] ?? f.defaultHours ?? 48;
+        const hours = f.perDealer?.[code] ?? f.defaultHours ?? DEFAULT_LEAD_RULES.unassignedAlertHours;
         return (asOf.getTime() - d.getTime()) / 3_600_000 > hours;
       });
       const m = new Map<string, number>();
@@ -428,14 +429,14 @@ export const LocalAdapter: DataAdapter = {
         .filter(l => !l.assigned?.trim() && isOpen(l.status))
         .map(l => ({ l, created: parseThaiDateLocal(l.createdAt ?? "") }))
         .filter((x): x is { l: LeadRow; created: Date } => !!x.created
-          && (asOf.getTime() - x.created.getTime()) / 3_600_000 > (f.unassignedPerDealer?.[x.l.dealerCode ?? DEFAULT_DEALER_CODE] ?? f.unassignedDefaultHours ?? 48))
+          && (asOf.getTime() - x.created.getTime()) / 3_600_000 > (f.unassignedPerDealer?.[x.l.dealerCode ?? DEFAULT_DEALER_CODE] ?? f.unassignedDefaultHours ?? DEFAULT_LEAD_RULES.unassignedAlertHours))
         .map(({ l }) => ({ numId: l.numId, company: l.company || l.name, province: l.province, value: l.value }));
       const idle = ls
         .filter(l => isOpen(l.status))
         .map(l => ({ l, lc: lastContactOf(l) }))
-        .filter((x): x is { l: LeadRow; lc: Date } => !!x.lc && (asOf.getTime() - x.lc.getTime()) / DAY > (f.leadIdleDays ?? 30))
+        .filter((x): x is { l: LeadRow; lc: Date } => !!x.lc && (asOf.getTime() - x.lc.getTime()) / DAY > (f.leadIdleDays ?? DEFAULT_HQ_NOTIF_RULES.leadIdleDays))
         .map(({ l, lc }) => ({ numId: l.numId, company: l.company || l.name, assigned: l.assigned, idleDays: Math.floor((asOf.getTime() - lc.getTime()) / DAY) }));
-      const validity = f.quoteValidityDays ?? 30, within = f.quoteExpiringDays ?? 7;
+      const validity = f.quoteValidityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays, within = f.quoteExpiringDays ?? DEFAULT_HQ_NOTIF_RULES.quoteExpiringDays;
       // นิยามเดียวกับ expireOverdue (effectiveExpiryOf) — เดิมใช้ date+validity เสมอ ไม่สนใจ expiry ที่กรอกเอง
       //   ใบที่ตั้ง expiry เองไว้ไกลจากวันนี้ ก็ยังโดนเตือน "ใกล้หมดอายุ" ผิด ๆ ตาม date+validity
       const expiring = qs.filter(q => q.status === "sent_to_client").map(q => {
@@ -502,7 +503,7 @@ export const LocalAdapter: DataAdapter = {
       const search = (opts.search ?? "").trim().toLowerCase();
       const isoOf = (l: LeadRow) => { const d = parseThaiDateLocal(l.createdAt ?? ""); return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null; };
       const lastMs = (l: LeadRow) => { const a = (l.activities ?? []).map(x => parseThaiDateLocal(x.date)?.getTime()).filter((x): x is number => x != null); return a.length ? Math.max(...a) : (parseThaiDateLocal(l.createdAt ?? "")?.getTime() ?? null); };
-      const asOfMs = Date.parse(opts.asOf ?? "2026-06-30"), defDays = opts.defaultDays ?? 7;
+      const asOfMs = Date.parse(opts.asOf ?? "2026-06-30"), defDays = opts.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays;
       let arr = scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), scope).filter(l => {
         const iso = isoOf(l);
         if (iso && opts.dateStart && iso < opts.dateStart) return false;

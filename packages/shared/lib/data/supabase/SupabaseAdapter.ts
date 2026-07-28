@@ -5,7 +5,7 @@
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
 import { getSupabase } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
-import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REASONS,
+import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, DEFAULT_LEAD_RULES, LOST_REASONS,
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -330,7 +330,7 @@ export const SupabaseAdapter: DataAdapter = {
       must(sb().from("dealer_lead_rules").upsert(toSnake({ dealerCode: code, ...rules } as unknown as Row))),
     getQuoteValidityDays: async () => {
       const p = await one<HQPolicy>("hq_policy");
-      return p?.quoteValidityDays ?? 30;
+      return p?.quoteValidityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays;
     },
     // lost เป็น text[] ของ Postgres — ไม่ต้องแปลงคีย์ (คอลัมน์เดียว ชื่อตรงอยู่แล้ว)
     // แถวยังไม่ถูก seed / รายการว่าง → ใช้ค่าเริ่มต้นกลาง ไม่ปล่อยให้ตัวแทนได้ dropdown เปล่า
@@ -458,7 +458,7 @@ export const SupabaseAdapter: DataAdapter = {
       const { data, error } = await sb().rpc("dealer_rollup", {
         p_year: year,
         p_as_of: opts?.asOf ?? APP_NOW_ISO,
-        p_default_days: opts?.defaultDays ?? 7,
+        p_default_days: opts?.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays,
         p_follow_up_days: opts?.perDealer ?? null,
       });
       if (error) throw new Error(error.message);
@@ -536,7 +536,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     unassignedLeads: async (f) => {
       const { data, error } = await sb().rpc("unassigned_leads", {
-        p_as_of: f.asOf ?? APP_NOW_ISO, p_default_hours: f.defaultHours ?? 48, p_per_dealer: f.perDealer ?? null,
+        p_as_of: f.asOf ?? APP_NOW_ISO, p_default_hours: f.defaultHours ?? DEFAULT_LEAD_RULES.unassignedAlertHours, p_per_dealer: f.perDealer ?? null,
         p_dealer_codes: f.dealerCodes ?? null, p_province: f.province ?? null, p_product: f.product ?? null,
         p_source: f.source ?? null, p_search: (f.search ?? "").trim() || null,
         p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
@@ -551,9 +551,9 @@ export const SupabaseAdapter: DataAdapter = {
     hqAlerts: async (f) => {
       const { data, error } = await sb().rpc("hq_alerts", {
         p_as_of: f.asOf ?? APP_NOW_ISO,
-        p_unassigned_default_hours: f.unassignedDefaultHours ?? 48, p_unassigned_per_dealer: f.unassignedPerDealer ?? null,
-        p_lead_idle_days: f.leadIdleDays ?? 30, p_quote_validity_days: f.quoteValidityDays ?? 30,
-        p_quote_expiring_days: f.quoteExpiringDays ?? 7, p_dealer_idle_days: f.dealerIdleDays ?? 30,
+        p_unassigned_default_hours: f.unassignedDefaultHours ?? DEFAULT_LEAD_RULES.unassignedAlertHours, p_unassigned_per_dealer: f.unassignedPerDealer ?? null,
+        p_lead_idle_days: f.leadIdleDays ?? DEFAULT_HQ_NOTIF_RULES.leadIdleDays, p_quote_validity_days: f.quoteValidityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays,
+        p_quote_expiring_days: f.quoteExpiringDays ?? DEFAULT_HQ_NOTIF_RULES.quoteExpiringDays, p_dealer_idle_days: f.dealerIdleDays ?? DEFAULT_HQ_NOTIF_RULES.dealerIdleDays,
       });
       if (error) throw new Error(error.message);
       const d = (data ?? {}) as { unassigned?: Row[]; idle?: Row[]; expiring?: Row[]; dealer_latest?: Row[]; lost_rate?: Row[] };
@@ -607,7 +607,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_search: (opts.search ?? "").trim() || null,
         p_date_start: opts.dateStart ?? null, p_date_end: opts.dateEnd ?? null,
         p_overdue: opts.overdue ?? false, p_as_of: opts.asOf ?? APP_NOW_ISO,
-        p_default_days: opts.defaultDays ?? 7, p_follow_up_days: opts.perDealer ?? null,
+        p_default_days: opts.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays, p_follow_up_days: opts.perDealer ?? null,
       });
       if (error) throw new Error(error.message);
       const d = (data ?? {}) as { total?: number; rows?: Row[] };
@@ -671,7 +671,7 @@ export const SupabaseAdapter: DataAdapter = {
     // ปิดใบที่เลยวันหมดอายุ — RLS ทำให้แต่ละสาขาปิดได้เฉพาะใบของตัวเอง (0019)
     //   validityDays = ใบที่ไม่ได้กรอก expiry เอง ใช้ date+validityDays แทน (นิยามเดียวกับ hq_alerts) · 0067
     expireOverdue: async (asOf, _scope, validityDays) => {
-      const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf, p_validity_days: validityDays ?? 30 });
+      const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf, p_validity_days: validityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays });
       if (error) throw new Error(error.message);
       return Number(data ?? 0);
     },

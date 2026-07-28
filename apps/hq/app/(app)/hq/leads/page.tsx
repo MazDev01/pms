@@ -46,7 +46,6 @@ const parseThaiDate = (s: string): Date | null => {
   const y = +mt[3] > 2500 ? +mt[3] - 543 : +mt[3];
   return new Date(y, TH_MONTH[mt[2]], +mt[1]);
 };
-const ACTIVE: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO"];
 const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 // ช่วงกว้างคงที่สำหรับสรุปใบรายเดือน (กราฟแนวโน้มลีด) — อ้างอิงคงที่ กัน hook รีเฟตช์
 const TREND_QUOTE_START = new Date(2000, 0, 1);

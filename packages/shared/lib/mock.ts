@@ -109,6 +109,8 @@ export const DEFAULT_DEALER_CODE = "CNX";
 export const LEAD_STATUS_ORDER: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
 // สถานะที่ "ถึงขั้นเสนอราคาแล้ว" (มีใบเสนอราคาออกไปแล้ว) — เดิมก๊อป literal ["QUOTED","FOLLOWUP","NEGO","PAID"] ซ้ำหลายไฟล์
 export const QUOTED_UP: LeadStatus[] = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
+// สถานะที่ "ยังเปิดอยู่ ไม่ใช่ปลายทาง" (ตัด PAID/CANCELLED) เรียงตามลำดับขั้น — ใช้ทำคอลัมน์ Kanban/คำนวณ % ความคืบหน้า
+export const ACTIVE_LEAD_STATUSES: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO"];
 
 export const leadStatusLabel: Record<LeadStatus, string> = {
   WAITING:   "ติดต่อแล้ว",

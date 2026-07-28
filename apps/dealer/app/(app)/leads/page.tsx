@@ -7,7 +7,7 @@ import {
   RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
   buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
-  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE,
+  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
 } from "@pms/shared/lib/mock";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
@@ -40,7 +40,7 @@ import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
-import { leadCreatedDate } from "@pms/shared/lib/leadMetrics";
+import { leadCreatedDate, priorityLabel } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
@@ -154,7 +154,7 @@ function needsFollowUp(l: LeadRow, threshold = 7): boolean {
 // ─── Priority (ความสำคัญ) — deterministic by value tier ──────────────────────
 type Priority = "HIGH" | "MEDIUM" | "LOW";
 // PRIORITIES ถูกลบพร้อมตัวกรอง "ความสำคัญ" — ป้ายความสำคัญในแผงรายละเอียดลีดยังใช้ leadPriority/priorityLabel อยู่
-const priorityLabel: Record<Priority, string> = { HIGH: "สูง", MEDIUM: "กลาง", LOW: "ต่ำ" };
+// priorityLabel = import จาก leadMetrics.ts (แหล่งเดียว — เดิม copy ซ้ำที่นี่)
 const priorityColor: Record<Priority, { text: string; bg: string }> = {
   HIGH:   { text: "#dc2626", bg: "#fee2e2" },
   MEDIUM: { text: "#d97706", bg: "#fff3cd" },
@@ -887,10 +887,9 @@ export default function LeadsPage() {
   function leadProgress(status: LeadStatus): number {
     if (status === "PAID") return 100;
     if (status === "CANCELLED") return 0;
-    const stages: LeadStatus[] = ["WAITING","BULLET","QUOTED","FOLLOWUP","NEGO"];
-    const idx = stages.indexOf(status);
+    const idx = ACTIVE_LEAD_STATUSES.indexOf(status);
     if (idx < 0) return 0;
-    return Math.round(((idx + 1) / (stages.length + 1)) * 100);
+    return Math.round(((idx + 1) / (ACTIVE_LEAD_STATUSES.length + 1)) * 100);
   }
 
   // Files — ของลูกค้าเป้าหมายรายนี้ (ผูกด้วย numId) จากคลังไฟล์รวม
@@ -1332,7 +1331,7 @@ export default function LeadsPage() {
 
         {/* ── KANBAN VIEW — คอลัมน์ตามสถานะ · ลากการ์ดเพื่อเปลี่ยนสถานะ (รวม "เส้นทางการขาย") ── */}
         {view === "kanban" && (() => {
-          const ACTIVE: LeadStatus[] = ["WAITING","BULLET","QUOTED","FOLLOWUP","NEGO"];
+          const ACTIVE = ACTIVE_LEAD_STATUSES;
           // PAID ไม่มีคอลัมน์แล้ว — ปิดการขายสำเร็จจะย้ายไปหน้า "ลูกค้า" อัตโนมัติ
           const TERMINAL: LeadStatus[] = ["CANCELLED"];
           const renderColumn = (status: LeadStatus, wide: boolean) => {
