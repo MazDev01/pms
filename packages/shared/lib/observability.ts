@@ -5,16 +5,9 @@
 // provider-agnostic: shared ไม่ผูกกับ Sentry/เจ้าไหน — แค่ console เสมอ + ส่งต่อ "sink" ที่แอปลงทะเบียน
 //   ต่อ provider ทีหลังได้โดยไม่ต้องแก้ที่เรียกใช้ (captureError อยู่แล้วทุกจุดสำคัญ)
 //
-// วิธีเปิด Sentry จริง (ทำที่ฝั่งแอป — apps/hq, apps/dealer — ที่มี @sentry ติดตั้ง):
-//   1) pnpm add @sentry/nextjs
-//   2) ตั้ง NEXT_PUBLIC_SENTRY_DSN ใน env ของแต่ละแอป
-//   3) ในไฟล์ client init ของแอป (เช่น instrumentation-client.ts หรือ provider ที่รันครั้งเดียว):
-//        import * as Sentry from "@sentry/nextjs";
-//        import { setErrorSink } from "@pms/shared/lib/observability";
-//        if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-//          Sentry.init({ dsn: process.env.NEXT_PUBLIC_SENTRY_DSN });
-//          setErrorSink((err, ctx) => Sentry.captureException(err, { extra: { context: ctx } }));
-//        }
+// เปิด Sentry จริง = ตั้ง NEXT_PUBLIC_SENTRY_DSN ในแต่ละแอปพอ — ต่อสายไว้แล้วที่
+//   apps/{hq,dealer}/instrumentation-client.ts (dynamic import · เปิดเมื่อมี DSN เท่านั้น)
+//   @sentry/nextjs ติดตั้งแล้ว · ไม่มี DSN = Sentry ไม่ถูกโหลด (tree-shaken) error ยังลง console
 
 export type ErrorContext = string;
 type ErrorSink = (error: unknown, context?: ErrorContext) => void;
