@@ -450,7 +450,7 @@ body {
   font-weight: 800; font-size: 1.05rem;
   box-shadow: 0 2px 8px rgba(0,51,102,0.35);
 }
-.erp-sidebar .brand-text h1 { font-size: 0.95rem; font-weight: 800; line-height: 1.05; letter-spacing: 0.04em; color: var(--primary); }
+.erp-sidebar .brand-text .brand-name { font-size: 0.95rem; font-weight: 800; line-height: 1.05; letter-spacing: 0.04em; color: var(--primary); }
 .erp-sidebar .brand-text span { font-size: 0.55rem; color: var(--muted-foreground); letter-spacing: 0.06em; }
 
 .nav-section { padding: 0.35rem 0.7rem; }
@@ -684,6 +684,11 @@ body {
 
 .hq-row-bottom { display: grid; grid-template-columns: 2.3fr 1fr; gap: 1.25rem; align-items: start; }
 @media (max-width: 1180px) { .hq-row-bottom { grid-template-columns: 1fr !important; } }
+
+/* หน้าปฏิทิน (Dealer) — mini-calendar + agenda panel (360px ตายตัว) เดิมไม่ stack เลยที่จอแคบ
+   ช่องวันเหลือ ~36px แคบจนเวลานัดหมายแสดงไม่ได้แม้แต่ตัวเดียว (ดูคอมเมนต์ใน calendar/page.tsx) */
+.calendar-layout { display: grid; grid-template-columns: minmax(0,1fr) 360px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .calendar-layout { grid-template-columns: 1fr; } }
 @media (max-width: 1100px) { .hq-row2a, .hq-row2b { grid-template-columns: 1fr !important; } }
 @media (max-width: 1280px) { .hq-row3c { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 @media (max-width: 680px)  { .hq-row3c { grid-template-columns: 1fr !important; } }
@@ -715,7 +720,21 @@ body {
 .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
 
 /* ─── Table (scoped to .table-wrap so other pages stay untouched) ─── */
-.table-wrap { border-top: 1px solid var(--border); overflow-x: auto; }
+/* scroll shadow — บอกใบ้ว่ายังปัดขวาได้อีก (จอแคบ/ตารางกว้างกว่าจอ) เดิมไม่มีสัญญาณอะไรเลย
+   ผู้ใช้ไม่รู้ว่าคอลัมน์ท้ายๆ (เช่นปุ่มดูรายละเอียด) หลุดจอไปแล้ว ต้องปัดถึงจะเห็น
+   เทคนิค dual-background มาตรฐาน: เงาจางที่ขอบขวาปรากฏเฉพาะตอนยังเลื่อนต่อได้ (fade ตามตำแหน่ง scroll จริง) */
+.table-wrap {
+  border-top: 1px solid var(--border); overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--card) 30%, rgba(255,255,255,0)) 0 0,
+    linear-gradient(to left, var(--card) 30%, rgba(255,255,255,0)) 100% 0,
+    linear-gradient(to right, rgba(16,40,80,.12), rgba(16,40,80,0)) 0 0,
+    linear-gradient(to left, rgba(16,40,80,.12), rgba(16,40,80,0)) 100% 0;
+  background-repeat: no-repeat;
+  background-color: var(--card);
+  background-size: 24px 100%, 24px 100%, 10px 100%, 10px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
 /* table-layout:fixed => คอลัมน์กว้างคงที่ ไม่ยืด/หดตามข้อมูลที่โชว์ (เสถียรทุกหน้า) */
 .table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
 .table-wrap thead { background: var(--muted); }

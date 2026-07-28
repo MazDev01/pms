@@ -50,7 +50,7 @@ const HQ_NAV: NavGroup[] = [
     group: "เมนูหลัก",
     items: [
       { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  icon: <LayoutDashboard size={16} /> },
-      { label: "ตัวแทนจำหน่าย",     href: "/hq/dealers",    icon: <Store size={16} /> },
+      { label: "ตัวแทน",           href: "/hq/dealers",    icon: <Store size={16} /> },
       { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
       { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",  icon: <Phone size={16} /> },
       { label: "ใบเสนอราคาทั้งเครือ", href: "/hq/quotations", icon: <ScrollText size={16} /> },
@@ -96,8 +96,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
         </div>
+        {/* ชื่อแบรนด์ ไม่ใช่หัวข้อหลักของหน้า — h1 จริงอยู่ที่ Topbar (เปลี่ยนตามหน้า)
+            เดิมเป็น h1 ทั้งคู่ → ทุกหน้ามี h1 ซ้ำ 2 อัน screen reader/SEO สับสนว่าอันไหนคือหัวข้อจริง */}
         <div className="brand-text">
-          <h1>BENJAMIN</h1>
+          <div className="brand-name">BENJAMIN</div>
           <span>{isHQ ? "PRE-ENGINEERED BUILDING" : "EASYBUILD"}</span>
         </div>
       </div>

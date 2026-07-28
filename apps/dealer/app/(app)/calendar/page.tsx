@@ -192,7 +192,10 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 16, alignItems: "start" }}>
+      {/* จอแคบ (768px) แผงปฏิทิน+agenda บีบเข้าคอลัมน์เดียวจนช่องวันเหลือ ~36px — เวลานัดหมาย "10:00" (27px)
+          ไม่พอที่จะแสดงในกล่องแคบขนาดนั้นเลย ไม่ว่าจะลด padding/font แค่ไหนก็ยังโดนตัด
+          ต้นเหตุจริงคือ layout กว้าง 360px ตายตัวของ agenda ไม่ยอมย้ายลงล่างที่จอแคบ (ดู .calendar-layout ใน globals.css) */}
+      <div className="calendar-layout">
         {/* Calendar (Month / Week / Day) */}
         <div className="card" style={{ minWidth: 0, alignSelf: "start" }}>
           <div className="card-header" style={{ flexWrap: "wrap", gap: 12 }}>
@@ -254,9 +257,12 @@ export default function CalendarPage() {
                             <span key={a.id} title={`${a.time} ${a.company}`}
                               style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.65rem", fontWeight: 600, color: "#2D2D2D",
                                 background: bm.bg, borderLeft: `2.5px solid ${bm.color}`, borderRadius: 4, padding: "1px 4px",
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                overflow: "hidden", minWidth: 0 }}>
+                              {/* เวลา = flexShrink:0 ต้องเต็มเสมอ · ชื่อบริษัท = minWidth:0 ให้ยอมหด/ตัด …
+                                  เดิมไม่มี minWidth:0 ที่ชื่อบริษัท → min-width:auto ของ flex item (นับความกว้างข้อความเต็มเพราะ nowrap)
+                                  ดันแถวทั้งแถวล้น กลายเป็น "เวลา" เองที่โดน ellipsis ตัดแทน (จอแคบ 768px ตารางเดือนช่องเล็ก) */}
                               <span style={{ color: bm.color, fontWeight: 800, flexShrink: 0 }}>{a.time}</span>
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.company}</span>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{a.company}</span>
                             </span>
                           );
                         })}

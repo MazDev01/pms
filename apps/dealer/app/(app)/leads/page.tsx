@@ -1392,8 +1392,13 @@ export default function LeadsPage() {
                         boxShadow: dragId===l.id ? "none" : "0 1px 4px rgba(0,0,0,.05)", transition:"box-shadow .12s, transform .12s" }}
                       onMouseEnter={e => { if (dragId!==l.id) (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 14px rgba(0,51,102,.12)"; }}
                       onMouseLeave={e => { if (dragId!==l.id) (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.05)"; }}>
-                      {/* Sales-only — ไม่มีรูปอาคาร/building type (โฟกัสโอกาสการขายอย่างเดียว) */}
-                      <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
+                      {/* Sales-only — ไม่มีรูปอาคาร/building type (โฟกัสโอกาสการขายอย่างเดียว)
+                          ไอคอนตา = แค่บอกใบ้ว่าคลิกการ์ดเปิดรายละเอียดได้ (การ์ดทั้งใบคลิกได้อยู่แล้ว เลยไม่ต้องมี onClick ซ้ำ)
+                          เดิมไม่มี affordance เลย ผู้ใช้ที่ไม่คุ้น kanban อาจไม่รู้ว่าคลิกการ์ดได้ */}
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
+                        <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }} title={l.company}>{l.company}</div>
+                        <Eye size={13} color="#9ca3af" style={{ flexShrink:0 }} />
+                      </div>
                       <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:"0.72rem", color:"#6b7280", marginBottom:6 }}>
                         <User size={10} /> {l.contact}
                       </div>
