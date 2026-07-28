@@ -544,18 +544,11 @@ export default function CustomersPage(){
   const totalAll      = scoped.length;
   const totalValue    = scoped.reduce((s,c)=>s+c.totalValue,0);
 
-  // ── S1: KPI + กราฟ (ภาษาเดียวกับแดชบอร์ด) ──
-  // เดิม hardcode เดือน/ปี (getMonth()===5 && getFullYear()===2026) ค้างจากยุคตรึงเวลา
-  // ไม่ได้ตาม APP_NOW ที่เลิกตรึงแล้ว (0621277) → เดือนก.ค.ขึ้นไปนับ "ลูกค้าใหม่เดือนนี้" ไม่ได้เลย
+  // ── S1: KPI + กราฟ (ภาษาเดียวกับแดชบอร์ด) — mock วันนี้ = 2026-06-30 ──
   const newThisMonth = useMemo(() => scoped.filter(c => {
     const d = new Date(c.joinDate);
-    return d.getFullYear() === APP_NOW.getFullYear() && d.getMonth() === APP_NOW.getMonth();
+    return d.getFullYear() === 2026 && d.getMonth() === 5;
   }).length, [scoped]);
-  // ลูกค้าเดิม (repeat — ปิดการขายซ้ำ/เป็นลูกค้ามาเกิน 6 เดือน) จับคู่กับ "ลูกค้าใหม่เดือนนี้" ข้างบน
-  const existingCount = useMemo(
-    () => scoped.filter(c => lifecycleTypeFor(c.id, c.joinDate, quotations) === "existing").length,
-    [scoped, quotations],
-  );
 
   // กราฟ 1 — การเติบโตของลูกค้า (สะสมตามเดือนที่เข้าร่วม, 12 เดือน)
   const growthSeries = useMemo(() => {
@@ -723,11 +716,9 @@ export default function CustomersPage(){
           const kpis = [
             { label:"ลูกค้าทั้งหมด",     value:`${totalAll}`,        sub:"ราย",     Icon:Users,       color:"#2563EB", bg:"#E8F0FE" },
             { label:"ยอดขายรวม",         value:fmtC(totalValue),     sub:"ทุกโครงการ", Icon:Coins,    color:"#EA580C", bg:"#FEF0E6" },
-            { label:"ลูกค้าใหม่เดือนนี้", value:`${newThisMonth}`,   sub:"ราย",     Icon:UserPlus,    color:"#16A34A", bg:"#E6F7EC" },
-            { label:"ลูกค้าเดิม",        value:`${existingCount}`,   sub:"ซื้อซ้ำ/เป็นลูกค้าเกิน 6 เดือน", Icon:HistoryIcon, color:"#7C3AED", bg:"#F1E9FE" },
           ];
           return (
-            <div className="dash-kpis" style={{ marginBottom:16 }}>
+            <div className="dash-kpis kpi-2" style={{ marginBottom:16 }}>
               {kpis.map(k => (
                 <div key={k.label} className="card" style={{ padding:"16px 14px", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
                   <div style={{ minWidth:0 }}>
