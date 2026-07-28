@@ -9,4 +9,5 @@ verifyDepsBeforeRun: false
 
 # ตัดสินใจชัด: ไม่รัน build script ของ sharp (native) — Next build ทำงานได้โดยไม่ต้องมี
 allowBuilds:
+  '@sentry/cli': false   # ไม่ต้องดาวน์โหลด sentry-cli (เราไม่ทำ source-map upload)
   sharp: false
