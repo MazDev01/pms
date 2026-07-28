@@ -14,8 +14,11 @@ import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
-const MOCK_TODAY = "2026-06-30";
+// "วันนี้ของระบบ" (ISO) — โหมด supabase = วันจริง · โหมด local = 30 มิ.ย. 2569 (ดู APP_NOW ใน FilterContext)
+// ใบเสนอราคาที่สร้าง/ส่งใหม่ลงวันที่นี้ → ตรงกับตัวกรอง/รายงานที่อิง APP_NOW เสมอ
+const MOCK_TODAY = APP_NOW_ISO;
 
 type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 

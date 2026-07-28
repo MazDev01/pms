@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { mainTemplateOf } from "@pms/shared/lib/mock";
+import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -12,10 +13,12 @@ import { mainTemplateOf } from "@pms/shared/lib/mock";
  * เปลี่ยน filter แล้ว KPI / chart / table อัปเดตทันทีโดยไม่รีโหลดหน้า
  * ────────────────────────────────────────────────────────────────────────── */
 
-// ยึด "วันนี้" ไว้ที่ยุคของข้อมูล mock (30 มิ.ย. 2026)
-// ห้ามใช้ new Date() ประทับวันลงเรคคอร์ดใหม่ — จะได้วันของนาฬิกาเครื่อง ซึ่งอยู่คนละยุคกับข้อมูล
-// แล้วเรคคอร์ดนั้นจะหลุดนอกช่วงตัวกรองทุกพรีเซ็ต (ทุกพรีเซ็ตจบที่ APP_NOW)
-export const APP_NOW = new Date(2026, 5, 30);
+// "วันนี้" ของระบบ — แยกตามแหล่งข้อมูล:
+//   supabase (โปรดักชันจริง) = เวลาจริง new Date() → เรคคอร์ด/ตัวกรอง/หมดอายุใบเสนอราคาเดินตามปฏิทินจริง
+//   local (เดโม/ข้อมูล mock) = ตรึงไว้ 30 มิ.ย. 2026 = ยุคของข้อมูล mock
+//     (ถ้าใช้เวลาจริงกับข้อมูล mock เรคคอร์ดจะหลุดนอกช่วงตัวกรองทุกพรีเซ็ต เพราะทุกพรีเซ็ตจบที่ APP_NOW)
+// ประเมินครั้งเดียวตอนโหลดโมดูล — ยึดเป็น "วันนี้" ตลอดเซสชัน (เพียงพอสำหรับตัวกรอง/วันที่ในหน้าจอ)
+export const APP_NOW = DATA_SOURCE === "supabase" ? new Date() : new Date(2026, 5, 30);
 // "วันนี้" แบบ ISO (YYYY-MM-DD) สำหรับฟิลด์ที่เก็บเป็น ISO เช่น uploadedAt / joinDate
 // ประกอบเองทีละส่วน ห้ามใช้ APP_NOW.toISOString() — มันแปลงเป็น UTC ก่อน ไทย (UTC+7) จะได้ 29 มิ.ย. ย้อนไป 1 วัน
 export const APP_NOW_ISO = `${APP_NOW.getFullYear()}-${String(APP_NOW.getMonth() + 1).padStart(2, "0")}-${String(APP_NOW.getDate()).padStart(2, "0")}`;

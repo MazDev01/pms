@@ -8,7 +8,7 @@ import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
 import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REASONS,
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
-import { APP_NOW } from "@pms/shared/context/FilterContext";
+import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { captureError } from "@pms/shared/lib/observability";
 import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, WonBuildingRaw, LeadSummary } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
@@ -457,7 +457,7 @@ export const SupabaseAdapter: DataAdapter = {
     dealerRollup: async (year, opts) => {
       const { data, error } = await sb().rpc("dealer_rollup", {
         p_year: year,
-        p_as_of: opts?.asOf ?? "2026-06-30",
+        p_as_of: opts?.asOf ?? APP_NOW_ISO,
         p_default_days: opts?.defaultDays ?? 7,
         p_follow_up_days: opts?.perDealer ?? null,
       });
@@ -536,7 +536,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     unassignedLeads: async (f) => {
       const { data, error } = await sb().rpc("unassigned_leads", {
-        p_as_of: f.asOf ?? "2026-06-30", p_default_hours: f.defaultHours ?? 48, p_per_dealer: f.perDealer ?? null,
+        p_as_of: f.asOf ?? APP_NOW_ISO, p_default_hours: f.defaultHours ?? 48, p_per_dealer: f.perDealer ?? null,
         p_dealer_codes: f.dealerCodes ?? null, p_province: f.province ?? null, p_product: f.product ?? null,
         p_source: f.source ?? null, p_search: (f.search ?? "").trim() || null,
         p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
@@ -550,7 +550,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     hqAlerts: async (f) => {
       const { data, error } = await sb().rpc("hq_alerts", {
-        p_as_of: f.asOf ?? "2026-06-30",
+        p_as_of: f.asOf ?? APP_NOW_ISO,
         p_unassigned_default_hours: f.unassignedDefaultHours ?? 48, p_unassigned_per_dealer: f.unassignedPerDealer ?? null,
         p_lead_idle_days: f.leadIdleDays ?? 30, p_quote_validity_days: f.quoteValidityDays ?? 30,
         p_quote_expiring_days: f.quoteExpiringDays ?? 7, p_dealer_idle_days: f.dealerIdleDays ?? 30,
@@ -569,7 +569,7 @@ export const SupabaseAdapter: DataAdapter = {
       const { data, error } = await sb().rpc("hq_quotations_summary", {
         p_status: f.status ?? null, p_dealer_codes: f.dealerCodes ?? null, p_product_lines: f.productLines ?? null,
         p_search: (f.search ?? "").trim() || null, p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
-        p_as_of: f.asOf ?? "2026-06-30", p_search_dealers: f.searchDealers ?? null,
+        p_as_of: f.asOf ?? APP_NOW_ISO, p_search_dealers: f.searchDealers ?? null,
       });
       if (error) throw new Error(error.message);
       const d = (data ?? {}) as { byDealer?: Row[]; byMonth?: Row[]; byProduct?: Row[]; aging?: Row[] };
@@ -606,7 +606,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_province: opts.province ?? null, p_product: opts.product ?? null, p_source: opts.source ?? null,
         p_search: (opts.search ?? "").trim() || null,
         p_date_start: opts.dateStart ?? null, p_date_end: opts.dateEnd ?? null,
-        p_overdue: opts.overdue ?? false, p_as_of: opts.asOf ?? "2026-06-30",
+        p_overdue: opts.overdue ?? false, p_as_of: opts.asOf ?? APP_NOW_ISO,
         p_default_days: opts.defaultDays ?? 7, p_follow_up_days: opts.perDealer ?? null,
       });
       if (error) throw new Error(error.message);

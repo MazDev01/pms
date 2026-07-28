@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { open, assertHealthyPage, openLeadQuotationForm } from "./helpers";
+import { SUPABASE_MODE } from "./supabaseEnv";
+
+// "วันนี้ของระบบ" (APP_NOW) เดินตามแหล่งข้อมูล: supabase = วันจริง · local = ตรึง 30 มิ.ย. 2569
+// เทสต์ประทับวันใบใหม่จึงต้องคำนวณวันคาดหวังแบบเดียวกัน (ไม่ hardcode "30 มิ.ย.")
+const TH_MO_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+function appNowThaiShort(): string {
+  const d = SUPABASE_MODE ? new Date() : new Date(2026, 5, 30); // ตรงกับ APP_NOW ใน FilterContext
+  return `${d.getDate()} ${TH_MO_ABBR[d.getMonth()]}`;           // เช่น "30 มิ.ย." (ตรงกับ fmtISOToThai แบบไม่รวมปี)
+}
 
 // รายละเอียดใบเสนอราคา = drawer คอลัมน์เดียว (หัวแผง = สรุป/สถานะ/ยอด · เนื้อ = เอกสาร + BOQ + เปลี่ยนสถานะ)
 test("[ui·dealer] Drawer ใบเสนอราคา (BOQ + สรุป + สถานะ) ไม่ล้นแนวนอน", async ({ page }) => {
@@ -90,7 +99,7 @@ test("[ui·dealer] ฟอร์มใบเสนอราคา inline ใน�
   await expect(page.getByText("ยอดสุทธิ (คำนวณ)"), "ฟิลด์แบบเก่าถูกแทนแล้ว").toHaveCount(0);
 });
 
-// ใบที่สร้างใหม่ต้องลงวันที่ = "วันนี้" ของระบบ (30 มิ.ย. 2569) ไม่ใช่วันจริงของเครื่อง
+// ใบที่สร้างใหม่ต้องลงวันที่ = "วันนี้" ของระบบ (APP_NOW) ไม่ใช่วันที่กรอกเอง
 // (วันที่ออกไม่ใช่ช่องให้กรอกอีกแล้ว — ระบบประทับให้ตอนบันทึก · ช่องวันที่ในฟอร์ม = วันหมดอายุ)
 test("[ux·dealer] ใบเสนอราคาที่สร้างใหม่ลงวันที่วันนี้ของระบบ", async ({ page }) => {
   await openLeadQuotationForm(page);
@@ -101,10 +110,11 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
   await page.goto("http://localhost:3001/quotations", { waitUntil: "domcontentloaded" });
   // การสร้างใบเป็น async (ขอเลขที่ผ่าน repo + บันทึก) → รอแบบ poll ไม่ใช่ timeout ตายตัว (กันเทสต์วูบ)
   // ตารางเรียงใบใหม่สุดไว้บน → แถวแรกต้องลงวันที่ของ "วันนี้" ระบบ
+  const expectedDate = appNowThaiShort();
   await expect.poll(
     async () => (await page.locator("tbody tr").first().locator("td").allInnerTexts()).join(" | "),
-    { message: "ใบที่สร้างใหม่ต้องลงวันที่ 30 มิ.ย. (วันนี้ของระบบ)", timeout: 10_000 },
-  ).toContain("30 มิ.ย.");
+    { message: `ใบที่สร้างใหม่ต้องลงวันที่ ${expectedDate} (วันนี้ของระบบ)`, timeout: 10_000 },
+  ).toContain(expectedDate);
 });
 
 // Smart filter: ลีดขาดติดต่อ >7/14/30 วัน — จำนวนอยู่บนการ์ด KPI "เกิน 7 วัน" (ไม่ซ้ำ)
