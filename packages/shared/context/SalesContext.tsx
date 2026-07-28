@@ -59,7 +59,7 @@ export type SalesContextType = {
 
   // Customers (lifted — one shared list app-wide)
   customers: CustomerRow[];
-  addCustomer: (customer: CustomerRow) => void;
+  addCustomer: (customer: CustomerRow) => Promise<void>;
   updateCustomer: (customer: CustomerRow) => void;
   deleteCustomer: (id: number) => void;
 
@@ -433,9 +433,14 @@ export function SalesProvider({
   }, [persistLead, cleanupFilesFor]);
 
   // ── Customer mutations (Phase 2) — เขียนทะลุถึง repo ──────────────
-  const addCustomer = useCallback((customer: CustomerRow) => {
+  const addCustomer = useCallback(async (customer: CustomerRow) => {
     // ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ลูกค้าใหม่เป็นของสาขานั้น (RLS with-check ฝั่ง supabase)
-    const tagged: CustomerRow = { ...customer, dealerCode: customer.dealerCode ?? myDealerCode };
+    const dealer = customer.dealerCode ?? myDealerCode;
+    // ออก id จาก counter อะตอมมิกของ DB (เหมือน Lead→Won) — ห้ามใช้ Math.max ฝั่งจอ (H1)
+    //   Math.max+1 จะชนกับ next_entity_id ที่ counter ไม่เคยอ่านตารางซ้ำ → Lead→Won ครั้งถัดไป insert ชน PK → ปิดการขายพัง
+    //   id ที่ติดมากับ row (ถ้ามี) ใช้แค่ seed สี — ตัวจริงมาจาก counter
+    const id = await customersRepo.nextId(dealer);
+    const tagged: CustomerRow = { ...customer, id, dealerCode: dealer };
     setCustomers(prev => [...prev, tagged]);
     persistCustomer.create(tagged);
   }, [myDealerCode, persistCustomer]);
@@ -503,6 +508,23 @@ export function SalesProvider({
     }
   }, [myDealerCode, persistLead]);
 
+  // ── รวมยอดลูกค้า (reconcile) = Σ ใบที่ won ของลูกค้ารายนั้น จากรายการใบ "หลังการแก้" แล้ว persist (H2) ──
+  //   เรียกเฉพาะตอนที่มี "ใบที่ won" เข้ามาเกี่ยว (won ใหม่ / ลบใบ won / แก้ใบ won / ย้อน won ออก)
+  //   → รับ 0 ได้ (ย้อน won ใบสุดท้ายออก = ยอดลด) โดยไม่ล้าง "ค่าประเมิน" ของลูกค้าที่ยังไม่เคยปิดดีล
+  //   (finish() ครอบเคสสร้างลูกค้าครั้งแรก + guard wonTotal>0 ไว้แล้ว — helper นี้ครอบการเปลี่ยนแปลงภายหลัง)
+  const reconcileCustomerTotal = useCallback((cid: number | undefined, quotesAfter: QuotationMock[]) => {
+    if (!(cid && cid > 0)) return;
+    const wonTotal = quotesAfter
+      .filter(q => q.customerId === cid && q.status === "won")
+      .reduce((s, q) => s + (q.totalValue ?? 0), 0);
+    setCustomers(prev => {
+      const nc = prev.map(c => c.id === cid ? { ...c, totalValue: wonTotal } : c);
+      const cust = nc.find(c => c.id === cid);
+      if (cust) persistCustomer.update(cust);
+      return nc;
+    });
+  }, [persistCustomer]);
+
   // ── Quotation mutations ──────────────────────────────────────────
   // สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) — รับ draft ที่ "ยังไม่มี id" · DB เป็นคนออกเลข
   // เดิมแยกเป็น newQuoteId() แล้ว addQuotation(withId) → insert ล้มหลังออกเลข = เลขหาย
@@ -519,16 +541,26 @@ export function SalesProvider({
   }, [completeLeadQuoteTasks, myDealerCode, syncQuoteFile]);
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
+    const before = quotationsRef.current.find(q => q.id === quotation.id);
+    const after = quotationsRef.current.map(q => q.id !== quotation.id ? q : quotation);
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));
     persistQuote.update(quotation);
     if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
-  }, [completeLeadQuoteTasks, persistQuote]);
+    // แก้ใบที่ won (หรือเคย won) ที่ผูกลูกค้า → ยอดลูกค้าต้องตาม (แก้ totalValue/สถานะ) · H2
+    if (quotation.customerId && quotation.customerId > 0 && (quotation.status === "won" || before?.status === "won")) {
+      reconcileCustomerTotal(quotation.customerId, after);
+    }
+  }, [completeLeadQuoteTasks, persistQuote, reconcileCustomerTotal]);
 
   const deleteQuotation = useCallback((id: string) => {
+    const removed = quotationsRef.current.find(q => q.id === id);
+    const after = quotationsRef.current.filter(q => q.id !== id);
     setQuotations(prev => prev.filter(q => q.id !== id));
     persistQuote.remove(id);
     syncQuoteFile.remove(id); // ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง (ไม่แตะไฟล์ที่ผู้ใช้แนบเอง)
-  }, [persistQuote, syncQuoteFile]);
+    // ลบใบที่ won ที่ผูกลูกค้า → ยอดลูกค้าลดตาม (เดิมไม่ลด = ยอดค้างเกินจริง) · H2
+    if (removed?.status === "won") reconcileCustomerTotal(removed.customerId, after);
+  }, [persistQuote, syncQuoteFile, reconcileCustomerTotal]);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
     const target = quotationsRef.current.find(q => q.id === id);
@@ -565,21 +597,14 @@ export function SalesProvider({
     }
     // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลีดต้นทาง) — mark สถานะตามปกติ
     persistQuote.setStatus(id, status);
-    // R6: won บนใบที่ "ผูกลูกค้าเดิมอยู่แล้ว" (ดีลที่ 2+) → รวมยอดลูกค้าใหม่ (finish() ไม่ครอบเคสนี้)
-    //   ใบอื่นที่ won ของลูกค้า (จาก ref) + ใบนี้ที่กำลัง won — นับใบนี้ครั้งเดียว (q.id !== id แล้วบวก target)
-    if (status === "won" && target.customerId && target.customerId > 0) {
-      const cid = target.customerId;
-      const wonTotal = quotationsRef.current
-        .filter(q => q.customerId === cid && q.status === "won" && q.id !== id)
-        .reduce((s, q) => s + (q.totalValue ?? 0), 0) + (target.totalValue ?? 0);
-      setCustomers(prev => {
-        const nc = prev.map(c => c.id === cid ? { ...c, totalValue: wonTotal } : c);
-        const cust = nc.find(c => c.id === cid);
-        if (cust) persistCustomer.update(cust);
-        return nc;
-      });
+    // R6/H2: ใบที่ผูกลูกค้าเดิมอยู่แล้ว เปลี่ยนเป็น won (ดีลที่ 2+) หรือย้อน won ออก (→ lost/expired/sent)
+    //   → รวมยอดลูกค้าใหม่จากรายการหลังเปลี่ยนสถานะ (finish() ครอบเฉพาะครั้งแรกผ่านลีด)
+    //   เดิมคิดเฉพาะขา won → ย้อน won ออกแล้วยอดไม่ลด = ยอดค้างเกินจริง
+    if (target.customerId && target.customerId > 0 && (status === "won" || prevStatus === "won")) {
+      const after = quotationsRef.current.map(q => q.id !== id ? q : { ...q, status });
+      reconcileCustomerTotal(target.customerId, after);
     }
-  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote, persistCustomer]);
+  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote, reconcileCustomerTotal]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
   // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB

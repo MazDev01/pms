@@ -115,10 +115,11 @@ export default function DealerDashboard() {
   const openLeads = useMemo(() => leadsIn.filter(isLeadOpen), [leadsIn]);
   const openValue = useMemo(() => openLeads.reduce((s, l) => s + parseValue(l.value), 0), [openLeads]);
   const followUpToday = useMemo(() => appointments.filter(a => a.date === TODAY_ISO && a.status !== "cancelled").length, [appointments]);
-  // ปิดการขายได้ = จำนวนดีลที่ปิดสำเร็จ · อัตราปิดการขาย = ปิดได้ / (ปิดได้ + ปิดไม่ได้)
-  // นับจากลูกค้าเป้าหมายของสาขา สูตรเดียวกับหน้า /leads
-  const wonCount = useMemo(() => leadsIn.filter(l => l.status === "PAID").length, [leadsIn]);
-  const lostCount = useMemo(() => leadsIn.filter(l => l.status === "CANCELLED").length, [leadsIn]);
+  // ปิดการขายได้ = จำนวนใบเสนอราคาที่ปิดได้ (won) · อัตราปิดการขาย = won / (won + lost)
+  //   นิยามเดียวกับฝั่ง HQ (useDealerPerformance / dealer_rollup) และกับ KPI "ยอดขาย" ของแดชบอร์ดเอง (wonByKey)
+  //   เดิมนับจากลีด PAID/CANCELLED → ตัวเลข win-rate ของสาขาไม่ตรงกับที่ HQ เห็น (ลีด PAID ≠ ใบ won) · H3
+  const wonCount = useMemo(() => quotations.filter(q => q.status === "won").length, [quotations]);
+  const lostCount = useMemo(() => quotations.filter(q => q.status === "lost").length, [quotations]);
   const winRate = useMemo(
     () => (wonCount + lostCount ? Math.round((wonCount / (wonCount + lostCount)) * 1000) / 10 : 0),
     [wonCount, lostCount],
@@ -279,7 +280,7 @@ export default function DealerDashboard() {
     { label: "ติดตามวันนี้", tip: "งานติดตาม/นัดหมายที่ต้องทำวันนี้", Icon: PhoneCall, color: "#EA580C", bg: "#FEF0E6", href: "/calendar", value: `${followUpToday}`, sub1: "รายการ" },
     // ตัวเลขหลัก = จำนวนดีลที่ปิดสำเร็จ · อัตราปิดการขาย (%) ลงมาเป็นบรรทัดรอง
     // ชื่อการ์ดต้องตรงกับหน่วยของตัวเลขที่โชว์ — "ปิดการขายได้" คู่กับ "50%" จะอ่านว่าปิดได้ 50 ดีล
-    { label: "ปิดการขายได้", tip: `จำนวนลูกค้าเป้าหมายที่ปิดการขายสำเร็จในช่วงเวลาที่เลือก · อัตราปิดการขาย = ปิดสำเร็จ ÷ (ปิดสำเร็จ + ปิดไม่สำเร็จ) = ${wonCount} ÷ ${wonCount + lostCount}`, Icon: Activity, color: "#0D9488", bg: "#E6F7F5", href: "/leads", value: `${wonCount} ดีล`, sub1: wonCount + lostCount ? `อัตราปิดการขาย ${winRate}%` : "ยังไม่มีดีลที่ปิด" },
+    { label: "ปิดการขายได้", tip: `จำนวนใบเสนอราคาที่ปิดการขายได้ (won) · อัตราปิดการขาย = ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) = ${wonCount} ÷ ${wonCount + lostCount} · นิยามเดียวกับที่สำนักงานใหญ่เห็น`, Icon: Activity, color: "#0D9488", bg: "#E6F7F5", href: "/quotations", value: `${wonCount} ดีล`, sub1: wonCount + lostCount ? `อัตราปิดการขาย ${winRate}%` : "ยังไม่มีดีลที่ปิด" },
   ];
   const KpiLabel = ({ label, tip }: { label: string; tip: string }) => (
     <span style={{ ...sub, display: "inline-flex", alignItems: "center", gap: 4 }}>

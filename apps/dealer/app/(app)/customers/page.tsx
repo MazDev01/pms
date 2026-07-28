@@ -607,15 +607,17 @@ export default function CustomersPage(){
     reader.onload=()=>{ try{ const rows=parseCsv(String(reader.result)); setImportRows(rows); setImportErr(rows.length?"":"ไม่พบข้อมูลในไฟล์"); }catch{ setImportErr("อ่านไฟล์ไม่สำเร็จ — ตรวจรูปแบบ CSV"); } };
     reader.readAsText(f,"utf-8");
   }
-  function commitImport(){
+  async function commitImport(){
+    // id จริงออกจาก counter อะตอมมิกใน addCustomer · base ที่ส่งไปใช้แค่ seed สีให้ต่างกัน
+    // await ทีละรายการ กัน nextId อ่านค่าซ้ำก่อนสร้างเสร็จ (โหมด local)
     const base=Math.max(0,...data.map(c=>c.id));
-    importRows.forEach((r,i)=>ctxAddCustomer(makeImported(r, base+i+1)));
+    for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
     setShowImport(false); setImportRows([]); setImportErr("");
   }
-  function createLegacy(){
+  async function createLegacy(){
     if(!legacyForm.company.trim()) return;
-    const base=Math.max(0,...data.map(c=>c.id));
-    ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1));
+    const base=Math.max(0,...data.map(c=>c.id)); // seed สีเท่านั้น — id จริงจาก counter
+    await ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1));
     setShowManual(false);
     setLegacyForm({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
   }
