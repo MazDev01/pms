@@ -46,6 +46,7 @@ begin
   end if;
   return new;
 end $$;
+drop trigger if exists trg_quote_won on quotations;
 create trigger trg_quote_won after update on quotations
   for each row execute function public.on_quote_won();
 
@@ -58,5 +59,6 @@ begin
           tg_op || ' แคตตาล็อก', coalesce(new.name, old.name));
   return coalesce(new, old);
 end $$;
+drop trigger if exists trg_catalog_audit on master_catalog;
 create trigger trg_catalog_audit after insert or update or delete on master_catalog
   for each row execute function public.log_catalog_change();

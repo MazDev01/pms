@@ -6,7 +6,8 @@
 -- แก้: อ่านได้ถ้าเป็น HQ หรือเป็นแถวสาขาตัวเอง — ตรงกับ policy เขียน (0058)
 --   ปลอดภัยกับแอป: ฝั่ง dealer เรียก getLeadRulesMap แต่ใช้แค่ของสาขาตัวเอง (useLeadRules(code))
 --   → RLS คืนเฉพาะแถวตัวเอง แผนที่มี 1 รายการ ยังทำงาน · HQ (is_hq) เห็นครบเหมือนเดิม
---   (การคำนวณแจ้งเตือนฝั่ง HQ เดินผ่าน RPC hq_alerts ที่เป็น security definer อยู่แล้ว ไม่พึ่ง policy นี้)
+--   (การคำนวณแจ้งเตือนฝั่ง HQ เดินผ่าน RPC hq_alerts — RLS scope ให้ตามผู้เรียก และไม่ได้อ่าน
+--    dealer_lead_rules อยู่แล้ว จึงไม่มี cross-dealer leak ไม่ว่า policy นี้จะเข้มแค่ไหน)
 
 drop policy if exists dealer_lead_rules_read on dealer_lead_rules;
 create policy dealer_lead_rules_read on dealer_lead_rules for select
