@@ -8,7 +8,7 @@ import { useSales } from "@pms/shared/context/SalesContext";
 import {
   apptTypeLabel,
   notifCategoryOf,
-  DEFAULT_HQ_NOTIFS, DEFAULT_HQ_NOTIF_RULES, hqAuditCategory, HQ_ALERT_META,
+  DEFAULT_HQ_NOTIFS, DEFAULT_HQ_NOTIF_RULES, hqAuditCategory, HQ_ALERT_META, DEFAULT_DEALER_CODE,
   type HQNotifRules,
   type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
   type HQAlertKey,
@@ -325,7 +325,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // เดิม Topbar ใช้ allLeads ตรง ๆ ทั้งกระดิ่งและช่องค้นหา → ตัวแทน CNX เห็นลีดของ RYG/MST
   // พร้อมชื่อผู้ติดต่อ เบอร์ มูลค่าดีล และชื่อเซลส์สาขาอื่น (ยืนยันด้วยเทสต์: ระยอง/ตาก โผล่ในกระดิ่ง CNX)
   const liveLeads = useMemo(
-    () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
+    () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, isHQ, currentDealer.code],
   );
   const auditEntries = useAuditEntries(); // สำหรับ HQ — บันทึกการใช้งาน

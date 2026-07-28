@@ -23,7 +23,7 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
   leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
-  quotationStatusLabel, quotationStatusColor, mainTemplateOf,
+  quotationStatusLabel, quotationStatusColor, mainTemplateOf, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
@@ -72,7 +72,7 @@ export default function DealerDashboard() {
   // เดิมอ่าน leads จาก context ตรง ๆ → แดชบอร์ดนับของทั้งเครือ 10 สาขา ตัวเลขเลยไม่ตรงหน้า /leads
   // ใบเสนอราคา/นัดหมายไม่มี dealerCode ในข้อมูล → เป็นของสาขาตัวเองอยู่แล้ว (ตรงกับหน้า /quotations)
   const myLeads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, currentDealer.code],
   );
 
@@ -150,11 +150,10 @@ export default function DealerDashboard() {
   }, [myLeads, quotations, lqRange]);
 
   const dealStatus = useMemo(() => {
-    const order = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"] as const;
     const m = new Map<string, number>();
     leadsIn.forEach(l => m.set(l.status, (m.get(l.status) ?? 0) + 1));
     const total = leadsIn.length || 1;
-    return order.filter(s => m.get(s)).map(s => ({
+    return LEAD_STATUS_ORDER.filter(s => m.get(s)).map(s => ({
       label: leadStatusLabel[s], value: m.get(s)!, color: leadStatusColor[s].text,
       pct: Math.round((m.get(s)! / total) * 100),
     }));

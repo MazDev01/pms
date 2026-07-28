@@ -101,6 +101,15 @@ export type LeadStatus =
   | "PAID"       // Won
   | "CANCELLED"; // Lost
 
+// สาขาเริ่มต้น (เดโม/HQ ที่ไม่ได้ผูกสาขาใด) — แหล่งเดียว เดิม hardcode "CNX" ซ้ำ ๆ ~40 จุดทั่วแอป
+// ใช้เป็น fallback เมื่อ dealerCode ว่าง (เช่น HQ ดูภาพรวม, เรคคอร์ดเก่าที่ไม่มี dealer_code ผูกไว้)
+export const DEFAULT_DEALER_CODE = "CNX";
+
+// ลำดับขั้นเต็ม (ใช้จัดเรียง/ตัวเลือกดรอปดาวน์/บอร์ด) — แหล่งเดียว เดิมก๊อปเป็น literal array ซ้ำ ๆ หลายไฟล์
+export const LEAD_STATUS_ORDER: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
+// สถานะที่ "ถึงขั้นเสนอราคาแล้ว" (มีใบเสนอราคาออกไปแล้ว) — เดิมก๊อป literal ["QUOTED","FOLLOWUP","NEGO","PAID"] ซ้ำหลายไฟล์
+export const QUOTED_UP: LeadStatus[] = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
+
 export const leadStatusLabel: Record<LeadStatus, string> = {
   WAITING:   "ติดต่อแล้ว",
   BULLET:    "รวบรวมความต้องการ",

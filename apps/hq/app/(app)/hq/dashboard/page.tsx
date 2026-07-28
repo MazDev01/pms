@@ -16,6 +16,7 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
   HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy, hqAuditCategory,
+  DEFAULT_DEALER_CODE,
   type DealerRow, type HQTargets,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -25,6 +26,7 @@ import { FilterBar, SelectFilter } from "@pms/shared/components/filters/FilterBa
 import { SalesTrendChart } from "@pms/shared/components/ui/SalesTrendChart";
 import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads, useNetworkQuoteRange, useDashboardQuoteSummary, useLeadSummary, useNetworkCustomerSummary } from "@pms/shared/lib/useNetworkData";
 import { useDealerPerformance } from "@pms/shared/lib/useDealerPerformance";
+import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useAuditEntries } from "@pms/shared/lib/useAudit";
@@ -54,7 +56,7 @@ const TIER_LEGEND = [
   { label: "น้อยกว่า 1M", color: "#cdddf0" },
   { label: "ไม่มีข้อมูล", color: "#eef1f5" },
 ];
-const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะวันออกเฉียงเหนือ" : `ภาค${r}`;
+// regionDisplay = ใช้ของกลาง (hqQuotations.ts) แหล่งเดียว — เดิม copy ในไฟล์นี้ไม่มี guard "ไม่ระบุ" (1.4)
 // จังหวัดที่ตั้งของตัวแทน (ตามรหัสสาขา) — ใช้ในตารางสรุปผลงาน
 const DEALER_PROVINCE: Record<string, string> = {
   RYG: "ระยอง", CNX: "เชียงใหม่", MST: "ตาก", CRI: "เชียงราย", NSN: "นครสวรรค์",
@@ -99,10 +101,11 @@ export default function HQDashboard() {
   const prevRange = useNetworkQuoteRange(addDaysD(timeRange.start, -periodDays), addDaysD(timeRange.start, -1), selDealer?.code);
   // สรุปใบในช่วง (byStatus/byProduct/byMonth) ที่ DB — ป้อน productAgg/buildingPerf/quoteStatus/pipeline/wonVal
   const quoteSummary = useDashboardQuoteSummary(timeRange.start, timeRange.end, selDealer?.code);
-  // สรุปลีดทั้งเครือ (ทุกสถานะ ทุกช่วง — ไม่ผูก selDealer เท่าพฤติกรรม allNetLeads เดิม) + ลูกค้าทั้งเครือ ที่ DB
+  // สรุปลีด + ลูกค้าทั้งเครือ ที่ DB · ผูกตัวแทนที่เลือก (selDealer) ให้ตรงกับฝั่งใบเสนอราคา (M3)
+  //   เดิมไม่ผูก selDealer → พอเลือกสาขา กราฟ/KPI ลีดยังโชว์ทั้งเครือ แต่ใบ/ยอดโชว์เฉพาะสาขา = ขัดกันในการ์ดเดียว
   //   ปลด journeyStages/leadQuoteSeries/monthly/bottomMetrics/barTrend/provinceTop6 ออกจาก array (M9 Phase 4)
   //   null (local/ยังไม่โหลด) → useMemo แต่ละใบ fallback คำนวณจาก allNetLeads/netCustomers เดิม
-  const dashLeadSum = useLeadSummary(EMPTY_LEAD_FILTER);
+  const dashLeadSum = useLeadSummary(selDealer ? { dealerCodes: [selDealer.code] } : EMPTY_LEAD_FILTER);
   const custSummary = useNetworkCustomerSummary();
   // ลีดรายเดือนปฏิทิน (index 0..11, รวมทุกปี ให้ตรง getMonth ฝั่ง client) + จำนวนลีดรวม จาก lead_summary
   const leadCal = useMemo(() => {
@@ -447,14 +450,16 @@ export default function HQDashboard() {
     else scopedQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (!d) return; const k = monthKeyOf(d); bump(quotesM, k); if (q.status === "won") bump(wonM, k); });
     // ลีดต่อเดือน (คีย์ YYYY-MM): supabase = lead_summary.byMonth (all-time ครอบคลุมหน้าต่าง barRange) · local = array
     if (dashLeadSum) { for (const r of dashLeadSum.byMonth) leadsM.set(monthKey(r.y, r.m), r.created); }
-    else allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
+    // local fallback: กรองลีดตามตัวแทนที่เลือกด้วย (M3) — ไม่งั้นแท่งลีดโชว์ทั้งเครือทั้งที่เลือกสาขาเดียว
+    else allNetLeads.filter(l => !selDealer || (l.dealerCode ?? DEFAULT_DEALER_CODE) === selDealer.code)
+      .forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
     return {
       months: buckets.map(b => b.label),
       leads: buckets.map(b => leadsM.get(b.key) ?? 0),
       quotes: buckets.map(b => quotesM.get(b.key) ?? 0),
       won: buckets.map(b => wonM.get(b.key) ?? 0),
     };
-  }, [barRange, barSummary, dashLeadSum, scopedQuotes, allNetLeads]);
+  }, [barRange, barSummary, dashLeadSum, scopedQuotes, allNetLeads, selDealer]);
 
   // ── กิจกรรมล่าสุด = "บันทึกการใช้งาน" (Audit Log) แหล่งเดียวกับหน้า /hq/audit ──
   // เดิมการ์ดนี้อ่านจากใบเสนอราคา (ความเคลื่อนไหวการขาย) — บอสสั่งให้ใช้บันทึกการใช้งานแทน 17 ก.ค. 69

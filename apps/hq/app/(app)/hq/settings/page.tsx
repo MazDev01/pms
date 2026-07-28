@@ -22,6 +22,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
+import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import type { HQCompany } from "@pms/shared/lib/data/types";
@@ -31,7 +32,7 @@ import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
   HQ_NOTIF_KEY, HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
   HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, loadHQDealers,
-  HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE,
+  HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE, LEAD_STATUS_ORDER,
   HQ_SYSTEM_KEY, DEFAULT_QUOTE_NUMBERING, HQ_JOURNEY_KEY, LOST_REASONS,
   type SolutionProduct,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
@@ -137,13 +138,13 @@ const numInput = (value: number, onChange: (n: number) => void, unit: string, st
   </div>
 );
 const fmtB = (n: number) => n >= 1e6 ? `฿${(n / 1e6).toFixed(1)}M` : `฿${n.toLocaleString("th-TH")}`;
-const regionDisplay = (r: string) => r === "อีสาน" ? "ภาคตะวันออกเฉียงเหนือ" : `ภาค${r}`;
+// regionDisplay = ใช้ของกลาง (hqQuotations.ts) แหล่งเดียว — เดิม copy ในไฟล์นี้ไม่มี guard "ไม่ระบุ" (1.4)
 
 // ═══════════════════════ 3 · เส้นทางการขาย ════════════════════════════════════
 // ขั้นการขาย = สถานะลีดจริงของระบบ (LeadStatus 7 ขั้น) — แสดงอย่างเดียว
 // แก้ชื่อ/สี/ลำดับที่นี่ไม่ได้ เพราะคัมบัง/ตาราง/แดชบอร์ด/งานมาตรฐาน ผูกกับสถานะจริงในโค้ด
 // (ของเดิมเป็นตัวแก้ไขที่แก้แล้วไม่มีผลกับหน้าไหนเลย)
-const STAGE_ORDER: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
+const STAGE_ORDER: LeadStatus[] = LEAD_STATUS_ORDER;
 // เหตุผลปิดการขายไม่สำเร็จ — ขั้น "ปิดไม่สำเร็จ" เป็นปลายทางหนึ่งของเส้นทางการขาย จึงอยู่แท็บนี้
 // (เดิมอยู่แท็บ "กฎธุรกิจ" ซึ่งยุบไปแล้ว — คีย์ hq_sales_journey เหมือนเดิม ค่าที่ตั้งไว้ไม่หาย)
 // เก็บผ่าน repository — เดิมเขียนลง localStorage ของ origin ฝั่ง HQ ซึ่งตัวแทน (คนละ origin)

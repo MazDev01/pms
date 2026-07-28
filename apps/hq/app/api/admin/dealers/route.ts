@@ -15,6 +15,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
+import { hasPermission } from "@pms/shared/lib/permissions";
+import type { UserRole } from "@pms/shared/lib/mock";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -22,8 +24,9 @@ export const runtime = "nodejs";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
-// บทบาทที่มีสิทธิ์จัดการตัวแทน = ตรงกับ dealers:manage ใน permissions.ts (can_write_master)
-const CAN_MANAGE_DEALERS = new Set(["SUPER_ADMIN", "HQ_MANAGEMENT"]);
+// บทบาทที่มีสิทธิ์จัดการตัวแทน = permission "dealers:manage" (ผูกตรงกับ permissions.ts/RLS can_write_master)
+// เดิมเป็น Set ประกาศแยกที่นี่ (ตกหล่นถ้าเพิ่มบทบาทใหม่แล้วลืมแก้ทุกจุด) · SSOT
+function canManageDealers(role: string): boolean { return hasPermission(role as UserRole, "dealers:manage"); }
 const DEALER_EMAIL_DOMAIN = "partner-agent.co.th";
 
 function bad(status: number, error: string) {
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return bad(401, "unauthorized");
   const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
-  if (!prof || !CAN_MANAGE_DEALERS.has(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
+  if (!prof || !canManageDealers(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
 
   // กันยิงรัว: สร้างตัวแทนได้ไม่เกิน 10 ครั้ง/นาที ต่อผู้เรียก (distributed ผ่าน DB · ดู rateLimit.ts)
   if (!(await checkRateLimit(admin, `create-dealer:${caller.user.id}`, 10, 60))) {
@@ -153,7 +156,7 @@ export async function DELETE(req: NextRequest) {
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return bad(401, "unauthorized");
   const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
-  if (!prof || !CAN_MANAGE_DEALERS.has(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
+  if (!prof || !canManageDealers(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
 
   const code = (new URL(req.url).searchParams.get("code") ?? "").trim().toUpperCase();
   if (!/^[A-Z]{2,5}$/.test(code)) return bad(400, "รหัสตัวแทนไม่ถูกต้อง");
@@ -162,7 +165,10 @@ export async function DELETE(req: NextRequest) {
   // dealer FK เป็น on delete restrict (0018) — ถ้าสาขายังมีข้อมูลงานขาย แถว dealers ลบไม่ได้
   // เดิมลบ auth users "ก่อน" แล้วค่อยลบแถว → พอแถวลบไม่ได้ = บัญชี login หายไปแล้วแต่สาขายังอยู่
   // (สาขากำพร้าไม่มีคนเข้าได้ · ย้อนไม่ได้) → ต้องเช็ก + ลบแถวให้สำเร็จ "ก่อน" แตะ auth
-  for (const t of ["leads", "quotations", "customers", "appointments", "files"]) {
+  // ต้องเช็ก "ทุกตาราง" ที่ FK on delete restrict → dealers ให้ครบก่อนลบอะไรทั้งสิ้น
+  //   customer_notes (0028) ก็ restrict เช่นกัน — เดิมตกหล่น → ถ้าสาขามี notes แต่ไม่มีข้อมูลใน 5 ตารางแรก
+  //   จะเลย 409 ไปลบ responsible_persons/dealer_lead_rules แล้วค่อย fail ตอนลบ dealers = ลบครึ่งทาง ย้อนไม่ได้
+  for (const t of ["leads", "quotations", "customers", "appointments", "files", "customer_notes"]) {
     const { count } = await admin.from(t).select("dealer_code", { count: "exact", head: true }).eq("dealer_code", code);
     if ((count ?? 0) > 0) {
       return bad(409, `สาขา "${code}" ยังมีข้อมูล (${t}) — ต้องย้าย/ลบข้อมูลก่อนจึงจะลบสาขาได้`);

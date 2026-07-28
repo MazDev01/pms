@@ -30,7 +30,7 @@ import {
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
-import { leadStatusLabel, leadStatusColor, type LeadStatus } from "@pms/shared/lib/mock";
+import { leadStatusLabel, leadStatusColor, QUOTED_UP, LEAD_STATUS_ORDER, type LeadStatus } from "@pms/shared/lib/mock";
 import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
 
 const PRIMARY = "#003366";
@@ -248,7 +248,6 @@ export default function HQLeadsPage() {
   // ใบ/ยอดขายรายสาขาในช่วง ที่ DB (M9 Phase 4) — supabase · local/ยังไม่กลับ = netQuotes (client)
   const rangeByDealer = useNetworkQuoteRange(timeRange.start, timeRange.end);
   const leadVsQuote = useMemo(() => {
-    const QUOTED_UP: LeadStatus[] = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
     const m = new Map<string, { leads: number; quoted: number; quotes: number }>();
     const at = (c: string) => m.get(c) ?? (m.set(c, { leads: 0, quoted: 0, quotes: 0 }), m.get(c)!);
     // ลีด/ถึงขั้นเสนอราคา รายสาขา: supabase = byDealer (chartSummary) · overdue/local = filtered
@@ -336,7 +335,7 @@ export default function HQLeadsPage() {
   }, [chartSummary, filtered]);
 
   const byStatus = useMemo(() => {
-    const order: LeadStatus[] = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
+    const order: LeadStatus[] = LEAD_STATUS_ORDER;
     const byS = chartSummary ? new Map(chartSummary.byStatus.map(r => [r.status, r.count])) : null;
     const count = (s: LeadStatus) => byS ? (byS.get(s) ?? 0) : filtered.filter(l => l.status === s).length;
     const max = Math.max(...order.map(count), 1);
@@ -389,7 +388,7 @@ export default function HQLeadsPage() {
   const leadToCells = (l: LeadRow) => [
     l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
     l.province, l.product, l.source || "—", l.value || "—",
-    ["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status) ? "เสนอแล้ว" : "—",
+    QUOTED_UP.includes(l.status) ? "เสนอแล้ว" : "—",
     l.activities?.length ? l.activities[0].date : "—",
     needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays) ? "ต้องติดตาม" : "—",
     l.assigned || "—", leadStatusLabel[l.status],
@@ -452,7 +451,7 @@ export default function HQLeadsPage() {
           {leadSel(btSel, setBtSel, "ทุกประเภทอาคาร", btOpts.map(o => ({ v: o, l: o })))}
           {leadSel(srcSel, setSrcSel, "ทุกแหล่งที่มา", srcOpts.map(o => ({ v: o, l: o })))}
           {leadSel(status, v => setStatus(v as LeadStatus | "ALL"), "ทุกสถานะ",
-            (["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"] as LeadStatus[]).map(s => ({ v: s, l: leadStatusLabel[s] })))}
+            LEAD_STATUS_ORDER.map(s => ({ v: s, l: leadStatusLabel[s] })))}
           {anyFilter && (
             <button onClick={() => { setQuery(""); setDealerSel("ALL"); setRegionSel("ALL"); setProvince("ALL"); setBtSel("ALL"); setSrcSel("ALL"); setStatus("ALL"); }}
               className="btn btn-secondary btn-sm" style={{ flexShrink: 0, whiteSpace: "nowrap" }}>ล้างตัวกรอง</button>
@@ -696,7 +695,7 @@ export default function HQLeadsPage() {
               ) : displayLeads.map(l => {
                 const c = leadStatusColor[l.status];
                 const followUp = needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays);
-                const quoted = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status);
+                const quoted = QUOTED_UP.includes(l.status);
                 // ติดต่อล่าสุด = กิจกรรมล่าสุดของลีด · ลีดที่ไม่มีบันทึกกิจกรรม = "—" (ไม่เดาวันให้)
                 const last = l.activities?.length ? l.activities[0].date : "—";
                 return (
@@ -759,7 +758,7 @@ export default function HQLeadsPage() {
       {viewLead && (() => {
         const l = viewLead;
         const c = leadStatusColor[l.status];
-        const quoted = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"].includes(l.status);
+        const quoted = QUOTED_UP.includes(l.status);
         return (
           <>
             <div onClick={() => setViewLead(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 240 }} />

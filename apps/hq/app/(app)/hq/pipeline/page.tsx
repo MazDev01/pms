@@ -20,7 +20,7 @@ import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import {
   HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY,
-  loadDealerFiles, DEALER_FILES_EVENT, fmtISOToThai,
+  loadDealerFiles, DEALER_FILES_EVENT, fmtISOToThai, QUOTED_UP,
   type DealerRow, type HQTargets, type DealerFile,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -47,7 +47,6 @@ const parseThaiDate = (s: string): Date | null => {
   const y = +mt[3] > 2500 ? +mt[3] - 543 : +mt[3];
   return new Date(y, TH_MONTH[mt[2]], +mt[1]);
 };
-const QUOTED_UP = ["QUOTED", "FOLLOWUP", "NEGO", "PAID"];
 const ALL = "ALL";
 // ตัวกรองว่าง (ทั้งเครือ ทุกช่วง) — อ้างอิงคงที่ ดึง product_line ทั้งหมดครั้งเดียว
 const EMPTY_QF = {};

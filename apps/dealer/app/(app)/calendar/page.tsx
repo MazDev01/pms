@@ -3,7 +3,7 @@
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
+import { apptTypeLabel, fmtISOToThai, DEFAULT_DEALER_CODE, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -464,7 +464,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const { leads: allLeads, newAppointmentId } = useSales();
   // เลือกได้เฉพาะลีดของตัวแทนที่ล็อกอิน — ไม่ให้เห็นลีดของตัวแทนรายอื่นทั้งเครือ
   const leads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, currentDealer.code],
   );
   const [leadId, setLeadId] = useState<number | undefined>(initial?.leadId);

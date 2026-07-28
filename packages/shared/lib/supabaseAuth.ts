@@ -7,8 +7,8 @@
 import { getSupabase } from "./data/supabase/client";
 import { DEMO_PASSWORD, type AuthResult } from "./auth";
 import type { MockSession, UserRole } from "./mock";
+import { HQ_ROLES } from "./permissions";
 
-const HQ_ROLES: readonly UserRole[] = ["SUPER_ADMIN", "HQ_MANAGEMENT", "HQ_STAFF"];
 const isHQRole = (r: UserRole): boolean => HQ_ROLES.includes(r);
 
 // อีเมลบัญชีเดโม (seed ไว้แล้ว) สำหรับปุ่มเข้าด่วนในหน้า login

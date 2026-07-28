@@ -15,6 +15,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
+import { hasPermission, HQ_ROLES } from "@pms/shared/lib/permissions";
+import type { UserRole } from "@pms/shared/lib/mock";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -22,10 +24,11 @@ export const runtime = "nodejs";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
-// บทบาทที่มีสิทธิ์จัดการผู้ใช้ HQ — SUPER_ADMIN + HQ_MANAGEMENT (ตรงกับ dealers:manage)
-const CAN_MANAGE_USERS = new Set(["SUPER_ADMIN", "HQ_MANAGEMENT"]);
+// บทบาทที่มีสิทธิ์จัดการผู้ใช้ HQ = permission "users:manage" (ดู permissions.ts — แหล่งเดียวกับ RLS/ตัวแอป)
+// เดิมประกาศ Set ซ้ำที่นี่ + dealers/route.ts + supabaseAuth.ts แยกกัน (เสี่ยงตกหล่นเวลาเพิ่มบทบาท) · SSOT
+function canManageUsers(role: string): boolean { return hasPermission(role as UserRole, "users:manage"); }
 // บทบาทที่อนุญาตให้ "ตั้ง" ให้ผู้ใช้ HQ (ฝั่งสำนักงานใหญ่เท่านั้น — ไม่ออกบัญชีตัวแทนจากที่นี่)
-const HQ_ROLES = new Set(["SUPER_ADMIN", "HQ_MANAGEMENT", "HQ_STAFF"]);
+function isHQRole(r: string): r is UserRole { return (HQ_ROLES as readonly string[]).includes(r); }
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -76,7 +79,7 @@ async function authorize(req: NextRequest): Promise<
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return { ok: false, res: bad(401, "unauthorized") };
   const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
-  if (!prof || !CAN_MANAGE_USERS.has(String(prof.role))) {
+  if (!prof || !canManageUsers(String(prof.role))) {
     return { ok: false, res: bad(403, "ไม่มีสิทธิ์จัดการผู้ใช้สำนักงานใหญ่") };
   }
   return { ok: true, admin, callerId: caller.user.id, prof };
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
   const avatar = typeof body.avatar === "string" ? body.avatar : "";
   if (!name) return bad(400, "ต้องระบุชื่อ");
   if (!/^\S+@\S+\.\S+$/.test(email)) return bad(400, "อีเมลไม่ถูกต้อง");
-  if (!HQ_ROLES.has(role)) return bad(400, "บทบาทไม่ถูกต้อง (ต้องเป็นผู้ใช้สำนักงานใหญ่)");
+  if (!isHQRole(role)) return bad(400, "บทบาทไม่ถูกต้อง (ต้องเป็นผู้ใช้สำนักงานใหญ่)");
 
   const password = strongPassword();
 

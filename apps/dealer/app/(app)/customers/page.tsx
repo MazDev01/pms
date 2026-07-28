@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import {
-  buildLeadTasks, leadStatusLabel, leadStatusColor,
+  buildLeadTasks, leadStatusLabel, leadStatusColor, QUOTED_UP, DEFAULT_DEALER_CODE,
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, loadHQPolicy, customerCode,
   loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
   type QuotationMock, type QuoteLineItem, type LeadRow,
@@ -368,9 +368,9 @@ export default function CustomersPage(){
   const [noteBody, setNoteBody] = useState(""); // โน้ตลูกค้าผ่าน repo (ผู้เขียน = ผู้ใช้ที่ล็อกอิน) // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
   // undefined = ของ CNX (สมุดงานเดิม) · ที่เหลือกรองด้วย dealerCode ตรง ๆ
-  const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomers, currentDealer.code]);
-  const quotations = useMemo(() => allQuotations.filter(q => (q.dealerCode ?? "CNX") === currentDealer.code), [allQuotations, currentDealer.code]);
-  const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code), [allLeadsRaw, currentDealer.code]);
+  const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allCustomers, currentDealer.code]);
+  const quotations = useMemo(() => allQuotations.filter(q => (q.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allQuotations, currentDealer.code]);
+  const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allLeadsRaw, currentDealer.code]);
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
   const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
@@ -1105,7 +1105,7 @@ export default function CustomersPage(){
                       {activeDeals.map(d=>{
                         const sc=leadStatusColor[d.status];
                         const dealQuoteCount=quotations.filter(q=>q.dealId===d.numId).length;
-                        const quoteLabel=dealQuoteCount>0?`${dealQuoteCount} ใบ`:(["QUOTED","FOLLOWUP","NEGO","PAID"].includes(d.status)?"มี":"—");
+                        const quoteLabel=dealQuoteCount>0?`${dealQuoteCount} ใบ`:(QUOTED_UP.includes(d.status)?"มี":"—");
                         return (
                           <button key={d.id} onClick={()=>router.push(`/leads?open=${d.numId}`)}
                             style={{display:"flex",flexDirection:"column",gap:6,padding:"10px 12px",borderRadius:10,background:"#f8f9fb",border:`1px solid #eef0f4`,cursor:"pointer",textAlign:"left",width:"100%"}}

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor, leadStatusLabel,
-  DEFAULT_ISSUER,
+  DEFAULT_ISSUER, DEFAULT_DEALER_CODE,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
@@ -313,10 +313,10 @@ function QuotationsPageInner(){
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
   // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน — RYG ไม่เห็นใบ/ลูกค้า/ลีดของ CNX (undefined = ของ CNX)
   // (ลีด lookup ผู้รับผิดชอบด้วยชื่อบริษัท — ถ้าไม่กรอง ownerOf/saveQ ไปเจอ+เขียนทับลีดสาขาอื่นชื่อซ้ำ)
-  const data = useMemo(() => allQuotationsRaw.filter(q => (q.dealerCode ?? "CNX") === currentDealer.code), [allQuotationsRaw, currentDealer.code]);
-  const customers = useMemo(() => allCustomersRaw.filter(c => (c.dealerCode ?? "CNX") === currentDealer.code), [allCustomersRaw, currentDealer.code]);
+  const data = useMemo(() => allQuotationsRaw.filter(q => (q.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allQuotationsRaw, currentDealer.code]);
+  const customers = useMemo(() => allCustomersRaw.filter(c => (c.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allCustomersRaw, currentDealer.code]);
   const leads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, currentDealer.code],
   );
   const [query, setQuery]           = useState("");

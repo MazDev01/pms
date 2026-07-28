@@ -14,6 +14,7 @@ export type Permission =
   | "tasks:manage"
   | "catalog:edit"
   | "dealers:manage"
+  | "users:manage"
   | "reports:view"
   | "analytics:view"
   | "hq:all_data";
@@ -36,7 +37,7 @@ const DEALER_BASE: Permission[] = [...SALES_READ, ...SALES_WRITE, "tasks:manage"
 const HQ_BASE: Permission[] = [...SALES_READ, "reports:view", "analytics:view"];
 
 // สิทธิ์ระดับเครือ (ข้อมูลกลางที่ HQ เป็นเจ้าของ) — RLS ฝั่ง DB คุมด้วย can_write_master()
-const HQ_MASTER: Permission[] = ["catalog:edit", "dealers:manage", "hq:all_data"];
+const HQ_MASTER: Permission[] = ["catalog:edit", "dealers:manage", "users:manage", "hq:all_data"];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   SUPER_ADMIN:   [...HQ_BASE, ...HQ_MASTER],
@@ -50,3 +51,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
+
+// ทุกบทบาทฝั่งสำนักงานใหญ่ (ไม่มี dealer_code) — แหล่งเดียว เดิมประกาศซ้ำใน supabaseAuth.ts /
+// api/admin/users/route.ts แยกกัน (เสี่ยงตกหล่นถ้าเพิ่มบทบาท HQ ใหม่ในอนาคต) · 1.5/SSOT
+export const HQ_ROLES: readonly UserRole[] = ["SUPER_ADMIN", "HQ_MANAGEMENT", "HQ_STAFF"];

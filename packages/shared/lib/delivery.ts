@@ -7,8 +7,6 @@
 // (บอสสั่ง 17 ก.ค. 69: ฝั่งตัวแทนไม่มีประกัน HQ ก็ไม่ต้องมี) เหลือเฉพาะการส่งมอบ
 import { DEFAULT_DELIVERY_DAYS } from "./mock";
 
-export const TODAY = new Date(2026, 5, 30); // "วันนี้" ของระบบ (deterministic)
-
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const TH_MONTH: Record<string, number> = Object.fromEntries(TH_ABBR.map((m, i) => [m, i]));
 
@@ -20,8 +18,8 @@ export function parseThaiDate(s?: string): Date | null {
 }
 export const toThaiDate = (d: Date) => `${d.getDate()} ${TH_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
 
-/** จำนวนวันส่งมอบจากข้อความ (เช่น "120 วัน") — ไม่ระบุ = ค่ามาตรฐานที่ HQ กำหนด */
-export const deliveryDaysOf = (deliveryTime?: string): number =>
+/** จำนวนวันส่งมอบจากข้อความ (เช่น "120 วัน") — ไม่ระบุ = ค่ามาตรฐานที่ HQ กำหนด (ใช้ภายในไฟล์นี้เท่านั้น) */
+const deliveryDaysOf = (deliveryTime?: string): number =>
   parseInt(String(deliveryTime ?? "").replace(/[^0-9]/g, "")) || DEFAULT_DELIVERY_DAYS;
 
 /** วันส่งมอบ = วันปิดการขาย + ระยะเวลาส่งมอบ · ไม่มีวันปิดการขาย = null */

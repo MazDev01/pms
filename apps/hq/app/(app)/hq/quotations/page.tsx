@@ -4,7 +4,7 @@
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
 // จึงมีแค่ ดู / วิเคราะห์ / เปรียบเทียบ / ส่งออก — ไม่มีปุ่มสร้าง แก้ไข ลบ อนุมัติ
 import { useState, useMemo, useEffect } from "react";
-import { quotationStatusLabel, mainTemplateOf, fmtISOToThai, type HQQuotation } from "@pms/shared/lib/mock";
+import { quotationStatusLabel, mainTemplateOf, fmtISOToThai, DEFAULT_DEALER_CODE, type HQQuotation } from "@pms/shared/lib/mock";
 import type { QuotationMock } from "@pms/shared/lib/data/types";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -222,7 +222,7 @@ export default function NetworkQuotationPage() {
   // แถวจาก listPage เป็น QuotationMock ดิบ → map เป็น HQQuotation (เท่า useNetworkQuotations) ก่อน toQuoteRows
   const mapToHQ = (q: QuotationMock): HQQuotation => {
     const lead = netLeads.find(l => (q.dealId != null && l.numId === q.dealId) || ((q.customerId ?? 0) > 0 && l.customerId === q.customerId));
-    const code = q.dealerCode ?? "CNX";
+    const code = q.dealerCode ?? DEFAULT_DEALER_CODE;
     return {
       id: `LIVE-${q.id}`, quoteNo: q.id, dealerCode: code, dealerName: nameOf.get(code) ?? code,
       customer: q.customer, valueNum: q.totalValue, status: q.status, createdAt: fmtISOToThai(q.date),

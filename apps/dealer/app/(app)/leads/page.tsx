@@ -7,7 +7,7 @@ import {
   RP_STORAGE_KEY,
   quotationStatusLabel, quotationStatusColor,
   buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
-  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory,
+  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
 } from "@pms/shared/lib/mock";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
@@ -48,9 +48,7 @@ import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
 
 // ─── Design tokens ────────────────────────────────────────────────────────
 
-const ALL_STATUSES: LeadStatus[] = [
-  "WAITING","BULLET","QUOTED","FOLLOWUP","NEGO","PAID","CANCELLED"
-];
+const ALL_STATUSES: LeadStatus[] = LEAD_STATUS_ORDER;
 // ความคืบหน้าตามขั้นตอน (module-level เพื่อใช้ใน OverviewEditor) — PAID=100, CANCELLED=0
 // (DEFAULT_PERSONS ถูกลบ — เดิมเป็นพนักงาน 5 คนจากชุดตัวอย่าง
 //  ตาราง responsible_persons ว่าง = ไม่มีวันถูกแทนที่ → ตัวแทนเลือกชื่อคนที่ไม่มีอยู่จริง
@@ -618,7 +616,7 @@ export default function LeadsPage() {
   // ลีดที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
   // สมุดงานของสาขาตัวเอง "ทุกสถานะ" (รวมที่ปิดการขายสำเร็จแล้ว) — ใช้คิดอัตราปิดการขาย
   const myAllLeads = useMemo(
-    () => allLeads.filter(l => (l.dealerCode ?? "CNX") === currentDealer.code),
+    () => allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, currentDealer.code],
   );
   const leadsData = useMemo(() => myAllLeads.filter(l => l.status !== "PAID"), [myAllLeads]);

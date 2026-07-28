@@ -18,6 +18,7 @@ import { parseThaiDate, needsFollowUp, isLeadOpen } from "./leadMetrics";
 import { useRepoValue } from "./useRepoState";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { settings as settingsRepo, metrics as metricsRepo } from "./data";
+import { DEFAULT_DEALER_CODE } from "./mock";
 import { DATA_SOURCE } from "./data/config";
 import { logRepoRead } from "./repoLog";
 import type { DealerRollup, DealerRollupOpts } from "./data/ports";
@@ -105,7 +106,7 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
     const stale = new Map<string, number>();
     for (const l of leads) {
       if (CLOSED.includes(l.status) || !isLeadOpen(l)) continue;
-      const code = l.dealerCode ?? "CNX";
+      const code = l.dealerCode ?? DEFAULT_DEALER_CODE;
       get(code).openLeads += 1;
       const days = (rules[code] ?? DEFAULT_LEAD_RULES).followUpAlertDays;
       if (needsFollowUp(l, days)) stale.set(code, (stale.get(code) ?? 0) + 1);

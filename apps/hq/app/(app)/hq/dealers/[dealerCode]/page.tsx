@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use } from "react";
 import {
   HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
+  quotationStatusColor, quotationStatusLabel,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@pms/shared/lib/mock";
 import { useRepoValue, useRepoValueLoaded } from "@pms/shared/lib/useRepoState";
@@ -37,13 +38,8 @@ const PROJ_STATUS: Record<DealerProjectItem["status"], { label: string; bg: stri
   overdue:     { label: "เกินกำหนด",      bg: "#fee2e2", color: "#dc2626", bar: "#dc2626" },
 };
 
-const QUOTE_STATUS: Record<DealerQuoteItem["status"], { label: string; bg: string; color: string }> = {
-  draft:          { label: "ร่าง",         bg: "#f0f0f5", color: "#6b7280" },
-  sent_to_client: { label: "ส่งแล้ว",      bg: "#dce5f0", color: "#003366" },
-  won:            { label: "ตอบรับ",       bg: "#e5faf0", color: "#059669" },
-  lost:           { label: "ปฏิเสธ",       bg: "#fee2e2", color: "#dc2626" },
-  expired:        { label: "หมดอายุ",      bg: "#f5f5f5", color: "#9ca3af" },
-};
+// สี/ป้ายสถานะใบเสนอราคา = ใช้ของกลาง (mock.ts) แหล่งเดียว — เดิม map ในไฟล์นี้ลอกไว้แล้วเพี้ยน
+// (lost เป็นแดงที่นี่ แต่เทาที่อื่น) → ใบเดียวกันสีต่างกันคนละหน้า · 1.3
 
 // ── Mini bar chart ───────────────────────────────────────────────
 
@@ -279,14 +275,14 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
               <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีใบเสนอ</td></tr>
             )}
             {quotes.map(q => {
-              const st = QUOTE_STATUS[q.status];
+              const st = quotationStatusColor[q.status];
               return (
                 <tr key={q.quoteNo}>
                   <td style={{ fontSize: "0.72rem", fontWeight: 700, color: "#003366" }}>{q.quoteNo}</td>
                   <td style={{ fontSize: "0.8rem", fontWeight: 600, color: "#2D2D2D" }}>{q.customer}</td>
                   <td><span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{q.product}</span></td>
                   <td className="num" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#003366" }}>{fmtM(q.valueNum)}</td>
-                  <td><span className="badge" style={BADGE(st.bg, st.color)}>{st.label}</span></td>
+                  <td><span className="badge" style={BADGE(st.bg, st.text)}>{quotationStatusLabel[q.status]}</span></td>
                   <td style={{ fontSize: "0.72rem", color: "#9ca3af" }}>{q.date}</td>
                 </tr>
               );
@@ -343,7 +339,7 @@ function CustomerTab({ customers }: { customers: HQCustomer[] }) {
 function ActivityTab({ leads, quotes }: { leads: DealerLeadItem[]; quotes: DealerQuoteItem[] }) {
   const items = [
     ...quotes.map(q => ({ id: `q-${q.quoteNo}`, icon: <ScrollText size={14} />, color: "#003366",
-      title: `ออกใบเสนอราคา ${q.customer}`, sub: `${q.product} · ${fmtM(q.valueNum)} · ${QUOTE_STATUS[q.status].label}`, date: q.date })),
+      title: `ออกใบเสนอราคา ${q.customer}`, sub: `${q.product} · ${fmtM(q.valueNum)} · ${quotationStatusLabel[q.status]}`, date: q.date })),
     ...leads.map(l => ({ id: `l-${l.id}`, icon: <Users size={14} />, color: "#6b7280",
       title: `รับมอบหมายลูกค้าเป้าหมาย ${l.name}`, sub: `${l.product} · ${fmtM(l.valueNum)}`, date: l.assignedAt })),
   ];

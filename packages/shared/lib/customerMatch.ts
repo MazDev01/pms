@@ -1,4 +1,5 @@
 // จับคู่ "ลูกค้าเดิม" กับชื่อบริษัทที่พิมพ์เข้ามา (M3)
+import { DEFAULT_DEALER_CODE } from "@pms/shared/lib/mock";
 //
 // ที่มาของปัญหา: ลูกค้าเกิดได้ทางเดียวคือลีดที่ปิดการขายได้ (convertLeadToCustomer)
 // แต่ถ้าตัวแทนเปิดลีดใหม่ให้บริษัทที่เป็นลูกค้าอยู่แล้ว (แทนที่จะกด "สร้างดีลใหม่" จากหน้าลูกค้า)
@@ -43,7 +44,7 @@ export function matchCustomers<T extends CustomerLike>(
 ): { exact: T | null; similar: T[] } {
   const ek = exactKey(company);
   if (!ek) return { exact: null, similar: [] };
-  const mine = all.filter(c => (c.dealerCode ?? "CNX") === dealerCode);
+  const mine = all.filter(c => (c.dealerCode ?? DEFAULT_DEALER_CODE) === dealerCode);
   const exact = mine.find(c => exactKey(c.company) === ek) ?? null;
   const lk = looseKey(company);
   const similar = lk
