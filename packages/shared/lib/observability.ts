@@ -1,0 +1,33 @@
+// ── ศูนย์รวมการรายงาน error (observability) ────────────────────────────────────
+// จุดเดียวที่ทุก error สำคัญไหลผ่าน (repo เขียนล้มเหลว · realtime หลุด · ฯลฯ)
+// เดิม error กระจายเป็น console.error/warn รายจุด → production พังตรงไหนไม่รู้ตัว
+//
+// provider-agnostic: shared ไม่ผูกกับ Sentry/เจ้าไหน — แค่ console เสมอ + ส่งต่อ "sink" ที่แอปลงทะเบียน
+//   ต่อ provider ทีหลังได้โดยไม่ต้องแก้ที่เรียกใช้ (captureError อยู่แล้วทุกจุดสำคัญ)
+//
+// วิธีเปิด Sentry จริง (ทำที่ฝั่งแอป — apps/hq, apps/dealer — ที่มี @sentry ติดตั้ง):
+//   1) pnpm add @sentry/nextjs
+//   2) ตั้ง NEXT_PUBLIC_SENTRY_DSN ใน env ของแต่ละแอป
+//   3) ในไฟล์ client init ของแอป (เช่น instrumentation-client.ts หรือ provider ที่รันครั้งเดียว):
+//        import * as Sentry from "@sentry/nextjs";
+//        import { setErrorSink } from "@pms/shared/lib/observability";
+//        if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+//          Sentry.init({ dsn: process.env.NEXT_PUBLIC_SENTRY_DSN });
+//          setErrorSink((err, ctx) => Sentry.captureException(err, { extra: { context: ctx } }));
+//        }
+
+export type ErrorContext = string;
+type ErrorSink = (error: unknown, context?: ErrorContext) => void;
+
+let sink: ErrorSink | null = null;
+
+/** ลงทะเบียนปลายทางรายงาน error (เช่น Sentry) — เรียกครั้งเดียวตอนแอปเริ่ม · null = ปิด */
+export function setErrorSink(fn: ErrorSink | null): void {
+  sink = fn;
+}
+
+/** รายงาน error สำคัญ — console เสมอ + ส่งต่อ sink ถ้าลงทะเบียนไว้ (sink พังต้องไม่ล้มระบบ) */
+export function captureError(error: unknown, context?: ErrorContext): void {
+  console.error(context ? `[${context}]` : "[error]", error);
+  try { sink?.(error, context); } catch { /* observability ต้องไม่ทำให้งานหลักพัง */ }
+}

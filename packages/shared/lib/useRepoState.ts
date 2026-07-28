@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { logRepoRead } from "./repoLog";
+import { captureError } from "./observability";
 
 // state ที่ผูกกับ repository (data layer) — drop-in แทน usePersistentState สำหรับข้อมูลระดับเครือ (HQ)
 //   • โหลดจาก repo ตอน mount (async) · เขียนกลับ "เฉพาะเมื่อผู้ใช้แก้จริง" หลังโหลดสำเร็จแล้ว
@@ -12,7 +13,7 @@ import { logRepoRead } from "./repoLog";
 export const REPO_SAVE_ERROR_EVENT = "pms:repo-save-error";
 export function reportRepoSaveError(e: unknown): void {
   const msg = e instanceof Error ? e.message : String(e);
-  console.error("[useRepoState.save]", e);
+  captureError(e, "repo.save"); // เขียนล้มเหลว = สำคัญ → console + ส่งต่อ observability sink
   if (typeof window === "undefined") return;
   try { window.dispatchEvent(new CustomEvent(REPO_SAVE_ERROR_EVENT, { detail: msg })); } catch {}
 }

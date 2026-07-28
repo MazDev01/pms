@@ -9,6 +9,7 @@ import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, LOST_REA
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
+import { captureError } from "@pms/shared/lib/observability";
 import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, WonBuildingRaw, LeadSummary } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
@@ -164,7 +165,7 @@ const topic = (base: string) => `${base}-${++channelSeq}`;
 // อย่างน้อยต้อง log ให้เห็น (CLOSED เป็นการปิดปกติตอน removeChannel — ไม่เตือน)
 function onSubStatus(status: string) {
   if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-    console.warn(`[realtime] channel ${status} — ข้อมูลอาจไม่อัปเดตสดจนกว่าจะรีเฟรชหน้า`);
+    captureError(new Error(`realtime channel ${status} — ข้อมูลอาจไม่อัปเดตสดจนกว่าจะรีเฟรชหน้า`), "realtime");
   }
 }
 
