@@ -5,7 +5,6 @@ import {
   type ReactNode,
 } from "react";
 import { mainTemplateOf } from "@pms/shared/lib/mock";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Global Filter / Time Range — ส่วนกลางที่ Dashboard / Reports / Analytics ใช้ร่วมกัน
@@ -13,15 +12,9 @@ import { DATA_SOURCE } from "@pms/shared/lib/data/config";
  * เปลี่ยน filter แล้ว KPI / chart / table อัปเดตทันทีโดยไม่รีโหลดหน้า
  * ────────────────────────────────────────────────────────────────────────── */
 
-// "วันนี้" ของระบบ — แยกตามแหล่งข้อมูล:
-//   supabase (โปรดักชันจริง) = เวลาจริง new Date() → เรคคอร์ด/ตัวกรอง/หมดอายุใบเสนอราคาเดินตามปฏิทินจริง
-//   local (เดโม/ข้อมูล mock) = ตรึงไว้ 30 มิ.ย. 2026 = ยุคของข้อมูล mock
-//     (ถ้าใช้เวลาจริงกับข้อมูล mock เรคคอร์ดจะหลุดนอกช่วงตัวกรองทุกพรีเซ็ต เพราะทุกพรีเซ็ตจบที่ APP_NOW)
-// ประเมินครั้งเดียวตอนโหลดโมดูล — ยึดเป็น "วันนี้" ตลอดเซสชัน (เพียงพอสำหรับตัวกรอง/วันที่ในหน้าจอ)
-export const APP_NOW = DATA_SOURCE === "supabase" ? new Date() : new Date(2026, 5, 30);
-// "วันนี้" แบบ ISO (YYYY-MM-DD) สำหรับฟิลด์ที่เก็บเป็น ISO เช่น uploadedAt / joinDate
-// ประกอบเองทีละส่วน ห้ามใช้ APP_NOW.toISOString() — มันแปลงเป็น UTC ก่อน ไทย (UTC+7) จะได้ 29 มิ.ย. ย้อนไป 1 วัน
-export const APP_NOW_ISO = `${APP_NOW.getFullYear()}-${String(APP_NOW.getMonth() + 1).padStart(2, "0")}-${String(APP_NOW.getDate()).padStart(2, "0")}`;
+// "วันนี้ของระบบ" — นิยามไว้ที่ lib/appTime.ts (แหล่งเดียว) · re-export ไว้ให้ผู้เรียกเดิมใช้ได้เหมือนเดิม
+import { APP_NOW, APP_NOW_ISO } from "@pms/shared/lib/appTime";
+export { APP_NOW, APP_NOW_ISO };
 
 const THAI_MONTH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 

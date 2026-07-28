@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { LineTrendChart } from "@pms/shared/components/ui/Charts";
 import { STEEL } from "@pms/shared/lib/theme";
+import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
 // ── กราฟแนวโน้มยอดขายที่ "กำหนดช่วงเวลาได้" ในตัว (ปุ่ม inline + รีบิลด์ตามวันจริง) ──
 // ใช้ซ้ำได้ทุกหน้าที่มีกราฟแนวโน้ม (dashboard / reports / hq dashboard)
@@ -28,7 +29,7 @@ export function SalesTrendChart({
   title,
   desc,
   monthly,
-  today = "2026-06-30",
+  today = APP_NOW_ISO,
   prevRatio = 0.86,
   initialRange = "6m",
   height,

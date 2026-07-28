@@ -12,7 +12,7 @@ import {
   UserPlus, CheckCircle2, Mail, Info,
 } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
-import { useFilters } from "@pms/shared/context/FilterContext";
+import { useFilters, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { PlanVsActualBars, SalesLineChart, CategoryRows, Donut, ProgressRing } from "@pms/shared/components/ui/Charts";
@@ -41,7 +41,7 @@ const NAVY = "#003366", SUCCESS = "#16A34A", DANGER = "#DC2626";
 // #D97706 ผ่านครบทั้ง contrast และการแยกสีสำหรับตาบอดสี เมื่อวางคู่กับสีน้ำเงินลูกค้าเป้าหมาย
 const AMBER = "#D97706";
 const TEXT = "#1F2937", SUB = "#6B7280", BORDER = "#E5E7EB";
-const TODAY_ISO = "2026-06-30";
+const TODAY_ISO = APP_NOW_ISO; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง) — งานวันนี้/ติดตามวันนี้เดินตามปฏิทินจริง
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const CUR_M = MOCK_TODAY.getMonth();
 const CUR_Y = MOCK_TODAY.getFullYear();

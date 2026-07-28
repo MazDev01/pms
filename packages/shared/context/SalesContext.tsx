@@ -10,7 +10,7 @@ import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, DEFAULT_QUOTE_NUMBERING,
   type IssuerProfile,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
-  quotationToFile, AUTO_FILE_BY,
+  quotationToFile, AUTO_FILE_BY, fmtISOToThai,
   type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock, type DealerFile,
@@ -356,7 +356,7 @@ export function SalesProvider({
       category: lead.category || lead.product || "อื่นๆ",
       status: "active",
       projects: 0,
-      joinDate: "2026-06-30",
+      joinDate: APP_NOW_ISO, // วันสมัคร = วันนี้ของระบบ (supabase=จริง / local=ตรึง)
       owner: lead.assigned,
       initials: deriveInitials(lead.company || lead.name),
       color: CUSTOMER_PALETTE[newId % CUSTOMER_PALETTE.length],
@@ -485,8 +485,8 @@ export function SalesProvider({
       const tasks = base.map(t => {
         if (keys.includes(t.key) && !t.done) {
           changed = true;
-          // ผู้ทำงาน = ผู้รับผิดชอบของลีด (ไม่ใช่ "ระบบ"/ดีลเลอร์)
-          return { ...t, done: true, doneAt: "30 มิ.ย. 2569", doneBy: l.assigned || "อัปเดตอัตโนมัติ" };
+          // ผู้ทำงาน = ผู้รับผิดชอบของลีด (ไม่ใช่ "ระบบ"/ดีลเลอร์) · วันปิดงาน = วันนี้ของระบบ (supabase=จริง)
+          return { ...t, done: true, doneAt: fmtISOToThai(APP_NOW_ISO), doneBy: l.assigned || "อัปเดตอัตโนมัติ" };
         }
         return t;
       });

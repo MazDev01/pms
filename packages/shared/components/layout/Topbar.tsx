@@ -24,9 +24,10 @@ import { useHQAlerts } from "@pms/shared/lib/useHQAlerts";
 import { useHQSearch } from "@pms/shared/lib/useNetworkData";
 import { type HQAlert } from "@pms/shared/lib/hqAlerts";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
-// ── mock "วันนี้" (deterministic) ────────────────────────────────
-const MOCK_TODAY = "2026-06-30";
+// ── "วันนี้ของระบบ" (APP_NOW) — supabase=จริง / local=ตรึง · จัดกลุ่มการแจ้งเตือน วันนี้/เมื่อวาน ──
+const MOCK_TODAY = APP_NOW_ISO;
 
 const BORDER   = "#e5e7eb";
 const BG       = "#fafafa";
@@ -47,8 +48,11 @@ type Notif = {
   bucket: NotifBucket;
 };
 
-// bucket ตามวันที่เทียบกับ mock วันนี้ = 2026-06-30 (deterministic)
-const MOCK_YESTERDAY = "2026-06-29";
+// เมื่อวาน = วันนี้ของระบบ ลบ 1 วัน (ISO) — bucket "เมื่อวาน" เดินตาม APP_NOW
+const MOCK_YESTERDAY = (() => {
+  const d = new Date(APP_NOW); d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+})();
 function bucketOf(date: string): NotifBucket {
   if (date === MOCK_TODAY) return "today";
   if (date === MOCK_YESTERDAY) return "yesterday";

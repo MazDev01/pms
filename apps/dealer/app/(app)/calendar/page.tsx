@@ -4,6 +4,7 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
+import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useSales } from "@pms/shared/context/SalesContext";
@@ -16,8 +17,8 @@ const MUTED   = "#6b7280";
 
 const THAI_DAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-// Mock clock — the single source of "today" (used for highlighting, nav, and grouping)
-const TODAY = "2026-06-30";
+// "วันนี้ของระบบ" (APP_NOW) — แหล่งเดียวของ "วันนี้" (ไฮไลต์/นำทาง/จัดกลุ่ม) · supabase=จริง / local=ตรึง
+const TODAY = APP_NOW_ISO;
 const GROUP_TODAY = TODAY;
 
 // ── Activity-type color buckets ───────────────────────────────

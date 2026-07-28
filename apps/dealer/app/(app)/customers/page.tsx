@@ -233,8 +233,11 @@ function activityItemsFor(customerId:number, joinDate:string, qs:QuotationMock[]
 // ── ลูกค้าใหม่ / ลูกค้าเดิม ───────────────
 // เกณฑ์ (deterministic): มีใบเสนอราคาปิดการขาย ≥1 หรือ joinDate เก่ากว่า ~6 เดือน → ลูกค้าเดิม, มิฉะนั้น → ลูกค้าใหม่
 type LifecycleType = "existing" | "new";
-// วันอ้างอิงคงที่ (deterministic) = วันที่ในระบบ (currentDate 2026-07-01) ลบ 6 เดือน = 2026-01-01
-const EXISTING_CUTOFF_DATE = "2026-01-01";
+// เกณฑ์ = "วันนี้ของระบบ" (APP_NOW) ลบ 6 เดือน · supabase=จริง / local=ตรึง → 2026-01-01 (deterministic)
+const EXISTING_CUTOFF_DATE = (() => {
+  const d = new Date(APP_NOW); d.setMonth(d.getMonth() - 6);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+})();
 function lifecycleTypeFor(customerId:number, joinDate:string, qs:QuotationMock[]): LifecycleType {
   if(wonQuotationCountFor(customerId, qs) >= 1) return "existing";
   if(joinDate && joinDate !== "—" && joinDate < EXISTING_CUTOFF_DATE) return "existing";

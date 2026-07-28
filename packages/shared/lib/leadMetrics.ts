@@ -1,8 +1,10 @@
 // ── ตัวชี้วัดของลีด (pure functions) — แหล่งเดียว ใช้ร่วมกันทั้งหน้าลีดและแดชบอร์ด ──
-// ไม่มี state / ไม่มี UI — คำนวณล้วน (deterministic, mock วันนี้ = 2026-06-30)
+// ไม่มี state / ไม่มี UI — คำนวณล้วน · "วันนี้" ยึด APP_NOW (supabase=จริง / local=ตรึง 30 มิ.ย. 2569)
 import { buildLeadTasks, taskProgress, type LeadRow } from "@pms/shared/lib/mock";
+import { APP_NOW } from "@pms/shared/lib/appTime";
 
-export const MOCK_TODAY = new Date(2026, 5, 30); // 2026-06-30
+// ความสดของลีด / ช่วงเดือนกราฟ / YTD — เดินตาม "วันนี้ของระบบ" แหล่งเดียว (เลิกตรึงในโหมด supabase)
+export const MOCK_TODAY = APP_NOW;
 
 // ── มูลค่า ──
 export function parseValue(v: string): number {

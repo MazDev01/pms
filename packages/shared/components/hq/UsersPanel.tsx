@@ -6,6 +6,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
+import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import { fmtISOToThai } from "@pms/shared/lib/mock";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
@@ -25,7 +27,7 @@ const PRIMARY = "#003366";
 const STEEL = "#2D2D2D";
 const BORDER = "#e5e7eb";
 const MUTED = "#6b7280";
-const MOCK_TODAY = "30 มิ.ย. 2569";
+const MOCK_TODAY = fmtISOToThai(APP_NOW_ISO); // วันที่เพิ่มผู้ใช้ = วันนี้ของระบบ (supabase=จริง / local=ตรึง)
 
 // ── Roles (HQ เท่านั้น · 3 บทบาทจริงในระบบ) ─────────────────────────────────────
 // บทบาทต้องเป็นชุดเดียวกับที่ระบบบังคับใช้จริง (user_role ใน DB + ROLE_PERMISSIONS)

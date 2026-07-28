@@ -140,7 +140,7 @@ function leadLatestDate(l: LeadRow): Date | null {
   return new Date(Math.max(...dates.map(d => d.getTime())));
 }
 // ── ลีดที่ต้องรีบติดตาม (ขาดการติดต่อเกิน 7 วัน) — กฎธุรกิจเดียวที่ต้องมี (ไม่มี SLA) ──
-const MOCK_TODAY_LEAD = new Date(2026, 5, 30); // 2026-06-30
+const MOCK_TODAY_LEAD = APP_NOW; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง 30 มิ.ย. 2569)
 const CUR_YEAR = MOCK_TODAY_LEAD.getFullYear(); // กราฟรายเดือน = ปีปัจจุบันเท่านั้น (ข้อมูลมีของปีที่แล้วปนอยู่)
 function daysSinceContact(l: LeadRow): number | null {
   const d = leadLatestDate(l) ?? parseThaiDate(l.createdAt);
@@ -691,7 +691,7 @@ export default function LeadsPage() {
   const [quickLostReason, setQuickLostReason] = useState("");
   // ฟอร์มนัดหมายในแท็บนัดหมายของลีด (นัดก่อนปิดการขาย)
   const [apptAdding, setApptAdding] = useState(false);
-  const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
+  const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
   const apptSavingRef = useRef(false); // กันกดบันทึกนัดซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard synchronous)
   const [apptSaving, setApptSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const [draft, setDraft] = useState<LeadRow|null>(null);
@@ -823,7 +823,7 @@ export default function LeadsPage() {
   const current = draft ?? selectedLead;
   const lid = current?.id ?? "";
 
-  function resetApptForm() { setApptAdding(false); setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" }); }
+  function resetApptForm() { setApptAdding(false); setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" }); }
   function openPanel(l: LeadRow) {
     if (selectedLead?.id === l.id) return closePanel();
     setSelectedLead(l); setDraft({...l});
@@ -978,7 +978,7 @@ export default function LeadsPage() {
     () => leadsData.filter(l => { const d = leadCreatedDate(l); return d.getMonth() === MOCK_TODAY_LEAD.getMonth() && d.getFullYear() === MOCK_TODAY_LEAD.getFullYear(); }).length,
     [leadsData]);
   const overdue7 = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
-  const meetingToday = useMemo(() => appointments.filter(a => a.date === "2026-06-30" && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
+  const meetingToday = useMemo(() => appointments.filter(a => a.date === APP_NOW_ISO && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
   const newWaiting = useMemo(() => leadsData.filter(l => l.status === "WAITING").length, [leadsData]);
   // Sales Opportunity = มูลค่ารวมของลีดที่ยังเปิดอยู่ (Expected Revenue)
   const openValue = useMemo(() => leadsData.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0), [leadsData]);
@@ -1614,7 +1614,7 @@ export default function LeadsPage() {
             date: apptForm.date, time: apptForm.time, type: apptForm.type,
             assigned: c.assigned || session.name, status: "upcoming", note: apptForm.note.trim(),
           });
-          setApptForm({ type: "visit", date: "2026-07-06", time: "10:00", title: "", note: "" });
+          setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
           setApptAdding(false);
           setToast("บันทึกนัดหมายแล้ว");
           } finally { apptSavingRef.current = false; setApptSaving(false); }

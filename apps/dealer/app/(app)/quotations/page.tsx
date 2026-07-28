@@ -16,7 +16,7 @@ import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useHQPolicy, useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
-import { useFilters, FilterProvider } from "@pms/shared/context/FilterContext";
+import { useFilters, FilterProvider, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
@@ -118,7 +118,7 @@ function expiryOf(q:{date:string;expiry?:string}, validityDays:number):string{
 //  ส่วนแผงใบเสนอราคาในหน้าลีดใช้ newQuoteId() = RPC ของ DB → Q-2026-0001
 //  ออกใบจากคนละหน้าจึงได้เลขคนละชุด และชนกันเองได้ · ตอนนี้เหลือทางเดียวคือ newQuoteId())
 // ── Add / Edit Modal ──────────────────────────────────────────
-const TODAY = "2026-06-30";
+const TODAY = APP_NOW_ISO; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง) — วันหมดอายุใบใหม่นับจากวันนี้จริง
 // วันหมดอายุเริ่มต้น = วันนี้ + อายุใบเสนอราคา (จากกฎการขาย settings) → ISO
 function defaultExpiry(validityDays:number): string {
   const d = new Date(TODAY); d.setDate(d.getDate() + validityDays);
@@ -453,9 +453,9 @@ function QuotationsPageInner(){
     setQuotationStatus(id,s);
     setSelected(p=>p?.id===id?{...p,status:s}:p);
   }
-  // ส่งอีกครั้ง — ตั้งสถานะกลับเป็น "ส่งแล้ว" และอัปเดตวันที่เป็น 2026-06-30
+  // ส่งอีกครั้ง — ตั้งสถานะกลับเป็น "ส่งแล้ว" และประทับวันที่ = วันนี้ของระบบ (supabase=จริง)
   function sendAgain(q:QuotationMock){
-    const RESENT_DATE="2026-06-30";
+    const RESENT_DATE=APP_NOW_ISO;
     const updated:QuotationMock={...q,status:"sent_to_client",date:RESENT_DATE};
     updateQuotation(updated);
     setSelected(p=>p?.id===q.id?updated:p);

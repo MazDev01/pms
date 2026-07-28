@@ -6,8 +6,11 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { useDealerOptions, useProductOptions, useProvinceOptions, usePersonOptions } from "@pms/shared/lib/useFilterOptions";
 import {
   useFilters, TIME_PRESETS, type TimePreset, type FilterDim,
-  ALL,
+  ALL, APP_NOW, APP_NOW_ISO,
 } from "@pms/shared/context/FilterContext";
+
+// ค่าเริ่มต้นช่องช่วงวันที่กำหนดเอง = ต้นเดือน..วันนี้ ของระบบ (APP_NOW · supabase=จริง / local=ตรึง)
+const MONTH_START_ISO = `${APP_NOW.getFullYear()}-${String(APP_NOW.getMonth() + 1).padStart(2, "0")}-01`;
 
 type Opt = { value: string; label: string };
 
@@ -191,8 +194,8 @@ const PILL_LABEL: Partial<Record<TimePreset, string>> = { today: "วันน�
 export function TimeRangePills({ style }: { style?: React.CSSProperties }) {
   const { timeRange, setPreset, setCustomRange } = useFilters();
   const [showCustom, setShowCustom] = useState(false);
-  const [cs, setCs] = useState("2026-06-01");
-  const [ce, setCe] = useState("2026-06-30");
+  const [cs, setCs] = useState(MONTH_START_ISO);
+  const [ce, setCe] = useState(APP_NOW_ISO);
   const inp: React.CSSProperties = { border: "1px solid var(--border, #e5e7eb)", borderRadius: 8, padding: "4px 8px", fontSize: "0.72rem", fontFamily: "inherit", color: "#2D2D2D" };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", ...style }}>
