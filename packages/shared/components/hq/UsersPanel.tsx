@@ -14,6 +14,7 @@ import { users as usersRepo } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 import { createHQUser, deleteHQUser } from "@pms/shared/lib/adminApi";
+import { useRole } from "@pms/shared/context/RoleContext";
 import type { UserRole } from "@pms/shared/lib/mock";
 import {
   Users, Shield, Check, X, Plus, Search, KeyRound, Copy, RefreshCw, MoreHorizontal,
@@ -126,7 +127,9 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 // ── Add/Edit Dialog (modal กลาง) ─────────────────────────────────────────────────
 type UserForm = { firstName: string; lastName: string; email: string; phone: string; role: RoleKey; department: string; tempPassword: string; status: UserStatus; avatar?: string };
-function UserDialog({ initial, onSave, onClose }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">) => void; onClose: () => void }) {
+function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">) => void; onClose: () => void; canEditPrivileges?: boolean }) {
+  // ล็อกบทบาท/สถานะตอน "แก้ไข" ถ้าไม่มีสิทธิ์ (HQ_MANAGEMENT) — RLS/trigger จะปฏิเสธการเปลี่ยนอยู่แล้ว
+  const lockPriv = !!initial && !canEditPrivileges;
   const [f, setF] = useState<UserForm>(() => {
     if (initial) { const [fn, ...ln] = initial.name.split(" "); return { firstName: fn, lastName: ln.join(" "), email: initial.email, phone: initial.phone, role: initial.role, department: initial.department, tempPassword: "", status: initial.status, avatar: initial.avatar }; }
     return { firstName: "", lastName: "", email: "", phone: "", role: "HQ_STAFF", department: "ฝ่ายขาย", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
@@ -160,8 +163,8 @@ function UserDialog({ initial, onSave, onClose }: { initial?: AppUser; onSave: (
           <div style={{ gridColumn: "1/-1" }}><label className="form-label">อีเมล (ใช้เข้าระบบ) *</label><input style={inp} value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="name@benjamin.co.th" /></div>
           <div><label className="form-label">เบอร์โทร</label><input style={inp} value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} placeholder="08x-xxx-xxxx" /></div>
           <div><label className="form-label">แผนก</label><select style={inp} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
-          <div><label className="form-label">บทบาท (Role)</label><select style={inp} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}>{ROLES.map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
-          <div><label className="form-label">สถานะ</label><select style={inp} value={f.status} onChange={e => setF({ ...f, status: e.target.value as UserStatus })}><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select></div>
+          <div><label className="form-label">บทบาท (Role){lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}>{ROLES.map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
+          <div><label className="form-label">สถานะ{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} disabled={lockPriv} value={f.status} onChange={e => setF({ ...f, status: e.target.value as UserStatus })}><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select></div>
           {!initial && <div style={{ gridColumn: "1/-1" }}><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ผู้ใช้ต้องเปลี่ยนเองหลังเข้าระบบครั้งแรก</div></div>}
         </div>
         <div style={{ padding: "14px 22px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -195,6 +198,10 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // ผู้ใช้จริงในระบบ (ตาราง profiles) — เฉพาะฝั่งสำนักงานใหญ่ (dealerCode ว่าง)
   const [users, setUsers] = useState<AppUser[]>([]);
   const canCreate = usersRepo.canCreate();
+  // แก้บทบาท/สถานะของผู้ใช้ = เฉพาะ SUPER_ADMIN (RLS/trigger บังคับ · 0026/0064) —
+  // HQ_MANAGEMENT แก้ได้แค่ข้อมูลทั่วไป → ล็อกช่อง role/status ในโหมดแก้ไข กันกดแล้ว error
+  const { role: currentRole } = useRole();
+  const canEditPrivileges = String(currentRole) === "SUPER_ADMIN";
   const reload = useCallback(() => {
     usersRepo.list()
       .then(rows => setUsers(rows.filter(u => !u.dealerCode).map(u => ({
@@ -410,7 +417,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
 
       {detailUser && <UserDetailDrawer user={detailUser} onClose={() => setDetailUser(null)} onEdit={() => { setDialogUser(detailUser); setDetailUser(null); }} />}
       {addOpen && <UserDialog onSave={data => saveUser(null, data)} onClose={() => setAddOpen(false)} />}
-      {dialogUser && <UserDialog initial={dialogUser} onSave={data => saveUser(dialogUser.id, data)} onClose={() => setDialogUser(null)} />}
+      {dialogUser && <UserDialog initial={dialogUser} canEditPrivileges={canEditPrivileges} onSave={data => saveUser(dialogUser.id, data)} onClose={() => setDialogUser(null)} />}
 
       {/* Reset password = ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล (H4) */}
       {resetInfo && (
