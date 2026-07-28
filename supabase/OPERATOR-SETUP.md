@@ -110,3 +110,27 @@ $env:SUPABASE_SERVICE_ROLE_KEY="<key>"; node supabase/seed-catalog.mjs
 > ⚠️ บัญชี bootstrap `admin@benjamin.com` / `benjamin` **ยังใช้รหัสอ่อนอยู่** — เปลี่ยน/ลบหลังตั้ง SUPER_ADMIN ตัวจริง
 
 โค้ดฝั่งแอปพร้อมหมดแล้ว (route/adapter/hook migration/seed script อยู่ครบใน repo)
+
+---
+
+## 9) งาน hardening เพิ่มเติม (หลัง go-live เริ่มต้น · 28 ก.ค. 69)
+**Migrations:**
+- [x] `0058/0059/0060` — apply เข้า prod แล้ว (db push 28 ก.ค.) · dealer_lead_rules write/read gate + persons RPC atomic
+- [ ] **`0061` (index) + `0062` (audit retention)** — ยัง pending · รัน `supabase db push` อีกครั้ง
+  - ⚠️ **`0062` ต้องเปิด `pg_cron` ก่อน**: Dashboard → Database → Extensions → เปิด `pg_cron`
+    (ไม่งั้น `create extension` ในใบจะพลาด) · งานนี้ล้าง audit_log ที่เก่ากว่า 2 ปี ทุกวัน 03:00
+
+**Observability (ไม่บังคับ — B2.3):** เปิด Sentry เมื่อพร้อม
+- `pnpm add @sentry/nextjs` · ตั้ง `NEXT_PUBLIC_SENTRY_DSN` ในแต่ละแอป · register sink (ดู `packages/shared/lib/observability.ts`)
+- ไม่ตั้ง = error ลง console เหมือนเดิม (ไม่พัง)
+
+**Rate limit (B3.1):** ปุ่มสร้างบัญชีจำกัด 10 ครั้ง/นาที/ผู้เรียก — เป็น **in-memory ต่อ instance**
+- บน Vercel serverless หลาย instance → กันได้ระดับหนึ่ง · ถ้าต้องเข้มข้ามทุก instance ใช้ Upstash Redis / ตาราง Supabase
+
+## สรุป checklist ที่เหลือก่อน production
+- [ ] `supabase db push` (0061/0062) — เปิด pg_cron ก่อนสำหรับ 0062
+- [ ] ตั้ง `SUPABASE_SERVICE_ROLE_KEY` บน Vercel (แอป HQ)
+- [ ] ลด JWT expiry → 300s (ขั้น 8)
+- [ ] เปลี่ยน/ลบ bootstrap admin
+- [ ] ยืนยัน buckets `catalog-images`/`avatars` ใน Dashboard
+- [ ] (ถ้าต้องการ) เปิด Sentry
