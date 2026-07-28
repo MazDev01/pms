@@ -14,7 +14,7 @@
 //   4) ลบ = กันลบตัวเอง และกันลบ SUPER_ADMIN คนสุดท้าย (กันล็อกตัวเองออกจากระบบ)
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { rateLimit } from "@pms/shared/lib/rateLimit";
+import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -88,8 +88,8 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.res;
   const { admin, prof } = auth;
 
-  // กันยิงรัว: สร้างผู้ใช้ HQ ได้ไม่เกิน 10 ครั้ง/นาที ต่อผู้เรียก (best-effort · ดู rateLimit.ts)
-  if (!rateLimit(`create-user:${auth.callerId}`, 10, 60_000)) {
+  // กันยิงรัว: สร้างผู้ใช้ HQ ได้ไม่เกิน 10 ครั้ง/นาที ต่อผู้เรียก (distributed ผ่าน DB · ดู rateLimit.ts)
+  if (!(await checkRateLimit(admin, `create-user:${auth.callerId}`, 10, 60))) {
     return bad(429, "สร้างผู้ใช้ถี่เกินไป — รอสักครู่แล้วลองใหม่");
   }
 

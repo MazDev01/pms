@@ -14,7 +14,7 @@
 //   3) ล้มเหลวกลางทาง = ลบ auth user ที่เพิ่งสร้างทิ้ง ไม่ให้เหลือบัญชีกำพร้า
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { rateLimit } from "@pms/shared/lib/rateLimit";
+import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
   const { data: prof } = await admin.from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
   if (!prof || !CAN_MANAGE_DEALERS.has(String(prof.role))) return bad(403, "ไม่มีสิทธิ์จัดการตัวแทน");
 
-  // กันยิงรัว: สร้างตัวแทนได้ไม่เกิน 10 ครั้ง/นาที ต่อผู้เรียก (best-effort · ดู rateLimit.ts)
-  if (!rateLimit(`create-dealer:${caller.user.id}`, 10, 60_000)) {
+  // กันยิงรัว: สร้างตัวแทนได้ไม่เกิน 10 ครั้ง/นาที ต่อผู้เรียก (distributed ผ่าน DB · ดู rateLimit.ts)
+  if (!(await checkRateLimit(admin, `create-dealer:${caller.user.id}`, 10, 60))) {
     return bad(429, "สร้างตัวแทนถี่เกินไป — รอสักครู่แล้วลองใหม่");
   }
 
