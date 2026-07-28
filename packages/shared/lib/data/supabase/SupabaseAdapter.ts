@@ -94,6 +94,23 @@ async function updateRow<T>(table: string, id: string | number, row: T): Promise
   return toCamel<T>(data as Row);
 }
 
+// คอลัมน์ text ของ leads/quotations/appointments ส่วนใหญ่ "nullable" ที่ DB (0001_schema.sql)
+// แต่ type ของแอป (LeadRow/QuotationMock/AppointmentMock) บังคับ string เสมอ (ไม่ optional)
+// แถวเก่า/import ไม่ครบที่มี NULL จริง ๆ จะได้ null ทะลุมาถึงแอป ทั้งที่ TS เชื่อว่าเป็น string
+// → พังเงียบตอนเรียก .trim()/.toUpperCase()/render ที่ไหนก็ได้ (ไม่ error ชัดตรงจุดที่อ่านมา)
+// str() กันไว้ตรงจุดอ่านครั้งเดียว ไม่ต้อง guard ซ้ำทั่วแอป
+const str = (v: unknown): string => v == null ? "" : String(v);
+
+// customers/dealers เช่นกัน — คอลัมน์ text nullable ที่ DB แต่ type บังคับ string (เหตุผลเดียวกับ str() ข้างบน)
+function normalizeCustomer(c: CustomerRow): CustomerRow {
+  return { ...c, name: str(c.name), company: str(c.company), email: str(c.email), phone: str(c.phone),
+    province: str(c.province), category: str(c.category), joinDate: str(c.joinDate),
+    owner: str(c.owner), initials: str(c.initials), color: str(c.color) };
+}
+function normalizeDealer(d: DealerRow): DealerRow {
+  return { ...d, province: str(d.province), region: str(d.region) };
+}
+
 // ── leads: LeadRow ↔ DB (มี field เฉพาะที่ต้องแปลงพิเศษ) ──
 //   • createdAt (สตริงวันที่ไทย) → คอลัมน์ created_label · ห้ามชน created_at (timestamptz เวลาจริงของ DB)
 //   • area: แอปเป็น number · DB เป็น text → แปลงไป-กลับ
@@ -109,6 +126,9 @@ function rowToLead(row: Row): LeadRow {
   delete l.createdLabel;
   if (typeof l.area === "string" && l.area !== "") l.area = Number(l.area);
   else if (l.area === "" || l.area === null) delete l.area;
+  l.name = str(l.name); l.company = str(l.company); l.contact = str(l.contact);
+  l.province = str(l.province); l.product = str(l.product); l.category = str(l.category);
+  l.value = str(l.value); l.assigned = str(l.assigned);
   return l as unknown as LeadRow;
 }
 
@@ -128,6 +148,8 @@ function rowToQuote(row: Row): QuotationMock {
   else if (q.area === "" || q.area === null) q.area = 0;
   // NULL จาก DB → 0 ที่แอปคาดหวัง (ตรรกะฝั่งแอปยังใช้ 0 เหมือนเดิม ไม่ต้องแก้ทั้งแอป)
   if (q.customerId == null) q.customerId = 0;
+  q.customer = str(q.customer); q.project = str(q.project); q.total = str(q.total);
+  q.province = str(q.province); q.buildingType = str(q.buildingType); q.date = str(q.date);
   return q as unknown as QuotationMock;
 }
 
@@ -141,6 +163,9 @@ function rowToAppt(row: Row): AppointmentMock {
   const a = toCamel<Record<string, unknown>>(row);
   if (typeof a.area === "string" && a.area !== "") a.area = Number(a.area);
   else if (a.area === "" || a.area === null) a.area = 0;
+  a.company = str(a.company); a.contact = str(a.contact); a.project = str(a.project);
+  a.buildingType = str(a.buildingType); a.province = str(a.province);
+  a.date = str(a.date); a.time = str(a.time); a.assigned = str(a.assigned); a.note = str(a.note);
   return a as unknown as AppointmentMock;
 }
 
@@ -254,7 +279,7 @@ export const SupabaseAdapter: DataAdapter = {
   dealers: {
     // ตาราง dealers ใช้ code เป็น PK — ไม่มีคอลัมน์ id (แต่ DealerRow ของแอปมี id และ mock ตั้ง id = code เสมอ)
     // ถ้าไม่เติมให้ ทุกแถวจะได้ id = undefined → React key ซ้ำ + หน้าจอที่อ้าง d.id พัง
-    list: async () => (await selectScoped<DealerRow>("dealers", undefined, "dealer_code", "code")).map(d => ({ ...d, id: d.id ?? d.code })),
+    list: async () => (await selectScoped<DealerRow>("dealers", undefined, "dealer_code", "code")).map(d => normalizeDealer({ ...d, id: d.id ?? d.code })),
     // ตัดฟิลด์ที่ไม่มีคอลัมน์ใน DB ออกก่อน upsert:
     //   • id          — ตารางใช้ code เป็น PK
     //   • credentials — รหัสผ่านอยู่ใน Supabase Auth (hash) ห้ามเก็บซ้ำในตารางนี้
@@ -702,7 +727,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
   },
   customers: {
-    list: (scope) => selectScoped<CustomerRow>("customers", scope),
+    list: async (scope) => (await selectScoped<CustomerRow>("customers", scope)).map(normalizeCustomer),
     nextId: (dealerCode) => nextEntityId(dealerCode, "customers"),
     create: (row) => insertRow<CustomerRow>("customers", row),
     update: (row) => updateRow<CustomerRow>("customers", row.id, row),
