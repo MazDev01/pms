@@ -11,7 +11,7 @@ import { DATA_SOURCE } from "./config";
 import { LocalAdapter } from "./local/LocalAdapter";
 import { SupabaseAdapter } from "./supabase/SupabaseAdapter";
 import { dedupeRead } from "./dedupe";
-import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo } from "./ports";
+import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo, ProfileRepo } from "./ports";
 
 const adapter: DataAdapter = DATA_SOURCE === "supabase" ? SupabaseAdapter : LocalAdapter;
 
@@ -50,7 +50,13 @@ export const dealerSettings: DealerSettingsRepo = {
   ..._dealerSettings,
   get: (dealerCode) => dedupeRead(`dealerSettings.get:${dealerCode}`, () => _dealerSettings.get(dealerCode)),
 };
-export const profile = adapter.profile;
+// Sidebar + Topbar เรียก useUserProfile() แยกอิสระคนละอินสแตนซ์ → profile.get() ยิงซ้ำพร้อมกันทุกครั้งที่
+// session เปลี่ยน (ล็อกอิน/รีเฟรชหน้า) — พบจากผลตรวจสอบระบบ 30 ก.ค. 69 (High) · แพตเทิร์นเดียวกับ H7 ข้างบน
+const _profile = adapter.profile;
+export const profile: ProfileRepo = {
+  ..._profile,
+  get: () => dedupeRead("profile.get", () => _profile.get()),
+};
 export const hqCompany = adapter.hqCompany;
 export const notes = adapter.notes;
 export const users = adapter.users;
