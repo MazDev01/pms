@@ -393,6 +393,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     logo: initial?.logo ?? "",
   });
   const logoInputRef = useRef<HTMLInputElement>(null);
+  // เดิมกด "บันทึก" แล้วขาดชื่อบริษัท/ผู้ติดต่อ = ออกเงียบๆ ไม่มีอะไรบอกผู้ใช้เลยว่าทำไมไม่บันทึก (QA เคส 6)
+  const [submitError, setSubmitError] = useState("");
   // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้เป็นลูกค้าอยู่แล้ว — กันเปิดลีดซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
   // แค่บอก ไม่ได้ห้าม (บางทีก็อยากเปิดลีดใหม่จริง ๆ) · ทางที่ถูกคือกด "สร้างดีลใหม่" จากหน้าลูกค้า
   const dupHint = useMemo(() => {
@@ -402,14 +404,18 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     if (similar[0])   return `ชื่อใกล้เคียงกับลูกค้าเดิม "${similar[0].company}" — ถ้าเป็นบริษัทเดียวกัน ควรกด "สร้างดีลใหม่" จากหน้าลูกค้าแทน`;
     return "";
   }, [isEdit, form.company, customers, myDealer.code]);
-  function set(k: keyof typeof form, v: string) { setForm(p=>({...p,[k]:v})); }
+  function set(k: keyof typeof form, v: string) { setForm(p=>({...p,[k]:v})); if (submitError) setSubmitError(""); }
   async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
   }
   function submit() {
-    if (!form.company.trim() || !form.contact.trim()) return;
+    if (!form.company.trim() || !form.contact.trim()) {
+      setSubmitError("กรอกบริษัทและผู้ติดต่อให้ครบก่อนบันทึก");
+      return;
+    }
+    setSubmitError("");
     const base = {
       name: form.company,
       company: form.company, contact: form.contact,
@@ -575,7 +581,10 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
           </div>
 
           {/* Footer */}
-          <div style={{ padding:"16px 24px", borderTop:"1px solid #e5e7eb", display:"flex", gap:8, justifyContent:"flex-end", background:"#fafafa" }}>
+          <div style={{ padding:"16px 24px", borderTop:"1px solid #e5e7eb", display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center", background:"#fafafa" }}>
+            {submitError && (
+              <div style={{ marginRight:"auto", color:"#dc2626", fontSize:"0.75rem", fontWeight:600 }}>{submitError}</div>
+            )}
             <button onClick={onClose}
               style={{ padding:"9px 20px", borderRadius:9, border:"1px solid #e5e7eb",
                 background:"#fff", color:"#374151", fontSize:"0.8rem", fontWeight:600, cursor:"pointer" }}>

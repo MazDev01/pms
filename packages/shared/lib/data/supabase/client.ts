@@ -23,7 +23,16 @@ export function getSupabase(): SupabaseClient {
   }
   if (!_client) {
     _client = createClient(URL, ANON, {
-      auth: { persistSession: true, autoRefreshToken: true },
+      // ⚠️ storage: sessionStorage (ไม่ใช่ default localStorage) — กันบัญชีสลับข้ามแท็บ
+      //   default ของ supabase-js ใช้ localStorage ซึ่งใช้ร่วมกันทุกแท็บของ origin เดียวกัน
+      //   ล็อกอินบัญชีที่สองในแท็บใหม่จะเขียนทับ session เดิม ทำให้แท็บเก่าที่เปิดค้างไว้
+      //   (บัญชีแรก) รีเฟรชแล้วกลายเป็นเห็นข้อมูลของบัญชีที่สองแทนแบบเงียบๆ — พบจริงจากทดสอบ QA
+      //   (เคส 7: เปิด RYG ไว้ ล็อกอิน CNX ในแท็บใหม่ → แท็บ RYG เห็นข้อมูล CNX)
+      //   sessionStorage แยกอิสระต่อแท็บ (ต่างจาก localStorage) จึงตัดปัญหานี้ทั้งหมด
+      //   trade-off: ปิดเบราว์เซอร์ทั้งหมดแล้วเปิดใหม่ต้องล็อกอินใหม่ (ไม่ persist ข้ามการปิดเบราว์เซอร์
+      //   เหมือน localStorage เดิม) — เช็กบ็อกซ์ "จดจำฉันไว้ในระบบ" ในฟอร์ม login ปัจจุบันก็ไม่ได้ผูกกับ
+      //   พฤติกรรมนี้อยู่แล้ว (ไม่เคยถูกส่งเข้า signIn จริง) จึงไม่มีอะไรเสียเพิ่มจากจุดนั้น
+      auth: { persistSession: true, autoRefreshToken: true, storage: typeof window !== "undefined" ? window.sessionStorage : undefined },
     });
   }
   return _client;

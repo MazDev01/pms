@@ -85,7 +85,13 @@ export async function sbSignIn(email: string, password: string): Promise<AuthRes
     email: email.trim().toLowerCase(),
     password,
   });
-  if (error || !data.session) return { ok: false, error: error?.message ?? ERR_GENERIC };
+  // Supabase คืนข้อความอังกฤษดิบ ("Invalid login credentials") — แปลกรณีนี้เป็นไทยให้ตรงกับ UI ที่เหลือ
+  // (เจอจากทดสอบ QA: กรอกรหัสผิดแล้วขึ้นข้อความอังกฤษปนอยู่กลางฟอร์มภาษาไทยทั้งหน้า)
+  if (error || !data.session) {
+    const raw = error?.message ?? "";
+    const msg = /invalid login credentials/i.test(raw) ? ERR_GENERIC : (raw || ERR_GENERIC);
+    return { ok: false, error: msg };
+  }
   // คืน session ทันที ไม่รอ query ชื่อ — ไม่งั้นทุกหน้าหลังล็อกอินช้าขึ้นเพราะรอ 2 คำขอ
   // ชื่อจริงมาทีหลังผ่าน sbOnChange (RoleContext อัปเดต session ให้เอง)
   return { ok: true, session: sessionFromToken(data.session.access_token, data.user?.email ?? email) };
