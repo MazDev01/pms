@@ -44,7 +44,11 @@ test("[ui·hq] KPI หน้าตัวแทนใช้มาตรฐาน 
 // modal ต้องยึด viewport เต็มจอ (กันบั๊ก: แอนิเมชันหน้าเผลอใส่ transform ที่ .erp → fixed ยึด .erp แทนจอ)
 test("[ui·desktop] modal ลูกค้า HQ ครอบเต็มจอ (fixed ยึด viewport)", async ({ page }) => {
   await open(page, "hq", "/hq/customers");
-  await page.locator("table tbody tr").first().click();
+  const row = page.locator("table tbody tr").first();
+  // ตารางแบ่งหน้าที่ DB (RPC async, M9 Phase 6) — แถวแรกตอนโหลดอาจเป็นแถว "กำลังโหลด…" ที่คลิกไม่ได้
+  // รอปุ่ม "ดูรายละเอียด" (มีแค่แถวข้อมูลจริง) ก่อนคลิก ไม่งั้นคลิกแถวชั่วคราวแล้วโมดัลไม่เปิดเลย
+  await expect(row.getByTitle("ดูรายละเอียด")).toBeVisible({ timeout: 15_000 });
+  await row.click();
   // รอโมดัลขึ้นจริงก่อนวัด — ใช้ "รหัสลูกค้า" ในแท็บโปรไฟล์เป็นหมุด (ป้าย "Data Ownership" เหลือแค่คอมเมนต์ในโค้ดแล้ว)
   // (คำเดียวกันเป็นหัวคอลัมน์ในตารางเบื้องหลังด้วย จึงต้อง .first())
   await expect(page.getByText("รหัสลูกค้า").first()).toBeVisible();

@@ -4,9 +4,9 @@
 // HQ ดูอย่างเดียว — มีแต่ปุ่ม "ดู" ไม่มี เพิ่ม/แก้ไข/ลบ
 // ช่องที่ไม่มีข้อมูลจริง (ลูกค้าที่ยังไม่มีใบปิดการขาย) ขึ้น "—" ไม่เดาแทน
 import { Eye } from "lucide-react";
-import { customerCode } from "@pms/shared/lib/mock";
-import { toThaiDate } from "@pms/shared/lib/delivery";
-import { type CustomerDbRow } from "@pms/shared/lib/customerDb";
+import { customerCode, fmtISOToThai } from "@pms/shared/lib/mock";
+import { regionOf } from "@pms/shared/lib/customerDb";
+import type { HQCustomerPageRow } from "@pms/shared/lib/data/ports";
 
 const PRIMARY = "#003366";
 const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
@@ -30,7 +30,14 @@ function MultiCell({ values }: { values: string[] }) {
   );
 }
 
-export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView: (r: CustomerDbRow) => void }) {
+export function CustomerTable({ rows, onView, pagination, loading }: {
+  rows: HQCustomerPageRow[]; onView: (r: HQCustomerPageRow) => void;
+  /** มีเมื่อแบ่งหน้าที่ DB (supabase) — local/ยังไม่กลับ: undefined = โชว์ rows ทั้งชุด ไม่มีแถบเปลี่ยนหน้า */
+  pagination?: { page: number; pageCount: number; total: number; onPage: (p: number) => void };
+  /** true = RPC หน้าแรกยังไม่กลับ (supabase) — ต้องแยกจาก "กรองแล้วไม่เจอจริง ๆ" ไม่งั้นโชว์ "ไม่พบลูกค้า"
+   *  ทั้งที่กำลังโหลดอยู่ (ผู้ใช้เข้าใจผิดว่าไม่มีข้อมูล + คลิกแถวก็ไม่มีอะไรเกิดขึ้นเพราะยังไม่มีแถวจริง) */
+  loading?: boolean;
+}) {
   return (
     <div className="table-wrap" style={{ borderTop: "none" }}>
       <table>
@@ -69,27 +76,27 @@ export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView:
           {rows.length === 0 ? (
             <tr>
               <td colSpan={12} style={{ textAlign: "center", padding: "40px 14px", color: "#6b7280" }}>
-                ไม่พบลูกค้า
+                {loading ? "กำลังโหลด…" : "ไม่พบลูกค้า"}
               </td>
             </tr>
           ) : (
             rows.map(c => (
               <tr key={c.id} onClick={() => onView(c)} style={{ cursor: "pointer" }}>
                 <td style={{ whiteSpace: "nowrap", fontWeight: 700, color: PRIMARY, fontFamily: "monospace" }}>
-                  {customerCode(c.dealerCode, c.localId ?? c.id)}
+                  {customerCode(c.dealerCode, c.id)}
                 </td>
                 <td style={{ fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={c.name}>{c.name}</td>
                 <td style={{ whiteSpace: "nowrap", fontWeight: 700, color: PRIMARY, paddingRight: 0 }}>{c.dealerCode}</td>
                 <td style={{ whiteSpace: "nowrap", paddingLeft: 8, overflow: "hidden", textOverflow: "ellipsis" }} title={c.dealerName}>{c.dealerName}</td>
                 <td style={{ whiteSpace: "nowrap" }}>{c.province || DASH}</td>
-                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.region ?? DASH}</td>
+                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{regionOf(c.province) ?? DASH}</td>
                 <td><MultiCell values={c.buildingTypes} /></td>
                 <td><MultiCell values={c.templates} /></td>
-                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.deliveredAt ? toThaiDate(c.deliveredAt) : DASH}</td>
-                <td className="num" style={{ whiteSpace: "nowrap", fontWeight: c.totalRevenue > 0 ? 700 : 400, color: c.totalRevenue > 0 ? PRIMARY : "#6b7280" }}>
-                  {c.totalRevenue > 0 ? fmtM(c.totalRevenue) : DASH}
+                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.deliveredAt ? fmtISOToThai(c.deliveredAt) : DASH}</td>
+                <td className="num" style={{ whiteSpace: "nowrap", fontWeight: c.totalValue > 0 ? 700 : 400, color: c.totalValue > 0 ? PRIMARY : "#6b7280" }}>
+                  {c.totalValue > 0 ? fmtM(c.totalValue) : DASH}
                 </td>
-                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.lastPurchase ?? DASH}</td>
+                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.lastPurchaseAt ? fmtISOToThai(c.lastPurchaseAt) : DASH}</td>
                 <td onClick={e => e.stopPropagation()}>
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button title="ดูรายละเอียด" onClick={() => onView(c)}
@@ -103,6 +110,15 @@ export function CustomerTable({ rows, onView }: { rows: CustomerDbRow[]; onView:
           )}
         </tbody>
       </table>
+      {pagination && pagination.pageCount > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderTop: "1px solid #f2f4f7", fontSize: "0.72rem", color: "#6b7280" }}>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>ทั้งหมด {pagination.total.toLocaleString()} ราย · หน้า {pagination.page + 1}/{pagination.pageCount}</span>
+          <span style={{ display: "flex", gap: 6 }}>
+            <button className="btn btn-secondary btn-sm" disabled={pagination.page <= 0} onClick={() => pagination.onPage(pagination.page - 1)}>ก่อนหน้า</button>
+            <button className="btn btn-secondary btn-sm" disabled={pagination.page >= pagination.pageCount - 1} onClick={() => pagination.onPage(pagination.page + 1)}>ถัดไป</button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

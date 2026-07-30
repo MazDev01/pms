@@ -224,8 +224,13 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
   await qrow.click();
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
 
-  const cust = await waitRow<{ id: number; total_value: number }>(sb, "customers", { company: COMPANY }, 20_000);
-  expect(cust.total_value, "ยอดลูกค้าต้อง > 0 หลังปิดการขาย").toBeGreaterThan(0);
+  await waitRow<{ id: number }>(sb, "customers", { company: COMPANY }, 20_000);
+  // แถวลูกค้าเกิดก่อน total_value ถึงค่าจริงเสมอ — reconcile ยิง RPC แยกหลัง setStatus commit (0078, กัน race
+  // ข้าม session) ต้อง poll รอค่าตกที่ DB จริง ไม่ใช่เช็กทันทีที่แถวโผล่
+  await expect.poll(async () =>
+    (await sb.from("customers").select("total_value").eq("company", COMPANY).single()).data?.total_value,
+    { timeout: 20_000 }).toBeGreaterThan(0);
+  const cust = (await sb.from("customers").select("id,total_value").eq("company", COMPANY).single()).data as { id: number; total_value: number };
   console.log(`[audit] ก่อนลบใบ: ยอดลูกค้า=${cust.total_value}`);
 
   // เปิดใบที่ won แล้ว → ลบ (ปุ่มลบไม่มี guard สถานะในโค้ด — ทดสอบว่าอนุญาตจริงไหม + ผลลัพธ์)

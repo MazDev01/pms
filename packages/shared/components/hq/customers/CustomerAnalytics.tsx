@@ -12,7 +12,7 @@
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { Donut, GroupedBarChart } from "@pms/shared/components/ui/Charts";
 import { fmtBaht } from "@pms/shared/lib/format";
-import { type CustomerDbRow } from "@pms/shared/lib/customerDb";
+import type { HQCustomersCharts } from "@pms/shared/lib/data/ports";
 
 const PRIMARY = "#003366";
 // ชุดสีโดนัท — ไล่จากกรมท่าเข้ม (ตัวแทนรายใหญ่) ไปอ่อน · ก้อน "ตัวแทนอื่น" ใช้เทาเสมอ
@@ -71,19 +71,13 @@ function Card({ title, hint, children }: { title: string; hint: string; children
   );
 }
 
-/** นับจำนวนลูกค้าแยกตามคีย์ (ลูกค้า 1 รายที่ซื้อหลายแบบ นับในทุกแบบที่ซื้อ) */
-function countCustomers(rows: CustomerDbRow[], keysOf: (r: CustomerDbRow) => string[]): HRow[] {
-  const m = new Map<string, number>();
-  rows.forEach(r => keysOf(r).forEach(k => m.set(k, (m.get(k) ?? 0) + 1)));
-  return [...m.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
-}
-
-export function CustomerAnalytics({ rows }: { rows: CustomerDbRow[] }) {
+// charts คำนวณที่ DB จากทั้งชุดที่กรองแล้วแล้ว (byProvince ตัด 10 อันดับแรกมาจาก DB) — M9 Phase 6, migration 0080
+export function CustomerAnalytics({ charts }: { charts: HQCustomersCharts }) {
   // 1 · ลูกค้าตามประเภทอาคาร (แม่แบบหลัก)
-  const byType = countCustomers(rows, r => r.buildingTypes);
+  const byType: HRow[] = charts.byType;
 
   // 2 · ลูกค้าตามตัวแทน
-  const byDealer = countCustomers(rows, r => [`${r.dealerCode} · ${r.dealerName}`]);
+  const byDealer: HRow[] = charts.byDealer.map(d => ({ label: `${d.code} · ${d.name}`, value: d.value }));
 
   // 2b · โดนัท "ลูกค้า ตามตัวแทน" — ลูกค้า 1 ราย = ตัวแทน 1 เจ้า → กลุ่มไม่ทับกัน รวมกันได้จำนวนลูกค้าจริง
   // ตัวแทนเกิน 6 เจ้ายุบเป็นก้อน "ตัวแทนอื่น" (ยังรวมได้ยอดเดิมเป๊ะ ไม่ตัดใครทิ้ง) — 10 ก้อนอ่านไม่ออก
@@ -100,24 +94,14 @@ export function CustomerAnalytics({ rows }: { rows: CustomerDbRow[] }) {
   // 3 · ยอดซื้อตามตัวแทน — แท่งตั้ง ชุดเดียว (ยอดซื้อสะสม)
   // ⚠️ อย่าเอา "เฉลี่ยต่อลูกค้า" มาวางเป็นแท่งคู่บนแกนเดียวกัน: ยอดสะสมสูงสุด ฿47M แต่ค่าเฉลี่ยแค่ ฿1.4–4.2M
   //    ต่างกัน ~30 เท่า → แท่งเฉลี่ยเตี้ยติดพื้นจนอ่านไม่ออก (ลองแล้ว) · ตัวเลขเฉลี่ยดูได้ที่ตารางด้านล่าง
-  const revenueByDealer = (() => {
-    const m = new Map<string, { revenue: number; count: number }>();
-    rows.forEach(r => {
-      const v = m.get(r.dealerCode) ?? { revenue: 0, count: 0 };
-      v.revenue += r.totalRevenue; v.count += 1;
-      m.set(r.dealerCode, v);
-    });
-    return [...m.entries()]
-      .map(([code, v]) => ({ code, revenue: v.revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
-  })();
+  const revenueByDealer = charts.revenueByDealer;
   const toM = (v: number) => Math.round(v / 1e5) / 10; // บาท → ล้านบาท (ทศนิยม 1 ตำแหน่ง)
 
-  // 4 · จังหวัด (10 อันดับแรก)
-  const byProvince = countCustomers(rows, r => (r.province ? [r.province] : [])).slice(0, 10);
+  // 4 · จังหวัด (10 อันดับแรก — ตัดมาจาก DB แล้ว)
+  const byProvince: HRow[] = charts.byProvince;
 
   // 5 · แม่แบบย่อย — ใบที่ระบุแค่แม่แบบหลักจะไม่นับ (ไม่มีแม่แบบย่อยจริง)
-  const bySubtype = countCustomers(rows, r => r.templates);
+  const bySubtype: HRow[] = charts.bySubtype;
 
   const cnt = (v: number) => `${v} ราย`;
 

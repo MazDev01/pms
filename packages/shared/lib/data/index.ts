@@ -79,6 +79,8 @@ export const metrics: MetricsRepo = {
   networkCustomerSummary: () => dedupeRead("metrics.networkCustomerSummary", () => _metrics.networkCustomerSummary()),
   unassignedLeads: (f) => dedupeRead(`metrics.unassignedLeads:${JSON.stringify(f)}`, () => _metrics.unassignedLeads(f)),
   hqAlerts: (f) => dedupeRead(`metrics.hqAlerts:${JSON.stringify(f)}`, () => _metrics.hqAlerts(f)),
+  hqCustomersPage: (opts) => dedupeRead(`metrics.hqCustomersPage:${JSON.stringify(opts)}`, () => _metrics.hqCustomersPage(opts)),
+  hqCustomersFilterOptions: () => dedupeRead("metrics.hqCustomersFilterOptions", () => _metrics.hqCustomersFilterOptions()),
 };
 export const leads = adapter.leads;
 export const quotations = adapter.quotations;

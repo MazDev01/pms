@@ -6,15 +6,13 @@
 // ตัดออกตอนเหลือ 4 ใบ: ยอดซื้อเฉลี่ย · ประเภทอาคาร · ส่งมอบเดือนนี้ · อยู่ในประกัน
 import { Users, UserCheck, Coins, Repeat } from "lucide-react";
 import { fmtBaht } from "@pms/shared/lib/format";
-import type { CustomerDbRow } from "@pms/shared/lib/customerDb";
+import type { HQCustomersKPI } from "@pms/shared/lib/data/ports";
 
 type Tile = { label: string; value: string; sub: string; Icon: typeof Users; color: string; bg: string };
 
-export function CustomerKPICards({ rows }: { rows: CustomerDbRow[] }) {
-  const total = rows.length;
-  const active = rows.filter(r => r.buildings.length > 0).length;
-  const revenue = rows.reduce((s, r) => s + r.totalRevenue, 0);
-  const repeat = rows.filter(r => r.isRepeat).length;
+// kpi คำนวณที่ DB จากทั้งชุดที่กรองแล้ว (ไม่ใช่แค่หน้าตารางที่กำลังโชว์) — M9 Phase 6, migration 0080
+export function CustomerKPICards({ kpi }: { kpi: HQCustomersKPI }) {
+  const { total, active, revenue, repeat } = kpi;
 
   const tiles: Tile[] = [
     { label: "ลูกค้าทั้งหมด",   value: `${total}`,       sub: "ราย",        Icon: Users,     color: "#003366", bg: "#E8F0FE" },

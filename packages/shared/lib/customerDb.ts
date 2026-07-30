@@ -14,7 +14,7 @@
 // (ห้ามเดาแทน — ลูกค้า seed หลายรายมี dealsWon แต่ไม่มีใบในระบบ ถือว่าไม่มีข้อมูล)
 import { useMemo, useState, useEffect } from "react";
 import { mainTemplateOf, fmtISOToThai, type HQCustomer } from "@pms/shared/lib/mock";
-import { useNetworkCustomersDb, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
+import { useNetworkCustomersDb, useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { deliveryDateOf, parseThaiDate } from "@pms/shared/lib/delivery";
 import { metrics as metricsRepo } from "@pms/shared/lib/data";
@@ -66,8 +66,8 @@ export type CustomerDbRow = HQCustomer & {
 };
 
 // ข้อมูลขั้นต่ำที่ใช้สร้าง 1 อาคาร — HQQuotation ก็เข้าได้ (fallback) · rollup จาก DB map มาให้ (M9 Phase 2)
-type BuildingSrc = { quoteNo: string; productLine: string; valueNum: number; createdAt: string; deliveryTime?: string };
-const buildingOf = (q: BuildingSrc): PurchasedBuilding => {
+export type BuildingSrc = { quoteNo: string; productLine: string; valueNum: number; createdAt: string; deliveryTime?: string };
+export const buildingOf = (q: BuildingSrc): PurchasedBuilding => {
   const product = q.productLine ?? "";
   const main = mainTemplateOf(product) || product;
   return {
@@ -155,4 +155,57 @@ export function useCustomerDb(): CustomerDbRow[] {
     // rollup โหลด async (supabase) — ต้องอยู่ใน deps ไม่งั้น memo คืนผลตอน rollup ยังเป็น null
     // → /hq/customers โชว์อาคาร/ประวัติซื้อว่างทั้งที่มีดีลปิดแล้ว (race กับ salesVersion) · M2
   }, [customers, quotations, rollup]);
+}
+
+/**
+ * เวอร์ชัน "ไม่ยิง fetch เลย" ของ useCustomerDb() — ใช้ useNetworkCustomers() (ไม่ใช่ useNetworkCustomersDb)
+ * และไม่เรียก customerRollup RPC เลย (คำนวณจาก quotations ในเครื่องตรง ๆ เสมอ)
+ *
+ * เหตุผลที่ต้องมีคู่กัน: หน้าที่มี RPC เฉพาะทางของตัวเองแล้ว (เช่น /hq/customers → hq_customers_page,
+ * M9 Phase 6) ไม่ควรมีทางดึงข้อมูลทั้งเครือซ้ำสองทางพร้อมกัน — useCustomerDb() เดิมยิง fetch เองไม่ว่าใครเรียก
+ * (useNetworkCustomersDb + customerRollup ยิง RPC ทั้งคู่ทันทีที่ DATA_SOURCE=supabase ไม่สนใจว่าหน้าเรียกจะ
+ * ใช้ผลจริงหรือไม่) ถ้าเอามาใช้เป็น fallback เฉย ๆ จะได้ full-network fetch ซ้ำอีกชุดโดยไม่จำเป็น
+ *
+ * local/demo mode: ได้ค่าจริงปกติ (SalesContext โหลดไว้ในเครื่องอยู่แล้ว ไม่ต้องดึงเพิ่ม)
+ * HQ+supabase mode: ว่างเปล่าเสมอ (SalesContext gate ไม่โหลด array ทั้งเครือให้ฝั่ง HQ — ตั้งใจ) — ใช้เป็น
+ *   fallback ที่ "ไม่ทำอะไรเลย" ตอนหน้ามี RPC ของตัวเองอยู่แล้ว (pageResult ไม่ null) เหมือน useNetworkQuotations()
+ *   ที่ /hq/quotations ใช้เป็น fallback ของ useHQQuotationsSummary/useQuotationsPage
+ */
+export function useCustomerDbLocal(): CustomerDbRow[] {
+  const customers = useNetworkCustomers();
+  const quotations = useNetworkQuotations();
+  return useMemo(() => {
+    const srcByCustomer = new Map<string, BuildingSrc[]>();
+    quotations.forEach(q => {
+      if (q.status !== "won") return;
+      const key = `${q.dealerCode}|${q.customer}`;
+      const b: BuildingSrc = { quoteNo: q.quoteNo, productLine: q.productLine ?? "", valueNum: q.valueNum, createdAt: q.createdAt, deliveryTime: q.deliveryTime };
+      const list = srcByCustomer.get(key);
+      if (list) list.push(b); else srcByCustomer.set(key, [b]);
+    });
+
+    return customers.map((c): CustomerDbRow => {
+      const won = srcByCustomer.get(`${c.dealerCode}|${c.name}`) ?? [];
+      const buildings = won
+        .map(buildingOf)
+        .sort((a, b) => (a.wonAt?.getTime() ?? 0) - (b.wonAt?.getTime() ?? 0));
+      const latest = [...buildings]
+        .filter((b): b is PurchasedBuilding & { deliveredAt: Date } => !!b.deliveredAt)
+        .sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime())
+        .pop() ?? null;
+      const lastBuy = [...buildings].filter(b => b.wonAt).pop() ?? null;
+
+      return {
+        ...c,
+        region: regionOf(c.province),
+        buildings,
+        buildingTypes: [...new Set(buildings.map(b => b.buildingType).filter(Boolean))],
+        templates: [...new Set(buildings.map(b => b.template).filter((t): t is string => !!t))],
+        deliveredAt: latest?.deliveredAt ?? null,
+        lastPurchase: lastBuy?.wonDate ?? null,
+        lastPurchaseAt: lastBuy?.wonAt ?? null,
+        isRepeat: buildings.length > 1,
+      };
+    });
+  }, [customers, quotations]);
 }

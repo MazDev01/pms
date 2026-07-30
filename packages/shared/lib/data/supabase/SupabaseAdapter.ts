@@ -61,6 +61,49 @@ async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult
   return out;
 }
 
+// ── listPage ที่ผู้เรียกขอ limit ก้อนใหญ่ (เช่น drawer/dealer-detail ขอ "เกือบทั้งหมดของสาขา" limit=5000) ──
+// เจอบั๊กเดียวกับที่ pageAll กันไว้ (C2, คอมเมนต์ข้างบน) แต่ listPage ที่เพิ่มทีหลัง (M9 Phase 2/4/5)
+// ยิง .range() ครั้งเดียวตรง ๆ ไม่ได้ไล่ทีละหน้า — ถ้า limit เกิน PAGE_ROWS (1000) จะได้กลับมาแค่ 1000
+// แถวแรกเงียบ ๆ โดยไม่มี error ให้รู้เลย (ยืนยันจริงจากทดสอบข้อมูลปริมาณ 5,500 แถว 30 ก.ค. 69)
+// ไม่กระทบ listPage ที่ใช้ทำ UI-pagination จริง (limit เล็ก เช่น 6/24/50) — เข้าเงื่อนไข loop แค่รอบเดียวเหมือนเดิม
+// buildQuery ต้องคืน query "ใหม่" ทุกครั้งที่เรียก (มี .range ของหน้านั้นในตัว) — ใช้ query เดิมซ้ำหลัง await ไม่ได้
+async function rangedFetch<T extends Row>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null; count?: number | null }>,
+  limit: number, offset: number,
+): Promise<{ rows: T[]; total: number }> {
+  const out: T[] = [];
+  let total = 0;
+  for (let from = offset; out.length < limit; from += PAGE_ROWS) {
+    const to = Math.min(from + PAGE_ROWS, offset + limit) - 1;
+    const { data, error, count } = await buildQuery(from, to);
+    if (error) throw new Error(error.message);
+    if (count != null) total = count;
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < to - from + 1) break; // ข้อมูลจริงหมดก่อนถึง limit ที่ขอ
+  }
+  return { rows: out, total };
+}
+
+// เน็ตหลุดชั่วคราวระหว่างยิงคำขอ (TypeError: Failed to fetch) — พบเป็นระยะตอนโหลดสูง/รันขนาน
+//   ไม่ใช่ error จาก DB (ไม่ผ่าน constraint/RLS/business logic ใด ๆ) แค่คำขอไปไม่ถึงปลายทางเฉย ๆ
+//   ลองใหม่ 1 ครั้งก่อนค่อยให้ผู้ใช้เห็น error จริง — ยืนยันจากผลตรวจสอบระบบ 30 ก.ค. 69 (สร้างลีดพลาดเป็นระยะ)
+function isTransientNetworkError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /Failed to fetch|NetworkError when attempting|Load failed/i.test(msg);
+}
+async function withNetworkRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (retries > 0 && isTransientNetworkError(e)) {
+      await new Promise(r => setTimeout(r, 400));
+      return withNetworkRetry(fn, retries - 1);
+    }
+    throw e;
+  }
+}
+
 // select ทั้งตาราง + กรองตาม scope (ตัวแทน = เฉพาะสาขาตัวเอง · HQ = ทั้งหมด) → แปลงเป็น camelCase
 async function selectScoped<T>(table: string, scope?: Scope, col = "dealer_code", orderCol = "id"): Promise<T[]> {
   const rows = await pageAll((from, to) => {
@@ -592,6 +635,44 @@ export const SupabaseAdapter: DataAdapter = {
         lostRate: (d.lost_rate ?? []).map(r => ({ dealerCode: String(r.dealer_code), lost: Number(r.lost), closed: Number(r.closed) })),
       };
     },
+    // หน้าเดียวของฐานข้อมูลลูกค้า HQ + KPI/กราฟ จากทั้งชุดที่กรองแล้ว (M9 Phase 6, migration 0080) —
+    // ปลด /hq/customers จากการดึงทั้งตาราง (ดูรายละเอียด root cause ในคอมเมนต์ migration 0080)
+    hqCustomersPage: async (opts) => {
+      const { data, error } = await sb().rpc("hq_customers_page", {
+        p_search: (opts.search ?? "").trim() || null,
+        p_dealer_code: opts.dealerCode ?? null,
+        p_provinces: opts.provinces?.length ? opts.provinces : null,
+        p_building_type: opts.buildingType ?? null,
+        p_delivery_year: opts.deliveryYear ?? null,
+        p_limit: opts.limit, p_offset: opts.offset,
+      });
+      if (error) throw new Error(error.message);
+      const d = data as {
+        total: number;
+        kpi: { total: number; active: number; revenue: number; repeat: number };
+        charts: {
+          byType: { label: string; value: number }[]; bySubtype: { label: string; value: number }[];
+          byProvince: { label: string; value: number }[]; byDealer: { code: string; name: string; value: number }[];
+          revenueByDealer: { code: string; revenue: number }[];
+        };
+        rows: Row[];
+      };
+      return {
+        total: d.total, kpi: d.kpi, charts: d.charts,
+        rows: d.rows.map(r => ({
+          id: Number(r.id), name: String(r.name ?? ""), dealerCode: String(r.dealer_code), dealerName: String(r.dealer_name ?? r.dealer_code),
+          province: String(r.province ?? ""), totalValue: Number(r.total_value ?? 0),
+          buildingTypes: (r.building_types as string[] | null) ?? [], templates: (r.templates as string[] | null) ?? [],
+          deliveredAt: (r.delivered_at as string | null) ?? null, lastPurchaseAt: (r.last_purchase_at as string | null) ?? null,
+        })),
+      };
+    },
+    hqCustomersFilterOptions: async () => {
+      const { data, error } = await sb().rpc("hq_customers_filter_options");
+      if (error) throw new Error(error.message);
+      const d = data as { dealers: { code: string; name: string }[]; provinces: string[]; types: string[]; years: number[] };
+      return d;
+    },
     hqQuotationsSummary: async (f) => {
       const { data, error } = await sb().rpc("hq_quotations_summary", {
         p_status: f.status ?? null, p_dealer_codes: f.dealerCodes ?? null, p_product_lines: f.productLines ?? null,
@@ -641,11 +722,11 @@ export const SupabaseAdapter: DataAdapter = {
       return { rows: (d.rows ?? []).map(rowToLead), total: Number(d.total ?? 0) };
     },
     nextNumId: (dealerCode) => nextEntityId(dealerCode, "leads"),
-    create: async (row) => {
+    create: (row) => withNetworkRetry(async () => {
       const { data, error } = await sb().from("leads").insert(leadToRow(row)).select().single();
       if (error) throw new Error(error.message);
       return rowToLead(data as Row);
-    },
+    }),
     update: async (row) => {
       const { data, error } = await sb().from("leads").update(leadToRow(row)).eq("id", row.id).select().single();
       if (error) throw new Error(error.message);
@@ -665,23 +746,24 @@ export const SupabaseAdapter: DataAdapter = {
     // หน้าเดียว + กรอง/เรียง ที่ DB (M9 Phase 2) — RLS คุม scope · derived filter ถูก resolve เป็นคอลัมน์จริงมาแล้ว
     listPage: async (scope, opts) => {
       const s = (opts.search ?? "").trim().replace(/[,()%*\\]/g, " ").trim(); // กันตัวอักษรที่ทำ or() พัง
-      let q = sb().from("quotations").select("*", { count: "exact" });
-      if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
-      if (opts.status) q = q.eq("status", opts.status);
-      if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
-      if (opts.productLines?.length) q = q.in("product_line", opts.productLines);
-      if (opts.dateStart) q = q.gte("date", opts.dateStart);
-      if (opts.dateEnd) q = q.lte("date", opts.dateEnd);
-      if (s) {
-        const parts = [`id.ilike.%${s}%`, `customer.ilike.%${s}%`];
-        if (opts.searchDealers?.length) parts.push(`dealer_code.in.(${opts.searchDealers.join(",")})`);
-        q = q.or(parts.join(","));
-      }
-      const col = opts.sort?.col ?? "date", asc = (opts.sort?.dir ?? "desc") === "asc";
-      q = q.order(col, { ascending: asc }).order("id", { ascending: true }).range(opts.offset, opts.offset + opts.limit - 1);
-      const { data, error, count } = await q;
-      if (error) throw new Error(error.message);
-      return { rows: (data as Row[]).map(rowToQuote), total: count ?? 0 };
+      const buildQuery = (from: number, to: number) => {
+        let q = sb().from("quotations").select("*", { count: "exact" });
+        if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
+        if (opts.status) q = q.eq("status", opts.status);
+        if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
+        if (opts.productLines?.length) q = q.in("product_line", opts.productLines);
+        if (opts.dateStart) q = q.gte("date", opts.dateStart);
+        if (opts.dateEnd) q = q.lte("date", opts.dateEnd);
+        if (s) {
+          const parts = [`id.ilike.%${s}%`, `customer.ilike.%${s}%`];
+          if (opts.searchDealers?.length) parts.push(`dealer_code.in.(${opts.searchDealers.join(",")})`);
+          q = q.or(parts.join(","));
+        }
+        const col = opts.sort?.col ?? "date", asc = (opts.sort?.dir ?? "desc") === "asc";
+        return q.order(col, { ascending: asc }).order("id", { ascending: true }).range(from, to);
+      };
+      const { rows, total } = await rangedFetch(buildQuery, opts.limit, opts.offset);
+      return { rows: rows.map(rowToQuote), total };
     },
     create: async (row) => {
       const { data, error } = await sb().from("quotations").insert(quoteToRow(row)).select().single();
@@ -707,6 +789,12 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new Error(error.message);
       return (data as string | null) ?? null;
     },
+    // ใบ won ของลูกค้ารายเดียว — bounded read ตรง ๆ (RLS คุม scope อยู่แล้ว) ไม่ต้อง RPC (M9 Phase 6)
+    listForCustomer: async (customerId) => {
+      const { data, error } = await sb().from("quotations").select("*").eq("customer_id", customerId).eq("status", "won").order("date", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as Row[]).map(rowToQuote);
+    },
     // ออกเลข + insert รวด (atomic) — RPC ที่ DB (0034) · insert ล้ม = ตัวนับ rollback ไม่เดิน (H8)
     createNumbered: async (dealer, prefix, row) => {
       const payload = quoteToRow(row as unknown as QuotationMock);
@@ -723,14 +811,15 @@ export const SupabaseAdapter: DataAdapter = {
     // หน้าเดียว + ค้นหา ที่ DB (M9 Phase 5) — เจาะจุดที่เคยดึงทั้งตารางแล้วกรองฝั่ง client (drawer/search)
     listPage: async (scope, opts) => {
       const s = (opts.search ?? "").trim().replace(/[,()%*\\]/g, " ").trim();
-      let q = sb().from("customers").select("*", { count: "exact" });
-      if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
-      if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
-      if (s) q = q.or(`name.ilike.%${s}%,company.ilike.%${s}%,province.ilike.%${s}%,phone.ilike.%${s}%`);
-      q = q.order("id", { ascending: true }).range(opts.offset, opts.offset + opts.limit - 1);
-      const { data, error, count } = await q;
-      if (error) throw new Error(error.message);
-      return { rows: (data as Row[]).map(r => normalizeCustomer(toCamel<CustomerRow>(r))), total: count ?? 0 };
+      const buildQuery = (from: number, to: number) => {
+        let q = sb().from("customers").select("*", { count: "exact" });
+        if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
+        if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
+        if (s) q = q.or(`name.ilike.%${s}%,company.ilike.%${s}%,province.ilike.%${s}%,phone.ilike.%${s}%`);
+        return q.order("id", { ascending: true }).range(from, to);
+      };
+      const { rows, total } = await rangedFetch(buildQuery, opts.limit, opts.offset);
+      return { rows: rows.map(r => normalizeCustomer(toCamel<CustomerRow>(r))), total };
     },
     nextId: (dealerCode) => nextEntityId(dealerCode, "customers"),
     create: (row) => insertRow<CustomerRow>("customers", row),

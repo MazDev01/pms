@@ -16,7 +16,7 @@ import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { DealerRow } from "@pms/shared/lib/data/types";
-import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult, NetworkCustomerSummary, UnassignedSummary, UnassignedFilters } from "@pms/shared/lib/data/ports";
+import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult, NetworkCustomerSummary, UnassignedSummary, UnassignedFilters, HQCustomersPageOpts, HQCustomersPageResult, HQCustomersFilterOptions } from "@pms/shared/lib/data/ports";
 import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo, customers as customersRepo, appointments as appointmentsRepo } from "@pms/shared/lib/data";
 import type { CustomerRow, AppointmentMock, QuotationMock } from "@pms/shared/lib/data/types";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
@@ -134,6 +134,57 @@ export function useQuotationSalesperson(quoteId: string | null): string | null {
     return () => { alive = false; };
   }, [quoteId]);
   return name;
+}
+
+// หน้าเดียวของฐานข้อมูลลูกค้า HQ + KPI/กราฟ จากทั้งชุดที่กรองแล้ว — M9 Phase 6 (migration 0080)
+// supabase เท่านั้น · local คืน null → หน้าใช้ client fallback (useCustomerDb เดิม)
+export function useHQCustomersPage(opts: HQCustomersPageOpts): HQCustomersPageResult | null {
+  const { salesVersion } = useSales();
+  const key = JSON.stringify(opts);
+  const [page, setPage] = useState<HQCustomersPageResult | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setPage(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      metricsRepo2.hqCustomersPage(opts)
+        .then(r => { if (alive) setPage(r); })
+        .catch(err => logRepoRead("metrics.hqCustomersPage", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, salesVersion]);
+  return page;
+}
+
+// ตัวเลือกตัวกรอง (ตัวแทน/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ) ของหน้าฐานข้อมูลลูกค้า — ไม่อิงตัวกรองปัจจุบัน
+// supabase เท่านั้น · local คืน null → หน้าคำนวณตัวเลือกจาก useCustomerDb() เดิมเอง
+export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
+  const { salesVersion } = useSales();
+  const [opts, setOpts] = useState<HQCustomersFilterOptions | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setOpts(null); return; }
+    let alive = true;
+    metricsRepo2.hqCustomersFilterOptions()
+      .then(r => { if (alive) setOpts(r); })
+      .catch(err => logRepoRead("metrics.hqCustomersFilterOptions", err));
+    return () => { alive = false; };
+  }, [salesVersion]);
+  return opts;
+}
+
+// ใบ won ของลูกค้ารายเดียว — ป้อน CustomerDrawer (แท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์) โดยไม่โหลดใบทั้งเครือ
+// supabase เท่านั้น · local คืน null → หน้าใช้ buildings ที่มากับ CustomerDbRow จาก useCustomerDb() เดิมอยู่แล้ว
+export function useCustomerBuildings(customerId: number | null): QuotationMock[] | null {
+  const [rows, setRows] = useState<QuotationMock[] | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase" || customerId == null) { setRows(null); return; }
+    let alive = true;
+    quotationsRepo.listForCustomer(customerId)
+      .then(r => { if (alive) setRows(r); })
+      .catch(err => logRepoRead("quotations.listForCustomer", err));
+    return () => { alive = false; };
+  }, [customerId]);
+  return rows;
 }
 
 // สรุปใบในช่วง (byMonth/byStatus/byProduct) ที่ DB รอบเดียว — ป้อนหลายการ์ด (M9)

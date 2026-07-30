@@ -201,6 +201,35 @@ export interface HQAlertsFilters {
   asOf?: string; unassignedDefaultHours?: number; unassignedPerDealer?: Record<string, number>;
   leadIdleDays?: number; quoteValidityDays?: number; quoteExpiringDays?: number; dealerIdleDays?: number;
 }
+// ── หน้าฐานข้อมูลลูกค้า HQ (M9 Phase 6) — filter+pagination+KPI/กราฟ ที่ DB (ดู migration 0080) ──
+export interface HQCustomerPageRow {
+  id: number; name: string; dealerCode: string; dealerName: string; province: string;
+  totalValue: number; buildingTypes: string[]; templates: string[];
+  /** ISO date (ไม่ใช่ Thai string) — client format เองด้วย toThaiDate/fmtISOToThai ตอนแสดงผล */
+  deliveredAt: string | null; lastPurchaseAt: string | null;
+}
+export interface HQCustomersPageOpts {
+  search?: string; dealerCode?: string; provinces?: string[]; buildingType?: string; deliveryYear?: number;
+  limit: number; offset: number;
+}
+export interface HQCustomersKPI { total: number; active: number; revenue: number; repeat: number; }
+export interface HQCustomersCharts {
+  byType: { label: string; value: number }[];
+  bySubtype: { label: string; value: number }[];
+  byProvince: { label: string; value: number }[];
+  byDealer: { code: string; name: string; value: number }[];
+  revenueByDealer: { code: string; revenue: number }[];
+}
+/** kpi/charts คำนวณจาก "ทั้งชุดที่กรองแล้ว" เสมอ (ไม่ใช่แค่ rows ของหน้าปัจจุบัน) — ตรงกับพฤติกรรมเดิมของหน้า */
+export interface HQCustomersPageResult {
+  total: number; kpi: HQCustomersKPI; charts: HQCustomersCharts; rows: HQCustomerPageRow[];
+}
+export interface HQCustomersFilterOptions {
+  dealers: { code: string; name: string }[];
+  provinces: string[];
+  types: string[];
+  years: number[];
+}
 export interface MetricsRepo {
   /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง
    *  scope คุมด้วย RLS ฝั่ง supabase (ตัวแทน=สาขาตน · HQ=ทั้งเครือ) เหมือนที่ client เคยเห็น */
@@ -222,6 +251,10 @@ export interface MetricsRepo {
   unassignedLeads(filters: UnassignedFilters): Promise<UnassignedSummary>;
   /** ผู้สมัครกฎแจ้งเตือน HQ (unassigned/idle/expiring/dealerLatest/lostRate) — ปลดกระดิ่ง HQ ออกจาก array (M9 Phase 4) */
   hqAlerts(filters: HQAlertsFilters): Promise<HQAlertsData>;
+  /** หน้าเดียวของฐานข้อมูลลูกค้า HQ + KPI/กราฟ 5 ตัวจากทั้งชุดที่กรองแล้ว — ปลด /hq/customers จากการดึงทั้งตาราง (M9 Phase 6) */
+  hqCustomersPage(opts: HQCustomersPageOpts): Promise<HQCustomersPageResult>;
+  /** ตัวเลือกตัวกรอง (ตัวแทน/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ) ของหน้าฐานข้อมูลลูกค้า — ไม่อิงตัวกรองปัจจุบัน */
+  hqCustomersFilterOptions(): Promise<HQCustomersFilterOptions>;
 }
 
 // ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
@@ -289,6 +322,9 @@ export interface QuotationsRepo {
   expireOverdue(asOf: string, scope?: Scope, validityDays?: number): Promise<number>;
   /** ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
   salesperson(quoteId: string): Promise<string | null>;
+  /** ใบที่ won ของลูกค้ารายเดียว (ผูกด้วย customer_id) — ป้อนแท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์ของ
+   *  CustomerDrawer โดยไม่ต้องโหลดใบทั้งเครือ (M9 Phase 6) — เหมือน appointments.listForLead */
+  listForCustomer(customerId: number): Promise<QuotationMock[]>;
 }
 // ตัวเลือกดึงลูกค้าแบบ "แบ่งหน้า + กรอง ที่ DB" (M9 Phase 5) — เจาะจุดที่ดึงทั้งตารางแล้ว filter ฝั่ง client
 // (dealer-detail drawer, useHQSearch) ยังไม่ครอบคลุมหน้า /hq/customers หลัก ซึ่งต้องใช้ทั้งชุดเพื่อทำ KPI/analytics/filter
