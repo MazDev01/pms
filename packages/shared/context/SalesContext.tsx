@@ -203,7 +203,7 @@ export function SalesProvider({
   }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays]);
   const persistQuote = useRef({
     create: (q: QuotationMock) => { void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
-    update: (q: QuotationMock) => { void quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
+    update: (q: QuotationMock) => quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")),
     remove: (id: string) => { void quotationsRepo.remove(id).catch(onFail("quotations", "ลบใบเสนอราคา")); },
     setStatus: (id: string, status: QuotationStatus) => { void quotationsRepo.setStatus(id, status).catch(onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")); },
   }).current;
@@ -303,7 +303,16 @@ export function SalesProvider({
     // ชื่อตรงเป๊ะภายในสาขาเดียวกัน = บริษัทเดียวกัน → ผูกเข้ากับลูกค้าเดิม ไม่แตกเป็นลูกค้าซ้ำอีกราย
     // (ไม่แตะข้อมูลลูกค้าเดิม — ยอด/ประวัติของเขาเป็นของจริงที่สะสมไว้แล้ว)
     // ปิดท้ายเหมือนกันทั้งกรณีลูกค้าใหม่และลูกค้าเดิม: จัดการตัวลีด + ผูกใบเสนอราคาที่ออกไว้ก่อนหน้า
-    const finish = (customerId: number) => {
+    // ⚠️ ต้องคืน promise ที่ resolve หลัง persistQuote.update(customer_id) ของใบที่ relink ลง DB จริงแล้ว
+    //   ผู้เรียก (setQuotationStatus) ยิง persistQuote.setStatus(won) ต่อทันทีที่ finish() เสร็จ —
+    //   ถ้าไม่รอให้ customer_id ถึง DB ก่อน จะแข่งกับ setStatus(won) เอง (คนละ UPDATE, ไม่ atomic)
+    //   เคยพัง prod มาแล้ว: DB constraint กัน won ที่ไม่มี customer_id ปฏิเสธ UPDATE ถ้า setStatus ไปถึงก่อน
+    //
+    //   ⚠️ ห้ามคำนวณ relinked list + ยิง persistQuote.update ข้างใน setQuotations(updater) แล้วหวังอ่าน
+    //   ผลจากตัวแปรนอก closure — React ไม่การันตีว่า updater รันก่อน setQuotations() return
+    //   (พลาดมาแล้วรอบหนึ่ง: relinkDone ค้างเป็น Promise.resolve() เดิม ไม่ได้รอของจริง)
+    //   อ่าน quotationsRef.current ตรง ๆ แทน (แพตเทิร์นเดียวกับที่ setQuotationStatus ใช้อ่าน target อยู่แล้ว)
+    const finish = async (customerId: number): Promise<void> => {
       if (removeLead) {
         // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
         setLeads(prev => prev.filter(l => l.id !== lead.id));
@@ -314,38 +323,35 @@ export function SalesProvider({
         persistLead.update({ ...lead, customerId });
       }
       // ผูกใบเสนอราคาที่ออกก่อน WON (customerId=0 ในนามบริษัทลีด) เข้ากับลูกค้ารายนี้ย้อนหลัง + persist
-      setQuotations(prev => {
-        const relinked: QuotationMock[] = [];
-        const next = prev.map(q => {
-          if ((!q.customerId || q.customerId === 0) && q.customer === lead.company) {
-            const nq = { ...q, customerId };
-            relinked.push(nq);
-            return nq;
-          }
-          return q;
-        });
-        relinked.forEach(q => persistQuote.update(q));
-        // R6: ยอดลูกค้า = ผลรวมใบเสนอราคาที่ปิดได้ (won) ของลูกค้ารายนี้ — รองรับ "ปิดหลายดีล"
-        //   เดิม total_value ตั้งครั้งเดียวตอนสร้าง = เท่าดีลแรก · ที่นี่รวมสดจาก next (relink แล้ว)
-        //   guard wonTotal>0: ปิดจากลีดที่ไม่มีใบ (won=0) ไม่ล้างค่าที่ตั้งตอนสร้าง (parseBaht(lead.value))
-        //   (persist ใน updater = ตามแบบ persistQuote ข้างบน · StrictMode เรียกซ้ำ = เขียนค่าเดิม idempotent)
-        const wonTotal = next
-          .filter(q => q.customerId === customerId && q.status === "won")
-          .reduce((s, q) => s + (q.totalValue ?? 0), 0);
-        if (wonTotal > 0) {
-          setCustomers(cp => {
-            const nc = cp.map(c => c.id === customerId ? { ...c, totalValue: wonTotal } : c);
-            const cust = nc.find(c => c.id === customerId);
-            if (cust) persistCustomer.update(cust);
-            return nc;
-          });
+      const relinked: QuotationMock[] = [];
+      const next = quotationsRef.current.map(q => {
+        if ((!q.customerId || q.customerId === 0) && q.customer === lead.company) {
+          const nq = { ...q, customerId };
+          relinked.push(nq);
+          return nq;
         }
-        return next;
+        return q;
       });
+      setQuotations(next);
+      await Promise.all(relinked.map(q => persistQuote.update(q)));
+      // R6: ยอดลูกค้า = ผลรวมใบเสนอราคาที่ปิดได้ (won) ของลูกค้ารายนี้ — รองรับ "ปิดหลายดีล"
+      //   เดิม total_value ตั้งครั้งเดียวตอนสร้าง = เท่าดีลแรก · ที่นี่รวมสดจาก next (relink แล้ว)
+      //   guard wonTotal>0: ปิดจากลีดที่ไม่มีใบ (won=0) ไม่ล้างค่าที่ตั้งตอนสร้าง (parseBaht(lead.value))
+      const wonTotal = next
+        .filter(q => q.customerId === customerId && q.status === "won")
+        .reduce((s, q) => s + (q.totalValue ?? 0), 0);
+      if (wonTotal > 0) {
+        setCustomers(cp => {
+          const nc = cp.map(c => c.id === customerId ? { ...c, totalValue: wonTotal } : c);
+          const cust = nc.find(c => c.id === customerId);
+          if (cust) persistCustomer.update(cust);
+          return nc;
+        });
+      }
     };
 
     const dup = matchCustomers(customers, lead.company, ownerDealer).exact;
-    if (dup) { finish(dup.id); return dup; }
+    if (dup) { await finish(dup.id); return dup; }
 
     const newId = await customersRepo.nextId(ownerDealer);
     // ลูกค้า = ลีดที่ปิดการขายสำเร็จ → พาข้อมูลตัวตนจากลีดมาให้ครบ (รูป/มูลค่าดีลที่ปิดได้)
@@ -377,7 +383,7 @@ export function SalesProvider({
       onFail("customers", "สร้างลูกค้า")(e); // แจ้ง + ดึงชุดจริงมาทับ · ไม่ relink ใบ (กัน FK violate)
       throw e; // ให้ผู้เรียกรู้ว่าล้มเหลว — เส้นทางปิดการขาย (won) จะได้ไม่ mark won ทั้งที่ไม่มีลูกค้า
     }
-    finish(newId);
+    await finish(newId);
     return newCustomer;
   }, [customers, myDealerCode, persistCustomer, persistLead, persistQuote]);
 
