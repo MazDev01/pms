@@ -679,6 +679,17 @@ export const LocalAdapter: DataAdapter = {
       writeKey(SALES.customers, [row, ...list]);
       return ok(row);
     },
+    // โหมด local เครื่องเดียว → คำนวณจากอาร์เรย์ในเครื่องตรง ๆ พอ (ไม่มี race ข้าม session จริงแบบ supabase)
+    reconcileWonTotal: (customerId) => {
+      const custs = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      const quotes = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const wonTotal = quotes.filter(q => q.customerId === customerId && q.status === "won").reduce((s, q) => s + (q.totalValue ?? 0), 0);
+      const next = custs.map(c => c.id === customerId ? { ...c, totalValue: wonTotal } : c);
+      writeKey(SALES.customers, next);
+      const updated = next.find(c => c.id === customerId);
+      if (!updated) throw new Error(`customer ${customerId} not found`);
+      return ok(updated);
+    },
   },
   appointments: {
     list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),

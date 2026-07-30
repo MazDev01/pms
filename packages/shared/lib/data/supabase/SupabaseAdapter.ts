@@ -279,7 +279,9 @@ export const SupabaseAdapter: DataAdapter = {
   dealers: {
     // ตาราง dealers ใช้ code เป็น PK — ไม่มีคอลัมน์ id (แต่ DealerRow ของแอปมี id และ mock ตั้ง id = code เสมอ)
     // ถ้าไม่เติมให้ ทุกแถวจะได้ id = undefined → React key ซ้ำ + หน้าจอที่อ้าง d.id พัง
-    list: async () => (await selectScoped<DealerRow>("dealers", undefined, "dealer_code", "code")).map(d => normalizeDealer({ ...d, id: d.id ?? d.code })),
+    // อ่านผ่าน dealers_directory (0077) ไม่ใช่ตารางตรง — revenue_target ของสาขาอื่นถูกมาสก์เป็น null ที่ view
+    //   (RLS เป็น row-level ปิดทั้งแถวได้อย่างเดียว ปิดทีละคอลัมน์ไม่ได้ · บอสยืนยัน 30 ก.ค. 69)
+    list: async () => (await selectScoped<DealerRow>("dealers_directory", undefined, "dealer_code", "code")).map(d => normalizeDealer({ ...d, id: d.id ?? d.code })),
     // ตัดฟิลด์ที่ไม่มีคอลัมน์ใน DB ออกก่อน upsert:
     //   • id          — ตารางใช้ code เป็น PK
     //   • credentials — รหัสผ่านอยู่ใน Supabase Auth (hash) ห้ามเก็บซ้ำในตารางนี้
@@ -740,6 +742,12 @@ export const SupabaseAdapter: DataAdapter = {
       const payload = toSnake(row as unknown as Row);
       delete payload.id; delete payload.created_at; delete payload.dealer_code;
       const { data, error } = await sb().rpc("upsert_customer_for_company", { p_dealer: dealerCode, p_payload: payload });
+      if (error) throw new Error(error.message);
+      return normalizeCustomer(toCamel<CustomerRow>(data as Row));
+    },
+    // รวมยอด won ที่ DB ตรง ๆ (0078) — กัน race ตอนแก้สถานะ 2 ใบพร้อมกันจาก 2 session
+    reconcileWonTotal: async (customerId) => {
+      const { data, error } = await sb().rpc("reconcile_customer_won_total", { p_customer_id: customerId });
       if (error) throw new Error(error.message);
       return normalizeCustomer(toCamel<CustomerRow>(data as Row));
     },

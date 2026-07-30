@@ -276,6 +276,11 @@ export function useNetworkCustomers(): HQCustomer[] {
   }, [customers, quotations]);
 }
 
+// เพดานดึงลูกค้าทั้งเครือ (หน้า /hq/customers ยังทำ KPI/analytics/filter จากชุดนี้ทั้งก้อนในเครื่อง —
+// ยังไม่คุ้มรื้อเป็น server-side filter/pagination เต็มรูปแบบ แค่กันไม่ให้โตไม่มีเพดานจนถึง 50k hard cap
+// ของ pageAll() แบบเงียบ ๆ · พบจากผลตรวจสอบระบบ 30 ก.ค. 69) — สูงพอที่จะไม่กระทบการใช้งานจริงตอนนี้
+const HQ_CUSTOMERS_FETCH_CAP = 5000;
+
 // ลูกค้าทั้งเครือสำหรับหน้า /hq/customers — ดึงตรงจาก repo (RLS = ทั้งเครือ) ไม่ผ่าน array ของ SalesContext
 // เพื่อให้ gate SalesContext ฝั่ง HQ ได้ (M9 Phase 4) · local ยังใช้ useNetworkCustomers (สมุดสด + seed) เพื่อ reactivity
 // dealsWon ไม่ถูกใช้ในหน้านี้ (นับอาคารจริงจาก customer_rollup แทน) → ตั้ง 0 ได้
@@ -288,7 +293,14 @@ export function useNetworkCustomersDb(): HQCustomer[] {
     if (DATA_SOURCE !== "supabase") { setRows(null); return; }
     let alive = true;
     const t = setTimeout(() => {
-      customersRepo.list({ isHQ: true, dealerCode: undefined }).then(r => { if (alive) setRows(r); }).catch(err => logRepoRead("customers.list", err));
+      customersRepo.listPage({ isHQ: true, dealerCode: undefined }, { limit: HQ_CUSTOMERS_FETCH_CAP, offset: 0 })
+        .then(r => {
+          if (!alive) return;
+          setRows(r.rows);
+          // เดิม pageAll() ตัดที่ 50k แบบเงียบ ไม่มีสัญญาณให้ผู้ใช้รู้ว่าข้อมูลไม่ครบ — ตอนนี้อย่างน้อย log ไว้ให้ตรวจสอบได้
+          if (r.total > r.rows.length) console.warn(`[customers] เกินเพดานดึง ${HQ_CUSTOMERS_FETCH_CAP} แถว — DB มีจริง ${r.total} ราย แสดงไม่ครบ`);
+        })
+        .catch(err => logRepoRead("customers.listPage", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
   }, [salesVersion]);

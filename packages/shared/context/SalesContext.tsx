@@ -527,22 +527,18 @@ export function SalesProvider({
     }
   }, [myDealerCode, persistLead]);
 
-  // ── รวมยอดลูกค้า (reconcile) = Σ ใบที่ won ของลูกค้ารายนั้น จากรายการใบ "หลังการแก้" แล้ว persist (H2) ──
+  // ── รวมยอดลูกค้า (reconcile) = Σ ใบที่ won ของลูกค้ารายนั้น จาก DB สดตรง ๆ แล้วอัปเดตจอ (H2) ──
   //   เรียกเฉพาะตอนที่มี "ใบที่ won" เข้ามาเกี่ยว (won ใหม่ / ลบใบ won / แก้ใบ won / ย้อน won ออก)
-  //   → รับ 0 ได้ (ย้อน won ใบสุดท้ายออก = ยอดลด) โดยไม่ล้าง "ค่าประเมิน" ของลูกค้าที่ยังไม่เคยปิดดีล
-  //   (finish() ครอบเคสสร้างลูกค้าครั้งแรก + guard wonTotal>0 ไว้แล้ว — helper นี้ครอบการเปลี่ยนแปลงภายหลัง)
-  const reconcileCustomerTotal = useCallback((cid: number | undefined, quotesAfter: QuotationMock[]) => {
+  //   ⚠️ เดิมคำนวณจาก quotationsRef.current (snapshot ฝั่ง client) แล้ว UPDATE ทับตรง ๆ — 2 แท็บแก้ 2 ใบ
+  //   ของลูกค้าเดียวกันพร้อมกัน แต่ละแท็บเห็น snapshot คนละเวอร์ชัน (อีกฝั่งยังไม่ sync มา) ผลรวมที่คำนวณ
+  //   จึงขาดใบของอีกฝั่งไป ใครเขียนทีหลังก็ทับด้วยยอดที่ขาด — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69 (Medium)
+  //   ย้ายไปคำนวณที่ DB แทน (RPC reconcile_customer_won_total, 0078) เหมือน upsert_customer_for_company —
+  //   ผู้เรียก "ต้อง" await การเปลี่ยนสถานะใบให้ commit จริงก่อนเรียกฟังก์ชันนี้ ไม่งั้น RPC จะยังไม่เห็นใบล่าสุด
+  const reconcileCustomerTotal = useCallback(async (cid: number | undefined): Promise<void> => {
     if (!(cid && cid > 0)) return;
-    const wonTotal = quotesAfter
-      .filter(q => q.customerId === cid && q.status === "won")
-      .reduce((s, q) => s + (q.totalValue ?? 0), 0);
-    setCustomers(prev => {
-      const nc = prev.map(c => c.id === cid ? { ...c, totalValue: wonTotal } : c);
-      const cust = nc.find(c => c.id === cid);
-      if (cust) persistCustomer.update(cust);
-      return nc;
-    });
-  }, [persistCustomer]);
+    const cust = await customersRepo.reconcileWonTotal(cid);
+    setCustomers(prev => prev.map(c => c.id === cid ? cust : c));
+  }, []);
 
   // ── Quotation mutations ──────────────────────────────────────────
   // สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) — รับ draft ที่ "ยังไม่มี id" · DB เป็นคนออกเลข
@@ -561,24 +557,54 @@ export function SalesProvider({
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
     const before = quotationsRef.current.find(q => q.id === quotation.id);
-    const after = quotationsRef.current.map(q => q.id !== quotation.id ? q : quotation);
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));
-    persistQuote.update(quotation);
-    if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
     // แก้ใบที่ won (หรือเคย won) ที่ผูกลูกค้า → ยอดลูกค้าต้องตาม (แก้ totalValue/สถานะ) · H2
-    if (quotation.customerId && quotation.customerId > 0 && (quotation.status === "won" || before?.status === "won")) {
-      reconcileCustomerTotal(quotation.customerId, after);
+    const needsReconcile = quotation.customerId && quotation.customerId > 0 && (quotation.status === "won" || before?.status === "won");
+    if (!needsReconcile) {
+      persistQuote.update(quotation);
+      if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
+      return;
     }
+    // ต้อง await การเขียนใบให้ commit จริงก่อนค่อย reconcile — RPC คำนวณผลรวมจาก DB สด (กัน race, 0078)
+    void (async () => {
+      try {
+        await quotationsRepo.update(quotation);
+      } catch (e) {
+        onFail("quotations", "แก้ไขใบเสนอราคา")(e);
+        return;
+      }
+      if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
+      try {
+        await reconcileCustomerTotal(quotation.customerId);
+      } catch (e) {
+        onFail("customers", "คำนวณยอดลูกค้าใหม่")(e);
+      }
+    })();
   }, [completeLeadQuoteTasks, persistQuote, reconcileCustomerTotal]);
 
   const deleteQuotation = useCallback((id: string) => {
     const removed = quotationsRef.current.find(q => q.id === id);
-    const after = quotationsRef.current.filter(q => q.id !== id);
     setQuotations(prev => prev.filter(q => q.id !== id));
-    persistQuote.remove(id);
     syncQuoteFile.remove(id); // ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง (ไม่แตะไฟล์ที่ผู้ใช้แนบเอง)
     // ลบใบที่ won ที่ผูกลูกค้า → ยอดลูกค้าลดตาม (เดิมไม่ลด = ยอดค้างเกินจริง) · H2
-    if (removed?.status === "won") reconcileCustomerTotal(removed.customerId, after);
+    if (removed?.status !== "won") {
+      persistQuote.remove(id);
+      return;
+    }
+    // ต้อง await การลบให้ commit จริงก่อนค่อย reconcile — RPC คำนวณผลรวมจาก DB สด (กัน race, 0078)
+    void (async () => {
+      try {
+        await quotationsRepo.remove(id);
+      } catch (e) {
+        onFail("quotations", "ลบใบเสนอราคา")(e);
+        return;
+      }
+      try {
+        await reconcileCustomerTotal(removed.customerId);
+      } catch (e) {
+        onFail("customers", "คำนวณยอดลูกค้าใหม่")(e);
+      }
+    })();
   }, [persistQuote, syncQuoteFile, reconcileCustomerTotal]);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
@@ -606,29 +632,53 @@ export function SalesProvider({
       void (async () => {
         try {
           const cust = await convertLeadToCustomer(lead, false); // สร้าง/ผูกลูกค้า (dedup · idempotent)
-          persistQuote.setStatus(id, status);        // สำเร็จแล้วค่อย mark won ที่ DB
-          // ⚠️ ต้องรวมยอดซ้ำหลัง mark won จริง: ตอน convertLeadToCustomer คำนวณ wonTotal ข้างในเอง
-          //   ใบนี้ยังเป็น "sent_to_client" อยู่ (ยังไม่ flip เป็น won จนกว่า persistQuote.setStatus
-          //   บรรทัดบนจะรัน) wonTotal ตอนนั้นจึงไม่นับใบนี้ ทำให้ลูกค้าใหม่ (ดีลแรก) ได้ total_value=0
-          //   ทั้งที่เพิ่งปิดการขายสำเร็จ — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69 (ทดสอบปิดผ่านหน้าใบเสนอราคา)
-          const after = quotationsRef.current.map(q => q.id !== id ? q : { ...q, status });
-          reconcileCustomerTotal(cust.id, after);
+          try {
+            await quotationsRepo.setStatus(id, status);          // สำเร็จแล้วค่อย mark won ที่ DB
+          } catch (e) {
+            onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")(e);
+            throw e; // ยังไม่ commit → ย้อนสถานะ UI ได้ปลอดภัย (ลง catch นอกด้านล่าง)
+          }
+          // ⚠️ ต้องรวมยอดซ้ำหลัง mark won commit จริงแล้วเท่านั้น: RPC reconcile คำนวณจาก DB สด (0078)
+          //   ตอน convertLeadToCustomer คำนวณ wonTotal ข้างในเอง ใบนี้ยังเป็น "sent_to_client" อยู่
+          //   (ยังไม่ flip เป็น won จนกว่า quotationsRepo.setStatus ข้างบนจะ commit) ทำให้ลูกค้าใหม่
+          //   (ดีลแรก) ได้ total_value=0 ทั้งที่เพิ่งปิดการขายสำเร็จ — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69
+          try {
+            await reconcileCustomerTotal(cust.id);
+          } catch (e) {
+            // ใบ won ที่ DB แล้ว แค่ยอดลูกค้ายังไม่อัปเดต — ไม่ย้อนสถานะใบ (จะหลอกผู้ใช้ว่าใบไม่ won)
+            onFail("customers", "คำนวณยอดลูกค้าใหม่")(e);
+          }
         } catch {
-          // ลูกค้าไม่ลง DB → ย้อนสถานะใบ ไม่ mark won (convertLeadToCustomer แจ้ง error เองแล้ว)
+          // ลูกค้าไม่ลง DB หรือ mark won ไม่สำเร็จ → ย้อนสถานะใบ (error ถูกแจ้งแล้วในจุดที่เกิดจริงข้างบน)
           setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? "sent_to_client" }));
         }
       })();
       return;
     }
     // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลีดต้นทาง) — mark สถานะตามปกติ
-    persistQuote.setStatus(id, status);
     // R6/H2: ใบที่ผูกลูกค้าเดิมอยู่แล้ว เปลี่ยนเป็น won (ดีลที่ 2+) หรือย้อน won ออก (→ lost/expired/sent)
-    //   → รวมยอดลูกค้าใหม่จากรายการหลังเปลี่ยนสถานะ (finish() ครอบเฉพาะครั้งแรกผ่านลีด)
+    //   → รวมยอดลูกค้าใหม่หลังเปลี่ยนสถานะ (finish() ครอบเฉพาะครั้งแรกผ่านลีด)
     //   เดิมคิดเฉพาะขา won → ย้อน won ออกแล้วยอดไม่ลด = ยอดค้างเกินจริง
-    if (target.customerId && target.customerId > 0 && (status === "won" || prevStatus === "won")) {
-      const after = quotationsRef.current.map(q => q.id !== id ? q : { ...q, status });
-      reconcileCustomerTotal(target.customerId, after);
+    const needsReconcile = target.customerId && target.customerId > 0 && (status === "won" || prevStatus === "won");
+    if (!needsReconcile) {
+      persistQuote.setStatus(id, status);
+      return;
     }
+    // ต้อง await การเปลี่ยนสถานะให้ commit จริงก่อนค่อย reconcile — RPC คำนวณผลรวมจาก DB สด (กัน race, 0078)
+    void (async () => {
+      try {
+        await quotationsRepo.setStatus(id, status);
+      } catch (e) {
+        onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")(e);
+        setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? q.status }));
+        return;
+      }
+      try {
+        await reconcileCustomerTotal(target.customerId);
+      } catch (e) {
+        onFail("customers", "คำนวณยอดลูกค้าใหม่")(e);
+      }
+    })();
   }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote, reconcileCustomerTotal]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)

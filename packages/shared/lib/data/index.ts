@@ -11,7 +11,7 @@ import { DATA_SOURCE } from "./config";
 import { LocalAdapter } from "./local/LocalAdapter";
 import { SupabaseAdapter } from "./supabase/SupabaseAdapter";
 import { dedupeRead } from "./dedupe";
-import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo } from "./ports";
+import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo } from "./ports";
 
 const adapter: DataAdapter = DATA_SOURCE === "supabase" ? SupabaseAdapter : LocalAdapter;
 
@@ -39,13 +39,25 @@ export const settings: SettingsRepo = {
   getLostReasons:       () => dedupeRead("settings.getLostReasons", () => _settings.getLostReasons()),
 };
 export const files = adapter.files;
-export const persons = adapter.persons;
-export const dealerSettings = adapter.dealerSettings;
+// Sidebar + Topbar (ทั้งสองคอมโพเนนต์อยู่ยาวทุกหน้า) ต่างเรียก persons/dealerSettings/audit เองอิสระ
+// ไม่มีจุดแชร์ผล → เปิดหน้าเดียวยิงซ้ำ 2-6 รอบ (พบจากผลตรวจสอบระบบ 30 ก.ค. 69) · แพตเทิร์นเดียวกับ H7 ข้างบน
+const _persons = adapter.persons, _dealerSettings = adapter.dealerSettings, _audit = adapter.audit;
+export const persons: PersonsRepo = {
+  ..._persons,
+  list: (scope) => dedupeRead(`persons.list:${JSON.stringify(scope ?? null)}`, () => _persons.list(scope)),
+};
+export const dealerSettings: DealerSettingsRepo = {
+  ..._dealerSettings,
+  get: (dealerCode) => dedupeRead(`dealerSettings.get:${dealerCode}`, () => _dealerSettings.get(dealerCode)),
+};
 export const profile = adapter.profile;
 export const hqCompany = adapter.hqCompany;
 export const notes = adapter.notes;
 export const users = adapter.users;
-export const audit = adapter.audit;
+export const audit: AuditRepo = {
+  ..._audit,
+  list: (limit) => dedupeRead(`audit.list:${limit ?? ""}`, () => _audit.list(limit)),
+};
 // rollup รายสาขา (M9 Phase 1) — dedup ตามปี: หลาย component (แดชบอร์ด/แจ้งเตือน/กระดิ่ง) ขอปีเดียวกันพร้อมกัน ยิงจริงครั้งเดียว
 const _metrics = adapter.metrics;
 export const metrics: MetricsRepo = {

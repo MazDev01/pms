@@ -311,6 +311,9 @@ export interface CustomersRepo {
   // หา "ลูกค้าเดิมที่ชื่อบริษัทตรงเป๊ะ" หรือสร้างใหม่ — ทรานแซกชันเดียวที่ DB (supabase) กันแข่งกัน
   // ปิดลีดชื่อเดียวกันพร้อมกัน 2 session สร้างลูกค้าซ้ำ · local: เช็ก+สร้างในเครื่อง (เครื่องเดียว ไม่มี race จริง)
   upsertForCompany(dealerCode: string, row: CustomerRow): Promise<CustomerRow>;
+  // รวมยอดลูกค้าใหม่จากใบ won ปัจจุบันตรงจาก DB (ไม่รับผลรวมจาก client) — กัน race ตอนแก้ 2 ใบพร้อมกัน (0078)
+  // supabase: subquery SUM ในสเตตเมนต์ UPDATE เดียว ที่ DB · local: คำนวณจากอาร์เรย์ในเครื่อง (ไม่มี race จริง)
+  reconcileWonTotal(customerId: number): Promise<CustomerRow>;
 }
 export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;
