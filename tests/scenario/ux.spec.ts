@@ -99,6 +99,9 @@ test("[ux·dealer] ฟอร์มใบเสนอราคาหน้าเ�
 test("[ux·dealer] ตั้งค่าใช้ปุ่มบันทึกกลาง + เตือน unsaved", async ({ page }) => {
   await open(page, "dealer", "/settings");
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: false }).first().click();
+  // รอโหลดค่าตั้งต้นจาก DB เสร็จก่อน (baseline snapshot สำหรับเทียบ dirty) — โหมด supabase
+  // ค่าตั้งต้นมาจาก fetch จริง ไม่ใช่ mock ในตัวแบบเดิม กรอกไวไปชนก่อน baseline พร้อมจะไม่ขึ้น dirty เลย
+  await page.waitForTimeout(1500);
   const num = page.locator('input[type="number"]').first();
   await num.fill("9");
   // ตัวบ่งชี้ยังไม่บันทึก + ปุ่มบันทึกกลางบนหัวต้องกดได้

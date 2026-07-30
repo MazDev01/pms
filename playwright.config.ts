@@ -6,6 +6,11 @@ import { defineConfig, devices } from "@playwright/test";
 // reuseExistingServer=true → ถ้ามี dev server รันอยู่แล้วใช้ตัวนั้น ไม่สตาร์ทซ้ำ (กัน .next เขียนทับกัน)
 export default defineConfig({
   testDir: "./tests/scenario",
+  // ข้อมูลตั้งต้น (ลีด/ใบเสนอราคา/ลูกค้า ติดแท็ก ZZTEST-BASE) สำหรับกลุ่มเทสต์ที่แค่ "เปิดหน้าไปดู"
+  // ไม่ได้สร้างข้อมูลเอง (hq-quotations/redesign/ui/ux/user/scenario-fixes) — DB จริงว่างเปล่า
+  // ก่อนหน้านี้กลุ่มนี้พึ่ง mock.ts (local mode) ซึ่งใช้ไม่ได้แล้วเพราะแอปรันโหมด supabase จริง
+  globalSetup: "./tests/scenario/global-setup.ts",
+  globalTeardown: "./tests/scenario/global-teardown.ts",
   // เก็บ artifact ไว้ใน node_modules/.cache — ที่เดิม (test-results/) อยู่ในโปรเจกต์
   // ทุกครั้งที่เทสต์เขียนไฟล์ dev server จะเห็นไฟล์เปลี่ยนแล้ว recompile ทั้งหน้า → เทสต์เจอ 404 กลางคัน
   outputDir: "node_modules/.cache/playwright-results",

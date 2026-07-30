@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { open } from "./helpers";
+import { EXISTING_CUSTOMER_NAME } from "./global-setup";
 
 // ลูกค้าซ้ำ (M3) — ลูกค้าเกิดได้ทางเดียวคือลีดที่ปิดการขายได้
 // ถ้าตัวแทนเปิดลีดใหม่ให้บริษัทที่เป็นลูกค้าอยู่แล้ว พอปิดการขายต้องไม่แตกเป็นลูกค้าคนที่สอง
-// "บจ. ไทยสตีล" เป็นลูกค้าในสมุดตั้งต้นของสาขา (id=1)
+// ลูกค้าตั้งต้นมาจาก global-setup.ts (seed ผูก dealer RYG ไว้แล้ว — ดู EXISTING_CUSTOMER_NAME)
 
-const EXISTING = "บจ. ไทยสตีล";
+const EXISTING = EXISTING_CUSTOMER_NAME;
 
 async function openAddLeadForm(page: import("@playwright/test").Page) {
   await open(page, "dealer", "/leads");

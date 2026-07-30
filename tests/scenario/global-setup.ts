@@ -1,0 +1,231 @@
+import { createClient } from "@supabase/supabase-js";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+import { SUPABASE_MODE } from "./supabaseEnv";
+
+// snapshot ของ hq_notif_rules.alerts เดิม (singleton row จริง ไม่ใช่ข้อมูลแท็กที่ลบทิ้งได้เฉยๆ)
+// ต้องคืนค่าเดิมใน teardown เสมอ — ไม่ใช่ตั้งเป็นค่า test แล้วปล่อยทิ้งไว้
+export const ALERTS_SNAPSHOT_PATH = path.join(__dirname, "../../node_modules/.cache/scenario-hq-alerts-snapshot.json");
+
+// ── ข้อมูลตั้งต้นสำหรับกลุ่มเทสต์ที่ตรวจ "สิ่งที่อยู่บนจอ" (hq-quotations/redesign/ui/ux/user/
+// scenario-fixes/branch-isolation) — ต่างจาก func-*.spec.ts ที่ seed+cleanup เองต่อเทสต์
+// เพราะกลุ่มนี้แค่ "เปิดหน้าไปดู" ไม่ได้สร้างข้อมูลเอง จึงต้องมีข้อมูลตั้งต้นให้เปิดเจอ
+//
+// พบว่า DB จริงว่างเปล่าทั้งเครือ (0 leads/quotations/customers ทุกสาขา) ตอนตรวจ 30 ก.ค. 69
+// เดิมกลุ่มนี้ใช้ mock.ts (ข้อมูลจำลอง local mode) ซึ่งใช้ไม่ได้แล้วเพราะแอปรันโหมด supabase จริง
+//
+// namespace: ทุกแถวขึ้นต้น "ZZTEST-BASE" (specNS("BASE")) — แยกจาก namespace ของ func-*.spec.ts
+// (ZZTEST-QUOTE/ZZTEST-SALES/ZZTEST-APPT) กันชนกันตอนรันขนาน · cleanup ที่ global-teardown.ts
+
+export const NS = "ZZTEST-BASE";
+export const tag = (s: string) => `${NS}-${s}`;
+
+const ID_BASE = 991_000_000; // ช่วง id สูงพอที่จะไม่ชนข้อมูลจริงในอนาคต
+
+// ลูกค้าตั้งต้นแบบ "มีอยู่แล้วในสมุด" — ใช้ทดสอบ dedup (customer-dedupe.spec.ts: เปิดลีดชื่อซ้ำ/ใกล้เคียง
+// กับลูกค้าเดิม ต้องผูกเข้าลูกค้ารายเดิม ไม่สร้างซ้ำ) ⚠️ ต้องเป็นชื่อ "สะอาด" ไม่มีแท็กนำหน้า —
+// ใส่แท็กจะทำให้ matchCustomers() (customerMatch.ts: exactKey/looseKey เทียบแค่คำนำหน้านิติบุคคล
+// กับช่องว่าง ไม่ได้ตัดคำแปลกปลอมกลางชื่อ) จับคู่ไม่เจอ ทดสอบ dedup จริงไม่ได้เลย
+// ลบทิ้งตอน teardown ด้วย id ตรงๆ (EXISTING_CUSTOMER_ID) แทนการ sweep ด้วยแท็กในชื่อ
+export const EXISTING_CUSTOMER_NAME = "บจ. ไทยสตีล";
+export const EXISTING_CUSTOMER_ID = ID_BASE + 999;
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+}
+function isoDate(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// ⚠️ leads.created_at (timestamptz) ไม่ใช่ค่าที่แอปใช้คำนวณ "ค้างติดต่อกี่วัน" — แอปอ่านจาก
+//   created_label (สตริงวันที่ไทย "D เดือนไทย พ.ศ.") ผ่าน parseThaiDate (ดู leadMetrics.ts +
+//   migration 0046) ลืมใส่ครั้งแรกแล้วทำให้ needsFollowUp/idleLeads คำนวณไม่ได้ (null) เงียบๆ
+const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+function thaiDateLabel(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getDate()} ${TH_MO[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+
+type LeadSeed = {
+  idOffset: number; dealerCode: string; company: string; province: string; product: string;
+  status: "WAITING" | "BULLET" | "QUOTED" | "FOLLOWUP" | "NEGO" | "PAID" | "CANCELLED";
+  ageDays: number; lostReason?: string;
+};
+
+const LEADS: LeadSeed[] = [
+  // ── RYG ──
+  { idOffset: 1, dealerCode: "RYG", company: tag("บจ. อาร์วายจีหนึ่ง"), province: "ระยอง", product: "โรงงาน", status: "WAITING", ageDays: 2 },
+  { idOffset: 2, dealerCode: "RYG", company: tag("บจ. อาร์วายจีสอง"), province: "ระยอง", product: "อาคารสำเร็จรูปทุกประเภท", status: "BULLET", ageDays: 10 },
+  { idOffset: 3, dealerCode: "RYG", company: tag("บจ. อาร์วายจีสาม"), province: "ชลบุรี", product: "อาคารสำเร็จรูปทุกประเภท", status: "FOLLOWUP", ageDays: 20 },
+  { idOffset: 4, dealerCode: "RYG", company: tag("บจ. อาร์วายจีสี่"), province: "ระยอง", product: "โรงงาน", status: "NEGO", ageDays: 35 },
+  { idOffset: 5, dealerCode: "RYG", company: tag("บจ. อาร์วายจีห้า"), province: "ชลบุรี", product: "งานตามแบบของลูกค้า", status: "QUOTED", ageDays: 5 },
+  { idOffset: 6, dealerCode: "RYG", company: tag("บจ. อาร์วายจีหก"), province: "ระยอง", product: "โรงงาน", status: "CANCELLED", ageDays: 15, lostReason: "ราคาสูงกว่าคู่แข่ง" },
+  { idOffset: 7, dealerCode: "RYG", company: tag("บจ. อาร์วายจีเจ็ด"), province: "ชลบุรี", product: "อาคารสำเร็จรูปทุกประเภท", status: "CANCELLED", ageDays: 25, lostReason: "ลูกค้าชะลอโครงการ" },
+  { idOffset: 8, dealerCode: "RYG", company: tag("บจ. อาร์วายจีแปด"), province: "ระยอง", product: "โรงงาน", status: "PAID", ageDays: 40 },
+  // ── CNX ──
+  { idOffset: 21, dealerCode: "CNX", company: tag("บจ. เชียงใหม่หนึ่ง"), province: "เชียงใหม่", product: "โรงงาน", status: "WAITING", ageDays: 3 },
+  { idOffset: 22, dealerCode: "CNX", company: tag("บจ. เชียงใหม่สอง"), province: "เชียงใหม่", product: "อาคารสำเร็จรูปทุกประเภท", status: "BULLET", ageDays: 9 },
+  { idOffset: 23, dealerCode: "CNX", company: tag("บจ. เชียงใหม่สาม"), province: "เชียงราย", product: "อาคารสำเร็จรูปทุกประเภท", status: "FOLLOWUP", ageDays: 18 },
+  { idOffset: 24, dealerCode: "CNX", company: tag("บจ. เชียงใหม่สี่"), province: "เชียงใหม่", product: "โรงงาน", status: "NEGO", ageDays: 33 },
+  { idOffset: 25, dealerCode: "CNX", company: tag("บจ. เชียงใหม่ห้า"), province: "เชียงราย", product: "งานตามแบบของลูกค้า", status: "QUOTED", ageDays: 6 },
+  { idOffset: 26, dealerCode: "CNX", company: tag("บจ. เชียงใหม่หก"), province: "เชียงใหม่", product: "โรงงาน", status: "CANCELLED", ageDays: 14, lostReason: "งบประมาณไม่พอ" },
+  { idOffset: 27, dealerCode: "CNX", company: tag("บจ. เชียงใหม่เจ็ด"), province: "เชียงราย", product: "อาคารสำเร็จรูปทุกประเภท", status: "CANCELLED", ageDays: 22, lostReason: "เลือกคู่แข่ง" },
+  { idOffset: 28, dealerCode: "CNX", company: tag("บจ. เชียงใหม่แปด"), province: "เชียงใหม่", product: "โรงงาน", status: "PAID", ageDays: 38 },
+];
+
+type QuoteSeed = {
+  idSuffix: string; dealerCode: string; customer: string; buildingType: string; province: string;
+  status: "draft" | "sent_to_client" | "won" | "lost" | "expired"; ageDays: number; totalValue: number;
+  customerIdOffset?: number;
+};
+
+const QUOTES: QuoteSeed[] = [
+  // ── RYG ──
+  { idSuffix: "RYG-1", dealerCode: "RYG", customer: tag("บจ. อาร์วายจีแปด"), buildingType: "โรงงาน", province: "ระยอง", status: "won", ageDays: 10, totalValue: 1_800_000, customerIdOffset: 1 },
+  { idSuffix: "RYG-2", dealerCode: "RYG", customer: tag("บจ. อาร์วายจีห้า"), buildingType: "อาคารสำเร็จรูปทุกประเภท", province: "ชลบุรี", status: "sent_to_client", ageDays: 25, totalValue: 950_000 },
+  { idSuffix: "RYG-3", dealerCode: "RYG", customer: tag("บจ. อาร์วายจีสาม"), buildingType: "โรงงาน", province: "ระยอง", status: "sent_to_client", ageDays: 55, totalValue: 2_100_000 },
+  { idSuffix: "RYG-4", dealerCode: "RYG", customer: tag("บจ. อาร์วายจีเจ็ด"), buildingType: "อาคารสำเร็จรูปทุกประเภท", province: "ชลบุรี", status: "lost", ageDays: 30, totalValue: 700_000 },
+  { idSuffix: "RYG-5", dealerCode: "RYG", customer: tag("บจ. อาร์วายจีหก"), buildingType: "โรงงาน", province: "ระยอง", status: "expired", ageDays: 60, totalValue: 1_200_000 },
+  { idSuffix: "RYG-6", dealerCode: "RYG", customer: tag("บจ. อาร์วายจีหนึ่ง"), buildingType: "งานตามแบบของลูกค้า", province: "ระยอง", status: "draft", ageDays: 1, totalValue: 500_000 },
+  // ── CNX ──
+  { idSuffix: "CNX-1", dealerCode: "CNX", customer: tag("บจ. เชียงใหม่แปด"), buildingType: "โรงงาน", province: "เชียงใหม่", status: "won", ageDays: 12, totalValue: 2_400_000, customerIdOffset: 21 },
+  { idSuffix: "CNX-2", dealerCode: "CNX", customer: tag("บจ. เชียงใหม่ห้า"), buildingType: "อาคารสำเร็จรูปทุกประเภท", province: "เชียงราย", status: "sent_to_client", ageDays: 20, totalValue: 1_100_000 },
+  { idSuffix: "CNX-3", dealerCode: "CNX", customer: tag("บจ. เชียงใหม่สาม"), buildingType: "โรงงาน", province: "เชียงใหม่", status: "sent_to_client", ageDays: 48, totalValue: 1_600_000 },
+  { idSuffix: "CNX-4", dealerCode: "CNX", customer: tag("บจ. เชียงใหม่เจ็ด"), buildingType: "อาคารสำเร็จรูปทุกประเภท", province: "เชียงราย", status: "lost", ageDays: 28, totalValue: 850_000 },
+  { idSuffix: "CNX-5", dealerCode: "CNX", customer: tag("บจ. เชียงใหม่หก"), buildingType: "โรงงาน", province: "เชียงใหม่", status: "expired", ageDays: 58, totalValue: 900_000 },
+  { idSuffix: "CNX-6", dealerCode: "CNX", customer: tag("บจ. เชียงใหม่หนึ่ง"), buildingType: "งานตามแบบของลูกค้า", province: "เชียงใหม่", status: "draft", ageDays: 1, totalValue: 400_000 },
+];
+
+export default async function globalSetup() {
+  if (!SUPABASE_MODE || !ADMIN_SUPABASE_URL || !ADMIN_SERVICE_ROLE_KEY) {
+    console.log("[global-setup] ข้ามการ seed — ไม่ใช่โหมด supabase หรือยังไม่มี service role key");
+    return;
+  }
+  const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY);
+
+  // กวาดของเก่าทิ้งก่อน (เผื่อรันค้างจากรอบก่อนแล้ว teardown ไม่ทัน) — idempotent
+  await teardownBaseline(admin);
+  await restoreAlertsIfPending(admin); // เผื่อรันค้างจากรอบก่อน (ไม่งั้น snapshot ที่ค้างจะทับของจริงตอน teardown รอบนี้)
+
+  // ── hq_notif_rules.alerts เดิมเป็น {} (ยังไม่มีใครเปิดกฎแจ้งเตือนเลย) → การ์ด "ต้องดูด่วน"
+  // ไม่มีทางโผล่ได้เลยไม่ว่าจะ seed ข้อมูลลีด/ใบเสนอราคาแบบไหน (ui/ux/hq-quotations spec ต้องการให้โผล่)
+  // snapshot ค่าเดิมไว้ก่อน แล้วเปิดครบ 6 กฎชั่วคราว — คืนค่าเดิมที่ global-teardown.ts เสมอ
+  const before = await admin.from("hq_notif_rules").select("alerts").eq("id", 1).single();
+  writeFileSync(ALERTS_SNAPSHOT_PATH, JSON.stringify(before.data?.alerts ?? {}));
+  const allOn = { on: true, inapp: true };
+  await admin.from("hq_notif_rules").update({
+    alerts: {
+      unassignedLead: allOn, idleLead: allOn, quoteExpiring: allOn,
+      dealerIdle: allOn, targetAchieved: allOn, lostRate: allOn,
+    },
+  }).eq("id", 1);
+
+  const leadRows = LEADS.map(l => ({
+    id: ID_BASE + l.idOffset,
+    dealer_code: l.dealerCode,
+    num_id: 800_000 + l.idOffset,
+    name: l.company,
+    company: l.company,
+    contact: "คุณทดสอบ",
+    phone: "0800000000",
+    email: "test@example.com",
+    province: l.province,
+    product: l.product,
+    category: l.product,
+    status: l.status,
+    value: "0",
+    area: "500",
+    assigned: "ทดสอบระบบ",
+    source: "เว็บไซต์",
+    lost_reason: l.lostReason ?? null,
+    created_at: daysAgo(l.ageDays),
+    created_label: thaiDateLabel(l.ageDays),
+  }));
+  const { error: leadErr } = await admin.from("leads").insert(leadRows);
+  if (leadErr) throw new Error(`[global-setup] insert leads ล้มเหลว: ${leadErr.message}`);
+
+  const custRows = QUOTES.filter(q => q.customerIdOffset != null).map(q => ({
+    id: ID_BASE + q.customerIdOffset!,
+    dealer_code: q.dealerCode,
+    name: q.customer,
+    company: q.customer,
+    email: "test@example.com",
+    phone: "0800000000",
+    province: q.province,
+    category: q.buildingType,
+    status: "active",
+    join_date: isoDate(q.ageDays),
+    owner: "ทดสอบระบบ",
+    initials: "ZZ",
+    color: "#003366",
+    total_value: q.totalValue,
+  }));
+  custRows.push({
+    id: EXISTING_CUSTOMER_ID, dealer_code: "RYG", name: EXISTING_CUSTOMER_NAME, company: EXISTING_CUSTOMER_NAME,
+    email: "test@example.com", phone: "0800000000", province: "ระยอง", category: "โรงงาน", status: "active",
+    join_date: isoDate(200), owner: "ทดสอบระบบ", initials: "ทส", color: "#003366", total_value: 2_500_000,
+  });
+  const { error: custErr } = await admin.from("customers").insert(custRows);
+  if (custErr) throw new Error(`[global-setup] insert customers ล้มเหลว: ${custErr.message}`);
+
+  const quoteRows = QUOTES.map(q => ({
+    id: tag(`Q-${q.idSuffix}`),
+    dealer_code: q.dealerCode,
+    quote_no: `Q-2026-${9000 + LEADS.length}`,
+    customer: q.customer,
+    project: `โครงการทดสอบ ${q.idSuffix}`,
+    total: `฿${q.totalValue.toLocaleString("th-TH")}`,
+    total_value: q.totalValue,
+    material_cost: Math.round(q.totalValue * 0.7),
+    province: q.province,
+    building_type: q.buildingType,
+    area: "500",
+    status: q.status,
+    date: isoDate(q.ageDays),
+    items: 1,
+    customer_id: q.customerIdOffset != null ? ID_BASE + q.customerIdOffset : null,
+  }));
+  const { error: quoteErr } = await admin.from("quotations").insert(quoteRows);
+  if (quoteErr) throw new Error(`[global-setup] insert quotations ล้มเหลว: ${quoteErr.message}`);
+
+  console.log(`[global-setup] seed สำเร็จ: ${leadRows.length} leads, ${quoteRows.length} quotations, ${custRows.length} customers`);
+}
+
+/** คืนค่า hq_notif_rules.alerts เดิมจาก snapshot ถ้ามีไฟล์ค้างอยู่ (เรียกทั้งต้น setup กันรันค้าง และท้าย teardown) */
+export async function restoreAlertsIfPending(admin: ReturnType<typeof createClient>) {
+  if (!existsSync(ALERTS_SNAPSHOT_PATH)) return;
+  const original = JSON.parse(readFileSync(ALERTS_SNAPSHOT_PATH, "utf8"));
+  await admin.from("hq_notif_rules").update({ alerts: original }).eq("id", 1);
+  try { require("node:fs").unlinkSync(ALERTS_SNAPSHOT_PATH); } catch { /* ignore */ }
+}
+
+export async function teardownBaseline(admin: ReturnType<typeof createClient>) {
+  // กวาด 2 ทาง: ทั้ง id ของใบที่เรา seed เอง (ZZTEST-BASE-Q-...) และใบที่ผู้ใช้/เทสต์สร้างผ่าน UI
+  // จากลีดที่ seed ไว้ (เช่น openLeadQuotationForm → "สร้างใบเสนอราคา") — ใบแบบหลังได้ id ออกเลขปกติ
+  // จาก DB (เช่น "Q-2026-0384") ไม่มีแท็กในตัวเอง แต่ผูก customer = ชื่อบริษัทที่ seed ไว้
+  // (พลาดมาแล้วรอบหนึ่ง: ลืมกวาดทางที่สอง ทำให้ใบที่เทสต์สร้างผ่าน UI ค้างสะสมใน DB จริงทุกรอบที่รัน)
+  await admin.from("quotations").delete().like("id", `${NS}%`);
+  await admin.from("quotations").delete().like("customer", `${NS}%`);
+  await admin.from("customers").delete().like("company", `${NS}%`);
+  await admin.from("leads").delete().like("company", `${NS}%`);
+  // ลูกค้า "บจ. ไทยสตีล" (EXISTING_CUSTOMER_ID) เป็นชื่อสะอาดไม่มีแท็ก (เหตุผลดูที่ประกาศตัวแปร) —
+  // กวาดด้วย id ตรงๆ แทน · customer-dedupe.spec.ts ยังสร้างลีดชื่อเดียวกันผ่าน UI ได้ (ไม่มีแท็ก
+  // เหมือนกัน) กวาดด้วยชื่อเป๊ะไปด้วยกันเลย — ปิดการขายสำเร็จแล้ว lead จะถูกลบออกจากตารางเองอยู่แล้ว
+  // (removeLead=true) แต่เผื่อเทสต์ล้มกลางทางค้างไว้ก็กวาดซ้ำให้ชัวร์
+  await admin.from("customers").delete().eq("id", EXISTING_CUSTOMER_ID);
+  await admin.from("leads").delete().eq("company", EXISTING_CUSTOMER_NAME).eq("dealer_code", "RYG");
+  // แอปสร้างไฟล์ PDF อัตโนมัติผูกกับใบเสนอราคาทุกใบที่สร้างผ่าน UI (ชื่อไฟล์ฝัง quote id/ชื่อลูกค้า
+  // ไว้ด้วย) — พลาดมาแล้วอีกรอบ: ลืมกวาดตารางนี้ ทำให้ไฟล์ค้างสะสมจนล้นหน้าแรก (12 ต่อหน้า) แล้วไป
+  // ทำให้ func-appt-files.spec.ts หาไฟล์ที่เพิ่งอัปโหลดจริงไม่เจอภายใน timeout (บั๊กจากดาต้าค้าง
+  // ไม่ใช่โค้ดแอปพัง) — กวาด storage bytes ก่อนด้วยถ้ามี (ตามแบบ cleanup() ใน funcHelpers.ts)
+  const staleFiles = await admin.from("files").select("id,storage_path").like("name", `%${NS}%`);
+  for (const f of staleFiles.data ?? []) {
+    if (f.storage_path) await admin.storage.from("dealer-files").remove([f.storage_path as string]);
+  }
+  await admin.from("files").delete().like("name", `%${NS}%`);
+}
