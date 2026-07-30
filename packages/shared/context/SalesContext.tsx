@@ -18,7 +18,6 @@ import {
 
 import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { parseBaht } from "@pms/shared/lib/format";
-import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
@@ -323,10 +322,21 @@ export function SalesProvider({
         persistLead.update({ ...lead, customerId });
       }
       // ผูกใบเสนอราคาที่ออกก่อน WON (customerId=0 ในนามบริษัทลีด) เข้ากับลูกค้ารายนี้ย้อนหลัง + persist
+      //
+      // ⚠️ ปิดจากฝั่งลีดโดยตรง (ปุ่ม "ปิดการขาย (Won)" / เปลี่ยนสถานะเป็น PAID) ต้องเลื่อนใบเสนอราคา
+      //   ที่ relink มาเป็น won ไปด้วย ไม่งั้นใบค้างเป็น draft ตลอดกาล ไม่มีทางแก้ผ่านหน้าจอ ยอดลูกค้า
+      //   ก็ไม่ถูกนับ (wonTotal กรองเฉพาะ status==="won") — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69
+      //   แต่ finish() ตัวนี้ถูกเรียกจาก setQuotationStatus's won-path ด้วย (หน้าใบเสนอราคา ลูกค้าตอบรับ
+      //   ใบเดียว) ซึ่ง caller จัดการสถานะของ "ใบที่กำลังกด" เองแยกต่างหากอยู่แล้ว — ถ้า cascade ตรงนี้ไป
+      //   ด้วยจะเผลอเลื่อนใบอื่นที่ยังไม่ถูกเลือกเป็น won ไปด้วย (ลูกค้ามีหลายใบใต้ลีดเดียวกัน)
+      //   ใช้ lead.status==="PAID" เป็นสัญญาณแยก 2 เส้นทาง: caller ฝั่งลีด (updateLead/updateLeadStatus)
+      //   ตั้ง status=PAID ไว้ใน lead object ก่อนเรียกอยู่แล้ว ส่วน caller ฝั่งใบเสนอราคายังไม่แตะ lead.status
+      const cascadeWon = lead.status === "PAID";
       const relinked: QuotationMock[] = [];
       const next = quotationsRef.current.map(q => {
         if ((!q.customerId || q.customerId === 0) && q.customer === lead.company) {
-          const nq = { ...q, customerId };
+          const carryWon = cascadeWon && q.status !== "lost" && q.status !== "expired";
+          const nq = { ...q, customerId, status: carryWon ? "won" as const : q.status };
           relinked.push(nq);
           return nq;
         }
@@ -350,13 +360,15 @@ export function SalesProvider({
       }
     };
 
-    const dup = matchCustomers(customers, lead.company, ownerDealer).exact;
-    if (dup) { await finish(dup.id); return dup; }
-
-    const newId = await customersRepo.nextId(ownerDealer);
-    // ลูกค้า = ลีดที่ปิดการขายสำเร็จ → พาข้อมูลตัวตนจากลีดมาให้ครบ (รูป/มูลค่าดีลที่ปิดได้)
-    const newCustomer: CustomerRow = {
-      id: newId,
+    // ⚠️ เดิมเช็ก "มีลูกค้าชื่อนี้อยู่แล้วไหม" ด้วย matchCustomers ฝั่ง client (อ่านจาก state ในเครื่อง)
+    //   แล้วค่อยแยกไปสร้างใหม่หรือผูกของเดิม — เป็น check-then-act ที่ไม่ atomic ข้าม 2 การเรียก
+    //   ปิดลีดชื่อเดียวกันพร้อมกันจาก 2 session (2 แท็บ/retry ตอนเน็ตช้า) ทั้งคู่เห็น "ยังไม่มี" พร้อมกัน
+    //   แล้วสร้างลูกค้าซ้ำ 2 แถว (ยืนยันจริงจากผลตรวจสอบระบบ 30 ก.ค. 69) — ย้ายไปเป็นทรานแซกชันเดียว
+    //   ที่ DB แทน (upsert_customer_for_company, 0074) เหมือน create_quotation (0034) กันเลขที่หาย
+    // สีอวาตาร์ยึดจาก lead.numId แทน id ลูกค้า (ยังไม่รู้ id จริงจนกว่า RPC จะคืนค่า — DB เป็นคนออกให้
+    // หรือคืนแถวเดิมถ้ามีอยู่แล้ว) ไม่กระทบกรณีลูกค้าเดิม เพราะ RPC ไม่แตะข้อมูลเดิมเลยถ้าเจอชื่อตรง
+    const payload: CustomerRow = {
+      id: 0, // ไม่ใช้ค่านี้ — DB เป็นคนออก id จริงให้ (หรือคืนลูกค้าเดิมถ้าชื่อตรงเป๊ะ)
       name: lead.contact || lead.company,
       company: lead.company,
       email: lead.email ?? "",
@@ -368,23 +380,21 @@ export function SalesProvider({
       joinDate: APP_NOW_ISO, // วันสมัคร = วันนี้ของระบบ (supabase=จริง / local=ตรึง)
       owner: lead.assigned,
       initials: deriveInitials(lead.company || lead.name),
-      color: CUSTOMER_PALETTE[newId % CUSTOMER_PALETTE.length],
+      color: CUSTOMER_PALETTE[(lead.numId ?? 0) % CUSTOMER_PALETTE.length],
       totalValue: parseBaht(lead.value),
       logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลีดมาด้วย
       dealerCode: lead.dealerCode ?? DEFAULT_DEALER_CODE, // ลูกค้าเป็นของสาขาเดียวกับลีดที่ปิดการขาย (multi-tenant)
     };
-    setCustomers(prev => [...prev, newCustomer]);
-    // ⚠️ ต้อง "รอ" ลูกค้าลง DB จริงก่อน relink ใบเสนอราคา (M6):
-    //   FK (dealer_code, customer_id) → customers บังคับว่าใบที่ผูก customerId ต้องมีลูกค้าอยู่ก่อน
-    //   เดิมยิงสร้างลูกค้า + อัปเดตใบพร้อมกันแบบ optimistic → ใบอาจถึง DB ก่อนลูกค้า = FK violate
+    let saved: CustomerRow;
     try {
-      await customersRepo.create(newCustomer); // Lead→Won สร้างลูกค้าข้อมูลครบ (RLS with-check ใช้ dealerCode นี้)
+      saved = await customersRepo.upsertForCompany(ownerDealer, payload);
     } catch (e) {
-      onFail("customers", "สร้างลูกค้า")(e); // แจ้ง + ดึงชุดจริงมาทับ · ไม่ relink ใบ (กัน FK violate)
+      onFail("customers", "สร้างลูกค้า")(e);
       throw e; // ให้ผู้เรียกรู้ว่าล้มเหลว — เส้นทางปิดการขาย (won) จะได้ไม่ mark won ทั้งที่ไม่มีลูกค้า
     }
-    await finish(newId);
-    return newCustomer;
+    setCustomers(prev => prev.some(c => c.id === saved.id) ? prev : [...prev, saved]);
+    await finish(saved.id);
+    return saved;
   }, [customers, myDealerCode, persistCustomer, persistLead, persistQuote]);
 
   // ── Lead mutations ───────────────────────────────────────────────
@@ -595,8 +605,14 @@ export function SalesProvider({
     if (lead && lead.customerId == null) {
       void (async () => {
         try {
-          await convertLeadToCustomer(lead, false); // สร้าง/ผูกลูกค้า (dedup · idempotent)
+          const cust = await convertLeadToCustomer(lead, false); // สร้าง/ผูกลูกค้า (dedup · idempotent)
           persistQuote.setStatus(id, status);        // สำเร็จแล้วค่อย mark won ที่ DB
+          // ⚠️ ต้องรวมยอดซ้ำหลัง mark won จริง: ตอน convertLeadToCustomer คำนวณ wonTotal ข้างในเอง
+          //   ใบนี้ยังเป็น "sent_to_client" อยู่ (ยังไม่ flip เป็น won จนกว่า persistQuote.setStatus
+          //   บรรทัดบนจะรัน) wonTotal ตอนนั้นจึงไม่นับใบนี้ ทำให้ลูกค้าใหม่ (ดีลแรก) ได้ total_value=0
+          //   ทั้งที่เพิ่งปิดการขายสำเร็จ — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69 (ทดสอบปิดผ่านหน้าใบเสนอราคา)
+          const after = quotationsRef.current.map(q => q.id !== id ? q : { ...q, status });
+          reconcileCustomerTotal(cust.id, after);
         } catch {
           // ลูกค้าไม่ลง DB → ย้อนสถานะใบ ไม่ mark won (convertLeadToCustomer แจ้ง error เองแล้ว)
           setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? "sent_to_client" }));

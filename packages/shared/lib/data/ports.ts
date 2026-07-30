@@ -300,6 +300,9 @@ export interface CustomersRepo {
   create(row: CustomerRow): Promise<CustomerRow>;
   update(row: CustomerRow): Promise<CustomerRow>;
   remove(id: number): Promise<void>;
+  // หา "ลูกค้าเดิมที่ชื่อบริษัทตรงเป๊ะ" หรือสร้างใหม่ — ทรานแซกชันเดียวที่ DB (supabase) กันแข่งกัน
+  // ปิดลีดชื่อเดียวกันพร้อมกัน 2 session สร้างลูกค้าซ้ำ · local: เช็ก+สร้างในเครื่อง (เครื่องเดียว ไม่มี race จริง)
+  upsertForCompany(dealerCode: string, row: CustomerRow): Promise<CustomerRow>;
 }
 export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;

@@ -732,6 +732,15 @@ export const SupabaseAdapter: DataAdapter = {
     create: (row) => insertRow<CustomerRow>("customers", row),
     update: (row) => updateRow<CustomerRow>("customers", row.id, row),
     remove: (id) => must(sb().from("customers").delete().eq("id", id)),
+    // หาลูกค้าเดิม (ชื่อตรงเป๊ะ) หรือสร้างใหม่ แบบ atomic ที่ DB (0074) — กันแข่งกันสร้างลูกค้าซ้ำ
+    // เมื่อปิดลีดชื่อเดียวกันพร้อมกัน 2 session (id/created_at ให้ DB เป็นคนออก เหมือน create_quotation)
+    upsertForCompany: async (dealerCode, row) => {
+      const payload = toSnake(row as unknown as Row);
+      delete payload.id; delete payload.created_at; delete payload.dealer_code;
+      const { data, error } = await sb().rpc("upsert_customer_for_company", { p_dealer: dealerCode, p_payload: payload });
+      if (error) throw new Error(error.message);
+      return normalizeCustomer(toCamel<CustomerRow>(data as Row));
+    },
   },
   appointments: {
     nextId: (dealerCode) => nextEntityId(dealerCode, "appointments"),

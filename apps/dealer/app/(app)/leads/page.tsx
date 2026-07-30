@@ -521,7 +521,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               </div>
               <div>
                 <label style={labelStyle}>แม่แบบที่สนใจ</label>
-                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} />
+                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} ariaLabel="แม่แบบที่สนใจ" />
               </div>
               <div>
                 <label style={labelStyle}>พื้นที่ (ตร.ม.)</label>

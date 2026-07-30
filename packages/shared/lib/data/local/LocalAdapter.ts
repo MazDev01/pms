@@ -13,6 +13,7 @@ import {
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
 import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
+import { exactKey } from "@pms/shared/lib/customerMatch";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
 import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE,
@@ -662,6 +663,16 @@ export const LocalAdapter: DataAdapter = {
       const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
       writeKey(SALES.customers, list.filter((c) => c.id !== id));
       return done();
+    },
+    // โหมด local มีผู้ใช้คนเดียวต่อเครื่อง → เช็ก+สร้างตรงนี้พอ (ไม่มี race ข้าม session จริงแบบ supabase)
+    upsertForCompany: (dealerCode, row) => {
+      const list = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      const mine = scopeByDealer(list, { dealerCode, isHQ: false });
+      const ek = exactKey(row.company);
+      const existing = mine.find((c) => exactKey(c.company) === ek);
+      if (existing) return ok(existing);
+      writeKey(SALES.customers, [row, ...list]);
+      return ok(row);
     },
   },
   appointments: {

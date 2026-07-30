@@ -1596,7 +1596,7 @@ export default function CustomersPage(){
                 <input className="form-input" value={dealForm.project} onChange={e=>setDealForm(f=>({...f,project:e.target.value}))} placeholder={`เช่น ${dealForm.product} เฟส 2`} /></div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div><label className="form-label">แม่แบบ</label>
-                  <TemplateSelect value={dealForm.product} onChange={v=>setDealForm(f=>({...f,product:v}))} className="form-select" /></div>
+                  <TemplateSelect value={dealForm.product} onChange={v=>setDealForm(f=>({...f,product:v}))} className="form-select" ariaLabel="แม่แบบ" /></div>
                 <div><label className="form-label">มูลค่าคาดการณ์</label>
                   <input className="form-input" value={dealForm.value} onChange={e=>setDealForm(f=>({...f,value:e.target.value}))} placeholder="เช่น ฿1.2M" /></div>
               </div>

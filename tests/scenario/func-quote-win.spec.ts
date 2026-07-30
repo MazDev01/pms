@@ -31,6 +31,7 @@ test("[func] ออกใบเสนอราคาจากลีด → ใ�
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณโซ่");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");   // พื้นที่ → ใช้ตั้งต้น BOQ
+  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
@@ -111,6 +112,8 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMP);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณตอบรับ");
+  await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500"); // พื้นที่ → ใช้ตั้งต้น BOQ
+  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMP });
 

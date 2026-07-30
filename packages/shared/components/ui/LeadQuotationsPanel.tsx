@@ -162,6 +162,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
   if (mode === "create" || mode === "edit") {
     const secLabel: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.05em", margin: "16px 0 10px" };
     const net = parseBaht(form.price);                 // มูลค่างาน (ก่อน VAT) = ยอดที่บันทึก
+    // กันออกใบเปล่า (H-audit): ไม่มีรายการ BOQ เลย = ไม่ให้กดสร้าง/บันทึก — เดิมกดผ่านได้
+    // ได้ใบ ฿0 ไม่มีรายการ ซึ่งแก้ทีหลังไม่ได้เลยเพราะโหมดแก้ไขใช้ editor ตัวเดียวกันนี้
+    // (เสียเลขที่เอกสารจริงถาวร ไม่มีทางเพิ่มรายการย้อนหลังผ่านหน้าจอ)
+    const hasItems = form.lineItems.length > 0;
     const vatPct = policy.vat;
     const vatAmt = Math.round(net * vatPct / 100);
     const grand = net + vatAmt;                        // ยอดรวมสุทธิ (รวม VAT)
@@ -222,9 +226,14 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
           </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 16 }}>
+          {!hasItems && (
+            <div style={{ marginRight: "auto", color: "#dc2626", fontSize: "0.72rem", fontWeight: 600 }}>
+              ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนบันทึก
+            </div>
+          )}
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>ยกเลิก</button>
-          <button onClick={save} disabled={saving} className="btn btn-primary btn-sm" style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}><FilePlus size={13} /> {mode === "edit" ? "บันทึก" : "สร้างใบเสนอราคา"}</button>
+          <button onClick={save} disabled={saving || !hasItems} className="btn btn-primary btn-sm" style={(saving || !hasItems) ? { opacity: .6, cursor: "not-allowed" } : undefined}><FilePlus size={13} /> {mode === "edit" ? "บันทึก" : "สร้างใบเสนอราคา"}</button>
         </div>
       </div>
     );
