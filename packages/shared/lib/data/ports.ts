@@ -279,9 +279,6 @@ export interface QuotationsRepo {
   update(row: QuotationMock): Promise<QuotationMock>;
   remove(id: string): Promise<void>;
   setStatus(id: string, status: QuotationMock["status"]): Promise<void>;
-  /** เลขที่ใบต่อสาขาแบบ atomic (supabase=RPC · local=max+1)
-   *  prefix = คำนำหน้าที่ "ตัวแทน" ตั้งเอง (ตั้งค่า › ใบเสนอราคา) — ผู้เรียกส่งมาให้ ไม่ใช่ adapter ไปอ่านเอง */
-  nextQuoteNo(dealer: string, prefix?: string): Promise<string>;
   /** ออกเลขที่ใบ + insert ใน "ทรานแซกชันเดียว" (atomic) — insert ล้ม = เลขไม่หาย (H8)
    *  รับ row ที่ "ยังไม่มี id" (DB เป็นคนออกเลขให้) · คืนใบที่บันทึกจริงพร้อมเลขที่
    *  supabase: RPC create_quotation (ออกเลข+insert รวด) · local: max+1 แล้ว insert (เธรดเดียว = atomic) */
@@ -293,8 +290,19 @@ export interface QuotationsRepo {
   /** ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
   salesperson(quoteId: string): Promise<string | null>;
 }
+// ตัวเลือกดึงลูกค้าแบบ "แบ่งหน้า + กรอง ที่ DB" (M9 Phase 5) — เจาะจุดที่ดึงทั้งตารางแล้ว filter ฝั่ง client
+// (dealer-detail drawer, useHQSearch) ยังไม่ครอบคลุมหน้า /hq/customers หลัก ซึ่งต้องใช้ทั้งชุดเพื่อทำ KPI/analytics/filter
+export interface CustomerListOpts {
+  limit: number;
+  offset: number;
+  dealerCodes?: string[];
+  search?: string;              // ilike name/company/province/phone
+}
+export interface CustomerListResult { rows: CustomerRow[]; total: number; }
 export interface CustomersRepo {
   list(scope?: Scope): Promise<CustomerRow[]>;
+  /** หน้าเดียวของลูกค้า + จำนวนรวมหลังกรอง — supabase: query ที่ DB · local: filter/slice */
+  listPage(scope: Scope | undefined, opts: CustomerListOpts): Promise<CustomerListResult>;
   // เลข id ถัดไปของสาขา — supabase: RPC atomic (กันชนเมื่อสร้างพร้อมกัน) · local: max+1
   nextId(dealerCode: string): Promise<number>;
   create(row: CustomerRow): Promise<CustomerRow>;

@@ -377,15 +377,14 @@ export function useDealerDrawerData(code: string | null): DealerDrawerData | nul
     if (DATA_SOURCE !== "supabase" || !code) { setData(null); return; }
     let alive = true;
     Promise.all([
-      customersRepo.list({ isHQ: true }),
+      customersRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
       leadsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
       quotationsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
       appointmentsRepo.listForDealer(code),
-    ]).then(([cs, lp, qp, appts]) => {
+    ]).then(([cp, lp, qp, appts]) => {
       if (!alive) return;
       setData({
-        customers: cs.filter(c => (c.dealerCode ?? CURRENT_DEALER.code) === code)
-          .map(c => ({ id: c.id, name: c.company, province: c.province, dealsWon: 0, totalRevenue: c.totalValue })),
+        customers: cp.rows.map(c => ({ id: c.id, name: c.company, province: c.province, dealsWon: 0, totalRevenue: c.totalValue })),
         leads: lp.rows.map(l => ({ numId: l.numId, company: l.company, status: l.status })),
         quotes: qp.rows.map(q => ({ quoteNo: q.id, customer: q.customer, valueNum: q.totalValue, status: q.status, createdAt: fmtISOToThai(q.date) })),
         appointments: appts,
@@ -408,15 +407,10 @@ export function useHQSearch(query: string): { leads: LeadRow[]; quotes: Quotatio
       Promise.all([
         leadsRepo.listPage(undefined, { limit: 6, offset: 0, search: q }),
         quotationsRepo.listPage(undefined, { limit: 6, offset: 0, search: q }),
-        customersRepo.list({ isHQ: true }),
-      ]).then(([lp, qp, cs]) => {
+        customersRepo.listPage(undefined, { limit: 6, offset: 0, search: q }),
+      ]).then(([lp, qp, cp]) => {
         if (!alive) return;
-        const ql = q.toLowerCase();
-        setRes({
-          leads: lp.rows,
-          quotes: qp.rows,
-          customers: cs.filter(c => `${c.company ?? ""} ${c.name ?? ""} ${c.province ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(ql)).slice(0, 6),
-        });
+        setRes({ leads: lp.rows, quotes: qp.rows, customers: cp.rows });
       }).catch(e => logRepoRead("hqSearch", e));
     }, 200);
     return () => { alive = false; clearTimeout(t); };

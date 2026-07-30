@@ -626,12 +626,6 @@ export const LocalAdapter: DataAdapter = {
       const lead = ls.find(l => (q.dealId != null && l.numId === q.dealId) || ((q.customerId ?? 0) > 0 && l.customerId === q.customerId));
       return ok(lead?.assigned ?? null);
     },
-    // เลขที่ใบถัดไป = max ของเลขท้าย +1 (เทียบเท่า nextQId เดิมในหน้าจอ) · dealer ไม่ใช้ในโหมด local
-    nextQuoteNo: (_dealer, prefix) => {
-      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
-      const nums = list.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
-      return ok(`${prefix || "Q-2026-"}${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`);
-    },
     // ออกเลข + insert (เธรดเดียวในเบราว์เซอร์ = atomic โดยธรรมชาติ ไม่มีเลขหาย)
     createNumbered: (dealer, prefix, row) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
@@ -644,6 +638,17 @@ export const LocalAdapter: DataAdapter = {
   },
   customers: {
     list: (scope) => ok(scopeByDealer(readKey<CustomerRow[]>(SALES.customers, initialCustomers), scope)),
+    // หน้าเดียว + ค้นหา (M9 Phase 5) — mirror ตรรกะ supabase
+    listPage: (scope, opts) => {
+      const s = (opts.search ?? "").trim().toLowerCase();
+      let arr = scopeByDealer(readKey<CustomerRow[]>(SALES.customers, initialCustomers), scope).filter(c => {
+        if (opts.dealerCodes?.length && !opts.dealerCodes.includes(c.dealerCode ?? DEFAULT_DEALER_CODE)) return false;
+        if (s && !`${c.name ?? ""} ${c.company ?? ""} ${c.province ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(s)) return false;
+        return true;
+      });
+      arr = [...arr].sort((a, b) => a.id - b.id);
+      return ok({ rows: arr.slice(opts.offset, opts.offset + opts.limit), total: arr.length });
+    },
     // โหมด local มีผู้ใช้คนเดียวต่อเครื่อง → max+1 พอ (โหมด supabase ใช้ RPC atomic)
     nextId: (dealerCode) => {
       const mine = scopeByDealer(readKey<CustomerRow[]>(SALES.customers, initialCustomers), { dealerCode, isHQ: false });

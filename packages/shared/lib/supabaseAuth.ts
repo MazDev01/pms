@@ -40,9 +40,13 @@ function decodeClaims(token: string): Record<string, unknown> {
 }
 
 // JWT (access_token) → MockSession · dealer_code ว่าง = HQ (เห็นทั้งเครือ)
-function sessionFromToken(accessToken: string, email: string): MockSession {
+// โทเค็นเพี้ยน/ไม่ใช่ JWT/ไม่มี custom claim ที่ custom_access_token_hook ใส่ให้เลย → คืน null (ห้ามเดาเป็น HQ)
+//   เดิม decode พังแล้วได้ {} → dealer_code default เป็น "" → ตีความเป็น HQ เสมอ (Medium, พบจากผลตรวจสอบ 30 ก.ค. 69)
+//   RLS ฝั่ง DB ยังกันข้อมูลจริงไว้อยู่แล้ว แต่ UI ไม่ควรเปิดเปลือก HQ ให้บัญชีสิทธิ์ต่ำเห็นเลยตั้งแต่แรก
+function sessionFromToken(accessToken: string, email: string): MockSession | null {
   const c = decodeClaims(accessToken);
-  const role = (typeof c.user_role === "string" ? c.user_role : "DEALER_ADMIN") as UserRole;
+  if (typeof c.user_role !== "string") return null;
+  const role = c.user_role as UserRole;
   const dealerCode = typeof c.dealer_code === "string" ? c.dealer_code : "";
   const hq = isHQRole(role) || dealerCode === "";
   return {
@@ -94,7 +98,9 @@ export async function sbSignIn(email: string, password: string): Promise<AuthRes
   }
   // คืน session ทันที ไม่รอ query ชื่อ — ไม่งั้นทุกหน้าหลังล็อกอินช้าขึ้นเพราะรอ 2 คำขอ
   // ชื่อจริงมาทีหลังผ่าน sbOnChange (RoleContext อัปเดต session ให้เอง)
-  return { ok: true, session: sessionFromToken(data.session.access_token, data.user?.email ?? email) };
+  const session = sessionFromToken(data.session.access_token, data.user?.email ?? email);
+  if (!session) return { ok: false, error: ERR_GENERIC };
+  return { ok: true, session };
 }
 
 /** เข้าด่วนด้วยบัญชีเดโมที่ seed ไว้ (ปุ่ม HQ / Dealer ในหน้า login) */
@@ -112,7 +118,10 @@ export async function sbRestore(): Promise<MockSession | null> {
   const { data } = await getSupabase().auth.getSession();
   const s = data.session;
   if (!s) return null;
-  return sessionFromToken(s.access_token, s.user?.email ?? ""); // ชื่อจริงตามมาทาง sbOnChange
+  const session = sessionFromToken(s.access_token, s.user?.email ?? ""); // ชื่อจริงตามมาทาง sbOnChange
+  // โทเค็นที่ถืออยู่เพี้ยน (แก้ไข sessionStorage เอง/ไฟล์เก่าค้าง) → เคลียร์ session ทิ้งเลย ไม่ใช่แค่ปฏิเสธหน้านี้
+  if (!session) { await sbSignOut(); return null; }
+  return session;
 }
 
 // ── H4 · รีเซ็ตรหัสผ่านด้วย "ลิงก์ทางอีเมล" (ไม่ต้องใช้ service_role) ──────────────
@@ -173,6 +182,7 @@ export function sbOnChange(cb: (session: MockSession | null) => void): () => voi
   const { data } = getSupabase().auth.onAuthStateChange((_event, s) => {
     if (!s) { cb(null); return; }
     const base = sessionFromToken(s.access_token, s.user?.email ?? "");
+    if (!base) { cb(null); void sbSignOut(); return; } // โทเค็นเพี้ยนกลางเซสชัน → ออกจากระบบ ไม่ใช่ถือ session ผี
     cb(base);                                   // ใช้งานต่อได้ทันที (ชื่อยังเป็นอีเมล/รหัสสาขา)
     void withNames(base, s.user?.id ?? "").then(full => {  // ได้ชื่อจริงแล้วค่อยส่งซ้ำ
       if (full.name !== base.name || full.dealerName !== base.dealerName) cb(full);

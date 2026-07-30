@@ -715,19 +715,21 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new Error(error.message);
       return rowToQuote(data as Row);
     },
-    // เลขที่ใบต่อสาขาแบบ atomic (กันเลขชนเมื่อออกพร้อมกัน/ข้ามสาขา) — RPC ที่ DB (0003)
-    nextQuoteNo: async (dealer, prefix) => {
-      // ตัวนับเดินหน้าใน DB แบบ atomic ต่อสาขา · คำนำหน้าเป็นของตัวแทน (ส่งมาจากผู้เรียก)
-      // ไม่ส่ง p_prefix = ฟังก์ชันใช้ค่า default ของมันเอง → คำนำหน้าที่ตัวแทนตั้งไว้จะถูกละเลย
-      const args: Record<string, unknown> = { p_dealer: dealer };
-      if (prefix) args.p_prefix = prefix;
-      const { data, error } = await sb().rpc("next_quote_no", args);
-      if (error) throw new Error(error.message);
-      return String(data);
-    },
   },
   customers: {
     list: async (scope) => (await selectScoped<CustomerRow>("customers", scope)).map(normalizeCustomer),
+    // หน้าเดียว + ค้นหา ที่ DB (M9 Phase 5) — เจาะจุดที่เคยดึงทั้งตารางแล้วกรองฝั่ง client (drawer/search)
+    listPage: async (scope, opts) => {
+      const s = (opts.search ?? "").trim().replace(/[,()%*\\]/g, " ").trim();
+      let q = sb().from("customers").select("*", { count: "exact" });
+      if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
+      if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
+      if (s) q = q.or(`name.ilike.%${s}%,company.ilike.%${s}%,province.ilike.%${s}%,phone.ilike.%${s}%`);
+      q = q.order("id", { ascending: true }).range(opts.offset, opts.offset + opts.limit - 1);
+      const { data, error, count } = await q;
+      if (error) throw new Error(error.message);
+      return { rows: (data as Row[]).map(r => normalizeCustomer(toCamel<CustomerRow>(r))), total: count ?? 0 };
+    },
     nextId: (dealerCode) => nextEntityId(dealerCode, "customers"),
     create: (row) => insertRow<CustomerRow>("customers", row),
     update: (row) => updateRow<CustomerRow>("customers", row.id, row),

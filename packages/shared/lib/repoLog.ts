@@ -22,8 +22,23 @@ export function isAbortedRequest(e: unknown): boolean {
   return /Failed to fetch|NetworkError when attempting|Load failed|aborted/i.test(msg);
 }
 
+// แจ้งการอ่านที่ล้มเหลวจริง (ไม่ใช่ถูกยกเลิกเพราะเปลี่ยนหน้า) ผ่าน event เดียวกันทั้งแอป —
+// คู่ขนานกับ REPO_SAVE_ERROR_EVENT (useRepoState.ts) แต่ฝั่งอ่าน · จุดที่แก้จริงคือ AppShell
+// (แถบเตือนเดียวกับ "บันทึกไม่สำเร็จ") ไม่ต้องแก้ทีละ hook ที่เรียก logRepoRead อยู่แล้วนับสิบจุด
+//
+// ทำไมต้องมี: hook พวกนี้ (useNetworkCustomersDb ฯลฯ) เดิม catch แล้วแค่ log ขึ้น console — ถ้าโหลด
+// พังจริง (RLS/เน็ตหลุด/query error) หน้าจอจะโชว์ "0 รายการ" เหมือนข้อมูลว่างจริงเป๊ะ ผู้ใช้แยกไม่ออก
+// ว่า "ยังไม่มีข้อมูล" กับ "โหลดไม่สำเร็จ" — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69 (severity: Critical)
+export const REPO_READ_ERROR_EVENT = "pms:repo-read-error";
+function reportRepoReadError(tag: string, e: unknown): void {
+  if (typeof window === "undefined") return;
+  const msg = e instanceof Error ? e.message : String(e);
+  try { window.dispatchEvent(new CustomEvent(REPO_READ_ERROR_EVENT, { detail: `${tag}: ${msg}` })); } catch { /* ignore */ }
+}
+
 /** บันทึกความล้มเหลวของการอ่าน — ข้ามกรณีที่คำขอถูกยกเลิกเพราะเปลี่ยนหน้า */
 export function logRepoRead(tag: string, e: unknown): void {
   if (isAbortedRequest(e)) return;
   console.error(`[${tag}]`, e);
+  reportRepoReadError(tag, e);
 }

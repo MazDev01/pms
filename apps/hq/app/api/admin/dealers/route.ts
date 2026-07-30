@@ -178,8 +178,11 @@ export async function DELETE(req: NextRequest) {
   await admin.from("responsible_persons").delete().eq("dealer_code", code);
   await admin.from("dealer_lead_rules").delete().eq("dealer_code", code);
   // ลบแถว dealers ก่อน — จุดที่อาจ fail · สำเร็จแล้วค่อยแตะ auth ที่ย้อนไม่ได้
-  const { error } = await admin.from("dealers").delete().eq("code", code);
+  // .select() เพื่อรู้จำนวนแถวที่ลบจริง — PostgREST ไม่ error เมื่อ filter ไม่ตรงแถวไหนเลย
+  //   เดิมไม่เช็ก → ลบรหัสสาขาที่ไม่มีจริงก็ได้ 200 + เขียน audit log "ลบตัวแทน" ทั้งที่ไม่มีอะไรถูกลบ (Medium, 30 ก.ค. 69)
+  const { data: deleted, error } = await admin.from("dealers").delete().eq("code", code).select("code");
   if (error) return bad(400, `ลบตัวแทนไม่สำเร็จ: ${error.message}`);
+  if (!deleted || deleted.length === 0) return bad(404, `ไม่พบตัวแทนรหัส "${code}"`);
   // ลบบัญชี auth ของผู้ใช้สังกัดสาขา (profile หายตาม cascade) — ทำท้ายสุด
   const { data: members } = await admin.from("profiles").select("id").eq("dealer_code", code);
   for (const m of members ?? []) {

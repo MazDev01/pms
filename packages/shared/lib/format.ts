@@ -19,10 +19,6 @@ export function fmtBaht(v: number): string {
   return `฿${v.toLocaleString()}`;
 }
 
-export function fmtM(v: number): string {
-  return `฿${Math.round(v * 10) / 10}M`;
-}
-
 export function fmtFull(v: number): string {
   return `฿${v.toLocaleString()}`;
 }

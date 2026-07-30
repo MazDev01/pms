@@ -27,6 +27,13 @@ const MUTED   = "#6b7280";
 type FileCategory = "ใบเสนอราคา" | "แบบแปลน" | "รูปภาพ" | "นำเสนอ" | "สัญญา" | "อื่นๆ";
 type FileExt = "pdf" | "docx" | "xlsx" | "dwg" | "pptx" | "jpg" | "png" | "other";
 
+// ชนิด/ขนาดไฟล์ที่รับอัปโหลด — ต้องตรงกับ allowed_mime_types/file_size_limit ของ bucket dealer-files (0075)
+//   เดิมไม่เช็กเลย ทั้งที่ป้ายบนกล่องลากไฟล์บอกว่ารับแค่ PDF/Word/Excel/CAD/รูปภาพ — อัปโหลด .exe ได้ปกติ
+//   (พบจากผลตรวจสอบระบบ 30 ก.ค. 69, Medium) เช็กที่นามสกุลไฟล์ ไม่ใช่ MIME — ไฟล์ CAD (.dwg/.dxf) ไม่มี
+//   MIME มาตรฐานที่เบราว์เซอร์ส่วนใหญ่รู้จัก (มักได้ octet-stream เหมือนไฟล์ไม่รู้จักทั่วไป)
+const ACCEPTED_EXT = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".dwg", ".dxf", ".jpg", ".jpeg", ".png"];
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+
 // ไฟล์ในหน้านี้ = คลังไฟล์รวมของตัวแทน (แหล่งเดียวใน mock.ts)
 // แนบไฟล์จากหน้าลูกค้า/ลูกค้าเป้าหมาย → ปรากฏที่นี่อัตโนมัติ
 type FileMock = DealerFile;
@@ -107,9 +114,20 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
   const [cat, setCat]       = useState<FileCategory>("อื่นๆ");
   const [project, setProj]  = useState("");
   const [blob, setBlob]     = useState<File | null>(null); // ไฟล์จริง → อัปโหลดเข้า Storage (โหมด supabase)
+  const [fileError, setFileError] = useState<string | null>(null);
 
   function pick(f: File | undefined) {
     if (!f) return;
+    const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
+    if (!ACCEPTED_EXT.includes(ext)) {
+      setFileError(`ไม่รองรับไฟล์ชนิด "${ext}" — รับเฉพาะ PDF, Word, Excel, PowerPoint, CAD, รูปภาพ`);
+      return;
+    }
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setFileError(`ไฟล์ใหญ่เกินไป (${(f.size / 1024 / 1024).toFixed(1)} MB) — จำกัดไม่เกิน 25 MB`);
+      return;
+    }
+    setFileError(null);
     setBlob(f);
     setName(f.name);
     setSize(f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`);
@@ -123,6 +141,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
   }
 
   function save() {
+    if (fileError) return; // ปุ่มถูก disable ไว้แล้ว แต่กันเผื่อ event ค้าง
     const fileName = name.trim() || "ไฟล์ใหม่.pdf";
     onUpload({
       id: Date.now(), name: fileName,
@@ -151,8 +170,8 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
             <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}
               style={{ border: `2px dashed ${name ? PRIMARY : BORDER}`, borderRadius: 12, padding: "24px 20px", textAlign: "center", background: name ? "#f0f4fa" : "var(--muted)", cursor: "pointer" }}>
               <label style={{ cursor: "pointer" }}>
-                <input type="file" style={{ display: "none" }} onChange={handleFile} />
-                {name ? (
+                <input type="file" accept={ACCEPTED_EXT.join(",")} style={{ display: "none" }} onChange={handleFile} />
+                {name && !fileError ? (
                   <div>
                     <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL }}>{name}</div>
                     <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 4 }}>{size}</div>
@@ -161,11 +180,14 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
                   <div>
                     <Upload size={28} color={MUTED} style={{ margin: "0 auto 10px" }} />
                     <div style={{ fontSize: "0.8rem", color: MUTED }}>ลากไฟล์มาวาง หรือ <span style={{ color: PRIMARY, fontWeight: 700 }}>คลิกเลือกไฟล์</span></div>
-                    <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>PDF, Word, Excel, CAD, รูปภาพ</div>
+                    <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>PDF, Word, Excel, PowerPoint, CAD, รูปภาพ · ไม่เกิน 25 MB</div>
                   </div>
                 )}
               </label>
             </div>
+            {fileError && (
+              <div style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 600 }}>{fileError}</div>
+            )}
             {/* Manual name override */}
             <div>
               <label className="form-label">ชื่อไฟล์</label>
@@ -186,7 +208,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
           </div>
           <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
-            <button onClick={save} className="btn btn-primary btn-md">
+            <button onClick={save} disabled={!!fileError} className="btn btn-primary btn-md">
               <Upload size={13} /> อัปโหลด
             </button>
           </div>

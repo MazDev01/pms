@@ -9,6 +9,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { purgeOldDealerKeys } from "@pms/shared/lib/mock";
 import { REPO_SAVE_ERROR_EVENT } from "@pms/shared/lib/useRepoState";
+import { REPO_READ_ERROR_EVENT } from "@pms/shared/lib/repoLog";
 
 // แถบเตือน "บันทึกไม่สำเร็จ" (C1) — ต้องเห็นทุกหน้า เพราะการเขียนเป็น optimistic
 // ถ้าไม่แจ้ง ผู้ใช้จะเข้าใจว่าบันทึกแล้วทั้งที่ DB ปฏิเสธ (เช่น RLS/เน็ตหลุด)
@@ -50,6 +51,35 @@ function SyncErrorBar() {
   );
 }
 
+// แถบเตือน "โหลดข้อมูลบางส่วนไม่สำเร็จ" — ต้องเห็นทุกหน้า เพราะหลาย hook (useNetworkCustomersDb ฯลฯ)
+// เดิม catch แล้ว log เงียบๆ ตอนโหลดพัง หน้าจอจึงโชว์ "0 รายการ" เหมือนข้อมูลว่างจริง แยกไม่ออกจาก
+// ของจริงที่ยังไม่มีข้อมูล — ผู้ใช้อาจเข้าใจผิดว่าข้อมูลหาย (Critical, พบจากผลตรวจสอบระบบ 30 ก.ค. 69)
+// ไม่มี retry ต่อ hook ให้เรียก (มีหลายสิบจุด) — รีเฟรชทั้งหน้าคือทางที่ตรงและเชื่อถือได้สุด
+function ReadErrorBar() {
+  const [readError, setReadError] = useState<string | null>(null);
+  useEffect(() => {
+    const onErr = (e: Event) => setReadError((e as CustomEvent<string>).detail || "โหลดข้อมูลไม่สำเร็จ");
+    window.addEventListener(REPO_READ_ERROR_EVENT, onErr);
+    return () => window.removeEventListener(REPO_READ_ERROR_EVENT, onErr);
+  }, []);
+  if (!readError) return null;
+  return (
+    <div role="alert" style={{
+      display: "flex", alignItems: "center", gap: 10, margin: "10px 16px 0",
+      background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e",
+      borderRadius: 10, padding: "10px 14px", fontSize: "0.8rem", fontWeight: 600,
+    }}>
+      <span style={{ flex: 1 }}>โหลดข้อมูลบางส่วนไม่สำเร็จ — ตัวเลขหรือรายการที่เห็นอาจไม่ครบถ้วน</span>
+      <button onClick={() => window.location.reload()}
+        style={{ background: "none", border: "1px solid #92400e", borderRadius: 6, cursor: "pointer", color: "#92400e", fontWeight: 700, padding: "3px 10px", fontSize: "0.75rem" }}>
+        รีเฟรช
+      </button>
+      <button onClick={() => setReadError(null)} aria-label="ปิดการแจ้งเตือน"
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#92400e", fontWeight: 800 }}>✕</button>
+    </div>
+  );
+}
+
 // เชลล์ของเวิร์กสเปซ — ถือสถานะเปิด/ปิดเมนูมือถือ (hamburger drawer)
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -64,6 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="main">
         <Topbar onMenu={() => setNavOpen(o => !o)} />
         <SyncErrorBar />
+        <ReadErrorBar />
         {/* ตัวกรองแยกอิสระต่อหน้า — key+storageKey ต่อ pathname (เปลี่ยนหน้า A ไม่กระทบหน้า B) */}
         <div className="content">
           <FilterProvider key={pathname} storageKey={`bpms_filters:${pathname}`}>

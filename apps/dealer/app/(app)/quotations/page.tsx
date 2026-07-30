@@ -943,7 +943,15 @@ function QuotationsPageInner(){
                 <span style={{width:38,height:38,borderRadius:"50%",background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={17} color="#dc2626"/></span>
                 <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบใบเสนอราคา</div>
               </div>
-              <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.id}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+              {selected.status==="won" ? (
+                // ใบที่ปิดการขายแล้วคือประวัติยอดขายจริง — เตือนแรงกว่าใบร่างทั่วไป กันมือลื่นลบยอดที่ปิดได้แล้ว
+                // (พบจากผลตรวจสอบระบบ 30 ก.ค. 69, Low: ข้อความเดิมเหมือนกันหมดทุกสถานะ ไม่มีสัญญาณเตือนพิเศษ)
+                <p style={{fontSize:"0.8rem",color:"#dc2626",lineHeight:1.6,margin:0,fontWeight:600}}>
+                  ใบนี้ <strong>ปิดการขายแล้ว</strong> (฿{Math.round(selected.totalValue).toLocaleString("th-TH")}) — ลบแล้วยอดขายของ {selected.customer} จะถูกหักออกด้วย และการลบไม่สามารถย้อนกลับได้
+                </p>
+              ) : (
+                <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.id}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+              )}
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setDelConfirm(false)}>ยกเลิก</button>
