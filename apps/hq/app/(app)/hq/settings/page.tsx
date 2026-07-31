@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
+import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import type { HQCompany } from "@pms/shared/lib/data/types";
@@ -137,7 +138,6 @@ const numInput = (value: number, onChange: (n: number) => void, unit: string, st
     <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
   </div>
 );
-const fmtB = (n: number) => n >= 1e6 ? `฿${(n / 1e6).toFixed(1)}M` : `฿${n.toLocaleString("th-TH")}`;
 // regionDisplay = ใช้ของกลาง (hqQuotations.ts) แหล่งเดียว — เดิม copy ในไฟล์นี้ไม่มี guard "ไม่ระบุ" (1.4)
 
 // ═══════════════════════ 3 · เส้นทางการขาย ════════════════════════════════════
@@ -508,6 +508,9 @@ function NotificationsTab() {
 // สำรอง/กู้คืนอ่าน-เขียนผ่าน repo ทั้งหมด (ดู exportAll/importAll) ไม่พึ่งรายชื่อคีย์ localStorage อีกแล้ว
 function BackupCard() {
   const toast = useToast();
+  // นำเข้า/คืนค่าเริ่มต้น เขียนทับนโยบายทั้งเครือได้ในคลิกเดียว ต้องบันทึกประวัติเหมือนการแก้ค่าตั้งปกติ
+  // (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมสองปุ่มนี้ไม่บันทึกอะไรเลย ต่างจากปุ่มบันทึกค่าตั้งทั่วไป)
+  const logAudit = useAuditLogger();
 
   // สำรอง/กู้คืน "ค่าจริงที่ระบบใช้อยู่" — อ่านผ่าน repo ทั้งหมด
   // เดิมอ่าน/เขียน localStorage ตรง ๆ ซึ่งพังไปแล้วตั้งแต่ค่าพวกนี้ย้ายเข้า DB:
@@ -547,6 +550,7 @@ function BackupCard() {
         if (Array.isArray(obj.dealers)) jobs.push(dealersRepo.save(obj.dealers as DealerRow[]));
         if (Array.isArray(obj.catalog)) jobs.push(catalogRepo.save(obj.catalog as SolutionProduct[]));
         await Promise.all(jobs);
+        logAudit("นำเข้าการตั้งค่า (กู้คืน)", file.name);
         toast("นำเข้าสำเร็จ — กำลังโหลดใหม่");
         setTimeout(() => location.reload(), 900);
       } catch (err) {
@@ -565,6 +569,7 @@ function BackupCard() {
         settingsRepo.saveNotifRules(DEFAULT_HQ_NOTIF_RULES),
         settingsRepo.saveLostReasons([...LOST_REASONS]),
       ]);
+      logAudit("คืนค่าเริ่มต้น", "นโยบาย/เป้าหมาย/กฎแจ้งเตือน/เหตุผลปิดการขาย");
       toast("คืนค่าเริ่มต้นแล้ว — กำลังโหลดใหม่");
       setTimeout(() => location.reload(), 900);
     } catch (e) {

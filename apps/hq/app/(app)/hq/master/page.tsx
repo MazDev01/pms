@@ -10,6 +10,7 @@ import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 // เริ่มด้วยรายการว่าง — เดิมตั้งต้นด้วยชุดตัวอย่าง ทำให้เห็นแม่แบบปลอมกะพริบก่อนของจริงมา
 import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
+import { fmtFull as fmtBaht } from "@pms/shared/lib/format";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -20,7 +21,6 @@ const STEEL   = "#2D2D2D";
 const MUTED   = "#6b7280";
 const BORDER  = "#e5e7eb";
 
-const fmtBaht = (v: number) => "฿" + v.toLocaleString("th-TH");
 const TH_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // วันของระบบ (APP_NOW) ไม่ใช่นาฬิกาเครื่อง — effectiveDate ของราคากลางต้องอยู่ในยุคเดียวกับข้อมูล
 function todayTH() { const d = APP_NOW; return `${d.getDate()} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
@@ -187,7 +187,7 @@ function HQMasterPageInner() {
   function openAdd() { setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(true); }
   function addProduct() {
     const price = parseFloat(addForm.price);
-    if (!addForm.name.trim() || !price) return;
+    if (!addForm.name.trim() || !(price > 0)) return;
     const nid = Math.max(0, ...catalog.map(p => parseInt(p.id.replace(/\D/g, "")) || 0)) + 1;
     setCatalog(prev => [...prev, {
       id: `tpl-${nid}`, name: addForm.name.trim(), spec: addForm.spec.trim(),
@@ -199,7 +199,7 @@ function HQMasterPageInner() {
   }
   function saveReprice() {
     const price = parseFloat(rpPrice);
-    if (!reprice || !price || price === reprice.price) { setReprice(null); return; }
+    if (!reprice || !(price > 0) || price === reprice.price) { setReprice(null); return; }
     setCatalog(prev => prev.map(p => p.id !== reprice.id ? p : {
       ...p, price, effectiveDate: todayTH(),
       // ราคาปัจจุบันถูกดันลงประวัติ (ใหม่สุดอยู่บน)
@@ -439,7 +439,7 @@ function HQMasterPageInner() {
               <div><label style={lbl}>รูปแม่แบบ</label><ImageUpload value={addForm.image} onChange={v => setAddForm(f => ({ ...f, image: v }))} /></div>
               <div><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={addForm.spec} onChange={e => setAddForm(f => ({ ...f, spec: e.target.value }))} /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div><label style={lbl}>ราคากลาง (บาท) *</label><input style={inp} type="number" value={addForm.price} onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="5100" /></div>
+                <div><label style={lbl}>ราคากลาง (บาท) *</label><input style={inp} type="number" min="0" step="0.01" value={addForm.price} onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="5100" /></div>
                 <div><label style={lbl}>หน่วย</label><input style={inp} value={addForm.unit} onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))} /></div>
               </div>
               {/* แม่แบบย่อย — ใส่/แก้/ลบ ได้ตั้งแต่ตอนสร้าง */}
@@ -496,7 +496,7 @@ function HQMasterPageInner() {
             <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800 }}>ปรับราคากลาง — {reprice.name}</div>
             <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 13 }}>
               <div style={{ fontSize: "0.8rem", color: MUTED }}>ราคาปัจจุบัน <b style={{ color: STEEL }}>{fmtBaht(reprice.price)}/{reprice.unit}</b> (มีผล {reprice.effectiveDate})</div>
-              <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input style={inp} type="number" value={rpPrice} autoFocus onChange={e => setRpPrice(e.target.value)} /></div>
+              <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input style={inp} type="number" min="0" step="0.01" value={rpPrice} autoFocus onChange={e => setRpPrice(e.target.value)} /></div>
               <div><label style={lbl}>หมายเหตุ</label><input style={inp} value={rpNote} onChange={e => setRpNote(e.target.value)} placeholder="เช่น ปรับตามราคาเหล็ก" /></div>
               <div style={{ fontSize: "0.65rem", color: "#9ca3af" }}>ราคาเดิมจะถูกบันทึกลงประวัติราคาโดยอัตโนมัติ · มีผลทันทีทุกตัวแทน</div>
             </div>

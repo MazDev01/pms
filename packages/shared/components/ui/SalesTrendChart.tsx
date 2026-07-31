@@ -76,8 +76,8 @@ export function SalesTrendChart({
   const data = useMemo(() => {
     const n = range === "3m" ? 3 : range === "12m" ? 12 : 6; // slice N เดือนล่าสุด
     return asPoints(monthly.slice(-n));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, monthly]);
+    // asPoints ปิดคลุม prevRatio — ขาดไปก่อนหน้านี้ทำให้ prevValue ค้างค่าเก่าถ้า prevRatio เปลี่ยนโดย range/monthly ไม่เปลี่ยน
+  }, [range, monthly, prevRatio]);
 
   const rangeDesc = range === "3m" ? "3 เดือนที่ผ่านมา (รายเดือน)"
     : range === "12m" ? "12 เดือนที่ผ่านมา (รายเดือน)"

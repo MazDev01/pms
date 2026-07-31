@@ -6,12 +6,13 @@ import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import {
   buildLeadTasks, leadStatusLabel, leadStatusColor, QUOTED_UP, DEFAULT_DEALER_CODE,
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, loadHQPolicy, customerCode,
-  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
+  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel, DEFAULT_DELIVERY_DAYS,
   type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile,
   type AppointmentMock,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
+import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
 
 // หมวดโน้ตจาก DB เป็นข้อความอิสระ — หมวดที่ไม่รู้จักต้องไม่ทำหน้าพัง ให้ใช้สีของ "ทั่วไป"
 const noteColorOf = (cat: string) =>
@@ -57,6 +58,11 @@ const STEEL   = "#2D2D2D";
 const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
 
+// เช็คชนิด/ขนาดไฟล์แนบจากหน้าลูกค้า — ต้องตรงกับหน้า "ไฟล์" หลัก (apps/dealer/app/(app)/files/page.tsx)
+// เพราะแนบเข้าคลังไฟล์เดียวกัน (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมช่องนี้ไม่เช็คอะไรเลย)
+const CUSTOMER_FILE_ACCEPTED_EXT = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".dwg", ".dxf", ".jpg", ".jpeg", ".png"];
+const CUSTOMER_FILE_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+
 // ── Types ────────────────────────────────────────────────────
 // CustomerRow imported from mock (shared app-wide)
 type SortKey = "company"|"name"|"phone"|"province"|"owner"|"lastActivity"|"quotationCount"|"joinDate";
@@ -83,7 +89,6 @@ function downloadCsvTemplate(){
   const url=URL.createObjectURL(blob); const a=document.createElement("a");
   a.href=url; a.download="customer-import-template.csv"; a.click(); URL.revokeObjectURL(url);
 }
-function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
 const THAI_MO=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // "วันนี้" ต้องเป็นวันของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง
 // ใช้ new Date() = ดีลใหม่ได้วันที่ล่วงหน้าจากยุคของข้อมูล แล้วหลุดนอกช่วงตัวกรองทุกพรีเซ็ต (ทุกพรีเซ็ตจบที่ APP_NOW)
@@ -205,11 +210,16 @@ function purchasedGroupsFor(customerId:number, qs:QuotationMock[]): PurchasedGro
     }))
     .sort((a,b)=>b.total-a.total);
 }
-// วันส่งมอบงานล่าสุด
-// เดิมบวก "ระยะเวลาส่งมอบ" ของใบเสนอราคา แต่ฟิลด์นั้นถูกลบแล้ว (ไม่เคยมีค่าสักใบ → ผลลัพธ์เท่ากับวันปิดการขายอยู่ดี)
+// วันส่งมอบงานล่าสุด = วันปิดการขาย + ระยะเวลาส่งมอบมาตรฐาน (DEFAULT_DELIVERY_DAYS)
+// สูตรเดียวกับที่ฝั่ง HQ ใช้ (0080_hq_customers_page.sql: won_date + 90) — เดิมหน้านี้แสดงแค่วันปิดการขาย
+// เฉยๆ (บวก 0 วัน) ไม่ตรงกับ HQ (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมมี 3 สูตรไม่ตรงกันในระบบ)
 function deliveryDateFor(customerId:number, qs:QuotationMock[]): string {
   const won = qs.filter(q=>q.customerId===customerId && q.status==="won").sort((a,b)=>a.date<b.date?1:-1)[0];
-  return won ? won.date : "—";
+  if (!won?.date) return "—";
+  const d = new Date(won.date);
+  if (Number.isNaN(d.getTime())) return "—";
+  d.setDate(d.getDate() + DEFAULT_DELIVERY_DAYS);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 // ── Deterministic drawer feeds (จากลูกค้า + quotations + leads) ──
@@ -400,12 +410,20 @@ export default function CustomersPage(){
   // เปิดโมดัลจากพารามิเตอร์ ?open=N — ใช้ทั้งตอนโหลดหน้า (ลิงก์เดิม/deep link) และตอนค้นหาจาก Topbar หน้าเดิม
   const dataRef = useRef(data);
   dataRef.current = data;
+  // แจ้งเตือนสั้น ๆ เมื่อลิงก์ที่ตามมาไม่พบลูกค้าจริง (เดิมหายไปเงียบ ๆ — พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+  const [linkToast, setLinkToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!linkToast) return;
+    const t = setTimeout(() => setLinkToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [linkToast]);
   useEffect(() => {
     const openByParam = (qs: string) => {
       const p = new URLSearchParams(qs).get("open");
       if (!p) return;
       const target = dataRef.current.find(c => String(c.id) === p);
       if (target) setSelected(target);
+      else setLinkToast("ไม่พบลูกค้ารายนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง");
       window.history.replaceState(null, "", "/customers");
     };
     // 1) ตอนโหลดหน้า (mount) — จาก URL จริง
@@ -454,9 +472,16 @@ export default function CustomersPage(){
   const [previewFile, setPreviewFile] = useState<DealerFile | null>(null);
   const [viewAppt, setViewAppt] = useState<AppointmentMock | null>(null);
   const [viewNote, setViewNote] = useState<CustomerNote | null>(null);
+  // request token กันผลลัพธ์เก่าทับใหม่ — sync ถูกยิงซ้ำได้จากหลายทาง (mount, event, สลับสาขา)
+  const dealerFilesReqRef = useRef(0);
   useEffect(() => {
     // ไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB)
-    const sync = () => { filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles).catch(() => {}); };
+    const sync = () => {
+      const myReq = ++dealerFilesReqRef.current;
+      filesRepo.list({ dealerCode: currentDealer.code, isHQ: false })
+        .then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); })
+        .catch(() => {});
+    };
     sync();
     window.addEventListener(DEALER_FILES_EVENT, sync);
     window.addEventListener("storage", sync);
@@ -468,6 +493,19 @@ export default function CustomersPage(){
   const scrollTo = (r: React.RefObject<HTMLDivElement|null>) => r.current?.scrollIntoView({ behavior:"smooth", block:"nearest" });
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !selected) return;
+    // เช็คชนิด/ขนาดไฟล์เหมือนหน้า "ไฟล์" หลัก (apps/dealer/app/(app)/files/page.tsx) — ที่นี่แนบเข้าคลังเดียวกัน
+    // เดิมช่องนี้ไม่เช็คอะไรเลย (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69)
+    const ext = ("." + (f.name.split(".").pop() ?? "")).toLowerCase();
+    if (!CUSTOMER_FILE_ACCEPTED_EXT.includes(ext)) {
+      alert(`ไฟล์ประเภท ${ext || "ไม่ทราบ"} ไม่รองรับ — รองรับเฉพาะ ${CUSTOMER_FILE_ACCEPTED_EXT.join(", ")}`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (f.size > CUSTOMER_FILE_MAX_BYTES) {
+      alert(`ไฟล์ใหญ่เกิน ${(CUSTOMER_FILE_MAX_BYTES/1024/1024).toFixed(0)} MB`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
     // อัปโหลด bytes เข้า Storage ก่อน (local คืน null = เก็บแค่ metadata) แล้วบันทึก metadata
     void fileStorage.upload(currentDealer.code, f).catch(() => null)
@@ -1413,7 +1451,7 @@ export default function CustomersPage(){
                   <div style={cardS}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                       <div style={{...secL,marginBottom:0}}><FileText size={13} color={PRIMARY}/> ใบเสนอราคา</div>
-                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, hqPolicy.vat, printCfg)}
+                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, q.vatPercent??hqPolicy.vat, printCfg)}
                         className="btn btn-secondary btn-sm" style={{color:PRIMARY}}><Printer size={12}/> พิมพ์ PDF</button>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 20px",marginBottom:12}}>
@@ -1484,7 +1522,7 @@ export default function CustomersPage(){
       })()}
 
       {/* input ไฟล์ (ซ่อน) — ใช้ร่วมกับแท็บไฟล์ของโมดัลลูกค้า */}
-      <input ref={fileInputRef} type="file" style={{display:"none"}} onChange={handleFileSelect} />
+      <input ref={fileInputRef} type="file" accept={CUSTOMER_FILE_ACCEPTED_EXT.join(",")} style={{display:"none"}} onChange={handleFileSelect} />
       <input ref={csvInputRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={onCsvFile} />
 
       {/* คีย์ลูกค้าเดิมทีละราย (legacy manual) */}
@@ -1696,6 +1734,15 @@ export default function CustomersPage(){
             </div>
           </div>
         </>
+      )}
+
+      {linkToast && (
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
+          zIndex:300, background:"#003366", color:"#fff", borderRadius:12, padding:"12px 18px",
+          boxShadow:"0 10px 32px rgba(0,0,0,.25)", fontSize:"0.8rem", fontWeight:600,
+          maxWidth:"calc(100vw - 32px)" }}>
+          {linkToast}
+        </div>
       )}
     </div>
   );

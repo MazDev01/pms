@@ -130,6 +130,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
         status: "draft", date: MOCK_TODAY, items: form.lineItems.length, lineItems: form.lineItems,
         customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: form.expiry || "",
         note: form.note || undefined,
+        vatPercent: policy.vat, // สแนปช็อต VAT ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ (ไม่ใช้ VAT ปัจจุบันของ HQ)
       });
       onToast?.("สร้างใบเสนอราคาเรียบร้อย");
     }
@@ -312,7 +313,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat, printCfg)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
+          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? policy.vat, printCfg)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
           {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
           {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
             <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
@@ -359,7 +360,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
                     {([
                       { ic: <Eye size={13} />, t: "ดู", fn: () => { setEditing(q); setMode("view"); } },
                       ...(readOnly ? [] : [{ ic: <Pencil size={13} />, t: "แก้ไข", fn: () => openEdit(q) }]),
-                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, policy.vat, printCfg) },
+                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? policy.vat, printCfg) },
                       ...(readOnly ? [] : [
                         { ic: <Copy size={13} />, t: "ทำสำเนา", fn: () => duplicate(q) },
                         { ic: <Trash2 size={13} />, t: "ลบ", fn: () => setConfirmDel(q.id), danger: true },

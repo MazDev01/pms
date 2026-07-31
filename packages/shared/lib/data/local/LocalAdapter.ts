@@ -693,7 +693,13 @@ export const LocalAdapter: DataAdapter = {
       writeKey(SALES.quotations, [row, ...list]);
       return ok(row);
     },
+    // เซฟตี้เน็ตชั้นที่ 2 (mirror quotations_won_requires_customer, 0069/0071) — โหมด local ไม่มี DB
+    // constraint คุมให้ ถ้าไม่เช็คตรงนี้ ฟอร์มแก้ไขทั่วไป (ที่ตอนนี้ตัดตัวเลือก "won" ออกแล้วก็จริง)
+    // หรือโค้ดเส้นทางอื่นในอนาคตจะเขียน won โดยไม่มีลูกค้าผูกได้แบบเงียบๆ (พบจากผลตรวจสอบ 31 ก.ค. 69)
     update: (row) => {
+      if (row.status === "won" && !((row.customerId ?? 0) > 0)) {
+        return Promise.reject(new Error('ปิดการขายสำเร็จไม่ได้ — ใบนี้ยังไม่ได้ผูกกับลูกค้า (ใช้ปุ่ม "ลูกค้าตอบรับ ✓" แทน)'));
+      }
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       writeKey(SALES.quotations, list.map((q) => (q.id === row.id ? row : q)));
       return ok(row);
@@ -705,6 +711,9 @@ export const LocalAdapter: DataAdapter = {
     },
     setStatus: (id, status) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      if (status === "won" && !((list.find(q => q.id === id)?.customerId ?? 0) > 0)) {
+        return Promise.reject(new Error('ปิดการขายสำเร็จไม่ได้ — ใบนี้ยังไม่ได้ผูกกับลูกค้า (ใช้ปุ่ม "ลูกค้าตอบรับ ✓" แทน)'));
+      }
       writeKey(SALES.quotations, list.map((q) => (q.id === id ? { ...q, status } : q)));
       return done();
     },
@@ -734,10 +743,14 @@ export const LocalAdapter: DataAdapter = {
     listForCustomer: (customerId) =>
       ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed).filter(q => q.customerId === customerId && q.status === "won")),
     // ออกเลข + insert (เธรดเดียวในเบราว์เซอร์ = atomic โดยธรรมชาติ ไม่มีเลขหาย)
+    // รูปแบบ Q-{DealerCode}-{Year}-{Running} — ตัวนับนับแยกต่อสาขา (mirror ตัวนับต่อสาขาฝั่ง Supabase)
+    // เดิมนับจากเลขสูงสุดที่เห็น "รวมทุกสาขา" ในเครื่อง — โหมด local ก็ต้องแยกสาขาเหมือนโหมดจริง (พบจากผลตรวจสอบ 31 ก.ค. 69)
     createNumbered: (dealer, prefix, row) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
-      const nums = list.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
-      const id = `${prefix || "Q-2026-"}${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`;
+      const mine = list.filter((q) => (q.dealerCode ?? DEFAULT_DEALER_CODE) === dealer);
+      const nums = mine.map((q) => { const m = q.id.match(/(\d+)\s*$/); return m ? parseInt(m[1]) : 0; });
+      const year = String(new Date().getFullYear());
+      const id = `${prefix || "Q-"}${dealer}-${year}-${String(Math.max(0, ...nums) + 1).padStart(4, "0")}`;
       const created = { ...row, id, dealerCode: dealer } as QuotationMock;
       writeKey(SALES.quotations, [created, ...list]);
       return ok(created);

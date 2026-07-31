@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  createContext, useContext, useState, useCallback, useRef, useEffect,
+  createContext, useContext, useState, useCallback, useMemo, useRef, useEffect,
   type ReactNode,
 } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -443,8 +443,15 @@ export function SalesProvider({
     } catch (e) { console.warn("[cleanupFiles] อ่านรายการไฟล์ไม่สำเร็จ", e); }
   }, []);
 
+  // ลบลีด — ต้องไม่ทิ้งใบเสนอราคาที่ผูกอยู่ให้ลอยไม่มีลีดแม่ (เหตุผลเดียวกับ deleteCustomer ด้านล่าง
+  // พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมลบได้เลยแม้มีใบเสนอราคาผูก dealId ไว้อยู่)
   const deleteLead = useCallback((leadId: string) => {
     const lead = leadsRef.current.find(l => l.id === leadId);
+    const linkedQuotes = lead?.numId != null ? quotationsRef.current.filter(q => q.dealId === lead.numId).length : 0;
+    if (linkedQuotes) {
+      setSyncError(`ลบลีดไม่ได้ — ยังมีใบเสนอราคา ${linkedQuotes} ใบผูกอยู่ · กรุณาย้าย/ลบใบเหล่านั้นก่อน`);
+      return;
+    }
     setLeads(prev => prev.filter(l => l.id !== leadId));
     persistLead.remove(leadId);
     // ลบไฟล์ที่แนบกับลีดนี้ (source=lead · record_id = numId ของลีด)
@@ -727,17 +734,31 @@ export function SalesProvider({
     persistAppt.remove(id);
   }, [persistAppt]);
 
+  // ค่า context ถูกใช้แทบทุกหน้าในทั้งสองแอป — ถ้าไม่ memo ทุก consumer จะเรนเดอร์ซ้ำทุกครั้งที่
+  // provider นี้เรนเดอร์ใหม่ แม้ส่วนที่ตัวเองอ่านจะไม่ได้เปลี่ยนเลย (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+  const clearSyncError = useCallback(() => setSyncError(null), []);
+  const value = useMemo(() => ({
+    leads, updateLeadStatus, newLeadNumId, addLead, updateLead, deleteLead,
+    customers, addCustomer, updateCustomer, deleteCustomer,
+    quotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
+    newAppointmentId,
+    appointments, addAppointment, updateAppointment, deleteAppointment,
+    convertLeadToCustomer,
+    syncError, clearSyncError,
+    salesVersion,
+  }), [
+    leads, updateLeadStatus, newLeadNumId, addLead, updateLead, deleteLead,
+    customers, addCustomer, updateCustomer, deleteCustomer,
+    quotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
+    newAppointmentId,
+    appointments, addAppointment, updateAppointment, deleteAppointment,
+    convertLeadToCustomer,
+    syncError, clearSyncError,
+    salesVersion,
+  ]);
+
   return (
-    <SalesContext.Provider value={{
-      leads, updateLeadStatus, newLeadNumId, addLead, updateLead, deleteLead,
-      customers, addCustomer, updateCustomer, deleteCustomer,
-      quotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
-      newAppointmentId,
-      appointments, addAppointment, updateAppointment, deleteAppointment,
-      convertLeadToCustomer,
-      syncError, clearSyncError: () => setSyncError(null),
-      salesVersion,
-    }}>
+    <SalesContext.Provider value={value}>
       {children}
     </SalesContext.Provider>
   );

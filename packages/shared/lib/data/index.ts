@@ -10,7 +10,11 @@
 import { DATA_SOURCE } from "./config";
 import { LocalAdapter } from "./local/LocalAdapter";
 import { SupabaseAdapter } from "./supabase/SupabaseAdapter";
-import { dedupeRead } from "./dedupe";
+import { dedupeRead, ttlCacheRead, invalidateCache } from "./dedupe";
+
+// TTL ของแคชข้อมูลอ้างอิง (ทะเบียนตัวแทน/แคตตาล็อก/กฎธุรกิจ/ผู้รับผิดชอบ) — สั้นพอที่ผู้ใช้จะไม่รู้สึกว่า
+// ข้อมูลค้าง (แก้เองก็ invalidate ทันทีอยู่แล้ว) ยาวพอที่จะตัดคำขอซ้ำตอนสลับหน้าไปมาเร็ว ๆ
+const REF_TTL_MS = 30_000;
 import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo, ProfileRepo } from "./ports";
 
 const adapter: DataAdapter = DATA_SOURCE === "supabase" ? SupabaseAdapter : LocalAdapter;
@@ -20,23 +24,35 @@ export const realtime = adapter.realtime; // ฟังการเปลี่�
 
 // ── H7 · รวมคำขออ่านที่ไม่มีพารามิเตอร์ ให้ยิงจริงครั้งเดียวเมื่อเกิดพร้อมกัน (in-flight dedup) ──
 // จุดเดียวครอบทุก caller · เฉพาะ read ที่ "ไม่มี arg" (การเขียน/read ที่มี scope ไม่แตะ · ดู dedupe.ts)
+// เดิม dedupeRead อย่างเดียว (รวมแค่คำขอที่ค้างพร้อมกัน) — ยังยิงซ้ำทุกครั้งที่เปลี่ยนหน้าเพราะคำขอ
+// ก่อนหน้า "settle" ไปแล้วเสมอกว่าจะเปิดหน้าถัดไป ตอนนี้ใช้ ttlCacheRead แทน (แคชจริง 30s) + invalidate
+// ทันทีที่มีการเขียน ให้ผู้ใช้เห็นข้อมูลใหม่ทันทีแม้ยังไม่ครบ TTL (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
 const _dealers = adapter.dealers, _catalog = adapter.catalog, _settings = adapter.settings;
 export const dealers: DealersRepo = {
   ..._dealers,
-  list: () => dedupeRead("dealers.list", () => _dealers.list()),
+  list: () => ttlCacheRead("dealers.list", () => _dealers.list(), REF_TTL_MS),
+  save: async (all) => { await _dealers.save(all); invalidateCache("dealers.list"); },
+  remove: async (code) => { await _dealers.remove(code); invalidateCache("dealers.list"); },
 };
 export const catalog: CatalogRepo = {
   ..._catalog,
-  list: () => dedupeRead("catalog.list", () => _catalog.list()),
+  list: () => ttlCacheRead("catalog.list", () => _catalog.list(), REF_TTL_MS),
+  save: async (all) => { await _catalog.save(all); invalidateCache("catalog.list"); },
+  remove: async (id) => { await _catalog.remove(id); invalidateCache("catalog.list"); },
 };
 export const settings: SettingsRepo = {
   ..._settings,
-  getPolicy:            () => dedupeRead("settings.getPolicy", () => _settings.getPolicy()),
-  getTargets:           () => dedupeRead("settings.getTargets", () => _settings.getTargets()),
-  getNotifRules:        () => dedupeRead("settings.getNotifRules", () => _settings.getNotifRules()),
-  getLeadRulesMap:      () => dedupeRead("settings.getLeadRulesMap", () => _settings.getLeadRulesMap()),
-  getQuoteValidityDays: () => dedupeRead("settings.getQuoteValidityDays", () => _settings.getQuoteValidityDays()),
-  getLostReasons:       () => dedupeRead("settings.getLostReasons", () => _settings.getLostReasons()),
+  getPolicy:            () => ttlCacheRead("settings.getPolicy", () => _settings.getPolicy(), REF_TTL_MS),
+  getTargets:           () => ttlCacheRead("settings.getTargets", () => _settings.getTargets(), REF_TTL_MS),
+  getNotifRules:        () => ttlCacheRead("settings.getNotifRules", () => _settings.getNotifRules(), REF_TTL_MS),
+  getLeadRulesMap:      () => ttlCacheRead("settings.getLeadRulesMap", () => _settings.getLeadRulesMap(), REF_TTL_MS),
+  getQuoteValidityDays: () => ttlCacheRead("settings.getQuoteValidityDays", () => _settings.getQuoteValidityDays(), REF_TTL_MS),
+  getLostReasons:       () => ttlCacheRead("settings.getLostReasons", () => _settings.getLostReasons(), REF_TTL_MS),
+  saveLeadRules:        async (dealerCode, rules) => { await _settings.saveLeadRules(dealerCode, rules); invalidateCache("settings.getLeadRulesMap"); },
+  saveLostReasons:      async (lost) => { await _settings.saveLostReasons(lost); invalidateCache("settings.getLostReasons"); },
+  savePolicy:           async (policy) => { await _settings.savePolicy(policy); invalidateCache("settings.getPolicy"); },
+  saveTargets:          async (targets) => { await _settings.saveTargets(targets); invalidateCache("settings.getTargets"); },
+  saveNotifRules:       async (rules) => { await _settings.saveNotifRules(rules); invalidateCache("settings.getNotifRules"); },
 };
 export const files = adapter.files;
 // Sidebar + Topbar (ทั้งสองคอมโพเนนต์อยู่ยาวทุกหน้า) ต่างเรียก persons/dealerSettings/audit เองอิสระ
@@ -44,11 +60,17 @@ export const files = adapter.files;
 const _persons = adapter.persons, _dealerSettings = adapter.dealerSettings, _audit = adapter.audit;
 export const persons: PersonsRepo = {
   ..._persons,
-  list: (scope) => dedupeRead(`persons.list:${JSON.stringify(scope ?? null)}`, () => _persons.list(scope)),
+  list: (scope) => ttlCacheRead(`persons.list:${JSON.stringify(scope ?? null)}`, () => _persons.list(scope), REF_TTL_MS),
+  save: async (all, dealerCode) => {
+    await _persons.save(all, dealerCode);
+    // ไม่รู้ scope object เป๊ะที่ผู้เรียกอื่นใช้ตอน list() (isHQ ต่างกัน) — ล้างทั้งแคชปลอดภัยกว่า
+    invalidateCache();
+  },
 };
 export const dealerSettings: DealerSettingsRepo = {
   ..._dealerSettings,
-  get: (dealerCode) => dedupeRead(`dealerSettings.get:${dealerCode}`, () => _dealerSettings.get(dealerCode)),
+  get: (dealerCode) => ttlCacheRead(`dealerSettings.get:${dealerCode}`, () => _dealerSettings.get(dealerCode), REF_TTL_MS),
+  save: async (dealerCode, patch) => { await _dealerSettings.save(dealerCode, patch); invalidateCache(`dealerSettings.get:${dealerCode}`); },
 };
 // Sidebar + Topbar เรียก useUserProfile() แยกอิสระคนละอินสแตนซ์ → profile.get() ยิงซ้ำพร้อมกันทุกครั้งที่
 // session เปลี่ยน (ล็อกอิน/รีเฟรชหน้า) — พบจากผลตรวจสอบระบบ 30 ก.ค. 69 (High) · แพตเทิร์นเดียวกับ H7 ข้างบน

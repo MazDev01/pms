@@ -3,7 +3,7 @@
 // ─── HQ · ลูกค้าเป้าหมายทั้งเครือ (Network Leads) ──────────────────────────────
 // ภาพรวมลีดของทุกตัวแทน · กรอง (ค้นหา/สถานะ/จังหวัด/ช่วงเวลา) · KPI · กราฟ · ตาราง drill-down
 // ใช้ข้อมูลจริงจาก SalesContext (leads) — HQ ดูอย่างเดียว (Sales CRM เท่านั้น)
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
 import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
@@ -83,8 +83,13 @@ export default function HQLeadsPage() {
   // นัดหมายของลีดที่กำลังเปิด drawer — supabase: ดึงตรง (M9 Phase 4) · local/ยังไม่กลับ: กรอง appointments array เดิม
   const drawerAppts = useLeadAppointments(viewLead?.numId ?? null);
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
+  // request token กันผลลัพธ์เก่าทับใหม่ — read ถูกยิงซ้ำได้ทุกครั้งที่มีการอัปโหลด/ลบไฟล์ทั้งเครือ
+  const dealerFilesReqRef = useRef(0);
   useEffect(() => {
-    const read = () => { filesRepo.list({ isHQ: true }).then(setDealerFiles).catch(() => {}); }; // HQ เห็นไฟล์ทั้งเครือ
+    const read = () => {
+      const myReq = ++dealerFilesReqRef.current;
+      filesRepo.list({ isHQ: true }).then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); }).catch(() => {}); // HQ เห็นไฟล์ทั้งเครือ
+    };
     read();
     window.addEventListener(DEALER_FILES_EVENT, read);
     return () => window.removeEventListener(DEALER_FILES_EVENT, read);

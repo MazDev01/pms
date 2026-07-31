@@ -44,7 +44,9 @@ const APPT_BUCKET: Record<ApptType, ActivityBucket> = {
   follow_up:     "followup",
 };
 
-function bucketOf(a: AppointmentMock): ActivityBucket { return APPT_BUCKET[a.type]; }
+// a.type ที่ไม่ตรงกับ 6 ค่าที่รู้จัก (ข้อมูลเก่า/ผิดปกติจาก DB ที่ไม่มี CHECK constraint คุม) → fallback เป็น meeting
+// แทนที่จะคืน undefined แล้วพังตอนอ่าน .color (พบจาก QA sweep 30 ก.ค. 69 — หน้าปฏิทินเปิดไม่ได้)
+function bucketOf(a: AppointmentMock): ActivityBucket { return APPT_BUCKET[a.type] ?? "meeting"; }
 function bucketMeta(a: AppointmentMock) { return BUCKET_META[bucketOf(a)]; }
 
 // CI colors for the quick-filter groups

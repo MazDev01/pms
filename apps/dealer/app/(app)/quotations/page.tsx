@@ -14,7 +14,7 @@ import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/li
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
-import { useHQPolicy, useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
+import { useHQPolicy, useQuoteValidityDays, useLostReasons } from "@pms/shared/lib/useHQConfig";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { useFilters, FilterProvider, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -22,6 +22,7 @@ import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRo
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useTableLayout, type Col } from "@pms/shared/components/ui/TableTools";
+import { fmtFull as fmtMoney, fmtFullRounded as fmtBaht } from "@pms/shared/lib/format";
 import {
   Plus, X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer, Eye,
@@ -96,7 +97,6 @@ type Issuer = IssuerProfile;
 // ตรา/ลายเซ็น/VAT/prefix มาจาก quotationPrint (DocProfile/DEFAULT_DOC/DOC_KEY) — แหล่งเดียวร่วมกับใบเสนอ inline
 
 // ── Helpers ───────────────────────────────────────────────────
-function fmtMoney(v:number){ return "฿"+v.toLocaleString("th-TH"); }
 function fmtDate(d:string){ if(!d||d==="—") return "—"; const [y,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]} ${parseInt(y)+543}`; }
 // วันที่แบบสั้น (ไม่มีปี พ.ศ.) — ใช้เฉพาะในตาราง ตามรูปแบบที่บอสกำหนดมา ("28 มิ.ย." / "28 ก.ค.")
 // ทำให้ 9 คอลัมน์พอดีกรอบโดยไม่ต้องเลื่อนแนวนอน · แผงรายละเอียด/เอกสารพิมพ์ยังใช้วันที่เต็มมีปี
@@ -233,9 +233,16 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div>
                 <label style={LBL}>สถานะ</label>
+                {/* "ปิดการขายสำเร็จ" ตั้งจากที่นี่ตรงๆ ไม่ได้ — ต้องผ่านปุ่ม "ลูกค้าตอบรับ ✓" เท่านั้น
+                    เพราะขั้นตอนนั้นสร้าง/ผูกลูกค้าให้ก่อนเสมอ · ฟอร์มนี้เขียนแค่ฟิลด์ตรงๆ ไม่ผ่านขั้นตอนนั้น
+                    (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมตั้ง won ที่นี่ได้ โหมดออฟไลน์จะได้ใบ
+                    "ปิดการขายสำเร็จ" ที่ไม่มีลูกค้าผูกอยู่จริงแบบเงียบๆ) */}
                 <select value={form.status} onChange={e=>set("status",e.target.value as QuotationStatus)} style={INP}>
-                  {STATUS_ORDER.map(s=><option key={s} value={s}>{quotationStatusLabel[s]}</option>)}
+                  {STATUS_ORDER.filter(s=>s!=="won"||form.status==="won").map(s=><option key={s} value={s}>{quotationStatusLabel[s]}</option>)}
                 </select>
+                {form.status!=="won" && <div style={{fontSize:"0.62rem",color:MUTED,marginTop:5,display:"flex",alignItems:"center",gap:4}}>
+                  <Lock size={9}/> ปิดการขายสำเร็จ ให้กดปุ่ม "ลูกค้าตอบรับ ✓" ที่รายการใบเสนอราคาแทน
+                </div>}
               </div>
               <div>
                 <label style={LBL}>วันที่</label>
@@ -303,6 +310,7 @@ function QuotationsPageInner(){
   const { timeRange, passes } = useFilters();
   // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — VAT/อายุใบมีผลกับการคิดเงิน
   const hqPolicy = useHQPolicy();
+  const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลีดใช้)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
   const validityDays = useQuoteValidityDays();
   const {
@@ -453,6 +461,16 @@ function QuotationsPageInner(){
     setQuotationStatus(id,s);
     setSelected(p=>p?.id===id?{...p,status:s}:p);
   }
+  // "ลูกค้าปฏิเสธ" ต้องเลือกเหตุผลก่อนเสมอ — ใช้ชุดเหตุผลเดียวกับที่ลีดใช้ (HQ กำหนด)
+  // (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมกดปุ่มเดียวจบ ไม่เก็บเหตุผลอะไรเลย)
+  const [pendingLostQ, setPendingLostQ] = useState<QuotationMock|null>(null);
+  const [pendingLostReason, setPendingLostReason] = useState("");
+  function confirmPendingLost(){
+    if(!pendingLostQ||!pendingLostReason) return;
+    updateQuotation({ ...pendingLostQ, status:"lost", lostReason:pendingLostReason });
+    setSelected(p=>p?.id===pendingLostQ.id?{...p,status:"lost",lostReason:pendingLostReason}:p);
+    setPendingLostQ(null); setPendingLostReason("");
+  }
   // ส่งอีกครั้ง — ตั้งสถานะกลับเป็น "ส่งแล้ว" และประทับวันที่ = วันนี้ของระบบ (supabase=จริง)
   function sendAgain(q:QuotationMock){
     const RESENT_DATE=APP_NOW_ISO;
@@ -480,7 +498,8 @@ function QuotationsPageInner(){
     if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
     // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
     // VAT บังคับใช้ค่าของ HQ เสมอ (docProfile มาจาก localStorage ของสาขา — ตัวแทนตั้ง VAT เองไม่ได้)
-    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:hqPolicy.vat},dealerCfg.settings.wordmark));
+    // VAT: ใช้สแนปช็อตที่ตรึงไว้กับใบตอนสร้าง (q.vatPercent) เสมอถ้ามี — ใบเก่าที่ไม่มีค่อย fallback ไปใช้ของ HQ ปัจจุบัน
+    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:q.vatPercent??hqPolicy.vat},dealerCfg.settings.wordmark));
     w.document.close();
   }
 
@@ -776,11 +795,10 @@ function QuotationsPageInner(){
         const cardStyle: React.CSSProperties = { background:"#fff", border:"1px solid #eef1f5", borderRadius:14, padding:16 };
         const secLabel: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
         const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
-        const fmtBaht = (n:number) => "฿"+Math.round(n).toLocaleString("th-TH");
         const lineItems: QuoteLineItem[] = boqLineItems(selected);
         const subtotal = boqSubtotal(lineItems);
         const net = subtotal;                            // = totalValue (มูลค่างาน ก่อน VAT) — ไม่มีส่วนลด
-        const vatPct = hqPolicy.vat;
+        const vatPct = selected.vatPercent ?? hqPolicy.vat; // สแนปช็อตตอนสร้าง — ใบเก่าไม่มีค่านี้ค่อย fallback ไปใช้ของ HQ ปัจจุบัน
         const vatAmt = Math.round(net*vatPct/100);
         const grand = net + vatAmt;                      // ยอดรวมสุทธิ (รวม VAT) — ตรงกับเอกสารพิมพ์
         const sc = quotationStatusColor[selected.status];
@@ -897,6 +915,11 @@ function QuotationsPageInner(){
                       <span style={{fontWeight:700,color:"#8a929c"}}>หมายเหตุ: </span>{selected.note}
                     </div>
                   )}
+                  {selected.status==="lost" && selected.lostReason && (
+                    <div style={{marginTop:12,padding:"10px 12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,fontSize:"0.75rem",color:"#991b1b",lineHeight:1.6}}>
+                      <span style={{fontWeight:700}}>เหตุผลที่ปฏิเสธ: </span>{selected.lostReason}
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -910,7 +933,7 @@ function QuotationsPageInner(){
                     <div style={secLabel}><ArrowRight size={13} color={PRIMARY}/> เปลี่ยนสถานะ</div>
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       {STATUS_ACTIONS[selected.status].map(action=>(
-                        <button key={action.next} onClick={()=>changeStatus(selected.id,action.next)} className="btn"
+                        <button key={action.next} onClick={()=>action.next==="lost"?setPendingLostQ(selected):changeStatus(selected.id,action.next)} className="btn"
                           style={{justifyContent:"space-between",padding:"9px 12px",background:action.bg,border:"none",width:"100%"}}>
                           <span style={{fontSize:"0.72rem",fontWeight:700,color:action.color}}>{action.label}</span>
                           <ArrowRight size={13} color={action.color}/>
@@ -956,6 +979,37 @@ function QuotationsPageInner(){
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setDelConfirm(false)}>ยกเลิก</button>
               <button className="btn btn-md" style={{background:"#dc2626",color:"#fff",border:"none"}} onClick={deleteQ}><Trash2 size={13}/> ลบ</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* เลือกเหตุผลก่อน "ลูกค้าปฏิเสธ" — บังคับเลือกเสมอ (ชุดเหตุผลเดียวกับที่ลีดใช้) */}
+      {pendingLostQ && (
+        <div onClick={()=>setPendingLostQ(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:230,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:420,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,.3)"}}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${BORDER}`,display:"flex",alignItems:"center",gap:9}}>
+              <span style={{fontSize:"0.9rem",fontWeight:800,color:"#dc2626"}}>ลูกค้าปฏิเสธ — ระบุเหตุผล</span>
+            </div>
+            <div style={{padding:"16px 18px"}}>
+              <div style={{fontSize:"0.75rem",color:MUTED,marginBottom:10}}>เลือกเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {lostReasons.map(r=>(
+                  <button key={r} onClick={()=>setPendingLostReason(r)}
+                    style={{padding:"8px 10px",borderRadius:9,border:`1px solid ${pendingLostReason===r?"#dc2626":BORDER}`,
+                      background:pendingLostReason===r?"#fef2f2":"#fff",color:pendingLostReason===r?"#dc2626":"#374151",
+                      fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{padding:"12px 18px",borderTop:`1px solid ${BORDER}`,display:"flex",justifyContent:"flex-end",gap:8,background:"#fafafa"}}>
+              <button onClick={()=>setPendingLostQ(null)} className="btn btn-secondary btn-md">ยกเลิก</button>
+              <button onClick={confirmPendingLost} disabled={!pendingLostReason} className="btn btn-md"
+                style={{background:"#dc2626",color:"#fff",opacity:pendingLostReason?1:0.5,cursor:pendingLostReason?"pointer":"not-allowed"}}>
+                ยืนยัน
+              </button>
             </div>
           </div>
         </div>

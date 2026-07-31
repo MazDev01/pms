@@ -22,3 +22,23 @@ export function dedupeRead<T>(key: string, run: () => Promise<T>): Promise<T> {
   inflight.set(key, p);
   return p;
 }
+
+// ── TTL cache — สำหรับข้อมูลอ้างอิงที่แทบไม่เปลี่ยนภายใน session เดียว ──────────
+// (ทะเบียนตัวแทน · แคตตาล็อกกลาง · กฎธุรกิจ/เป้า · ผู้รับผิดชอบต่อสาขา) ต่างจาก dedupeRead
+// (รวมแค่คำขอที่ค้างพร้อมกัน) ตัวนี้ "จำค่าที่โหลดสำเร็จไว้ข้ามเวลา" จริง — จึงต้อง invalidate เอง
+// ทุกจุดที่มีการเขียนทับข้อมูลชุดเดียวกัน (ดู index.ts: ต่อ save/remove ของแต่ละ repo เข้ากับ invalidateCache)
+// พบจากผลตรวจสอบระบบรอบ 2 (31 ก.ค. 69): เปิดหน้า HQ 6 หน้า → ยิงซ้ำ endpoint เดิม 4-6 รอบ
+type CacheEntry<T> = { value: T; at: number };
+const cache = new Map<string, CacheEntry<unknown>>();
+
+export function ttlCacheRead<T>(key: string, run: () => Promise<T>, ttlMs: number): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return Promise.resolve(hit.value as T);
+  return dedupeRead(key, run).then(v => { cache.set(key, { value: v, at: Date.now() }); return v; });
+}
+
+/** ล้าง cache หลังเขียนข้อมูล — คีย์ตรง = ล้างรายการเดียว · ไม่ส่ง key = ล้างทั้งหมด (เผื่อผู้เรียกไม่รู้คีย์ชัด) */
+export function invalidateCache(key?: string): void {
+  if (key === undefined) { cache.clear(); return; }
+  cache.delete(key);
+}

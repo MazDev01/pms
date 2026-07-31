@@ -216,13 +216,19 @@ export function FilterProvider({ children, storageKey = STORAGE_KEY }: { childre
     (state.product !== ALL ? 1 : 0) + (state.status !== ALL ? 1 : 0) +
     (state.person !== ALL ? 1 : 0);
 
-  const value: Ctx = {
+  // ใช้แทบทุกหน้าเหมือนกับ SalesContext — ถ้าไม่ memo ทุก consumer เรนเดอร์ซ้ำทุกครั้งที่ provider
+  // เรนเดอร์ใหม่ แม้ตัวกรองที่ตัวเองอ่านจะไม่เปลี่ยน (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+  const value: Ctx = useMemo(() => ({
     timeRange,
     dealer: state.dealer, province: state.province, product: state.product, status: state.status,
     person: state.person,
     setPreset, setCustomRange, setDealer, setProvince, setProduct, setStatus, setPerson, setDim, reset,
     activeCount, passes, inRange,
-  };
+  }), [
+    timeRange, state.dealer, state.province, state.product, state.status, state.person,
+    setPreset, setCustomRange, setDealer, setProvince, setProduct, setStatus, setPerson, setDim, reset,
+    activeCount, passes, inRange,
+  ]);
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
 }

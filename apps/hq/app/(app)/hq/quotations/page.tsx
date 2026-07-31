@@ -230,7 +230,9 @@ export default function NetworkQuotationPage() {
       materialCost: q.materialCost, lineItems: q.lineItems,
     };
   };
-  const displayRows = useMemo(() => pageResult ? toQuoteRows(pageResult.rows.map(mapToHQ), validityDays, look) : tableRows, [pageResult, tableRows, validityDays, look]); // eslint-disable-line react-hooks/exhaustive-deps
+  // mapToHQ ปิดคลุม netLeads/nameOf — ขาดไปก่อนหน้านี้ทำให้ชื่อผู้รับผิดชอบค้างค่าเก่าถ้าลีด/ทะเบียนตัวแทน
+  // เปลี่ยนผ่าน realtime โดย pageResult reference เดิม (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+  const displayRows = useMemo(() => pageResult ? toQuoteRows(pageResult.rows.map(mapToHQ), validityDays, look) : tableRows, [pageResult, tableRows, validityDays, look, netLeads, nameOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalRows = pageResult ? pageResult.total : tableRows.length;
   const pagination = pageResult ? { page: tablePage, pageCount: Math.max(1, Math.ceil(totalRows / QPAGE_SIZE)), total: totalRows, onPage: setTablePage } : undefined;
 

@@ -48,7 +48,6 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [quick, setQuick] = useState<DemoRole | null>(null);
@@ -142,13 +141,10 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
               </div>
             </div>
 
-            {/* Remember + Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex cursor-pointer select-none items-center gap-2 text-[0.85rem] text-slate-600">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 accent-[#0e2a5c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40" />
-                จดจำฉันไว้ในระบบ
-              </label>
+            {/* Forgot — เดิมมี checkbox "จดจำฉันไว้ในระบบ" คู่กัน แต่ไม่เคยถูกส่งเข้า signIn() เลย
+                (session ตั้งใจแยกต่อแท็บกันบัญชีรั่วข้ามแท็บ — ดู client.ts) ลบทิ้งแทนแก้ให้ทำงานจริง
+                เพื่อไม่ย้อนกลับไปเจอบั๊กเดิมที่ร้ายแรงกว่า (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69) */}
+            <div className="flex items-center justify-end">
               <button type="button" onClick={handleForgot} disabled={forgotBusy}
                 className="text-[0.85rem] font-bold text-[#1d4ed8] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 rounded disabled:opacity-60">
                 {forgotBusy ? "กำลังส่ง…" : "ลืมรหัสผ่าน?"}

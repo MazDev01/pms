@@ -10,7 +10,7 @@
 // • ย้อนหลังฟิกซ์ 12 เดือน — ตัวแทน 9/10 รายมีข้อมูลแค่ 3 เดือน · กราฟตัดตามตัวกรองเวลา "เท่าที่มีข้อมูล"
 // • Last Updated รายตัวแทน — DealerRow ไม่มีฟิลด์นี้ · ใช้ "ใบเสนอราคาล่าสุด" ที่หาได้จริงแทน (ชื่อคอลัมน์ตรงกับสิ่งที่มันเป็น)
 // • Refresh — ระบบไม่มี backend ให้ refresh (ข้อมูลสดจาก SalesContext อยู่แล้ว)
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
@@ -32,7 +32,6 @@ import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary, useLeadSummary, useDealerDrawerData } from "@pms/shared/lib/useNetworkData";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBaht } from "@pms/shared/lib/format";
-import { useEffect } from "react";
 
 const PRIMARY = "#003366";
 const STEEL = "#2D2D2D";
@@ -129,8 +128,13 @@ export default function SalesAnalyticsPage() {
 
   // ไฟล์แนบ — ใช้เฉพาะใน Drawer (ผูกกับลีดด้วย recordId = numId)
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
+  // request token กันผลลัพธ์เก่าทับใหม่ — read ถูกยิงซ้ำได้ทุกครั้งที่มีการอัปโหลด/ลบไฟล์ทั้งเครือ
+  const dealerFilesReqRef = useRef(0);
   useEffect(() => {
-    const read = () => { filesRepo.list({ isHQ: true }).then(setDealerFiles).catch(() => {}); }; // HQ เห็นไฟล์ทั้งเครือ
+    const read = () => {
+      const myReq = ++dealerFilesReqRef.current;
+      filesRepo.list({ isHQ: true }).then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); }).catch(() => {}); // HQ เห็นไฟล์ทั้งเครือ
+    };
     read();
     window.addEventListener(DEALER_FILES_EVENT, read);
     return () => window.removeEventListener(DEALER_FILES_EVENT, read);

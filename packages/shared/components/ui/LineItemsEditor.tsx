@@ -21,6 +21,13 @@ const genId = () =>
 // ที่เหลือคือหน่วยที่ใช้จริงตอนแตกรายการย่อย (งานเสริม/อุปกรณ์/เหมาทั้งหลัง)
 const UNIT_OPTIONS = ["ตร.ม.", "เมตร", "จุด", "ชุด", "ชิ้น", "งาน", "หลัง", "รายการ"];
 
+// เพดานกันกรอกเลขเกินจริง (พิมพ์เลข 0 เกินโดยไม่ตั้งใจ) — ไม่ใช่เพดานส่วนลด/ธุรกิจ
+// ระบบไม่มีฟีเจอร์ส่วนลดแล้ว ราคา/หน่วยเจรจากับลูกค้าได้ตามจริง แค่กันพิมพ์ผิดจำนวนหลัก
+// (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมกันแค่ค่าติดลบ ไม่มีเพดานบนเลย)
+const MAX_QTY = 100_000;
+const MAX_UNIT_PRICE = 100_000_000;
+const clamp = (n: number, max: number) => Math.min(max, Math.max(0, Number.isFinite(n) ? n : 0));
+
 // showCatalog=false → ซ่อนทั้งปุ่ม "เลือกจากแคตตาล็อก" และปุ่มลบรายการ (บอสสั่ง)
 // ใช้ตอน BOQ ตั้งต้นมาจากแม่แบบของลูกค้าแล้ว — เพิ่มไม่ได้ก็ไม่ควรลบได้ ไม่งั้นลบแล้วเอากลับไม่ได้
 // ยังแก้ชื่อ/จำนวน/ราคาต่อหน่วยได้ตามปกติ
@@ -89,7 +96,7 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
             {items.map((it, i) => (
               <tr key={it.id ?? i} style={{ borderTop: `1px solid #f1f5f9` }}>
                 <td style={{ padding: "5px 8px" }}><input style={inp} value={it.name} onChange={e => set(i, { name: e.target.value })} placeholder="ชื่อรายการ" /></td>
-                <td style={{ padding: "5px 6px" }}><input type="number" min={0} style={{ ...inp, textAlign: "right" }} value={it.qty || ""} onChange={e => set(i, { qty: Number(e.target.value) })} /></td>
+                <td style={{ padding: "5px 6px" }}><input type="number" min={0} max={MAX_QTY} style={{ ...inp, textAlign: "right" }} value={it.qty || ""} onChange={e => set(i, { qty: clamp(Number(e.target.value), MAX_QTY) })} /></td>
                 {/* หน่วย = ดรอปดาวน์ (บอสสั่ง 17 ก.ค. 69: "ทำให้เปลี่ยนหน่วยได้") — เดิมเป็นช่องพิมพ์เปล่า ๆ ไม่มีตัวเลือก
                     ใบเก่าที่หน่วยไม่อยู่ในลิสต์มาตรฐาน ให้แทรกค่าเดิมเป็นตัวเลือกแรก — ห้ามทำค่าที่บันทึกไว้หาย */}
                 <td style={{ padding: "5px 6px" }}>
@@ -99,7 +106,7 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
                     {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </td>
-                <td style={{ padding: "5px 6px" }}><input type="number" min={0} style={{ ...inp, textAlign: "right" }} value={it.unitPrice || ""} onChange={e => set(i, { unitPrice: Number(e.target.value) })} /></td>
+                <td style={{ padding: "5px 6px" }}><input type="number" min={0} max={MAX_UNIT_PRICE} style={{ ...inp, textAlign: "right" }} value={it.unitPrice || ""} onChange={e => set(i, { unitPrice: clamp(Number(e.target.value), MAX_UNIT_PRICE) })} /></td>
                 <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>฿{fmt(it.qty * it.unitPrice)}</td>
                 <td style={{ padding: "5px 4px", textAlign: "center" }}>{showCatalog && <button type="button" onClick={() => del(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 3 }}><Trash2 size={13} /></button>}</td>
               </tr>

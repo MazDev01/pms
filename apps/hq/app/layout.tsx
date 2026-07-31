@@ -12,9 +12,10 @@ const notoThai = Noto_Sans_Thai({
   display: "swap",
 });
 
+// เดิม title เดียวกันเป๊ะกับแอปตัวแทน — เปิดสองแอปพร้อมกันแยกแท็บไม่ออก (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
 export const metadata: Metadata = {
-  title: "Benjamin PMS",
-  description: "ระบบบริหารจัดการ Benjamin — Pre-Engineered Steel Building",
+  title: "Benjamin PMS · สำนักงานใหญ่",
+  description: "ระบบบริหารจัดการ Benjamin — Pre-Engineered Steel Building (สำนักงานใหญ่)",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

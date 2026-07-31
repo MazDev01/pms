@@ -2,6 +2,7 @@
 // Tailwind ล้วน + inline SVG (ไม่พึ่ง icon library) · เป็น server component (ไม่มี state)
 // รูป: ใช้ภาพจริงที่ /public/images/login-warehouse.png (สลับไฟล์/พาธได้ตามต้องการ)
 // variant: "dealer" (ค่าเริ่มต้น — พอร์ทัลตัวแทน) · "hq" (พอร์ทัลสำนักงานใหญ่ · เนื้อหาบริหารทั้งเครือ)
+import Image from "next/image";
 const HERO_IMG = "/images/login-warehouse.png";
 
 // ไอคอน 4 ตัว (ใช้ร่วมทั้งสอง variant) — dashboard / people / document / line-chart
@@ -72,12 +73,16 @@ export default function HeroSection({ variant = "dealer" }: { variant?: "dealer"
       {/* fallback gradient (โผล่ระหว่างรูปกำลังโหลด) */}
       <div className="absolute inset-0 bg-gradient-to-br from-white via-[#eef4fc] to-[#dbe8f8]" />
 
-      {/* รูปโกดังเต็มแผง */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      {/* รูปโกดังเต็มแผง — next/image แทน <img> ตรง ๆ: เดิมโหลดไฟล์ PNG ต้นฉบับเต็ม 1.96MB ทุกครั้ง
+          (1672×941px แสดงจริงแค่ ~460×600px, cache-control max-age=0) next/image ย่อ+แปลงเป็น
+          WebP/AVIF ตามขนาดจอจริงให้อัตโนมัติ (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69) */}
+      <Image
         src={HERO_IMG}
         alt="Benjamin PEB Steel Building"
-        className="absolute inset-0 h-full w-full object-cover"
+        fill
+        priority
+        sizes="(min-width: 1024px) 50vw, 100vw"
+        className="object-cover"
         style={{ objectPosition: "34% 62%" }}
       />
 

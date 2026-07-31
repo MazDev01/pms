@@ -369,6 +369,38 @@ export function useNetworkCustomersDb(): HQCustomer[] {
   }, [rows, local, dealerInfoOf]);
 }
 
+// ลูกค้าของตัวแทนสาขาเดียว (หน้ารายละเอียดตัวแทน /hq/dealers/[code]) — กรองที่ repo ตรง ๆ
+// เดิมหน้านี้เรียก useNetworkCustomersDb() (ดึงทั้งเครือ ~5000 แถวสูงสุด) แล้วค่อยกรอง .filter()
+// ฝั่ง client — วัดจริงพบ ~1.15MB/หน้า ทั้งที่โชว์แค่สาขาเดียว (ผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
+  const local = useNetworkCustomers().filter(c => c.dealerCode === code);
+  const { salesVersion } = useSales();
+  const dealerInfoOf = useDealerInfo();
+  const [rows, setRows] = useState<CustomerRow[] | null>(null);
+  useEffect(() => {
+    if (DATA_SOURCE !== "supabase") { setRows(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      customersRepo.listPage({ isHQ: true, dealerCode: code }, { limit: HQ_CUSTOMERS_FETCH_CAP, offset: 0 })
+        .then(r => { if (alive) setRows(r.rows); })
+        .catch(err => logRepoRead("customers.listPage(dealer)", err));
+    }, 150);
+    return () => { alive = false; clearTimeout(t); };
+  }, [code, salesVersion]);
+  return useMemo(() => {
+    if (!rows) return local; // local mode หรือ supabase ระหว่างโหลด
+    return rows.map(c => {
+      const dl = dealerInfoOf(c.dealerCode);
+      return {
+        id: 10000 + c.id, localId: c.id, name: c.company, dealerCode: dl.code, dealerName: dl.name,
+        province: c.province, dealsWon: 0, totalRevenue: c.totalValue,
+        status: c.status === "inactive" ? "inactive" : "active" as HQCustomer["status"],
+        lastContact: "—", segment: "sme" as HQCustomer["segment"],
+      };
+    });
+  }, [rows, local, dealerInfoOf]);
+}
+
 // ─── รายละเอียดตัวแทน (เจาะรายสาขา) — CNX = ข้อมูลสด · สาขาอื่น = seed ────────────
 const LEAD_TO_ITEM: Record<LeadStatus, DealerLeadItem["status"]> = {
   WAITING: "contacted", BULLET: "contacted", QUOTED: "quoted", FOLLOWUP: "quoted", NEGO: "quoted", PAID: "won", CANCELLED: "lost",

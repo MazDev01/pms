@@ -227,7 +227,7 @@ type DocumentSettings = {
   signature: string;
 };
 const DOC_DEFAULT: DocumentSettings = {
-  quotePrefix:         "Q-2026-",
+  quotePrefix:         "Q-", // รหัสสาขา+ปี+เลขรันต่อท้ายเสมอที่ฝั่งสร้างใบ (ไม่ใช่ค่าที่พิมพ์ตรงๆ อีกต่อไป)
   autoYear:            true,
   runningNumber:       1101,
   vatPercent:          7,
@@ -334,7 +334,8 @@ function DocumentsTab() {
             <div>
               <label className="form-label">คำนำหน้าเลขที่</label>
               <input className="form-input" value={doc.quotePrefix} onChange={e => set("quotePrefix", e.target.value)}
-                placeholder="Q-2026-" style={{ fontFamily: "monospace" }} />
+                placeholder="Q-" style={{ fontFamily: "monospace" }} />
+              <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>เลขที่เต็มจะเป็น {doc.quotePrefix || "Q-"}{"{"}รหัสสาขา{"}"}-{"{"}ปี{"}"}-{"{"}เลขรัน{"}"} เช่น {doc.quotePrefix || "Q-"}CNX-2026-0001</div>
             </div>
             <div>
               <label className="form-label">เลขลำดับถัดไป</label>
@@ -464,8 +465,10 @@ function PersonsTab() {
 
   useEffect(() => {
     // พนักงานขายของสาขานี้ — อ่านผ่าน repository (local: localStorage · supabase: DB · RLS สาขาตัวเอง)
+    let alive = true;
     personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
-      .then(list => setPersons(reindexPersons(list))).catch(() => {});
+      .then(list => { if (alive) setPersons(reindexPersons(list)); }).catch(() => {});
+    return () => { alive = false; };
   }, [currentDealer.code]);
 
   function save(updated: ResponsiblePerson[]) {

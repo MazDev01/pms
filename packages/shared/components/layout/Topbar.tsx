@@ -328,7 +328,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, isHQ, currentDealer.code],
   );
-  const auditEntries = useAuditEntries(); // สำหรับ HQ — บันทึกการใช้งาน
+  // Topbar mount อยู่ทุกหน้าของ HQ — เดิมดึงเต็มเพดาน 5000 แถวทุกครั้ง (~180KB) ทั้งที่กระดิ่งแจ้งเตือน
+  // แสดงจริงแค่ไม่กี่รายการล่าสุด ลดเหลือ 200 (พอสำหรับฟีดกิจกรรมล่าสุด) — เบราส์ประวัติเต็มยังทำที่ /hq/audit
+  // (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+  const auditEntries = useAuditEntries(200); // สำหรับ HQ — บันทึกการใช้งาน
   // กฎแจ้งเตือน 6 ข้อของทั้งเครือ — แหล่งเดียวกับการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ
   const hqAlerts = useHQAlerts();
   // HQ → บันทึกการใช้งาน (ใครทำอะไร) · Dealer → งานขายของตัวเอง

@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { TemplateHero } from "@pms/shared/components/ui/TemplateHero";
+import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
 
 // ── Design tokens ─────────────────────────────────────────────
 const PRIMARY = "#003366";
@@ -17,8 +18,6 @@ const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
 
 type Product = SolutionProduct;
-
-function fmtMoney(v: number) { return "฿" + v.toLocaleString("th-TH"); }
 
 export default function DealerProductsPage() {
   const [query, setQuery] = useState("");

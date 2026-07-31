@@ -9,11 +9,11 @@ import {
 import type { HQAlertsData } from "@pms/shared/lib/data/ports";
 import { parseDate, APP_NOW } from "@pms/shared/context/FilterContext";
 import { leadCreatedDate, daysSinceContact, isLeadOpen } from "@pms/shared/lib/leadMetrics";
+import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
 
 export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string };
 
 const DAY_MS = 86_400_000;
-const fmtB = (n: number) => (n >= 1e6 ? `฿${(n / 1e6).toFixed(1)}M` : `฿${n.toLocaleString("th-TH")}`);
 
 /** ลีดที่ยังไม่มีผู้รับผิดชอบ นานเกินเกณฑ์ของ "สาขาเจ้าของลีด" — นับจากวันที่สร้างลีด
  *  เกณฑ์ไม่ใช่ค่าเดียวทั้งเครืออีกแล้ว (ตัวแทนตั้งเอง) → ต้องถามเป็นรายใบด้วย dealerCode */

@@ -60,7 +60,7 @@ test("[ux·dealer] ตัวแทนตั้งเลขที่ใบเส�
   await open(page, "dealer", "/settings");
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: false }).first().click();
   // เลขที่ = ตัวแทนคุมเอง → มีช่องพิมพ์คำนำหน้า (prefix) แบบแก้ได้
-  await expect(page.locator('input[value^="Q-2026-"]')).toHaveCount(1);
+  await expect(page.locator('input[value^="Q-"]')).toHaveCount(1);
   // ล็อกแค่อันจำเป็น — VAT ยังกำหนดโดยสำนักงานใหญ่ (กล่องอ่านอย่างเดียว + ป้าย HQ)
   await expect(page.getByText("ภาษีมูลค่าเพิ่ม %")).toBeVisible();
 });

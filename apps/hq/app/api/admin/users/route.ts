@@ -111,6 +111,13 @@ export async function POST(req: NextRequest) {
   if (!name) return bad(400, "ต้องระบุชื่อ");
   if (!/^\S+@\S+\.\S+$/.test(email)) return bad(400, "อีเมลไม่ถูกต้อง");
   if (!isHQRole(role)) return bad(400, "บทบาทไม่ถูกต้อง (ต้องเป็นผู้ใช้สำนักงานใหญ่)");
+  // ตั้งบัญชีใหม่เป็น SUPER_ADMIN ได้เฉพาะผู้เรียกที่เป็น SUPER_ADMIN เอง — กันผู้บริหาร HQ
+  // (ก็มีสิทธิ์ users:manage เหมือนกัน) ยกระดับบัญชีขึ้นไปเทียบเท่า/เหนือกว่าตัวเอง
+  // ตรงกับกฎที่ RLS ของ profiles สงวนไว้อยู่แล้ว (0002_rls.sql) แต่ route นี้ใช้ service_role ข้าม RLS
+  // จึงต้องบังคับซ้ำเองตรงนี้ (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69)
+  if (role === "SUPER_ADMIN" && String(prof.role) !== "SUPER_ADMIN") {
+    return bad(403, "ตั้งบัญชีใหม่เป็นแอดมินสูงสุดได้เฉพาะแอดมินสูงสุดเท่านั้น");
+  }
 
   const password = strongPassword();
 
@@ -155,6 +162,10 @@ export async function DELETE(req: NextRequest) {
   // route นี้จัดการเฉพาะผู้ใช้สำนักงานใหญ่ — บัญชีตัวแทนต้องจัดการที่หน้า /hq/dealers
   if (String(target.dealer_code ?? "")) return bad(400, "นี่เป็นบัญชีตัวแทน — จัดการที่หน้า “ตัวแทน”");
 
+  // ลบบัญชี SUPER_ADMIN ได้เฉพาะผู้เรียกที่เป็น SUPER_ADMIN เอง (เหตุผลเดียวกับตอนสร้าง — เหตุผลด้านบน)
+  if (String(target.role) === "SUPER_ADMIN" && String(prof.role) !== "SUPER_ADMIN") {
+    return bad(403, "ลบบัญชีแอดมินสูงสุดได้เฉพาะแอดมินสูงสุดเท่านั้น");
+  }
   // กันลบ SUPER_ADMIN คนสุดท้าย (ไม่งั้นระบบจะไม่มีผู้ดูแลสูงสุดเหลือเลย)
   if (String(target.role) === "SUPER_ADMIN") {
     const { count } = await admin.from("profiles")

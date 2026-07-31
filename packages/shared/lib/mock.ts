@@ -317,7 +317,9 @@ export function hqAuditCategory(action: string): string {
 // ตั้งที่ /hq/settings → แท็บ "ระบบ" (hq_system.runningPrefix / runningNext)
 export type QuoteNumbering = { prefix: string; next: number };
 export const HQ_SYSTEM_KEY = "hq_system";
-export const DEFAULT_QUOTE_NUMBERING: QuoteNumbering = { prefix: "Q-2026-", next: 1101 };
+// prefix เป็นแค่ป้ายนำหน้า (ไม่ใช่ตัวกันชนอีกต่อไป) — รหัสสาขา+ปีปัจจุบัน+เลขรัน ต่อท้ายเสมอที่ RPC/LocalAdapter
+// รูปแบบเต็ม: Q-{DealerCode}-{Year}-{Running} เช่น Q-CNX-2026-0001 (0088_quotation_number_dealer_code.sql)
+export const DEFAULT_QUOTE_NUMBERING: QuoteNumbering = { prefix: "Q-", next: 1101 };
 export function loadQuoteNumbering(): QuoteNumbering {
   if (typeof window === "undefined") return { ...DEFAULT_QUOTE_NUMBERING };
   // ตัวแทนคุมเลขที่ใบเสนอราคาของตัวเอง (เหมือนแฟรนไชส์แต่ไม่ใช่แฟรนไชส์) → อ่านจากตั้งค่าใบเสนอราคาของตัวแทนก่อน
@@ -837,6 +839,9 @@ export type QuotationMock = {
   revision?: string; // เวอร์ชันใบเสนอราคา V1/V2/V3
   expiry?: string;   // วันหมดอายุใบเสนอราคา (Expiry Date)
   note?: string;        // หมายเหตุ
+  lostReason?: string;  // เหตุผลที่ลูกค้าปฏิเสธ (เมื่อ status = lost) — ตัวเลือกมาจาก HQ (getLostReasons ร่วมกับลีด)
+  // สแนปช็อต % VAT ณ ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ ไม่ใช้ VAT ปัจจุบันของ HQ (ใบเก่าที่ไม่มีค่านี้ = fallback ไปใช้ hqPolicy.vat)
+  vatPercent?: number;
   // paymentTerms / deliveryTime ถูกลบตามที่บอสสั่ง — มีที่เก็บแต่ไม่มีช่องกรอก ขึ้น "—" ทุกใบ
   // (HQCustomer.deliveryTime เป็นคนละตัว ฝั่ง HQ ยังใช้คิดวันส่งมอบอยู่ ไม่แตะ)
   issuer?: IssuerProfile; // สแนปช็อตโปรไฟล์บริษัทผู้ออก ณ ตอนสร้าง — ใบเก่าคงชื่อเดิมแม้เปลี่ยนโปรไฟล์

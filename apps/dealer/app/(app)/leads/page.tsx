@@ -362,10 +362,19 @@ function OverviewEditor({ lead, persons, onSave }: {
         )}
         <span style={{ flex:1 }} />
         {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
-        <button onClick={save} disabled={!dirty} className="btn btn-primary btn-sm"
-          style={{ opacity: dirty ? 1 : 0.5, cursor: dirty ? "pointer" : "default" }}>
-          <Check size={13} /> บันทึกการแก้ไข
-        </button>
+        {(() => {
+          // ปิดการขายไม่สำเร็จ ต้องเลือกเหตุผลก่อนถึงจะบันทึกได้ — ให้ตรงกับปุ่ม "ปิดการขายไม่สำเร็จ"
+          // ในแผงเดียวกัน (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมช่องนี้ปล่อยผ่านได้โดยไม่กรอกเหตุผล)
+          const needsReason = f.status === "CANCELLED" && !f.lostReason;
+          const disabled = !dirty || needsReason;
+          return (
+            <button onClick={save} disabled={disabled} className="btn btn-primary btn-sm"
+              title={needsReason ? "เลือกเหตุผลที่ปิดการขายไม่สำเร็จก่อนบันทึก" : undefined}
+              style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
+              <Check size={13} /> บันทึกการแก้ไข
+            </button>
+          );
+        })()}
       </div>
     </div>
   );
@@ -662,6 +671,22 @@ export default function LeadsPage() {
   const { density, setDensity, hiddenCols, toggleCol } = useTableLayout("leads");
   const [view, setView] = useState<"list"|"kanban">("list"); // ค่าเริ่มต้น = ตาราง (สลับไปบอร์ดได้ที่ปุ่มมุมขวา)
   const [dragId, setDragId] = useState<string|null>(null); // การ์ดที่กำลังลากในมุมมอง Kanban
+  // ลีดที่กำลังจะปิดการขายไม่สำเร็จ (จากตาราง/Kanban) — รอเลือกเหตุผลก่อนค่อยเปลี่ยนสถานะจริง
+  // (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมสองช่องทางนี้ปิดได้โดยไม่ต้องกรอกเหตุผลเลย
+  //  ต่างจากปุ่ม "ปิดการขายไม่สำเร็จ" ในแผงลีดที่บังคับอยู่แล้ว — ทำให้ตรงกันทุกช่องทาง)
+  const [pendingLostId, setPendingLostId] = useState<string|null>(null);
+  const [pendingLostReason, setPendingLostReason] = useState("");
+  function requestStatusChange(id: string, status: LeadStatus) {
+    if (status === "CANCELLED") { setPendingLostId(id); setPendingLostReason(""); return; }
+    updateLeadStatus(id, status);
+  }
+  function confirmPendingLost() {
+    if (!pendingLostId || !pendingLostReason) return;
+    const target = allLeads.find(l => l.id === pendingLostId);
+    if (!target) { setPendingLostId(null); return; }
+    updateLead({ ...target, status: "CANCELLED", lostReason: pendingLostReason });
+    setPendingLostId(null); setPendingLostReason("");
+  }
   const [dragOver, setDragOver] = useState<LeadStatus|null>(null); // คอลัมน์ที่กำลังลากค้างอยู่ (ไฮไลต์)
   const [hideEmpty, setHideEmpty] = useState(false); // ซ่อนคอลัมน์ที่ไม่มีการ์ด
   const [query, setQuery] = useState("");
@@ -715,9 +740,16 @@ export default function LeadsPage() {
   // Files — คลังไฟล์รวม (แหล่งเดียว) กรองเฉพาะของลูกค้าเป้าหมายนี้
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   const [previewFile, setPreviewFile] = useState<DealerFile | null>(null);
+  // request token กันผลลัพธ์เก่าทับใหม่ — sync ถูกยิงซ้ำได้จากหลายทาง (mount, event, สลับสาขา)
+  const dealerFilesReqRef = useRef(0);
   useEffect(() => {
     // ไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB)
-    const sync = () => { filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles).catch(() => {}); };
+    const sync = () => {
+      const myReq = ++dealerFilesReqRef.current;
+      filesRepo.list({ dealerCode: currentDealer.code, isHQ: false })
+        .then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); })
+        .catch(() => {});
+    };
     sync();
     window.addEventListener(DEALER_FILES_EVENT, sync);
     window.addEventListener("storage", sync);
@@ -729,9 +761,11 @@ export default function LeadsPage() {
   // ห้ามใส่ค่าตั้งต้นปลอม และห้ามใช้ `if (names.length)` — ทะเบียนว่างต้องแปลว่าว่างจริง
   const [personsList, setPersonsList] = useState<string[]>([]);
   useEffect(() => {
+    let alive = true;
     personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
-      .then(arr => setPersonsList(arr.filter(p => p.active).map(p => p.name)))
+      .then(arr => { if (alive) setPersonsList(arr.filter(p => p.active).map(p => p.name)); })
       .catch(() => {});
+    return () => { alive = false; };
   }, [currentDealer.code]);
 
   // Inline status dropdown (table view)
@@ -863,6 +897,10 @@ export default function LeadsPage() {
           return;
         }
         openPanel(target);
+      } else {
+        // ลิงก์เดิม/แชร์มาแต่ลูกค้าเป้าหมายถูกลบ/ไม่มีจริง — เดิมหายไปเงียบ ๆ ไม่มีข้อความอะไรเลย
+        // (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+        setToast("ไม่พบลูกค้าเป้าหมายรายนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง");
       }
       window.history.replaceState(null, "", "/leads"); // ล้าง param กันเปิดซ้ำเมื่อรีเฟรช
     };
@@ -1222,7 +1260,7 @@ export default function LeadsPage() {
                                   const c = leadStatusColor[s];
                                   return (
                                     <button key={s}
-                                      onClick={e => { e.stopPropagation(); updateLeadStatus(l.id, s); setOpenStatusId(null); }}
+                                      onClick={e => { e.stopPropagation(); requestStatusChange(l.id, s); setOpenStatusId(null); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 14px",
                                         border:"none", background:s===l.status?"#f0f4f8":"transparent",
                                         cursor:"pointer", textAlign:"left" }}>
@@ -1357,7 +1395,7 @@ export default function LeadsPage() {
               <div key={status}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOver !== status) setDragOver(status); }}
                 onDragLeave={() => setDragOver(o => o === status ? null : o)}
-                onDrop={() => { if (dragId) { updateLeadStatus(dragId, status); setDragId(null); } setDragOver(null); }}
+                onDrop={() => { if (dragId) { requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
                 style={{ minWidth:w, width:w, flexShrink:0, alignSelf:"flex-start",
                   background: isOver ? "#eaf1fb" : "#f6f7f9", borderRadius:12, padding:10,
                   border: isOver ? "1.5px dashed #003366" : "1.5px solid transparent", transition:"background .12s, border-color .12s" }}>
@@ -1552,6 +1590,38 @@ export default function LeadsPage() {
           }}
           persons={personsList}
         />
+      )}
+
+      {/* เลือกเหตุผลก่อนปิดการขายไม่สำเร็จ — จากตาราง/Kanban (บังคับเลือกเหมือนปุ่มในแผงลีด) */}
+      {pendingLostId && (
+        <>
+          <div onClick={()=>setPendingLostId(null)} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.5)", zIndex:230 }} />
+          <div style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)", zIndex:240, width:420, maxWidth:"calc(100vw - 32px)", background:"#fff", borderRadius:16, overflow:"hidden", boxShadow:"0 24px 80px rgba(0,0,0,.3)" }}>
+            <div style={{ padding:"14px 18px", borderBottom:"1px solid #f0f4f8", display:"flex", alignItems:"center", gap:9 }}>
+              <XCircle size={17} color="#dc2626" /><span style={{ fontSize:"0.9rem", fontWeight:800, color:"#dc2626" }}>ปิดการขายไม่สำเร็จ</span>
+            </div>
+            <div style={{ padding:"16px 18px" }}>
+              <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                {lostReasons.map(r => (
+                  <button key={r} onClick={()=>setPendingLostReason(r)}
+                    style={{ padding:"8px 10px", borderRadius:9, border:`1px solid ${pendingLostReason===r?"#dc2626":"#e5e7eb"}`,
+                      background:pendingLostReason===r?"#fef2f2":"#fff", color:pendingLostReason===r?"#dc2626":"#374151",
+                      fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding:"12px 18px", borderTop:"1px solid #f0f4f8", display:"flex", justifyContent:"flex-end", gap:8, background:"#fafafa" }}>
+              <button onClick={()=>setPendingLostId(null)} className="btn btn-secondary btn-md">ยกเลิก</button>
+              <button onClick={confirmPendingLost} disabled={!pendingLostReason} className="btn btn-md"
+                style={{ background:"#dc2626", color:"#fff", opacity:pendingLostReason?1:0.5, cursor:pendingLostReason?"pointer":"not-allowed" }}>
+                ยืนยันปิดการขาย
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Delete confirm dialog */}

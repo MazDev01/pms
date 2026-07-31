@@ -1,7 +1,7 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   DEALER_FILES_EVENT, type DealerFile,
@@ -468,7 +468,15 @@ export default function FilesPage() {
   const [files, setFiles] = useState<FileMock[]>([]);
   const [loaded, setLoaded] = useState(false); // false = กำลังโหลด (แสดง Skeleton)
   // อ่านไฟล์ของสาขานี้ผ่าน repository (local: localStorage · supabase: DB · RLS สาขาตัวเอง)
-  const reloadFiles = () => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setFiles).catch(() => {});
+  // reloadFiles ถูกยิงซ้ำได้จากหลายทาง (mount, event, สลับสาขา) — ต้องกันผลลัพธ์เก่าที่มาช้ากว่า
+  // ทับผลลัพธ์ใหม่ (เช่น สลับสาขาเร็ว ๆ หรืออัปโหลดไฟล์ 2 ครั้งใกล้กัน) ด้วย request token
+  const reloadReqRef = useRef(0);
+  const reloadFiles = () => {
+    const myReq = ++reloadReqRef.current;
+    return filesRepo.list({ dealerCode: currentDealer.code, isHQ: false })
+      .then(r => { if (reloadReqRef.current === myReq) setFiles(r); })
+      .catch(() => {});
+  };
   useEffect(() => {
     reloadFiles().then(() => setLoaded(true));
     const sync = () => { void reloadFiles(); };

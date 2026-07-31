@@ -100,7 +100,7 @@ test("[func] ตั้งคำนำหน้าเลขที่ใบเส�
   await page.goto(`${DEALER_ORIGIN}/settings`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตั้งค่าใบเสนอราคา" }).first().click();
 
-  const prefixBox = page.getByPlaceholder("Q-2026-").first();
+  const prefixBox = page.getByPlaceholder("Q-").first();
   await expect(prefixBox).toBeVisible({ timeout: 10_000 });
   await fillWhenSettled(prefixBox, PREFIX);
   await clickSave(page);

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { use } from "react";
 import {
@@ -12,7 +11,7 @@ import {
 import { useRepoValue, useRepoValueLoaded } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { useNetworkDealerDetail, useNetworkCustomersDb } from "@pms/shared/lib/useNetworkData";
+import { useNetworkDealerDetail, useNetworkCustomersForDealer } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
 
@@ -375,11 +374,28 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   const dealer = dealers.find(d => d.code === code);
   // รายละเอียดตัวแทนแบบเชื่อมต่อ: CNX = ข้อมูลสด (leads/projects/quotes/ยอดรายเดือน) · สาขาอื่น = seed
   const detail = useNetworkDealerDetail(code);
-  const custs = useNetworkCustomersDb().filter(c => c.dealerCode === code); // ลูกค้าของตัวแทนนี้ (repo-backed · M9 Phase 4)
+  const custs = useNetworkCustomersForDealer(code); // ลูกค้าของตัวแทนนี้ (กรองที่ repo ตรง ๆ — ไม่ดึงทั้งเครือ)
 
   // ทะเบียนตัวแทนมาจาก repo (async) — ต้องรอโหลดจบก่อน ไม่งั้นเรนเดอร์แรกเด้ง 404 ทุกครั้ง
   if (!loaded) return <div className="erp" />;
-  if (!dealer) return notFound();
+  // รหัสตัวแทนที่พิมพ์ผิด/บุ๊กมาร์กเก่า/สาขาที่ถูกลบไปแล้ว — เรนเดอร์ข้อความในหน้าเอง (ไม่ใช้ notFound())
+  // เพราะ notFound() ในคอมโพเนนต์ "use client" ที่ไม่มี not-found.tsx ครอบ เคยขึ้นจอเปล่าเงียบ ๆ
+  // ไม่มี error เลยด้วย (พบจริงจากผลตรวจสอบระบบเต็มรูปแบบรอบ 2, 31 ก.ค. 69)
+  if (!dealer) {
+    return (
+      <div className="erp" style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ maxWidth: 380, textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 8 }}>ไม่พบตัวแทนรหัส "{code}"</div>
+          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20, lineHeight: 1.6 }}>
+            อาจพิมพ์รหัสผิด หรือตัวแทนรายนี้ถูกลบ/ยังไม่ถูกสร้างในระบบ
+          </p>
+          <Link href="/hq/dealers" className="btn btn-primary" style={{ display: "inline-flex", textDecoration: "none" }}>
+            <ArrowLeft size={14} style={{ marginRight: 6 }} /> กลับไปหน้าตัวแทน
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const perf = perfMap.get(code) ?? EMPTY_PERF;
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;

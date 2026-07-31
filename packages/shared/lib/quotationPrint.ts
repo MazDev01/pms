@@ -7,7 +7,8 @@ import { DEFAULT_ISSUER, ISSUER_KEY, loadHQPolicy, fmtISOToThai, type IssuerProf
 // termsAndConditions / validityDays มาจากหน้าตั้งค่าตัวแทน (คีย์ dealer_document_settings เดียวกัน)
 // เดิมไม่ได้ประกาศไว้ → เอกสารพิมพ์เงื่อนไขที่เขียนตายในโค้ด ตัวแทนแก้ที่หน้าตั้งค่าไปก็ไม่มีผล
 export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number; termsAndConditions?: string; validityDays?: number };
-export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-2026-", runningNumber: 1001, termsAndConditions: "", validityDays: 30 };
+// quotePrefix เป็นแค่ป้ายนำหน้า — รหัสสาขา+ปี+เลขรันต่อท้ายเสมอที่ฝั่งสร้างใบ (ดู DEFAULT_QUOTE_NUMBERING)
+export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-", runningNumber: 1001, termsAndConditions: "", validityDays: 30 };
 export const DOC_KEY = "dealer_document_settings";
 export const WORDMARK_KEY = "dealer_company_wordmark_v2"; // โลโก้พร้อมชื่อ (แนวนอน) → หัวเอกสาร
 
