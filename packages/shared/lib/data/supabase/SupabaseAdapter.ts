@@ -10,6 +10,7 @@ import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, DEFAULT_
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { captureError } from "@pms/shared/lib/observability";
+import { DbError } from "@pms/shared/lib/friendlyError";
 import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, WonBuildingRaw, LeadSummary } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
@@ -49,7 +50,7 @@ async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult
   const out: Row[] = [];
   for (let from = 0; ; from += PAGE_ROWS) {
     const { data, error } = await run(from, from + PAGE_ROWS - 1);
-    if (error) throw new Error(error.message);
+    if (error) throw new DbError(error.message, (error as { code?: string }).code);
     const rows = (data ?? []) as Row[];
     out.push(...rows);
     if (rows.length < PAGE_ROWS) break;
@@ -76,7 +77,7 @@ async function rangedFetch<T extends Row>(
   for (let from = offset; out.length < limit; from += PAGE_ROWS) {
     const to = Math.min(from + PAGE_ROWS, offset + limit) - 1;
     const { data, error, count } = await buildQuery(from, to);
-    if (error) throw new Error(error.message);
+    if (error) throw new DbError(error.message, (error as { code?: string }).code);
     if (count != null) total = count;
     const rows = data ?? [];
     out.push(...rows);
@@ -113,27 +114,27 @@ async function selectScoped<T>(table: string, scope?: Scope, col = "dealer_code"
   return toCamelList<T>(rows);
 }
 
-async function must(p: PromiseLike<{ error: { message: string } | null }>): Promise<void> {
+async function must(p: PromiseLike<{ error: { message: string; code?: string } | null }>): Promise<void> {
   const { error } = await p;
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error.message, error.code);
 }
 
 async function one<T>(table: string): Promise<T | null> {
   const { data, error } = await sb().from(table).select("*").limit(1).maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error.message, error.code);
   return data ? toCamel<T>(data as Row) : null;
 }
 
 // insert 1 แถว → คืนแถวที่ DB บันทึกจริง (id/created_at ที่ DB สร้างให้) เป็น camelCase
 async function insertRow<T>(table: string, row: T): Promise<T> {
   const { data, error } = await sb().from(table).insert(toSnake(row as unknown as Row)).select().single();
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error.message, error.code);
   return toCamel<T>(data as Row);
 }
 // update ทั้งแถวตาม id → คืนแถวหลังอัปเดต
 async function updateRow<T>(table: string, id: string | number, row: T): Promise<T> {
   const { data, error } = await sb().from(table).update(toSnake(row as unknown as Row)).eq("id", id).select().single();
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error.message, error.code);
   return toCamel<T>(data as Row);
 }
 
@@ -215,7 +216,7 @@ function rowToAppt(row: Row): AppointmentMock {
 // เลข id ถัดไปต่อสาขาแบบ atomic — DB เป็นคนออกให้ (กันชนเมื่อสร้างพร้อมกันในสาขาเดียวกัน)
 async function nextEntityId(dealerCode: string, entity: "customers" | "appointments" | "leads"): Promise<number> {
   const { data, error } = await sb().rpc("next_entity_id", { p_dealer: dealerCode, p_entity: entity });
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error.message, error.code);
   return Number(data);
 }
 
@@ -245,17 +246,17 @@ export const SupabaseAdapter: DataAdapter = {
       const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_") || "file";
       const path = `${dealerCode}/${Date.now()}-${safe}`;
       const { error } = await sb().storage.from(FILES_BUCKET).upload(path, file, { upsert: false });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return path;
     },
     signedUrl: async (path) => {
       const { data, error } = await sb().storage.from(FILES_BUCKET).createSignedUrl(path, 3600);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return data?.signedUrl ?? null;
     },
     remove: async (path) => {
       const { error } = await sb().storage.from(FILES_BUCKET).remove([path]);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
     },
   },
   // Realtime — ช่องเดียวฟังครบ 4 ตารางงานขาย · RLS กรอง event ให้ตามสาขาที่ล็อกอินอยู่แล้ว
@@ -366,7 +367,7 @@ export const SupabaseAdapter: DataAdapter = {
     list: (scope) => selectScoped<DealerFile>("files", scope),
     add: async (f) => {
       const { data, error } = await sb().from("files").insert(toSnake(f as unknown as Row)).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return toCamel<DealerFile>(data as Row);
     },
     update: (f) => must(sb().from("files").update(toSnake(f as unknown as Row)).eq("id", f.id)),
@@ -428,7 +429,7 @@ export const SupabaseAdapter: DataAdapter = {
     get: async (dealerCode) => {
       const { data, error } = await sb().from("dealer_settings")
         .select("issuer,document,wordmark,logo,notif_prefs").eq("dealer_code", dealerCode).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const r = (data ?? {}) as Record<string, unknown>;
       // ยังไม่เคยตั้งค่า = คืนค่ากลาง (หน้าจอจะได้มีอะไรให้แก้ ไม่ใช่ฟอร์มว่างเปล่า)
       return {
@@ -461,7 +462,7 @@ export const SupabaseAdapter: DataAdapter = {
       if (!id) return null;
       const { data, error } = await sb().from("profiles")
         .select("name,phone,contact_email,avatar").eq("id", id).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       if (!data) return null;
       const r = data as Record<string, unknown>;
       return {
@@ -523,7 +524,7 @@ export const SupabaseAdapter: DataAdapter = {
     list: async (limit = 5000) => {
       const { data, error } = await sb().from("audit_log")
         .select("*").order("id", { ascending: false }).range(0, Math.max(0, limit - 1));
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
     },
     // ประทับ at ด้วย "วันนี้ของระบบ" (APP_NOW) + เวลาจริง → รายการอยู่ในช่วงตัวกรอง /hq/audit (แช่แข็งเวลา)
@@ -543,7 +544,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_default_days: opts?.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays,
         p_follow_up_days: opts?.perDealer ?? null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const m = new Map<string, DealerRollup>();
       for (const r of (data as Row[]) ?? []) {
         m.set(String(r.dealer_code), {
@@ -559,7 +560,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_source: f.source ?? null, p_search: (f.search ?? "").trim() || null, p_status: f.status ?? null,
         p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { byStatus?: Row[]; bySource?: Row[]; byProduct?: Row[]; byProvince?: Row[]; byLostReason?: Row[]; byMonth?: Row[]; byDealer?: Row[] };
       return {
         byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count), value: Number(r.value) })),
@@ -573,7 +574,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     customerRollup: async () => {
       const { data, error } = await sb().rpc("customer_rollup");
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const m = new Map<string, WonBuildingRaw[]>();
       for (const r of (data as Row[]) ?? []) {
         m.set(`${r.dealer_code}|${r.customer ?? ""}`, ((r.buildings as WonBuildingRaw[]) ?? []).map(b => ({
@@ -584,7 +585,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     networkQuoteRange: async (start, end, dealer) => {
       const { data, error } = await sb().rpc("network_quote_range", { p_start: start, p_end: end, p_dealer: dealer ?? null });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const m = new Map<string, QuoteRangeRow>();
       for (const r of (data as Row[]) ?? []) {
         m.set(String(r.dealer_code), {
@@ -596,7 +597,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     dashboardQuoteSummary: async (start, end, dealer) => {
       const { data, error } = await sb().rpc("dashboard_quote_summary", { p_start: start, p_end: end, p_dealer: dealer ?? null });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { byMonth?: Row[]; byStatus?: Row[]; byProduct?: Row[] };
       return {
         byMonth: (d.byMonth ?? []).map(r => ({
@@ -609,7 +610,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     networkCustomerSummary: async () => {
       const { data, error } = await sb().rpc("network_customer_summary");
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { total?: number; byProvince?: Row[] };
       return {
         total: Number(d.total ?? 0),
@@ -623,7 +624,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_source: f.source ?? null, p_search: (f.search ?? "").trim() || null,
         p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { total?: number; byDealer?: Row[] };
       return {
         total: Number(d.total ?? 0),
@@ -637,7 +638,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_lead_idle_days: f.leadIdleDays ?? DEFAULT_HQ_NOTIF_RULES.leadIdleDays, p_quote_validity_days: f.quoteValidityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays,
         p_quote_expiring_days: f.quoteExpiringDays ?? DEFAULT_HQ_NOTIF_RULES.quoteExpiringDays, p_dealer_idle_days: f.dealerIdleDays ?? DEFAULT_HQ_NOTIF_RULES.dealerIdleDays,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { unassigned?: Row[]; idle?: Row[]; expiring?: Row[]; dealer_latest?: Row[]; lost_rate?: Row[] };
       return {
         unassigned: (d.unassigned ?? []).map(r => ({ numId: Number(r.num_id), company: String(r.company ?? ""), province: String(r.province ?? ""), value: String(r.value ?? "") })),
@@ -658,7 +659,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_delivery_year: opts.deliveryYear ?? null,
         p_limit: opts.limit, p_offset: opts.offset,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = data as {
         total: number;
         kpi: { total: number; active: number; revenue: number; repeat: number };
@@ -681,7 +682,7 @@ export const SupabaseAdapter: DataAdapter = {
     },
     hqCustomersFilterOptions: async () => {
       const { data, error } = await sb().rpc("hq_customers_filter_options");
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = data as { dealers: { code: string; name: string }[]; provinces: string[]; types: string[]; years: number[] };
       return d;
     },
@@ -691,7 +692,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_search: (f.search ?? "").trim() || null, p_date_start: f.dateStart ?? null, p_date_end: f.dateEnd ?? null,
         p_as_of: f.asOf ?? APP_NOW_ISO, p_search_dealers: f.searchDealers ?? null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { byDealer?: Row[]; byMonth?: Row[]; byProduct?: Row[]; aging?: Row[] };
       return {
         byDealer: (d.byDealer ?? []).map(r => ({
@@ -729,19 +730,19 @@ export const SupabaseAdapter: DataAdapter = {
         p_overdue: opts.overdue ?? false, p_as_of: opts.asOf ?? APP_NOW_ISO,
         p_default_days: opts.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays, p_follow_up_days: opts.perDealer ?? null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { total?: number; rows?: Row[] };
       return { rows: (d.rows ?? []).map(rowToLead), total: Number(d.total ?? 0) };
     },
     nextNumId: (dealerCode) => nextEntityId(dealerCode, "leads"),
     create: (row) => withNetworkRetry(async () => {
       const { data, error } = await sb().from("leads").insert(leadToRow(row)).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToLead(data as Row);
     }),
     update: async (row) => {
       const { data, error } = await sb().from("leads").update(leadToRow(row)).eq("id", row.id).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToLead(data as Row);
     },
     remove: (id) => must(sb().from("leads").delete().eq("id", id)),
@@ -779,12 +780,12 @@ export const SupabaseAdapter: DataAdapter = {
     },
     create: async (row) => {
       const { data, error } = await sb().from("quotations").insert(quoteToRow(row)).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToQuote(data as Row);
     },
     update: async (row) => {
       const { data, error } = await sb().from("quotations").update(quoteToRow(row)).eq("id", row.id).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToQuote(data as Row);
     },
     remove: (id) => must(sb().from("quotations").delete().eq("id", id)),
@@ -793,18 +794,18 @@ export const SupabaseAdapter: DataAdapter = {
     //   validityDays = ใบที่ไม่ได้กรอก expiry เอง ใช้ date+validityDays แทน (นิยามเดียวกับ hq_alerts) · 0067
     expireOverdue: async (asOf, _scope, validityDays) => {
       const { data, error } = await sb().rpc("expire_quotations", { p_as_of: asOf, p_validity_days: validityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return Number(data ?? 0);
     },
     salesperson: async (quoteId) => {
       const { data, error } = await sb().rpc("quotation_salesperson", { p_quote_id: quoteId });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as string | null) ?? null;
     },
     // ใบ won ของลูกค้ารายเดียว — bounded read ตรง ๆ (RLS คุม scope อยู่แล้ว) ไม่ต้อง RPC (M9 Phase 6)
     listForCustomer: async (customerId) => {
       const { data, error } = await sb().from("quotations").select("*").eq("customer_id", customerId).eq("status", "won").order("date", { ascending: true });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToQuote);
     },
     // ผูกใบกำพร้าทั้งชุดในคำสั่งเดียว (RPC, 0093) — แทนที่ N คำขอ update แยกกัน (Phase 4 transaction)
@@ -812,7 +813,7 @@ export const SupabaseAdapter: DataAdapter = {
       const { data, error } = await sb().rpc("relink_customer_quotes", {
         p_dealer: dealer, p_customer_id: customerId, p_company: company, p_cascade_won: cascadeWon,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToQuote);
     },
     // ออกเลข + insert รวด (atomic) — RPC ที่ DB (0034) · insert ล้ม = ตัวนับ rollback ไม่เดิน (H8)
@@ -822,7 +823,7 @@ export const SupabaseAdapter: DataAdapter = {
       const { data, error } = await sb().rpc("create_quotation", {
         p_dealer: dealer, p_prefix: prefix ?? "Q-2026-", p_payload: payload,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToQuote(data as Row);
     },
   },
@@ -851,13 +852,13 @@ export const SupabaseAdapter: DataAdapter = {
       const payload = toSnake(row as unknown as Row);
       delete payload.id; delete payload.created_at; delete payload.dealer_code;
       const { data, error } = await sb().rpc("upsert_customer_for_company", { p_dealer: dealerCode, p_payload: payload });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return normalizeCustomer(toCamel<CustomerRow>(data as Row));
     },
     // รวมยอด won ที่ DB ตรง ๆ (0078) — กัน race ตอนแก้สถานะ 2 ใบพร้อมกันจาก 2 session
     reconcileWonTotal: async (customerId) => {
       const { data, error } = await sb().rpc("reconcile_customer_won_total", { p_customer_id: customerId });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return normalizeCustomer(toCamel<CustomerRow>(data as Row));
     },
     // ปิดการขายสำเร็จทั้งก้อนแบบ atomic (RPC, 0094/0095 — Phase 4 transaction)
@@ -870,7 +871,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_dealer: dealer, p_known_customer_id: knownCustomerId, p_lead_company: leadCompany,
         p_target_quote_id: targetQuoteId, p_cascade_won: cascadeWon, p_customer_payload: payload,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const result = data as { customer: Row; quotations: Row[] };
       return {
         customer: normalizeCustomer(toCamel<CustomerRow>(result.customer)),
@@ -889,22 +890,22 @@ export const SupabaseAdapter: DataAdapter = {
     },
     listForDealer: async (dealerCode) => {
       const { data, error } = await sb().from("appointments").select("*").eq("dealer_code", dealerCode).order("id", { ascending: true });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToAppt);
     },
     listForLead: async (leadId) => {
       const { data, error } = await sb().from("appointments").select("*").eq("lead_id", leadId).order("id", { ascending: true });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToAppt);
     },
     create: async (row) => {
       const { data, error } = await sb().from("appointments").insert(apptToRow(row)).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToAppt(data as Row);
     },
     update: async (row) => {
       const { data, error } = await sb().from("appointments").update(apptToRow(row)).eq("id", row.id).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToAppt(data as Row);
     },
     remove: (id) => must(sb().from("appointments").delete().eq("id", id)),

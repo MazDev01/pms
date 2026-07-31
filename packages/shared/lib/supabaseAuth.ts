@@ -6,6 +6,7 @@
 // แล้วปั้นเป็น MockSession รูปเดียวกับโหมด local → RoleContext ใช้ร่วมกันได้ทั้งสองโหมด
 import { getSupabase } from "./data/supabase/client";
 import { DEMO_PASSWORD, type AuthResult } from "./auth";
+import { friendlyError } from "./friendlyError";
 import type { MockSession, UserRole } from "./mock";
 import { HQ_ROLES } from "./permissions";
 
@@ -138,10 +139,10 @@ export async function sbSendPasswordReset(email: string): Promise<ResetResult> {
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined;
     const { error } = await getSupabase().auth.resetPasswordForEmail(e, { redirectTo });
     // Supabase ตอบสำเร็จเสมอแม้ไม่พบอีเมล (กัน user enumeration) — ถือว่าส่งแล้ว
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: friendlyError(error) };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: friendlyError(err) };
   }
 }
 
@@ -150,10 +151,10 @@ export async function sbUpdatePassword(newPassword: string): Promise<ResetResult
   if (newPassword.length < 8) return { ok: false, error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" };
   try {
     const { error } = await getSupabase().auth.updateUser({ password: newPassword });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: friendlyError(error) };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: friendlyError(err) };
   }
 }
 
@@ -173,7 +174,7 @@ export async function sbChangeOwnPassword(current: string, next: string): Promis
   if (reauth) return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
   // ตั้งรหัสใหม่
   const { error } = await sb.auth.updateUser({ password: next });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: friendlyError(error) };
   return { ok: true };
 }
 

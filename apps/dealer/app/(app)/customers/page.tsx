@@ -12,6 +12,7 @@ import {
   type AppointmentMock,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
 
 // หมวดโน้ตจาก DB เป็นข้อความอิสระ — หมวดที่ไม่รู้จักต้องไม่ทำหน้าพัง ให้ใช้สีของ "ทั่วไป"
@@ -1059,7 +1060,7 @@ export default function CustomersPage(){
                             try {
                               await customerNotes.add({ title:noteTitle.trim(), content:noteBody.trim(), category:"ลูกค้า", color:"#003366", customerId:selected.id });
                               setAddingNote(false); setNoteTitle(""); setNoteBody("");
-                            } catch(e){ alert("บันทึกโน้ตไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))); }
+                            } catch(e){ alert("บันทึกโน้ตไม่สำเร็จ: " + friendlyError(e)); }
                           }}>บันทึกโน้ต</button>
                       </div>
                     </div>

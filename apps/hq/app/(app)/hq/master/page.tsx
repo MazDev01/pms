@@ -5,6 +5,7 @@
 // อ่านจากคีย์เดียวกันทันที · ขอบเขต Sales เท่านั้น (ไม่มี lead time/การส่งมอบ)
 import { useState } from "react";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { catalog as catalogRepo } from "@pms/shared/lib/data";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 // เริ่มด้วยรายการว่าง — เดิมตั้งต้นด้วยชุดตัวอย่าง ทำให้เห็นแม่แบบปลอมกะพริบก่อนของจริงมา
@@ -214,7 +215,7 @@ function HQMasterPageInner() {
     const target = delTarget;
     void catalogRepo.remove(target.id)
       .then(() => setCatalog(prev => prev.filter(p => p.id !== target.id)))
-      .catch(e => alert("ลบแม่แบบไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("ลบแม่แบบไม่สำเร็จ: " + friendlyError(e)));
     logAudit("ลบแม่แบบ", target.name);
     setDelTarget(null);
   }

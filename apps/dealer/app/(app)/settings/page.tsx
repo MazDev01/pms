@@ -13,6 +13,7 @@ import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { useUnsavedGuard } from "@pms/shared/lib/useUnsavedGuard";
@@ -90,7 +91,7 @@ function CompanyTab() {
       .catch(() => alert("บันทึกโปรไฟล์ไม่สำเร็จ — รูปอาจมีขนาดใหญ่เกินไป"));
     // ข้อมูลบริษัท/โลโก้ = ของสาขา เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่เงียบแล้วจอขึ้นว่าบันทึกแล้ว
     void dealerCfg.save({ issuer: form, logo, wordmark })
-      .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
     window.dispatchEvent(new Event("bpms-company-updated"));
     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
     setBaseline(JSON.stringify({ form, logo, wordmark, prof }));
@@ -300,7 +301,7 @@ function DocumentsTab() {
 
   const save = useCallback(() => {
     void dealerCfg.save({ document: doc })
-      .catch(e => alert("บันทึกตั้งค่าเอกสารไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("บันทึกตั้งค่าเอกสารไม่สำเร็จ: " + friendlyError(e)));
     setBaseline(JSON.stringify(doc));
     // dep ต้องเป็น dealerCfg.save (useCallback ที่เสถียร) ไม่ใช่ dealerCfg ทั้งก้อน
     // เพราะ hook คืน object ใหม่ทุกเรนเดอร์ → save ใหม่ทุกเรนเดอร์ → useMemo/useReport ยิงซ้ำ = เรนเดอร์วนไม่จบ
@@ -724,7 +725,7 @@ function NotificationsTab() {
   const save = useCallback(() => {
     const next = draftRef.current;
     void notifCfg.save({ notifPrefs: next })
-      .catch(e => alert("บันทึกการแจ้งเตือนไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("บันทึกการแจ้งเตือนไม่สำเร็จ: " + friendlyError(e)));
     window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้กระดิ่งบน Topbar อัปเดตทันที
     const nextRules = rulesDraftRef.current;
     void settingsRepo.saveLeadRules(currentDealer.code, nextRules); // local: ยิง event ให้หน้าอื่นอัปเดตทันที · supabase: RLS dealer-own

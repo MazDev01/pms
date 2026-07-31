@@ -7,6 +7,7 @@ import {
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { createDealerAccount, deleteDealerAccount } from "@pms/shared/lib/adminApi";
@@ -262,7 +263,7 @@ function HQDealersPageInner() {
     // การเดาแบบนั้นทำให้ "โหลดยังไม่เสร็จแล้วผู้ใช้แก้" กลายเป็นคำสั่งลบทั้งตาราง
     void dealersRepo.remove(d.code)
       .then(() => setDealers(prev => prev.filter(x => x.id !== d.id)))
-      .catch(e => alert("ลบตัวแทนไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("ลบตัวแทนไม่สำเร็จ: " + friendlyError(e)));
     logAudit("ลบตัวแทน", `${d.code} · ${d.name}`);
   }
 

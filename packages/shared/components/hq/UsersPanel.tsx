@@ -5,6 +5,7 @@
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { fmtISOToThai } from "@pms/shared/lib/mock";
@@ -258,7 +259,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     if (!cur) return;
     const next = { ...cur, ...patch };
     void usersRepo.update({ id, name: next.name, role: next.role, department: next.department, status: next.status })
-      .catch(e => alert("บันทึกผู้ใช้ไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
   };
   function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
     if (id !== null) { update(id, data); logAudit("แก้ไขผู้ใช้", data.email); return; }

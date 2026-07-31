@@ -21,6 +21,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
@@ -528,7 +529,7 @@ function BackupCard() {
       URL.revokeObjectURL(a.href);
       toast("ส่งออกการตั้งค่าแล้ว");
     } catch (e) {
-      toast("ส่งออกไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e)));
+      toast("ส่งออกไม่สำเร็จ: " + friendlyError(e));
     }
   }
 
@@ -558,7 +559,7 @@ function BackupCard() {
         toast("นำเข้าสำเร็จ — กำลังโหลดใหม่");
         setTimeout(() => location.reload(), 900);
       } catch (err) {
-        toast("นำเข้าไม่สำเร็จ: " + (err instanceof Error ? err.message : String(err)));
+        toast("นำเข้าไม่สำเร็จ: " + friendlyError(err));
       }
     };
     r.readAsText(file);
@@ -576,7 +577,7 @@ function BackupCard() {
       toast("คืนค่าเริ่มต้นแล้ว — กำลังโหลดใหม่");
       setTimeout(() => location.reload(), 900);
     } catch (e) {
-      toast("คืนค่าไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e)));
+      toast("คืนค่าไม่สำเร็จ: " + friendlyError(e));
     }
   }
 

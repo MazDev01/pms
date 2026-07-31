@@ -6,6 +6,7 @@
 // (โมดูลนี้อยู่ฝั่ง client — ส่งแค่ JWT ของผู้เรียกไปให้เซิร์ฟเวอร์ตรวจสิทธิ์เอง ไม่แตะ service_role)
 import { getSupabase } from "./data/supabase/client";
 import { DATA_SOURCE } from "./data/config";
+import { friendlyError } from "./friendlyError";
 
 export type CreateDealerInput = {
   code: string; name: string; province: string; region: string; revenueTarget: number;
@@ -37,7 +38,7 @@ export async function createDealerAccount(input: CreateDealerInput): Promise<Cre
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
     return { ok: true, email: json.email ?? "", password: json.password ?? "" };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
 }
 
@@ -75,7 +76,7 @@ export async function createHQUser(input: CreateHQUserInput): Promise<CreateHQUs
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
     return { ok: true, id: json.id ?? "", email: json.email ?? "", password: json.password ?? "" };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
 }
 
@@ -95,7 +96,7 @@ export async function deleteHQUser(id: string): Promise<{ ok: true } | { ok: fal
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
 }
 
@@ -116,6 +117,6 @@ export async function deleteDealerAccount(code: string): Promise<{ ok: true } | 
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
 }

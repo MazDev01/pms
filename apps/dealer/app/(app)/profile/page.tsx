@@ -9,6 +9,7 @@ import {
   defaultProfileEmail, type UserProfile,
 } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { sbChangeOwnPassword } from "@pms/shared/lib/supabaseAuth";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
@@ -60,7 +61,7 @@ export default function ProfilePage() {
     };
     // เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่กลืน error แล้วขึ้นว่าบันทึกแล้ว
     void userProfile.save(clean)
-      .catch(e => alert("บันทึกโปรไฟล์ไม่สำเร็จ: " + (e instanceof Error ? e.message : String(e))));
+      .catch(e => alert("บันทึกโปรไฟล์ไม่สำเร็จ: " + friendlyError(e)));
     setForm(clean);
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);

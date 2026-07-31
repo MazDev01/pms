@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, DEFAULT_QUOTE_NUMBERING,
@@ -248,9 +249,8 @@ export function SalesProvider({
   // หน้าที่: แจ้งผู้ใช้ + ดึงชุดข้อมูลจริงจาก repo มาทับ (ยกเลิก optimistic ที่ไม่ได้ถูกบันทึก)
   useEffect(() => {
     failRef.current = (entity, op, e) => {
-      const detail = e instanceof Error ? e.message : String(e);
       console.error(`[${entity}] ${op}`, e);
-      setSyncError(`บันทึกไม่สำเร็จ: ${op} — ${detail}`);
+      setSyncError(`บันทึกไม่สำเร็จ: ${op} — ${friendlyError(e)}`);
       const scope = { dealerCode, isHQ };
       if (entity === "leads") leadsRepo.list(scope).then(setLeads).catch(() => {});
       else if (entity === "quotations") quotationsRepo.list(scope).then(setQuotations).catch(() => {});
