@@ -480,7 +480,7 @@ function HQMasterPageInner() {
                   onChange={next => setEditForm(f => ({ ...f, subtypes: next }))}
                   onImagesChange={next => setEditForm(f => ({ ...f, subtypeImages: next }))} />
               </div>
-              <div style={{ fontSize: "0.72rem", color: MUTED }}>ราคากลางแก้ผ่านปุ่ม "ปรับราคา" เพื่อบันทึกประวัติราคาเสมอ</div>
+              <div style={{ fontSize: "0.72rem", color: MUTED }}>ราคากลางแก้ผ่านปุ่ม &quot;ปรับราคา&quot; เพื่อบันทึกประวัติราคาเสมอ</div>
             </div>
             <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
               <button className="btn btn-secondary btn-md" onClick={() => setEditing(null)}>ยกเลิก</button>

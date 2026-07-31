@@ -9,5 +9,6 @@ verifyDepsBeforeRun: false
 
 # ตัดสินใจชัด: ไม่รัน build script ของ sharp (native) — Next build ทำงานได้โดยไม่ต้องมี
 allowBuilds:
-  '@sentry/cli': false   # ไม่ต้องดาวน์โหลด sentry-cli (เราไม่ทำ source-map upload)
+  '@sentry/cli': false # ไม่ต้องดาวน์โหลด sentry-cli (เราไม่ทำ source-map upload)
   sharp: false
+  unrs-resolver: false # native resolver ภายในของ eslint — ไม่จำเป็นต้องรัน build script (เหตุผลเดียวกับ sharp)

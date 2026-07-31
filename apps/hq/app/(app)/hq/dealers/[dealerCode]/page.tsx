@@ -385,7 +385,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
     return (
       <div className="erp" style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ maxWidth: 380, textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 8 }}>ไม่พบตัวแทนรหัส "{code}"</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 8 }}>ไม่พบตัวแทนรหัส &quot;{code}&quot;</div>
           <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20, lineHeight: 1.6 }}>
             อาจพิมพ์รหัสผิด หรือตัวแทนรายนี้ถูกลบ/ยังไม่ถูกสร้างในระบบ
           </p>

@@ -241,7 +241,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
                   {STATUS_ORDER.filter(s=>s!=="won"||form.status==="won").map(s=><option key={s} value={s}>{quotationStatusLabel[s]}</option>)}
                 </select>
                 {form.status!=="won" && <div style={{fontSize:"0.62rem",color:MUTED,marginTop:5,display:"flex",alignItems:"center",gap:4}}>
-                  <Lock size={9}/> ปิดการขายสำเร็จ ให้กดปุ่ม "ลูกค้าตอบรับ ✓" ที่รายการใบเสนอราคาแทน
+                  <Lock size={9}/> ปิดการขายสำเร็จ ให้กดปุ่ม &quot;ลูกค้าตอบรับ ✓&quot; ที่รายการใบเสนอราคาแทน
                 </div>}
               </div>
               <div>
