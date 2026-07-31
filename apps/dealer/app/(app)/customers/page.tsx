@@ -152,7 +152,9 @@ function purchasedItemsFor(customerId:number, qs:QuotationMock[]): string[] {
 function printCustomer(c:CustomerRow, rows:{q:QuotationMock;template:string}[], code:string){
   const win = window.open("", "_blank", "width=900,height=700");
   if(!win) return;
-  const esc = (s:unknown)=>String(s??"—");
+  // XSS: หน้านี้ประกอบ HTML ด้วย document.write() ตรงๆ — ต้อง escape เอนทิตี HTML จริง ไม่ใช่แค่ stringify
+  // (เดิม esc() แค่ String(s??"—") ไม่กันเลย — ชื่อบริษัท/ที่อยู่/ชื่องาน ที่มี <script> จะรันจริงตอนพิมพ์)
+  const esc = (s:unknown)=>String(s??"—").replace(/[&<>"]/g, c => (({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" } as Record<string,string>)[c]));
   const info: [string,string][] = [
     ["รหัสลูกค้า", code], ["ชื่อ-สกุล", esc(c.name)],
     ["เบอร์โทรศัพท์", esc(c.phone)], ["อีเมล", esc(c.email)], ["ที่อยู่", esc(c.address)],

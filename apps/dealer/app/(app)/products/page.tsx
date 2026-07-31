@@ -27,22 +27,26 @@ export default function DealerProductsPage() {
   // แคตตาล็อกเดียวทั้งเครือ — อ่านผ่าน repository (local: localStorage · supabase: DB)
   const PRODUCTS = useMasterCatalog();
 
+  // XSS: หน้านี้ประกอบ HTML ด้วย document.write() ตรงๆ — ต้อง escape เอนทิตี HTML ก่อนแทรกเสมอ
+  // (เดิมแทรก p.name/p.spec ดิบๆ — ชื่อ/รายละเอียดแม่แบบที่มี <script> จะรันจริงตอนเปิดหน้าพิมพ์)
+  const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, c => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as Record<string, string>)[c]));
+
   // ดาวน์โหลดเอกสารแม่แบบ (เปิดหน้าพิมพ์ · ไทยล้วน)
   function downloadSpec(p: Product) {
     const win = window.open("", "_blank", "width=820,height=640");
     if (!win) return;
-    win.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${p.name}</title>
+    win.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(p.name)}</title>
       <style>*{font-family:"Noto Sans Thai","Sarabun",system-ui,sans-serif;box-sizing:border-box}
         body{margin:36px;color:#2D2D2D}h1{color:#003366;font-size:20px;margin:0 0 2px}
         .sub{color:#6b7280;font-size:12px;margin-bottom:20px}
         .row{display:flex;border-bottom:1px solid #eef1f5;padding:9px 0;font-size:13px}
         .k{width:150px;color:#6b7280;font-weight:600}.v{font-weight:700}
         .price{color:#003366;font-size:18px;font-weight:800}</style></head>
-      <body><h1>${p.name}</h1><div class="sub">แม่แบบอาคารสำเร็จรูป</div>
-      <div class="row"><div class="k">รายละเอียด</div><div class="v">${p.spec}</div></div>
-      <div class="row"><div class="k">ราคากลาง</div><div class="v price">${fmtMoney(p.price)} / ${p.unit}</div></div>
+      <body><h1>${esc(p.name)}</h1><div class="sub">แม่แบบอาคารสำเร็จรูป</div>
+      <div class="row"><div class="k">รายละเอียด</div><div class="v">${esc(p.spec)}</div></div>
+      <div class="row"><div class="k">ราคากลาง</div><div class="v price">${fmtMoney(p.price)} / ${esc(p.unit)}</div></div>
       <p style="margin-top:24px;font-size:11px;color:#9ca3af">ราคากลางกำหนดโดยสำนักงานใหญ่ · ใช้อ้างอิงในการนำเสนอ</p>
-      <script>window.onload=function(){window.print()}</script></body></html>`);
+      <script>window.onload=function(){window.print()}<\/script></body></html>`);
     win.document.close();
   }
 
