@@ -361,6 +361,14 @@ export interface CustomersRepo {
   // รวมยอดลูกค้าใหม่จากใบ won ปัจจุบันตรงจาก DB (ไม่รับผลรวมจาก client) — กัน race ตอนแก้ 2 ใบพร้อมกัน (0078)
   // supabase: subquery SUM ในสเตตเมนต์ UPDATE เดียว ที่ DB · local: คำนวณจากอาร์เรย์ในเครื่อง (ไม่มี race จริง)
   reconcileWonTotal(customerId: number): Promise<CustomerRow>;
+  /** ปิดการขายสำเร็จแบบ atomic ทั้งก้อน (Phase 4, 0094) — หา/สร้างลูกค้า + relink ใบกำพร้าของบริษัทนี้
+   *  (cascade เป็น won ด้วยถ้า cascadeWon) + บังคับใบเป้าหมายเป็น won (ถ้าระบุ targetQuoteId) + รวมยอดใหม่
+   *  ในทรานแซกชันเดียว — แทนที่ upsertForCompany + relink แยก + setStatus แยก + reconcile แยก (4 คำสั่งเขียน
+   *  เดิม เน็ตหลุดกลางทางได้) · supabase: RPC close_won_quotation · local: เรียงลำดับ await เดิม (เธรดเดียว) */
+  closeWon(args: {
+    dealer: string; knownCustomerId: number | null; leadCompany: string;
+    targetQuoteId: string | null; cascadeWon: boolean; customerPayload: CustomerRow;
+  }): Promise<{ customer: CustomerRow; quotations: QuotationMock[] }>;
 }
 export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;

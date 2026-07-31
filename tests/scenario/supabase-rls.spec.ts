@@ -254,16 +254,17 @@ test("[repo] HQ ลบตัวแทนแล้วหายจาก DB จร
   const before = (await sb.from("dealers").select("code")).data ?? [];
   expect(before.length, "ต้องมีตัวแทนอยู่ก่อน").toBeGreaterThan(0);
   try {
-    // เพิ่มตัวแทนชั่วคราว
+    // เพิ่มตัวแทนชั่วคราว — select("code") เท่านั้น (0091: revenue_target/คอลัมน์อื่นถอด SELECT
+    // ทั้งตารางออกจาก authenticated แล้ว select() เปล่าๆ จะโดน "permission denied for table dealers")
     const ins = await sb.from("dealers").insert({
       code: CODE, name: "สาขาทดสอบอัตโนมัติ", province: "กรุงเทพฯ", region: "กลาง", status: "active",
-    }).select();
+    }).select("code");
     expect(ins.error, `เพิ่มไม่ได้: ${JSON.stringify(ins.error)}`).toBeNull();
     expect(((await sb.from("dealers").select("code")).data ?? []).length).toBe(before.length + 1);
 
     // จำลองสิ่งที่ dealers.save ทำ: upsert ชุดที่ "ไม่มี ZTEST" แล้วลบส่วนเกิน
     const keep = before.map(d => `"${d.code}"`).join(",");
-    const del = await sb.from("dealers").delete().not("code", "in", `(${keep})`).select();
+    const del = await sb.from("dealers").delete().not("code", "in", `(${keep})`).select("code");
     expect(del.error, `ลบไม่ได้: ${JSON.stringify(del.error)}`).toBeNull();
 
     const after = (await sb.from("dealers").select("code")).data ?? [];
@@ -276,7 +277,8 @@ test("[repo] HQ ลบตัวแทนแล้วหายจาก DB จร
 
 test("[schema] ตาราง dealers ไม่มีคอลัมน์ KPI เดโมแล้ว (0023)", async () => {
   const sb = await signIn(ADMIN);
-  const { data, error } = await sb.from("dealers").select("*").limit(1);
+  // 0091: SELECT ทั้งตารางถูก revoke จาก authenticated แล้ว เหลือแค่คอลัมน์ปลอดภัยที่ grant ไว้
+  const { data, error } = await sb.from("dealers").select("code, name, province, region, status, created_at").limit(1);
   expect(error).toBeNull();
   const row = (data ?? [])[0];
   expect(row, "ต้องมีตัวแทนอย่างน้อย 1 สาขา").toBeTruthy();
@@ -376,8 +378,14 @@ test("[notes] โน้ตลูกค้าเก็บที่ DB · สา�
   const hq  = await signIn(ADMIN);
   let id: number | null = null;
   try {
+    // customer_notes_customer_fk (0089) บังคับให้ customer_id ต้องมีลูกค้าอยู่จริง — ดึงลูกค้าจริงของ RYG มาใช้
+    const anyCustomer = await ryg.from("customers").select("id").eq("dealer_code", "RYG").limit(1).maybeSingle();
+    expect(anyCustomer.error, `หาลูกค้า RYG ไม่ได้: ${JSON.stringify(anyCustomer.error)}`).toBeNull();
+    const customerId = (anyCustomer.data as { id: number } | null)?.id;
+    expect(customerId, "ต้องมีลูกค้าอย่างน้อย 1 รายของ RYG ไว้ใช้ทดสอบโน้ต").toBeTruthy();
+
     const ins = await ryg.from("customer_notes")
-      .insert({ dealer_code: "RYG", customer_id: 1, title: "โน้ตทดสอบ", content: "เนื้อหา", author: "อัตโนมัติ" })
+      .insert({ dealer_code: "RYG", customer_id: customerId, title: "โน้ตทดสอบ", content: "เนื้อหา", author: "อัตโนมัติ" })
       .select().single();
     expect(ins.error, `สร้างโน้ตไม่ได้: ${JSON.stringify(ins.error)}`).toBeNull();
     id = (ins.data as { id: number }).id;

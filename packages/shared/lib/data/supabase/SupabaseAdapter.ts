@@ -860,6 +860,23 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new Error(error.message);
       return normalizeCustomer(toCamel<CustomerRow>(data as Row));
     },
+    // ปิดการขายสำเร็จทั้งก้อนแบบ atomic (RPC, 0094/0095 — Phase 4 transaction)
+    // คืนทั้งลูกค้าและใบเสนอราคาที่เกี่ยวข้องทั้งหมด (relink แล้ว) — ผู้เรียกอัปเดต local state ได้ทันที
+    // ไม่ต้องรอ realtime round-trip
+    closeWon: async ({ dealer, knownCustomerId, leadCompany, targetQuoteId, cascadeWon, customerPayload }) => {
+      const payload = toSnake(customerPayload as unknown as Row);
+      delete payload.id; delete payload.created_at; delete payload.dealer_code;
+      const { data, error } = await sb().rpc("close_won_quotation", {
+        p_dealer: dealer, p_known_customer_id: knownCustomerId, p_lead_company: leadCompany,
+        p_target_quote_id: targetQuoteId, p_cascade_won: cascadeWon, p_customer_payload: payload,
+      });
+      if (error) throw new Error(error.message);
+      const result = data as { customer: Row; quotations: Row[] };
+      return {
+        customer: normalizeCustomer(toCamel<CustomerRow>(result.customer)),
+        quotations: result.quotations.map(rowToQuote),
+      };
+    },
   },
   appointments: {
     nextId: (dealerCode) => nextEntityId(dealerCode, "appointments"),

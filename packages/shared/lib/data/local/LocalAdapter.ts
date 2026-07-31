@@ -837,6 +837,43 @@ export const LocalAdapter: DataAdapter = {
       if (!updated) throw new Error(`customer ${customerId} not found`);
       return ok(updated);
     },
+    // mirror close_won_quotation ฝั่ง supabase (0094) — เธรดเดียวในเบราว์เซอร์ = ไม่มี partial-write จริง
+    // อยู่แล้ว แต่เขียนให้ตรรกะตรงกันเป๊ะเพื่อพฤติกรรม Local/Supabase ไม่เพี้ยนกัน (M9 parity)
+    closeWon: (args) => {
+      const { dealer, knownCustomerId, leadCompany, targetQuoteId, cascadeWon, customerPayload } = args;
+      const custList = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+      let cust = knownCustomerId != null ? custList.find(c => c.id === knownCustomerId) : undefined;
+      if (!cust) {
+        const mine = scopeByDealer(custList, { dealerCode: dealer, isHQ: false });
+        const ek = exactKey(customerPayload.company);
+        cust = mine.find(c => exactKey(c.company) === ek);
+        if (!cust) {
+          cust = customerPayload;
+          writeKey(SALES.customers, [cust, ...custList]);
+        }
+      }
+      const custId = cust.id;
+      const qList = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const nextQ = qList.map(q => {
+        if ((q.dealerCode ?? DEFAULT_DEALER_CODE) === dealer && !(q.customerId > 0) && q.customer === leadCompany) {
+          const carryWon = cascadeWon && q.status !== "lost" && q.status !== "expired";
+          return { ...q, customerId: custId, status: carryWon ? ("won" as const) : q.status };
+        }
+        if (targetQuoteId && q.id === targetQuoteId) {
+          return { ...q, customerId: custId, status: "won" as const };
+        }
+        return q;
+      });
+      writeKey(SALES.quotations, nextQ);
+      const wonTotal = nextQ.filter(q => q.customerId === custId && q.status === "won").reduce((s, q) => s + (q.totalValue ?? 0), 0);
+      const finalCustList = readKey<CustomerRow[]>(SALES.customers, initialCustomers).map(c => c.id === custId ? { ...c, totalValue: wonTotal } : c);
+      writeKey(SALES.customers, finalCustList);
+      const updated = finalCustList.find(c => c.id === custId);
+      if (!updated) throw new Error(`customer ${custId} not found`);
+      // ใบที่เกี่ยวข้องทั้งหมด — mirror เงื่อนไขเดียวกับฝั่ง supabase (ตรงชื่อบริษัท หรือคือใบเป้าหมาย)
+      const related = nextQ.filter(q => q.customerId === custId && (q.customer === leadCompany || q.id === targetQuoteId));
+      return ok({ customer: updated, quotations: related });
+    },
   },
   appointments: {
     list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),
