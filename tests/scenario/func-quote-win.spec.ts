@@ -68,6 +68,8 @@ test("[func] ปิดการขายสำเร็จ → ลูกค้�
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: /▾/ }).first().click();
+  // ปิดการขาย = ย้อนกลับไม่ได้ → แอปขึ้น confirm() ก่อนเสมอ (เพิ่มหลังผลตรวจสอบ /scenario 31 ก.ค. 69)
+  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
   // ลูกค้าต้องถูกสร้างจากลีด — นี่คือจุดที่ระบบ "แปลงลีดเป็นลูกค้า"
@@ -138,6 +140,8 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
 
   // 3) เปิดลิ้นชักใบ → กด "ลูกค้าตอบรับ ✓"
   await qrow.click();
+  // ปิดการขาย = ย้อนกลับไม่ได้ → แอปขึ้น confirm() ก่อนเสมอ (เพิ่มหลังผลตรวจสอบ /scenario 31 ก.ค. 69)
+  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
 
   // 4) ลูกค้าต้องถูกสร้างด้วย id จริง (> 0) ไม่ใช่ 0 — และไม่มีลูกค้าผี id=0 โผล่

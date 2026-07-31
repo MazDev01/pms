@@ -127,7 +127,9 @@ export const leadStatusColor: Record<LeadStatus, { bg: string; text: string }> =
   WAITING:   { bg: "#eef2f7",  text: "#475569" },
   BULLET:    { bg: "#dce5f0",  text: "#003366" },
   QUOTED:    { bg: "#e0e7ff",  text: "#4338ca" },
-  FOLLOWUP:  { bg: "#fff3cd",  text: "#d97706" },
+  // text เข้มขึ้นจาก #d97706 (contrast ~2.9:1 บนพื้นเดิม ต่ำกว่า WCAG AA มาก อ่านยาก
+  // — พบจาก /scenario 31 ก.ค. 69) เป็น #92400e (amber-800) ให้ผ่านมาตรฐาน 4.5:1
+  FOLLOWUP:  { bg: "#fff3cd",  text: "#92400e" },
   NEGO:      { bg: "#fde8cd",  text: "#b45309" },
   PAID:      { bg: "#e5faf0",  text: "#059669" },
   CANCELLED: { bg: "#fee2e2",  text: "#dc2626" },

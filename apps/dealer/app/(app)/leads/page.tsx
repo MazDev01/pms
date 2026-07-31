@@ -678,6 +678,17 @@ export default function LeadsPage() {
   const [pendingLostReason, setPendingLostReason] = useState("");
   function requestStatusChange(id: string, status: LeadStatus) {
     if (status === "CANCELLED") { setPendingLostId(id); setPendingLostReason(""); return; }
+    // ปิดการขายสำเร็จ = สร้างลูกค้าอัตโนมัติทันที ย้อนกลับไม่ได้ — ต้องยืนยันก่อนเสมอ (ทุกช่องทาง
+    // ไม่ใช่แค่ปุ่มลัดในแผงลีด) ยืนยันจาก scenario test 31 ก.ค. 69: เดิมกดครั้งเดียวสร้างลูกค้าทันที
+    if (status === "PAID") {
+      const target = allLeads.find(l => l.id === id);
+      if (!target) return;
+      if (!confirm(`ปิดการขายสำเร็จสำหรับ "${target.company || target.name}"?\nระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
+      updateLeadStatus(id, status);
+      setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ");
+      setJustWonCompany(target.company || target.name);
+      return;
+    }
     updateLeadStatus(id, status);
   }
   function confirmPendingLost() {
@@ -781,11 +792,15 @@ export default function LeadsPage() {
 
   // success toast
   const [toast, setToast] = useState<string|null>(null);
+  // ลูกค้าใหม่ที่เพิ่งปิดการขาย (ชื่อบริษัท) — โชว์ปุ่มลัดพาไปหน้าลูกค้าพร้อมค้นหาให้เลย
+  // (เดิมลูกค้าใหม่หายไปอยู่หน้าไหนก็ไม่รู้ในรายการที่แบ่งหน้า ต้องค้นหาเองเสมอ — /scenario 31 ก.ค. 69)
+  const [justWonCompany, setJustWonCompany] = useState<string|null>(null);
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2600);
+    // ถ้ามีปุ่ม "ดูลูกค้าใหม่" ให้เวลานานกว่าปกติ (มี action ให้กด ไม่ใช่แค่แจ้งเฉยๆ)
+    const t = setTimeout(() => { setToast(null); setJustWonCompany(null); }, justWonCompany ? 6000 : 2600);
     return () => clearTimeout(t);
-  }, [toast]);
+  }, [toast, justWonCompany]);
 
 
   // ─── Derived ──────────────────────────────────────────────────────────
@@ -1356,7 +1371,9 @@ export default function LeadsPage() {
                     style={{ display:"flex", alignItems:"center", gap:3, padding:"5px 11px", borderRadius:8,
                       border:"1px solid #e5e7eb", fontSize:"0.72rem", fontWeight:600,
                       background: page<=1 ? "#fafafa" : "#fff",
-                      color: page<=1 ? "#C0C0C0" : "#003366",
+                      // #6b7280 (MUTED มาตรฐาน) แทน #C0C0C0 เดิม — contrast ต่ำกว่า WCAG AA มาก
+                      // (ratio ~1.7 บนพื้น #fafafa) แทบมองไม่เห็นตัวหนังสือ (พบจาก /scenario 31 ก.ค. 69)
+                      color: page<=1 ? "#6b7280" : "#003366",
                       cursor: page<=1 ? "not-allowed" : "pointer" }}>
                     <ChevronDown size={12} style={{ transform:"rotate(90deg)" }} /> ก่อนหน้า
                   </button>
@@ -1369,7 +1386,7 @@ export default function LeadsPage() {
                     style={{ display:"flex", alignItems:"center", gap:3, padding:"5px 11px", borderRadius:8,
                       border:"1px solid #e5e7eb", fontSize:"0.72rem", fontWeight:600,
                       background: page>=totalPages ? "#fafafa" : "#fff",
-                      color: page>=totalPages ? "#C0C0C0" : "#003366",
+                      color: page>=totalPages ? "#6b7280" : "#003366",
                       cursor: page>=totalPages ? "not-allowed" : "pointer" }}>
                     ถัดไป <ChevronDown size={12} style={{ transform:"rotate(-90deg)" }} />
                   </button>
@@ -1859,7 +1876,14 @@ export default function LeadsPage() {
         const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
         const progressPct = leadProg(c);
         const scrollTo = (r: React.RefObject<HTMLDivElement|null>) => r.current?.scrollIntoView({ behavior:"smooth", block:"nearest" });
-        const markWon = () => { const t = (c.tasks?.length ? c.tasks : buildLeadTasks()).map(x => ({ ...x, done:true })); saveLead({ ...c, tasks:t, status:"PAID" }); setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ"); };
+        // ย้อนกลับไม่ได้ (สร้างลูกค้าทันที) — ต้องยืนยันก่อนเสมอ เหมือนช่องทางอื่น (ดรอปดาวน์สถานะ)
+        const markWon = () => {
+          if (!confirm(`ปิดการขายสำเร็จสำหรับ "${c.company || c.name}"?\nระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
+          const t = (c.tasks?.length ? c.tasks : buildLeadTasks()).map(x => ({ ...x, done:true }));
+          saveLead({ ...c, tasks:t, status:"PAID" });
+          setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ");
+          setJustWonCompany(c.company || c.name);
+        };
         const markLost = (reason:string) => { saveLead({ ...c, status:"CANCELLED", lostReason:reason }); setQuickLost(false); setQuickLostReason(""); setToast("บันทึกปิดการขายไม่สำเร็จแล้ว"); };
 
         return (
@@ -2000,7 +2024,7 @@ export default function LeadsPage() {
         );
       })()}
 
-      {/* Success toast (Convert to Customer) */}
+      {/* Success toast (Convert to Customer) — ถ้าเพิ่งปิดการขาย มีปุ่มลัดไปหน้าลูกค้าพร้อมค้นหาให้เลย */}
       {toast && (
         <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
           zIndex:300, display:"flex", alignItems:"center", gap:9,
@@ -2009,6 +2033,13 @@ export default function LeadsPage() {
           maxWidth:"calc(100vw - 32px)" }}>
           <CheckCircle2 size={17} color="#34d399" />
           <span>{toast}</span>
+          {justWonCompany && (
+            <button onClick={() => router.push(`/customers?search=${encodeURIComponent(justWonCompany)}`)}
+              style={{ background:"rgba(255,255,255,.18)", color:"#fff", border:"none", borderRadius:8,
+                padding:"5px 11px", fontSize:"0.74rem", fontWeight:700, cursor:"pointer", flexShrink:0, whiteSpace:"nowrap" }}>
+              ดูลูกค้าใหม่ →
+            </button>
+          )}
         </div>
       )}
       {previewFile && <FilePreviewModal file={previewFile} onClose={()=>setPreviewFile(null)} />}

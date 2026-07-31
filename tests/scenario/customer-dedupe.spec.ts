@@ -50,6 +50,8 @@ test("[dealer] ปิดการขายลีดที่ชื่อตร�
   const row = page.locator("tbody tr").filter({ hasText: "ผู้ติดต่อทดสอบ" }).first();
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: /▾/ }).first().click();
+  // ปิดการขาย = ย้อนกลับไม่ได้ → แอปขึ้น confirm() ก่อนเสมอ (เพิ่มหลังผลตรวจสอบ /scenario 31 ก.ค. 69)
+  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
   // สมุดลูกค้าต้องยังมีรายนี้เท่าเดิม (ผูกเข้ากับรายเดิม ไม่สร้างใหม่)

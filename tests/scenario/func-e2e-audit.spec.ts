@@ -65,6 +65,7 @@ test("[audit] ปิดการขายจากลีดโดยไม่เ
   const row2 = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row2).toBeVisible({ timeout: 15_000 });
   await row2.getByRole("button", { name: /▾/ }).first().click();
+  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
   const cust = await waitRow<{ id: number; total_value: number; company: string }>(sb, "customers", { company: COMPANY }, 20_000);
@@ -121,6 +122,7 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
       (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
       { timeout: 25_000 }).toBe("sent_to_client");
     await qrow.click();
+    page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
     await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
     await expect.poll(async () =>
       (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
@@ -175,6 +177,7 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
     (await sb.from("quotations").select("status").eq("id", q2.id)).data?.[0]?.status,
     { timeout: 25_000 }).toBe("sent_to_client");
   await qrow2.click();
+  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
   await expect.poll(async () =>
     (await sb.from("quotations").select("status").eq("id", q2.id)).data?.[0]?.status,
@@ -222,6 +225,7 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
     (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 25_000 }).toBe("sent_to_client");
   await qrow.click();
+  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
 
   await waitRow<{ id: number }>(sb, "customers", { company: COMPANY }, 20_000);
@@ -248,9 +252,14 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
       (await sb.from("quotations").select("id").eq("id", q.id)).data?.length,
       { timeout: 15_000 }).toBe(0);
 
-    const custAfter = await waitRow<{ total_value: number }>(sb, "customers", { id: cust.id }, 15_000);
+    // waitRow match แค่ {id} ซึ่งมีอยู่แล้วตั้งแต่ก่อนลบใบ (id คงที่) → resolve ทันทีโดยไม่รอ reconcile
+    // (fire-and-forget หลังลบใบ) commit จริงก่อน — ต้อง poll ค่า total_value ให้ตกที่ 0 จริงเหมือนที่
+    // poll ตอน > 0 ด้านบน (ยืนยันแยกแล้วว่า reconcile_customer_won_total RPC คำนวณถูกต้องเสมอ)
+    await expect.poll(async () =>
+      (await sb.from("customers").select("total_value").eq("id", cust.id).single()).data?.total_value,
+      { timeout: 15_000, message: "ยอดลูกค้าต้องลดลงหลังลบใบที่ won ไป — ไม่ควรค้างยอดเกินจริง" }).toBe(0);
+    const custAfter = (await sb.from("customers").select("total_value").eq("id", cust.id).single()).data as { total_value: number };
     console.log(`[audit] หลังลบใบ won: ยอดลูกค้า=${custAfter.total_value} (คาดหวัง=0)`);
-    expect(custAfter.total_value, "ยอดลูกค้าต้องลดลงหลังลบใบที่ won ไป — ไม่ควรค้างยอดเกินจริง").toBe(0);
   }
 
   assertNoErrors(errs, "ลบใบที่ won แล้ว");
@@ -326,6 +335,7 @@ test("[audit] cross-role: ตัวแทนปิดการขาย → HQ �
     (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 25_000 }).toBe("sent_to_client");
   await qrow.click();
+  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
   await expect.poll(async () =>
     (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,

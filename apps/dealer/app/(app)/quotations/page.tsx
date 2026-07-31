@@ -275,7 +275,8 @@ function PaginationBar({ from, to, total, page, totalPages, onPrev, onNext }:{
     display:"flex",alignItems:"center",gap:4,padding:"5px 12px",borderRadius:8,
     border:`1px solid ${disabled?BORDER:PRIMARY}`,
     background:disabled?"#f3f4f6":"#fff",
-    color:disabled?"#9ca3af":PRIMARY,
+    // #6b7280 (MUTED มาตรฐาน) แทน #9ca3af เดิม — contrast ต่ำกว่า WCAG AA (พบจาก /scenario 31 ก.ค. 69)
+    color:disabled?"#6b7280":PRIMARY,
     fontSize:"0.72rem",fontWeight:700,cursor:disabled?"default":"pointer",
     opacity:disabled?0.7:1,transition:"all .15s",
   });
@@ -346,12 +347,19 @@ function QuotationsPageInner(){
   const [issuer, setIssuer]         = useState<Issuer>(DEFAULT_ISSUER);
   const [docProfile, setDocProfile] = useState<DocProfile>(DEFAULT_DOC);
   const [toast, setToast]           = useState<string|null>(null);
+  // ลูกค้าใหม่ที่เพิ่งปิดการขาย — โชว์ปุ่มลัดพาไปหน้าลูกค้าพร้อมค้นหาให้เลย (เดิมหาไม่เจอง่าย
+  // เพราะรายการลูกค้ามีแบ่งหน้า — /scenario 31 ก.ค. 69)
+  const [justWonCompany, setJustWonCompany] = useState<string|null>(null);
   // Table toolbar layout — ความหนาแน่นแถว + ซ่อน/แสดงคอลัมน์ (persist ใน localStorage)
   const { density, setDensity, hiddenCols, toggleCol } = useTableLayout("quotations");
 
   // แสดง toast ชั่วคราวแล้วซ่อนอัตโนมัติ
   function showToast(msg:string){ setToast(msg); }
-  useEffect(()=>{ if(!toast) return; const t=setTimeout(()=>setToast(null),2600); return ()=>clearTimeout(t); },[toast]);
+  useEffect(()=>{
+    if(!toast) return;
+    const t=setTimeout(()=>{ setToast(null); setJustWonCompany(null); }, justWonCompany ? 6000 : 2600);
+    return ()=>clearTimeout(t);
+  },[toast, justWonCompany]);
 
 
   // ผู้ออกใบเสนอราคา + ตั้งค่าเอกสาร = ของสาขา อ่านผ่าน repo (โหมด supabase เก็บที่ DB)
@@ -458,6 +466,17 @@ function QuotationsPageInner(){
     } finally { savingQRef.current = false; }
   }
   function changeStatus(id:string,s:QuotationStatus){
+    // "won" (ลูกค้าตอบรับ) = สร้าง/ผูกลูกค้าอัตโนมัติทันที ย้อนกลับไม่ได้ — ต้องยืนยันก่อนเสมอ
+    // (ยืนยันจาก scenario test 31 ก.ค. 69: เดิมกดครั้งเดียวจบ เงียบสนิทไม่มี feedback เลย)
+    if (s === "won") {
+      const target = allQuotationsRaw.find(q => q.id === id);
+      if (!confirm(`ปิดการขายสำเร็จสำหรับใบเสนอราคา "${id}"${target ? ` (${target.customer})` : ""}?\nระบบจะสร้าง/ผูกลูกค้าให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
+      setQuotationStatus(id,s);
+      setSelected(p=>p?.id===id?{...p,status:s}:p);
+      showToast("ปิดการขายสำเร็จ — ระบบสร้าง/ผูกลูกค้าให้อัตโนมัติ");
+      setJustWonCompany(target?.customer ?? null);
+      return;
+    }
     setQuotationStatus(id,s);
     setSelected(p=>p?.id===id?{...p,status:s}:p);
   }
@@ -1033,6 +1052,13 @@ function QuotationsPageInner(){
           fontSize:"0.8rem",fontWeight:700,maxWidth:"calc(100vw - 32px)"}}>
           <span style={{width:18,height:18,borderRadius:99,background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✓</span>
           {toast}
+          {justWonCompany && (
+            <button onClick={() => router.push(`/customers?search=${encodeURIComponent(justWonCompany)}`)}
+              style={{ background:"rgba(255,255,255,.18)", color:"#fff", border:"none", borderRadius:8,
+                padding:"5px 11px", fontSize:"0.74rem", fontWeight:700, cursor:"pointer", flexShrink:0, whiteSpace:"nowrap" }}>
+              ดูลูกค้าใหม่ →
+            </button>
+          )}
         </div>
       )}
     </div>

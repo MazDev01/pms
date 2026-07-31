@@ -399,6 +399,15 @@ export default function CustomersPage(){
     const t = new URLSearchParams(window.location.search).get("template");
     if (t && catalog.some(p => p.name === t)) setCatFilter(t);
   }, [catalog]);
+  // มาจากปุ่ม "ดูลูกค้าใหม่" หลังปิดการขาย (/leads, /quotations) → /customers?search=<ชื่อบริษัท>
+  // ตั้งช่องค้นหาให้ทันที กันลูกค้าที่เพิ่งปิดการขายหายไปในรายการที่แบ่งหน้า (/scenario 31 ก.ค. 69)
+  const urlSearchDone = useRef(false);
+  useEffect(() => {
+    if (urlSearchDone.current) return;
+    urlSearchDone.current = true;
+    const s = new URLSearchParams(window.location.search).get("search");
+    if (s) setQuery(s);
+  }, []);
   // ตัวกรองจังหวัด/ผู้รับผิดชอบ — ตัวเลือกสร้างจากข้อมูลลูกค้าจริงที่มีอยู่ ไม่ใช่รายการตายตัว
   const [provFilter, setProvFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
@@ -713,7 +722,8 @@ export default function CustomersPage(){
     const btnStyle = (disabled:boolean): React.CSSProperties => ({
       display:"inline-flex",alignItems:"center",justifyContent:"center",
       padding:"5px 12px",borderRadius:8,border:`1px solid ${BORDER}`,
-      background:disabled?"#f1f5f9":"#fff",color:disabled?"#9ca3af":PRIMARY,
+      // #6b7280 (MUTED มาตรฐาน) แทน #9ca3af เดิม — contrast ต่ำกว่า WCAG AA (พบจาก /scenario 31 ก.ค. 69)
+      background:disabled?"#f1f5f9":"#fff",color:disabled?"#6b7280":PRIMARY,
       fontSize:"0.72rem",fontWeight:700,cursor:disabled?"not-allowed":"pointer",
       opacity:disabled?0.7:1,transition:"all .15s",
     });

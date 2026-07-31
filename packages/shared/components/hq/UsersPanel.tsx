@@ -227,6 +227,12 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [dialogUser, setDialogUser] = useState<AppUser | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<AppUser | null>(null);
+
+  // toast มาตรฐานของหน้านี้เอง — ใช้ได้ทั้งตอน standalone (/hq/users) และ embedded ใน /hq/settings
+  // (BusCtx toast ของหน้าตั้งค่าใช้ไม่ได้ตอน standalone เพราะไม่มี provider ครอบ) แทน alert() เดิม
+  // ที่บล็อกทั้งหน้าจอและดูไม่ตรงกับ pattern ของแอป (พบจาก /scenario 31 ก.ค. 69)
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const notify = useCallback((m: string) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2800); }, []);
   const [resetInfo, setResetInfo] = useState<{ user: AppUser } | null>(null);
   const [menu, setMenu] = useState<{ user: AppUser; x: number; y: number } | null>(null);
   const [matrixRole, setMatrixRole] = useState<RoleKey>("SUPER_ADMIN");
@@ -259,7 +265,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     if (!cur) return;
     const next = { ...cur, ...patch };
     void usersRepo.update({ id, name: next.name, role: next.role, department: next.department, status: next.status })
-      .catch(e => alert("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => notify("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
   };
   function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
     if (id !== null) {
@@ -277,7 +283,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     if (DATA_SOURCE === "supabase") { void createRemote(data); return; }
     // โหมดเดโม (local): ไม่มีระบบยืนยันตัวตนจริง — เพิ่มไว้ในมุมมองพอให้ทดลอง UI
     if (!canCreate) {
-      alert("เพิ่มผู้ใช้จากหน้านี้ไม่ได้\n\nบัญชีเข้าระบบถูกจัดการโดยระบบยืนยันตัวตน — ต้องสร้างบัญชีที่นั่นก่อน แล้วชื่อจะขึ้นในหน้านี้เอง");
+      notify("เพิ่มผู้ใช้จากหน้านี้ไม่ได้ — บัญชีเข้าระบบถูกจัดการโดยระบบยืนยันตัวตน ต้องสร้างบัญชีที่นั่นก่อน แล้วชื่อจะขึ้นในหน้านี้เอง");
       return;
     }
     const nid = String(Date.now());
@@ -290,7 +296,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       name: data.name, email: data.email, phone: data.phone, role: data.role,
       department: data.department, status: data.status, avatar: data.avatar,
     });
-    if (!res.ok) { alert("เพิ่มผู้ใช้ไม่สำเร็จ: " + res.error); return; }
+    if (!res.ok) { notify("เพิ่มผู้ใช้ไม่สำเร็จ: " + res.error); return; }
     // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
     setCreds({ name: data.name, email: res.email, password: res.password });
     reload();
@@ -446,6 +452,13 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       {deleteTarget && (
         <DeleteUserDialog user={deleteTarget} onConfirm={() => doDelete(deleteTarget)} onClose={() => setDeleteTarget(null)} />
       )}
+
+      {/* Toast — เหมือน pattern มาตรฐานของหน้าตั้งค่า (fixed bottom-right) */}
+      {toastMsg && (
+        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: "#111827", color: "#fff", padding: "12px 18px", borderRadius: 12, fontSize: "0.82rem", fontWeight: 600, boxShadow: "0 12px 32px rgba(0,0,0,.28)", display: "flex", alignItems: "center", gap: 9, maxWidth: 360 }}>
+          <Check size={15} color="#7ee2b8" style={{ flexShrink: 0 }} /> {toastMsg}
+        </div>
+      )}
     </div>
   );
 }
@@ -569,6 +582,14 @@ function ResetEmailDialog({ user, onSent, onClose }: { user: AppUser; onSent: (e
               <label style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, display: "block", marginBottom: 5 }}>อีเมลเข้าสู่ระบบ</label>
               <input value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} placeholder="name@benjamin.co.th"
                 style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              {/* ค่าเริ่มต้นมาจาก "อีเมลติดต่อ" (profiles.contact_email) ซึ่งอาจไม่ตรงกับอีเมลล็อกอินจริง
+                  (client อ่าน auth.users ไม่ได้) + Supabase ตอบสำเร็จเสมอแม้พิมพ์ผิด (กัน enumeration)
+                  → ต้องเตือนให้ตรวจสอบเองเสมอ ไม่งั้น HQ อาจพิมพ์ผิดแล้วไม่รู้ตัวว่าไม่มีใครได้ลิงก์
+                  (พบจาก /scenario 31 ก.ค. 69) */}
+              <div style={{ fontSize: "0.7rem", color: "#b45309", marginTop: 6, lineHeight: 1.5, display: "flex", gap: 5 }}>
+                <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>ตรวจสอบให้แน่ใจว่าเป็นอีเมลที่ผู้ใช้ใช้ล็อกอินจริง — ระบบจะแจ้งว่า &quot;ส่งลิงก์แล้ว&quot; เสมอแม้พิมพ์อีเมลผิด (ป้องกันข้อมูลรั่วไหล)</span>
+              </div>
               {err && <div style={{ fontSize: "0.74rem", color: "#dc2626", fontWeight: 600, marginTop: 8 }}>{err}</div>}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
                 <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
