@@ -302,15 +302,12 @@ export function SalesProvider({
     // ชื่อตรงเป๊ะภายในสาขาเดียวกัน = บริษัทเดียวกัน → ผูกเข้ากับลูกค้าเดิม ไม่แตกเป็นลูกค้าซ้ำอีกราย
     // (ไม่แตะข้อมูลลูกค้าเดิม — ยอด/ประวัติของเขาเป็นของจริงที่สะสมไว้แล้ว)
     // ปิดท้ายเหมือนกันทั้งกรณีลูกค้าใหม่และลูกค้าเดิม: จัดการตัวลีด + ผูกใบเสนอราคาที่ออกไว้ก่อนหน้า
-    // ⚠️ ต้องคืน promise ที่ resolve หลัง persistQuote.update(customer_id) ของใบที่ relink ลง DB จริงแล้ว
-    //   ผู้เรียก (setQuotationStatus) ยิง persistQuote.setStatus(won) ต่อทันทีที่ finish() เสร็จ —
-    //   ถ้าไม่รอให้ customer_id ถึง DB ก่อน จะแข่งกับ setStatus(won) เอง (คนละ UPDATE, ไม่ atomic)
-    //   เคยพัง prod มาแล้ว: DB constraint กัน won ที่ไม่มี customer_id ปฏิเสธ UPDATE ถ้า setStatus ไปถึงก่อน
-    //
-    //   ⚠️ ห้ามคำนวณ relinked list + ยิง persistQuote.update ข้างใน setQuotations(updater) แล้วหวังอ่าน
-    //   ผลจากตัวแปรนอก closure — React ไม่การันตีว่า updater รันก่อน setQuotations() return
-    //   (พลาดมาแล้วรอบหนึ่ง: relinkDone ค้างเป็น Promise.resolve() เดิม ไม่ได้รอของจริง)
-    //   อ่าน quotationsRef.current ตรง ๆ แทน (แพตเทิร์นเดียวกับที่ setQuotationStatus ใช้อ่าน target อยู่แล้ว)
+    // ⚠️ ต้องคืน promise ที่ resolve หลัง relinkCustomerQuotes ลง DB จริงแล้ว (Phase 4: ย้ายจาก
+    //   Promise.all ของ N คำขอ update แยกกัน ไปเป็น RPC เดียว atomic — 0093) ผู้เรียก (setQuotationStatus)
+    //   ยิง persistQuote.setStatus(won) ต่อทันทีที่ finish() เสร็จ — ถ้าไม่รอให้ customer_id ถึง DB ก่อน
+    //   จะแข่งกับ setStatus(won) เอง (คนละคำสั่ง ไม่ atomic ต่อกัน) เคยพัง prod มาแล้ว: DB constraint
+    //   กัน won ที่ไม่มี customer_id ปฏิเสธ UPDATE ถ้า setStatus ไปถึงก่อน
+    //   อ่าน quotationsRef.current ตรง ๆ เพื่อ merge ผลลัพธ์ (แพตเทิร์นเดียวกับที่ setQuotationStatus ใช้อ่าน target อยู่แล้ว)
     const finish = async (customerId: number): Promise<void> => {
       if (removeLead) {
         // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
@@ -331,19 +328,14 @@ export function SalesProvider({
       //   ด้วยจะเผลอเลื่อนใบอื่นที่ยังไม่ถูกเลือกเป็น won ไปด้วย (ลูกค้ามีหลายใบใต้ลีดเดียวกัน)
       //   ใช้ lead.status==="PAID" เป็นสัญญาณแยก 2 เส้นทาง: caller ฝั่งลีด (updateLead/updateLeadStatus)
       //   ตั้ง status=PAID ไว้ใน lead object ก่อนเรียกอยู่แล้ว ส่วน caller ฝั่งใบเสนอราคายังไม่แตะ lead.status
+      // ผูกทั้งชุดในคำสั่งเดียว (RPC, 0093 — Phase 4 transaction) แทน Promise.all ของ N คำขอ update
+      // แยกกัน (เดิม: บางใบ commit บางใบไม่ ปล่อยครึ่งๆ กลางๆ ได้ถ้าเน็ตหลุดกลางทาง) — เขียนก่อนค่อย
+      // อัปเดต UI จากผลลัพธ์จริงที่ DB ยืนยันแล้ว (ไม่ใช่ optimistic เดา)
       const cascadeWon = lead.status === "PAID";
-      const relinked: QuotationMock[] = [];
-      const next = quotationsRef.current.map(q => {
-        if ((!q.customerId || q.customerId === 0) && q.customer === lead.company) {
-          const carryWon = cascadeWon && q.status !== "lost" && q.status !== "expired";
-          const nq = { ...q, customerId, status: carryWon ? "won" as const : q.status };
-          relinked.push(nq);
-          return nq;
-        }
-        return q;
-      });
+      const relinked = await quotationsRepo.relinkCustomerQuotes(ownerDealer, customerId, lead.company, cascadeWon);
+      const relinkedById = new Map(relinked.map(q => [q.id, q]));
+      const next = quotationsRef.current.map(q => relinkedById.get(q.id) ?? q);
       setQuotations(next);
-      await Promise.all(relinked.map(q => persistQuote.update(q)));
       // R6: ยอดลูกค้า = ผลรวมใบเสนอราคาที่ปิดได้ (won) ของลูกค้ารายนี้ — รองรับ "ปิดหลายดีล"
       //   เดิม total_value ตั้งครั้งเดียวตอนสร้าง = เท่าดีลแรก · ที่นี่รวมสดจาก next (relink แล้ว)
       //   guard wonTotal>0: ปิดจากลีดที่ไม่มีใบ (won=0) ไม่ล้างค่าที่ตั้งตอนสร้าง (parseBaht(lead.value))
@@ -395,7 +387,7 @@ export function SalesProvider({
     setCustomers(prev => prev.some(c => c.id === saved.id) ? prev : [...prev, saved]);
     await finish(saved.id);
     return saved;
-  }, [customers, myDealerCode, persistCustomer, persistLead, persistQuote]);
+  }, [customers, myDealerCode, persistCustomer, persistLead]);
 
   // ── Lead mutations ───────────────────────────────────────────────
   const updateLeadStatus = useCallback((leadId: string, status: LeadRow["status"]) => {

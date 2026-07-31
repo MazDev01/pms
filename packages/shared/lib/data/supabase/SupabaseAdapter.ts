@@ -393,6 +393,14 @@ export const SupabaseAdapter: DataAdapter = {
     savePolicy: (p) => must(sb().from("hq_policy").upsert({ id: 1, ...toSnake(p as unknown as Row) })),
     saveTargets: (t) => must(sb().from("hq_targets").upsert({ id: 1, ...toSnake(t as unknown as Row) })),
     saveNotifRules: (r) => must(sb().from("hq_notif_rules").upsert({ id: 1, ...toSnake(r as unknown as Row) })),
+    // all-or-nothing (RPC, 0093) — แทน Promise.all ของ upsert แยกทีละตาราง (Phase 4 transaction)
+    restoreSettings: (patch) => must(sb().rpc("restore_hq_settings", {
+      p_policy:       patch.policy      ? toSnake(patch.policy as unknown as Row)      : null,
+      p_targets:      patch.targets     ? toSnake(patch.targets as unknown as Row)     : null,
+      p_notif_rules:  patch.notifRules  ? toSnake(patch.notifRules as unknown as Row)  : null,
+      p_lost_reasons: patch.lostReasons ?? null,
+      p_company:      patch.company     ? toSnake(patch.company as unknown as Row)     : null,
+    })),
     getLeadRulesMap: async () => {
       // ตารางนี้ใช้ dealer_code เป็น PK — ไม่มีคอลัมน์ id จึงต้องระบุคอลัมน์เรียงเอง
       const rows = await selectScoped<{ dealerCode: string } & LeadRules>("dealer_lead_rules", { isHQ: true }, "dealer_code", "dealer_code");
@@ -796,6 +804,14 @@ export const SupabaseAdapter: DataAdapter = {
     // ใบ won ของลูกค้ารายเดียว — bounded read ตรง ๆ (RLS คุม scope อยู่แล้ว) ไม่ต้อง RPC (M9 Phase 6)
     listForCustomer: async (customerId) => {
       const { data, error } = await sb().from("quotations").select("*").eq("customer_id", customerId).eq("status", "won").order("date", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as Row[]).map(rowToQuote);
+    },
+    // ผูกใบกำพร้าทั้งชุดในคำสั่งเดียว (RPC, 0093) — แทนที่ N คำขอ update แยกกัน (Phase 4 transaction)
+    relinkCustomerQuotes: async (dealer, customerId, company, cascadeWon) => {
+      const { data, error } = await sb().rpc("relink_customer_quotes", {
+        p_dealer: dealer, p_customer_id: customerId, p_company: company, p_cascade_won: cascadeWon,
+      });
       if (error) throw new Error(error.message);
       return (data as Row[]).map(rowToQuote);
     },

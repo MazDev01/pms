@@ -48,6 +48,12 @@ export interface SettingsRepo {
   savePolicy(policy: HQPolicy): Promise<void>;
   saveTargets(targets: HQTargets): Promise<void>;
   saveNotifRules(rules: HQNotifRules): Promise<void>;
+  /** กู้คืน/นำเข้าค่าตั้งหลายกลุ่มพร้อมกันแบบ all-or-nothing (Phase 4 transaction, 0093) — undefined = ไม่แตะ
+   *  กลุ่มนั้น · ใช้กับปุ่ม "นำเข้า (กู้คืน)"/"คืนค่าเริ่มต้น" หน้า HQ ตั้งค่า (เดิมยิงแยกทีละกลุ่ม เน็ตหลุด
+   *  กลางทาง = กู้คืนได้แค่บางส่วน) · supabase: RPC restore_hq_settings · local: เขียนทีละกลุ่มในเครื่อง */
+  restoreSettings(patch: {
+    policy?: HQPolicy; targets?: HQTargets; notifRules?: HQNotifRules; lostReasons?: string[]; company?: HQCompany;
+  }): Promise<void>;
 }
 // ── ตั้งค่าของตัวแทนแต่ละสาขา (หัวกระดาษ/เอกสาร/โลโก้/แจ้งเตือน) ──
 // เดิมอยู่ใน localStorage ของเครื่องที่ใช้ → ล้างเบราว์เซอร์/ย้ายเครื่องแล้วหาย
@@ -325,6 +331,11 @@ export interface QuotationsRepo {
   /** ใบที่ won ของลูกค้ารายเดียว (ผูกด้วย customer_id) — ป้อนแท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์ของ
    *  CustomerDrawer โดยไม่ต้องโหลดใบทั้งเครือ (M9 Phase 6) — เหมือน appointments.listForLead */
   listForCustomer(customerId: number): Promise<QuotationMock[]>;
+  /** ผูกใบเสนอราคา "กำพร้า" (customer_id ว่าง, ชื่อลูกค้าตรงกัน) เข้ากับลูกค้าที่เพิ่งสร้าง/พบ ทั้งชุด
+   *  ในคำสั่งเดียว (atomic) — cascadeWon=true จะเลื่อนสถานะใบที่ยังไม่ปิด (ไม่ใช่ lost/expired) เป็น won
+   *  ด้วย (ปิดจากฝั่งลีดโดยตรง) · supabase: RPC relink_customer_quotes (Phase 4, กัน partial-relink
+   *  ที่เดิมเป็น N คำขอ update แยกกัน) · local: วนอัปเดตในเครื่อง (เธรดเดียว = atomic โดยธรรมชาติ) */
+  relinkCustomerQuotes(dealer: string, customerId: number, company: string, cascadeWon: boolean): Promise<QuotationMock[]>;
 }
 // ตัวเลือกดึงลูกค้าแบบ "แบ่งหน้า + กรอง ที่ DB" (M9 Phase 5) — เจาะจุดที่ดึงทั้งตารางแล้ว filter ฝั่ง client
 // (dealer-detail drawer, useHQSearch) ยังไม่ครอบคลุมหน้า /hq/customers หลัก ซึ่งต้องใช้ทั้งชุดเพื่อทำ KPI/analytics/filter

@@ -539,14 +539,18 @@ function BackupCard() {
       let obj: Record<string, unknown>;
       try { obj = JSON.parse(String(r.result)) as Record<string, unknown>; }
       catch { toast("ไฟล์ไม่ถูกต้อง"); return; }
-      // เขียนเฉพาะส่วนที่มีในไฟล์ — ไฟล์เก่าที่ไม่มีบางหัวข้อต้องไม่ไปล้างของที่ตั้งไว้แล้ว
+      // ค่าตั้งเครือ 5 กลุ่ม (policy/targets/notifRules/lostReasons/company) เขียนแบบ all-or-nothing
+      // ในคำสั่งเดียว (RPC, 0093 — Phase 4 transaction) — เดิมยิงแยกกัน เน็ตหลุดกลางทาง = กู้คืนได้แค่
+      // บางส่วน · ทะเบียนตัวแทน/แคตตาล็อก เป็นชุดข้อมูลแยก ยังคงเขียนแยกเหมือนเดิม (คนละความเสี่ยง)
       try {
+        await settingsRepo.restoreSettings({
+          policy:      obj.policy as HQPolicy | undefined,
+          targets:     obj.targets as HQTargets | undefined,
+          notifRules:  obj.notifRules as HQNotifRules | undefined,
+          lostReasons: Array.isArray(obj.lostReasons) ? obj.lostReasons as string[] : undefined,
+          company:     obj.company as HQCompany | undefined,
+        });
         const jobs: Promise<unknown>[] = [];
-        if (obj.policy)       jobs.push(settingsRepo.savePolicy(obj.policy as HQPolicy));
-        if (obj.targets)      jobs.push(settingsRepo.saveTargets(obj.targets as HQTargets));
-        if (obj.notifRules)   jobs.push(settingsRepo.saveNotifRules(obj.notifRules as HQNotifRules));
-        if (Array.isArray(obj.lostReasons)) jobs.push(settingsRepo.saveLostReasons(obj.lostReasons as string[]));
-        if (obj.company)      jobs.push(hqCompanyRepo.save(obj.company as HQCompany));
         if (Array.isArray(obj.dealers)) jobs.push(dealersRepo.save(obj.dealers as DealerRow[]));
         if (Array.isArray(obj.catalog)) jobs.push(catalogRepo.save(obj.catalog as SolutionProduct[]));
         await Promise.all(jobs);
@@ -563,12 +567,11 @@ function BackupCard() {
   async function restoreDefaults() {
     if (!confirm("คืนค่าเริ่มต้นของนโยบาย เป้าหมาย กฎแจ้งเตือน และเหตุผลปิดการขาย?\n\nทะเบียนตัวแทนและแคตตาล็อกจะไม่ถูกแตะ")) return;
     try {
-      await Promise.all([
-        settingsRepo.savePolicy(DEFAULT_HQ_POLICY),
-        settingsRepo.saveTargets(DEFAULT_HQ_TARGETS),
-        settingsRepo.saveNotifRules(DEFAULT_HQ_NOTIF_RULES),
-        settingsRepo.saveLostReasons([...LOST_REASONS]),
-      ]);
+      // all-or-nothing (RPC, 0093 — Phase 4 transaction) — เดิมยิงแยก 4 คำขอ
+      await settingsRepo.restoreSettings({
+        policy: DEFAULT_HQ_POLICY, targets: DEFAULT_HQ_TARGETS,
+        notifRules: DEFAULT_HQ_NOTIF_RULES, lostReasons: [...LOST_REASONS],
+      });
       logAudit("คืนค่าเริ่มต้น", "นโยบาย/เป้าหมาย/กฎแจ้งเตือน/เหตุผลปิดการขาย");
       toast("คืนค่าเริ่มต้นแล้ว — กำลังโหลดใหม่");
       setTimeout(() => location.reload(), 900);

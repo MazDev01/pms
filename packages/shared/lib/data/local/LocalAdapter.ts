@@ -150,6 +150,17 @@ export const LocalAdapter: DataAdapter = {
     savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); fireSettings(); return done(); },
     saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); fireSettings(); return done(); },
     saveNotifRules: (r) => { writeKey(HQ_NOTIF_RULES_KEY, r); fireSettings(); return done(); },
+    // mirror restore_hq_settings ฝั่ง supabase (0093) — เธรดเดียวในเบราว์เซอร์ = เขียนทีละกลุ่มได้โดยไม่มี
+    // ทางเสี่ยง partial-write จริง (ไม่มี network round-trip คั่นระหว่างแต่ละคีย์)
+    restoreSettings: (patch) => {
+      if (patch.policy)      writeKey(HQ_POLICY_KEY, patch.policy);
+      if (patch.targets)     writeKey(HQ_TARGETS_KEY, patch.targets);
+      if (patch.notifRules)  writeKey(HQ_NOTIF_RULES_KEY, patch.notifRules);
+      if (patch.lostReasons) writeKey(HQ_JOURNEY_KEY, { lost: patch.lostReasons });
+      if (patch.company)     writeKey(HQ_COMPANY_KEY, patch.company);
+      fireSettings();
+      return done();
+    },
   },
   // ตั้งค่าของสาขา — โหมด local เก็บ 4 คีย์เดิมไว้เหมือนเดิม (ค่าที่ผู้ใช้เคยตั้งไม่หาย)
   // ไม่แยกตามสาขา เพราะเครื่องหนึ่งใช้สาขาเดียวอยู่แล้วในโหมดเดโม
@@ -742,6 +753,22 @@ export const LocalAdapter: DataAdapter = {
     },
     listForCustomer: (customerId) =>
       ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed).filter(q => q.customerId === customerId && q.status === "won")),
+    // mirror relink_customer_quotes ฝั่ง supabase (0093) — เธรดเดียวในเบราว์เซอร์ = atomic โดยธรรมชาติ
+    relinkCustomerQuotes: (dealer, customerId, company, cascadeWon) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const relinked: QuotationMock[] = [];
+      const next = list.map(q => {
+        if ((q.dealerCode ?? DEFAULT_DEALER_CODE) === dealer && !(q.customerId > 0) && q.customer === company) {
+          const carryWon = cascadeWon && q.status !== "lost" && q.status !== "expired";
+          const nq = { ...q, customerId, status: carryWon ? ("won" as const) : q.status };
+          relinked.push(nq);
+          return nq;
+        }
+        return q;
+      });
+      writeKey(SALES.quotations, next);
+      return ok(relinked);
+    },
     // ออกเลข + insert (เธรดเดียวในเบราว์เซอร์ = atomic โดยธรรมชาติ ไม่มีเลขหาย)
     // รูปแบบ Q-{DealerCode}-{Year}-{Running} — ตัวนับนับแยกต่อสาขา (mirror ตัวนับต่อสาขาฝั่ง Supabase)
     // เดิมนับจากเลขสูงสุดที่เห็น "รวมทุกสาขา" ในเครื่อง — โหมด local ก็ต้องแยกสาขาเหมือนโหมดจริง (พบจากผลตรวจสอบ 31 ก.ค. 69)
