@@ -527,6 +527,7 @@ function BackupCard() {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = "benjamin-settings-backup.json"; a.click();
       URL.revokeObjectURL(a.href);
+      logAudit("ส่งออกการตั้งค่า", "benjamin-settings-backup.json");
       toast("ส่งออกการตั้งค่าแล้ว");
     } catch (e) {
       toast("ส่งออกไม่สำเร็จ: " + friendlyError(e));

@@ -6,6 +6,14 @@ import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { sbSignIn, sbDemoSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
+import { audit as auditRepo } from "@pms/shared/lib/data";
+
+// Phase 9 (Logging/Audit) — เดิมระบบไม่บันทึกเข้า/ออกจากระบบเลย (มีแต่ mutation ของ admin)
+// เข้าสู่ระบบ/ออกจากระบบเป็นเหตุการณ์ที่ audit trail มาตรฐานต้องมี — log ล้มเหลวต้องไม่บล็อกการ
+// เข้า/ออกระบบจริง (แค่ log เงียบ ๆ ถ้าพัง)
+function logAuthEvent(action: string, s: MockSession) {
+  auditRepo.append({ user: s.name, role: s.role, action, target: s.dealerName }).catch(() => {});
+}
 
 // โหมด backend — supabase = auth จริง (JWT) · local = mock เดิม (localStorage)
 const USE_SUPABASE = DATA_SOURCE === "supabase";
@@ -88,11 +96,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string): Promise<AuthResult> => {
     if (USE_SUPABASE) {
       const r = await sbSignIn(email, password);
-      if (r.ok) { setSession(r.session); setIsLoggedIn(true); }
+      if (r.ok) { setSession(r.session); setIsLoggedIn(true); logAuthEvent("เข้าสู่ระบบ", r.session); }
       return r;
     }
     const r = authenticate(email, password);
-    if (r.ok) { setSession(r.session); setIsLoggedIn(true); persist(r.session); }
+    if (r.ok) { setSession(r.session); setIsLoggedIn(true); persist(r.session); logAuthEvent("เข้าสู่ระบบ", r.session); }
     return r;
   };
 
@@ -101,15 +109,17 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const login = async (key: "hq" | "dealer"): Promise<void> => {
     if (USE_SUPABASE) {
       const r = await sbDemoSignIn(key);
-      if (r.ok) { setSession(r.session); setIsLoggedIn(true); }
+      if (r.ok) { setSession(r.session); setIsLoggedIn(true); logAuthEvent("เข้าสู่ระบบ", r.session); }
       return;
     }
     const s = sessions[key];
     setSession(s); setIsLoggedIn(true); persist(s);
+    logAuthEvent("เข้าสู่ระบบ", s);
   };
 
   const logout = () => {
     setIsLoggedIn(false);
+    logAuthEvent("ออกจากระบบ", session);
     if (USE_SUPABASE) { void sbSignOut(); return; }
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_LOGIN);

@@ -262,7 +262,17 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       .catch(e => alert("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
   };
   function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
-    if (id !== null) { update(id, data); logAudit("แก้ไขผู้ใช้", data.email); return; }
+    if (id !== null) {
+      // เปลี่ยนบทบาท = ยกระดับ/ลดสิทธิ์ผู้ใช้ — เหตุการณ์อ่อนไหว ต้องบันทึกแยกให้เห็นการเปลี่ยนแปลงชัดเจน
+      // (ไม่ปนกับ "แก้ไขผู้ใช้" ทั่วไปที่อาจแค่แก้ชื่อ/แผนก) — Phase 9 (Logging/Audit)
+      const cur = users.find(u => u.id === id);
+      if (cur && cur.role !== data.role) {
+        logAudit("เปลี่ยนบทบาทผู้ใช้", `${data.email}: ${ROLE_BY_KEY[cur.role]?.th ?? cur.role} → ${ROLE_BY_KEY[data.role]?.th ?? data.role}`);
+      }
+      update(id, data);
+      logAudit("แก้ไขผู้ใช้", data.email);
+      return;
+    }
     // โหมดจริง (supabase): สร้างบัญชีเข้าระบบจริงผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ (service_role)
     if (DATA_SOURCE === "supabase") { void createRemote(data); return; }
     // โหมดเดโม (local): ไม่มีระบบยืนยันตัวตนจริง — เพิ่มไว้ในมุมมองพอให้ทดลอง UI
