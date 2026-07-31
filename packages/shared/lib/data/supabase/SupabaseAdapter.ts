@@ -340,12 +340,16 @@ export const SupabaseAdapter: DataAdapter = {
       // ⚠️ ถ้าไม่ตัด: upsert เป็น bulk · PostgREST รวมชุดคอลัมน์จาก "ทุกแถว" ให้เท่ากัน
       //    สาขาเดิมที่โหลดมาจาก DB มี created_at · สาขาใหม่ที่เพิ่งกรอกในฟอร์มไม่มี
       //    → แถวใหม่ถูกเติมเป็น null → ชน not-null → เพิ่มตัวแทนใหม่ไม่สำเร็จเลยสักครั้ง
+      // เขียนผ่าน RPC save_dealers (SECURITY DEFINER) แทน upsert ตรง — ตั้งแต่ 0091 ตัด SELECT
+      // ทั้งตารางออกจาก authenticated (revenue_target อ่านได้แค่ผ่าน dealers_directory) upsert ตรง
+      // จึงพัง (INSERT...ON CONFLICT DO UPDATE ต้องมี SELECT บนคอลัมน์ที่ SET ด้วย ไม่ใช่แค่ INSERT/UPDATE)
+      // RPC นี้รันด้วยสิทธิ์เจ้าของฟังก์ชัน ข้ามข้อจำกัดนั้นได้ แล้วตรวจ can_write_master() เอง (0092)
       const rows = all.map(d => {
         const r = toSnake(d as unknown as Row);
         delete r.id; delete r.credentials; delete r.created_at;
         return r;
       });
-      await must(sb().from("dealers").upsert(rows, { onConflict: "code" }));
+      await must(sb().rpc("save_dealers", { p_rows: rows }));
     },
     remove: (code) => must(sb().from("dealers").delete().eq("code", code)),
   },

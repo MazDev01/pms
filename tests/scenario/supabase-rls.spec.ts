@@ -284,8 +284,25 @@ test("[schema] ตาราง dealers ไม่มีคอลัมน์ KPI 
   for (const col of ["revenue_actual", "win_rate", "active_projects", "on_time_pct"]) {
     expect(Object.keys(row), `คอลัมน์ ${col} ต้องถูกลบไปแล้ว`).not.toContain(col);
   }
-  // เป้าทั้งปียังต้องอยู่ — เป็นค่าที่ HQ กรอกเอง คำนวณจากที่ไหนไม่ได้
-  expect(Object.keys(row), "revenue_target ต้องยังอยู่").toContain("revenue_target");
+  // revenue_target ถูกดึงคอลัมน์ระดับสิทธิ์ออกจากตารางฐานแล้ว (0090) — อ่านได้เฉพาะผ่าน dealers_directory
+  // เท่านั้น (มาสก์ตาม is_hq()/auth_dealer() ที่ view) แม้แต่ HQ เองก็อ่านจากตารางตรงไม่ได้อีกต่อไป
+  expect(Object.keys(row), "revenue_target ต้องไม่อยู่ในตารางฐานอีกต่อไป (อ่านผ่าน dealers_directory เท่านั้น — 0090)").not.toContain("revenue_target");
+});
+
+test("[schema] dealers_directory มาสก์ revenue_target ข้ามสาขา · HQ เห็นครบ (0077/0090)", async () => {
+  const ryg = await signIn(RYG);
+  const hq  = await signIn(ADMIN);
+
+  const byDealer = await ryg.from("dealers_directory").select("code, revenue_target");
+  expect(byDealer.error).toBeNull();
+  const mine = byDealer.data?.find(d => d.code === "RYG");
+  const other = byDealer.data?.find(d => d.code !== "RYG");
+  expect(mine?.revenue_target, "ตัวแทนต้องเห็น revenue_target ของสาขาตัวเอง").not.toBeNull();
+  expect(other?.revenue_target, "ตัวแทนต้องไม่เห็น revenue_target ของสาขาอื่น (ต้องเป็น null)").toBeNull();
+
+  const byHQ = await hq.from("dealers_directory").select("code, revenue_target");
+  expect(byHQ.error).toBeNull();
+  expect(byHQ.data?.every(d => d.revenue_target !== null), "HQ ต้องเห็น revenue_target ครบทุกสาขา").toBe(true);
 });
 
 test("[dealer-settings] หัวกระดาษ/เอกสารของสาขาเก็บที่ DB · สาขาอื่นแตะไม่ได้ (0024)", async () => {
