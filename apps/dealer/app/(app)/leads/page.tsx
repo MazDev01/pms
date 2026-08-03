@@ -66,6 +66,10 @@ const VALUE_BANDS = [
   { v:"gte10", l:"มากกว่า 10 ล้าน", min:"10", max:""   },
 ];
 const PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","นครสวรรค์","ราชบุรี","ขอนแก่น","อื่นๆ"];
+// เหตุผลปิดการขายไม่สำเร็จมาจากรายการที่ HQ กำหนดเท่านั้น (useLostReasons) — ถ้าเหตุผลจริงไม่ตรงกับ
+// รายการนั้นเลย ต้องมีทางกรอกเอง (บอสสั่ง 31 ก.ค. 69) ใช้ sentinel นี้เฉพาะตอนเลือกใน <select> เพื่อ
+// สลับเป็นช่องพิมพ์เอง — ไม่เคยถูกบันทึกลง DB จริง (lostReason ที่บันทึกคือข้อความที่กรอก)
+const OTHER_REASON = "__OTHER__";
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 function thaiDateStr(d: Date) { return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
@@ -262,7 +266,7 @@ function OverviewEditor({ lead, persons, onSave }: {
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
       area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
       project: f.project.trim() || undefined,
-      lostReason: f.status === "CANCELLED" ? (f.lostReason || undefined) : undefined,
+      lostReason: f.status === "CANCELLED" ? (f.lostReason.trim() || undefined) : undefined,
     });
   }
 
@@ -327,10 +331,20 @@ function OverviewEditor({ lead, persons, onSave }: {
         </Cell>
         {f.status === "CANCELLED" && (
           <Cell icon={XCircle} label="เหตุผลที่เสีย">
-            <select value={f.lostReason} onChange={e=>set("lostReason",e.target.value)} style={inp}>
-              <option value="">— เลือก —</option>
-              {lostReasons.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+            {/* เหตุผลไม่ตรงรายการที่ HQ กำหนดไว้เลย → กรอกเองได้ (ค่า lostReason เดิม/พิมพ์เองใหม่ ไม่ผูกกับ
+                รายการตายตัว) — เดิมเลือกได้แค่จากลิสต์ ถ้าเหตุผลจริงไม่มีในนั้นก็บันทึกไม่ได้เลย */}
+            {lostReasons.includes(f.lostReason) || f.lostReason === "" ? (
+              <select value={f.lostReason} onChange={e=>set("lostReason", e.target.value === OTHER_REASON ? " " : e.target.value)} style={inp}>
+                <option value="">— เลือก —</option>
+                {lostReasons.map(r => <option key={r} value={r}>{r}</option>)}
+                <option value={OTHER_REASON}>อื่นๆ (ระบุเอง)</option>
+              </select>
+            ) : (
+              <span style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <input value={f.lostReason.trim()} onChange={e=>set("lostReason", e.target.value)} placeholder="ระบุเหตุผล…" style={inp} autoFocus />
+                <button type="button" onClick={()=>set("lostReason","")} title="กลับไปเลือกจากรายการ" style={{ background:"none", border:"none", cursor:"pointer", color:"#9ca3af", flexShrink:0, padding:4 }}><X size={14}/></button>
+              </span>
+            )}
           </Cell>
         )}
         {/* สองแถวนี้ระบบคำนวณ/ประทับเอง — โชว์ไว้ให้ครบเหมือนมุมมองอ่านเดิม แต่แก้ไม่ได้ */}
@@ -404,6 +418,11 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   const logoInputRef = useRef<HTMLInputElement>(null);
   // เดิมกด "บันทึก" แล้วขาดชื่อบริษัท/ผู้ติดต่อ = ออกเงียบๆ ไม่มีอะไรบอกผู้ใช้เลยว่าทำไมไม่บันทึก (QA เคส 6)
   const [submitError, setSubmitError] = useState("");
+  // กันกดบันทึกซ้ำ (H8 · guard synchronous) — เดิมไม่มี guard เลย: กดรัว ๆ เร็วกว่า React จะ re-render
+  // ปุ่ม/unmount โมดัลทัน (onClose() unmount แบบ synchronous หลัง onSave() แต่ React batch การอัปเดต
+  // ให้ effect จริงทำงานคนละ tick) → ยิง addLead() ซ้ำหลายครั้งได้จริง สร้างลีดซ้ำหลายแถว
+  // (พบจากทดสอบ Edge Case จริง 3 ส.ค. 69) แพตเทิร์นเดียวกับ apptSavingRef ที่ใช้กันฟอร์มนัดหมายอยู่แล้ว
+  const savingRef = useRef(false);
   // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้เป็นลูกค้าอยู่แล้ว — กันเปิดลีดซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
   // แค่บอก ไม่ได้ห้าม (บางทีก็อยากเปิดลีดใหม่จริง ๆ) · ทางที่ถูกคือกด "สร้างดีลใหม่" จากหน้าลูกค้า
   const dupHint = useMemo(() => {
@@ -420,10 +439,12 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
   }
   function submit() {
+    if (savingRef.current) return;
     if (!form.company.trim() || !form.contact.trim()) {
       setSubmitError("กรอกบริษัทและผู้ติดต่อให้ครบก่อนบันทึก");
       return;
     }
+    savingRef.current = true;
     setSubmitError("");
     const base = {
       name: form.company,
@@ -692,10 +713,11 @@ export default function LeadsPage() {
     updateLeadStatus(id, status);
   }
   function confirmPendingLost() {
-    if (!pendingLostId || !pendingLostReason) return;
+    const reason = pendingLostReason.trim();
+    if (!pendingLostId || !reason || reason === OTHER_REASON) return;
     const target = allLeads.find(l => l.id === pendingLostId);
     if (!target) { setPendingLostId(null); return; }
-    updateLead({ ...target, status: "CANCELLED", lostReason: pendingLostReason });
+    updateLead({ ...target, status: "CANCELLED", lostReason: reason });
     setPendingLostId(null); setPendingLostReason("");
   }
   const [dragOver, setDragOver] = useState<LeadStatus|null>(null); // คอลัมน์ที่กำลังลากค้างอยู่ (ไฮไลต์)
@@ -1618,22 +1640,41 @@ export default function LeadsPage() {
               <XCircle size={17} color="#dc2626" /><span style={{ fontSize:"0.9rem", fontWeight:800, color:"#dc2626" }}>ปิดการขายไม่สำเร็จ</span>
             </div>
             <div style={{ padding:"16px 18px" }}>
-              <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                {lostReasons.map(r => (
-                  <button key={r} onClick={()=>setPendingLostReason(r)}
-                    style={{ padding:"8px 10px", borderRadius:9, border:`1px solid ${pendingLostReason===r?"#dc2626":"#e5e7eb"}`,
-                      background:pendingLostReason===r?"#fef2f2":"#fff", color:pendingLostReason===r?"#dc2626":"#374151",
-                      fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
-                    {r}
-                  </button>
-                ))}
-              </div>
+              {lostReasons.includes(pendingLostReason) || pendingLostReason === "" ? (
+                <>
+                  <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                    {lostReasons.map(r => (
+                      <button key={r} onClick={()=>setPendingLostReason(r)}
+                        style={{ padding:"8px 10px", borderRadius:9, border:`1px solid ${pendingLostReason===r?"#dc2626":"#e5e7eb"}`,
+                          background:pendingLostReason===r?"#fef2f2":"#fff", color:pendingLostReason===r?"#dc2626":"#374151",
+                          fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
+                        {r}
+                      </button>
+                    ))}
+                    {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
+                    <button onClick={()=>setPendingLostReason(OTHER_REASON)}
+                      style={{ padding:"8px 10px", borderRadius:9, border:"1px dashed #9ca3af",
+                        background:"#fafafa", color:"#6b7280", fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
+                      อื่นๆ (ระบุเอง)
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
+                    <button type="button" onClick={()=>setPendingLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
+                  </div>
+                  <input autoFocus value={pendingLostReason.trim()} onChange={e=>setPendingLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                    style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+                </>
+              )}
             </div>
             <div style={{ padding:"12px 18px", borderTop:"1px solid #f0f4f8", display:"flex", justifyContent:"flex-end", gap:8, background:"#fafafa" }}>
               <button onClick={()=>setPendingLostId(null)} className="btn btn-secondary btn-md">ยกเลิก</button>
-              <button onClick={confirmPendingLost} disabled={!pendingLostReason} className="btn btn-md"
-                style={{ background:"#dc2626", color:"#fff", opacity:pendingLostReason?1:0.5, cursor:pendingLostReason?"pointer":"not-allowed" }}>
+              <button onClick={confirmPendingLost} disabled={!pendingLostReason.trim() || pendingLostReason===OTHER_REASON} className="btn btn-md"
+                style={{ background:"#dc2626", color:"#fff", opacity:pendingLostReason.trim() && pendingLostReason!==OTHER_REASON ?1:0.5, cursor:pendingLostReason.trim() && pendingLostReason!==OTHER_REASON ?"pointer":"not-allowed" }}>
                 ยืนยันปิดการขาย
               </button>
             </div>
@@ -2005,17 +2046,33 @@ export default function LeadsPage() {
                     <XCircle size={17} color="#dc2626" /><span style={{ fontSize:"0.9rem", fontWeight:800, color:"#dc2626" }}>ปิดการขายไม่สำเร็จ</span>
                   </div>
                   <div style={{ padding:"16px 18px" }}>
-                    <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                      {lostReasons.map(r => (
-                        <button key={r} onClick={()=>setQuickLostReason(r)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
-                          border:`1px solid ${quickLostReason===r ? "#dc2626" : "#e5e7eb"}`, background:quickLostReason===r ? "#fee2e2" : "#fff", color:quickLostReason===r ? "#dc2626" : "#2D2D2D", fontWeight:quickLostReason===r ? 700 : 400 }}>{r}</button>
-                      ))}
-                    </div>
+                    {lostReasons.includes(quickLostReason) || quickLostReason === "" ? (
+                      <>
+                        <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                          {lostReasons.map(r => (
+                            <button key={r} onClick={()=>setQuickLostReason(r)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
+                              border:`1px solid ${quickLostReason===r ? "#dc2626" : "#e5e7eb"}`, background:quickLostReason===r ? "#fee2e2" : "#fff", color:quickLostReason===r ? "#dc2626" : "#2D2D2D", fontWeight:quickLostReason===r ? 700 : 400 }}>{r}</button>
+                          ))}
+                          {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
+                          <button onClick={()=>setQuickLostReason(OTHER_REASON)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
+                            border:"1px dashed #9ca3af", background:"#fafafa", color:"#6b7280" }}>อื่นๆ (ระบุเอง)</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
+                          <button type="button" onClick={()=>setQuickLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
+                        </div>
+                        <input autoFocus value={quickLostReason.trim()} onChange={e=>setQuickLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                          style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+                      </>
+                    )}
                   </div>
                   <div style={{ padding:"12px 18px", borderTop:"1px solid #f0f4f8", background:"#fafafa", display:"flex", justifyContent:"flex-end", gap:8 }}>
                     <button onClick={()=>{ setQuickLost(false); setQuickLostReason(""); }} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>
-                    <button onClick={()=>markLost(quickLostReason)} disabled={!quickLostReason} className="btn btn-sm" style={{ background:quickLostReason ? "#dc2626" : "#f3f4f6", color:quickLostReason ? "#fff" : "#9ca3af", cursor:quickLostReason ? "pointer" : "not-allowed" }}>ยืนยันปิดการขาย</button>
+                    <button onClick={()=>markLost(quickLostReason.trim())} disabled={!quickLostReason.trim() || quickLostReason===OTHER_REASON} className="btn btn-sm" style={{ background:quickLostReason.trim() && quickLostReason!==OTHER_REASON ? "#dc2626" : "#f3f4f6", color:quickLostReason.trim() && quickLostReason!==OTHER_REASON ? "#fff" : "#9ca3af", cursor:quickLostReason.trim() && quickLostReason!==OTHER_REASON ? "pointer" : "not-allowed" }}>ยืนยันปิดการขาย</button>
                   </div>
                 </div>
               </>

@@ -479,6 +479,10 @@ export default function CustomersPage(){
   const [showManual, setShowManual]   = useState(false);
   const [legacyForm, setLegacyForm]   = useState({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
   const csvInputRef = useRef<HTMLInputElement>(null);
+  // กันกดบันทึกซ้ำ (H8 · guard synchronous) — เดิม createLegacy() ไม่มี guard เลย กดรัว ๆ เร็วกว่า React
+  // จะปิดโมดัล/re-render ทัน สร้างลูกค้าซ้ำหลายแถวได้จริง (แพทเทิร์นเดียวกับที่พบในฟอร์มเพิ่มลีด — Edge Case, 3 ส.ค. 69)
+  const savingLegacyRef = useRef(false);
+  const savingImportRef = useRef(false); // กันกดนำเข้า CSV ซ้ำ — ดู commitImport()
   // ไฟล์แนบต่อลูกค้า — คลังไฟล์รวม (แหล่งเดียว) ปรากฏในหน้าไฟล์กลางด้วย
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   const [previewFile, setPreviewFile] = useState<DealerFile | null>(null);
@@ -658,18 +662,26 @@ export default function CustomersPage(){
     reader.readAsText(f,"utf-8");
   }
   async function commitImport(){
-    // id จริงออกจาก counter อะตอมมิกใน addCustomer · base ที่ส่งไปใช้แค่ seed สีให้ต่างกัน
-    // await ทีละรายการ กัน nextId อ่านค่าซ้ำก่อนสร้างเสร็จ (โหมด local)
-    const base=Math.max(0,...data.map(c=>c.id));
-    for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
-    setShowImport(false); setImportRows([]); setImportErr("");
+    if(savingImportRef.current) return; // กันกดนำเข้าซ้ำ (H8) — เดิมไม่มี guard กดรัวจะนำเข้าซ้ำทั้งชุด
+    savingImportRef.current = true;
+    try {
+      // id จริงออกจาก counter อะตอมมิกใน addCustomer · base ที่ส่งไปใช้แค่ seed สีให้ต่างกัน
+      // await ทีละรายการ กัน nextId อ่านค่าซ้ำก่อนสร้างเสร็จ (โหมด local)
+      const base=Math.max(0,...data.map(c=>c.id));
+      for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
+      setShowImport(false); setImportRows([]); setImportErr("");
+    } finally { savingImportRef.current = false; }
   }
   async function createLegacy(){
+    if(savingLegacyRef.current) return;
     if(!legacyForm.company.trim()) return;
-    const base=Math.max(0,...data.map(c=>c.id)); // seed สีเท่านั้น — id จริงจาก counter
-    await ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1));
-    setShowManual(false);
-    setLegacyForm({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
+    savingLegacyRef.current = true;
+    try {
+      const base=Math.max(0,...data.map(c=>c.id)); // seed สีเท่านั้น — id จริงจาก counter
+      await ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1));
+      setShowManual(false);
+      setLegacyForm({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
+    } finally { savingLegacyRef.current = false; }
   }
   // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
   function openNewDeal(c: CustomerRow){
@@ -677,29 +689,37 @@ export default function CustomersPage(){
     setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",assigned:c.owner,note:""});
     setShowNewDeal(true);
   }
+  // กันกดสร้างดีลซ้ำ (H8 · guard synchronous) — เดิมไม่มี guard: กดรัว ๆ ระหว่างรอ newLeadNumId() (async)
+  // จะยิงขอเลขซ้อนกันได้หลายครั้ง สร้างดีลซ้ำหลายใบจากคลิกเดียว (แพทเทิร์นเดียวกับที่พบใน
+  // ฟอร์มเพิ่มลีด/ลูกค้า/แม่แบบ — Edge Case sweep 3 ส.ค. 69)
+  const creatingDealRef = useRef(false);
   // สร้างดีล = ลีดใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
   async function createDeal(){
+    if(creatingDealRef.current) return;
     const c=dealCustomer; if(!c||!dealForm.product) return;
-    const nid=await newLeadNumId(); // num_id atomic ต่อสาขา (M7) — เลิก Math.max+1 ที่ชนได้
-    const product=dealForm.product;
-    const newDeal: LeadRow={
-      id:`#L-${40321+nid}`, numId:nid,
-      name:c.company, company:c.company,                              // ── ข้อมูลลูกค้าเดิม ──
-      contact:c.name, phone:c.phone, email:c.email, province:c.province,
-      assigned:dealForm.assigned||c.owner, logo:c.logo, customerId:c.id,
-      product, category:mainTemplateOf(product),                     // ── รายละเอียดดีล ──
-      value:fmtDealValue(dealForm.value),
-      project:dealForm.project||undefined,
-      note:dealForm.note||undefined,
-      status:"WAITING",                                              // ดีลใหม่เริ่มที่ต้น pipeline
-      source:"ลูกค้าเดิม (ดีลใหม่)",
-      createdAt:thaiToday(),
-      tasks:buildLeadTasks(),                                        // Default Checklist (ยังไม่ติ๊ก)
-      activities:[],                                                 // เริ่มว่าง
-    };
-    addLead(newDeal);
-    setShowNewDeal(false);
-    router.push(`/leads?open=${newDeal.numId}`);                     // เปิด Deal Detail ทันที (ไม่ต้องกลับหน้า Lead)
+    creatingDealRef.current = true;
+    try {
+      const nid = await newLeadNumId(); // num_id atomic ต่อสาขา (M7) — เลิก Math.max+1 ที่ชนได้
+      const product=dealForm.product;
+      const newDeal: LeadRow={
+        id:`#L-${40321+nid}`, numId:nid,
+        name:c.company, company:c.company,                              // ── ข้อมูลลูกค้าเดิม ──
+        contact:c.name, phone:c.phone, email:c.email, province:c.province,
+        assigned:dealForm.assigned||c.owner, logo:c.logo, customerId:c.id,
+        product, category:mainTemplateOf(product),                     // ── รายละเอียดดีล ──
+        value:fmtDealValue(dealForm.value),
+        project:dealForm.project||undefined,
+        note:dealForm.note||undefined,
+        status:"WAITING",                                              // ดีลใหม่เริ่มที่ต้น pipeline
+        source:"ลูกค้าเดิม (ดีลใหม่)",
+        createdAt:thaiToday(),
+        tasks:buildLeadTasks(),                                        // Default Checklist (ยังไม่ติ๊ก)
+        activities:[],                                                 // เริ่มว่าง
+      };
+      addLead(newDeal);
+      setShowNewDeal(false);
+      router.push(`/leads?open=${newDeal.numId}`);                     // เปิด Deal Detail ทันที (ไม่ต้องกลับหน้า Lead)
+    } finally { creatingDealRef.current = false; }
   }
   // toggleStatus ถูกลบ — โค้ดตาย (นิยามไว้แต่ไม่มีใครเรียก) · สถานะลูกค้าเป็นข้อมูลแสดงผลอย่างเดียว
 

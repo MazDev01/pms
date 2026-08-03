@@ -3,7 +3,7 @@
 // ─── HQ · แคตตาล็อกแม่แบบ / ราคากลาง (แหล่งเดียวทั้งเครือ) ─────────────────
 // HQ แก้ไขที่นี่ → persist ลง MASTER_CATALOG_KEY → Dealer (/products + dropdown ฟอร์ม)
 // อ่านจากคีย์เดียวกันทันที · ขอบเขต Sales เท่านั้น (ไม่มี lead time/การส่งมอบ)
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { catalog as catalogRepo } from "@pms/shared/lib/data";
@@ -149,6 +149,7 @@ function HQMasterPageInner() {
   // อ่าน/เขียนผ่าน repository (local: localStorage · supabase: DB · RLS: เขียนได้เฉพาะ HQ)
   const [catalog, setCatalog] = useRepoState<SolutionProduct[]>(() => catalogRepo.list(), (v) => catalogRepo.save(v), []);
   const logAudit = useAuditLogger(); // บันทึกการแก้แม่แบบ/ราคากลาง
+  const addingRef = useRef(false); // กันกดปุ่ม "เพิ่ม" ซ้ำเร็ว ๆ — ดู addProduct()
   const [q, setQ] = useState("");
 
   // modals
@@ -187,8 +188,13 @@ function HQMasterPageInner() {
   }
   function openAdd() { setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(true); }
   function addProduct() {
+    // กันกดซ้ำ (H8 · guard synchronous) — nid คำนวณจาก catalog ปิดคลุม (closure) ไม่ใช่ prev ข้างใน
+    // updater กดรัว ๆ เร็วกว่า React re-render ทันจะได้ nid ซ้ำ (สร้างสองแม่แบบ id ชนกัน) — พบจาก
+    // Edge Case sweep เดียวกับที่เจอในฟอร์มเพิ่มลีด/ลูกค้าฝั่งตัวแทน (3 ส.ค. 69)
+    if (addingRef.current) return;
     const price = parseFloat(addForm.price);
     if (!addForm.name.trim() || !(price > 0)) return;
+    addingRef.current = true;
     const nid = Math.max(0, ...catalog.map(p => parseInt(p.id.replace(/\D/g, "")) || 0)) + 1;
     setCatalog(prev => [...prev, {
       id: `tpl-${nid}`, name: addForm.name.trim(), spec: addForm.spec.trim(),
@@ -197,6 +203,7 @@ function HQMasterPageInner() {
     }]);
     logAudit("เพิ่มแม่แบบ", `${addForm.name.trim()} · ฿${price.toLocaleString("th-TH")}`);
     setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(false);
+    addingRef.current = false;
   }
   function saveReprice() {
     const price = parseFloat(rpPrice);
