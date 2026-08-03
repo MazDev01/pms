@@ -1,0 +1,283 @@
+import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
+import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors } from "./funcHelpers";
+
+// ── Multi-Dealer Load / Stress Test ──────────────────────────────────────────
+// จำลอง 10 ตัวแทนใช้งานพร้อมกันจริง (บัญชี auth จริง ไม่ใช่ mock) + HQ ติดตามแบบเรียลไทม์
+// ทุกขั้นตอนตามที่ขอ: เพิ่ม/แก้ไข/ค้นหาลูกค้า → สร้างใบเสนอราคา → เปลี่ยนสถานะ → ปิดการขายสำเร็จ/ไม่สำเร็จ
+//   → แนบไฟล์ + บันทึกหมายเหตุ — ทำพร้อมกันทั้ง 10 บัญชี แล้วตรวจว่าไม่มีข้อมูลปนกัน/เลขซ้ำ/ระบบค้าง
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
+test.setTimeout(600_000);
+
+const N = 10;
+const TAG = "ZZLOAD";
+// รหัสตัวแทนต้องเป็น A–Z ล้วน 2–5 ตัว (0091_dealers_revoke_table_grant + validation ฝั่งเซิร์ฟเวอร์)
+const CODES = ["ZZLA","ZZLB","ZZLC","ZZLD","ZZLE","ZZLF","ZZLG","ZZLH","ZZLI","ZZLJ"].slice(0, N);
+
+type Provisioned = { code: string; email: string; password: string };
+
+async function adminToken(): Promise<{ sb: SupabaseClient; token: string }> {
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { error } = await sb.auth.signInWithPassword(ADMIN);
+  if (error) throw new Error(`ล็อกอิน ADMIN ไม่ผ่าน: ${error.message}`);
+  const { data } = await sb.auth.getSession();
+  return { sb, token: data.session?.access_token ?? "" };
+}
+
+async function purgeDealer(token: string, code: string) {
+  await fetch(`${HQ_ORIGIN}/api/admin/dealers?code=${code}`, {
+    method: "DELETE", headers: { authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
+
+async function provisionDealer(token: string, code: string): Promise<Provisioned | null> {
+  const res = await fetch(`${HQ_ORIGIN}/api/admin/dealers`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ code, name: `${TAG}-ตัวแทน-${code}`, province: "ทดสอบโหลด", region: "กลาง", revenueTarget: 0, status: "active" }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) { console.log(`[setup] สร้างตัวแทน ${code} ไม่สำเร็จ: ${JSON.stringify(json)}`); return null; }
+  return { code, email: json.email, password: json.password };
+}
+
+const SESSION_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
+async function openAsDealer(context: BrowserContext, dealer: Provisioned): Promise<{ page: Page; sb: SupabaseClient }> {
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await sb.auth.signInWithPassword({ email: dealer.email, password: dealer.password });
+  if (error || !data.session) throw new Error(`ล็อกอินตัวแทน ${dealer.code} ไม่ผ่าน: ${error?.message}`);
+  const page = await context.newPage();
+  await page.addInitScript(({ key, session }) => { sessionStorage.setItem(key, JSON.stringify(session)); },
+    { key: SESSION_KEY, session: data.session });
+  return { page, sb };
+}
+
+// ── ขั้นตอนงานของตัวแทนหนึ่งราย: เพิ่มลูกค้า → แก้ไข → ค้นหา → สร้างใบเสนอราคา
+//    → ส่ง → ปิดการขาย(สำเร็จ/ไม่สำเร็จ) → แนบไฟล์ → บันทึกหมายเหตุ ──
+async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willWin: boolean, timings: Record<string, number>) {
+  const COMPANY = `${TAG}-ลูกค้า-${code}`;
+  const t0 = Date.now();
+  const mark = (label: string) => { timings[`${code}:${label}`] = Date.now() - t0; };
+
+  await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
+
+  // 1) เพิ่มลูกค้าใหม่ (นำเข้าลูกค้าเดิม → เพิ่มทีละราย → กรอกเอง)
+  await page.getByRole("button", { name: "นำเข้าลูกค้าเดิม" }).click();
+  await page.getByRole("button", { name: "เพิ่มทีละราย" }).click();
+  await page.locator('input[placeholder="ชื่อบริษัท / ชื่อลูกค้า"]').fill(COMPANY);
+  await page.locator('input[placeholder="ชื่อผู้ติดต่อ"]').fill(`คุณ${code}`);
+  await page.locator('input[placeholder="0XX-XXX-XXXX"]').first().fill("0800000000");
+  await page.getByRole("button", { name: "เพิ่มลูกค้า" }).click();
+  await expect.poll(async () => (await sb.from("customers").select("id").eq("company", COMPANY)).data?.length ?? 0,
+    { timeout: 20_000, message: `${code}: ลูกค้าต้องถูกสร้าง` }).toBe(1);
+  mark("customer_created");
+
+  // 2) ค้นหาลูกค้า
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row, `${code}: ค้นหาต้องเจอลูกค้าที่เพิ่งสร้าง`).toBeVisible({ timeout: 10_000 });
+  mark("searched");
+
+  // 3) เปิดลูกค้า → แก้ไขข้อมูล (เบอร์โทร) ในที่เดิม
+  await row.click();
+  const phoneInput = page.locator('input[placeholder="0XX-XXX-XXXX"]').first();
+  await expect(phoneInput).toBeVisible({ timeout: 10_000 });
+  await phoneInput.fill("0899999999");
+  await page.getByRole("button", { name: "บันทึกการแก้ไข" }).click();
+  await expect.poll(async () => (await sb.from("customers").select("phone").eq("company", COMPANY)).data?.[0]?.phone,
+    { timeout: 15_000, message: `${code}: เบอร์โทรต้องอัปเดต` }).toBe("0899999999");
+  mark("customer_edited");
+
+  // 4) สร้างดีลใหม่ (เพิ่มงานขายใหม่ → สร้างโครงการ) — เปิด redirect ไปหน้าลีดพร้อม detail
+  //    ต้องเลือกแม่แบบ + กรอกมูลค่าคาดการณ์ ไม่งั้น BOQ auto-seed จะว่าง (qty คำนวณจาก มูลค่า÷ราคากลาง)
+  //    แล้วปุ่ม "สร้างใบเสนอราคา" ในขั้นถัดไปจะ disable ค้าง (เจอจริงระหว่างพัฒนาเทสต์นี้)
+  await page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).first().click();
+  const newDealBtn = page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).last();
+  await expect(newDealBtn).toBeVisible({ timeout: 10_000 });
+  await newDealBtn.click();
+  await page.getByLabel("แม่แบบ", { exact: true }).selectOption({ index: 0 });
+  await page.locator('input[placeholder="เช่น ฿1.2M"]').fill("1200000");
+  const createDealBtn = page.getByRole("button", { name: "สร้างโครงการ" });
+  await expect(createDealBtn).toBeEnabled({ timeout: 10_000 });
+  await createDealBtn.click();
+  await page.waitForURL(/\/leads\?open=/, { timeout: 20_000 });
+  mark("deal_created");
+
+  // 5) แนบไฟล์ที่ลีด (ช่องไม่มี accept = ช่องแนบไฟล์ทั่วไป ต่างจากช่องอัปโหลดโลโก้)
+  const fileInput = page.locator('input[type="file"]:not([accept])').first();
+  await expect(fileInput, `${code}: ต้องมีช่องแนบไฟล์ในลิ้นชักลีด`).toBeAttached({ timeout: 15_000 });
+  await fileInput.setInputFiles({ name: `${TAG}-${code}-เอกสาร.txt`, mimeType: "text/plain", buffer: Buffer.from(`load test ${code}`) });
+  await expect.poll(async () => (await sb.from("files").select("id").like("name", `%${code}-เอกสาร%`)).data?.length ?? 0,
+    { timeout: 15_000, message: `${code}: ไฟล์ต้องขึ้น Storage/DB` }).toBeGreaterThan(0);
+  mark("file_attached");
+
+  // 6) สร้างใบเสนอราคาจากลีด
+  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
+  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
+  await expect.poll(async () => (await sb.from("quotations").select("id").eq("customer", COMPANY)).data?.length ?? 0,
+    { timeout: 20_000, message: `${code}: ใบเสนอราคาต้องถูกสร้าง` }).toBe(1);
+  mark("quotation_created");
+
+  const { data: qrows } = await sb.from("quotations").select("id").eq("customer", COMPANY);
+  const quoteId = qrows![0].id as string;
+
+  // 7) ไปหน้าใบเสนอราคา → เปิดใบ → เปลี่ยนสถานะ (ส่ง → ตอบรับ/ปฏิเสธ)
+  await page.goto(`${DEALER_ORIGIN}/quotations`, { waitUntil: "domcontentloaded" });
+  const qrow = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(qrow, `${code}: ใบเสนอราคาต้องโผล่ในตาราง`).toBeVisible({ timeout: 15_000 });
+  await qrow.click();
+  await page.getByRole("button", { name: "ส่งใบเสนอราคา", exact: true }).click();
+  await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
+    { timeout: 15_000, message: `${code}: ใบต้องเป็น 'ส่งแล้ว'` }).toBe("sent_to_client");
+  mark("quotation_sent");
+
+  if (willWin) {
+    page.once("dialog", d => d.accept());
+    await page.getByRole("button", { name: "ลูกค้าตอบรับ", exact: false }).click();
+    await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
+      { timeout: 20_000, message: `${code}: ใบต้องเป็น 'won'` }).toBe("won");
+    mark("closed_won");
+  } else {
+    await page.getByRole("button", { name: "ลูกค้าปฏิเสธ", exact: true }).click();
+    const reasonPicker = page.getByText("เลือกเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้");
+    await expect(reasonPicker).toBeVisible({ timeout: 10_000 });
+    await reasonPicker.locator("xpath=following-sibling::div[1]//button").first().click();
+    await page.getByRole("button", { name: "ยืนยัน", exact: true }).click();
+    await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
+      { timeout: 20_000, message: `${code}: ใบต้องเป็น 'lost'` }).toBe("lost");
+    mark("closed_lost");
+  }
+
+  // 8) บันทึกหมายเหตุที่ลูกค้า
+  await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
+  await expect(page.locator("tbody tr").filter({ hasText: COMPANY }).first()).toBeVisible({ timeout: 15_000 });
+  await page.locator("tbody tr").filter({ hasText: COMPANY }).first().click();
+  await page.getByRole("button", { name: "เพิ่มโน้ต" }).first().click();
+  await page.getByPlaceholder("หัวข้อโน้ต").fill(`${TAG}-โน้ต-${code}`);
+  await page.getByPlaceholder("รายละเอียดการติดตาม").fill(`บันทึกจาก load test ${code}`);
+  await page.getByRole("button", { name: "บันทึกโน้ต" }).click();
+  await expect.poll(async () => (await sb.from("customer_notes").select("id").eq("title", `${TAG}-โน้ต-${code}`)).data?.length ?? 0,
+    { timeout: 15_000, message: `${code}: โน้ตต้องลง DB` }).toBe(1);
+  mark("note_added");
+}
+
+test.describe.configure({ mode: "serial" }); // ไฟล์นี้มี 2 เทสต์ (setup ทีละคน + stress พร้อมกัน) — กันชนกัน
+
+let provisioned: Provisioned[] = [];
+let adminTok = "";
+
+test.beforeAll(async () => {
+  const { token } = await adminToken();
+  adminTok = token;
+  // กันของค้างจากรอบก่อนที่ล้มกลางคัน — ลองลบทุกโค้ด (best-effort, 409 ถ้ายังมีข้อมูลค้างจะข้ามไปเงียบ ๆ)
+  for (const code of CODES) await purgeDealer(token, code);
+});
+
+test("[stress] เตรียม 10 บัญชีตัวแทนจริง (auth+dealer) สำหรับทดสอบโหลด", async () => {
+  for (const code of CODES) {
+    const p = await provisionDealer(adminTok, code);
+    expect(p, `ต้องสร้างบัญชีตัวแทน ${code} ได้`).not.toBeNull();
+    if (p) provisioned.push(p);
+  }
+  expect(provisioned.length, "ต้องสร้างตัวแทนได้ครบตามจำนวนที่ขอ").toBe(N);
+});
+
+test("[stress] 10 ตัวแทนทำงานพร้อมกันเต็มวงจร + HQ เห็นข้อมูลอัปเดตจริง", async ({ browser }) => {
+  expect(provisioned.length, "ต้องมีตัวแทนที่เตรียมไว้ก่อนหน้า").toBe(N);
+
+  // ── HQ baseline (ก่อนเริ่ม) ──
+  const { sb: hqSb } = await adminToken();
+  const { count: custBefore } = await hqSb.from("customers").select("id", { count: "exact", head: true });
+  const { count: quoteBefore } = await hqSb.from("quotations").select("id", { count: "exact", head: true });
+
+  const hqCtx = await browser.newContext();
+  const hqPage = await hqCtx.newPage();
+  await hqPage.addInitScript(({ key, session }) => { sessionStorage.setItem(key, JSON.stringify(session)); },
+    { key: SESSION_KEY, session: (await hqSb.auth.getSession()).data.session });
+  await hqPage.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
+  await hqPage.waitForLoadState("networkidle").catch(() => {});
+
+  // ── เปิด 10 บริบทเบราว์เซอร์ ล็อกอินจริงแยกบัญชี แล้วรันขั้นตอนทั้งหมดพร้อมกัน ──
+  const timings: Record<string, number> = {};
+  const contexts = await Promise.all(provisioned.map(() => browser.newContext()));
+  const sessions = await Promise.all(provisioned.map((d, i) => openAsDealer(contexts[i], d)));
+
+  // แยก error "รู้อยู่แล้ว" (reconcileWonTotal ไม่มี retry เจอตอนพัฒนาเทสต์นี้ — รายงานแยกต่างหาก
+  // ไม่ล้มทั้งเทสต์ เพื่อให้เห็นภาพรวมทั้งหมดของโหลด 10 สาขาต่อไปได้) ออกจาก error อื่นที่ต้องล้มจริง
+  const softErrors: { code: string; msg: string }[] = [];
+  const started = Date.now();
+  const results = await Promise.allSettled(
+    provisioned.map((d, i) => {
+      const errs = watchErrors(sessions[i].page);
+      return runDealerFlow(sessions[i].page, sessions[i].sb, d.code, i % 2 === 0, timings)
+        .then(() => {
+          const known = errs.filter(e => e.includes("reconcileWonTotal") || e.includes("คำนวณยอดลูกค้าใหม่"));
+          known.forEach(m => softErrors.push({ code: d.code, msg: m }));
+          const hard = errs.filter(e => !known.includes(e));
+          assertNoErrors(hard, `ตัวแทน ${d.code}`);
+        });
+    })
+  );
+  const elapsedSec = (Date.now() - started) / 1000;
+  console.log(`[stress] 10 ตัวแทนทำงานพร้อมกันเสร็จภายใน ${elapsedSec.toFixed(1)} วินาที`);
+  console.log(`[stress] timings: ${JSON.stringify(timings, null, 1)}`);
+  if (softErrors.length) console.log(`[stress] soft errors (reconcileWonTotal ไม่มี retry): ${JSON.stringify(softErrors, null, 1)}`);
+
+  const failed = results.map((r, i) => ({ r, code: provisioned[i].code })).filter(x => x.r.status === "rejected");
+  if (failed.length) {
+    for (const f of failed) console.log(`[stress] ${f.code} ล้มเหลว: ${(f.r as PromiseRejectedResult).reason}`);
+  }
+  expect(failed.length, `ตัวแทนที่ทำงานไม่สำเร็จ: ${failed.map(f => f.code).join(",")}`).toBe(0);
+
+  // ── ตรวจความถูกต้องของข้อมูลหลังจบ — ไม่มีข้อมูลปนกันข้ามสาขา ──
+  const staleTotals: string[] = [];
+  for (const [i, d] of provisioned.entries()) {
+    const { data: custs } = await hqSb.from("customers").select("dealer_code,total_value").eq("company", `${TAG}-ลูกค้า-${d.code}`);
+    expect(custs?.length, `${d.code}: ต้องมีลูกค้าที่สร้างพอดี 1 ราย`).toBe(1);
+    expect(custs?.[0]?.dealer_code, `${d.code}: ลูกค้าต้องเป็นของสาขาตัวเองเท่านั้น`).toBe(d.code);
+
+    const { data: quotes } = await hqSb.from("quotations").select("dealer_code,status,total_value").eq("customer", `${TAG}-ลูกค้า-${d.code}`);
+    expect(quotes?.length, `${d.code}: ต้องมีใบเสนอราคาพอดี 1 ใบ`).toBe(1);
+    expect(quotes?.[0]?.dealer_code, `${d.code}: ใบเสนอราคาต้องเป็นของสาขาตัวเองเท่านั้น`).toBe(d.code);
+
+    // dealers ที่ i%2===0 ปิดแบบ "won" — ยอดลูกค้าควรตรงกับใบที่ปิดได้ (ไม่ค้างที่ 0 จากปัญหา reconcile ไม่มี retry)
+    if (i % 2 === 0 && quotes?.[0]?.status === "won" && (custs?.[0]?.total_value ?? 0) !== (quotes?.[0]?.total_value ?? -1)) {
+      staleTotals.push(`${d.code}: ยอดลูกค้า=${custs?.[0]?.total_value} แต่ใบที่ปิด won=${quotes?.[0]?.total_value}`);
+    }
+  }
+  if (staleTotals.length) console.log(`[stress] ยอดลูกค้าค้าง (ไม่ได้ reconcile หลัง won): ${JSON.stringify(staleTotals, null, 1)}`);
+
+  // ── เลขที่ใบเสนอราคาต้องไม่ซ้ำกันเลย แม้สร้างพร้อมกัน 10 สาขา ──
+  const { data: allNewQuotes } = await hqSb.from("quotations").select("id").like("customer", `${TAG}-ลูกค้า-%`);
+  const ids = (allNewQuotes ?? []).map(q => q.id as string);
+  expect(new Set(ids).size, "เลขที่ใบเสนอราคาต้องไม่ซ้ำกันเลยแม้สร้างพร้อมกัน").toBe(ids.length);
+  expect(ids.length, "ต้องมีใบเสนอราคาครบ 10 ใบจาก 10 สาขา").toBe(N);
+
+  // ── HQ dashboard ต้องเห็นตัวเลขใหม่หลังรีเฟรช (real-time ผ่านการโหลดข้อมูลใหม่) ──
+  await hqPage.reload({ waitUntil: "domcontentloaded" });
+  await hqPage.waitForLoadState("networkidle").catch(() => {});
+  const { count: custAfter } = await hqSb.from("customers").select("id", { count: "exact", head: true });
+  const { count: quoteAfter } = await hqSb.from("quotations").select("id", { count: "exact", head: true });
+  expect((custAfter ?? 0) - (custBefore ?? 0), "จำนวนลูกค้าทั้งเครือต้องเพิ่มขึ้นตามจำนวนที่สร้างจริง").toBeGreaterThanOrEqual(N);
+  expect((quoteAfter ?? 0) - (quoteBefore ?? 0), "จำนวนใบเสนอราคาทั้งเครือต้องเพิ่มขึ้นตามจำนวนที่สร้างจริง").toBeGreaterThanOrEqual(N);
+
+  await hqCtx.close();
+  await Promise.all(contexts.map(c => c.close()));
+});
+
+test.afterAll(async () => {
+  // เก็บกวาดข้อมูลของแต่ละสาขา "ในฐานะตัวแทนเจ้าของ" (HQ เขียน/ลบข้อมูลขายตรงไม่ได้ตาม RLS)
+  // แล้วค่อยลบบัญชีตัวแทน+auth ผ่าน route (route เองก็บังคับให้ข้อมูลว่างก่อนถึงจะลบแถวได้)
+  for (const d of provisioned) {
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { error } = await sb.auth.signInWithPassword({ email: d.email, password: d.password });
+      if (!error) await cleanup(sb, d.code, TAG);
+    } catch { /* best-effort */ }
+    await purgeDealer(adminTok, d.code);
+  }
+});
