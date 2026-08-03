@@ -856,11 +856,11 @@ export const SupabaseAdapter: DataAdapter = {
       return normalizeCustomer(toCamel<CustomerRow>(data as Row));
     },
     // รวมยอด won ที่ DB ตรง ๆ (0078) — กัน race ตอนแก้สถานะ 2 ใบพร้อมกันจาก 2 session
-    reconcileWonTotal: async (customerId) => {
+    reconcileWonTotal: (customerId) => withNetworkRetry(async () => {
       const { data, error } = await sb().rpc("reconcile_customer_won_total", { p_customer_id: customerId });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return normalizeCustomer(toCamel<CustomerRow>(data as Row));
-    },
+    }),
     // ปิดการขายสำเร็จทั้งก้อนแบบ atomic (RPC, 0094/0095 — Phase 4 transaction)
     // คืนทั้งลูกค้าและใบเสนอราคาที่เกี่ยวข้องทั้งหมด (relink แล้ว) — ผู้เรียกอัปเดต local state ได้ทันที
     // ไม่ต้องรอ realtime round-trip
