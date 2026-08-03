@@ -127,15 +127,19 @@ async function one<T>(table: string): Promise<T | null> {
 
 // insert 1 แถว → คืนแถวที่ DB บันทึกจริง (id/created_at ที่ DB สร้างให้) เป็น camelCase
 async function insertRow<T>(table: string, row: T): Promise<T> {
-  const { data, error } = await sb().from(table).insert(toSnake(row as unknown as Row)).select().single();
-  if (error) throw new DbError(error.message, error.code);
-  return toCamel<T>(data as Row);
+  return withNetworkRetry(async () => {
+    const { data, error } = await sb().from(table).insert(toSnake(row as unknown as Row)).select().single();
+    if (error) throw new DbError(error.message, error.code);
+    return toCamel<T>(data as Row);
+  });
 }
 // update ทั้งแถวตาม id → คืนแถวหลังอัปเดต
 async function updateRow<T>(table: string, id: string | number, row: T): Promise<T> {
-  const { data, error } = await sb().from(table).update(toSnake(row as unknown as Row)).eq("id", id).select().single();
-  if (error) throw new DbError(error.message, error.code);
-  return toCamel<T>(data as Row);
+  return withNetworkRetry(async () => {
+    const { data, error } = await sb().from(table).update(toSnake(row as unknown as Row)).eq("id", id).select().single();
+    if (error) throw new DbError(error.message, error.code);
+    return toCamel<T>(data as Row);
+  });
 }
 
 // คอลัมน์ text ของ leads/quotations/appointments ส่วนใหญ่ "nullable" ที่ DB (0001_schema.sql)
@@ -740,11 +744,11 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToLead(data as Row);
     }),
-    update: async (row) => {
+    update: (row) => withNetworkRetry(async () => {
       const { data, error } = await sb().from("leads").update(leadToRow(row)).eq("id", row.id).select().single();
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToLead(data as Row);
-    },
+    }),
     remove: (id) => must(sb().from("leads").delete().eq("id", id)),
     setStatus: (id, status) => must(sb().from("leads").update({ status }).eq("id", id)),
   },
@@ -783,13 +787,22 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToQuote(data as Row);
     },
-    update: async (row) => {
+    update: (row) => withNetworkRetry(async () => {
       const { data, error } = await sb().from("quotations").update(quoteToRow(row)).eq("id", row.id).select().single();
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return rowToQuote(data as Row);
-    },
+    }),
     remove: (id) => must(sb().from("quotations").delete().eq("id", id)),
     setStatus: (id, status) => must(sb().from("quotations").update({ status }).eq("id", id)),
+    setStatusReconciled: (id, status) => withNetworkRetry(async () => {
+      const { data, error } = await sb().rpc("set_quotation_status_reconciled", { p_quote_id: id, p_status: status });
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
+      const result = data as { quotation: Row; customer: Row | null };
+      return {
+        quotation: rowToQuote(result.quotation),
+        customer: result.customer ? normalizeCustomer(toCamel<CustomerRow>(result.customer)) : null,
+      };
+    }),
     // ปิดใบที่เลยวันหมดอายุ — RLS ทำให้แต่ละสาขาปิดได้เฉพาะใบของตัวเอง (0019)
     //   validityDays = ใบที่ไม่ได้กรอก expiry เอง ใช้ date+validityDays แทน (นิยามเดียวกับ hq_alerts) · 0067
     expireOverdue: async (asOf, _scope, validityDays) => {

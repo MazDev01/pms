@@ -318,6 +318,12 @@ export interface QuotationsRepo {
   update(row: QuotationMock): Promise<QuotationMock>;
   remove(id: string): Promise<void>;
   setStatus(id: string, status: QuotationMock["status"]): Promise<void>;
+  /** เปลี่ยนสถานะใบ + รวมยอดลูกค้าใหม่ (ถ้าใบผูก customer_id อยู่แล้ว) ในทรานแซกชันเดียว (0102) —
+   *  เดิมเรียก setStatus แล้วค่อย customers.reconcileWonTotal แยกกัน 2 คำขอ ภายใต้โหลดสูงพบว่า
+   *  reconcile บางครั้งคำนวณได้ 0 ทั้งที่สถานะเปลี่ยนไปแล้วจริง (ช่องว่างจังหวะเวลาระหว่าง 2 คำขอ
+   *  ไม่ใช่เน็ตสะดุดที่ withNetworkRetry จับได้) — รวมเป็นคำสั่งเดียวตัดช่องว่างนั้นทิ้ง
+   *  ใช้แทน setStatus เฉพาะกรณีที่ status เดิม/ใหม่เกี่ยวข้องกับ "won" (ต้อง reconcile) */
+  setStatusReconciled(id: string, status: QuotationMock["status"]): Promise<{ quotation: QuotationMock; customer: CustomerRow | null }>;
   /** ออกเลขที่ใบ + insert ใน "ทรานแซกชันเดียว" (atomic) — insert ล้ม = เลขไม่หาย (H8)
    *  รับ row ที่ "ยังไม่มี id" (DB เป็นคนออกเลขให้) · คืนใบที่บันทึกจริงพร้อมเลขที่
    *  supabase: RPC create_quotation (ออกเลข+insert รวด) · local: max+1 แล้ว insert (เธรดเดียว = atomic) */

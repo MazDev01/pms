@@ -604,22 +604,19 @@ export function SalesProvider({
       persistQuote.setStatus(id, status);
       return;
     }
-    // ต้อง await การเปลี่ยนสถานะให้ commit จริงก่อนค่อย reconcile — RPC คำนวณผลรวมจาก DB สด (กัน race, 0078)
+    // เปลี่ยนสถานะ + รวมยอดลูกค้าใหม่ในทรานแซกชันเดียว (0102) — เดิมเรียก setStatus แล้วค่อย reconcile
+    // แยก 2 คำขอ ภายใต้โหลดสูงเจอช่องว่างจังหวะเวลาที่ reconcile คำนวณได้ 0 ทั้งที่สถานะเปลี่ยนไปแล้วจริง
     void (async () => {
       try {
-        await quotationsRepo.setStatus(id, status);
+        const { quotation, customer } = await quotationsRepo.setStatusReconciled(id, status);
+        setQuotations(prev => prev.map(q => q.id !== id ? q : quotation));
+        if (customer) setCustomers(prev => prev.map(c => c.id === customer.id ? customer : c));
       } catch (e) {
         onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")(e);
         setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? q.status }));
-        return;
-      }
-      try {
-        await reconcileCustomerTotal(target.customerId);
-      } catch (e) {
-        onFail("customers", "คำนวณยอดลูกค้าใหม่")(e);
       }
     })();
-  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote, reconcileCustomerTotal]);
+  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
   // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB

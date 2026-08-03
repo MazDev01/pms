@@ -77,10 +77,11 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   // โปรไฟล์ผ่าน repo — เดิมอ่าน localStorage ต่อสาขา (ผู้ใช้ในสาขาเดียวกันทับกันเอง)
   const { profile } = useUserProfile();
 
+  // เดิม prefetch ทั้งสองเส้นทางไม่ว่าง role ไหน — เส้นทางของอีกแอปไม่มีจริงในแอปนี้ (dealer ไม่มี /hq/*
+  // และกลับกัน) ยิง 404 ซ้ำ ๆ ทุกครั้งที่ Sidebar โหลด (พบจริงจากทดสอบโหลด: เกือบ 300 ครั้งใน log)
   useEffect(() => {
-    router.prefetch("/hq/dashboard");
-    router.prefetch("/dashboard");
-  }, [router]);
+    router.prefetch(isHQ ? "/hq/dashboard" : "/dashboard");
+  }, [router, isHQ]);
 
 
 

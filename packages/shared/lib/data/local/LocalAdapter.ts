@@ -728,6 +728,27 @@ export const LocalAdapter: DataAdapter = {
       writeKey(SALES.quotations, list.map((q) => (q.id === id ? { ...q, status } : q)));
       return done();
     },
+    // เหมือน setStatus + reconcileWonTotal รวมกัน (0102) — เธรดเดียวในเบราว์เซอร์ไม่มี race จริงอยู่แล้ว
+    // แต่คงพฤติกรรม/ลายเซ็นเดียวกับ Supabase ไว้เพื่อ parity
+    setStatusReconciled: (id, status) => {
+      const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const target = list.find(q => q.id === id);
+      if (status === "won" && !((target?.customerId ?? 0) > 0)) {
+        return Promise.reject(new Error('ปิดการขายสำเร็จไม่ได้ — ใบนี้ยังไม่ได้ผูกกับลูกค้า (ใช้ปุ่ม "ลูกค้าตอบรับ ✓" แทน)'));
+      }
+      const nextQuotes = list.map((q) => (q.id === id ? { ...q, status } : q));
+      writeKey(SALES.quotations, nextQuotes);
+      const updatedQuote = nextQuotes.find(q => q.id === id)!;
+      let updatedCustomer: CustomerRow | null = null;
+      if (updatedQuote.customerId && updatedQuote.customerId > 0) {
+        const custs = readKey<CustomerRow[]>(SALES.customers, initialCustomers);
+        const wonTotal = nextQuotes.filter(q => q.customerId === updatedQuote.customerId && q.status === "won").reduce((s, q) => s + (q.totalValue ?? 0), 0);
+        const nextCusts = custs.map(c => c.id === updatedQuote.customerId ? { ...c, totalValue: wonTotal } : c);
+        writeKey(SALES.customers, nextCusts);
+        updatedCustomer = nextCusts.find(c => c.id === updatedQuote.customerId) ?? null;
+      }
+      return Promise.resolve({ quotation: updatedQuote, customer: updatedCustomer });
+    },
     // ปิดใบที่เลยวันหมดอายุ (โหมด local ทำกับชุดของสาขานั้น)
     //   "หมดอายุ" = expiry ที่กรอกเอง ถ้ามี · ไม่กรอก (ค่าเริ่มต้นฟอร์ม) = date + validityDays (นโยบาย HQ)
     //   เดิมอ่านแต่ expiry → ใบที่ไม่ได้กรอก expiry (ส่วนใหญ่) ไม่มีวันหมดอายุเองเลย ไม่ตรงกับที่ hq_alerts เตือน

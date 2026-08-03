@@ -15,6 +15,15 @@ import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
 
+// กันข้อมูลหายถ้าผู้ใช้รีเฟรช/ปิดแท็บระหว่างกำลังบันทึก (พบจริงจากทดสอบโหลด: รีเฟรชทันทีหลังกดบันทึก
+// ทำให้คำขอที่กำลังส่งถูกตัดตอนกลางทาง ข้อมูลไม่ถูกสร้างเลยโดยผู้ใช้ไม่รู้ตัว) — เตือนผู้ใช้ก่อนออกจากหน้า
+// ระหว่างกำลังส่งคำขอ ให้เวลาตัดสินใจว่าจะรอให้บันทึกเสร็จก่อนหรือไม่
+function warnBeforeUnloadDuring<T>(fn: () => Promise<T>): Promise<T> {
+  const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+  window.addEventListener("beforeunload", onBeforeUnload);
+  return fn().finally(() => window.removeEventListener("beforeunload", onBeforeUnload));
+}
+
 // หมวดโน้ตจาก DB เป็นข้อความอิสระ — หมวดที่ไม่รู้จักต้องไม่ทำหน้าพัง ให้ใช้สีของ "ทั่วไป"
 const noteColorOf = (cat: string) =>
   (noteCategoryColor as Record<string, { bg: string; text: string; dot: string }>)[cat] ?? noteCategoryColor["ทั่วไป"];
@@ -665,12 +674,15 @@ export default function CustomersPage(){
     if(savingImportRef.current) return; // กันกดนำเข้าซ้ำ (H8) — เดิมไม่มี guard กดรัวจะนำเข้าซ้ำทั้งชุด
     savingImportRef.current = true;
     try {
-      // id จริงออกจาก counter อะตอมมิกใน addCustomer · base ที่ส่งไปใช้แค่ seed สีให้ต่างกัน
-      // await ทีละรายการ กัน nextId อ่านค่าซ้ำก่อนสร้างเสร็จ (โหมด local)
-      const base=Math.max(0,...data.map(c=>c.id));
-      for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
+      await warnBeforeUnloadDuring(async () => {
+        // id จริงออกจาก counter อะตอมมิกใน addCustomer · base ที่ส่งไปใช้แค่ seed สีให้ต่างกัน
+        // await ทีละรายการ กัน nextId อ่านค่าซ้ำก่อนสร้างเสร็จ (โหมด local)
+        const base=Math.max(0,...data.map(c=>c.id));
+        for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
+      });
       setShowImport(false); setImportRows([]); setImportErr("");
-    } finally { savingImportRef.current = false; }
+    } catch(e){ alert("นำเข้าลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
+    finally { savingImportRef.current = false; }
   }
   async function createLegacy(){
     if(savingLegacyRef.current) return;
@@ -678,10 +690,13 @@ export default function CustomersPage(){
     savingLegacyRef.current = true;
     try {
       const base=Math.max(0,...data.map(c=>c.id)); // seed สีเท่านั้น — id จริงจาก counter
-      await ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1));
+      await warnBeforeUnloadDuring(() =>
+        ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1))
+      );
       setShowManual(false);
       setLegacyForm({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
-    } finally { savingLegacyRef.current = false; }
+    } catch(e){ alert("เพิ่มลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
+    finally { savingLegacyRef.current = false; }
   }
   // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
   function openNewDeal(c: CustomerRow){
