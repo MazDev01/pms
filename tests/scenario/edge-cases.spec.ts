@@ -342,3 +342,49 @@ test("[edge·hq] กดปุ่ม 'บันทึก' (เพิ่มผู�
 
   await purgeHQUsersByName(NAME);
 });
+
+test("[edge] พิมพ์เหตุผลปิดไม่สำเร็จแบบมีวรรคกลางคำ (พิมพ์จริงทีละตัวอักษร) → วรรคต้องไม่หาย", async ({ page }) => {
+  // regression: ช่องพิมพ์เหตุผลเอง ("อื่นๆ (ระบุเอง)") เดิมใช้ value={reason.trim()} — trim ทุก re-render
+  // ไม่ใช่แค่ตอนบันทึก ทำให้วรรคที่เพิ่งพิมพ์เสร็จ (อยู่ท้ายสตริงชั่วขณะ) ถูกลบทิ้งก่อนกดตัวอักษรถัดไป
+  // พิมพ์ด้วย .fill() ตรวจไม่เจอ (ยิงค่าเต็มทีเดียว) ต้องพิมพ์จริงทีละตัวด้วย pressSequentially ถึงจะจำลองบั๊กได้
+  const errs = watchErrors(page);
+  const sb = await db(RYG);
+  const COMPANY = tg("วรรคหาย");
+  const CUSTOM_REASON = "ราคา สูง เกินไป";
+
+  const { error: insErr } = await sb.from("leads").insert({
+    id: `${COMPANY}`, dealer_code: "RYG", company: COMPANY, contact: "คุณวรรคหาย",
+    province: "ระยอง", product: "โกดังสำเร็จรูป", status: "WAITING", value: "฿1,000,000",
+    assigned: "—", source: "เว็บไซต์",
+  });
+  if (insErr) throw new Error(`สร้างลีดตั้งต้นไม่สำเร็จ: ${insErr.message}`);
+
+  try {
+    await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+    await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "ตาราง" }).click();
+    await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY); // กันเคสตกหน้าอื่นของ pagination
+    const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.locator("button.badge").click();
+    await page.getByRole("button", { name: "ปิดการขายไม่สำเร็จ", exact: true }).click();
+
+    const otherBtn = page.getByRole("button", { name: "อื่นๆ (ระบุเอง)" });
+    await expect(otherBtn).toBeVisible({ timeout: 10_000 });
+    await otherBtn.click();
+
+    const input = page.getByPlaceholder("พิมพ์เหตุผล…");
+    await expect(input).toBeVisible({ timeout: 5_000 });
+    await input.pressSequentially(CUSTOM_REASON, { delay: 40 });
+    await expect(input, "วรรคกลางคำต้องไม่หายระหว่างพิมพ์จริง (ไม่ใช่แค่ตอน .fill() ทีเดียว)").toHaveValue(CUSTOM_REASON);
+
+    await page.getByRole("button", { name: "ยืนยันปิดการขาย" }).click();
+    await expect.poll(async () =>
+      (await sb.from("leads").select("lost_reason").eq("id", COMPANY).single()).data?.lost_reason,
+      { timeout: 15_000, message: "เหตุผลที่บันทึกใน DB ต้องมีวรรคกลางคำครบ ไม่ถูกตัดคำติดกัน" },
+    ).toBe(CUSTOM_REASON);
+    assertNoErrors(errs, "พิมพ์เหตุผลปิดไม่สำเร็จแบบมีวรรคกลางคำ");
+  } finally {
+    await sb.from("leads").delete().eq("id", COMPANY);
+  }
+});

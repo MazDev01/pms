@@ -43,6 +43,10 @@ const CARD: React.CSSProperties = { background:"#fff", borderRadius:16, border:`
 const STATUS_ORDER: QuotationStatus[] = ["draft","sent_to_client","won","lost","expired"];
 
 const PAGE_SIZE = 10;
+// เหตุผล "ลูกค้าปฏิเสธ" มาจากรายการที่ HQ กำหนดเท่านั้น (useLostReasons) — ถ้าเหตุผลจริงไม่ตรงกับ
+// รายการนั้นเลย ต้องมีทางกรอกเอง (บอสสั่ง 31 ก.ค. 69) sentinel นี้ใช้เฉพาะสลับโหมดปุ่ม → ช่องพิมพ์
+// ไม่เคยถูกบันทึกลง DB จริง
+const OTHER_REASON = "__OTHER__";
 
 const STATUS_ACTIONS: Record<QuotationStatus,{label:string;next:QuotationStatus;bg:string;color:string}[]> = {
   draft:          [
@@ -485,9 +489,10 @@ function QuotationsPageInner(){
   const [pendingLostQ, setPendingLostQ] = useState<QuotationMock|null>(null);
   const [pendingLostReason, setPendingLostReason] = useState("");
   function confirmPendingLost(){
-    if(!pendingLostQ||!pendingLostReason) return;
-    updateQuotation({ ...pendingLostQ, status:"lost", lostReason:pendingLostReason });
-    setSelected(p=>p?.id===pendingLostQ.id?{...p,status:"lost",lostReason:pendingLostReason}:p);
+    const reason = pendingLostReason.trim();
+    if(!pendingLostQ || !reason || reason===OTHER_REASON) return;
+    updateQuotation({ ...pendingLostQ, status:"lost", lostReason:reason });
+    setSelected(p=>p?.id===pendingLostQ.id?{...p,status:"lost",lostReason:reason}:p);
     setPendingLostQ(null); setPendingLostReason("");
   }
   // ส่งอีกครั้ง — ตั้งสถานะกลับเป็น "ส่งแล้ว" และประทับวันที่ = วันนี้ของระบบ (supabase=จริง)
@@ -1011,22 +1016,41 @@ function QuotationsPageInner(){
               <span style={{fontSize:"0.9rem",fontWeight:800,color:"#dc2626"}}>ลูกค้าปฏิเสธ — ระบุเหตุผล</span>
             </div>
             <div style={{padding:"16px 18px"}}>
-              <div style={{fontSize:"0.75rem",color:MUTED,marginBottom:10}}>เลือกเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                {lostReasons.map(r=>(
-                  <button key={r} onClick={()=>setPendingLostReason(r)}
-                    style={{padding:"8px 10px",borderRadius:9,border:`1px solid ${pendingLostReason===r?"#dc2626":BORDER}`,
-                      background:pendingLostReason===r?"#fef2f2":"#fff",color:pendingLostReason===r?"#dc2626":"#374151",
-                      fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
-                    {r}
-                  </button>
-                ))}
-              </div>
+              {lostReasons.includes(pendingLostReason) || pendingLostReason === "" ? (
+                <>
+                  <div style={{fontSize:"0.75rem",color:MUTED,marginBottom:10}}>เลือกเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    {lostReasons.map(r=>(
+                      <button key={r} onClick={()=>setPendingLostReason(r)}
+                        style={{padding:"8px 10px",borderRadius:9,border:`1px solid ${pendingLostReason===r?"#dc2626":BORDER}`,
+                          background:pendingLostReason===r?"#fef2f2":"#fff",color:pendingLostReason===r?"#dc2626":"#374151",
+                          fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                        {r}
+                      </button>
+                    ))}
+                    {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
+                    <button onClick={()=>setPendingLostReason(OTHER_REASON)}
+                      style={{padding:"8px 10px",borderRadius:9,border:"1px dashed #9ca3af",
+                        background:"#fafafa",color:"#6b7280",fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                      อื่นๆ (ระบุเอง)
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{fontSize:"0.75rem",color:MUTED,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>ระบุเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้</span>
+                    <button type="button" onClick={()=>setPendingLostReason("")} style={{background:"none",border:"none",cursor:"pointer",color:"#003366",fontSize:"0.72rem",fontWeight:700}}>← กลับไปเลือกจากรายการ</button>
+                  </div>
+                  <input autoFocus value={pendingLostReason === OTHER_REASON ? "" : pendingLostReason} onChange={e=>setPendingLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                    style={{width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"9px 12px",fontSize:"0.82rem",color:"#2D2D2D",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}} />
+                </>
+              )}
             </div>
             <div style={{padding:"12px 18px",borderTop:`1px solid ${BORDER}`,display:"flex",justifyContent:"flex-end",gap:8,background:"#fafafa"}}>
               <button onClick={()=>setPendingLostQ(null)} className="btn btn-secondary btn-md">ยกเลิก</button>
-              <button onClick={confirmPendingLost} disabled={!pendingLostReason} className="btn btn-md"
-                style={{background:"#dc2626",color:"#fff",opacity:pendingLostReason?1:0.5,cursor:pendingLostReason?"pointer":"not-allowed"}}>
+              <button onClick={confirmPendingLost} disabled={!pendingLostReason.trim() || pendingLostReason===OTHER_REASON} className="btn btn-md"
+                style={{background:"#dc2626",color:"#fff",opacity:pendingLostReason.trim() && pendingLostReason!==OTHER_REASON ?1:0.5,cursor:pendingLostReason.trim() && pendingLostReason!==OTHER_REASON ?"pointer":"not-allowed"}}>
                 ยืนยัน
               </button>
             </div>

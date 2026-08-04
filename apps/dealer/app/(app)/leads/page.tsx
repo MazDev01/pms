@@ -266,7 +266,7 @@ function OverviewEditor({ lead, persons, onSave }: {
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
       area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
       project: f.project.trim() || undefined,
-      lostReason: f.status === "CANCELLED" ? (f.lostReason.trim() || undefined) : undefined,
+      lostReason: f.status === "CANCELLED" && f.lostReason.trim() && f.lostReason !== OTHER_REASON ? f.lostReason.trim() : undefined,
     });
   }
 
@@ -334,14 +334,14 @@ function OverviewEditor({ lead, persons, onSave }: {
             {/* เหตุผลไม่ตรงรายการที่ HQ กำหนดไว้เลย → กรอกเองได้ (ค่า lostReason เดิม/พิมพ์เองใหม่ ไม่ผูกกับ
                 รายการตายตัว) — เดิมเลือกได้แค่จากลิสต์ ถ้าเหตุผลจริงไม่มีในนั้นก็บันทึกไม่ได้เลย */}
             {lostReasons.includes(f.lostReason) || f.lostReason === "" ? (
-              <select value={f.lostReason} onChange={e=>set("lostReason", e.target.value === OTHER_REASON ? " " : e.target.value)} style={inp}>
+              <select value={f.lostReason} onChange={e=>set("lostReason", e.target.value)} style={inp}>
                 <option value="">— เลือก —</option>
                 {lostReasons.map(r => <option key={r} value={r}>{r}</option>)}
                 <option value={OTHER_REASON}>อื่นๆ (ระบุเอง)</option>
               </select>
             ) : (
               <span style={{ display:"flex", gap:6, alignItems:"center" }}>
-                <input value={f.lostReason.trim()} onChange={e=>set("lostReason", e.target.value)} placeholder="ระบุเหตุผล…" style={inp} autoFocus />
+                <input value={f.lostReason === OTHER_REASON ? "" : f.lostReason} onChange={e=>set("lostReason", e.target.value)} placeholder="ระบุเหตุผล…" style={inp} autoFocus />
                 <button type="button" onClick={()=>set("lostReason","")} title="กลับไปเลือกจากรายการ" style={{ background:"none", border:"none", cursor:"pointer", color:"#9ca3af", flexShrink:0, padding:4 }}><X size={14}/></button>
               </span>
             )}
@@ -1666,7 +1666,7 @@ export default function LeadsPage() {
                     <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
                     <button type="button" onClick={()=>setPendingLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
                   </div>
-                  <input autoFocus value={pendingLostReason.trim()} onChange={e=>setPendingLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                  <input autoFocus value={pendingLostReason === OTHER_REASON ? "" : pendingLostReason} onChange={e=>setPendingLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
                     style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
                 </>
               )}
@@ -2065,7 +2065,7 @@ export default function LeadsPage() {
                           <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
                           <button type="button" onClick={()=>setQuickLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
                         </div>
-                        <input autoFocus value={quickLostReason.trim()} onChange={e=>setQuickLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                        <input autoFocus value={quickLostReason === OTHER_REASON ? "" : quickLostReason} onChange={e=>setQuickLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
                           style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
                       </>
                     )}
