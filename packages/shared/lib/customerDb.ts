@@ -12,15 +12,10 @@
 //
 // ลูกค้าที่ไม่มีใบปิดการขายจับคู่ได้ → ไม่มีอาคาร/ส่งมอบ = null → หน้าแสดง "—"
 // (ห้ามเดาแทน — ลูกค้า seed หลายรายมี dealsWon แต่ไม่มีใบในระบบ ถือว่าไม่มีข้อมูล)
-import { useMemo, useState, useEffect } from "react";
-import { mainTemplateOf, fmtISOToThai, type HQCustomer } from "@pms/shared/lib/mock";
-import { useNetworkCustomersDb, useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
-import { useSales } from "@pms/shared/context/SalesContext";
+import { useMemo } from "react";
+import { mainTemplateOf, type HQCustomer } from "@pms/shared/lib/mock";
+import { useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { deliveryDateOf, parseThaiDate } from "@pms/shared/lib/delivery";
-import { metrics as metricsRepo } from "@pms/shared/lib/data";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
-import { logRepoRead } from "@pms/shared/lib/repoLog";
-import type { WonBuildingRaw } from "@pms/shared/lib/data/ports";
 
 // ─── ภาค (ข้อเท็จจริงทางภูมิศาสตร์ — ไม่ใช่ข้อมูลธุรกิจที่กุขึ้น) ────────────────────
 // สะกดให้ตรงกับ dealer.region (mock.ts seed / hq/dealers / hq/pipeline) = "อีสาน" ไม่ใช่ "ตะวันออกเฉียงเหนือ"
@@ -82,89 +77,10 @@ export const buildingOf = (q: BuildingSrc): PurchasedBuilding => {
   };
 };
 
-// จับกลุ่มใบ won ตามลูกค้าที่ DB (M9 Phase 2) — supabase เท่านั้น · local คืน null → ใช้ client group เดิม
-// reactive: refetch เมื่อ quotations เปลี่ยน (trigger = อาร์เรย์จาก SalesContext)
-function useCustomerRollup(trigger: unknown): Map<string, WonBuildingRaw[]> | null {
-  const [rollup, setRollup] = useState<Map<string, WonBuildingRaw[]> | null>(null);
-  useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setRollup(null); return; }
-    let alive = true;
-    const t = setTimeout(() => {
-      metricsRepo.customerRollup().then(r => { if (alive) setRollup(r); }).catch(e => logRepoRead("metrics.customerRollup", e));
-    }, 150);
-    return () => { alive = false; clearTimeout(t); };
-  }, [trigger]);
-  return rollup;
-}
-
 /**
- * ลูกค้าทั้งเครือ + ข้อมูลหลังปิดการขายที่ derive จากใบเสนอราคาจริง
- * ไม่มีใบปิดการขาย = buildings ว่าง → ทุกช่องหลังปิดการขายเป็น null
- */
-export function useCustomerDb(): CustomerDbRow[] {
-  const customers = useNetworkCustomersDb();
-  const quotations = useNetworkQuotations();
-  const { salesVersion } = useSales();
-  const rollup = useCustomerRollup(salesVersion); // supabase: group ที่ DB · local/ยังไม่กลับ: null
-
-  return useMemo(() => {
-    // อาคารต่อลูกค้า (BuildingSrc):
-    //   supabase → จาก rollup (group ที่ DB) · date(ISO) → createdAt ไทยด้วย fmtISOToThai (เท่า useNetworkQuotations)
-    //   local/ยังไม่กลับ → จัดใบ won ฝั่ง client ตาม (รหัสตัวแทน|ชื่อลูกค้า) เหมือนเดิม
-    const srcByCustomer = new Map<string, BuildingSrc[]>();
-    if (rollup) {
-      for (const [key, raws] of rollup) {
-        srcByCustomer.set(key, raws.map(r => ({ quoteNo: r.quoteNo, productLine: r.productLine, valueNum: r.valueNum, createdAt: fmtISOToThai(r.date) })));
-      }
-    } else {
-      quotations.forEach(q => {
-        if (q.status !== "won") return;
-        const key = `${q.dealerCode}|${q.customer}`;
-        const b: BuildingSrc = { quoteNo: q.quoteNo, productLine: q.productLine ?? "", valueNum: q.valueNum, createdAt: q.createdAt, deliveryTime: q.deliveryTime };
-        const list = srcByCustomer.get(key);
-        if (list) list.push(b); else srcByCustomer.set(key, [b]);
-      });
-    }
-
-    return customers.map((c): CustomerDbRow => {
-      const won = srcByCustomer.get(`${c.dealerCode}|${c.name}`) ?? [];
-      // เรียงตามวันปิดการขาย เก่า → ใหม่ (ใบที่อ่านวันไม่ได้ไปท้ายสุด)
-      const buildings = won
-        .map(buildingOf)
-        .sort((a, b) => (a.wonAt?.getTime() ?? 0) - (b.wonAt?.getTime() ?? 0));
-
-      // type predicate แทน .filter(b => b.deliveredAt) เฉย ๆ — ให้ TS แคบชนิดจริง ไม่ต้องพึ่ง ! ต่อจากนี้
-      const latest = [...buildings]
-        .filter((b): b is PurchasedBuilding & { deliveredAt: Date } => !!b.deliveredAt)
-        .sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime())
-        .pop() ?? null;
-      const lastBuy = [...buildings].filter(b => b.wonAt).pop() ?? null;
-
-      return {
-        ...c,
-        region: regionOf(c.province),
-        buildings,
-        buildingTypes: [...new Set(buildings.map(b => b.buildingType).filter(Boolean))],
-        templates: [...new Set(buildings.map(b => b.template).filter((t): t is string => !!t))],
-        deliveredAt: latest?.deliveredAt ?? null,
-        lastPurchase: lastBuy?.wonDate ?? null,
-        lastPurchaseAt: lastBuy?.wonAt ?? null,
-        isRepeat: buildings.length > 1,
-      };
-    });
-    // rollup โหลด async (supabase) — ต้องอยู่ใน deps ไม่งั้น memo คืนผลตอน rollup ยังเป็น null
-    // → /hq/customers โชว์อาคาร/ประวัติซื้อว่างทั้งที่มีดีลปิดแล้ว (race กับ salesVersion) · M2
-  }, [customers, quotations, rollup]);
-}
-
-/**
- * เวอร์ชัน "ไม่ยิง fetch เลย" ของ useCustomerDb() — ใช้ useNetworkCustomers() (ไม่ใช่ useNetworkCustomersDb)
- * และไม่เรียก customerRollup RPC เลย (คำนวณจาก quotations ในเครื่องตรง ๆ เสมอ)
- *
- * เหตุผลที่ต้องมีคู่กัน: หน้าที่มี RPC เฉพาะทางของตัวเองแล้ว (เช่น /hq/customers → hq_customers_page,
- * M9 Phase 6) ไม่ควรมีทางดึงข้อมูลทั้งเครือซ้ำสองทางพร้อมกัน — useCustomerDb() เดิมยิง fetch เองไม่ว่าใครเรียก
- * (useNetworkCustomersDb + customerRollup ยิง RPC ทั้งคู่ทันทีที่ DATA_SOURCE=supabase ไม่สนใจว่าหน้าเรียกจะ
- * ใช้ผลจริงหรือไม่) ถ้าเอามาใช้เป็น fallback เฉย ๆ จะได้ full-network fetch ซ้ำอีกชุดโดยไม่จำเป็น
+ * ลูกค้าทั้งเครือ + ข้อมูลหลังปิดการขายที่ derive จากใบเสนอราคาจริง — คำนวณจาก quotations ในเครื่องตรง ๆ เสมอ
+ * ไม่ยิง fetch ทั้งเครือเอง (ไม่มี RPC ของตัวเอง) — ใช้เป็น fallback เฉย ๆ ตอนหน้ามี RPC เฉพาะทางอยู่แล้ว
+ * (เช่น /hq/customers → hq_customers_page, M9 Phase 6)
  *
  * local/demo mode: ได้ค่าจริงปกติ (SalesContext โหลดไว้ในเครื่องอยู่แล้ว ไม่ต้องดึงเพิ่ม)
  * HQ+supabase mode: ว่างเปล่าเสมอ (SalesContext gate ไม่โหลด array ทั้งเครือให้ฝั่ง HQ — ตั้งใจ) — ใช้เป็น

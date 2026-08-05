@@ -63,8 +63,9 @@ function SubtypeEditor({ value, images, onChange, onImagesChange }: {
     setEditIdx(null); setEditText("");
   }
   async function pickImg(name: string, file: File) {
+    // ข้อความจาก imageResize บอกเหตุผลชัด (ชนิดไฟล์/ขนาด/ไฟล์เสีย) — ส่งต่อให้ผู้ใช้ตรง ๆ ดีกว่าข้อความกลาง ๆ
     try { onImagesChange({ ...images, [name]: await fileToResizedDataURL(file, 512, 0.85) }); }
-    catch { alert("อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
+    catch (err) { alert(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
   }
   function clearImg(name: string) { const n = { ...images }; delete n[name]; onImagesChange(n); }
 
@@ -118,7 +119,7 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (v: string)
     if (!file) return;
     setBusy(true);
     try { onChange(await fileToResizedDataURL(file, 512, 0.85)); }
-    catch { alert("อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
+    catch (err) { alert(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
     finally { setBusy(false); }
   }
   return (

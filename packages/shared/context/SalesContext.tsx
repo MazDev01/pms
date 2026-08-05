@@ -210,6 +210,8 @@ export function SalesProvider({
   // auto-link ไฟล์ใบเสนอราคา (metadata) ผ่าน repository — แทน syncAddQuotationFile/Remove เดิม (Phase 6)
   const fileScopeRef = useRef({ dealerCode, isHQ, myDealerCode });
   fileScopeRef.current = { dealerCode, isHQ, myDealerCode };
+  // เงียบโดยตั้งใจทั้งสองเมธอด: เป็นงานเบื้องหลังผูก "ไฟล์ใบเสนอราคา" ให้อัตโนมัติ ไม่ใช่ข้อมูลที่ผู้ใช้
+  // กำลังรออ่านบนจอ — ล้มเหลวแล้วแค่ไม่มีไฟล์อัตโนมัติ (แนบเองได้) ไม่ควรเด้งแถบเตือนกวนตอนกดบันทึกสำเร็จ
   const syncQuoteFile = useRef({
     add: (q: QuotationMock) => {
       const s = fileScopeRef.current;
@@ -252,6 +254,8 @@ export function SalesProvider({
       console.error(`[${entity}] ${op}`, e);
       setSyncError(`บันทึกไม่สำเร็จ: ${op} — ${friendlyError(e)}`);
       const scope = { dealerCode, isHQ };
+      // เงียบโดยตั้งใจ: บรรทัดบนแจ้งผู้ใช้ไปแล้ว (setSyncError) — การดึงข้อมูลกลับมาทับตรงนี้เป็นแค่
+      // ความพยายามกู้สภาพ ถ้าแจ้งซ้ำจะได้ข้อความเตือน 2 อันจากความผิดพลาดครั้งเดียว
       if (entity === "leads") leadsRepo.list(scope).then(setLeads).catch(() => {});
       else if (entity === "quotations") quotationsRepo.list(scope).then(setQuotations).catch(() => {});
       else if (entity === "customers") customersRepo.list(scope).then(setCustomers).catch(() => {});

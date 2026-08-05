@@ -62,3 +62,23 @@ export function useCustomerNotes(author = ""): UseCustomerNotes {
 
   return { notes, loaded, add, update, remove };
 }
+
+/** โน้ตของลูกค้า — มุมมอง HQ (อ่านอย่างเดียว ข้ามสาขาได้ ตาม RLS customer_notes_select: is_hq() or ...)
+ *  เดิม HQ ไม่มีทางอ่านตารางนี้เลยแม้ RLS จะอนุญาตไว้แล้ว — ใช้ scope { dealerCode, isHQ:false } เพื่อกรองที่ query
+ *  ตรง ๆ (ไม่ใช่ isHQ:true ที่จะดึงทั้งเครือมาโดยไม่จำเป็น เพราะแผงนี้ดูทีละลูกค้า/ทีละสาขาเท่านั้น) */
+export function useCustomerNotesForDealer(dealerCode: string): { notes: CustomerNote[]; loaded: boolean } {
+  const [notes, setNotes] = useState<CustomerNote[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!dealerCode) { setNotes([]); setLoaded(true); return; }
+    let alive = true;
+    setLoaded(false);
+    repo.list({ dealerCode, isHQ: false })
+      .then(rows => { if (alive) { setNotes(rows); setLoaded(true); } })
+      .catch(e => { logRepoRead("notes.list(hq)", e); if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [dealerCode]);
+
+  return { notes, loaded };
+}

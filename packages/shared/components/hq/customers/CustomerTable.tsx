@@ -7,6 +7,7 @@ import { Eye } from "lucide-react";
 import { customerCode, fmtISOToThai } from "@pms/shared/lib/mock";
 import { regionOf } from "@pms/shared/lib/customerDb";
 import type { HQCustomerPageRow } from "@pms/shared/lib/data/ports";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 
 const PRIMARY = "#003366";
 const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
@@ -81,7 +82,9 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
             </tr>
           ) : (
             rows.map(c => (
-              <tr key={c.id} onClick={() => onView(c)} style={{ cursor: "pointer" }}>
+              // c.id นับแยกต่อสาขา (ไม่ใช่เลขทั้งเครือ) — สาขาต่างกันมี id ชนกันได้ปกติ (เช่นทุกสาขามีลูกค้า id=1)
+              // key ต้องกันชนด้วย dealerCode คู่กัน ไม่งั้น React เจอ key ซ้ำข้ามสาขา (duplicate key warning จริง)
+              <ClickableRow key={`${c.dealerCode}-${c.id}`} onActivate={() => onView(c)} label={`เปิดรายละเอียดลูกค้า ${c.name}`}>
                 <td style={{ whiteSpace: "nowrap", fontWeight: 700, color: PRIMARY, fontFamily: "monospace" }}>
                   {customerCode(c.dealerCode, c.id)}
                 </td>
@@ -105,7 +108,7 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
                     </button>
                   </div>
                 </td>
-              </tr>
+              </ClickableRow>
             ))
           )}
         </tbody>

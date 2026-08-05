@@ -7,7 +7,6 @@ import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 
 const FORGOT_MSG = "กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th";
-const DEMO_PASSWORD = "benjamin";
 
 // ── inline SVG (feather/lucide style) — ไม่พึ่ง icon library ──
 const IconMail = () => (
@@ -32,31 +31,22 @@ const IconEyeOff = () => (
   </svg>
 );
 
-type DemoRole = "hq" | "dealer";
-const DEMO = [
-  { role: "hq" as const,     badge: "HQ", tone: "bg-[#0e2a5c]", title: "สำนักงานใหญ่ (HQ)", sub: "ผู้ดูแลระบบ", email: "admin@benjamin.com" },
-  { role: "dealer" as const, badge: "D",  tone: "bg-[#2563eb]", title: "ตัวแทนเชียงใหม่",   sub: "CNX Dealer",  email: "cnx@dealer.com" },
-];
-
 export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" | "hq" }) {
-  const { signIn, login } = useRole();
+  const { signIn } = useRole();
   const router = useRouter();
   const isHQ = variant === "hq";
-  // แต่ละพอร์ทัลแสดงเฉพาะบัญชีทดลองของตัวเอง — HQ→บัญชี HQ · dealer→บัญชีตัวแทน (ไม่ปนกัน)
-  const demoAccounts = DEMO.filter((d) => d.role === (isHQ ? "hq" : "dealer"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [quick, setQuick] = useState<DemoRole | null>(null);
   // "ลืมรหัสผ่าน?" — โหมด supabase ส่งลิงก์ตั้งรหัสใหม่ทางอีเมลจริง (H4/sbSendPasswordReset)
   //   โหมด local (เดโม) ไม่มีระบบยืนยันตัวตนจริงให้ส่งอีเมล → คงข้อความ "ติดต่อ HQ" เดิมไว้
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMsg, setForgotMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const busy = loading || quick !== null;
+  const busy = loading;
   const go = (scopeAll: boolean) => router.push(scopeAll ? "/hq/dashboard" : "/dashboard");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -69,21 +59,11 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     else { setError(r.error); setLoading(false); }
   }
 
-  // ปุ่มบัญชีทดลอง — เข้าสู่ระบบทันทีตามบทบาท (ปุ่มเขียน "เข้าสู่ระบบ" จึงต้องเข้าจริง)
-  // เติมช่องอีเมล/รหัสให้เห็นด้วยว่าล็อกอินด้วยบัญชีไหน แล้วเข้าระบบเลย
-  async function quickLogin(role: DemoRole, demoEmail: string) {
-    if (busy) return;
-    setError(null);
-    setEmail(demoEmail);
-    setPassword(DEMO_PASSWORD);
-    setQuick(role);
-    await login(role);
-    go(role === "hq");
-  }
-
   // ใช้อีเมลในช่องที่กรอกไว้แล้ว — ไม่ต้องเปิดฟอร์มใหม่ซ้อน
+  // ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตรหัสผ่านเอง — HQ เป็นผู้คุมรหัสผ่านของตัวแทนทั้งหมด (บอสสั่ง)
+  // จึงเปิดลิงก์รีเซ็ตทางอีเมลจริงให้เฉพาะฝั่ง HQ เท่านั้น ฝั่งตัวแทนให้ไปติดต่อ HQ เสมอ
   async function handleForgot() {
-    if (DATA_SOURCE !== "supabase") { alert(FORGOT_MSG); return; } // โหมดเดโมไม่มีอีเมลจริงให้ส่ง
+    if (DATA_SOURCE !== "supabase" || !isHQ) { alert(FORGOT_MSG); return; } // โหมดเดโม/ฝั่งตัวแทน ไม่มีสิทธิ์รีเซ็ตเอง
     const e = email.trim();
     if (!/^\S+@\S+\.\S+$/.test(e)) {
       setForgotMsg({ ok: false, text: "กรอกอีเมลในช่องด้านบนก่อน แล้วกด \"ลืมรหัสผ่าน?\" อีกครั้ง" });
@@ -169,36 +149,6 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                 : "เข้าสู่ระบบ"}
             </button>
           </form>
-
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-4" role="separator">
-            <span className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs font-medium text-slate-400">หรือ</span>
-            <span className="h-px flex-1 bg-slate-200" />
-          </div>
-
-          {/* Demo Accounts */}
-          <p className="mb-2.5 text-[0.82rem] font-bold text-[#0e2a5c]">Demo Accounts</p>
-          <div className="grid grid-cols-1 gap-2.5">
-            {demoAccounts.map((d: (typeof DEMO)[number]) => (
-              <div key={d.role} className="flex flex-col gap-2.5 rounded-xl border border-slate-200 p-3.5 transition hover:border-[#2563eb] hover:shadow-[0_10px_30px_-12px_rgba(14,42,92,0.18)]">
-                <div className="flex items-center gap-3">
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${d.tone} text-[0.7rem] font-bold text-white`}>{d.badge}</span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[0.82rem] font-bold text-slate-800">{d.title}</span>
-                    <span className="block truncate text-[0.7rem] text-slate-500">{d.sub}</span>
-                  </span>
-                </div>
-                <p className="truncate text-[0.72rem] text-slate-500">{d.email}</p>
-                <button type="button" onClick={() => quickLogin(d.role, d.email)} disabled={busy}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 py-2 text-[0.8rem] font-bold text-[#0e2a5c] transition hover:border-[#2563eb] hover:bg-[#eef4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 disabled:cursor-not-allowed disabled:opacity-60">
-                  {quick === d.role
-                    ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0e2a5c]/30 border-t-[#0e2a5c]" aria-hidden="true" />
-                    : "เข้าสู่ระบบ"}
-                </button>
-              </div>
-            ))}
-          </div>
 
           {/* Helper */}
           <p className="mt-4 text-center text-[0.8rem] text-slate-500">

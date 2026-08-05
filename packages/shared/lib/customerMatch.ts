@@ -32,7 +32,9 @@ export function looseKey(company: string): string {
   return s.replace(/[.,\-–—·]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-type CustomerLike = { id: number; company: string; dealerCode?: string };
+// id รับได้ทั้ง number (ลูกค้า) และ string (ลีด) — ใช้แค่เทียบว่าเป็นแถวเดียวกันไหมตอนตัดตัวที่ตรงเป๊ะ
+// ออกจากรายการ "ชื่อใกล้เคียง" ไม่ได้เอาไปคำนวณอะไร · ฟอร์มลีดใช้ฟังก์ชันนี้กับทั้งสองชุด
+type CustomerLike = { id: number | string; company: string; dealerCode?: string };
 
 /**
  * หาลูกค้าที่เข้าคู่กับชื่อบริษัทนี้ ภายในสาขาเดียวกันเท่านั้น (คนละสาขา = คนละสมุดลูกค้า)

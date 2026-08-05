@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import {
   buildLeadTasks, leadStatusLabel, leadStatusColor, QUOTED_UP, DEFAULT_DEALER_CODE,
-  quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, loadHQPolicy, customerCode,
-  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel, DEFAULT_DELIVERY_DAYS,
+  quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, customerCode,
+  DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel, DEFAULT_DELIVERY_DAYS,
   type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile,
   type AppointmentMock,
@@ -38,14 +38,16 @@ import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
 import { useTableLayout, type Col } from "@pms/shared/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/components/ui/ActivityTimeline";
-import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonPicker";
+import { PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { LeadQuotationsPanel } from "@pms/shared/components/ui/LeadQuotationsPanel";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
-import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
+import { Donut } from "@pms/shared/components/ui/Charts";
 import { TemplateHero } from "@pms/shared/components/ui/TemplateHero";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRow";
@@ -54,10 +56,10 @@ import { useFilters, APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterCont
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
   Plus, X, ChevronUp, ChevronDown, Upload, Download,
-  Phone, Building2, ExternalLink,
+  Phone, Building2,
   Trash2,
-  Calendar, FileText, StickyNote, Check, User, Paperclip, Eye, Hash, Printer,
-  MapPin, Mail, Coins, Layers, TrendingUp, Percent, PhoneCall, CalendarClock,
+  Calendar, FileText, StickyNote, Check, User, Paperclip, Eye, Printer,
+  MapPin, Mail, Coins, Layers, TrendingUp, CalendarClock,
   Users, UserPlus, Package, ChevronRight, History as HistoryIcon,
 } from "lucide-react";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
@@ -302,12 +304,17 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
   });
   const [f, setF] = useState<CustomerForm>(seed);
   const logoRef = useRef<HTMLInputElement>(null);
-  useEffect(()=>{ setF(seed()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [customer.id]);
+  // ตั้งค่าฟอร์มใหม่เฉพาะตอน "สลับไปลูกค้าคนอื่น" เท่านั้น — จงใจไม่ใส่ seed ใน dependency
+  // (seed ถูกสร้างใหม่ทุก render จะทำให้ล้างสิ่งที่ผู้ใช้กำลังพิมพ์อยู่ทิ้งทุกครั้ง)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(seed()); }, [customer.id]);
   const set = <K extends keyof CustomerForm>(k:K,v:CustomerForm[K])=>setF(p=>({...p,[k]:v}));
   async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>){
     const file = e.target.files?.[0];
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if(!file) return;
-    set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
+    try { set("logo", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
+    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
   }
   const dirty = (Object.keys(f) as (keyof CustomerForm)[]).some(k => (f[k] ?? "") !== ((customer as unknown as CustomerForm)[k] ?? ""));
 
@@ -457,7 +464,6 @@ export default function CustomersPage(){
     };
     window.addEventListener("bpms:open-record", onOpen);
     return () => window.removeEventListener("bpms:open-record", onOpen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // รายชื่อผู้รับผิดชอบดึงจาก PersonPicker เอง (registry กลาง) — ไม่ต้องเก็บ list ที่นี่
   // โมดัลรายละเอียด: ปิดด้วย Esc + ล็อกสกรอลล์พื้นหลัง (parity กับ RightDrawer)
@@ -505,7 +511,7 @@ export default function CustomersPage(){
       const myReq = ++dealerFilesReqRef.current;
       filesRepo.list({ dealerCode: currentDealer.code, isHQ: false })
         .then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); })
-        .catch(() => {});
+        .catch(e => logRepoRead("files.list", e));
     };
     sync();
     window.addEventListener(DEALER_FILES_EVENT, sync);
@@ -540,7 +546,8 @@ export default function CustomersPage(){
         uploadedAt: APP_NOW_ISO, source: "customer", recordId: selected.id, customerId: selected.id, dealerCode: currentDealer.code,
         ...(storagePath ? { storagePath } : {}),
       }))
-      .then(() => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles)).catch(() => {});
+      .then(() => filesRepo.list({ dealerCode: currentDealer.code, isHQ: false }).then(setDealerFiles))
+      .catch(e => logRepoRead("files.add/list", e));
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
   // ไฟล์ของลูกค้าที่เลือก — ผูกด้วย customerId หรือแนบตรงกับลูกค้า
@@ -890,9 +897,10 @@ export default function CustomersPage(){
                     // จำนวนโครงการ = ใบเสนอราคาที่ปิดการขายจริง (ยังไม่ซื้อ = "—" ไม่เดา)
                     const projects = purchasedGroupsFor(c.id, quotations).reduce((n,g)=>n+g.projects.length,0);
                     return (
-                      <tr key={c.id} className="clickable"
-                        onClick={()=>{ setSelected(c); setCustTab("overview"); setShowDeleteConfirm(false); }}
-                        style={{ cursor:"pointer", background: selected?.id===c.id ? "#f4f8fd" : undefined }}>
+                      <ClickableRow key={c.id} className="clickable"
+                        onActivate={()=>{ setSelected(c); setCustTab("overview"); setShowDeleteConfirm(false); }}
+                        label={`เปิดรายละเอียดลูกค้า ${c.company}`}
+                        style={{ background: selected?.id===c.id ? "#f4f8fd" : undefined }}>
                         <td style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={c.company}>
                           <span style={{ display:"inline-flex", alignItems:"center", gap:9, minWidth:0, maxWidth:"100%" }}>
                             <span style={{ width:28, height:28, borderRadius:8, flexShrink:0, background:c.color||PRIMARY, color:"#fff",
@@ -920,7 +928,7 @@ export default function CustomersPage(){
                             </button>
                           </div>
                         </td>
-                      </tr>
+                      </ClickableRow>
                     );
                   })}
                 </tbody>

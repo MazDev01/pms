@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  DollarSign, MapPin, Trophy, Building2, XCircle, Percent,
-  FileText, ChevronRight, Users2, CalendarClock,
-  ArrowUpRight, ArrowDownRight, Target, Activity, RefreshCw, Info,
+  Trophy, Building2,
+  FileText, ChevronRight, Users2,
+  Target, Info,
 } from "lucide-react";
 import { PlanVsActualBars, GroupedBarChart, Donut, ProgressRing, CategoryRows } from "@pms/shared/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/components/ui/ActivityTimeline";
@@ -15,7 +15,7 @@ import {
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
-  HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY, quotationStatusLabel, quotationStatusColor, loadHQPolicy, hqAuditCategory,
+  DEFAULT_HQ_TARGETS, hqAuditCategory,
   DEFAULT_DEALER_CODE,
   type DealerRow, type HQTargets,
 } from "@pms/shared/lib/mock";
@@ -47,30 +47,12 @@ const parseThaiDate = (s: string): Date | null => {
 };
 const addDaysD = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 
-// ── แผนที่ความครอบคลุมรายภูมิภาค — สี heat ตามยอดขาย (tier) ──
-const tierColor = (rev: number) => rev >= 10e6 ? "#003366" : rev >= 5e6 ? "#3b6fb5" : rev >= 1e6 ? "#93b4dd" : rev > 0 ? "#cdddf0" : "#eef1f5";
-const TIER_LEGEND = [
-  { label: "มากกว่า 10M", color: "#003366" },
-  { label: "5M – 10M", color: "#3b6fb5" },
-  { label: "1M – 5M", color: "#93b4dd" },
-  { label: "น้อยกว่า 1M", color: "#cdddf0" },
-  { label: "ไม่มีข้อมูล", color: "#eef1f5" },
-];
 // regionDisplay = ใช้ของกลาง (hqQuotations.ts) แหล่งเดียว — เดิม copy ในไฟล์นี้ไม่มี guard "ไม่ระบุ" (1.4)
-// จังหวัดที่ตั้งของตัวแทน (ตามรหัสสาขา) — ใช้ในตารางสรุปผลงาน
-const DEALER_PROVINCE: Record<string, string> = {
-  RYG: "ระยอง", CNX: "เชียงใหม่", MST: "ตาก", CRI: "เชียงราย", NSN: "นครสวรรค์",
-  HYI: "สงขลา", AYA: "พระนครศรีอยุธยา", KKN: "ขอนแก่น", UBN: "อุบลราชธานี", PKT: "ภูเก็ต",
-};
-// รูปทรงภูมิภาค — 6 ภาคต่อขอบกันเป็นเงาประเทศไทย (ใช้จุดร่วมขอบเพื่อไม่ให้มีช่องว่าง) viewBox 0 0 160 260
-const THAI_REGION_PATHS: Record<string, string> = {
-  "เหนือ":     "M54 42 L56 22 L62 11 L96 8 L110 38 L96 60 L72 62 Z",
-  "อีสาน":     "M110 38 L148 46 L150 104 L118 120 L100 104 L96 60 Z",
-  "กลาง":      "M72 62 L96 60 L100 104 L86 124 L70 116 L68 88 Z",
-  "ตะวันตก":   "M54 42 L72 62 L68 88 L70 116 L62 150 L50 150 L42 110 L44 70 Z",
-  "ตะวันออก":  "M100 104 L118 120 L130 144 L100 150 L86 124 Z",
-  "ใต้":       "M62 150 L70 116 L86 124 L88 150 L82 190 L74 224 L64 252 L56 252 L54 214 L58 178 Z",
-};
+//
+// เคยมีชุดข้อมูลสำหรับ "แผนที่ความครอบคลุมรายภูมิภาค" อยู่ตรงนี้ (tierColor / TIER_LEGEND /
+// THAI_REGION_PATHS / DEALER_PROVINCE) แต่ไม่มีที่ไหนเรียกใช้แล้ว — ตัวแผนที่เองก็ไม่ได้ถูกวางบนหน้า
+// ลบออกพร้อมกัน (ตรวจสอบระบบ 5 ส.ค. 69) · ถ้าจะทำแผนที่อีกครั้ง ควรทำเป็นคอมโพเนนต์กลางใน
+// @pms/shared/components/ui/Charts เพื่อให้หน้าอื่นใช้ร่วมได้ ไม่ใช่เขียนซ้ำในหน้าเดียว
 
 export default function HQDashboard() {
   const router = useRouter();
@@ -746,7 +728,13 @@ export default function HQDashboard() {
               <span style={{ flex: 1 }} /><span style={{ flex: "0 0 44px", textAlign: "right" }}>ยอดขาย</span><span style={{ flex: "0 0 34px", textAlign: "right" }}>% เป้า</span><span style={{ flex: "0 0 44px", textAlign: "right" }}>อัตราปิด</span>
             </div>
             {(() => { const maxRev = Math.max(...rankedWin.map(d => d.revenueW), 1); return rankedWin.slice(0, 10).map((d, i) => (
-              <div key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+              // แถวอันดับนี้คลิกไปหน้าตัวแทนได้ — ต้องกดด้วยคีย์บอร์ดได้ด้วย (role/tabIndex/Enter-Space)
+              // ไม่เปลี่ยนเป็น <button> เพราะข้างในมีแถบกราฟที่เป็น div (ปุ่มรับได้แต่เนื้อหาแบบ phrasing)
+              <div key={d.code} className="clickable" role="button" tabIndex={0}
+                aria-label={`เปิดหน้าตัวแทน ${d.name}`}
+                onClick={() => router.push(`/hq/dealers/${d.code}`)}
+                onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); router.push(`/hq/dealers/${d.code}`); } }}
+                style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 16, textAlign: "center", fontSize: "0.74rem", fontWeight: 700, color: "#6b7280", flexShrink: 0 }}>{i + 1}</span>
                 <span style={{ flex: "0 0 84px", fontSize: "0.76rem", fontWeight: 700, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name.replace("Benjamin ", "")}</span>
                 <div style={{ flex: 1, height: 8, background: "var(--muted)", borderRadius: 999, overflow: "hidden", minWidth: 20 }}>
@@ -792,80 +780,9 @@ export default function HQDashboard() {
   );
 }
 
-// ── กราฟแท่งเคียงข้าง (Grouped Bar) — 3 ชุดต่อเดือน ──
-function GroupedBar({ months, series }: { months: string[]; series: { name: string; color: string; data: number[] }[] }) {
-  const max = Math.max(...series.flatMap(s => s.data), 1);
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 6, height: 176 }}>
-        {months.map((mo, mi) => (
-          <div key={mi} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 150, justifyContent: "center" }}>
-              {series.map(s => (
-                <div key={s.name} title={`${s.name}: ${s.data[mi] ?? 0}`}
-                  style={{ width: 7, height: Math.max(2, Math.round((s.data[mi] ?? 0) / max * 140)), background: s.color, borderRadius: "3px 3px 0 0" }} />
-              ))}
-            </div>
-            <span style={{ fontSize: "0.68rem", color: "var(--muted-foreground)" }}>{mo}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
-        {series.map(s => (
-          <span key={s.name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.72rem", color: "#374151" }}>
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: s.color }} />{s.name}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // วงแหวนความคืบหน้าใช้ ProgressRing จาก @pms/shared/components/ui/Charts — แหล่งเดียวร่วมกับแดชบอร์ดตัวแทน
 // (เดิมเขียนซ้ำไว้ที่นี่ แต่ตกตัวแก้ที่ทำให้แอนิเมชันวิ่ง วงแหวนเลยนิ่งอยู่ที่ค่าจริงตั้งแต่เฟรมแรก)
 
-// ── มินิกราฟบนการ์ด KPI (เส้น + พื้นไล่เฉด) ──
-function Sparkline({ data, color }: { data: number[]; color: string }) {
-  const w = 100, h = 32;
-  if (!data.length) return <div style={{ height: h }} />;
-  const max = Math.max(...data, 1), min = Math.min(...data, 0), rng = (max - min) || 1;
-  const pts = data.map((v, i) => [data.length > 1 ? (i / (data.length - 1)) * w : 0, h - 3 - ((v - min) / rng) * (h - 7)] as [number, number]);
-  const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-  const id = "sp" + color.replace("#", "");
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
-      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity="0.22" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
-      <path d={`${line} L${w},${h} L0,${h} Z`} fill={`url(#${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-// ── สถานะใบเสนอราคา — กราฟแท่งแนวตั้ง ──
-function StatusBars({ data }: { data: { label: string; color: string; count: number }[] }) {
-  const max = Math.max(...data.map(d => d.count), 1);
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 6, height: 168 }}>
-      {data.map(s => (
-        <div key={s.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 0 }}>
-          <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#1F2937" }}>{s.count}</span>
-          <div style={{ width: "62%", maxWidth: 30, height: Math.max(4, Math.round(s.count / max * 118)), background: s.color, borderRadius: "6px 6px 0 0" }} />
-          <span style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── แผนที่ภูมิภาคประเทศไทย (สไตไลซ์) — เติมสี heat ตามยอดขายรายภาค ──
-function ThailandMap({ regionRevenue }: { regionRevenue: Record<string, number> }) {
-  return (
-    <svg width="150" height="238" viewBox="0 0 160 262" style={{ display: "block" }}>
-      {Object.entries(THAI_REGION_PATHS).map(([region, d]) => (
-        <path key={region} d={d} fill={tierColor(regionRevenue[region] ?? 0)} stroke="#fff" strokeWidth="1.5">
-          <title>{regionDisplay(region)} · {Math.round((regionRevenue[region] ?? 0) / 1e6 * 10) / 10}M</title>
-        </path>
-      ))}
-    </svg>
-  );
-}
+// เคยมีกราฟที่เขียนไว้เองในไฟล์นี้อีก 4 ตัว (GroupedBar / Sparkline / StatusBars / ThailandMap)
+// แต่ไม่มีที่ไหนเรียกใช้เลย — เหลือค้างจากตอนย้ายไปใช้กราฟกลางใน @pms/shared/components/ui/Charts
+// ลบออกแล้ว (ตรวจสอบระบบ 5 ส.ค. 69) ถ้าต้องการกราฟแบบนั้นอีก ให้เพิ่มที่ Charts.tsx เพื่อใช้ร่วมกัน

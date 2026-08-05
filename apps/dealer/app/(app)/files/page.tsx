@@ -8,11 +8,13 @@ import {
 } from "@pms/shared/lib/mock";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
-  FileText, FileSpreadsheet, Image, Plus,
+  FileText, FileSpreadsheet, Image as ImageIcon, Plus,
   FileSignature, PenTool, Presentation, Files, Eye, Pencil,
 } from "lucide-react";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
@@ -63,7 +65,7 @@ function catIcon(cat: FileCategory, size = 15) {
   const color = CAT_COLORS[cat].text;
   if (cat === "ใบเสนอราคา") return <FileText size={size} color={color} />;
   if (cat === "แบบแปลน")    return <PenTool size={size} color={color} />;
-  if (cat === "รูปภาพ")     return <Image size={size} color={color} />;
+  if (cat === "รูปภาพ")     return <ImageIcon size={size} color={color} />;
   if (cat === "นำเสนอ")     return <Presentation size={size} color={color} />;
   if (cat === "สัญญา")      return <FileSignature size={size} color={color} />;
   return <Files size={size} color={color} />;
@@ -76,7 +78,7 @@ function extIcon(ext: FileExt) {
   if (ext === "docx") return <FileText  size={sz} color="#003366" />;
   if (ext === "pptx") return <FileText  size={sz} color="#d97706" />;
   if (ext === "dwg")  return <File      size={sz} color="#2D2D2D" />;
-  if (ext === "jpg" || ext === "png") return <Image size={sz} color="#003366" />;
+  if (ext === "jpg" || ext === "png") return <ImageIcon size={sz} color="#003366" />;
   return <File size={sz} color={MUTED} />;
 }
 function extLabel(ext: FileExt) {
@@ -342,7 +344,7 @@ function PreviewBody({ f }: { f: FileMock }) {
     );
   }
 
-  // รูปภาพ — กรอบภาพ + gradient + ไอคอน Image
+  // รูปภาพ — กรอบภาพ + gradient + ไอคอนรูปภาพ
   if (f.ext === "jpg" || f.ext === "png") {
     return (
       <div style={{ padding: 24, background: "#eceef0", display: "flex", justifyContent: "center" }}>
@@ -352,7 +354,7 @@ function PreviewBody({ f }: { f: FileMock }) {
           background: "#003366",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
         }}>
-          <Image size={56} color="rgba(255,255,255,.9)" />
+          <ImageIcon size={56} color="rgba(255,255,255,.9)" />
           <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fff", textAlign: "center", padding: "0 20px", wordBreak: "break-word" }}>{f.name}</div>
           <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)" }}>{f.size} · {extLabel(f.ext)}</div>
         </div>
@@ -446,9 +448,10 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
             {/* มีไฟล์จริงใน Storage เท่านั้นจึงโหลดได้ (โหมด local เก็บแค่ metadata → ไม่ขึ้นปุ่มนี้) */}
             {file.storagePath && (
               <button className="btn btn-secondary btn-md" onClick={() => {
+                // ผู้ใช้กดปุ่มแล้วต้องเกิดอะไรสักอย่าง — ล้มเหลวเงียบ = กดแล้วไม่มีอะไรเกิดขึ้น แยกไม่ออกจากปุ่มเสีย
                 void fileStorage.signedUrl(file.storagePath!)
                   .then(url => { if (url) window.open(url, "_blank", "noopener"); })
-                  .catch(() => {});
+                  .catch(e => logRepoRead("storage.signedUrl", e));
               }}>ดาวน์โหลดไฟล์จริง</button>
             )}
             <button onClick={onClose} className="btn btn-primary btn-md">ปิด</button>
@@ -475,7 +478,7 @@ export default function FilesPage() {
     const myReq = ++reloadReqRef.current;
     return filesRepo.list({ dealerCode: currentDealer.code, isHQ: false })
       .then(r => { if (reloadReqRef.current === myReq) setFiles(r); })
-      .catch(() => {});
+      .catch(e => logRepoRead("files.list", e));
   };
   useEffect(() => {
     reloadFiles().then(() => setLoaded(true));
@@ -678,7 +681,7 @@ export default function FilesPage() {
                   </td></tr>
                 ) : null}
                 {paged.map(f => (
-                  <tr key={f.id} onClick={() => setPreviewId(f.id)} style={{ cursor: "pointer" }}>
+                  <ClickableRow key={f.id} onActivate={() => setPreviewId(f.id)} label={`เปิดรายละเอียดไฟล์ ${f.name}`}>
                     <td style={{ maxWidth: 260 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ background: extBg(f.ext), borderRadius: 8, padding: 7, display: "flex", flexShrink: 0 }}>{extIcon(f.ext)}</div>
@@ -729,7 +732,7 @@ export default function FilesPage() {
                         </button>
                       </div>
                     </td>
-                  </tr>
+                  </ClickableRow>
                 ))}
               </tbody>
             </table>

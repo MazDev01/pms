@@ -5,7 +5,6 @@ export type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap, QuoteNumbering,
 } from "@pms/shared/lib/mock";
-export type { AuditEntry } from "@pms/shared/lib/useAudit";
 export type { IssuerProfile, NotifPrefs, UserProfile } from "@pms/shared/lib/mock";
 export type { DocProfile } from "@pms/shared/lib/quotationPrint";
 
@@ -18,6 +17,18 @@ export type DealerSettings = {
   wordmark: string;     // โลโก้พร้อมชื่อสำหรับหัวเอกสาร (data URI) · "" = ยังไม่ตั้ง
   logo: string;         // โลโก้สัญลักษณ์ (ไอคอน) บนแถบเมนู · "" = ยังไม่ตั้ง
   notifPrefs: _Notif;   // การแจ้งเตือนที่สาขาเปิด/ปิดเอง
+};
+
+// รายการในบันทึกตรวจสอบ (audit_log) — ใครทำอะไร เมื่อไหร่
+//
+// นิยามไว้ที่นี่ ไม่ใช่ที่ useAudit.ts: ไฟล์นี้คือ "สัญญาข้อมูลกลาง" ที่ทุกอย่างในชั้นข้อมูลอ้างถึง
+// เดิม re-export มาจาก useAudit.ts (ซึ่งเป็น React hook) ทำให้เกิดวงจร import ย้อนกลับ:
+//   types.ts → useAudit.ts → RoleContext.tsx → data/index.ts → LocalAdapter.ts → ports.ts → types.ts
+// ตอนนั้นยังไม่พังเพราะเป็น import แบบ type ล้วน (ถูกตัดทิ้งตอนคอมไพล์) แต่เปราะมาก —
+// วันไหนมีใครเปลี่ยนเป็นการ import ค่าจริง จะกลายเป็นวงจรตอนรัน (ค่าเป็น undefined ตอน render แรก)
+// ย้ายมาไว้ที่นี่แล้วให้ useAudit.ts import กลับไปแทน = ทิศทางถูกต้อง วงจรหายถาวร
+export type AuditEntry = {
+  id: number; user: string; role: string; action: string; target: string; at: string;
 };
 
 // ข้อมูลบริษัทของสำนักงานใหญ่ (แถวเดียวทั้งระบบ)

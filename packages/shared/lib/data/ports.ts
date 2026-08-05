@@ -161,8 +161,6 @@ export interface QuoteSummaryFilters {
   dateEnd?: string;
   asOf?: string; // "วันนี้ของระบบ" (APP_NOW ISO) สำหรับคิดอายุใบ
 }
-/** อาคารที่ลูกค้าซื้อ (ใบ won) — ดิบจาก DB · client คิด mainTemplate/วันส่งมอบต่อ (M9 Phase 2) */
-export interface WonBuildingRaw { quoteNo: string; productLine: string; valueNum: number; date: string; }
 /** สรุปลีด "หลังกรอง" สำหรับ /hq/leads (M9 Phase 2) */
 export interface LeadMonthRow { y: number; m: number; created: number; won: number; lost: number; }
 export interface LeadSummary {
@@ -242,8 +240,6 @@ export interface MetricsRepo {
   dealerRollup(year: number, opts?: DealerRollupOpts): Promise<Map<string, DealerRollup>>;
   /** สรุปลีดหลังกรอง (byStatus/bySource/byProduct/byLostReason/byMonth) — ป้อน analytics หน้า /hq/leads */
   leadSummary(filters: LeadSummaryFilters): Promise<LeadSummary>;
-  /** ใบ won จับกลุ่มตามลูกค้า (key = `${dealerCode}|${customer}`) — ป้อน useCustomerDb (M9 Phase 2) */
-  customerRollup(): Promise<Map<string, WonBuildingRaw[]>>;
   /** สรุปใบหลังกรอง (byDealer/byMonth/byProduct/aging) — ป้อน analytics หน้า /hq/quotations (M9 Phase 2) */
   hqQuotationsSummary(filters: QuoteSummaryFilters): Promise<HQQuotationsSummary>;
   /** สถิติใบในช่วง [start,end] (ISO YYYY-MM-DD, inclusive) รายสาขา (key = dealerCode)

@@ -206,26 +206,24 @@ test("[stress] 10 ตัวแทนทำงานพร้อมกันเ�
   const contexts = await Promise.all(provisioned.map(() => browser.newContext()));
   const sessions = await Promise.all(provisioned.map((d, i) => openAsDealer(contexts[i], d)));
 
-  // แยก error "รู้อยู่แล้ว" (reconcileWonTotal ไม่มี retry เจอตอนพัฒนาเทสต์นี้ — รายงานแยกต่างหาก
-  // ไม่ล้มทั้งเทสต์ เพื่อให้เห็นภาพรวมทั้งหมดของโหลด 10 สาขาต่อไปได้) ออกจาก error อื่นที่ต้องล้มจริง
-  const softErrors: { code: string; msg: string }[] = [];
+  // error ทุกตัวต้องทำให้เทสต์ล้ม — ไม่มีข้อยกเว้นอีกต่อไป
+  //
+  // เดิมกรอง error ที่มีคำว่า reconcileWonTotal / "คำนวณยอดลูกค้าใหม่" ออกไปเป็น "soft error" แค่ log
+  // เพราะตอนเขียนเทสต์นี้ reconcileWonTotal ยังไม่มี retry จึงพลาดเป็นครั้งคราวจริง
+  // แต่ต้นเหตุนั้นถูกแก้ไปแล้วทั้งสองทาง: เพิ่ม auto-retry (2264f33) และทำให้เป็น RPC ก้อนเดียว
+  // ที่ atomic (0102/0103) — ข้อยกเว้นจึงหมดเหตุผล และถ้ายังปล่อยไว้ บั๊กยอดลูกค้าค้างที่เคยเจอ
+  // จะกลับมาได้โดยเทสต์ไม่ล้ม (พบจากผลตรวจสอบระบบ 5 ส.ค. 69)
   const started = Date.now();
   const results = await Promise.allSettled(
     provisioned.map((d, i) => {
       const errs = watchErrors(sessions[i].page);
       return runDealerFlow(sessions[i].page, sessions[i].sb, d.code, i % 2 === 0, timings)
-        .then(() => {
-          const known = errs.filter(e => e.includes("reconcileWonTotal") || e.includes("คำนวณยอดลูกค้าใหม่"));
-          known.forEach(m => softErrors.push({ code: d.code, msg: m }));
-          const hard = errs.filter(e => !known.includes(e));
-          assertNoErrors(hard, `ตัวแทน ${d.code}`);
-        });
+        .then(() => assertNoErrors(errs, `ตัวแทน ${d.code}`));
     })
   );
   const elapsedSec = (Date.now() - started) / 1000;
   console.log(`[stress] 10 ตัวแทนทำงานพร้อมกันเสร็จภายใน ${elapsedSec.toFixed(1)} วินาที`);
   console.log(`[stress] timings: ${JSON.stringify(timings, null, 1)}`);
-  if (softErrors.length) console.log(`[stress] soft errors (reconcileWonTotal ไม่มี retry): ${JSON.stringify(softErrors, null, 1)}`);
 
   const failed = results.map((r, i) => ({ r, code: provisioned[i].code })).filter(x => x.r.status === "rejected");
   if (failed.length) {
@@ -249,7 +247,10 @@ test("[stress] 10 ตัวแทนทำงานพร้อมกันเ�
       staleTotals.push(`${d.code}: ยอดลูกค้า=${custs?.[0]?.total_value} แต่ใบที่ปิด won=${quotes?.[0]?.total_value}`);
     }
   }
-  if (staleTotals.length) console.log(`[stress] ยอดลูกค้าค้าง (ไม่ได้ reconcile หลัง won): ${JSON.stringify(staleTotals, null, 1)}`);
+  // ต้อง assert จริง ไม่ใช่แค่ log — นี่คือหัวใจของบั๊กที่เทสต์นี้ถูกเขียนขึ้นมาเพื่อจับ
+  // (ยอดลูกค้าค้างที่ 0 ทั้งที่ปิดการขายสำเร็จ · พบจากทดสอบโหลด 3 ส.ค. 69 → แก้ที่ 0101)
+  // เดิมแค่ console.log ซึ่งไม่มีใครบังคับให้อ่าน — บั๊กเดิมกลับมาได้โดยเทสต์ยังเขียว
+  expect(staleTotals, `ยอดลูกค้าต้องตรงกับใบที่ปิดการขายได้เสมอ — ที่ไม่ตรง: ${staleTotals.join(" · ")}`).toEqual([]);
 
   // ── เลขที่ใบเสนอราคาต้องไม่ซ้ำกันเลย แม้สร้างพร้อมกัน 10 สาขา ──
   const { data: allNewQuotes } = await hqSb.from("quotations").select("id").like("customer", `${TAG}-ลูกค้า-%`);
@@ -272,12 +273,24 @@ test("[stress] 10 ตัวแทนทำงานพร้อมกันเ�
 test.afterAll(async () => {
   // เก็บกวาดข้อมูลของแต่ละสาขา "ในฐานะตัวแทนเจ้าของ" (HQ เขียน/ลบข้อมูลขายตรงไม่ได้ตาม RLS)
   // แล้วค่อยลบบัญชีตัวแทน+auth ผ่าน route (route เองก็บังคับให้ข้อมูลว่างก่อนถึงจะลบแถวได้)
-  for (const d of provisioned) {
+  //
+  // เคยพบ (พบจาก Final Acceptance run): cleanup() ลบ leads/quotations/appointments/files/notes ครบ
+  // แต่บางครั้ง "customers" เหลือ 1 แถวเงียบ ๆ (ไม่ throw — DELETE แค่ไม่โดนแถวตามเงื่อนไข RLS ชั่วขณะ
+  // เป็นครั้งคราว) → purgeDealer ตามมาเจอ 409 (ยังมีข้อมูล) แล้ว catch เงียบทิ้ง เหลือตัวแทนผีค้างให้รันรอบ
+  // ถัดไปชนรหัสซ้ำ (provisionDealer คืน null ทันทีตั้งแต่ตัวแรก) — เช็กซ้ำ + retry ครั้งเดียวกันไว้ก่อนลบตัวแทน
+  //
+  // ทำทีละคนตามลำดับ (for-loop เดิม) ช้าเกิน afterAll timeout ของ Playwright (30s) พอมี 10 คน ×
+  // sign-in+cleanup+verify+purge ต่อคน — เปลี่ยนเป็นขนานทั้ง 10 คนพร้อมกันเหมือน test หลักที่ใช้ Promise.all
+  await Promise.all(provisioned.map(async (d) => {
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
       const { error } = await sb.auth.signInWithPassword({ email: d.email, password: d.password });
-      if (!error) await cleanup(sb, d.code, TAG);
+      if (!error) {
+        await cleanup(sb, d.code, TAG);
+        const { count } = await sb.from("customers").select("id", { count: "exact", head: true }).eq("dealer_code", d.code);
+        if ((count ?? 0) > 0) await cleanup(sb, d.code, TAG); // retry ครั้งเดียว — เจอแถวค้างหลุดบ้างเป็นครั้งคราว
+      }
     } catch { /* best-effort */ }
     await purgeDealer(adminTok, d.code);
-  }
+  }));
 });

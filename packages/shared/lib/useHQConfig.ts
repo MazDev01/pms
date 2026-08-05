@@ -13,13 +13,19 @@ import {
   type HQPolicy, type HQTargets,
 } from "./mock";
 import { settings as settingsRepo, realtime } from "./data";
+import { logRepoRead } from "./repoLog";
 
 // โครงร่วม: โหลดค่าผ่าน repo แล้วโหลดซ้ำเมื่อ HQ แก้
-function useHQValue<T>(load: () => Promise<T>, initial: T): T {
+//
+// tag: ชื่อที่ใช้แจ้งเมื่อโหลดไม่สำเร็จ — ต้องแจ้งเสมอ ห้ามกลืนเงียบ
+//   เดิม .catch(() => {}) ทิ้ง error ทั้งดุ้น → พอโหลดนโยบายพลาด ระบบจะ fallback เป็นค่า default
+//   ในโค้ดเงียบ ๆ โดยผู้ใช้ไม่รู้ตัว · ค่าพวกนี้คือ VAT กับอายุใบเสนอราคา = ออกใบด้วยเลขผิดได้จริง
+//   (พบจากผลตรวจสอบระบบ 5 ส.ค. 69 · แพตเทิร์นเดียวกับที่เคยแก้ไปแล้วใน SalesContext/useNetworkData)
+function useHQValue<T>(tag: string, load: () => Promise<T>, initial: T): T {
   const [value, setValue] = useState<T>(initial);
   useEffect(() => {
     let alive = true;
-    const read = () => { load().then(v => { if (alive) setValue(v); }).catch(() => {}); };
+    const read = () => { load().then(v => { if (alive) setValue(v); }).catch(e => logRepoRead(tag, e)); };
     read();
     const unsub = realtime.subscribeSettings(read); // supabase: ข้ามแอป/ข้ามเครื่อง · local: no-op
     window.addEventListener(HQ_SETTINGS_EVENT, read); // local: HQ กดบันทึกใน origin เดียวกัน
@@ -37,21 +43,22 @@ function useHQValue<T>(load: () => Promise<T>, initial: T): T {
 
 /** นโยบายการขายของ HQ (VAT ฯลฯ) — ตัวแทนตั้งเองไม่ได้ */
 export function useHQPolicy(): HQPolicy {
-  return useHQValue<HQPolicy>(() => settingsRepo.getPolicy(), DEFAULT_HQ_POLICY);
+  return useHQValue<HQPolicy>("settings.getPolicy", () => settingsRepo.getPolicy(), DEFAULT_HQ_POLICY);
 }
 
 /** เป้ายอดขายของเครือ — แดชบอร์ดตัวแทนใช้เทียบความคืบหน้า */
 export function useHQTargets(): HQTargets {
-  return useHQValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
+  return useHQValue<HQTargets>("settings.getTargets", () => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
 }
 
 /** อายุใบเสนอราคา (วัน) — ใช้คำนวณวันหมดอายุของใบ */
 export function useQuoteValidityDays(): number {
-  return useHQValue<number>(() => settingsRepo.getQuoteValidityDays(), DEFAULT_HQ_POLICY.quoteValidityDays);
+  return useHQValue<number>("settings.getQuoteValidityDays",
+    () => settingsRepo.getQuoteValidityDays(), DEFAULT_HQ_POLICY.quoteValidityDays);
 }
 
 /** เหตุผล "ปิดการขายไม่สำเร็จ" ที่ HQ กำหนด — ตัวแทนเลือกจากรายการนี้เท่านั้น
  *  เดิมอ่าน localStorage ตรง ๆ ซึ่งเป็นคนละ origin กับที่ HQ เขียน → ค่าที่ตั้งไม่เคยไปถึงตัวแทน */
 export function useLostReasons(): string[] {
-  return useHQValue<string[]>(() => settingsRepo.getLostReasons(), [...LOST_REASONS]);
+  return useHQValue<string[]>("settings.getLostReasons", () => settingsRepo.getLostReasons(), [...LOST_REASONS]);
 }

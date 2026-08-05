@@ -12,6 +12,7 @@ import { fmtISOToThai } from "@pms/shared/lib/mock";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { users as usersRepo } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
@@ -138,7 +139,14 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
     return { firstName: "", lastName: "", email: "", phone: "", role: "HQ_STAFF", department: "ฝ่ายขาย", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
   });
   const fileRef = useRef<HTMLInputElement>(null);
-  async function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) { const file = e.target.files?.[0]; e.target.value = ""; if (!file) return; setF(p => ({ ...p, avatar: undefined })); const url = await fileToResizedDataURL(file, 160); setF(p => ({ ...p, avatar: url })); }
+  async function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    // ไฟล์ที่ไม่ผ่านการตรวจต้องบอกเหตุผล และต้องไม่ล้างรูปเดิมทิ้งก่อนรู้ผล
+    try {
+      const url = await fileToResizedDataURL(file, 160);
+      setF(p => ({ ...p, avatar: url }));
+    } catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
+  }
   const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email);
   const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: `1px solid ${BORDER}`, fontSize: "0.84rem", color: STEEL, background: "#fff", outline: "none", boxSizing: "border-box" };
   const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: f.department, status: f.status, avatar: f.avatar }); onClose(); };
@@ -363,13 +371,25 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
         <div className="card-body" style={{ padding: 0 }}>
           <div className="table-wrap" style={{ maxHeight: 460, overflow: "auto" }}>
             <table>
+              {/* ตารางใน .table-wrap ใช้ table-layout: fixed — ความกว้างทุกคอลัมน์ต้องกำหนดที่นี่เท่านั้น
+                  ไม่มี colgroup = ทุกคอลัมน์กว้างเท่ากันหมด ทั้งที่ "ผู้ใช้" (รูป+ชื่อ+อีเมล) ต้องการที่มาก
+                  ส่วน "จัดการ" มีแค่ปุ่มไอคอนเดียว (พบจากผลตรวจสอบระบบ 5 ส.ค. 69)
+                  เพิ่ม/ลบคอลัมน์ ต้องแก้ที่นี่คู่กันเสมอ */}
+              <colgroup>
+                <col style={{ width: "34%", minWidth: 220 }} />{/* ผู้ใช้ (รูป + ชื่อ + อีเมล) */}
+                <col style={{ width: "16%", minWidth: 110 }} />{/* บทบาท */}
+                <col style={{ width: "16%", minWidth: 100 }} />{/* แผนก */}
+                <col style={{ width: "11%", minWidth: 84 }} />{/* สถานะ */}
+                <col style={{ width: "15%", minWidth: 104 }} />{/* สร้างเมื่อ */}
+                <col style={{ width: "8%", minWidth: 56 }} />{/* จัดการ (ปุ่มไอคอน) */}
+              </colgroup>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                 <tr>{th("ผู้ใช้", "name")}<th>บทบาท</th><th>แผนก</th><th>สถานะ</th>{th("สร้างบัญชี", "createdAt")}<th className="ovf-visible" style={{ textAlign: "right" }}>จัดการ</th></tr>
               </thead>
               <tbody>
                 {pageRows.length === 0 && <tr><td colSpan={6} style={{ padding: 36, textAlign: "center", color: "#9ca3af", fontSize: "0.82rem" }}>ไม่พบผู้ใช้ตามเงื่อนไข</td></tr>}
                 {pageRows.map(u => (
-                  <tr key={u.id} className="clickable" onClick={() => setDetailUser(u)}>
+                  <ClickableRow key={u.id} className="clickable" onActivate={() => setDetailUser(u)} label={`เปิดรายละเอียดผู้ใช้ ${u.name}`}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <Avatar name={u.name} role={u.role} avatar={u.avatar} />
@@ -385,7 +405,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
                         <button className="btn btn-icon btn-sm" title="จัดการ" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ user: u, x: r.right, y: r.bottom + 4 }); }}><MoreHorizontal size={16} /></button>
                       </div>
                     </td>
-                  </tr>
+                  </ClickableRow>
                 ))}
               </tbody>
             </table>
@@ -410,6 +430,15 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
           <div style={{ fontSize: "0.76rem", color: MUTED, marginBottom: 12 }}>{roleSummary[matrixRole]}</div>
           <div className="table-wrap" style={{ border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
             <table>
+              {/* fixed layout — ชื่อโมดูลยาวกว่าคอลัมน์ติ๊กถูกมาก ต้องกำหนดสัดส่วนเอง (ดูหมายเหตุตารางด้านบน) */}
+              <colgroup>
+                <col style={{ width: "40%", minWidth: 150 }} />{/* โมดูล */}
+                <col style={{ width: "12%", minWidth: 52 }} />{/* ดู */}
+                <col style={{ width: "12%", minWidth: 52 }} />{/* สร้าง */}
+                <col style={{ width: "12%", minWidth: 52 }} />{/* แก้ไข */}
+                <col style={{ width: "12%", minWidth: 52 }} />{/* ลบ */}
+                <col style={{ width: "12%", minWidth: 60 }} />{/* ส่งออก */}
+              </colgroup>
               <thead><tr><th>โมดูล</th><th className="num">ดู</th><th className="num">สร้าง</th><th className="num">แก้ไข</th><th className="num">ลบ</th><th className="num">ส่งออก</th></tr></thead>
               <tbody>
                 {MODULE_LIST.map(m => {

@@ -8,6 +8,7 @@
 // ไม่มี "อัตราการเปิดอ่าน" และ "การใช้แม่แบบ" — ระบบไม่มีข้อมูลรองรับทั้งสองอย่าง (ห้ามกุ)
 import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { QuotationTrendChart } from "./QuotationTrendChart";
 import { QuotationAgingChart } from "./QuotationAgingChart";
 import { LeadsVsQuotationsChart } from "./LeadsVsQuotationsChart";
@@ -113,7 +114,7 @@ function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
             {!ranked.length ? (
               <tr><td colSpan={9} style={{ textAlign: "center", padding: "28px 14px", color: "var(--muted-foreground)" }}>ไม่พบข้อมูล</td></tr>
             ) : ranked.map((d, i) => (
-              <tr key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
+              <ClickableRow key={d.code} className="clickable" onActivate={() => router.push(`/hq/dealers/${d.code}`)} label={`เปิดหน้าตัวแทน ${d.name}`}>
                 <td style={{ fontWeight: 700, color: "var(--muted-foreground)" }}>{i + 1}</td>
                 <td style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY }}>{d.code}</td>
                 <td style={{ fontWeight: 600, color: "#1F2937" }}>{d.name}</td>
@@ -131,7 +132,7 @@ function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
                     </button>
                   </div>
                 </td>
-              </tr>
+              </ClickableRow>
             ))}
           </tbody>
         </table>

@@ -16,6 +16,7 @@ import {
   type LeadRules, type DealerLeadRulesMap,
 } from "@pms/shared/lib/mock";
 import { settings as settingsRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 
 /** แผนที่กฎของทุกสาขา — ใช้ในหน้า HQ ที่รวมลีดหลายสาขาไว้ด้วยกัน */
 export function useDealerLeadRulesMap(): DealerLeadRulesMap {
@@ -23,7 +24,8 @@ export function useDealerLeadRulesMap(): DealerLeadRulesMap {
   const [map, setMap] = useState<DealerLeadRulesMap>({});
   useEffect(() => {
     // อ่านผ่าน repository (local: localStorage · supabase: DB)
-    const read = () => { settingsRepo.getLeadRulesMap().then(setMap).catch(() => {}); };
+    // โหลดพลาดต้องแจ้ง — ไม่งั้น map ค้างว่างตลอด แล้วทุกหน้าที่ใช้กฎจะแสดงเกณฑ์ตั้งต้นเงียบ ๆ
+    const read = () => { settingsRepo.getLeadRulesMap().then(setMap).catch(e => logRepoRead("settings.getLeadRulesMap", e)); };
     read();
     window.addEventListener(DEALER_LEAD_RULES_EVENT, read);
     window.addEventListener("storage", read);

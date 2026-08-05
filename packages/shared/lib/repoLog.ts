@@ -26,7 +26,7 @@ export function isAbortedRequest(e: unknown): boolean {
 // คู่ขนานกับ REPO_SAVE_ERROR_EVENT (useRepoState.ts) แต่ฝั่งอ่าน · จุดที่แก้จริงคือ AppShell
 // (แถบเตือนเดียวกับ "บันทึกไม่สำเร็จ") ไม่ต้องแก้ทีละ hook ที่เรียก logRepoRead อยู่แล้วนับสิบจุด
 //
-// ทำไมต้องมี: hook พวกนี้ (useNetworkCustomersDb ฯลฯ) เดิม catch แล้วแค่ log ขึ้น console — ถ้าโหลด
+// ทำไมต้องมี: hook พวกนี้ (useNetworkCustomersForDealer ฯลฯ) เดิม catch แล้วแค่ log ขึ้น console — ถ้าโหลด
 // พังจริง (RLS/เน็ตหลุด/query error) หน้าจอจะโชว์ "0 รายการ" เหมือนข้อมูลว่างจริงเป๊ะ ผู้ใช้แยกไม่ออก
 // ว่า "ยังไม่มีข้อมูล" กับ "โหลดไม่สำเร็จ" — พบจริงจากผลตรวจสอบระบบ 30 ก.ค. 69 (severity: Critical)
 export const REPO_READ_ERROR_EVENT = "pms:repo-read-error";

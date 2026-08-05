@@ -4,10 +4,8 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   leadStatusLabel, leadStatusColor,
-  RP_STORAGE_KEY,
-  quotationStatusLabel, quotationStatusColor,
   buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
-  loadDealerFiles, addDealerFile, DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
+  DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
 } from "@pms/shared/lib/mock";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
@@ -23,13 +21,13 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
-  Plus, Search, X,
-  CheckCircle2, User, ArrowRight, Building2,
-  MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, Package, Layers,
+  Plus, X,
+  CheckCircle2, User, Building2,
+  MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, Package,
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown,
-  LayoutList, Columns3, AlarmClock, ChevronRight, Ruler,
+  LayoutList, Columns3, AlarmClock, Ruler,
 } from "lucide-react";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useSales } from "@pms/shared/context/SalesContext";
@@ -39,10 +37,12 @@ import { useFilters, APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterCont
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
-import { MultiLineChart, Donut } from "@pms/shared/components/ui/Charts";
+import { Donut } from "@pms/shared/components/ui/Charts";
 import { leadCreatedDate, priorityLabel } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
 
@@ -237,12 +237,16 @@ function OverviewEditor({ lead, persons, onSave }: {
   const [f, setF] = useState(seed);
   const logoRef = useRef<HTMLInputElement>(null);
   // reseed เมื่อสลับลูกค้าเป้าหมาย
-  useEffect(() => { setF(seed()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [lead.id]);
+  // จงใจไม่ใส่ seed ใน dependency — seed ถูกสร้างใหม่ทุก render จะล้างสิ่งที่ผู้ใช้กำลังพิมพ์ทิ้ง
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(seed()); }, [lead.id]);
   const set = (k: keyof ReturnType<typeof seed>, v: string) => setF(p => ({ ...p, [k]: v }));
   async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
-    set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
+    try { set("logo", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
+    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
   }
 
   const dirty =
@@ -401,7 +405,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 }) {
   const isEdit = !!initial;
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง
-  const { customers } = useSales();   // สมุดลูกค้าของสาขา — ใช้เตือนว่าบริษัทนี้เป็นลูกค้าอยู่แล้ว
+  // สมุดลูกค้า + ลีดที่มีอยู่ของสาขา — ใช้เตือนว่าบริษัทนี้มีอยู่แล้ว (ดู dupHint ด้านล่าง)
+  const { customers, leads: existingLeads } = useSales();
   const myDealer = useCurrentDealer();
   const [form, setForm] = useState({
     company: initial?.company ?? "", contact: initial?.contact ?? "",
@@ -423,20 +428,31 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   // ให้ effect จริงทำงานคนละ tick) → ยิง addLead() ซ้ำหลายครั้งได้จริง สร้างลีดซ้ำหลายแถว
   // (พบจากทดสอบ Edge Case จริง 3 ส.ค. 69) แพตเทิร์นเดียวกับ apptSavingRef ที่ใช้กันฟอร์มนัดหมายอยู่แล้ว
   const savingRef = useRef(false);
-  // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้เป็นลูกค้าอยู่แล้ว — กันเปิดลีดซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
+  // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้มีอยู่แล้ว — กันเปิดลีดซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
   // แค่บอก ไม่ได้ห้าม (บางทีก็อยากเปิดลีดใหม่จริง ๆ) · ทางที่ถูกคือกด "สร้างดีลใหม่" จากหน้าลูกค้า
+  //
+  // เช็ค "ลีดที่มีอยู่" ด้วย ไม่ใช่แค่ลูกค้า: savingRef กันกดรัวได้เฉพาะในแท็บเดียว — เปิดสองแท็บแล้ว
+  // กรอกบริษัทเดียวกันทั้งคู่ ต่างคนต่างผ่าน guard ของตัวเอง ได้ลีดซ้ำ 2 แถวจริง (ยืนยันด้วยการทดสอบ
+  // จริง 5 ส.ค. 69: แท็บเดียวกดรัว 5 ครั้ง → 1 แถว · สองแท็บพร้อมกัน → 2 แถว)
+  // ไม่ใช้ unique constraint ที่ DB เพราะ "หลายดีลของบริษัทเดียวกัน" เป็นเรื่องปกติของงานขาย
+  // การเตือนให้เห็นก่อนกดบันทึกจึงตรงกับปัญหาจริง (กดซ้ำเพราะนึกว่าไม่สำเร็จ) โดยไม่ขวางงานที่ถูกต้อง
   const dupHint = useMemo(() => {
     if (isEdit || !form.company.trim()) return "";
     const { exact, similar } = matchCustomers(customers, form.company, myDealer.code);
     if (exact)        return `"${exact.company}" เป็นลูกค้าอยู่แล้ว — ปิดการขายได้ ระบบจะผูกเข้ากับลูกค้ารายเดิมให้ ไม่สร้างซ้ำ`;
+    const dupLead = matchCustomers(existingLeads, form.company, myDealer.code);
+    if (dupLead.exact) return `มีลูกค้าเป้าหมายชื่อ "${dupLead.exact.company}" อยู่แล้ว — ถ้าเพิ่งกดบันทึกไปในหน้าอื่น อาจกลายเป็นรายการซ้ำ`;
     if (similar[0])   return `ชื่อใกล้เคียงกับลูกค้าเดิม "${similar[0].company}" — ถ้าเป็นบริษัทเดียวกัน ควรกด "สร้างดีลใหม่" จากหน้าลูกค้าแทน`;
+    if (dupLead.similar[0]) return `ชื่อใกล้เคียงกับลูกค้าเป้าหมายที่มีอยู่ "${dupLead.similar[0].company}" — ตรวจก่อนว่าไม่ใช่รายการเดียวกัน`;
     return "";
-  }, [isEdit, form.company, customers, myDealer.code]);
+  }, [isEdit, form.company, customers, existingLeads, myDealer.code]);
   function set(k: keyof typeof form, v: string) { setForm(p=>({...p,[k]:v})); if (submitError) setSubmitError(""); }
   async function uploadLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
-    set("logo", await fileToResizedDataURL(file, 256)); // ย่อก่อนเก็บ กัน quota เต็ม
+    try { set("logo", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
+    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
   }
   function submit() {
     if (savingRef.current) return;
@@ -781,7 +797,7 @@ export default function LeadsPage() {
       const myReq = ++dealerFilesReqRef.current;
       filesRepo.list({ dealerCode: currentDealer.code, isHQ: false })
         .then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); })
-        .catch(() => {});
+        .catch(e => logRepoRead("files.list", e));
     };
     sync();
     window.addEventListener(DEALER_FILES_EVENT, sync);
@@ -797,7 +813,7 @@ export default function LeadsPage() {
     let alive = true;
     personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
       .then(arr => { if (alive) setPersonsList(arr.filter(p => p.active).map(p => p.name)); })
-      .catch(() => {});
+      .catch(e => logRepoRead("persons.list", e));
     return () => { alive = false; };
   }, [currentDealer.code]);
 
@@ -1261,7 +1277,8 @@ export default function LeadsPage() {
                     const done = !!l.customerId;
                     const isSel = selectedLead?.id === l.id;
                     return (
-                      <tr key={l.id} onClick={()=>openPanel(l)} className="clickable"
+                      <ClickableRow key={l.id} onActivate={()=>openPanel(l)} className="clickable"
+                        label={`เปิดรายละเอียดลูกค้าเป้าหมาย ${l.company}`}
                         style={{ background:isSel?"#f0f4f8":undefined }}>
                         <td style={{ minWidth:0 }}>
                           <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>{l.company}</div>
@@ -1366,7 +1383,7 @@ export default function LeadsPage() {
                             </button>
                           </div>
                         </td>
-                      </tr>
+                      </ClickableRow>
                     );
                   })}
                   {filtered.length === 0 && (

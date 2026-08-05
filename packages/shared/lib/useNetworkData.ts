@@ -137,7 +137,7 @@ export function useQuotationSalesperson(quoteId: string | null): string | null {
 }
 
 // หน้าเดียวของฐานข้อมูลลูกค้า HQ + KPI/กราฟ จากทั้งชุดที่กรองแล้ว — M9 Phase 6 (migration 0080)
-// supabase เท่านั้น · local คืน null → หน้าใช้ client fallback (useCustomerDb เดิม)
+// supabase เท่านั้น · local คืน null → หน้าใช้ client fallback (useCustomerDbLocal)
 export function useHQCustomersPage(opts: HQCustomersPageOpts): HQCustomersPageResult | null {
   const { salesVersion } = useSales();
   const key = JSON.stringify(opts);
@@ -157,7 +157,7 @@ export function useHQCustomersPage(opts: HQCustomersPageOpts): HQCustomersPageRe
 }
 
 // ตัวเลือกตัวกรอง (ตัวแทน/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ) ของหน้าฐานข้อมูลลูกค้า — ไม่อิงตัวกรองปัจจุบัน
-// supabase เท่านั้น · local คืน null → หน้าคำนวณตัวเลือกจาก useCustomerDb() เดิมเอง
+// supabase เท่านั้น · local คืน null → หน้าคำนวณตัวเลือกจาก useCustomerDbLocal() เอง
 export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
   const { salesVersion } = useSales();
   const [opts, setOpts] = useState<HQCustomersFilterOptions | null>(null);
@@ -173,7 +173,7 @@ export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
 }
 
 // ใบ won ของลูกค้ารายเดียว — ป้อน CustomerDrawer (แท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์) โดยไม่โหลดใบทั้งเครือ
-// supabase เท่านั้น · local คืน null → หน้าใช้ buildings ที่มากับ CustomerDbRow จาก useCustomerDb() เดิมอยู่แล้ว
+// supabase เท่านั้น · local คืน null → หน้าใช้ buildings ที่มากับ CustomerDbRow จาก useCustomerDbLocal() อยู่แล้ว
 export function useCustomerBuildings(customerId: number | null): QuotationMock[] | null {
   const [rows, setRows] = useState<QuotationMock[] | null>(null);
   useEffect(() => {
@@ -332,46 +332,9 @@ export function useNetworkCustomers(): HQCustomer[] {
 // ของ pageAll() แบบเงียบ ๆ · พบจากผลตรวจสอบระบบ 30 ก.ค. 69) — สูงพอที่จะไม่กระทบการใช้งานจริงตอนนี้
 const HQ_CUSTOMERS_FETCH_CAP = 5000;
 
-// ลูกค้าทั้งเครือสำหรับหน้า /hq/customers — ดึงตรงจาก repo (RLS = ทั้งเครือ) ไม่ผ่าน array ของ SalesContext
-// เพื่อให้ gate SalesContext ฝั่ง HQ ได้ (M9 Phase 4) · local ยังใช้ useNetworkCustomers (สมุดสด + seed) เพื่อ reactivity
-// dealsWon ไม่ถูกใช้ในหน้านี้ (นับอาคารจริงจาก customer_rollup แทน) → ตั้ง 0 ได้
-export function useNetworkCustomersDb(): HQCustomer[] {
-  const local = useNetworkCustomers();
-  const { salesVersion } = useSales();
-  const dealerInfoOf = useDealerInfo();
-  const [rows, setRows] = useState<CustomerRow[] | null>(null);
-  useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setRows(null); return; }
-    let alive = true;
-    const t = setTimeout(() => {
-      customersRepo.listPage({ isHQ: true, dealerCode: undefined }, { limit: HQ_CUSTOMERS_FETCH_CAP, offset: 0 })
-        .then(r => {
-          if (!alive) return;
-          setRows(r.rows);
-          // เดิม pageAll() ตัดที่ 50k แบบเงียบ ไม่มีสัญญาณให้ผู้ใช้รู้ว่าข้อมูลไม่ครบ — ตอนนี้อย่างน้อย log ไว้ให้ตรวจสอบได้
-          if (r.total > r.rows.length) console.warn(`[customers] เกินเพดานดึง ${HQ_CUSTOMERS_FETCH_CAP} แถว — DB มีจริง ${r.total} ราย แสดงไม่ครบ`);
-        })
-        .catch(err => logRepoRead("customers.listPage", err));
-    }, 150);
-    return () => { alive = false; clearTimeout(t); };
-  }, [salesVersion]);
-  return useMemo(() => {
-    if (!rows) return local; // local mode หรือ supabase ระหว่างโหลด
-    return rows.map(c => {
-      const dl = dealerInfoOf(c.dealerCode);
-      return {
-        id: 10000 + c.id, localId: c.id, name: c.company, dealerCode: dl.code, dealerName: dl.name,
-        province: c.province, dealsWon: 0, totalRevenue: c.totalValue,
-        status: c.status === "inactive" ? "inactive" : "active" as HQCustomer["status"],
-        lastContact: "—", segment: "sme" as HQCustomer["segment"],
-      };
-    });
-  }, [rows, local, dealerInfoOf]);
-}
-
 // ลูกค้าของตัวแทนสาขาเดียว (หน้ารายละเอียดตัวแทน /hq/dealers/[code]) — กรองที่ repo ตรง ๆ
-// เดิมหน้านี้เรียก useNetworkCustomersDb() (ดึงทั้งเครือ ~5000 แถวสูงสุด) แล้วค่อยกรอง .filter()
-// ฝั่ง client — วัดจริงพบ ~1.15MB/หน้า ทั้งที่โชว์แค่สาขาเดียว (ผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
+// เดิมดึงลูกค้าทั้งเครือ (~5000 แถวสูงสุด) แล้วค่อยกรอง .filter() ฝั่ง client — วัดจริงพบ ~1.15MB/หน้า
+// ทั้งที่โชว์แค่สาขาเดียว (ผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69) แก้เป็นกรองที่ repo ตรงแทน
 export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
   const local = useNetworkCustomers().filter(c => c.dealerCode === code);
   const { salesVersion } = useSales();

@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  quotationStatusLabel, quotationStatusColor, leadStatusLabel,
+  quotationStatusLabel, quotationStatusColor,
   DEFAULT_ISSUER, DEFAULT_DEALER_CODE,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
@@ -23,11 +23,12 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useTableLayout, type Col } from "@pms/shared/components/ui/TableTools";
 import { fmtFull as fmtMoney, fmtFullRounded as fmtBaht } from "@pms/shared/lib/format";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import {
-  Plus, X, FileText, LayoutList, LayoutGrid,
+  X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer, Eye,
   ExternalLink, ArrowRight, ChevronLeft, ChevronRight,
-  Send, Coins, MapPin, Package, User, Layers, Target, Check, Phone, Mail, Lock,
+  Send, Coins, MapPin, Package, Layers, Check, Lock,
 } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -676,7 +677,8 @@ function QuotationsPageInner(){
                   {paged.map(q=>{
                     const sc=quotationStatusColor[q.status]; const isSel=selected?.id===q.id;
                     return (
-                      <tr key={q.id} onClick={()=>selectRow(q)} className="clickable"
+                      <ClickableRow key={q.id} onActivate={()=>selectRow(q)} className="clickable"
+                        label={`เปิดรายละเอียดใบเสนอราคา ${q.id}`}
                         style={{background:isSel?"#f0f6ff":undefined}}>
                         {/* ไอคอนเอกสารหน้าเลขที่เอาออก — ซ้ำกันทุกแถว ไม่ได้บอกอะไร แลกที่ให้คอลัมน์อื่น */}
                         <td>
@@ -740,7 +742,7 @@ function QuotationsPageInner(){
                               style={{width:28,height:28,borderRadius:7,border:`1px solid ${BORDER}`,background:"#fff",color:PRIMARY,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Edit2 size={13}/></button>
                           </div>
                         </td>
-                      </tr>
+                      </ClickableRow>
                     );
                   })}
                 </tbody>

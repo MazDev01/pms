@@ -51,7 +51,7 @@ function SyncErrorBar() {
   );
 }
 
-// แถบเตือน "โหลดข้อมูลบางส่วนไม่สำเร็จ" — ต้องเห็นทุกหน้า เพราะหลาย hook (useNetworkCustomersDb ฯลฯ)
+// แถบเตือน "โหลดข้อมูลบางส่วนไม่สำเร็จ" — ต้องเห็นทุกหน้า เพราะหลาย hook (useNetworkCustomersForDealer ฯลฯ)
 // เดิม catch แล้ว log เงียบๆ ตอนโหลดพัง หน้าจอจึงโชว์ "0 รายการ" เหมือนข้อมูลว่างจริง แยกไม่ออกจาก
 // ของจริงที่ยังไม่มีข้อมูล — ผู้ใช้อาจเข้าใจผิดว่าข้อมูลหาย (Critical, พบจากผลตรวจสอบระบบ 30 ก.ค. 69)
 // ไม่มี retry ต่อ hook ให้เรียก (มีหลายสิบจุด) — รีเฟรชทั้งหน้าคือทางที่ตรงและเชื่อถือได้สุด
@@ -80,6 +80,51 @@ function ReadErrorBar() {
   );
 }
 
+// แถบเตือน "กำลังเข้าระบบแทนโดย HQ" — HQ เปิดแท็บนี้ผ่านลิงก์เข้าระบบแทน (magic-link, ดู
+// /api/admin/dealers/impersonate) ต้องมีทางกลับที่ชัดเจน ไม่ใช่ให้ HQ งงว่าจะออกจากบัญชีตัวแทนยังไง
+// เก็บสถานะไว้ที่ sessionStorage ของแท็บนี้เท่านั้น (แยกต่อแท็บอยู่แล้ว — ดู supabase/client.ts)
+// เพื่อให้แถบยังอยู่ต่อแม้เปลี่ยนหน้าในแอปตัวแทน ไม่ใช่แค่หน้าแรกที่ query param ?impersonated=1 มาถึง
+const IMPERSONATING_KEY = "pms_impersonating";
+function ImpersonationBanner() {
+  const [active, setActive] = useState(false);
+  const { logout } = useRole();
+
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("impersonated") === "1") {
+        sessionStorage.setItem(IMPERSONATING_KEY, "1");
+        url.searchParams.delete("impersonated");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+      }
+      setActive(sessionStorage.getItem(IMPERSONATING_KEY) === "1");
+    } catch { /* sessionStorage ไม่พร้อม (โหมด private/ปิด storage) — ไม่ต้องโชว์แถบ */ }
+  }, []);
+
+  if (!active) return null;
+
+  function backToHQ() {
+    try { sessionStorage.removeItem(IMPERSONATING_KEY); } catch {}
+    logout();
+    // แท็บนี้เปิดจาก HQ ผ่าน window.open() เสมอ — ปิดได้ · ถ้าเบราว์เซอร์ไม่ยอมปิด ผู้ใช้ก็ออกจากระบบแล้วอยู่ดี
+    window.close();
+  }
+
+  return (
+    <div role="status" style={{
+      display: "flex", alignItems: "center", gap: 10, margin: "10px 16px 0",
+      background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8",
+      borderRadius: 10, padding: "10px 14px", fontSize: "0.8rem", fontWeight: 600,
+    }}>
+      <span style={{ flex: 1 }}>กำลังเข้าระบบแทนตัวแทนโดยสำนักงานใหญ่ (HQ)</span>
+      <button onClick={backToHQ}
+        style={{ background: "#1d4ed8", border: "none", borderRadius: 6, cursor: "pointer", color: "#fff", fontWeight: 700, padding: "5px 12px", fontSize: "0.78rem" }}>
+        กลับสู่ HQ
+      </button>
+    </div>
+  );
+}
+
 // เชลล์ของเวิร์กสเปซ — ถือสถานะเปิด/ปิดเมนูมือถือ (hamburger drawer)
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -93,6 +138,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)} />}
       <div className="main">
         <Topbar onMenu={() => setNavOpen(o => !o)} />
+        <ImpersonationBanner />
         <SyncErrorBar />
         <ReadErrorBar />
         {/* ตัวกรองแยกอิสระต่อหน้า — key+storageKey ต่อ pathname (เปลี่ยนหน้า A ไม่กระทบหน้า B) */}

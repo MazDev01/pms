@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { use } from "react";
 import {
-  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
+  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   quotationStatusColor, quotationStatusLabel,
   type DealerRow, type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem, type HQTargets, type HQCustomer,
 } from "@pms/shared/lib/mock";

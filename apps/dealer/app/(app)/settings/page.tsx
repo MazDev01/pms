@@ -13,6 +13,7 @@ import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
@@ -98,9 +99,12 @@ function CompanyTab() {
   }, [form, logo, wordmark, prof, session.dealerCode, session.name]);
   async function uploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
-    const url = await fileToResizedDataURL(file, 256);
-    setProf(p => ({ ...p, avatar: url }));
+    try {
+      const url = await fileToResizedDataURL(file, 256);
+      setProf(p => ({ ...p, avatar: url }));
+    } catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
   }
   const dirty = baseline !== "" && JSON.stringify({ form, logo, wordmark, prof }) !== baseline;
   const reset = useCallback(() => {
@@ -249,8 +253,10 @@ function ImageUploadBox({
   const ref = useRef<HTMLInputElement>(null);
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
-    onChange(await fileToResizedDataURL(file, 320)); // ย่อก่อนเก็บ กัน quota เต็ม
+    try { onChange(await fileToResizedDataURL(file, 320)); } // ย่อก่อนเก็บ กัน quota เต็ม
+    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
   }
   return (
     <div>
@@ -461,14 +467,15 @@ function PersonsTab() {
   // อ่านไฟล์รูป → ย่อขนาด (มาตรฐานกลาง imageResize) กัน localStorage เต็ม
   async function readAvatar(file: File | undefined, cb: (url: string) => void) {
     if (!file) return;
-    cb(await fileToResizedDataURL(file, 128));
+    try { cb(await fileToResizedDataURL(file, 128)); }
+    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
   }
 
   useEffect(() => {
     // พนักงานขายของสาขานี้ — อ่านผ่าน repository (local: localStorage · supabase: DB · RLS สาขาตัวเอง)
     let alive = true;
     personsRepo.list({ dealerCode: currentDealer.code, isHQ: false })
-      .then(list => { if (alive) setPersons(reindexPersons(list)); }).catch(() => {});
+      .then(list => { if (alive) setPersons(reindexPersons(list)); }).catch(e => logRepoRead("persons.list", e));
     return () => { alive = false; };
   }, [currentDealer.code]);
 
@@ -717,7 +724,7 @@ function NotificationsTab() {
       const r = leadRulesOf(map, currentDealer.code);
       setSavedRules(r);
       if (!editedRef.current) setRulesDraft(r);
-    }).catch(() => {});
+    }).catch(e => logRepoRead("settings.getLeadRulesMap", e));
   }, [currentDealer.code, notifCfg.loaded, notifCfg.settings]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedPrefs)

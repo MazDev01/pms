@@ -12,7 +12,9 @@ import {
   loadDealerLeadRulesMap, saveDealerLeadRules, loadQuoteValidityDays,
   leads as leadSeed, initialCustomers, quotations as quoteSeed, appointments as apptSeed,
 } from "@pms/shared/lib/mock";
-import { loadAudit, appendAudit } from "@pms/shared/lib/useAudit";
+// อ่านจาก auditStore (localStorage ล้วน) ไม่ใช่ useAudit — useAudit เป็น React hook ที่ import
+// ชั้นข้อมูลกลับเข้ามา ทำให้เกิดวงจร import จริงตอนรัน (ดูเหตุผลเต็มใน auditStore.ts)
+import { loadAudit, appendAudit } from "@pms/shared/lib/auditStore";
 import { exactKey } from "@pms/shared/lib/customerMatch";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
@@ -319,18 +321,6 @@ export const LocalAdapter: DataAdapter = {
         byMonth: [...monthM.values()],
         byDealer: [...dealerM.entries()].map(([dealerCode, x]) => ({ dealerCode, ...x })),
       });
-    },
-    customerRollup: () => {
-      const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
-      const m = new Map<string, { quoteNo: string; productLine: string; valueNum: number; date: string }[]>();
-      for (const q of qs) {
-        if (q.status !== "won") continue;
-        const key = `${q.dealerCode ?? DEFAULT_DEALER_CODE}|${q.customer ?? ""}`;
-        const b = { quoteNo: q.id, productLine: (q.buildingType || q.project) ?? "", valueNum: q.totalValue ?? 0, date: q.date ?? "" };
-        const arr = m.get(key); if (arr) arr.push(b); else m.set(key, [b]);
-      }
-      for (const arr of m.values()) arr.sort((a, b) => a.date.localeCompare(b.date)); // order by date (ตรง jsonb_agg order by)
-      return ok(m);
     },
     networkQuoteRange: (start, end, dealer) => {
       const qs = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);

@@ -5,14 +5,21 @@ import { sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock"
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
-import { sbSignIn, sbDemoSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
+import { sbSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
 import { audit as auditRepo } from "@pms/shared/lib/data";
+import { isAbortedRequest } from "@pms/shared/lib/repoLog";
 
 // Phase 9 (Logging/Audit) — เดิมระบบไม่บันทึกเข้า/ออกจากระบบเลย (มีแต่ mutation ของ admin)
-// เข้าสู่ระบบ/ออกจากระบบเป็นเหตุการณ์ที่ audit trail มาตรฐานต้องมี — log ล้มเหลวต้องไม่บล็อกการ
-// เข้า/ออกระบบจริง (แค่ log เงียบ ๆ ถ้าพัง)
+// เข้าสู่ระบบ/ออกจากระบบเป็นเหตุการณ์ที่ audit trail มาตรฐานต้องมี — บันทึกล้มเหลวต้องไม่บล็อกการ
+// เข้า/ออกระบบจริง แต่ต้อง "ดังพอให้รู้" ไม่ใช่เงียบสนิท ไม่งั้นร่องรอยการเข้าระบบดับไปโดยไม่มีใครรู้
+// (แนวเดียวกับ auditLog ใน adminRoute.ts ฝั่งเซิร์ฟเวอร์)
+//
+// ⚠️ ต้องข้ามกรณีคำขอถูกยกเลิก: ทันทีที่ล็อกอินสำเร็จ แอปจะพาไปหน้าใหม่ เบราว์เซอร์จึงยกเลิกคำขอ
+//    audit ที่ยังค้างอยู่เป็นปกติ (ได้ "Failed to fetch" เหมือนเน็ตหลุดเป๊ะ) — ถ้าไม่กรอง จะมี error
+//    ขึ้นทุกครั้งที่ล็อกอินสำเร็จ ทั้งที่ไม่มีอะไรผิด (เจอจริงตอนรันชุดทดสอบหลังแก้รอบนี้)
 function logAuthEvent(action: string, s: MockSession) {
-  auditRepo.append({ user: s.name, role: s.role, action, target: s.dealerName }).catch(() => {});
+  auditRepo.append({ user: s.name, role: s.role, action, target: s.dealerName })
+    .catch(e => { if (!isAbortedRequest(e)) console.error(`[audit] บันทึก "${action}" ไม่สำเร็จ`, e); });
 }
 
 // โหมด backend — supabase = auth จริง (JWT) · local = mock เดิม (localStorage)
@@ -30,7 +37,6 @@ type RoleContextType = {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   login: (key: "hq" | "dealer") => Promise<void>;
   logout: () => void;
-  switchSession: (key: "hq" | "dealer") => Promise<void>;
   currentKey: "hq" | "dealer";
 };
 
@@ -104,14 +110,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     return r;
   };
 
-  // เข้าด่วนด้วยบัญชีเดโม (ปุ่มในหน้า login / สลับบทบาทใน Sidebar)
-  // supabase: signInWithPassword ด้วยบัญชีเดโมที่ seed ไว้ · local: session สำเร็จรูป
+  // เข้าด่วนด้วย session สำเร็จรูป — ใช้เฉพาะโหมด local (เช่น "เข้าระบบแทนตัวแทน" ในหน้า HQ dealers
+  // ซึ่งปิดไว้แล้วในโหมด supabase เพราะสวมสิทธิ์ข้ามบัญชีจริงทำไม่ได้)
   const login = async (key: "hq" | "dealer"): Promise<void> => {
-    if (USE_SUPABASE) {
-      const r = await sbDemoSignIn(key);
-      if (r.ok) { setSession(r.session); setIsLoggedIn(true); logAuthEvent("เข้าสู่ระบบ", r.session); }
-      return;
-    }
     const s = sessions[key];
     setSession(s); setIsLoggedIn(true); persist(s);
     logAuthEvent("เข้าสู่ระบบ", s);
@@ -140,7 +141,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         signIn,
         login,
         logout,
-        switchSession: login,
         currentKey: session.scopeAll ? "hq" : "dealer",
       }}
     >

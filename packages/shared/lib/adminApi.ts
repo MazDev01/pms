@@ -100,6 +100,48 @@ export async function deleteHQUser(id: string): Promise<{ ok: true } | { ok: fal
   }
 }
 
+/** ออกรหัสผ่านใหม่ให้ตัวแทน (HQ คุมรหัสผ่านของตัวแทนเท่านั้น — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตเอง)
+ *  รหัสใหม่สุ่มที่เซิร์ฟเวอร์เสมอ คืนมาโชว์ครั้งเดียวเหมือนตอนสร้างบัญชี */
+export async function resetDealerPassword(code: string): Promise<CreateDealerResult> {
+  if (DATA_SOURCE !== "supabase") {
+    return { ok: false, error: "โหมดเดโม: รีเซ็ตรหัสผ่านจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
+  }
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch(`/api/admin/dealers?code=${encodeURIComponent(code)}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; email?: string; password?: string };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, email: json.email ?? "", password: json.password ?? "" };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
+
+/** ขอลิงก์ "เข้าระบบแทนตัวแทน" — ไม่ต้องรู้/รีเซ็ตรหัสผ่านตัวแทนเลย (ใช้ Supabase magic-link)
+ *  ลิงก์ใช้ได้ครั้งเดียวแล้วหมดอายุ — เปิดในแท็บใหม่ไปยังแอปตัวแทนเสมอ (คนละ origin กับ HQ) */
+export async function impersonateDealer(code: string): Promise<{ ok: true; link: string } | { ok: false; error: string }> {
+  if (DATA_SOURCE !== "supabase") {
+    return { ok: false, error: "โหมดเดโม: ไม่ต้องขอลิงก์ — ใช้ปุ่มเข้าระบบแทนแบบเดโมได้เลย" };
+  }
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch(`/api/admin/dealers/impersonate?code=${encodeURIComponent(code)}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; link?: string };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, link: json.link ?? "" };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
+
 /** ลบตัวแทนจริง (auth ของผู้ใช้สังกัดสาขา + แถว dealers) ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์
  *  เดิมลบผ่าน repo ตรง ๆ ได้แค่แถว dealers → บัญชี auth ของสาขายังค้างเป็นบัญชีกำพร้า */
 export async function deleteDealerAccount(code: string): Promise<{ ok: true } | { ok: false; error: string }> {

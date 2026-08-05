@@ -19,13 +19,15 @@ import { DealerQuotationPerformance, DealerQuotationTable } from "@pms/shared/co
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import {
-  HQ_DEALERS_KEY, DEFAULT_HQ_TARGETS, HQ_TARGETS_KEY,
-  loadDealerFiles, DEALER_FILES_EVENT, fmtISOToThai, QUOTED_UP,
+  DEFAULT_HQ_TARGETS,
+  DEALER_FILES_EVENT, fmtISOToThai, QUOTED_UP,
   type DealerRow, type HQTargets, type DealerFile,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { dealers as dealersRepo, settings as settingsRepo, files as filesRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -133,7 +135,7 @@ export default function SalesAnalyticsPage() {
   useEffect(() => {
     const read = () => {
       const myReq = ++dealerFilesReqRef.current;
-      filesRepo.list({ isHQ: true }).then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); }).catch(() => {}); // HQ เห็นไฟล์ทั้งเครือ
+      filesRepo.list({ isHQ: true }).then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); }).catch(e => logRepoRead("files.list", e)); // HQ เห็นไฟล์ทั้งเครือ
     };
     read();
     window.addEventListener(DEALER_FILES_EVENT, read);
@@ -522,7 +524,7 @@ export default function SalesAnalyticsPage() {
             <tbody>
               {!perf.length && <tr><td colSpan={12} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่พบตัวแทนที่ตรงกับตัวกรอง</td></tr>}
               {perf.map(d => (
-                <tr key={d.code} className="clickable" onClick={() => setDrawer(d)} style={{ cursor: "pointer" }}>
+                <ClickableRow key={d.code} className="clickable" onActivate={() => setDrawer(d)} label={`เปิดรายละเอียดตัวแทน ${d.name}`}>
                   <td style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY }}>{d.code}</td>
                   <td style={{ fontWeight: 600, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {d.name}
@@ -545,7 +547,7 @@ export default function SalesAnalyticsPage() {
                       </button>
                     </div>
                   </td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>

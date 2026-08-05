@@ -11,7 +11,7 @@ import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { captureError } from "@pms/shared/lib/observability";
 import { DbError } from "@pms/shared/lib/friendlyError";
-import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, WonBuildingRaw, LeadSummary } from "../ports";
+import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, LeadSummary } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
@@ -356,7 +356,11 @@ export const SupabaseAdapter: DataAdapter = {
       });
       await must(sb().rpc("save_dealers", { p_rows: rows }));
     },
-    remove: (code) => must(sb().from("dealers").delete().eq("code", code)),
+    // ⚠️ ห้ามเรียกจริง — การลบตัวแทนในระบบจริงต้องผ่าน /api/admin/dealers (DELETE) เท่านั้น เพราะที่นั่น
+    // เช็ก FK-restrict ครบ 6 ตาราง + ลบบัญชี auth ของสาขาด้วย + เขียน audit log ก่อนลบจริง — .delete() ตรง
+    // ที่นี่ไม่มีอะไรกันเลยสักอย่าง (ผลตรวจสอบ DB×หน้าจอทั้งระบบ พบว่าไม่มีจุดไหนเรียกเมธอดนี้ในโหมด supabase
+    // จริงเลย — คงไว้เพื่อให้ตรงตาม DealersRepo interface เท่านั้น แต่ทำให้ throw ชัดเจนแทนลบเงียบๆ ถ้าถูกเรียกผิดจุด)
+    remove: async () => { throw new Error("ห้ามลบตัวแทนผ่านทางนี้ — ใช้ DELETE /api/admin/dealers เท่านั้น (กัน FK/บัญชีกำพร้า)"); },
   },
   catalog: {
     list: () => selectScoped<SolutionProduct>("master_catalog"),
@@ -575,17 +579,6 @@ export const SupabaseAdapter: DataAdapter = {
         byMonth: (d.byMonth ?? []).map(r => ({ y: Number(r.y), m: Number(r.m), created: Number(r.new), won: Number(r.won), lost: Number(r.lost) })),
         byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), leads: Number(r.leads), quoted: Number(r.quoted) })),
       };
-    },
-    customerRollup: async () => {
-      const { data, error } = await sb().rpc("customer_rollup");
-      if (error) throw new DbError(error.message, (error as { code?: string }).code);
-      const m = new Map<string, WonBuildingRaw[]>();
-      for (const r of (data as Row[]) ?? []) {
-        m.set(`${r.dealer_code}|${r.customer ?? ""}`, ((r.buildings as WonBuildingRaw[]) ?? []).map(b => ({
-          quoteNo: String(b.quoteNo), productLine: String(b.productLine ?? ""), valueNum: Number(b.valueNum), date: String(b.date ?? ""),
-        })));
-      }
-      return m;
     },
     networkQuoteRange: async (start, end, dealer) => {
       const { data, error } = await sb().rpc("network_quote_range", { p_start: start, p_end: end, p_dealer: dealer ?? null });

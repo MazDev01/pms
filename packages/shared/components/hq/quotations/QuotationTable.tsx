@@ -7,6 +7,7 @@ import { Eye } from "lucide-react";
 import { quotationStatusLabel, quotationStatusColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 import type { QuoteRow } from "@pms/shared/lib/hqQuotations";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
@@ -64,7 +65,7 @@ export function QuotationTable({ rows, onView, pagination }: {
             ) : rows.map(q => {
               const sc = quotationStatusColor[q.status];
               return (
-                <tr key={q.id} onClick={() => onView(q)} style={{ cursor: "pointer" }}>
+                <ClickableRow key={q.id} onActivate={() => onView(q)} label={`เปิดรายละเอียดใบเสนอราคา ${q.quoteNo}`}>
                   <td style={{ color: PRIMARY, fontWeight: 700, whiteSpace: "nowrap" }}>{q.quoteNo}</td>
                   <td>
                     <span className="badge" style={{ background: "#eef2f7", color: PRIMARY, fontFamily: "monospace" }}>{q.dealerCode}</span>
@@ -93,7 +94,7 @@ export function QuotationTable({ rows, onView, pagination }: {
                       <Eye size={13} />
                     </button>
                   </td>
-                </tr>
+                </ClickableRow>
               );
             })}
           </tbody>

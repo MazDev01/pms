@@ -26,16 +26,17 @@ import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerfo
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import type { HQCompany } from "@pms/shared/lib/data/types";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
-  HQ_POLICY_KEY, DEFAULT_HQ_POLICY,
-  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS,
-  HQ_NOTIF_KEY, HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
-  HQ_NOTIF_RULES_KEY, DEFAULT_HQ_NOTIF_RULES, HQ_DEALERS_KEY, loadHQDealers,
+  DEFAULT_HQ_POLICY,
+  DEFAULT_HQ_TARGETS,
+  HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
+  DEFAULT_HQ_NOTIF_RULES,
   HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE, LEAD_STATUS_ORDER,
-  HQ_SYSTEM_KEY, DEFAULT_QUOTE_NUMBERING, HQ_JOURNEY_KEY, LOST_REASONS,
+  LOST_REASONS,
   type SolutionProduct,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
   type HQAlertKey, type DealerRow, type LeadStatus,
@@ -50,7 +51,7 @@ import { SettingsBusCtx as BusCtx, type SectionApi } from "@pms/shared/lib/setti
 import {
   Building2, Users, GitMerge, Target, Bell,
   Save, RotateCcw, Plus, Trash2, Check, X,
-  Download, Upload, RefreshCw, Mail, Smartphone, Lock, AlertCircle,
+  Download, Upload, RefreshCw, Lock, AlertCircle,
   ShieldCheck,
 } from "lucide-react";
 
@@ -320,7 +321,7 @@ function TargetsTab() {
   // "ทำได้จริง" = ยอดจากใบที่ปิดการขายได้ ไม่ใช่คอลัมน์ revenue_actual ที่ seed ไว้
   const perf = useDealerPerformance();
   const actualOf = (code: string) => (perf.get(code) ?? EMPTY_PERF).revenue;
-  useEffect(() => { dealersRepo.list().then(setDealers).catch(() => {}); }, []);
+  useEffect(() => { dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e)); }, []);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
   // รวมเป้า/ผลจริงตามพื้นที่ — มาจากเป้ารายตัวแทนที่ตั้งไว้จริง ไม่ได้กุตัวเลข

@@ -5,18 +5,12 @@
 // อ่าน dealer_code / user_role จาก JWT claims (ใส่โดย custom_access_token_hook ที่ DB)
 // แล้วปั้นเป็น MockSession รูปเดียวกับโหมด local → RoleContext ใช้ร่วมกันได้ทั้งสองโหมด
 import { getSupabase } from "./data/supabase/client";
-import { DEMO_PASSWORD, type AuthResult } from "./auth";
+import type { AuthResult } from "./auth";
 import { friendlyError } from "./friendlyError";
 import type { MockSession, UserRole } from "./mock";
 import { HQ_ROLES } from "./permissions";
 
 const isHQRole = (r: UserRole): boolean => HQ_ROLES.includes(r);
-
-// อีเมลบัญชีเดโม (seed ไว้แล้ว) สำหรับปุ่มเข้าด่วนในหน้า login
-const DEMO_EMAIL: Record<"hq" | "dealer", string> = {
-  hq: "admin@benjamin.com",
-  dealer: "cnx@dealer.com",
-};
 
 const ERR_GENERIC = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
 
@@ -102,11 +96,6 @@ export async function sbSignIn(email: string, password: string): Promise<AuthRes
   const session = sessionFromToken(data.session.access_token, data.user?.email ?? email);
   if (!session) return { ok: false, error: ERR_GENERIC };
   return { ok: true, session };
-}
-
-/** เข้าด่วนด้วยบัญชีเดโมที่ seed ไว้ (ปุ่ม HQ / Dealer ในหน้า login) */
-export function sbDemoSignIn(key: "hq" | "dealer"): Promise<AuthResult> {
-  return sbSignIn(DEMO_EMAIL[key], DEMO_PASSWORD);
 }
 
 /** ออกจากระบบ (ล้าง session ฝั่ง Supabase) */

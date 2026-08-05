@@ -5,11 +5,15 @@
 // ไม่มีแท็บสัญญา / ใบส่งมอบ / แบบก่อสร้าง — ระบบไม่มีที่เก็บข้อมูลเหล่านั้น
 import { Building2, Truck } from "lucide-react";
 import { RightDrawer, type DrawerTab } from "@pms/shared/components/ui/RightDrawer";
-import { customerCode } from "@pms/shared/lib/mock";
+import { customerCode, noteCategoryColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 import { toThaiDate } from "@pms/shared/lib/delivery";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { useCustomerNotesForDealer } from "@pms/shared/lib/useCustomerNotes";
 import { type CustomerDbRow, type PurchasedBuilding } from "@pms/shared/lib/customerDb";
+
+const noteColorOf = (cat: string) =>
+  (noteCategoryColor as Record<string, { bg: string; text: string; dot: string }>)[cat] ?? noteCategoryColor["ทั่วไป"];
 
 const PRIMARY = "#003366";
 const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
@@ -68,8 +72,11 @@ function BuildingCard({ b }: { b: PurchasedBuilding }) {
 }
 
 export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; onClose: () => void }) {
+  // ต้องเรียก hook ก่อน early-return เสมอ (Rules of Hooks) — dealerCode ว่างตอน row ยังไม่มา ก็ไม่ยิง fetch
+  const { notes: dealerNotes } = useCustomerNotesForDealer(row?.dealerCode ?? "");
   if (!row) return null;
 
+  const customerNotes = dealerNotes.filter(n => n.customerId === (row.localId ?? row.id));
   const totalBought = row.buildings.reduce((s, b) => s + b.value, 0);
 
   const tabs: DrawerTab[] = [
@@ -88,6 +95,28 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
           <Field label="ซื้อล่าสุด" value={row.lastPurchase ?? DASH} />
         </Grid>
       ),
+    },
+    {
+      key: "notes",
+      label: `บันทึก (${customerNotes.length})`,
+      content: customerNotes.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {customerNotes.map(n => {
+            const c = noteColorOf(n.category);
+            return (
+              <div key={n.id} style={{ padding: "10px 12px", borderRadius: 10, background: "#f8f9fb", border: "1px solid #eef0f4" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title}</span>
+                  <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>{n.updatedAt}</span>
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "#4b5563", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{n.content}</div>
+                <div style={{ fontSize: "0.63rem", color: "#9ca3af", marginTop: 6 }}>โดย {n.author || "—"}</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : <Empty text="ยังไม่มีบันทึกของลูกค้ารายนี้ (ดูอย่างเดียว — แก้ไขได้ที่หน้าลูกค้าฝั่งตัวแทน)" />,
     },
     {
       key: "buildings",

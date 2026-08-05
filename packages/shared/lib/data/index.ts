@@ -90,7 +90,6 @@ export const audit: AuditRepo = {
 const _metrics = adapter.metrics;
 export const metrics: MetricsRepo = {
   dealerRollup: (year, opts) => dedupeRead(`metrics.dealerRollup:${year}:${opts ? JSON.stringify(opts) : ""}`, () => _metrics.dealerRollup(year, opts)),
-  customerRollup: () => dedupeRead("metrics.customerRollup", () => _metrics.customerRollup()),
   leadSummary: (f) => dedupeRead(`metrics.leadSummary:${JSON.stringify(f)}`, () => _metrics.leadSummary(f)),
   networkQuoteRange: (start, end, dealer) =>
     dedupeRead(`metrics.networkQuoteRange:${start}:${end}:${dealer ?? ""}`, () => _metrics.networkQuoteRange(start, end, dealer)),

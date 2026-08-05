@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
-  HQ_TARGETS_KEY, DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
+  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { createDealerAccount, deleteDealerAccount } from "@pms/shared/lib/adminApi";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
+import { createDealerAccount, deleteDealerAccount, resetDealerPassword, impersonateDealer } from "@pms/shared/lib/adminApi";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
@@ -128,6 +130,12 @@ function genCredentials(code: string): DealerCredentials {
   return { email: `${code.toLowerCase()}@partner-agent.co.th`, password: `PEB-${code}-${digits}` };
 }
 
+// อีเมลล็อกอินของตัวแทน — สูตรเดียวกับที่เซิร์ฟเวอร์ตั้งให้ตอนสร้างบัญชีจริง (H5) ไม่ใช่ความลับ
+// ต่างจากรหัสผ่าน (hash ไว้ ดึงคืนไม่ได้) — โชว์ได้เสมอโดยไม่ต้องยิง API แค่คำนวณจากรหัสสาขา
+function dealerLoginEmail(code: string): string {
+  return `${code.toLowerCase()}@partner-agent.co.th`;
+}
+
 // รหัสผ่านใหม่ตอนรีเซ็ต — deterministic (ไม่สุ่ม) เดโมจึงทวนซ้ำได้
 // nonce = ความยาวรหัสเดิม → กดรีเซ็ตซ้ำได้รหัสใหม่เรื่อย ๆ ไม่วนกลับมาซ้ำของเดิม
 // ฟอร์แมตเดียวกับ genCredentials: PEB-{รหัส}-{4 หลัก}
@@ -166,6 +174,7 @@ function HQDealersPageInner() {
   const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials; mode: "created" | "reset" } | null>(null);
   const [viewCredsDealer, setViewCredsDealer] = useState<DealerRow | null>(null);
   const [entering, setEntering] = useState<string | null>(null);
+  const [resettingPw, setResettingPw] = useState(false); // กำลังรีเซ็ตรหัสผ่านที่เซิร์ฟเวอร์ — กันกดปุ่มซ้ำระหว่างรอ
   const [selectedDealer, setSelectedDealer] = useState<DealerRow | null>(null);
 
   // ผลงานจริงจากใบเสนอราคา/ลีด — ห้ามอ่าน d.revenueActual / d.winRate / d.activeProjects อีก
@@ -231,7 +240,7 @@ function HQDealersPageInner() {
       });
       setCreating(false);
       if (!res.ok) { setFormErr(res.error); return; } // ล้มเหลวต้องบอกจริง คงฟอร์มไว้ให้แก้
-      await dealersRepo.list().then(setDealers).catch(() => {}); // route เพิ่งเพิ่มแถวที่เซิร์ฟเวอร์ → ดึงชุดจริง
+      await dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e)); // route เพิ่งเพิ่มแถวที่เซิร์ฟเวอร์ → ดึงชุดจริง
       // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
       setShowForm(false);
       // รหัสจริงจากเซิร์ฟเวอร์ (บัญชีล็อกอินได้แล้วจริง) — โชว์ให้ก๊อปไปแจ้งครั้งเดียว
@@ -274,35 +283,51 @@ function HQDealersPageInner() {
     logAudit(next === "active" ? "เปิดใช้งานตัวแทน" : "ปิดใช้งานตัวแทน", `${d.code} · ${d.name}`);
   }
 
-  // "เข้าระบบแทนตัวแทน" — ทำได้เฉพาะโหมดเดโมเท่านั้น
+  // "เข้าระบบแทนตัวแทน" — HQ มีสิทธิ์เข้าบัญชีตัวแทนไหนก็ได้ (บอสยืนยัน)
   //
-  // เดิมปุ่มนี้เรียก login("dealer") ซึ่งเข้าด้วยบัญชีเดโมตัวเดียวเสมอ (CNX)
-  // ไม่ว่าจะกดจากแถวไหน → HQ กดที่แถว RYG แล้วไปเห็นข้อมูล CNX โดยไม่รู้ตัว = อันตรายกว่าไม่มีปุ่ม
+  // โหมดเดโม (local): เดิมปุ่มนี้เรียก login("dealer") ซึ่งเข้าด้วยบัญชีเดโมตัวเดียวเสมอ (CNX)
+  // ไม่ว่าจะกดจากแถวไหน → คงพฤติกรรมเดิมไว้ (ไม่มีระบบยืนยันตัวตนจริงให้ผูกต่อสาขา)
   //
-  // ทำให้ถูกต้องในโหมดจริงไม่ได้ด้วย: รหัสผ่านตัวแทนถูก hash อยู่ใน Supabase Auth
-  // การสวมสิทธิ์ต้องใช้ service_role ซึ่งอยู่ฝั่ง client ไม่ได้เด็ดขาด
-  const canImpersonate = DATA_SOURCE !== "supabase";
-  function enterDealer(d: DealerRow) {
-    if (!canImpersonate) {
-      alert([
-        `เข้าระบบแทน "${d.name}" จากหน้านี้ไม่ได้`,
-        "",
-        "รหัสผ่านของตัวแทนถูกเข้ารหัสไว้ในระบบยืนยันตัวตน สำนักงานใหญ่จึงสวมสิทธิ์ไม่ได้",
-        "ถ้าต้องการดูข้อมูลของสาขานี้ ให้กดปุ่มดูรายละเอียดตัวแทนแทน",
-      ].join("\n"));
+  // โหมดจริง (supabase): เดิมเข้าใจผิดว่าทำไม่ได้เพราะรหัสผ่านตัวแทนถูก hash ไว้ — แต่ service_role
+  // ไม่จำเป็นต้อง "รู้" รหัสผ่านเพื่อสร้าง session แทนผู้ใช้อื่น: ใช้ Supabase magic-link
+  // (generateLink ฝั่งเซิร์ฟเวอร์ — ดู /api/admin/dealers/impersonate) ออกลิงก์เข้าระบบครั้งเดียว
+  // เปิดในแท็บใหม่ไปยังแอปตัวแทน (คนละ origin กับ HQ · session แยกต่อแท็บอยู่แล้ว — ดู client.ts)
+  // จึงไม่กระทบ session ของ HQ เองในแท็บปัจจุบันเลย
+  const canImpersonate = true;
+  async function enterDealer(d: DealerRow) {
+    if (DATA_SOURCE !== "supabase") {
+      setEntering(d.id);
+      login("dealer");
+      router.push("/dashboard");
       return;
     }
     setEntering(d.id);
-    login("dealer");
-    router.push("/dashboard");
+    const res = await impersonateDealer(d.code);
+    setEntering(null);
+    if (!res.ok) { alert(`เข้าระบบแทน "${d.name}" ไม่สำเร็จ: ${res.error}`); return; }
+    window.open(res.link, "_blank", "noopener");
+    logAudit("เข้าระบบแทนตัวแทน", `${d.code} · ${d.name}`);
   }
 
   // ออกรหัสผ่านใหม่ให้ตัวแทน แล้วเปิดโมดัลคัดลอกรหัสใหม่ไปแจ้งต่อ
-  function resetPassword(d: DealerRow) {
-    // โหมด supabase: รหัสผ่านถูก hash อยู่ใน Supabase Auth — ออกรหัสใหม่จากหน้านี้ไม่ได้
-    const cur = d.credentials;
-    if (!cur) { alert("บัญชีนี้จัดการรหัสผ่านผ่านระบบยืนยันตัวตน (Supabase Auth)\nรีเซ็ตรหัสผ่านจากหน้านี้ไม่ได้"); return; }
+  // HQ เป็นผู้คุมรหัสผ่านของตัวแทนทั้งหมด — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตรหัสผ่านเอง (บอสสั่ง)
+  async function resetPassword(d: DealerRow) {
     if (!confirm(`ออกรหัสผ่านใหม่ให้ "${d.name}"?\nรหัสเดิมจะใช้เข้าระบบไม่ได้ทันที`)) return;
+
+    if (DATA_SOURCE === "supabase") {
+      setResettingPw(true);
+      const res = await resetDealerPassword(d.code);
+      setResettingPw(false);
+      if (!res.ok) { alert("รีเซ็ตรหัสผ่านไม่สำเร็จ: " + res.error); return; }
+      // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
+      setViewCredsDealer(null);
+      setCredsModal({ name: d.name, creds: { email: res.email, password: res.password }, mode: "reset" });
+      return;
+    }
+
+    // โหมดเดโม (local): คงพฤติกรรมเดิมไว้เล่นได้
+    const cur = d.credentials;
+    if (!cur) { alert("ไม่พบข้อมูลรหัสผ่านของตัวแทนนี้"); return; }
     const creds: DealerCredentials = { email: cur.email, password: genResetPassword(d.code, cur.password.length) };
     setDealers(prev => prev.map(x => x.id === d.id ? { ...x, credentials: creds } : x));
     logAudit("รีเซ็ตรหัสผ่านตัวแทน", `${d.code} · ${d.name}`);
@@ -320,7 +345,7 @@ function HQDealersPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
-            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials?.email ?? "—",perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
+            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials?.email ?? dealerLoginEmail(d.code),perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มตัวแทน
           </button>
@@ -380,12 +405,15 @@ function HQDealersPageInner() {
               <col style={{ width: "14%", minWidth: 190 }} />{/* ชื่อตัวแทน */}
               <col style={{ width: "9%", minWidth: 96 }} />{/* จังหวัด */}
               <col style={{ width: "7%", minWidth: 64 }} />{/* ภาค */}
-              <col style={{ width: "13%", minWidth: 130 }} />{/* ยอด / เป้า */}
+              <col style={{ width: "11%", minWidth: 130 }} />{/* ยอด / เป้า */}
               <col style={{ width: "9%", minWidth: 130 }} />{/* โอกาสการขาย */}
               <col style={{ width: "9%", minWidth: 140 }} />{/* ติดตามตรงเวลา */}
               <col style={{ width: "7%", minWidth: 76 }} />{/* สถานะ */}
-              {/* คอลัมน์ปุ่ม: เข้าระบบ + ไอคอน 4 ปุ่ม ต้องการ ~230px — ให้พื้นที่พอ ไม่ล้นออกนอกตาราง */}
-              <col style={{ width: "22%", minWidth: 268 }} />
+              {/* คอลัมน์ปุ่ม: เข้าระบบ (~99px) + ไอคอน 5 ปุ่ม (28px × 5) + gap 4px × 5 ช่อง ≈ 259px
+                  เดิม minWidth 268 ลบ padding td 32px เหลือพื้นที่จริงแค่ 236px < เนื้อหา 259px
+                  → ปุ่มล้นออกนอกเซลล์ (td ตั้ง overflow:visible ไว้) จัดเรียงเพี้ยนตามความกว้างจอ/ฟอนต์เรนเดอร์
+                  ให้พื้นที่เผื่อจริง 300px (268px ใช้งาน + เผื่อ ~30px) */}
+              <col style={{ width: "24%", minWidth: 300 }} />
             </colgroup>
             <thead>
               <tr>
@@ -398,8 +426,8 @@ function HQDealersPageInner() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={10} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
               ) : filtered.map((d, i) => (
-                <tr key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
-                  onClick={() => setSelectedDealer(d)}>
+                <ClickableRow key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
+                  onActivate={() => setSelectedDealer(d)} label={`เปิดรายละเอียดตัวแทน ${d.name}`}>
                   <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{i + 1}</td>
                   <td>
                     <span style={{ fontWeight: 800, color: "#003366", fontSize: "0.8rem", letterSpacing: "0.05em" }}>{d.code}</span>
@@ -426,7 +454,7 @@ function HQDealersPageInner() {
                   <td style={{ overflow: "visible" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", justifyContent: "flex-end" }}>
                       {canImpersonate && (
-                        <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id} title="เข้าระบบตัวแทน (โหมดเดโมเท่านั้น)"
+                        <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id} title="เข้าระบบแทนตัวแทน"
                           className="btn btn-primary btn-sm" style={{ opacity: entering === d.id ? 0.6 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
                           <LogIn size={12} /> {entering === d.id ? "..." : "เข้าระบบ"}
                         </button>
@@ -453,7 +481,7 @@ function HQDealersPageInner() {
                       </button>
                     </div>
                   </td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>
@@ -667,7 +695,7 @@ function HQDealersPageInner() {
                 {/* Credentials */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px" }}>
                   <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
-                  <CopyField label="อีเมล" value={d.credentials?.email ?? "—"} />
+                  <CopyField label="อีเมล" value={d.credentials?.email ?? dealerLoginEmail(d.code)} />
                   {/* โหมด supabase ไม่มีรหัสผ่านให้แสดง (hash อยู่ใน Auth) — ขึ้น "—" ตามจริง ห้ามกุ */}
                   <CopyField label="รหัสผ่าน" value={d.credentials?.password ?? "—"} secret />
                 </div>
@@ -705,18 +733,19 @@ function HQDealersPageInner() {
               <button onClick={() => setViewCredsDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={16} /></button>
             </div>
             <div style={{ padding: "16px 20px" }}>
-              <CopyField label="อีเมล" value={viewCredsDealer.credentials?.email ?? "—"} />
+              <CopyField label="อีเมล" value={viewCredsDealer.credentials?.email ?? dealerLoginEmail(viewCredsDealer.code)} />
               <CopyField label="รหัสผ่าน" value={viewCredsDealer.credentials?.password ?? "—"} />
               <div style={{ fontSize: "0.72rem", color: "#6b7280", background: "#f0f4f8", borderRadius: 8, padding: "8px 12px", marginTop: 4 }}>
                 ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
               </div>
               {/* ย้ายมาจากแท็บ "ตัวแทนจำหน่าย" ในหน้าตั้งค่า (แท็บนั้นถูกยุบ — ข้อมูลซ้ำกับหน้านี้ทั้งใบ)
                   มีผลทันที ไม่ผ่านปุ่มบันทึก · ลงบันทึกการใช้งานทุกครั้ง เพราะเป็นการแตะบัญชีคนอื่น */}
-              <button onClick={() => resetPassword(viewCredsDealer)}
+              <button onClick={() => resetPassword(viewCredsDealer)} disabled={resettingPw}
                 style={{ width: "100%", marginTop: 12, padding: "9px", borderRadius: 9, border: "1px solid #fecaca",
-                  background: "#fff", color: "#dc2626", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
+                  background: "#fff", color: "#dc2626", fontSize: "0.78rem", fontWeight: 700, cursor: resettingPw ? "not-allowed" : "pointer",
+                  opacity: resettingPw ? 0.6 : 1,
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-                <Key size={13} /> รีเซ็ตรหัสผ่าน
+                <Key size={13} /> {resettingPw ? "กำลังรีเซ็ต…" : "รีเซ็ตรหัสผ่าน"}
               </button>
               <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 6, textAlign: "center" }}>
                 รหัสเดิมจะใช้ไม่ได้ทันที — ต้องแจ้งรหัสใหม่ให้ตัวแทน

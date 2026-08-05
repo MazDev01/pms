@@ -6,7 +6,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { useRouter } from "next/navigation";
-import { Users, PhoneCall, AlarmClock, Percent, X, ChevronRight, MapPin, GitBranch, Eye } from "lucide-react";
+import { Users, PhoneCall, AlarmClock, Percent, X, GitBranch, Eye } from "lucide-react";
 import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange, useUnassignedLeads, useDashboardQuoteSummary, useLeadAppointments } from "@pms/shared/lib/useNetworkData";
 import type { LeadSummaryFilters, LeadListOpts } from "@pms/shared/lib/data/ports";
 import { DEFAULT_LEAD_RULES } from "@pms/shared/lib/mock";
@@ -22,6 +22,8 @@ import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { DEALER_FILES_EVENT, type DealerFile } from "@pms/shared/lib/mock";
 import { files as filesRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { GroupedBarChart, Donut } from "@pms/shared/components/ui/Charts";
@@ -31,7 +33,7 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { leadStatusLabel, leadStatusColor, QUOTED_UP, LEAD_STATUS_ORDER, type LeadStatus } from "@pms/shared/lib/mock";
-import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
+import { fmtBaht } from "@pms/shared/lib/format";
 
 const PRIMARY = "#003366";
 // 8 สี — โดนัท "ตามแหล่งที่มา" มีได้ถึง 8 ชิ้น ถ้าสีวนซ้ำจะอ่านผิดว่าเป็นชิ้นเดียวกัน
@@ -88,7 +90,7 @@ export default function HQLeadsPage() {
   useEffect(() => {
     const read = () => {
       const myReq = ++dealerFilesReqRef.current;
-      filesRepo.list({ isHQ: true }).then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); }).catch(() => {}); // HQ เห็นไฟล์ทั้งเครือ
+      filesRepo.list({ isHQ: true }).then(r => { if (dealerFilesReqRef.current === myReq) setDealerFiles(r); }).catch(e => logRepoRead("files.list", e)); // HQ เห็นไฟล์ทั้งเครือ
     };
     read();
     window.addEventListener(DEALER_FILES_EVENT, read);
@@ -165,7 +167,6 @@ export default function HQLeadsPage() {
     source: srcSel === "ALL" ? undefined : srcSel, search: query.trim() || undefined,
     dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
     overdue: overdueOnly, asOf: isoDateOf(APP_NOW), defaultDays: DEFAULT_LEAD_RULES.followUpAlertDays, perDealer: perDealerDays,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [leadPage, status, leadDealerCodes, province, btSel, srcSel, query, timeRange.start, timeRange.end, overdueOnly, perDealerDays]);
   const leadsPage = useLeadsPage(leadOpts);
   const leadTableKey = JSON.stringify({ ...leadOpts, offset: 0 });
@@ -182,7 +183,6 @@ export default function HQLeadsPage() {
     source: srcSel === "ALL" ? undefined : srcSel, search: query.trim() || undefined,
     dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
     overdue: true, asOf: isoDateOf(APP_NOW), defaultDays: DEFAULT_LEAD_RULES.followUpAlertDays, perDealer: perDealerDays,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [leadDealerCodes, province, btSel, srcSel, query, timeRange.start, timeRange.end, perDealerDays]);
   const followUpPage = useLeadsPage(followUpOpts);
 
@@ -639,7 +639,7 @@ export default function HQLeadsPage() {
               {!dealerPerf.length ? (
                 <tr><td colSpan={6} style={{ textAlign: "center", padding: "28px 14px", color: "var(--muted-foreground)" }}>ไม่มีข้อมูลในช่วงที่เลือก</td></tr>
               ) : dealerPerf.map((d, i) => (
-                <tr key={d.code} className="clickable" onClick={() => router.push(`/hq/dealers/${d.code}`)} style={{ cursor: "pointer" }}>
+                <ClickableRow key={d.code} className="clickable" onActivate={() => router.push(`/hq/dealers/${d.code}`)} label={`เปิดหน้าตัวแทน ${d.name}`}>
                   <td>
                     {/* อันดับ 1-3 = เหรียญ ทอง/เงิน/ทองแดง · ที่เหลือ = เลขในชิปเทา (โพลิชแบบ leaderboard) */}
                     <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, fontWeight: 800, fontSize: "0.72rem", fontVariantNumeric: "tabular-nums",
@@ -651,7 +651,7 @@ export default function HQLeadsPage() {
                   <td className="num" style={{ fontVariantNumeric: "tabular-nums" }}>{d.quotes}</td>
                   <td className="num" style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{d.conv === null ? "—" : `${d.conv}%`}</td>
                   <td className="num" style={{ fontWeight: 800, color: "#003366", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(d.sales)}</td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>
@@ -703,7 +703,7 @@ export default function HQLeadsPage() {
                 // ติดต่อล่าสุด = กิจกรรมล่าสุดของลีด · ลีดที่ไม่มีบันทึกกิจกรรม = "—" (ไม่เดาวันให้)
                 const last = l.activities?.length ? l.activities[0].date : "—";
                 return (
-                  <tr key={l.id} className="clickable" onClick={() => setViewLead(l)} style={{ cursor: "pointer" }}>
+                  <ClickableRow key={l.id} className="clickable" onActivate={() => setViewLead(l)} label={`เปิดรายละเอียดลูกค้าเป้าหมาย ${l.company}`}>
                     <td style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY, whiteSpace: "nowrap" }}>{l.id}</td>
                     {/* รหัส + ชื่อตัวแทนรวมเซลล์เดียว — เดิมแยก 2 คอลัมน์ทั้งที่เป็นข้อมูลตัวเดียวกัน กินที่ 228px */}
                     <td title={DEALER_NAME.get(l.dealerCode ?? "") ?? ""} style={{ overflow: "hidden" }}>
@@ -740,7 +740,7 @@ export default function HQLeadsPage() {
                         <Eye size={13} />
                       </button>
                     </td>
-                  </tr>
+                  </ClickableRow>
                 );
               })}
             </tbody>

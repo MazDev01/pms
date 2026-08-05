@@ -35,7 +35,9 @@ export function useHQRules(): HQRules | null {
         dealersRepo.list(),
       ]).then(([rules, leadRulesMap, validityDays, dealers]) =>
         setHqRules({ rules, leadRulesMap, validityDays, dealers }),
-      ).catch(() => {});
+      // โหลดพลาด = hqRules ค้าง null → การแจ้งเตือน/เกณฑ์ทั้งหมดหายเงียบ ต้องแจ้งเสมอ
+      // (ให้ตรงกับ metrics.hqAlerts ในไฟล์เดียวกันที่ทำถูกอยู่แล้ว)
+      ).catch(e => logRepoRead("settings.hqRules", e));
     };
     read();
     window.addEventListener(HQ_NOTIF_UPDATED_EVENT, read);
