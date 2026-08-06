@@ -125,15 +125,40 @@ export function SalesProvider({
   const leadsRef = useRef(leads);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
 
+  // ── กัน "ผลการโหลดที่มาช้า" ทับสิ่งที่ผู้ใช้เพิ่งทำ (พบจากทดสอบโหลด 10 สาขา · 6 ส.ค. 69) ──
+  //
+  // อาการจริงที่จับได้: เปิดหน้าลูกค้าแล้วรีบกด "เพิ่มลูกค้า" ก่อนรายการโหลดเสร็จ → แถวที่เพิ่งเพิ่ม
+  //   หายไปจากหน้าจอทั้งที่บันทึกลง DB สำเร็จแล้ว และไม่มีข้อความเตือนอะไรเลย (ตารางว่าง 0 แถว)
+  // สาเหตุ: list() ที่ยิงตอนเปิดหน้าได้ภาพ ณ ตอนนั้น (ยังไม่มีลูกค้ารายนี้) แต่ resolve ทีหลัง
+  //   แล้ว setLeads/setCustomers(rows) ทับทั้งอาร์เรย์ — ลบทั้งแถวที่ใส่แบบ optimistic และแถวที่
+  //   realtime เพิ่งเติมเข้ามาทิ้ง · ผู้ใช้ต้องรีเฟรชเองถึงจะเห็น
+  // วิธีแก้: นับจำนวน "การเขียนจากฝั่งเรา" ถ้าตัวเลขขยับระหว่างที่รอ list() = ภาพนั้นเก่ากว่าหน้าจอ
+  //   → ทิ้งแล้วโหลดใหม่ (ไม่เกิน 3 รอบ)
+  // ⚠️ ไม่ใช้วิธี "รวมอาร์เรย์เก่ากับใหม่" เพราะตอนสลับสาขา (login คนละบัญชี) จะกลายเป็นข้อมูล
+  //   สาขาเก่าค้างอยู่ = ข้อมูลข้ามสาขา ซึ่งเป็นบั๊กที่ร้ายแรงกว่ามาก (ดู branch-isolation.spec.ts)
+  const writeSeq = useRef(0);
+  const bumpWrite = useCallback(() => { writeSeq.current += 1; }, []);
+  const loadFresh = useCallback(async <T,>(
+    load: () => Promise<T>, apply: (rows: T) => void, alive: () => boolean, label: string,
+  ) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const seq = writeSeq.current;
+      let rows: T;
+      try { rows = await load(); } catch (e) { if (alive()) logRepoRead(label, e); return; }
+      if (!alive()) return;
+      // รอบสุดท้ายรับไว้เลย — ยอมเสี่ยงทับดีกว่าปล่อยให้หน้าจอไม่มีข้อมูลตั้งต้นเลย
+      // (แถวที่หายจะถูก realtime เติมกลับให้อยู่แล้ว เพราะ INSERT event ตามมาทีหลังการเขียน)
+      if (writeSeq.current === seq || attempt === 2) { apply(rows); return; }
+    }
+  }, []);
+
   // โหลดลีดเมื่อ auth พร้อม + รีโหลดเมื่อสลับสาขา (login คนละบัญชี) — scope ส่งให้ repo (RLS ฝั่ง supabase)
   useEffect(() => {
     if (!hydrated || gateHQ) return; // HQ/supabase: ไม่โหลดลีดทั้งเครือ (อ่านผ่าน RPC แทน)
     let alive = true;
-    leadsRepo.list({ dealerCode, isHQ })
-      .then((rows) => { if (alive) setLeads(rows); })
-      .catch((e) => { if (alive) logRepoRead("leads.list", e); });
+    void loadFresh(() => leadsRepo.list({ dealerCode, isHQ }), setLeads, () => alive, "leads.list");
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, gateHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ, loadFresh]);
 
   // ── การบันทึกล้มเหลว ต้อง "ดัง" เสมอ (C1) ────────────────────────────────
   // เดิม: .catch(console.error) → RLS ปฏิเสธ/เน็ตหลุด แล้วผู้ใช้ยังเห็นข้อมูลบนจอเหมือนบันทึกสำเร็จ
@@ -149,10 +174,11 @@ export function SalesProvider({
   const onFail = (entity: SyncEntity, op: string) => (e: unknown) => failRef.current(entity, op, e);
 
   // เขียนทะลุถึง repo — optimistic: อัปเดต UI ก่อน แล้ว persist เบื้องหลัง
+  // bumpWrite() ทุกครั้ง = บอก loadFresh ว่า "หน้าจอใหม่กว่าภาพที่กำลังโหลดอยู่แล้ว อย่าเอามาทับ"
   const persistLead = useRef({
-    create: (l: LeadRow) => { void leadsRepo.create(l).catch(onFail("leads", "สร้างลูกค้าเป้าหมาย")); },
-    update: (l: LeadRow) => { void leadsRepo.update(l).catch(onFail("leads", "แก้ไขลูกค้าเป้าหมาย")); },
-    remove: (id: string) => { void leadsRepo.remove(id).catch(onFail("leads", "ลบลูกค้าเป้าหมาย")); },
+    create: (l: LeadRow) => { bumpWrite(); void leadsRepo.create(l).catch(onFail("leads", "สร้างลูกค้าเป้าหมาย")); },
+    update: (l: LeadRow) => { bumpWrite(); void leadsRepo.update(l).catch(onFail("leads", "แก้ไขลูกค้าเป้าหมาย")); },
+    remove: (id: string) => { bumpWrite(); void leadsRepo.remove(id).catch(onFail("leads", "ลบลูกค้าเป้าหมาย")); },
   }).current;
   // ── Customers (Phase 2) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
@@ -162,15 +188,13 @@ export function SalesProvider({
   useEffect(() => {
     if (!hydrated || gateHQ) return; // HQ/supabase: ลูกค้าทั้งเครืออ่านผ่าน repo ที่หน้า /hq/customers เอง
     let alive = true;
-    customersRepo.list({ dealerCode, isHQ })
-      .then((rows) => { if (alive) setCustomers(rows); })
-      .catch((e) => { if (alive) logRepoRead("customers.list", e); });
+    void loadFresh(() => customersRepo.list({ dealerCode, isHQ }), setCustomers, () => alive, "customers.list");
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, gateHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ, loadFresh]);
   const persistCustomer = useRef({
-    create: (c: CustomerRow) => { void customersRepo.create(c).catch(onFail("customers", "สร้างลูกค้า")); },
-    update: (c: CustomerRow) => { void customersRepo.update(c).catch(onFail("customers", "แก้ไขลูกค้า")); },
-    remove: (id: number) => { void customersRepo.remove(id).catch(onFail("customers", "ลบลูกค้า")); },
+    create: (c: CustomerRow) => { bumpWrite(); void customersRepo.create(c).catch(onFail("customers", "สร้างลูกค้า")); },
+    update: (c: CustomerRow) => { bumpWrite(); void customersRepo.update(c).catch(onFail("customers", "แก้ไขลูกค้า")); },
+    remove: (id: number) => { bumpWrite(); void customersRepo.remove(id).catch(onFail("customers", "ลบลูกค้า")); },
   }).current;
   // ── Quotations (Phase 3) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา · setStatus→won ให้แอปสร้างลูกค้าเอง (ดู setQuotationStatus · trigger ถูกลบ 0033)
@@ -195,17 +219,17 @@ export function SalesProvider({
     const prepare = skipExpire
       ? Promise.resolve(0)
       : quotationsRepo.expireOverdue(APP_NOW_ISO, scope, quoteValidityDays).catch(() => { expiredThisSession.delete(myDealerCode); return 0; });
-    prepare
-      .then(() => quotationsRepo.list(scope))
-      .then((rows) => { if (alive) setQuotations(rows); })
-      .catch((e) => { if (alive) logRepoRead("quotations.list", e); });
+    void loadFresh(
+      () => prepare.then(() => quotationsRepo.list(scope)),
+      setQuotations, () => alive, "quotations.list",
+    );
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays]);
+  }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays, loadFresh]);
   const persistQuote = useRef({
-    create: (q: QuotationMock) => { void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
-    update: (q: QuotationMock) => quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")),
-    remove: (id: string) => { void quotationsRepo.remove(id).catch(onFail("quotations", "ลบใบเสนอราคา")); },
-    setStatus: (id: string, status: QuotationStatus) => { void quotationsRepo.setStatus(id, status).catch(onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")); },
+    create: (q: QuotationMock) => { bumpWrite(); void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
+    update: (q: QuotationMock) => { bumpWrite(); return quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
+    remove: (id: string) => { bumpWrite(); void quotationsRepo.remove(id).catch(onFail("quotations", "ลบใบเสนอราคา")); },
+    setStatus: (id: string, status: QuotationStatus) => { bumpWrite(); void quotationsRepo.setStatus(id, status).catch(onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")); },
   }).current;
   // auto-link ไฟล์ใบเสนอราคา (metadata) ผ่าน repository — แทน syncAddQuotationFile/Remove เดิม (Phase 6)
   const fileScopeRef = useRef({ dealerCode, isHQ, myDealerCode });
@@ -234,17 +258,15 @@ export function SalesProvider({
   useEffect(() => {
     if (!hydrated || gateHQ) return; // HQ/supabase: นัดหมายดึงเฉพาะที่ต้องใช้ (per-lead/per-dealer) ที่หน้า
     let alive = true;
-    appointmentsRepo.list({ dealerCode, isHQ })
-      .then((rows) => { if (alive) setAppointments(rows); })
-      .catch((e) => { if (alive) logRepoRead("appointments.list", e); });
+    void loadFresh(() => appointmentsRepo.list({ dealerCode, isHQ }), setAppointments, () => alive, "appointments.list");
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, gateHQ]);
+  }, [hydrated, dealerCode, isHQ, gateHQ, loadFresh]);
   // bump สัญญาณเมื่อข้อมูลขายชุดใดเปลี่ยน (โหลด/เขียน/realtime) — hook RPC ผูก refetch กับ salesVersion
   useEffect(() => { setSalesVersion(v => v + 1); }, [leads, quotations, customers, appointments]);
   const persistAppt = useRef({
-    create: (a: AppointmentMock) => { void appointmentsRepo.create(a).catch(onFail("appointments", "สร้างนัดหมาย")); },
-    update: (a: AppointmentMock) => { void appointmentsRepo.update(a).catch(onFail("appointments", "แก้ไขนัดหมาย")); },
-    remove: (id: number) => { void appointmentsRepo.remove(id).catch(onFail("appointments", "ลบนัดหมาย")); },
+    create: (a: AppointmentMock) => { bumpWrite(); void appointmentsRepo.create(a).catch(onFail("appointments", "สร้างนัดหมาย")); },
+    update: (a: AppointmentMock) => { bumpWrite(); void appointmentsRepo.update(a).catch(onFail("appointments", "แก้ไขนัดหมาย")); },
+    remove: (id: number) => { bumpWrite(); void appointmentsRepo.remove(id).catch(onFail("appointments", "ลบนัดหมาย")); },
   }).current;
 
   // ประกอบตัวรายงานความล้มเหลว (C1) — ทำหลัง state ครบทุกตัวแล้วจึงรู้จัก setter ทั้งหมด
@@ -262,6 +284,41 @@ export function SalesProvider({
       else appointmentsRepo.list(scope).then(setAppointments).catch(() => {});
     };
   }, [dealerCode, isHQ]);
+
+  // ── ตาข่ายกันหน้าจอค้าง: ซิงก์ซ้ำเป็นระยะ ไม่ฝากความถูกต้องไว้กับ realtime อย่างเดียว ──
+  //
+  // พบจากการรันชุดทดสอบเต็ม (6 ส.ค. 69): การเชื่อมต่อ realtime "เปิดอยู่" และสมัครรับข้อมูลตอบ "ok"
+  //   ครบทุกช่อง แต่เซิร์ฟเวอร์ไม่ส่งสัญญาณข้อมูลใหม่มาเลยสักรายการ (นับได้ 0)
+  //   ผลคือหน้า HQ ค้างที่ "ลูกค้าทั้งเครือ 13 ราย" ขณะฐานข้อมูลมี 16 ราย และค้างแบบนั้นต่อไปเรื่อย ๆ
+  //   จนกว่าผู้ใช้จะกดรีเฟรช/เปลี่ยนหน้าเอง — ผู้ใช้ไม่มีทางรู้เลยว่าตัวเลขที่เห็นไม่ใช่ของจริง
+  //
+  // เกิดจริงได้หลายกรณีนอกห้องทดสอบ: เน็ตสะดุด · หลับเครื่องแล้วเปิดใหม่ · เปลี่ยน wifi/มือถือ ·
+  //   ผู้ให้บริการจำกัดปริมาณสัญญาณช่วงงานหนัก · ไฟร์วอลล์องค์กรตัด websocket ทิ้งเงียบ ๆ
+  //
+  // จึงเพิ่ม 3 จังหวะ "ขอข้อมูลใหม่": กลับมาที่แท็บนี้ · เน็ตกลับมา · และทุก 30 วินาทีระหว่างเปิดหน้าอยู่
+  //   (ทำเฉพาะตอนแท็บถูกมองเห็น — แท็บที่ซ่อนอยู่ไม่ต้องยิงให้เปลืองทั้งเครื่องและเซิร์ฟเวอร์)
+  const resyncAll = useCallback(() => {
+    if (!hydrated) return;
+    if (gateHQ) { setSalesVersion(v => v + 1); return; } // HQ อ่านผ่าน RPC — แค่บอกให้ไปดึงใหม่
+    const scope = { dealerCode, isHQ };
+    leadsRepo.list(scope).then(setLeads).catch(() => {});
+    customersRepo.list(scope).then(setCustomers).catch(() => {});
+    quotationsRepo.list(scope).then(setQuotations).catch(() => {});
+    appointmentsRepo.list(scope).then(setAppointments).catch(() => {});
+  }, [hydrated, gateHQ, dealerCode, isHQ]);
+
+  useEffect(() => {
+    if (!hydrated || typeof document === "undefined") return;
+    const tick = () => { if (document.visibilityState === "visible") resyncAll(); };
+    const timer = setInterval(tick, 30_000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("online", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("online", tick);
+    };
+  }, [hydrated, resyncAll]);
 
   // ── Realtime — มีคนแก้ข้อมูลจากเครื่องอื่น → อัปเดตเฉพาะแถวนั้น ──
   // supabase: postgres_changes (RLS กรอง event ตามสาขาให้แล้ว) · local: no-op (ยังใช้ event bus เดิม)
@@ -332,6 +389,7 @@ export function SalesProvider({
       throw e; // ให้ผู้เรียกรู้ว่าล้มเหลว — เส้นทางปิดการขาย (won) จะได้ไม่หลงคิดว่าสำเร็จ
     }
     const saved = result.customer;
+    bumpWrite(); // เส้นทางนี้เขียนผ่าน RPC ไม่ผ่าน persist* — ต้องบอก loadFresh เองว่าหน้าจอใหม่กว่าแล้ว
     setCustomers(prev => prev.some(c => c.id === saved.id) ? prev.map(c => c.id === saved.id ? saved : c) : [...prev, saved]);
     const relinkedById = new Map(result.quotations.map(q => [q.id, q]));
     setQuotations(prev => prev.map(q => relinkedById.get(q.id) ?? q));
@@ -494,8 +552,9 @@ export function SalesProvider({
   const reconcileCustomerTotal = useCallback(async (cid: number | undefined): Promise<void> => {
     if (!(cid && cid > 0)) return;
     const cust = await customersRepo.reconcileWonTotal(cid);
+    bumpWrite(); // เขียนผ่าน RPC — กันผลโหลดเก่าทับยอดที่เพิ่งรวมใหม่
     setCustomers(prev => prev.map(c => c.id === cid ? cust : c));
-  }, []);
+  }, [bumpWrite]);
 
   // ── Quotation mutations ──────────────────────────────────────────
   // สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) — รับ draft ที่ "ยังไม่มี id" · DB เป็นคนออกเลข
@@ -505,6 +564,7 @@ export function SalesProvider({
     // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง + ติด dealerCode สาขาที่ล็อกอิน (multi-tenant)
     const base = { ...draft, issuer: draft.issuer ?? issuerRef.current, dealerCode: draft.dealerCode ?? myDealerCode };
     const created = await quotationsRepo.createNumbered(myDealerCode, quotePrefixRef.current, base);
+    bumpWrite(); // ออกเลขใบผ่าน RPC ไม่ผ่าน persist* — กันผลโหลดเก่าทับใบที่เพิ่งสร้าง
     setQuotations(prev => [created, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
     completeLeadQuoteTasks(created, created.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);

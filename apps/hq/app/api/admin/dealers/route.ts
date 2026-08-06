@@ -13,10 +13,12 @@
 //   2) service_role อ่านจาก env ฝั่งเซิร์ฟเวอร์เท่านั้น (ไม่มี NEXT_PUBLIC_)
 //   3) ล้มเหลวกลางทาง = ลบ auth user ที่เพิ่งสร้างทิ้ง ไม่ให้เหลือบัญชีกำพร้า
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import {
   bad, authorizeAdmin, auditLog, withErrors, strongPassword, findDealerAccount,
 } from "@pms/shared/lib/adminRoute";
+import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -31,6 +33,21 @@ const DENY = "ไม่มีสิทธิ์จัดการตัวแท
 async function must(p: PromiseLike<{ error: { message: string } | null }>) {
   const { error } = await p;
   if (error) throw new Error(error.message);
+}
+
+/** เก็บสำเนารหัสผ่าน (เข้ารหัส) ให้ HQ เปิดดูย้อนหลังได้ — บอสสั่ง 5 ส.ค. 69
+ *  ล้มเหลวต้องไม่ทำให้การสร้าง/รีเซ็ตพัง (รหัสถูกตั้งที่ Auth ไปแล้ว) แต่ต้องดังพอให้รู้
+ *  ถ้ายังไม่ตั้ง DEALER_SECRET_KEY จะ "ไม่เก็บ" ไม่ใช่เก็บเป็นข้อความเปล่า — ดู dealerSecret.ts */
+async function rememberSecret(admin: SupabaseClient, code: string, password: string, by: string) {
+  if (!dealerSecretReady()) {
+    console.warn(`[dealer-secret] ยังไม่ได้ตั้ง DEALER_SECRET_KEY — ไม่เก็บสำเนารหัสของ ${code}`);
+    return;
+  }
+  const secret = encryptSecret(password);
+  if (!secret) { console.error(`[dealer-secret] เข้ารหัสรหัสของ ${code} ไม่สำเร็จ`); return; }
+  const { error } = await admin.from("dealer_login_secrets")
+    .upsert({ dealer_code: code, secret, updated_at: new Date().toISOString(), updated_by: by });
+  if (error) console.error(`[dealer-secret] เก็บสำเนารหัสของ ${code} ไม่สำเร็จ`, error);
 }
 
 export const POST = withErrors("create-dealer", async (req: NextRequest) => {
@@ -108,8 +125,9 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     return bad(400, `สร้างทะเบียน/โปรไฟล์ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  await rememberSecret(admin, code, password, String(prof.name ?? ""));
   await auditLog(admin, prof, "สร้างตัวแทน", `${code} · ${name}`);
-  // คืนรหัสให้หน้าจอโชว์ให้ก๊อปไปแจ้งตัวแทน (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน)
+  // คืนรหัสให้หน้าจอโชว์ให้ก๊อปไปแจ้งตัวแทน (และเก็บสำเนาเข้ารหัสไว้ให้ HQ เปิดดูภายหลังได้)
   return NextResponse.json({ ok: true, email, password });
 });
 
@@ -138,6 +156,7 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, { password });
   if (updateErr || !updated.user) return bad(400, `รีเซ็ตรหัสผ่านไม่สำเร็จ: ${updateErr?.message ?? ""}`);
 
+  await rememberSecret(admin, code, password, String(prof.name ?? ""));
   await auditLog(admin, prof, "รีเซ็ตรหัสผ่านตัวแทน", code);
   return NextResponse.json({ ok: true, email: updated.user.email ?? "", password });
 });

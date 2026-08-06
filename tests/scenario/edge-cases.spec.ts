@@ -110,6 +110,9 @@ test("[edge] อักขระพิเศษ/emoji/แท็ก HTML ในช
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ค้นหาก่อนเสมอ — ตารางลีดแบ่งหน้า ตอนรันชุดเต็มมีลีดของสเปกอื่นบนสาขา RYG เดียวกันเพิ่มเข้ามา
+  // ลีดของเราถูกดันไปหน้าหลัง แล้วเทสต์ล้มแบบสุ่มทั้งที่ระบบทำงานถูก (เป็นการหาผิดที่ ไม่ใช่บั๊ก)
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(tg("แปลก"));
   const rowLoc = page.locator("tbody tr").filter({ hasText: tg("แปลก") }).first();
   await expect(rowLoc).toBeVisible({ timeout: 15_000 });
   // ต้องไม่มี <b> จริงเรนเดอร์เป็น bold — ต้องเห็นเป็นข้อความ "<b>bold</b>" ตรง ๆ (escape ถูกต้อง)

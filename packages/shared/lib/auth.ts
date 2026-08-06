@@ -5,7 +5,7 @@
 // เฟส B (Supabase) จะสลับเฉพาะไฟล์นี้ (supabase.auth.signInWithPassword) โดยที่เหลือไม่ต้องแก้
 //
 // คลังบัญชี 2 แหล่ง (ของจริงในระบบ ไม่มีการกุ):
-//   • ตัวแทน  → hq_dealers_v4 · credentials { email, password } เป็นรหัสจริง (เช่น PEB-CNX-3317)
+//   • ตัวแทน  → hq_dealers_v4 · credentials { email } — เก็บได้เฉพาะอีเมล ห้ามเก็บรหัสผ่านจริง (ดูหมายเหตุที่ DealerCredentials ใน mock.ts)
 //   • ผู้ใช้ HQ → hq_users_v4 · มี email/role/status แต่ "ไม่เก็บรหัสผ่าน"
 //     (UsersPanel สร้างรหัสชั่วคราวโชว์ครั้งเดียว ไม่ persist) → ฝั่ง login ใช้รหัส demo ที่ประกาศชัด
 //     จนกว่าจะถึงเฟส B ที่ Supabase Auth ถือรหัสจริง (bcrypt)

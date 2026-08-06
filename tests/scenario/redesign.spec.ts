@@ -67,15 +67,24 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
   await openLeadQuotationForm(page);
   // ฟอร์มมีรายการ BOQ ตั้งต้นจากแม่แบบของลีดอยู่แล้ว → ยอดถูกคำนวณให้ กดสร้างได้เลย
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
-  await page.waitForTimeout(800);
+  // รอให้ฟอร์มปิดจริง = ระบบรับใบแล้ว — ห้ามรอเป็นเวลาตายตัว (800ms ไม่พอตอนเครื่องรับงานหนัก
+  // แล้วเทสต์จะไปต่อทั้งที่ใบยังไม่ถูกสร้าง → หน้า /quotations ว่าง แล้วสรุปผิดว่าระบบแสดงยอดพลาด)
+  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toHaveCount(0, { timeout: 30_000 });
 
   // ใบสร้างบนแอปตัวแทน (:3001) → localStorage อยู่ origin นั้น ต้องเปิด /quotations ของ :3001 (ไม่ใช่ baseURL :3002 = HQ)
   await page.goto("http://localhost:3001/quotations", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(800);
-  // ใบที่เพิ่งสร้าง = ร่าง → กรองสถานะร่างเพื่อเจาะให้ตรงใบใหม่
-  const joined = (await page.locator("tbody tr").first().locator("td").allInnerTexts()).join(" | ");
-  expect(/฿[\d,]{5,}/.test(joined), `ต้องเป็นเลขเต็มมี comma — ได้: ${joined}`).toBeTruthy();
-  expect(/฿[\d.]+[MK]\b/.test(joined), `ต้องไม่ย่อ M/K — ได้: ${joined}`).toBeFalsy();
+  // รอจนตารางมีใบจริง ไม่ใช่แถว "ไม่พบใบเสนอราคา" (รายการโหลดช้าได้ตอนรันชุดเต็ม)
+  await expect(page.locator("tbody tr").filter({ hasText: "฿" }).first(),
+    "ต้องมีใบเสนอราคาขึ้นในตาราง").toBeVisible({ timeout: 30_000 });
+  // ตรวจ "ทุกแถวในตาราง" ไม่ใช่แถวแรกอย่างเดียว
+  //   เดิมสมมติว่าแถวแรก = ใบที่เราเพิ่งสร้าง ซึ่งไม่จริงเมื่อสเปกอื่นออกใบของสาขาเดียวกันพร้อมกัน
+  //   (เทสต์รันหลายไฟล์ขนานกันบนสาขา RYG ตัวเดียว) → แถวแรกอาจเป็นใบของสเปกอื่นแล้วตัดสินผิด
+  //   สิ่งที่ต้องการวัดจริงคือ "รายการใบเสนอราคาไม่ย่อยอดเป็น M/K" ซึ่งเป็นคุณสมบัติของทั้งตาราง
+  const rows = await page.locator("tbody tr").allInnerTexts();
+  const joined = rows.join(" | ");
+  expect(/฿[\d,]{5,}/.test(joined), `ต้องมียอดเป็นเลขเต็มมี comma — ได้: ${joined.slice(0, 400)}`).toBeTruthy();
+  const abbreviated = rows.filter(r => /฿[\d.]+[MK]\b/.test(r));
+  expect(abbreviated, `ต้องไม่ย่อ M/K — แถวที่ย่อ: ${JSON.stringify(abbreviated).slice(0, 400)}`).toEqual([]);
 });
 
 // ฟอร์มสร้างใบเสนอราคา inline ในหน้า Lead (รีสไตล์ให้เหมือน wizard) — VAT breakdown + section เหมือนกัน

@@ -156,11 +156,17 @@ test("[rpc] ใบที่ส่งแล้วและเลยกำหน�
     expect(ins.error, `สร้างใบทดสอบไม่ได้: ${JSON.stringify(ins.error)}`).toBeNull();
 
     // HQ เรียกได้แต่ไม่มีสิทธิ์เขียนงานขาย → ต้องไม่ปิดใบของใครเลย
+    //
+    // จดสถานะไว้ "ทันทีก่อน" ให้ HQ เรียก แล้วเทียบว่าไม่เปลี่ยน — ห้ามล็อกค่าไว้เป็น sent_to_client ตายตัว
+    //   เพราะแอปฝั่งตัวแทนสั่งปิดใบหมดอายุของสาขาตัวเองอัตโนมัติทุกครั้งที่เปิดแอป (expireOverdue ใน SalesContext)
+    //   ตอนรันชุดเต็ม สเปกอื่นที่ล็อกอินเป็น RYG จะไปปิดใบทดสอบใบนี้ให้เอง = ถูกต้องตามระบบ ไม่ใช่ HQ เป็นคนปิด
+    //   สิ่งที่เทสต์นี้ต้องพิสูจน์คือ "HQ ไม่ได้เปลี่ยนอะไร" เท่านั้น
+    const before = (await ryg.from("quotations").select("status").eq("id", id)).data?.[0]?.status;
     const byHQ = await hq.rpc("expire_quotations", { p_as_of: "2026-06-30" });
     expect(byHQ.error).toBeNull();
     expect(Number(byHQ.data), "HQ ต้องปิดใบของตัวแทนไม่ได้").toBe(0);
     expect((await ryg.from("quotations").select("status").eq("id", id)).data?.[0]?.status,
-      "ใบต้องยังไม่ถูกปิดโดย HQ").toBe("sent_to_client");
+      "HQ ต้องไม่เปลี่ยนสถานะใบของตัวแทน").toBe(before);
 
     // สาขาเจ้าของเรียกเอง → ใบของตัวเองต้องถูกปิด
     const byDealer = await ryg.rpc("expire_quotations", { p_as_of: "2026-06-30" });

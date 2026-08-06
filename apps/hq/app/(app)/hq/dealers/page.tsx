@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
-  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
+  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor, fmtISOToThai,
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -12,7 +12,7 @@ import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
-import { createDealerAccount, deleteDealerAccount, resetDealerPassword, impersonateDealer } from "@pms/shared/lib/adminApi";
+import { createDealerAccount, deleteDealerAccount, resetDealerPassword, impersonateDealer, viewDealerPassword, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
@@ -82,7 +82,7 @@ function OnTimeBadge({ pct }: { pct: number | null }) {
 }
 
 // secret = ปิดบังค่าไว้ก่อน ต้องกดตาถึงเห็น (ยังคัดลอกได้โดยไม่ต้องเปิดดู)
-// ใช้กับรหัสผ่านในแผงรายละเอียดตัวแทน — เดิมโชว์ "PEB-CNX-3317" เต็ม ๆ ทันทีที่เปิดแถว
+// ใช้กับรหัสผ่านในแผงรายละเอียดตัวแทน — เดิมโชว์รหัสจริงเต็ม ๆ ทันทีที่เปิดแถว
 // ใครเดินผ่านหลังจอ/แชร์หน้าจอ/ถ่ายภาพหน้าจอ ก็ได้รหัสเข้าระบบของตัวแทนไปเลย
 // (โมดัลตอนสร้าง/รีเซ็ตยังโชว์เต็มโดยตั้งใจ — เป็นจังหวะเดียวที่ HQ ต้องอ่านไปแจ้งตัวแทน)
 function CopyField({ label, value, secret = false }: { label: string; value: string; secret?: boolean }) {
@@ -114,6 +114,57 @@ function CopyField({ label, value, secret = false }: { label: string; value: str
   );
 }
 
+// ช่องรหัสผ่านของตัวแทน — "ดึงตอนกดดู" เท่านั้น ไม่โหลดมาไว้ในหน้าล่วงหน้า
+//
+// สำคัญ: ห้ามเปลี่ยนเป็นการส่งรหัสมากับข้อมูลตัวแทนตั้งแต่แรกเด็ดขาด
+//   ครั้งก่อนรหัสถูกฝังใน mock.ts แล้วติดไปกับไฟล์ที่เบราว์เซอร์โหลด "ทุกหน้า รวมหน้าล็อกอิน"
+//   ใครเปิดดูซอร์สก็อ่านได้หมด (Critical จากผลตรวจสอบระบบรอบ 2 · 5 ส.ค. 69)
+//   ที่นี่จึงเรียก API ทีละสาขาเมื่อผู้ใช้กด และฝั่งเซิร์ฟเวอร์บันทึก audit ทุกครั้ง
+function DealerPasswordField({ code, fallback }: { code: string; fallback?: string }) {
+  const [pw, setPw] = useState<string | null>(fallback ?? null);
+  const [meta, setMeta] = useState<{ at: string; by: string } | null>(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function reveal() {
+    if (loading || pw) return;
+    setLoading(true); setErr("");
+    const res = await viewDealerPassword(code);
+    setLoading(false);
+    if (!res.ok) { setErr(res.error); return; }
+    setPw(res.password);
+    setMeta({ at: res.updatedAt, by: res.updatedBy });
+  }
+
+  if (pw) return (
+    <>
+      <CopyField label="รหัสผ่าน" value={pw} secret />
+      {meta?.at && (
+        <div style={{ fontSize: "0.68rem", color: "#6b7280", marginTop: -6, marginBottom: 10 }}>
+          ตั้งเมื่อ {fmtISOToThai(meta.at.slice(0, 10))}{meta.by ? ` โดย ${meta.by}` : ""}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>รหัสผ่าน</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px" }}>
+        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.86rem", fontWeight: 700, color: "#9ca3af", letterSpacing: "0.03em" }}>
+          ••••••••••••
+        </span>
+        <button type="button" onClick={reveal} disabled={loading}
+          title="ดูรหัสผ่าน (ระบบจะบันทึกว่าใครเปิดดู)"
+          style={{ background: "none", border: "none", cursor: loading ? "wait" : "pointer", color: "#003366", padding: 0, display: "flex", alignItems: "center", gap: 5, fontFamily: "inherit", fontSize: "0.74rem", fontWeight: 700 }}>
+          <Eye size={14} /> {loading ? "กำลังดึง…" : "ดูรหัสผ่าน"}
+        </button>
+      </div>
+      {err && <div style={{ fontSize: "0.7rem", color: "#dc2626", marginTop: 5 }}>{err}</div>}
+    </div>
+  );
+}
+
 function InputField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -130,11 +181,11 @@ function genCredentials(code: string): DealerCredentials {
   return { email: `${code.toLowerCase()}@partner-agent.co.th`, password: `PEB-${code}-${digits}` };
 }
 
-// อีเมลล็อกอินของตัวแทน — สูตรเดียวกับที่เซิร์ฟเวอร์ตั้งให้ตอนสร้างบัญชีจริง (H5) ไม่ใช่ความลับ
-// ต่างจากรหัสผ่าน (hash ไว้ ดึงคืนไม่ได้) — โชว์ได้เสมอโดยไม่ต้องยิง API แค่คำนวณจากรหัสสาขา
-function dealerLoginEmail(code: string): string {
-  return `${code.toLowerCase()}@partner-agent.co.th`;
-}
+// ⛔ ห้ามสร้างฟังก์ชัน "เดาอีเมลจากรหัสสาขา" กลับมาอีก
+//   เคยมี dealerLoginEmail(code) = `<code>@partner-agent.co.th` ซึ่งเป็นสูตรของบัญชีที่สร้างผ่านหน้าจอนี้
+//   เท่านั้น · สาขาที่มีอยู่จริงใช้อีเมลธุรกิจของตัวเอง (CNX = sales@cmsteelbuild.co.th)
+//   → หน้าจอโชว์อีเมลที่ไม่มีอยู่จริงคู่กับรหัสผ่านที่ถูกต้อง HQ คัดลอกไปแล้วเข้าระบบไม่ได้
+//   อีเมลจริงต้องมาจาก /api/admin/dealers/logins เท่านั้น · ไม่รู้ = ขึ้น "—"
 
 // รหัสผ่านใหม่ตอนรีเซ็ต — deterministic (ไม่สุ่ม) เดโมจึงทวนซ้ำได้
 // nonce = ความยาวรหัสเดิม → กดรีเซ็ตซ้ำได้รหัสใหม่เรื่อย ๆ ไม่วนกลับมาซ้ำของเดิม
@@ -156,6 +207,18 @@ function HQDealersPageInner() {
   const router = useRouter();
 
   const [dealers, setDealers] = useRepoState<DealerRow[]>(() => dealersRepo.list(), (v) => dealersRepo.save(v), []);
+  // อีเมลเข้าระบบจริงของแต่ละสาขา (ถามเซิร์ฟเวอร์ครั้งเดียวตอนเปิดหน้า)
+  //   ห้ามคำนวณจากรหัสสาขาเด็ดขาด — สูตร `<code>@partner-agent.co.th` ใช้ได้เฉพาะบัญชีที่สร้าง
+  //   ผ่านหน้าจอนี้ · สาขาที่มีอยู่จริงใช้อีเมลธุรกิจของตัวเอง (CNX = sales@cmsteelbuild.co.th)
+  //   เดิมโชว์อีเมลที่เดาไว้ HQ คัดลอกไปใช้คู่กับรหัสผ่านที่ถูกต้อง แล้วเข้าระบบไม่ได้
+  const [loginEmails, setLoginEmails] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    listDealerLoginEmails().then(m => { if (alive) setLoginEmails(m); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  // อีเมลที่ "ยืนยันแล้วว่ามีจริง" เท่านั้น — ไม่รู้ ให้ขึ้น "—" ไม่เดาให้ผู้ใช้เข้าใจผิด
+  const loginEmailOf = (code: string) => loginEmails[code] ?? "—";
   // เกณฑ์สี Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
   const [q, setQ] = useState("");
@@ -328,7 +391,9 @@ function HQDealersPageInner() {
     // โหมดเดโม (local): คงพฤติกรรมเดิมไว้เล่นได้
     const cur = d.credentials;
     if (!cur) { alert("ไม่พบข้อมูลรหัสผ่านของตัวแทนนี้"); return; }
-    const creds: DealerCredentials = { email: cur.email, password: genResetPassword(d.code, cur.password.length) };
+    // ความยาวรหัสเดิมไม่มีให้อ้างอิงแล้ว (ห้ามเก็บรหัสจริงใน mock.ts — ดูหมายเหตุที่ DealerCredentials)
+    // ใช้ความยาวมาตรฐานแทน · ค่านี้ใช้เฉพาะโหมดเดโม ไม่ใช่รหัสของบัญชีจริง
+    const creds: DealerCredentials = { email: cur.email, password: genResetPassword(d.code, 12) };
     setDealers(prev => prev.map(x => x.id === d.id ? { ...x, credentials: creds } : x));
     logAudit("รีเซ็ตรหัสผ่านตัวแทน", `${d.code} · ${d.name}`);
     setViewCredsDealer(null);
@@ -345,7 +410,7 @@ function HQDealersPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
-            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,d.credentials?.email ?? dealerLoginEmail(d.code),perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
+            rows={filtered.map(d=>[d.code,d.name,d.province,d.region,loginEmailOf(d.code),perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
           <button onClick={openAdd} className="btn btn-primary btn-md">
             <Plus size={14} /> เพิ่มตัวแทน
           </button>
@@ -571,7 +636,7 @@ function HQDealersPageInner() {
               <div style={{ background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
                 <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>รหัสเข้าสู่ระบบตัวแทน</div>
                 <CopyField label="อีเมล" value={credsModal.creds.email} />
-                <CopyField label={credsModal.mode === "reset" ? "รหัสผ่านใหม่" : "รหัสผ่านเริ่มต้น"} value={credsModal.creds.password} />
+                <CopyField label={credsModal.mode === "reset" ? "รหัสผ่านใหม่" : "รหัสผ่านเริ่มต้น"} value={credsModal.creds.password ?? "—"} />
               </div>
               <div style={{ background: "#fef3cd", border: "1px solid #f59e0b30", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: "0.72rem", color: "#f59e0b", fontWeight: 600 }}>
                 {credsModal.mode === "reset"
@@ -695,9 +760,12 @@ function HQDealersPageInner() {
                 {/* Credentials */}
                 <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px" }}>
                   <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
-                  <CopyField label="อีเมล" value={d.credentials?.email ?? dealerLoginEmail(d.code)} />
-                  {/* โหมด supabase ไม่มีรหัสผ่านให้แสดง (hash อยู่ใน Auth) — ขึ้น "—" ตามจริง ห้ามกุ */}
-                  <CopyField label="รหัสผ่าน" value={d.credentials?.password ?? "—"} secret />
+                  <CopyField label="อีเมล" value={loginEmailOf(d.code)} />
+                  {/* ช่องเดียวกับในหน้าต่าง "รหัสเข้าระบบ" — ต้องใช้ตัวเดียวกันทั้งสองที่
+                      เดิมจุดนี้ค้างเป็น CopyField ที่ขึ้น "—" เสมอ (รหัสจริงอยู่ใน Auth เป็น hash)
+                      พอเปิดฟีเจอร์ให้ HQ ดูรหัสได้แล้ว ยังลืมเปลี่ยนจุดนี้ HQ จึงเห็น "—" ที่แผงนี้
+                      แต่เห็นรหัสจริงในหน้าต่างอีกใบ — สับสนว่าตกลงระบบมีรหัสให้ดูหรือไม่ */}
+                  <DealerPasswordField code={d.code} fallback={d.credentials?.password} />
                 </div>
               </div>
 
@@ -733,8 +801,8 @@ function HQDealersPageInner() {
               <button onClick={() => setViewCredsDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={16} /></button>
             </div>
             <div style={{ padding: "16px 20px" }}>
-              <CopyField label="อีเมล" value={viewCredsDealer.credentials?.email ?? dealerLoginEmail(viewCredsDealer.code)} />
-              <CopyField label="รหัสผ่าน" value={viewCredsDealer.credentials?.password ?? "—"} />
+              <CopyField label="อีเมล" value={loginEmailOf(viewCredsDealer.code)} />
+              <DealerPasswordField code={viewCredsDealer.code} fallback={viewCredsDealer.credentials?.password} />
               <div style={{ fontSize: "0.72rem", color: "#6b7280", background: "#f0f4f8", borderRadius: 8, padding: "8px 12px", marginTop: 4 }}>
                 ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
               </div>

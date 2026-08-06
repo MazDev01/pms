@@ -59,8 +59,13 @@ test.describe("อื่น ๆ", () => {
   test("[4] รหัสผ่านตัวแทนถูกปิดบัง", async ({ page }) => {
     await open(page, "hq", "/hq/dealers");
     await page.locator("table tbody tr").first().click();
-    await expect(page.getByRole("button", { name: "แสดงรหัสผ่าน" })).toBeVisible();
-    expect(/PEB-[A-Z]{3}-\d{4}/.test(await page.locator(".erp").innerText()), "ต้องไม่เห็นรหัสจริงก่อนกดตา").toBe(false);
+    // ต้องขึ้นจุดไข่ปลา + ปุ่มให้กดดู — ไม่ใช่โชว์รหัสมาเลย
+    // (เดิมช่องนี้เป็นช่องปิดบังธรรมดาที่ค่าเป็น "—" เสมอ · ตอนนี้ดึงรหัสจริงตอนกดดูได้แล้ว
+    //  จึงต้องยืนยันว่ายัง "ไม่ดึงมาก่อนกด" ตามที่ออกแบบไว้)
+    await expect(page.getByRole("button", { name: /ดูรหัสผ่าน/ })).toBeVisible();
+    const panel = await page.locator(".erp").innerText();
+    expect(panel.includes("••••••••••••"), "ต้องปิดบังรหัสไว้ก่อน").toBe(true);
+    expect(/PEB-[A-Za-z0-9]{6,}/.test(panel), "ต้องไม่เห็นรหัสจริงก่อนกดปุ่มดู").toBe(false);
   });
 
   // ข้อ 5 — คำที่เคยชนกัน ต้องแยกออกจากกัน

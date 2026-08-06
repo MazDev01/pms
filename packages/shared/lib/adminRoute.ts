@@ -49,11 +49,18 @@ export async function authorizeAdmin(
   if (authErr || !caller.user) return { ok: false, res: bad(401, "unauthorized") };
 
   const { data: prof, error: profErr } = await admin
-    .from("profiles").select("role, name").eq("id", caller.user.id).maybeSingle();
+    .from("profiles").select("role, name, status").eq("id", caller.user.id).maybeSingle();
   if (profErr) {
     // อ่านบทบาทไม่ได้ ≠ ไม่มีสิทธิ์ — ต้องบอกให้ต่างกัน ไม่งั้นไล่ปัญหาไม่ถูก (และไม่มีร่องรอยเลย)
     console.error("[adminRoute] อ่านบทบาทผู้เรียกไม่สำเร็จ", profErr);
     return { ok: false, res: bad(503, "ตรวจสอบสิทธิ์ไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง") };
+  }
+  // บัญชีที่ถูกปิดการใช้งาน ต้องสั่งงานไม่ได้ "ทันที" ไม่ใช่รอ token หมดอายุ
+  //   token ของ Supabase มีอายุ 1 ชั่วโมง — เดิมตรวจแค่บทบาท พนักงานที่เพิ่งถูกปลด/พักงาน
+  //   จึงยังสร้างตัวแทน รีเซ็ตรหัสผ่าน หรือลบผู้ใช้ได้อีกนานถึง 1 ชั่วโมงหลังถูกปิดบัญชี
+  //   (ผลตรวจสอบระบบรอบ 2 · ระดับสูง) · ตรวจที่นี่ที่เดียวครอบทุก /api/admin/*
+  if (prof && String(prof.status) !== "active") {
+    return { ok: false, res: bad(403, "บัญชีนี้ถูกปิดการใช้งานแล้ว — ติดต่อผู้ดูแลระบบ") };
   }
   if (!prof || !hasPermission(String(prof.role) as UserRole, permission)) {
     return { ok: false, res: bad(403, denyMessage) };

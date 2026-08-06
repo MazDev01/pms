@@ -44,7 +44,9 @@ function catchAlerts(page: Page): () => string[] {
 async function openProfileUpload(page: Page) {
   await open(page, "hq", "/profile");
   const input = page.locator('input[type="file"]').first();
-  await input.waitFor({ state: "attached", timeout: 40_000 });
+  // 60s: หน้า /profile ถูกคอมไพล์ครั้งแรกตอนเทสต์เปิด ถ้าจังหวะนั้นเครื่องรับงานจากหลาย worker พร้อมกัน
+  // จะนานเกิน 40s ได้เป็นครั้งคราว (วัดแล้ว: รันเดี่ยวใช้ 5.9s) — เป็นความช้าของสภาพทดสอบ ไม่ใช่บั๊ก
+  await input.waitFor({ state: "attached", timeout: 60_000 });
   return input;
 }
 

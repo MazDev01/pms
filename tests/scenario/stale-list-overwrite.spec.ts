@@ -1,0 +1,71 @@
+import { test, expect } from "@playwright/test";
+import { RYG, skipReason } from "./supabaseEnv";
+import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag, waitRow } from "./funcHelpers";
+
+// ── ข้อมูลที่เพิ่งเพิ่ม ต้องไม่ถูก "ผลการโหลดที่มาช้า" ลบหายไปจากหน้าจอ ──
+//
+// บั๊กจริงที่เจอจากทดสอบโหลด 10 สาขา (6 ส.ค. 69): ตัวแทนกด "เพิ่มลูกค้า" ก่อนรายการโหลดเสร็จ
+// → ลูกค้าบันทึกลง DB สำเร็จ แต่หายจากตารางบนจอ ตารางว่าง 0 แถว และไม่มีข้อความเตือนใด ๆ
+// สาเหตุ: คำสั่งโหลดรายการที่ยิงตอนเปิดหน้า ได้ภาพ ณ ตอนนั้น (ยังไม่มีลูกค้ารายนี้) แต่ตอบกลับทีหลัง
+// แล้วเอาไปทับรายการทั้งชุด — ลบแถวที่เพิ่งเพิ่มทิ้ง ผู้ใช้ต้องรีเฟรชเองถึงจะเห็น
+//
+// เทสต์นี้ "จงใจถ่วง" คำตอบของคำสั่งโหลดรายการ เพื่อบังคับให้เกิดจังหวะนั้นทุกครั้ง
+// (ของจริงเกิดตอนเน็ตช้า/เซิร์ฟเวอร์งานล้น ซึ่งสุ่มเกินกว่าจะเขียนเทสต์ให้ซ้ำได้)
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
+test.setTimeout(120_000);
+
+const NS = specNS("STALE");
+const tg = nsTag(NS);
+const DELAY_MS = 6_000;
+
+test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+
+test("เพิ่มลูกค้าระหว่างรายการยังโหลดไม่เสร็จ → แถวต้องอยู่บนจอ ไม่ถูกทับหาย", async ({ page }) => {
+  const company = tg("ลูกค้าจังหวะชน");
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+
+  // ถ่วงเฉพาะ "คำสั่งอ่านรายการลูกค้า" ครั้งแรก — ครั้งถัดไปปล่อยผ่านปกติ
+  // (แอปที่แก้แล้วจะรู้ว่าภาพเก่ากว่าจอ แล้วสั่งโหลดใหม่ ครั้งที่สองต้องไม่โดนถ่วง ไม่งั้นวัดไม่ตรงจุด)
+  // ตัดช่องทาง realtime ทิ้งระหว่างเทสต์นี้ — จงใจ
+  //   realtime เป็น "ตาข่ายกู้คืน" ที่เติมแถวกลับมาให้เองภายหลัง ถ้าเปิดไว้จะกลบบั๊กที่ต้องการวัด
+  //   (ยืนยันมาแล้ว: เปิด realtime ไว้ เทสต์ผ่านทั้งที่ปิดตัวแก้ = วัดไม่ตรงจุด)
+  //   และของจริงก็เกิดได้ — เน็ตมือถือ/ไฟร์วอลล์ที่ websocket ต่อไม่ติด ผู้ใช้ต้องยังเห็นสิ่งที่ตัวเองเพิ่งเพิ่ม
+  await page.routeWebSocket(/realtime\/v1\/websocket/, () => { /* รับสายแล้วเงียบ ไม่ต่อไปเซิร์ฟเวอร์จริง */ });
+
+  // ⚠️ ต้อง "ยิงคำขอออกไปก่อน แล้วค่อยถ่วงคำตอบ" — ห้ามใช้ route.continue() แบบหน่วงเวลา
+  //    เพราะนั่นคือการส่งคำขอช้า เซิร์ฟเวอร์จะได้ภาพ ณ ตอนที่ส่ง (มีแถวใหม่อยู่แล้ว) = ไม่เกิดจังหวะที่ต้องการวัด
+  //    สิ่งที่ต้องจำลองคือ "ภาพถ่ายไว้ตั้งแต่ต้น แต่มาถึงจอทีหลัง"
+  let delayed = false;
+  await page.route(/\/rest\/v1\/customers\?.*select/, async (route) => {
+    if (route.request().method() !== "GET" || delayed) return route.continue();
+    delayed = true;
+    const res = await route.fetch();          // ถ่ายภาพเดี๋ยวนี้ (ยังไม่มีลูกค้ารายใหม่)
+    const body = await res.body();
+    await new Promise(r => setTimeout(r, DELAY_MS));  // แล้วค่อยส่งภาพนั้นถึงจอทีหลัง
+    await route.fulfill({ response: res, body });
+  });
+
+  await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
+
+  // เพิ่มลูกค้า "ระหว่างที่รายการยังโหลดค้างอยู่" — นี่คือหัวใจของเทสต์
+  await page.getByRole("button", { name: "นำเข้าลูกค้าเดิม" }).click();
+  await page.getByRole("button", { name: "เพิ่มทีละราย" }).click();
+  await page.locator('input[placeholder="ชื่อบริษัท / ชื่อลูกค้า"]').fill(company);
+  await page.locator('input[placeholder="ชื่อผู้ติดต่อ"]').fill("คุณทดสอบ");
+  await page.locator('input[placeholder="0XX-XXX-XXXX"]').first().fill("0800000000");
+  await page.getByRole("button", { name: "เพิ่มลูกค้า" }).click();
+
+  // ยืนยันก่อนว่า "บันทึกลงฐานข้อมูลสำเร็จจริง" — ถ้าตรงนี้ไม่ผ่านแปลว่าคนละปัญหา (บันทึกไม่ลง ไม่ใช่จอทับ)
+  const sb = await db(RYG);
+  await waitRow(sb, "customers", { company }, 30_000);
+
+  // รอให้คำตอบที่ถูกถ่วงไว้กลับมาถึงจอ (นี่คือจังหวะที่ของเดิมจะทับรายการทิ้ง) แล้วเผื่อเวลาโหลดรอบใหม่
+  await page.waitForTimeout(DELAY_MS + 4_000);
+
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(company);
+  const row = page.locator("tbody tr").filter({ hasText: company }).first();
+  await expect(row,
+    "ลูกค้าที่เพิ่งเพิ่มต้องยังอยู่บนหน้าจอ (ยังอยู่ใน DB แล้ว) — ถ้าหายแปลว่าผลโหลดที่มาช้าทับรายการทิ้ง",
+  ).toBeVisible({ timeout: 20_000 });
+});

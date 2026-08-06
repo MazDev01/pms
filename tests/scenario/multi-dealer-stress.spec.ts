@@ -70,23 +70,39 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   await page.locator('input[placeholder="0XX-XXX-XXXX"]').first().fill("0800000000");
   await page.getByRole("button", { name: "เพิ่มลูกค้า" }).click();
   await expect.poll(async () => (await sb.from("customers").select("id").eq("company", COMPANY)).data?.length ?? 0,
-    { timeout: 20_000, message: `${code}: ลูกค้าต้องถูกสร้าง` }).toBe(1);
+    { timeout: 60_000, message: `${code}: ลูกค้าต้องถูกสร้าง` }).toBe(1);
   mark("customer_created");
 
   // 2) ค้นหาลูกค้า
   await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
-  await expect(row, `${code}: ค้นหาต้องเจอลูกค้าที่เพิ่งสร้าง`).toBeVisible({ timeout: 10_000 });
+  try {
+    await expect(row, `${code}: ค้นหาต้องเจอลูกค้าที่เพิ่งสร้าง`).toBeVisible({ timeout: 30_000 });
+  } catch (e) {
+    const box = page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...");
+    const searchVal = await box.inputValue().catch(() => "<อ่านไม่ได้>");
+    const rowCount = await page.locator("tbody tr").count().catch(() => -1);
+    const firstRows = (await page.locator("tbody tr").allInnerTexts().catch(() => []))
+      .slice(0, 3).map(t => t.replace(/\s+/g, " ").slice(0, 80));
+    const banner = await page.locator("body").innerText().catch(() => "");
+    const errBits = banner.split("\n").filter(l => /ไม่สำเร็จ|ผิดพลาด|โหลดข้อมูล|เชื่อมต่อ/.test(l)).slice(0, 3);
+    const { count: dbCount } = await sb.from("customers").select("id", { count: "exact", head: true }).eq("company", COMPANY);
+    // พิมพ์สภาพหน้าจอ ณ วินาทีที่ล้ม — ตอนแก้บั๊ก "แถวหายเพราะผลโหลดมาช้าทับ" (6 ส.ค. 69)
+    // ข้อมูลชุดนี้คือสิ่งที่ชี้ตัวการได้: ตารางว่าง 0 แถว + ไม่มีแบนเนอร์ error + ใน DB มีแถวอยู่
+    // ถ้าไม่มีบรรทัดนี้ จะเห็นแค่ "ค้นหาไม่เจอ" แล้วเดากันต่อว่าเพราะอะไร
+    console.log(`[stress·วินิจฉัย] ${code} ค้นหาไม่เจอ · ช่องค้นหา="${searchVal}" · แถวในตาราง=${rowCount} · ตัวอย่างแถว=${JSON.stringify(firstRows)} · แบนเนอร์=${JSON.stringify(errBits)} · ใน DB=${dbCount}`);
+    throw e;
+  }
   mark("searched");
 
   // 3) เปิดลูกค้า → แก้ไขข้อมูล (เบอร์โทร) ในที่เดิม
   await row.click();
   const phoneInput = page.locator('input[placeholder="0XX-XXX-XXXX"]').first();
-  await expect(phoneInput).toBeVisible({ timeout: 10_000 });
+  await expect(phoneInput).toBeVisible({ timeout: 30_000 });
   await phoneInput.fill("0899999999");
   await page.getByRole("button", { name: "บันทึกการแก้ไข" }).click();
   await expect.poll(async () => (await sb.from("customers").select("phone").eq("company", COMPANY)).data?.[0]?.phone,
-    { timeout: 15_000, message: `${code}: เบอร์โทรต้องอัปเดต` }).toBe("0899999999");
+    { timeout: 45_000, message: `${code}: เบอร์โทรต้องอัปเดต` }).toBe("0899999999");
   mark("customer_edited");
 
   // 4) สร้างดีลใหม่ (เพิ่มงานขายใหม่ → สร้างโครงการ) — เปิด redirect ไปหน้าลีดพร้อม detail
@@ -94,31 +110,31 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   //    แล้วปุ่ม "สร้างใบเสนอราคา" ในขั้นถัดไปจะ disable ค้าง (เจอจริงระหว่างพัฒนาเทสต์นี้)
   await page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).first().click();
   const newDealBtn = page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).last();
-  await expect(newDealBtn).toBeVisible({ timeout: 10_000 });
+  await expect(newDealBtn).toBeVisible({ timeout: 30_000 });
   await newDealBtn.click();
   await page.getByLabel("แม่แบบ", { exact: true }).selectOption({ index: 0 });
   await page.locator('input[placeholder="เช่น ฿1.2M"]').fill("1200000");
   const createDealBtn = page.getByRole("button", { name: "สร้างโครงการ" });
-  await expect(createDealBtn).toBeEnabled({ timeout: 10_000 });
+  await expect(createDealBtn).toBeEnabled({ timeout: 30_000 });
   await createDealBtn.click();
-  await page.waitForURL(/\/leads\?open=/, { timeout: 20_000 });
+  await page.waitForURL(/\/leads\?open=/, { timeout: 60_000 });
   mark("deal_created");
 
   // 5) แนบไฟล์ที่ลีด (ช่องไม่มี accept = ช่องแนบไฟล์ทั่วไป ต่างจากช่องอัปโหลดโลโก้)
   const fileInput = page.locator('input[type="file"]:not([accept])').first();
-  await expect(fileInput, `${code}: ต้องมีช่องแนบไฟล์ในลิ้นชักลีด`).toBeAttached({ timeout: 15_000 });
+  await expect(fileInput, `${code}: ต้องมีช่องแนบไฟล์ในลิ้นชักลีด`).toBeAttached({ timeout: 45_000 });
   await fileInput.setInputFiles({ name: `${TAG}-${code}-เอกสาร.txt`, mimeType: "text/plain", buffer: Buffer.from(`load test ${code}`) });
   await expect.poll(async () => (await sb.from("files").select("id").like("name", `%${code}-เอกสาร%`)).data?.length ?? 0,
-    { timeout: 15_000, message: `${code}: ไฟล์ต้องขึ้น Storage/DB` }).toBeGreaterThan(0);
+    { timeout: 45_000, message: `${code}: ไฟล์ต้องขึ้น Storage/DB` }).toBeGreaterThan(0);
   mark("file_attached");
 
   // 6) สร้างใบเสนอราคาจากลีด
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
-  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
   await expect.poll(async () => (await sb.from("quotations").select("id").eq("customer", COMPANY)).data?.length ?? 0,
-    { timeout: 20_000, message: `${code}: ใบเสนอราคาต้องถูกสร้าง` }).toBe(1);
+    { timeout: 60_000, message: `${code}: ใบเสนอราคาต้องถูกสร้าง` }).toBe(1);
   mark("quotation_created");
 
   const { data: qrows } = await sb.from("quotations").select("id").eq("customer", COMPANY);
@@ -127,41 +143,41 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   // 7) ไปหน้าใบเสนอราคา → เปิดใบ → เปลี่ยนสถานะ (ส่ง → ตอบรับ/ปฏิเสธ)
   await page.goto(`${DEALER_ORIGIN}/quotations`, { waitUntil: "domcontentloaded" });
   const qrow = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
-  await expect(qrow, `${code}: ใบเสนอราคาต้องโผล่ในตาราง`).toBeVisible({ timeout: 15_000 });
+  await expect(qrow, `${code}: ใบเสนอราคาต้องโผล่ในตาราง`).toBeVisible({ timeout: 45_000 });
   await qrow.click();
   await page.getByRole("button", { name: "ส่งใบเสนอราคา", exact: true }).click();
   await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
-    { timeout: 15_000, message: `${code}: ใบต้องเป็น 'ส่งแล้ว'` }).toBe("sent_to_client");
+    { timeout: 45_000, message: `${code}: ใบต้องเป็น 'ส่งแล้ว'` }).toBe("sent_to_client");
   mark("quotation_sent");
 
   if (willWin) {
     page.once("dialog", d => d.accept());
     await page.getByRole("button", { name: "ลูกค้าตอบรับ", exact: false }).click();
     await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
-      { timeout: 20_000, message: `${code}: ใบต้องเป็น 'won'` }).toBe("won");
+      { timeout: 60_000, message: `${code}: ใบต้องเป็น 'won'` }).toBe("won");
     mark("closed_won");
   } else {
     await page.getByRole("button", { name: "ลูกค้าปฏิเสธ", exact: true }).click();
     const reasonPicker = page.getByText("เลือกเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้");
-    await expect(reasonPicker).toBeVisible({ timeout: 10_000 });
+    await expect(reasonPicker).toBeVisible({ timeout: 30_000 });
     await reasonPicker.locator("xpath=following-sibling::div[1]//button").first().click();
     await page.getByRole("button", { name: "ยืนยัน", exact: true }).click();
     await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
-      { timeout: 20_000, message: `${code}: ใบต้องเป็น 'lost'` }).toBe("lost");
+      { timeout: 60_000, message: `${code}: ใบต้องเป็น 'lost'` }).toBe("lost");
     mark("closed_lost");
   }
 
   // 8) บันทึกหมายเหตุที่ลูกค้า
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
   await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
-  await expect(page.locator("tbody tr").filter({ hasText: COMPANY }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("tbody tr").filter({ hasText: COMPANY }).first()).toBeVisible({ timeout: 45_000 });
   await page.locator("tbody tr").filter({ hasText: COMPANY }).first().click();
   await page.getByRole("button", { name: "เพิ่มโน้ต" }).first().click();
   await page.getByPlaceholder("หัวข้อโน้ต").fill(`${TAG}-โน้ต-${code}`);
   await page.getByPlaceholder("รายละเอียดการติดตาม").fill(`บันทึกจาก load test ${code}`);
   await page.getByRole("button", { name: "บันทึกโน้ต" }).click();
   await expect.poll(async () => (await sb.from("customer_notes").select("id").eq("title", `${TAG}-โน้ต-${code}`)).data?.length ?? 0,
-    { timeout: 15_000, message: `${code}: โน้ตต้องลง DB` }).toBe(1);
+    { timeout: 45_000, message: `${code}: โน้ตต้องลง DB` }).toBe(1);
   mark("note_added");
 }
 

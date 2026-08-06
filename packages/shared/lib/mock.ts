@@ -919,7 +919,19 @@ export const team: TeamMock[] = [
 // ─── HQ MOCK DATA ─────────────────────────────────────────────
 
 // บริษัทตัวแทนจำหน่าย (เครือข่ายตัวแทน)
-export type DealerCredentials = { email: string; password: string };
+// ⛔ ห้ามใส่รหัสผ่านจริงลงในไฟล์นี้เด็ดขาด
+//    mock.ts ถูก import จากคอมโพเนนต์ฝั่ง client (RoleContext ฯลฯ) จึงถูกรวมเข้าไปในไฟล์ที่
+//    เบราว์เซอร์โหลด "ทุกหน้า รวมหน้าล็อกอินที่ยังไม่ต้องเข้าระบบ" — ใครเปิดดูซอร์สก็อ่านได้หมด
+//    เคยมีรหัสผ่านจริงของตัวแทนทั้ง 10 สาขาอยู่ตรงนี้ และหลุดไปถึงเบราว์เซอร์จริง
+//    (พบจากผลตรวจสอบระบบรอบ 2 · 5 ส.ค. 69 · ยืนยันจากไฟล์ build ทั้งสองแอป)
+//
+//    รหัสผ่านจริงอยู่ใน Supabase Auth (hash) ที่เดียวเท่านั้น
+//    โหมดจำลอง (local) ใช้ DEMO_PASSWORD ใน auth.ts ซึ่งไม่ใช่รหัสของบัญชีจริง
+export type DealerCredentials = {
+  email: string;
+  /** ⛔ ห้ามใส่ค่าจริง — เก็บ optional ไว้เฉพาะเพื่อความเข้ากันได้ของ type เดิมเท่านั้น */
+  password?: string;
+};
 
 export type DealerRow = {
   id: string;
@@ -988,16 +1000,16 @@ export function loadHQDealers(): DealerRow[] {
 // เดิมตั้งไว้ ฿4.2M/เป้า ฿6.2M ซึ่งเล็กกว่ายอดจริงราว 5 เท่า แดชบอร์ดตัวแทนเลยขึ้น 362% และทุกเดือนเกินเป้า
 // สาขาอื่นยังเป็นตัวเลขสมมติของ HQ ล้วน — ไม่มีใบเสนอราคาจริงผูกอยู่
 export const dealerLeaderboard: DealerRow[] = [
-  { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      province: "ระยอง",           region: "ตะวันออก", revenueTarget: 6000000, status: "active",   credentials: { email: "sales@rayongsteel.co.th", password: "PEB-RYG-4821" } },
-  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   province: "เชียงใหม่",       region: "เหนือ",    revenueTarget: 45000000, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th", password: "PEB-CNX-3317" } },
-  { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      province: "ตาก",             region: "ตะวันตก", revenueTarget: 5000000, status: "active",   credentials: { email: "sales@maesotmetal.co.th", password: "PEB-MST-7749" } },
-  { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    province: "เชียงราย",        region: "เหนือ",    revenueTarget: 5800000, status: "active",   credentials: { email: "sales@crstructure.co.th", password: "PEB-CRI-5563" } },
-  { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   province: "นครสวรรค์",       region: "กลาง",     revenueTarget: 5000000, status: "active",   credentials: { email: "sales@nsn-engineering.co.th", password: "PEB-NSN-2294" } },
-  { id: "HYI", code: "HYI", name: "บจ. หาดใหญ่สตีลกรุ๊ป",    province: "สงขลา",           region: "ใต้",      revenueTarget: 4000000, status: "inactive", credentials: { email: "sales@hatyaisteel.co.th", password: "PEB-HYI-1108" } },
-  { id: "AYA", code: "AYA", name: "บจ. อยุธยาเมทัลบิลด์",     province: "พระนครศรีอยุธยา", region: "กลาง",     revenueTarget: 5200000, status: "active",   credentials: { email: "sales@ayametalbuild.co.th", password: "PEB-AYA-6612" } },
-  { id: "KKN", code: "KKN", name: "หจก. ขอนแก่นโครงเหล็ก",   province: "ขอนแก่น",         region: "อีสาน",    revenueTarget: 4800000, status: "active",   credentials: { email: "sales@kksteelframe.co.th", password: "PEB-KKN-9034" } },
-  { id: "UBN", code: "UBN", name: "บจ. อุบลสตีลกรุ๊ป",        province: "อุบลราชธานี",     region: "อีสาน",    revenueTarget: 4500000, status: "active",   credentials: { email: "sales@ubonsteel.co.th", password: "PEB-UBN-4478" } },
-  { id: "PKT", code: "PKT", name: "บจ. ภูเก็ตสตรัคเจอรัล",   province: "ภูเก็ต",          region: "ใต้",      revenueTarget: 3500000, status: "active",   credentials: { email: "sales@phuketstructural.co.th", password: "PEB-PKT-2851" } },
+  { id: "RYG", code: "RYG", name: "บจ. ระยองสตีลเวิร์คส์",      province: "ระยอง",           region: "ตะวันออก", revenueTarget: 6000000, status: "active",   credentials: { email: "sales@rayongsteel.co.th" } },
+  { id: "CNX", code: "CNX", name: "บจ. เชียงใหม่สตีลบิลด์",   province: "เชียงใหม่",       region: "เหนือ",    revenueTarget: 45000000, status: "active",   credentials: { email: "sales@cmsteelbuild.co.th" } },
+  { id: "MST", code: "MST", name: "หจก. แม่สอดเมทัลเวิร์ค",      province: "ตาก",             region: "ตะวันตก", revenueTarget: 5000000, status: "active",   credentials: { email: "sales@maesotmetal.co.th" } },
+  { id: "CRI", code: "CRI", name: "บจ. เชียงรายสตรัคเจอร์",    province: "เชียงราย",        region: "เหนือ",    revenueTarget: 5800000, status: "active",   credentials: { email: "sales@crstructure.co.th" } },
+  { id: "NSN", code: "NSN", name: "บจ. นครสวรรค์เอ็นจิเนียริ่ง",   province: "นครสวรรค์",       region: "กลาง",     revenueTarget: 5000000, status: "active",   credentials: { email: "sales@nsn-engineering.co.th" } },
+  { id: "HYI", code: "HYI", name: "บจ. หาดใหญ่สตีลกรุ๊ป",    province: "สงขลา",           region: "ใต้",      revenueTarget: 4000000, status: "inactive", credentials: { email: "sales@hatyaisteel.co.th" } },
+  { id: "AYA", code: "AYA", name: "บจ. อยุธยาเมทัลบิลด์",     province: "พระนครศรีอยุธยา", region: "กลาง",     revenueTarget: 5200000, status: "active",   credentials: { email: "sales@ayametalbuild.co.th" } },
+  { id: "KKN", code: "KKN", name: "หจก. ขอนแก่นโครงเหล็ก",   province: "ขอนแก่น",         region: "อีสาน",    revenueTarget: 4800000, status: "active",   credentials: { email: "sales@kksteelframe.co.th" } },
+  { id: "UBN", code: "UBN", name: "บจ. อุบลสตีลกรุ๊ป",        province: "อุบลราชธานี",     region: "อีสาน",    revenueTarget: 4500000, status: "active",   credentials: { email: "sales@ubonsteel.co.th" } },
+  { id: "PKT", code: "PKT", name: "บจ. ภูเก็ตสตรัคเจอรัล",   province: "ภูเก็ต",          region: "ใต้",      revenueTarget: 3500000, status: "active",   credentials: { email: "sales@phuketstructural.co.th" } },
 ];
 
 // ยอดขายรายเดือน (รวมทั้งเครือ)

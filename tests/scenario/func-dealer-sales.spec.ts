@@ -56,6 +56,9 @@ test("[func] แก้ลีดผ่านหน้าจอ → ค่าใ�
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
 
+  // ต้องค้นหาก่อน — ตารางลีดแบ่งหน้า และตอนรันชุดเต็มมีลีดทดสอบของสเปกอื่นบนสาขา RYG เดียวกันเพิ่มเข้ามา
+  // ทำให้ลีดของเราหลุดไปหน้าหลัง แล้วเทสต์ล้มแบบสุ่ม (ไม่ใช่บั๊ก — เป็นการหาผิดที่)
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row, "ลีดที่สร้างไว้ต้องโผล่ในตาราง").toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -82,6 +85,7 @@ test("[func] เลื่อนสถานะลีด → สถานะใ�
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
 
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY); // ตารางแบ่งหน้า — ต้องค้นหาก่อน
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: /▾/ }).first().click();
@@ -103,6 +107,7 @@ test("[func] ลบลีดผ่านหน้าจอ → หายจา�
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
 
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY); // ตารางแบ่งหน้า — ต้องค้นหาก่อน
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
 
