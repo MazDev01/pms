@@ -96,6 +96,10 @@ test("[func] ลูกค้าที่เกิดจากการปิด�
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
 
+  // ต้องค้นหาก่อน — หน้าลูกค้าแบ่งหน้า และตอนรันทั้งชุดพร้อมกัน สเปกอื่นปิดการขายของสาขาเดียวกัน
+  // เพิ่มลูกค้าใหม่แทรกเข้ามาตลอด ลูกค้าของเทสต์นี้จึงถูกดันตกหน้าแรกไปเป็นครั้งคราว
+  // → ตกด้วย "ไม่เจอลูกค้า" ทั้งที่ข้อมูลอยู่ครบ (ตัวหน้าจอเองก็ตั้งช่องค้นหาให้อัตโนมัติด้วยเหตุผลเดียวกัน)
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 20_000, message: "ลูกค้าใหม่ต้องโผล่ในหน้าลูกค้า" }).toContain(COMPANY);
 
@@ -169,6 +173,9 @@ test("[func] เพิ่มโน้ตให้ลูกค้า → โน�
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
 
+  // ต้องค้นหาก่อน — หน้าลูกค้าแบ่งหน้า ตอนรันทั้งชุดพร้อมกันสเปกอื่นปิดการขายเพิ่มลูกค้าแทรกเข้ามา
+  // ลูกค้าของเทสต์นี้จึงตกหน้าแรก (กับดักเดียวกับที่แก้ไปแล้วในเทสต์ข้างบนของไฟล์นี้ แต่จุดนี้ตกหล่น)
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 20_000 }).toContain(COMPANY);
   await page.getByText(COMPANY).first().click();

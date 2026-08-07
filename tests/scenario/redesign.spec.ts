@@ -132,6 +132,13 @@ test("[ux·dealer] Smart filter ค้างติดต่อ (>7/14/30 วั�
   await open(page, "dealer", "/leads");
   await assertHealthyPage(page, "ลูกค้าเป้าหมาย");
 
+  // ต้องรอให้รายการลีดโหลดเสร็จก่อน แล้วค่อยอ่านตัวเลขบนการ์ด
+  // เทสต์นี้เอา "ตัวเลขบนการ์ด" ไปเทียบกับ "จำนวนแถวในตาราง" ซึ่งอ่านคนละจังหวะกัน
+  // ถ้าอ่านการ์ดตอนข้อมูลยังมาไม่ถึง จะได้เลขของหน้าว่าง แล้วไปเทียบกับแถวที่โผล่มาทีหลัง = ไม่มีทางตรง
+  // (ตกเป็นครั้งคราวเฉพาะตอนรันทั้งชุดพร้อมกัน ซึ่งทุกอย่างช้าลง — ได้ 0 เทียบกับ 3 แถว)
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  await expect.poll(() => page.locator("tbody tr").count(), { timeout: 20_000 }).toBeGreaterThan(0);
+
   // การ์ด KPI บอกจำนวนลีดที่ค้างเกิน 7 วัน
   const kpi = page.getByRole("button", { name: /^เกิน 7 วัน/ });
   await expect(kpi).toBeVisible();
@@ -144,8 +151,7 @@ test("[ux·dealer] Smart filter ค้างติดต่อ (>7/14/30 วั�
     await expect(idle.getByRole("option", { name: `ค้างติดต่อ >${d} วัน`, exact: true }), `ต้องมีเกณฑ์ >${d} วัน`).toHaveCount(1);
   }
 
-  await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตารางเพื่อนับแถว
-  const rows = page.locator("tbody tr");
+  const rows = page.locator("tbody tr"); // สลับเป็นตารางไปแล้วข้างบนตอนรอข้อมูลโหลด
   const before = await rows.count();
 
   // กรอง >7 วัน → จำนวนแถวต้องตรงกับตัวเลขบนการ์ด KPI (เช็คว่าการ์ดกับตัวกรองนับด้วยเกณฑ์เดียวกันจริง)

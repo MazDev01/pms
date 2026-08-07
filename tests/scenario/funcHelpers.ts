@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON, type Account } from "./supabaseEnv";
+import { SESSION_KEY, getSession } from "./helpers";
 
 export const DEALER_ORIGIN = "http://localhost:3001";
 export const HQ_ORIGIN = "http://localhost:3002";
@@ -23,8 +24,32 @@ export function assertNoErrors(errs: string[], label: string) {
   expect(real, `${label} ต้องไม่มี error`).toEqual([]);
 }
 
-/** ล็อกอินผ่านหน้าจอจริง — กรอกหลัง hydrate เท่านั้น ไม่งั้น controlled input ถูกล้างแล้วส่งฟอร์มเปล่า */
+// ── เข้าสู่ระบบ: ใช้สิทธิ์เดิมซ้ำ ไม่ล็อกอินใหม่ทุกเทสต์ ────────────────────────────
+//
+// ปัญหาที่แก้ (ยืนยันจากบันทึกการรันเต็ม 7 ส.ค. 69):
+//   เดิมทุกเทสต์พิมพ์อีเมล+รหัสผ่านแล้วกดปุ่มจริง — 55 จุดเรียก × รันขนาน 3 ช่องทาง ใน 8 นาที
+//   จำนวนคำขอล็อกอินทะลุเพดานของ Supabase Auth แล้วโดนปฏิเสธ:
+//     ล็อกอินรอบที่ 1 ไม่ผ่าน (["Request rate limit reached"]) — ลองใหม่
+//   ผลที่ตามมาไม่ได้หยุดแค่ "ช้าลง": ถ้าสิทธิ์เข้าถึงไม่สมบูรณ์ ฐานข้อมูลจะคืน "ไม่มีแถว" เงียบ ๆ
+//   (RLS กรองออกหมดโดยไม่ถือเป็น error) → เทสต์ตกด้วยข้อความ "หาข้อมูลไม่เจอ" ที่ชี้ไปผิดทางสนิท
+//   อาการที่ค้างคาที่สุดคือ "ใบเสนอราคาที่เพิ่งหาเจอ หายไปใน 5 วินาที" ซึ่งอธิบายได้ด้วยเรื่องนี้
+//
+// วิธีแก้: ล็อกอินครั้งเดียวต่อบัญชี (ผ่าน API) แล้วยัด session เดิมให้ทุกเทสต์ใช้ซ้ำ
+//   เป็นวิธีเดียวกับที่ helpers.ts (openAs) ใช้อยู่แล้วและไม่เคยมีปัญหา
+//   ถ้ายัดแล้วแอปไม่ยอมรับ (ยังอยู่หน้าล็อกอิน) จะตกกลับไปล็อกอินผ่านหน้าจอจริงเหมือนเดิม
+const HOME_AFTER_LOGIN: Record<string, string> = { "/login": "/dashboard", "/hq/login": "/hq/dashboard" };
+
 export async function loginUI(page: Page, origin: string, path: string, who: Account) {
+  try {
+    const session = await getSession(who);
+    await page.addInitScript(({ key, session }) => {
+      sessionStorage.setItem(key as string, JSON.stringify(session));
+    }, { key: SESSION_KEY, session });
+    await page.goto(`${origin}${HOME_AFTER_LOGIN[path] ?? path}`, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    if (!page.url().includes("/login")) return;
+  } catch { /* ยัด session ไม่สำเร็จ → ล็อกอินผ่านหน้าจอจริงข้างล่าง */ }
+
   await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
   const email = page.getByLabel(/อีเมล/i).first();
@@ -104,7 +129,22 @@ export const tagged = (s: string) => `${TAG}-${s}`;
 //   ที่กำลังรันอยู่กลางคัน (func-dealer-sales เขียนคอมเมนต์เตือนไว้เอง)
 //   → แต่ละสเปกต้องมี "ช่องของตัวเอง": specNS("APPT") = "ZZTEST-APPT" แล้วตั้งชื่อข้อมูลใต้ช่องนั้น
 //     cleanup(sb, dealer, ns) จะลบเฉพาะ %ZZTEST-APPT% ไม่แตะของสเปกอื่น (ยัง sweep รวมด้วย %ZZTEST% ได้)
-export const specNS = (name: string) => `${TAG}-${name}`;
+//
+// ── ยังไม่พอ: ต้องแยก "ต่อ worker" ด้วย ────────────────────────────────────────
+// ยืนยันจากบันทึกการรันเต็ม 7 ส.ค. 69 (ใส่ตัวเก็บหลักฐานไว้ในเทสต์แล้วดักได้):
+//   ใบ Q-RYG-2026-1621 ถูกสร้างและหาเจอแล้ว · 5 วินาทีถัดมาค้นด้วยเลขที่ตรง ๆ ได้ [] error null
+//   แต่ "อ่านใบใดก็ได้ในสาขา" ยังได้ 1 แถว → สิทธิ์เข้าถึงปกติดี ใบถูกลบออกจากฐานข้อมูลจริง
+//
+// ที่มา: เทสต์ตกรอบแรก → Playwright ทิ้ง worker นั้นแล้วเปิดตัวใหม่มารันซ้ำ
+//   worker ที่ถูกทิ้งจะยิง afterAll (= cleanup ลบทุกอย่างใต้ช่องของสเปก) ระหว่างที่รอบรันซ้ำ
+//   สร้างข้อมูลใหม่ใต้ "ช่องเดียวกัน" อยู่พอดี → ของรอบใหม่โดนลบตามไปด้วย แล้วตกซ้ำอีกครั้ง
+//   (ตระกูลเดียวกับบั๊ก fullyParallel ที่เคยเจอ — ตัวเก็บกวาดวิ่งไล่ตามงานที่ยังทำอยู่)
+//
+// แก้: ผูกชื่อช่องกับหมายเลข worker · Playwright ให้เลขใหม่กับ worker ที่เปิดมารันซ้ำเสมอ
+//   cleanup ของ worker เก่าจึงหาข้อมูลของ worker ใหม่ไม่เจอ ลบไม่โดนกัน
+//   ของตกค้างข้าม worker ยังถูกกวาดด้วย %ZZTEST% ที่ global-teardown ตอนจบชุดอยู่ดี
+const WORKER = process.env.TEST_WORKER_INDEX ?? "0";
+export const specNS = (name: string) => `${TAG}-${name}-W${WORKER}`;
 export const nsTag = (ns: string) => (s: string) => `${ns}-${s}`;
 
 /** กวาดข้อมูลทดสอบทิ้งทุกตาราง — เรียกทั้งก่อนและหลังชุดเทสต์ · tag = ช่องของสเปก (ค่าเริ่มต้น = ร่วม) */

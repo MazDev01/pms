@@ -15,10 +15,10 @@ export async function loginAs(page: Page, role: "hq" | "dealer") {
 // แล้ว cache ไว้ใช้ซ้ำได้ตลอดการรัน — เทียบกับเดิมที่ล็อกอินผ่านหน้าจอทุกเทสต์)
 // ⚠️ ต้องเป็น sessionStorage ไม่ใช่ localStorage — client.ts เปลี่ยนมาใช้ sessionStorage แล้ว
 // (กัน session สลับข้ามแท็บ, ดู packages/shared/lib/data/supabase/client.ts) คีย์ต้องตรงกับที่แอปใช้จริง
-const SESSION_KEY = `sb-${new URL(SUPABASE_URL || "https://x.supabase.co").hostname.split(".")[0]}-auth-token`;
+export const SESSION_KEY = `sb-${new URL(SUPABASE_URL || "https://x.supabase.co").hostname.split(".")[0]}-auth-token`;
 
 const sessionCache = new Map<string, Promise<Session>>();
-async function getSession(who: Account): Promise<Session> {
+export async function getSession(who: Account): Promise<Session> {
   const cached = sessionCache.get(who.email);
   if (cached) return cached;
   const p = (async () => {

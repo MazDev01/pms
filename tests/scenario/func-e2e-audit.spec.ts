@@ -140,6 +140,8 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
 
   // ดีลที่สอง — ผ่านหน้าลูกค้า "สร้างดีลใหม่"
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
+  // ต้องค้นหาก่อน — หน้าลูกค้าแบ่งหน้า ตอนรันทั้งชุดพร้อมกันสเปกอื่นเพิ่มลูกค้าแทรกเข้ามาตลอด
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 20_000 }).toContain(COMPANY);
   await page.getByText(COMPANY).first().click();
@@ -353,6 +355,8 @@ test("[audit] cross-role: ตัวแทนปิดการขาย → HQ �
   expect(await hqCreateBtn.count(), "HQ ต้องไม่มีปุ่มสร้างใบเสนอราคา (read-only)").toBe(0);
 
   await page.goto(`${HQ_ORIGIN}/hq/customers`, { waitUntil: "domcontentloaded" });
+  // หน้ารวมทั้งเครือยิ่งแบ่งหน้าแน่นกว่าเดิม (ลูกค้าทุกสาขารวมกัน) — ต้องค้นหาก่อนเสมอ
+  await page.getByPlaceholder("ค้นหาชื่อลูกค้า หรือจังหวัด...").fill(COMPANY);
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 20_000, message: "HQ /hq/customers ต้องเห็นลูกค้าใหม่" }).toContain(COMPANY);
 
