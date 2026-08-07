@@ -14,6 +14,7 @@ import { DbError } from "@pms/shared/lib/friendlyError";
 import { reportPartialData } from "@pms/shared/lib/repoLog";
 import type { DataAdapter, DealerRollup, QuoteRangeRow } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, DealerLeadRulesMap, LeadRules,
@@ -251,13 +252,58 @@ const FILES_BUCKET = "dealer-files";
 let channelSeq = 0;
 const topic = (base: string) => `${base}-${++channelSeq}`;
 
-// สถานะการ subscribe realtime — เดิม ch.subscribe() ทิ้ง status callback
-// → CHANNEL_ERROR/TIMED_OUT (เน็ตหลุด/timeout) เงียบสนิท ข้อมูลค้างไม่อัปเดตสดโดยไม่มีสัญญาณ
-// อย่างน้อยต้อง log ให้เห็น (CLOSED เป็นการปิดปกติตอน removeChannel — ไม่เตือน)
-function onSubStatus(status: string) {
-  if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-    captureError(new Error(`realtime channel ${status} — ข้อมูลอาจไม่อัปเดตสดจนกว่าจะรีเฟรชหน้า`), "realtime");
-  }
+// ── การเชื่อมต่อ "อัปเดตสด" — ต่อใหม่เองเมื่อหลุด ไม่ใช่บอกให้ผู้ใช้รีเฟรชเอง ──────────
+//
+// เดิม: เจอ CHANNEL_ERROR/TIMED_OUT แล้ว "แค่รายงาน" พร้อมข้อความว่าข้อมูลอาจไม่อัปเดตสด
+//   จนกว่าจะรีเฟรชหน้า → ผลักภาระให้ผู้ใช้ ทั้งที่การหลุดชั่วคราวเป็นเรื่องปกติมาก
+//   (เน็ตสะดุด · สลับ wifi · เครื่องตื่นจาก sleep · เซิร์ฟเวอร์รีสตาร์ท)
+//   และผู้ใช้เห็นข้อความสีแดงน่าตกใจทั้งที่ระบบยังใช้งานได้ปกติ (มีตาข่ายซิงก์ทุก 30 วินาทีรองอยู่แล้ว)
+//   พบจริงจากหน้าจอผู้ใช้ 7 ส.ค. 69
+//
+// ตอนนี้: หลุดแล้วต่อใหม่เองแบบถอยห่างขึ้นเรื่อย ๆ (1 → 3 → 8 วินาที)
+//   ต่อติดเมื่อไหร่ล้างตัวนับ เริ่มใหม่ได้เต็มโควตาอีกครั้ง
+//   รายงานให้คนเห็น "เฉพาะตอนต่อใหม่ครบทุกครั้งแล้วยังไม่ติด" ซึ่งแปลว่าผิดปกติจริง
+//
+// ⚠️ ต้องสร้าง channel ใหม่ทุกครั้งที่ลองใหม่ ใช้ตัวเดิมซ้ำไม่ได้ (ตัวที่ error ไปแล้วต่อไม่ติดอีก)
+//   จึงรับ "ฟังก์ชันสร้าง channel" เข้ามา ไม่ใช่รับตัว channel
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
+
+function subscribeWithRetry(label: string, build: () => RealtimeChannel): () => void {
+  let ch: RealtimeChannel | null = null;
+  let attempt = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+
+  const start = () => {
+    if (stopped) return;
+    ch = build();
+    ch.subscribe((status) => {
+      if (status === "SUBSCRIBED") { attempt = 0; return; }
+      // CLOSED = ปิดตามปกติตอน removeChannel — ไม่ใช่ความผิดพลาด
+      if (status !== "CHANNEL_ERROR" && status !== "TIMED_OUT") return;
+
+      const dead = ch;
+      ch = null;
+      if (dead) void sb().removeChannel(dead);
+      if (stopped) return;
+
+      if (attempt >= RETRY_DELAYS_MS.length) {
+        captureError(
+          new Error(`realtime "${label}" ต่อใหม่ ${RETRY_DELAYS_MS.length} ครั้งแล้วยังไม่ติด — ข้อมูลจะอัปเดตช้ากว่าปกติ (ยังซิงก์ทุก 30 วินาที)`),
+          "realtime",
+        );
+        return;
+      }
+      timer = setTimeout(start, RETRY_DELAYS_MS[attempt++]);
+    });
+  };
+
+  start();
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+    if (ch) void sb().removeChannel(ch);
+  };
 }
 
 export const SupabaseAdapter: DataAdapter = {
@@ -292,6 +338,7 @@ export const SupabaseAdapter: DataAdapter = {
         appointments: rowToAppt,
         customers: (r) => toCamel<CustomerRow>(r),
       };
+      return subscribeWithRetry("งานขาย", () => {
       const ch = sb().channel(topic("sales-changes"));
       for (const t of Object.keys(toRow) as SalesTable[]) {
         ch.on("postgres_changes", { event: "*", schema: "public", table: t }, (p) => {
@@ -307,16 +354,13 @@ export const SupabaseAdapter: DataAdapter = {
           } as SalesChange);
         });
       }
-      ch.subscribe(onSubStatus);
-      return () => { void sb().removeChannel(ch); };
+      return ch;
+      });
     },
-    subscribeCatalog: (onChange) => {
-      const ch = sb().channel(topic("catalog-changes"))
-        .on("postgres_changes", { event: "*", schema: "public", table: "master_catalog" }, () => onChange());
-      ch.subscribe(onSubStatus);
-      return () => { void sb().removeChannel(ch); };
-    },
-    subscribeSettings: (onChange) => {
+    subscribeCatalog: (onChange) => subscribeWithRetry("แคตตาล็อกกลาง", () =>
+      sb().channel(topic("catalog-changes"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "master_catalog" }, () => onChange())),
+    subscribeSettings: (onChange) => subscribeWithRetry("ตั้งค่าเครือ", () => {
       const ch = sb().channel(topic("settings-changes"));
       // ต้องครบทุกตารางที่ HQ เป็นเจ้าของและตัวแทนต้องใช้ตาม
       // (0021 เปิด Realtime ให้ hq_sales_journey ไว้แล้ว แต่ฝั่ง client ลืมฟัง
@@ -324,23 +368,16 @@ export const SupabaseAdapter: DataAdapter = {
       for (const t of ["hq_policy", "hq_targets", "hq_notif_rules", "hq_sales_journey"]) {
         ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
       }
-      ch.subscribe(onSubStatus);
-      return () => { void sb().removeChannel(ch); };
-    },
+      return ch;
+    }),
     // โน้ตลูกค้า — RLS กรอง event ให้เห็นเฉพาะของสาขาตัวเอง (0028 เปิด Realtime + replica identity full)
-    subscribeNotes: (onChange) => {
-      const ch = sb().channel(topic("notes-changes"))
-        .on("postgres_changes", { event: "*", schema: "public", table: "customer_notes" }, () => onChange());
-      ch.subscribe(onSubStatus);
-      return () => { void sb().removeChannel(ch); };
-    },
+    subscribeNotes: (onChange) => subscribeWithRetry("โน้ตลูกค้า", () =>
+      sb().channel(topic("notes-changes"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "customer_notes" }, () => onChange())),
     // ตั้งค่าของสาขา — 0024 เปิด Realtime + replica identity full · RLS กรองเฉพาะของสาขาตัวเอง (M4)
-    subscribeDealerSettings: (onChange) => {
-      const ch = sb().channel(topic("dealer-settings-changes"))
-        .on("postgres_changes", { event: "*", schema: "public", table: "dealer_settings" }, () => onChange());
-      ch.subscribe(onSubStatus);
-      return () => { void sb().removeChannel(ch); };
-    },
+    subscribeDealerSettings: (onChange) => subscribeWithRetry("ตั้งค่าสาขา", () =>
+      sb().channel(topic("dealer-settings-changes"))
+        .on("postgres_changes", { event: "*", schema: "public", table: "dealer_settings" }, () => onChange())),
   },
   dealers: {
     // ตาราง dealers ใช้ code เป็น PK — ไม่มีคอลัมน์ id (แต่ DealerRow ของแอปมี id และ mock ตั้ง id = code เสมอ)
