@@ -39,13 +39,22 @@ const HQ_BASE: Permission[] = [...SALES_READ, "reports:view", "analytics:view"];
 // สิทธิ์ระดับเครือ (ข้อมูลกลางที่ HQ เป็นเจ้าของ) — RLS ฝั่ง DB คุมด้วย can_write_master()
 const HQ_MASTER: Permission[] = ["catalog:edit", "dealers:manage", "users:manage", "hq:all_data"];
 
+// ⚠️ DEALER_SALES / DEALER_SITE = "เก็บไว้เป็นบันทึกเท่านั้น ไม่มีบัญชีเข้าระบบจริง" (ตัดสิน 7 ส.ค. 69)
+//   ระบบบังคับ "หนึ่งสาขา หนึ่งบัญชีเข้าระบบ" ที่ฐานข้อมูล (0105 · unique index บน dealer_code)
+//   จึงเพิ่มบัญชีที่สองให้สาขาที่มี DEALER_ADMIN อยู่แล้วไม่ได้เลย — ยิงพิสูจน์แล้ว ถูกปฏิเสธจริง
+//   นี่คือ "การออกแบบ" ไม่ใช่บั๊ก: พนักงานขายรายคนถูกบันทึกเป็น "ผู้รับผิดชอบ" (responsible_persons)
+//   ซึ่งเป็นแค่ชื่อไว้มอบหมายงาน ไม่ใช่บัญชีที่ล็อกอินได้ (ดู responsible-person-not-user)
+//
+//   ห้ามลบสองบทบาทนี้ออก และห้าม "แก้" กฎหนึ่งสาขาหนึ่งบัญชีเพื่อให้ใช้ได้ โดยไม่ได้รับคำสั่ง
+//   สิทธิ์ที่ประกาศไว้ข้างล่างจึงเป็นเพียงค่าตั้งต้นเผื่ออนาคต ไม่มีผลกับใครในระบบตอนนี้
+//   (มีเทสต์ล็อกไว้แล้วที่ role-matrix.spec.ts — ถ้าวันหนึ่งกฎถูกเปลี่ยน จะรู้ทันที)
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   SUPER_ADMIN:   [...HQ_BASE, ...HQ_MASTER],
   HQ_MANAGEMENT: [...HQ_BASE, ...HQ_MASTER],
   HQ_STAFF:      [...HQ_BASE],                 // ดูได้ทั้งเครือ แต่แก้ข้อมูลกลาง/ตั้งค่าไม่ได้
   DEALER_ADMIN:  [...DEALER_BASE, "analytics:view"],
-  DEALER_SALES:  DEALER_BASE,
-  DEALER_SITE:   ["leads:read", "customers:read"],
+  DEALER_SALES:  DEALER_BASE,                  // เก็บไว้เป็นบันทึก — ไม่มีบัญชีจริง (ดูหมายเหตุข้างบน)
+  DEALER_SITE:   ["leads:read", "customers:read"], // เก็บไว้เป็นบันทึก — ไม่มีบัญชีจริง
 };
 
 export function hasPermission(role: UserRole, permission: Permission): boolean {

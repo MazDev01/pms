@@ -35,6 +35,32 @@ const CSP = [
   "form-action 'self'",
 ].join("; ");
 
+// ── CSP แบบ "รหัสยืนยันต่อคำขอ" (nonce) — ของจริงที่กัน XSS ได้ ──────────────────────
+//
+// ต่างจาก CSP ข้างบนตรงไหน: ข้างบนต้องเปิด 'unsafe-inline' ทิ้งไว้ให้ Next.js hydrate
+//   ซึ่งเท่ากับ "อนุญาตสคริปต์ที่ฝังในหน้าทุกตัว" — สคริปต์แปลกปลอมที่แทรกเข้ามาก็รันได้เหมือนกัน
+//   แบบ nonce ออกรหัสสุ่มใหม่ทุกคำขอ แล้วอนุญาตเฉพาะสคริปต์ที่ถือรหัสนั้น
+//   สคริปต์ที่ถูกแทรกเข้ามาภายหลังไม่มีทางรู้รหัส จึงถูกบล็อกจริง
+//   'strict-dynamic' = สคริปต์ที่ผ่านแล้วโหลดสคริปต์อื่นต่อได้ (Next.js ต้องใช้)
+//
+// ⚠️ ใช้เฉพาะตอนรันจริง (production) เท่านั้น — ตอนพัฒนา React Refresh ต้องใช้ eval
+//    และ Next.js ฝังสคริปต์ที่ไม่มี nonce หลายจุด ถ้าบังคับตอน dev หน้าจะพังทั้งระบบ
+//    ระดับความปลอดภัยตอนพัฒนาจึงเท่าเดิม (ซึ่งไม่ใช่ปัญหา เพราะไม่มีผู้ใช้จริงเข้าถึง)
+export function cspWithNonce(nonce) {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",       // ปิด <object>/<embed> — ช่องรันโค้ดเก่าที่ไม่มีใครใช้แล้ว
+  ].join("; ");
+}
+
 export const SECURITY_HEADERS = [
   // ห้ามเว็บอื่นเอาหน้าเราไปฝังใน iframe
   { key: "X-Frame-Options", value: "DENY" },
@@ -47,7 +73,15 @@ export const SECURITY_HEADERS = [
   { key: "Content-Security-Policy", value: CSP },
 ];
 
-/** ใส่หัวข้อความปลอดภัยให้ทุกหน้า — เรียกจาก next.config.ts ของแต่ละแอป */
+/** ใส่หัวข้อความปลอดภัยให้ทุกหน้า — เรียกจาก next.config.ts ของแต่ละแอป
+ *
+ *  ⚠️ ตอนรันจริง (production) จะ "ไม่ใส่ CSP จากที่นี่" เพราะ middleware เป็นคนใส่แบบ nonce แทน
+ *     ถ้าใส่ทั้งสองที่ เบราว์เซอร์จะบังคับ "ทั้งสองอัน" พร้อมกัน (ตัดกันเป็นเซตร่วม)
+ *     ผลคือ nonce ใช้ไม่ได้จริงเพราะโดนอีกอันที่ไม่มี nonce บล็อกซ้ำ — หน้าจะพังแบบหาสาเหตุยาก
+ *     หัวข้ออีก 4 อันไม่เกี่ยวกับ CSP จึงยังใส่จากที่นี่เหมือนเดิมทั้งสองโหมด
+ */
 export function securityHeaderRules() {
-  return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+  const isProd = process.env.NODE_ENV === "production";
+  const headers = isProd ? SECURITY_HEADERS.filter(h => h.key !== "Content-Security-Policy") : SECURITY_HEADERS;
+  return [{ source: "/:path*", headers }];
 }
