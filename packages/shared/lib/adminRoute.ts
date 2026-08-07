@@ -85,6 +85,32 @@ export async function auditLog(
 }
 
 /**
+ * ลบบัญชีเข้าระบบแบบ "ดังเมื่อพลาด" — ใช้ตอนย้อนกลับ (rollback) ที่ห้ามล้มเหลวเงียบ
+ *
+ * ทำไมต้องมีตัวนี้: supabase-js **คืน error เป็นค่า** ไม่ได้โยน exception
+ *   โค้ดเดิมเขียน `try { await admin.auth.admin.deleteUser(uid) } catch { log }` ซึ่งดักไม่ติดเลย
+ *   → การย้อนกลับล้มเหลวโดยไม่มีใครรู้ เหลือ "บัญชีที่ล็อกอินได้แต่ไม่มีโปรไฟล์" ค้างในระบบ
+ *   ซึ่งเป็นสิ่งที่การย้อนกลับนั้นตั้งใจจะกันอยู่แท้ ๆ (ผลตรวจสอบระบบรอบ 2 · ระดับสูง)
+ *
+ * คืน true เมื่อลบสำเร็จจริง — ผู้เรียกเอาไปบอกผู้ใช้ได้ว่าเหลือของค้างหรือไม่
+ */
+export async function deleteAuthUserLoud(
+  admin: SupabaseClient, userId: string, label: string,
+): Promise<boolean> {
+  try {
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) {
+      console.error(`[${label}] ย้อนลบบัญชี ${userId} ไม่สำเร็จ — อาจเหลือบัญชีกำพร้า`, error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`[${label}] ย้อนลบบัญชี ${userId} ไม่สำเร็จ — อาจเหลือบัญชีกำพร้า`, e);
+    return false;
+  }
+}
+
+/**
  * ครอบ handler ให้ throw ที่ไม่ได้คาดคิด (เช่น network ของ supabase-js พังจริง ไม่ใช่คืน error object)
  * กลายเป็น 500 รูปแบบ JSON เดียวกับ error อื่น ๆ + มี log ฝั่งเซิร์ฟเวอร์เสมอ
  * เดิมจะหลุดไป error boundary ของ Next เอง → client ได้ response คนละรูปแบบ และไม่มี log ว่าอะไรพัง

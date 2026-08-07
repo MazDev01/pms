@@ -92,11 +92,11 @@ export default function HQAuditPage() {
           {q && <button onClick={() => setQ("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", padding: 0 }}><X size={13} /></button>}
         </div>
         <div style={{ flex: 1 }} />
-        <select value={moduleFilter} onChange={e => setModuleFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามหมวดงาน" value={moduleFilter} onChange={e => setModuleFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           <option value="all">ทุกโมดูล</option>
           {modules.map(m => <option key={m} value={m}>{MODULE_LABEL[m] ?? m}</option>)}
         </select>
-        <select value={userFilter} onChange={e => setUserFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามผู้ใช้" value={userFilter} onChange={e => setUserFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           <option value="all">ผู้ใช้ทุกคน</option>
           {users.map(u => <option key={u} value={u}>{u}</option>)}
         </select>

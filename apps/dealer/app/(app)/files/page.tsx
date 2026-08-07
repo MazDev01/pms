@@ -1,6 +1,8 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
+import { validateUpload, humanFileSize, UPLOAD_ACCEPTED_EXT } from "@pms/shared/lib/uploadLimits";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -29,12 +31,9 @@ const MUTED   = "#6b7280";
 type FileCategory = "ใบเสนอราคา" | "แบบแปลน" | "รูปภาพ" | "นำเสนอ" | "สัญญา" | "อื่นๆ";
 type FileExt = "pdf" | "docx" | "xlsx" | "dwg" | "pptx" | "jpg" | "png" | "other";
 
-// ชนิด/ขนาดไฟล์ที่รับอัปโหลด — ต้องตรงกับ allowed_mime_types/file_size_limit ของ bucket dealer-files (0075)
-//   เดิมไม่เช็กเลย ทั้งที่ป้ายบนกล่องลากไฟล์บอกว่ารับแค่ PDF/Word/Excel/CAD/รูปภาพ — อัปโหลด .exe ได้ปกติ
-//   (พบจากผลตรวจสอบระบบ 30 ก.ค. 69, Medium) เช็กที่นามสกุลไฟล์ ไม่ใช่ MIME — ไฟล์ CAD (.dwg/.dxf) ไม่มี
-//   MIME มาตรฐานที่เบราว์เซอร์ส่วนใหญ่รู้จัก (มักได้ octet-stream เหมือนไฟล์ไม่รู้จักทั่วไป)
-const ACCEPTED_EXT = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".dwg", ".dxf", ".jpg", ".jpeg", ".png"];
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+// ชนิด/ขนาดไฟล์ที่รับอัปโหลด — ใช้กฎกลาง uploadLimits.ts (ต้องตรงกับ allowed_mime_types/file_size_limit
+// ของ bucket dealer-files ใน 0075) · ห้ามประกาศเกณฑ์ซ้ำในไฟล์นี้อีก — เคยมี 3 หน้าถือกฎคนละชุด
+// แล้วตกหล่นทีละหน้า (หน้าไฟล์ 30 ก.ค. · แผงลูกค้า 31 ก.ค. · แผงลูกค้าเป้าหมาย 6 ส.ค. 69)
 
 // ไฟล์ในหน้านี้ = คลังไฟล์รวมของตัวแทน (แหล่งเดียวใน mock.ts)
 // แนบไฟล์จากหน้าลูกค้า/ลูกค้าเป้าหมาย → ปรากฏที่นี่อัตโนมัติ
@@ -120,19 +119,12 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
 
   function pick(f: File | undefined) {
     if (!f) return;
-    const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
-    if (!ACCEPTED_EXT.includes(ext)) {
-      setFileError(`ไม่รองรับไฟล์ชนิด "${ext}" — รับเฉพาะ PDF, Word, Excel, PowerPoint, CAD, รูปภาพ`);
-      return;
-    }
-    if (f.size > MAX_UPLOAD_BYTES) {
-      setFileError(`ไฟล์ใหญ่เกินไป (${(f.size / 1024 / 1024).toFixed(1)} MB) — จำกัดไม่เกิน 25 MB`);
-      return;
-    }
+    const problem = validateUpload(f);
+    if (problem) { setFileError(problem); return; }
     setFileError(null);
     setBlob(f);
     setName(f.name);
-    setSize(f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${(f.size / 1024).toFixed(0)} KB`);
+    setSize(humanFileSize(f.size));
   }
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -162,7 +154,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.22)" }}>
+        <ModalCard onClose={onClose} label="อัปโหลดไฟล์" className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.22)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>อัปโหลดไฟล์</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
@@ -172,7 +164,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
             <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}
               style={{ border: `2px dashed ${name ? PRIMARY : BORDER}`, borderRadius: 12, padding: "24px 20px", textAlign: "center", background: name ? "#f0f4fa" : "var(--muted)", cursor: "pointer" }}>
               <label style={{ cursor: "pointer" }}>
-                <input type="file" accept={ACCEPTED_EXT.join(",")} style={{ display: "none" }} onChange={handleFile} />
+                <input type="file" accept={UPLOAD_ACCEPTED_EXT.join(",")} style={{ display: "none" }} onChange={handleFile} />
                 {name && !fileError ? (
                   <div>
                     <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL }}>{name}</div>
@@ -214,7 +206,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
               <Upload size={13} /> อัปโหลด
             </button>
           </div>
-        </div>
+        </ModalCard>
       </div>
     </>
   );
@@ -242,7 +234,7 @@ function EditFileModal({ file, onSave, onClose }: { file: FileMock; onSave: (f: 
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.22)" }}>
+        <ModalCard onClose={onClose} label="แก้ไขข้อมูลไฟล์" className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.22)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>แก้ไขไฟล์</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
@@ -271,7 +263,7 @@ function EditFileModal({ file, onSave, onClose }: { file: FileMock; onSave: (f: 
               <Pencil size={13} /> บันทึก
             </button>
           </div>
-        </div>
+        </ModalCard>
       </div>
     </>
   );
@@ -424,7 +416,7 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <div onClick={e => e.stopPropagation()} className="card"
+        <ModalCard onClose={onClose} label="ยืนยันการลบไฟล์" className="card"
           style={{ width: "100%", maxWidth: 640, maxHeight: "90vh", pointerEvents: "auto", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,51,102,.28)" }}>
           {/* Header */}
           <div style={{ background: PRIMARY, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
@@ -456,7 +448,7 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
             )}
             <button onClick={onClose} className="btn btn-primary btn-md">ปิด</button>
           </div>
-        </div>
+        </ModalCard>
       </div>
     </>
   );
@@ -839,7 +831,7 @@ export default function FilesPage() {
         <>
           <div onClick={() => setDelId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 200 }} />
           <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-            <div onClick={e => e.stopPropagation()} className="card" style={{ width: 300, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
+            <ModalCard onClose={() => setDelId(null)} label="เมนูไฟล์" className="card" style={{ width: 300, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
               <div style={{ padding: "16px 20px 14px", borderBottom: `1px solid ${BORDER}` }}>
                 <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL }}>ยืนยันการลบไฟล์</div>
                 <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 4 }}>
@@ -850,7 +842,7 @@ export default function FilesPage() {
                 <button onClick={() => setDelId(null)} className="btn btn-secondary btn-md" style={{ flex: 1, justifyContent: "center" }}>ยกเลิก</button>
                 <button onClick={() => deleteFile(delId)} className="btn btn-md" style={{ flex: 1, justifyContent: "center", background: "#dc2626", color: "#fff", border: "none" }}>ลบไฟล์</button>
               </div>
-            </div>
+            </ModalCard>
           </div>
         </>
       )}

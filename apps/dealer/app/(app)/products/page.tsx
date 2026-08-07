@@ -1,6 +1,7 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useState, useMemo } from "react";
 import {
   Package, FileText, Download, Search, Lock, X, History, CalendarClock,
@@ -187,7 +188,7 @@ export default function DealerProductsPage() {
       {/* ── รายละเอียดแม่แบบ modal ── */}
       {viewP && (
         <div onClick={() => setViewP(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+          <ModalCard onClose={() => setViewP(null)} label="รายละเอียดแม่แบบ" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewP.name}</div>
@@ -240,14 +241,14 @@ export default function DealerProductsPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── รายละเอียดแม่แบบย่อย modal ── */}
       {subView && (
         <div onClick={() => setSubView(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setSubView(null)} label="รายละเอียดประเภทย่อย" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{subView.sub}</div>
@@ -276,14 +277,14 @@ export default function DealerProductsPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── ประวัติราคา modal (read-only) ── */}
       {historyP && (
         <div onClick={() => setHistoryP(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "84vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+          <ModalCard onClose={() => setHistoryP(null)} label="ประวัติราคา" style={{ width: "100%", maxWidth: 480, maxHeight: "84vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>ประวัติราคา</div>
@@ -331,7 +332,7 @@ export default function DealerProductsPage() {
                 )}
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
     </div>

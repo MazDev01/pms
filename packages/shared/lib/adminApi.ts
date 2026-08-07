@@ -181,7 +181,9 @@ export async function impersonateDealer(code: string): Promise<{ ok: true; link:
 
 /** ลบตัวแทนจริง (auth ของผู้ใช้สังกัดสาขา + แถว dealers) ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์
  *  เดิมลบผ่าน repo ตรง ๆ ได้แค่แถว dealers → บัญชี auth ของสาขายังค้างเป็นบัญชีกำพร้า */
-export async function deleteDealerAccount(code: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function deleteDealerAccount(code: string): Promise<
+  { ok: true; warning?: string } | { ok: false; error: string }
+> {
   if (DATA_SOURCE !== "supabase") {
     return { ok: false, error: "โหมดเดโม: ลบบัญชีจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
@@ -192,9 +194,11 @@ export async function deleteDealerAccount(code: string): Promise<{ ok: true } | 
       method: "DELETE",
       headers: { authorization: `Bearer ${token}` },
     });
-    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    const json = (await res.json().catch(() => ({}))) as { error?: string; warning?: string };
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
-    return { ok: true };
+    // warning = ลบสาขาสำเร็จแล้ว แต่มีของค้างที่ผู้ดูแลต้องตามเก็บ (เช่น บัญชีเข้าระบบลบไม่ออก)
+    // หน้าจอต้องเอาสาขาออกจากรายการ แล้วแจ้งเตือนต่างหาก — ห้ามตีความเป็น "ลบไม่สำเร็จ"
+    return json.warning ? { ok: true, warning: json.warning } : { ok: true };
   } catch (e) {
     return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }

@@ -11,7 +11,7 @@ import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { captureError } from "@pms/shared/lib/observability";
 import { DbError } from "@pms/shared/lib/friendlyError";
-import type { DataAdapter, DealerRollup, QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, LeadSummary } from "../ports";
+import type { DataAdapter, DealerRollup, QuoteRangeRow } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
@@ -41,6 +41,15 @@ type RowsResult = { data: unknown[] | null; error: { message: string } | null };
 
 // ไล่ดึงทุกหน้าจนครบ · ต้องมี ORDER ที่เสถียรเสมอ ไม่งั้นแบ่งหน้าแล้วแถวซ้ำ/ตกหล่นได้
 // (Postgres ไม่รับประกันลำดับถ้าไม่ระบุ order)
+//
+// ── "เสถียร" ต้องหมายถึง "ไม่มีทางเสมอกันได้เลย" ── (ผลตรวจสอบระบบรอบ 2 · Part 8)
+// เลขที่ของงานขาย (customers.id · leads.num_id · quotations.id · appointments.id) เดินแยกกันรายสาขา
+// คีย์จริงคือ dealer_code + id — เลข 1 ของระยองกับเลข 1 ของเชียงใหม่คนละรายกันแต่ค่าเท่ากัน
+// ฝั่งตัวแทนไม่มีปัญหา (กรองสาขาเดียวอยู่แล้ว) แต่ฝั่งสำนักงานใหญ่ที่ดูรวมทั้งเครือ เลขจะซ้ำกันเป็นแถบ
+// พอสั่งเรียงด้วย id เฉย ๆ แล้วตัดหน้า แถวที่ "เสมอกัน" จะถูกจัดหน้าตามใจฐานข้อมูล ไม่รับประกันว่าซ้ำเดิม
+// ผลคือรายการเดียวกันโผล่สองหน้า หรือหายไปเลย โดยไม่มีอะไรฟ้อง
+// จึงต้องพ่วง dealer_code เป็นตัวตัดสินท้ายสุดทุกครั้ง — ฝั่งตัวแทนไม่มีผลอะไร (มีสาขาเดียว)
+const TIEBREAK_COL = "dealer_code";
 // ── กันเบราว์เซอร์ค้าง (M8) ──
 // pageAll วนดึงทีละ PAGE_ROWS จน "หมดตาราง" — ที่สเกลใหญ่ (หลายแสนแถว) โหลดทั้งก้อนเข้าหน่วยความจำ
 // = แท็บค้าง/ตาย · ใส่เพดานแข็ง: เกินแล้ว "หยุด + เตือนดังในคอนโซล" (ไม่เงียบ) แทนที่จะค้างจนตาย
@@ -106,9 +115,15 @@ async function withNetworkRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T
 }
 
 // select ทั้งตาราง + กรองตาม scope (ตัวแทน = เฉพาะสาขาตัวเอง · HQ = ทั้งหมด) → แปลงเป็น camelCase
-async function selectScoped<T>(table: string, scope?: Scope, col = "dealer_code", orderCol = "id"): Promise<T[]> {
+// tiebreak = คอลัมน์ตัดสินท้ายสุดเวลา orderCol เสมอกันได้ · ส่ง null เมื่อ orderCol ไม่ซ้ำอยู่แล้ว
+//   (ทะเบียนสาขาเรียงด้วย code · แคตตาล็อกกลางเป็นของส่วนกลาง — สองตารางนี้ไม่มีคอลัมน์ dealer_code ด้วยซ้ำ)
+async function selectScoped<T>(
+  table: string, scope?: Scope, col = "dealer_code", orderCol = "id", tiebreak: string | null = "dealer_code",
+): Promise<T[]> {
   const rows = await pageAll((from, to) => {
-    const base = sb().from(table).select("*").order(orderCol, { ascending: true }).range(from, to);
+    let q = sb().from(table).select("*").order(orderCol, { ascending: true });
+    if (tiebreak && tiebreak !== orderCol) q = q.order(tiebreak, { ascending: true });
+    const base = q.range(from, to);
     return scope && !scope.isHQ && scope.dealerCode ? base.eq(col, scope.dealerCode) : base;
   }, table);
   return toCamelList<T>(rows);
@@ -329,7 +344,7 @@ export const SupabaseAdapter: DataAdapter = {
     // ถ้าไม่เติมให้ ทุกแถวจะได้ id = undefined → React key ซ้ำ + หน้าจอที่อ้าง d.id พัง
     // อ่านผ่าน dealers_directory (0077) ไม่ใช่ตารางตรง — revenue_target ของสาขาอื่นถูกมาสก์เป็น null ที่ view
     //   (RLS เป็น row-level ปิดทั้งแถวได้อย่างเดียว ปิดทีละคอลัมน์ไม่ได้ · บอสยืนยัน 30 ก.ค. 69)
-    list: async () => (await selectScoped<DealerRow>("dealers_directory", undefined, "dealer_code", "code")).map(d => normalizeDealer({ ...d, id: d.id ?? d.code })),
+    list: async () => (await selectScoped<DealerRow>("dealers_directory", undefined, "dealer_code", "code", null)).map(d => normalizeDealer({ ...d, id: d.id ?? d.code })),
     // ตัดฟิลด์ที่ไม่มีคอลัมน์ใน DB ออกก่อน upsert:
     //   • id          — ตารางใช้ code เป็น PK
     //   • credentials — รหัสผ่านอยู่ใน Supabase Auth (hash) ห้ามเก็บซ้ำในตารางนี้
@@ -363,7 +378,7 @@ export const SupabaseAdapter: DataAdapter = {
     remove: async () => { throw new Error("ห้ามลบตัวแทนผ่านทางนี้ — ใช้ DELETE /api/admin/dealers เท่านั้น (กัน FK/บัญชีกำพร้า)"); },
   },
   catalog: {
-    list: () => selectScoped<SolutionProduct>("master_catalog"),
+    list: () => selectScoped<SolutionProduct>("master_catalog", undefined, "dealer_code", "id", null),
     save: async (all) => {
       // เหตุผลเดียวกับ dealers.save — created_at เป็นของ DB (ดูคำอธิบายด้านบน)
       const rows = toSnakeList(all as unknown as Row[]).map(r => { const c = { ...r }; delete c.created_at; return c; });
@@ -504,8 +519,10 @@ export const SupabaseAdapter: DataAdapter = {
     list: async () => {
       // อีเมลล็อกอินอยู่ใน auth.users ซึ่ง client อ่านไม่ได้ (ต้อง service_role)
       // → แสดง contact_email ที่ผู้ใช้ตั้งเอง ไม่มีก็ขึ้น "—" ไม่กุอีเมลขึ้นมา
+      // created_at เสมอกันได้ (บัญชีที่ถูกสร้างพร้อมกันเป็นชุด) → พ่วง id ซึ่งไม่ซ้ำทั้งระบบเป็นตัวตัดสินท้าย
       const rows = await pageAll((from, to) =>
-        sb().from("profiles").select("*").order("created_at", { ascending: true }).range(from, to), "profiles");
+        sb().from("profiles").select("*")
+          .order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, to), "profiles");
       return rows.map(r => ({
         id: String(r.id),
         name: (r.name as string) || "",
@@ -638,8 +655,8 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { unassigned?: Row[]; idle?: Row[]; expiring?: Row[]; dealer_latest?: Row[]; lost_rate?: Row[] };
       return {
-        unassigned: (d.unassigned ?? []).map(r => ({ numId: Number(r.num_id), company: String(r.company ?? ""), province: String(r.province ?? ""), value: String(r.value ?? "") })),
-        idle: (d.idle ?? []).map(r => ({ numId: Number(r.num_id), company: String(r.company ?? ""), assigned: String(r.assigned ?? ""), idleDays: Number(r.idle_days) })),
+        unassigned: (d.unassigned ?? []).map(r => ({ numId: Number(r.num_id), dealerCode: (r.dealer_code as string) ?? null, company: String(r.company ?? ""), province: String(r.province ?? ""), value: String(r.value ?? "") })),
+        idle: (d.idle ?? []).map(r => ({ numId: Number(r.num_id), dealerCode: (r.dealer_code as string) ?? null, company: String(r.company ?? ""), assigned: String(r.assigned ?? ""), idleDays: Number(r.idle_days) })),
         expiring: (d.expiring ?? []).map(r => ({ quoteNo: String(r.quote_no), customer: String(r.customer ?? ""), value: Number(r.value), dealerCode: (r.dealer_code as string) ?? null, daysLeft: Number(r.days_left) })),
         dealerLatest: (d.dealer_latest ?? []).map(r => ({ dealerCode: String(r.dealer_code), idleDays: Number(r.idle_days) })),
         lostRate: (d.lost_rate ?? []).map(r => ({ dealerCode: String(r.dealer_code), lost: Number(r.lost), closed: Number(r.closed) })),
@@ -711,7 +728,8 @@ export const SupabaseAdapter: DataAdapter = {
   leads: {
     list: async (scope) => {
       const rows = await pageAll((from, to) => {
-        const base = sb().from("leads").select("*").order("id", { ascending: true }).range(from, to);
+        const base = sb().from("leads").select("*")
+          .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
       }, "leads");
       return rows.map(rowToLead);
@@ -748,7 +766,8 @@ export const SupabaseAdapter: DataAdapter = {
   quotations: {
     list: async (scope) => {
       const rows = await pageAll((from, to) => {
-        const base = sb().from("quotations").select("*").order("id", { ascending: true }).range(from, to);
+        const base = sb().from("quotations").select("*")
+          .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
       }, "quotations");
       return rows.map(rowToQuote);
@@ -770,7 +789,8 @@ export const SupabaseAdapter: DataAdapter = {
           q = q.or(parts.join(","));
         }
         const col = opts.sort?.col ?? "date", asc = (opts.sort?.dir ?? "desc") === "asc";
-        return q.order(col, { ascending: asc }).order("id", { ascending: true }).range(from, to);
+        return q.order(col, { ascending: asc })
+          .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
       };
       const { rows, total } = await rangedFetch(buildQuery, opts.limit, opts.offset);
       return { rows: rows.map(rowToQuote), total };
@@ -803,14 +823,19 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return Number(data ?? 0);
     },
-    salesperson: async (quoteId) => {
-      const { data, error } = await sb().rpc("quotation_salesperson", { p_quote_id: quoteId });
+    salesperson: async (quoteId, dealerCode) => {
+      // ต้องส่งสาขาไปด้วย — เลขที่ใบซ้ำข้ามสาขาได้ (คีย์จริงคือ dealer_code + id ตั้งแต่ 0022)
+      const { data, error } = await sb().rpc("quotation_salesperson", { p_quote_id: quoteId, p_dealer_code: dealerCode });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as string | null) ?? null;
     },
     // ใบ won ของลูกค้ารายเดียว — bounded read ตรง ๆ (RLS คุม scope อยู่แล้ว) ไม่ต้อง RPC (M9 Phase 6)
-    listForCustomer: async (customerId) => {
-      const { data, error } = await sb().from("quotations").select("*").eq("customer_id", customerId).eq("status", "won").order("date", { ascending: true });
+    listForCustomer: async (customerId, dealerCode) => {
+      // ต้องระบุสาขาเสมอ — customer_id ซ้ำกันได้ข้ามสาขา (คีย์จริงคือ dealer_code + id)
+      //   RLS กันให้เฉพาะตอนที่ผู้เรียกเป็นตัวแทน · แต่ HQ เห็นทั้งเครือ ถ้าไม่ระบุสาขา
+      //   แผงลูกค้าฝั่ง HQ จะดึงใบของลูกค้าเลขเดียวกันจากสาขาอื่นมาปนด้วย
+      const { data, error } = await sb().from("quotations").select("*")
+        .eq("dealer_code", dealerCode).eq("customer_id", customerId).eq("status", "won").order("date", { ascending: true });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToQuote);
     },
@@ -843,7 +868,7 @@ export const SupabaseAdapter: DataAdapter = {
         if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
         if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
         if (s) q = q.or(`name.ilike.%${s}%,company.ilike.%${s}%,province.ilike.%${s}%,phone.ilike.%${s}%`);
-        return q.order("id", { ascending: true }).range(from, to);
+        return q.order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
       };
       const { rows, total } = await rangedFetch(buildQuery, opts.limit, opts.offset);
       return { rows: rows.map(r => normalizeCustomer(toCamel<CustomerRow>(r))), total };
@@ -889,7 +914,8 @@ export const SupabaseAdapter: DataAdapter = {
     nextId: (dealerCode) => nextEntityId(dealerCode, "appointments"),
     list: async (scope) => {
       const rows = await pageAll((from, to) => {
-        const base = sb().from("appointments").select("*").order("id", { ascending: true }).range(from, to);
+        const base = sb().from("appointments").select("*")
+          .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
       }, "appointments");
       return rows.map(rowToAppt);
@@ -899,8 +925,10 @@ export const SupabaseAdapter: DataAdapter = {
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToAppt);
     },
-    listForLead: async (leadId) => {
-      const { data, error } = await sb().from("appointments").select("*").eq("lead_id", leadId).order("id", { ascending: true });
+    listForLead: async (leadId, dealerCode) => {
+      // เหตุผลเดียวกับ listForCustomer — lead_id (numId) ซ้ำข้ามสาขาได้
+      const { data, error } = await sb().from("appointments").select("*")
+        .eq("dealer_code", dealerCode).eq("lead_id", leadId).order("id", { ascending: true });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       return (data as Row[]).map(rowToAppt);
     },

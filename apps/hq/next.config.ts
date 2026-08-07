@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+// หัวข้อความปลอดภัยชุดเดียวกันทั้งสองแอป — แก้ที่เดียวมีผลทั้งระบบ
+import { securityHeaderRules } from "../../packages/shared/lib/securityHeaders.mjs";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@pms/shared"],
@@ -8,6 +10,9 @@ const nextConfig: NextConfig = {
   // รวมหน้า login เก่า /login/hq (ดีไซน์ dark-stripe) → หน้า HQ ใหม่ /hq/login (split-panel) ให้เหลือดีไซน์เดียว
   async redirects() {
     return [{ source: "/login/hq", destination: "/hq/login", permanent: false }];
+  },
+  async headers() {
+    return securityHeaderRules();
   },
 };
 

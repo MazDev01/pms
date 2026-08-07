@@ -97,7 +97,7 @@ export default function HeroSection({ variant = "dealer" }: { variant?: "dealer"
         {/* กลุ่มแบรนด์ (บน) */}
         <div className="flex flex-col gap-7">
           {/* Logo — โลโก้จริงของ Benjamin (B mark + wordmark + tagline) · ต้นฉบับ 801×276 คมชัด */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img src="/benjamin-logo.png" alt="Benjamin — Pre-Engineered Building" width={801} height={276} className="h-16 w-auto self-start select-none" />
 
           {/* Badge */}

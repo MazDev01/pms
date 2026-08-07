@@ -17,7 +17,6 @@ import {
   type AppointmentMock, type DealerFile,
 } from "@pms/shared/lib/mock";
 
-import { usePersistentState } from "@pms/shared/lib/usePersistentState";
 import { parseBaht } from "@pms/shared/lib/format";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
@@ -224,7 +223,7 @@ export function SalesProvider({
       setQuotations, () => alive, "quotations.list",
     );
     return () => { alive = false; };
-  }, [hydrated, dealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays, loadFresh]);
+  }, [hydrated, dealerCode, myDealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays, loadFresh]);
   const persistQuote = useRef({
     create: (q: QuotationMock) => { bumpWrite(); void quotationsRepo.create(q).catch(onFail("quotations", "สร้างใบเสนอราคา")); },
     update: (q: QuotationMock) => { bumpWrite(); return quotationsRepo.update(q).catch(onFail("quotations", "แก้ไขใบเสนอราคา")); },
@@ -403,7 +402,7 @@ export function SalesProvider({
       persistLead.update({ ...lead, customerId: saved.id });
     }
     return saved;
-  }, [myDealerCode, persistLead]);
+  }, [myDealerCode, persistLead, bumpWrite]);
 
   // ── Lead mutations ───────────────────────────────────────────────
   const updateLeadStatus = useCallback((leadId: string, status: LeadRow["status"]) => {
@@ -570,7 +569,7 @@ export function SalesProvider({
     completeLeadQuoteTasks(created, created.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
     syncQuoteFile.add(created); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลีด/ลูกค้า
     return created;
-  }, [completeLeadQuoteTasks, myDealerCode, syncQuoteFile]);
+  }, [completeLeadQuoteTasks, myDealerCode, syncQuoteFile, bumpWrite]);
 
   const updateQuotation = useCallback((quotation: QuotationMock) => {
     const before = quotationsRef.current.find(q => q.id === quotation.id);

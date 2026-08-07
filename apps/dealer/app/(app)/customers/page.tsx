@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { validateUpload, humanFileSize, UPLOAD_ACCEPTED_EXT } from "@pms/shared/lib/uploadLimits";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import {
   buildLeadTasks, leadStatusLabel, leadStatusColor, QUOTED_UP, DEFAULT_DEALER_CODE,
@@ -70,10 +71,7 @@ const STEEL   = "#2D2D2D";
 const BORDER  = "#e5e7eb";
 const MUTED   = "#6b7280";
 
-// เช็คชนิด/ขนาดไฟล์แนบจากหน้าลูกค้า — ต้องตรงกับหน้า "ไฟล์" หลัก (apps/dealer/app/(app)/files/page.tsx)
-// เพราะแนบเข้าคลังไฟล์เดียวกัน (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมช่องนี้ไม่เช็คอะไรเลย)
-const CUSTOMER_FILE_ACCEPTED_EXT = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".dwg", ".dxf", ".jpg", ".jpeg", ".png"];
-const CUSTOMER_FILE_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+// เกณฑ์ไฟล์แนบใช้ของกลาง (uploadLimits) — ทุกช่องแนบเขียนลงคลังไฟล์เดียวกัน ห้ามตั้งกฎเองรายหน้า
 
 // ── Types ────────────────────────────────────────────────────
 // CustomerRow imported from mock (shared app-wide)
@@ -327,8 +325,8 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 28px", borderTop:"1px solid #eef1f5", paddingTop:12 }}>
         <div style={{ display:"flex", flexDirection:"column" }}>
           <Row label="รหัสลูกค้า"><span style={{ fontSize:"0.8rem", fontWeight:700, color:"#9ca3af" }}>{code}</span></Row>
-          <Row label="บริษัท"><input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></Row>
-          <Row label="ชื่อ-สกุล"><input value={f.name} onChange={e=>set("name",e.target.value)} style={inp} /></Row>
+          <Row label="บริษัท"><input aria-label="ชื่อบริษัท" value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></Row>
+          <Row label="ชื่อ-สกุล"><input aria-label="ชื่อ-สกุลผู้ติดต่อ" value={f.name} onChange={e=>set("name",e.target.value)} style={inp} /></Row>
           <Row label="เบอร์โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Row>
           <Row label="อีเมล"><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" placeholder="email@company.com" style={inp} /></Row>
         </div>
@@ -339,11 +337,11 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
               style={{ ...inp, height:"auto", padding:"5px 8px", resize:"vertical", lineHeight:1.4, fontWeight:400 }} />
           </Row>
           <Row label="จังหวัด">
-            <select value={f.province} onChange={e=>set("province",e.target.value)} style={{ ...inp, cursor:"pointer" }}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
+            <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={{ ...inp, cursor:"pointer" }}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
           </Row>
           <Row label="แม่แบบ"><TemplateSelect value={f.category} onChange={v=>set("category",v)} style={inp} /></Row>
           {/* joinDate = วันที่เข้าระบบเป็นลูกค้า — ป้าย "วันที่สมัคร" เดิมชวนเข้าใจผิด (บอสสั่งเปลี่ยน 17 ก.ค. 69) */}
-          <Row label="เป็นลูกค้าเมื่อ"><input type="date" value={f.joinDate} onChange={e=>set("joinDate",e.target.value)} style={inp} /></Row>
+          <Row label="เป็นลูกค้าเมื่อ"><input type="date" aria-label="วันที่เป็นลูกค้า" value={f.joinDate} onChange={e=>set("joinDate",e.target.value)} style={inp} /></Row>
           <Row label="ผู้รับผิดชอบ"><PersonPicker value={f.owner} onChange={v=>set("owner",v)} multiple /></Row>
           {/* แถว "สถานะ" ถูกถอดออกจากการ์ด (บอสสั่ง 17 ก.ค. 69) — สถานะกลับเป็นข้อมูลแสดงผลอย่างเดียว
               (เหมือนก่อนมีตัวแก้ในที่เดิม: ไม่เคยมี UI แก้สถานะมาก่อน ดรอปดาวน์นี้เพิ่งถูกเพิ่มแล้วถูกสั่งถอด) */}
@@ -356,7 +354,7 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
           border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
           {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
         </span>
-        <input ref={logoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
+        <input ref={logoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{ display:"none" }} onChange={uploadLogo} />
         <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
           <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
         </button>
@@ -527,17 +525,13 @@ export default function CustomersPage(){
     // เช็คชนิด/ขนาดไฟล์เหมือนหน้า "ไฟล์" หลัก (apps/dealer/app/(app)/files/page.tsx) — ที่นี่แนบเข้าคลังเดียวกัน
     // เดิมช่องนี้ไม่เช็คอะไรเลย (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69)
     const ext = ("." + (f.name.split(".").pop() ?? "")).toLowerCase();
-    if (!CUSTOMER_FILE_ACCEPTED_EXT.includes(ext)) {
-      alert(`ไฟล์ประเภท ${ext || "ไม่ทราบ"} ไม่รองรับ — รองรับเฉพาะ ${CUSTOMER_FILE_ACCEPTED_EXT.join(", ")}`);
+    const problem = validateUpload(f);
+    if (problem) {
+      alert(problem);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    if (f.size > CUSTOMER_FILE_MAX_BYTES) {
-      alert(`ไฟล์ใหญ่เกิน ${(CUSTOMER_FILE_MAX_BYTES/1024/1024).toFixed(0)} MB`);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-    const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
+    const size = humanFileSize(f.size);
     // อัปโหลด bytes เข้า Storage ก่อน (local คืน null = เก็บแค่ metadata) แล้วบันทึก metadata
     void fileStorage.upload(currentDealer.code, f).catch(() => null)
       .then(storagePath => filesRepo.add({
@@ -1578,8 +1572,8 @@ export default function CustomersPage(){
       })()}
 
       {/* input ไฟล์ (ซ่อน) — ใช้ร่วมกับแท็บไฟล์ของโมดัลลูกค้า */}
-      <input ref={fileInputRef} type="file" accept={CUSTOMER_FILE_ACCEPTED_EXT.join(",")} style={{display:"none"}} onChange={handleFileSelect} />
-      <input ref={csvInputRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={onCsvFile} />
+      <input ref={fileInputRef} type="file" aria-label="แนบไฟล์เข้าลูกค้า" accept={UPLOAD_ACCEPTED_EXT.join(",")} style={{display:"none"}} onChange={handleFileSelect} />
+      <input ref={csvInputRef} type="file" aria-label="นำเข้าลูกค้าจากไฟล์ CSV" accept=".csv,text/csv" style={{display:"none"}} onChange={onCsvFile} />
 
       {/* คีย์ลูกค้าเดิมทีละราย (legacy manual) */}
       {showManual && (

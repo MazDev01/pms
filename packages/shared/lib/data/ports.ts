@@ -195,8 +195,8 @@ export interface UnassignedFilters {
 }
 /** ผู้สมัครของกฎแจ้งเตือน HQ (คำนวณที่ DB) — client ประกอบเป็นข้อความ + toggle (M9 Phase 4) */
 export interface HQAlertsData {
-  unassigned: { numId: number; company: string; province: string; value: string }[];
-  idle: { numId: number; company: string; assigned: string; idleDays: number }[];
+  unassigned: { numId: number; dealerCode: string | null; company: string; province: string; value: string }[];
+  idle: { numId: number; dealerCode: string | null; company: string; assigned: string; idleDays: number }[];
   expiring: { quoteNo: string; customer: string; value: number; dealerCode: string | null; daysLeft: number }[];
   dealerLatest: { dealerCode: string; idleDays: number }[];
   lostRate: { dealerCode: string; lost: number; closed: number }[];
@@ -329,10 +329,10 @@ export interface QuotationsRepo {
   //   (นิยามเดียวกับที่ hq_alerts ใช้เตือน "ใกล้หมดอายุ" — ไม่งั้นสองจุดเห็นวันหมดอายุคนละวัน)
   expireOverdue(asOf: string, scope?: Scope, validityDays?: number): Promise<number>;
   /** ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
-  salesperson(quoteId: string): Promise<string | null>;
+  salesperson(quoteId: string, dealerCode: string): Promise<string | null>;
   /** ใบที่ won ของลูกค้ารายเดียว (ผูกด้วย customer_id) — ป้อนแท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์ของ
    *  CustomerDrawer โดยไม่ต้องโหลดใบทั้งเครือ (M9 Phase 6) — เหมือน appointments.listForLead */
-  listForCustomer(customerId: number): Promise<QuotationMock[]>;
+  listForCustomer(customerId: number, dealerCode: string): Promise<QuotationMock[]>;
   /** ผูกใบเสนอราคา "กำพร้า" (customer_id ว่าง, ชื่อลูกค้าตรงกัน) เข้ากับลูกค้าที่เพิ่งสร้าง/พบ ทั้งชุด
    *  ในคำสั่งเดียว (atomic) — cascadeWon=true จะเลื่อนสถานะใบที่ยังไม่ปิด (ไม่ใช่ lost/expired) เป็น won
    *  ด้วย (ปิดจากฝั่งลีดโดยตรง) · supabase: RPC relink_customer_quotes (Phase 4, กัน partial-relink
@@ -377,7 +377,7 @@ export interface AppointmentsRepo {
   /** นัดหมายของสาขาหนึ่ง (HQ เจาะดูตัวแทน) — ดึงเฉพาะที่ต้องใช้ ไม่ต้องโหลดทั้งเครือ (M9 Phase 4) */
   listForDealer(dealerCode: string): Promise<AppointmentMock[]>;
   /** นัดหมายของลีดหนึ่ง (drawer ดูลีด) — ผูกด้วย lead_id = numId (M9 Phase 4) */
-  listForLead(leadId: number): Promise<AppointmentMock[]>;
+  listForLead(leadId: number, dealerCode: string): Promise<AppointmentMock[]>;
   nextId(dealerCode: string): Promise<number>;
   create(row: AppointmentMock): Promise<AppointmentMock>;
   update(row: AppointmentMock): Promise<AppointmentMock>;

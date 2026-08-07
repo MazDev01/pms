@@ -49,7 +49,7 @@ function BuildingThumb({ b }: { b: PurchasedBuilding }) {
     );
   }
   // รูปเป็น data URL ที่ย่อขนาดแล้วใน Master Catalog — ใช้ <img> ตรง ๆ (next/image ไม่รองรับ data URL แบบนี้)
-  // eslint-disable-next-line @next/next/no-img-element
+   
   return <img src={src} alt={b.template ?? b.buildingType} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />;
 }
 

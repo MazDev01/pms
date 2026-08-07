@@ -19,7 +19,7 @@ export function SkeletonText({ lines = 3 }: { lines?: number }) {
 }
 
 // การ์ด KPI/สรุป — แถวการ์ดสี่เหลี่ยม
-export function SkeletonCards({ count = 4, height = 92 }: { count?: number; height?: number }) {
+export function SkeletonCards({ count = 4 }: { count?: number }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(180px, 1fr))`, gap: 14 }}>
       {Array.from({ length: count }).map((_, i) => (

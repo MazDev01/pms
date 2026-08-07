@@ -113,7 +113,7 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
                 width: 80, height: 80, borderRadius: 12, flexShrink: 0, background: "#003366",
                 border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 44, height: 44, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", fontSize: "0.76rem", color: "#6b7280" }}>

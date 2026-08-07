@@ -30,10 +30,8 @@ export type DealerQuotePerf = {
 
 const pctText = (c: number | null) => c === null ? "—" : `${c}%`;
 
-export function DealerQuotationPerformance({ rows, avgConv }: {
+export function DealerQuotationPerformance({ rows }: {
   rows: DealerQuotePerf[];
-  /** อัตราปิดเฉลี่ยทั้งเครือ — เส้นเทียบว่าใคร "ต่ำกว่าปกติ" (คิดจากข้อมูลจริง ไม่ใช่เกณฑ์ที่ตั้งเอง) */
-  avgConv: number | null;
 }) {
   const [hover, setHover] = useState<number | null>(null);
 

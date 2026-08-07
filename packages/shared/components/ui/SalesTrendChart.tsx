@@ -2,20 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { LineTrendChart } from "@pms/shared/components/ui/Charts";
-import { STEEL } from "@pms/shared/lib/theme";
-import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
-// ── กราฟแนวโน้มยอดขายที่ "กำหนดช่วงเวลาได้" ในตัว (ปุ่ม inline + รีบิลด์ตามวันจริง) ──
+// ── กราฟแนวโน้มยอดขายที่ "กำหนดช่วงเวลาได้" ในตัว (ปุ่ม inline) ──
 // ใช้ซ้ำได้ทุกหน้าที่มีกราฟแนวโน้ม (dashboard / reports / hq dashboard)
 // monthly: ข้อมูลรายเดือนหน่วย "ล้านบาท" เรียงตามปฏิทิน (index 0 = ม.ค.)
-
-const monthsTH = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-
-const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const daysInclusive = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
-const parseISO = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
-const dmLabel = (d: Date) => `${d.getDate()} ${monthsTH[d.getMonth() + 1]}`;
-const fmtDate = (iso: string) => { const [, mm, dd] = iso.split("-"); return `${parseInt(dd)} ${monthsTH[parseInt(mm)]}`; };
+//
+// เคยมีโหมด "รายวัน" (ปั้นยอดรายวันจากยอดรายเดือนด้วยคลื่นไซน์) ค้างอยู่ในไฟล์นี้ทั้งชุด
+// แต่ไม่เคยถูกเรียกใช้เลย — และเป็นตัวเลขที่ปั้นขึ้นเอง ไม่ใช่ยอดขายจริงรายวัน จึงเอาออกทั้งหมด
 
 const RANGE_PILLS: { key: string; label: string }[] = [
   { key: "3m", label: "3 เดือน" },
@@ -29,7 +22,6 @@ export function SalesTrendChart({
   title,
   desc,
   monthly,
-  today = APP_NOW_ISO,
   prevRatio = 0.86,
   initialRange = "6m",
   height,
@@ -37,46 +29,21 @@ export function SalesTrendChart({
   title: string;
   desc?: string;
   monthly: MonthlyPoint[];
-  today?: string;
   prevRatio?: number;
   initialRange?: string;
   height?: number;
 }) {
   const [range, setRange] = useState(initialRange);
 
-  // ยอดขายต่อวัน (ล้านบาท) — เฉลี่ยจากยอดเดือน + คลื่นในเดือนให้เส้นดูเป็นธรรมชาติ
-  const dayValue = useMemo(() => (d: Date): number => {
-    const m = d.getMonth();
-    const mv = monthly[m]?.value ?? monthly[m % monthly.length]?.value ?? 0;
-    const dim = new Date(d.getFullYear(), m + 1, 0).getDate();
-    const base = mv / dim;
-    const wave = 1 + 0.4 * Math.sin(d.getDate() * 0.7 + m);
-    return Math.max(base * wave, base * 0.2);
-  }, [monthly]);
-
-  const buildDaily = useMemo(() => (start: Date, end: Date, maxPoints: number) => {
-    const total = Math.max(1, daysInclusive(start, end));
-    const bucket = Math.max(1, Math.ceil(total / maxPoints));
-    const pts: { month: string; value: number; prevValue: number }[] = [];
-    for (let i = 0; i < total; i += bucket) {
-      let sum = 0;
-      for (let j = 0; j < bucket && i + j < total; j++) sum += dayValue(addDays(start, i + j));
-      const value = Math.round(sum * 10) / 10;
-      pts.push({ month: dmLabel(addDays(start, i)), value, prevValue: Math.round(value * prevRatio * 10) / 10 });
-    }
-    return pts;
-  }, [dayValue, prevRatio]);
-
-  const asPoints = (arr: MonthlyPoint[]) => arr.map(d => ({
-    month: d.month,
-    value: Math.round(d.value * 10) / 10,
-    prevValue: Math.round(d.value * prevRatio * 10) / 10,
-  }));
-
   const data = useMemo(() => {
     const n = range === "3m" ? 3 : range === "12m" ? 12 : 6; // slice N เดือนล่าสุด
-    return asPoints(monthly.slice(-n));
-    // asPoints ปิดคลุม prevRatio — ขาดไปก่อนหน้านี้ทำให้ prevValue ค้างค่าเก่าถ้า prevRatio เปลี่ยนโดย range/monthly ไม่เปลี่ยน
+    // แปลงจุดอยู่ในนี้เลย — เดิมแยกเป็นฟังก์ชันข้างนอกซึ่งปิดคลุม prevRatio ไว้เงียบ ๆ
+    // ทำให้ต้องจำเองว่าต้องใส่ prevRatio ในรายการที่เฝ้าดูด้วย (เคยลืมมาแล้วจน prevValue ค้างค่าเก่า)
+    return monthly.slice(-n).map(d => ({
+      month: d.month,
+      value: Math.round(d.value * 10) / 10,
+      prevValue: Math.round(d.value * prevRatio * 10) / 10,
+    }));
   }, [range, monthly, prevRatio]);
 
   const rangeDesc = range === "3m" ? "3 เดือนที่ผ่านมา (รายเดือน)"

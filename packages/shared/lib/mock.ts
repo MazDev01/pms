@@ -88,7 +88,7 @@ export const responsiblePersons: ResponsiblePerson[] = [
   { id: 5, name: "สุรชัย บุญมา",    title: "เจ้าหน้าที่ขาย",   phone: "085-678-9012", email: "surachai@dealer.co.th", active: false },
 ];
 
-// โครงสร้างอ้างอิง prisma/schema.prisma
+// โครงสร้างฐานข้อมูลจริงอยู่ที่ supabase/migrations (ไล่ตามลำดับเลข) — เป็นแหล่งเดียวที่เชื่อได้
 
 // Sales Journey — 7 ขั้นมาตรฐาน (Dealer สร้าง Lead หลังติดต่อลูกค้าแล้ว → ไม่มีสถานะ "ลูกค้าเป้าหมายใหม่")
 // ติดต่อแล้ว → รวบรวมความต้องการ → เสนอราคา → ติดตามผล → เจรจาต่อรอง → ปิดการขาย (Won / Lost)

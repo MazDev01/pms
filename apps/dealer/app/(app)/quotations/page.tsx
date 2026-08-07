@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { SortableTh } from "@pms/shared/components/ui/SortableTh";
 import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor,
@@ -242,7 +243,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
                     เพราะขั้นตอนนั้นสร้าง/ผูกลูกค้าให้ก่อนเสมอ · ฟอร์มนี้เขียนแค่ฟิลด์ตรงๆ ไม่ผ่านขั้นตอนนั้น
                     (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมตั้ง won ที่นี่ได้ โหมดออฟไลน์จะได้ใบ
                     "ปิดการขายสำเร็จ" ที่ไม่มีลูกค้าผูกอยู่จริงแบบเงียบๆ) */}
-                <select value={form.status} onChange={e=>set("status",e.target.value as QuotationStatus)} style={INP}>
+                <select aria-label="สถานะใบเสนอราคา" value={form.status} onChange={e=>set("status",e.target.value as QuotationStatus)} style={INP}>
                   {STATUS_ORDER.filter(s=>s!=="won"||form.status==="won").map(s=><option key={s} value={s}>{quotationStatusLabel[s]}</option>)}
                 </select>
                 {form.status!=="won" && <div style={{fontSize:"0.62rem",color:MUTED,marginTop:5,display:"flex",alignItems:"center",gap:4}}>
@@ -661,11 +662,13 @@ function QuotationsPageInner(){
                       {label:"วันที่สร้าง",key:null,col:"created"},{label:"หมดอายุ",key:null,col:"expiry"},{label:"",key:null,col:null}] as {label:string;key:SortKey|null;col:string|null}[])
                       .filter(col=>!col.col||!hiddenCols.includes(col.col))
                       .map((col,i)=>(
-                      <th key={i} onClick={col.key?()=>handleSort(col.key as SortKey):undefined}
+                      <SortableTh key={i} label={col.label || "คอลัมน์"}
+                        active={!!col.key && sortKey === col.key} dir={sortDir}
+                        onSort={col.key?()=>handleSort(col.key as SortKey):undefined}
                         style={{cursor:col.key?"pointer":"default",userSelect:"none"}}>
                         {/* nowrap กันหัวคอลัมน์ตกบรรทัดเวลาช่องแคบ (มาตรฐานเดียวกับตารางลีด/ลูกค้า) */}
                         <span style={{display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>{col.label}{col.key&&<SortIcon k={col.key}/>}</span>
-                      </th>
+                      </SortableTh>
                     ))}
                   </tr>
                 </thead>

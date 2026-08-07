@@ -9,7 +9,6 @@
 import { Search, X } from "lucide-react";
 import { quotationStatusLabel, type QuotationStatus } from "@pms/shared/lib/mock";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
-import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 
 const MUTED = "#6b7280";
 
@@ -59,12 +58,12 @@ export function QuotationFilterBar({
 
       <span style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, whiteSpace: "nowrap" }}>{resultCount} ใบ</span>
 
-      <select value={filters.dealer} onChange={e => set("dealer", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามตัวแทน" value={filters.dealer} onChange={e => set("dealer", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
         <option value="all">ทุกตัวแทน</option>
         {dealers.map(d => <option key={d.code} value={d.code}>{d.code} – {d.name}</option>)}
       </select>
 
-      <select value={filters.region} onChange={e => set("region", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามภูมิภาค" value={filters.region} onChange={e => set("region", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
         <option value="all">ทุกภูมิภาค</option>
         {regions.map(r => <option key={r} value={r}>{regionDisplay(r)}</option>)}
       </select>
@@ -75,12 +74,12 @@ export function QuotationFilterBar({
         {provinces.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
 
-      <select value={filters.product} onChange={e => set("product", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามแม่แบบ" value={filters.product} onChange={e => set("product", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
         <option value="all">ทุกประเภทอาคาร</option>
         {products.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
 
-      <select value={filters.status} onChange={e => set("status", e.target.value as QuotationFilters["status"])} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามสถานะใบเสนอราคา" value={filters.status} onChange={e => set("status", e.target.value as QuotationFilters["status"])} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
         <option value="all">ทุกสถานะ</option>
         {(Object.keys(quotationStatusLabel) as QuotationStatus[]).map(s => (
           <option key={s} value={s}>{quotationStatusLabel[s]}</option>

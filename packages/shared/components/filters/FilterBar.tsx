@@ -147,8 +147,8 @@ function TimeRangePicker() {
             </button>
             {showCustom && (
               <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 5 }}>
-                <input type="date" className="form-input" value={cs} onChange={e => setCs(e.target.value)} />
-                <input type="date" className="form-input" value={ce} onChange={e => setCe(e.target.value)} />
+                <input type="date" className="form-input" aria-label="วันเริ่มต้นของช่วงที่กำหนดเอง" value={cs} onChange={e => setCs(e.target.value)} />
+                <input type="date" className="form-input" aria-label="วันสิ้นสุดของช่วงที่กำหนดเอง" value={ce} onChange={e => setCe(e.target.value)} />
                 <button className="btn btn-primary btn-sm" onClick={applyCustom} disabled={!cs || !ce}
                   style={{ justifyContent: "center", ...(!cs || !ce ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}>
                   ใช้ช่วงเวลานี้
@@ -213,9 +213,9 @@ export function TimeRangePills({ style }: { style?: React.CSSProperties }) {
       </button>
       {showCustom && (
         <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <input type="date" value={cs} onChange={e => setCs(e.target.value)} style={inp} />
+          <input type="date" aria-label="วันเริ่มต้นของช่วงที่กำหนดเอง" value={cs} onChange={e => setCs(e.target.value)} style={inp} />
           <span style={{ color: "#9ca3af", fontSize: "0.72rem" }}>–</span>
-          <input type="date" value={ce} onChange={e => setCe(e.target.value)} style={inp} />
+          <input type="date" aria-label="วันสิ้นสุดของช่วงที่กำหนดเอง" value={ce} onChange={e => setCe(e.target.value)} style={inp} />
           <button className="btn btn-primary btn-sm" onClick={() => { setCustomRange(cs, ce); setShowCustom(false); }}>ใช้</button>
         </span>
       )}

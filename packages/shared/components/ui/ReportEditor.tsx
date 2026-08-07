@@ -17,7 +17,10 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
   const initial = () => lead.report ?? buildLeadReport(lead, todayStr());
   const [text, setText] = useState(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { setText(initial()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [lead.id]);
+  // ตั้งใจให้รีเซ็ตข้อความ "เฉพาะตอนเปลี่ยนลีด" เท่านั้น — ไม่ใช่ทุกครั้งที่ initial ถูกสร้างใหม่
+  // ไม่งั้นสิ่งที่ผู้ใช้กำลังพิมพ์ค้างอยู่จะถูกเขียนทับด้วยเทมเพลตตั้งต้นระหว่างพิมพ์
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setText(initial()); }, [lead.id]);
   const dirty = text !== (lead.report ?? "");
 
   // แทรก bullet บรรทัดใหม่ที่ตำแหน่งเคอร์เซอร์
@@ -46,7 +49,7 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
           <button type="button" onClick={resetTemplate} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "4px 10px" }}>รีเซ็ตเทมเพลต</button>
         </div>
       </div>
-      <textarea ref={ref} value={text} onChange={e => setText(e.target.value)}
+      <textarea ref={ref} aria-label="เนื้อหารายงาน" value={text} onChange={e => setText(e.target.value)}
         spellCheck={false}
         style={{ width: "100%", minHeight: 320, padding: "12px 14px", borderRadius: 10, border: "1px solid #e5e7eb",
           fontSize: "0.8rem", lineHeight: 1.7, fontFamily: "inherit", color: "#2D2D2D", background: "#fff", resize: "vertical", whiteSpace: "pre-wrap" }} />

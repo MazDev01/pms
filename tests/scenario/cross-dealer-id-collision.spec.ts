@@ -107,3 +107,57 @@ test("quotation_salesperson: ผู้รับผิดชอบต้องม
     expect(name, `ใบของ ${d.code} ต้องไม่ได้ผู้รับผิดชอบของสาขา ${other.code}`).not.toBe(other.who);
   }
 });
+
+// ── เลขที่ "ใบเสนอราคา" ก็ซ้ำข้ามสาขาได้เหมือนกัน (composite PK dealer_code+id ตั้งแต่ 0022) ──
+// เทสต์ด้านบนใช้เลขที่ใบต่างกันคนละสาขา จึงไม่เคยแตะกรณีที่เลขที่ "ตรงกันเป๊ะ" ซึ่งเป็นกรณีที่พังจริง
+// (ผลตรวจสอบระบบรอบ 2: quotation_salesperson ค้นด้วย `where q.id = ?` เฉย ๆ → หยิบใบของสาขาไหนก็ได้)
+const SAME_ID = `${TAG}-SAME-Q1`;
+
+test.beforeAll(async () => {
+  await admin.from("quotations").delete().eq("id", SAME_ID);
+  for (const d of [A, B]) {
+    // ผูกกับ "ลีด" ผ่าน deal_id แทน customer_id โดยตั้งใจ — ถ้าผูกกับลูกค้ารายเดิม
+    // ใบใบนี้จะไปนับเป็นใบที่สองของลูกค้า แล้วทำให้ KPI "ลูกค้าประจำ" ของเทสต์ด้านบนเปลี่ยน
+    // (เทสต์จะตกเพราะข้อมูลที่เราเติมเอง ไม่ใช่เพราะบั๊ก — ต้องแยกให้ขาดจากกัน)
+    const { error } = await admin.from("quotations").insert({
+      id: SAME_ID, dealer_code: d.code, deal_id: d.leadId, status: "draft",
+      building_type: d.type, date: d.date, total_value: 1_000_000, customer: `${TAG}-${d.code}`,
+    });
+    if (error) throw new Error(`เตรียมใบเลขซ้ำของ ${d.code} ไม่สำเร็จ: ${error.message}`);
+  }
+});
+test.afterAll(async () => { await admin.from("quotations").delete().eq("id", SAME_ID); });
+
+test("quotation_salesperson: ใบเลขที่เดียวกันคนละสาขา ต้องได้ผู้รับผิดชอบของสาขาที่ระบุ", async () => {
+  const sb = await hqClient();
+  for (const d of [A, B]) {
+    const other = d.code === A.code ? B : A;
+    const { data: name, error } = await sb.rpc("quotation_salesperson", { p_quote_id: SAME_ID, p_dealer_code: d.code });
+    expect(error, `เรียกพร้อมระบุสาขา ${d.code} ต้องไม่ error`).toBeNull();
+    expect(name, `ระบุสาขา ${d.code} ต้องได้ผู้รับผิดชอบของสาขานั้น`).toBe(d.who);
+    expect(name, `ต้องไม่ได้ผู้รับผิดชอบของสาขา ${other.code}`).not.toBe(other.who);
+  }
+});
+
+test("quotation_salesperson: ไม่ระบุสาขาแล้วเลขที่ใบกำกวม ต้องไม่เดาชื่อใครเลย", async () => {
+  // คืนชื่อผิดคนอันตรายกว่าไม่คืนชื่อ — HQ จะโทรหาพนักงานผิดสาขาโดยไม่รู้ตัว
+  const sb = await hqClient();
+  const { data: name, error } = await sb.rpc("quotation_salesperson", { p_quote_id: SAME_ID });
+  expect(error, "ต้องไม่ error").toBeNull();
+  expect(name, `เลขที่ใบซ้ำ 2 สาขาแต่ไม่ระบุสาขา ต้องคืนค่าว่าง ไม่ใช่เดาเอาสาขาใดสาขาหนึ่ง (ได้ ${name})`).toBeNull();
+});
+
+test("hq_alerts: รายการแจ้งเตือนลีดต้องพกรหัสสาขามาด้วย", async () => {
+  // ไม่มีรหัสสาขา = HQ เห็นแค่ชื่อบริษัท ไม่รู้ว่าต้องตามกับสาขาไหน และลิงก์ในกระดิ่งก็กำกวม
+  const sb = await hqClient();
+  const { data, error } = await sb.rpc("hq_alerts", { p_as_of: "2026-06-30", p_unassigned_default_hours: 1, p_lead_idle_days: 1 });
+  expect(error, "เรียก hq_alerts ต้องไม่ error").toBeNull();
+
+  const groups = (data ?? {}) as { unassigned?: Array<Record<string, unknown>>; idle?: Array<Record<string, unknown>> };
+  for (const key of ["unassigned", "idle"] as const) {
+    const rows = groups[key] ?? [];
+    if (!rows.length) continue; // ไม่มีข้อมูลเข้าเกณฑ์ตอนนี้ — ไม่ใช่ความล้มเหลว
+    const missing = rows.filter(r => !("dealer_code" in r));
+    expect(missing, `รายการ "${key}" ทุกแถวต้องมี dealer_code (ขาด ${missing.length} จาก ${rows.length})`).toEqual([]);
+  }
+});

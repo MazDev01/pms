@@ -157,7 +157,9 @@ export default function HQCustomersPage() {
   const localDetail = useMemo(() => viewId != null ? localSource.find(c => c.id === viewId) ?? null : null, [viewId, localSource]);
   const remoteRowMeta = pageResult?.rows.find(r => r.id === viewId) ?? null;
   const needsRemoteDetail = !!pageResult && viewId != null && !localDetail;
-  const remoteBuildQuotes = useCustomerBuildings(needsRemoteDetail ? viewId : null);
+  // ต้องส่งรหัสสาขาไปด้วย — เลขที่ลูกค้าซ้ำกันได้ข้ามสาขา ถ้าไม่ระบุ HQ จะดึงใบของ
+  // ลูกค้าเลขเดียวกันจากสาขาอื่นมาปนในแผงนี้ (ผลตรวจรอบ 2 · ระดับสูง)
+  const remoteBuildQuotes = useCustomerBuildings(needsRemoteDetail ? viewId : null, remoteRowMeta?.dealerCode ?? null);
   const viewDetail: CustomerDbRow | null = useMemo(() => {
     if (viewId == null) return null;
     if (localDetail) return localDetail;
@@ -240,12 +242,13 @@ export default function HQCustomersPage() {
           />
         </div>
 
-        <select value={dealerSel} onChange={e => setDealerSel(e.target.value)} className="form-select" style={selectStyle}>
+        <select aria-label="กรองตามตัวแทน" value={dealerSel} onChange={e => setDealerSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกตัวแทน</option>
           {dealerOptions.map(([code, name]) => <option key={code} value={code}>{code} – {name}</option>)}
         </select>
 
         <select
+          aria-label="กรองตามภูมิภาค"
           value={regionSel}
           onChange={e => { setRegionSel(e.target.value); setProvinceSel("all"); }}
           className="form-select" style={selectStyle}
@@ -254,17 +257,17 @@ export default function HQCustomersPage() {
           {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
 
-        <select value={provinceSel} onChange={e => setProvinceSel(e.target.value)} className="form-select" style={selectStyle}>
+        <select aria-label="กรองตามจังหวัด" value={provinceSel} onChange={e => setProvinceSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกจังหวัด</option>
           {provinceOptions.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
 
-        <select value={typeSel} onChange={e => setTypeSel(e.target.value)} className="form-select" style={selectStyle}>
+        <select aria-label="กรองตามประเภทอาคาร" value={typeSel} onChange={e => setTypeSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกประเภทอาคาร</option>
           {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
 
-        <select value={yearSel} onChange={e => setYearSel(e.target.value)} className="form-select" style={selectStyle}>
+        <select aria-label="กรองตามปี" value={yearSel} onChange={e => setYearSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกปีที่ส่งมอบ</option>
           {yearOptions.map(y => <option key={y} value={y}>ส่งมอบปี {y}</option>)}
         </select>

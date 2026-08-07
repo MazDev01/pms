@@ -11,7 +11,6 @@
 //             เอาไปทำโดนัทไม่ได้ ผลรวมจะเกินจำนวนลูกค้าจริง)
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { Donut, GroupedBarChart } from "@pms/shared/components/ui/Charts";
-import { fmtBaht } from "@pms/shared/lib/format";
 import type { HQCustomersCharts } from "@pms/shared/lib/data/ports";
 
 const PRIMARY = "#003366";

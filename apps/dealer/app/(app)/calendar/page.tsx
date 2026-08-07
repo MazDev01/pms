@@ -1,6 +1,7 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, DEFAULT_DEALER_CODE, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
@@ -418,7 +419,7 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 440, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
+        <ModalCard onClose={onClose} label="รายละเอียดนัดหมาย" className="card" style={{ width: "100%", maxWidth: 440, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#fff" }}>{a.company}</div>
@@ -458,7 +459,7 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
               </button>
             </div>
           </div>
-        </div>
+        </ModalCard>
       </div>
     </>
   );
@@ -530,7 +531,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
+        <ModalCard onClose={onClose} label="เพิ่ม/แก้ไขนัดหมาย" className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>{isEdit ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
@@ -574,7 +575,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
             <button onClick={save} disabled={saving} className="btn btn-primary btn-md" style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}>{isEdit ? <><Edit2 size={13} /> บันทึก</> : <><Plus size={13} /> เพิ่มกิจกรรม</>}</button>
           </div>
-        </div>
+        </ModalCard>
       </div>
     </>
   );

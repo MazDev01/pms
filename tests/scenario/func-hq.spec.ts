@@ -1,3 +1,5 @@
+import { statuses, ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+import { createClient } from "@supabase/supabase-js";
 import { test, expect } from "@playwright/test";
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
 import {
@@ -24,6 +26,15 @@ async function purgeDealerAccount(code: string) {
   await fetch(`${HQ_ORIGIN}/api/admin/dealers?code=${code}`, {
     method: "DELETE", headers: { authorization: `Bearer ${token}` },
   }).catch(() => { /* best-effort cleanup */ });
+
+  // เก็บ "บัญชีเข้าระบบที่ค้าง" ด้วย — เส้นทางลบผ่าน route จะข้ามการลบบัญชีเมื่อไม่เจอแถวสาขาแล้ว
+  // (เคยเจอจริง: รอบก่อนลบแถวสาขาสำเร็จแต่ลบบัญชีไม่ผ่าน → รอบถัดไปสร้างไม่ได้เพราะ "อีเมลถูกใช้แล้ว"
+  //  แล้วเทสต์ตกโดยไม่เกี่ยวกับสิ่งที่กำลังวัดเลย)
+  if (!ADMIN_SERVICE_ROLE_KEY || !/^ZZ[A-Z]{0,3}$/.test(code)) return; // กันพลาด: เฉพาะรหัสทดสอบเท่านั้น
+  const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const orphan = (data?.users ?? []).filter(u => (u.email ?? "").toLowerCase().startsWith(`${code.toLowerCase()}@`));
+  for (const u of orphan) await admin.auth.admin.deleteUser(u.id);
 }
 
 test.beforeAll(async () => {
@@ -86,7 +97,7 @@ test("[func·hq] route สร้างตัวแทนปฏิเสธคำ
     // 1) ไม่มี token
     const noAuth = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, { data: payload });
     expect(noAuth.status(), "ไม่มี token ต้องไม่ผ่าน").not.toBe(200);
-    expect([401, 501], `สถานะที่ยอมรับ (ได้ ${noAuth.status()})`).toContain(noAuth.status());
+    expect(statuses(401), `สถานะที่ยอมรับ (ได้ ${noAuth.status()})`).toContain(noAuth.status());
 
     // 2) token ของ "ตัวแทน" (ไม่ใช่ HQ) — ต้องไม่มีสิทธิ์สร้างตัวแทน
     const rygToken = (await (await db(RYG)).auth.getSession()).data.session?.access_token ?? "";
@@ -94,7 +105,7 @@ test("[func·hq] route สร้างตัวแทนปฏิเสธคำ
       headers: { authorization: `Bearer ${rygToken}` }, data: payload,
     });
     expect(asDealer.status(), "ตัวแทนสร้างตัวแทนไม่ได้").not.toBe(200);
-    expect([403, 501], `สถานะที่ยอมรับ (ได้ ${asDealer.status()})`).toContain(asDealer.status());
+    expect(statuses(403), `สถานะที่ยอมรับ (ได้ ${asDealer.status()})`).toContain(asDealer.status());
 
     // ไม่ว่ากรณีไหน ต้องไม่มีสาขา ZZX เกิดขึ้น
     const rows = (await sb.from("dealers").select("code").eq("code", "ZZX")).data ?? [];

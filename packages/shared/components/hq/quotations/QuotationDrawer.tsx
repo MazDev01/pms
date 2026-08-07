@@ -9,6 +9,7 @@
 //  · เอกสารแนบรายใบ — คลังไฟล์ผูกกับลูกค้า/ลีด ไม่ได้ผูกกับเลขที่ใบเสนอราคา
 //  · รายการสินค้า — มีเฉพาะใบที่ดีลเลอร์สร้างจริง (CNX) ที่เหลือขึ้น "—"
 import { X } from "lucide-react";
+import { useModalA11y } from "@pms/shared/lib/useModalA11y";
 import { quotationStatusLabel, quotationStatusColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 import { regionDisplay, type QuoteRow } from "@pms/shared/lib/hqQuotations";
@@ -40,11 +41,15 @@ export function QuotationDrawer({ quote, onClose }: {
 }) {
   const sc = quotationStatusColor[quote.status];
   const items = quote.lineItems ?? [];
+  // Esc ปิดได้ · Tab วนอยู่ในลิ้นชัก · ปิดแล้วโฟกัสกลับไปที่แถวที่กดเปิด
+  const dialogRef = useModalA11y<HTMLElement>(onClose);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", justifyContent: "flex-end" }}>
       <aside
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="รายละเอียดใบเสนอราคา"
         onClick={e => e.stopPropagation()}
         style={{ width: 460, maxWidth: "100%", background: "#F8FAFC", height: "100%", overflowY: "auto", boxShadow: "-14px 0 44px rgba(0,0,0,.18)", display: "flex", flexDirection: "column" }}

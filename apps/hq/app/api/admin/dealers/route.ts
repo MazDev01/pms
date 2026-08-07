@@ -16,7 +16,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import {
-  bad, authorizeAdmin, auditLog, withErrors, strongPassword, findDealerAccount,
+  bad, authorizeAdmin, auditLog, withErrors, strongPassword, findDealerAccount, deleteAuthUserLoud,
 } from "@pms/shared/lib/adminRoute";
 import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
@@ -99,8 +99,13 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   });
   if (createErr || !createdUser.user) {
     const msg = createErr?.message ?? "สร้างบัญชีเข้าระบบไม่สำเร็จ";
-    // อีเมลชนกับบัญชีเดิม = โดยมากรหัสสาขาถูกใช้ไปแล้วในระบบยืนยันตัวตน
-    return bad(400, /already/i.test(msg) ? `อีเมล ${email} ถูกใช้ไปแล้วในระบบยืนยันตัวตน` : msg);
+    // แยกให้ชัดว่าเป็นความผิดของ "คำขอ" หรือของ "ระบบ" — ผู้ใช้ทำต่างกันคนละเรื่อง
+    //   400 = ผู้ใช้แก้เองได้ (เปลี่ยนรหัสสาขา) · 503 = ระบบขัดข้อง ให้ลองใหม่ ไม่ใช่ความผิดผู้ใช้
+    // เดิมตอบ 400 พร้อมข้อความดิบจากระบบยืนยันตัวตนทุกกรณี — ผู้ใช้เห็นแล้วนึกว่าตัวเองกรอกผิด
+    // แล้วลองแก้ข้อมูลไปเรื่อย ๆ ทั้งที่ปัญหาอยู่ที่เซิร์ฟเวอร์ · ทั้งยังเผยรายละเอียดภายในออกไปด้วย
+    if (/already/i.test(msg)) return bad(400, `อีเมล ${email} ถูกใช้ไปแล้วในระบบยืนยันตัวตน`);
+    console.error(`[create-dealer] สร้างบัญชีเข้าระบบของสาขา ${code} ไม่สำเร็จ`, createErr);
+    return bad(503, "สร้างบัญชีเข้าระบบไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
   const uid = createdUser.user.id;
 
@@ -116,13 +121,14 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   } catch (e) {
     // ย้อนทุกอย่างที่อาจสร้างไปแล้ว ไม่ให้เหลือบัญชี/แถวกำพร้า
     // ต้อง log ถ้าการย้อนเองล้มเหลว — ไม่งั้นเหลือของกำพร้าโดยไม่มีใครรู้ (คือบั๊กที่การย้อนพยายามกันอยู่แท้ ๆ)
-    try { await admin.auth.admin.deleteUser(uid); }
-    catch (re) { console.error(`[create-dealer] ย้อนลบบัญชี ${uid} ไม่สำเร็จ — อาจเหลือบัญชีกำพร้า`, re); }
+    await deleteAuthUserLoud(admin, uid, "create-dealer");
     try {
       const { error: delErr } = await admin.from("dealers").delete().eq("code", code);
       if (delErr) console.error(`[create-dealer] ย้อนลบทะเบียนสาขา ${code} ไม่สำเร็จ`, delErr);
     } catch (re) { console.error(`[create-dealer] ย้อนลบทะเบียนสาขา ${code} ไม่สำเร็จ`, re); }
-    return bad(400, `สร้างทะเบียน/โปรไฟล์ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`);
+    // ถึงตรงนี้แปลว่าคำขอผ่านการตรวจความถูกต้องมาหมดแล้ว — ที่พังคือฝั่งเซิร์ฟเวอร์ ไม่ใช่ข้อมูลที่กรอก
+    console.error(`[create-dealer] สร้างทะเบียน/โปรไฟล์สาขา ${code} ไม่สำเร็จ`, e);
+    return bad(503, "สร้างตัวแทนไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
 
   await rememberSecret(admin, code, password, String(prof.name ?? ""));
@@ -154,7 +160,11 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
 
   const password = strongPassword("PEB-");
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, { password });
-  if (updateErr || !updated.user) return bad(400, `รีเซ็ตรหัสผ่านไม่สำเร็จ: ${updateErr?.message ?? ""}`);
+  if (updateErr || !updated.user) {
+    // รหัสใหม่สุ่มที่เซิร์ฟเวอร์เอง ผู้ใช้ไม่ได้กรอกอะไรเลย — พังตรงนี้คือฝั่งระบบล้วน ๆ
+    console.error(`[reset-dealer-pw] ตั้งรหัสผ่านใหม่ให้สาขา ${code} ไม่สำเร็จ`, updateErr);
+    return bad(503, "รีเซ็ตรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
 
   await rememberSecret(admin, code, password, String(prof.name ?? ""));
   await auditLog(admin, prof, "รีเซ็ตรหัสผ่านตัวแทน", code);
@@ -182,64 +192,49 @@ export const DELETE = withErrors("delete-dealer", async (req: NextRequest) => {
   if (!/^[A-Z]{2,5}$/.test(code)) return bad(400, "รหัสตัวแทนไม่ถูกต้อง");
 
   // ── กันทำลายครึ่งทาง ──
-  // dealer FK เป็น on delete restrict (0018) — ถ้าสาขายังมีข้อมูลงานขาย แถว dealers ลบไม่ได้
-  // เดิมลบ auth users "ก่อน" แล้วค่อยลบแถว → พอแถวลบไม่ได้ = บัญชี login หายไปแล้วแต่สาขายังอยู่
-  // (สาขากำพร้าไม่มีคนเข้าได้ · ย้อนไม่ได้) → ต้องเช็ก + ลบแถวให้สำเร็จ "ก่อน" แตะ auth
-  // ต้องเช็ก "ทุกตาราง" ที่ FK on delete restrict → dealers ให้ครบก่อนลบอะไรทั้งสิ้น
-  //   customer_notes (0028) ก็ restrict เช่นกัน — เดิมตกหล่น → ถ้าสาขามี notes แต่ไม่มีข้อมูลใน 5 ตารางแรก
-  //   จะเลย 409 ไปลบ responsible_persons/dealer_lead_rules แล้วค่อย fail ตอนลบ dealers = ลบครึ่งทาง ย้อนไม่ได้
-  for (const t of ["leads", "quotations", "customers", "appointments", "files", "customer_notes"]) {
-    const { count, error: cntErr } = await admin.from(t)
-      .select("dealer_code", { count: "exact", head: true }).eq("dealer_code", code);
-    // นับไม่ได้ ≠ ไม่มีข้อมูล — ถ้าปล่อยผ่านจะลบสาขาทั้งที่อาจยังมีข้อมูลค้างอยู่จริง
-    if (cntErr) {
-      console.error(`[delete-dealer] นับข้อมูลค้างในตาราง ${t} ของสาขา ${code} ไม่สำเร็จ`, cntErr);
-      return bad(503, "ตรวจสอบข้อมูลค้างของสาขาไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  // ── ตรวจ + ลบทั้งชุดในธุรกรรมเดียว (RPC 0119) ──
+  //
+  // เดิมยิงคำสั่งลบทีละก้อนแยกกันจากที่นี่: responsible_persons → dealer_lead_rules → dealers
+  //   สองก้อนแรกไม่เช็กผลด้วย · ถ้าก้อนสุดท้ายพลาด ค่าตั้งของสาขาหายไปแล้วและกู้กลับไม่ได้
+  //   สาขายังอยู่ แต่ผู้รับผิดชอบ/กฎติดตามหายเกลี้ยง ขณะที่หน้าจอแจ้งว่า "ลบไม่สำเร็จ"
+  //   → ผู้ดูแลไม่รู้เลยว่ามีของหายไปแล้ว (ผลตรวจสอบระบบรอบ 2 · Part 8)
+  //
+  // ตอนนี้ทั้งชุดอยู่ในฟังก์ชันเดียวที่ฐานข้อมูล = ธุรกรรมเดียว พังตรงไหนย้อนกลับให้หมดเอง
+  // การลบ "บัญชีเข้าระบบ" ยังทำที่นี่ (SQL แตะสคีมา auth ไม่ได้) และทำหลังธุรกรรมสำเร็จเท่านั้น
+  const { data: memberRows, error: delErr } = await admin.rpc("delete_dealer_atomic", { p_code: code });
+  if (delErr) {
+    const msg = delErr.message ?? "";
+    const hasData = /dealer_has_data:([a-z_]+):(\d+)/.exec(msg);
+    if (hasData) {
+      return bad(409, `สาขา "${code}" ยังมีข้อมูล (${hasData[1]}) — ต้องย้าย/ลบข้อมูลก่อนจึงจะลบสาขาได้`);
     }
-    if ((count ?? 0) > 0) {
-      return bad(409, `สาขา "${code}" ยังมีข้อมูล (${t}) — ต้องย้าย/ลบข้อมูลก่อนจึงจะลบสาขาได้`);
-    }
+    if (/dealer_not_found:/.test(msg)) return bad(404, `ไม่พบตัวแทนรหัส "${code}"`);
+    if (/forbidden:/.test(msg)) return bad(403, DENY);
+    console.error(`[delete-dealer] ลบสาขา ${code} ไม่สำเร็จ`, delErr);
+    return bad(503, "ลบตัวแทนไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
-
-  // ── หา "บัญชีที่ต้องลบตาม" ให้ครบ ก่อน แตะอะไรทั้งสิ้น ──
-  // เดิมอ่าน profiles หลังลบแถว dealers ไปแล้ว และไม่เช็ค error ของ select → ถ้า select พลาด
-  // จะได้ลิสต์ว่าง ลบบัญชีไปศูนย์บัญชี แต่ยังตอบ ok:true — เหลือบัญชีกำพร้าที่ยังผูก dealer_code เดิม
-  // ถ้ารหัสสาขานั้นถูกนำกลับมาใช้ใหม่ภายหลัง บัญชีเก่าจะเห็นข้อมูลของสาขาใหม่ทันที (พบจากตรวจสอบระบบ 5 ส.ค. 69)
-  const { data: members, error: memErr } = await admin.from("profiles").select("id").eq("dealer_code", code);
-  if (memErr) {
-    console.error(`[delete-dealer] อ่านรายชื่อบัญชีของสาขา ${code} ไม่สำเร็จ`, memErr);
-    return bad(503, "อ่านรายชื่อบัญชีของสาขาไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
-  }
-
-  // ค่าตั้งของสาขาเอง (FK restrict เช่นกัน) — ลบก่อนแถว dealers
-  await admin.from("responsible_persons").delete().eq("dealer_code", code);
-  await admin.from("dealer_lead_rules").delete().eq("dealer_code", code);
-  // ลบแถว dealers ก่อน — จุดที่อาจ fail · สำเร็จแล้วค่อยแตะ auth ที่ย้อนไม่ได้
-  // .select() เพื่อรู้จำนวนแถวที่ลบจริง — PostgREST ไม่ error เมื่อ filter ไม่ตรงแถวไหนเลย
-  //   เดิมไม่เช็ก → ลบรหัสสาขาที่ไม่มีจริงก็ได้ 200 + เขียน audit log "ลบตัวแทน" ทั้งที่ไม่มีอะไรถูกลบ (Medium, 30 ก.ค. 69)
-  const { data: deleted, error } = await admin.from("dealers").delete().eq("code", code).select("code");
-  if (error) return bad(400, `ลบตัวแทนไม่สำเร็จ: ${error.message}`);
-  if (!deleted || deleted.length === 0) return bad(404, `ไม่พบตัวแทนรหัส "${code}"`);
+  const members = (memberRows ?? []) as { member_id: string }[];
 
   // ลบบัญชี auth ของผู้ใช้สังกัดสาขา (profile หายตาม cascade) — ทำท้ายสุด
   // เก็บรายชื่อที่ลบไม่สำเร็จไว้บอกผู้เรียกตรง ๆ ไม่กลืนเงียบ — บัญชีที่ค้างคือช่องข้ามสาขาถ้ารหัสถูกใช้ซ้ำ
   const orphans: string[] = [];
-  for (const m of members ?? []) {
-    try {
-      const { error: delErr } = await admin.auth.admin.deleteUser(String(m.id));
-      if (delErr) { orphans.push(String(m.id)); console.error(`[delete-dealer] ลบบัญชี ${m.id} ของสาขา ${code} ไม่สำเร็จ`, delErr); }
-    } catch (e) {
-      orphans.push(String(m.id));
-      console.error(`[delete-dealer] ลบบัญชี ${m.id} ของสาขา ${code} ไม่สำเร็จ`, e);
-    }
+  for (const m of members) {
+    if (!(await deleteAuthUserLoud(admin, String(m.member_id), "delete-dealer"))) orphans.push(String(m.member_id));
   }
 
   if (orphans.length) {
     // ทะเบียนสาขาถูกลบไปแล้ว (ย้อนไม่ได้) แต่ต้องไม่รายงานว่าสำเร็จทั้งหมด — และห้ามนำรหัสนี้กลับมาใช้ใหม่
     // จนกว่าจะเคลียร์บัญชีค้างเสร็จ ไม่งั้นบัญชีเก่าจะเห็นข้อมูลของสาขาใหม่
     await auditLog(admin, prof, "ลบตัวแทน (บัญชีค้าง)", `${code} · เหลือบัญชีที่ลบไม่สำเร็จ ${orphans.length} บัญชี`);
-    return bad(500, `ลบทะเบียนสาขา "${code}" แล้ว แต่ลบบัญชีเข้าระบบไม่สำเร็จ ${orphans.length} บัญชี — ` +
-      `ห้ามนำรหัส "${code}" กลับมาใช้ใหม่จนกว่าผู้ดูแลระบบจะเคลียร์บัญชีค้างเสร็จ`);
+    // ── ต้องตอบว่า "สำเร็จบางส่วน" ไม่ใช่ "ล้มเหลว" ──
+    // ทะเบียนสาขาถูกลบไปแล้วจริงและย้อนไม่ได้ · เดิมตอบ 500 ซึ่งหน้าจอตีความว่าลบไม่สำเร็จ
+    // แล้ว "คงสาขาไว้บนหน้าจอ" ทั้งที่ในระบบไม่มีแล้ว — ผู้ดูแลเห็นสาขาที่ลบไปแล้วเหมือนฟื้นกลับมา
+    // และเข้าใจผิดว่าไม่ต้องทำอะไรต่อ ทั้งที่ยังมีบัญชีค้างที่ต้องเคลียร์ (ผลตรวจรอบ 2 · ระดับสูง)
+    return NextResponse.json({
+      ok: true,
+      warning: `ลบทะเบียนสาขา "${code}" เรียบร้อยแล้ว แต่ลบบัญชีเข้าระบบไม่สำเร็จ ${orphans.length} บัญชี — ` +
+        `ห้ามนำรหัส "${code}" กลับมาใช้ใหม่จนกว่าผู้ดูแลระบบจะเคลียร์บัญชีค้างเสร็จ`,
+    });
   }
 
   await auditLog(admin, prof, "ลบตัวแทน", code);

@@ -67,10 +67,18 @@ export type DealerPerf = {
 
 export const EMPTY_PERF: DealerPerf = { revenue: 0, quotes: 0, won: 0, lost: 0, winRate: null, openLeads: 0, onTimePct: null };
 
+/** ผลงานรายสาขา + ธงบอกว่า "ตัวเลขจากเซิร์ฟเวอร์มาถึงหรือยัง"
+ *
+ *  ทำไมต้องมีธงนี้: ระหว่างที่ยังโหลดไม่เสร็จ ทุกค่าเป็น 0 ตามธรรมชาติ หน้าจอจึงแสดง "฿0"
+ *  ซึ่งผู้บริหารอ่านว่า "สาขานี้ขายไม่ได้เลย" — คนละความหมายกับ "ยังไม่รู้ตัวเลข"
+ *  (ผลตรวจสอบระบบรอบ 2 · เหลือ 5 จุดที่ยังไม่แยกสองสถานะนี้ออกจากกัน)
+ *  ready=false → หน้าจอต้องขึ้น "—" หรือโครงร่างรอ ห้ามขึ้นเลข 0 */
+export type DealerPerfMap = Map<string, DealerPerf> & { ready: boolean };
+
 const CLOSED: LeadStatus[] = ["PAID", "CANCELLED"];
 
 /** ผลงานของทุกสาขา — key = dealerCode */
-export function useDealerPerformance(): Map<string, DealerPerf> {
+export function useDealerPerformance(): DealerPerfMap {
   const quotes = useNetworkQuotations();
   const leads = useNetworkLeads();
   // เกณฑ์ค้างติดต่อของแต่ละสาขา — สาขาที่ไม่ได้ตั้งเองใช้ค่ากลาง
@@ -85,7 +93,7 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
   const serverRollup = useDealerRollup(APP_NOW.getFullYear(), rollupOpts);
 
   return useMemo(() => {
-    const m = new Map<string, DealerPerf>();
+    const m = new Map<string, DealerPerf>() as DealerPerfMap;
     const get = (code: string) => {
       let r = m.get(code);
       if (!r) { r = { ...EMPTY_PERF }; m.set(code, r); }
@@ -131,6 +139,11 @@ export function useDealerPerformance(): Map<string, DealerPerf> {
         r.onTimePct = sr.openLeads > 0 ? Math.round(((sr.openLeads - sr.staleLeads) / sr.openLeads) * 100) : null;
       }
     }
+    // โหมด local คิดจบในเครื่องทันที = พร้อมเสมอ · โหมดจริงต้องรอ rollup จากเซิร์ฟเวอร์ก่อน
+    Object.defineProperty(m, "ready", {
+      value: DATA_SOURCE !== "supabase" || serverRollup !== null,
+      enumerable: false,
+    });
     return m;
   }, [quotes, leads, rules, serverRollup]);
 }

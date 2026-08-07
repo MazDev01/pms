@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
 import { HQ_ORIGIN, db, TAG } from "./funcHelpers";
 import { createClient } from "@supabase/supabase-js";
-import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, statuses } from "./adminEnv";
 
 // ── ความแข็งแรงของ route ผู้ดูแล (/api/admin/*) — regression จากผลตรวจสอบระบบ 5 ส.ค. 69 ──
 //
@@ -68,7 +68,7 @@ test.describe("ตรวจ input ก่อนสร้างบัญชี", (
     });
     // 501 = ยังไม่ได้ตั้ง service_role ที่เครื่องนี้ (ไม่ใช่บั๊กของโค้ด)
     const body = res.status() === 200 ? null : await res.text();
-    expect([200, 501], `ต้องผ่านหรือบอกว่ายังไม่ได้ตั้งค่า (ได้ ${res.status()} · ${body})`).toContain(res.status());
+    expect(statuses(200), `ต้องผ่านหรือบอกว่ายังไม่ได้ตั้งค่า (ได้ ${res.status()} · ${body})`).toContain(res.status());
     // เก็บกวาดทำที่ afterEach (purge) แล้ว — ครอบคลุมทั้งบัญชี auth และโปรไฟล์ ไม่ใช่แค่แถวสาขา
   });
 });
@@ -135,7 +135,7 @@ test("route ที่ไม่มีสิทธิ์ยังถูกปฏ�
 
   for (const c of cases) {
     const res = await c.run();
-    expect([401, 403, 501], `${c.name} ต้องถูกปฏิเสธ (ได้ ${res.status()})`).toContain(res.status());
+    expect(statuses(401, 403), `${c.name} ต้องถูกปฏิเสธ (ได้ ${res.status()})`).toContain(res.status());
   }
 
   // สาขา CNX ต้องยังอยู่ครบหลังโดนยิงทุกช่องทาง

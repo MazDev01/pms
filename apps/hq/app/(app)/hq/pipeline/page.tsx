@@ -121,6 +121,8 @@ export default function SalesAnalyticsPage() {
   // ยอดขายจริงรายสาขา — จากใบที่ปิดการขายได้ ไม่ใช่คอลัมน์ revenue_actual ที่ seed ไว้
   const dealerPerf = useDealerPerformance();
   const perfOf = (code: string) => dealerPerf.get(code) ?? EMPTY_PERF;
+  // ยอดขายที่ยังโหลดไม่เสร็จต้องขึ้น "—" ไม่ใช่ ฿0 — ศูนย์แปลว่า "ขายไม่ได้เลย" ซึ่งคนละเรื่องกับ "ยังไม่รู้"
+  const money = (v: number) => (dealerPerf.ready ? fmtBaht(v) : "—");
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
 
   const netQuotes = useNetworkQuotations();
@@ -357,11 +359,11 @@ export default function SalesAnalyticsPage() {
     { label: "ยอดขายจริง (ในช่วง)", value: fmtBaht(kpi.wonVal), sub: `${kpi.wonCount} ดีล · จากใบเสนอราคาที่ปิดได้`, Icon: Trophy, color: "#059669", bg: "#E6F6EF" },
     { label: "มูลค่าใบเสนอราคา", value: fmtBaht(kpi.quoteVal), sub: `${kpi.quotes} ใบ · ในช่วงที่เลือก`, Icon: FileText, color: "#0891B2", bg: "#E6F4F9" },
     { label: "อัตราปิดการขาย", value: kpi.conv === null ? "—" : `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
-    { label: "เป้าหมายทั้งปี", value: `${kpi.tpct}%`, sub: `ยอดสะสม ${fmtBaht(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
+    { label: "เป้าหมายทั้งปี", value: dealerPerf.ready ? `${kpi.tpct}%` : "—", sub: `ยอดสะสม ${money(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
   ];
 
   const sel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
-    <select value={v} onChange={e => on(e.target.value)} className="form-input"
+    <select aria-label={caption} value={v} onChange={e => on(e.target.value)} className="form-input"
       style={{ width: "auto", minWidth: 128, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer" }}>
       <option value={ALL}>{caption}</option>
       {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
@@ -431,7 +433,7 @@ export default function SalesAnalyticsPage() {
       {/* ── แถว 1 · วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน — เต็มความกว้าง ──
           คำถามหลักของหน้า "ใครออกใบเยอะแต่ปิดได้น้อย" จึงขึ้นก่อนเพื่อน
           แท่งคู่ 10 ตัวแทน · ตัวเลขชุดเดียวกันอยู่ในตารางแถว 3 (แยกการ์ดเพื่อไม่ให้ใบเดียวสูง 1,010px) */}
-      <DealerQuotationPerformance rows={quotePerf} avgConv={kpi.conv} />
+      <DealerQuotationPerformance rows={quotePerf} />
 
       {/* ── แถว 2 · เปรียบเทียบรายตัวแทน: ลีด→ใบเสนอราคา | มูลค่า→ยอดขายจริง ──
           สองใบนี้เป็นแท่งคู่รายตัวแทนเหมือนกันและสูงพอ ๆ กัน จับคู่ไว้แถวเดียว
@@ -534,7 +536,7 @@ export default function SalesAnalyticsPage() {
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.leads}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.quotes}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(d.quoteVal)}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 800, color: "#1F2937" }}>{fmtBaht(d.revenueActual)}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 800, color: "#1F2937" }}>{money(d.revenueActual)}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{d.conv === null ? "—" : `${d.conv}%`}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtBaht(d.revenueTarget)}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: d.tpct >= 100 ? "#059669" : PRIMARY }}>{d.tpct}%</td>

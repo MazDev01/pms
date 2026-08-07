@@ -96,7 +96,7 @@ export function AreaChart({ data, target, unit = "M", height }: { data: AreaPoin
   const yTicks = Array.from({ length: 5 }, (_, i) => floor + ((ceiling - floor) / 4) * i);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="chart">
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="กราฟพื้นที่แสดงแนวโน้มยอดขาย">
       <defs>
         <linearGradient id="pms1-area" x1="0" y1="0" x2="0" y2="1">
           <stop offset="5%" stopColor={NAVY} stopOpacity="0.26" />
@@ -605,7 +605,7 @@ export function LineTrendChart({
 
   return (
     <div ref={wrapRef} style={{ width: "100%" }}>
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="line chart">
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="กราฟเส้นแสดงแนวโน้ม">
       <defs>
         <linearGradient id={grad} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.20" />
@@ -702,7 +702,7 @@ export function AreaGradientChart({
   const gid = "area-grad-" + n;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="area chart">
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="กราฟพื้นที่แสดงแนวโน้ม">
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={NAVY} stopOpacity="0.22" />
@@ -782,7 +782,7 @@ export function MultiLineChart({
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="multi-line chart">
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="กราฟเส้นเปรียบเทียบหลายชุดข้อมูล">
         {yTicks.map((v, i) => {
           const y = cy(v);
           return (
@@ -865,7 +865,7 @@ export function GroupedBarChart({
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="grouped bar chart">
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto", overflow: "visible" }} role="img" aria-label="กราฟแท่งเปรียบเทียบรายกลุ่ม">
         {yTicks.map((v, i) => {
           const y = pT + (1 - v / ceiling) * cH;
           return (

@@ -131,7 +131,7 @@ export default function ProfilePage() {
                 style={{ position: "absolute", bottom: -2, right: -2, width: 28, height: 28, borderRadius: "50%", background: "#fff", border: `1px solid ${BORDER}`, boxShadow: "0 2px 6px rgba(0,0,0,.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: PRIMARY }}>
                 <Camera size={14} />
               </button>
-              <input ref={fileRef} type="file" accept="image/*" onChange={onPickAvatar} style={{ display: "none" }} />
+              <input ref={fileRef} type="file" accept="image/*" aria-label="อัปโหลดรูปโปรไฟล์" onChange={onPickAvatar} style={{ display: "none" }} />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL }}>{form.name || session.name}</div>

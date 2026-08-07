@@ -45,7 +45,10 @@ function esc(s: unknown) { return String(s ?? "").replace(/[&<>"]/g, c => (({ "&
 function fmtDate(d: string) { if (!d || d === "—") return "—"; const [y, m, day] = d.split("-"); const mo = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m) - 1]} ${parseInt(y) + 543}`; }
 
 // สร้าง HTML ใบเสนอราคา A4 (เต็มรูปแบบ — หัวกระดาษ/คู่สัญญา/ตาราง/สรุป VAT/เงื่อนไข/ลายเซ็น+ตรา)
-export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC, wordmark = "") {
+// _wordmark: ยังรับไว้เพื่อไม่ให้ผู้เรียกเดิมพัง แต่ "ตั้งใจไม่ใช้" ตามนโยบายแบรนด์ (ดูคอมเมนต์ที่หัวเอกสาร)
+//   ⚠️ ตามมาด้วยเรื่องที่ต้องให้ผู้บริหารตัดสิน: หน้าตั้งค่าของตัวแทนยังให้อัปโหลด "โลโก้หัวเอกสาร" อยู่
+//   และเก็บลงฐานข้อมูลจริง แต่ไม่มีที่ไหนเอาไปแสดงเลย = ตัวแทนอัปโหลดแล้วไม่เกิดอะไรขึ้น
+export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC, _wordmark = "") {
   // ── เงื่อนไข ────────────────────────────────────────────────────────────────
   // ยึดข้อมูลจริงเท่านั้น:
   //  · วันยืนยันราคา = "วันหมดอายุ" ของใบนั้น (ถ้าไม่มี = วันที่ออก + อายุใบจากตั้งค่า)

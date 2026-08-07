@@ -56,7 +56,6 @@ export function useTableLayout(storageKey: string): {
       setDensityState(stored.density);
       setHiddenColsState(stored.hiddenCols);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   const setDensity = (d: Density) => {

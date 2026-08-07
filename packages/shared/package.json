@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/supabase-js": "^2.110.7",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0"
   },
@@ -11,5 +11,14 @@
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.22",
+    "typescript": "^5.7.0"
   }
 }

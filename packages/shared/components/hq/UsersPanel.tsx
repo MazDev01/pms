@@ -4,6 +4,8 @@
 // บริหารผู้ใช้ของ "สำนักงานใหญ่" เท่านั้น — ไม่แสดงผู้ใช้ Dealer (ดีลเลอร์จัดการใน Workspace ตัวเอง
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { SortableTh } from "@pms/shared/components/ui/SortableTh";
+import { useModalA11y } from "@pms/shared/lib/useModalA11y";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
@@ -21,8 +23,8 @@ import { createHQUser, deleteHQUser } from "@pms/shared/lib/adminApi";
 import { useRole } from "@pms/shared/context/RoleContext";
 import type { UserRole } from "@pms/shared/lib/mock";
 import {
-  Users, Shield, Check, X, Plus, Search, KeyRound, Copy, RefreshCw, MoreHorizontal,
-  Eye, EyeOff, Pencil, Power, Clock, LogIn, UserPlus, Phone, ImagePlus, Trash2, AlertTriangle,
+  Users, Shield, Check, X, Plus, Search, KeyRound, Copy, MoreHorizontal,
+  Eye, EyeOff, Pencil, Power, Clock, UserPlus, Phone, ImagePlus, Trash2, AlertTriangle,
 } from "lucide-react";
 
 const PRIMARY = "#003366";
@@ -113,18 +115,6 @@ function StatusDot({ status }: { status: UserStatus }) {
   const a = status === "active";
   return <span className="badge" style={{ background: a ? "#e5faf0" : "#f0f0f5", color: a ? "#059669" : "#9ca3af" }}><span style={{ width: 7, height: 7, borderRadius: "50%", display: "inline-block", background: a ? "#059669" : "#C0C0C0" }} />{a ? "ใช้งาน" : "ปิดใช้งาน"}</span>;
 }
-function CopyField({ label, value }: { label: string; value: string }) {
-  const [c, setC] = useState(false);
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: "0.72rem", color: MUTED, marginBottom: 4, fontWeight: 600 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 11px" }}>
-        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.84rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis" }}>{value}</span>
-        <button type="button" onClick={() => navigator.clipboard.writeText(value).then(() => { setC(true); setTimeout(() => setC(false), 1500); })} style={{ background: "none", border: "none", cursor: "pointer", color: c ? "#059669" : MUTED, padding: 0, display: "flex", flexShrink: 0 }}>{c ? <Check size={14} /> : <Copy size={14} />}</button>
-      </div>
-    </div>
-  );
-}
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return <div style={{ marginBottom: 12 }}><div style={{ fontSize: "0.68rem", color: MUTED, fontWeight: 600, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div><div style={{ fontSize: "0.86rem", color: STEEL, fontWeight: 600 }}>{value}</div></div>;
 }
@@ -150,9 +140,10 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
   const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email);
   const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: `1px solid ${BORDER}`, fontSize: "0.84rem", color: STEEL, background: "#fff", outline: "none", boxSizing: "border-box" };
   const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: f.department, status: f.status, avatar: f.avatar }); onClose(); };
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ฟอร์มผู้ใช้ HQ" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
         <div style={{ background: PRIMARY, color: "#fff", padding: "16px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}>{initial ? <Pencil size={16} /> : <UserPlus size={17} />} {initial ? "แก้ไขผู้ใช้ HQ" : "เพิ่มผู้ใช้งาน HQ"}</div>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={15} /></button>
@@ -325,10 +316,17 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // เดิม genTempPassword() สร้างสตริงที่ล็อกอินไม่ได้จริง + ลง audit ว่ารีเซ็ตแล้วทั้งที่ไม่เคยส่งไปที่ระบบยืนยันตัวตน
   function resetPassword(u: AppUser) { setResetInfo({ user: u }); }
 
+  // หัวคอลัมน์เรียงลำดับ — ใช้ตัวกลาง SortableTh เพื่อให้กดด้วยคีย์บอร์ดได้
+  // และประกาศทิศทางการเรียงให้โปรแกรมอ่านหน้าจอรู้ (aria-sort)
   const th = (label: string, key?: SortKey) => (
-    <th style={key ? { cursor: "pointer", userSelect: "none" } : undefined} onClick={key ? () => setSort(s => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" })) : undefined}>
+    <SortableTh
+      label={label}
+      active={!!key && sort.key === key}
+      dir={sort.dir}
+      onSort={key ? () => setSort(s => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" })) : undefined}
+    >
       <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>{label}{key && sort.key === key && <span style={{ fontSize: "0.7rem" }}>{sort.dir === "asc" ? "▲" : "▼"}</span>}</span>
-    </th>
+    </SortableTh>
   );
   const selCls: React.CSSProperties = { padding: "8px 10px", borderRadius: 9, border: `1px solid ${BORDER}`, fontSize: "0.78rem", color: STEEL, background: "#fff", outline: "none", cursor: "pointer" };
   const STAT = [
@@ -359,8 +357,8 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
           <div style={{ display: "flex", alignItems: "center", gap: 7, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "0 10px", height: 36, flex: "1 1 220px", minWidth: 180 }}>
             <Search size={14} color={MUTED} /><input value={q} onChange={e => { setQ(e.target.value); setPage(1); }} placeholder="ค้นหาชื่อ หรือ อีเมล…" style={{ border: "none", outline: "none", flex: 1, fontSize: "0.82rem", color: STEEL, background: "transparent" }} />
           </div>
-          <select style={selCls} value={roleF} onChange={e => { setRoleF(e.target.value as RoleKey | "all"); setPage(1); }}><option value="all">ทุกบทบาท</option>{ROLES.map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select>
-          <select style={selCls} value={deptF} onChange={e => { setDeptF(e.target.value); setPage(1); }}><option value="all">ทุกแผนก</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select>
+          <select aria-label="กรองตามบทบาท" style={selCls} value={roleF} onChange={e => { setRoleF(e.target.value as RoleKey | "all"); setPage(1); }}><option value="all">ทุกบทบาท</option>{ROLES.map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select>
+          <select aria-label="กรองตามแผนก" style={selCls} value={deptF} onChange={e => { setDeptF(e.target.value); setPage(1); }}><option value="all">ทุกแผนก</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select>
           <div style={{ display: "flex", gap: 2, background: "#f1f5f9", borderRadius: 9, padding: 3 }}>
             {([["all", "ทั้งหมด"], ["active", "ใช้งาน"], ["inactive", "ปิด"]] as const).map(([v, l]) => (
               <button key={v} onClick={() => { setStatusF(v); setPage(1); }} style={{ border: "none", cursor: "pointer", borderRadius: 7, padding: "6px 12px", fontSize: "0.76rem", fontWeight: 700, fontFamily: "inherit", background: statusF === v ? "#fff" : "transparent", color: statusF === v ? PRIMARY : MUTED, boxShadow: statusF === v ? "0 1px 3px rgba(16,40,80,.12)" : "none" }}>{l}</button>
@@ -507,9 +505,10 @@ function NewCredsDialog({ name, email, password, onClose }: { name: string; emai
       </div>
     </div>
   );
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="รหัสเข้าระบบของผู้ใช้ใหม่" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
         <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><UserPlus size={16} /> สร้างบัญชีแล้ว</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
@@ -542,9 +541,10 @@ function DeleteUserDialog({ user, onConfirm, onClose }: { user: AppUser; onConfi
     if (!r.ok) { setState("idle"); setErr(r.error || "ลบไม่สำเร็จ"); return; }
     onClose();
   }
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ยืนยันการลบผู้ใช้" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
         <div style={{ background: "#dc2626", color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><AlertTriangle size={16} /> ลบผู้ใช้ถาวร</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
@@ -586,9 +586,10 @@ function ResetEmailDialog({ user, onSent, onClose }: { user: AppUser; onSent: (e
     if (!r.ok) { setState("idle"); setErr(r.error); return; }
     setState("sent"); onSent(email.trim().toLowerCase());
   }
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ส่งลิงก์ตั้งรหัสผ่านใหม่" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
         <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><KeyRound size={16} /> รีเซ็ตรหัสผ่าน</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>

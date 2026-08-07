@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Store, Phone, BarChart2, Package,
+  LayoutDashboard, Store, Phone, Package,
   Settings, GitMerge, ScrollText, Users,
-  CalendarDays, FolderOpen, Building2, History, LogOut, Crown,
+  CalendarDays, FolderOpen, History, LogOut, Crown,
 } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
-import { type UserProfile } from "@pms/shared/lib/mock";
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
 type NavGroup = { group: string; items: NavItem[] };
@@ -94,7 +93,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
       {/* Brand — แบรนด์ Benjamin เท่านั้นทุกบทบาท (ตัวแทนเปลี่ยนโลโก้/แบรนด์เองไม่ได้) */}
       <div className="sidebar-brand">
         <div className="brand-mark">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
         </div>
         {/* ชื่อแบรนด์ ไม่ใช่หัวข้อหลักของหน้า — h1 จริงอยู่ที่ Topbar (เปลี่ยนตามหน้า)
@@ -134,7 +133,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
             เคยกินที่จนชื่อโดนตัดเหลือ "เชียงใหม่ส…" และป้ายบทบาทพับสองบรรทัด (บอสสั่งปรับ 17 ก.ค. 69) */}
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 6, padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
           {profile?.avatar
-            /* eslint-disable-next-line @next/next/no-img-element */
+             
             ? <img src={profile.avatar} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
             : <span style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: "var(--primary)", color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 900 }}>

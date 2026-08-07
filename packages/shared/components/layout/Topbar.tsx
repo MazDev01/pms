@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
@@ -10,7 +11,7 @@ import {
   notifCategoryOf,
   DEFAULT_HQ_NOTIFS, DEFAULT_HQ_NOTIF_RULES, hqAuditCategory, HQ_ALERT_META, DEFAULT_DEALER_CODE,
   type HQNotifRules,
-  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type UserProfile, type NotifPrefs, type HQNotifChannels,
+  type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type NotifPrefs, type HQNotifChannels,
   type HQAlertKey,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -303,8 +304,12 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // ตั้งค่าการแจ้งเตือนของ HQ (หมวดจาก Audit Log) — กรองกระดิ่งฝั่ง HQ ตาม toggle "ในระบบ"
   // อ่านผ่าน repo — เดิม loadHQNotifPrefs() อ่าน localStorage ของเครื่องที่ใช้
   const hqRules = useRepoValue<HQNotifRules>(() => settingsRepo.getNotifRules(), DEFAULT_HQ_NOTIF_RULES);
-  const hqNotifPrefs: Record<string, HQNotifChannels> | null =
-    { ...DEFAULT_HQ_NOTIFS, ...(hqRules.channels ?? {}) };
+  // ต้อง memo ไว้ — เดิมสร้างอ็อบเจกต์ใหม่ทุกครั้งที่ render แล้วถูกใช้เป็นตัวเฝ้าดูของ useMemo ข้างล่าง
+  // ผลคือรายการแจ้งเตือนถูกคำนวณใหม่ทุก render ทั้งที่ค่าไม่ได้เปลี่ยน (การ memo ไม่ได้ทำงานเลย)
+  const hqNotifPrefs: Record<string, HQNotifChannels> = useMemo(
+    () => ({ ...DEFAULT_HQ_NOTIFS, ...(hqRules.channels ?? {}) }),
+    [hqRules],
+  );
 
   const displayName = profile?.name || session.name;
   // ชื่อบัญชี = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน (ไม่ใช่ชื่อคน) · HQ ใช้ชื่อผู้ใช้
@@ -496,8 +501,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         <div
           onClick={() => { setShowSearch(false); setSearchQ(""); }}
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:400, display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop:80 }}>
-          <div
-            onClick={e => e.stopPropagation()}
+          <ModalCard
+            onClose={() => { setShowSearch(false); setSearchQ(""); }}
+            label="ค้นหาทั้งระบบ"
             style={{ width:"100%", maxWidth:560, background:"#fff", borderRadius:16, boxShadow:"0 24px 64px rgba(0,0,0,.22)", overflow:"hidden" }}>
             {/* Input */}
             <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 16px", borderBottom:`1px solid ${BORDER}` }}>
@@ -553,7 +559,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 พิมพ์เพื่อค้นหา
               </div>
             )}
-          </div>
+          </ModalCard>
         </div>
       )}
 

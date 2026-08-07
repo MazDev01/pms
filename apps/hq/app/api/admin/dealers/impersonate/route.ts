@@ -19,7 +19,6 @@ import { bad, authorizeAdmin, auditLog, withErrors, findDealerAccount } from "@p
 export const runtime = "nodejs";
 
 const DEALER_APP_URL = process.env.NEXT_PUBLIC_DEALER_APP_URL ?? "http://localhost:3001";
-const DEALER_EMAIL_DOMAIN = "partner-agent.co.th";
 
 export const POST = withErrors("impersonate-dealer", async (req: NextRequest) => {
   const authz = await authorizeAdmin(
@@ -41,13 +40,33 @@ export const POST = withErrors("impersonate-dealer", async (req: NextRequest) =>
   const found = await findDealerAccount(admin, code);
   if (!found.ok) return found.res;
 
-  const email = `${code.toLowerCase()}@${DEALER_EMAIL_DOMAIN}`;
+  // ⛔ ห้ามประกอบอีเมลจากรหัสสาขาเด็ดขาด — ต้องใช้อีเมลของบัญชีที่ค้นเจอจริงเท่านั้น
+  //
+  // เดิมบรรทัดนี้เป็น `${code.toLowerCase()}@partner-agent.co.th` ซึ่งเป็นสูตรของบัญชีที่สร้าง
+  // ผ่านหน้าจัดการตัวแทนเท่านั้น · 7 สาขาที่มีอยู่จริงใช้อีเมลธุรกิจของตัวเอง
+  // (CNX = sales@cmsteelbuild.co.th) → อีเมลที่ประกอบขึ้นมา "ไม่มีอยู่จริง"
+  // และ generateLink แบบ magiclink จะ *สร้างบัญชีใหม่ให้อัตโนมัติ* เมื่อไม่พบอีเมลนั้น
+  // ผลคือ 2 เรื่องพร้อมกัน (พบจากชุดตรวจรับ 6 ส.ค. 69):
+  //   1) "เข้าระบบแทนตัวแทน" ไม่ได้เข้าเป็นตัวแทนจริง แต่เข้าเป็นบัญชีเปล่าที่เพิ่งถูกสร้าง
+  //      → HQ เห็นหน้าจอว่างเปล่า ไม่ใช่ข้อมูลของสาขานั้น = ฟีเจอร์นี้ใช้ไม่ได้จริงทุกสาขา
+  //   2) ทุกครั้งที่กด จะทิ้งบัญชีผีไว้ในระบบ (ไม่มีโปรไฟล์ ไม่สังกัดสาขา) สะสมไปเรื่อย ๆ
+  const { data: acct, error: acctErr } = await admin.auth.admin.getUserById(found.id);
+  if (acctErr || !acct?.user?.email) {
+    console.error(`[impersonate-dealer] อ่านอีเมลบัญชีของสาขา ${code} ไม่สำเร็จ`, acctErr);
+    return bad(503, "อ่านบัญชีเข้าระบบของตัวแทนไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
+  const email = acct.user.email;
+
   const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email,
     options: { redirectTo: `${DEALER_APP_URL}/dashboard?impersonated=1` },
   });
-  if (linkErr || !link) return bad(400, `สร้างลิงก์เข้าระบบไม่สำเร็จ: ${linkErr?.message ?? ""}`);
+  if (linkErr || !link) {
+    // รหัสสาขาถูกตรวจไปแล้ว และอีเมลก็อ่านมาจากบัญชีจริง — พังตรงนี้คือฝั่งระบบ ไม่ใช่คำขอผิด
+    console.error(`[impersonate-dealer] สร้างลิงก์เข้าระบบของสาขา ${code} ไม่สำเร็จ`, linkErr);
+    return bad(503, "สร้างลิงก์เข้าระบบไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
 
   // บันทึกทันทีตอนออกลิงก์ (ไม่ใช่ตอนคลิก) — ลิงก์นี้ = สิทธิ์เข้าถึงเต็มรูปแบบ ต้องมีร่องรอยเสมอ
   await auditLog(admin, prof, "เข้าระบบแทนตัวแทน", code);

@@ -114,13 +114,18 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
   const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
   const dOf = new Map(dealers.map(d => [d.code, d]));
   const out: HQAlert[] = [];
+  // ต้องบอกด้วยว่าเป็นลีดของ "สาขาไหน" — ไม่งั้น HQ ไม่รู้ว่าต้องตามกับใคร
+  // และเลขลีด (numId) ซ้ำกันได้ข้ามสาขา — ลิงก์จึงต้องพกรหัสสาขาไปด้วยเสมอ
+  const at = (code: string | null) => (code ? ` · สาขา ${code}` : "");
+  const leadHref = (numId: number, code: string | null) =>
+    `/hq/leads?open=${numId}${code ? `&dealer=${encodeURIComponent(code)}` : ""}`;
   if (on("unassignedLead")) for (const l of data.unassigned) out.push({
     key: "unassignedLead", title: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ",
-    body: `${l.company} · ${l.province} · ${l.value}`, href: `/hq/leads?open=${l.numId}`,
+    body: `${l.company} · ${l.province} · ${l.value}${at(l.dealerCode)}`, href: leadHref(l.numId, l.dealerCode),
   });
   if (on("idleLead")) for (const l of data.idle) out.push({
     key: "idleLead", title: "ลูกค้าเป้าหมายไม่มีการติดต่อ",
-    body: `${l.company} · ไม่ได้ติดต่อ ${l.idleDays} วัน · ผู้รับผิดชอบ ${l.assigned || "—"}`, href: `/hq/leads?open=${l.numId}`,
+    body: `${l.company} · ไม่ได้ติดต่อ ${l.idleDays} วัน · ผู้รับผิดชอบ ${l.assigned || "—"}${at(l.dealerCode)}`, href: leadHref(l.numId, l.dealerCode),
   });
   if (on("quoteExpiring")) for (const q of data.expiring) out.push({
     key: "quoteExpiring", title: "ใบเสนอราคาใกล้หมดอายุ",

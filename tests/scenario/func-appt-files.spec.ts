@@ -51,7 +51,8 @@ test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้�
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const COMPANY = tg("ลีดไฟล์");
-  const FILENAME = `${NS}-เอกสารทดสอบ.txt`;
+  // .pdf ไม่ใช่ .txt — ระบบรับเฉพาะ PDF/Word/Excel/PowerPoint/CAD/รูปภาพ (uploadLimits.ts)
+  const FILENAME = `${NS}-เอกสารทดสอบ.pdf`;
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
@@ -74,7 +75,7 @@ test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้�
   const fileInput = page.locator('input[type="file"]:not([accept])').first();
   await expect(fileInput, "ลิ้นชักลีดต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 15_000 });
   await fileInput
-    .setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("benjamin test") });
+    .setInputFiles({ name: FILENAME, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 benjamin test") });
 
   // แถว metadata ต้องลง DB
   const f = await waitRow<{ dealer_code: string; storage_path: string | null }>(
@@ -114,7 +115,7 @@ async function openLeadFileInput(page: Page, sb: SupabaseClient, company: string
 test("[func] อัปโหลดไฟล์ล้มเหลว → ขึ้นแถบเตือน + ไม่เหลือ metadata ผีใน DB (H1)", async ({ page }) => {
   const sb = await db(RYG);
   const COMPANY = tg("ไฟล์อัปล้ม");
-  const FILENAME = `${NS}-อัปโหลดล้ม.txt`;
+  const FILENAME = `${NS}-อัปโหลดล้ม.pdf`;
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   const fileInput = await openLeadFileInput(page, sb, COMPANY);
@@ -125,7 +126,7 @@ test("[func] อัปโหลดไฟล์ล้มเหลว → ขึ�
       ? r.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "forced upload fail" }) })
       : r.continue());
 
-  await fileInput.setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("x") });
+  await fileInput.setInputFiles({ name: FILENAME, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 x") });
 
   // 1) ล้มเหลวต้องดัง — แถบเตือนกลางของ AppShell
   // (กรอง hasText: Next.js มี div role=alert ซ่อนไว้อีกตัว (__next-route-announcer__) จะชน strict mode)
@@ -142,13 +143,13 @@ test("[func] อัปโหลดไฟล์ล้มเหลว → ขึ�
 test("[func] ลบไฟล์แต่ลบไบต์ไม่สำเร็จ → ยังคง metadata ไว้ + ขึ้นแถบเตือน (H2)", async ({ page }) => {
   const sb = await db(RYG);
   const COMPANY = tg("ไฟล์ลบล้ม");
-  const FILENAME = `${NS}-ลบไบต์ล้ม.txt`;
+  const FILENAME = `${NS}-ลบไบต์ล้ม.pdf`;
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   const fileInput = await openLeadFileInput(page, sb, COMPANY);
 
   // แนบไฟล์จริง (สำเร็จ) — ต้องมีทั้งแถวใน DB และไบต์ใน Storage ก่อน
-  await fileInput.setInputFiles({ name: FILENAME, mimeType: "text/plain", buffer: Buffer.from("benjamin") });
+  await fileInput.setInputFiles({ name: FILENAME, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 benjamin") });
   const f = await waitRow<{ id: number; storage_path: string | null }>(sb, "files", { name: FILENAME }, 20_000);
   expect(f.storage_path, "ต้องอัปโหลดไบต์สำเร็จก่อน").toBeTruthy();
 

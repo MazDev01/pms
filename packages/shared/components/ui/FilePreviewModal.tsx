@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useModalA11y } from "@pms/shared/lib/useModalA11y";
 import { X, Eye, Image as ImageIcon, FileText, FileSpreadsheet, File as FileIcon } from "lucide-react";
 import type { DealerFile, DealerFileExt } from "@pms/shared/lib/mock";
 
@@ -147,11 +148,12 @@ function PreviewBody({ f }: { f: PreviewFile }) {
 }
 
 export function FilePreviewModal({ file, onClose }: { file: PreviewFile; onClose: () => void }) {
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc / Tab / คืนโฟกัส
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <div onClick={e => e.stopPropagation()} className="card"
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ดูตัวอย่างไฟล์" onClick={e => e.stopPropagation()} className="card"
           style={{ width: "100%", maxWidth: 640, maxHeight: "90vh", pointerEvents: "auto", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,51,102,.28)" }}>
           <div style={{ background: PRIMARY, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>

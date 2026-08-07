@@ -4,6 +4,7 @@
 // HQ แก้ไขที่นี่ → persist ลง MASTER_CATALOG_KEY → Dealer (/products + dropdown ฟอร์ม)
 // อ่านจากคีย์เดียวกันทันที · ขอบเขต Sales เท่านั้น (ไม่มี lead time/การส่งมอบ)
 import { useState, useRef } from "react";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { catalog as catalogRepo } from "@pms/shared/lib/data";
@@ -84,11 +85,11 @@ function SubtypeEditor({ value, images, onChange, onImagesChange }: {
                 /* eslint-disable-next-line @next/next/no-img-element */
                 ? <img src={images[s]} alt={s} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : <ImagePlus size={15} color="#9ca3af" />}
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickImg(s, f); }} />
+              <input type="file" accept="image/*" aria-label="อัปโหลดรูปแม่แบบ" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickImg(s, f); }} />
             </label>
             {/* ชื่อ (คลิกเพื่อแก้) */}
             {editIdx === i ? (
-              <input autoFocus value={editText} onChange={e => setEditText(e.target.value)} onBlur={commitEdit}
+              <input autoFocus aria-label="แก้ไขข้อความ" value={editText} onChange={e => setEditText(e.target.value)} onBlur={commitEdit}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } else if (e.key === "Escape") { setEditIdx(null); setEditText(""); } }}
                 style={{ ...subInp, flex: 1, padding: "5px 8px", fontSize: "0.78rem" }} />
             ) : (
@@ -337,7 +338,7 @@ function HQMasterPageInner() {
       {/* ── View detail modal — ดูแบบเดียวกับที่ตัวแทนเห็น + จัดการได้ในตัว (HQ ควบคุม) ── */}
       {viewing && (
         <div onClick={() => setViewing(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
+          <ModalCard onClose={() => setViewing(null)} label="รายละเอียดแม่แบบ" style={{ width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
             {/* Header */}
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
@@ -399,14 +400,14 @@ function HQMasterPageInner() {
                 <button className="btn btn-danger btn-md" style={{ justifyContent: "center" }} onClick={() => { const p = viewing; setViewing(null); setDelTarget(p); }}><Trash2 size={13} /> ลบแม่แบบ</button>
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── รายละเอียดแม่แบบย่อย modal ── */}
       {subView && (
         <div onClick={() => setSubView(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setSubView(null)} label="รายละเอียดประเภทย่อย" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: "1rem", fontWeight: 800 }}>{subView.sub}</div>
@@ -431,14 +432,14 @@ function HQMasterPageInner() {
                 <span style={{ fontSize: "0.72rem", color: MUTED }}> /{subView.parent.unit}</span>
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── Add modal ── */}
       {adding && (
         <div onClick={() => setAdding(false)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} className="modal-pop-flex" style={{ position: "static", width: "100%", maxWidth: 460, maxHeight: "90vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setAdding(false)} label="เพิ่มแม่แบบใหม่" className="modal-pop-flex" style={{ position: "static", width: "100%", maxWidth: 460, maxHeight: "90vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               เพิ่มแม่แบบใหม่
               <button onClick={() => setAdding(false)} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 28, height: 28, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
@@ -464,14 +465,14 @@ function HQMasterPageInner() {
               <button className="btn btn-primary btn-md" onClick={addProduct} disabled={!addForm.name.trim() || !parseFloat(addForm.price)}
                 style={!addForm.name.trim() || !parseFloat(addForm.price) ? { opacity: .5, cursor: "not-allowed" } : undefined}><Check size={14} /> บันทึก</button>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── Edit modal ── */}
       {editing && (
         <div onClick={() => setEditing(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, maxHeight: "90vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setEditing(null)} label="แก้ไขแม่แบบ" style={{ width: "100%", maxWidth: 460, maxHeight: "90vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               แก้ไขแม่แบบ
               <button onClick={() => setEditing(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 28, height: 28, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
@@ -494,14 +495,14 @@ function HQMasterPageInner() {
               <button className="btn btn-secondary btn-md" onClick={() => setEditing(null)}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={saveEdit}><Check size={14} /> บันทึก</button>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── Reprice modal ── */}
       {reprice && (
         <div onClick={() => setReprice(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setReprice(null)} label="ปรับราคากลาง" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800 }}>ปรับราคากลาง — {reprice.name}</div>
             <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 13 }}>
               <div style={{ fontSize: "0.8rem", color: MUTED }}>ราคาปัจจุบัน <b style={{ color: STEEL }}>{fmtBaht(reprice.price)}/{reprice.unit}</b> (มีผล {reprice.effectiveDate})</div>
@@ -513,14 +514,14 @@ function HQMasterPageInner() {
               <button className="btn btn-secondary btn-md" onClick={() => setReprice(null)}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={saveReprice}><TrendingUp size={14} /> ปรับราคา</button>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── History modal ── */}
       {history && (
         <div onClick={() => setHistory(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setHistory(null)} label="ประวัติการเปลี่ยนราคา" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               ประวัติราคา — {history.name}
               <button onClick={() => setHistory(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 28, height: 28, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
@@ -541,14 +542,14 @@ function HQMasterPageInner() {
               ))}
               {history.priceHistory.length === 0 && <div style={{ fontSize: "0.72rem", color: "#9ca3af", textAlign: "center", padding: "16px 0" }}>ยังไม่มีประวัติการปรับราคา</div>}
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
       {/* ── Delete confirm ── */}
       {delTarget && (
         <div onClick={() => setDelTarget(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 360, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+          <ModalCard onClose={() => setDelTarget(null)} label="ยืนยันการลบแม่แบบ" style={{ width: "100%", maxWidth: 360, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
             <div style={{ padding: "22px 22px 16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <span style={{ width: 38, height: 38, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={17} color="#dc2626" /></span>
@@ -560,7 +561,7 @@ function HQMasterPageInner() {
               <button className="btn btn-secondary btn-md" onClick={() => setDelTarget(null)}>ยกเลิก</button>
               <button className="btn btn-md" style={{ background: "#dc2626", color: "#fff", border: "none" }} onClick={deleteProduct}><Trash2 size={13} /> ลบ</button>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
     </div>

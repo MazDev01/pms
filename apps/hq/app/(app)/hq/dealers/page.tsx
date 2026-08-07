@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
   DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor, fmtISOToThai,
@@ -326,7 +327,11 @@ function HQDealersPageInner() {
     if (DATA_SOURCE === "supabase") {
       void deleteDealerAccount(d.code).then(res => {
         if (!res.ok) { alert("ลบตัวแทนไม่สำเร็จ: " + res.error); return; }
+        // ลบสำเร็จ (หรือสำเร็จบางส่วน) = ทะเบียนสาขาหายไปจากระบบจริงแล้ว ต้องเอาออกจากหน้าจอเสมอ
+        //   เดิมกรณี "สำเร็จบางส่วน" ถูกตีความเป็นล้มเหลว แล้วคงสาขาไว้บนจอ ทั้งที่ในระบบไม่มีแล้ว
+        //   ผู้ดูแลจึงเห็นเหมือนสาขาฟื้นกลับมา และไม่รู้ว่ายังมีบัญชีค้างต้องเคลียร์
         setDealers(prev => prev.filter(x => x.id !== d.id));
+        if (res.warning) alert(res.warning);
         // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
       });
       return;
@@ -448,10 +453,10 @@ function HQDealersPageInner() {
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาตัวแทน..." />
         </div>
         <div style={{ flex: 1 }} />
-        <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามภูมิภาค" value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {["ทั้งหมด", ...REGIONS].map(r => <option key={r} value={r}>{r}</option>)}
         </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as DealerStatus | "all")} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามสถานะตัวแทน" value={statusFilter} onChange={e => setStatusFilter(e.target.value as DealerStatus | "all")} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {STATUS_PILLS.map(p => <option key={p.value} value={p.value}>{p.value === "all" ? "ทุกสถานะ" : p.label}</option>)}
         </select>
       </div>
@@ -556,7 +561,7 @@ function HQDealersPageInner() {
       {/* ── Add / Edit Modal ── */}
       {showForm && (
         <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...CARD, width: 460, maxWidth: "100%" }}>
+          <ModalCard onClose={() => setShowForm(false)} label="ฟอร์มข้อมูลตัวแทน" style={{ ...CARD, width: 460, maxWidth: '100%' }}>
             <div style={{ padding: "18px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>{editTarget ? "แก้ไขข้อมูลตัวแทน" : "เพิ่มตัวแทนใหม่"}</h2>
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
@@ -586,12 +591,15 @@ function HQDealersPageInner() {
                   <input value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))} placeholder="เช่น ระยอง" style={INPUT_STYLE} />
                 </InputField>
                 <InputField label="ภาค">
-                  <select value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                  <select aria-label="ภูมิภาค" value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                     {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </InputField>
                 <InputField label="เป้ายอดขาย (บาท/ปี)">
-                  <input type="number" value={form.revenueTarget || ""} onChange={e => { setTargetTouched(true); setForm(f => ({ ...f, revenueTarget: Number(e.target.value) || 0 })); }} placeholder="0" style={INPUT_STYLE} />
+                  {/* เป้ายอดขายติดลบไม่มีอยู่จริงในทางธุรกิจ และทำให้ตัวเลขอื่นเพี้ยนตามเป็นทอด ๆ:
+                      เปอร์เซ็นต์ความสำเร็จของสาขา · เป้ารวมทั้งเครือบนหัวตาราง · กราฟเทียบเป้า
+                      เดิมรับค่าติดลบตรง ๆ (พิมพ์ -5000000 แล้วบันทึกลงระบบได้จริง · พบ 6 ส.ค. 69) */}
+                  <input type="number" min={0} value={form.revenueTarget || ""} onChange={e => { setTargetTouched(true); setForm(f => ({ ...f, revenueTarget: Math.max(0, Number(e.target.value) || 0) })); }} placeholder="0" style={INPUT_STYLE} />
                   {!editTarget && !targetTouched && (
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
                       ค่าเริ่มต้นแนะนำตามภาค {form.region} · ฿{(regionDefaultTarget(form.region) / 1_000_000).toFixed(0)}M — แก้ไขได้
@@ -601,7 +609,7 @@ function HQDealersPageInner() {
               </div>
 
               <InputField label="สถานะ">
-                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as DealerStatus }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                <select aria-label="สถานะตัวแทน" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as DealerStatus }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                   <option value="active">{dealerStatusLabel.active}</option>
                   <option value="inactive">{dealerStatusLabel.inactive}</option>
                 </select>
@@ -615,7 +623,7 @@ function HQDealersPageInner() {
                 </button>
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
 
@@ -792,7 +800,7 @@ function HQDealersPageInner() {
       {/* ── View Credentials Modal ── */}
       {viewCredsDealer && (
         <div onClick={() => setViewCredsDealer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ ...CARD, width: 380, maxWidth: "100%" }}>
+          <ModalCard onClose={() => setViewCredsDealer(null)} label="รหัสเข้าระบบของตัวแทน" style={{ ...CARD, width: 380, maxWidth: '100%' }}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: "#2D2D2D" }}>รหัสเข้าระบบ</h3>
@@ -819,7 +827,7 @@ function HQDealersPageInner() {
                 รหัสเดิมจะใช้ไม่ได้ทันที — ต้องแจ้งรหัสใหม่ให้ตัวแทน
               </div>
             </div>
-          </div>
+          </ModalCard>
         </div>
       )}
     </div>

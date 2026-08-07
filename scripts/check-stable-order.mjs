@@ -1,0 +1,59 @@
+// ── ตรวจว่าคำสั่ง "ขอข้อมูลทีละหน้า" ทุกจุด มีลำดับที่ตายตัวจริง ──────────────────
+//
+// ปัญหาที่กัน (ผลตรวจสอบระบบรอบ 2 · Part 8):
+//   เลขที่ของงานขาย (ลูกค้า/ลีด/ใบเสนอราคา/นัดหมาย) เดินแยกกันรายสาขา — คีย์จริงคือ สาขา + เลขที่
+//   เลข 1 ของระยองกับเลข 1 ของเชียงใหม่คนละรายกันแต่ค่าเท่ากัน
+//   ฝั่งตัวแทนไม่มีปัญหา (เห็นสาขาเดียว) แต่หน้ารวมทั้งเครือของสำนักงานใหญ่ เลขจะซ้ำกันเป็นแถบ
+//   ถ้าสั่งเรียงด้วยเลขที่อย่างเดียวแล้วตัดหน้า แถวที่ "เสมอกัน" จะถูกจัดหน้าตามใจฐานข้อมูล
+//   ไม่มีอะไรรับประกันว่าหน้า 1 กับหน้า 2 จะแบ่งเหมือนเดิมทุกครั้ง → รายการซ้ำ/หายได้โดยไม่มีอะไรฟ้อง
+//
+// หมายเหตุตามจริง: ทดลองยิงจริง 4,000 แถวแล้วยังไม่เห็นอาการ — ฐานข้อมูลบังเอิญคืนลำดับเดิมทุกครั้ง
+//   แต่เป็นเรื่องที่ "ไม่มีการรับประกัน" ไม่ใช่เรื่องที่ "รับประกันว่าถูก" จึงต้องปิดช่องไว้
+//   และเพราะอาการไม่เกิดตอนทดสอบ เทสต์ปกติจะผ่านทั้งที่โค้ดผิด — ต้องใช้ตัวตรวจโค้ดแทน
+//
+// กติกา: ถ้าดึงทีละหน้าจาก "ตารางงานขาย" (เลขที่เดินรายสาขา) การเรียงตัวสุดท้ายต้องเป็น dealer_code
+//   ตารางอื่น (profiles/audit_log/แคตตาล็อกกลาง) id ไม่ซ้ำทั้งระบบอยู่แล้ว — ไม่บังคับ
+//
+// รัน: node scripts/check-stable-order.mjs
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
+
+const ROOTS = ["apps", "packages"];
+const SKIP = new Set(["node_modules", ".next", "dist", ".turbo"]);
+// ตารางที่เลขที่เดินแยกรายสาขา — คีย์จริงคือ dealer_code + id (ดู 0022 เป็นต้นมา)
+const PER_DEALER_TABLES = ["customers", "leads", "quotations", "appointments", "files", "customer_notes"];
+// คอลัมน์ที่ยอมรับว่า "ไม่มีวันซ้ำ" เมื่ออยู่ท้ายสุดของการเรียงในตารางเหล่านั้น
+const UNIQUE_TAIL = ["dealer_code", "TIEBREAK_COL"];
+
+function walk(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    if (SKIP.has(name)) continue;
+    const p = path.join(dir, name);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else if (name.endsWith(".ts") || name.endsWith(".tsx")) out.push(p);
+  }
+  return out;
+}
+
+const bad = [];
+for (const file of ROOTS.flatMap(r => walk(r))) {
+  const src = readFileSync(file, "utf8");
+  if (!src.includes(".range(")) continue;
+  const lines = src.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes(".range(")) continue;
+    // คำสั่งหนึ่งชุดอาจเขียนคร่อมหลายบรรทัด — มองย้อนขึ้นไป 8 บรรทัดให้ครอบทั้ง .from() และ .order() ที่ต่อกันมา
+    const chain = lines.slice(Math.max(0, i - 8), i + 1).join(" ");
+    const table = /\.from\(\s*["'`]([a-z_]+)["'`]/.exec(chain)?.[1] ?? "";
+    if (!PER_DEALER_TABLES.includes(table)) continue; // ตารางที่ id ไม่ซ้ำทั้งระบบ — ไม่ต้องมีตัวตัดสินเพิ่ม
+    const orders = [...chain.matchAll(/\.order\(\s*([^,)]+)/g)].map(m => m[1].trim());
+    const tail = orders[orders.length - 1] ?? "(ไม่ได้สั่งเรียงเลย)";
+    if (UNIQUE_TAIL.some(u => tail.includes(u))) continue;
+    bad.push({ file, line: i + 1, table, orders: orders.join(" → ") || tail });
+  }
+}
+
+for (const b of bad) console.log(`${b.file}:${b.line}  [${b.table}] เรียงด้วย ${b.orders} แล้วตัดหน้า — ตัวสุดท้ายซ้ำข้ามสาขาได้`);
+console.log(`\nจุดแบ่งหน้าที่ลำดับยังไม่ตายตัว: ${bad.length}`);
+process.exit(bad.length ? 1 : 0);

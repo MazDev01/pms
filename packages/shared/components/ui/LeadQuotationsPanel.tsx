@@ -10,7 +10,7 @@ import {
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
-import { parseBaht, fmtBaht } from "@pms/shared/lib/format";
+import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
@@ -166,7 +166,13 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
     // กันออกใบเปล่า (H-audit): ไม่มีรายการ BOQ เลย = ไม่ให้กดสร้าง/บันทึก — เดิมกดผ่านได้
     // ได้ใบ ฿0 ไม่มีรายการ ซึ่งแก้ทีหลังไม่ได้เลยเพราะโหมดแก้ไขใช้ editor ตัวเดียวกันนี้
     // (เสียเลขที่เอกสารจริงถาวร ไม่มีทางเพิ่มรายการย้อนหลังผ่านหน้าจอ)
+    //
+    // "มีแถว" อย่างเดียวไม่พอ — แถวที่จำนวนหรือราคาเป็น 0 ก็ยังได้ใบ ฿0 อยู่ดี (พบ 6 ส.ค. 69)
+    // ใบ ฿0 ส่งให้ลูกค้าไม่ได้จริง แต่ไปนับรวมใน "จำนวนใบเสนอราคา" ของสาขา และถ้าเผลอปิดการขาย
+    // จะได้ลูกค้าที่มียอดสะสม 0 ปนอยู่ในฐาน — ต้องมียอดจริงก่อนถึงจะออกใบได้
     const hasItems = form.lineItems.length > 0;
+    const hasAmount = net > 0;
+    const canSave = hasItems && hasAmount;
     const vatPct = policy.vat;
     const vatAmt = Math.round(net * vatPct / 100);
     const grand = net + vatAmt;                        // ยอดรวมสุทธิ (รวม VAT)
@@ -215,26 +221,28 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
 
         {/* ยอดเงิน — ก่อน VAT (บันทึก) · VAT · รวม VAT (ตรงกับ wizard/เอกสารพิมพ์) */}
         <div style={{ marginTop: 14, background: "#003366", borderRadius: 12, padding: 14, color: "#fff" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>มูลค่า BOQ</span><span>{fmtBaht(net)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>มูลค่า BOQ</span><span>{fmtFull(net)}</span></div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid rgba(255,255,255,.2)", marginTop: 7, paddingTop: 9 }}>
             <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,.85)", display: "flex", alignItems: "center", gap: 4 }}><Coins size={12} /> มูลค่างาน (ก่อน VAT)</span>
-            <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>{fmtBaht(net)}</span>
+            <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>{fmtFull(net)}</span>
           </div>
           <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,.6)", marginTop: 2 }}>= ยอดที่บันทึกในใบเสนอราคา</div>
           <div style={{ borderTop: "1px solid rgba(255,255,255,.15)", marginTop: 9, paddingTop: 7 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.7)" }}><span>VAT {vatPct}%</span><span>{fmtBaht(vatAmt)}</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.9)", fontWeight: 800 }}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtBaht(grand)}</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.7)" }}><span>VAT {vatPct}%</span><span>{fmtFull(vatAmt)}</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.9)", fontWeight: 800 }}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtFull(grand)}</span></div>
           </div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 16 }}>
-          {!hasItems && (
+          {!canSave && (
             <div style={{ marginRight: "auto", color: "#dc2626", fontSize: "0.72rem", fontWeight: 600 }}>
-              ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนบันทึก
+              {!hasItems
+                ? "ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนบันทึก"
+                : "ยอดรวมเป็น ฿0 — ระบุจำนวนและราคาต่อหน่วยก่อนออกใบ"}
             </div>
           )}
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>ยกเลิก</button>
-          <button onClick={save} disabled={saving || !hasItems} className="btn btn-primary btn-sm" style={(saving || !hasItems) ? { opacity: .6, cursor: "not-allowed" } : undefined}><FilePlus size={13} /> {mode === "edit" ? "บันทึก" : "สร้างใบเสนอราคา"}</button>
+          <button onClick={save} disabled={saving || !canSave} className="btn btn-primary btn-sm" style={(saving || !canSave) ? { opacity: .6, cursor: "not-allowed" } : undefined}><FilePlus size={13} /> {mode === "edit" ? "บันทึก" : "สร้างใบเสนอราคา"}</button>
         </div>
       </div>
     );
@@ -291,12 +299,12 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
                   <td style={{ ...td, textAlign: "right" }}>{it.qty.toLocaleString("th-TH")}</td>
                   <td style={td}>{it.unit}</td>
                   <td style={{ ...td, textAlign: "right" }}>{it.unitPrice.toLocaleString("th-TH")}</td>
-                  <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#003366" }}>{fmtBaht(it.qty * it.unitPrice)}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#003366" }}>{fmtFull(it.qty * it.unitPrice)}</td>
                 </tr>
               ))}
               <tr>
                 <td style={{ ...td, background: "#f7f9fc", fontWeight: 700 }} colSpan={4}>{lis.length} รายการ · รวมก่อน VAT</td>
-                <td style={{ ...td, background: "#f7f9fc", textAlign: "right", fontWeight: 800, color: "#003366" }}>{fmtBaht(subtotal)}</td>
+                <td style={{ ...td, background: "#f7f9fc", textAlign: "right", fontWeight: 800, color: "#003366" }}>{fmtFull(subtotal)}</td>
               </tr>
             </tbody>
           </table>

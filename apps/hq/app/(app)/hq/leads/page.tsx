@@ -83,7 +83,8 @@ export default function HQLeadsPage() {
   // นัดหมายผูกด้วย leadId · ไฟล์ผูกด้วย source="lead" + recordId — ทั้งคู่คือ numId ของลีด
   const { appointments } = useSales();
   // นัดหมายของลีดที่กำลังเปิด drawer — supabase: ดึงตรง (M9 Phase 4) · local/ยังไม่กลับ: กรอง appointments array เดิม
-  const drawerAppts = useLeadAppointments(viewLead?.numId ?? null);
+  // เลขลีด (numId) ซ้ำกันได้ข้ามสาขา — ต้องระบุสาขาของลีดที่เปิดอยู่ ไม่งั้นนัดหมายของสาขาอื่นจะปนเข้ามา
+  const drawerAppts = useLeadAppointments(viewLead?.numId ?? null, viewLead?.dealerCode ?? null);
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   // request token กันผลลัพธ์เก่าทับใหม่ — read ถูกยิงซ้ำได้ทุกครั้งที่มีการอัปโหลด/ลบไฟล์ทั้งเครือ
   const dealerFilesReqRef = useRef(0);
@@ -211,7 +212,7 @@ export default function HQLeadsPage() {
   // ทุกช่องอยู่บรรทัดเดียว: แชร์ความกว้างเท่า ๆ กัน (flex:1) แล้วย่อได้เมื่อจอแคบ
   // ห้ามใช้ width:"auto" — select จะกว้างตามตัวเลือกที่ยาวที่สุด ("D-001 – ชื่อบริษัทเต็ม") แล้วดันจนตกบรรทัด
   const leadSel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
-    <select value={v} onChange={e => on(e.target.value)} className="form-input"
+    <select aria-label={caption} value={v} onChange={e => on(e.target.value)} className="form-input"
       style={{ flex: "1 1 0", minWidth: 96, maxWidth: 180, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer", textOverflow: "ellipsis" }}>
       <option value="ALL">{caption}</option>
       {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}

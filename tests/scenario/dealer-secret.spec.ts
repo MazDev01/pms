@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN, RYG, CNX, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
-import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, statuses } from "./adminEnv";
 import { HQ_ORIGIN, db } from "./funcHelpers";
 
 // ── สำเนารหัสผ่านตัวแทนที่ HQ เปิดดูได้ (บอสสั่ง 5 ส.ค. 69) ──
@@ -24,20 +24,20 @@ async function tokenOf(who: { email: string; password: string }): Promise<string
 
 test("ชั้นที่ 1 — ต้องมีสิทธิ์ dealers:manage เท่านั้น", async ({ request }) => {
   const noAuth = await request.get(`${HQ_ORIGIN}/api/admin/dealers/secret?code=CNX`);
-  expect([401, 501], `ไม่มี token ต้องถูกปฏิเสธ (ได้ ${noAuth.status()})`).toContain(noAuth.status());
+  expect(statuses(401), `ไม่มี token ต้องถูกปฏิเสธ (ได้ ${noAuth.status()})`).toContain(noAuth.status());
   expect(await noAuth.text(), "คำตอบที่ถูกปฏิเสธต้องไม่มีรหัสผ่านติดมา").not.toMatch(/PEB-|BJ-/);
 
   const asDealer = await request.get(`${HQ_ORIGIN}/api/admin/dealers/secret?code=CNX`, {
     headers: { authorization: `Bearer ${await tokenOf(RYG)}` },
   });
-  expect([403, 501], `ตัวแทนต้องดูรหัสของสาขาอื่นไม่ได้ (ได้ ${asDealer.status()})`).toContain(asDealer.status());
+  expect(statuses(403), `ตัวแทนต้องดูรหัสของสาขาอื่นไม่ได้ (ได้ ${asDealer.status()})`).toContain(asDealer.status());
   expect(await asDealer.text(), "ต้องไม่มีรหัสผ่านติดมา").not.toMatch(/PEB-|BJ-/);
 
   // แม้แต่รหัสของตัวเองตัวแทนก็ดูผ่าน API นี้ไม่ได้ (เป็นเครื่องมือของ HQ ไม่ใช่ของตัวแทน)
   const ownCode = await request.get(`${HQ_ORIGIN}/api/admin/dealers/secret?code=RYG`, {
     headers: { authorization: `Bearer ${await tokenOf(RYG)}` },
   });
-  expect([403, 501], `ตัวแทนต้องดูแม้แต่รหัสตัวเองผ่าน API นี้ไม่ได้ (ได้ ${ownCode.status()})`).toContain(ownCode.status());
+  expect(statuses(403), `ตัวแทนต้องดูแม้แต่รหัสตัวเองผ่าน API นี้ไม่ได้ (ได้ ${ownCode.status()})`).toContain(ownCode.status());
 });
 
 test("ชั้นที่ 2 — ตารางเก็บรหัสอ่านตรงไม่ได้เลย ไม่ว่าใคร", async () => {

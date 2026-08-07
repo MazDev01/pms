@@ -37,6 +37,8 @@ test("[func] ออกใบเสนอราคาจากลีด → ใ�
 
   // 2) เปิดแผงลีด → แท็บใบเสนอราคา → สร้าง
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางลีดแบ่งหน้า — ตอนรันชุดเต็มมีลีดทดสอบสะสมจนลีดของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -64,6 +66,7 @@ test("[func] ปิดการขายสำเร็จ → ลูกค้�
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางลีดแบ่งหน้า — ตอนรันชุดเต็มมีลีดทดสอบสะสมจนลีดของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
 
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -120,6 +123,8 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
   await waitRow(sb, "leads", { company: COMP });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางลีดแบ่งหน้า — ตอนรันชุดเต็มมีลีดทดสอบสะสมจนลีดของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMP);
   const lrow = page.locator("tbody tr").filter({ hasText: COMP }).first();
   await expect(lrow).toBeVisible({ timeout: 25_000 });
   await lrow.getByRole("button", { name: "ดูรายละเอียด" }).first().click();

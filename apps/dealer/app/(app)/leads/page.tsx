@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState, useRef, useMemo, useEffect } from "react";
+import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
 import {
   leadStatusLabel, leadStatusColor,
@@ -288,7 +289,7 @@ function OverviewEditor({ lead, persons, onSave }: {
             style={{ ...inp, width:170, marginTop:4, fontSize:"1rem", fontWeight:800, color:"#003366" }} />
           <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap", alignItems:"center" }}>
             {/* สถานะลอยเดี่ยวนอกแถว — คงกรอบบางไว้ให้รู้ว่ากดได้ (กรอบที่ถอดคือกรอบซ้อนในแถวข้อมูล) */}
-            <select value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", height:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700, border:"1px solid #eef1f5", background:"#fafbfc" }}>
+            <select aria-label="สถานะลูกค้าเป้าหมาย" value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", height:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700, border:"1px solid #eef1f5", background:"#fafbfc" }}>
               {(Object.keys(leadStatusLabel) as LeadStatus[]).map(k => <option key={k} value={k}>{leadStatusLabel[k]}</option>)}
             </select>
             {/* ป้ายความสำคัญ — ย้ายมาจากมุมมองอ่านเดิม (คิดจากมูลค่าที่บันทึกแล้ว ไม่ใช่ค่าที่กำลังพิมพ์) */}
@@ -303,24 +304,24 @@ function OverviewEditor({ lead, persons, onSave }: {
         <div style={{ gridColumn:"1/-1", ...cell }}>
           <Building2 size={14} color="#94a3b8" style={{ flexShrink:0 }} />
           <span style={cellLbl}>บริษัท</span>
-          <span style={{ flex:1, minWidth:0 }}><input value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></span>
+          <span style={{ flex:1, minWidth:0 }}><input aria-label="ชื่อบริษัท" value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></span>
         </div>
         {/* ชื่อโครงการมีเฉพาะดีลที่สร้างจากลูกค้าเดิม — โชว์ให้แก้เมื่อมีจริงเท่านั้น (ลีดทั่วไปไม่มีฟิลด์นี้) */}
         {(lead.project ?? "") !== "" && (
           <div style={{ gridColumn:"1/-1", ...cell }}>
             <FileText size={14} color="#94a3b8" style={{ flexShrink:0 }} />
             <span style={cellLbl}>ชื่อโครงการ</span>
-            <span style={{ flex:1, minWidth:0 }}><input value={f.project} onChange={e=>set("project",e.target.value)} style={inp} /></span>
+            <span style={{ flex:1, minWidth:0 }}><input aria-label="ชื่อโครงการ" value={f.project} onChange={e=>set("project",e.target.value)} style={inp} /></span>
           </div>
         )}
-        <Cell icon={User}    label="ผู้ติดต่อ"><input value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></Cell>
+        <Cell icon={User}    label="ผู้ติดต่อ"><input aria-label="ชื่อผู้ติดต่อ" value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></Cell>
         <Cell icon={Phone}   label="โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Cell>
-        <Cell icon={Mail}    label="อีเมล"><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" style={inp} /></Cell>
+        <Cell icon={Mail}    label="อีเมล"><input aria-label="อีเมล" value={f.email} onChange={e=>set("email",e.target.value)} type="email" style={inp} /></Cell>
         <Cell icon={MapPin}  label="จังหวัด">
-          <select value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(x=><option key={x}>{x}</option>)}</select>
+          <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(x=><option key={x}>{x}</option>)}</select>
         </Cell>
         <Cell icon={Package} label="แม่แบบที่สนใจ">
-          <select value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
+          <select aria-label="แม่แบบที่สนใจ" value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
             {catalog.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
         </Cell>
@@ -328,17 +329,17 @@ function OverviewEditor({ lead, persons, onSave }: {
           <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
         </Cell>
         <Cell icon={Target}  label="แหล่งที่มา">
-          <select value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(x=><option key={x}>{x}</option>)}</select>
+          <select aria-label="ช่องทางที่มา" value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(x=><option key={x}>{x}</option>)}</select>
         </Cell>
         <Cell icon={Users}   label="ผู้รับผิดชอบ">
-          <select value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>{persons.map(x=><option key={x}>{x}</option>)}</select>
+          <select aria-label="ผู้รับผิดชอบ" value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>{persons.map(x=><option key={x}>{x}</option>)}</select>
         </Cell>
         {f.status === "CANCELLED" && (
           <Cell icon={XCircle} label="เหตุผลที่เสีย">
             {/* เหตุผลไม่ตรงรายการที่ HQ กำหนดไว้เลย → กรอกเองได้ (ค่า lostReason เดิม/พิมพ์เองใหม่ ไม่ผูกกับ
                 รายการตายตัว) — เดิมเลือกได้แค่จากลิสต์ ถ้าเหตุผลจริงไม่มีในนั้นก็บันทึกไม่ได้เลย */}
             {lostReasons.includes(f.lostReason) || f.lostReason === "" ? (
-              <select value={f.lostReason} onChange={e=>set("lostReason", e.target.value)} style={inp}>
+              <select aria-label="เหตุผลที่ปิดการขายไม่สำเร็จ" value={f.lostReason} onChange={e=>set("lostReason", e.target.value)} style={inp}>
                 <option value="">— เลือก —</option>
                 {lostReasons.map(r => <option key={r} value={r}>{r}</option>)}
                 <option value={OTHER_REASON}>อื่นๆ (ระบุเอง)</option>
@@ -369,7 +370,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
           {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
         </span>
-        <input ref={logoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={uploadLogo} />
+        <input ref={logoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{ display:"none" }} onChange={uploadLogo} />
         <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
           <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
         </button>
@@ -998,7 +999,15 @@ export default function LeadsPage() {
     : [];
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !current) return;
-    const size = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
+    // ช่องนี้เคยไม่ตรวจอะไรเลย — ไฟล์ใหญ่แค่ไหน ชนิดอะไรก็แนบได้ ทั้งที่เขียนลงคลังไฟล์
+    // ก้อนเดียวกับหน้าไฟล์/แผงลูกค้าซึ่งตรวจอยู่แล้ว (พบ 6 ส.ค. 69) · ใช้กฎกลางตัวเดียวกัน
+    const problem = validateUpload(f);
+    if (problem) {
+      alert(problem);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const size = humanFileSize(f.size);
     const lead = current;
     if (fileInputRef.current) fileInputRef.current.value = "";
     void (async () => {
@@ -1348,7 +1357,7 @@ export default function LeadsPage() {
                           <td className="num" style={{ fontSize:"0.8rem", fontWeight:700, color:"#2D2D2D" }}
                             onClick={e => { e.stopPropagation(); setEditValueId(l.id); setValueDraft(String(parseValue(l.value) || "")); }}>
                             {editValueId === l.id ? (
-                              <input autoFocus type="number" value={valueDraft}
+                              <input autoFocus aria-label="มูลค่าประเมิน" type="number" value={valueDraft}
                                 onChange={e => setValueDraft(e.target.value)}
                                 onClick={e => e.stopPropagation()}
                                 onBlur={() => commitValue(l)}
@@ -1576,7 +1585,7 @@ export default function LeadsPage() {
       </div>
 
       {/* hidden file input */}
-      <input ref={fileInputRef} type="file" style={{ display:"none" }} onChange={handleFileSelect} />
+      <input ref={fileInputRef} type="file" aria-label="แนบไฟล์เข้าลูกค้าเป้าหมาย" style={{ display:"none" }} onChange={handleFileSelect} />
 
       {/* Field edit popup */}
       {popupField && editPopupPos && (
@@ -1597,6 +1606,7 @@ export default function LeadsPage() {
             </div>
             {editPopupOptions ? (
               <select autoFocus
+                aria-label={editPopupLabel}
                 value={editPopupVal}
                 onChange={e=>setEditPopupVal(e.target.value)}
                 style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9,
@@ -1607,6 +1617,7 @@ export default function LeadsPage() {
               </select>
             ) : (
               <input autoFocus
+                aria-label={editPopupLabel}
                 type={editPopupType}
                 value={editPopupVal}
                 onChange={e=>setEditPopupVal(e.target.value)}

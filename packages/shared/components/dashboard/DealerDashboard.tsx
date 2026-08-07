@@ -4,7 +4,7 @@
 // ขอบเขตข้อมูล: ลูกค้าเป้าหมายของตัวแทนรายนี้เท่านั้น (กติกาเดียวกับหน้า /leads และ /calendar)
 // S1: 4 KPI (ทั้งใบกดได้) · S2: 2 กราฟใหญ่ (แท่งคู่จำนวน + เส้นยอดขาย) · S3: ผลงาน + แม่แบบ + ขั้นตอนการขาย
 // S4: 4 การ์ดรายการ (ปิดท้ายด้วยกิจกรรมล่าสุด) · stack เดิม (SVG charts, ไม่ลง Recharts)
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Target, TrendingUp, PhoneCall, Activity, Building2, User,
@@ -42,7 +42,6 @@ const NAVY = "#003366", SUCCESS = "#16A34A", DANGER = "#DC2626";
 const AMBER = "#D97706";
 const TEXT = "#1F2937", SUB = "#6B7280", BORDER = "#E5E7EB";
 const TODAY_ISO = APP_NOW_ISO; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง) — งานวันนี้/ติดตามวันนี้เดินตามปฏิทินจริง
-const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const CUR_M = MOCK_TODAY.getMonth();
 const CUR_Y = MOCK_TODAY.getFullYear();
 

@@ -99,12 +99,29 @@ test("HQ ที่มีสิทธิ์ได้ลิงก์ที่ใ�
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: verified, error: vErr } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
   expect(vErr, `ลิงก์ต้องแลกเป็น session ได้จริง (${vErr?.message ?? ""})`).toBeNull();
-  expect(verified.user?.email, "ต้องได้ session ของบัญชีตัวแทน CNX").toBe("cnx@partner-agent.co.th");
+  // ── ต้องเป็น "บัญชีจริงของสาขา CNX" ไม่ใช่บัญชีอะไรก็ได้ที่ล็อกอินได้ ──
+  //
+  // เดิมเทสต์นี้ล็อกอีเมลไว้ตรง ๆ ว่า "cnx@partner-agent.co.th" ซึ่งเป็นอีเมลที่ระบบ *ประกอบขึ้นเอง*
+  // จากรหัสสาขา และไม่มีบัญชีนั้นอยู่จริง — magiclink จึงสร้างบัญชีเปล่าใหม่ให้ทุกครั้ง
+  // เทสต์เลย "ผ่าน" ทั้งที่ HQ ไม่ได้เข้าเป็นตัวแทนจริงเลยสักครั้ง (พบจากชุดตรวจรับ 6 ส.ค. 69)
+  // ต้องผูกกับตัวตนจริง: id ของ session ต้องเท่ากับ id ของบัญชีที่สังกัดสาขา CNX
+  const { data: cnxProf } = await admin.from("profiles").select("id").eq("dealer_code", "CNX");
+  expect(cnxProf?.length, "สาขา CNX ต้องมีบัญชีเข้าระบบ 1 บัญชี").toBe(1);
+  expect(verified.user?.id,
+    `session ที่ได้ต้องเป็นบัญชีจริงของสาขา CNX (ได้อีเมล ${verified.user?.email})`,
+  ).toBe(String(cnxProf![0].id));
 
   // session ที่ได้ต้องมีสิทธิ์แค่ของสาขา CNX — ไม่ใช่สิทธิ์ HQ ที่เห็นทั้งเครือ
+  //   และต้อง "เห็นข้อมูลของ CNX จริง" ด้วย ไม่ใช่ว่างเปล่า (บัญชีผีก็ผ่านเงื่อนไข "ไม่เห็นสาขาอื่น" ได้ฟรี)
   const { data: seenLeads } = await sb.from("leads").select("dealer_code").limit(200);
   const otherBranches = [...new Set((seenLeads ?? []).map(l => l.dealer_code).filter(c => c !== "CNX"))];
   expect(otherBranches, `เข้าระบบแทน CNX แล้วต้องเห็นเฉพาะข้อมูล CNX (เห็นสาขาอื่น: ${otherBranches.join(",")})`).toEqual([]);
+  const { count: cnxLeadCount } = await admin.from("leads").select("id", { count: "exact", head: true }).eq("dealer_code", "CNX");
+  if ((cnxLeadCount ?? 0) > 0) {
+    expect((seenLeads ?? []).length,
+      `CNX มีลีด ${cnxLeadCount} รายการ แต่ session ที่ได้กลับมองไม่เห็นเลย = ไม่ได้เข้าเป็นตัวแทนจริง`,
+    ).toBeGreaterThan(0);
+  }
 
   // ── ต้องมีร่องรอยใน audit log เสมอ (บันทึกตอนออกลิงก์ ไม่ใช่ตอนคลิก) ──
   // คอลัมน์เวลาของ audit_log ชื่อ "at" (ดู 0001_schema.sql) ไม่ใช่ created_at

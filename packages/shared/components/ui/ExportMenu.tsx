@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Download, ChevronDown, FileText, FileSpreadsheet, Printer } from "lucide-react";
+// ตัวกันข้อมูลผู้ใช้ไม่ให้กลายเป็นโค้ด/สูตร — แยกเป็นโมดูลบริสุทธิ์เพื่อทดสอบตรงได้
+import { escHtml, escCsvCell } from "@pms/shared/lib/exportSafety";
 
 type Cell = string | number;
 
@@ -37,7 +39,6 @@ function downloadBlob(blob: Blob, name: string) {
   URL.revokeObjectURL(url);
 }
 
-const esc = (c: Cell) => String(c ?? "");
 
 /** Export ตาราง — CSV / Excel / PDF (frontend-only, ไม่ง้อ backend) */
 export function ExportMenu({ filename, title, headers, rows, getRows, small, extraActions, extraLabel }: ExportMenuProps) {
@@ -57,7 +58,7 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
   async function exportCSV() {
     const data = await resolveRows();
     const csv = [headers, ...data]
-      .map(r => r.map(c => `"${esc(c).replace(/"/g, '""')}"`).join(","))
+      .map(r => r.map(escCsvCell).join(","))
       .join("\r\n");
     downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `${filename}.csv`);
     setOpen(false);
@@ -65,8 +66,8 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
 
   async function exportExcel() {
     const data = await resolveRows();
-    const thead = `<tr>${headers.map(h => `<th style="background:#003366;color:#fff;padding:6px 10px;text-align:left">${esc(h)}</th>`).join("")}</tr>`;
-    const tbody = data.map(r => `<tr>${r.map(c => `<td style="padding:5px 10px;border:1px solid #e5e7eb">${esc(c)}</td>`).join("")}</tr>`).join("");
+    const thead = `<tr>${headers.map(h => `<th style="background:#003366;color:#fff;padding:6px 10px;text-align:left">${escHtml(h)}</th>`).join("")}</tr>`;
+    const tbody = data.map(r => `<tr>${r.map(c => `<td style="padding:5px 10px;border:1px solid #e5e7eb">${escHtml(c)}</td>`).join("")}</tr>`).join("");
     const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table>${thead}${tbody}</table></body></html>`;
     downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), `${filename}.xls`);
     setOpen(false);
@@ -76,9 +77,9 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
     const data = await resolveRows();
     const win = window.open("", "_blank", "width=1000,height=700");
     if (!win) { setOpen(false); return; }
-    const thead = `<tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>`;
-    const tbody = data.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
-    win.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(title ?? filename)}</title>
+    const thead = `<tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join("")}</tr>`;
+    const tbody = data.map(r => `<tr>${r.map(c => `<td>${escHtml(c)}</td>`).join("")}</tr>`).join("");
+    win.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${escHtml(title ?? filename)}</title>
       <style>
         *{font-family:"Noto Sans Thai","Sarabun",system-ui,sans-serif;box-sizing:border-box}
         body{margin:28px;color:#2D2D2D}
@@ -89,7 +90,7 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
         td{padding:6px 10px;border-bottom:1px solid #e5e7eb}
         tr:nth-child(even) td{background:#f8f9fb}
       </style></head><body>
-      <h1>${esc(title ?? filename)}</h1>
+      <h1>${escHtml(title ?? filename)}</h1>
       <div class="sub">ระบบ PMS · ${data.length} รายการ</div>
       <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
       <script>window.onload=function(){window.print()}</script>

@@ -123,7 +123,7 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   // 5) แนบไฟล์ที่ลีด (ช่องไม่มี accept = ช่องแนบไฟล์ทั่วไป ต่างจากช่องอัปโหลดโลโก้)
   const fileInput = page.locator('input[type="file"]:not([accept])').first();
   await expect(fileInput, `${code}: ต้องมีช่องแนบไฟล์ในลิ้นชักลีด`).toBeAttached({ timeout: 45_000 });
-  await fileInput.setInputFiles({ name: `${TAG}-${code}-เอกสาร.txt`, mimeType: "text/plain", buffer: Buffer.from(`load test ${code}`) });
+  await fileInput.setInputFiles({ name: `${TAG}-${code}-เอกสาร.pdf`, mimeType: "application/pdf", buffer: Buffer.from(`load test ${code}`) });
   await expect.poll(async () => (await sb.from("files").select("id").like("name", `%${code}-เอกสาร%`)).data?.length ?? 0,
     { timeout: 45_000, message: `${code}: ไฟล์ต้องขึ้น Storage/DB` }).toBeGreaterThan(0);
   mark("file_attached");

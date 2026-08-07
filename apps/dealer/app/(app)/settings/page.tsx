@@ -1,6 +1,7 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from "react";
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save, RotateCcw,
@@ -139,7 +140,7 @@ function CompanyTab() {
               style={{ position: "absolute", bottom: -1, right: -1, width: 28, height: 28, borderRadius: "50%", background: "#fff", border: "1px solid #e5e7eb", boxShadow: "0 2px 6px rgba(0,0,0,.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#003366" }}>
               <Camera size={14} />
             </button>
-            <input ref={avatarRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: "none" }} />
+            <input ref={avatarRef} type="file" accept="image/*" aria-label="อัปโหลดรูปโปรไฟล์" onChange={uploadAvatar} style={{ display: "none" }} />
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -279,7 +280,7 @@ function ImageUploadBox({
           <span style={{ fontSize: "0.65rem", color: "#9ca3af" }}>PNG, JPG · โปร่งใสได้</span>
         </div>
       </div>
-      <input ref={ref} type="file" accept="image/*" style={{ display: "none" }} onChange={upload} />
+      <input ref={ref} type="file" accept="image/*" aria-label="อัปโหลดรูป" style={{ display: "none" }} onChange={upload} />
     </div>
   );
 }
@@ -535,7 +536,7 @@ function PersonsTab() {
           return (
             <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
               display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-              <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
+              <ModalCard onClose={close} label="ฟอร์มผู้รับผิดชอบ" style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
                 overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
                 {/* header */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", background: "#003366" }}>
@@ -593,7 +594,7 @@ function PersonsTab() {
                     style={!name.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                     onClick={submit}><Check size={14} strokeWidth={2.5} /> บันทึก</button>
                 </div>
-              </div>
+              </ModalCard>
             </div>
           );
         })()}
@@ -802,7 +803,7 @@ function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRu
   const currentDealer = useCurrentDealer(); // ชื่อ/รหัสสาขาที่ล็อกอิน (แสดงบนหัวการ์ด)
   const num = (value: number, on: (n: number) => void, unit: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <input type="number" min={1} className="form-input" style={{ textAlign: "right", fontWeight: 700 }}
+      <input type="number" min={1} aria-label="จำนวนวัน" className="form-input" style={{ textAlign: "right", fontWeight: 700 }}
         value={value} onChange={e => on(Math.max(1, Number(e.target.value)))} />
       <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
     </div>

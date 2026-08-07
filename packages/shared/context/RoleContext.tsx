@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock";
-import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
+import { hasPermission, HQ_ROLES, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { sbSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
@@ -18,6 +18,12 @@ import { isAbortedRequest } from "@pms/shared/lib/repoLog";
 //    audit ที่ยังค้างอยู่เป็นปกติ (ได้ "Failed to fetch" เหมือนเน็ตหลุดเป๊ะ) — ถ้าไม่กรอง จะมี error
 //    ขึ้นทุกครั้งที่ล็อกอินสำเร็จ ทั้งที่ไม่มีอะไรผิด (เจอจริงตอนรันชุดทดสอบหลังแก้รอบนี้)
 function logAuthEvent(action: string, s: MockSession) {
+  // บันทึกตรวจสอบเป็นของสำนักงานใหญ่เท่านั้น (ดู /hq/audit) — ฐานข้อมูลปฏิเสธการเขียนจากตัวแทนอยู่แล้ว
+  //   เดิมแอปตัวแทนก็ยิงคำสั่งนี้ทุกครั้งที่ล็อกอิน แล้วโดนปฏิเสธ 403 ทุกครั้ง
+  //   → ผู้ใช้เห็น error ค้างใน console ทุกการล็อกอิน และชุดทดสอบที่ตรวจ "ต้องไม่มี error" ก็ล้มตาม
+  //   ไม่ใช่ปัญหาสิทธิ์ที่ต้องเปิดเพิ่ม แต่เป็นการ "เรียกในสิ่งที่ไม่ควรเรียกตั้งแต่ต้น"
+  //   (พบจากการรันชุดเต็ม 6 ส.ค. 69 · ของเดิมสะสมมาตั้งแต่รัด policy ที่ 0031)
+  if (!HQ_ROLES.includes(s.role)) return;
   auditRepo.append({ user: s.name, role: s.role, action, target: s.dealerName })
     .catch(e => { if (!isAbortedRequest(e)) console.error(`[audit] บันทึก "${action}" ไม่สำเร็จ`, e); });
 }

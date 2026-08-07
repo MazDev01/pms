@@ -7,7 +7,7 @@
 import { useMemo, useEffect, useState } from "react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  dealerDetails, dealerLeaderboard, fmtISOToThai, hqAllQuotations, hqAllCustomers,
+  dealerDetails, fmtISOToThai, hqAllQuotations, hqAllCustomers,
   type HQQuotation, type HQCustomer, type LeadStatus, type LeadRow,
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@pms/shared/lib/mock";
@@ -123,16 +123,16 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
 
 // ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4)
 // supabase เท่านั้น · local คืน null → หน้าใช้ค่า salesperson เดิมของ row (มาจาก array อยู่แล้ว)
-export function useQuotationSalesperson(quoteId: string | null): string | null {
+export function useQuotationSalesperson(quoteId: string | null, dealerCode: string | null): string | null {
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || !quoteId) { setName(null); return; }
+    if (DATA_SOURCE !== "supabase" || !quoteId || !dealerCode) { setName(null); return; }
     let alive = true;
-    quotationsRepo.salesperson(quoteId)
+    quotationsRepo.salesperson(quoteId, dealerCode)
       .then(r => { if (alive) setName(r); })
       .catch(err => logRepoRead("quotations.salesperson", err));
     return () => { alive = false; };
-  }, [quoteId]);
+  }, [quoteId, dealerCode]);
   return name;
 }
 
@@ -174,16 +174,16 @@ export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
 
 // ใบ won ของลูกค้ารายเดียว — ป้อน CustomerDrawer (แท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์) โดยไม่โหลดใบทั้งเครือ
 // supabase เท่านั้น · local คืน null → หน้าใช้ buildings ที่มากับ CustomerDbRow จาก useCustomerDbLocal() อยู่แล้ว
-export function useCustomerBuildings(customerId: number | null): QuotationMock[] | null {
+export function useCustomerBuildings(customerId: number | null, dealerCode: string | null): QuotationMock[] | null {
   const [rows, setRows] = useState<QuotationMock[] | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || customerId == null) { setRows(null); return; }
+    if (DATA_SOURCE !== "supabase" || customerId == null || !dealerCode) { setRows(null); return; }
     let alive = true;
-    quotationsRepo.listForCustomer(customerId)
+    quotationsRepo.listForCustomer(customerId, dealerCode)
       .then(r => { if (alive) setRows(r); })
       .catch(err => logRepoRead("quotations.listForCustomer", err));
     return () => { alive = false; };
-  }, [customerId]);
+  }, [customerId, dealerCode]);
   return rows;
 }
 
@@ -289,7 +289,9 @@ export function useNetworkQuotations(): HQQuotation[] {
     if (!USE_SEED) return live; // supabase: ใบทุกสาขามาจาก DB จริงแล้ว
     const liveNos = new Set(live.map(l => l.quoteNo));
     return [...live, ...hqAllQuotations.filter(h => !liveNos.has(h.quoteNo))];
-  }, [quotations, leads]);
+    // ต้องมี dealerInfoOf ด้วย — ทะเบียนสาขาโหลดทีหลังข้อมูลขาย ถ้าไม่เฝ้าดู ชื่อสาขาจะค้างเป็น
+    // "รหัส 3 ตัว" ไปจนกว่าจะมีอย่างอื่นมาสะกิดให้คำนวณใหม่ (อาการเดียวกับที่คอมเมนต์ข้างบนพยายามกันอยู่)
+  }, [quotations, leads, dealerInfoOf]);
 }
 
 // ลีดทั้งเครือ = ลีดจริงจาก SalesContext เท่านั้น (ไม่มีข้อมูลเติมสังเคราะห์)
@@ -324,7 +326,7 @@ export function useNetworkCustomers(): HQCustomer[] {
     // (เคยมี "บ.ไทยสตีล" ใน seed กับ "บจ. ไทยสตีล" ในสมุดสด แล้ว HQ นับเป็น 2 ราย)
     // ลูกค้าของสาขาที่เล่นได้มาจากสมุดสดเสมอ → seed ของสาขานั้นไม่ต้องเอามาต่อท้าย
     return [...live, ...hqAllCustomers.filter(h => h.dealerCode !== CURRENT_DEALER.code)];
-  }, [customers, quotations]);
+  }, [customers, quotations, dealerInfoOf]);
 }
 
 // เพดานดึงลูกค้าทั้งเครือ (หน้า /hq/customers ยังทำ KPI/analytics/filter จากชุดนี้ทั้งก้อนในเครื่อง —
@@ -477,14 +479,14 @@ export function useHQSearch(query: string): { leads: LeadRow[]; quotes: Quotatio
 }
 
 // นัดหมายของลีดหนึ่ง (drawer ดูลีด หน้า /hq/leads) — supabase: ดึงตรง · local/ยังไม่กลับ: null → ใช้ appointments array เดิม
-export function useLeadAppointments(leadNumId: number | null): AppointmentMock[] | null {
+export function useLeadAppointments(leadNumId: number | null, dealerCode: string | null): AppointmentMock[] | null {
   const { salesVersion } = useSales();
   const [appts, setAppts] = useState<AppointmentMock[] | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || leadNumId == null) { setAppts(null); return; }
+    if (DATA_SOURCE !== "supabase" || leadNumId == null || !dealerCode) { setAppts(null); return; }
     let alive = true;
-    appointmentsRepo.listForLead(leadNumId).then(r => { if (alive) setAppts(r); }).catch(e => logRepoRead("appointments.listForLead", e));
+    appointmentsRepo.listForLead(leadNumId, dealerCode).then(r => { if (alive) setAppts(r); }).catch(e => logRepoRead("appointments.listForLead", e));
     return () => { alive = false; };
-  }, [leadNumId, salesVersion]);
+  }, [leadNumId, dealerCode, salesVersion]);
   return appts;
 }

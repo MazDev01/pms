@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient , type SupabaseClient } from "@supabase/supabase-js";
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
@@ -197,14 +197,14 @@ export default async function globalSetup() {
 }
 
 /** คืนค่า hq_notif_rules.alerts เดิมจาก snapshot ถ้ามีไฟล์ค้างอยู่ (เรียกทั้งต้น setup กันรันค้าง และท้าย teardown) */
-export async function restoreAlertsIfPending(admin: ReturnType<typeof createClient>) {
+export async function restoreAlertsIfPending(admin: SupabaseClient) {
   if (!existsSync(ALERTS_SNAPSHOT_PATH)) return;
   const original = JSON.parse(readFileSync(ALERTS_SNAPSHOT_PATH, "utf8"));
   await admin.from("hq_notif_rules").update({ alerts: original }).eq("id", 1);
   try { require("node:fs").unlinkSync(ALERTS_SNAPSHOT_PATH); } catch { /* ignore */ }
 }
 
-export async function teardownBaseline(admin: ReturnType<typeof createClient>) {
+export async function teardownBaseline(admin: SupabaseClient) {
   // กวาด 2 ทาง: ทั้ง id ของใบที่เรา seed เอง (ZZTEST-BASE-Q-...) และใบที่ผู้ใช้/เทสต์สร้างผ่าน UI
   // จากลีดที่ seed ไว้ (เช่น openLeadQuotationForm → "สร้างใบเสนอราคา") — ใบแบบหลังได้ id ออกเลขปกติ
   // จาก DB (เช่น "Q-2026-0384") ไม่มีแท็กในตัวเอง แต่ผูก customer = ชื่อบริษัทที่ seed ไว้

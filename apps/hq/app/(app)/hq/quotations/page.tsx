@@ -238,7 +238,8 @@ export default function NetworkQuotationPage() {
 
   // ผู้รับผิดชอบใบใน drawer — supabase (แถวมาจาก listPage) เดิมได้ placeholder → เติมชื่อจริงจากลีดผ่าน RPC
   //   local (ไม่มี pageResult) = viewQ.salesperson มาจาก array จริงอยู่แล้ว → hook คืน null ไม่ทับ
-  const drawerSp = useQuotationSalesperson(viewQ && pageResult ? viewQ.quoteNo : null);
+  // ต้องระบุสาขาของใบที่เปิดอยู่ — ไม่งั้นอาจได้ชื่อพนักงานของสาขาอื่นที่เลขที่ใบตรงกัน
+  const drawerSp = useQuotationSalesperson(viewQ && pageResult ? viewQ.quoteNo : null, viewQ?.dealerCode ?? null);
 
   // Export — หนึ่งแถวต่อใบ · supabase: ดึงทั้งชุดที่กรองจาก DB ตอนกด · local: จาก tableRows (ทั้งชุดอยู่แล้ว)
   const quoteToCells = (q: QuoteRow) => [

@@ -136,7 +136,7 @@ function UsedAt({ children }: { children: ReactNode }) {
 }
 const numInput = (value: number, onChange: (n: number) => void, unit: string, step?: number) => (
   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <input type="number" step={step} className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={value} onChange={e => onChange(Number(e.target.value))} />
+    <input type="number" step={step} aria-label={unit} className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={value} onChange={e => onChange(Number(e.target.value))} />
     <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
   </div>
 );
@@ -253,10 +253,13 @@ function JourneyTab() {
 // เป้าทั้งปี = แหล่งเดียว (แดชบอร์ด HQ/ตัวแทนอ่านค่านี้) · ไตรมาส/เดือน = แบ่งจากเป้าทั้งปี
 // เป้ารายตัวแทน = DealerRow.revenueTarget (ตั้งที่หน้า “ตัวแทน”) · ความคืบหน้า = ยอดจริงเทียบเป้า
 // ไม่มี "คาดการณ์" (Forecast) — ระบบไม่มีข้อมูลคาดการณ์ (ไม่มีวันคาดปิดการขาย / ค่าความน่าจะเป็น)
-function RollupTable({ title, hint, rows, countryTarget }: {
+function RollupTable({ title, hint, rows, countryTarget, ready = true }: {
   title: string; hint: string;
   rows: { key: string; target: number; actual: number; dealers: number }[];
   countryTarget?: number;
+  /** ตัวเลข "ทำได้จริง" มาถึงหรือยัง — ยังไม่มา ต้องขึ้น "—" ไม่ใช่ ฿0
+   *  (฿0 อ่านว่า "ยังขายไม่ได้เลย" ซึ่งคนละความหมายกับ "ยังโหลดไม่เสร็จ") */
+  ready?: boolean;
 }) {
   const sorted = [...rows].sort((a, b) => b.target - a.target);
   return (
@@ -289,8 +292,8 @@ function RollupTable({ title, hint, rows, countryTarget }: {
                   <td style={{ fontWeight: 600, color: STEEL }}>{r.key}</td>
                   <td className="num" style={{ color: "#6b7280" }}>{r.dealers}</td>
                   <td className="num" style={{ fontWeight: 700 }}>{fmtB(r.target)}</td>
-                  <td className="num" style={{ fontWeight: 700, color: NAVY }}>{fmtB(r.actual)}</td>
-                  <td className="num" style={{ fontWeight: 800, color: pct >= 100 ? "#059669" : pct >= 70 ? NAVY : "#b45309" }}>{pct}%</td>
+                  <td className="num" style={{ fontWeight: 700, color: NAVY }}>{ready ? fmtB(r.actual) : "—"}</td>
+                  <td className="num" style={{ fontWeight: 800, color: pct >= 100 ? "#059669" : pct >= 70 ? NAVY : "#b45309" }}>{ready ? `${pct}%` : "—"}</td>
                 </tr>
               );
             })}
@@ -376,7 +379,7 @@ function TargetsTab() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginTop: 6 }}>
           {[
             { label: "เป้าหมาย", value: fmtB(draft.annualTarget), color: STEEL },
-            { label: "ทำได้จริง", value: fmtB(totalActual), color: NAVY },
+            { label: "ทำได้จริง", value: perf.ready ? fmtB(totalActual) : "—", color: NAVY },
             { label: "ความคืบหน้า", value: `${achievement}%`, color: achievement >= 100 ? "#059669" : achievement >= 70 ? NAVY : "#b45309" },
           ].map(s => (
             <div key={s.label} style={{ background: "#f8fafc", border: "1px solid #eef1f5", borderRadius: 12, padding: "14px 16px" }}>
@@ -390,8 +393,8 @@ function TargetsTab() {
         </div>
       </SectionCard>
 
-      <RollupTable title="เป้าหมายรายภูมิภาค" hint="รวมจากเป้าของตัวแทนในภาคนั้น — ตั้งเป้ารายตัวแทนที่หน้า “ตัวแทน”" rows={byRegion} countryTarget={draft.annualTarget} />
-      <RollupTable title="เป้าหมายรายตัวแทน" hint="ตั้งค่าได้ที่หน้า “ตัวแทน” → แก้ไขตัวแทน" rows={byDealer} />
+      <RollupTable title="เป้าหมายรายภูมิภาค" hint="รวมจากเป้าของตัวแทนในภาคนั้น — ตั้งเป้ารายตัวแทนที่หน้า “ตัวแทน”" rows={byRegion} countryTarget={draft.annualTarget} ready={perf.ready} />
+      <RollupTable title="เป้าหมายรายตัวแทน" hint="ตั้งค่าได้ที่หน้า “ตัวแทน” → แก้ไขตัวแทน" rows={byDealer} ready={perf.ready} />
     </>
   );
 }

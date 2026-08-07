@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Phone, FileText, Users, Eye, GitCommit, StickyNote,
+  Phone, FileText, Users, GitCommit, StickyNote,
   type LucideIcon,
 } from "lucide-react";
 

@@ -432,12 +432,12 @@ export const LocalAdapter: DataAdapter = {
         .map(l => ({ l, created: parseThaiDateLocal(l.createdAt ?? "") }))
         .filter((x): x is { l: LeadRow; created: Date } => !!x.created
           && (asOf.getTime() - x.created.getTime()) / 3_600_000 > (f.unassignedPerDealer?.[x.l.dealerCode ?? DEFAULT_DEALER_CODE] ?? f.unassignedDefaultHours ?? DEFAULT_LEAD_RULES.unassignedAlertHours))
-        .map(({ l }) => ({ numId: l.numId, company: l.company || l.name, province: l.province, value: l.value }));
+        .map(({ l }) => ({ numId: l.numId, dealerCode: l.dealerCode ?? DEFAULT_DEALER_CODE, company: l.company || l.name, province: l.province, value: l.value }));
       const idle = ls
         .filter(l => isOpen(l.status))
         .map(l => ({ l, lc: lastContactOf(l) }))
         .filter((x): x is { l: LeadRow; lc: Date } => !!x.lc && (asOf.getTime() - x.lc.getTime()) / DAY > (f.leadIdleDays ?? DEFAULT_HQ_NOTIF_RULES.leadIdleDays))
-        .map(({ l, lc }) => ({ numId: l.numId, company: l.company || l.name, assigned: l.assigned, idleDays: Math.floor((asOf.getTime() - lc.getTime()) / DAY) }));
+        .map(({ l, lc }) => ({ numId: l.numId, dealerCode: l.dealerCode ?? DEFAULT_DEALER_CODE, company: l.company || l.name, assigned: l.assigned, idleDays: Math.floor((asOf.getTime() - lc.getTime()) / DAY) }));
       const validity = f.quoteValidityDays ?? DEFAULT_HQ_POLICY.quoteValidityDays, within = f.quoteExpiringDays ?? DEFAULT_HQ_NOTIF_RULES.quoteExpiringDays;
       // นิยามเดียวกับ expireOverdue (effectiveExpiryOf) — เดิมใช้ date+validity เสมอ ไม่สนใจ expiry ที่กรอกเอง
       //   ใบที่ตั้ง expiry เองไว้ไกลจากวันนี้ ก็ยังโดนเตือน "ใกล้หมดอายุ" ผิด ๆ ตาม date+validity
@@ -755,15 +755,20 @@ export const LocalAdapter: DataAdapter = {
       if (n) writeKey(SALES.quotations, next);
       return ok(n);
     },
-    salesperson: (quoteId) => {
-      const q = readKey<QuotationMock[]>(SALES.quotations, quoteSeed).find(x => x.id === quoteId);
+    salesperson: (quoteId, dealerCode) => {
+      // เทียบ "สาขา + เลขที่" เหมือนฝั่ง supabase — เลขที่ใบซ้ำข้ามสาขาได้
+      // และลีดที่นำมาเทียบต้องเป็นของสาขาเดียวกันด้วย ไม่งั้นได้ชื่อผู้รับผิดชอบผิดสาขา
+      const same = (a?: string) => (a ?? DEFAULT_DEALER_CODE) === dealerCode;
+      const q = readKey<QuotationMock[]>(SALES.quotations, quoteSeed).find(x => x.id === quoteId && same(x.dealerCode));
       if (!q) return ok(null);
-      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const ls = readKey<LeadRow[]>(SALES.leads, leadSeed).filter(l => same(l.dealerCode));
       const lead = ls.find(l => (q.dealId != null && l.numId === q.dealId) || ((q.customerId ?? 0) > 0 && l.customerId === q.customerId));
       return ok(lead?.assigned ?? null);
     },
-    listForCustomer: (customerId) =>
-      ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed).filter(q => q.customerId === customerId && q.status === "won")),
+    listForCustomer: (customerId, dealerCode) =>
+      ok(readKey<QuotationMock[]>(SALES.quotations, quoteSeed).filter(q =>
+        q.customerId === customerId && q.status === "won"
+        && (q.dealerCode ?? DEFAULT_DEALER_CODE) === dealerCode)),
     // mirror relink_customer_quotes ฝั่ง supabase (0093) — เธรดเดียวในเบราว์เซอร์ = atomic โดยธรรมชาติ
     relinkCustomerQuotes: (dealer, customerId, company, cascadeWon) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
@@ -889,7 +894,8 @@ export const LocalAdapter: DataAdapter = {
   appointments: {
     list: (scope) => ok(scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), scope)),
     listForDealer: (dealerCode) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => (a.dealerCode ?? DEFAULT_DEALER_CODE) === dealerCode)),
-    listForLead: (leadId) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed).filter(a => a.leadId === leadId)),
+    listForLead: (leadId, dealerCode) => ok(readKey<AppointmentMock[]>(SALES.appointments, apptSeed)
+      .filter(a => a.leadId === leadId && (a.dealerCode ?? DEFAULT_DEALER_CODE) === dealerCode)),
     nextId: (dealerCode) => {
       const mine = scopeByDealer(readKey<AppointmentMock[]>(SALES.appointments, apptSeed), { dealerCode, isHQ: false });
       return ok(mine.reduce((m, a) => Math.max(m, a.id), 0) + 1);

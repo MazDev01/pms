@@ -15,7 +15,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import { HQ_ROLES } from "@pms/shared/lib/permissions";
-import { bad, authorizeAdmin, auditLog, withErrors, strongPassword } from "@pms/shared/lib/adminRoute";
+import { bad, authorizeAdmin, auditLog, withErrors, strongPassword, deleteAuthUserLoud } from "@pms/shared/lib/adminRoute";
 import type { UserRole } from "@pms/shared/lib/mock";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
@@ -76,7 +76,11 @@ export const POST = withErrors("create-user", async (req: NextRequest) => {
   });
   if (createErr || !createdUser.user) {
     const msg = createErr?.message ?? "สร้างบัญชีเข้าระบบไม่สำเร็จ";
-    return bad(400, /already/i.test(msg) ? `อีเมล ${email} ถูกใช้ไปแล้วในระบบยืนยันตัวตน` : msg);
+    // 400 = ผู้ใช้แก้เองได้ (เปลี่ยนอีเมล) · 503 = ระบบขัดข้อง ให้ลองใหม่ ไม่ใช่ความผิดผู้ใช้
+    // เดิมตอบ 400 พร้อมข้อความดิบทุกกรณี ผู้ใช้จึงเข้าใจผิดว่ากรอกผิด แล้วไล่แก้ข้อมูลไปเรื่อย ๆ
+    if (/already/i.test(msg)) return bad(400, `อีเมล ${email} ถูกใช้ไปแล้วในระบบยืนยันตัวตน`);
+    console.error(`[create-user] สร้างบัญชีเข้าระบบ ${email} ไม่สำเร็จ`, createErr);
+    return bad(503, "สร้างบัญชีเข้าระบบไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
   const uid = createdUser.user.id;
 
@@ -88,9 +92,12 @@ export const POST = withErrors("create-user", async (req: NextRequest) => {
   } catch (e) {
     // ย้อน auth user ที่เพิ่งสร้าง ไม่ให้เหลือบัญชีกำพร้า
     // ต้อง log ถ้าย้อนไม่สำเร็จ — ไม่งั้นเหลือบัญชีล็อกอินได้ที่ไม่มีโปรไฟล์ โดยไม่มีใครรู้
-    try { await admin.auth.admin.deleteUser(uid); }
-    catch (re) { console.error(`[create-user] ย้อนลบบัญชี ${uid} ไม่สำเร็จ — อาจเหลือบัญชีกำพร้า`, re); }
-    return bad(400, `สร้างโปรไฟล์ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`);
+    // ต้องใช้ตัวช่วยที่เช็ก error ที่ "คืนกลับมาเป็นค่า" ด้วย — supabase-js ไม่โยน exception
+    // เขียนเป็น try/catch เฉย ๆ จะดักไม่ติด แล้วบัญชีกำพร้าจะค้างโดยไม่มีใครรู้
+    await deleteAuthUserLoud(admin, uid, "create-user");
+    // คำขอผ่านการตรวจความถูกต้องมาหมดแล้ว — ที่พังคือฝั่งเซิร์ฟเวอร์ ไม่ใช่ข้อมูลที่กรอก
+    console.error(`[create-user] สร้างโปรไฟล์ของ ${email} ไม่สำเร็จ`, e);
+    return bad(503, "สร้างผู้ใช้ไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
 
   // คืนรหัสให้หน้าจอโชว์ครั้งเดียว (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน)
@@ -143,7 +150,11 @@ export const DELETE = withErrors("delete-user", async (req: NextRequest) => {
   }
 
   const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return bad(400, `ลบบัญชีไม่สำเร็จ: ${error.message}`);
+  if (error) {
+    // บัญชีมีอยู่จริง (ตรวจไปแล้วข้างบน) และเงื่อนไขห้ามลบก็ผ่านหมด — พังตรงนี้คือฝั่งระบบ
+    console.error(`[delete-user] ลบบัญชี ${id} ไม่สำเร็จ`, error);
+    return bad(503, "ลบบัญชีไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
   await auditLog(admin, prof, "ลบผู้ใช้ HQ", String(target.name ?? id));
   return NextResponse.json({ ok: true });
 });
