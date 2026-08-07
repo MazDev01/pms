@@ -65,6 +65,8 @@ test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้�
   await waitRow(sb, "leads", { company: COMPANY });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -101,6 +103,8 @@ async function openLeadFileInput(page: Page, sb: SupabaseClient, company: string
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company });
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(company);
   const row = page.locator("tbody tr").filter({ hasText: company }).first();
   await expect(row).toBeVisible({ timeout: 25_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();

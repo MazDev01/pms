@@ -47,6 +47,8 @@ test("[audit] ปิดการขายจากลีดโดยไม่เ
   await waitRow(sb, "leads", { company: COMPANY });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -62,6 +64,8 @@ test("[audit] ปิดการขายจากลีดโดยไม่เ
   // 2) ปิดจากฝั่งลีดโดยตรง (ไม่แตะใบเสนอราคาเลย) — action ที่ตัวแทนน่าจะกดเป็นธรรมชาติที่สุด
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row2 = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row2).toBeVisible({ timeout: 15_000 });
   await row2.getByRole("button", { name: /▾/ }).first().click();
@@ -103,6 +107,8 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
     await waitRow(sb, "leads", { company });
 
     await page.getByRole("button", { name: "ตาราง" }).click();
+    // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+    await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(company);
     const row = page.locator("tbody tr").filter({ hasText: company }).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -160,6 +166,8 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
   // ดีลใหม่ = ลีดใหม่ผูก customerId — หาในหน้าลีด แล้วออกใบ + ปิดให้ผ่านฟลว์เดียวกัน
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const dealRow = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(dealRow, "ดีลที่สองต้องโผล่เป็นลีดใหม่ในสมุดงาน").toBeVisible({ timeout: 15_000 });
   await dealRow.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -209,6 +217,8 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
   await waitRow(sb, "leads", { company: COMPANY });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -281,6 +291,8 @@ test("[audit] เปิดฟอร์มสร้างใบเสนอรา
   await waitRow(sb, "leads", { company: COMPANY });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
@@ -320,6 +332,8 @@ test("[audit] cross-role: ตัวแทนปิดการขาย → HQ �
   await waitRow(sb, "leads", { company: COMPANY });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();

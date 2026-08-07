@@ -191,6 +191,8 @@ test("[edge] กดปุ่ม 'สร้างโครงการ' (ดี�
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
+  // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(COMPANY);
   const custRow = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(custRow).toBeVisible({ timeout: 15_000 });
   await custRow.click();
@@ -244,6 +246,8 @@ test("[edge] แก้ 'มูลค่า' ลีดเดียวกันพ
     ]);
     await Promise.all([pageA.getByRole("button", { name: "ตาราง" }).click(), pageB.getByRole("button", { name: "ตาราง" }).click()]);
 
+    // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
+    await pageA.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
     const rowA = pageA.locator("tbody tr").filter({ hasText: COMPANY }).first();
     const rowB = pageB.locator("tbody tr").filter({ hasText: COMPANY }).first();
     await expect(rowA).toBeVisible({ timeout: 15_000 });
