@@ -41,7 +41,7 @@ const NOTES_KEY = "customer_notes_v1";
 const HQ_USERS_KEY = "hq_users_v4";
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY } from "@pms/shared/lib/mock";
-import { DEFAULT_DOC, DOC_KEY, WORDMARK_KEY } from "@pms/shared/lib/quotationPrint";
+import { DEFAULT_DOC, DOC_KEY } from "@pms/shared/lib/quotationPrint";
 
 // โลโก้ไอคอนบนแถบเมนู — คีย์เดิมของหน้าตั้งค่าตัวแทน
 const LOGO_KEY = "dealer_company_logo_v2";
@@ -170,14 +170,12 @@ export const LocalAdapter: DataAdapter = {
     get: () => ok<DealerSettings>({
       issuer: readKey(ISSUER_KEY, DEFAULT_ISSUER),
       document: { ...DEFAULT_DOC, ...readKey(DOC_KEY, DEFAULT_DOC) },
-      wordmark: readKey<string>(WORDMARK_KEY, ""),
       logo: readKey<string>(LOGO_KEY, ""),
       notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...readKey(NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS) },
     }),
     save: (_dealerCode, patch) => {
       if (patch.issuer)     writeKey(ISSUER_KEY, patch.issuer);
       if (patch.document)   writeKey(DOC_KEY, patch.document);
-      if (patch.wordmark !== undefined) writeKey(WORDMARK_KEY, patch.wordmark);
       if (patch.logo !== undefined)     writeKey(LOGO_KEY, patch.logo);
       if (patch.notifPrefs) writeKey(NOTIF_PREFS_KEY, patch.notifPrefs);
       return done();

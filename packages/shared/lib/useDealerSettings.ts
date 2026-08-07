@@ -17,7 +17,6 @@ import type { DealerSettings } from "./data/types";
 export const EMPTY_DEALER_SETTINGS: DealerSettings = {
   issuer: DEFAULT_ISSUER,
   document: DEFAULT_DOC,
-  wordmark: "",
   logo: "",
   notifPrefs: DEFAULT_NOTIF_PREFS,
 };

@@ -387,7 +387,7 @@ export default function CustomersPage(){
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — ใช้ออกรหัสลูกค้า
   const userProfile = useUserProfile();
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา — ต้องส่งเข้าเอกสารพิมพ์
-  const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document, wordmark: dealerCfg.settings.wordmark };
+  const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document };
   const hqPolicy = useHQPolicy();
   const customerNotes = useCustomerNotes(userProfile.profile.name);
   const [addingNote, setAddingNote] = useState(false);

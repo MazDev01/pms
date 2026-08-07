@@ -10,13 +10,6 @@ export type DocProfile = { stamp: string; signature: string; vatPercent: number;
 // quotePrefix เป็นแค่ป้ายนำหน้า — รหัสสาขา+ปี+เลขรันต่อท้ายเสมอที่ฝั่งสร้างใบ (ดู DEFAULT_QUOTE_NUMBERING)
 export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-", runningNumber: 1001, termsAndConditions: "", validityDays: 30 };
 export const DOC_KEY = "dealer_document_settings";
-export const WORDMARK_KEY = "dealer_company_wordmark_v2"; // โลโก้พร้อมชื่อ (แนวนอน) → หัวเอกสาร
-
-// อ่านโลโก้พร้อมชื่อของตัวแทน (ถ้ามี) มาแสดงบนหัวใบเสนอราคา
-export function loadWordmark(): string {
-  if (typeof window === "undefined") return "";
-  try { return localStorage.getItem(WORDMARK_KEY) || ""; } catch { return ""; }
-}
 
 export type PrintCustomer = { company?: string; name?: string; phone?: string; province?: string; email?: string };
 
@@ -45,10 +38,7 @@ function esc(s: unknown) { return String(s ?? "").replace(/[&<>"]/g, c => (({ "&
 function fmtDate(d: string) { if (!d || d === "—") return "—"; const [y, m, day] = d.split("-"); const mo = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m) - 1]} ${parseInt(y) + 543}`; }
 
 // สร้าง HTML ใบเสนอราคา A4 (เต็มรูปแบบ — หัวกระดาษ/คู่สัญญา/ตาราง/สรุป VAT/เงื่อนไข/ลายเซ็น+ตรา)
-// _wordmark: ยังรับไว้เพื่อไม่ให้ผู้เรียกเดิมพัง แต่ "ตั้งใจไม่ใช้" ตามนโยบายแบรนด์ (ดูคอมเมนต์ที่หัวเอกสาร)
-//   ⚠️ ตามมาด้วยเรื่องที่ต้องให้ผู้บริหารตัดสิน: หน้าตั้งค่าของตัวแทนยังให้อัปโหลด "โลโก้หัวเอกสาร" อยู่
-//   และเก็บลงฐานข้อมูลจริง แต่ไม่มีที่ไหนเอาไปแสดงเลย = ตัวแทนอัปโหลดแล้วไม่เกิดอะไรขึ้น
-export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC, _wordmark = "") {
+export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust?: PrintCustomer, doc: DocProfile = DEFAULT_DOC) {
   // ── เงื่อนไข ────────────────────────────────────────────────────────────────
   // ยึดข้อมูลจริงเท่านั้น:
   //  · วันยืนยันราคา = "วันหมดอายุ" ของใบนั้น (ถ้าไม่มี = วันที่ออก + อายุใบจากตั้งค่า)
@@ -88,9 +78,7 @@ export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust
 body{font-family:'Sarabun','Tahoma',sans-serif;color:#2D2D2D;font-size:13px;line-height:1.5;background:#f3f4f6}
 .sheet{width:210mm;min-height:297mm;margin:12px auto;padding:16mm 14mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12)}
 .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #003366;padding-bottom:14px}
-.issuer-logo{max-height:54px;max-width:240px;object-fit:contain;display:block;margin-bottom:4px}
 .issuer-name{font-size:20px;font-weight:800;color:#003366}
-.issuer-logo{max-height:46px;max-width:240px;object-fit:contain;display:block;margin-bottom:2px}
 .issuer-meta{font-size:11px;color:#555;margin-top:4px;white-space:pre-line}
 .doc-title{text-align:right}
 .doc-title h1{font-size:22px;color:#003366;letter-spacing:1px}
@@ -177,7 +165,7 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
 // vatPercent: ส่ง VAT จาก useHQPolicy() มาด้วยเสมอ (ค่าจริงของ HQ) — ดู loadDoc
 /** ตั้งค่าของสาขาที่ใช้ประกอบเอกสาร — ผู้เรียกต้องส่งมาจาก useDealerSettings()
  *  ไม่ส่งมา = ตกไปอ่าน localStorage ซึ่งถูกเฉพาะโหมด local (โหมดจริงค่าอยู่ใน DB) */
-export type PrintSettings = { issuer?: IssuerProfile; doc?: DocProfile; wordmark?: string };
+export type PrintSettings = { issuer?: IssuerProfile; doc?: DocProfile };
 
 export function printQuotation(q: QuotationMock, cust?: PrintCustomer, vatPercent?: number, settings?: PrintSettings) {
   // ใช้สแนปช็อตผู้ออกที่ตรึงไว้กับใบ (ถ้ามี) — ใบเก่าคงชื่อเดิม; ไม่มีค่อย fallback โปรไฟล์ปัจจุบัน
@@ -189,8 +177,7 @@ export function printQuotation(q: QuotationMock, cust?: PrintCustomer, vatPercen
   const doc = settings?.doc
     ? { ...settings.doc, vatPercent: typeof vatPercent === "number" && vatPercent >= 0 ? vatPercent : settings.doc.vatPercent }
     : loadDoc(vatPercent);
-  const wordmark = settings?.wordmark ?? loadWordmark();
-  const html = buildQuotationHTML(q, issuer, cust, doc, wordmark);
+  const html = buildQuotationHTML(q, issuer, cust, doc);
   const w = window.open("", "_blank"); if (!w) return;
   w.document.write(html); w.document.close();
 }

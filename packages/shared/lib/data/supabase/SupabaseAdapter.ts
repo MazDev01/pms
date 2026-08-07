@@ -11,6 +11,7 @@ import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { captureError } from "@pms/shared/lib/observability";
 import { DbError } from "@pms/shared/lib/friendlyError";
+import { reportPartialData } from "@pms/shared/lib/repoLog";
 import type { DataAdapter, DealerRollup, QuoteRangeRow } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type {
@@ -64,7 +65,9 @@ async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult
     out.push(...rows);
     if (rows.length < PAGE_ROWS) break;
     if (out.length >= PAGE_HARD_CAP) {
-      console.warn(`[pageAll] "${label}" เกิน ${PAGE_HARD_CAP.toLocaleString()} แถว — หยุดโหลดเพื่อกันเบราว์เซอร์ค้าง · ข้อมูลที่ได้ไม่ครบ ต้องทำ server-side paging/aggregate (M8/M9)`);
+      // ต้องบอกผู้ใช้บนหน้าจอด้วย ไม่ใช่เตือนแค่ใน console ที่ไม่มีใครเห็น (L-1)
+      // ข้อมูลขาดแบบเงียบ ๆ อันตรายกว่าโหลดพังไปเลย — เพราะหน้าจอดูปกติทุกอย่าง
+      reportPartialData(`ข้อมูลที่แสดงไม่ครบ — "${label}" มีเกิน ${PAGE_HARD_CAP.toLocaleString()} รายการ ระบบหยุดโหลดเพื่อไม่ให้หน้าจอค้าง กรุณาใช้ตัวกรองช่วยแคบผลลัพธ์`);
       break;
     }
   }
@@ -451,14 +454,13 @@ export const SupabaseAdapter: DataAdapter = {
   dealerSettings: {
     get: async (dealerCode) => {
       const { data, error } = await sb().from("dealer_settings")
-        .select("issuer,document,wordmark,logo,notif_prefs").eq("dealer_code", dealerCode).maybeSingle();
+        .select("issuer,document,logo,notif_prefs").eq("dealer_code", dealerCode).maybeSingle();
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const r = (data ?? {}) as Record<string, unknown>;
       // ยังไม่เคยตั้งค่า = คืนค่ากลาง (หน้าจอจะได้มีอะไรให้แก้ ไม่ใช่ฟอร์มว่างเปล่า)
       return {
         issuer:     { ...DEFAULT_ISSUER, ...(r.issuer as object ?? {}) },
         document:   { ...DEFAULT_DOC, ...(r.document as object ?? {}) },
-        wordmark:   (r.wordmark as string) ?? "",
         logo:       (r.logo as string) ?? "",
         notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...(r.notif_prefs as object ?? {}) },
       } as DealerSettings;
@@ -467,7 +469,6 @@ export const SupabaseAdapter: DataAdapter = {
       const row: Row = { dealer_code: dealerCode, updated_at: new Date().toISOString() };
       if (patch.issuer)                 row.issuer = patch.issuer;
       if (patch.document)               row.document = patch.document;
-      if (patch.wordmark !== undefined) row.wordmark = patch.wordmark;
       if (patch.logo !== undefined)     row.logo = patch.logo;
       if (patch.notifPrefs)             row.notif_prefs = patch.notifPrefs;
       await must(sb().from("dealer_settings").upsert(row, { onConflict: "dealer_code" }));

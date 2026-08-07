@@ -42,3 +42,18 @@ export function logRepoRead(tag: string, e: unknown): void {
   console.error(`[${tag}]`, e);
   reportRepoReadError(tag, e);
 }
+
+/** แจ้งผู้ใช้ว่า "ข้อมูลที่เห็นไม่ครบ" — คนละเรื่องกับโหลดไม่สำเร็จ แต่ต้องเห็นเหมือนกัน
+ *
+ *  ทำไมต้องมี (ผลตรวจสอบระบบ 7 ส.ค. 69 · L-1):
+ *    ชั้นข้อมูลมีเพดานกันเบราว์เซอร์ค้าง — โหลดเกิน 50,000 แถวแล้วหยุด แล้ว "เตือนแค่ใน console"
+ *    ซึ่งผู้ใช้ไม่มีวันเห็น · หน้าจอจะแสดงข้อมูลที่ไม่ครบเหมือนเป็นข้อมูลทั้งหมด
+ *    ผู้ใช้จึงอาจสรุปยอด/ตัดสินใจจากตัวเลขที่ขาดไปโดยไม่รู้ตัว ซึ่งอันตรายกว่าโหลดพังไปเลย
+ *    (โหลดพังยังเห็นว่าพัง · แต่ข้อมูลขาดแบบเงียบ ๆ ดูเหมือนปกติทุกอย่าง)
+ *  ใช้แถบเตือนใบเดียวกับ "โหลดข้อมูลบางส่วนไม่สำเร็จ" — ผู้ใช้ต้องรู้ทั้งสองกรณีเหมือนกัน
+ */
+export function reportPartialData(message: string): void {
+  console.warn(`[partial-data] ${message}`);
+  if (typeof window === "undefined") return;
+  try { window.dispatchEvent(new CustomEvent(REPO_READ_ERROR_EVENT, { detail: message })); } catch { /* ignore */ }
+}

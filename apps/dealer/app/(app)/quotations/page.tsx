@@ -525,7 +525,7 @@ function QuotationsPageInner(){
     // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
     // VAT บังคับใช้ค่าของ HQ เสมอ (docProfile มาจาก localStorage ของสาขา — ตัวแทนตั้ง VAT เองไม่ได้)
     // VAT: ใช้สแนปช็อตที่ตรึงไว้กับใบตอนสร้าง (q.vatPercent) เสมอถ้ามี — ใบเก่าที่ไม่มีค่อย fallback ไปใช้ของ HQ ปัจจุบัน
-    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:q.vatPercent??hqPolicy.vat},dealerCfg.settings.wordmark));
+    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:q.vatPercent??hqPolicy.vat}));
     w.document.close();
   }
 

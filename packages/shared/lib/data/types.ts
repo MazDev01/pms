@@ -14,7 +14,6 @@ import type { DocProfile as _Doc } from "@pms/shared/lib/quotationPrint";
 export type DealerSettings = {
   issuer: _Issuer;      // หัวกระดาษ: ชื่อบริษัท/ที่อยู่/โทร/เลขภาษี
   document: _Doc;       // คำนำหน้าเลขที่ · อายุใบ · เงื่อนไข · ตราประทับ · ลายเซ็น
-  wordmark: string;     // โลโก้พร้อมชื่อสำหรับหัวเอกสาร (data URI) · "" = ยังไม่ตั้ง
   logo: string;         // โลโก้สัญลักษณ์ (ไอคอน) บนแถบเมนู · "" = ยังไม่ตั้ง
   notifPrefs: _Notif;   // การแจ้งเตือนที่สาขาเปิด/ปิดเอง
 };

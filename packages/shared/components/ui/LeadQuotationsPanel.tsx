@@ -39,7 +39,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const policy = useHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ (อ่านผ่าน repo + อัปเดตตาม HQ)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา (ผ่าน repo)
-  const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document, wordmark: dealerCfg.settings.wordmark };
+  const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document };
 
   // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
   const subj = lead ? {

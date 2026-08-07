@@ -48,7 +48,6 @@ const TABS: { key: SettingTab; label: string; icon: React.ReactNode }[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 const COMPANY_KEY   = "dealer_issuer_profile_v2"; // v2 = รีเซ็ตข้อมูลเดโมเดิม
 const LOGO_KEY      = "dealer_company_logo_v2";      // โลโก้สัญลักษณ์ (ไอคอน) → แถบเมนู
-const WORDMARK_KEY  = "dealer_company_wordmark_v2";  // โลโก้พร้อมชื่อ (แนวนอน) → เอกสาร/ใบเสนอราคา
 type CompanyProfile = { company: string; address: string; phone: string; email: string; website: string; taxId: string };
 // ข้อมูลบริษัทดีลเลอร์เริ่มต้น (ตัวอย่างสมจริง — ไม่ใช่ Benjamin)
 const COMPANY_DEFAULT: CompanyProfile = {
@@ -65,7 +64,6 @@ function CompanyTab() {
   const { session } = useRole();
   const [form, setForm] = useState<CompanyProfile>(COMPANY_DEFAULT);
   const [logo, setLogo] = useState<string>("");
-  const [wordmark, setWordmark] = useState<string>("");
   const [prof, setProf] = useState<UserProfile>({ name: session.name, email: defaultProfileEmail(session.dealerCode), phone: "" });
   const [pwNote, setPwNote] = useState(false);
   const [baseline, setBaseline] = useState("");
@@ -78,10 +76,9 @@ function CompanyTab() {
     if (!dealerCfg.loaded) return;
     const f = { ...COMPANY_DEFAULT, ...dealerCfg.settings.issuer } as CompanyProfile;
     const l = dealerCfg.settings.logo;
-    const w = dealerCfg.settings.wordmark;
     const p = userProfile.loaded ? userProfile.profile : prof;
-    setForm(f); setLogo(l); setWordmark(w); setProf(p);
-    setBaseline(JSON.stringify({ form: f, logo: l, wordmark: w, prof: p }));
+    setForm(f); setLogo(l); setProf(p);
+    setBaseline(JSON.stringify({ form: f, logo: l, prof: p }));
   }, [dealerCfg.loaded, dealerCfg.settings, userProfile.loaded, userProfile.profile, session.dealerCode, session.name]);
 
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
@@ -92,12 +89,12 @@ function CompanyTab() {
     void userProfile.save(cleanProf)
       .catch(() => alert("บันทึกโปรไฟล์ไม่สำเร็จ — รูปอาจมีขนาดใหญ่เกินไป"));
     // ข้อมูลบริษัท/โลโก้ = ของสาขา เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่เงียบแล้วจอขึ้นว่าบันทึกแล้ว
-    void dealerCfg.save({ issuer: form, logo, wordmark })
+    void dealerCfg.save({ issuer: form, logo })
       .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
     window.dispatchEvent(new Event("bpms-company-updated"));
     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
-    setBaseline(JSON.stringify({ form, logo, wordmark, prof }));
-  }, [form, logo, wordmark, prof, session.dealerCode, session.name]);
+    setBaseline(JSON.stringify({ form, logo, prof }));
+  }, [form, logo, prof, session.dealerCode, session.name]);
   async function uploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
@@ -107,10 +104,10 @@ function CompanyTab() {
       setProf(p => ({ ...p, avatar: url }));
     } catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
   }
-  const dirty = baseline !== "" && JSON.stringify({ form, logo, wordmark, prof }) !== baseline;
+  const dirty = baseline !== "" && JSON.stringify({ form, logo, prof }) !== baseline;
   const reset = useCallback(() => {
     if (!baseline) return;
-    try { const b = JSON.parse(baseline); setForm(b.form); setLogo(b.logo); setWordmark(b.wordmark); setProf(b.prof); } catch {}
+    try { const b = JSON.parse(baseline); setForm(b.form); setLogo(b.logo); setProf(b.prof); } catch {}
   }, [baseline]);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
