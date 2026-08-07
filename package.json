@@ -11,7 +11,10 @@
     "lint": "turbo lint",
     "test": "playwright test",
     "test:unit": "vitest run",
-    "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit"
+    "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit",
+    "preflight": "node scripts/preflight.mjs",
+    "load-test": "node scripts/load-test.mjs",
+    "checks": "node scripts/check-stable-order.mjs && node scripts/check-form-labels.mjs && node scripts/check-unchecked-mutations.mjs && node scripts/check-paginated-lookup.mjs && node scripts/check-network-list-keys.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
