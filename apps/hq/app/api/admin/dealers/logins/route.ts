@@ -9,7 +9,8 @@
 // อีเมลไม่ใช่ความลับ แต่ต้องใช้ service_role อ่าน เพราะเก็บอยู่ใน auth.users ไม่ใช่ตาราง profiles
 // จึงกันด้วยสิทธิ์เดียวกับการจัดการตัวแทน และไม่ส่งอะไรนอกจาก "รหัสสาขา → อีเมล"
 import { NextResponse, type NextRequest } from "next/server";
-import { authorizeAdmin, withErrors } from "@pms/shared/lib/adminRoute";
+import { authorizeAdmin, withErrors, bad } from "@pms/shared/lib/adminRoute";
+import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,15 @@ export const GET = withErrors("list-dealer-logins", async (req: NextRequest) => 
     "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์ (SUPABASE_SERVICE_ROLE_KEY) — ดูอีเมลเข้าระบบของตัวแทนยังไม่ได้",
   );
   if (!authz.ok) return authz.res;
-  const { admin } = authz.auth;
+  const { admin, callerId } = authz.auth;
+
+  // กันยิงรัว — เส้นทางนี้เป็นเส้นเดียวใน 5 เส้นของ /api/admin/* ที่ไม่เคยมีตัวจำกัด
+  //   (ผลตรวจสอบระบบ 7 ส.ค. 69 · M-2) · ถึงอีเมลจะไม่ใช่ความลับ แต่ถ้าบัญชีผู้ดูแลถูกยึด
+  //   ผู้บุกรุกกวาดอีเมลเข้าระบบของ "ทุกสาขา" ออกไปทำรายการต่อได้ในคำขอเดียว โดยไม่มีอะไรชะลอ
+  // 30 ครั้ง/นาที = เท่ากับเส้นทางอ่าน/จัดการตัวแทนเส้นอื่น (สูงพอสำหรับการกดใช้งานจริง)
+  if (!(await checkRateLimit(admin, `list-dealer-logins:${callerId}`, 30, 60))) {
+    return bad(429, "เรียกดูข้อมูลเข้าระบบถี่เกินไป — รอสักครู่แล้วลองใหม่");
+  }
 
   const { data: profs, error } = await admin
     .from("profiles").select("id, dealer_code").neq("dealer_code", "");

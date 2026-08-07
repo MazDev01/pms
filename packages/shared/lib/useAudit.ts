@@ -34,14 +34,29 @@ export function useAuditLogger() {
 
 // hook สำหรับ "ดู" — โหลดล่าสุดสูงสุด limit รายการผ่าน repository + ฟังอัปเดตแบบเรียลไทม์
 // default = AUDIT_READ_CAP · กระดิ่ง/แดชบอร์ดที่ต้องการแค่ล่าสุดไม่กี่รายการก็ถูกจำกัดตามไปด้วย (M8)
+//
+// ── เรียกเฉพาะฝั่งสำนักงานใหญ่เท่านั้น ──────────────────────────────────────────
+// บันทึกการใช้งานเป็นของสำนักงานใหญ่ล้วน ๆ ตัวแทนไม่มีสิทธิ์เห็นสักแถว
+// แต่แถบด้านบน (Topbar) ใช้ร่วมกันทั้งสองแอป และเรียก hook นี้โดยไม่เช็กบทบาท
+// → แอปตัวแทนยิงขอ 200 แถวทุกครั้งที่เปิดหน้า แล้วได้กลับมา 0 แถวเสมอ
+//
+// ไม่ใช่แค่เสียเปล่า แต่ "แพงมาก" เพราะฐานข้อมูลต้องไล่ดูทุกแถวเพื่อจะพบว่าไม่มีสิทธิ์เห็นเลย
+//   วัดจริง 7 ส.ค. 69 (ตาราง 8,954 แถว): ตัวแทน 2,196 ms ได้ 0 แถว · สำนักงานใหญ่ 264 ms ได้ 200 แถว
+//   ตัวแทน 10 รายเปิดพร้อมกัน → ฐานข้อมูลยกเลิกคำสั่งทิ้ง (statement timeout) ตอบ 500
+//   ผู้ใช้เห็นหน้าจอแจ้งเตือนพังจริง และจะยิ่งแย่ลงเมื่อตารางโตขึ้น
+//
+// เป็นคู่แฝดของบั๊กที่แก้ไปแล้วเมื่อ 6 ส.ค. 69 — ตอนนั้นแก้ฝั่ง "เขียน" (ตัวแทนบันทึกไม่ได้แล้วขึ้น 403 รัว)
+// แต่ฝั่ง "อ่าน" ตกหล่นไป · กันไว้ในตัว hook เลย ไม่ใช่ที่จุดเรียก จะได้ครอบทุกจุดทั้งตอนนี้และที่เพิ่มทีหลัง
 export function useAuditEntries(limit: number = AUDIT_READ_CAP): AuditEntry[] {
+  const { isHQ } = useRole();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   useEffect(() => {
+    if (!isHQ) { setEntries([]); return; }
     const read = () => { auditRepo.list(limit).then(setEntries).catch((e) => logRepoRead("audit.list", e)); };
     read();
     window.addEventListener(AUDIT_EVENT, read);
     window.addEventListener("storage", read);
     return () => { window.removeEventListener(AUDIT_EVENT, read); window.removeEventListener("storage", read); };
-  }, [limit]);
+  }, [limit, isHQ]);
   return entries;
 }

@@ -152,6 +152,11 @@ max_indexes = 5
 # Vector Buckets is available to Supabase Pro plan.
 # [storage.vector.buckets.documents-openai]
 
+# ⛔ ห้ามรัน `supabase config push` กับโปรเจกต์จริง โดยไม่ไล่ตรวจทีละบรรทัดก่อน
+#    คำสั่งนั้นส่ง "ทั้งไฟล์" ขึ้นไปทับค่าจริง และไฟล์นี้ยังเป็นค่าเริ่มต้นของเครื่องพัฒนาอยู่หลายจุด
+#    ที่อันตรายที่สุด: site_url ชี้ 127.0.0.1 (ลิงก์ในอีเมลพัง) และ enable_signup = true
+#    (เปิดให้ใครก็สมัครเข้าระบบเองได้) — CLI ไม่มีคำสั่ง pull มาเทียบด้วย
+#    ค่าที่ตั้งไว้ในไฟล์นี้จึงเป็น "บันทึกเจตนา" เท่านั้น ไม่ได้มีผลกับโปรเจกต์จริงจนกว่าจะไปตั้งที่หน้าเว็บ
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
@@ -162,7 +167,17 @@ site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://127.0.0.1:3000"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
-jwt_expiry = 3600
+#
+# ── 600 = 10 นาที (ลดจาก 3600) ────────────────────────────────────────────────
+# เหตุผล: ปิดบัญชีผู้ใช้แล้ว สิทธิ์ "อ่านข้อมูล" ยังค้างอยู่จนกว่าใบผ่านจะหมดอายุ
+#   (ผลตรวจสอบระบบ 7 ส.ค. 69 · H-1 · ยิงพิสูจน์แล้ว) — 1 ชั่วโมงนานเกินไป
+#   ลองปิดที่กฎฐานข้อมูลแล้ว (0123–0126) แต่ทำให้อ่านช้าลง 2–4 เท่า จึงถอยออก (0127)
+#   ลดอายุใบผ่านได้ผลใกล้เคียงโดยไม่มีต้นทุนความเร็วเลย
+# ทำไมได้ผล: ตอนต่ออายุใบผ่าน ระบบจะเรียก custom_access_token_hook ใหม่ทุกครั้ง
+#   ซึ่งปฏิเสธไม่ออกใบให้บัญชีที่ถูกปิด (0032) → เซสชันจบทันทีที่ถึงรอบต่ออายุ
+# ปลอดภัยกับผู้ใช้: แอปตั้ง autoRefreshToken = true อยู่แล้ว (client.ts) จึงต่ออายุให้เองเงียบ ๆ
+#   ผู้ใช้ไม่ถูกเตะออกจากระบบ
+jwt_expiry = 600
 # JWT issuer URL. If not set, defaults to auth.external_url.
 # jwt_issuer = ""
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
