@@ -162,6 +162,7 @@ function HQMasterPageInner() {
   const [reprice, setReprice]   = useState<SolutionProduct | null>(null);
   const [rpPrice, setRpPrice]   = useState("");
   const [rpNote, setRpNote]     = useState("");
+  const [rpError, setRpError]   = useState("");   // ข้อความบอกว่าทำไมปรับราคาไม่ได้ — ต้องมี ไม่งั้นกล่องปิดเงียบ
   const [history, setHistory]   = useState<SolutionProduct | null>(null);
   const [delTarget, setDelTarget] = useState<SolutionProduct | null>(null);
   // ดูรายละเอียดแม่แบบ (แบบเดียวกับหน้าตัวแทน) + เจาะแม่แบบย่อยพร้อมรูป
@@ -208,15 +209,22 @@ function HQMasterPageInner() {
     addingRef.current = false;
   }
   function saveReprice() {
+    if (!reprice) return;
     const price = parseFloat(rpPrice);
-    if (!reprice || !(price > 0) || price === reprice.price) { setReprice(null); return; }
+    // ⚠️ ห้ามปิดกล่องเงียบ ๆ เมื่อค่าใช้ไม่ได้ (บั๊กจริง พบ 10 ส.ค. 69)
+    //   เดิมกรอก 0 หรือติดลบ แล้วกล่องปิดลงเหมือนบันทึกสำเร็จ ทั้งที่ราคาไม่ได้เปลี่ยนเลย
+    //   ผู้ดูแลเชื่อว่าปรับราคากลางทั้งเครือแล้ว แต่ตัวแทนทุกสาขายังเห็นราคาเดิม
+    //   และไม่มีร่องรอยอะไรเลย — ไม่มีข้อความ ไม่มีบันทึกการใช้งาน ไม่มีข้อผิดพลาด
+    if (!(price > 0)) { setRpError("ราคากลางต้องมากกว่า 0 บาท"); return; }
+    if (price === reprice.price) { setRpError("ราคาใหม่เท่ากับราคาเดิม — ไม่มีอะไรต้องเปลี่ยน"); return; }
+    setRpError("");
     setCatalog(prev => prev.map(p => p.id !== reprice.id ? p : {
       ...p, price, effectiveDate: todayTH(),
       // ราคาปัจจุบันถูกดันลงประวัติ (ใหม่สุดอยู่บน)
       priceHistory: [{ price: p.price, effectiveDate: p.effectiveDate, note: rpNote.trim() || undefined }, ...p.priceHistory],
     }));
     logAudit("ปรับราคากลาง", `${reprice.name} · ฿${reprice.price.toLocaleString("th-TH")} → ฿${price.toLocaleString("th-TH")}`);
-    setReprice(null); setRpPrice(""); setRpNote("");
+    setReprice(null); setRpPrice(""); setRpNote(""); setRpError("");
   }
   function deleteProduct() {
     if (!delTarget) return;
@@ -506,12 +514,15 @@ function HQMasterPageInner() {
             <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800 }}>ปรับราคากลาง — {reprice.name}</div>
             <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 13 }}>
               <div style={{ fontSize: "0.8rem", color: MUTED }}>ราคาปัจจุบัน <b style={{ color: STEEL }}>{fmtBaht(reprice.price)}/{reprice.unit}</b> (มีผล {reprice.effectiveDate})</div>
-              <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input style={inp} type="number" min="0" step="0.01" value={rpPrice} autoFocus onChange={e => setRpPrice(e.target.value)} /></div>
+              {/* ป้ายชื่อกับช่องกรอกไม่ได้ผูกกันในโค้ด (ไม่มี htmlFor และป้ายไม่ได้ครอบช่อง)
+                  → โปรแกรมอ่านหน้าจอไม่รู้ว่าช่องนี้คือช่องอะไร · ใส่ aria-label กำกับไว้ */}
+              <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input aria-label="ราคากลางใหม่ (บาท)" style={inp} type="number" min="0" step="0.01" value={rpPrice} autoFocus onChange={e => setRpPrice(e.target.value)} /></div>
               <div><label style={lbl}>หมายเหตุ</label><input style={inp} value={rpNote} onChange={e => setRpNote(e.target.value)} placeholder="เช่น ปรับตามราคาเหล็ก" /></div>
+              {rpError && <div role="alert" style={{ fontSize: "0.74rem", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>{rpError}</div>}
               <div style={{ fontSize: "0.65rem", color: "#9ca3af" }}>ราคาเดิมจะถูกบันทึกลงประวัติราคาโดยอัตโนมัติ · มีผลทันทีทุกตัวแทน</div>
             </div>
             <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
-              <button className="btn btn-secondary btn-md" onClick={() => setReprice(null)}>ยกเลิก</button>
+              <button className="btn btn-secondary btn-md" onClick={() => { setReprice(null); setRpError(""); }}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={saveReprice}><TrendingUp size={14} /> ปรับราคา</button>
             </div>
           </ModalCard>

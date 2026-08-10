@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag,
+  db, waitRow, cleanup, specNS, nsTag, pickTemplate
 } from "./funcHelpers";
 
 // โซ่ธุรกิจหลักของทั้งระบบ: ลีด → ใบเสนอราคา (BOQ) → ปิดการขาย → ลูกค้า
@@ -31,7 +31,7 @@ test("[func] ออกใบเสนอราคาจากลีด → ใ�
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณโซ่");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");   // พื้นที่ → ใช้ตั้งต้น BOQ
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
+  await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
@@ -124,7 +124,7 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMP);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณตอบรับ");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500"); // พื้นที่ → ใช้ตั้งต้น BOQ
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
+  await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMP });
 

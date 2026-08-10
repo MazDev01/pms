@@ -15,6 +15,12 @@ export function TemplateSelect({ value, onChange, style, className, ariaLabel }:
   const known = catalog.some(p => p.name === value || (p.subtypes ?? []).includes(value));
   return (
     <select value={value} onChange={e => onChange(e.target.value)} style={style} className={className} aria-label={ariaLabel}>
+      {/* ⚠️ ต้องมีตัวเลือก "ยังไม่ระบุ" เสมอ ห้ามเอาออก (บั๊กจริง พบ 10 ส.ค. 69)
+          ถ้าค่าจริงเป็นว่างแต่ไม่มีตัวเลือกว่างให้ตรง เบราว์เซอร์จะโชว์ตัวเลือกแรกแทน
+          → หน้าจอบอกว่า "เลือกโกดังสำเร็จรูปแล้ว" ทั้งที่ในระบบยังว่าง
+          ผลที่ผู้ใช้เจอ: บันทึกลีดแล้วออกใบเสนอราคาไม่ได้เลย เพราะตารางรายการต้องใช้แม่แบบ
+          แต่หน้าจอยังยืนยันว่ามีแม่แบบอยู่ ไม่มีทางเดาถูกว่าอะไรผิด */}
+      <option value="">— ยังไม่ระบุแม่แบบ —</option>
       {/* ค่าที่ไม่ตรงแคตตาล็อก (ข้อมูลเก่า) — คงไว้กันหาย */}
       {!known && value && <option value={value}>{value}</option>}
       {catalog.map(p => (

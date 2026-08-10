@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, HQ_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag, fillDealerForm,
+  db, waitRow, cleanup, specNS, nsTag, fillDealerForm, pickTemplate
 } from "./funcHelpers";
 
 // ลบตัวแทน "พร้อมบัญชี auth" ผ่าน route (service_role) — เหมือน func-hq.spec.ts (purgeDealerAccount)
@@ -44,7 +44,13 @@ const NEW_DEALER_CODE = "ZZEDG"; // รหัสตัวแทนทดสอ�
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); await purgeDealerAccount(NEW_DEALER_CODE); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); await purgeDealerAccount(NEW_DEALER_CODE); });
 
-test("[edge] มูลค่าประเมินติดลบ/ข้อความมั่ว → ไม่พัง, ไม่เก็บค่าติดลบลง DB", async ({ page }) => {
+// ⚠️ เกณฑ์ข้อนี้เข้มขึ้นเมื่อ 10 ส.ค. 69 — เดิมยอมให้บันทึกผ่านตราบใดที่ไม่มีเลขติดลบลง DB
+//   (ของที่กรอกไปจะกลายเป็น "฿0" เงียบ ๆ) ซึ่งพอเจอในการใช้งานจริงแล้วไม่ดีพอ:
+//   เซลส์ไม่รู้ว่ามูลค่าหายไป แล้วลีดนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
+//   ตอนนี้ต้อง "ฟ้องแล้วไม่บันทึก" — เทสต์นี้จึงเปลี่ยนตามพฤติกรรมที่ตั้งใจให้เป็น
+//   (ไม่ได้แก้เทสต์เพื่อให้ผ่าน — แก้เพราะข้อกำหนดเปลี่ยน และมีเทสต์เฉพาะเรื่องนี้เพิ่มไว้ที่
+//    form-shows-what-it-saves.spec.ts ด้วย)
+test("[edge] มูลค่าประเมินติดลบ/ข้อความมั่ว → ต้องฟ้องและไม่บันทึก ไม่ใช่กลายเป็น 0 เงียบ ๆ", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const COMPANY = tg("ค่าติดลบ");
@@ -57,13 +63,17 @@ test("[edge] มูลค่าประเมินติดลบ/ข้อค
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("-500000");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").blur();
   const afterBlur = await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").inputValue();
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 });
+  await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
 
-  const row = await waitRow<{ value: string | null }>(sb, "leads", { company: COMPANY });
+  // ต้องขึ้นเหตุผลให้ผู้ใช้เห็น ไม่ใช่บันทึกผ่านไปเงียบ ๆ
+  await expect(page.getByText(/มูลค่าอ่านไม่ออก/), `ตอน blur ในฟอร์มเห็น: "${afterBlur}"`).toBeVisible({ timeout: 10_000 });
   assertNoErrors(errs, "กรอกมูลค่าติดลบ");
-  // ต้องไม่มีเลขติดลบหลุดลง DB เลย ไม่ว่าจะเก็บเป็น "฿0" หรือค่าอื่นที่ไม่ใช่ลบ
-  expect(row.value ?? "", `ค่าที่บันทึกจริง: "${row.value}" (ตอน blur ในฟอร์มเห็น: "${afterBlur}")`).not.toMatch(/-/);
+
+  // และต้องไม่มีลีดลงฐานข้อมูลเลย (เดิมลงเป็น "฿0" ซึ่งผู้ใช้ไม่มีทางรู้ว่ามูลค่าหายไปแล้ว)
+  await page.waitForTimeout(1500);
+  const { data } = await sb.from("leads").select("id,value").eq("dealer_code", "RYG").eq("company", COMPANY);
+  expect(data?.length ?? 0, `ต้องไม่บันทึก แต่พบ ${JSON.stringify(data)}`).toBe(0);
 });
 
 test("[edge] ชื่อบริษัทยาวผิดปกติ (2000 ตัวอักษร) → ไม่พัง, เปิดดูได้ปกติ", async ({ page }) => {
@@ -77,7 +87,7 @@ test("[edge] ชื่อบริษัทยาวผิดปกติ (2000 
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(LONG);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณยาว");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 });
+  await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
 
   const row = await waitRow<{ company: string }>(sb, "leads", { company: LONG });
@@ -105,7 +115,7 @@ test("[edge] อักขระพิเศษ/emoji/แท็ก HTML ในช
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(WEIRD);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณแปลก");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 });
+  await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
 
   const row = await waitRow<{ company: string }>(sb, "leads", { company: WEIRD });
@@ -134,7 +144,7 @@ test("[edge] กดปุ่มบันทึกซ้ำเร็ว ๆ (doub
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณกดซ้ำ");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 });
+  await pickTemplate(page);
 
   const saveBtn = page.getByRole("button", { name: "บันทึก" });
   // ยิง pointerdown ตรง ๆ ผ่าน dispatchEvent 5 ครั้งรัว ๆ ในจังหวะเดียว (เร็วกว่าที่ React จะ re-render
@@ -166,7 +176,7 @@ test("[edge] พื้นที่ (ตร.ม.) ติดลบผ่าน fil
   // type=number min=0 กัน spinner ได้ แต่ fill() เขียนค่าตรง ๆ ผ่าน DOM (จำลอง paste ค่าติดลบ)
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("-999");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 });
+  await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
 
   const row = await waitRow<{ area: number | null }>(sb, "leads", { company: COMPANY });

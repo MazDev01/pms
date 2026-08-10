@@ -193,3 +193,25 @@ export async function fillDealerForm(
   await page.getByLabel("ภูมิภาค", { exact: true }).selectOption(region);
   await page.getByLabel("จังหวัดที่ตั้ง", { exact: true }).selectOption(province);
 }
+
+/** เลือก "แม่แบบจริงตัวแรก" ในช่องแม่แบบที่สนใจ
+ *
+ *  ⚠️ ห้ามใช้ selectOption({ index: 0 }) กับช่องนี้ (บทเรียน 10 ส.ค. 69)
+ *    ตัวเลือกลำดับแรกคือ "— ยังไม่ระบุแม่แบบ —" ซึ่งมีไว้ให้ค่าว่างมีที่ยืน
+ *    (ถ้าไม่มี เบราว์เซอร์จะโชว์แม่แบบตัวแรกทั้งที่ค่าจริงว่าง = จอโกหก)
+ *    เลือกตำแหน่ง 0 จึงเท่ากับ "ไม่เลือกแม่แบบ" → ตารางรายการว่าง → ออกใบเสนอราคาไม่ได้
+ *    แล้วเทสต์จะตกด้วยอาการที่ไม่เกี่ยวกับสิ่งที่มันตั้งใจตรวจเลย
+ *  เลือกด้วย "ความหมาย" แทนตำแหน่ง — เพิ่ม/ลด/สลับตัวเลือกทีหลังก็ยังใช้ได้
+ */
+export async function pickTemplate(page: Page, label = "แม่แบบที่สนใจ") {
+  const sel = page.getByLabel(label).first();
+  // ⚠️ ต้องรอให้แคตตาล็อกมาถึงก่อน — ตอนเปิดฟอร์มใหม่ ๆ ในช่องมีแต่ "ยังไม่ระบุ" ตัวเดียว
+  //   เลือกทันทีจะได้ค่าว่าง แล้วเทสต์ปลายทางจะตกด้วยอาการที่ไม่เกี่ยวกับสิ่งที่มันตรวจ
+  await expect.poll(
+    async () => sel.evaluate(el => [...(el as HTMLSelectElement).options].filter(o => o.value !== "").length),
+    { timeout: 20_000, message: "ต้องมีแม่แบบจริงให้เลือกอย่างน้อย 1 ตัว" },
+  ).toBeGreaterThan(0);
+  const value = await sel.evaluate(el =>
+    [...(el as HTMLSelectElement).options].map(o => o.value).find(v => v !== "") ?? "");
+  await sel.selectOption(value);
+}

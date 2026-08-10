@@ -1,7 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
-import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors } from "./funcHelpers";
+import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate } from "./funcHelpers";
 
 // ── Multi-Dealer Load / Stress Test ──────────────────────────────────────────
 // จำลอง 10 ตัวแทนใช้งานพร้อมกันจริง (บัญชี auth จริง ไม่ใช่ mock) + HQ ติดตามแบบเรียลไทม์
@@ -112,7 +112,7 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   const newDealBtn = page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).last();
   await expect(newDealBtn).toBeVisible({ timeout: 30_000 });
   await newDealBtn.click();
-  await page.getByLabel("แม่แบบ", { exact: true }).selectOption({ index: 0 });
+  await pickTemplate(page, "แม่แบบ");
   await page.locator('input[placeholder="เช่น ฿1.2M"]').fill("1200000");
   const createDealBtn = page.getByRole("button", { name: "สร้างโครงการ" });
   await expect(createDealBtn).toBeEnabled({ timeout: 30_000 });

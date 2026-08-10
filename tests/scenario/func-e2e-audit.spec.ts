@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, HQ_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag,
+  db, waitRow, cleanup, specNS, nsTag, pickTemplate
 } from "./funcHelpers";
 
 // ── E2E audit: end-to-end sales journey coverage NOT already in func-quote-win/func-dealer-sales ──
@@ -42,7 +42,7 @@ test("[audit] ปิดการขายจากลีดโดยไม่เ
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณลัดคิว");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
+  await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
@@ -102,7 +102,7 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
     await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
     await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill(contact);
     await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
-    await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
+    await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
     await page.getByRole("button", { name: "บันทึก" }).click();
     await waitRow(sb, "leads", { company });
 
@@ -160,7 +160,7 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
   // dealForm.product เริ่มที่ "" เสมอ (ไม่ได้ดึงจาก category ของลูกค้าอัตโนมัติแบบที่คอมเมนต์เดิมเข้าใจผิด
   // ไว้ — select ที่ไม่มี option ตรงค่า "" แค่ "โชว์" ตัวเลือกแรกตามพฤติกรรม browser เฉยๆ ไม่ได้เซ็ตค่าจริง
   // ทำให้ลีดดีลใหม่ได้ product="" แล้ว BOQ ว่าง → ปุ่มสร้างใบถูก disable แบบสุ่ม/แล้วแต่จังหวะโหลดแคตตาล็อก)
-  await page.getByLabel("แม่แบบ", { exact: true }).selectOption({ index: 0 }); // ต้องเลือกจริง (H-audit fix)
+  await pickTemplate(page, "แม่แบบ"); // ต้องเลือกแม่แบบจริง ไม่งั้นปุ่มสร้างโครงการถูกปิด
   await page.getByRole("button", { name: "สร้างโครงการ" }).click();
 
   // ดีลใหม่ = ลีดใหม่ผูก customerId — หาในหน้าลีด แล้วออกใบ + ปิดให้ผ่านฟลว์เดียวกัน
@@ -212,7 +212,7 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณลบวอน");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
+  await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
@@ -327,7 +327,7 @@ test("[audit] cross-role: ตัวแทนปิดการขาย → HQ �
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณครอสโรล");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 }); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
+  await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 

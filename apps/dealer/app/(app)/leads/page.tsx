@@ -20,6 +20,7 @@ import { useLeadRules } from "@pms/shared/lib/useHQRules";
 import { useLostReasons } from "@pms/shared/lib/useHQConfig";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
+import { parseBaht } from "@pms/shared/lib/format";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
   Plus, X,
@@ -103,7 +104,11 @@ function fmtM(n: number) {
   return "฿"+n.toLocaleString();
 }
 // ฟอร์แมตมูลค่าจากสตริงดิบ/มีหน่วย → ดูง่าย (฿1.2B / ฿1.2M / ฿480K)
-function fmtVal(v: string) { return fmtM(parseValue(v)); }
+// ⚠️ อ่านค่าไม่ออก = คืนข้อความเดิมไว้ ห้ามแปลงเป็น "฿0" (บั๊กจริง พบ 10 ส.ค. 69)
+//   เดิมพิมพ์อะไรที่อ่านไม่ออกลงไป พอคลิกออกจากช่อง ข้อความจะถูกเขียนทับเป็น "฿0" ทันที
+//   ผู้ใช้เห็นเป็นศูนย์แล้วนึกว่าระบบคิดให้ ทั้งที่จริงคือของที่พิมพ์หายไปแล้ว
+//   คงข้อความเดิมไว้ให้เห็นว่า "ยังผิดอยู่นะ" แล้วให้ตอนกดบันทึกเป็นคนฟ้อง
+function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v; }
 
 // ความคืบหน้าของลีด (%) — จากงานที่เช็ก (แหล่งเดียวกับ LeadTasks) · PAID=100 · CANCELLED=0
 function leadProg(l: LeadRow): number {
@@ -317,22 +322,34 @@ function OverviewEditor({ lead, persons, onSave }: {
         <Cell icon={User}    label="ผู้ติดต่อ"><input aria-label="ชื่อผู้ติดต่อ" value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></Cell>
         <Cell icon={Phone}   label="โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Cell>
         <Cell icon={Mail}    label="อีเมล"><input aria-label="อีเมล" value={f.email} onChange={e=>set("email",e.target.value)} type="email" style={inp} /></Cell>
+        {/* ⚠️ ทุกช่องเลือกในแผงนี้ต้องมีตัวเลือก "ยังไม่ระบุ" (บั๊กจริง พบ 10 ส.ค. 69)
+            ค่าจริงเป็นว่างได้ทุกช่อง แต่ถ้าไม่มีตัวเลือกว่างให้ตรง เบราว์เซอร์จะโชว์ตัวเลือกแรกแทน
+            → หน้าจอบอกว่ากรอกแล้ว ทั้งที่ในระบบยังว่าง แล้วผู้ใช้ก็หาสาเหตุไม่เจอ */}
         <Cell icon={MapPin}  label="จังหวัด">
-          <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>{PROVINCES.map(x=><option key={x}>{x}</option>)}</select>
+          <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>
+            <option value="">— ยังไม่ระบุ —</option>
+            {PROVINCES.map(x=><option key={x}>{x}</option>)}
+          </select>
         </Cell>
         <Cell icon={Package} label="แม่แบบที่สนใจ">
-          <select aria-label="แม่แบบที่สนใจ" value={f.product} onChange={e=>set("product",e.target.value)} style={inp}>
-            {catalog.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-          </select>
+          {/* ใช้ตัวเดียวกับฟอร์มเพิ่มลีด — เดิมที่นี่ลิสต์เฉพาะแม่แบบหลัก ไม่มีแม่แบบย่อย
+              ลีดที่เลือกแม่แบบย่อยไว้จึงหาค่าตัวเองในลิสต์ไม่เจอ แล้วโชว์ตัวแรกผิด ๆ แบบเดียวกัน */}
+          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} ariaLabel="แม่แบบที่สนใจ" />
         </Cell>
         <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
           <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
         </Cell>
         <Cell icon={Target}  label="แหล่งที่มา">
-          <select aria-label="ช่องทางที่มา" value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>{SOURCES.map(x=><option key={x}>{x}</option>)}</select>
+          <select aria-label="ช่องทางที่มา" value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>
+            <option value="">— ยังไม่ระบุ —</option>
+            {SOURCES.map(x=><option key={x}>{x}</option>)}
+          </select>
         </Cell>
         <Cell icon={Users}   label="ผู้รับผิดชอบ">
-          <select aria-label="ผู้รับผิดชอบ" value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>{persons.map(x=><option key={x}>{x}</option>)}</select>
+          <select aria-label="ผู้รับผิดชอบ" value={f.assigned} onChange={e=>set("assigned",e.target.value)} style={inp}>
+            <option value="">— ยังไม่มอบหมาย —</option>
+            {persons.map(x=><option key={x}>{x}</option>)}
+          </select>
         </Cell>
         {f.status === "CANCELLED" && (
           <Cell icon={XCircle} label="เหตุผลที่เสีย">
@@ -421,6 +438,25 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     source: initial?.source ?? "เว็บไซต์", note: initial?.note ?? "",
     logo: initial?.logo ?? "",
   });
+  // ── เติมค่าตั้งต้นเมื่อข้อมูลมาถึงทีหลัง (บั๊กจริง พบ 10 ส.ค. 69) ──────────────────
+  //
+  // ค่าตั้งต้นข้างบนอ่านจาก catalog[0] / persons[0] ซึ่ง useState อ่าน "ครั้งเดียวตอนเปิดฟอร์ม"
+  // แต่ทั้งสองอย่างโหลดแบบไม่พร้อมกัน ถ้าผู้ใช้กดเปิดฟอร์มเร็วกว่าข้อมูลมาถึง
+  // ค่าจะค้างเป็นว่างถาวร แล้ว useState ก็ไม่อ่านใหม่อีกเลยตลอดอายุฟอร์ม
+  //
+  // ผลที่ผู้ใช้เจอจริง: บันทึกลีดโดยเข้าใจว่าเลือกแม่แบบไว้แล้ว (ช่องโชว์ตัวแรกให้)
+  // แต่ในระบบว่าง → ออกใบเสนอราคาไม่ได้เลย และย้อนกลับมาดูก็ยังเห็นแม่แบบอยู่ หาสาเหตุไม่เจอ
+  //
+  // เติมเฉพาะตอน "เพิ่มลีดใหม่ และช่องยังว่างอยู่" — ห้ามไปทับค่าที่ผู้ใช้เลือกเองหรือค่าของลีดเดิม
+  useEffect(() => {
+    if (isEdit) return;
+    setForm(f => {
+      const product = f.product || catalog[0]?.name || "";
+      const assigned = f.assigned || persons[0] || "";
+      return (product === f.product && assigned === f.assigned) ? f : { ...f, product, assigned };
+    });
+  }, [isEdit, catalog, persons]);
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   // เดิมกด "บันทึก" แล้วขาดชื่อบริษัท/ผู้ติดต่อ = ออกเงียบๆ ไม่มีอะไรบอกผู้ใช้เลยว่าทำไมไม่บันทึก (QA เคส 6)
   const [submitError, setSubmitError] = useState("");
@@ -459,6 +495,14 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     if (savingRef.current) return;
     if (!form.company.trim() || !form.contact.trim()) {
       setSubmitError("กรอกบริษัทและผู้ติดต่อให้ครบก่อนบันทึก");
+      return;
+    }
+    // ⚠️ มูลค่าที่กรอกแล้วอ่านไม่ออก ต้องฟ้อง ห้ามเงียบ (บั๊กจริง พบ 10 ส.ค. 69)
+    //   ช่องนี้รับข้อความอิสระ (เขียน "1.4M" หรือ "฿1,400,000" ก็ได้) ตัวแปลงค่าจึงคืน 0
+    //   เมื่ออ่านไม่ออก · เดิมกรอก "abcxyz" หรือ "-5000000" แล้วบันทึกผ่านเป็น ฿0 เงียบ ๆ
+    //   เซลส์ไม่รู้ว่ามูลค่าหาย แล้วลีดนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
+    if (form.value.trim() && !(parseBaht(form.value) > 0)) {
+      setSubmitError('มูลค่าอ่านไม่ออก — กรอกเป็นตัวเลขบวก เช่น 1400000 หรือ 1.4M (เว้นว่างได้ถ้ายังไม่รู้)');
       return;
     }
     savingRef.current = true;

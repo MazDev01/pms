@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
-  DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag,
+  DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag, pickTemplate
 } from "./funcHelpers";
 import { validateUpload } from "@pms/shared/lib/uploadLimits";
 
@@ -27,7 +27,7 @@ async function newLeadOpened(page: import("@playwright/test").Page, company: str
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
-  await page.getByLabel("แม่แบบที่สนใจ").selectOption({ index: 0 });
+  await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
 
   const sb = await db(RYG);
