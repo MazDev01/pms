@@ -348,7 +348,7 @@ function PreviewBody({ f }: { f: FileMock }) {
         }}>
           <ImageIcon size={56} color="rgba(255,255,255,.9)" />
           <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fff", textAlign: "center", padding: "0 20px", wordBreak: "break-word" }}>{f.name}</div>
-          <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)" }}>{f.size} · {extLabel(f.ext)}</div>
+          <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)" }}>{f.size ? `${f.size} · ` : ""}{extLabel(f.ext)}</div>
         </div>
       </div>
     );
@@ -394,7 +394,7 @@ function PreviewBody({ f }: { f: FileMock }) {
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 1, borderTop: `1px solid ${BORDER}` }}>
           {[
             ["ประเภท", extLabel(f.ext)],
-            ["ขนาด", f.size],
+            ["ขนาด", f.size || "—"],
             ["โฟลเดอร์", f.category],
             ["โอกาสการขาย", f.project],
             ["อัปโหลดโดย", f.uploadedBy],
@@ -426,7 +426,7 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
-                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)} · {file.size}</div>
+                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)}{file.size ? ` · ${file.size}` : ""}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={13} /></button>

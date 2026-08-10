@@ -457,6 +457,20 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     });
   }, [isEdit, catalog, persons]);
 
+  // ⚠️ ปิดฟอร์มทั้งที่ยังมีของที่กรอกค้างไว้ ต้องถามก่อน (แก้ 10 ส.ค. 69)
+  //   เดิมกด "ยกเลิก" หรือเผลอคลิกโดนฉากหลัง ป๊อปอัพปิดทันทีโดยไม่ถามอะไรเลย
+  //   สิ่งที่พิมพ์ไปหายหมดแบบเงียบ ๆ · หน้าตั้งค่าเตือนถูกอยู่แล้ว ("ยังมีงานที่ยังไม่บันทึก…")
+  //   ที่อื่นไม่เตือน = ผู้ใช้เดาไม่ได้ว่าหน้าไหนปลอดภัยที่จะกดปิด
+  function closeGuarded() {
+    const touched = Object.entries(form).some(([k, v]) => {
+      const base = (initial as Record<string, unknown> | null | undefined)?.[k];
+      if (typeof v !== "string") return false;
+      return v.trim() !== String(base ?? "").trim();
+    });
+    if (touched && !window.confirm("ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก — ปิดแล้วข้อมูลจะหาย ยืนยันปิดหรือไม่")) return;
+    onClose();
+  }
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   // เดิมกด "บันทึก" แล้วขาดชื่อบริษัท/ผู้ติดต่อ = ออกเงียบๆ ไม่มีอะไรบอกผู้ใช้เลยว่าทำไมไม่บันทึก (QA เคส 6)
   const [submitError, setSubmitError] = useState("");
@@ -501,6 +515,13 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     //   ช่องนี้รับข้อความอิสระ (เขียน "1.4M" หรือ "฿1,400,000" ก็ได้) ตัวแปลงค่าจึงคืน 0
     //   เมื่ออ่านไม่ออก · เดิมกรอก "abcxyz" หรือ "-5000000" แล้วบันทึกผ่านเป็น ฿0 เงียบ ๆ
     //   เซลส์ไม่รู้ว่ามูลค่าหาย แล้วลีดนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
+    // เพดานมูลค่า — กรอก 21 หลักได้เดิม แล้วเก็บเป็น "฿1000000000.0T" ซึ่งไม่ใช่ตัวเลขที่มีความหมาย
+    //   ตั้งไว้ที่หนึ่งแสนล้านบาท: สูงกว่างานจริงที่ใหญ่ที่สุดหลายเท่า แต่กันเลขหลุดโลกได้
+    const MAX_LEAD_VALUE = 100_000_000_000;
+    if (form.value.trim() && parseBaht(form.value) > MAX_LEAD_VALUE) {
+      setSubmitError("มูลค่าสูงเกินจริง — กรอกได้ไม่เกิน 100,000 ล้านบาท");
+      return;
+    }
     if (form.value.trim() && !(parseBaht(form.value) > 0)) {
       setSubmitError('มูลค่าอ่านไม่ออก — กรอกเป็นตัวเลขบวก เช่น 1400000 หรือ 1.4M (เว้นว่างได้ถ้ายังไม่รู้)');
       return;
@@ -547,7 +568,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 
   return (
     <>
-      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:1100 }} />
+      <div onClick={closeGuarded} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:1100 }} />
       <div style={{ position:"fixed", inset:0, zIndex:1110, display:"flex", alignItems:"center", justifyContent:"center", padding:24, pointerEvents:"none" }}>
         <div onClick={e=>e.stopPropagation()}
           style={{ width:"100%", maxWidth:600, background:"#fff", borderRadius:20,
@@ -561,7 +582,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               <div style={{ fontSize:"1rem", fontWeight:800, color:"#fff" }}>{isEdit ? "แก้ไขลูกค้าเป้าหมาย" : "เพิ่มลูกค้าเป้าหมาย"}</div>
               <div style={{ fontSize:"0.72rem", color:"#374151" }}>{isEdit ? `แก้ไขข้อมูล ${initial?.id}` : "กรอกข้อมูลลูกค้าเป้าหมาย"}</div>
             </div>
-            <button onClick={onClose}
+            <button onClick={closeGuarded}
               style={{ width:32, height:32, borderRadius:9, border:"1px solid rgba(255,255,255,.2)",
                 background:"rgba(255,255,255,.1)", color:"#fff", cursor:"pointer",
                 display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -676,7 +697,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
             {submitError && (
               <div style={{ marginRight:"auto", color:"#dc2626", fontSize:"0.75rem", fontWeight:600 }}>{submitError}</div>
             )}
-            <button onClick={onClose}
+            <button onClick={closeGuarded}
               style={{ padding:"9px 20px", borderRadius:9, border:"1px solid #e5e7eb",
                 background:"#fff", color:"#374151", fontSize:"0.8rem", fontWeight:600, cursor:"pointer" }}>
               ยกเลิก
@@ -1827,7 +1848,10 @@ export default function LeadsPage() {
             leadId: c.numId,
             company: c.company, contact: c.contact ?? "", phone: c.phone ?? "", province: c.province ?? "",
             project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
-            buildingType: c.product ?? "", area: 0,
+            buildingType: c.product ?? "",
+            // ⚠️ เดิมใส่ 0 ตายตัว ทั้งที่ช่องอื่นคัดลอกจากลีดหมด (แก้ 10 ส.ค. 69)
+            //   นัดหมายจึงบันทึกพื้นที่เป็น 0 เสมอ แม้ลีดจะระบุไว้ 800 ตร.ม. ก็ตาม
+            area: c.area ?? 0,
             date: apptForm.date, time: apptForm.time, type: apptForm.type,
             assigned: c.assigned || session.name, status: "upcoming", note: apptForm.note.trim(),
           });

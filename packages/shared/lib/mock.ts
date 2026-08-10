@@ -514,7 +514,11 @@ export function quotationToFile(q: QuotationMock): Omit<DealerFile, "id"> {
   const isLead = !!q.dealId;
   return {
     name: `ใบเสนอราคา_${q.id}_${(q.customer || "").replace(/\s+/g, "")}.pdf`,
-    size: "~140 KB", ext: "pdf", category: "ใบเสนอราคา", project: q.project,
+    // ⚠️ ห้ามใส่ขนาดไฟล์ตายตัว (แก้ 10 ส.ค. 69) — แถวนี้ไม่ใช่ไฟล์จริง
+    //   เป็นแค่ "ตัวชี้" ไปที่ใบเสนอราคา เอกสารตัวจริงถูกสร้างตอนสั่งพิมพ์ ไม่ได้เก็บไว้เป็นไฟล์
+    //   เดิมใส่ "~140 KB" ไว้ ซึ่งเป็นตัวเลขที่กุขึ้นมาเอง ไม่ได้วัดจากอะไรเลย
+    //   ผิดกฎเดียวกับข้อมูลบริษัทปลอมที่เพิ่งลบไป — ไม่มีข้อมูลจริงให้ปล่อยว่าง
+    size: "", ext: "pdf", category: "ใบเสนอราคา", project: q.project,
     uploadedBy: AUTO_FILE_BY, uploadedAt: q.date,
     source: isLead ? "lead" : "customer",
     recordId: isLead ? q.dealId : q.customerId,
