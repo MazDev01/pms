@@ -17,24 +17,11 @@ import { mainTemplateOf, type HQCustomer } from "@pms/shared/lib/mock";
 import { useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { deliveryDateOf, parseThaiDate } from "@pms/shared/lib/delivery";
 
-// ─── ภาค (ข้อเท็จจริงทางภูมิศาสตร์ — ไม่ใช่ข้อมูลธุรกิจที่กุขึ้น) ────────────────────
-// สะกดให้ตรงกับ dealer.region (mock.ts seed / hq/dealers / hq/pipeline) = "อีสาน" ไม่ใช่ "ตะวันออกเฉียงเหนือ"
-//   เดิมสะกดคนละแบบ → ของสองระบบเทียบกันไม่ตรง (regionDisplay ต้อง special-case "อีสาน" อยู่แล้วเพื่อขยายชื่อเต็ม) · 1.4
-export const REGIONS = ["เหนือ", "อีสาน", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้"] as const;
-export type Region = (typeof REGIONS)[number];
-
-const REGION_OF: Record<string, Region> = {};
-const put = (region: Region, provinces: string[]) => provinces.forEach(p => { REGION_OF[p] = region; });
-
-put("เหนือ", ["เชียงใหม่", "เชียงราย", "ลำปาง", "ลำพูน", "แม่ฮ่องสอน", "น่าน", "พะเยา", "แพร่", "อุตรดิตถ์"]);
-put("อีสาน", ["กาฬสินธุ์", "ขอนแก่น", "ชัยภูมิ", "นครพนม", "นครราชสีมา", "บึงกาฬ", "บุรีรัมย์", "มหาสารคาม", "มุกดาหาร", "ยโสธร", "ร้อยเอ็ด", "เลย", "ศรีสะเกษ", "สกลนคร", "สุรินทร์", "หนองคาย", "หนองบัวลำภู", "อำนาจเจริญ", "อุดรธานี", "อุบลราชธานี"]);
-put("กลาง", ["กรุงเทพมหานคร", "กรุงเทพฯ", "กำแพงเพชร", "ชัยนาท", "นครนายก", "นครปฐม", "นครสวรรค์", "นนทบุรี", "ปทุมธานี", "พระนครศรีอยุธยา", "พิจิตร", "พิษณุโลก", "เพชรบูรณ์", "ลพบุรี", "สมุทรปราการ", "สมุทรสงคราม", "สมุทรสาคร", "สระบุรี", "สิงห์บุรี", "สุโขทัย", "สุพรรณบุรี", "อ่างทอง", "อุทัยธานี"]);
-put("ตะวันออก", ["จันทบุรี", "ฉะเชิงเทรา", "ชลบุรี", "ตราด", "ปราจีนบุรี", "ระยอง", "สระแก้ว"]);
-put("ตะวันตก", ["กาญจนบุรี", "ตาก", "ประจวบคีรีขันธ์", "เพชรบุรี", "ราชบุรี"]);
-put("ใต้", ["กระบี่", "ชุมพร", "ตรัง", "นครศรีธรรมราช", "นราธิวาส", "ปัตตานี", "พังงา", "พัทลุง", "ภูเก็ต", "ยะลา", "ระนอง", "สงขลา", "สตูล", "สุราษฎร์ธานี"]);
-
-/** ภาคของจังหวัด · จังหวัดที่ไม่รู้จัก = null (หน้าแสดง "—") */
-export const regionOf = (province: string): Region | null => REGION_OF[(province ?? "").trim()] ?? null;
+// ─── ภาค — ย้ายไปอยู่ที่ lib/provinces.ts แล้ว (ใช้ร่วมกับ /hq/dealers ที่ต้องเลือกจังหวัดตามภาค)
+// re-export ไว้ที่เดิมด้วย เพื่อไม่ให้หน้าที่ import จากไฟล์นี้อยู่แล้วต้องแก้ตาม
+export { REGIONS, regionOf, provincesOfRegion, type Region } from "@pms/shared/lib/provinces";
+import { regionOf } from "@pms/shared/lib/provinces";
+import type { Region } from "@pms/shared/lib/provinces";
 
 // ─── อาคารที่ลูกค้าซื้อไปแล้ว (1 ใบที่ปิดการขายได้ = 1 อาคาร) ────────────────────
 export type PurchasedBuilding = {

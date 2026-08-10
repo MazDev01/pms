@@ -8,7 +8,7 @@ import {
   Upload, UserCheck, FileText, ShieldCheck, Lock, ImagePlus, Bell,
   Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
-import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
+import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, QUOTE_PREFIX, quoteNoPrefix, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
@@ -49,14 +49,12 @@ const TABS: { key: SettingTab; label: string; icon: React.ReactNode }[] = [
 const COMPANY_KEY   = "dealer_issuer_profile_v2"; // v2 = รีเซ็ตข้อมูลเดโมเดิม
 const LOGO_KEY      = "dealer_company_logo_v2";      // โลโก้สัญลักษณ์ (ไอคอน) → แถบเมนู
 type CompanyProfile = { company: string; address: string; phone: string; email: string; website: string; taxId: string };
-// ข้อมูลบริษัทดีลเลอร์เริ่มต้น (ตัวอย่างสมจริง — ไม่ใช่ Benjamin)
+// ⛔ ต้องว่างเสมอ ห้ามใส่ข้อมูลบริษัทของสาขาใดสาขาหนึ่ง — เหตุผลเดียวกับ DEFAULT_ISSUER ใน mock.ts
+//   เดิมใส่ข้อมูลจริงของ CNX ไว้ ตัวแทนที่เพิ่งสร้างใหม่จึงเปิดหน้านี้แล้วเห็นชื่อ/ที่อยู่/อีเมล/เว็บไซต์
+//   ของสาขาอื่นขึ้นมาเต็มฟอร์ม เหมือนเป็นข้อมูลตัวเอง (พบ 7 ส.ค. 69)
+//   ตัวอย่างการกรอกให้ใส่ที่ placeholder ของแต่ละช่องแทน — ไม่ใช่ใส่เป็นค่าจริงในฟอร์ม
 const COMPANY_DEFAULT: CompanyProfile = {
-  company: "บริษัท เชียงใหม่สตีลบิลด์ จำกัด",
-  address: "88/9 ถ.มหิดล ต.หายยา อ.เมือง จ.เชียงใหม่ 50100",
-  phone:   "053-112-233",
-  email:   "sales@cmsteelbuild.co.th",
-  website: "www.cmsteelbuild.co.th",
-  taxId:   "0505561001234",
+  company: "", address: "", phone: "", email: "", website: "", taxId: "",
 };
 
 // บัญชีดีลเลอร์ = โปรไฟล์ผู้ใช้ (รูป/ชื่อ) + ข้อมูลบริษัท + ข้อมูลบัญชี (อีเมลล็อกอิน/รหัสผ่าน) รวมเป็นบัญชีเดียว
@@ -285,16 +283,15 @@ function ImageUploadBox({
 function DocumentsTab() {
   const [doc, setDoc] = useState<DocumentSettings>(DOC_DEFAULT);
   const [baseline, setBaseline] = useState(""); // สแนปช็อตค่าที่บันทึกล่าสุด → ใช้เทียบ dirty
-  // VAT ที่ HQ ล็อก — ต้องอ่านผ่าน repo (useHQPolicy) เท่านั้น
-  // เดิม loadHQPolicy() อ่าน localStorage ของ :3001 แต่ HQ เขียนที่ :3002 → ได้ default 7% เสมอ
-  // ทั้งที่ช่องนี้ติดไอคอนกุญแจ + ป้าย "HQ" บอกผู้ใช้ว่าเป็นค่าจริงของสำนักงานใหญ่
-  const hq = useHQPolicy();
-  const dealerCfg = useDealerSettings(); // ตั้งค่าเอกสารของสาขา (ผ่าน repo)
+  const dealerCfg = useDealerSettings(); // ตั้งค่าเอกสารของสาขา รวม % VAT (ผ่าน repo)
+  const currentDealer = useCurrentDealer(); // รหัสสาขาที่ล็อกอิน — ใช้ประกอบคำนำหน้าเลขที่
 
   // ตั้งค่าเอกสารของสาขา อ่านผ่าน repo — เดิมอยู่ใน localStorage เครื่องเดียว
   useEffect(() => {
     if (!dealerCfg.loaded) return;
-    const d = { ...DOC_DEFAULT, ...dealerCfg.settings.document } as DocumentSettings;
+    // quotePrefix บังคับกลับเป็นค่าคงที่ของระบบเสมอ — ช่องนี้ล็อกแล้ว ค่าที่เคยพิมพ์ทับไว้ใน DB
+    // (เช่น "Q-CNX-2026-") ต้องไม่ถูกอ่านกลับมาใช้ ไม่งั้นบันทึกครั้งถัดไปจะพาค่าเสียกลับลงไปอีก
+    const d = { ...DOC_DEFAULT, ...dealerCfg.settings.document, quotePrefix: QUOTE_PREFIX } as DocumentSettings;
     setDoc(d);
     setBaseline(JSON.stringify(d));
   }, [dealerCfg.loaded, dealerCfg.settings]);
@@ -317,30 +314,37 @@ function DocumentsTab() {
   }, [baseline]);
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
-  // เลขที่ตัวอย่าง = รูปแบบที่ตัวแทนตั้งเอง (prefix + เลขถัดไป)
-  const previewNo = `${doc.quotePrefix}${String(doc.runningNumber).padStart(4, "0")}`;
+  // คำนำหน้าที่ระบบล็อกไว้ = Q-{รหัสสาขา}-{ปีปัจจุบัน}- (แหล่งเดียวกับตอนออกเลขจริงที่ RPC/LocalAdapter)
+  // ตัวอย่างเลขที่ = คำนำหน้าล็อก + เลขรัน 4 หลัก — ต้องหน้าตาเหมือนใบที่ออกจริงเป๊ะ
+  // เดิมโชว์ doc.quotePrefix + เลขรันเฉย ๆ → สาขาที่พิมพ์คำนำหน้าเองเห็นตัวอย่างไม่ตรงกับเลขที่ได้จริง
+  const lockedPrefix = quoteNoPrefix(currentDealer.code);
+  const previewNo = `${lockedPrefix}${String(doc.runningNumber).padStart(4, "0")}`;
 
   return (
     <>
       <div className="card-header">
         <div>
           <div className="card-title">ตั้งค่าใบเสนอราคา</div>
-          <div className="card-desc">เลขที่ · อายุใบ · หัว/ท้าย เงื่อนไข ตราประทับ และลายเซ็น · ภาษีกำหนดโดยสำนักงานใหญ่</div>
+          <div className="card-desc">เลขที่ · อายุใบ · ภาษีมูลค่าเพิ่ม · หัว/ท้าย เงื่อนไข ตราประทับ และลายเซ็น</div>
         </div>
       </div>
       <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
-        {/* Quote number format — ตัวแทนตั้งเลขที่/อายุใบเองได้ · ล็อกเฉพาะ VAT (อัตราภาษีมาตรฐาน) */}
+        {/* Quote number format — ตัวแทนตั้งเลขลำดับ/อายุใบ/VAT เองได้ · ล็อกเฉพาะคำนำหน้าเลขที่ (ระบบออกให้) */}
         <div>
           <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 10, textTransform: "uppercase" }}>
             เลขที่ใบเสนอราคา
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(120px, 160px) minmax(90px, 120px) minmax(0, 1fr)", gap: 12, alignItems: "end" }}>
             <div>
-              <label className="form-label">คำนำหน้าเลขที่</label>
-              <input className="form-input" value={doc.quotePrefix} onChange={e => set("quotePrefix", e.target.value)}
-                placeholder="Q-" style={{ fontFamily: "monospace" }} />
-              <div style={{ fontSize: "0.66rem", color: "#9ca3af", marginTop: 4 }}>เลขที่เต็มจะเป็น {doc.quotePrefix || "Q-"}{"{"}รหัสสาขา{"}"}-{"{"}ปี{"}"}-{"{"}เลขรัน{"}"} เช่น {doc.quotePrefix || "Q-"}CNX-2026-0001</div>
+              <label className="form-label" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                คำนำหน้าเลขที่ <Lock size={11} style={{ color: "#9ca3af" }} />
+              </label>
+              <div className="form-input" data-testid="quote-prefix" style={{ fontFamily: "monospace", background: "#f8fafc", color: "#6b7280",
+                display: "flex", alignItems: "center", cursor: "not-allowed", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                title="รูปแบบเลขที่กำหนดโดยระบบ — แก้ไม่ได้">
+                {lockedPrefix}
+              </div>
             </div>
             <div>
               <label className="form-label">เลขลำดับถัดไป</label>
@@ -349,15 +353,12 @@ function DocumentsTab() {
                 style={{ fontFamily: "monospace" }} />
             </div>
             <div>
-              <label className="form-label" style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                ภาษีมูลค่าเพิ่ม % <Lock size={11} style={{ color: "#9ca3af" }} />
-              </label>
-              <div className="form-input" style={{ fontFamily: "monospace", background: "#f8fafc", color: "#6b7280",
-                display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "not-allowed" }}
-                title="อัตราภาษีมาตรฐาน กำหนดโดยสำนักงานใหญ่">
-                <span>{hq.vat}%</span>
-                <span style={{ fontSize: "0.6rem", fontFamily: "inherit", color: "#9ca3af", fontWeight: 600 }}>HQ</span>
-              </div>
+              {/* เดิมล็อกไว้ให้สำนักงานใหญ่กำหนดทั้งเครือ · บอสสั่งเปิดให้ตัวแทนตั้งเอง (7 ส.ค. 69)
+                  ใบที่ออกไปแล้วไม่กระทบ — ทุกใบตรึง % VAT ไว้ตั้งแต่ตอนสร้าง */}
+              <label className="form-label">ภาษีมูลค่าเพิ่ม %</label>
+              <input className="form-input" type="number" min={0} max={100} step="0.01" value={doc.vatPercent}
+                onChange={e => set("vatPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                style={{ fontFamily: "monospace" }} />
             </div>
             <div style={{ padding: "10px 14px", background: "#f0f4fa", borderRadius: 10, border: "1px solid #dce5f0" }}>
               <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 3 }}>ตัวอย่างเลขที่ถัดไป</div>
@@ -545,19 +546,29 @@ function PersonsTab() {
                 </div>
                 {/* body */}
                 <div style={{ padding: "24px 22px" }}>
-                  {/* avatar upload — กลาง */}
+                  {/* avatar upload — กลาง · แบบเดียวกับกล่อง "เพิ่มผู้ใช้งาน HQ" (UsersPanel > UserDialog)
+                      วงกลมทึบตัวอักษรแรกของชื่อ (ว่าง = "?") ไม่ใช่วงเส้นประ — เส้นประวงกลมเรนเดอร์เป็นจุด ๆ
+                      ที่สั่นไหวตามระดับซูม/สเกลจอ ดูเหมือนภาพกระพริบ */}
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
                     <label title="เพิ่ม/เปลี่ยนรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
                       <input type="file" accept="image/*" style={{ display: "none" }}
                         onChange={e => { readAvatar(e.target.files?.[0], url => setAvatar(url)); e.target.value = ""; }} />
                       {avatar
                         ? <img src={avatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: "3px solid #003366" }} />
-                        : <span style={{ width: 84, height: 84, borderRadius: "50%", border: "2px dashed #c7ccd3", background: "#f8f9fb",
-                            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, color: "#9ca3af" }}>
-                            <ImagePlus size={22} /><span style={{ fontSize: "0.65rem" }}>เพิ่มรูป</span>
+                        : <span style={{ width: 84, height: 84, borderRadius: "50%", background: "#003366", color: "#fff",
+                            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "2rem" }}>
+                            {name.trim().charAt(0) || "?"}
                           </span>}
                       <span style={{ position: "absolute", right: 0, bottom: 2, width: 26, height: 26, borderRadius: "50%", background: "#003366",
                         border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><ImagePlus size={13} /></span>
+                      {avatar && (
+                        <button type="button" title="ลบรูป" aria-label="ลบรูป"
+                          onClick={e => { e.preventDefault(); setAvatar(undefined); }}
+                          style={{ position: "absolute", left: 0, bottom: 2, width: 24, height: 24, borderRadius: "50%", background: "#fff",
+                            border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", cursor: "pointer" }}>
+                          <X size={12} />
+                        </button>
+                      )}
                     </label>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>

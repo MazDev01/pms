@@ -12,7 +12,7 @@ import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { AssigneeAvatars, PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/lib/quotationPrint";
-import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useHQPolicy, useQuoteValidityDays, useLostReasons } from "@pms/shared/lib/useHQConfig";
@@ -315,10 +315,10 @@ export default function QuotationsPage(){
 function QuotationsPageInner(){
   const router = useRouter();
   const { timeRange, passes } = useFilters();
-  // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — VAT/อายุใบมีผลกับการคิดเงิน
-  const hqPolicy = useHQPolicy();
+  // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — อายุใบมีผลกับการคิดวันหมดอายุ
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลีดใช้)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
+  const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ค่าสำรองของใบที่ไม่มีสแนปช็อต
   const validityDays = useQuoteValidityDays();
   const {
     quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
@@ -523,9 +523,9 @@ function QuotationsPageInner(){
     const w=window.open("","_blank","width=880,height=1040");
     if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
     // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
-    // VAT บังคับใช้ค่าของ HQ เสมอ (docProfile มาจาก localStorage ของสาขา — ตัวแทนตั้ง VAT เองไม่ได้)
-    // VAT: ใช้สแนปช็อตที่ตรึงไว้กับใบตอนสร้าง (q.vatPercent) เสมอถ้ามี — ใบเก่าที่ไม่มีค่อย fallback ไปใช้ของ HQ ปัจจุบัน
-    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:q.vatPercent??hqPolicy.vat}));
+    // VAT: ใช้สแนปช็อตที่ตรึงไว้กับใบตอนสร้าง (q.vatPercent) เสมอถ้ามี
+    //   ใบเก่าที่ไม่มีค่อย fallback ไปใช้ค่าที่สาขาตั้งไว้ปัจจุบัน (ตัวแทนตั้ง VAT เองได้แล้ว · 7 ส.ค. 69)
+    w.document.write(buildQuotationHTML(q,q.issuer??issuer,cust,{...docProfile,vatPercent:q.vatPercent??dealerVat}));
     w.document.close();
   }
 
@@ -827,7 +827,7 @@ function QuotationsPageInner(){
         const lineItems: QuoteLineItem[] = boqLineItems(selected);
         const subtotal = boqSubtotal(lineItems);
         const net = subtotal;                            // = totalValue (มูลค่างาน ก่อน VAT) — ไม่มีส่วนลด
-        const vatPct = selected.vatPercent ?? hqPolicy.vat; // สแนปช็อตตอนสร้าง — ใบเก่าไม่มีค่านี้ค่อย fallback ไปใช้ของ HQ ปัจจุบัน
+        const vatPct = selected.vatPercent ?? dealerVat; // สแนปช็อตตอนสร้าง — ใบเก่าไม่มีค่านี้ค่อย fallback ไปใช้ค่าที่สาขาตั้งไว้
         const vatAmt = Math.round(net*vatPct/100);
         const grand = net + vatAmt;                      // ยอดรวมสุทธิ (รวม VAT) — ตรงกับเอกสารพิมพ์
         const sc = quotationStatusColor[selected.status];

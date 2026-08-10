@@ -562,6 +562,33 @@ body {
   .pms-dash .cc:hover, .cust-card:hover { transform: none; }
 }
 
+/* ⛔ การ์ดที่มีป๊อปอัพเปิดอยู่ข้างใน "ห้ามยกตัว" — กันป๊อปอัพเด้งไปมา
+ *
+ * อาการที่เจอ (7 ส.ค. 69 · หน้าตั้งค่าตัวแทน → ผู้รับผิดชอบ → เพิ่ม):
+ *   ป๊อปอัพกระพริบสลับตำแหน่งซ้าย-ขวาตลอดเวลาที่ขยับเมาส์
+ *
+ * เหตุ: ฉากหลังป๊อปอัพเป็น position:fixed ซึ่งปกติยึดกับ "ขอบจอ" — แต่ถ้ามีบรรพบุรุษตัวใดตัวหนึ่ง
+ *   มี transform อยู่ มันจะเปลี่ยนไปยึดกับ "กล่องตัวนั้น" แทน (กฎ CSS containing block)
+ *   ป๊อปอัพหลายตัวถูกเขียนไว้ข้างใน .card · พอเมาส์เลื่อนเข้าเขตการ์ด → .card:hover ยกตัว
+ *   translateY(-2px) → ป๊อปอัพย้ายไปยึดการ์ดทันที (วัดได้: เด้ง 95px แนวนอน 116px แนวตั้ง)
+ *   เมาส์ออกนอกการ์ด → transform หาย → เด้งกลับ = ภาพกระพริบไปมา
+ *
+ * แก้ที่ต้นเหตุจุดเดียว ครอบคลุมป๊อปอัพทุกตัวในระบบ (~25 ตัว) โดยไม่ต้องไล่แก้ทีละหน้า
+ * ตอนป๊อปอัพเปิด การ์ดอยู่ใต้ฉากมืดอยู่แล้ว เอฟเฟกต์ยกตัวจึงไม่มีใครเห็น = ไม่เสียอะไร
+ * (วางไว้หลังกฎ hover เพื่อให้ชนะด้วยลำดับ ไม่ต้องใช้ !important) */
+.card:has([role="dialog"], .side-drawer),
+.card:hover:has([role="dialog"], .side-drawer),
+.card.clickable:hover:has([role="dialog"], .side-drawer),
+.dash-tile:hover:has([role="dialog"], .side-drawer),
+.tpl-card:hover:has([role="dialog"], .side-drawer),
+.stat-card:hover:has([role="dialog"], .side-drawer),
+.hqx-kpi:hover:has([role="dialog"], .side-drawer),
+.hqx-fcard:hover:has([role="dialog"], .side-drawer),
+.kc.clickable:hover:has([role="dialog"], .side-drawer),
+.pms-dash .kc.clickable:hover:has([role="dialog"], .side-drawer),
+.pms-dash .cc:hover:has([role="dialog"], .side-drawer),
+.cust-card:hover:has([role="dialog"], .side-drawer) { transform: none; }
+
 /* ── การ์ด KPI ที่กดเพื่อกรองได้ (ลีด · ใบเสนอราคา · ลีดทั้งเครือ) ──
    สถานะ "ถูกเลือก" = วงแหวนน้ำเงิน · ต้องเป็นคลาส ห้ามกลับไปใช้ inline style:
    inline ชนะ CSS เสมอ → เงา/ขอบตอน hover จะถูกทับ การ์ดเลยยกลอยแบบไม่มีเงา (เอฟเฟกต์เสียไปครึ่ง)

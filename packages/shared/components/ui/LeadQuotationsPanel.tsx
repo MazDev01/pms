@@ -13,7 +13,7 @@ import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
-import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
 // "วันนี้ของระบบ" (ISO) — โหมด supabase = วันจริง · โหมด local = 30 มิ.ย. 2569 (ดู APP_NOW ใน FilterContext)
@@ -37,8 +37,9 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const savingRef = useRef(false); // กันกดออกใบซ้ำระหว่างรอเลขที่ใบจาก DB (H8 · guard synchronous)
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
-  const policy = useHQPolicy(); // นโยบาย HQ — VAT / อายุใบ · บังคับใช้ทั้งเครือ (อ่านผ่าน repo + อัปเดตตาม HQ)
-  const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา (ผ่าน repo)
+  const policy = useHQPolicy(); // นโยบาย HQ — อายุใบ ฯลฯ (VAT ย้ายไปเป็นของสาขาแล้ว · 7 ส.ค. 69)
+  const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับ/VAT ของสาขา (ผ่าน repo)
+  const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ใช้ตอนออกใบใหม่และเป็นค่าสำรองของใบเก่า
   const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document };
 
   // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
@@ -130,7 +131,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
         status: "draft", date: MOCK_TODAY, items: form.lineItems.length, lineItems: form.lineItems,
         customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: form.expiry || "",
         note: form.note || undefined,
-        vatPercent: policy.vat, // สแนปช็อต VAT ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ (ไม่ใช้ VAT ปัจจุบันของ HQ)
+        vatPercent: dealerVat, // สแนปช็อต VAT ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ (ไม่ใช้ค่าที่สาขาแก้ทีหลัง)
       });
       onToast?.("สร้างใบเสนอราคาเรียบร้อย");
     }
@@ -173,7 +174,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
     const hasItems = form.lineItems.length > 0;
     const hasAmount = net > 0;
     const canSave = hasItems && hasAmount;
-    const vatPct = policy.vat;
+    // ฟอร์มออกใบ: ใช้ VAT ที่สาขาตั้งไว้ (ตั้งค่า › ใบเสนอราคา) — ต้องเป็นค่าเดียวกับที่จะตรึงลงใบตอนบันทึก
+    const vatPct = dealerVat;
     const vatAmt = Math.round(net * vatPct / 100);
     const grand = net + vatAmt;                        // ยอดรวมสุทธิ (รวม VAT)
     return (
@@ -321,7 +323,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? policy.vat, printCfg)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
+          <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? dealerVat, printCfg)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
           {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
           {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
             <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
@@ -368,7 +370,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
                     {([
                       { ic: <Eye size={13} />, t: "ดู", fn: () => { setEditing(q); setMode("view"); } },
                       ...(readOnly ? [] : [{ ic: <Pencil size={13} />, t: "แก้ไข", fn: () => openEdit(q) }]),
-                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? policy.vat, printCfg) },
+                      { ic: <Printer size={13} />, t: "พิมพ์", fn: () => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? dealerVat, printCfg) },
                       ...(readOnly ? [] : [
                         { ic: <Copy size={13} />, t: "ทำสำเนา", fn: () => duplicate(q) },
                         { ic: <Trash2 size={13} />, t: "ลบ", fn: () => setConfirmDel(q.id), danger: true },

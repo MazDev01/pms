@@ -11,8 +11,9 @@ const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626", 
 export function BuildingTypeChart({ types }: { types: { type: string; count: number; value: number }[] }) {
   const max = Math.max(...types.map(t => t.count), 1);
 
+  // chart-m = สูงเท่า "เทียบรายภูมิภาค" ที่จับคู่กันในแถวเดียวกัน (รายการยาวเกินก็เลื่อนในใบ)
   return (
-    <div className="card" style={{ marginBottom: 0 }}>
+    <div className="card chart-m" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div>
           <div className="card-title">ประเภทอาคาร</div>

@@ -38,6 +38,24 @@ export function getSupabase(): SupabaseClient {
   return _client;
 }
 
+/** มีเซสชันเก็บอยู่ในแท็บนี้ไหม (ยังไม่ตรวจว่าหมดอายุ — แค่ "เคยล็อกอินและยังไม่ออก")
+ *
+ *  ใช้กันไม่ให้ยิงคำขอข้อมูลตอนที่ยังไม่ได้ล็อกอิน (7 ส.ค. 69)
+ *  คำขอพวกนั้นถูกฐานข้อมูลปฏิเสธทุกครั้งอยู่แล้ว (401) จึงไม่มีประโยชน์ที่จะยิง
+ *  มีแต่ทำให้หน้า login มีหน้าจอ error แดงเด้งคาไว้ · อ่านจาก sessionStorage โดยตรง
+ *  (คีย์ของ supabase-js) เพราะต้องตอบได้ทันทีแบบไม่ต้องรอ — getSession() เป็น async
+ */
+export function hasStoredSession(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) return true;
+    }
+  } catch { /* เบราว์เซอร์ปิด storage — ถือว่าไม่มี */ }
+  return false;
+}
+
 /** ตรวจว่าเชื่อมต่อ DB ได้จริงไหม (ping ตาราง dealers) — ใช้ตอน health-check */
 export async function checkConnection(): Promise<{ ok: boolean; error?: string }> {
   try {

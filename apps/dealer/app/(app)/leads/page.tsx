@@ -1461,7 +1461,10 @@ export default function LeadsPage() {
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOver !== status) setDragOver(status); }}
                 onDragLeave={() => setDragOver(o => o === status ? null : o)}
                 onDrop={() => { if (dragId) { requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
-                style={{ minWidth:w, width:w, flexShrink:0, alignSelf:"flex-start",
+                style={{ minWidth:w, width:w, flexShrink:0, display:"flex", flexDirection:"column",
+                  // คอลัมน์ยาวลงมาเต็มพื้นที่จอเสมอ ไม่หดตามจำนวนการ์ด — คอลัมน์ว่างจึงยังเป็นเป้าให้ลากมาวางได้ชัด ๆ
+                  // (เดิม alignSelf:"flex-start" ทำให้สูงพอดีเนื้อหา คอลัมน์ที่ยังไม่มีลีดเลยเหลือแค่แถบเตี้ย ๆ)
+                  minHeight:"max(360px, calc(100vh - 330px))",
                   background: isOver ? "#eaf1fb" : "#f6f7f9", borderRadius:12, padding:10,
                   border: isOver ? "1.5px dashed #003366" : "1.5px solid transparent", transition:"background .12s, border-color .12s" }}>
                 {/* header */}
@@ -1476,7 +1479,7 @@ export default function LeadsPage() {
                   {total > 0 && <div style={{ fontSize:"0.65rem", color:"#9ca3af", fontWeight:600, marginTop:3, fontVariantNumeric:"tabular-nums" }}>{fmtM(total)}</div>}
                 </div>
                 {/* cards */}
-                <div style={{ display:"flex", flexDirection:"column", gap:10, minHeight:44 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:10, minHeight:44, flex:1 }}>
                   {col.map(l => (
                     <div key={l.id} draggable
                       onDragStart={e => {
@@ -1566,14 +1569,14 @@ export default function LeadsPage() {
                     </div>
                   ))}
                   {col.length === 0 && (
-                    <div style={{ textAlign:"center", padding:"16px 6px", fontSize:"0.65rem", color: isOver ? "#003366" : "#c7ccd3", border:`1.5px dashed ${isOver ? "#003366" : "#e5e7eb"}`, borderRadius:10 }}>วางการ์ดที่นี่</div>
+                    <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"16px 6px", fontSize:"0.65rem", color: isOver ? "#003366" : "#c7ccd3", border:`1.5px dashed ${isOver ? "#003366" : "#e5e7eb"}`, borderRadius:10 }}>วางการ์ดที่นี่</div>
                   )}
                 </div>
               </div>
             );
           };
           return (
-            <div style={{ display:"flex", gap:16, overflowX:"auto", paddingBottom:10, alignItems:"flex-start" }}>
+            <div style={{ display:"flex", gap:16, overflowX:"auto", paddingBottom:10, alignItems:"stretch" }}>
               {ACTIVE.map(s => renderColumn(s, true))}
               {/* เส้นคั่นก่อนกลุ่มปิดการขาย (ปิดการขายสำเร็จ/ปิดการขายไม่สำเร็จ) — หัวคอลัมน์ตรงแนวเดียวกัน */}
               <div style={{ width:1, alignSelf:"stretch", background:"#e5e7eb", flexShrink:0, margin:"2px 0" }} />

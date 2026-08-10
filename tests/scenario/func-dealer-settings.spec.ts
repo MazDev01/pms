@@ -91,26 +91,28 @@ test("[func] ค่าที่บันทึกไว้ ยังอยู่
   assertNoErrors(errs, "โหลดค่าที่บันทึก");
 });
 
-test("[func] ตั้งคำนำหน้าเลขที่ใบเสนอราคา → ลง DB", async ({ page }) => {
+// คำนำหน้าเลขที่ใบเสนอราคาเป็นค่าของระบบ — ตัวแทนแก้ไม่ได้แล้ว (เดิมพิมพ์เองได้ จึงมีสาขาพิมพ์
+// "Q-CNX-2026-" ทับ แล้วได้เลขซ้อน Q-CNX-2026-CNX-2026-0001 เพราะ RPC ต่อรหัสสาขา+ปีให้อยู่แล้ว)
+test("[func] คำนำหน้าเลขที่ใบเสนอราคาถูกล็อก + ตรงรูปแบบ Q-{สาขา}-{ปี}-", async ({ page }) => {
   const errs = watchErrors(page);
-  const sb = await db(RYG);
-  const PREFIX = "ZZT-2569-";
+  const expected = `Q-RYG-${new Date().getFullYear()}-`;
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/settings`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตั้งค่าใบเสนอราคา" }).first().click();
 
-  const prefixBox = page.getByPlaceholder("Q-").first();
+  const prefixBox = page.getByTestId("quote-prefix");
   await expect(prefixBox).toBeVisible({ timeout: 10_000 });
-  await fillWhenSettled(prefixBox, PREFIX);
-  await clickSave(page);
+  await expect(prefixBox, "คำนำหน้าต้องเป็นรูปแบบที่ระบบออกให้").toHaveText(expected);
 
-  await expect.poll(async () => {
-    const { data } = await sb.from("dealer_settings").select("document").eq("dealer_code", "RYG").maybeSingle();
-    return (data?.document as { quotePrefix?: string } | undefined)?.quotePrefix;
-  }, { timeout: 15_000, message: "คำนำหน้าต้องถูกบันทึกลง DB" }).toBe(PREFIX);
+  // ห้ามมีช่องพิมพ์คำนำหน้าเหลืออยู่ — ล็อกแล้วต้องล็อกจริง ไม่ใช่แค่ทำให้ดูเป็นสีเทา
+  await expect(page.getByPlaceholder("Q-")).toHaveCount(0);
 
-  assertNoErrors(errs, "ตั้งคำนำหน้าเลขที่");
+  // ตัวอย่างเลขที่ถัดไปต้องขึ้นต้นด้วยคำนำหน้าเดียวกัน (ไม่ซ้อนรหัสสาขา/ปีสองรอบ)
+  const preview = page.locator("text=ตัวอย่างเลขที่ถัดไป").locator("xpath=..");
+  await expect(preview).toContainText(expected);
+
+  assertNoErrors(errs, "คำนำหน้าเลขที่ล็อก");
 });
 
 test("[func] ทะเบียนพนักงานขายจาก DB → เลือกได้ในฟอร์มลีด", async ({ page }) => {

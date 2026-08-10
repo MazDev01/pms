@@ -8,7 +8,7 @@ import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
-  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, DEFAULT_QUOTE_NUMBERING,
+  quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, QUOTE_PREFIX,
   type IssuerProfile,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
   quotationToFile, AUTO_FILE_BY, fmtISOToThai, DEFAULT_DEALER_CODE,
@@ -562,7 +562,7 @@ export function SalesProvider({
   const createQuotation = useCallback(async (draft: Omit<QuotationMock, "id">): Promise<QuotationMock> => {
     // สแนปช็อตโปรไฟล์บริษัท ณ ตอนสร้าง + ติด dealerCode สาขาที่ล็อกอิน (multi-tenant)
     const base = { ...draft, issuer: draft.issuer ?? issuerRef.current, dealerCode: draft.dealerCode ?? myDealerCode };
-    const created = await quotationsRepo.createNumbered(myDealerCode, quotePrefixRef.current, base);
+    const created = await quotationsRepo.createNumbered(myDealerCode, QUOTE_PREFIX, base);
     bumpWrite(); // ออกเลขใบผ่าน RPC ไม่ผ่าน persist* — กันผลโหลดเก่าทับใบที่เพิ่งสร้าง
     setQuotations(prev => [created, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
@@ -682,23 +682,18 @@ export function SalesProvider({
   }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
-  // คำนำหน้าเลขที่เป็นของตัวแทน (ตั้งค่า › ใบเสนอราคา) — ตัวนับเดินหน้าที่ DB
-  // อ่าน localStorage ตรงนี้ได้ เพราะเป็นค่าของ "สาขาตัวเอง" ใน origin เดียวกัน ไม่ใช่ค่าที่ HQ เป็นเจ้าของ
+  // คำนำหน้าเป็นค่าคงที่ของระบบ (QUOTE_PREFIX) — รูปแบบเต็ม Q-{รหัสสาขา}-{ปีปัจจุบัน}-{เลขรัน}
+  //   เดิมอ่าน document.quotePrefix ที่ตัวแทนพิมพ์เองได้ → สาขาที่พิมพ์ "Q-CNX-2026-" ทับ
+  //   ได้เลขซ้อนเป็น Q-CNX-2026-CNX-2026-0001 (RPC/LocalAdapter ต่อรหัสสาขา+ปีให้อยู่แล้ว)
+  //   ตอนนี้ช่องนั้นล็อกในหน้าตั้งค่าแล้ว จึงไม่อ่านค่าจาก DB อีก — ค่าเสียที่ค้างอยู่ไม่มีผล
   // หัวกระดาษของสาขา — โหลดผ่าน repo ไว้ล่วงหน้า เพื่อสแนปช็อตลงใบตอนสร้าง (addQuotation เป็น sync)
   // เดิมเรียก loadIssuer() ซึ่งอ่าน localStorage → โหมด supabase ได้ค่าเริ่มต้นของโปรเจกต์เสมอ
   // = ใบเสนอราคาที่ส่งลูกค้าขึ้นชื่อบริษัทผิด (ชื่อสาขาเดโม แทนชื่อสาขาจริง)
   const issuerRef = useRef<IssuerProfile>(DEFAULT_ISSUER);
-  // คำนำหน้าเลขที่ก็เป็นของสาขาเช่นกัน — ต้องอ่านจากที่เดียวกับหัวกระดาษ
-  // เดิมใช้ loadQuoteNumbering() ที่อ่าน localStorage → ตัวแทนตั้งคำนำหน้าไว้ใน DB แล้ว
-  // แต่เวลาออกใบยังได้ค่าจากเครื่อง (คนละค่ากับที่หน้าตั้งค่าแสดง)
-  const quotePrefixRef = useRef<string>(DEFAULT_QUOTE_NUMBERING.prefix);
   useEffect(() => {
     if (!hydrated) return;
     dealerSettingsRepo.get(myDealerCode)
-      .then(cfg => {
-        issuerRef.current = cfg.issuer;
-        if (cfg.document?.quotePrefix) quotePrefixRef.current = cfg.document.quotePrefix;
-      })
+      .then(cfg => { issuerRef.current = cfg.issuer; })
       .catch(e => logRepoRead("dealerSettings.get", e));
   }, [hydrated, myDealerCode]);
 

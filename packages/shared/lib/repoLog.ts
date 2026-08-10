@@ -36,9 +36,15 @@ function reportRepoReadError(tag: string, e: unknown): void {
   try { window.dispatchEvent(new CustomEvent(REPO_READ_ERROR_EVENT, { detail: `${tag}: ${msg}` })); } catch { /* ignore */ }
 }
 
-/** บันทึกความล้มเหลวของการอ่าน — ข้ามกรณีที่คำขอถูกยกเลิกเพราะเปลี่ยนหน้า */
+/** คำขอถูกหยุดเพราะยังไม่ได้ล็อกอิน (ชั้นข้อมูลไม่ยิงออกไปเลย) — ไม่ใช่ความผิดพลาดของระบบ
+ *  เทียบ code ตรง ๆ แทนการ import จากชั้น adapter เพื่อไม่ให้สองไฟล์ import วนกัน */
+function isNoSession(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { code?: unknown }).code === "no-session";
+}
+
+/** บันทึกความล้มเหลวของการอ่าน — ข้ามกรณีที่คำขอถูกยกเลิกเพราะเปลี่ยนหน้า/ยังไม่ล็อกอิน */
 export function logRepoRead(tag: string, e: unknown): void {
-  if (isAbortedRequest(e)) return;
+  if (isAbortedRequest(e) || isNoSession(e)) return;
   console.error(`[${tag}]`, e);
   reportRepoReadError(tag, e);
 }

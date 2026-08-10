@@ -42,7 +42,7 @@ import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/compone
 import { PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
-import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
+import { useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
@@ -388,7 +388,7 @@ export default function CustomersPage(){
   const userProfile = useUserProfile();
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับของสาขา — ต้องส่งเข้าเอกสารพิมพ์
   const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document };
-  const hqPolicy = useHQPolicy();
+  const dealerVat = useDealerVat();  // % VAT ที่สาขาตั้งเอง (ตั้งค่า › ใบเสนอราคา) — ใบที่มีสแนปช็อตใช้ของใบเสมอ
   const customerNotes = useCustomerNotes(userProfile.profile.name);
   const [addingNote, setAddingNote] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
@@ -1330,7 +1330,7 @@ export default function CustomersPage(){
         // BOQ — ใบที่ไม่มี lineItems เก็บไว้ ใช้ materialCost ปั้นเป็นรายการเดียว (ตรรกะเดียวกับหน้าใบเสนอราคา)
         const lis: QuoteLineItem[] = boqLineItems(q);
         const boqTotal = boqSubtotal(lis);
-        const vatPct = hqPolicy.vat;   // VAT = นโยบาย HQ (ตัวแทนตั้งเองไม่ได้ · อ่านผ่าน repo)
+        const vatPct = q.vatPercent ?? dealerVat;   // สแนปช็อตที่ตรึงไว้กับใบ · ใบเก่าที่ไม่มีค่อยใช้ค่าที่สาขาตั้งไว้
         // ดีลที่ผูกกับใบนี้ → ไทม์ไลน์กิจกรรมจริงของดีล
         const deal = customerDeals.find(l => (q.dealId!=null && l.numId===q.dealId)) ?? customerDeals.find(l=>l.company===q.customer);
         const acts = deal?.activities ?? [];
@@ -1501,7 +1501,7 @@ export default function CustomersPage(){
                   <div style={cardS}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                       <div style={{...secL,marginBottom:0}}><FileText size={13} color={PRIMARY}/> ใบเสนอราคา</div>
-                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, q.vatPercent??hqPolicy.vat, printCfg)}
+                      <button onClick={()=>printQuotation(q,{ company:selected.company, name:selected.name, phone:selected.phone, province:selected.province }, q.vatPercent??dealerVat, printCfg)}
                         className="btn btn-secondary btn-sm" style={{color:PRIMARY}}><Printer size={12}/> พิมพ์ PDF</button>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 20px",marginBottom:12}}>

@@ -322,6 +322,13 @@ export const HQ_SYSTEM_KEY = "hq_system";
 // prefix เป็นแค่ป้ายนำหน้า (ไม่ใช่ตัวกันชนอีกต่อไป) — รหัสสาขา+ปีปัจจุบัน+เลขรัน ต่อท้ายเสมอที่ RPC/LocalAdapter
 // รูปแบบเต็ม: Q-{DealerCode}-{Year}-{Running} เช่น Q-CNX-2026-0001 (0088_quotation_number_dealer_code.sql)
 export const DEFAULT_QUOTE_NUMBERING: QuoteNumbering = { prefix: "Q-", next: 1101 };
+// ⛔ ป้ายนำหน้าเป็นค่าคงที่ของระบบ — ตัวแทนแก้ไม่ได้ (ช่องในหน้าตั้งค่าเป็นแบบล็อก)
+//   เดิมพิมพ์เองได้ → มีสาขาพิมพ์ "Q-CNX-2026-" ทับ แล้วได้เลขซ้อนเป็น Q-CNX-2026-CNX-2026-0001
+export const QUOTE_PREFIX = DEFAULT_QUOTE_NUMBERING.prefix;
+// คำนำหน้าเต็มที่ระบบออกให้ = Q-{รหัสสาขา}-{ปีปัจจุบัน}- (ปีเดินเองทุกปี) แล้วต่อด้วยเลขรัน 4 หลัก
+export function quoteNoPrefix(dealerCode: string, year: number = new Date().getFullYear()): string {
+  return `${QUOTE_PREFIX}${dealerCode}-${year}-`;
+}
 export function loadQuoteNumbering(): QuoteNumbering {
   if (typeof window === "undefined") return { ...DEFAULT_QUOTE_NUMBERING };
   // ตัวแทนคุมเลขที่ใบเสนอราคาของตัวเอง (เหมือนแฟรนไชส์แต่ไม่ใช่แฟรนไชส์) → อ่านจากตั้งค่าใบเสนอราคาของตัวแทนก่อน
@@ -490,12 +497,14 @@ export function syncAddQuotationFile(q: QuotationMock) {
 // ให้หัวกระดาษ (ชื่อบริษัท/ที่อยู่/โทร/เลขภาษี) ตรงกันทุกที่เมื่อยังไม่ได้ตั้งค่าโปรไฟล์
 export type IssuerProfile = { company: string; address: string; phone: string; taxId: string };
 export const ISSUER_KEY = "dealer_issuer_profile_v2";
-export const DEFAULT_ISSUER: IssuerProfile = {
-  company: "บริษัท เชียงใหม่สตีลบิลด์ จำกัด",
-  address: "88/9 ถ.มหิดล ต.หายยา อ.เมือง จ.เชียงใหม่ 50100",
-  phone: "053-112-233",
-  taxId: "0505561001234",
-};
+// ⛔ ห้ามใส่ข้อมูลบริษัทของสาขาใดสาขาหนึ่งเป็นค่าเริ่มต้นเด็ดขาด — ต้องว่างเสมอ
+//   ค่านี้คือ "ค่าที่ใช้เมื่อสาขายังไม่เคยตั้งค่าหัวกระดาษ" ซึ่งใช้ร่วมกันทุกสาขา
+//   เดิมใส่ข้อมูลจริงของ CNX (เชียงใหม่สตีลบิลด์) ไว้ ผลคือ (พบ 7 ส.ค. 69):
+//     · ตัวแทนที่เพิ่งสร้างใหม่ เปิดหน้าบัญชีดีลเลอร์แล้วเห็นชื่อ/ที่อยู่/เลขผู้เสียภาษีของ CNX
+//     · ร้ายกว่านั้น — ใบเสนอราคาที่ตัวแทนใหม่ออกให้ลูกค้า ขึ้นหัวกระดาษเป็นชื่อบริษัท CNX
+//       และช่องลงนามผู้เสนอราคาก็เป็นชื่อ CNX (ดู quotationPrint.ts · SalesContext issuerRef)
+//   ว่างเปล่า = ผู้ใช้เห็นทันทีว่ายังไม่ได้กรอก ดีกว่าเห็นข้อมูลบริษัทอื่นแล้วเข้าใจว่าเป็นของตัวเอง
+export const DEFAULT_ISSUER: IssuerProfile = { company: "", address: "", phone: "", taxId: "" };
 
 export const kpis = [
   { key: "target", label: "เป้า vs ยอดขาย", value: "68%", delta: 10.4, icon: "target" },

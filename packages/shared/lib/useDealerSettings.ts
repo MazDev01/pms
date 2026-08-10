@@ -69,3 +69,14 @@ export function useDealerSettings(): UseDealerSettings {
 
   return { settings, loaded, save };
 }
+
+/** % VAT ที่สาขาตั้งไว้เอง (ตั้งค่า › ใบเสนอราคา) — ใช้ตอนออกใบใหม่ และเป็นค่าสำรองของใบเก่าที่ไม่มีสแนปช็อต
+ *
+ *  เดิมค่านี้ล็อกไว้ที่สำนักงานใหญ่ทั้งเครือ · บอสสั่งเปิดให้ตัวแทนตั้งเอง (7 ส.ค. 69)
+ *  ใบที่ออกไปแล้วไม่กระทบ — ทุกใบตรึง q.vatPercent ไว้ตั้งแต่ตอนสร้าง เปลี่ยนค่านี้ทีหลังไม่ย้อนไปแก้ใบเก่า
+ */
+export function useDealerVat(): number {
+  const { settings } = useDealerSettings();
+  const v = settings.document?.vatPercent;
+  return typeof v === "number" && v >= 0 ? v : DEFAULT_DOC.vatPercent;
+}
