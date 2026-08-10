@@ -755,13 +755,23 @@ body {
   background:
     linear-gradient(to right, var(--card) 30%, rgba(255,255,255,0)) 0 0,
     linear-gradient(to left, var(--card) 30%, rgba(255,255,255,0)) 100% 0,
-    linear-gradient(to right, rgba(16,40,80,.12), rgba(16,40,80,0)) 0 0,
-    linear-gradient(to left, rgba(16,40,80,.12), rgba(16,40,80,0)) 100% 0;
+    linear-gradient(to right, rgba(16,40,80,.30), rgba(16,40,80,0)) 0 0,
+    linear-gradient(to left, rgba(16,40,80,.30), rgba(16,40,80,0)) 100% 0;
   background-repeat: no-repeat;
   background-color: var(--card);
-  background-size: 24px 100%, 24px 100%, 10px 100%, 10px 100%;
+  background-size: 24px 100%, 24px 100%, 28px 100%, 28px 100%;
   background-attachment: local, local, scroll, scroll;
 }
+/* ⚠️ ต้องเห็นได้ว่า "ยังมีคอลัมน์ต่อทางขวา" (แก้ 10 ส.ค. 69) ────────────────────────
+   ปัญหาที่วัดได้จริง: หน้าทะเบียนตัวแทนซ่อนเนื้อหาไป 94px — ปุ่ม แก้ไข/ปิดใช้งาน/ลบ
+   อยู่นอกสายตาตั้งแต่เปิดหน้ามา · จอแคบ 768px ซ่อนถึง 522px
+   ผู้ใช้เข้าใจว่าตารางมีแค่ที่เห็น แล้วหาปุ่มที่ต้องใช้ไม่เจอ
+
+   ทำไมไม่พึ่งแถบเลื่อน: แถบเลื่อนแนวนอนของ Chromium เป็นแบบลอย โผล่เฉพาะตอนเอาเมาส์ไปชี้
+   ลองบังคับด้วย scrollbar-width/::-webkit-scrollbar แล้ว วัดจริงได้ความสูงแค่ 1px
+   (= ขอบตาราง ไม่ใช่แถบเลื่อน) แปลว่ามันไม่กินพื้นที่จริงและมองไม่เห็นอยู่ดี
+   → ใช้เงาที่ขอบแทน ซึ่งเป็นภาพวาดธรรมดา เรนเดอร์ได้แน่นอนทุกเบราว์เซอร์
+   และเข้มพอให้เห็น (ของเดิมจางระดับ .12 ซึ่งจางจนเอเจนต์ตรวจ UI รายงานว่า "ไม่มีสัญญาณอะไรเลย") */
 /* table-layout:fixed => คอลัมน์กว้างคงที่ ไม่ยืด/หดตามข้อมูลที่โชว์ (เสถียรทุกหน้า) */
 .table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
 .table-wrap thead { background: var(--muted); }

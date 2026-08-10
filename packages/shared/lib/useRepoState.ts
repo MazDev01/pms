@@ -23,7 +23,12 @@ export function useRepoState<T>(
   load: () => Promise<T>,
   save: (value: T) => void,
   initial: T,
-): [T, Dispatch<SetStateAction<T>>] {
+  // ตัวที่ 3 = โหลดเสร็จหรือยัง · เพิ่มท้ายทูเพิลจึงไม่กระทบที่เรียกใช้แบบเดิม [a, b]
+  //
+  // ⚠️ ต้องมี เพราะ "ยังโหลดไม่เสร็จ" กับ "ไม่มีข้อมูล" หน้าตาเหมือนกันหมด (ทั้งคู่เป็นอาร์เรย์ว่าง)
+  //   ถ้าแยกไม่ออก หน้าจะประกาศว่า "ตัวแทนทั้งหมด 0 · ไม่พบข้อมูล" ระหว่างรอโหลด
+  //   ซึ่งเป็นข้อมูลผิด ไม่ใช่แค่ว่างเปล่า — ผู้ใช้เน็ตช้าจะเชื่อว่าระบบไม่มีข้อมูลจริง ๆ (พบ 10 ส.ค. 69)
+): [T, Dispatch<SetStateAction<T>>, boolean] {
   const [state, setState] = useState<T>(initial);
   // "โหลดสำเร็จแล้ว" เท่านั้นจึงจะเขียนกลับได้ — โหลดล้มเหลวไม่นับ
   // เดิมใช้ hydrated ตัวเดียวและตั้งเป็น true ใน .catch ด้วย → query ล้ม (เน็ตหลุด/RLS ปฏิเสธ)
@@ -72,7 +77,7 @@ export function useRepoState<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, loaded]);
 
-  return [state, setAndMark];
+  return [state, setAndMark, loaded];
 }
 
 // อ่านอย่างเดียว (ไม่เขียนกลับ) — สำหรับหน้าที่แค่แสดงผลข้อมูลระดับเครือ
