@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { RYG, ADMIN, skipReason, type Account } from "./supabaseEnv";
+import { db } from "./funcHelpers";
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 
@@ -111,14 +112,41 @@ test("[supabase] HQ ล็อกอินแล้วเปิดหน้าเ
   expect(fatal, "หน้า HQ ต้องไม่มี error").toEqual([]);
 });
 
-test("[supabase] HQ เห็นตัวแทนครบ 10 สาขาจาก DB", async ({ page }) => {
+// ⚠️ เดิมเทสต์นี้เขียนชื่อสาขาไว้ตายตัว 3 ชื่อ ("ระยอง/เชียงใหม่/ภูเก็ต") และตั้งชื่อว่า "ครบ 10 สาขา"
+//   พอผู้บริหารลบสาขาภูเก็ตออกจริง (7 ส.ค. 69) เทสต์ก็ตกทันที ทั้งที่ระบบทำงานถูกต้องทุกอย่าง
+//   → เสียเวลาไล่หาว่าโค้ดพังตรงไหน ทั้งที่ไม่มีอะไรพัง
+//   สิ่งที่อยากพิสูจน์จริง ๆ คือ "หน้าจอแสดงสาขาตามที่มีอยู่ในฐานข้อมูล ไม่ใช่ข้อมูลตัวอย่างที่ฝังในโค้ด"
+//   จึงเปลี่ยนไปเทียบกับฐานข้อมูลตรง ๆ — เพิ่มหรือลบสาขากี่ครั้งเทสต์นี้ก็ยังถูกเสมอ
+test("[supabase] หน้าทะเบียนตัวแทนแสดงสาขาตรงกับที่มีในฐานข้อมูลจริง", async ({ page }) => {
   await login(page, HQ, "/hq/login", ADMIN);
   await page.goto(`${HQ}/hq/dealers`, { waitUntil: "domcontentloaded" });
-  await expect.poll(async () => page.evaluate(() => document.body.innerText), { timeout: 15_000 })
-    .toContain("ระยองสตีลเวิร์คส์");
-  const txt = await page.evaluate(() => document.body.innerText);
-  for (const d of ["เชียงใหม่สตีลบิลด์", "ภูเก็ตสตรัคเจอรัล"]) expect(txt).toContain(d);
-  console.log("รายชื่อตัวแทนจาก DB แสดงครบ");
+
+  // รายชื่อจริงจากฐานข้อมูล — อ่านด้วยสิทธิ์ของผู้ดูแลที่ล็อกอินอยู่ (ผ่านกฎความปลอดภัยจริง ไม่ใช่ลัด)
+  const sb = await db(ADMIN);
+  const names = ((await sb.from("dealers_directory").select("name")).data ?? []).map(d => String(d.name));
+  expect(names.length, "ต้องมีสาขาอยู่ในฐานข้อมูลอย่างน้อย 1 สาขา").toBeGreaterThan(0);
+
+  // ⚠️ ต้องรอ "ข้อมูลจริงขึ้นจอ" ไม่ใช่แค่ "มีแถวในตาราง"
+  //   ระหว่างโหลด ตารางมีแถวโครงเปล่าอยู่ก่อนแล้ว ถ้าเช็กแค่จำนวนแถว จะอ่านตอนยังว่างแล้วตกทันที
+  //   (เจอกับตัวเองตอนเขียนเทสต์นี้ 10 ส.ค. 69 — เช็กว่ามีแถว ผ่าน แต่ชื่อสาขายังว่าง)
+  await expect.poll(async () => page.evaluate(() => document.body.innerText),
+    { timeout: 20_000, message: "ต้องรอชื่อสาขาจริงขึ้นจอก่อน" }).toContain(names[0]);
+
+  // เก็บข้อความทุกช่องของแต่ละแถว — ไม่ผูกกับลำดับคอลัมน์ สลับคอลัมน์เมื่อไหร่เทสต์ก็ยังใช้ได้
+  const rows: string[][] = await page.evaluate(() =>
+    [...document.querySelectorAll("tbody tr")].map(tr =>
+      [...tr.children].map(td => td.textContent?.trim() ?? "")));
+
+  // ⚠️ ตารางแบ่งหน้าละ 10 แถว — มีมากกว่านั้นหน้าแรกจะแสดงแค่ 10 ซึ่งถูกต้องแล้ว
+  expect(rows.length, "หน้าแรกต้องแสดงไม่เกิน 10 แถวตามกติกาการแบ่งหน้า").toBeLessThanOrEqual(10);
+  // ทุกแถวบนจอต้องเป็นสาขาที่มีอยู่จริงในฐานข้อมูล = ไม่ได้เอาข้อมูลตัวอย่างที่ฝังในโค้ดมาโชว์
+  const shown = rows.map(cells => cells.find(c => names.includes(c)) ?? "");
+  for (let i = 0; i < rows.length; i++) {
+    expect(shown[i], `แถวที่ ${i + 1} ไม่ตรงกับสาขาใดในฐานข้อมูลเลย (${rows[i].join(" | ")})`).not.toBe("");
+  }
+  // ถ้าสาขาน้อยกว่าหนึ่งหน้า ต้องเห็นครบทุกสาขา ไม่มีหายไปเงียบ ๆ
+  if (names.length <= 10) expect(rows.length, "สาขาไม่ถึงหนึ่งหน้า ต้องแสดงครบทุกสาขา").toBe(names.length);
+  console.log(`ทะเบียนตัวแทนแสดง ${rows.length} สาขาจากฐานข้อมูล: ${shown.join(", ")}`);
 });
 
 test("[supabase] หน้าจอโชว์ชื่อคน/ชื่อสาขาจริง ไม่ใช่อีเมล/รหัสสาขา (B5)", async ({ page }) => {

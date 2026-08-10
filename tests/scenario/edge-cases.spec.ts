@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, HQ_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag,
+  db, waitRow, cleanup, specNS, nsTag, fillDealerForm,
 } from "./funcHelpers";
 
 // ลบตัวแทน "พร้อมบัญชี auth" ผ่าน route (service_role) — เหมือน func-hq.spec.ts (purgeDealerAccount)
@@ -247,7 +247,16 @@ test("[edge] แก้ 'มูลค่า' ลีดเดียวกันพ
     await Promise.all([pageA.getByRole("button", { name: "ตาราง" }).click(), pageB.getByRole("button", { name: "ตาราง" }).click()]);
 
     // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
-    await pageA.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
+    //
+    // ⚠️ ต้องค้นหา "ทั้งสองแท็บ" — เดิมใส่ให้แท็บ A แท็บเดียว (พบ 10 ส.ค. 69)
+    //   แท็บ B จึงเห็นตารางที่ไม่ได้กรอง พอมีลีดของสาขา RYG เกิน 10 รายการ
+    //   แถวเป้าหมายก็ตกไปอยู่หน้าถัดไป → หาไม่เจอ แล้วตกที่บรรทัด "รอให้แถว B ขึ้น"
+    //   อาการคือ "ตกบ้างไม่ตกบ้าง" ขึ้นกับว่าสเปกอื่นสร้างข้อมูลค้างไว้เท่าไหร่ตอนนั้น
+    //   ซึ่งเป็นกับดักเดียวกับที่เคยไล่เก็บไปแล้ว 13 จุด แต่จุดนี้รอดมาเพราะ "มีคำสั่งค้นหาอยู่จริง" หนึ่งอัน
+    await Promise.all([
+      pageA.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY),
+      pageB.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY),
+    ]);
     const rowA = pageA.locator("tbody tr").filter({ hasText: COMPANY }).first();
     const rowB = pageB.locator("tbody tr").filter({ hasText: COMPANY }).first();
     await expect(rowA).toBeVisible({ timeout: 15_000 });
@@ -289,9 +298,7 @@ test("[edge·hq] กดปุ่ม 'สร้างตัวแทน' ซ้�
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
   await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มตัวแทน" }).click();
-  await page.getByPlaceholder("เช่น BKK").fill(NEW_DEALER_CODE);
-  await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(tg("ตัวแทนกดซ้ำ"));
-  await page.getByPlaceholder("เช่น ระยอง").fill("ระยอง");
+  await fillDealerForm(page, NEW_DEALER_CODE, tg("ตัวแทนกดซ้ำ"));
 
   const saveBtn = page.getByRole("button", { name: "สร้างตัวแทน" });
   await expect(saveBtn).toBeEnabled({ timeout: 10_000 });

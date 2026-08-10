@@ -55,13 +55,27 @@ test("[ux·dealer] ก้น sidebar แสดงป้ายเจ้าขอ�
   await expect(page.getByText("เจ้าของแพลตฟอร์ม")).toHaveCount(0);
 });
 
-// HQ ล็อกเลขที่ใบเสนอราคา: ฝั่งตัวแทนดูได้ แก้ไม่ได้ (ไม่มี input พิมพ์ prefix)
-test("[ux·dealer] ตัวแทนตั้งเลขที่ใบเสนอราคาเองได้ · ล็อกเฉพาะ VAT", async ({ page }) => {
+// ⚠️ เดิมเทสต์นี้คาดว่าตัวแทน "พิมพ์คำนำหน้าเลขที่เองได้" (มองหาช่องกรอกที่ขึ้นต้นด้วย Q-)
+//   แต่ภายหลังตัดสินใจ **ล็อกคำนำหน้าเป็นรูปแบบเดียวทั้งระบบ** Q-{รหัสสาขา}-{ปี}- โดยตั้งใจ
+//   เพราะสาขาที่พิมพ์เองจะได้เลขที่ไม่ตรงกับที่ระบบออกจริงตอนสร้างใบ
+//   เทสต์จึงตกทั้งที่โค้ดถูก — ตอนนี้เปลี่ยนมาตรวจ "กติกาที่ใช้จริง" แทน
+//
+// สรุปกติกาปัจจุบัน: คำนำหน้า = ระบบล็อก · เลขลำดับกับอายุใบ = ตัวแทนตั้งเอง · VAT = สำนักงานใหญ่กำหนด
+test("[ux·dealer] คำนำหน้าเลขที่ใบเสนอราคาถูกล็อก · เลขลำดับตัวแทนตั้งเอง · VAT มาจากสำนักงานใหญ่", async ({ page }) => {
   await open(page, "dealer", "/settings");
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: false }).first().click();
-  // เลขที่ = ตัวแทนคุมเอง → มีช่องพิมพ์คำนำหน้า (prefix) แบบแก้ได้
-  await expect(page.locator('input[value^="Q-"]')).toHaveCount(1);
-  // ล็อกแค่อันจำเป็น — VAT ยังกำหนดโดยสำนักงานใหญ่ (กล่องอ่านอย่างเดียว + ป้าย HQ)
+
+  // คำนำหน้าเป็นกล่องอ่านอย่างเดียว ไม่ใช่ช่องกรอก — และต้องเป็นรูปแบบของระบบ
+  const prefix = page.getByTestId("quote-prefix");
+  await expect(prefix).toBeVisible();
+  await expect(prefix).toHaveText(/^Q-[A-Z]{3}-\d{4}-$/);
+  await expect(page.locator('input[data-testid="quote-prefix"]'), "คำนำหน้าต้องแก้ไม่ได้").toHaveCount(0);
+
+  // เลขลำดับถัดไป = ตัวแทนตั้งเองได้จริง (ต้องเป็นช่องกรอกที่ไม่ถูกปิด)
+  const running = page.locator('input[type="number"]').first();
+  await expect(running).toBeEditable();
+
+  // VAT ยังกำหนดโดยสำนักงานใหญ่
   await expect(page.getByText("ภาษีมูลค่าเพิ่ม %")).toBeVisible();
 });
 

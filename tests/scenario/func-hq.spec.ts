@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
 import {
   HQ_ORIGIN, DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, waitGone, TAG,
+  db, waitRow, waitGone, TAG, fillDealerForm,
 } from "./funcHelpers";
 
 // ฝั่งสำนักงานใหญ่ — ข้อมูลกลางที่ทั้งเครือใช้ร่วมกัน
@@ -68,9 +68,7 @@ test("[func·hq] สร้างตัวแทน = สร้างบัญช
     { timeout: 25_000, message: "ทะเบียนตัวแทนต้องโหลดเสร็จก่อน" }).toContain("ระยองสตีลเวิร์คส์");
   await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
 
-  await page.getByPlaceholder("เช่น BKK").fill(NEW_CODE);
-  await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(NEW_NAME);
-  await page.getByPlaceholder("เช่น ระยอง").fill("ระยอง");
+  await fillDealerForm(page, NEW_CODE, NEW_NAME);
   await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
 
   // ผลอย่างใดอย่างหนึ่ง: โมดัลสำเร็จ (มี key) หรือ ข้อความ error ในฟอร์ม (ไม่มี key)
@@ -231,9 +229,7 @@ test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเ�
     // จงใจ "ไม่รอ" ให้ทะเบียนโหลดเสร็จ แล้วรีบกดเพิ่มทันที
     await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
-    await page.getByPlaceholder("เช่น BKK").fill(BCODE);
-    await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(`${TAG}-ก่อนโหลด`);
-    await page.getByPlaceholder("เช่น ระยอง").fill("ระยอง");
+    await fillDealerForm(page, BCODE, `${TAG}-ก่อนโหลด`);
     await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
     await page.waitForTimeout(4000);
 
