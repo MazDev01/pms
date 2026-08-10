@@ -20,8 +20,24 @@
 //   • ฟอนต์ของ "ใบเสนอราคาที่พิมพ์ออกมา" — กระทบ! quotationPrint.ts ดึง Sarabun จากภายนอกตอนใช้งานจริง
 //     หน้าต่างพิมพ์สืบทอด CSP มาจากหน้าที่เปิดมัน → ถ้าไม่เปิดทางไว้ เอกสารจะตกไปใช้ฟอนต์สำรอง
 //     หน้าตาเพี้ยนจากที่ออกแบบ (จึงเปิดทางให้ fonts.googleapis.com / fonts.gstatic.com โดยเฉพาะ)
-//   • ระบบแจ้งเตือนข้อผิดพลาด (Sentry) — ยังไม่ได้เปิดใช้ (ไม่ได้ตั้ง DSN) จึงไม่ต้องเปิดทาง
-//     ⚠️ ถ้าวันหลังเปิดใช้ ต้องกลับมาเติมปลายทางของ Sentry ที่ connect-src ด้วย ไม่งั้นรายงานส่งไม่ออก
+//   • ระบบแจ้งเตือนข้อผิดพลาด (Sentry) — เปิดทางให้อัตโนมัติเมื่อตั้ง DSN (ดู connectSrc ด้านล่าง)
+
+// ── ปลายทางที่หน้าเว็บส่งข้อมูลออกไปได้ ────────────────────────────────────────────
+//
+// ⚠️ ทำไมต้องคำนวณเอาจาก DSN ไม่ใช่พิมพ์ที่อยู่ Sentry ไว้ตรง ๆ (แก้ 7 ส.ค. 69 · Part 2):
+//   เดิมเขียนเตือนไว้ว่า "ถ้าเปิดใช้ Sentry อย่าลืมกลับมาเติมที่อยู่ตรงนี้ด้วย"
+//   ซึ่งเป็นขั้นตอนที่คนต้องจำเอง และถ้าลืม จะพังแบบ **เงียบสนิทและหลอกที่สุด**:
+//     ตั้ง DSN แล้ว → คิดว่าระบบแจ้งเตือนทำงานแล้ว → เห็น Sentry ว่างเปล่า
+//     → สรุปว่า "ระบบไม่มีข้อผิดพลาดเลย" ทั้งที่ความจริงคือรายงานถูกเบราว์เซอร์บล็อกทิ้งทุกฉบับ
+//   ระบบเฝ้าระวังที่เงียบเพราะพัง อันตรายกว่าไม่มีระบบเฝ้าระวัง เพราะมันสร้างความมั่นใจผิด ๆ
+//   → ตั้ง DSN อย่างเดียวจบ ไม่มีขั้นตอนที่สอง ไม่มีอะไรให้ลืม
+function sentryOrigin() {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return "";
+  try { return " " + new URL(dsn).origin; } catch { return ""; }   // DSN เพี้ยน = ไม่เปิดทางมั่ว
+}
+const connectSrc = `connect-src 'self' https://*.supabase.co wss://*.supabase.co${sentryOrigin()}`;
+
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",   // Next.js hydrate ด้วย inline script
@@ -29,7 +45,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https:",                  // โลโก้/รูปโปรไฟล์เก็บเป็น data URL
   "font-src 'self' data: https://fonts.gstatic.com",    // ไฟล์ฟอนต์จริงของเอกสารที่พิมพ์
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  connectSrc,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -53,7 +69,7 @@ export function cspWithNonce(nonce) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    connectSrc,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

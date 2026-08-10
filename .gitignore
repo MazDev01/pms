@@ -25,6 +25,7 @@ playwright/.cache/
 
 # debug/scratch scripts
 _m.mjs
+.scratch-audit/
 
 # Claude Code personal local settings + เครื่องมือส่วนตัว
 .claude/settings.local.json
@@ -40,3 +41,6 @@ note/
 
 # ไฟล์ขยะจาก hook แจ้งเตือน (พาธ Windows ถูกเขียนเป็นชื่อไฟล์ตรง ๆ) — ห้ามเข้า repo
 *claude-notify-signals*
+
+# ข้อมูลสำรอง — มีข้อมูลลูกค้าจริงและรหัสลับตัวแทน ห้ามขึ้น git เด็ดขาด
+backups/

@@ -1,0 +1,127 @@
+// ── สำรองข้อมูลทั้งฐานข้อมูลลงไฟล์ ────────────────────────────────────────────────
+//
+// ทำไมต้องมี (ตรวจพบ 7 ส.ค. 69 ระหว่างทำ Part 2):
+//   ถามระบบสำรองข้อมูลของผู้ให้บริการตรง ๆ แล้วได้คำตอบว่า
+//     {"pitr_enabled": false, "backups": []}
+//   แปลว่า **ไม่มีข้อมูลสำรองอยู่เลยแม้แต่ชุดเดียว** ถ้าฐานข้อมูลเสียหรือมีคนลบผิด
+//   ข้อมูลจะหายถาวร กู้ไม่ได้ — และวันเดียวกันนั้นก็เพิ่งมีการลบตัวแทน 4 สาขาจริง
+//   ซึ่งกู้กลับไม่ได้เลย เป็นตัวอย่างที่เกิดขึ้นแล้วจริง ๆ ว่าความเสี่ยงนี้ไม่ใช่เรื่องสมมติ
+//
+//   เอกสารนำขึ้นระบบเดิมเขียนว่า "ผู้ให้บริการสำรองให้อัตโนมัติ" — ข้อความนั้นไม่จริง
+//   (แผนใช้งานปัจจุบันไม่มีการสำรองอัตโนมัติ) จึงต้องมีของเราเองที่ควบคุมได้และทดลองกู้ได้จริง
+//
+// ⚠️ ขอบเขตที่ทำได้จริง — ต้องรู้ก่อนใช้ ไม่ใช่คิดว่าครอบคลุมทุกอย่าง:
+//   ✅ ข้อมูลธุรกิจทั้งหมด 23 ตาราง (ตัวแทน ลูกค้า ลีด ใบเสนอราคา การตั้งค่า บันทึกการใช้งาน)
+//   ⚠️ รายชื่อบัญชีผู้ใช้ — เก็บได้แค่ "ใครมีบัญชีบ้าง" (อีเมล/บทบาท/สาขา)
+//      **รหัสผ่านสำรองไม่ได้** เพราะระบบยืนยันตัวตนไม่เปิดให้อ่านออกมา
+//      → ถ้าต้องกู้จริง ผู้ใช้ทุกคนต้องตั้งรหัสผ่านใหม่ ระบบจะไม่กลับมาเองทั้งหมด
+//   ❌ ไฟล์แนบที่อัปโหลด (รูป/เอกสาร) — อยู่คนละที่กับฐานข้อมูล ตัวนี้ไม่ได้สำรองให้
+//
+// 🔒 ไฟล์ที่ได้มีข้อมูลลูกค้าจริงและรหัสลับของตัวแทน — ห้ามส่งต่อ ห้าม commit ขึ้น git
+//    (โฟลเดอร์ backups/ ถูกกันไว้ใน .gitignore แล้ว)
+//
+// รัน: node scripts/backup.mjs [ชื่อโฟลเดอร์ปลายทาง]
+import { createClient } from "@supabase/supabase-js";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
+
+const PAGE = 1000;   // ฐานข้อมูลคืนสูงสุด 1,000 แถวต่อคำขอ ขอมากกว่านี้ก็ได้เท่านี้ — ต้องไล่ทีละหน้า
+
+function readEnvFile(file) {
+  const out = {};
+  try {
+    for (const l of readFileSync(file, "utf8").split(/\r?\n/)) {
+      const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "").trim();
+    }
+  } catch { /* ไม่มีไฟล์ */ }
+  return out;
+}
+
+const env = readEnvFile("apps/hq/.env.local");
+const URL_ = env.NEXT_PUBLIC_SUPABASE_URL, KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+if (!URL_ || !KEY) {
+  console.error("❌ ไม่พบค่าเชื่อมต่อฐานข้อมูลใน apps/hq/.env.local");
+  process.exit(1);
+}
+const svc = createClient(URL_, KEY, { auth: { persistSession: false } });
+
+/**
+ * อ่านรายชื่อตาราง + คีย์หลัก จากสคีมาจริงของฐานข้อมูล
+ * ⚠️ ห้าม hardcode รายชื่อตาราง — เพิ่มตารางใหม่แล้วลืมมาแก้ที่นี่ = ตารางนั้นไม่ถูกสำรอง
+ *    และจะไม่มีใครรู้จนกว่าจะถึงวันที่ต้องกู้จริง ซึ่งสายไปแล้ว
+ */
+async function readSchema() {
+  const res = await fetch(`${URL_}/rest/v1/`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } });
+  const defs = (await res.json()).definitions ?? {};
+  return Object.entries(defs).map(([table, d]) => ({
+    table,
+    pk: Object.entries(d.properties ?? {})
+      .filter(([, p]) => /<pk\/>/.test(p.description ?? ""))
+      .map(([c]) => c),
+  }));
+}
+
+/** ดึงทั้งตารางแบบไล่ทีละหน้า — เรียงตามคีย์หลักเพื่อให้ลำดับคงที่ทุกครั้งที่สำรอง */
+async function dumpTable(table, pk) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = svc.from(table).select("*").range(from, from + PAGE - 1);
+    for (const c of pk) q = q.order(c, { ascending: true });
+    const { data, error } = await q;
+    if (error) throw new Error(`${table}: ${error.message}`);
+    rows.push(...(data ?? []));
+    if ((data?.length ?? 0) < PAGE) break;
+  }
+  return rows;
+}
+
+const stamp = process.argv[2] ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "").replace(/(\d{8})(\d{4})/, "$1-$2");
+const dir = path.join("backups", stamp);
+mkdirSync(dir, { recursive: true });
+
+console.log(`\n══ สำรองข้อมูล → ${dir} ══\n`);
+
+const schema = await readSchema();
+const manifest = { at: new Date().toISOString(), source: URL_, tables: {}, warnings: [] };
+let total = 0, failed = 0;
+
+for (const { table, pk } of schema) {
+  try {
+    const rows = await dumpTable(table, pk);
+    writeFileSync(path.join(dir, `${table}.json`), JSON.stringify(rows, null, 1), "utf8");
+    manifest.tables[table] = { rows: rows.length, pk };
+    total += rows.length;
+    console.log(`  ✅ ${table.padEnd(24)} ${String(rows.length).padStart(6)} แถว`);
+  } catch (e) {
+    failed++;
+    manifest.tables[table] = { rows: -1, pk, error: String(e.message).slice(0, 120) };
+    console.log(`  ❌ ${table.padEnd(24)} ${String(e.message).slice(0, 60)}`);
+  }
+}
+
+// ── รายชื่อบัญชีผู้ใช้ (ไม่มีรหัสผ่าน — ระบบยืนยันตัวตนไม่เปิดให้อ่าน) ──
+try {
+  const { data, error } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) throw new Error(error.message);
+  const users = (data?.users ?? []).map(u => ({
+    id: u.id, email: u.email, created_at: u.created_at,
+    last_sign_in_at: u.last_sign_in_at, user_metadata: u.user_metadata,
+  }));
+  writeFileSync(path.join(dir, "_auth_users.json"), JSON.stringify(users, null, 1), "utf8");
+  manifest.tables._auth_users = { rows: users.length, pk: ["id"], note: "ไม่มีรหัสผ่าน — กู้แล้วต้องตั้งใหม่ทุกคน" };
+  console.log(`  ✅ ${"_auth_users".padEnd(24)} ${String(users.length).padStart(6)} บัญชี  (ไม่มีรหัสผ่าน)`);
+} catch (e) {
+  failed++;
+  console.log(`  ❌ _auth_users             ${String(e.message).slice(0, 60)}`);
+}
+
+manifest.warnings.push("ไม่ครอบคลุมรหัสผ่านผู้ใช้ — กู้แล้วทุกคนต้องตั้งรหัสผ่านใหม่");
+manifest.warnings.push("ไม่ครอบคลุมไฟล์แนบที่อัปโหลด (เก็บคนละที่กับฐานข้อมูล)");
+manifest.warnings.push("มีข้อมูลลูกค้าจริงและรหัสลับตัวแทน — ห้ามส่งต่อ ห้าม commit");
+writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+
+console.log(`\n  รวม ${total.toLocaleString()} แถว จาก ${schema.length} ตาราง`);
+for (const w of manifest.warnings) console.log(`  ⚠️  ${w}`);
+console.log(`\n${failed ? `❌ มี ${failed} รายการที่สำรองไม่สำเร็จ` : "✅ สำรองครบทุกตาราง"}\n`);
+process.exit(failed ? 1 : 0);

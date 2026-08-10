@@ -10,7 +10,7 @@
 //   (คุณภาพโค้ดมี typecheck/lint/test แยกอยู่แล้ว)
 //
 // รัน: node scripts/preflight.mjs
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const results = [];
@@ -116,6 +116,40 @@ for (const [fn, args] of [["is_account_active", {}], ["next_entity_id", { p_deal
       add(life <= 900, "อายุใบผ่านเข้าระบบ", `${life} วินาที (${(life / 60).toFixed(0)} นาที) · ควรไม่เกิน 15 นาที`);
     }
   }
+}
+
+// ── 11) ระบบแจ้งเตือนข้อผิดพลาด ต้องเปิดใช้และส่งออกได้จริง ──
+// ⚠️ ไม่ได้ตรวจแค่ "ตั้ง DSN แล้วหรือยัง" — ต้องตรวจว่าเบราว์เซอร์ยอมให้ส่งออกด้วย
+//    ตั้ง DSN แต่ CSP ไม่เปิดทาง = รายงานถูกบล็อกทุกฉบับ แล้วเราจะเข้าใจผิดว่า "ระบบไม่มี error เลย"
+{
+  const dsn = hq.NEXT_PUBLIC_SENTRY_DSN ?? "";
+  if (!dsn) {
+    add(false, "ระบบแจ้งเตือนข้อผิดพลาด", "ยังไม่ได้เปิด — ระบบล่มจะรู้ตัวก็ต่อเมื่อผู้ใช้โทรมาแจ้ง");
+  } else {
+    let origin = "";
+    try { origin = new URL(dsn).origin; } catch { /* DSN เพี้ยน */ }
+    const csp = readFileSync("packages/shared/lib/securityHeaders.mjs", "utf8");
+    const auto = /function sentryOrigin\(\)/.test(csp);   // คำนวณที่อยู่จาก DSN ให้เองหรือยัง
+    add(!!origin && auto, "ระบบแจ้งเตือนข้อผิดพลาด",
+      !origin ? "⚠ DSN ผิดรูปแบบ" : auto ? `เปิดใช้แล้ว · ส่งไปที่ ${origin}` : "⚠ CSP ไม่เปิดทางให้ — รายงานจะถูกบล็อกเงียบ ๆ");
+  }
+}
+
+// ── 12) ต้องมีข้อมูลสำรองที่ใหม่พอ ──
+// เหตุผลที่ต้องตรวจ: ถามระบบสำรองของผู้ให้บริการแล้วพบว่า "ไม่มีสำรองเลยสักชุด" (7 ส.ค. 69)
+//   ข้อมูลหาย = หายถาวร · ต้องมีตัวคอยเตือนไม่ให้กลับไปอยู่ในสภาพนั้นอีกโดยไม่มีใครรู้
+{
+  let newest = null;
+  try {
+    for (const d of readdirSync("backups")) {
+      if (d.startsWith("_")) continue;   // โฟลเดอร์ชั่วคราวของการซ้อม
+      const m = statSync(`backups/${d}`);
+      if (m.isDirectory() && (!newest || m.mtimeMs > newest.ms)) newest = { name: d, ms: m.mtimeMs };
+    }
+  } catch { /* ยังไม่มีโฟลเดอร์ */ }
+  const days = newest ? (Date.now() - newest.ms) / 86_400_000 : Infinity;
+  add(days <= 7, "ข้อมูลสำรองล่าสุด",
+    !newest ? "⚠ ไม่มีข้อมูลสำรองเลย — สั่ง npm run backup" : `${newest.name} (${days < 1 ? "วันนี้" : `${Math.floor(days)} วันก่อน`}) · ควรไม่เกิน 7 วัน`);
 }
 
 report();
