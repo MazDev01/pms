@@ -109,6 +109,15 @@ function fmtM(n: number) {
 //   เดิมพิมพ์อะไรที่อ่านไม่ออกลงไป พอคลิกออกจากช่อง ข้อความจะถูกเขียนทับเป็น "฿0" ทันที
 //   ผู้ใช้เห็นเป็นศูนย์แล้วนึกว่าระบบคิดให้ ทั้งที่จริงคือของที่พิมพ์หายไปแล้ว
 //   คงข้อความเดิมไว้ให้เห็นว่า "ยังผิดอยู่นะ" แล้วให้ตอนกดบันทึกเป็นคนฟ้อง
+// ── เพดานมูลค่าลีด — ค่ากลางของทั้งไฟล์ ────────────────────────────────────────────
+//
+// ⚠️ ต้องประกาศที่เดียว ห้ามแยกไว้ในฟังก์ชันใดฟังก์ชันหนึ่ง (บทเรียน 10 ส.ค. 69)
+//   เดิมประกาศไว้ในฟอร์มเพิ่มลีดเท่านั้น แผงแก้ไขในหน้ารายละเอียดจึงไม่มีเพดาน
+//   ผู้ใช้กรอก 2,500 ล้านผ่านฟอร์มไม่ได้ แต่แก้ทีหลังในแผงกลับได้ = กฎเดียวกันบังคับไม่เท่ากัน
+//
+// ตั้งที่หนึ่งแสนล้านบาท: สูงกว่างานจริงที่ใหญ่ที่สุดหลายเท่า แต่กันเลขหลุดโลกได้
+const MAX_LEAD_VALUE = 100_000_000_000;
+
 function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v; }
 
 // ความคืบหน้าของลีด (%) — จากงานที่เช็ก (แหล่งเดียวกับ LeadTasks) · PAID=100 · CANCELLED=0
@@ -269,9 +278,25 @@ function OverviewEditor({ lead, persons, onSave }: {
   const pct = lead.status === "PAID" ? 100 : lead.status === "CANCELLED" ? 0
     : taskProgress(lead.tasks?.length ? lead.tasks : buildLeadTasks());
 
+  const [valueErr, setValueErr] = useState("");
   const inp = OV_INP;
 
+  // ⚠️ ต้องตรวจมูลค่าเหมือนฟอร์มเพิ่มลีดทุกประการ (แก้ 10 ส.ค. 69 รอบสอง)
+  //   เดิมเส้นทางนี้ไม่ตรวจอะไรเลย · แย่ลงกว่าเดิมหลังผมแก้ fmtVal ให้คืนข้อความเดิม
+  //   (ก่อนหน้านั้นค่าเสียถูกแปลงเป็น "฿0" เงียบ ๆ ตอนนี้ค่าขยะลงฐานข้อมูลได้จริง)
+  //   ผลที่เอเจนต์ยืนยัน: พิมพ์ "abcxyz" แล้วบันทึก → ตารางลีดและหน้าสำนักงานใหญ่โชว์ "abcxyz" ดิบ ๆ
+  //   บทเรียน: แก้ตัวช่วยกลางแล้วต้องไล่ดูผู้เรียกทุกทาง ไม่ใช่แค่ทางที่กำลังแก้อยู่
   function save() {
+    const v = f.value.trim();
+    if (v && !(parseBaht(v) > 0)) {
+      setValueErr("มูลค่าอ่านไม่ออก — กรอกเป็นตัวเลขบวก เช่น 1400000 หรือ 1.4M (เว้นว่างได้ถ้ายังไม่รู้)");
+      return;
+    }
+    if (v && parseBaht(v) > MAX_LEAD_VALUE) {
+      setValueErr(`มูลค่าสูงเกินจริง — กรอกได้ไม่เกิน ${(MAX_LEAD_VALUE / 1e9).toLocaleString("th-TH")} พันล้านบาท`);
+      return;
+    }
+    setValueErr("");
     onSave({
       ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value),
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
@@ -398,6 +423,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           </button>
         )}
         <span style={{ flex:1 }} />
+        {valueErr && <span role="alert" style={{ fontSize:"0.72rem", color:"#b91c1c", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"5px 9px" }}>{valueErr}</span>}
         {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
         {(() => {
           // ปิดการขายไม่สำเร็จ ต้องเลือกเหตุผลก่อนถึงจะบันทึกได้ — ให้ตรงกับปุ่ม "ปิดการขายไม่สำเร็จ"
@@ -462,16 +488,19 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   //   เดิมกด "ยกเลิก" หรือเผลอคลิกโดนฉากหลัง ป๊อปอัพปิดทันทีโดยไม่ถามอะไรเลย
   //   สิ่งที่พิมพ์ไปหายหมดแบบเงียบ ๆ · หน้าตั้งค่าเตือนถูกอยู่แล้ว ("ยังมีงานที่ยังไม่บันทึก…")
   //   ที่อื่นไม่เตือน = ผู้ใช้เดาไม่ได้ว่าหน้าไหนปลอดภัยที่จะกดปิด
+  //
+  // ⚠️ ต้องเทียบกับ "ค่าตอนเปิดฟอร์ม" ไม่ใช่กับ initial (แก้ 10 ส.ค. 69 รอบสอง)
+  //   ตอนเพิ่มลีดใหม่ initial เป็น undefined แต่ฟอร์มมีค่าตั้งต้นไม่ว่าง (จังหวัด/แหล่งที่มา/ขั้นตอน/แม่แบบ)
+  //   เทียบแบบเดิมจึงถือว่า "แก้แล้ว" ตั้งแต่วินาทีที่เปิด → เด้งถามทุกครั้งแม้ยังไม่ได้พิมพ์อะไร
+  //   คำเตือนที่เด้งทุกครั้งจะถูกกดผ่านโดยไม่อ่าน แล้ววันที่กรอกจริงก็จะเสียของ
   function closeGuarded() {
-    const touched = Object.entries(form).some(([k, v]) => {
-      const base = (initial as Record<string, unknown> | null | undefined)?.[k];
-      if (typeof v !== "string") return false;
-      return v.trim() !== String(base ?? "").trim();
-    });
+    const touched = JSON.stringify(form) !== openedSnapshot.current;
     if (touched && !window.confirm("ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก — ปิดแล้วข้อมูลจะหาย ยืนยันปิดหรือไม่")) return;
     onClose();
   }
 
+  // สแนปช็อตค่าฟอร์ม ณ วินาทีที่เปิด — ใช้เทียบว่าผู้ใช้แตะอะไรไปจริงหรือยัง
+  const openedSnapshot = useRef(JSON.stringify(form));
   useEscapeKey(closeGuarded);   // กด Esc = เหมือนกดยกเลิก (ถามก่อนถ้ากรอกค้างไว้)
   const logoInputRef = useRef<HTMLInputElement>(null);
   // เดิมกด "บันทึก" แล้วขาดชื่อบริษัท/ผู้ติดต่อ = ออกเงียบๆ ไม่มีอะไรบอกผู้ใช้เลยว่าทำไมไม่บันทึก (QA เคส 6)
@@ -517,9 +546,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     //   ช่องนี้รับข้อความอิสระ (เขียน "1.4M" หรือ "฿1,400,000" ก็ได้) ตัวแปลงค่าจึงคืน 0
     //   เมื่ออ่านไม่ออก · เดิมกรอก "abcxyz" หรือ "-5000000" แล้วบันทึกผ่านเป็น ฿0 เงียบ ๆ
     //   เซลส์ไม่รู้ว่ามูลค่าหาย แล้วลีดนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
-    // เพดานมูลค่า — กรอก 21 หลักได้เดิม แล้วเก็บเป็น "฿1000000000.0T" ซึ่งไม่ใช่ตัวเลขที่มีความหมาย
-    //   ตั้งไว้ที่หนึ่งแสนล้านบาท: สูงกว่างานจริงที่ใหญ่ที่สุดหลายเท่า แต่กันเลขหลุดโลกได้
-    const MAX_LEAD_VALUE = 100_000_000_000;
     if (form.value.trim() && parseBaht(form.value) > MAX_LEAD_VALUE) {
       setSubmitError("มูลค่าสูงเกินจริง — กรอกได้ไม่เกิน 100,000 ล้านบาท");
       return;

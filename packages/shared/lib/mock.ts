@@ -630,11 +630,21 @@ export function taskProgress(tasks: LeadTask[] = []): number {
 // สถานะจาก task ที่ทำล่าสุด (ไม่รวม "ปิดการขาย" ซึ่งแยกเป็น Won/Lost) — ฐานเริ่มที่ "ติดต่อแล้ว"
 // ปรับ Checklist ให้ "ตรงกับสเตจเป๊ะ" — ไปข้างหน้าติ๊กงานถึงสเตจนั้น · ย้อนกลับเอาติ๊กที่เกินสเตจออก
 // (คง doneAt/doneBy ของงานที่ยังอยู่ในสเตจไว้) ใช้ตอนลากการ์ดเปลี่ยนสถานะบนบอร์ด
+// วันเวลาปัจจุบันแบบไทย ใช้ประทับบนงานที่เพิ่งถูกติ๊ก — ต้องเป็นเวลาจริง ห้ามฝังตายตัว
+export function nowStampTH(d: Date = new Date()): string {
+  const mo = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
+}
+
 export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStatus, doneBy: string): LeadTask[] {
   const base = (tasks && tasks.length) ? tasks : buildLeadTasks();
   if (status === "CANCELLED") return base; // ปิดการขายไม่สำเร็จ — ไม่แตะ Checklist
   const rank = STAGE_RANK[status];
-  const stamp = "30 มิ.ย. 2569 · 10:30";
+  // ⚠️ เดิมฝังวันที่ "30 มิ.ย. 2569" ไว้ตายตัว — ของเก่าจากยุคข้อมูลตัวอย่าง (แก้ 10 ส.ค. 69)
+  //   ตอนนี้ระบบต่อฐานข้อมูลจริงแล้ว ลีดที่สร้างวันนี้จึงมีงาน "ทำเสร็จแล้ว" ลงวันที่ย้อนหลัง 6 สัปดาห์
+  //   และค่านี้ถูกเขียนลงฐานข้อมูลจริง ไม่ใช่แค่แสดงผล = ประวัติการทำงานที่ไม่เคยเกิดขึ้น
+  const stamp = nowStampTH();
   return LEAD_TASK_TEMPLATE.map(def => {
     const existing = base.find(t => t.key === def.key);
     const shouldDone = def.key === "close" ? status === "PAID" : STAGE_RANK[def.stage] <= rank;

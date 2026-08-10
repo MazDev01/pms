@@ -347,7 +347,13 @@ export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
     if (DATA_SOURCE !== "supabase") { setRows(null); return; }
     let alive = true;
     const t = setTimeout(() => {
-      customersRepo.listPage({ isHQ: true, dealerCode: code }, { limit: HQ_CUSTOMERS_FETCH_CAP, offset: 0 })
+      // ⚠️ ต้องส่ง dealerCodes ไม่ใช่ dealerCode (แก้ 10 ส.ค. 69)
+      //   ตัวอะแดปเตอร์ตัดเงื่อนไข dealerCode ทิ้งเมื่อ isHQ เป็นจริง (ตั้งใจ — HQ เห็นทั้งเครือ)
+      //   พารามิเตอร์ที่ส่งไปจึงไม่มีผลเลย แล้วผลลัพธ์ก็ไม่ได้กรองซ้ำตอนแปลง
+      //   ผลที่เอเจนต์ยืนยัน: หน้ารายละเอียด "ทุกสาขา" โชว์ลูกค้าทั้งเครือเท่ากันหมด
+      //   สาขาที่ไม่มีลูกค้าสักรายก็ขึ้น "ลูกค้า 3" และเห็นชื่อ+มูลค่าของสาขาอื่น
+      //   dealerCodes เป็นตัวกรองของคำสั่งค้นหาโดยตรง ไม่ผูกกับ isHQ จึงมีผลจริง
+      customersRepo.listPage({ isHQ: true }, { limit: HQ_CUSTOMERS_FETCH_CAP, offset: 0, dealerCodes: [code] })
         .then(r => { if (alive) setRows(r.rows); })
         .catch(err => logRepoRead("customers.listPage(dealer)", err));
     }, 150);
@@ -355,7 +361,8 @@ export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
   }, [code, salesVersion]);
   return useMemo(() => {
     if (!rows) return local; // local mode หรือ supabase ระหว่างโหลด
-    return rows.map(c => {
+    // กรองซ้ำอีกชั้น — ถ้าชั้นล่างเปลี่ยนพฤติกรรมอีก หน้านี้ต้องไม่หลุดไปโชว์สาขาอื่น
+    return rows.filter(c => c.dealerCode === code).map(c => {
       const dl = dealerInfoOf(c.dealerCode);
       return {
         id: 10000 + c.id, localId: c.id, name: c.company, dealerCode: dl.code, dealerName: dl.name,
@@ -364,7 +371,7 @@ export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
         lastContact: "—", segment: "sme" as HQCustomer["segment"],
       };
     });
-  }, [rows, local, dealerInfoOf]);
+  }, [rows, local, dealerInfoOf, code]);
 }
 
 // ─── รายละเอียดตัวแทน (เจาะรายสาขา) — CNX = ข้อมูลสด · สาขาอื่น = seed ────────────
