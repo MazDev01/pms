@@ -67,7 +67,7 @@ function RevBar({ actual, target }: { actual: number; target: number }) {
         <div className="top5-bar" style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 99 }} />
       </div>
       <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
-        เป้า ฿{(target / 1_000_000).toFixed(0)}M
+        เป้า ฿{(target / 1_000_000).toFixed(1)}M
       </div>
     </div>
   );
@@ -88,9 +88,10 @@ function OnTimeBadge({ pct }: { pct: number | null }) {
 // ใช้กับรหัสผ่านในแผงรายละเอียดตัวแทน — เดิมโชว์รหัสจริงเต็ม ๆ ทันทีที่เปิดแถว
 // ใครเดินผ่านหลังจอ/แชร์หน้าจอ/ถ่ายภาพหน้าจอ ก็ได้รหัสเข้าระบบของตัวแทนไปเลย
 // (โมดัลตอนสร้าง/รีเซ็ตยังโชว์เต็มโดยตั้งใจ — เป็นจังหวะเดียวที่ HQ ต้องอ่านไปแจ้งตัวแทน)
-function CopyField({ label, value, secret = false }: { label: string; value: string; secret?: boolean }) {
+function CopyField({ label, value, secret = false, defaultShown = false }: { label: string; value: string; secret?: boolean; defaultShown?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const [shown, setShown] = useState(false);
+  // defaultShown = ผู้ใช้กด "ดูรหัสผ่าน" มาแล้ว ไม่ต้องให้กดปุ่มรูปตาซ้ำอีกชั้น (แก้ 10 ส.ค. 69)
+  const [shown, setShown] = useState(defaultShown);
   const masked = secret && !shown;
   function doCopy() {
     navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
@@ -126,6 +127,12 @@ function CopyField({ label, value, secret = false }: { label: string; value: str
 function DealerPasswordField({ code, fallback }: { code: string; fallback?: string }) {
   const [pw, setPw] = useState<string | null>(fallback ?? null);
   const [meta, setMeta] = useState<{ at: string; by: string } | null>(null);
+  // ⚠️ กด "ดูรหัสผ่าน" แล้วต้องเห็นรหัสทันที (บั๊กจริง พบ 10 ส.ค. 69)
+  //   เดิมเซิร์ฟเวอร์ส่งรหัสมาให้เรียบร้อยแล้ว แต่ช่องยังเป็น •••••••••••• อยู่
+  //   เพราะกล่องแสดงผลปิดบังไว้เป็นค่าตั้งต้น ต้องกดปุ่มรูปตาอีกชั้นถึงจะเห็น
+  //   ปุ่มที่เขียนว่า "ดูรหัสผ่าน" แล้วไม่แสดงรหัส = ไม่ทำตามที่เขียนไว้
+  //   (การเปิดดูถูกบันทึกตั้งแต่กดปุ่มแรกแล้ว ปิดบังต่ออีกชั้นไม่ได้เพิ่มความปลอดภัย)
+  const [revealed, setRevealed] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -136,12 +143,13 @@ function DealerPasswordField({ code, fallback }: { code: string; fallback?: stri
     setLoading(false);
     if (!res.ok) { setErr(res.error); return; }
     setPw(res.password);
+    setRevealed(true);
     setMeta({ at: res.updatedAt, by: res.updatedBy });
   }
 
   if (pw) return (
     <>
-      <CopyField label="รหัสผ่าน" value={pw} secret />
+      <CopyField label="รหัสผ่าน" value={pw} secret defaultShown={revealed} />
       {meta?.at && (
         <div style={{ fontSize: "0.68rem", color: "#6b7280", marginTop: -6, marginBottom: 10 }}>
           ตั้งเมื่อ {fmtISOToThai(meta.at.slice(0, 10))}{meta.by ? ` โดย ${meta.by}` : ""}
@@ -209,7 +217,7 @@ function HQDealersPageInner() {
   const logAudit = useAuditLogger(); // บันทึกการกระทำของ admin
   const router = useRouter();
 
-  const [dealers, setDealers] = useRepoState<DealerRow[]>(() => dealersRepo.list(), (v) => dealersRepo.save(v), []);
+  const [dealers, setDealers, dealersLoaded] = useRepoState<DealerRow[]>(() => dealersRepo.list(), (v) => dealersRepo.save(v), []);
   // อีเมลเข้าระบบจริงของแต่ละสาขา (ถามเซิร์ฟเวอร์ครั้งเดียวตอนเปิดหน้า)
   //   ห้ามคำนวณจากรหัสสาขาเด็ดขาด — สูตร `<code>@partner-agent.co.th` ใช้ได้เฉพาะบัญชีที่สร้าง
   //   ผ่านหน้าจอนี้ · สาขาที่มีอยู่จริงใช้อีเมลธุรกิจของตัวเอง (CNX = sales@cmsteelbuild.co.th)
@@ -228,6 +236,7 @@ function HQDealersPageInner() {
   const [regionFilter, setRegionFilter] = useState("ทั้งหมด");
   const [statusFilter, setStatusFilter] = useState<DealerStatus | "all">("all");
   // แบ่งหน้า 10 แถวเท่ากับทุกตารางในระบบ (สั่งโดยผู้บริหาร 7 ส.ค. 69)
+  // ⚠️ ทุกตัวกรองต้องพากลับหน้า 1 — ไม่งั้นกรองแล้วค้างอยู่หน้ากลางลิสต์ที่ไม่มีข้อมูลแล้ว
   const [page, setPage] = useState(0);
 
   // Modals
@@ -385,7 +394,10 @@ function HQDealersPageInner() {
     setEntering(null);
     if (!res.ok) { alert(`เข้าระบบแทน "${d.name}" ไม่สำเร็จ: ${res.error}`); return; }
     window.open(res.link, "_blank", "noopener");
-    logAudit("เข้าระบบแทนตัวแทน", `${d.code} · ${d.name}`);
+    // ⚠️ ห้ามบันทึกซ้ำจากตรงนี้ (แก้ 10 ส.ค. 69) — ฝั่งเซิร์ฟเวอร์บันทึกให้แล้วตอนออกลิงก์
+    //   กดครั้งเดียวเคยได้บันทึก 2 แถว ("ZZP" กับ "ZZP · ชื่อสาขา") ทำให้นับจำนวนครั้งผิด
+    //   และของฝั่งเซิร์ฟเวอร์เชื่อถือได้กว่า เพราะข้ามไม่ได้แม้ผู้ใช้ปิดหน้าจอทันทีหลังกด
+    //   (ดู apps/hq/app/api/admin/dealers/impersonate/route.ts)
   }
 
   // ออกรหัสผ่านใหม่ให้ตัวแทน แล้วเปิดโมดัลคัดลอกรหัสใหม่ไปแจ้งต่อ
@@ -439,8 +451,8 @@ function HQDealersPageInner() {
           กติกาของ .hq-kpi4: ป้าย → ตัวเลข (เข้ม ไม่ใส่สี) → หน่วย/บริบท · ไอคอนในกล่องสีจางมุมขวา */}
       <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
         {([
-          { label: "ตัวแทนทั้งหมด", value: `${filtered.length}`, sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
-          { label: "รายได้รวม", value: `฿${(totalRevenue / 1_000_000).toFixed(1)}M`, sub: `${totalPct}% ของเป้า ฿${(totalTarget / 1_000_000).toFixed(0)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
+          { label: "ตัวแทนทั้งหมด", value: dealersLoaded ? `${filtered.length}` : "—", sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
+          { label: "รายได้รวม", value: `฿${(totalRevenue / 1_000_000).toFixed(1)}M`, sub: `${totalPct}% ของผลรวมเป้ารายตัวแทน ฿${(totalTarget / 1_000_000).toFixed(1)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
           { label: "โอกาสการขายทั้งหมด", value: `${totalProjects}`, sub: `${active.filter(d => perfOf(d.code).openLeads > 0).length} ตัวแทนมีงาน`, Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
           { label: "ติดตามตรงเวลา", value: avgOnTime === null ? "—" : `${avgOnTime}%`, sub: avgOnTime === null ? "ยังไม่มีข้อมูล" : `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยเท่าที่มีข้อมูล`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
         ] as const).map(t => (
@@ -461,13 +473,13 @@ function HQDealersPageInner() {
       <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap", padding: "10px 14px" }}>
         <div className="search-bar">
           <Search size={13} color="#6b7280" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาตัวแทน..." />
+          <input value={q} onChange={e => { setQ(e.target.value); setPage(0); }} placeholder="ค้นหาตัวแทน..." />
         </div>
         <div style={{ flex: 1 }} />
-        <select aria-label="กรองตามภูมิภาค" value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามภูมิภาค" value={regionFilter} onChange={e => { setRegionFilter(e.target.value); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {["ทั้งหมด", ...REGIONS].map(r => <option key={r} value={r}>{r}</option>)}
         </select>
-        <select aria-label="กรองตามสถานะตัวแทน" value={statusFilter} onChange={e => setStatusFilter(e.target.value as DealerStatus | "all")} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามสถานะตัวแทน" value={statusFilter} onChange={e => { setStatusFilter(e.target.value as DealerStatus | "all"); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {STATUS_PILLS.map(p => <option key={p.value} value={p.value}>{p.value === "all" ? "ทุกสถานะ" : p.label}</option>)}
         </select>
       </div>
@@ -505,7 +517,7 @@ function HQDealersPageInner() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={10} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>{dealersLoaded ? "ไม่พบข้อมูล" : "กำลังโหลดข้อมูล…"}</td></tr>
               ) : pageSlice(filtered, Math.min(page, pageCountOf(filtered.length) - 1)).map((d, i) => (
                 <ClickableRow key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
                   onActivate={() => setSelectedDealer(d)} label={`เปิดรายละเอียดตัวแทน ${d.name}`}>
@@ -723,7 +735,7 @@ function HQDealersPageInner() {
                   <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ยอดขายเทียบเป้าหมาย</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                     <span style={{ fontSize: "1.5rem", fontWeight: 800, color: revColor }}>฿{(dPerf.revenue / 1_000_000).toFixed(1)}M</span>
-                    <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>เป้า ฿{(d.revenueTarget / 1_000_000).toFixed(0)}M</span>
+                    <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>เป้า ฿{(d.revenueTarget / 1_000_000).toFixed(1)}M</span>
                   </div>
                   <div style={{ height: 8, background: "#e5e7eb", borderRadius: 99, overflow: "hidden", marginBottom: 5 }}>
                     <div className="top5-bar" style={{ height: "100%", width: `${Math.min(revPct, 100)}%`, background: revColor, borderRadius: 99 }} />

@@ -8,6 +8,20 @@ import { NAVY, SILVER, STEEL } from "@pms/shared/lib/theme";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 
 // เพดานแกน Y แบบ "nice number" — ปรับตามขนาดข้อมูลจริง เพื่อให้เส้นเต็มกราฟทั้งค่าน้อย (รายวัน) และค่ามาก (รายเดือน)
+// ── ป้ายแกน Y ต้องไม่ซ้ำค่ากันเอง (แก้ 10 ส.ค. 69) ────────────────────────────────
+//
+// บั๊กจริง (เอเจนต์สวมบทผู้บริหารเจอเอง เจอพร้อมกัน 3 หน้า):
+//   กราฟที่นับ "จำนวนใบ/ราย" ตอนข้อมูลยังน้อย แกน Y อ่านได้ว่า 3 · 2 · 1 · 1 · 0
+//   เพราะแบ่ง 5 ขีดเท่า ๆ กันเสมอ (0, 0.5, 1, 1.5, 2) แล้วป้ายปัดเป็นจำนวนเต็มทับกัน
+//   ผู้อ่านเห็นเลขซ้ำ 2 คู่ แล้วอ่านสเกลของกราฟไม่ออก
+//
+// แก้: เพดานต่ำ ๆ ให้ใช้ขั้นเป็นจำนวนเต็ม (นับของนับไม่ได้ครึ่งใบอยู่แล้ว)
+function axisTicks(ceiling: number): number[] {
+  if (ceiling <= 4) return Array.from({ length: Math.max(2, Math.round(ceiling) + 1) }, (_, i) => i);
+  if (ceiling <= 8) return [0, 2, 4, 6, 8].filter(v => v <= ceiling);
+  return Array.from({ length: 5 }, (_, i) => (ceiling / 4) * i);
+}
+
 function niceCeil(v: number): number {
   if (!isFinite(v) || v <= 0) return 1;
   const pow = Math.pow(10, Math.floor(Math.log10(v)));
@@ -428,7 +442,7 @@ export function LineTrendChart({
   const pts = data.map((d, i) => ({ x: cx(i), y: cy(d.value), ...d }));
   const line = smoothPath(pts); // เส้นโค้งเนียน (Catmull-Rom) แทนเส้นหักตรง
   const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${bottomY} L${pts[0].x.toFixed(2)},${bottomY} Z` : "";
-  const yTicks = Array.from({ length: 5 }, (_, i) => (hi / 4) * i);
+  const yTicks = axisTicks(hi);
   const last = pts[n - 1];
   const hp = hover !== null ? pts[hover] : null;
   const gid = "line-clip-" + n;
@@ -530,7 +544,7 @@ export function GroupedBarChart({
   const band = cW / n;
   const groupW = Math.min(band * 0.68, 24 * series.length);
   const bw = groupW / series.length;
-  const yTicks = Array.from({ length: 5 }, (_, i) => (ceiling / 4) * i);
+  const yTicks = axisTicks(ceiling);
   const bottomY = pT + cH;
   const fs = narrow ? 13 : 15;
 
@@ -617,7 +631,7 @@ export function BarLineChart({
   const cW = W - pL - pR, cH = H - pT - pB;
   const band = cW / n;
   const bw = Math.min(band * 0.5, 34);
-  const yTicks = Array.from({ length: 5 }, (_, i) => (ceiling / 4) * i);
+  const yTicks = axisTicks(ceiling);
   const bottomY = pT + cH;
   const fs = narrow ? 13 : 15;
   const cx = (i: number) => pL + band * i + band / 2;

@@ -95,13 +95,19 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
   const perf = useDealerPerformance().get(dealer.code) ?? EMPTY_PERF;
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
   const barColor  = targetPct >= 80 ? "#059669" : targetPct >= 50 ? "#003366" : "#dc2626";
-  const isAtRisk  = targetPct < 50;
+  // ⚠️ ไม่มีข้อมูลเลย = ยังตัดสินไม่ได้ ห้ามขึ้น "ล้าหลังเป้า" (แก้ 10 ส.ค. 69)
+  //   เดิมสาขาที่ยังไม่มีลีด/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
+  //   พร้อมแถบเตือน "ต้องกระตุ้นการปิดการขาย" ทันทีที่เปิดหน้า เพราะยอด 0 ย่อมน้อยกว่า 50%
+  //   สาขาที่เพิ่งเปิดจึงถูกตีตราตั้งแต่วันแรก · การ์ด "ติดตามตรงเวลา" ในหน้าเดียวกันทำถูกอยู่แล้ว
+  //   (ขึ้น "ยังไม่มีข้อมูล") — ใบนี้แค่ยังไม่ได้ทำตาม
+  const hasAnyActivity = perf.revenue > 0 || perf.openLeads > 0 || perf.quotes > 0;
+  const isAtRisk  = hasAnyActivity && targetPct < 50;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
       {/* Revenue progress */}
       <div className="card" style={{ padding: "18px 20px", gridColumn: "1 / -1" }}>
-        <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>ความคืบหน้าเป้าหมายรายเดือน</p>
+        <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>ความคืบหน้าเทียบเป้าทั้งปี</p>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -399,7 +405,13 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
 
   const perf = perfMap.get(code) ?? EMPTY_PERF;
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
-  const isAtRisk  = targetPct < 50;
+  // ⚠️ ไม่มีข้อมูลเลย = ยังตัดสินไม่ได้ ห้ามขึ้น "ล้าหลังเป้า" (แก้ 10 ส.ค. 69)
+  //   เดิมสาขาที่ยังไม่มีลีด/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
+  //   พร้อมแถบเตือน "ต้องกระตุ้นการปิดการขาย" ทันทีที่เปิดหน้า เพราะยอด 0 ย่อมน้อยกว่า 50%
+  //   สาขาที่เพิ่งเปิดจึงถูกตีตราตั้งแต่วันแรก · การ์ด "ติดตามตรงเวลา" ในหน้าเดียวกันทำถูกอยู่แล้ว
+  //   (ขึ้น "ยังไม่มีข้อมูล") — ใบนี้แค่ยังไม่ได้ทำตาม
+  const hasAnyActivity = perf.revenue > 0 || perf.openLeads > 0 || perf.quotes > 0;
+  const isAtRisk  = hasAnyActivity && targetPct < 50;
   const isWarn    = targetPct >= 50 && targetPct < 70;
 
   return (

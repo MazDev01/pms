@@ -106,8 +106,13 @@ test("อีเมล+รหัสผ่านที่หน้าจอโช�
   const email = (await panel.getByText(/@/).first().innerText()).trim();
   expect(email, "ต้องไม่ขึ้นเป็นขีดกลาง — แปลว่าหาอีเมลจริงไม่เจอ").not.toBe("—");
 
+  // ⚠️ กดปุ่มเดียวต้องเห็นรหัสเลย (เปลี่ยนพฤติกรรมโดยตั้งใจ 10 ส.ค. 69)
+  //   เดิมต้องกด 2 จังหวะ — "ดูรหัสผ่าน" แล้วตามด้วยปุ่มรูปตา "แสดงรหัสผ่าน" อีกที
+  //   ผู้ใช้กดปุ่มที่เขียนว่า "ดูรหัสผ่าน" แล้วยังเห็น •••••••••••• = ปุ่มไม่ทำตามที่เขียน
+  //   (แก้เทสต์เพราะข้อกำหนดเปลี่ยน ไม่ใช่เพื่อให้ผ่าน)
   await page.getByRole("button", { name: /ดูรหัสผ่าน/ }).first().click();
-  await page.getByRole("button", { name: "แสดงรหัสผ่าน" }).first().click({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "ซ่อนรหัสผ่าน" }).first(),
+    "กดครั้งเดียวต้องแสดงรหัสทันที (ปุ่มจึงเปลี่ยนเป็น ซ่อนรหัสผ่าน)").toBeVisible({ timeout: 30_000 });
   const shown = await panel.innerText();
   const password = shown.match(/PEB-[A-Za-z0-9]+/)?.[0] ?? "";
   expect(password, "ต้องอ่านรหัสผ่านจากหน้าจอได้").not.toBe("");
