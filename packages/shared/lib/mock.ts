@@ -307,6 +307,8 @@ export function loadHQNotifPrefs(): Record<string, HQNotifChannels> {
   return { ...DEFAULT_HQ_NOTIFS };
 }
 // จัดหมวดข้อความ audit action → หมวดแจ้งเตือน HQ (ใช้กรองกระดิ่งตาม toggle)
+// ⚠️ ตัวนี้มีไว้สำหรับ "กระดิ่งแจ้งเตือน" เท่านั้น — หมวดต้องตรงกับ toggle ในหน้าตั้งค่า
+//    หน้าบันทึกการใช้งานใช้ hqAuditModule() ด้านล่างแทน (คนละวัตถุประสงค์ ดูเหตุผลที่นั่น)
 export function hqAuditCategory(action: string): string {
   if (action.includes("ตัวแทน")) return "dealer";
   if (action.includes("ราคากลาง")) return "pricing";
@@ -314,6 +316,38 @@ export function hqAuditCategory(action: string): string {
   if (action.includes("ผู้ใช้")) return "users";
   return "target"; // เป้า/ตั้งค่า/อื่นๆ
 }
+
+// ── หมวดงานสำหรับ "หน้าบันทึกการใช้งาน" (/hq/audit) ────────────────────────────────
+//
+// บั๊กจริง (เอเจนต์สวมบทผู้ดูแล HQ + ผู้บริหาร เจอตรงกันทั้งคู่ 10 ส.ค. 69):
+//   หน้าบันทึกการใช้งานเอา hqAuditCategory ของกระดิ่งมาใช้เป็นตัวกรองโมดูลด้วย
+//   ซึ่งมีแค่ 5 หมวดตาม toggle การแจ้งเตือน อะไรที่ไม่เข้าหมวดจะตกไปอยู่ "เป้าหมายและการตั้งค่า" หมด
+//   ผลที่เจอจริง:
+//     • "เข้าสู่ระบบ" 2,800+ แถว ไปกองอยู่ในหมวดเป้าหมายและการตั้งค่า
+//     • "UPDATE/INSERT/DELETE แคตตาล็อก" (ข้อความที่ตัวดักฐานข้อมูลเขียน) ก็ตกไปหมวดเดียวกัน
+//       ทั้งที่ "แก้ไขแม่แบบ" (ข้อความที่แอปเขียน) เข้าหมวดแคตตาล็อกถูกต้อง
+//       → กรองหมวด "แม่แบบและแคตตาล็อก" แล้วแถวหายไปดื้อ ๆ หาไม่เจอทั้งที่มีอยู่
+//
+// ต้นเหตุ: ฟังก์ชันเดียวถูกใช้สองวัตถุประสงค์ที่ต้องการหมวดคนละชุด
+//   → แยกออกมาเป็นของหน้านี้เอง เพิ่มหมวดได้อิสระโดยไม่กระทบ toggle การแจ้งเตือน
+export function hqAuditModule(action: string): string {
+  if (/เข้าสู่ระบบ|ออกจากระบบ|เข้าระบบแทน/.test(action)) return "auth";
+  if (action.includes("ตัวแทน")) return "dealer";
+  if (action.includes("ราคากลาง")) return "pricing";
+  if (/แม่แบบ|แคตตาล็อก/.test(action)) return "catalog";
+  if (action.includes("ผู้ใช้")) return "users";
+  return "target"; // เป้า/ตั้งค่า/อื่นๆ
+}
+
+/** ชื่อหมวดที่แสดงในหน้าบันทึกการใช้งาน — ครอบคลุมทุกค่าที่ hqAuditModule คืนได้ */
+export const HQ_AUDIT_MODULE_LABEL: Record<string, string> = {
+  auth: "เข้า–ออกระบบ",
+  dealer: "ตัวแทนจำหน่าย",
+  pricing: "ราคากลาง",
+  catalog: "แม่แบบและแคตตาล็อก",
+  users: "ผู้ใช้และสิทธิ์",
+  target: "เป้าหมายและการตั้งค่า",
+};
 
 // ─── รูปแบบเลขที่ใบเสนอราคา (แหล่งเดียว = HQ) — ตัวแทนใช้ตาม ห้ามแก้ ──────────────
 // ตั้งที่ /hq/settings → แท็บ "ระบบ" (hq_system.runningPrefix / runningNext)

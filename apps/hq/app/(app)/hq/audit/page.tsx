@@ -5,16 +5,23 @@ import { useMemo, useState } from "react";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { ScrollText, Search, X, User, Activity } from "lucide-react";
 import { useAuditEntries, AUDIT_READ_CAP } from "@pms/shared/lib/useAudit";
-import { hqAuditCategory, HQ_NOTIF_EVENTS } from "@pms/shared/lib/mock";
+import { hqAuditModule, HQ_AUDIT_MODULE_LABEL } from "@pms/shared/lib/mock";
 import { useFilters, APP_NOW, parseDate } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 const PRIMARY = "#003366";
-// ชื่อโมดูล = ชุดเดียวกับหัวข้อใน ตั้งค่า → การแจ้งเตือน (hqAuditCategory จัดหมวดให้)
-const MODULE_LABEL: Record<string, string> = Object.fromEntries(HQ_NOTIF_EVENTS.map(e => [e.key, e.label]));
+// ⚠️ ห้ามกลับไปใช้ hqAuditCategory ของกระดิ่งแจ้งเตือน (บั๊กจริง 10 ส.ค. 69)
+//    หมวดของกระดิ่งมีแค่ 5 ตาม toggle ในหน้าตั้งค่า อะไรไม่เข้าหมวดจะตกไปกอง
+//    ที่ "เป้าหมายและการตั้งค่า" หมด — เข้าสู่ระบบ 2,800+ แถว และแคตตาล็อกที่ตัวดัก
+//    ฐานข้อมูลเขียน ก็หายไปจากหมวดของตัวเอง กรองแล้วหาไม่เจอ
+const MODULE_LABEL = HQ_AUDIT_MODULE_LABEL;
 const ROLE_LABEL: Record<string, { label: string; bg: string; color: string }> = {
+  // ⚠️ ต้องครอบทุกบทบาทที่มีจริง ไม่งั้นรหัสระบบดิบหลุดขึ้นจอ (แก้ 10 ส.ค. 69)
+  //   เดิมไม่มี SUPER_ADMIN ในรายการ → คอลัมน์บทบาทขึ้นคำว่า "SUPER_ADMIN" ตรง ๆ
+  //   ซึ่งเป็นชื่อตัวแปรในโปรแกรม ไม่ใช่คำที่ผู้ใช้ควรเห็นในระบบภาษาไทย
+  SUPER_ADMIN: { label: "ผู้ดูแลระบบ", bg: "#dce5f0", color: "#003366" },
   HQ_MANAGEMENT: { label: "ผู้บริหาร HQ", bg: "#dce5f0", color: "#003366" },
   DEALER_ADMIN: { label: "ตัวแทน", bg: "#fff3cd", color: "#92400e" },
   DEALER_SALES: { label: "ฝ่ายขาย", bg: "#eef2f7", color: "#475569" },
@@ -27,18 +34,21 @@ export default function HQAuditPage() {
   const [userFilter, setUserFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
   // ตารางนี้โตไม่จำกัด (เกือบหมื่นแถวแล้ว) — เดิมเรนเดอร์ทีเดียวทั้งหมด เบราว์เซอร์หน่วงเห็นได้ชัด
+  // ⚠️ ทุกตัวกรองต้องพากลับหน้า 1 (แก้ 10 ส.ค. 69 — เป็นบั๊กที่ผมเพิ่มเองตอนใส่ตัวแบ่งหน้า)
+  //   กดไปหน้า 9 แล้วเปลี่ยนตัวกรอง เดิมค้างอยู่หน้า 9 กลางลิสต์ทั้งที่ผลลัพธ์เปลี่ยนไปแล้ว
+  //   ตารางเดิมของระบบ (ผู้ใช้/ไฟล์) ทำถูกอยู่ก่อนแล้ว — ผมไม่ได้ดูของเดิมก่อนเขียน
   const [page, setPage] = useState(0);
 
   const users = useMemo(() => [...new Set(entries.map(e => e.user))], [entries]);
   // โมดูลที่มีจริงในบันทึกเท่านั้น — ไม่ขึ้นตัวเลือกที่กรองแล้วไม่เจออะไร
   const modules = useMemo(
-    () => [...new Set(entries.map(e => hqAuditCategory(e.action)))],
+    () => [...new Set(entries.map(e => hqAuditModule(e.action)))],
     [entries],
   );
 
   const filtered = useMemo(() => entries.filter(e => {
     if (userFilter !== "all" && e.user !== userFilter) return false;
-    if (moduleFilter !== "all" && hqAuditCategory(e.action) !== moduleFilter) return false;
+    if (moduleFilter !== "all" && hqAuditModule(e.action) !== moduleFilter) return false;
     if (!inRange(e.at)) return false;
     const s = q.trim().toLowerCase();
     return !s || `${e.user} ${e.action} ${e.target}`.toLowerCase().includes(s);
@@ -51,12 +61,15 @@ export default function HQAuditPage() {
       const d = parseDate(s);
       return !!d && d.getDate() === APP_NOW.getDate() && d.getMonth() === APP_NOW.getMonth() && d.getFullYear() === APP_NOW.getFullYear();
     };
+    // ⚠️ การ์ดตัวเลขต้องคิดจาก "ผลที่กรองอยู่" ไม่ใช่ข้อมูลทั้งกอง (แก้ 10 ส.ค. 69)
+    //   เดิมเลือกโมดูลแล้วตารางเหลือ 128 รายการ แต่การ์ดยังค้างที่ 5,000 · 6 ผู้ใช้ · 177 วันนี้
+    //   ผู้ใช้จึงอ่านตัวเลขที่ไม่เกี่ยวกับสิ่งที่กำลังดูอยู่ตรงหน้า แล้วสรุปผิด
     return {
-      total: entries.length,
-      users: users.length,
-      today: entries.filter(e => sameDay(e.at)).length,
+      total: filtered.length,
+      users: new Set(filtered.map(e => e.user)).size,
+      today: filtered.filter(e => sameDay(e.at)).length,
     };
-  }, [entries, users]);
+  }, [filtered]);
 
   return (
     <div className="erp">
@@ -68,7 +81,7 @@ export default function HQAuditPage() {
           rows={filtered.map(e => [
             e.user,
             ROLE_LABEL[e.role]?.label ?? e.role,
-            MODULE_LABEL[hqAuditCategory(e.action)] ?? hqAuditCategory(e.action),
+            MODULE_LABEL[hqAuditModule(e.action)] ?? hqAuditModule(e.action),
             e.action, e.target, e.at,
           ])}
         />
@@ -82,7 +95,7 @@ export default function HQAuditPage() {
 
       {/* สรุป */}
       <div className="kpi-bar">
-        <div className="kpi"><div className="kpi-icon kpi-navy"><Activity size={16} /></div><div><div className="kpi-val">{stats.total}</div><div className="kpi-label">รายการทั้งหมด</div></div></div>
+        <div className="kpi"><div className="kpi-icon kpi-navy"><Activity size={16} /></div><div><div className="kpi-val">{stats.total}</div><div className="kpi-label">รายการที่แสดงอยู่</div></div></div>
         <div className="kpi"><div className="kpi-icon kpi-navy"><User size={16} /></div><div><div className="kpi-val">{stats.users}</div><div className="kpi-label">ผู้ใช้ที่มีกิจกรรม</div></div></div>
         <div className="kpi"><div className="kpi-icon kpi-green"><ScrollText size={16} /></div><div><div className="kpi-val">{stats.today}</div><div className="kpi-label">กิจกรรมวันนี้</div></div></div>
       </div>
@@ -91,15 +104,15 @@ export default function HQAuditPage() {
       <div className="card" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 16 }}>
         <div className="search-bar" style={{ width: 300, maxWidth: "100%" }}>
           <Search size={14} color="#9ca3af" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหาผู้ใช้ / การกระทำ / รายละเอียด..." />
+          <input value={q} onChange={e => { setQ(e.target.value); setPage(0); }} placeholder="ค้นหาผู้ใช้ / การกระทำ / รายละเอียด..." />
           {q && <button onClick={() => setQ("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", padding: 0 }}><X size={13} /></button>}
         </div>
         <div style={{ flex: 1 }} />
-        <select aria-label="กรองตามหมวดงาน" value={moduleFilter} onChange={e => setModuleFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามหมวดงาน" value={moduleFilter} onChange={e => { setModuleFilter(e.target.value); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           <option value="all">ทุกโมดูล</option>
           {modules.map(m => <option key={m} value={m}>{MODULE_LABEL[m] ?? m}</option>)}
         </select>
-        <select aria-label="กรองตามผู้ใช้" value={userFilter} onChange={e => setUserFilter(e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามผู้ใช้" value={userFilter} onChange={e => { setUserFilter(e.target.value); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           <option value="all">ผู้ใช้ทุกคน</option>
           {users.map(u => <option key={u} value={u}>{u}</option>)}
         </select>
@@ -139,7 +152,7 @@ export default function HQAuditPage() {
                     </td>
                     <td><span className="badge" style={{ background: rm.bg, color: rm.color }}>{rm.label}</span></td>
                     <td style={{ fontSize: "0.76rem", color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {MODULE_LABEL[hqAuditCategory(e.action)] ?? "—"}
+                      {MODULE_LABEL[hqAuditModule(e.action)] ?? "—"}
                     </td>
                     <td><span className="badge" style={{ background: "#eef2f7", color: PRIMARY }}>{e.action}</span></td>
                     <td style={{ fontSize: "0.8rem", color: "#2D2D2D" }}>{e.target}</td>
