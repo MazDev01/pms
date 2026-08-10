@@ -332,8 +332,8 @@ function HQMasterPageInner() {
               <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
                 <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={e => { e.stopPropagation(); openEdit(p); }}><Pencil size={12} /> แก้ไข</button>
                 <button className="btn btn-tint btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={e => { e.stopPropagation(); setReprice(p); setRpPrice(String(p.price)); }}><TrendingUp size={12} /> ปรับราคา</button>
-                <button className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 38, padding: 0, justifyContent: "center" }} onClick={e => { e.stopPropagation(); setHistory(p); }}><History size={13} /></button>
-                <button className="btn btn-danger btn-sm" title="ลบแม่แบบ" style={{ width: 38, padding: 0, justifyContent: "center" }} onClick={e => { e.stopPropagation(); setDelTarget(p); }}><Trash2 size={13} /></button>
+                <button className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 38, padding: 0, justifyContent: "center" }} aria-label={`ประวัติราคา ${p.name}`} onClick={e => { e.stopPropagation(); setHistory(p); }}><History size={13} /></button>
+                <button className="btn btn-danger btn-sm" title="ลบแม่แบบ" style={{ width: 38, padding: 0, justifyContent: "center" }} aria-label={`ลบแม่แบบ ${p.name}`} onClick={e => { e.stopPropagation(); setDelTarget(p); }}><Trash2 size={13} /></button>
               </div>
             </div>
           </div>

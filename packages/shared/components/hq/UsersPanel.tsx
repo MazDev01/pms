@@ -395,9 +395,10 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
                       </div>
                     </td>
                     <td><RoleBadge role={u.role} /></td>
-                    <td style={{ fontSize: "0.8rem", color: STEEL, fontWeight: 600 }}>{u.department}</td>
+                    <td style={{ fontSize: "0.8rem", color: STEEL, fontWeight: 600 }}>{u.department?.trim() || "—"}</td>
                     <td><StatusDot status={u.status} /></td>
-                    <td style={{ color: MUTED, fontSize: "0.72rem", whiteSpace: "nowrap" }}>{u.createdAt}</td>
+                    {/* ⚠️ เดิมโชว์ค่าดิบจากฐานข้อมูล ("2026-08-04T08:20:57.7…") ซึ่งเป็นรูปแบบของเครื่อง ไม่ใช่ของคนอ่าน */}
+                    <td style={{ color: MUTED, fontSize: "0.72rem", whiteSpace: "nowrap" }}>{fmtISOToThai(String(u.createdAt).slice(0, 10)) || "—"}</td>
                     <td className="ovf-visible" onClick={e => e.stopPropagation()}>
                       <div style={{ display: "flex", justifyContent: "flex-end" }}>
                         <button className="btn btn-icon btn-sm" title="จัดการ" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ user: u, x: r.right, y: r.bottom + 4 }); }}><MoreHorizontal size={16} /></button>

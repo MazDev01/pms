@@ -33,7 +33,7 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { leadStatusLabel, leadStatusColor, QUOTED_UP, LEAD_STATUS_ORDER, type LeadStatus } from "@pms/shared/lib/mock";
-import { fmtBaht } from "@pms/shared/lib/format";
+import { fmtBaht, pctOrNull } from "@pms/shared/lib/format";
 
 const PRIMARY = "#003366";
 // 8 สี — โดนัท "ตามแหล่งที่มา" มีได้ถึง 8 ชิ้น ถ้าสีวนซ้ำจะอ่านผิดว่าเป็นชิ้นเดียวกัน
@@ -230,14 +230,14 @@ export default function HQLeadsPage() {
       const total = sumBase.byStatus.reduce((s, r) => s + r.count, 0);
       const won = byS.get("PAID") ?? 0, lost = byS.get("CANCELLED") ?? 0, closed = won + lost;
       const newThis = sumBase.byMonth.filter(r => r.m === lastM).reduce((s, r) => s + r.created, 0);
-      return { total, followUp, newThis, conv: closed ? Math.round(won / closed * 100) : 0 };
+      return { total, followUp, newThis, conv: pctOrNull(won, closed) };
     }
     const total = kpiBase.length;
     const won = kpiBase.filter(l => l.status === "PAID").length;
     const lost = kpiBase.filter(l => l.status === "CANCELLED").length;
     const closed = won + lost;
     const newThis = kpiBase.filter(l => { const d = parseThaiDate(l.createdAt ?? ""); return d && d.getMonth() === lastM; }).length;
-    return { total, followUp, newThis, conv: closed ? Math.round(won / closed * 100) : 0 };
+    return { total, followUp, newThis, conv: pctOrNull(won, closed) };
   }, [sumBase, followUpPage, kpiBase, timeRange.end, rulesOf]);
 
   // ── Section 1 · ลีด เทียบ ใบเสนอราคา รายตัวแทน ─────────────────────────────
@@ -293,7 +293,7 @@ export default function HQLeadsPage() {
     { label: "ลูกค้าเป้าหมายทั้งหมด", value: `${kpis.total}`, sub: scopeLabel, Icon: Users, color: "#2563a8", on: status === "ALL", onClick: () => setStatus("ALL") },
     { label: "ลีดใหม่ (เดือนนี้)", value: `${kpis.newThis}`, sub: "รายการ", Icon: PhoneCall, color: "#7c3aed", on: false, onClick: () => setStatus("ALL") },
     { label: "ต้องติดตามด่วน", value: `${kpis.followUp}`, sub: followUpSub, Icon: AlarmClock, color: "#EA580C", on: overdueOnly, onClick: () => { setStatus("ALL"); setOverdueOnly(v => !v); } },
-    { label: "อัตราแปลงเป็นลูกค้า", value: `${kpis.conv}%`, sub: "ปิดได้ / ปิดทั้งหมด", Icon: Percent, color: "#059669", on: false, onClick: () => setStatus("ALL") },
+    { label: "อัตราแปลงเป็นลูกค้า", value: kpis.conv === null ? "—" : `${kpis.conv}%`, sub: "ปิดได้ / ปิดทั้งหมด", Icon: Percent, color: "#059669", on: false, onClick: () => setStatus("ALL") },
   ];
 
   // ── Section 7 · แนวโน้มรายเดือน — 4 เส้น: ลีดใหม่ · ใบเสนอราคา · ปิดได้ · ปิดไม่สำเร็จ ──
