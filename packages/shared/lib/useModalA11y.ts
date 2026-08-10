@@ -66,3 +66,21 @@ export function useModalA11y<T extends HTMLElement>(onClose: () => void) {
 
   return ref;
 }
+
+// ── เฉพาะ "Esc เพื่อปิด" — สำหรับโมดัลที่ยังไม่ได้ย้ายมาใช้ ModalCard ───────────────
+//
+// ทำไมมีตัวนี้เพิ่ม (10 ส.ค. 69):
+//   useModalA11y ข้างบนต้องผูก ref เข้ากับกล่องโมดัลโดยตรง ซึ่งแปลว่าต้องรื้อโครง DOM ของโมดัลนั้น
+//   โมดัลจำนวนมากในระบบเขียนเป็น div ซ้อนกันเองในหน้าเพจ การรื้อทั้งหมดพร้อมกันเสี่ยงพังหลายจุด
+//   ตัวนี้ให้พฤติกรรมที่ผู้ใช้คาดหวังที่สุด (กด Esc แล้วปิด) ได้ทันทีโดยไม่ต้องแตะโครงหน้า
+//
+// ⚠️ ไม่ทดแทน ModalCard — ไม่มีการกักโฟกัสและคืนโฟกัส ถ้าเขียนโมดัลใหม่ให้ใช้ ModalCard
+export function useEscapeKey(onClose: () => void) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+}

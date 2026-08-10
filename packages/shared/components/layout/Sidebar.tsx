@@ -9,6 +9,7 @@ import {
   CalendarDays, FolderOpen, History, LogOut, Crown,
 } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { roleLabelOf } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
@@ -141,7 +142,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
               </span>}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={displayName}>{displayName}</div>
-            <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", fontWeight: 600, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{isHQ ? "เจ้าของแพลตฟอร์ม" : "เจ้าของบัญชีตัวแทน"}</div>
+            <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", fontWeight: 600, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{roleLabelOf(session.role, isHQ)}</div>
           </div>
           <Crown size={15} color="#e11d48" fill="#e11d48" strokeWidth={1.5} style={{ flexShrink: 0 }} />
         </div>

@@ -42,17 +42,24 @@ test("[ux·dealer] บัญชีดีลเลอร์ รวมโปรไ
   await expect(page.getByText("อีเมลเข้าสู่ระบบ").first()).toBeVisible();
 });
 
-// ป้ายเจ้าของ+มงกุฎ: อยู่ที่ก้น sidebar ที่เดียว (ไม่ซ้ำใน dropdown) · label ต่างกันตามสิทธิ์
-test("[ux·hq] ก้น sidebar แสดงป้ายเจ้าของแพลตฟอร์ม (ที่เดียว)", async ({ page }) => {
+// ป้ายเจ้าของ+มงกุฎ: อยู่ที่ก้น sidebar · ชื่อบทบาทต่างกันตามสิทธิ์
+//
+// ⚠️ คำที่ใช้เปลี่ยนเมื่อ 10 ส.ค. 69 โดยตั้งใจ — เดิม "เจ้าของแพลตฟอร์ม"/"เจ้าของบัญชีตัวแทน"
+//   ซึ่งเป็นคนละคำกับที่แถบบนขวาเรียกคนคนเดียวกัน ("ผู้ดูแลระบบ"/"ผู้จัดการตัวแทน")
+//   ผู้ใช้เห็นตัวเองถูกเรียกสองชื่อพร้อมกันในจอเดียว → รวมมาใช้แหล่งเดียว (roleLabelOf)
+//   เทสต์นี้จึงเปลี่ยนตามข้อกำหนดใหม่ ไม่ใช่แก้เพื่อให้ผ่าน
+test("[ux·hq] ก้น sidebar แสดงชื่อบทบาทตรงกับแถบบน", async ({ page }) => {
   await open(page, "hq", "/hq/dashboard");
-  await expect(page.locator(".sidebar-footer").getByText("เจ้าของแพลตฟอร์ม")).toBeVisible();
-  // ต้องมีที่เดียว (ไม่ซ้ำใน dropdown บนขวา)
-  await expect(page.getByText("เจ้าของแพลตฟอร์ม")).toHaveCount(1);
-});
-test("[ux·dealer] ก้น sidebar แสดงป้ายเจ้าของบัญชีตัวแทน ไม่ใช่เจ้าของแพลตฟอร์ม", async ({ page }) => {
-  await open(page, "dealer", "/dashboard");
-  await expect(page.locator(".sidebar-footer").getByText("เจ้าของบัญชีตัวแทน")).toBeVisible();
+  // ชื่อบัญชีผู้ดูแลบังเอิญเป็นคำเดียวกับชื่อบทบาท → เจอสองจุดในการ์ดเดียว ใช้ตัวแรกพอ
+  await expect(page.locator(".sidebar-footer").getByText("ผู้ดูแลระบบ").first()).toBeVisible();
+  // ต้องไม่กลับไปใช้คำเก่าที่ขัดกับแถบบนอีก
   await expect(page.getByText("เจ้าของแพลตฟอร์ม")).toHaveCount(0);
+});
+test("[ux·dealer] ก้น sidebar ของตัวแทนต้องไม่ใช่ชื่อบทบาทของสำนักงานใหญ่", async ({ page }) => {
+  await open(page, "dealer", "/dashboard");
+  await expect(page.locator(".sidebar-footer").getByText("ผู้จัดการตัวแทน")).toBeVisible();
+  await expect(page.getByText("ผู้ดูแลระบบ")).toHaveCount(0);
+  await expect(page.getByText("เจ้าของบัญชีตัวแทน")).toHaveCount(0);
 });
 
 // ⚠️ เดิมเทสต์นี้คาดว่าตัวแทน "พิมพ์คำนำหน้าเลขที่เองได้" (มองหาช่องกรอกที่ขึ้นต้นด้วย Q-)

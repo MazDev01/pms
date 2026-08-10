@@ -750,16 +750,20 @@ body {
 /* scroll shadow — บอกใบ้ว่ายังปัดขวาได้อีก (จอแคบ/ตารางกว้างกว่าจอ) เดิมไม่มีสัญญาณอะไรเลย
    ผู้ใช้ไม่รู้ว่าคอลัมน์ท้ายๆ (เช่นปุ่มดูรายละเอียด) หลุดจอไปแล้ว ต้องปัดถึงจะเห็น
    เทคนิค dual-background มาตรฐาน: เงาจางที่ขอบขวาปรากฏเฉพาะตอนยังเลื่อนต่อได้ (fade ตามตำแหน่ง scroll จริง) */
+/* ⚠️ ผ้าคลุม (2 ชั้นแรก) ต้อง "กว้างกว่า" เงา (2 ชั้นหลัง) เสมอ — ไม่งั้นเงาโผล่ตอนไม่มีอะไรให้เลื่อน
+   เดิมผ้าคลุม 24px แต่เงา 28px และผ้าคลุมเริ่มจางตั้งแต่ 30% (=7px) → ช่วง 7–28px เงาทะลุออกมา
+   ผลคือตารางที่ "ไม่ล้นเลย" ก็ยังมีแถบเทาคาดขอบซ้าย-ขวาตลอดเวลา ดูเหมือนเปื้อน (ผู้ใช้แจ้ง 10 ส.ค. 69)
+   ตอนนี้ผ้าคลุม 40px และทึบเต็มถึง 50% (=20px) จึงกลบเงา 28px ได้มิด เหลือให้เห็นเฉพาะตอนเลื่อนได้จริง */
 .table-wrap {
   border-top: 1px solid var(--border); overflow-x: auto;
   background:
-    linear-gradient(to right, var(--card) 30%, rgba(255,255,255,0)) 0 0,
-    linear-gradient(to left, var(--card) 30%, rgba(255,255,255,0)) 100% 0,
+    linear-gradient(to right, var(--card) 50%, rgba(255,255,255,0)) 0 0,
+    linear-gradient(to left, var(--card) 50%, rgba(255,255,255,0)) 100% 0,
     linear-gradient(to right, rgba(16,40,80,.30), rgba(16,40,80,0)) 0 0,
     linear-gradient(to left, rgba(16,40,80,.30), rgba(16,40,80,0)) 100% 0;
   background-repeat: no-repeat;
   background-color: var(--card);
-  background-size: 24px 100%, 24px 100%, 28px 100%, 28px 100%;
+  background-size: 40px 100%, 40px 100%, 28px 100%, 28px 100%;
   background-attachment: local, local, scroll, scroll;
 }
 /* ⚠️ ต้องเห็นได้ว่า "ยังมีคอลัมน์ต่อทางขวา" (แก้ 10 ส.ค. 69) ────────────────────────

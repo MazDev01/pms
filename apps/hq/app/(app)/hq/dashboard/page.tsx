@@ -529,7 +529,7 @@ export default function HQDashboard() {
     { label: "เป้าหมายยอดขายทั้งเครือ", tip: "เป้าหมายยอดขายทั้งปีของทั้งเครือ เทียบกับยอดปิดการขายสะสมในช่วงเวลาที่เลือก", Icon: Target, color: "#2563EB", bg: "#E8F0FE", href: "/hq/quotations", ring: true },
     { label: "ใบเสนอราคารวม", tip: "จำนวนใบเสนอราคาทั้งเครือในช่วงเวลาที่เลือก", Icon: FileText, color: "#0891B2", bg: "#E6F4F9", href: "/hq/quotations", value: sc.quotes.value, sub1: "ใบ" },
     { label: "ลูกค้าทั้งเครือ", tip: "จำนวนลูกค้าทั้งหมดในเครือ", Icon: Users2, color: "#7C3AED", bg: "#F0EBFB", href: "/hq/customers", value: sc.customers.value, sub1: "ราย" },
-    { label: "ดีลที่ปิดการขาย (Won)", tip: "จำนวนดีลที่ปิดการขายสำเร็จในช่วงเวลาที่เลือก", Icon: Trophy, color: "#D97706", bg: "#FEF0E6", href: "/hq/quotations", value: sc.won.value, sub1: "ดีล" },
+    { label: "ดีลที่ปิดการขาย", tip: "จำนวนดีลที่ปิดการขายสำเร็จในช่วงเวลาที่เลือก", Icon: Trophy, color: "#D97706", bg: "#FEF0E6", href: "/hq/quotations", value: sc.won.value, sub1: "ดีล" },
   ];
   const kSub: React.CSSProperties = { fontSize: "0.8rem", color: "var(--muted-foreground)" };
   const kNum: React.CSSProperties = { fontSize: "1.25rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
@@ -704,9 +704,9 @@ export default function HQDashboard() {
             {/* แท่งกลุ่ม ไม่ใช่แท่งซ้อน — ลีด/ใบเสนอราคา/ปิดการขาย เป็นขั้นของดีลเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
             <GroupedBarChart months={barTrend.months} vw={820} height={260} fmt={v => `${Math.round(v)}`}
               series={[
-                { name: "ลูกค้าเป้าหมาย (Leads)", color: "#003366", data: barTrend.leads },
-                { name: "ใบเสนอราคา (Quotations)", color: "#0891b2", data: barTrend.quotes },
-                { name: "ปิดการขาย (Won)", color: "#10B981", data: barTrend.won },
+                { name: "ลูกค้าเป้าหมาย", color: "#003366", data: barTrend.leads },
+                { name: "ใบเสนอราคา", color: "#0891b2", data: barTrend.quotes },
+                { name: "ปิดการขาย", color: "#10B981", data: barTrend.won },
               ]} />
           </div>
         </div>
@@ -729,7 +729,7 @@ export default function HQDashboard() {
       {/* แถว 3: ผลงานตัวแทน Top 10 · ยอดขายตามประเภทอาคาร · เหตุผลปิดการขายไม่สำเร็จ */}
       <div className="hq-row3c" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
         <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย Top 10</div>
+          <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div>
             <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
           <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 9 }}>
             <div style={{ display: "flex", fontSize: "0.68rem", color: "var(--muted-foreground)", paddingLeft: 26, gap: 8 }}>

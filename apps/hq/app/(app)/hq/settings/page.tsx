@@ -652,7 +652,7 @@ function HQSettingsPageInner() {
           <button className="btn btn-secondary btn-sm" onClick={resetAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><RotateCcw size={14} /> รีเซ็ต</button>
           <button className="btn btn-primary btn-sm" onClick={saveAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><Save size={14} /> บันทึก</button>
         </TopbarActions>
-        <p className="page-sub">Enterprise Administration · สิ่งที่แก้ในหน้านี้จะมีผลกับตัวแทนจำหน่ายตามสิทธิ์ที่ได้รับ</p>
+        <p className="page-sub">การตั้งค่าระดับองค์กร · สิ่งที่แก้ในหน้านี้จะมีผลกับตัวแทนจำหน่ายตามสิทธิ์ที่ได้รับ</p>
 
         {/* แท็บแนวนอน */}
         <div className="card" style={{ marginBottom: 18 }}>

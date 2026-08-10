@@ -111,7 +111,7 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button className={`btn btn-secondary ${small ? "btn-sm" : "btn-md"}`} onClick={() => setOpen(o => !o)} style={{ gap: 6 }}>
-        <Download size={14} /> Export
+        <Download size={14} /> ส่งออก
         <ChevronDown size={13} style={{ opacity: 0.55, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
       </button>
       {open && (

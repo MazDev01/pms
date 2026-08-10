@@ -21,6 +21,7 @@ import { useLostReasons } from "@pms/shared/lib/useHQConfig";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { parseBaht } from "@pms/shared/lib/format";
+import { useEscapeKey } from "@pms/shared/lib/useModalA11y";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
   Plus, X,
@@ -471,6 +472,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     onClose();
   }
 
+  useEscapeKey(closeGuarded);   // กด Esc = เหมือนกดยกเลิก (ถามก่อนถ้ากรอกค้างไว้)
   const logoInputRef = useRef<HTMLInputElement>(null);
   // เดิมกด "บันทึก" แล้วขาดชื่อบริษัท/ผู้ติดต่อ = ออกเงียบๆ ไม่มีอะไรบอกผู้ใช้เลยว่าทำไมไม่บันทึก (QA เคส 6)
   const [submitError, setSubmitError] = useState("");
@@ -2130,7 +2132,7 @@ export default function LeadsPage() {
                 {!isCustomer && (
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <button onClick={()=>setQuickLost(true)} className="btn btn-md" style={{ background:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca" }}><XCircle size={14} /> ปิดการขายไม่สำเร็จ</button>
-                    <button onClick={markWon} className="btn btn-md" style={{ background:"#059669", color:"#fff", boxShadow:"0 4px 12px rgba(5,150,105,.25)" }}><Trophy size={14} /> ปิดการขาย (Won)</button>
+                    <button onClick={markWon} className="btn btn-md" style={{ background:"#059669", color:"#fff", boxShadow:"0 4px 12px rgba(5,150,105,.25)" }}><Trophy size={14} /> ปิดการขาย</button>
                   </div>
                 )}
               </div>

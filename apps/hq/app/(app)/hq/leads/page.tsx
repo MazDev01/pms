@@ -443,7 +443,7 @@ export default function HQLeadsPage() {
 
       {/* ── SMART FILTER ── อยู่ใต้ KPI เหมือนหน้าอื่น (/hq/quotations · /hq/pipeline)
           เดิมแถบนี้อยู่ล่างสุดเหนือตาราง → กราฟทุกใบอยู่ "เหนือ" ตัวกรอง คนอ่านเลยไม่รู้ว่ามันคุมกราฟได้
-          ตอนนี้คุมทั้งหน้า: KPI · กราฟ · Top 10 · การ์ดเตือน · ตาราง
+          ตอนนี้คุมทั้งหน้า: การ์ดตัวเลข · กราฟ · 10 อันดับแรก · การ์ดเตือน · ตาราง
           (KPI ตามตัวกรองขอบเขตทุกตัว แต่ไม่ตาม "สถานะ"/"ต้องติดตามด่วน" เพราะการ์ด KPI คือปุ่มของสองอันนั้นเอง — ดู kpiBase)
           ตัวเลือกในดรอปดาวน์สร้างจาก scoped ไม่ใช่ filtered — ไม่งั้นพอเลือกตัวแทนแล้วจะเปลี่ยนกลับไม่ได้ */}
       <div className="card hq-sticky-filter" style={{ marginBottom: "1.25rem" }}>
@@ -619,7 +619,7 @@ export default function HQLeadsPage() {
           ตารางนี้มี 6 คอลัมน์ กว้างขั้นต่ำ 674px (colgroup) จึงอยู่ในช่องแคบไม่ได้
           เคยอยู่ช่องที่ 3 ของกริด (~300px) → เห็นแค่คอลัมน์ "ลีด" ที่เหลือต้องเลื่อนแนวนอน */}
       <div className="card" style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
-        <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย (Top 10)</div>
+        <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div>
           <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เรียงตามยอดขายในช่วง</span></div>
         <div className="table-wrap">
           <table>

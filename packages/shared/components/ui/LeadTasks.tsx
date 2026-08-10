@@ -149,7 +149,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
               {lead.status === "PAID" ? <Trophy size={18} color="#059669" /> : <XCircle size={18} color="#dc2626" />}
               <div>
                 <div style={{ fontSize: "0.86rem", fontWeight: 800, color: lead.status === "PAID" ? "#059669" : "#dc2626" }}>
-                  {lead.status === "PAID" ? "ปิดการขายสำเร็จ (Won)" : "ปิดการขายไม่สำเร็จ (Lost)"}
+                  {lead.status === "PAID" ? "ปิดการขายสำเร็จ" : "ปิดการขายไม่สำเร็จ"}
                 </div>
                 {lead.status === "CANCELLED" && lead.lostReason && <div style={{ fontSize: "0.72rem", color: "#991b1b" }}>เหตุผล: {lead.lostReason}</div>}
               </div>
@@ -180,9 +180,9 @@ export function LeadTasks({ lead, performedBy, onSave }: {
           <div style={{ display: "flex", gap: 8 }}>
             <span style={{ flex: 1, fontSize: "0.8rem", fontWeight: 700, color: "#374151", alignSelf: "center" }}>ปิดการขาย :</span>
             <button type="button" className="btn btn-sm" onClick={() => close("won")}
-              style={{ background: "#059669", color: "#fff" }}><Trophy size={13} /> ได้งาน (Won)</button>
+              style={{ background: "#059669", color: "#fff" }}><Trophy size={13} /> ได้งาน</button>
             <button type="button" className="btn btn-sm" onClick={() => setLostOpen(true)}
-              style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}><XCircle size={13} /> ไม่ได้งาน (Lost)</button>
+              style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}><XCircle size={13} /> ไม่ได้งาน</button>
           </div>
         )}
       </div>

@@ -13,6 +13,7 @@ import {
   type HQNotifRules,
   type LeadRow, type CustomerRow, type QuotationMock, type DealerRow, type AppointmentMock, type NotifPrefs, type HQNotifChannels,
   type HQAlertKey,
+  roleLabelOf,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
@@ -246,7 +247,6 @@ const TITLE_MAP: { match: string; title: string }[] = [
   { match: "/hq/customers",      title: "ลูกค้าทั้งเครือ" },
   { match: "/hq/quotations",     title: "ใบเสนอราคาทั้งเครือ" },
   { match: "/hq/master",         title: "แคตตาล็อกแม่แบบ" },
-  { match: "/hq/company",        title: "บริษัท" },
   { match: "/hq/users",          title: "ผู้ใช้งาน" },
   { match: "/hq/audit",          title: "บันทึกการใช้งาน" },
   { match: "/hq/settings",        title: "ตั้งค่า" },
@@ -278,7 +278,9 @@ const HQ_PAGES: PageEntry[] = [
   { label: "ภาพรวมยอดขาย",        href: "/hq/pipeline",   keywords: "ภาพรวมยอดขาย pipeline ยอดขาย sales funnel" },
   { label: "ใบเสนอราคาทั้งเครือ",   href: "/hq/quotations", keywords: "ใบเสนอราคา quotation quote ทั้งเครือ" },
   { label: "แคตตาล็อกแม่แบบ",     href: "/hq/master",     keywords: "แคตตาล็อก แม่แบบ master สินค้า product catalog" },
-  { label: "บริษัท",              href: "/hq/company",    keywords: "บริษัท company องค์กร โปรไฟล์บริษัท" },
+  // หน้า /hq/company ถูกยุบเมื่อ 10 ส.ค. 69 — เนื้อหาซ้ำกับแท็บ "บริษัท" ในหน้าตั้งค่าทุกประการ
+  // และไม่มีลิงก์ในเมนู (เข้าได้ด้วยการพิมพ์ที่อยู่เท่านั้น) · ค้นหาคำว่า "บริษัท" ให้ไปที่หน้าตั้งค่าแทน
+  { label: "บริษัท",              href: "/hq/settings",   keywords: "บริษัท องค์กร โปรไฟล์บริษัท ข้อมูลบริษัท" },
   { label: "ผู้ใช้งาน",            href: "/hq/users",      keywords: "ผู้ใช้งาน user users บัญชีผู้ใช้ สิทธิ์" },
   { label: "ตั้งค่า",              href: "/hq/settings",   keywords: "ตั้งค่า setting settings config" },
   { label: "โปรไฟล์",             href: "/profile",       keywords: "โปรไฟล์ profile บัญชี account ข้อมูลส่วนตัว" },
@@ -317,8 +319,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const acctSub = isHQ ? session.dealerName : `ผู้ดูแล: ${displayName}`;
   const avatarUrl = profile?.avatar;
   const initial = acctName.charAt(0).toUpperCase();
-  const roleLabel = isHQ ? "ผู้บริหาร HQ"
-    : ({ DEALER_ADMIN: "ผู้จัดการตัวแทน", DEALER_SALES: "เซลส์", DEALER_SITE: "เซลส์ภาคสนาม" } as Record<string, string>)[session.role] ?? "สมาชิก";
+  const roleLabel = roleLabelOf(session.role, isHQ);   // แหล่งเดียวกับแถบข้าง — ห้ามเขียนชื่อบทบาทซ้ำที่นี่
   // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
   const { leads: allLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
 
