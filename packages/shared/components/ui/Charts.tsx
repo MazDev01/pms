@@ -225,6 +225,18 @@ export function CategoryRows({
   ariaLabel: string;
 }) {
   const max = Math.max(...data.map(d => d.value), 1);
+  // ⚠️ ไม่มีข้อมูล = ต้องบอกผู้ใช้ ห้ามปล่อยเป็นกล่องขาวเปล่า (แก้ 10 ส.ค. 69)
+  //   เดิมคืนรายการว่าง การ์ดจึงเหลือแต่หัวข้อกับพื้นที่ว่างสูง 57px
+  //   ผู้ใช้แยกไม่ออกระหว่าง "ยังไม่มีข้อมูล" กับ "การ์ดพัง/โหลดไม่ขึ้น"
+  //   แก้ที่คอมโพเนนต์กลางจึงมีผลกับทุกการ์ดที่ใช้ตัวนี้พร้อมกัน
+  if (data.length === 0) {
+    return (
+      <div role="img" aria-label={ariaLabel}
+        style={{ padding: "18px 0", fontSize: "0.78rem", color: "var(--muted-foreground, #8a94a3)" }}>
+        — ยังไม่มีข้อมูลในช่วงที่เลือก
+      </div>
+    );
+  }
   return (
     <div role="img" aria-label={ariaLabel}
       style={{ display: "flex", flexDirection: "column", gap: 12 }}>

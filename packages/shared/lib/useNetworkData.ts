@@ -12,6 +12,7 @@ import {
   type DealerDetail, type DealerLeadItem, type DealerProjectItem, type DealerQuoteItem,
 } from "@pms/shared/lib/mock";
 import { parseBaht } from "@pms/shared/lib/format";
+import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -416,7 +417,12 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
       const m = parseInt((q.date || "").slice(5, 7)) - 1;
       if (!isNaN(m)) byMonth.set(m, (byMonth.get(m) ?? 0) + q.totalValue);
     });
-    const monthlySales = TH_MO.slice(0, 6).map((month, i) => ({ month, value: Math.round((byMonth.get(i) ?? 0) / 1000) }));
+    // ⚠️ เดิมตัดไว้ 6 เดือนแรกตายตัว ไม่เกี่ยวกับว่าตอนนี้เดือนอะไร (แก้ 10 ส.ค. 69)
+    //   วันนี้ ส.ค. แต่กราฟหยุดที่ มิ.ย. และแท่งสุดท้ายถูกเน้นเป็น "เดือนปัจจุบัน" ผิดไป 2 เดือน
+    //   ยอดของ ก.ค./ส.ค. จึงหายไปจากกราฟทั้งที่การ์ดเดียวกันนับรวมอยู่ในตัวเลขสะสม
+    //   → แสดงตั้งแต่ ม.ค. ถึงเดือนปัจจุบัน แท่งสุดท้ายจึงเป็นเดือนนี้เสมอ
+    const monthsToShow = APP_NOW.getMonth() + 1;
+    const monthlySales = TH_MO.slice(0, monthsToShow).map((month, i) => ({ month, value: Math.round((byMonth.get(i) ?? 0) / 1000) }));
     return { code, monthlySales, leads: leadItems, projects, quotes };
   }, [code, fetched, leads, quotations]);
 }

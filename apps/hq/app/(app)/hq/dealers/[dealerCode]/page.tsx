@@ -158,6 +158,10 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
           const sorted = Object.entries(byProduct).sort((a, b) => b[1] - a[1]);
           const total = sorted.reduce((s, [, v]) => s + v, 0);
           const colors = ["#003366", "#0a4f8c", "#1e6fbf", "#4d94d4", "#82b4e3", "#b8d4f0"];
+          // ไม่มีข้อมูล = บอกให้รู้ ไม่ปล่อยกล่องเปล่า (แก้ 10 ส.ค. 69)
+          if (sorted.length === 0) return (
+            <div style={{ padding: "14px 0", fontSize: "0.78rem", color: "#8a94a3" }}>— ยังไม่มีแม่แบบที่ปิดการขายได้</div>
+          );
           return sorted.map(([product, value], i) => (
             <div key={product} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <span className="badge" style={BADGE(colors[i % colors.length] + "22", colors[i % colors.length])}>{product}</span>
