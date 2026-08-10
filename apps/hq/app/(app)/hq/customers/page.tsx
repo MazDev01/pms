@@ -28,7 +28,7 @@ import { CustomerAnalytics } from "@pms/shared/components/hq/customers/CustomerA
 import { CustomerTable } from "@pms/shared/components/hq/customers/CustomerTable";
 import { CustomerDrawer } from "@pms/shared/components/hq/customers/CustomerDrawer";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 
 export default function HQCustomersPage() {
   // ตัวกรองเฉพาะหน้านี้ (ไม่จำข้ามหน้า) — ช่วงเวลาใช้ FilterBar ส่วนกลาง

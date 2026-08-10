@@ -489,7 +489,7 @@ export default function FilesPage() {
   const [editId,  setEditId]  = useState<number | null>(null);
   const [previewId, setPreviewId] = useState<number | null>(null);
   const [page,    setPage]    = useState(1);
-  const PAGE_SIZE = 12;
+  const PAGE_SIZE = 10;
 
   // แสดงทุกคอลัมน์เสมอ (ไม่มีเครื่องมือซ่อน/แสดงคอลัมน์ในมุมมองรายการแล้ว)
   const showCol = (_key: string) => true;

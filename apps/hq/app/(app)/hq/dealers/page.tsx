@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
@@ -12,6 +13,7 @@ import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { createDealerAccount, deleteDealerAccount, resetDealerPassword, impersonateDealer, viewDealerPassword, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
@@ -225,6 +227,8 @@ function HQDealersPageInner() {
   const [q, setQ] = useState("");
   const [regionFilter, setRegionFilter] = useState("ทั้งหมด");
   const [statusFilter, setStatusFilter] = useState<DealerStatus | "all">("all");
+  // แบ่งหน้า 10 แถวเท่ากับทุกตารางในระบบ (สั่งโดยผู้บริหาร 7 ส.ค. 69)
+  const [page, setPage] = useState(0);
 
   // Modals
   const [showForm, setShowForm] = useState(false);
@@ -273,8 +277,15 @@ function HQDealersPageInner() {
   function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setTargetTouched(true); setFormErr(""); setShowForm(true); }
 
   // เปลี่ยนภาค: อัปเดตภาค + ถ้ายังไม่แก้เป้าเอง (โหมดเพิ่มใหม่) เติมค่าเริ่มต้นตามภาคให้
+  //   และล้างจังหวัดทิ้งถ้ามันไม่ได้อยู่ในภาคใหม่ — กันข้อมูลขัดกันเอง (เช่น ภาค "ใต้" + จังหวัด "เชียงใหม่")
+  //   ซึ่งเคยเกิดได้เพราะจังหวัดเป็นช่องพิมพ์อิสระ ไม่ผูกกับภาคเลย
   function changeRegion(region: string) {
-    setForm(f => ({ ...f, region, revenueTarget: (!editTarget && !targetTouched) ? regionDefaultTarget(region) : f.revenueTarget }));
+    setForm(f => ({
+      ...f,
+      region,
+      province: provincesOfRegion(region).includes(f.province) ? f.province : "",
+      revenueTarget: (!editTarget && !targetTouched) ? regionDefaultTarget(region) : f.revenueTarget,
+    }));
   }
 
   async function save() {
@@ -495,10 +506,10 @@ function HQDealersPageInner() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr><td colSpan={10} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>ไม่พบข้อมูล</td></tr>
-              ) : filtered.map((d, i) => (
+              ) : pageSlice(filtered, Math.min(page, pageCountOf(filtered.length) - 1)).map((d, i) => (
                 <ClickableRow key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
                   onActivate={() => setSelectedDealer(d)} label={`เปิดรายละเอียดตัวแทน ${d.name}`}>
-                  <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{i + 1}</td>
+                  <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{Math.min(page, pageCountOf(filtered.length) - 1) * ROWS_PER_PAGE + i + 1}</td>
                   <td>
                     <span style={{ fontWeight: 800, color: "#003366", fontSize: "0.8rem", letterSpacing: "0.05em" }}>{d.code}</span>
                   </td>
@@ -556,6 +567,7 @@ function HQDealersPageInner() {
             </tbody>
           </table>
         </div>
+        <TablePagination page={page} total={filtered.length} onPage={setPage} unit="สาขา" />
       </div>
 
       {/* ── Add / Edit Modal ── */}
@@ -587,12 +599,22 @@ function HQDealersPageInner() {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <InputField label="จังหวัดที่ตั้ง">
-                  <input value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))} placeholder="เช่น ระยอง" style={INPUT_STYLE} />
-                </InputField>
+                {/* ภาคมาก่อนจังหวัด — เพราะจังหวัดที่เลือกได้ขึ้นกับภาคที่เลือกไว้ */}
                 <InputField label="ภาค">
                   <select aria-label="ภูมิภาค" value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                     {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </InputField>
+                <InputField label="จังหวัดที่ตั้ง *">
+                  {/* จังหวัดของตัวแทนเดิมที่ไม่อยู่ในรายการของภาคนั้น (สะกดต่าง/ข้อมูลเก่า) ต้องยังเห็นค่าเดิมอยู่
+                      ไม่งั้นแค่เปิดฟอร์มมาแก้ชื่อ จังหวัดก็หายไปเงียบ ๆ แล้วถูกบันทึกทับเป็นค่าว่าง */}
+                  <select aria-label="จังหวัดที่ตั้ง" value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))}
+                    style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                    <option value="">เลือกจังหวัด</option>
+                    {provincesOfRegion(form.region).map(p => <option key={p} value={p}>{p}</option>)}
+                    {form.province && !provincesOfRegion(form.region).includes(form.province) && (
+                      <option value={form.province}>{form.province} (นอกภาค {form.region})</option>
+                    )}
                   </select>
                 </InputField>
                 <InputField label="เป้ายอดขาย (บาท/ปี)">

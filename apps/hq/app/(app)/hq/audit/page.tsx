@@ -2,6 +2,7 @@
 
 // ─── HQ · บันทึกการใช้งาน (Audit Log) — ตรวจว่า admin ของ HQ ทำอะไรไปบ้าง ──────
 import { useMemo, useState } from "react";
+import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { ScrollText, Search, X, User, Activity } from "lucide-react";
 import { useAuditEntries, AUDIT_READ_CAP } from "@pms/shared/lib/useAudit";
 import { hqAuditCategory, HQ_NOTIF_EVENTS } from "@pms/shared/lib/mock";
@@ -25,6 +26,8 @@ export default function HQAuditPage() {
   const [q, setQ] = useState("");
   const [userFilter, setUserFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
+  // ตารางนี้โตไม่จำกัด (เกือบหมื่นแถวแล้ว) — เดิมเรนเดอร์ทีเดียวทั้งหมด เบราว์เซอร์หน่วงเห็นได้ชัด
+  const [page, setPage] = useState(0);
 
   const users = useMemo(() => [...new Set(entries.map(e => e.user))], [entries]);
   // โมดูลที่มีจริงในบันทึกเท่านั้น — ไม่ขึ้นตัวเลือกที่กรองแล้วไม่เจออะไร
@@ -124,7 +127,7 @@ export default function HQAuditPage() {
                   {entries.length === 0 ? "ยังไม่มีบันทึกกิจกรรม" : "ไม่พบบันทึกตามตัวกรองที่เลือก"}
                 </td></tr>
               )}
-              {filtered.map(e => {
+              {pageSlice(filtered, Math.min(page, pageCountOf(filtered.length) - 1)).map(e => {
                 const rm = ROLE_LABEL[e.role] ?? { label: e.role, bg: "#f0f0f5", color: "#6b7280" };
                 return (
                   <tr key={e.id}>
@@ -147,6 +150,7 @@ export default function HQAuditPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination page={page} total={filtered.length} onPage={setPage} unit="รายการ" />
       </div>
     </div>
   );

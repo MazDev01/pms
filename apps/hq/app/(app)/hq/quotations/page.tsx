@@ -21,7 +21,7 @@ import {
 import { parseBaht } from "@pms/shared/lib/format";
 
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-const QPAGE_SIZE = 20;
+const QPAGE_SIZE = 10;
 const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 // ตัวกรองว่าง (ทั้งเครือ ทุกช่วง) — อ้างอิงคงที่ ดึง product_line ทั้งหมดครั้งเดียว ไม่รีเฟตช์
 const ALL_PRODUCTS_FILTER: QuoteSummaryFilters = {};

@@ -3,7 +3,7 @@
 // SupabaseAdapter — เชื่อม repository ทุกตัวเข้ากับตาราง Supabase (เฟส B)
 // map ตาราง ↔ type ตาม BACKEND-DESIGN.md · ขอบเขตข้อมูล (dealer_code) บังคับด้วย RLS ที่ DB
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
-import { getSupabase } from "./client";
+import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
 import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, DEFAULT_LEAD_RULES, LOST_REASONS,
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
@@ -24,7 +24,20 @@ import type {
 
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 
-const sb = () => getSupabase();
+// ── ด่านสุดท้ายกันคำขอที่ยิงตอนยังไม่ล็อกอิน (7 ส.ค. 69) ──────────────────────────
+// AuthGuard กันไว้ชั้นแรกแล้ว (ไม่เรนเดอร์หน้าที่ต้องล็อกอิน) แต่ยังมีช่วงสั้น ๆ ระหว่างที่แอป
+// กำลังกู้เซสชันอยู่ ซึ่งคอมโพเนนต์ที่อยู่ยาว (แถบบน/เมนูข้าง) เริ่มขอข้อมูลไปแล้ว
+// คำขอช่วงนั้นถูกฐานข้อมูลปฏิเสธ 100% (401) จึงไม่มีเหตุผลให้ยิงออกไป — หยุดตั้งแต่ที่นี่
+// ⚠️ ไม่ใช่การ "เปิดสิทธิ์ให้ผ่าน" — สิทธิ์ฝั่งฐานข้อมูลยังเข้มเท่าเดิมทุกประการ
+const NO_SESSION = "ยังไม่ได้เข้าสู่ระบบ";
+const sb = () => {
+  if (!hasStoredSession()) throw new DbError(NO_SESSION, "no-session");
+  return getSupabase();
+};
+/** คำขอที่ถูกหยุดเพราะยังไม่ล็อกอิน — ไม่ใช่ความผิดพลาด ไม่ต้องตะโกนใส่ผู้ใช้ */
+export function isNoSessionError(e: unknown): boolean {
+  return e instanceof DbError && e.code === "no-session";
+}
 type Row = Record<string, unknown>;
 
 // at (timestamptz ISO) → "30 มิ.ย. 2569 · 09:22" (รูปแบบเดียวกับ stampNow ใน useAudit ที่ parseDate อ่านได้)
@@ -276,7 +289,10 @@ function subscribeWithRetry(label: string, build: () => RealtimeChannel): () => 
 
   const start = () => {
     if (stopped) return;
-    ch = build();
+    // ยังไม่ล็อกอิน = ยังไม่ต้องเปิดช่องฟังอะไรทั้งนั้น (build() จะโยน no-session ออกมา)
+    //   หน้าที่ต้องล็อกอินจะ mount ใหม่หลังเข้าระบบสำเร็จ แล้วค่อยเปิดช่องตอนนั้น
+    try { ch = build(); }
+    catch (e) { if (!isNoSessionError(e)) throw e; return; }
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") { attempt = 0; return; }
       // CLOSED = ปิดตามปกติตอน removeChannel — ไม่ใช่ความผิดพลาด
@@ -284,7 +300,7 @@ function subscribeWithRetry(label: string, build: () => RealtimeChannel): () => 
 
       const dead = ch;
       ch = null;
-      if (dead) void sb().removeChannel(dead);
+      if (dead) { try { void sb().removeChannel(dead); } catch { /* ไม่มีเซสชันแล้ว */ } }
       if (stopped) return;
 
       if (attempt >= RETRY_DELAYS_MS.length) {
@@ -302,7 +318,8 @@ function subscribeWithRetry(label: string, build: () => RealtimeChannel): () => 
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
-    if (ch) void sb().removeChannel(ch);
+    // ออกจากระบบแล้ว sb() จะโยน no-session — การเก็บกวาดช่องต้องไม่พังตามไปด้วย
+    if (ch) { try { void sb().removeChannel(ch); } catch { /* ไม่มีเซสชันแล้ว ช่องถูกปิดไปเองอยู่แล้ว */ } }
   };
 }
 
@@ -584,11 +601,18 @@ export const SupabaseAdapter: DataAdapter = {
     // อ่านล่าสุดสูงสุด limit รายการ (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ
     // audit_log เป็นตาราง append-only ที่โตไม่จำกัด (ทุก action ของ HQ ตลอดกาล) — เดิม pageAll ดึงทั้งหมด
     // จึงมีเพดานอ่านเสมอ (M8) · หน้า /hq/audit แจ้งผู้ใช้เมื่อชนเพดาน (ไม่ตัดเงียบ)
+    // ⚠️ ต้องไล่ดึงทีละหน้า ห้ามยิง .range(0, limit-1) ครั้งเดียว
+    //   ฐานข้อมูลคืนสูงสุด 1,000 แถวต่อคำขอ ต่อให้ขอ 5,000 ก็ได้กลับมาแค่ 1,000
+    //   ผลที่เกิดจริง (พบ 7 ส.ค. 69): หน้า /hq/audit มีคำเตือน "แสดงเฉพาะ N รายการล่าสุด" อยู่แล้ว
+    //   แต่ตั้งเงื่อนไขไว้ที่ 5,000 ซึ่งไม่มีวันถึง → คำเตือนไม่เคยขึ้นเลยสักครั้ง
+    //   ผู้ใช้เห็น "1,000 รายการ" เหมือนเป็นทั้งหมด ทั้งที่ในระบบมี 9,666 = ข้อมูลขาดแบบเงียบ ๆ
+    //   ซึ่งอันตรายกว่าโหลดไม่สำเร็จ เพราะหน้าจอดูปกติทุกอย่าง (กับดักเดียวกับ L-1)
     list: async (limit = 5000) => {
-      const { data, error } = await sb().from("audit_log")
-        .select("*").order("id", { ascending: false }).range(0, Math.max(0, limit - 1));
-      if (error) throw new DbError(error.message, (error as { code?: string }).code);
-      return (data as Row[]).map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
+      const { rows } = await rangedFetch<Row>(
+        (from, to) => sb().from("audit_log").select("*").order("id", { ascending: false }).range(from, to),
+        limit, 0,
+      );
+      return rows.map(r => ({ ...toCamel<AuditEntry>(r), at: fmtAuditAt(String(r.at)) }));
     },
     // ประทับ at ด้วย "วันนี้ของระบบ" (APP_NOW) + เวลาจริง → รายการอยู่ในช่วงตัวกรอง /hq/audit (แช่แข็งเวลา)
     append: (e) => {

@@ -194,7 +194,7 @@ function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; on
 
 // ═══════════════════════ PAGE ═══════════════════════════════════════════════════
 type SortKey = "name" | "createdAt";
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // ผู้ใช้จริงในระบบ (ตาราง profiles) — เฉพาะฝั่งสำนักงานใหญ่ (dealerCode ว่าง)
