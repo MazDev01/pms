@@ -128,8 +128,16 @@ export default function HQDashboard() {
     winQuotes.forEach(q => { const r = m.get(q.status) ?? { count: 0, value: 0 }; r.count += 1; r.value += q.valueNum; m.set(q.status, r); });
     return m;
   }, [quoteSummary, winQuotes]);
+  // ⚠️ การ์ดนี้ชื่อ "ยอดขายตามประเภทอาคาร" → ต้องนับเฉพาะใบที่ปิดการขายได้ (แก้ 10 ส.ค. 69)
+  //   เดิมฝั่ง DB ส่ง value = ยอดรวมทุกใบ (รวมร่าง/ที่ปิดไม่สำเร็จ) → การ์ดขึ้น ฿15.6M
+  //   ขณะที่การ์ดอื่นในหน้าเดียวกันขึ้น ฿10.2M · ฝั่ง local คิดจากใบที่ชนะอยู่แล้วมาแต่แรก
+  //   = ทางที่ถูกคือใบที่ชนะ · ตอนนี้ DB ส่ง wonValue/wonProjects มาให้แล้ว (migration 0132)
   const productArr = useMemo(() => {
-    if (quoteSummary) return quoteSummary.byProduct.map(r => ({ product: (r.product ?? undefined) as string, value: r.value, projects: r.projects }));
+    if (quoteSummary) return quoteSummary.byProduct.map(r => ({
+      product: (r.product ?? undefined) as string,
+      value: r.wonValue ?? r.value,
+      projects: r.wonProjects ?? r.projects,
+    }));
     const m = new Map<string, { value: number; projects: number }>();
     winQuotes.forEach(q => { const r = m.get(q.productLine) ?? { value: 0, projects: 0 }; r.value += q.valueNum; r.projects += 1; m.set(q.productLine, r); });
     return [...m.entries()].map(([product, v]) => ({ product, ...v })).sort((a, b) => b.value - a.value);

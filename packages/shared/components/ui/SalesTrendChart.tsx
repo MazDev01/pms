@@ -46,13 +46,23 @@ export function SalesTrendChart({
     }));
   }, [range, monthly, prevRatio]);
 
-  const rangeDesc = range === "3m" ? "3 เดือนที่ผ่านมา (รายเดือน)"
-    : range === "12m" ? "12 เดือนที่ผ่านมา (รายเดือน)"
-    : "6 เดือนที่ผ่านมา (รายเดือน)";
+  // ⚠️ ต้องบอกตามจำนวนเดือนที่มีข้อมูลจริง (แก้ 10 ส.ค. 69)
+  //   เดิมกด "12 เดือน" แล้วคำบรรยายเขียน "12 เดือนที่ผ่านมา" เสมอ
+  //   แต่ถ้าผู้เรียกส่งข้อมูลมาแค่ 8 เดือน slice(-12) ก็ได้ 8 เดือน → คำบรรยายไม่ตรงกับกราฟ
+  //   ผู้บริหารอ่านแล้วเข้าใจว่าย้อนหลังครบปี ทั้งที่เห็นแค่ 8 เดือน
+  const askedMonths = range === "3m" ? 3 : range === "12m" ? 12 : 6;
+  const rangeDesc = data.length < askedMonths
+    ? `${data.length} เดือนที่มีข้อมูล (ขอ ${askedMonths} เดือน · รายเดือน)`
+    : `${askedMonths} เดือนที่ผ่านมา (รายเดือน)`;
 
   // ตัวเลขรวม + การเติบโต (จุดแรก → จุดสุดท้ายของช่วงที่เลือก) — สไตล์การ์ดสถิติ
   const total = data.reduce((s, d) => s + d.value, 0);
-  const growth = data.length >= 2 && data[0].value ? Math.round(((data[data.length - 1].value - data[0].value) / data[0].value) * 100) : 0;
+  // ⚠️ เดือนตั้งต้นเป็น 0 = คิดเป็นเปอร์เซ็นต์ไม่ได้ ต้องขึ้น "—" (แก้ 10 ส.ค. 69)
+  //   เดิมคืน 0 แล้วไปแสดงเป็น "▲ 0%" ลูกศรเขียวขึ้น ทั้งที่ความจริงคือ "เทียบไม่ได้"
+  //   เจอจริงตอนยอดขึ้นจาก ฿0 เป็น ฿10.2M แต่การ์ดยังขึ้น "▲ 0%" เหมือนไม่มีอะไรเปลี่ยน
+  const growth = data.length >= 2 && data[0].value
+    ? Math.round(((data[data.length - 1].value - data[0].value) / data[0].value) * 100)
+    : null;
 
   return (
     <div style={{ width: "100%" }}>
@@ -63,8 +73,9 @@ export function SalesTrendChart({
           <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0 2px" }}>
             <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#003366", lineHeight: 1 }}>฿{(total).toFixed(1)}M</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "0.72rem", fontWeight: 800,
-              color: growth >= 0 ? "#059669" : "#dc2626" }}>
-              {growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%
+              color: growth === null ? "#8a94a3" : growth >= 0 ? "#059669" : "#dc2626" }}
+              title={growth === null ? "เดือนตั้งต้นเป็น 0 — คิดเป็นเปอร์เซ็นต์ไม่ได้" : undefined}>
+              {growth === null ? "—" : <>{growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%</>}
             </span>
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>

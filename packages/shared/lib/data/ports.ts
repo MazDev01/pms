@@ -134,7 +134,9 @@ export interface QuoteRangeRow {
 /** สรุปใบเสนอราคาของ /hq/dashboard ในช่วง — 3 ชุด ป้อนได้หลายการ์ดในรอบเดียว */
 export interface QuoteMonthRow { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number; }
 export interface QuoteStatusRow { status: string; count: number; value: number; }
-export interface QuoteProductRow { product: string | null; value: number; projects: number; }
+// wonValue/wonProjects = เฉพาะใบที่ปิดการขายได้ — การ์ด "ยอดขาย" ต้องใช้ตัวนี้เท่านั้น
+// (value/projects = ทุกใบรวมร่าง ใช้กับการ์ดที่พูดถึง "ใบเสนอราคา" ไม่ใช่ "ยอดขาย")
+export interface QuoteProductRow { product: string | null; value: number; projects: number; wonValue?: number; wonProjects?: number; }
 export interface DashboardQuoteSummary {
   byMonth: QuoteMonthRow[];
   byStatus: QuoteStatusRow[];

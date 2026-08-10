@@ -681,7 +681,12 @@ export const SupabaseAdapter: DataAdapter = {
           won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
         })),
         byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count), value: Number(r.value) })),
-        byProduct: (d.byProduct ?? []).map(r => ({ product: (r.product as string) ?? null, value: Number(r.value), projects: Number(r.projects) })),
+        // won_value/won_projects = เฉพาะใบที่ปิดการขายได้ (migration 0132) — การ์ด "ยอดขาย" ใช้ตัวนี้
+        byProduct: (d.byProduct ?? []).map(r => ({
+          product: (r.product as string) ?? null,
+          value: Number(r.value), projects: Number(r.projects),
+          wonValue: Number(r.won_value ?? 0), wonProjects: Number(r.won_projects ?? 0),
+        })),
       };
     },
     networkCustomerSummary: async () => {

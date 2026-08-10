@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
+import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
 import { Building2, Check, Save, MapPin, Image as ImageIcon } from "lucide-react";
 import { useReportSection } from "@pms/shared/lib/settingsBus";
@@ -17,28 +18,24 @@ type CompanyProfile = {
   phone: string; email: string; website: string;
 };
 
+// ── ⛔ ห้ามใส่ค่าตัวอย่างไว้ตรงนี้เด็ดขาด (แก้ 10 ส.ค. 69) ────────────────────────────
+//
+// เดิมมีข้อมูลบริษัทปลอมฝังไว้ทั้งชุด — ชื่อบริษัท ที่อยู่ เบอร์โทร อีเมล เว็บไซต์
+// และ **เลขประจำตัวผู้เสียภาษี "0105XXXXXXXXX"** ซึ่งไม่มีอยู่จริง
+// เมื่อฐานข้อมูลยังว่าง (ยังไม่เคยกรอก) ค่าพวกนี้จะถูกยัดใส่ช่องกรอกให้ดูเหมือนเป็นข้อมูลจริง
+//
+// อันตรายจริงจัง 2 ทาง:
+//   1) กดบันทึกครั้งเดียวโดยไม่ได้แก้ ของปลอมทั้งชุดลงฐานข้อมูลจริงทันที
+//   2) ข้อมูลบริษัทถูกใช้อ้างอิงในเอกสาร — เลขผู้เสียภาษีปลอมมีสิทธิ์ไปโผล่บนใบเสนอราคาที่ส่งลูกค้า
+//
+// กติกา: ไม่มีข้อมูลจริง = ปล่อยว่าง แล้วให้ผู้ใช้กรอกเอง (ตัวอย่างรูปแบบใส่เป็น placeholder ได้
+// เพราะเป็นข้อความจาง ๆ ที่ไม่ถูกบันทึก)
 const PROFILE_DEFAULT: CompanyProfile = {
-  name: "บริษัท เบนจามิน พรี-เอนจิเนียร์ บิลดิ้ง จำกัด",
-  address: "123 ถ.รัชดาภิเษก แขวงห้วยขวาง เขตห้วยขวาง กรุงเทพมหานคร 10310",
-  taxId: "0105XXXXXXXXX",
-  phone: "02-000-0000",
-  email: "info@benjamin.co.th",
-  website: "www.benjamin.co.th",
+  name: "", address: "", taxId: "", phone: "", email: "", website: "",
 };
 
-// hq: true = แถวสำนักงานใหญ่ → ที่อยู่มาจากช่อง "ที่อยู่" ด้านบนเสมอ ไม่เก็บซ้ำที่นี่
-// (เดิมฝังที่อยู่ กทม. ไว้ตรงนี้อีกชุด → แก้ที่อยู่บริษัทแล้วแถวนี้ยังโชว์ของเก่า)
-type Branch = { name: string; region: string; address?: string; hq?: boolean; status: "เปิดทำการ" | "เร็วๆ นี้" };
-const BRANCHES: Branch[] = [
-  { name: "สำนักงานใหญ่ (กรุงเทพฯ)", region: "ภาคกลาง",      hq: true, status: "เปิดทำการ" },
-  { name: "สาขาเชียงใหม่",           region: "ภาคเหนือ",      address: "ถ.ซุปเปอร์ไฮเวย์ อ.เมือง เชียงใหม่", status: "เปิดทำการ" },
-  { name: "สาขาขอนแก่น",             region: "ภาคตะวันออกเฉียงเหนือ", address: "ถ.มิตรภาพ อ.เมือง ขอนแก่น", status: "เปิดทำการ" },
-  { name: "สาขาชลบุรี",              region: "ภาคตะวันออก",   address: "ถ.สุขุมวิท อ.ศรีราชา ชลบุรี",  status: "เปิดทำการ" },
-  { name: "สาขาสุราษฎร์ธานี",        region: "ภาคใต้",        address: "ถ.ตลาดใหม่ อ.เมือง สุราษฎร์ธานี", status: "เปิดทำการ" },
-  { name: "สาขานครราชสีมา",          region: "ภาคตะวันออกเฉียงเหนือ", address: "ถ.มิตรภาพ อ.เมือง นครราชสีมา", status: "เร็วๆ นี้" },
-];
-
 export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
+  const logAudit = useAuditLogger();
   const [form,  setForm]  = useState<CompanyProfile>(PROFILE_DEFAULT);
   const [saved, setSaved] = useState(false);
   const [baseline, setBaseline] = useState(""); // สแนปช็อตค่าที่บันทึกล่าสุด → ใช้เทียบ dirty (โหมดฝัง)
@@ -50,8 +47,8 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
     hqCompanyRepo.get()
       .then(c => {
         if (!alive) return;
-        // แถวว่าง (ยังไม่เคยกรอก) → ใช้ค่าเริ่มต้นให้ฟอร์มมีอะไรให้แก้
-        const f = c.name ? { ...PROFILE_DEFAULT, ...c } : PROFILE_DEFAULT;
+        // แถวว่าง (ยังไม่เคยกรอก) = ปล่อยช่องว่างไว้ ห้ามเติมค่าตัวอย่างให้ดูเหมือนมีข้อมูลแล้ว
+        const f = { ...PROFILE_DEFAULT, ...c };
         setForm(f);
         setBaseline(JSON.stringify({ form: f }));
       })
@@ -66,11 +63,16 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
   const save = useCallback(() => {
     void hqCompanyRepo.save(form)
       .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
+    // ⚠️ ต้องบันทึกไว้ในประวัติการใช้งานด้วย (แก้ 10 ส.ค. 69)
+    //   เดิมแก้ข้อมูลบริษัทจากหน้า /hq/company แล้ว "ไม่มีร่องรอยเลยสักแถว"
+    //   ทั้งที่ทำแบบเดียวกันผ่านหน้าตั้งค่า → แท็บบริษัท มีบันทึกปกติ
+    //   (โหมดฝังในหน้าตั้งค่าใช้ปุ่มบันทึกกลางซึ่งบันทึกให้อยู่แล้ว — จดที่นี่ซ้ำจะได้ 2 แถว)
+    if (!embedded) logAudit("บันทึกข้อมูลบริษัท", form.name || "(ยังไม่ระบุชื่อบริษัท)");
     window.dispatchEvent(new Event("bpms-company-updated")); // ให้ Sidebar HQ อัปเดตชื่อทันที
     setBaseline(JSON.stringify({ form }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
-  }, [form]);
+  }, [form, embedded, logAudit]);
   // โหมดฝังในหน้าตั้งค่า → รายงาน {dirty,save,reset} ให้ปุ่มบันทึกกลาง (ไม่มีปุ่มของตัวเอง = ไม่ซ้ำ)
   const dirty = baseline !== "" && JSON.stringify({ form }) !== baseline;
   const reset = useCallback(() => {
@@ -165,55 +167,15 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
         </div>
       </div>
 
-      {/* ── สาขา (Branches) ──────────────────────────────────────── */}
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <MapPin size={16} style={{ color: "var(--primary)" }} /> สาขา (Branches)
-            </div>
-            <div className="card-desc">เครือข่ายสาขาของเบนจามินทั่วประเทศ</div>
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <colgroup>
-              <col style={{ width: "26%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "48%" }} />
-              <col style={{ width: "10%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>ชื่อสาขา</th>
-                <th>ภาค</th>
-                <th>ที่อยู่</th>
-                <th style={{ textAlign: "right" }}>สถานะ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {BRANCHES.map((b, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600 }}>{b.name}</td>
-                  <td style={{ color: "var(--muted-foreground)" }}>{b.region}</td>
-                  {/* สำนักงานใหญ่ = ที่อยู่เดียวกับช่องด้านบน (แหล่งเดียว) — ยังไม่กรอก = "—" ไม่เดา */}
-                  <td style={{ color: "var(--muted-foreground)" }}>{(b.hq ? form.address.trim() : b.address) || "—"}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <span className="badge" style={
-                      b.status === "เปิดทำการ"
-                        ? { background: "#ecfdf5", color: "#059669" }
-                        : { background: "#f1f5f9", color: "#64748b" }
-                    }>
-                      {b.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* ── ⛔ ตาราง "สาขา (Branches)" ถูกลบทิ้งเมื่อ 10 ส.ค. 69 ────────────────────────
+          เดิมมีรายชื่อสาขา 6 แห่งฝังไว้ในโค้ด — เชียงใหม่ ขอนแก่น ชลบุรี สุราษฎร์ธานี นครราชสีมา
+          พร้อมที่อยู่และสถานะ "เปิดทำการ" ทั้งหมดถูกกุขึ้นมา ไม่มีอยู่ในฐานข้อมูลเลยแม้แต่แถวเดียว
+          แต่แสดงบนหน้าจอเหมือนเป็นเครือข่ายสาขาจริงของบริษัท
 
+          ⚠️ และห้ามเอาตาราง "ตัวแทนจำหน่าย" มาแสดงแทน — คนละเรื่องกัน
+             ตัวแทนจำหน่ายคือคู่ค้า ไม่ใช่สาขาของบริษัท การเอามาสวมรอยกันคือการกุข้อมูลอีกแบบ
+
+          ถ้าวันหลังต้องมีทะเบียนสาขาจริง ต้องมีตารางของมันเองในฐานข้อมูลก่อน */}
     </div>
   );
 }

@@ -516,10 +516,14 @@ export default function FilesPage() {
   const rangeFrom = filtered.length === 0 ? 0 : pageStart + 1;
   const rangeTo   = Math.min(pageStart + PAGE_SIZE, filtered.length);
 
+  // ⚠️ ขนาดไฟล์เก็บเป็นข้อความ ("~140 KB", "0 KB", บางแถวว่าง) ไม่ใช่ตัวเลข (แก้ 10 ส.ค. 69)
+  //   เดิม parseFloat("~140 KB") = NaN แล้วบวกสะสมต่อ → ทั้งแถบสรุปกลายเป็น "NaN MB"
+  //   ค่าเดียวที่อ่านไม่ออกทำให้ยอดรวมทั้งหน้าใช้ไม่ได้ · ข้ามค่าที่อ่านไม่ออกไปแทน
   const totalSize = useMemo(() => {
     const mb = files.reduce((s, f) => {
-      const n = parseFloat(f.size);
-      return s + (f.size.includes("MB") ? n : n / 1024);
+      const n = parseFloat(String(f.size ?? "").replace(/[^\d.]/g, ""));
+      if (!isFinite(n)) return s;
+      return s + (/MB/i.test(String(f.size)) ? n : n / 1024);
     }, 0);
     return `${mb.toFixed(1)} MB`;
   }, [files]);
