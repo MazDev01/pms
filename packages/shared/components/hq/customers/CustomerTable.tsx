@@ -45,7 +45,7 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
         {/* ความกว้างทุกคอลัมน์กำหนดที่นี่เท่านั้น (table-layout: fixed) — เพิ่ม/ลบคอลัมน์ต้องแก้ที่นี่ด้วย */}
         <colgroup>
           <col style={{ width: "7%", minWidth: 92 }} />{/* รหัสลูกค้า */}
-          <col style={{ width: "15%", minWidth: 160 }} />{/* ลูกค้า */}
+          <col style={{ width: "15%", minWidth: 148 }} />{/* ลูกค้า — ยาวเกินตัด + tooltip */}
           <col style={{ width: "5%", minWidth: 60 }} />{/* รหัสตัวแทน */}
           <col style={{ width: "12%", minWidth: 130 }} />{/* ชื่อตัวแทน */}
           <col style={{ width: "8%", minWidth: 84 }} />{/* จังหวัด */}
@@ -53,7 +53,7 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
           <col style={{ width: "10%", minWidth: 104 }} />{/* ประเภทอาคาร */}
           <col style={{ width: "9%", minWidth: 96 }} />{/* แม่แบบ */}
           <col style={{ width: "8%", minWidth: 92 }} />{/* วันที่ส่งมอบ */}
-          <col style={{ width: "7%", minWidth: 84 }} />{/* ยอดซื้อรวม */}
+          <col style={{ width: "7%", minWidth: 96 }} />{/* ยอดซื้อรวม — หัวคอลัมน์ต้องอ่านครบ (th ไม่ตัดบรรทัด) */}
           <col style={{ width: "8%", minWidth: 92 }} />{/* ซื้อล่าสุด */}
           <col style={{ width: "4%", minWidth: 56 }} />{/* ปุ่มดู */}
         </colgroup>

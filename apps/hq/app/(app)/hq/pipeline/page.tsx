@@ -494,18 +494,21 @@ export default function SalesAnalyticsPage() {
         <div className="table-wrap">
           <table>
             <colgroup>
-              <col style={{ width: "7%", minWidth: 58 }} />{/* รหัส */}
-              <col style={{ width: "17%", minWidth: 150 }} />{/* ตัวแทน */}
-              <col style={{ width: "12%", minWidth: 110 }} />{/* ภูมิภาค */}
-              <col style={{ width: "7%", minWidth: 58 }} />{/* ลีด */}
-              <col style={{ width: "8%", minWidth: 74 }} />{/* ใบเสนอราคา */}
-              <col style={{ width: "10%", minWidth: 96 }} />{/* มูลค่าใบเสนอราคา */}
-              <col style={{ width: "9%", minWidth: 88 }} />{/* ยอดขายจริง */}
-              <col style={{ width: "7%", minWidth: 66 }} />{/* อัตราปิด */}
-              <col style={{ width: "9%", minWidth: 88 }} />{/* เป้าทั้งปี */}
-              <col style={{ width: "6%", minWidth: 58 }} />{/* % เป้า */}
-              <col style={{ width: "9%", minWidth: 94 }} />{/* ใบเสนอราคาล่าสุด */}
-              <col style={{ width: "5%", minWidth: 56 }} />{/* ปุ่มดู */}
+              {/* รวม minWidth = 1,102px — พอดีพื้นที่จริง 1,128px (วัดที่จอ 1440 · 11 ส.ค. 69)
+                  ชุดเดิมรวม 996px แต่แบ่งผิดสัดส่วน: ช่องภูมิภาคแคบกว่าป้ายชื่อภาคเต็ม
+                  ("ภาคตะวันออกเฉียงเหนือ") และหัวคอลัมน์ยาวหลายอันถูกเฉือน ทั้งที่ยังเหลือที่ว่าง */}
+              <col style={{ width: "5%", minWidth: 58 }} />{/* รหัส */}
+              <col style={{ width: "12%", minWidth: 136 }} />{/* ตัวแทน */}
+              <col style={{ width: "13%", minWidth: 148 }} />{/* ภูมิภาค — ป้ายชื่อภาคเต็ม ห้ามตัด */}
+              <col style={{ width: "5%", minWidth: 58 }} />{/* ลีด */}
+              <col style={{ width: "8%", minWidth: 94 }} />{/* ใบเสนอราคา */}
+              <col style={{ width: "9%", minWidth: 100 }} />{/* มูลค่าเสนอ */}
+              <col style={{ width: "9%", minWidth: 100 }} />{/* ยอดขายสะสม */}
+              <col style={{ width: "7%", minWidth: 84 }} />{/* อัตราปิด */}
+              <col style={{ width: "8%", minWidth: 94 }} />{/* เป้าทั้งปี */}
+              <col style={{ width: "6%", minWidth: 76 }} />{/* % เป้า */}
+              <col style={{ width: "9%", minWidth: 98 }} />{/* เสนอล่าสุด */}
+              <col style={{ width: "8%", minWidth: 56 }} />{/* ปุ่มดู */}
             </colgroup>
             <thead>
               <tr>
@@ -514,12 +517,13 @@ export default function SalesAnalyticsPage() {
                 <th>ภูมิภาค</th>
                 <th style={{ textAlign: "right" }}>ลีด</th>
                 <th style={{ textAlign: "right" }}>ใบเสนอราคา</th>
-                <th style={{ textAlign: "right" }}>มูลค่าใบเสนอราคา</th>
+                {/* หัวคอลัมน์ต้องสั้นพอไม่ให้ถูกเฉือน (th ตั้ง white-space: nowrap ทั้งระบบ) */}
+                <th style={{ textAlign: "right" }} title="มูลค่ารวมของใบเสนอราคาทั้งหมด">มูลค่าเสนอ</th>
                 <th style={{ textAlign: "right" }}>ยอดขายสะสม</th>
                 <th style={{ textAlign: "right" }} title="ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) — นับเฉพาะใบที่รู้ผลแล้ว · คนละสูตรกับ “อัตราปิดการขาย” ที่หน้าใบเสนอราคาทั้งเครือ">อัตราปิด</th>
                 <th style={{ textAlign: "right" }}>เป้าทั้งปี</th>
                 <th style={{ textAlign: "right" }}>% เป้า</th>
-                <th>ใบเสนอราคาล่าสุด</th>
+                <th title="วันที่ออกใบเสนอราคาล่าสุด">เสนอล่าสุด</th>
                 <th></th>
               </tr>
             </thead>

@@ -551,7 +551,7 @@ function PersonsTab() {
                 {/* body */}
                 <div style={{ padding: "24px 22px" }}>
                   {/* avatar upload — กลาง · แบบเดียวกับกล่อง "เพิ่มผู้ใช้งาน HQ" (UsersPanel > UserDialog)
-                      วงกลมทึบตัวอักษรแรกของชื่อ (ว่าง = "?") ไม่ใช่วงเส้นประ — เส้นประวงกลมเรนเดอร์เป็นจุด ๆ
+                      วงกลมทึบตัวอักษรแรกของชื่อ (ยังไม่พิมพ์ชื่อ = ไอคอนเพิ่มรูป) ไม่ใช่วงเส้นประ — เส้นประวงกลมเรนเดอร์เป็นจุด ๆ
                       ที่สั่นไหวตามระดับซูม/สเกลจอ ดูเหมือนภาพกระพริบ */}
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
                     <label title="เพิ่ม/เปลี่ยนรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
@@ -559,9 +559,17 @@ function PersonsTab() {
                         onChange={e => { readAvatar(e.target.files?.[0], url => setAvatar(url)); e.target.value = ""; }} />
                       {avatar
                         ? <img src={avatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: "3px solid #003366" }} />
-                        : <span style={{ width: 84, height: 84, borderRadius: "50%", background: "#003366", color: "#fff",
+                        : name.trim()
+                        ? <span style={{ width: 84, height: 84, borderRadius: "50%", background: "#003366", color: "#fff",
                             display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "2rem" }}>
-                            {name.trim().charAt(0) || "?"}
+                            {name.trim().charAt(0)}
+                          </span>
+                        // ยังไม่ได้พิมพ์ชื่อ = ยังไม่มีตัวอักษรให้แสดง — ใช้ไอคอน "เพิ่มรูป" ไม่ใช่ "?"
+                        //   เดิมแสดงเครื่องหมายคำถามตัวโต ๆ บนวงกลมทึบ ซึ่งอ่านได้ว่า "รูปเสีย/โหลดไม่ขึ้น"
+                        //   ทั้งที่เป็นแค่ฟอร์มเปล่า (ผู้ใช้แจ้ง 7 ส.ค. 69 · เห็นทั้งบนเครื่องและบนเว็บจริง)
+                        : <span style={{ width: 84, height: 84, borderRadius: "50%", background: "#eef3f8", border: "2px solid #dce5f0",
+                            display: "flex", alignItems: "center", justifyContent: "center", color: "#003366" }}>
+                            <ImagePlus size={30} strokeWidth={1.8} />
                           </span>}
                       <span style={{ position: "absolute", right: 0, bottom: 2, width: 26, height: 26, borderRadius: "50%", background: "#003366",
                         border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><ImagePlus size={13} /></span>

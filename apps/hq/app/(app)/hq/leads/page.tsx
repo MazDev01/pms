@@ -669,29 +669,31 @@ export default function HQLeadsPage() {
       <div className="card" style={{ marginBottom: 0, overflow: "hidden" }}>
         <div className="table-wrap">
           <table>
-            {/* 12 คอลัมน์ · รวม minWidth = 1,188px = ความกว้างกรอบพอดี → ไม่ล้น ไม่ต้องเลื่อน
-                (เดิม 13 คอลัมน์ = 1,440px ล้นไป 252px)
-                ที่ประหยัดมาได้: รวม "รหัสตัวแทน" เข้ากับ "ตัวแทน" (ข้อมูลซ้ำ) −78px · บีบที่เหลือ −174px
+            {/* 12 คอลัมน์ · รวม minWidth = 1,116px — พอดีพื้นที่จริง 1,128px (วัดที่จอ 1440 · 11 ส.ค. 69)
+                ชุดก่อนหน้ารวม 1,214px → เกินไป 86px ตารางจึงยังมีแถบเลื่อนแนวนอนคาอยู่
+                (เดิม 13 คอลัมน์ = 1,440px · ที่ประหยัดมาได้: รวม "รหัสตัวแทน" เข้ากับ "ตัวแทน" ซึ่งข้อมูลซ้ำกัน)
+                จอกว้างกว่า 1440 คอลัมน์จะยืดตาม % เอง (รวมต้องได้ 100)
                 เพิ่ม/ลบคอลัมน์ต้องแก้ที่นี่เท่านั้น (table-layout: fixed — ใส่ที่ <th> ไม่มีผล)
                 และต้องคุมผลรวม minWidth ไม่ให้เกินกรอบ ไม่งั้นกลับมาล้นอีก */}
             <colgroup>
-              <col style={{ width: "8%", minWidth: 92 }} />{/* รหัสลีด */}
-              <col style={{ width: "15%", minWidth: 178 }} />{/* ตัวแทน (รหัส + ชื่อ) */}
-              <col style={{ width: "13%", minWidth: 150 }} />{/* ลูกค้า */}
+              <col style={{ width: "7%", minWidth: 88 }} />{/* รหัสลีด */}
+              <col style={{ width: "12%", minWidth: 140 }} />{/* ตัวแทน (รหัส + ชื่อ) */}
+              <col style={{ width: "11%", minWidth: 120 }} />{/* ลูกค้า */}
               <col style={{ width: "7%", minWidth: 84 }} />{/* จังหวัด */}
-              <col style={{ width: "10%", minWidth: 112 }} />{/* ประเภทอาคาร */}
-              <col style={{ width: "8%", minWidth: 92 }} />{/* แหล่งที่มา */}
+              <col style={{ width: "9%", minWidth: 100 }} />{/* ประเภทอาคาร */}
+              <col style={{ width: "8%", minWidth: 84 }} />{/* แหล่งที่มา */}
               <col style={{ width: "7%", minWidth: 84 }} />{/* มูลค่า */}
-              <col style={{ width: "8%", minWidth: 88 }} />{/* เสนอราคาแล้ว */}
-              <col style={{ width: "8%", minWidth: 96 }} />{/* ติดต่อล่าสุด */}
-              <col style={{ width: "7%", minWidth: 86 }} />{/* ต้องติดตาม */}
-              <col style={{ width: "9%", minWidth: 100 }} />{/* สถานะ */}
+              <col style={{ width: "8%", minWidth: 88 }} />{/* เสนอราคา */}
+              <col style={{ width: "8%", minWidth: 88 }} />{/* ติดต่อล่าสุด */}
+              <col style={{ width: "8%", minWidth: 100 }} />{/* ต้องติดตาม — ในช่องเป็นป้ายชื่อ ห้ามตัด */}
+              <col style={{ width: "8%", minWidth: 92 }} />{/* สถานะ */}
               <col style={{ width: "5%", minWidth: 52 }} />{/* ดู — ไอคอนล้วน (ปุ่ม 28px + padding ของ td) */}
             </colgroup>
             <thead><tr>
               <th>รหัสลีด</th><th>ตัวแทน</th><th>ลูกค้า</th>
               <th>จังหวัด</th><th>ประเภทอาคาร</th><th>แหล่งที่มา</th>
-              <th className="num">มูลค่า</th><th>เสนอราคาแล้ว</th><th>ติดต่อล่าสุด</th>
+              {/* หัวคอลัมน์ต้องสั้นพอไม่ให้ถูกตัด (th ตั้ง white-space: nowrap ทั้งระบบ) — ไฟล์ส่งออกยังใช้ชื่อเต็ม */}
+              <th className="num">มูลค่า</th><th>เสนอราคา</th><th>ติดต่อล่าสุด</th>
               <th>ต้องติดตาม</th><th>สถานะ</th><th></th>
             </tr></thead>
             <tbody>
