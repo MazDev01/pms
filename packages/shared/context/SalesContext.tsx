@@ -752,7 +752,11 @@ export function SalesProvider({
   );
 }
 
-export function useSales() {
+// ⚠️ ต้องเขียนชนิดที่คืนค่าไว้ตรง ๆ ห้ามปล่อยให้ TypeScript เดาเอง (แก้ 11 ส.ค. 69)
+//   ตอน build บนเซิร์ฟเวอร์จริงพัง แต่ build ในเครื่องผ่าน — ข้อความคือ "a เป็นชนิด any"
+//   ที่หน้าปฏิทิน ซึ่งเป็นอาการปลายทางของการที่ตัวนี้กลายเป็น any บนเครื่องนั้น
+//   เขียนชนิดไว้ชัด ๆ = ไม่ขึ้นกับลำดับการอ่านไฟล์ของแต่ละเครื่องอีกต่อไป
+export function useSales(): SalesContextType {
   const ctx = useContext(SalesContext);
   if (!ctx) throw new Error("useSales must be used inside SalesProvider");
   return ctx;

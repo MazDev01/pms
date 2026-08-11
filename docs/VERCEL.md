@@ -11,8 +11,17 @@
 | `benjamin-hq` | `apps/hq` | `hq.<โดเมนบริษัท>` |
 | `benjamin-dealer` | `apps/dealer` | `dealer.<โดเมนบริษัท>` |
 
-**ตั้ง Root Directory ให้ถูก** แล้ว Vercel จะอ่าน `vercel.json` ในโฟลเดอร์นั้นเอง
-(ไฟล์นั้นสั่ง build เฉพาะแอปตัวเอง และข้าม build ถ้าคอมมิตนั้นไม่ได้แตะแอปนี้)
+**ตั้ง Root Directory ให้ถูก** แล้วกรอกคำสั่งในหน้า Settings → Build & Development Settings
+
+| ช่อง | ค่าของ `benjamin-hq` | ค่าของ `benjamin-dealer` |
+|---|---|---|
+| Install Command | `cd ../.. && pnpm install --frozen-lockfile` | เหมือนกัน |
+| Build Command | `cd ../.. && npx turbo build --filter=hq` | `--filter=dealer` |
+| Ignored Build Step | `cd ../.. && npx turbo-ignore hq` | `npx turbo-ignore dealer` |
+
+> ⚠️ ต้องกรอกเองในหน้าเว็บ — ไฟล์ `vercel.json` ที่เคยเก็บค่าพวกนี้ไว้ในโค้ดถูกเอาออกแล้ว (11 ส.ค. 69)
+> เป็นโมโนเรโป ถ้าไม่ตั้งคำสั่งพวกนี้ Vercel จะ build จากโฟลเดอร์แอปเดี่ยว ๆ แล้วหาแพ็กเกจร่วมไม่เจอ
+> ส่วน Ignored Build Step มีไว้ข้าม build เมื่อคอมมิตนั้นไม่ได้แตะแอปนี้ (ไม่ตั้งก็ได้ แค่ build บ่อยเกินจำเป็น)
 
 ---
 
@@ -36,7 +45,8 @@
 ทุกคำขอจะวิ่งข้ามมหาสมุทรไปกลับ เพิ่มเวลารอครั้งละ 150–250 มิลลิวินาที **ต่อคำขอ**
 หน้าเดียวยิงหลายคำขอ ผู้ใช้ในไทยจะรู้สึกได้ชัดว่าช้า
 
-> ถ้าวันหนึ่งย้ายฐานข้อมูลไปที่อื่น ต้องแก้ `regions` ในไฟล์ `vercel.json` ทั้งสองแอปให้ตรงกัน
+> ถ้าวันหนึ่งย้ายฐานข้อมูลไปที่อื่น ต้องไปแก้ Region ของทั้งสองโปรเจกต์ในหน้า Settings → Functions ให้ตรงกัน
+> (ฐานข้อมูลปัจจุบันอยู่โตเกียว `ap-northeast-1` → ฝั่งเว็บควรเป็น `hnd1`)
 
 ---
 
