@@ -93,8 +93,15 @@ Vercel มี **Monitoring → Alerts** ในตัว ตั้งให้ย
 | `benjamin-hq` | `apps/hq` | https://benjamin-hq.vercel.app |
 | `benjamin-dealer` | `apps/dealer` | https://benjamin-dealer.vercel.app |
 
-⚠️ **ต้องตั้ง Production Branch เป็น `monorepo` เองในหน้าเว็บ** (Settings → Git)
-คำสั่งบรรทัดคำสั่งตั้งค่านี้ไม่ได้ ต้องกดในหน้าจัดการ
+⚠️ **ต้องตั้ง Production Branch เป็น `monorepo` เองในหน้าเว็บ** — คำสั่งบรรทัดคำสั่งตั้งค่านี้ไม่ได้
+
+**Settings → Environments → Production → Branch Tracking** → เปลี่ยนเป็น `monorepo` → Save (ทำทั้ง 2 โปรเจกต์)
+
+> เดิมใบนี้เขียนว่าอยู่ที่ Settings → Git ซึ่ง**ไม่ใช่แล้ว** (Vercel ย้ายไปหน้า Environments)
+> หน้า Git เหลือแค่ Connected Repository / Git LFS / Deploy Hooks — เลื่อนหาเท่าไรก็ไม่เจอ
+
+ตั้งเสร็จแล้ว Vercel **ไม่ย้อนไปเลื่อนของเก่าขึ้นให้** ต้องกระตุ้นเองอีกทีอย่างใดอย่างหนึ่ง:
+Deployments → ตัวล่าสุดของสาขา `monorepo` → ⋯ → **Promote to Production** · หรือ push commit ใหม่ · หรือสั่ง deploy จากเครื่องตามหัวข้อถัดไป
 
 ถ้าไม่ตั้ง Vercel จะถือว่าสาขาผลิตจริงคือสาขาเริ่มต้นของที่เก็บโค้ด (`main`)
 ซึ่งเก่ากว่าสาขา `monorepo` อยู่มาก — push ขึ้น `monorepo` จะได้แค่ Preview ไม่ทับของจริง
