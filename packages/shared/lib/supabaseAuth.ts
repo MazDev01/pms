@@ -80,6 +80,7 @@ async function withNames(base: MockSession, userId: string): Promise<MockSession
 
 /** เข้าสู่ระบบด้วยอีเมล/รหัสผ่านจริง (Supabase Auth) */
 export async function sbSignIn(email: string, password: string): Promise<AuthResult> {
+  localSignInAt = Date.now();   // บอกตัวกันสลับบัญชีว่าครั้งนี้แท็บนี้กดเอง อย่าสั่งโหลดหน้าใหม่
   const { data, error } = await getSupabase().auth.signInWithPassword({
     email: email.trim().toLowerCase(),
     password,
@@ -167,10 +168,35 @@ export async function sbChangeOwnPassword(current: string, next: string): Promis
   return { ok: true };
 }
 
+// ── ตัวกันบัญชีปนกันข้ามแท็บ ──────────────────────────────────────────────────────
+//
+// ใบผ่านเข้าระบบเก็บใน localStorage = ทุกแท็บใช้ร่วมกัน (เพื่อให้เปิดแท็บใหม่แล้วไม่ต้องล็อกอินซ้ำ)
+// ผลข้างเคียงที่ต้องกัน: ล็อกอินบัญชีอื่นในแท็บใหม่ แท็บเก่าจะได้ session ของบัญชีใหม่มาแทน
+// ถ้าปล่อยให้ setSession เฉย ๆ แท็บเก่าจะเอาข้อมูลบัญชีใหม่มาปะทับหน้าจอที่ยังค้างของบัญชีเดิม
+// (หัวจอเขียนสาขาหนึ่ง ตารางข้างล่างเป็นอีกสาขา) — เคยเจอจริงตอนทดสอบ QA
+//
+// โหลดหน้าใหม่ทั้งหน้าเมื่อ "คนที่ล็อกอินเปลี่ยนคน" เท่านั้น — ต่ออายุใบผ่านหรือรีเฟรชปกติ
+// ผู้ใช้คนเดิม จึงไม่โดนโหลดใหม่ (เช็กที่ id ของผู้ใช้ ไม่ใช่ที่ตัวใบผ่านซึ่งเปลี่ยนทุก 10 นาที)
+//
+// ⚠️ ต้องยกเว้น "แท็บที่กดล็อกอินเอง" ด้วย ไม่งั้นเจอบั๊กนี้ (เจอตอนทดสอบ 11 ส.ค. 69):
+//   ออกจากระบบไม่ได้กด แต่ไปหน้าเข้าสู่ระบบแล้วล็อกอินอีกบัญชี → แท็บนั้นเห็นว่า "คนเปลี่ยน"
+//   เลยสั่งโหลดหน้าใหม่ทับการพาไปหน้าแดชบอร์ด ผู้ใช้ค้างอยู่หน้าเข้าสู่ระบบทั้งที่ล็อกอินสำเร็จแล้ว
+//   จึงจดเวลาที่แท็บนี้กดล็อกอินไว้ แล้วเว้นช่วงสั้น ๆ ให้การล็อกอินของตัวเองเดินจนจบ
+let tabUserId: string | null = null;
+let localSignInAt = 0;
+const LOCAL_SIGNIN_GRACE_MS = 5000;
+
 /** ติดตามการเปลี่ยนสถานะ auth (login/logout/token refresh) — คืนฟังก์ชัน unsubscribe */
 export function sbOnChange(cb: (session: MockSession | null) => void): () => void {
   const { data } = getSupabase().auth.onAuthStateChange((_event, s) => {
-    if (!s) { cb(null); return; }
+    if (!s) { tabUserId = null; cb(null); return; }
+    const uid = s.user?.id ?? "";
+    const justSignedInHere = Date.now() - localSignInAt < LOCAL_SIGNIN_GRACE_MS;
+    if (tabUserId && uid && uid !== tabUserId && !justSignedInHere) {
+      if (typeof window !== "undefined") window.location.reload();
+      return;
+    }
+    tabUserId = uid;
     const base = sessionFromToken(s.access_token, s.user?.email ?? "");
     if (!base) { cb(null); void sbSignOut(); return; } // โทเค็นเพี้ยนกลางเซสชัน → ออกจากระบบ ไม่ใช่ถือ session ผี
     cb(base);                                   // ใช้งานต่อได้ทันที (ชื่อยังเป็นอีเมล/รหัสสาขา)

@@ -10,10 +10,11 @@ export async function loginAs(page: Page, role: "hq" | "dealer") {
   }, role);
 }
 
-// ── โหมด supabase: ยัด session จริงลง sessionStorage ตรงๆ แทนล็อกอินผ่านหน้าจอทุกเทสต์ ──
+// ── โหมด supabase: ยัด session จริงลง localStorage ตรงๆ แทนล็อกอินผ่านหน้าจอทุกเทสต์ ──
 // เร็วกว่ามาก (ไม่ต้องรอ UI) และไม่ชน rate limit ของ Supabase Auth (เข้าสู่ระบบครั้งเดียวต่อบัญชี
 // แล้ว cache ไว้ใช้ซ้ำได้ตลอดการรัน — เทียบกับเดิมที่ล็อกอินผ่านหน้าจอทุกเทสต์)
-// ⚠️ ต้องเป็น sessionStorage ไม่ใช่ localStorage — client.ts เปลี่ยนมาใช้ sessionStorage แล้ว
+// ⚠️ ต้องเป็น localStorage ให้ตรงกับ client.ts (11 ส.ค. 69 ย้ายกลับจาก sessionStorage
+//    เพราะ sessionStorage ทำให้เปิดแท็บใหม่แล้วต้องล็อกอินซ้ำ) — ยัดผิดที่ = แอปไม่เห็น session เลย
 // (กัน session สลับข้ามแท็บ, ดู packages/shared/lib/data/supabase/client.ts) คีย์ต้องตรงกับที่แอปใช้จริง
 export const SESSION_KEY = `sb-${new URL(SUPABASE_URL || "https://x.supabase.co").hostname.split(".")[0]}-auth-token`;
 
@@ -48,7 +49,7 @@ export async function open(page: Page, role: "hq" | "dealer", path: string) {
 export async function openAs(page: Page, who: Account, appRole: "hq" | "dealer", path: string) {
   const session = await getSession(who);
   await page.addInitScript(({ key, session }) => {
-    sessionStorage.setItem(key, JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify(session));
   }, { key: SESSION_KEY, session });
   await page.goto(APP_ORIGIN[appRole] + path, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});

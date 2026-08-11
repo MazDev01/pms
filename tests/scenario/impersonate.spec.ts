@@ -157,7 +157,7 @@ test("แถบเตือน 'กำลังเข้าระบบแทน
   // จำลองการมาถึงด้วยลิงก์เข้าระบบแทน (?impersonated=1) โดยใช้ session ของตัวแทนจริง
   const sb = await db(CNX);
   const session = (await sb.auth.getSession()).data.session;
-  await page.addInitScript(({ key, s }) => { sessionStorage.setItem(key, JSON.stringify(s)); },
+  await page.addInitScript(({ key, s }) => { localStorage.setItem(key, JSON.stringify(s)); },
     { key: `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`, s: session });
   await page.goto(`${DEALER_ORIGIN}/dashboard?impersonated=1`, { waitUntil: "domcontentloaded" });
 

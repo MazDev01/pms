@@ -48,7 +48,7 @@ async function openAsDealer(context: BrowserContext, dealer: Provisioned): Promi
   const { data, error } = await sb.auth.signInWithPassword({ email: dealer.email, password: dealer.password });
   if (error || !data.session) throw new Error(`ล็อกอินตัวแทน ${dealer.code} ไม่ผ่าน: ${error?.message}`);
   const page = await context.newPage();
-  await page.addInitScript(({ key, session }) => { sessionStorage.setItem(key, JSON.stringify(session)); },
+  await page.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)); },
     { key: SESSION_KEY, session: data.session });
   return { page, sb };
 }
@@ -212,7 +212,7 @@ test("[stress] 10 ตัวแทนทำงานพร้อมกันเ�
 
   const hqCtx = await browser.newContext();
   const hqPage = await hqCtx.newPage();
-  await hqPage.addInitScript(({ key, session }) => { sessionStorage.setItem(key, JSON.stringify(session)); },
+  await hqPage.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)); },
     { key: SESSION_KEY, session: (await hqSb.auth.getSession()).data.session });
   await hqPage.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
   await hqPage.waitForLoadState("networkidle").catch(() => {});

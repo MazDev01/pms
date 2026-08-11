@@ -89,7 +89,8 @@ function CompanyTab() {
     // ข้อมูลบริษัท/โลโก้ = ของสาขา เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่เงียบแล้วจอขึ้นว่าบันทึกแล้ว
     void dealerCfg.save({ issuer: form, logo })
       .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
-    window.dispatchEvent(new Event("bpms-company-updated"));
+    // (สัญญาณ "bpms-company-updated" ถูกเอาออก 11 ส.ค. 69 — ไม่เคยมีใครรับฟังเลยทั้งโปรเจกต์
+    //  ส่งไปก็ไม่เกิดอะไรขึ้น · PROFILE_UPDATED_EVENT ข้างล่างมีคนฟังจริง จึงเก็บไว้)
     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
     setBaseline(JSON.stringify({ form, logo, prof }));
   }, [form, logo, prof, session.dealerCode, session.name]);
@@ -167,7 +168,10 @@ function CompanyTab() {
           </div>
           <div>
             <label className="form-label">เลขประจำตัวผู้เสียภาษี</label>
-            <input className="form-input" value={form.taxId} onChange={e => set("taxId", e.target.value)} placeholder="0105555000000" />
+            {/* ⚠️ ตัวอย่างเลขต้องมี X (แก้ 10 ส.ค. 69) — เดิมเป็น "0105555000000" ซึ่งเป็นตัวเลข 13 หลัก
+                ครบรูปแบบ อ่านผ่าน ๆ แล้วแยกไม่ออกว่าเป็นค่าตัวอย่างหรือเลขที่กรอกไว้แล้ว
+                และต้องเขียนเหมือนฝั่งสำนักงานใหญ่ (CompanyPanel) — ช่องเดียวกันห้ามมี 2 รูปแบบ */}
+            <input className="form-input" value={form.taxId} onChange={e => set("taxId", e.target.value)} placeholder="0105XXXXXXXXX" />
           </div>
           <div>
             <label className="form-label">อีเมลบริษัท</label>

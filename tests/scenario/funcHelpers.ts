@@ -43,7 +43,7 @@ export async function loginUI(page: Page, origin: string, path: string, who: Acc
   try {
     const session = await getSession(who);
     await page.addInitScript(({ key, session }) => {
-      sessionStorage.setItem(key as string, JSON.stringify(session));
+      localStorage.setItem(key as string, JSON.stringify(session));
     }, { key: SESSION_KEY, session });
     await page.goto(`${origin}${HOME_AFTER_LOGIN[path] ?? path}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
