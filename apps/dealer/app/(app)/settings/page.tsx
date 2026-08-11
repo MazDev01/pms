@@ -2,6 +2,7 @@
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
+import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
 import { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from "react";
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save, RotateCcw,
@@ -15,6 +16,7 @@ import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { useOverlayClose } from "@pms/shared/lib/useOverlayClose";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
@@ -508,6 +510,14 @@ function PersonsTab() {
     setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); setAdding(false);
   }
 
+  // ปิดฟอร์ม (ทั้งโหมดเพิ่มและโหมดแก้ไข) — ต้องอยู่ระดับนี้เพื่อให้ตัวคุมการคลิกฉากหลังใช้ได้
+  const closeForm = useCallback(() => {
+    if (editId !== null) { setEditId(null); return; }
+    setAdding(false); setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined);
+  }, [editId]);
+  // คลิกฉากหลังเพื่อปิด — แต่กันคลิกที่สองของดับเบิลคลิก และกันการลากข้อความออกนอกกล่อง
+  const overlayProps = useOverlayClose(closeForm, adding || editId !== null);
+
   return (
     <>
       <div className="card-header">
@@ -533,10 +543,12 @@ function PersonsTab() {
           const setEmail = isEdit ? setEditEmail : setNewEmail;
           const setAvatar = isEdit ? setEditAvatar : setNewAvatar;
           const submit = isEdit ? saveEdit : addPerson;
-          const close = () => { if (isEdit) setEditId(null); else { setAdding(false); setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); } };
+          const close = closeForm;
           const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && name.trim()) submit(); };
           return (
-            <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
+            // แขวนที่ระดับหน้าเว็บ ไม่ฝังในการ์ด — ไม่งั้นอนิเมชันของการ์ดจะดึงตำแหน่งป๊อปอัพไปด้วย
+            <ModalPortal>
+            <div {...overlayProps} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
               display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
               <ModalCard onClose={close} label="ฟอร์มผู้รับผิดชอบ" style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
                 overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
@@ -616,6 +628,7 @@ function PersonsTab() {
                 </div>
               </ModalCard>
             </div>
+            </ModalPortal>
           );
         })()}
 
