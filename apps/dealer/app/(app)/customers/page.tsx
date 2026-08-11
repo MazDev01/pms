@@ -555,6 +555,8 @@ export default function CustomersPage(){
 
   function handleSort(k: SortKey){ if(sortKey===k) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortKey(k);setSortDir("asc");} }
 
+  // มีตัวกรองถูกตั้งไว้จริงไหม — ใช้เลือกข้อความตอนไม่มีผลลัพธ์ (ดูหมายเหตุที่ตารางด้านล่าง)
+  const hasActiveFilter = query.trim() !== "" || catFilter !== "ALL" || provFilter !== "ALL" || ownerFilter !== "ALL";
   const filtered = useMemo(()=>{
     let rows=data.filter(c=>{
       const q=query.toLowerCase();
@@ -842,11 +844,22 @@ export default function CustomersPage(){
 
         {/* ── ตารางลูกค้า — คลิกแถวเพื่อเปิดแผงรายละเอียด · เรียงได้ที่หัวคอลัมน์
              ความกว้างคุมที่ colgroup เท่านั้น (table-layout:fixed — ใส่ที่ th ไม่มีผล) ── */}
+        {/* ⚠️ ต้องแยก "ไม่มีลูกค้าเลย" ออกจาก "กรองแล้วไม่เจอ" (แก้ 10 ส.ค. 69)
+             เดิมขึ้นข้อความเดียวกันหมด — ตัวแทนที่ยังไม่มีลูกค้าสักรายเห็น "ลองล้างตัวกรอง"
+             พร้อมปุ่มล้างตัวกรองที่กดแล้วไม่เกิดอะไร เพราะไม่ได้ตั้งตัวกรองไว้ตั้งแต่แรก
+             = ชี้ทางผิด ผู้ใช้เสียเวลาหาว่าตัวเองตั้งตัวกรองอะไรไว้
+             ที่ถูกคือบอกว่าลูกค้าเกิดจากการปิดการขายลีด แล้วพาไปหน้าลูกค้าเป้าหมาย */}
         {filtered.length===0?(
           <div className="card" style={{ marginBottom:16 }}>
-            <EmptyState icon={<User size={28}/>} title="ไม่พบลูกค้าที่ตรงกับเงื่อนไข"
-              description="ลองปรับคำค้นหรือล้างตัวกรองเพื่อดูลูกค้าทั้งหมด"
-              action={<button className="btn btn-secondary btn-md" style={{color:PRIMARY}} onClick={()=>{ setCatFilter("ALL"); setProvFilter("ALL"); setOwnerFilter("ALL"); setQuery(""); }}>ล้างตัวกรอง</button>} />
+            {hasActiveFilter ? (
+              <EmptyState icon={<User size={28}/>} title="ไม่พบลูกค้าที่ตรงกับเงื่อนไข"
+                description="ลองปรับคำค้นหรือล้างตัวกรองเพื่อดูลูกค้าทั้งหมด"
+                action={<button className="btn btn-secondary btn-md" style={{color:PRIMARY}} onClick={()=>{ setCatFilter("ALL"); setProvFilter("ALL"); setOwnerFilter("ALL"); setQuery(""); }}>ล้างตัวกรอง</button>} />
+            ) : (
+              <EmptyState icon={<User size={28}/>} title="ยังไม่มีลูกค้าในระบบ"
+                description="ลูกค้าจะถูกสร้างให้อัตโนมัติเมื่อปิดการขายลูกค้าเป้าหมายได้สำเร็จ"
+                action={<button className="btn btn-primary btn-md" onClick={()=>router.push("/leads")}>ไปที่ลูกค้าเป้าหมาย</button>} />
+            )}
           </div>
         ):(
           <div className="card" style={{ marginBottom:16 }}>

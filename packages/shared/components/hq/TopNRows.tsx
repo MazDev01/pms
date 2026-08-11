@@ -29,7 +29,10 @@ export function TopNRows({ children, topN = 5, unit = "ราย", gap = 12 }: {
     <>
       <div style={{ display: "flex", flexDirection: "column", gap }}>{shown}</div>
       {/* ห้ามตัดเงียบ — ถ้าซ่อนของไว้ ต้องบอกว่าซ่อนไปกี่รายการ */}
-      {(hidden > 0 || all) && (
+      {/* ⚠️ ปุ่ม "ย่อกลับ" ต้องโผล่เฉพาะตอนมีของให้ย่อจริง (แก้ 10 ส.ค. 69)
+           เดิมเช็กแค่ all → กรองจนเหลือ 4 แถวแล้วปุ่มยังบอกว่า "ย่อกลับเป็น 5 อันดับแรก"
+           ซึ่งมากกว่าจำนวนที่มีอยู่ ผู้ใช้อ่านแล้วสับสนว่าตกลงมีกี่รายการกันแน่ */}
+      {(hidden > 0 || (all && items.length > topN)) && (
         <button type="button" onClick={() => setAll(v => !v)}
           style={{
             marginTop: 10, alignSelf: "flex-start", background: "none", border: "none", padding: 0,

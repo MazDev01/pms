@@ -242,7 +242,8 @@ const TITLE_MAP: { match: string; title: string }[] = [
   /* HQ */
   { match: "/hq/dashboard",      title: "แดชบอร์ดสำนักงานใหญ่" },
   { match: "/hq/pipeline",       title: "ภาพรวมยอดขาย" },
-  { match: "/hq/dealers",        title: "ตัวแทน" },
+  // ต้องตรงกับชื่อในเมนูข้าง — เดิมเมนูเรียก "ตัวแทนจำหน่าย" แต่หัวหน้าเพจเรียก "ตัวแทน"
+  { match: "/hq/dealers",        title: "ตัวแทนจำหน่าย" },
   { match: "/hq/leads",          title: "ลูกค้าเป้าหมายทั้งเครือ" },
   { match: "/hq/customers",      title: "ลูกค้าทั้งเครือ" },
   { match: "/hq/quotations",     title: "ใบเสนอราคาทั้งเครือ" },

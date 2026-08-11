@@ -59,7 +59,12 @@ const ALL_STATUSES: LeadStatus[] = LEAD_STATUS_ORDER;
 // Lead Source ตามสเปก: Facebook / Website / LINE / Walk-in / Referral / Exhibition / Other
 // สีของแต่ละแหล่งที่มา (โดนัท) — วนใช้ตามลำดับจำนวนมาก→น้อย
 const SOURCE_COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#0D9488", "#94A3B8"];
-const SOURCES = ["Facebook","เว็บไซต์","LINE","Walk-in","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
+// ⚠️ "Walk-in" → "ลูกค้าเข้ามาเอง" (แก้ 10 ส.ค. 69) — เหลือคำอังกฤษคำเดียวในลิสต์ที่เป็นไทยหมด
+//    และไม่ใช่ชื่อแบรนด์อย่าง Facebook/LINE จึงแปลได้ (ดู legacySource ข้างล่าง — ลีดเก่าที่บันทึก
+//    ค่าเดิมไว้ต้องยังเห็นค่าตัวเองในช่องเลือก ไม่ใช่ถูกเบราว์เซอร์สลับไปตัวเลือกแรกเงียบ ๆ)
+const SOURCES = ["Facebook","เว็บไซต์","LINE","ลูกค้าเข้ามาเอง","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
+/** ค่าที่บันทึกไว้แต่ไม่อยู่ในลิสต์มาตรฐาน (ลีดเก่า/ข้อมูลนำเข้า) → แทรกเป็นตัวเลือกเพิ่ม ห้ามทำค่าเดิมหาย */
+const legacySource = (v: string) => (v && !SOURCES.includes(v) ? [v] : []);
 // ช่วงมูลค่าใน FilterRow — เดิมเป็นช่องกรอก "มูลค่าขั้นต่ำ/สูงสุด (M฿)" สองช่องในแผงตัวกรอง
 // เก็บเป็นสตริงหน่วยล้านบาท เพราะตัวกรองจริง (fValueMin/fValueMax) อ่านค่าแบบนั้นอยู่แล้ว
 const VALUE_BANDS = [
@@ -368,7 +373,7 @@ function OverviewEditor({ lead, persons, onSave }: {
         <Cell icon={Target}  label="แหล่งที่มา">
           <select aria-label="ช่องทางที่มา" value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>
             <option value="">— ยังไม่ระบุ —</option>
-            {SOURCES.map(x=><option key={x}>{x}</option>)}
+            {[...legacySource(f.source), ...SOURCES].map(x=><option key={x}>{x}</option>)}
           </select>
         </Cell>
         <Cell icon={Users}   label="ผู้รับผิดชอบ">
@@ -598,7 +603,13 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     <>
       <div onClick={closeGuarded} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.45)", zIndex:1100 }} />
       <div style={{ position:"fixed", inset:0, zIndex:1110, display:"flex", alignItems:"center", justifyContent:"center", padding:24, pointerEvents:"none" }}>
+        {/* ⚠️ ต้องบอกโปรแกรมอ่านหน้าจอว่านี่คือหน้าต่างซ้อน (แก้ 10 ส.ค. 69)
+             เดิมเป็น div เปล่า ๆ — ผู้ใช้ที่ใช้โปรแกรมอ่านหน้าจอไม่รู้เลยว่ามีหน้าต่างเปิดอยู่
+             ยังคุยกับเนื้อหาข้างหลังต่อเหมือนไม่มีอะไรเกิดขึ้น
+             ป๊อปอัพที่ใช้ ModalCard มีของพวกนี้ครบอยู่แล้ว ใบนี้เขียนแยกจึงตกหล่น */}
         <div onClick={e=>e.stopPropagation()}
+          role="dialog" aria-modal="true"
+          aria-label={isEdit ? "แก้ไขลูกค้าเป้าหมาย" : "เพิ่มลูกค้าเป้าหมาย"}
           style={{ width:"100%", maxWidth:600, background:"#fff", borderRadius:20,
             border:"1px solid #e5e7eb", boxShadow:"0 24px 80px rgba(0,0,0,.2)",
             pointerEvents:"auto", overflow:"hidden" }}>
@@ -704,7 +715,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               <div>
                 <label style={labelStyle}>แหล่งที่มา</label>
                 <select value={form.source} onChange={e=>set("source",e.target.value)} style={inputStyle}>
-                  {SOURCES.map(s=><option key={s}>{s}</option>)}
+                  {[...legacySource(form.source), ...SOURCES].map(s=><option key={s}>{s}</option>)}
                 </select>
               </div>
               <div>

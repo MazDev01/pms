@@ -453,8 +453,13 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
         <span style={{ fontSize: "0.78rem", color: "#374151", flex: 1, minWidth: 180 }}>
           <strong style={{ color: "#003366" }}>โหมดดูอย่างเดียว</strong> — HQ ดูข้อมูลของตัวแทนได้ทั้งหมด แต่แก้ไขไม่ได้จากหน้านี้
         </span>
-        <button disabled title="เฉพาะ Super Admin" className="btn btn-secondary btn-sm"
-          style={{ opacity: .55, cursor: "not-allowed" }}><Lock size={12} /> เข้าสู่โหมดจัดการ</button>
+        {/* ⚠️ ปุ่ม "เข้าสู่โหมดจัดการ" ถูกลบเมื่อ 10 ส.ค. 69 — เดิมเขียน disabled ตายตัวในโค้ด
+            ทดสอบด้วยบัญชีผู้ดูแลระบบจริงก็ยังกดไม่ได้ พร้อมคำอธิบายว่า "เฉพาะ Super Admin"
+            ซึ่งผู้ใช้เข้าเงื่อนไขอยู่แล้ว = ปุ่มที่ไม่มีวันกดได้และบอกเหตุผลผิด
+            การจัดการตัวแทนทำที่หน้าทะเบียนตัวแทนอยู่แล้ว จึงชี้ทางไปที่นั่นแทน */}
+        <Link href="/hq/dealers" className="btn btn-secondary btn-sm">
+          <Lock size={12} /> จัดการที่หน้าทะเบียนตัวแทน
+        </Link>
       </div>
 
       {/* Tabs */}

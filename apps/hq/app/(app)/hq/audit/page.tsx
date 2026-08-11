@@ -95,7 +95,7 @@ export default function HQAuditPage() {
 
       {/* สรุป */}
       <div className="kpi-bar">
-        <div className="kpi"><div className="kpi-icon kpi-navy"><Activity size={16} /></div><div><div className="kpi-val">{stats.total}</div><div className="kpi-label">รายการที่แสดงอยู่</div></div></div>
+        <div className="kpi"><div className="kpi-icon kpi-navy"><Activity size={16} /></div><div><div className="kpi-val">{stats.total.toLocaleString()}</div><div className="kpi-label">รายการที่แสดงอยู่</div></div></div>
         <div className="kpi"><div className="kpi-icon kpi-navy"><User size={16} /></div><div><div className="kpi-val">{stats.users}</div><div className="kpi-label">ผู้ใช้ที่มีกิจกรรม</div></div></div>
         <div className="kpi"><div className="kpi-icon kpi-green"><ScrollText size={16} /></div><div><div className="kpi-val">{stats.today}</div><div className="kpi-label">กิจกรรมวันนี้</div></div></div>
       </div>

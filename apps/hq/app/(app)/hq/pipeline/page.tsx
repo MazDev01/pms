@@ -102,7 +102,7 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
           ))}
         </div>
         {/* บอกจำนวนที่ซ่อนไว้เสมอ — ห้ามตัดเงียบ ไม่งั้นคนอ่านนึกว่าเห็นครบแล้ว */}
-        {(hidden > 0 || all) && (
+        {(hidden > 0 || (all && rows.length > 5)) && (
           <button type="button" onClick={() => setAll(v => !v)}
             style={{ marginTop: 10, flexShrink: 0, alignSelf: "flex-start", background: "none", border: "none", padding: 0,
               cursor: "pointer", fontFamily: "inherit", fontSize: "0.68rem", fontWeight: 700, color: PRIMARY }}>

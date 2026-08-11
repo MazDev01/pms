@@ -150,7 +150,10 @@ export default function HQMasterPage() {
 function HQMasterPageInner() {
   // อ่าน/เขียนผ่าน repository (local: localStorage · supabase: DB · RLS: เขียนได้เฉพาะ HQ)
   const [catalog, setCatalog] = useRepoState<SolutionProduct[]>(() => catalogRepo.list(), (v) => catalogRepo.save(v), []);
-  const logAudit = useAuditLogger(); // บันทึกการแก้แม่แบบ/ราคากลาง
+  // ⚠️ หน้านี้ "ไม่จด" บันทึกการใช้งานเอง — ตัวดักที่ฐานข้อมูลเป็นผู้จดเพียงผู้เดียว (migration 0135)
+  //   เดิมจดทั้งสองที่ → 1 การกระทำได้ 2 แถว และใช้ชื่อผู้ใช้คนละแบบ (ชื่อที่แสดง vs อีเมล)
+  //   ทำให้ตัวกรองผู้ใช้แยกคนคนเดียวเป็น 2 คน และการ์ด "ผู้ใช้ที่มีกิจกรรม" นับเกินจริง
+  //   ที่สำคัญกว่า: ฝั่งแอปจดแม้กดบันทึกโดยไม่ได้แก้อะไรเลย ส่วนตัวดักยิงเฉพาะที่เปลี่ยนจริง // บันทึกการแก้แม่แบบ/ราคากลาง
   const addingRef = useRef(false); // กันกดปุ่ม "เพิ่ม" ซ้ำเร็ว ๆ — ดู addProduct()
   const [q, setQ] = useState("");
 
@@ -186,7 +189,6 @@ function HQMasterPageInner() {
   function saveEdit() {
     if (!editing || !editForm.name.trim()) return;
     setCatalog(prev => prev.map(p => p.id !== editing.id ? p : { ...p, name: editForm.name.trim(), spec: editForm.spec.trim(), unit: editForm.unit.trim() || "ตร.ม.", subtypes: editForm.subtypes, image: editForm.image || undefined, subtypeImages: pruneImages(editForm.subtypes, editForm.subtypeImages) }));
-    logAudit("แก้ไขแม่แบบ", editForm.name.trim());
     setEditing(null);
   }
   function openAdd() { setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(true); }
@@ -204,7 +206,6 @@ function HQMasterPageInner() {
       price, unit: addForm.unit.trim() || "ตร.ม.", effectiveDate: todayTH(), priceHistory: [],
       subtypes: addForm.subtypes, image: addForm.image || undefined, subtypeImages: pruneImages(addForm.subtypes, addForm.subtypeImages),
     }]);
-    logAudit("เพิ่มแม่แบบ", `${addForm.name.trim()} · ฿${price.toLocaleString("th-TH")}`);
     setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(false);
     addingRef.current = false;
   }
@@ -223,7 +224,6 @@ function HQMasterPageInner() {
       // ราคาปัจจุบันถูกดันลงประวัติ (ใหม่สุดอยู่บน)
       priceHistory: [{ price: p.price, effectiveDate: p.effectiveDate, note: rpNote.trim() || undefined }, ...p.priceHistory],
     }));
-    logAudit("ปรับราคากลาง", `${reprice.name} · ฿${reprice.price.toLocaleString("th-TH")} → ฿${price.toLocaleString("th-TH")}`);
     setReprice(null); setRpPrice(""); setRpNote(""); setRpError("");
   }
   function deleteProduct() {
@@ -233,7 +233,6 @@ function HQMasterPageInner() {
     void catalogRepo.remove(target.id)
       .then(() => setCatalog(prev => prev.filter(p => p.id !== target.id)))
       .catch(e => alert("ลบแม่แบบไม่สำเร็จ: " + friendlyError(e)));
-    logAudit("ลบแม่แบบ", target.name);
     setDelTarget(null);
   }
 

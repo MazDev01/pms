@@ -56,7 +56,12 @@ export function QuotationFilterBar({
 
       <div style={{ flex: 1 }} />
 
-      <span style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, whiteSpace: "nowrap" }}>{resultCount} ใบ</span>
+      {/* ⚠️ ต้องมีคำว่า "พบ" นำหน้า (แก้ 10 ส.ค. 69) — เดิมเขียนแค่ "0 ใบ" ลอยอยู่กลางแถบตัวกรอง
+          ระหว่างช่องค้นหากับช่องเลือกตัวแทน อ่านไม่ออกว่าเป็นจำนวนอะไร ดูเหมือนป้ายของช่องข้างหลัง
+          และหลักพันต้องมีจุลภาค — ทั้งเครือมีใบเสนอราคาหลักพันใบได้ */}
+      <span style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+        พบ {resultCount.toLocaleString()} ใบ
+      </span>
 
       <select aria-label="กรองตามตัวแทน" value={filters.dealer} onChange={e => set("dealer", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
         <option value="all">ทุกตัวแทน</option>

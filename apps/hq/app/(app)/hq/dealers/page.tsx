@@ -58,8 +58,12 @@ function RevBar({ actual, target }: { actual: number; target: number }) {
   const pct = target > 0 ? Math.min(100, Math.round(actual / target * 100)) : 0;
   const color = pct >= 100 ? "#059669" : pct >= 75 ? "#003366" : pct >= 50 ? "#f59e0b" : "#dc2626";
   return (
-    <div style={{ minWidth: 130 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
+    // ⚠️ ห้ามใส่ minWidth ที่กล่องข้างใน (แก้ 10 ส.ค. 69)
+    //   ช่องตารางมีระยะขอบซ้ายขวารวม ~32px · กล่องข้างในที่กว้างตายตัวจึงล้นออกนอกช่อง
+    //   แล้วโดน overflow:hidden ตัดทิ้ง → ป้าย "100%" ถูกเฉือนเหลือ "10" อ่านเป็นสิบเปอร์เซ็นต์
+    //   ตัวแทนที่ทำได้เต็มเป้าถูกอ่านว่าทำได้แค่ 10% · ความกว้างคุมที่ colgroup แทน (table-layout:fixed)
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: "0.72rem", marginBottom: 3 }}>
         <span style={{ color: "#6b7280" }}>฿{(actual / 1_000_000).toFixed(1)}M</span>
         <span style={{ fontWeight: 700, color }}>{pct}%</span>
       </div>
@@ -449,11 +453,13 @@ function HQDealersPageInner() {
           เดิมหน้านี้ใช้ .stat-card ของเก่า: แถบสีซ้าย + ตัวเลขสีใหญ่ + หน่วยติดในตัวเลข ("10 ตัวแทน")
           ซึ่งเป็นที่เดียวในระบบที่ทำแบบนั้น · .stat-grid ยังไม่มี breakpoint ด้วย (จอแคบบีบ 4 ใบค้าง)
           กติกาของ .hq-kpi4: ป้าย → ตัวเลข (เข้ม ไม่ใส่สี) → หน่วย/บริบท · ไอคอนในกล่องสีจางมุมขวา */}
+      {/* ⚠️ ทุกใบต้องรอข้อมูลก่อนประกาศตัวเลข — เลข 0 ระหว่างโหลดคือ "ข้อมูลผิด" ไม่ใช่ "ยังว่าง"
+          รอบก่อนแก้เฉพาะใบแรก อีก 3 ใบยังประกาศ 0 อยู่ (พบจากผลตรวจรอบสุดท้าย 10 ส.ค. 69) */}
       <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
         {([
-          { label: "ตัวแทนทั้งหมด", value: dealersLoaded ? `${filtered.length}` : "—", sub: `เปิดใช้งาน ${active.length} ตัวแทน`, Icon: Store, color: "#003366", bg: "#E8F0FE" },
-          { label: "รายได้รวม", value: `฿${(totalRevenue / 1_000_000).toFixed(1)}M`, sub: `${totalPct}% ของผลรวมเป้ารายตัวแทน ฿${(totalTarget / 1_000_000).toFixed(1)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
-          { label: "โอกาสการขายทั้งหมด", value: `${totalProjects}`, sub: `${active.filter(d => perfOf(d.code).openLeads > 0).length} ตัวแทนมีงาน`, Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
+          { label: "ตัวแทนทั้งหมด", value: dealersLoaded ? `${filtered.length}` : "—", sub: dealersLoaded ? `เปิดใช้งาน ${active.length} ตัวแทน` : "กำลังโหลด…", Icon: Store, color: "#003366", bg: "#E8F0FE" },
+          { label: "รายได้รวม", value: dealersLoaded ? `฿${(totalRevenue / 1_000_000).toFixed(1)}M` : "—", sub: `${totalPct}% ของผลรวมเป้ารายตัวแทน ฿${(totalTarget / 1_000_000).toFixed(1)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
+          { label: "โอกาสการขายทั้งหมด", value: dealersLoaded ? `${totalProjects}` : "—", sub: dealersLoaded ? `${active.filter(d => perfOf(d.code).openLeads > 0).length} ตัวแทนมีงาน` : "กำลังโหลด…", Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
           { label: "ติดตามตรงเวลา", value: avgOnTime === null ? "—" : `${avgOnTime}%`, sub: avgOnTime === null ? "ยังไม่มีข้อมูล" : `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยเท่าที่มีข้อมูล`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
         ] as const).map(t => (
           <div key={t.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
@@ -498,7 +504,7 @@ function HQDealersPageInner() {
               <col style={{ width: "14%", minWidth: 190 }} />{/* ชื่อตัวแทน */}
               <col style={{ width: "9%", minWidth: 96 }} />{/* จังหวัด */}
               <col style={{ width: "7%", minWidth: 64 }} />{/* ภาค */}
-              <col style={{ width: "11%", minWidth: 130 }} />{/* ยอด / เป้า */}
+              <col style={{ width: "12%", minWidth: 168 }} />{/* ยอด / เป้า — เผื่อระยะขอบช่อง ไม่งั้นป้าย % โดนตัด */}
               <col style={{ width: "9%", minWidth: 130 }} />{/* โอกาสการขาย */}
               <col style={{ width: "9%", minWidth: 140 }} />{/* ติดตามตรงเวลา */}
               <col style={{ width: "7%", minWidth: 76 }} />{/* สถานะ */}

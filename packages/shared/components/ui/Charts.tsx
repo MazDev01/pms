@@ -103,7 +103,10 @@ export function PlanVsActualBars({
   const yAt = (v: number) => pT + (1 - v / max) * cH;
   const baseY = pT + cH;
   const fmt = fmtProp ?? ((v: number) => `฿${Math.round(v * 10) / 10}${unit}`);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
+  // ⚠️ กราฟที่นับ "จำนวนรายการ" ต้องใช้ขั้นเป็นจำนวนเต็ม (แก้ 10 ส.ค. 69)
+  //   เดิมแบ่ง 4 ส่วนเท่า ๆ กันเสมอ ตอนข้อมูลน้อยจึงได้ป้าย 1.2 · 0.9 · 0.6 · 0.3 · 0
+  //   "ลูกค้าเป้าหมาย 0.3 ราย" ไม่มีอยู่จริง — ผู้อ่านสับสนว่าหน่วยคืออะไร
+  const ticks = axisTicks(max);
   const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
   const hasExceeded = highlightExceeded && data.some(d => d.actual > d.plan);
 
@@ -301,7 +304,10 @@ export function SalesLineChart({
   const line = monotonePath(pts);
   const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${baseY} L${pts[0].x.toFixed(2)},${baseY} Z` : "";
   const tY = cy(target);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => max * t);
+  // ⚠️ กราฟที่นับ "จำนวนรายการ" ต้องใช้ขั้นเป็นจำนวนเต็ม (แก้ 10 ส.ค. 69)
+  //   เดิมแบ่ง 4 ส่วนเท่า ๆ กันเสมอ ตอนข้อมูลน้อยจึงได้ป้าย 1.2 · 0.9 · 0.6 · 0.3 · 0
+  //   "ลูกค้าเป้าหมาย 0.3 ราย" ไม่มีอยู่จริง — ผู้อ่านสับสนว่าหน่วยคืออะไร
+  const ticks = axisTicks(max);
   const fadeIn = (d: number) => ({ transition: `opacity .5s ease ${d}s` });
 
   return (
@@ -386,6 +392,16 @@ export function Donut({ segments, centerLabel, centerValue, size = 190 }: {
   const [drawn, setDrawn] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
   let offset = 0;
+  // ⚠️ ไม่มีข้อมูล = ต้องบอกผู้ใช้ ห้ามปล่อยกล่องเปล่า/ขีดเดียว (แก้ 10 ส.ค. 69)
+  //   ผลตรวจรอบสุดท้ายพบการ์ดแบบนี้ 7 ใบ ที่มีแค่ "—" ในกล่องขาวสูง 340-420px
+  //   ต้องเช็ก "หลัง" เรียก hook ครบแล้วเท่านั้น — คืนค่าก่อน hook ผิดกฎของ React
+  if (segments.length === 0 || segments.every(x => x.value <= 0)) {
+    return (
+      <div style={{ padding: "24px 0", textAlign: "center", fontSize: "0.78rem", color: "var(--muted-foreground, #8a94a3)" }}>
+        — ยังไม่มีข้อมูลในช่วงที่เลือก
+      </div>
+    );
+  }
   return (
     <div className="donut-area" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>

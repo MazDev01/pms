@@ -5,7 +5,7 @@ import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
-import { Building2, Check, Save, MapPin, Image as ImageIcon } from "lucide-react";
+import { Building2, Check, Save, Image as ImageIcon } from "lucide-react";
 import { useReportSection } from "@pms/shared/lib/settingsBus";
 
 // โลโก้ Benjamin เป็นแบรนด์มาตรฐานเดียว (ไฟล์ static) — ไม่มีคีย์เก็บโลโก้ที่อัปโหลดอีกแล้ว
@@ -68,7 +68,10 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
     //   ทั้งที่ทำแบบเดียวกันผ่านหน้าตั้งค่า → แท็บบริษัท มีบันทึกปกติ
     //   (โหมดฝังในหน้าตั้งค่าใช้ปุ่มบันทึกกลางซึ่งบันทึกให้อยู่แล้ว — จดที่นี่ซ้ำจะได้ 2 แถว)
     if (!embedded) logAudit("บันทึกข้อมูลบริษัท", form.name || "(ยังไม่ระบุชื่อบริษัท)");
-    window.dispatchEvent(new Event("bpms-company-updated")); // ให้ Sidebar HQ อัปเดตชื่อทันที
+    // ⛔ เคยส่งสัญญาณ "bpms-company-updated" ตรงนี้ พร้อมคำอธิบายว่า "ให้แถบเมนูอัปเดตชื่อทันที"
+    //    ซึ่งไม่จริงเลย — ไม่มีใครรับฟังสัญญาณนี้ทั้งโปรเจกต์ และแถบเมนูใช้คำว่า BENJAMIN
+    //    เป็นแบรนด์ตายตัวอยู่แล้ว ไม่ได้ดึงจากช่องชื่อบริษัท (ตรวจแล้ว 11 ส.ค. 69)
+    //    เอาออกทั้งบรรทัด — โค้ดที่ไม่ทำงานพร้อมคำอธิบายที่ผิด อันตรายกว่าไม่มีอะไรเลย
     setBaseline(JSON.stringify({ form }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
