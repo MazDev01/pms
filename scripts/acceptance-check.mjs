@@ -5,21 +5,16 @@
 // ทั้งสองอย่างจำเป็นก่อนเซ็นรับ — ระบบที่โค้ดถูกแต่ข้อมูลเพี้ยนอยู่แล้ว ก็ยังใช้ตัดสินใจไม่ได้
 //
 // รัน: node scripts/acceptance-check.mjs
-// อ่านคีย์จาก apps/hq/.env.local (service_role — ต้องรันบนเครื่องผู้ดูแลเท่านั้น)
+// อ่านคีย์ service_role — ต้องรันบนเครื่องผู้ดูแลเท่านั้น
+//
+// ⚠️ ตรวจรับระบบต้องตรวจ "ฐานจริง" — apps/hq/.env.local ชี้ฐานทดสอบตั้งแต่แยกฐานข้อมูล (11 ส.ค. 69)
+//    (จะตรวจฐานทดสอบก็ได้ถ้าตั้งใจ — ใส่ --test)
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { loadTarget } from "./lib/targetEnv.mjs";
 
-const env = {};
-for (const f of ["apps/hq/.env.local", ".env.local"]) {
-  try {
-    for (const line of readFileSync(f, "utf8").split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
-      if (m && !env[m[1]]) env[m[1]] = m[2].replace(/^["']|["']$/g, "").trim();
-    }
-  } catch { /* ไม่มีไฟล์ */ }
-}
-const URL_ = env.NEXT_PUBLIC_SUPABASE_URL, SRV = env.SUPABASE_SERVICE_ROLE_KEY, ANON = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!URL_ || !SRV || !ANON) { console.error("ไม่พบค่าเชื่อมต่อใน apps/hq/.env.local"); process.exit(2); }
+const target = loadTarget({ allowTest: true });
+const URL_ = target.url, SRV = target.serviceKey, ANON = target.anonKey;
+if (!ANON) { console.error("ไม่พบ NEXT_PUBLIC_SUPABASE_ANON_KEY ของฐานที่เลือก"); process.exit(2); }
 const db = createClient(URL_, SRV, { auth: { persistSession: false } });
 
 const results = [];

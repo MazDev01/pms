@@ -295,10 +295,17 @@ max_frequency = "5s"
 # enabled = true
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
-# This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# ── ⚠️ ห้ามปิด — ปิดแล้ว RLS พังทั้งระบบ ──────────────────────────────────────────
+#
+# hook นี้ยัด user_role + dealer_code ลงในใบผ่านเข้าระบบ (JWT) ซึ่ง RLS ใช้ตัดสินว่าใครเห็นอะไร
+# ไม่เปิด = ทุกคนล็อกอินได้ตามปกติแต่เห็นข้อมูลว่างเปล่าทุกหน้า ตัวแทนไม่เห็นแม้แต่ข้อมูลสาขาตัวเอง
+#
+# เดิมเป็นค่าที่ต้องไปกดเปิดเองในหน้าจัดการของผู้ให้บริการ ไม่ได้อยู่ในโค้ด — พอสร้างโปรเจกต์ใหม่
+# (แยกฐานทดสอบ 11 ส.ค. 69) จึงลืมเปิด แล้วชุดทดสอบตก 45 ข้อโดยไม่มีอะไรบอกว่าเพราะอะไร
+# เขียนไว้ตรงนี้เพื่อให้ `supabase config push` ตั้งให้เองทุกโปรเจกต์ ไม่ต้องพึ่งความจำใคร
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]

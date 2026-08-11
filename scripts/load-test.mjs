@@ -19,6 +19,8 @@ import { readFileSync } from "node:fs";
 const N = Number(process.argv[2] ?? 50);
 const TAG = "ZZLOADTEST";
 
+// อ่านจาก apps/hq/.env.local = "ฐานทดสอบ" ตั้งแต่แยกฐานข้อมูล (11 ส.ค. 69) — ถูกต้องแล้ว
+// ⛔ ห้ามเปลี่ยนไปชี้ฐานจริง: ตัวนี้สร้างตัวแทน 10 ราย + ผู้ใช้ 50 คน แล้วเขียนข้อมูลรัว ๆ
 const env = {};
 for (const f of ["apps/hq/.env.local", "tests/.env.test"]) {
   try {

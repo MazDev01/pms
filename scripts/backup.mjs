@@ -22,28 +22,17 @@
 //
 // รัน: node scripts/backup.mjs [ชื่อโฟลเดอร์ปลายทาง]
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { loadTarget } from "./lib/targetEnv.mjs";
 import path from "node:path";
 
 const PAGE = 1000;   // ฐานข้อมูลคืนสูงสุด 1,000 แถวต่อคำขอ ขอมากกว่านี้ก็ได้เท่านี้ — ต้องไล่ทีละหน้า
 
-function readEnvFile(file) {
-  const out = {};
-  try {
-    for (const l of readFileSync(file, "utf8").split(/\r?\n/)) {
-      const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
-      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "").trim();
-    }
-  } catch { /* ไม่มีไฟล์ */ }
-  return out;
-}
-
-const env = readEnvFile("apps/hq/.env.local");
-const URL_ = env.NEXT_PUBLIC_SUPABASE_URL, KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL_ || !KEY) {
-  console.error("❌ ไม่พบค่าเชื่อมต่อฐานข้อมูลใน apps/hq/.env.local");
-  process.exit(1);
-}
+// ⚠️ ตั้งแต่แยกฐานข้อมูล (11 ส.ค. 69) ห้ามอ่าน apps/hq/.env.local ตรง ๆ อีก — ไฟล์นั้นชี้ฐานทดสอบ
+//    ถ้าอ่านผิดที่ จะได้ไฟล์สำรองของฐานทดสอบทั้งกองโดยไม่มีสัญญาณอะไรบอกเลย
+//    (สำรองฐานทดสอบด้วยก็ได้ ถ้าตั้งใจ — ใส่ --test)
+const target = loadTarget({ allowTest: true });
+const URL_ = target.url, KEY = target.serviceKey;
 const svc = createClient(URL_, KEY, { auth: { persistSession: false } });
 
 /**
@@ -76,7 +65,9 @@ async function dumpTable(table, pk) {
   return rows;
 }
 
-const stamp = process.argv[2] ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "").replace(/(\d{8})(\d{4})/, "$1-$2");
+// ชื่อโฟลเดอร์จากอาร์กิวเมนต์แรกที่ไม่ใช่ตัวเลือก (กัน --test ถูกเอาไปใช้เป็นชื่อโฟลเดอร์)
+const nameArg = process.argv.slice(2).find(a => !a.startsWith("--"));
+const stamp = nameArg ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "").replace(/(\d{8})(\d{4})/, "$1-$2");
 const dir = path.join("backups", stamp);
 mkdirSync(dir, { recursive: true });
 

@@ -18,8 +18,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
+import { loadTarget } from "./lib/targetEnv.mjs";
 
-const dir = process.argv[2];
+const dir = process.argv.slice(2).find(a => !a.startsWith("--"));
 const APPLY = process.argv.includes("--apply");
 const YES = process.argv.includes("--yes");
 
@@ -32,20 +33,24 @@ if (APPLY && !YES) {
   process.exit(1);
 }
 
-function readEnvFile(file) {
-  const out = {};
-  try {
-    for (const l of readFileSync(file, "utf8").split(/\r?\n/)) {
-      const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
-      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "").trim();
-    }
-  } catch { /* ไม่มีไฟล์ */ }
-  return out;
-}
-const env = readEnvFile("apps/hq/.env.local");
-const svc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+// ⚠️ ตั้งแต่แยกฐานข้อมูล (11 ส.ค. 69) ห้ามอ่าน apps/hq/.env.local ตรง ๆ — ไฟล์นั้นชี้ฐานทดสอบ
+const target = loadTarget({ allowTest: true });
+const svc = createClient(target.url, target.serviceKey, { auth: { persistSession: false } });
 
 const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8"));
+
+// ── ไฟล์สำรองต้องมาจากฐานเดียวกับที่กำลังจะเขียนกลับ ────────────────────────────
+//
+// เคสที่กันไว้: มีฐาน 2 ชุด (จริง/ทดสอบ) ชื่อโฟลเดอร์สำรองเป็นวันเวลาล้วน ๆ แยกไม่ออกด้วยตา
+//   หยิบผิดโฟลเดอร์แล้วสั่งกู้ = เอาข้อมูลของอีกฐานทับลงฐานนี้ทั้งชุด ซึ่งแย่กว่าไม่กู้เลย
+const backupRef = (String(manifest.source ?? "").match(/https?:\/\/([a-z0-9]+)\.supabase\./) ?? [])[1];
+if (backupRef && backupRef !== target.ref) {
+  console.error(`\n❌ ไฟล์สำรองนี้มาจากฐานข้อมูลคนละตัว`);
+  console.error(`   ไฟล์สำรองมาจาก : ${backupRef}`);
+  console.error(`   กำลังจะเขียนลง  : ${target.ref} (${target.label})`);
+  console.error(`   หยุดไว้ก่อน — ตรวจว่าหยิบโฟลเดอร์ถูกอันไหม`);
+  process.exit(1);
+}
 
 // ลำดับที่ควรเขียนก่อน — ตารางแม่ต้องมาก่อนตารางลูก ไม่งั้นฐานข้อมูลปฏิเสธเพราะอ้างถึงของที่ยังไม่มี
 // (เป็นแค่ "คำใบ้" เพื่อให้จบเร็ว ถ้าลำดับยังไม่พอ ตัวโปรแกรมจะวนซ้ำให้เองด้านล่าง)

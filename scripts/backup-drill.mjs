@@ -18,22 +18,30 @@
 //
 // รัน: node scripts/backup-drill.mjs
 import { createClient } from "@supabase/supabase-js";
+import { loadTarget } from "./lib/targetEnv.mjs";
 import { readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 const DRILL_DIR = "backups/_drill";
-const MARK = { id: "ZZ-DRILL", dealer_code: "RYG" };
+const MARK = { id: "ZZ-DRILL", dealer_code: "" };   // dealer_code เติมจากทะเบียนจริงข้างล่าง
 
-function readEnvFile(file) {
-  const out = {};
-  for (const l of readFileSync(file, "utf8").split(/\r?\n/)) {
-    const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
-    if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "").trim();
+// ⚠️ ตั้งแต่แยกฐานข้อมูล (11 ส.ค. 69) ห้ามอ่าน apps/hq/.env.local ตรง ๆ — ไฟล์นั้นชี้ฐานทดสอบ
+//    การซ้อมกู้คืนต้องซ้อมกับฐานจริง ไม่งั้นพิสูจน์ไม่ได้ว่าของจริงกู้ได้ (ใส่ --test เพื่อซ้อมกับฐานทดสอบ)
+const target = loadTarget({ allowTest: true });
+const svc = createClient(target.url, target.serviceKey, { auth: { persistSession: false } });
+
+// สาขาที่ใช้วางข้อมูลซ้อม — ต้องหยิบจากทะเบียนจริง ไม่ใช่เขียนรหัสตายไว้
+// (เดิมตรึงเป็น "RYG" ซึ่งเป็นสาขาทดสอบ · พอลบสาขานั้นออกจากฐานจริง การซ้อมจะพังทันที
+//  เพราะลีดต้องอ้างสาขาที่มีอยู่จริง — และจะไม่มีใครรู้จนถึงวันที่ต้องกู้ของจริง)
+{
+  const { data } = await svc.from("dealers").select("code").limit(1);
+  if (!data?.length) {
+    console.error("\n❌ ฐานข้อมูลนี้ยังไม่มีตัวแทนสักราย — ซ้อมกู้คืนไม่ได้");
+    console.error("   การซ้อมต้องสร้างลีดของสาขาใดสาขาหนึ่ง ให้เพิ่มตัวแทนก่อนแล้วค่อยซ้อม");
+    process.exit(1);
   }
-  return out;
+  MARK.dealer_code = data[0].code;
 }
-const env = readEnvFile("apps/hq/.env.local");
-const svc = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 const steps = [];
 const step = (ok, name, detail = "") => { steps.push({ ok, name, detail }); console.log(`  ${ok ? "✅" : "❌"} ${name.padEnd(46)} ${detail}`); };

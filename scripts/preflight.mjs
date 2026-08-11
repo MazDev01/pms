@@ -12,6 +12,7 @@
 // รัน: node scripts/preflight.mjs
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { loadTarget } from "./lib/targetEnv.mjs";
 
 const results = [];
 const add = (ok, name, detail = "") => results.push({ ok, name, detail });
@@ -48,11 +49,14 @@ const dealerUrl = hq.NEXT_PUBLIC_DEALER_APP_URL ?? "";
 add(!!dealerUrl && !/localhost|127\.0\.0\.1/.test(dealerUrl), "ที่อยู่แอปตัวแทน",
   dealerUrl ? `ตั้งไว้ = ${dealerUrl}` : "ไม่ได้ตั้ง — ปุ่ม 'เข้าระบบแทนตัวแทน' จะพาไปผิดที่");
 
-if (!hq.NEXT_PUBLIC_SUPABASE_URL || !hq.SUPABASE_SERVICE_ROLE_KEY) {
-  report(); process.exit(1);
-}
-const svc = createClient(hq.NEXT_PUBLIC_SUPABASE_URL, hq.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-const anon = createClient(hq.NEXT_PUBLIC_SUPABASE_URL, hq.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+// ── ฐานข้อมูลที่ตรวจ = "ฐานจริง" เสมอ ────────────────────────────────────────────
+// ตรวจความพร้อมก่อนเปิดใช้จริง แต่ไปตรวจฐานทดสอบ = ได้ใบผ่านที่ไม่มีความหมาย
+// (apps/hq/.env.local ชี้ฐานทดสอบตั้งแต่แยกฐานข้อมูล 11 ส.ค. 69 · ใส่ --test ถ้าตั้งใจตรวจฐานทดสอบ)
+const target = loadTarget({ allowTest: true });
+if (!target.anonKey) { add(false, "ค่าเชื่อมต่อฐานที่จะตรวจ", "ไม่พบ NEXT_PUBLIC_SUPABASE_ANON_KEY"); report(); process.exit(1); }
+add(true, "ฐานข้อมูลที่ตรวจ", `${target.label} · ${target.ref}`);
+const svc = createClient(target.url, target.serviceKey, { auth: { persistSession: false } });
+const anon = createClient(target.url, target.anonKey, { auth: { persistSession: false } });
 
 // ── 4) ต่อฐานข้อมูลได้จริง ──
 {
@@ -138,18 +142,31 @@ for (const [fn, args] of [["is_account_active", {}], ["next_entity_id", { p_deal
 // ── 12) ต้องมีข้อมูลสำรองที่ใหม่พอ ──
 // เหตุผลที่ต้องตรวจ: ถามระบบสำรองของผู้ให้บริการแล้วพบว่า "ไม่มีสำรองเลยสักชุด" (7 ส.ค. 69)
 //   ข้อมูลหาย = หายถาวร · ต้องมีตัวคอยเตือนไม่ให้กลับไปอยู่ในสภาพนั้นอีกโดยไม่มีใครรู้
+//
+// ⚠️ ต้องนับเฉพาะไฟล์สำรอง "ของฐานที่กำลังตรวจ" (แก้ 11 ส.ค. 69 ตอนแยกฐานทดสอบ/ฐานจริง)
+//   มีฐาน 2 ชุดแล้ว แต่ชื่อโฟลเดอร์เป็นวันเวลาล้วน ๆ แยกด้วยตาไม่ได้
+//   ถ้านับรวมหมด ไฟล์สำรองของฐานทดสอบจะทำให้ตัวตรวจขึ้นเขียวทั้งที่ฐานจริงไม่เคยถูกสำรองเลย
+//   — ใบผ่านที่หลอกแบบนี้แย่กว่าไม่มีตัวตรวจ เพราะทำให้เลิกสงสัย
 {
   let newest = null;
   try {
     for (const d of readdirSync("backups")) {
       if (d.startsWith("_")) continue;   // โฟลเดอร์ชั่วคราวของการซ้อม
       const m = statSync(`backups/${d}`);
-      if (m.isDirectory() && (!newest || m.mtimeMs > newest.ms)) newest = { name: d, ms: m.mtimeMs };
+      if (!m.isDirectory()) continue;
+      let ref = "";
+      try {
+        const src = String(JSON.parse(readFileSync(`backups/${d}/manifest.json`, "utf8")).source ?? "");
+        ref = (src.match(/https?:\/\/([a-z0-9]+)\.supabase\./) ?? [])[1] ?? "";
+      } catch { continue; }               // ไม่มี manifest / อ่านไม่ได้ = ไม่นับ
+      if (ref !== target.ref) continue;   // ของฐานอื่น
+      if (!newest || m.mtimeMs > newest.ms) newest = { name: d, ms: m.mtimeMs };
     }
   } catch { /* ยังไม่มีโฟลเดอร์ */ }
   const days = newest ? (Date.now() - newest.ms) / 86_400_000 : Infinity;
   add(days <= 7, "ข้อมูลสำรองล่าสุด",
-    !newest ? "⚠ ไม่มีข้อมูลสำรองเลย — สั่ง npm run backup" : `${newest.name} (${days < 1 ? "วันนี้" : `${Math.floor(days)} วันก่อน`}) · ควรไม่เกิน 7 วัน`);
+    !newest ? `⚠ ไม่มีข้อมูลสำรองของฐาน ${target.ref} เลย — สั่ง npm run backup`
+            : `${newest.name} (${days < 1 ? "วันนี้" : `${Math.floor(days)} วันก่อน`}) · ควรไม่เกิน 7 วัน`);
 }
 
 report();
