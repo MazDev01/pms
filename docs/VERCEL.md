@@ -79,4 +79,31 @@ Vercel มี **Monitoring → Alerts** ในตัว ตั้งให้ย
   เคยพลาดมาแล้ว 7 ส.ค. 69 — บนเครื่องผ่านเพราะรันด้วย Node แต่บน Vercel จะพังทุกคำขอ
   ถ้าแก้ `middleware.ts` ให้ใช้เฉพาะของมาตรฐานเว็บ (`btoa`, `crypto`, `fetch`)
 - **Preview deployment ใช้ฐานข้อมูลตัวเดียวกับของจริง** — ระวังการทดลองบน Preview
-  ไปแก้ข้อมูลจริง ถ้าจะแยกต้องสร้างโปรเจกต์ Supabase อีกตัวสำหรับทดสอบ
+  ไปแก้ข้อมูลจริง (มีฐานทดสอบแยกแล้ว ดู GO-LIVE-CHECKLIST.md — ถ้าจะให้ Preview
+  ใช้ฐานทดสอบ ต้องแก้ตัวแปรของ Preview ให้ชี้ `pms-test` แทน)
+
+---
+
+## ผูกกับ GitHub ให้อัพเองเมื่อ push (ตั้งแล้ว 11 ส.ค. 69)
+
+ทั้งสองโปรเจกต์ผูกกับ `github.com/MazDev01/pms` แล้ว
+
+| โปรเจกต์ | Root Directory | ที่อยู่ |
+|---|---|---|
+| `benjamin-hq` | `apps/hq` | https://benjamin-hq.vercel.app |
+| `benjamin-dealer` | `apps/dealer` | https://benjamin-dealer.vercel.app |
+
+⚠️ **ต้องตั้ง Production Branch เป็น `monorepo` เองในหน้าเว็บ** (Settings → Git)
+คำสั่งบรรทัดคำสั่งตั้งค่านี้ไม่ได้ ต้องกดในหน้าจัดการ
+
+ถ้าไม่ตั้ง Vercel จะถือว่าสาขาผลิตจริงคือสาขาเริ่มต้นของที่เก็บโค้ด (`main`)
+ซึ่งเก่ากว่าสาขา `monorepo` อยู่มาก — push ขึ้น `monorepo` จะได้แค่ Preview ไม่ทับของจริง
+(ปลอดภัยกว่าในแง่หนึ่ง แต่ไม่ใช่สิ่งที่ต้องการ)
+
+### สั่งอัพเองจากเครื่อง (ไม่ต้องผ่าน git)
+
+```bash
+cp apps/hq/.vercel/project.json .vercel/project.json && npx vercel deploy --prod --yes
+```
+เปลี่ยน `apps/hq` เป็น `apps/dealer` สำหรับอีกแอป — ทั้งสองอ่านค่า Root Directory
+จากหน้าจัดการโปรเจกต์ จึง build แยกกันถูกต้องแม้จะสั่งจากรากโปรเจกต์เดียวกัน
