@@ -155,7 +155,11 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pickAvatar} />
               {f.avatar
                 ? <img src={f.avatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: `3px solid ${PRIMARY}` }} />
-                : <span style={{ width: 84, height: 84, borderRadius: "50%", background: ROLE_BY_KEY[f.role].tone, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "2rem" }}>{f.firstName.charAt(0) || "?"}</span>}
+                : f.firstName.trim()
+                ? <span style={{ width: 84, height: 84, borderRadius: "50%", background: ROLE_BY_KEY[f.role].tone, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "2rem" }}>{f.firstName.trim().charAt(0)}</span>
+                // ฟอร์มเปล่า (ยังไม่พิมพ์ชื่อ) ต้องเห็นไอคอน "เพิ่มรูป" ไม่ใช่ "?" ที่อ่านได้ว่ารูปเสีย
+                //   แบบเดียวกับฟอร์มเพิ่มผู้รับผิดชอบฝั่งตัวแทน (ผู้ใช้แจ้ง 7 ส.ค. 69)
+                : <span style={{ width: 84, height: 84, borderRadius: "50%", background: "#eef3f8", border: `2px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}><ImagePlus size={30} strokeWidth={1.8} /></span>}
               <span style={{ position: "absolute", right: 0, bottom: 2, width: 26, height: 26, borderRadius: "50%", background: PRIMARY, border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><ImagePlus size={13} /></span>
               {f.avatar && <button type="button" onClick={e => { e.preventDefault(); setF(p => ({ ...p, avatar: undefined })); }} style={{ position: "absolute", left: 0, bottom: 2, width: 24, height: 24, borderRadius: "50%", background: "#fff", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", cursor: "pointer" }}><X size={12} /></button>}
             </label>
@@ -263,8 +267,16 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     const cur = users.find(u => u.id === id);
     if (!cur) return;
     const next = { ...cur, ...patch };
-    void usersRepo.update({ id, name: next.name, role: next.role, department: next.department, status: next.status })
-      .catch(e => notify("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
+    // ⚠️ ต้องส่งทุกช่องที่ฟอร์มให้แก้ได้ — เดิมส่งแค่ ชื่อ/บทบาท/แผนก/สถานะ
+    //   ฟอร์มให้เปลี่ยนรูป เบอร์ และอีเมลติดต่อได้ด้วย พอกดบันทึกหน้าจอขึ้นค่าใหม่ให้ดู
+    //   (เพราะอัปเดตในหน้าจอไปแล้วบรรทัดบน) แต่ไม่เคยถูกบันทึกลงฐานข้อมูลเลย
+    //   โหลดหน้าใหม่ทีไรรูปเก่ากลับมาทุกครั้ง — ผู้ใช้แจ้ง 11 ส.ค. 69
+    void usersRepo.update({
+      id, name: next.name, role: next.role, department: next.department, status: next.status,
+      ...("avatar" in patch ? { avatar: next.avatar } : {}),
+      ...(patch.phone !== undefined ? { phone: next.phone } : {}),
+      ...(patch.email !== undefined ? { email: next.email } : {}),
+    }).catch(e => notify("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
   };
   function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
     if (id !== null) {

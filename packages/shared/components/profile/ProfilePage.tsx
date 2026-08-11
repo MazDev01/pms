@@ -34,10 +34,16 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default function ProfilePage() {
-  const { session, isHQ } = useRole();
+  const { session, isHQ, hydrated } = useRole();
   const router = useRouter();
   // ฝั่งตัวแทน: โปรไฟล์ส่วนตัวถูกรวมเป็น "บัญชีดีลเลอร์" ในหน้าตั้งค่าแล้ว → ส่งไปที่นั่น (HQ ยังใช้หน้านี้)
-  useEffect(() => { if (!isHQ) router.replace("/settings"); }, [isHQ, router]);
+  //
+  // ⚠️ ต้องรอฟื้น session ให้เสร็จก่อน (hydrated) — แก้ 11 ส.ค. 69
+  //   ก่อนฟื้นเสร็จ ระบบใช้ session ตั้งต้นซึ่งเป็นของ "ตัวแทน" ทำให้ isHQ เป็นเท็จชั่วขณะ
+  //   ผู้ใช้สำนักงานใหญ่ที่กดรีเฟรชหน้าโปรไฟล์จึงถูกเด้งไป /settings ทันทีทุกครั้ง
+  //   ซึ่งฝั่งสำนักงานใหญ่ไม่มีเส้นทางนั้น (ของเขาคือ /hq/settings) → ตกไปหน้าไม่พบหน้าที่ต้องการ
+  //   อาการที่ผู้ใช้เห็น: แก้โปรไฟล์แล้วรีเฟรชดู กลับไม่ได้เห็นหน้าโปรไฟล์อีกเลย
+  useEffect(() => { if (hydrated && !isHQ) router.replace("/settings"); }, [hydrated, isHQ, router]);
   // เริ่มด้วยค่า default (deterministic — server/client ตรงกัน) แล้วโหลดจาก localStorage หลัง mount กัน hydration mismatch
   const userProfile = useUserProfile(); // อ่าน/เขียนผ่าน repo (โหมด supabase = ตาราง profiles)
   const [form, setForm] = useState<UserProfile>({ name: session.name, email: defaultProfileEmail(session.dealerCode), phone: "" });

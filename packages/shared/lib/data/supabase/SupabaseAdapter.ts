@@ -591,9 +591,15 @@ export const SupabaseAdapter: DataAdapter = {
         avatar: (r.avatar as string) || undefined,
       }));
     },
-    update: (u) => must(sb().from("profiles")
-      .update({ name: u.name, role: u.role, department: u.department, status: u.status })
-      .eq("id", u.id)),
+    // ส่งเฉพาะช่องที่ผู้เรียกตั้งใจแก้ — undefined = ไม่แตะ (ไม่ใช่ล้างค่าเดิมทิ้ง)
+    // avatar ส่ง null ได้เมื่อผู้ใช้กดลบรูป จึงเช็ก "มีคีย์นี้ไหม" ไม่ใช่เช็กว่ามีค่าไหม
+    update: (u) => {
+      const row: Row = { name: u.name, role: u.role, department: u.department, status: u.status };
+      if ("avatar" in u) row.avatar = u.avatar ?? null;
+      if (u.phone !== undefined) row.phone = u.phone;
+      if (u.email !== undefined) row.contact_email = u.email;
+      return must(sb().from("profiles").update(row).eq("id", u.id));
+    },
     // สร้าง/ลบบัญชีต้องใช้ service_role — ห้ามอยู่ฝั่ง client เด็ดขาด
     canCreate: () => false,
   },
