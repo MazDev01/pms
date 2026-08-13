@@ -475,7 +475,8 @@ export default function CustomersPage(){
   }, [selected]);
 
   const [view] = useState<"card"|"table">("table"); // ตารางอย่างเดียว (เอามุมมองการ์ดออก)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // ลูกค้าที่กำลังจะลบ — เก็บ "ตัวลูกค้า" ไม่ใช่ boolean เพราะลบได้จากตารางโดยไม่ต้องเปิดแผงรายละเอียด
+  const [delTarget, setDelTarget] = useState<CustomerRow|null>(null);
   const [detailTab, setDetailTab]     = useState<"info"|"deals"|"quotes"|"appts"|"notes"|"files">("info");
   // โครงการที่กดดู (จากตาราง "ประวัติการปิดการขาย") → เปิดแผงรายละเอียดโครงการซ้อนขึ้นมา
   const [viewProject, setViewProject] = useState<{ q: QuotationMock; template: string } | null>(null);
@@ -656,9 +657,12 @@ export default function CustomersPage(){
     setSelected(updated);
   }
   function deleteCustomer(){
-    if(!selected) return;
-    ctxDeleteCustomer(selected.id);
-    setSelected(null); setShowDeleteConfirm(false);
+    const target = delTarget;
+    if(!target) return;
+    ctxDeleteCustomer(target.id);
+    // ปิดแผงรายละเอียดเฉพาะเมื่อกำลังเปิดลูกค้าที่เพิ่งลบอยู่ (ลบจากตาราง = แผงไม่ได้เปิด)
+    setSelected(p=>p?.id===target.id?null:p);
+    setDelTarget(null);
   }
   // ── นำเข้าลูกค้าเดิม (ตัวแทน) — เพิ่มเข้า SalesContext เดียว · flag imported=true ──
   function makeImported(r: ImportRow, id: number): CustomerRow {
@@ -868,15 +872,17 @@ export default function CustomersPage(){
                 <colgroup>
                   {/* ความกว้างวัดจริงในเบราว์เซอร์ (หัวตาราง + ข้อมูล) · minWidth รวม ~1006px ต้องไม่เกินกรอบ 1012px
                       "ยอดขายรวม" หัวต้องการ 111px และ "โครงการ" 87px — เคยตั้งแคบไปจนหัวโดนตัด */}
-                  <col style={{ width:"18%",   minWidth:170 }} />{/* บริษัท */}
-                  <col style={{ width:"12%",   minWidth:118 }} />{/* ผู้ติดต่อ */}
-                  <col style={{ width:"11%",   minWidth:118 }} />{/* โทรศัพท์ */}
-                  <col style={{ width:"10%",   minWidth:104 }} />{/* จังหวัด */}
+                  {/* บริษัท/ผู้ติดต่อ/จังหวัด หดรวม 32px แลกที่ให้ปุ่ม "ลบ" ที่เพิ่มเข้ามา (13 ส.ค. 69)
+                      สามช่องนี้ตัดข้อความด้วย … + hover ดูเต็มได้ และยังกว้างกว่าหัวคอลัมน์ของตัวเอง */}
+                  <col style={{ width:"15.4%", minWidth:154 }} />{/* บริษัท */}
+                  <col style={{ width:"11.2%", minWidth:110 }} />{/* ผู้ติดต่อ */}
+                  <col style={{ width:"11%",   minWidth:118 }} />{/* โทรศัพท์ — เบอร์ห้ามตัด */}
+                  <col style={{ width:"9.2%",  minWidth:96 }} />{/* จังหวัด */}
                   <col style={{ width:"12%",   minWidth:116 }} />{/* แม่แบบ */}
                   <col style={{ width:"11.5%", minWidth:114 }} />{/* ยอดขายรวม — หัว 111 */}
                   <col style={{ width:"9%",    minWidth:90 }} />{/* โครงการ — หัว 87 */}
                   <col style={{ width:"11%",   minWidth:112 }} />{/* ติดต่อล่าสุด */}
-                  <col style={{ width:"5.5%",  minWidth:64 }} />{/* ปุ่มดูรายละเอียด */}
+                  <col style={{ width:"9.7%",  minWidth:96 }} />{/* ปุ่ม ดู + ลบ — 2×28 + gap + padding */}
                 </colgroup>
                 <thead>
                   <tr>
@@ -905,7 +911,7 @@ export default function CustomersPage(){
                     const projects = purchasedGroupsFor(c.id, quotations).reduce((n,g)=>n+g.projects.length,0);
                     return (
                       <ClickableRow key={c.id} className="clickable"
-                        onActivate={()=>{ setSelected(c); setCustTab("overview"); setShowDeleteConfirm(false); }}
+                        onActivate={()=>{ setSelected(c); setCustTab("overview"); setDelTarget(null); }}
                         label={`เปิดรายละเอียดลูกค้า ${c.company}`}
                         style={{ background: selected?.id===c.id ? "#f4f8fd" : undefined }}>
                         <td style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={c.company}>
@@ -927,11 +933,16 @@ export default function CustomersPage(){
                         <td className="num" style={{ fontWeight:700, color: projects?STEEL:"#9ca3af", fontVariantNumeric:"tabular-nums" }}>{projects || "—"}</td>
                         <td style={{ color:MUTED, fontSize:"0.78rem", whiteSpace:"nowrap" }}>{fmtDate(lastActivityFor(c.id,c.joinDate,quotations))}</td>
                         <td onClick={e=>e.stopPropagation()}>
-                          <div style={{ display:"flex", justifyContent:"flex-end" }}>
+                          <div style={{ display:"flex", justifyContent:"flex-end", gap:4 }}>
                             <button title="ดูรายละเอียด"
-                              onClick={()=>{ setSelected(c); setCustTab("overview"); setShowDeleteConfirm(false); }}
+                              onClick={()=>{ setSelected(c); setCustTab("overview"); setDelTarget(null); }}
                               style={{ width:28, height:28, borderRadius:7, border:"1px solid #dbe3ec", background:"#fff", color:PRIMARY, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <Eye size={13} />
+                            </button>
+                            {/* ลบได้จากตารางเลย ไม่ต้องเปิดแผงรายละเอียดก่อน — ยังถามยืนยัน และยังลบไม่ได้ถ้ามีใบเสนอราคา/ลีดผูกอยู่ */}
+                            <button title="ลบลูกค้า" onClick={()=>setDelTarget(c)}
+                              style={{ width:28, height:28, borderRadius:7, border:"1px solid #f3c9c9", background:"#fff", color:"#dc2626", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </td>
@@ -1056,7 +1067,7 @@ export default function CustomersPage(){
                 </div>
                 {/* หัว = ลบ · ปิด (ปุ่ม "โทร" เอาออกตามที่บอสสั่ง — เบอร์อยู่ใต้ชื่อแล้ว) */}
                 <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
-                  <button title="ลบลูกค้า" onClick={()=>setShowDeleteConfirm(true)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
+                  <button title="ลบลูกค้า" onClick={()=>setDelTarget(selected)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
                   <button onClick={()=>setSelected(null)} title="ปิด" style={{...qa,width:30,padding:0,justifyContent:"center"}}><X size={15}/></button>
                 </div>
               </div>
@@ -1717,18 +1728,18 @@ export default function CustomersPage(){
 
 
       {/* Delete confirm dialog */}
-      {showDeleteConfirm && selected && (
-        <div onClick={()=>setShowDeleteConfirm(false)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      {delTarget && (
+        <div onClick={()=>setDelTarget(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
             <div style={{padding:"22px 22px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                 <span style={{width:38,height:38,borderRadius:"50%",background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={17} color="#dc2626"/></span>
                 <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบลูกค้า</div>
               </div>
-              <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.company}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+              <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{delTarget.company}</strong>? การลบไม่สามารถย้อนกลับได้</p>
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
-              <button className="btn btn-secondary btn-md" onClick={()=>setShowDeleteConfirm(false)}>ยกเลิก</button>
+              <button className="btn btn-secondary btn-md" onClick={()=>setDelTarget(null)}>ยกเลิก</button>
               <button className="btn btn-md" style={{background:"#dc2626",color:"#fff",border:"none"}} onClick={deleteCustomer}><Trash2 size={13}/> ลบ</button>
             </div>
           </div>

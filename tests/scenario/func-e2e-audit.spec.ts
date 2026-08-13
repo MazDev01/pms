@@ -253,8 +253,9 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
   await page.goto(`${DEALER_ORIGIN}/quotations`, { waitUntil: "domcontentloaded" });
   const qrowWon = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(qrowWon).toBeVisible({ timeout: 15_000 });
-  await qrowWon.click();
-  const delBtn = page.getByTitle("ลบใบเสนอราคา");
+  // ลบจากปุ่มในแถวได้เลย (13 ส.ค. 69 — เดิมต้องเปิดแผงรายละเอียดก่อน)
+  // ต้องผูกกับ "แถวนั้น" เสมอ: ตอนนี้ปุ่มลบมีทุกแถว + อีกตัวในแผงรายละเอียด ถ้าเลือกทั้งหน้าจะได้หลายตัว
+  const delBtn = qrowWon.getByTitle("ลบใบเสนอราคา");
   const delAllowed = await delBtn.count() > 0;
   console.log(`[audit] ปุ่มลบใบที่ won แล้วโผล่ให้กดไหม: ${delAllowed}`);
   if (delAllowed) {

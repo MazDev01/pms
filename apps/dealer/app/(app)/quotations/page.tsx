@@ -348,7 +348,8 @@ function QuotationsPageInner(){
   const [selected, setSelected]     = useState<QuotationMock|null>(null);
   const [showModal, setShowModal]   = useState(false);
   const [editingQ, setEditingQ]     = useState<QuotationMock|null>(null);
-  const [delConfirm, setDelConfirm] = useState(false);
+  // ใบที่กำลังจะลบ — เก็บ "ตัวใบ" ไม่ใช่ boolean เพราะลบได้จากรายการโดยไม่ต้องเปิดแผงรายละเอียด
+  const [delTarget, setDelTarget]   = useState<QuotationMock|null>(null);
   const [detailTab, setDetailTab]   = useState<"info"|"customer"|"lead">("info");
   const [issuer, setIssuer]         = useState<Issuer>(DEFAULT_ISSUER);
   const [docProfile, setDocProfile] = useState<DocProfile>(DEFAULT_DOC);
@@ -507,13 +508,17 @@ function QuotationsPageInner(){
   }
   // (ทำสำเนา/สร้างเวอร์ชัน ถูกตัดออกตามการรีวิว — ปุ่มไม่ได้ใช้)
   function deleteQ(){
-    if(!selected) return;
-    ctxDeleteQuotation(selected.id);
-    setSelected(null); setDelConfirm(false);
+    const target = delTarget;
+    if(!target) return;
+    ctxDeleteQuotation(target.id);
+    // ปิดแผงรายละเอียดเฉพาะเมื่อกำลังเปิดใบที่เพิ่งลบอยู่ (ลบจากรายการ = แผงไม่ได้เปิด)
+    setSelected(p=>p?.id===target.id?null:p);
+    setDelTarget(null);
+    showToast(`ลบใบเสนอราคา ${target.id} แล้ว`);
   }
   function selectRow(q:QuotationMock){
     setSelected(p=>p?.id===q.id?null:q);
-    setDetailTab("info"); setDelConfirm(false);
+    setDetailTab("info"); setDelTarget(null);
   }
 
   // พิมพ์ใบเสนอราคาเป็นเอกสาร A4 (ต้องตั้งชื่อบริษัทผู้ออกก่อน)
@@ -644,16 +649,18 @@ function QuotationsPageInner(){
                       ของจริงต้องการรวม 1284px แต่กรอบมีแค่ 1012px (กรอบกว้างเท่านี้ตายตัว ขยายจอไม่ช่วย)
                       → คอลัมน์ห้ามตัด (เลขที่/มูลค่า/สถานะ/วันที่/ปุ่ม) ให้เต็มตามที่วัดได้ รวมหัวตารางด้วย
                         คอลัมน์ข้อความยาว (ลูกค้า/โครงการ/ประเภท/ผู้รับผิดชอบ) รับส่วนที่เหลือ → "..." + hover ดูเต็ม */}
-                  <col style={{width:"10.9%",minWidth:110}} />{/* เลขที่ — "Q-2026-0096" 110 ห้ามตัด */}
-                  <col style={{width:"9.5%",minWidth:94}} />{/* ลูกค้า (…) หัว 74 */}
-                  {!hiddenCols.includes("project")&&<col style={{width:"9.5%",minWidth:94}} />}{/* โครงการ (…) หัว 88 */}
-                  {!hiddenCols.includes("type")&&<col style={{width:"8.2%",minWidth:82}} />}{/* ประเภท (…) หัว 67 */}
-                  {!hiddenCols.includes("owner")&&<col style={{width:"8.9%",minWidth:90}} />}{/* ผู้รับผิดชอบ (…) หัว 87 */}
+                  <col style={{width:"10.7%",minWidth:110}} />{/* เลขที่ — "Q-2026-0096" 110 ห้ามตัด */}
+                  {/* คอลัมน์ข้อความหดลงรวม 32px เพื่อแลกที่ให้ปุ่ม "ลบ" ที่เพิ่มเข้ามา (13 ส.ค. 69)
+                      หดได้เพราะยังกว้างกว่าหัวคอลัมน์ของตัวเอง — ข้อมูลยาวยังตัดด้วย … + hover ดูเต็มเหมือนเดิม */}
+                  <col style={{width:"8.2%",minWidth:78}} />{/* ลูกค้า (…) หัว 74 */}
+                  {!hiddenCols.includes("project")&&<col style={{width:"9.1%",minWidth:90}} />}{/* โครงการ (…) หัว 88 */}
+                  {!hiddenCols.includes("type")&&<col style={{width:"7.2%",minWidth:72}} />}{/* ประเภท (…) หัว 67 */}
+                  {!hiddenCols.includes("owner")&&<col style={{width:"8.7%",minWidth:88}} />}{/* ผู้รับผิดชอบ (…) หัว 87 */}
                   {!hiddenCols.includes("value")&&<col style={{width:"11.3%",minWidth:116}} />}{/* มูลค่า — ข้อมูล 114 ห้ามตัด */}
                   <col style={{width:"10.9%",minWidth:110}} />{/* สถานะ — ป้ายยาวสุด "ส่งแล้ว"/"ปฏิเสธ" */}
                   {!hiddenCols.includes("created")&&<col style={{width:"7.7%",minWidth:78}} />}{/* วันที่สร้าง — หัว 75 (ไม่มีลูกศร) */}
                   {!hiddenCols.includes("expiry")&&<col style={{width:"7.5%",minWidth:74}} />}{/* หมดอายุ — หัว 71 */}
-                  <col style={{width:"15.6%",minWidth:158}} />{/* ปุ่ม 4 ไอคอน — 156 */}
+                  <col style={{width:"18.7%",minWidth:190}} />{/* ปุ่ม 5 ไอคอน (ส่ง·ดู·พิมพ์·แก้ไข·ลบ) — 5×28 + 4×4 gap + padding */}
                 </colgroup>
                 <thead>
                   <tr>
@@ -743,6 +750,9 @@ function QuotationsPageInner(){
                               style={{width:28,height:28,borderRadius:7,border:`1px solid ${BORDER}`,background:"#fff",color:PRIMARY,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Printer size={13}/></button>
                             <button onClick={()=>openEdit(q)} title="แก้ไข"
                               style={{width:28,height:28,borderRadius:7,border:`1px solid ${BORDER}`,background:"#fff",color:PRIMARY,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Edit2 size={13}/></button>
+                            {/* ลบได้จากรายการเลย ไม่ต้องเปิดแผงรายละเอียดก่อน — ยังถามยืนยันเหมือนเดิม */}
+                            <button onClick={()=>setDelTarget(q)} title="ลบใบเสนอราคา"
+                              style={{width:28,height:28,borderRadius:7,border:"1px solid #f3c9c9",background:"#fff",color:"#dc2626",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={13}/></button>
                           </div>
                         </td>
                       </ClickableRow>
@@ -805,6 +815,8 @@ function QuotationsPageInner(){
                           style={{color:PRIMARY,padding:"4px 8px",fontSize:"0.65rem"}}><Printer size={11}/></button>
                         <button onClick={()=>openEdit(q)} className="btn btn-secondary btn-sm"
                           style={{color:PRIMARY,padding:"4px 9px",fontSize:"0.65rem"}}>แก้ไข</button>
+                        <button onClick={()=>setDelTarget(q)} title="ลบใบเสนอราคา" className="btn btn-secondary btn-sm"
+                          style={{color:"#dc2626",borderColor:"#f3c9c9",padding:"4px 8px",fontSize:"0.65rem"}}><Trash2 size={11}/></button>
                       </div>
                     </div>
                   </div>
@@ -866,7 +878,7 @@ function QuotationsPageInner(){
                   <button title="แก้ไข" onClick={()=>openEdit(selected)} style={qa}><Edit2 size={13}/> แก้ไข</button>
                   {selected.status==="sent_to_client" && <button title="ส่งอีกครั้ง" onClick={()=>sendAgain(selected)} style={qa}><Send size={13}/> ส่งอีกครั้ง</button>}
                   {selected.customerId ? <button title="ดูลูกค้า" onClick={()=>router.push(`/customers?open=${selected.customerId}`)} style={qa}><ExternalLink size={13}/> ลูกค้า</button> : null}
-                  <button title="ลบใบเสนอราคา" onClick={()=>setDelConfirm(true)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
+                  <button title="ลบใบเสนอราคา" onClick={()=>setDelTarget(selected)} style={{...qa,width:30,padding:0,justifyContent:"center",color:"#fecaca"}}><Trash2 size={14}/></button>
                   <button onClick={()=>setSelected(null)} title="ปิด" style={{...qa,width:30,padding:0,justifyContent:"center"}}><X size={15}/></button>
                 </div>
               </div>
@@ -987,26 +999,26 @@ function QuotationsPageInner(){
       })()}
 
       {/* Delete confirm dialog */}
-      {delConfirm&&selected&&(
-        <div onClick={()=>setDelConfirm(false)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      {delTarget&&(
+        <div onClick={()=>setDelTarget(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
             <div style={{padding:"22px 22px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                 <span style={{width:38,height:38,borderRadius:"50%",background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={17} color="#dc2626"/></span>
                 <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบใบเสนอราคา</div>
               </div>
-              {selected.status==="won" ? (
+              {delTarget.status==="won" ? (
                 // ใบที่ปิดการขายแล้วคือประวัติยอดขายจริง — เตือนแรงกว่าใบร่างทั่วไป กันมือลื่นลบยอดที่ปิดได้แล้ว
                 // (พบจากผลตรวจสอบระบบ 30 ก.ค. 69, Low: ข้อความเดิมเหมือนกันหมดทุกสถานะ ไม่มีสัญญาณเตือนพิเศษ)
                 <p style={{fontSize:"0.8rem",color:"#dc2626",lineHeight:1.6,margin:0,fontWeight:600}}>
-                  ใบนี้ <strong>ปิดการขายแล้ว</strong> (฿{Math.round(selected.totalValue).toLocaleString("th-TH")}) — ลบแล้วยอดขายของ {selected.customer} จะถูกหักออกด้วย และการลบไม่สามารถย้อนกลับได้
+                  ใบนี้ <strong>ปิดการขายแล้ว</strong> (฿{Math.round(delTarget.totalValue).toLocaleString("th-TH")}) — ลบแล้วยอดขายของ {delTarget.customer} จะถูกหักออกด้วย และการลบไม่สามารถย้อนกลับได้
                 </p>
               ) : (
-                <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{selected.id}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+                <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{delTarget.id}</strong>? การลบไม่สามารถย้อนกลับได้</p>
               )}
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
-              <button className="btn btn-secondary btn-md" onClick={()=>setDelConfirm(false)}>ยกเลิก</button>
+              <button className="btn btn-secondary btn-md" onClick={()=>setDelTarget(null)}>ยกเลิก</button>
               <button className="btn btn-md" style={{background:"#dc2626",color:"#fff",border:"none"}} onClick={deleteQ}><Trash2 size={13}/> ลบ</button>
             </div>
           </div>
