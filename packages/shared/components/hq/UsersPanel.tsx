@@ -5,6 +5,7 @@
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { SortableTh } from "@pms/shared/components/ui/SortableTh";
+import { TablePagination } from "@pms/shared/components/ui/TablePagination";
 import { useModalA11y } from "@pms/shared/lib/useModalA11y";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -421,13 +422,11 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
               </tbody>
             </table>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderTop: `1px solid ${BORDER}`, fontSize: "0.76rem", color: MUTED }}>
-            <span>หน้า {curPage} / {pageCount}</span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button className="btn btn-secondary btn-sm" disabled={curPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={curPage <= 1 ? { opacity: .5, cursor: "not-allowed" } : undefined}>ก่อนหน้า</button>
-              <button className="btn btn-secondary btn-sm" disabled={curPage >= pageCount} onClick={() => setPage(p => Math.min(pageCount, p + 1))} style={curPage >= pageCount ? { opacity: .5, cursor: "not-allowed" } : undefined}>ถัดไป</button>
-            </div>
-          </div>
+          {/* แถบเปลี่ยนหน้ากลางของระบบ — หน้านี้นับหน้าเริ่มที่ 1 จึงต้องแปลงเป็นฐาน 0 ให้คอมโพเนนต์ */}
+          <TablePagination
+            page={curPage - 1} total={filtered.length} onPage={p => setPage(p + 1)}
+            size={PAGE_SIZE} unit="คน"
+          />
         </div>
       </div>
 

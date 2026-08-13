@@ -24,6 +24,7 @@ import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
+import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -262,6 +263,9 @@ function RollupTable({ title, hint, rows, countryTarget, ready = true }: {
   ready?: boolean;
 }) {
   const sorted = [...rows].sort((a, b) => b.target - a.target);
+  const [page, setPage] = useState(0);
+  const cur = Math.min(page, pageCountOf(sorted.length) - 1);
+  const shown = pageSlice(sorted, cur);
   return (
     <SectionCard icon={<Target size={19} />} title={title} desc={hint}>
       <div className="table-wrap" style={{ marginTop: 6 }}>
@@ -285,7 +289,7 @@ function RollupTable({ title, hint, rows, countryTarget, ready = true }: {
           <tbody>
             {!sorted.length ? (
               <tr><td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "#6b7280", fontSize: "0.8rem" }}>—</td></tr>
-            ) : sorted.map(r => {
+            ) : shown.map(r => {
               const pct = r.target > 0 ? Math.round(r.actual / r.target * 100) : 0;
               return (
                 <tr key={r.key}>
@@ -300,6 +304,7 @@ function RollupTable({ title, hint, rows, countryTarget, ready = true }: {
           </tbody>
         </table>
       </div>
+      <TablePagination page={cur} total={sorted.length} onPage={setPage} unit="รายการ" />
       {countryTarget != null && (() => {
         const sum = rows.reduce((s, r) => s + r.target, 0);
         const diff = sum - countryTarget;

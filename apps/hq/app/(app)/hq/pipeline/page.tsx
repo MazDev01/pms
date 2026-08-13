@@ -11,6 +11,7 @@
 // • Last Updated รายตัวแทน — DealerRow ไม่มีฟิลด์นี้ · ใช้ "ใบเสนอราคาล่าสุด" ที่หาได้จริงแทน (ชื่อคอลัมน์ตรงกับสิ่งที่มันเป็น)
 // • Refresh — ระบบไม่มี backend ให้ refresh (ข้อมูลสดจาก SalesContext อยู่แล้ว)
 import { useMemo, useState, useRef, useEffect } from "react";
+import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { useRouter } from "next/navigation";
 import {
   FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
@@ -353,6 +354,13 @@ export default function SalesAnalyticsPage() {
   const drawerData = useDealerDrawerData(drawer?.code ?? null);
   const anyFilter = q.trim() !== "" || [dealerSel, regionSel, provSel, btSel, salesSel].some(v => v !== ALL);
 
+  // ── ตารางผลงานตัวแทน: แบ่งหน้า 10 แถวเท่าทุกตารางในระบบ ──
+  // เปลี่ยนตัวกรองต้องกลับหน้า 1 เสมอ — ไม่งั้นกรองแล้วค้างอยู่หน้ากลางลิสต์ที่ไม่มีข้อมูลแล้ว
+  const [perfPage, setPerfPage] = useState(0);
+  useEffect(() => { setPerfPage(0); }, [q, dealerSel, regionSel, provSel, btSel, salesSel]);
+  const perfPageSafe = Math.min(perfPage, pageCountOf(perf.length) - 1);
+  const perfRows = pageSlice(perf, perfPageSafe);
+
   const kNum: React.CSSProperties = { fontSize: "1.15rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.15, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" };
   const kSub: React.CSSProperties = { fontSize: "0.72rem", color: MUTED };
   const kpiCards = [
@@ -529,7 +537,7 @@ export default function SalesAnalyticsPage() {
             </thead>
             <tbody>
               {!perf.length && <tr><td colSpan={12} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่พบตัวแทนที่ตรงกับตัวกรอง</td></tr>}
-              {perf.map(d => (
+              {perfRows.map(d => (
                 <ClickableRow key={d.code} className="clickable" onActivate={() => setDrawer(d)} label={`เปิดรายละเอียดตัวแทน ${d.name}`}>
                   <td style={{ fontFamily: "monospace", fontWeight: 700, color: PRIMARY }}>{d.code}</td>
                   <td style={{ fontWeight: 600, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -558,6 +566,7 @@ export default function SalesAnalyticsPage() {
             </tbody>
           </table>
         </div>
+        <TablePagination page={perfPageSafe} total={perf.length} onPage={setPerfPage} unit="ตัวแทน" />
       </div>
 
       {/* ── DRAWER — เจาะรายตัวแทน (อ่านอย่างเดียว ไม่มีแก้/ลบ) ── */}

@@ -30,6 +30,7 @@ import { QuotationFilterBar, EMPTY_FILTERS, type QuotationFilters } from "@pms/s
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { QuotationAnalytics } from "@pms/shared/components/hq/quotations/QuotationAnalytics";
 import { QuotationTable } from "@pms/shared/components/hq/quotations/QuotationTable";
+import { pageSlice } from "@pms/shared/components/ui/TablePagination";
 import { QuotationDrawer } from "@pms/shared/components/hq/quotations/QuotationDrawer";
 
 export default function NetworkQuotationPage() {
@@ -232,9 +233,12 @@ export default function NetworkQuotationPage() {
   };
   // mapToHQ ปิดคลุม netLeads/nameOf — ขาดไปก่อนหน้านี้ทำให้ชื่อผู้รับผิดชอบค้างค่าเก่าถ้าลีด/ทะเบียนตัวแทน
   // เปลี่ยนผ่าน realtime โดย pageResult reference เดิม (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
-  const displayRows = useMemo(() => pageResult ? toQuoteRows(pageResult.rows.map(mapToHQ), validityDays, look) : tableRows, [pageResult, tableRows, validityDays, look, netLeads, nameOf]); // eslint-disable-line react-hooks/exhaustive-deps
+  // local ต้องตัดเป็นหน้า ๆ ที่ client ด้วย — ไม่งั้นแถบเปลี่ยนหน้าบอก "หน้า 1/9" แต่ตารางเทมาทั้ง 9 หน้า
+  const localPageCount = Math.max(1, Math.ceil(tableRows.length / QPAGE_SIZE));
+  const localPage = Math.min(tablePage, localPageCount - 1);
+  const displayRows = useMemo(() => pageResult ? toQuoteRows(pageResult.rows.map(mapToHQ), validityDays, look) : pageSlice(tableRows, localPage, QPAGE_SIZE), [pageResult, tableRows, localPage, validityDays, look, netLeads, nameOf]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalRows = pageResult ? pageResult.total : tableRows.length;
-  const pagination = pageResult ? { page: tablePage, pageCount: Math.max(1, Math.ceil(totalRows / QPAGE_SIZE)), total: totalRows, onPage: setTablePage } : undefined;
+  const pagination = { page: pageResult ? tablePage : localPage, pageCount: Math.max(1, Math.ceil(totalRows / QPAGE_SIZE)), total: totalRows, onPage: setTablePage };
 
   // ผู้รับผิดชอบใบใน drawer — supabase (แถวมาจาก listPage) เดิมได้ placeholder → เติมชื่อจริงจากลีดผ่าน RPC
   //   local (ไม่มี pageResult) = viewQ.salesperson มาจาก array จริงอยู่แล้ว → hook คืน null ไม่ทับ

@@ -5,6 +5,7 @@
 // ใช้ข้อมูลจริงจาก SalesContext (leads) — HQ ดูอย่างเดียว (Sales CRM เท่านั้น)
 import { useMemo, useState, useEffect, useRef } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
+import { TablePagination, pageSlice, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { useRouter } from "next/navigation";
 import { Users, PhoneCall, AlarmClock, Percent, X, GitBranch, Eye } from "lucide-react";
 import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange, useUnassignedLeads, useDashboardQuoteSummary, useLeadAppointments } from "@pms/shared/lib/useNetworkData";
@@ -158,7 +159,8 @@ export default function HQLeadsPage() {
   const chartSummary = overdueOnly ? null : sumCharts;                               // overdue → client (พึ่ง last_contact + เกณฑ์)
 
   // ── ตารางลีด: แบ่งหน้าที่ DB (M9 Phase 4) · local/ยังไม่กลับ = filtered (client) ──
-  const LEADS_PAGE = 25;
+  // 10 แถว/หน้าเท่าทุกตารางในระบบ (บอสสั่ง 13 ส.ค. 69 — เดิมหน้านี้ 25 อยู่หน้าเดียวที่ไม่เหมือนใคร)
+  const LEADS_PAGE = ROWS_PER_PAGE;
   const [leadPage, setLeadPage] = useState(0);
   const perDealerDays = useMemo(() => Object.fromEntries(allDealers.map(d => [d.code, rulesOf(d.code).followUpAlertDays])), [allDealers, rulesOf]);
   const leadOpts: LeadListOpts = useMemo(() => ({
@@ -172,9 +174,11 @@ export default function HQLeadsPage() {
   const leadsPage = useLeadsPage(leadOpts);
   const leadTableKey = JSON.stringify({ ...leadOpts, offset: 0 });
   useEffect(() => { setLeadPage(0); }, [leadTableKey]); // เปลี่ยนตัวกรอง → หน้า 1
-  const displayLeads = leadsPage?.rows ?? filtered;
+  // local ต้องตัดเป็นหน้า ๆ ที่ client ด้วย — ไม่งั้นแถบบอกเลขหน้าแต่ตารางเทมาทั้งชุด
+  const localLeadPage = Math.min(leadPage, Math.max(1, Math.ceil(filtered.length / LEADS_PAGE)) - 1);
+  const displayLeads = leadsPage?.rows ?? pageSlice(filtered, localLeadPage, LEADS_PAGE);
   const leadTotal = leadsPage ? leadsPage.total : filtered.length;
-  const leadPagination = leadsPage ? { page: leadPage, pageCount: Math.max(1, Math.ceil(leadTotal / LEADS_PAGE)), total: leadTotal, onPage: setLeadPage } : null;
+  const leadPagination = { page: leadsPage ? leadPage : localLeadPage, total: leadTotal, onPage: setLeadPage };
 
   // จำนวน "ต้องติดตามด่วน" (ในขอบเขต kpiBase, ไม่กรอง status) ที่ DB — overdue=true, นับรวม (limit 1 พอ)
   //   supabase: leads_page.total · local/ยังไม่กลับ: นับจาก kpiBase ฝั่ง client
@@ -753,15 +757,11 @@ export default function HQLeadsPage() {
             </tbody>
           </table>
         </div>
-        {leadPagination && leadPagination.pageCount > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderTop: "1px solid #f2f4f7", fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>ทั้งหมด {leadPagination.total.toLocaleString()} ลีด · หน้า {leadPagination.page + 1}/{leadPagination.pageCount}</span>
-            <span style={{ display: "flex", gap: 6 }}>
-              <button className="btn btn-secondary btn-sm" disabled={leadPagination.page <= 0} onClick={() => leadPagination.onPage(leadPagination.page - 1)}>ก่อนหน้า</button>
-              <button className="btn btn-secondary btn-sm" disabled={leadPagination.page >= leadPagination.pageCount - 1} onClick={() => leadPagination.onPage(leadPagination.page + 1)}>ถัดไป</button>
-            </span>
-          </div>
-        )}
+        {/* แถบเปลี่ยนหน้าแสดงตลอด แม้มีหน้าเดียว (มาตรฐานทุกตาราง HQ) · หน้านี้ 25 แถว/หน้า */}
+        <TablePagination
+          page={leadPagination.page} total={leadPagination.total} onPage={leadPagination.onPage}
+          size={LEADS_PAGE} unit="ลีด"
+        />
       </div>
 
       {/* ── Drawer · ดูรายละเอียดลีด (HQ ดูอย่างเดียว — ไม่มีแก้/ลบ/มอบหมาย) ──

@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
 // ── ตัวแบ่งหน้าของตาราง — ใช้ร่วมกันทุกตารางในระบบ ────────────────────────────────
 //
 // ทำไมต้องมี (สั่งโดยผู้บริหาร 7 ส.ค. 69: "ตารางทุกอัน ถ้าเกิน 10 ให้ไปหน้าถัดไป"):
@@ -9,6 +11,10 @@
 //   → บันทึกการใช้งานเรนเดอร์ทีเดียวเป็นพัน ๆ แถว เบราว์เซอร์หน่วงเห็นได้ชัด
 //
 // ใช้ที่เดียวกันหมด = แก้ครั้งเดียวมีผลทุกตาราง และผู้ใช้เจอของเหมือนกันทุกหน้า
+//
+// แสดงตลอดแม้มีหน้าเดียว (สั่งโดยผู้บริหาร 13 ส.ค. 69):
+//   เดิมซ่อนเมื่อ pageCount<=1 → ท้ายตารางบางอันมีแถบ บางอันไม่มี ผู้ใช้อ่านไม่ออกว่า
+//   "ไม่มีแถบ = ข้อมูลหมดแค่นี้" หรือ "ตารางนี้ไม่แบ่งหน้า" · ตอนนี้เห็น "หน้า 1 / 1" = จบแล้วชัดเจน
 
 /** จำนวนแถวต่อหน้ามาตรฐานของทั้งระบบ — เกินจากนี้ให้ไปหน้าถัดไป */
 export const ROWS_PER_PAGE = 10;
@@ -36,10 +42,8 @@ export function TablePagination({
   unit?: string;
 }) {
   const pageCount = pageCountOf(total, size);
-  // มีหน้าเดียว = ไม่ต้องแสดงอะไรเลย (ปุ่มที่กดไม่ได้รกจอเปล่า ๆ)
-  if (pageCount <= 1) return null;
-  const cur = Math.min(page, pageCount - 1);
-  const from = cur * size + 1;
+  const cur = Math.min(Math.max(page, 0), pageCount - 1);
+  const from = total === 0 ? 0 : cur * size + 1;
   const to = Math.min(total, (cur + 1) * size);
 
   return (
@@ -52,22 +56,28 @@ export function TablePagination({
     >
       {/* บอก "กำลังดูช่วงไหนจากทั้งหมดเท่าไหร่" ไม่ใช่แค่เลขหน้า — ผู้ใช้จะรู้ว่าเหลืออีกเยอะไหม */}
       <span style={{ fontVariantNumeric: "tabular-nums" }}>
-        แสดง {from.toLocaleString()}–{to.toLocaleString()} จาก {total.toLocaleString()} {unit} · หน้า {cur + 1}/{pageCount}
+        แสดง {from.toLocaleString()}–{to.toLocaleString()} จาก {total.toLocaleString()} {unit}
       </span>
-      <span style={{ display: "flex", gap: 6 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <button
           type="button" className="btn btn-secondary btn-sm"
           disabled={cur <= 0} onClick={() => onPage(cur - 1)}
           aria-label="หน้าก่อนหน้า"
+          style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
         >
-          ก่อนหน้า
+          <ChevronLeft size={13} /> ก่อนหน้า
         </button>
+        {/* เลขหน้าอยู่ระหว่างปุ่มทั้งสอง — ตำแหน่งเดียวกับฝั่งตัวแทนจำหน่าย */}
+        <span style={{ fontWeight: 700, color: "#334155", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+          หน้า {cur + 1} / {pageCount}
+        </span>
         <button
           type="button" className="btn btn-secondary btn-sm"
           disabled={cur >= pageCount - 1} onClick={() => onPage(cur + 1)}
           aria-label="หน้าถัดไป"
+          style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
         >
-          ถัดไป
+          ถัดไป <ChevronRight size={13} />
         </button>
       </span>
     </div>

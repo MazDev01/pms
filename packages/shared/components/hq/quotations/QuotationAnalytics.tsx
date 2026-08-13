@@ -9,6 +9,7 @@
 import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
+import { TablePagination } from "@pms/shared/components/ui/TablePagination";
 import { QuotationTrendChart } from "./QuotationTrendChart";
 import { QuotationAgingChart } from "./QuotationAgingChart";
 import { LeadsVsQuotationsChart } from "./LeadsVsQuotationsChart";
@@ -137,6 +138,9 @@ function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
           </tbody>
         </table>
       </div>
+      {/* ตารางนี้ตั้งใจโชว์แค่ 10 อันดับแรกตามสเปก — แถบจึงเป็น "หน้า 1 / 1" เสมอ
+          (มีไว้ให้ท้ายตารางเหมือนกันทุกหน้า HQ) · จำนวนที่ไม่ได้แสดงบอกไว้ใต้แถบ */}
+      <TablePagination page={0} total={ranked.length} onPage={() => {}} size={TOP_N} unit="ตัวแทน" />
       {hidden > 0 && (
         <div style={{ padding: "8px 14px", fontSize: "0.65rem", color: "#9ca3af", borderTop: "1px solid #f2f4f7" }}>
           แสดง 10 อันดับแรก — อีก {hidden} ตัวแทนไม่ได้แสดงในตารางนี้

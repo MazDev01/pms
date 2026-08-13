@@ -14,6 +14,7 @@
 //
 // สเปกจากบอส: ไม่มี animation · ไม่มี gradient · ไม่มี 3D · พื้นหลังขาว
 import { useState } from "react";
+import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 
 const NAVY = "#003366";   // ใบเสนอราคาที่ออก
 const GREEN = "#059669";  // ปิดการขายได้
@@ -157,6 +158,10 @@ export function DealerQuotationTable({ rows, avgConv }: {
   rows: DealerQuotePerf[];
   avgConv: number | null;
 }) {
+  // hooks ต้องเรียกก่อน early-return เสมอ (กติกา React) — ตารางว่างค่อยคืน null ทีหลัง
+  const [page, setPage] = useState(0);
+  const cur = Math.min(page, pageCountOf(rows.length) - 1);
+  const shown = pageSlice(rows, cur);
   if (!rows.length) return null;
   return (
     <div className="card" style={{ marginBottom: 0 }}>
@@ -196,7 +201,7 @@ export function DealerQuotationTable({ rows, avgConv }: {
             </tr>
           </thead>
           <tbody>
-            {rows.map(d => (
+            {shown.map(d => (
               <tr key={d.code}>
                 <td style={{ fontFamily: "monospace", fontWeight: 700, color: NAVY }}>{d.code}</td>
                 <td title={d.name} style={{ fontWeight: 600, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</td>
@@ -214,6 +219,7 @@ export function DealerQuotationTable({ rows, avgConv }: {
           </tbody>
         </table>
       </div>
+      <TablePagination page={cur} total={rows.length} onPage={setPage} unit="ตัวแทน" />
       <div style={{ padding: "10px 20px 14px", fontSize: "0.64rem", color: MUTED, lineHeight: 1.7 }}>
         &ldquo;ปิดไม่ได้&rdquo; นับเฉพาะใบที่ลูกค้าปฏิเสธจริง · &ldquo;ยังไม่รู้ผล&rdquo; = ร่าง + ส่งแล้วรอลูกค้าตอบ + หมดอายุ (ยังไม่ถือเป็นความล้มเหลว)<br />
         อัตราปิด = ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) · ตัวแทนที่ยังไม่มีใบไหนรู้ผลจะขึ้น &ldquo;—&rdquo; ไม่ใช่ 0%

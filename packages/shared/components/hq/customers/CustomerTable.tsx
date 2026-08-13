@@ -8,6 +8,7 @@ import { customerCode, fmtISOToThai } from "@pms/shared/lib/mock";
 import { regionOf } from "@pms/shared/lib/customerDb";
 import type { HQCustomerPageRow } from "@pms/shared/lib/data/ports";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
+import { TablePagination, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 
 const PRIMARY = "#003366";
 const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
@@ -33,7 +34,7 @@ function MultiCell({ values }: { values: string[] }) {
 
 export function CustomerTable({ rows, onView, pagination, loading }: {
   rows: HQCustomerPageRow[]; onView: (r: HQCustomerPageRow) => void;
-  /** มีเมื่อแบ่งหน้าที่ DB (supabase) — local/ยังไม่กลับ: undefined = โชว์ rows ทั้งชุด ไม่มีแถบเปลี่ยนหน้า */
+  /** หน้าปัจจุบัน/จำนวนทั้งหมด — ไม่ส่งมา (local, ยังไม่กลับ) ก็ยังมีแถบ โดยนับจากแถวที่เห็นอยู่ */
   pagination?: { page: number; pageCount: number; total: number; onPage: (p: number) => void };
   /** true = RPC หน้าแรกยังไม่กลับ (supabase) — ต้องแยกจาก "กรองแล้วไม่เจอจริง ๆ" ไม่งั้นโชว์ "ไม่พบลูกค้า"
    *  ทั้งที่กำลังโหลดอยู่ (ผู้ใช้เข้าใจผิดว่าไม่มีข้อมูล + คลิกแถวก็ไม่มีอะไรเกิดขึ้นเพราะยังไม่มีแถวจริง) */
@@ -113,15 +114,14 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
           )}
         </tbody>
       </table>
-      {pagination && pagination.pageCount > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderTop: "1px solid #f2f4f7", fontSize: "0.72rem", color: "#6b7280" }}>
-          <span style={{ fontVariantNumeric: "tabular-nums" }}>ทั้งหมด {pagination.total.toLocaleString()} ราย · หน้า {pagination.page + 1}/{pagination.pageCount}</span>
-          <span style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-secondary btn-sm" disabled={pagination.page <= 0} onClick={() => pagination.onPage(pagination.page - 1)}>ก่อนหน้า</button>
-            <button className="btn btn-secondary btn-sm" disabled={pagination.page >= pagination.pageCount - 1} onClick={() => pagination.onPage(pagination.page + 1)}>ถัดไป</button>
-          </span>
-        </div>
-      )}
+      {/* แถบเปลี่ยนหน้าแสดงตลอด แม้มีหน้าเดียว (มาตรฐานทุกตาราง HQ) */}
+      <TablePagination
+        page={pagination ? pagination.page : 0}
+        total={pagination ? pagination.total : rows.length}
+        onPage={pagination ? pagination.onPage : () => {}}
+        size={ROWS_PER_PAGE}
+        unit="ราย"
+      />
     </div>
   );
 }

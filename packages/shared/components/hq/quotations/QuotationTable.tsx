@@ -8,6 +8,7 @@ import { quotationStatusLabel, quotationStatusColor } from "@pms/shared/lib/mock
 import { fmtBaht } from "@pms/shared/lib/format";
 import type { QuoteRow } from "@pms/shared/lib/hqQuotations";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
+import { TablePagination, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
@@ -102,15 +103,14 @@ export function QuotationTable({ rows, onView, pagination }: {
           </tbody>
         </table>
       </div>
-      {pagination && pagination.pageCount > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderTop: "1px solid #f2f4f7", fontSize: "0.72rem", color: MUTED }}>
-          <span style={{ fontVariantNumeric: "tabular-nums" }}>ทั้งหมด {pagination.total.toLocaleString()} ใบ · หน้า {pagination.page + 1}/{pagination.pageCount}</span>
-          <span style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-secondary btn-sm" disabled={pagination.page <= 0} onClick={() => pagination.onPage(pagination.page - 1)}>ก่อนหน้า</button>
-            <button className="btn btn-secondary btn-sm" disabled={pagination.page >= pagination.pageCount - 1} onClick={() => pagination.onPage(pagination.page + 1)}>ถัดไป</button>
-          </span>
-        </div>
-      )}
+      {/* แถบเปลี่ยนหน้าแสดงตลอด แม้มีหน้าเดียว (มาตรฐานทุกตาราง HQ) */}
+      <TablePagination
+        page={pagination ? pagination.page : 0}
+        total={pagination ? pagination.total : rows.length}
+        onPage={pagination ? pagination.onPage : () => {}}
+        size={ROWS_PER_PAGE}
+        unit="ใบ"
+      />
     </div>
   );
 }

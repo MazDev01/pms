@@ -13,6 +13,7 @@ import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerfo
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useNetworkDealerDetail, useNetworkCustomersForDealer } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
+import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -178,6 +179,9 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
 }
 
 function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
+  const [page, setPage] = useState(0);
+  const cur = Math.min(page, pageCountOf(leads.length) - 1);
+  const rows = pageSlice(leads, cur);
   return (
     <div className="card">
       <div className="card-header">
@@ -205,7 +209,7 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
             {leads.length === 0 && (
               <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีลูกค้าเป้าหมาย</td></tr>
             )}
-            {leads.map(l => {
+            {rows.map(l => {
               const st = LEAD_STATUS[l.status];
               return (
                 <tr key={l.id}>
@@ -222,6 +226,7 @@ function LeadsTab({ leads }: { leads: DealerLeadItem[] }) {
           </tbody>
         </table>
       </div>
+      <TablePagination page={cur} total={leads.length} onPage={setPage} unit="ราย" />
     </div>
   );
 }
@@ -256,6 +261,9 @@ function ProjectsTab({ projects }: { projects: DealerProjectItem[] }) {
 }
 
 function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
+  const [page, setPage] = useState(0);
+  const cur = Math.min(page, pageCountOf(quotes.length) - 1);
+  const rows = pageSlice(quotes, cur);
   return (
     <div className="card">
       <div className="card-header">
@@ -283,7 +291,7 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
             {quotes.length === 0 && (
               <tr><td colSpan={6} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ไม่มีใบเสนอ</td></tr>
             )}
-            {quotes.map(q => {
+            {rows.map(q => {
               const st = quotationStatusColor[q.status];
               return (
                 <tr key={q.quoteNo}>
@@ -299,6 +307,7 @@ function QuotesTab({ quotes }: { quotes: DealerQuoteItem[] }) {
           </tbody>
         </table>
       </div>
+      <TablePagination page={cur} total={quotes.length} onPage={setPage} unit="ใบ" />
     </div>
   );
 }
@@ -316,6 +325,9 @@ const TABS = [
 
 // ── Customer tab (read-only) — ลูกค้าที่ตัวแทนนี้ดูแล ────────────────────────────
 function CustomerTab({ customers }: { customers: HQCustomer[] }) {
+  const [page, setPage] = useState(0);
+  const cur = Math.min(page, pageCountOf(customers.length) - 1);
+  const rows = pageSlice(customers, cur);
   return (
     <div className="card">
       <div className="card-header"><div className="card-title">ลูกค้าที่ตัวแทนนี้ดูแล</div></div>
@@ -328,7 +340,7 @@ function CustomerTab({ customers }: { customers: HQCustomer[] }) {
             {customers.length === 0 && (
               <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#9ca3af" }}>ยังไม่มีลูกค้า</td></tr>
             )}
-            {customers.map(c => (
+            {rows.map(c => (
               <tr key={c.id}>
                 <td style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{c.name}</td>
                 <td style={{ fontSize: "0.8rem", color: "#6b7280" }}>{c.province}</td>
@@ -340,6 +352,7 @@ function CustomerTab({ customers }: { customers: HQCustomer[] }) {
           </tbody>
         </table>
       </div>
+      <TablePagination page={cur} total={customers.length} onPage={setPage} unit="ราย" />
     </div>
   );
 }
