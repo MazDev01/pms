@@ -12,3 +12,12 @@ allowBuilds:
   '@sentry/cli': false # ไม่ต้องดาวน์โหลด sentry-cli (เราไม่ทำ source-map upload)
   sharp: false
   unrs-resolver: false # native resolver ภายในของ eslint — ไม่จำเป็นต้องรัน build script (เหตุผลเดียวกับ sharp)
+
+# บังคับเวอร์ชันของไลบรารีย่อยที่มีช่องโหว่ (13 ส.ค. 69)
+#   ทั้งสามตัวมากับ Next เอง — Next ยังผูกรุ่นเก่าอยู่ แต่รุ่นที่ปิดช่องโหว่เป็นแค่เวอร์ชันย่อยถัดไป
+#   postcss: อ่านไฟล์ในเครื่องได้จากไฟล์ CSS ที่ผู้อื่นควบคุม (สูง) + XSS ตอนแปลงข้อความ CSS
+#   nanoid: วนไม่รู้จบเมื่อขนาดเป็นศูนย์ (สูง) · sharp: ช่องโหว่ที่ติดมากับ libvips (สูง)
+overrides:
+  postcss: ">=8.5.23"
+  nanoid: ">=3.3.17"
+  sharp: ">=0.35.0"
