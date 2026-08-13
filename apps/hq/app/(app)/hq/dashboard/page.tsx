@@ -727,7 +727,12 @@ export default function HQDashboard() {
       </div>
 
       {/* แถว 3: ผลงานตัวแทน Top 10 · ยอดขายตามประเภทอาคาร · เหตุผลปิดการขายไม่สำเร็จ */}
-      <div className="hq-row3c" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
+      {/* minHeight = พื้นการ์ดขั้นต่ำของแถวนี้ (แถวนี้เป็น grid + stretch → การ์ดสูงเท่าใบที่เนื้อสูงสุด)
+          เดิมไม่ได้กำหนดไว้ พอเครือข่ายยังมีตัวแทนน้อยและประเภทอาคารไม่กี่ชนิด สองใบซ้ายเตี้ยมาก
+          แถวเลยเตี้ยตาม แล้วการ์ด "กิจกรรมล่าสุด" ที่ยาวกว่าถูกบีบจนเห็นแค่ 2 รายการต้องเลื่อนตลอด
+          ใช้ 340px = ขนาด .chart-m ของ design system (เพดานคือ .chart-l 420px ห้ามเกิน)
+          เป็น min ไม่ใช่ height ตายตัว — พอตัวแทนครบ 10 รายการ์ดยังยืดเองได้ ไม่โดนตัดข้อมูลทิ้ง */}
+      <div className="hq-row3c" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem", minHeight: 340 }}>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div>
             <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
