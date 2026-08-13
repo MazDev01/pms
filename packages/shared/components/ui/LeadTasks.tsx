@@ -7,7 +7,7 @@ import {
   type LeadRow, type LeadTask,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
-import { useLostReasons } from "@pms/shared/lib/useHQConfig";
+import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // วันประทับ = "วันนี้" ของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง — กติกาเดียวกับ useAudit/ทั้งระบบ
@@ -24,7 +24,8 @@ export function LeadTasks({ lead, performedBy, onSave }: {
   lead: LeadRow; performedBy: string; onSave: (l: LeadRow) => void;
 }) {
   const lostReasons = useLostReasons(); // รายการที่ HQ กำหนด (อ่านผ่าน repo — ไม่ใช่ localStorage ของ origin ตัวเอง)
-  const tasks: LeadTask[] = lead.tasks?.length ? lead.tasks : buildLeadTasks();
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ลีดที่ยังไม่มี checklist ใช้ชุดนี้สร้าง
+  const tasks: LeadTask[] = lead.tasks?.length ? lead.tasks : buildLeadTasks(taskTpl);
   const closed = lead.status === "PAID" || lead.status === "CANCELLED";
   const pct = closed ? 100 : taskProgress(tasks);
   const [lostOpen, setLostOpen] = useState(false);
@@ -56,7 +57,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
           : { ...t, done: true, doneAt: now, doneBy: performedBy })
       : t);
     // เช็ก Task → คำนวณ stage ใหม่อัตโนมัติ (เลื่อน stage ตาม task ที่ทำล่าสุด)
-    onSave({ ...lead, tasks: next, status: stageFromTasks(next) });
+    onSave({ ...lead, tasks: next, status: stageFromTasks(next, taskTpl) });
   }
 
   function close(outcome: "won" | "lost", reason?: string) {
@@ -69,7 +70,7 @@ export function LeadTasks({ lead, performedBy, onSave }: {
 
   function reopen() {
     const next = tasks.map(t => t.key === "close" ? { ...t, done: false, doneAt: undefined, doneBy: undefined } : t);
-    onSave({ ...lead, tasks: next, status: stageFromTasks(next), lostReason: undefined });
+    onSave({ ...lead, tasks: next, status: stageFromTasks(next, taskTpl), lostReason: undefined });
   }
 
   const barColor = lead.status === "CANCELLED" ? "#dc2626" : lead.status === "PAID" ? "#059669" : "#003366";

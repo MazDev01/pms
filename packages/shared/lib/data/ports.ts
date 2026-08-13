@@ -3,7 +3,7 @@
 // ทุกเมธอดเป็น async ตั้งแต่แรก → ต่อ network (เฟส B) ไม่ต้องแก้ signature
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
-  HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap,
+  HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap, LeadTaskDef,
   AuditEntry, LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope,
   DealerSettings, UserProfile, HQCompany, CustomerNote, SystemUser,
 } from "./types";
@@ -44,6 +44,9 @@ export interface SettingsRepo {
   /** เหตุผล "ปิดการขายไม่สำเร็จ" ที่ HQ ตั้ง — ตัวแทนใช้ร่วมกันทั้งเครือ (เขียนได้เฉพาะ HQ) */
   getLostReasons(): Promise<string[]>;
   saveLostReasons(lost: string[]): Promise<void>;
+  /** งานมาตรฐานของแต่ละขั้นในเส้นทางการขาย ที่ HQ ตั้ง — ตัวแทนเช็กงานชุดนี้ (เขียนได้เฉพาะ HQ) */
+  getLeadTasks(): Promise<LeadTaskDef[]>;
+  saveLeadTasks(tasks: LeadTaskDef[]): Promise<void>;
   // เขียนนโยบายระดับเครือ (HQ เท่านั้น — RLS is_hq ฝั่ง supabase · singleton id=1)
   savePolicy(policy: HQPolicy): Promise<void>;
   saveTargets(targets: HQTargets): Promise<void>;

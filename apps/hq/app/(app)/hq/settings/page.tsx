@@ -40,7 +40,7 @@ import {
   LOST_REASONS,
   type SolutionProduct,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
-  type HQAlertKey, type DealerRow, type LeadStatus,
+  type HQAlertKey, type DealerRow, type LeadStatus, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
 // แท็บ "บริษัท" / "ผู้ใช้งาน" ฝังหน้าจัดการจริงเต็ม
 import { CompanyPanel } from "@pms/shared/components/hq/CompanyPanel";
@@ -144,9 +144,11 @@ const numInput = (value: number, onChange: (n: number) => void, unit: string, st
 // regionDisplay = ใช้ของกลาง (hqQuotations.ts) แหล่งเดียว — เดิม copy ในไฟล์นี้ไม่มี guard "ไม่ระบุ" (1.4)
 
 // ═══════════════════════ 3 · เส้นทางการขาย ════════════════════════════════════
-// ขั้นการขาย = สถานะลีดจริงของระบบ (LeadStatus 7 ขั้น) — แสดงอย่างเดียว
-// แก้ชื่อ/สี/ลำดับที่นี่ไม่ได้ เพราะคัมบัง/ตาราง/แดชบอร์ด/งานมาตรฐาน ผูกกับสถานะจริงในโค้ด
-// (ของเดิมเป็นตัวแก้ไขที่แก้แล้วไม่มีผลกับหน้าไหนเลย)
+// ขั้นการขาย = สถานะลีดจริงของระบบ (LeadStatus 7 ขั้น) — ชื่อ/สี/ลำดับของ "ขั้น" แก้ที่นี่ไม่ได้
+// เพราะคัมบัง/ตาราง/แดชบอร์ด และชนิดข้อมูลใน DB (enum lead_status) ผูกกับ 7 ขั้นนี้
+//
+// สิ่งที่ HQ แก้ได้จริงคือ "งานมาตรฐาน" ในแต่ละขั้น (13 ส.ค. 69) — เก็บที่ hq_sales_journey.tasks
+// งานพวกนี้คือของจริงที่ตัวแทนเช็ก และเป็นตัวเลื่อนขั้นให้ลีด ไม่ใช่ข้อความประดับ
 const STAGE_ORDER: LeadStatus[] = LEAD_STATUS_ORDER;
 // เหตุผลปิดการขายไม่สำเร็จ — ขั้น "ปิดไม่สำเร็จ" เป็นปลายทางหนึ่งของเส้นทางการขาย จึงอยู่แท็บนี้
 // (เดิมอยู่แท็บ "กฎธุรกิจ" ซึ่งยุบไปแล้ว — คีย์ hq_sales_journey เหมือนเดิม ค่าที่ตั้งไว้ไม่หาย)
@@ -155,44 +157,93 @@ const STAGE_ORDER: LeadStatus[] = LEAD_STATUS_ORDER;
 type Journey = { lost: string[] };
 const DEFAULT_JOURNEY: Journey = { lost: [...LOST_REASONS] };
 
+// ── ตัวช่วยของการ์ด "ขั้นตอนการขายมาตรฐาน" ────────────────────────────────────
+// รหัสงาน (key) ผูกกับ checklist ที่บันทึกไว้ในลีดทุกใบ — งานใหม่ต้องได้ key ที่ไม่ซ้ำของเดิม
+// และห้ามเปลี่ยน key ของงานที่มีอยู่ (ลีดเก่าจะหาไม่เจอ = ประวัติการเช็กงานหาย) จึงแก้ได้แค่ "ชื่อ"
+function newTaskKey(existing: LeadTaskDef[], stage: LeadStatus): string {
+  const base = `task_${stage.toLowerCase()}`;
+  const used = new Set(existing.map(t => t.key));
+  for (let i = 1; ; i++) if (!used.has(`${base}_${i}`)) return `${base}_${i}`;
+}
+
 function JourneyTab() {
   // ทุกกฎของเส้นทางการขายรวมที่แท็บนี้: นโยบาย (VAT/อายุใบ) · เหตุผลปิดไม่สำเร็จ
   // (เดิมมี sys=เลขรันใบเสนอราคาใน localStorage แต่การ์ดที่แก้ค่านั้นถูกลบไปแล้ว → เป็น plumbing ตาย ตัดออก · L6)
+  // บันทึกไม่ผ่านต้องบอกผู้ใช้เสมอ — ไม่งั้นหน้าจอโชว์ค่าใหม่ทั้งที่ DB ยังเป็นค่าเก่า (พังเงียบ)
+  const toast = useToast();
   const pol = useRepoDraft<HQPolicy>(() => settingsRepo.getPolicy(), (v) => settingsRepo.savePolicy(v), DEFAULT_HQ_POLICY);
   const jn = useRepoDraft<Journey>(
     async () => ({ lost: await settingsRepo.getLostReasons() }),
-    (v) => { void settingsRepo.saveLostReasons(v.lost); },
+    // เดิม void ทิ้ง error ทั้งดุ้น บันทึกไม่ผ่านก็ไม่มีใครรู้
+    (v) => { settingsRepo.saveLostReasons(v.lost).catch(e => toast("บันทึกรายการเหตุผลไม่สำเร็จ: " + friendlyError(e))); },
     DEFAULT_JOURNEY,
   );
+  // งานมาตรฐานรายขั้น — ของจริงที่ตัวแทนเช็ก (บันทึกผ่านปุ่มบันทึกกลางเหมือนการ์ดอื่นในหน้านี้)
+  const tk = useRepoDraft<LeadTaskDef[]>(
+    () => settingsRepo.getLeadTasks(),
+    (v) => { settingsRepo.saveLeadTasks(v).catch(e => toast("บันทึกงานมาตรฐานไม่สำเร็จ: " + friendlyError(e))); },
+    [...LEAD_TASK_TEMPLATE],
+  );
   const [newLost, setNewLost] = useState("");
-  const saveAll = useCallback(() => { pol.save(); jn.save(); }, [pol.save, jn.save]);
+  const saveAll = useCallback(() => { pol.save(); jn.save(); tk.save(); }, [pol.save, jn.save, tk.save]);
   useReport(useMemo(() => ({
-    dirty: pol.dirty || jn.dirty,
+    dirty: pol.dirty || jn.dirty || tk.dirty,
     save: saveAll,
-    reset: () => { pol.reset(); jn.reset(); },
-  }), [pol.dirty, jn.dirty, saveAll, pol.reset, jn.reset]));
+    reset: () => { pol.reset(); jn.reset(); tk.reset(); },
+  }), [pol.dirty, jn.dirty, tk.dirty, saveAll, pol.reset, jn.reset, tk.reset]));
 
   const addLost = () => { if (newLost.trim()) { jn.set(p => ({ ...p, lost: [...p.lost, newLost.trim()] })); setNewLost(""); } };
   const active = STAGE_ORDER.filter(s => s !== "PAID" && s !== "CANCELLED");
-  const tasksOf = (s: LeadStatus) => LEAD_TASK_TEMPLATE.filter(t => t.stage === s).map(t => t.label);
+  const tasksOf = (s: LeadStatus) => tk.draft.filter(t => t.stage === s);
+  // แก้ได้แค่ชื่อ — key คงเดิมเสมอ (ผูกกับ checklist ของลีดที่บันทึกไว้แล้ว)
+  const renameTask = (key: string, label: string) => tk.set(p => p.map(t => t.key === key ? { ...t, label } : t));
+  const removeTask = (key: string) => tk.set(p => p.filter(t => t.key !== key));
+  const addTask = (stage: LeadStatus) => tk.set(p => {
+    const def: LeadTaskDef = { key: newTaskKey(p, stage), label: "", stage };
+    // แทรกต่อท้ายงานของขั้นเดียวกัน — ลำดับงานคือลำดับที่ตัวแทนต้องเช็ก ห้ามไปโผล่ท้ายสุดข้ามขั้น
+    const last = p.map(t => t.stage).lastIndexOf(stage);
+    if (last < 0) return [...p, def];
+    return [...p.slice(0, last + 1), def, ...p.slice(last + 1)];
+  });
 
   return (
     <>
       <SectionCard icon={<GitMerge size={19} />} title="ขั้นตอนการขายมาตรฐาน"
-        desc="เส้นทางเดียวกันทุกตัวแทน — สำนักงานใหญ่กำหนด ตัวแทนแก้ไขไม่ได้">
+        desc="เส้นทางเดียวกันทุกตัวแทน — สำนักงานใหญ่กำหนดงานของแต่ละขั้น ตัวแทนแก้ไขไม่ได้">
         <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden", marginTop: 6 }}>
           {active.map((s, idx) => (
-            <div key={s} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderBottom: idx < active.length - 1 ? "1px solid #f1f5f9" : "none", flexWrap: "wrap" }}>
-              <span style={{ width: 24, height: 24, borderRadius: "50%", background: leadStatusColor[s].bg, color: leadStatusColor[s].text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, flexShrink: 0 }}>{idx + 1}</span>
-              <span style={{ flex: "1 1 140px", fontSize: "0.84rem", fontWeight: 700, color: STEEL }}>{leadStatusLabel[s]}</span>
-              {/* งานมาตรฐานของขั้นนี้ = ตัวขับความคืบหน้าจริง (เช็กงาน → เลื่อนขั้นเอง) */}
-              <span style={{ flex: "2 1 260px", display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {tasksOf(s).map(t => <span key={t} className="badge" style={{ background: "#f1f5f9", color: "#6b7280", fontWeight: 600 }}>{t}</span>)}
-                {!tasksOf(s).length && <span style={{ fontSize: "0.72rem", color: SILVER }}>—</span>}
+            <div key={s} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 14px", borderBottom: idx < active.length - 1 ? "1px solid #f1f5f9" : "none", flexWrap: "wrap" }}>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: leadStatusColor[s].bg, color: leadStatusColor[s].text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, flexShrink: 0, marginTop: 4 }}>{idx + 1}</span>
+              <span style={{ flex: "1 1 140px", fontSize: "0.84rem", fontWeight: 700, color: STEEL, marginTop: 5 }}>{leadStatusLabel[s]}</span>
+              {/* งานมาตรฐานของขั้นนี้ = ตัวขับความคืบหน้าจริง (เช็กงาน → เลื่อนขั้นเอง) · แก้ชื่อ/เพิ่ม/ลบได้ */}
+              <span style={{ flex: "2 1 300px", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {tasksOf(s).map(t => (
+                  <span key={t.key} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#f1f5f9", borderRadius: 8, padding: "3px 4px 3px 9px" }}>
+                    <input
+                      aria-label={`ชื่องานของขั้น ${leadStatusLabel[s]}`}
+                      value={t.label} placeholder="ชื่องาน…" autoFocus={!t.label}
+                      onChange={e => renameTask(t.key, e.target.value)}
+                      style={{ border: "none", background: "transparent", outline: "none", fontFamily: "inherit", fontSize: "0.74rem", fontWeight: 600, color: "#374151", width: `${Math.max(7, (t.label.length || 7) + 1)}ch` }}
+                    />
+                    <button onClick={() => removeTask(t.key)} title={`ลบงาน ${t.label || "ที่ยังไม่ตั้งชื่อ"}`}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", padding: 2 }}><X size={12} /></button>
+                  </span>
+                ))}
+                <button onClick={() => addTask(s)} className="btn btn-secondary btn-sm"
+                  title={`เพิ่มงานในขั้น ${leadStatusLabel[s]}`}
+                  style={{ padding: "2px 9px", fontSize: "0.7rem", color: NAVY }}><Plus size={12} /> เพิ่มงาน</button>
+                {!tasksOf(s).length && (
+                  <span style={{ fontSize: "0.7rem", color: "#b45309" }}>ยังไม่มีงาน — ลีดจะข้ามขั้นนี้ไปเลย</span>
+                )}
               </span>
             </div>
           ))}
         </div>
+        {tk.draft.some(t => !t.label.trim()) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: "0.76rem", color: "#b45309", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px" }}>
+            <AlertCircle size={14} style={{ flexShrink: 0 }} /> มีงานที่ยังไม่ได้ตั้งชื่อ — งานที่ไม่มีชื่อจะไม่ถูกบันทึก
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
           {(["PAID", "CANCELLED"] as LeadStatus[]).map(s => (
             <div key={s} style={{ flex: "1 1 220px", display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: s === "PAID" ? "#f0fdf4" : "#fff5f5", border: `1px solid ${s === "PAID" ? "#bbf7d0" : "#fecaca"}` }}>
@@ -204,7 +255,9 @@ function JourneyTab() {
         </div>
         <UsedAt>
           7 ขั้นนี้คือสถานะจริงของลูกค้าเป้าหมายทั้งระบบ — ความคืบหน้าเลื่อนขั้นเองจาก “งานมาตรฐาน” ที่ตัวแทนเช็ก
-          <br />ไม่มีขั้น “ลูกค้าเป้าหมายใหม่” เพราะตัวแทนสร้างลีดหลังติดต่อลูกค้าแล้ว
+          <br />ชื่อขั้นและลำดับขั้นแก้ไม่ได้ (ผูกกับคัมบัง/รายงาน/ฐานข้อมูล) แต่งานในแต่ละขั้นตั้งได้ตามต้องการ
+          <br />บันทึกแล้วมีผลกับ<strong>ลีดใหม่ทันที</strong> · ลีดเดิมยังเก็บงานที่เช็กไว้แล้วตามเดิม จนกว่าสถานะจะเปลี่ยน
+          <br />งาน “ปิดการขาย” เป็นงานปิดท้ายของระบบ จึงไม่มีให้แก้ที่นี่ (ปุ่มปิดดีลของตัวแทนผูกกับงานนี้)
         </UsedAt>
       </SectionCard>
 

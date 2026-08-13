@@ -7,7 +7,7 @@ import {
   leadStatusLabel, leadStatusColor,
   buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
-  type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile,
+  type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
@@ -17,7 +17,7 @@ import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonP
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { useLeadRules } from "@pms/shared/lib/useHQRules";
-import { useLostReasons } from "@pms/shared/lib/useHQConfig";
+import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { parseBaht } from "@pms/shared/lib/format";
@@ -126,14 +126,16 @@ const MAX_LEAD_VALUE = 100_000_000_000;
 function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v; }
 
 // ความคืบหน้าของลีด (%) — จากงานที่เช็ก (แหล่งเดียวกับ LeadTasks) · PAID=100 · CANCELLED=0
-function leadProg(l: LeadRow): number {
+// tpl = งานมาตรฐานที่ HQ ตั้งไว้ (ส่งมาจากคอมโพเนนต์ที่เรียก useLeadTaskTemplate)
+// ลีดที่ยังไม่มี checklist ต้องนับจากชุดของ HQ ไม่ใช่ชุดเริ่มต้นในโค้ด — ไม่งั้น "0/10" ทั้งที่ HQ ตั้งไว้ 12 งาน
+function leadProg(l: LeadRow, tpl?: LeadTaskDef[]): number {
   if (l.status === "PAID") return 100;
   if (l.status === "CANCELLED") return 0;
-  return taskProgress(l.tasks?.length ? l.tasks : buildLeadTasks());
+  return taskProgress(l.tasks?.length ? l.tasks : buildLeadTasks(tpl));
 }
 // จำนวนงานที่ทำเสร็จ / ทั้งหมด (ไว้แสดงบนการ์ดบอร์ด)
-function leadTaskCount(l: LeadRow): { done: number; total: number } {
-  const t = l.tasks?.length ? l.tasks : buildLeadTasks();
+function leadTaskCount(l: LeadRow, tpl?: LeadTaskDef[]): { done: number; total: number } {
+  const t = l.tasks?.length ? l.tasks : buildLeadTasks(tpl);
   return { done: t.filter(x => x.done).length, total: t.length };
 }
 // กิจกรรมล่าสุดของลีด (activities เรียงใหม่สุดอยู่บน) — ไม่มีกิจกรรม/ไม่มีวันที่สร้าง = "—"
@@ -246,6 +248,7 @@ function OverviewEditor({ lead, persons, onSave }: {
 }) {
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง (HQ แก้ → เห็นตรงกัน)
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ผ่าน repo)
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ใช้คิด % ของลีดที่ยังไม่มี checklist
   const seed = () => ({
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
     email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
@@ -280,8 +283,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     f.project !== (lead.project ?? "") ||
     f.note !== (lead.note ?? "") || f.lostReason !== (lead.lostReason ?? "") || f.logo !== (lead.logo ?? "");
   // ความคืบหน้า = แหล่งเดียวกับแท็บ "งาน/ความคืบหน้า" (LeadTasks) → เลขตรงกันทุกแท็บ
-  const pct = lead.status === "PAID" ? 100 : lead.status === "CANCELLED" ? 0
-    : taskProgress(lead.tasks?.length ? lead.tasks : buildLeadTasks());
+  const pct = leadProg(lead, taskTpl);
 
   const [valueErr, setValueErr] = useState("");
   const inp = OV_INP;
@@ -763,6 +765,7 @@ export default function LeadsPage() {
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant) — scope ข้อมูล/กฎด้วย code นี้
   const { followUpAlertDays } = useLeadRules(currentDealer.code); // กฎของสาขานี้ — ตั้งเองที่ ตั้งค่า › การแจ้งเตือน
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ผ่าน repo)
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานรายขั้นที่ HQ ตั้ง (ผ่าน repo — ไม่ใช่ค่าคงที่ในโค้ด)
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // List state
@@ -1260,7 +1263,7 @@ export default function LeadsPage() {
           <FilterBar dims={[]} />
           <ExportMenu filename="leads" title="รายชื่อลูกค้าเป้าหมาย"
             headers={["รหัส","ชื่อ","ผู้ติดต่อ","จังหวัด","ช่องทางที่มา","แม่แบบ","พื้นที่ (ตร.ม.)","สถานะ","ความคืบหน้า","มูลค่า","ผู้รับผิดชอบ","กิจกรรมล่าสุด"]}
-            rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.source??"—",l.product,l.area ?? "—",leadStatusLabel[l.status],`${leadProg(l)}%`,fmtVal(l.value),l.assigned,lastActivity(l)])} />
+            rows={filtered.map(l=>[l.id,l.name,l.contact,l.province,l.source??"—",l.product,l.area ?? "—",leadStatusLabel[l.status],`${leadProg(l, taskTpl)}%`,fmtVal(l.value),l.assigned,lastActivity(l)])} />
           <button onClick={() => setShowAddForm(true)} className="btn btn-primary btn-sm">
             <Plus size={15} /> เพิ่มลูกค้าเป้าหมาย
           </button>
@@ -1445,7 +1448,7 @@ export default function LeadsPage() {
                         </td>
                         <td>
                           {(() => {
-                            const p = leadProg(l);
+                            const p = leadProg(l, taskTpl);
                             const col = l.status==="CANCELLED" ? "#dc2626" : p>=100 ? "#059669" : "#003366";
                             return (
                               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -1656,13 +1659,13 @@ export default function LeadsPage() {
                       {/* Progress + จำนวนงาน + กิจกรรมล่าสุด */}
                       <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
                         <div style={{ flex:1, height:5, background:"#eef2f7", borderRadius:99, overflow:"hidden" }}>
-                          <div className="bar-grow" style={{ height:"100%", width:`${leadProg(l)}%`, background:"#003366", borderRadius:99 }} />
+                          <div className="bar-grow" style={{ height:"100%", width:`${leadProg(l, taskTpl)}%`, background:"#003366", borderRadius:99 }} />
                         </div>
-                        <span style={{ fontSize:"0.65rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums" }}>{leadProg(l)}%</span>
+                        <span style={{ fontSize:"0.65rem", fontWeight:700, color:"#6b7280", fontVariantNumeric:"tabular-nums" }}>{leadProg(l, taskTpl)}%</span>
                       </div>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:"0.65rem", color:"#9ca3af", fontWeight:600 }}>
                         <span style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
-                          <CheckSquare size={10} /> {leadTaskCount(l).done}/{leadTaskCount(l).total} งาน
+                          <CheckSquare size={10} /> {leadTaskCount(l, taskTpl).done}/{leadTaskCount(l, taskTpl).total} งาน
                         </span>
                         {lastActivity(l) !== "—" && (
                           <span style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
@@ -1759,7 +1762,7 @@ export default function LeadsPage() {
               ...withIds,
               report: l.report || buildLeadReport(withIds, thaiDateStr(APP_NOW)),
               // ดีลเลอร์สร้างลีดหลังติดต่อลูกค้าแล้ว → ติ๊กงานให้ถึงสถานะที่เลือก (เริ่มต้น "ติดต่อแล้ว" = ติ๊กติดต่อครั้งแรก/เก็บข้อมูล)
-              tasks: l.tasks?.length ? l.tasks : seedLeadTasks(l.status, l.assigned || "—", 30),
+              tasks: l.tasks?.length ? l.tasks : seedLeadTasks(l.status, l.assigned || "—", 30, taskTpl),
             });
           }}
           persons={personsList}
@@ -2053,12 +2056,12 @@ export default function LeadsPage() {
         const cardStyle: React.CSSProperties = { background:"#fff", border:"1px solid #eef1f5", borderRadius:14, padding:16 };
         const secLabel: React.CSSProperties = { display:"flex", alignItems:"center", gap:6, fontSize:"0.62rem", fontWeight:800, color:"#8a929c", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 };
         const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
-        const progressPct = leadProg(c);
+        const progressPct = leadProg(c, taskTpl);
         const scrollTo = (r: React.RefObject<HTMLDivElement|null>) => r.current?.scrollIntoView({ behavior:"smooth", block:"nearest" });
         // ย้อนกลับไม่ได้ (สร้างลูกค้าทันที) — ต้องยืนยันก่อนเสมอ เหมือนช่องทางอื่น (ดรอปดาวน์สถานะ)
         const markWon = () => {
           if (!confirm(`ปิดการขายสำเร็จสำหรับ "${c.company || c.name}"?\nระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
-          const t = (c.tasks?.length ? c.tasks : buildLeadTasks()).map(x => ({ ...x, done:true }));
+          const t = (c.tasks?.length ? c.tasks : buildLeadTasks(taskTpl)).map(x => ({ ...x, done:true }));
           saveLead({ ...c, tasks:t, status:"PAID" });
           setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ");
           setJustWonCompany(c.company || c.name);

@@ -169,6 +169,19 @@ export function loadLostReasons(): string[] {
   } catch {}
   return [...LOST_REASONS];
 }
+/** งานมาตรฐานของแต่ละขั้น ที่ HQ ตั้งไว้ (โหมด local) — เก็บกล่องเดียวกับเหตุผลปิดไม่สำเร็จ
+ *  ยังไม่เคยตั้ง = ใช้ชุดเริ่มต้น · ทุกหน้าจอต้องอ่านผ่าน useLeadTaskTemplate() ไม่ใช่ฟังก์ชันนี้ตรง ๆ */
+export function loadLeadTaskTemplate(): LeadTaskDef[] {
+  if (typeof window === "undefined") return [...LEAD_TASK_TEMPLATE];
+  try {
+    const s = localStorage.getItem(HQ_JOURNEY_KEY);
+    if (s) {
+      const d = JSON.parse(s);
+      if (Array.isArray(d?.tasks) && d.tasks.length) return normalizeLeadTaskTemplate(d.tasks);
+    }
+  } catch {}
+  return [...LEAD_TASK_TEMPLATE];
+}
 // ─── นโยบายการขายของ HQ (แหล่งเดียว) — บังคับใช้กับทุกตัวแทน ────────────────
 // ตั้งที่ /hq/settings → คุม VAT / อายุใบเสนอราคา ทั้งเครือ (ระบบไม่มีส่วนลดแล้ว)
 export type HQPolicy = { requireApproval: boolean; vat: number; quoteValidityDays: number };
@@ -587,8 +600,15 @@ export type LeadActivity = { id: number; date: string; icon: string; text: strin
 // เช็ก Task → บันทึกเวลา/ผู้ทำ → คำนวณ % (Completed/Total) → เลื่อน Stage อัตโนมัติ
 export type LeadTask = { key: string; label: string; done: boolean; doneAt?: string; doneBy?: string };
 
+export type LeadTaskDef = { key: string; label: string; stage: LeadStatus };
+
+/** งานสุดท้ายของเส้นทาง — ปิดการขาย · ห้ามลบ/ห้ามย้ายขั้น (ปุ่มปิดดีลทั้งระบบผูกกับ key นี้) */
+export const CLOSE_TASK_KEY = "close";
+
 // เทมเพลต Checklist มาตรฐาน (สร้างอัตโนมัติทุก Lead) + stage ที่แต่ละ task พาไปถึง
-export const LEAD_TASK_TEMPLATE: { key: string; label: string; stage: LeadStatus }[] = [
+// ⚠️ นี่คือ "ค่าเริ่มต้น" เท่านั้น — ของจริง HQ แก้ได้ที่ /hq/settings › เส้นทางการขาย (เก็บใน hq_sales_journey.tasks)
+//    ทุกหน้าจอต้องอ่านผ่าน useLeadTaskTemplate() ไม่ใช่ค่านี้ตรง ๆ (คนละ origin = ค่าที่ HQ ตั้งไม่ข้ามมาเอง)
+export const LEAD_TASK_TEMPLATE: LeadTaskDef[] = [
   { key: "contact",     label: "ติดต่อครั้งแรก",      stage: "WAITING"  },
   { key: "collect",     label: "เก็บข้อมูลลูกค้า",     stage: "WAITING"  },
   { key: "requirement", label: "รวบรวมความต้องการ",   stage: "BULLET"   },
@@ -601,18 +621,42 @@ export const LEAD_TASK_TEMPLATE: { key: string; label: string; stage: LeadStatus
   { key: "close",       label: "ปิดการขาย",          stage: "PAID"     },
 ];
 
-export function buildLeadTasks(): LeadTask[] {
-  return LEAD_TASK_TEMPLATE.map(t => ({ key: t.key, label: t.label, done: false }));
+/** ตรวจ/ซ่อมชุดงานที่ HQ ตั้งไว้ก่อนเอาไปใช้จริง — กันข้อมูลเพี้ยนจาก DB/หน้าจอ
+ *  · ทิ้งแถวที่ไม่มีชื่อ/ขั้นไม่ถูกต้อง · คีย์ซ้ำเก็บตัวแรก
+ *  · เรียงตามลำดับขั้นเสมอ (กลไกเลื่อนขั้นอ่านจากบนลงล่าง สลับลำดับ = เลื่อนขั้นเพี้ยน)
+ *  · งาน "ปิดการขาย" ต้องมีเสมอ — หายไปเมื่อไรเติมกลับให้ (ไม่งั้นปิดดีลไม่ได้ทั้งระบบ) */
+export function normalizeLeadTaskTemplate(raw: unknown): LeadTaskDef[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  const clean: LeadTaskDef[] = [];
+  for (const item of list) {
+    const t = item as Partial<LeadTaskDef>;
+    const key = typeof t?.key === "string" ? t.key.trim() : "";
+    const label = typeof t?.label === "string" ? t.label.trim() : "";
+    const stage = t?.stage as LeadStatus;
+    if (!key || !label || !LEAD_STATUS_ORDER.includes(stage) || seen.has(key)) continue;
+    seen.add(key);
+    clean.push({ key, label, stage });
+  }
+  if (!clean.length) return [...LEAD_TASK_TEMPLATE];
+  const closeDef = LEAD_TASK_TEMPLATE.find(t => t.key === CLOSE_TASK_KEY)!;
+  if (!seen.has(CLOSE_TASK_KEY)) clean.push({ ...closeDef });
+  const rank = (s: LeadStatus) => LEAD_STATUS_ORDER.indexOf(s);
+  return clean.sort((a, b) => rank(a.stage) - rank(b.stage));
+}
+
+export function buildLeadTasks(tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTask[] {
+  return tpl.map(t => ({ key: t.key, label: t.label, done: false }));
 }
 
 // seed งานของลีดตัวอย่างให้ "ตรงสถานะจริง" — เช็กงานครบถึงขั้นของสถานะ พร้อมผู้ทำ/เวลา (deterministic)
 // ให้ % ความคืบหน้า/แถบ Kanban/stageFromTasks ของข้อมูลตัวอย่างสอดคล้องกับกลไก Task-driven ปัจจุบัน
 const STAGE_RANK: Record<LeadStatus, number> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4, PAID: 5, CANCELLED: 2 };
-export function seedLeadTasks(status: LeadStatus, doneBy: string, baseDay: number): LeadTask[] {
+export function seedLeadTasks(status: LeadStatus, doneBy: string, baseDay: number, tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTask[] {
   const rank = STAGE_RANK[status];
   let day = baseDay;
-  return LEAD_TASK_TEMPLATE.map(t => {
-    const done = t.key === "close" ? status === "PAID" : STAGE_RANK[t.stage] <= rank;
+  return tpl.map(t => {
+    const done = t.key === CLOSE_TASK_KEY ? status === "PAID" : STAGE_RANK[t.stage] <= rank;
     const entry: LeadTask = done
       ? { key: t.key, label: t.label, done: true, doneAt: `${Math.min(day, 29)} มิ.ย. 2569 · 10:30`, doneBy }
       : { key: t.key, label: t.label, done: false };
@@ -637,17 +681,17 @@ export function nowStampTH(d: Date = new Date()): string {
   return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
 }
 
-export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStatus, doneBy: string): LeadTask[] {
-  const base = (tasks && tasks.length) ? tasks : buildLeadTasks();
+export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStatus, doneBy: string, tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTask[] {
+  const base = (tasks && tasks.length) ? tasks : buildLeadTasks(tpl);
   if (status === "CANCELLED") return base; // ปิดการขายไม่สำเร็จ — ไม่แตะ Checklist
   const rank = STAGE_RANK[status];
   // ⚠️ เดิมฝังวันที่ "30 มิ.ย. 2569" ไว้ตายตัว — ของเก่าจากยุคข้อมูลตัวอย่าง (แก้ 10 ส.ค. 69)
   //   ตอนนี้ระบบต่อฐานข้อมูลจริงแล้ว ลีดที่สร้างวันนี้จึงมีงาน "ทำเสร็จแล้ว" ลงวันที่ย้อนหลัง 6 สัปดาห์
   //   และค่านี้ถูกเขียนลงฐานข้อมูลจริง ไม่ใช่แค่แสดงผล = ประวัติการทำงานที่ไม่เคยเกิดขึ้น
   const stamp = nowStampTH();
-  return LEAD_TASK_TEMPLATE.map(def => {
+  return tpl.map(def => {
     const existing = base.find(t => t.key === def.key);
-    const shouldDone = def.key === "close" ? status === "PAID" : STAGE_RANK[def.stage] <= rank;
+    const shouldDone = def.key === CLOSE_TASK_KEY ? status === "PAID" : STAGE_RANK[def.stage] <= rank;
     if (shouldDone) {
       // อยู่ในสเตจ → ติ๊ก (ถ้าติ๊กแล้วเก็บ doneAt/doneBy เดิม)
       return existing?.done ? existing : { key: def.key, label: def.label, done: true, doneAt: stamp, doneBy };
@@ -656,10 +700,10 @@ export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStat
     return { key: def.key, label: def.label, done: false };
   });
 }
-export function stageFromTasks(tasks: LeadTask[] = []): LeadStatus {
+export function stageFromTasks(tasks: LeadTask[] = [], tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadStatus {
   let stage: LeadStatus = "WAITING";
-  for (const def of LEAD_TASK_TEMPLATE) {
-    if (def.key === "close") continue;
+  for (const def of tpl) {
+    if (def.key === CLOSE_TASK_KEY) continue;
     if (tasks.find(t => t.key === def.key && t.done)) stage = def.stage;
   }
   return stage;

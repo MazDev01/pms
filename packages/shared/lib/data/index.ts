@@ -48,6 +48,8 @@ export const settings: SettingsRepo = {
   getLeadRulesMap:      () => ttlCacheRead("settings.getLeadRulesMap", () => _settings.getLeadRulesMap(), REF_TTL_MS),
   getQuoteValidityDays: () => ttlCacheRead("settings.getQuoteValidityDays", () => _settings.getQuoteValidityDays(), REF_TTL_MS),
   getLostReasons:       () => ttlCacheRead("settings.getLostReasons", () => _settings.getLostReasons(), REF_TTL_MS),
+  getLeadTasks:         () => ttlCacheRead("settings.getLeadTasks", () => _settings.getLeadTasks(), REF_TTL_MS),
+  saveLeadTasks:        async (tasks) => { await _settings.saveLeadTasks(tasks); invalidateCache("settings.getLeadTasks"); },
   saveLeadRules:        async (dealerCode, rules) => { await _settings.saveLeadRules(dealerCode, rules); invalidateCache("settings.getLeadRulesMap"); },
   saveLostReasons:      async (lost) => { await _settings.saveLostReasons(lost); invalidateCache("settings.getLostReasons"); },
   savePolicy:           async (policy) => { await _settings.savePolicy(policy); invalidateCache("settings.getPolicy"); },

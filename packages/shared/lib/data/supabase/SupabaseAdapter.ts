@@ -6,6 +6,7 @@
 import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
 import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, DEFAULT_LEAD_RULES, LOST_REASONS,
+  LEAD_TASK_TEMPLATE, normalizeLeadTaskTemplate,
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -516,6 +517,15 @@ export const SupabaseAdapter: DataAdapter = {
       return row?.lost?.length ? row.lost : [...LOST_REASONS];
     },
     saveLostReasons: (lost) => must(sb().from("hq_sales_journey").upsert({ id: 1, lost })),
+    // tasks เป็น jsonb คอลัมน์เดียว (0137) — ยังไม่เคยตั้ง/ข้อมูลเพี้ยน = ใช้ชุดเริ่มต้น ไม่ปล่อยให้ลีดไม่มีงานเลย
+    getLeadTasks: async () => {
+      const row = await one<{ tasks?: unknown }>("hq_sales_journey");
+      return Array.isArray(row?.tasks) && row.tasks.length
+        ? normalizeLeadTaskTemplate(row.tasks)
+        : [...LEAD_TASK_TEMPLATE];
+    },
+    saveLeadTasks: (tasks) =>
+      must(sb().from("hq_sales_journey").upsert({ id: 1, tasks: normalizeLeadTaskTemplate(tasks) })),
   },
   // ตั้งค่าของสาขา — แถวเดียวต่อ dealer_code · RLS คุมว่าแก้ได้เฉพาะของตัวเอง
   // เก็บเป็น jsonb ราย "กลุ่ม" จึงไม่ต้องแปลง snake/camel ข้างใน (ปล่อยผ่านทั้งก้อน)

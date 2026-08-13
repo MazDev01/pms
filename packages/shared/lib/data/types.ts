@@ -4,6 +4,7 @@ export type {
   LeadRow, CustomerRow, QuotationMock, AppointmentMock,
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap, QuoteNumbering,
+  LeadTaskDef,
 } from "@pms/shared/lib/mock";
 export type { IssuerProfile, NotifPrefs, UserProfile } from "@pms/shared/lib/mock";
 export type { DocProfile } from "@pms/shared/lib/quotationPrint";

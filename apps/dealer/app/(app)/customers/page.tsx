@@ -41,6 +41,7 @@ import { useTableLayout, type Col } from "@pms/shared/components/ui/TableTools";
 import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/components/ui/ActivityTimeline";
 import { PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
@@ -399,6 +400,7 @@ export default function CustomersPage(){
   const quotations = useMemo(() => allQuotations.filter(q => (q.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allQuotations, currentDealer.code]);
   const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allLeadsRaw, currentDealer.code]);
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ดีลใหม่ต้องได้ checklist ชุดเดียวกับลีดอื่น
   const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
   const [query, setQuery]             = useState("");
@@ -735,7 +737,7 @@ export default function CustomersPage(){
         status:"WAITING",                                              // ดีลใหม่เริ่มที่ต้น pipeline
         source:"ลูกค้าเดิม (ดีลใหม่)",
         createdAt:thaiToday(),
-        tasks:buildLeadTasks(),                                        // Default Checklist (ยังไม่ติ๊ก)
+        tasks:buildLeadTasks(taskTpl),                                 // Checklist ตามที่ HQ ตั้งไว้ (ยังไม่ติ๊ก)
         activities:[],                                                 // เริ่มว่าง
       };
       addLead(newDeal);

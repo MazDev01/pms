@@ -9,8 +9,8 @@
 //   hook นี้อ่านผ่าน repository + ติดตามการแก้ (Realtime ฝั่ง supabase · event ฝั่ง local)
 import { useEffect, useState } from "react";
 import {
-  DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, HQ_SETTINGS_EVENT, LOST_REASONS,
-  type HQPolicy, type HQTargets,
+  DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, HQ_SETTINGS_EVENT, LOST_REASONS, LEAD_TASK_TEMPLATE,
+  type HQPolicy, type HQTargets, type LeadTaskDef,
 } from "./mock";
 import { settings as settingsRepo, realtime } from "./data";
 import { logRepoRead } from "./repoLog";
@@ -61,4 +61,10 @@ export function useQuoteValidityDays(): number {
  *  เดิมอ่าน localStorage ตรง ๆ ซึ่งเป็นคนละ origin กับที่ HQ เขียน → ค่าที่ตั้งไม่เคยไปถึงตัวแทน */
 export function useLostReasons(): string[] {
   return useHQValue<string[]>("settings.getLostReasons", () => settingsRepo.getLostReasons(), [...LOST_REASONS]);
+}
+
+/** งานมาตรฐานของแต่ละขั้น ที่ HQ ตั้งไว้ — ตัวแทนเช็กงานชุดนี้ และเป็นตัวเลื่อนขั้นให้ลีด
+ *  ห้ามใช้ LEAD_TASK_TEMPLATE ตรง ๆ ในหน้าจอ: นั่นเป็นแค่ค่าเริ่มต้น ไม่ใช่ของที่ HQ ตั้งไว้จริง */
+export function useLeadTaskTemplate(): LeadTaskDef[] {
+  return useHQValue<LeadTaskDef[]>("settings.getLeadTasks", () => settingsRepo.getLeadTasks(), [...LEAD_TASK_TEMPLATE]);
 }

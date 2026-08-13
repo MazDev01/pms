@@ -20,7 +20,7 @@ import {
 import { parseBaht } from "@pms/shared/lib/format";
 import { shouldCloseWon } from "@pms/shared/lib/closeWon";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
-import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
+import { useQuoteValidityDays, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
@@ -110,6 +110,11 @@ export function SalesProvider({
   const myDealerCode = dealerCode || DEFAULT_DEALER_CODE;
   // อายุใบเสนอราคา (นโยบาย HQ) — ใบที่ไม่ได้กรอก expiry เอง ใช้ค่านี้คำนวณวันหมดอายุ (0067)
   const quoteValidityDays = useQuoteValidityDays();
+  // งานมาตรฐานรายขั้นที่ HQ ตั้งไว้ — ตัวขับการเลื่อนขั้นของลีด (HQ แก้ได้ที่ /hq/settings › เส้นทางการขาย)
+  // ต้องอ่านผ่าน hook: ค่าตั้งต้นในโค้ดใช้ได้แค่ตอนยังโหลดไม่เสร็จ ไม่ใช่ของจริงที่ HQ ตั้ง
+  const taskTpl = useLeadTaskTemplate();
+  const taskTplRef = useRef(taskTpl);
+  useEffect(() => { taskTplRef.current = taskTpl; }, [taskTpl]);
   // ── M9 Phase 4 (unload) — HQ ในโหมด supabase ไม่โหลด array งานขายทั้งเครืออีกต่อไป ──
   // ทุก surface ของ HQ อ่านผ่าน RPC/รายการแบ่งหน้าที่ DB แล้ว (dashboard/quotations/leads/pipeline/
   //   customers/dealers-detail/กระดิ่งแจ้งเตือน/ค้นหา) → ไม่ต้องถือ leads/quotations/customers/appointments
@@ -411,7 +416,7 @@ export function SalesProvider({
     const lead = leadsRef.current.find(l => l.id === leadId);
     if (!lead) return;
     // ย้ายสถานะ → ติ๊กงานใน Checklist ให้ถึงสเตจนั้นอัตโนมัติ (ผู้ทำ = ผู้รับผิดชอบของลีด)
-    const updated: LeadRow = { ...lead, status, tasks: syncTasksToStage(lead.tasks, status, lead.assigned || "—") };
+    const updated: LeadRow = { ...lead, status, tasks: syncTasksToStage(lead.tasks, status, lead.assigned || "—", taskTplRef.current) };
     setLeads(prev => prev.map(l => l.id !== leadId ? l : updated));
     persistLead.update(updated); // สถานะ + tasks เปลี่ยน → update ทั้งแถว (แทน setStatus)
     if (shouldCloseWon(status)) {
@@ -520,7 +525,7 @@ export function SalesProvider({
         || l.company === quotation.customer;
       if (!match || l.status === "PAID" || l.status === "CANCELLED") return l;
       let changed = false;
-      const base = l.tasks && l.tasks.length ? l.tasks : buildLeadTasks();
+      const base = l.tasks && l.tasks.length ? l.tasks : buildLeadTasks(taskTplRef.current);
       const tasks = base.map(t => {
         if (keys.includes(t.key) && !t.done) {
           changed = true;
@@ -530,7 +535,7 @@ export function SalesProvider({
         return t;
       });
       if (!changed) return l;
-      const next = stageFromTasks(tasks);
+      const next = stageFromTasks(tasks, taskTplRef.current);
       const status = (RANK[next] ?? 0) > (RANK[l.status] ?? 0) ? next : l.status;
       const nl: LeadRow = { ...l, tasks, status };
       changedLeads.push(nl);
