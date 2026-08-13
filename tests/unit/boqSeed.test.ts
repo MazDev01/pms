@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { seedLineItems, boqSubtotal } from "../../packages/shared/lib/boq";
+import { seedLineItems, boqSubtotal, catalogRate } from "../../packages/shared/lib/boq";
 import type { SolutionProduct } from "../../packages/shared/lib/mock";
 
 // ── BOQ ตั้งต้นของใบเสนอราคาใหม่ ────────────────────────────────────────────────
@@ -14,8 +14,9 @@ import type { SolutionProduct } from "../../packages/shared/lib/mock";
 //   ผู้ใช้จึงเพิ่มแถวเองไม่ได้เลย = ออกใบไม่ได้
 //
 // ตรงนี้ทดสอบตัวคิด BOQ ตรง ๆ ส่วนการ "คิดใหม่เมื่อแคตตาล็อกมาถึง" อยู่ที่ LeadQuotationsPanel
-const prod = (name: string, price: number, subtypes: string[] = []): SolutionProduct => ({
-  id: name, name, spec: "", price, unit: "ตร.ม.", effectiveDate: "2026-01-01", priceHistory: [], subtypes,
+const prod = (name: string, price: number, subtypes: string[] = [],
+              subtypePrices?: Record<string, number>): SolutionProduct => ({
+  id: name, name, spec: "", price, unit: "ตร.ม.", effectiveDate: "2026-01-01", priceHistory: [], subtypes, subtypePrices,
 });
 const CATALOG: SolutionProduct[] = [
   prod("สนามกีฬาในร่ม", 7400, ["โรงยิมอเนกประสงค์", "สนามแบดมินตัน"]),
@@ -67,5 +68,45 @@ describe("BOQ ตั้งต้น — กรณีที่ยังปั้�
     const items = seedLineItems({ product: "โรงยิมอเนกประสงค์", value: v }, CATALOG);
     expect(items.length, "ต้องมีแถวให้แก้ต่อได้ ไม่ใช่ทางตัน").toBe(1);
     expect(items[0].qty).toBe(1);
+  });
+});
+
+// ── ราคากลางแยกรายแม่แบบย่อย (migration 0136) ──────────────────────────────────
+// เดิมแม่แบบย่อยทุกอันใต้แม่แบบเดียวกันใช้ราคาเท่ากันหมด เช่น "สนามกีฬาในร่ม" ราคาเดียว
+// คุมทั้งสนามแบดมินตันและสระว่ายน้ำในร่ม ซึ่งต้นทุนจริงต่างกันมาก
+// ตอนนี้ตั้งแยกได้ · ไม่ตั้ง = ใช้ราคาแม่แบบหลักเหมือนเดิม (ข้อมูลเก่าไม่กระทบ)
+const SPORT = prod("สนามกีฬาในร่ม", 7400,
+  ["โรงยิมอเนกประสงค์", "สนามแบดมินตัน", "สระว่ายน้ำในร่ม"],
+  { "สระว่ายน้ำในร่ม": 9800, "สนามแบดมินตัน": 6200 });
+
+describe("ราคากลางรายแม่แบบย่อย", () => {
+  it("แม่แบบย่อยที่ตั้งราคาเองไว้ → ใช้ราคาของตัวเอง", () => {
+    expect(catalogRate(SPORT, "สระว่ายน้ำในร่ม")).toBe(9800);
+    expect(catalogRate(SPORT, "สนามแบดมินตัน")).toBe(6200);
+  });
+
+  it("แม่แบบย่อยที่ยังไม่ตั้งราคา → ใช้ราคาของแม่แบบหลัก", () => {
+    expect(catalogRate(SPORT, "โรงยิมอเนกประสงค์")).toBe(7400);
+  });
+
+  it("ถามด้วยชื่อแม่แบบหลัก → ได้ราคาหลักเสมอ ไม่หยิบราคาย่อยมาปน", () => {
+    expect(catalogRate(SPORT, "สนามกีฬาในร่ม")).toBe(7400);
+    expect(catalogRate(SPORT)).toBe(7400);
+  });
+
+  it("ไม่มีแม่แบบ → 0 (ให้ผู้เรียกตัดสินใจว่าจะไม่ปั้นรายการ)", () => {
+    expect(catalogRate(undefined, "อะไรก็ได้")).toBe(0);
+  });
+
+  it("BOQ ตั้งต้นต้องใช้ราคาของแม่แบบย่อย ไม่ใช่ราคาหลัก", () => {
+    const items = seedLineItems({ product: "สระว่ายน้ำในร่ม", area: 100 }, [SPORT]);
+    expect(items[0].unitPrice, "ต้องเป็น 9,800 ของสระว่ายน้ำ ไม่ใช่ 7,400 ของกลุ่ม").toBe(9800);
+    expect(boqSubtotal(items)).toBe(980_000);
+  });
+
+  it("ถอดจำนวนจากมูลค่าประเมิน ต้องหารด้วยราคาของแม่แบบย่อย", () => {
+    const items = seedLineItems({ product: "สนามแบดมินตัน", value: "฿620K" }, [SPORT]);
+    expect(items[0].unitPrice).toBe(6200);
+    expect(items[0].qty, "620,000 ÷ 6,200 = 100").toBe(100);
   });
 });

@@ -30,6 +30,16 @@ export function boqSubtotal(items: QuoteLineItem[]): number {
   return items.reduce((s, li) => s + li.qty * li.unitPrice, 0);
 }
 
+// ── ราคากลางที่ใช้จริงของแม่แบบหนึ่ง ๆ ──────────────────────────────────────────
+// แม่แบบย่อยตั้งราคาแยกของตัวเองได้ (subtypePrices) · ไม่ได้ตั้ง = ใช้ราคาของแม่แบบหลัก
+// จุดเดียวที่ตัดสินเรื่องนี้ทั้งระบบ — ห้ามอ่าน p.price ตรง ๆ ที่อื่นเวลารู้ชื่อแม่แบบย่อย
+// ไม่งั้นหน้าจอกับใบเสนอราคาจะบอกราคาคนละตัว
+export function catalogRate(prod: SolutionProduct | undefined, productName?: string): number {
+  if (!prod) return 0;
+  const sub = productName && productName !== prod.name ? prod.subtypePrices?.[productName] : undefined;
+  return sub && sub > 0 ? sub : (prod.price ?? 0);
+}
+
 /** ข้อมูลจากลูกค้าเป้าหมาย/ลูกค้า ที่ใช้ตั้งต้น BOQ ของใบใหม่ */
 export type SeedSubject = {
   /** แม่แบบที่เลือกไว้ — ตรงกับชื่อหลัก หรือชื่อประเภทย่อยในแคตตาล็อก */
@@ -52,7 +62,7 @@ export function seedLineItems(subj: SeedSubject, catalog: SolutionProduct[]): Qu
   // ลีดอาจระบุ "แม่แบบย่อย" (เช่น โรงยิมอเนกประสงค์ อยู่ใต้ สนามกีฬาในร่ม) → หาทั้ง 2 ชั้น
   const prod = catalog.find(p => p.name === subj.product)
             ?? catalog.find(p => p.subtypes?.includes(subj.product));
-  const rate = prod?.price ?? 0;
+  const rate = catalogRate(prod, subj.product);
   if (rate <= 0) return [];   // ยังไม่รู้ราคากลาง = ยังปั้นไม่ได้ (ไม่ใช่ปั้นด้วยเลข 0)
 
   // จำนวนตั้งต้น เรียงตามความน่าเชื่อถือของข้อมูล:

@@ -13,6 +13,7 @@ import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { fmtFull as fmtBaht } from "@pms/shared/lib/format";
+import { catalogRate } from "@pms/shared/lib/boq";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -27,16 +28,21 @@ const TH_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.",
 // วันของระบบ (APP_NOW) ไม่ใช่นาฬิกาเครื่อง — effectiveDate ของราคากลางต้องอยู่ในยุคเดียวกับข้อมูล
 function todayTH() { const d = APP_NOW; return `${d.getDate()} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
-type EditForm = { name: string; spec: string; unit: string; subtypes: string[]; image: string; subtypeImages: Record<string, string> };
+type EditForm = { name: string; spec: string; unit: string; subtypes: string[]; image: string; subtypeImages: Record<string, string>; subtypePrices: Record<string, number> };
 
 const subInp: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: "0.8rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
 
 // ── ตัวจัดการแม่แบบย่อย — เพิ่ม / แก้ชื่อ / ลบ + อัปโหลดรูปรายแม่แบบย่อย ── (ใช้ร่วมฟอร์มเพิ่ม/แก้ไข)
-function SubtypeEditor({ value, images, onChange, onImagesChange }: {
+function SubtypeEditor({ value, images, prices, mainPrice, onChange, onImagesChange, onPricesChange }: {
   value: string[];
   images: Record<string, string>;
+  /** ราคากลางรายแม่แบบย่อย — ไม่ใส่ = ใช้ราคาแม่แบบหลัก */
+  prices: Record<string, number>;
+  /** ราคาแม่แบบหลัก — ใช้เป็น placeholder ให้เห็นว่า "ไม่ใส่แล้วจะได้เท่าไหร่" */
+  mainPrice: number;
   onChange: (next: string[]) => void;
   onImagesChange: (next: Record<string, string>) => void;
+  onPricesChange: (next: Record<string, number>) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [editIdx, setEditIdx] = useState<number | null>(null);
@@ -51,6 +57,7 @@ function SubtypeEditor({ value, images, onChange, onImagesChange }: {
     const name = value[i];
     onChange(value.filter((_, x) => x !== i));
     if (images[name]) { const n = { ...images }; delete n[name]; onImagesChange(n); }
+    if (prices[name] != null) { const n = { ...prices }; delete n[name]; onPricesChange(n); }
   }
   function commitEdit() {
     if (editIdx === null) return;
@@ -60,8 +67,17 @@ function SubtypeEditor({ value, images, onChange, onImagesChange }: {
     else if (!value.some((x, i) => x === v && i !== editIdx)) {
       onChange(value.map((x, i) => i === editIdx ? v : x));
       if (images[old] && old !== v) { const n = { ...images }; n[v] = n[old]; delete n[old]; onImagesChange(n); } // ย้ายรูปตามชื่อใหม่
+      // ราคาต้องย้ายตามชื่อใหม่ด้วย — ไม่ย้าย = ราคาที่ตั้งไว้หายเงียบตอนแก้ชื่อ
+      if (prices[old] != null && old !== v) { const n = { ...prices }; n[v] = n[old]; delete n[old]; onPricesChange(n); }
     }
     setEditIdx(null); setEditText("");
+  }
+  function setPrice(name: string, raw: string) {
+    const n = { ...prices };
+    const v = parseFloat(raw);
+    if (raw.trim() === "" || !(v > 0)) delete n[name];   // ว่าง/ไม่ถูกต้อง = กลับไปใช้ราคาแม่แบบหลัก
+    else n[name] = v;
+    onPricesChange(n);
   }
   async function pickImg(name: string, file: File) {
     // ข้อความจาก imageResize บอกเหตุผลชัด (ชนิดไฟล์/ขนาด/ไฟล์เสีย) — ส่งต่อให้ผู้ใช้ตรง ๆ ดีกว่าข้อความกลาง ๆ
@@ -96,6 +112,17 @@ function SubtypeEditor({ value, images, onChange, onImagesChange }: {
               <button type="button" onClick={() => { setEditIdx(i); setEditText(s); }} title="คลิกเพื่อแก้ชื่อ"
                 style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.78rem", fontWeight: 600, color: STEEL, padding: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</button>
             )}
+            {/* ราคากลางของแม่แบบย่อยนี้ — ว่างไว้ = ใช้ราคาแม่แบบหลัก (placeholder บอกว่าจะได้เท่าไหร่) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              <span style={{ fontSize: "0.7rem", color: MUTED }}>฿</span>
+              <input type="number" min="0" step="0.01" aria-label={`ราคากลางของ ${s}`}
+                value={prices[s] != null ? String(prices[s]) : ""}
+                onChange={e => setPrice(s, e.target.value)}
+                placeholder={mainPrice > 0 ? String(mainPrice) : "ราคาหลัก"}
+                title={prices[s] != null ? "ราคาเฉพาะของแม่แบบย่อยนี้" : "ยังไม่ตั้ง — ใช้ราคาของแม่แบบหลัก"}
+                style={{ ...subInp, width: 92, padding: "5px 7px", fontSize: "0.75rem", textAlign: "right",
+                  fontWeight: prices[s] != null ? 700 : 400, color: prices[s] != null ? PRIMARY : STEEL }} />
+            </div>
             {images[s] && <button type="button" onClick={() => clearImg(s)} title="ลบรูป" style={iconBtn}><Trash2 size={13} color="#dc2626" /></button>}
             <button type="button" onClick={() => removeAt(i)} title="ลบแม่แบบย่อย" style={iconBtn}><X size={14} color="#9ca3af" /></button>
           </div>
@@ -106,7 +133,7 @@ function SubtypeEditor({ value, images, onChange, onImagesChange }: {
           onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
         <button type="button" className="btn btn-secondary btn-md" onClick={add} style={{ flexShrink: 0 }}><Plus size={14} /> เพิ่ม</button>
       </div>
-      {value.length > 0 && <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 6 }}>คลิกที่ชื่อเพื่อแก้ · คลิกรูปเพื่ออัปโหลดรายแม่แบบย่อย · ✕ เพื่อลบ</div>}
+      {value.length > 0 && <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 6 }}>คลิกที่ชื่อเพื่อแก้ · คลิกรูปเพื่ออัปโหลดรายแม่แบบย่อย · ✕ เพื่อลบ<br />ช่องราคา: ว่างไว้ = ใช้ราคาแม่แบบหลัก · ใส่ตัวเลข = ใช้ราคานั้นเฉพาะแม่แบบย่อยนี้</div>}
     </div>
   );
 }
@@ -159,9 +186,9 @@ function HQMasterPageInner() {
 
   // modals
   const [editing, setEditing]   = useState<SolutionProduct | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ name: "", spec: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} });
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", spec: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {}, subtypePrices: {} });
   const [adding, setAdding]     = useState(false);
-  const [addForm, setAddForm]   = useState({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [] as string[], image: "", subtypeImages: {} as Record<string, string> });
+  const [addForm, setAddForm]   = useState({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [] as string[], image: "", subtypeImages: {} as Record<string, string>, subtypePrices: {} as Record<string, number> });
   const [reprice, setReprice]   = useState<SolutionProduct | null>(null);
   const [rpPrice, setRpPrice]   = useState("");
   const [rpNote, setRpNote]     = useState("");
@@ -183,15 +210,21 @@ function HQMasterPageInner() {
     subs.forEach(s => { if (imgs[s]) keep[s] = imgs[s]; });
     return Object.keys(keep).length ? keep : undefined;
   };
+  // ราคาของแม่แบบย่อยที่ถูกลบไปแล้ว ต้องไม่ค้างอยู่ในข้อมูล (แนวเดียวกับ pruneImages)
+  const prunePrices = (subs: string[], prices: Record<string, number>): Record<string, number> | undefined => {
+    const keep: Record<string, number> = {};
+    subs.forEach(s => { if (prices[s] > 0) keep[s] = prices[s]; });
+    return Object.keys(keep).length ? keep : undefined;
+  };
   function openEdit(p: SolutionProduct) {
-    setEditing(p); setEditForm({ name: p.name, spec: p.spec, unit: p.unit, subtypes: [...(p.subtypes ?? [])], image: p.image ?? "", subtypeImages: { ...(p.subtypeImages ?? {}) } });
+    setEditing(p); setEditForm({ name: p.name, spec: p.spec, unit: p.unit, subtypes: [...(p.subtypes ?? [])], image: p.image ?? "", subtypeImages: { ...(p.subtypeImages ?? {}) }, subtypePrices: { ...(p.subtypePrices ?? {}) } });
   }
   function saveEdit() {
     if (!editing || !editForm.name.trim()) return;
-    setCatalog(prev => prev.map(p => p.id !== editing.id ? p : { ...p, name: editForm.name.trim(), spec: editForm.spec.trim(), unit: editForm.unit.trim() || "ตร.ม.", subtypes: editForm.subtypes, image: editForm.image || undefined, subtypeImages: pruneImages(editForm.subtypes, editForm.subtypeImages) }));
+    setCatalog(prev => prev.map(p => p.id !== editing.id ? p : { ...p, name: editForm.name.trim(), spec: editForm.spec.trim(), unit: editForm.unit.trim() || "ตร.ม.", subtypes: editForm.subtypes, image: editForm.image || undefined, subtypeImages: pruneImages(editForm.subtypes, editForm.subtypeImages), subtypePrices: prunePrices(editForm.subtypes, editForm.subtypePrices) }));
     setEditing(null);
   }
-  function openAdd() { setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(true); }
+  function openAdd() { setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {}, subtypePrices: {} }); setAdding(true); }
   function addProduct() {
     // กันกดซ้ำ (H8 · guard synchronous) — nid คำนวณจาก catalog ปิดคลุม (closure) ไม่ใช่ prev ข้างใน
     // updater กดรัว ๆ เร็วกว่า React re-render ทันจะได้ nid ซ้ำ (สร้างสองแม่แบบ id ชนกัน) — พบจาก
@@ -204,9 +237,9 @@ function HQMasterPageInner() {
     setCatalog(prev => [...prev, {
       id: `tpl-${nid}`, name: addForm.name.trim(), spec: addForm.spec.trim(),
       price, unit: addForm.unit.trim() || "ตร.ม.", effectiveDate: todayTH(), priceHistory: [],
-      subtypes: addForm.subtypes, image: addForm.image || undefined, subtypeImages: pruneImages(addForm.subtypes, addForm.subtypeImages),
+      subtypes: addForm.subtypes, image: addForm.image || undefined, subtypeImages: pruneImages(addForm.subtypes, addForm.subtypeImages), subtypePrices: prunePrices(addForm.subtypes, addForm.subtypePrices),
     }]);
-    setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {} }); setAdding(false);
+    setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {}, subtypePrices: {} }); setAdding(false);
     addingRef.current = false;
   }
   function saveReprice() {
@@ -382,7 +415,15 @@ function HQMasterPageInner() {
                             ? <img src={viewing.subtypeImages?.[s] ?? viewing.image} alt={s} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                             : <Building2 size={22} style={{ color: PRIMARY }} />}
                         </div>
-                        <div style={{ padding: "6px 8px", fontSize: "0.7rem", fontWeight: 600, color: STEEL, textAlign: "center", lineHeight: 1.3 }}>{s}</div>
+                        <div style={{ padding: "6px 8px 7px", textAlign: "center", lineHeight: 1.3 }}>
+                          <div style={{ fontSize: "0.7rem", fontWeight: 600, color: STEEL }}>{s}</div>
+                          {/* ราคาที่ใช้จริงของแม่แบบย่อยนี้ — ตั้งเองไว้จะเข้ม ถ้ายังไม่ตั้งจะจางและบอกว่าใช้ราคาหลัก */}
+                          <div style={{ fontSize: "0.64rem", marginTop: 2, fontWeight: viewing.subtypePrices?.[s] ? 800 : 500,
+                            color: viewing.subtypePrices?.[s] ? PRIMARY : "#9ca3af" }}
+                            title={viewing.subtypePrices?.[s] ? "ราคาเฉพาะของแม่แบบย่อยนี้" : "ใช้ราคาของแม่แบบหลัก"}>
+                            {fmtBaht(catalogRate(viewing, s))}
+                          </div>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -435,7 +476,7 @@ function HQMasterPageInner() {
               </div>
               <div>
                 <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (ตามแม่แบบหลัก)</div>
-                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtBaht(subView.parent.price)}</span>
+                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtBaht(catalogRate(subView.parent, subView.sub))}</span>
                 <span style={{ fontSize: "0.72rem", color: MUTED }}> /{subView.parent.unit}</span>
               </div>
             </div>
@@ -463,8 +504,10 @@ function HQMasterPageInner() {
               <div>
                 <label style={lbl}>แม่แบบย่อย ({addForm.subtypes.length})</label>
                 <SubtypeEditor value={addForm.subtypes} images={addForm.subtypeImages}
+                  prices={addForm.subtypePrices} mainPrice={parseFloat(addForm.price) || 0}
                   onChange={next => setAddForm(f => ({ ...f, subtypes: next }))}
-                  onImagesChange={next => setAddForm(f => ({ ...f, subtypeImages: next }))} />
+                  onImagesChange={next => setAddForm(f => ({ ...f, subtypeImages: next }))}
+                  onPricesChange={next => setAddForm(f => ({ ...f, subtypePrices: next }))} />
               </div>
             </div>
             <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
@@ -493,8 +536,10 @@ function HQMasterPageInner() {
               <div>
                 <label style={lbl}>แม่แบบย่อย ({editForm.subtypes.length})</label>
                 <SubtypeEditor value={editForm.subtypes} images={editForm.subtypeImages}
+                  prices={editForm.subtypePrices} mainPrice={editing?.price ?? 0}
                   onChange={next => setEditForm(f => ({ ...f, subtypes: next }))}
-                  onImagesChange={next => setEditForm(f => ({ ...f, subtypeImages: next }))} />
+                  onImagesChange={next => setEditForm(f => ({ ...f, subtypeImages: next }))}
+                  onPricesChange={next => setEditForm(f => ({ ...f, subtypePrices: next }))} />
               </div>
               <div style={{ fontSize: "0.72rem", color: MUTED }}>ราคากลางแก้ผ่านปุ่ม &quot;ปรับราคา&quot; เพื่อบันทึกประวัติราคาเสมอ</div>
             </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins } from "lucide-react";
+import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins, AlertTriangle } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
   quotationStatusLabel, quotationStatusColor,
@@ -190,6 +190,22 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
             <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{mode === "edit" ? `แก้ไข ${editing?.id}` : "สร้างใบเสนอราคาใหม่"}</div>
           </div>
         </div>
+
+        {/* ── เตือนเมื่อสาขายังไม่ได้กรอกข้อมูลบริษัทของตัวเอง (11 ส.ค. 69) ──────────────
+            หัวกระดาษของใบเสนอราคามาจากข้อมูลบริษัทของสาขาเท่านั้น — ไม่มีค่าเริ่มต้นให้ยืมใช้แล้ว
+            (เดิมเคยยืมข้อมูลของสาขาอื่นมาแสดง ซึ่งเป็นบั๊กที่แก้ไปแล้ว)
+            ถ้ายังไม่กรอก เอกสารที่ส่งถึงลูกค้าจะไม่มีชื่อบริษัท ที่อยู่ เลขผู้เสียภาษี และช่องลงนามผู้เสนอราคาว่างเปล่า
+            เตือนตรงนี้เพราะเป็นจังหวะที่ยังแก้ทัน — ไม่ได้ห้ามออกใบ (บางสาขาอาจตั้งใจร่างไว้ก่อน) */}
+        {dealerCfg.loaded && !dealerCfg.settings.issuer?.company?.trim() && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 9, background: "#fff8e6", border: "1px solid #f5d78e",
+            borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: "0.74rem", color: "#7a5b12", lineHeight: 1.55 }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <b>ยังไม่ได้กรอกข้อมูลบริษัทของสาขา</b> — ใบที่ออกจะไม่มีชื่อบริษัท ที่อยู่ และเลขประจำตัวผู้เสียภาษีบนหัวกระดาษ
+              {" "}<a href="/settings" style={{ color: "#003366", fontWeight: 700, textDecoration: "underline" }}>ไปกรอกที่ตั้งค่า › บัญชีดีลเลอร์</a>
+            </div>
+          </div>
+        )}
 
         {/* ข้อมูลจาก subject — เติมอัตโนมัติ (อ่านอย่างเดียว) */}
         <div style={{ background: "#f7f9fc", border: "1px solid #eef1f5", borderRadius: 12, padding: "11px 13px", fontSize: "0.72rem", color: "#475569", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 14px" }}>

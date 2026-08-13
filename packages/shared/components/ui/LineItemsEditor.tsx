@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { catalogRate } from "@pms/shared/lib/boq";
 import type { QuoteLineItem } from "@pms/shared/lib/mock";
 
 const PRIMARY = "#003366";
@@ -66,9 +67,9 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
                       <span>{p.name}</span><span style={{ fontSize: "0.68rem", color: PRIMARY, fontWeight: 800, flexShrink: 0 }}>฿{fmt(p.price)}/{p.unit}</span>
                     </button>
                     {p.subtypes?.map(st => (
-                      <button key={st} type="button" onClick={() => addFromCatalog(`${p.name} · ${st}`, p.unit, p.price)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "6px 10px 6px 22px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.74rem", color: "#6b7280", textAlign: "left", fontFamily: "inherit" }}
+                      <button key={st} type="button" onClick={() => addFromCatalog(`${p.name} · ${st}`, p.unit, catalogRate(p, st))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "6px 10px 6px 22px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.74rem", color: "#6b7280", textAlign: "left", fontFamily: "inherit" }}
                         onMouseEnter={e => (e.currentTarget.style.background = "#f0f4fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-                        <span>{st}</span><span style={{ fontSize: "0.64rem", color: "#9ca3af", flexShrink: 0 }}>฿{fmt(p.price)}</span>
+                        <span>{st}</span><span style={{ fontSize: "0.64rem", color: "#9ca3af", flexShrink: 0 }}>฿{fmt(catalogRate(p, st))}</span>
                       </button>
                     ))}
                   </div>

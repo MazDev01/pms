@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { type SolutionProduct } from "@pms/shared/lib/mock";
+import { catalogRate } from "@pms/shared/lib/boq";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { TemplateHero } from "@pms/shared/components/ui/TemplateHero";
 import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
@@ -217,7 +218,10 @@ export default function DealerProductsPage() {
                             ? <img src={viewP.subtypeImages?.[s] ?? viewP.image} alt={s} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                             : <TemplateHero name={`${viewP.name} ${s}`} />}
                         </div>
-                        <div style={{ padding: "6px 8px", fontSize: "0.7rem", fontWeight: 600, color: STEEL, textAlign: "center", lineHeight: 1.3 }}>{s}</div>
+                        <div style={{ padding: "6px 8px 7px", textAlign: "center", lineHeight: 1.3 }}>
+                          <div style={{ fontSize: "0.7rem", fontWeight: 600, color: STEEL }}>{s}</div>
+                          <div style={{ fontSize: "0.64rem", marginTop: 2, fontWeight: 700, color: PRIMARY }}>{fmtMoney(catalogRate(viewP, s))}</div>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -269,7 +273,7 @@ export default function DealerProductsPage() {
               </div>
               <div>
                 <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (ตามแม่แบบหลัก · สำนักงานใหญ่กำหนด)</div>
-                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(subView.parent.price)}</span>
+                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(catalogRate(subView.parent, subView.sub))}</span>
                 <span style={{ fontSize: "0.72rem", color: MUTED }}> / {subView.parent.unit}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
                   <CalendarClock size={12} style={{ color: MUTED }} />
