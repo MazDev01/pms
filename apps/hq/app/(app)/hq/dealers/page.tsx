@@ -15,7 +15,8 @@ import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/li
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
-import { createDealerAccount, deleteDealerAccount, resetDealerPassword, impersonateDealer, viewDealerPassword, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
+import { createDealerAccount, deleteDealerAccount, impersonateDealer, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
+import { CopyField, DealerPasswordField } from "@pms/shared/components/hq/DealerCredentialsCard";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
@@ -92,93 +93,7 @@ function OnTimeBadge({ pct }: { pct: number | null }) {
 // ใช้กับรหัสผ่านในแผงรายละเอียดตัวแทน — เดิมโชว์รหัสจริงเต็ม ๆ ทันทีที่เปิดแถว
 // ใครเดินผ่านหลังจอ/แชร์หน้าจอ/ถ่ายภาพหน้าจอ ก็ได้รหัสเข้าระบบของตัวแทนไปเลย
 // (โมดัลตอนสร้าง/รีเซ็ตยังโชว์เต็มโดยตั้งใจ — เป็นจังหวะเดียวที่ HQ ต้องอ่านไปแจ้งตัวแทน)
-function CopyField({ label, value, secret = false, defaultShown = false }: { label: string; value: string; secret?: boolean; defaultShown?: boolean }) {
-  const [copied, setCopied] = useState(false);
-  // defaultShown = ผู้ใช้กด "ดูรหัสผ่าน" มาแล้ว ไม่ต้องให้กดปุ่มรูปตาซ้ำอีกชั้น (แก้ 10 ส.ค. 69)
-  const [shown, setShown] = useState(defaultShown);
-  const masked = secret && !shown;
-  function doCopy() {
-    navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
-  }
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 11px" }}>
-        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.86rem", fontWeight: 700, color: "#2D2D2D", letterSpacing: "0.03em" }}>
-          {masked ? "••••••••••••" : value}
-        </span>
-        {secret && (
-          <button type="button" onClick={() => setShown(v => !v)} aria-label={shown ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} title={shown ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", padding: 0, display: "flex" }}>
-            {shown ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        )}
-        <button type="button" onClick={doCopy} aria-label={`คัดลอก${label}`} title={`คัดลอก${label}`}
-          style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "#059669" : "#6b7280", padding: 0, display: "flex" }}>
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ช่องรหัสผ่านของตัวแทน — "ดึงตอนกดดู" เท่านั้น ไม่โหลดมาไว้ในหน้าล่วงหน้า
-//
-// สำคัญ: ห้ามเปลี่ยนเป็นการส่งรหัสมากับข้อมูลตัวแทนตั้งแต่แรกเด็ดขาด
-//   ครั้งก่อนรหัสถูกฝังใน mock.ts แล้วติดไปกับไฟล์ที่เบราว์เซอร์โหลด "ทุกหน้า รวมหน้าล็อกอิน"
-//   ใครเปิดดูซอร์สก็อ่านได้หมด (Critical จากผลตรวจสอบระบบรอบ 2 · 5 ส.ค. 69)
-//   ที่นี่จึงเรียก API ทีละสาขาเมื่อผู้ใช้กด และฝั่งเซิร์ฟเวอร์บันทึก audit ทุกครั้ง
-function DealerPasswordField({ code, fallback }: { code: string; fallback?: string }) {
-  const [pw, setPw] = useState<string | null>(fallback ?? null);
-  const [meta, setMeta] = useState<{ at: string; by: string } | null>(null);
-  // ⚠️ กด "ดูรหัสผ่าน" แล้วต้องเห็นรหัสทันที (บั๊กจริง พบ 10 ส.ค. 69)
-  //   เดิมเซิร์ฟเวอร์ส่งรหัสมาให้เรียบร้อยแล้ว แต่ช่องยังเป็น •••••••••••• อยู่
-  //   เพราะกล่องแสดงผลปิดบังไว้เป็นค่าตั้งต้น ต้องกดปุ่มรูปตาอีกชั้นถึงจะเห็น
-  //   ปุ่มที่เขียนว่า "ดูรหัสผ่าน" แล้วไม่แสดงรหัส = ไม่ทำตามที่เขียนไว้
-  //   (การเปิดดูถูกบันทึกตั้งแต่กดปุ่มแรกแล้ว ปิดบังต่ออีกชั้นไม่ได้เพิ่มความปลอดภัย)
-  const [revealed, setRevealed] = useState(false);
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function reveal() {
-    if (loading || pw) return;
-    setLoading(true); setErr("");
-    const res = await viewDealerPassword(code);
-    setLoading(false);
-    if (!res.ok) { setErr(res.error); return; }
-    setPw(res.password);
-    setRevealed(true);
-    setMeta({ at: res.updatedAt, by: res.updatedBy });
-  }
-
-  if (pw) return (
-    <>
-      <CopyField label="รหัสผ่าน" value={pw} secret defaultShown={revealed} />
-      {meta?.at && (
-        <div style={{ fontSize: "0.68rem", color: "#6b7280", marginTop: -6, marginBottom: 10 }}>
-          ตั้งเมื่อ {fmtISOToThai(meta.at.slice(0, 10))}{meta.by ? ` โดย ${meta.by}` : ""}
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 4, fontWeight: 600 }}>รหัสผ่าน</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px" }}>
-        <span style={{ flex: 1, fontFamily: "monospace", fontSize: "0.86rem", fontWeight: 700, color: "#9ca3af", letterSpacing: "0.03em" }}>
-          ••••••••••••
-        </span>
-        <button type="button" onClick={reveal} disabled={loading}
-          title="ดูรหัสผ่าน (ระบบจะบันทึกว่าใครเปิดดู)"
-          style={{ background: "none", border: "none", cursor: loading ? "wait" : "pointer", color: "#003366", padding: 0, display: "flex", alignItems: "center", gap: 5, fontFamily: "inherit", fontSize: "0.74rem", fontWeight: 700 }}>
-          <Eye size={14} /> {loading ? "กำลังดึง…" : "ดูรหัสผ่าน"}
-        </button>
-      </div>
-      {err && <div style={{ fontSize: "0.7rem", color: "#dc2626", marginTop: 5 }}>{err}</div>}
-    </div>
-  );
-}
+// CopyField / DealerPasswordField ย้ายไปเป็นของกลางที่ DealerCredentialsCard.tsx แล้ว (13 ส.ค. 69)
 
 function InputField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -251,11 +166,9 @@ function HQDealersPageInner() {
   const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
   const [creating, setCreating] = useState(false); // กำลังสร้างบัญชีที่เซิร์ฟเวอร์ — กันกดปุ่มซ้ำระหว่างรอ
-  // โมดัลเดียวใช้ 2 กรณี — สร้างตัวแทนใหม่ / รีเซ็ตรหัสผ่าน · ข้อความต้องตรงกับสิ่งที่เพิ่งเกิดจริง
+  // โมดัลแสดงรหัสหลังสร้างตัวแทนใหม่ (กรณีรีเซ็ตรหัสย้ายไปหน้ารายละเอียดตัวแทนแล้ว)
   const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials; mode: "created" | "reset" } | null>(null);
-  const [viewCredsDealer, setViewCredsDealer] = useState<DealerRow | null>(null);
   const [entering, setEntering] = useState<string | null>(null);
-  const [resettingPw, setResettingPw] = useState(false); // กำลังรีเซ็ตรหัสผ่านที่เซิร์ฟเวอร์ — กันกดปุ่มซ้ำระหว่างรอ
   const [selectedDealer, setSelectedDealer] = useState<DealerRow | null>(null);
 
   // ผลงานจริงจากใบเสนอราคา/ลีด — ห้ามอ่าน d.revenueActual / d.winRate / d.activeProjects อีก
@@ -404,33 +317,8 @@ function HQDealersPageInner() {
     //   (ดู apps/hq/app/api/admin/dealers/impersonate/route.ts)
   }
 
-  // ออกรหัสผ่านใหม่ให้ตัวแทน แล้วเปิดโมดัลคัดลอกรหัสใหม่ไปแจ้งต่อ
-  // HQ เป็นผู้คุมรหัสผ่านของตัวแทนทั้งหมด — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตรหัสผ่านเอง (บอสสั่ง)
-  async function resetPassword(d: DealerRow) {
-    if (!confirm(`ออกรหัสผ่านใหม่ให้ "${d.name}"?\nรหัสเดิมจะใช้เข้าระบบไม่ได้ทันที`)) return;
-
-    if (DATA_SOURCE === "supabase") {
-      setResettingPw(true);
-      const res = await resetDealerPassword(d.code);
-      setResettingPw(false);
-      if (!res.ok) { alert("รีเซ็ตรหัสผ่านไม่สำเร็จ: " + res.error); return; }
-      // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
-      setViewCredsDealer(null);
-      setCredsModal({ name: d.name, creds: { email: res.email, password: res.password }, mode: "reset" });
-      return;
-    }
-
-    // โหมดเดโม (local): คงพฤติกรรมเดิมไว้เล่นได้
-    const cur = d.credentials;
-    if (!cur) { alert("ไม่พบข้อมูลรหัสผ่านของตัวแทนนี้"); return; }
-    // ความยาวรหัสเดิมไม่มีให้อ้างอิงแล้ว (ห้ามเก็บรหัสจริงใน mock.ts — ดูหมายเหตุที่ DealerCredentials)
-    // ใช้ความยาวมาตรฐานแทน · ค่านี้ใช้เฉพาะโหมดเดโม ไม่ใช่รหัสของบัญชีจริง
-    const creds: DealerCredentials = { email: cur.email, password: genResetPassword(d.code, 12) };
-    setDealers(prev => prev.map(x => x.id === d.id ? { ...x, credentials: creds } : x));
-    logAudit("รีเซ็ตรหัสผ่านตัวแทน", `${d.code} · ${d.name}`);
-    setViewCredsDealer(null);
-    setCredsModal({ name: d.name, creds, mode: "reset" });  // ใช้โมดัลคัดลอกรหัสตัวเดียวกับตอนสร้างตัวแทน
-  }
+  // การรีเซ็ตรหัสผ่านให้ตัวแทน ย้ายไปอยู่ในการ์ด "ข้อมูลเข้าระบบของตัวแทน"
+  // ที่หน้ารายละเอียดตัวแทนแล้ว (DealerCredentialsCard · 13 ส.ค. 69)
 
   return (
     <div className="erp">
@@ -572,10 +460,9 @@ function HQDealersPageInner() {
                         style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 7, color: "#003366", cursor: "pointer" }}>
                         <BarChart2 size={12} />
                       </button>
-                      <button onClick={e => { e.stopPropagation(); setViewCredsDealer(d); }} title="รหัสเข้าระบบ"
-                        style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 7, color: "#003366", cursor: "pointer" }}>
-                        <Key size={12} />
-                      </button>
+                      {/* ปุ่มรูปกุญแจ (ดูรหัสเข้าระบบ/รีเซ็ตรหัสผ่าน) ย้ายไปหน้ารายละเอียดตัวแทนแล้ว (บอสสั่ง 13 ส.ค. 69)
+                          เป็นงานราย "สาขา" ไม่ใช่งานที่ต้องทำรัวจากลิสต์ · ตารางนี้เคยมีปุ่มต่อแถวถึง 6 ปุ่มจนแน่น
+                          เข้าถึงได้ที่ปุ่มรูปกราฟข้างบน → การ์ด "ข้อมูลเข้าระบบของตัวแทน" ในแท็บภาพรวม */}
                       <button onClick={e => { e.stopPropagation(); openEdit(d); }} title="แก้ไข"
                         style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, color: "#6b7280", cursor: "pointer" }}>
                         <Pencil size={12} />
@@ -847,39 +734,8 @@ function HQDealersPageInner() {
         );
       })()}
 
-      {/* ── View Credentials Modal ── */}
-      {viewCredsDealer && (
-        <div onClick={() => setViewCredsDealer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <ModalCard onClose={() => setViewCredsDealer(null)} label="รหัสเข้าระบบของตัวแทน" style={{ ...CARD, width: 380, maxWidth: '100%' }}>
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: "#2D2D2D" }}>รหัสเข้าระบบ</h3>
-                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{viewCredsDealer.name}</div>
-              </div>
-              <button onClick={() => setViewCredsDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={16} /></button>
-            </div>
-            <div style={{ padding: "16px 20px" }}>
-              <CopyField label="อีเมล" value={loginEmailOf(viewCredsDealer.code)} />
-              <DealerPasswordField code={viewCredsDealer.code} fallback={viewCredsDealer.credentials?.password} />
-              <div style={{ fontSize: "0.72rem", color: "#6b7280", background: "#f0f4f8", borderRadius: 8, padding: "8px 12px", marginTop: 4 }}>
-                ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
-              </div>
-              {/* ย้ายมาจากแท็บ "ตัวแทนจำหน่าย" ในหน้าตั้งค่า (แท็บนั้นถูกยุบ — ข้อมูลซ้ำกับหน้านี้ทั้งใบ)
-                  มีผลทันที ไม่ผ่านปุ่มบันทึก · ลงบันทึกการใช้งานทุกครั้ง เพราะเป็นการแตะบัญชีคนอื่น */}
-              <button onClick={() => resetPassword(viewCredsDealer)} disabled={resettingPw}
-                style={{ width: "100%", marginTop: 12, padding: "9px", borderRadius: 9, border: "1px solid #fecaca",
-                  background: "#fff", color: "#dc2626", fontSize: "0.78rem", fontWeight: 700, cursor: resettingPw ? "not-allowed" : "pointer",
-                  opacity: resettingPw ? 0.6 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-                <Key size={13} /> {resettingPw ? "กำลังรีเซ็ต…" : "รีเซ็ตรหัสผ่าน"}
-              </button>
-              <div style={{ fontSize: "0.68rem", color: "#9ca3af", marginTop: 6, textAlign: "center" }}>
-                รหัสเดิมจะใช้ไม่ได้ทันที — ต้องแจ้งรหัสใหม่ให้ตัวแทน
-              </div>
-            </div>
-          </ModalCard>
-        </div>
-      )}
+      {/* โมดัล "รหัสเข้าระบบ/รีเซ็ตรหัสผ่าน" ย้ายไปเป็นการ์ดในหน้ารายละเอียดตัวแทนแล้ว (13 ส.ค. 69)
+          ดู DealerCredentialsCard — ความสามารถเท่าเดิมทุกอย่าง */}
     </div>
   );
 }

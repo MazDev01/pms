@@ -13,6 +13,7 @@ import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerfo
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useNetworkDealerDetail, useNetworkCustomersForDealer } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
+import { DealerCredentialsCard } from "@pms/shared/components/hq/DealerCredentialsCard";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
 
@@ -106,6 +107,10 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* ข้อมูลเข้าระบบของสาขานี้ — ย้ายมาจากปุ่มรูปกุญแจในตารางหน้ารายชื่อตัวแทน (13 ส.ค. 69)
+          แสดงเฉพาะผู้มีสิทธิ์จัดการตัวแทน (การ์ดเช็คสิทธิ์ในตัวเอง) */}
+      <DealerCredentialsCard dealer={dealer} />
+
       {/* Revenue progress */}
       <div className="card" style={{ padding: "18px 20px", gridColumn: "1 / -1" }}>
         <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>ความคืบหน้าเทียบเป้าทั้งปี</p>
