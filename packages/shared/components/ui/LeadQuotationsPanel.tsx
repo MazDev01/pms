@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
@@ -8,7 +8,7 @@ import {
   type LeadRow, type CustomerRow, type QuotationMock, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
-import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
+import { boqLineItems, boqSubtotal, seedLineItems } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
@@ -67,20 +67,9 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
   // โครงสร้าง BOQ ที่ถูก: ราคา/หน่วย = ราคากลางของ HQ (คงที่) · จำนวน = พื้นที่ (ตัวแปร)
   // จึงถอดพื้นที่ออกมาจากมูลค่าประเมิน: จำนวน = มูลค่าประเมิน ÷ ราคากลาง — ไม่ใช่ยัดมูลค่าทั้งก้อนลงราคา/หน่วย
   // ลีดอาจระบุ "แม่แบบย่อย" (เช่น โรงงานอาหาร อยู่ใต้ โรงงาน) → หาในแคตตาล็อกทั้ง 2 ชั้น
+  // ทั้งสองทางเป็นแค่ "ค่าตั้งต้น" — ตัวแทนแก้ทับใน BOQ ได้ และพื้นที่บนใบยึดตาม BOQ ตอนบันทึกเสมอ
   const emptyForm = (): FormState => {
-    const est = parseBaht(subj.value || "");
-    const prod = catalog.find(p => p.name === subj.product)
-              ?? catalog.find(p => p.subtypes?.includes(subj.product));
-    const rate = prod?.price ?? 0;
-    // จำนวนตั้งต้นของ BOQ เรียงตามความน่าเชื่อถือของข้อมูล:
-    //  1) พื้นที่ที่กรอกไว้ในลีด + แม่แบบคิดเป็น ตร.ม. → ใช้ตัวเลขจริงจากลีด (ตรงที่สุด · บอสสั่ง 17 ก.ค. 69)
-    //  2) ไม่มีพื้นที่ → ถอดกลับจาก มูลค่าประเมิน ÷ ราคากลาง (ประมาณเอา เหมือนเดิม)
-    // ทั้งสองทางเป็นแค่ "ค่าตั้งต้น" — ตัวแทนแก้ทับใน BOQ ได้ และพื้นที่บนใบยึดตาม BOQ ตอนบันทึกเสมอ
-    const areaQty = prod?.unit === "ตร.ม." && (subj.area ?? 0) > 0 ? subj.area! : 0;
-    const qty = areaQty > 0 ? areaQty : (rate > 0 && est > 0 ? Math.round(est / rate) : 0);
-    const seed: QuoteLineItem[] = subj.product && rate > 0 && qty > 0
-      ? [{ name: subj.product, qty: Math.max(1, qty), unit: prod!.unit, unitPrice: rate }]
-      : [];
+    const seed = seedLineItems({ product: subj.product, value: subj.value, area: subj.area }, catalog);
     const total = boqSubtotal(seed);
     return {
       project: defProject(), buildingType: subj.product,
@@ -89,6 +78,19 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
     };
   };
   const [form, setForm] = useState<FormState>(emptyForm);
+
+  // แคตตาล็อกมาช้ากว่าฟอร์ม → ตั้งต้น BOQ ใหม่ให้เมื่อของมาถึง
+  // useMasterCatalog เริ่มด้วยรายการว่างเสมอแล้วค่อยโหลด ถ้าผู้ใช้กด "สร้างใบเสนอราคา" ก่อนโหลดเสร็จ
+  // ราคากลางจะเป็น 0 → BOQ ว่าง และหน้านี้ซ่อนปุ่มเลือกแคตตาล็อกไว้ = เพิ่มแถวเองไม่ได้ ออกใบไม่ได้เลย
+  // เติมเฉพาะตอน "สร้างใหม่ + ยังไม่มีแถวเลย" จึงไม่ทับของที่ตัวแทนแก้ไว้
+  useEffect(() => {
+    if (mode !== "create" || form.lineItems.length > 0 || catalog.length === 0) return;
+    const seed = seedLineItems({ product: subj.product, value: subj.value, area: subj.area }, catalog);
+    if (!seed.length) return;
+    const total = boqSubtotal(seed);
+    setForm(p => ({ ...p, lineItems: seed, items: String(seed.length), price: String(total) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog, mode, form.lineItems.length, subj.product, subj.value, subj.area]);
   const set = <K extends keyof FormState>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   // ใบเสนอราคาที่เกี่ยวข้อง — ลูกค้า: ผูกด้วย customerId · ลีด: ผูกด้วย dealId (legacy ใช้ customerId/ชื่อบริษัท)
