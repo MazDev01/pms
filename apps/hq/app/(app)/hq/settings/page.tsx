@@ -460,7 +460,9 @@ function NotificationsTab() {
         </div>
         <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden" }}>
           {HQ_ALERT_META.map((a, i) => {
-            const pref = rules.draft.alerts[a.key];
+            // กฎที่ยังไม่เคยถูกบันทึกลงฐานข้อมูล (หรือกฎใหม่ที่เพิ่มทีหลัง) จะไม่มีค่าในกล่องนี้
+            // ต้องตกไปใช้ค่าเริ่มต้นเสมอ ไม่ใช่ปล่อยให้เป็นของว่างแล้วอ่านค่าจากมันจนหน้าพังทั้งหน้า
+            const pref = rules.draft.alerts?.[a.key] ?? DEFAULT_HQ_NOTIF_RULES.alerts[a.key];
             const th = ALERT_THRESHOLD[a.key];
             return (
               <div key={a.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderTop: i ? "1px solid #f1f5f9" : "none", flexWrap: "wrap" }}>

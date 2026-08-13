@@ -18,6 +18,7 @@ import {
 } from "@pms/shared/lib/mock";
 
 import { parseBaht } from "@pms/shared/lib/format";
+import { shouldCloseWon } from "@pms/shared/lib/closeWon";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
@@ -413,7 +414,7 @@ export function SalesProvider({
     const updated: LeadRow = { ...lead, status, tasks: syncTasksToStage(lead.tasks, status, lead.assigned || "—") };
     setLeads(prev => prev.map(l => l.id !== leadId ? l : updated));
     persistLead.update(updated); // สถานะ + tasks เปลี่ยน → update ทั้งแถว (แทน setStatus)
-    if (status === "PAID" && lead.customerId == null) {
+    if (shouldCloseWon(status)) {
       setTimeout(() => { void convertLeadToCustomer({ ...lead, status }, false).catch(() => { /* onFail แจ้งแล้ว */ }); }, 0);
     }
   }, [convertLeadToCustomer, persistLead]);
@@ -428,8 +429,8 @@ export function SalesProvider({
   const updateLead = useCallback((lead: LeadRow) => {
     setLeads(prev => prev.map(l => l.id !== lead.id ? l : lead));
     persistLead.update(lead);
-    // ปิดการขายสำเร็จ → สร้างลูกค้า (เฉพาะยังไม่เป็นลูกค้า)
-    if (lead.status === "PAID" && lead.customerId == null) {
+    // ปิดการขายสำเร็จ → เดินเส้นทางปิดการขายเสมอ (สร้างลูกค้าถ้ายังไม่มี · ปิดใบเสนอราคา · รวมยอดใหม่)
+    if (shouldCloseWon(lead.status)) {
       setTimeout(() => { void convertLeadToCustomer(lead, false).catch(() => { /* onFail แจ้งแล้ว */ }); }, 0);
     }
   }, [convertLeadToCustomer, persistLead]);

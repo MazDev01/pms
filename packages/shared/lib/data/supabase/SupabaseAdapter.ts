@@ -470,7 +470,21 @@ export const SupabaseAdapter: DataAdapter = {
     // singleton (id=1) — fallback เป็น default ถ้าแถวยังไม่ถูก seed (กัน null → หน้า HQ crash)
     getPolicy: async () => (await one<HQPolicy>("hq_policy")) ?? DEFAULT_HQ_POLICY,
     getTargets: async () => (await one<HQTargets>("hq_targets")) ?? DEFAULT_HQ_TARGETS,
-    getNotifRules: async () => (await one<HQNotifRules>("hq_notif_rules")) ?? DEFAULT_HQ_NOTIF_RULES,
+    // ⚠️ ต้องรวมกับค่าเริ่มต้นแบบ "ลงลึกถึงในกล่อง" ไม่ใช่แค่ชั้นนอก (พบจากหน้าจอจริง 13 ส.ค. 69)
+    //   แถวในฐานข้อมูลเก็บ alerts/channels เป็นกล่อง json — ของจริงมีค่าเป็นกล่องว่าง {} อยู่
+    //   รวมแค่ชั้นนอกจะเอากล่องว่างไปทับกฎแจ้งเตือนทั้ง 6 ข้อ → หน้าตั้งค่าอ่าน "กฎข้อนี้เปิดอยู่ไหม"
+    //   จากของที่ไม่มีอยู่ แล้วพังทั้งหน้า (แท็บการแจ้งเตือนขึ้นจอแดง "เกิดข้อผิดพลาดในหน้านี้")
+    //   โหมดในเครื่อง (loadHQNotifRules ใน mock.ts) รวมลึกไว้ถูกแล้ว — ฝั่งฐานข้อมูลตกหล่นไปที่เดียว
+    getNotifRules: async () => {
+      const r = await one<HQNotifRules>("hq_notif_rules");
+      if (!r) return DEFAULT_HQ_NOTIF_RULES;
+      return {
+        ...DEFAULT_HQ_NOTIF_RULES,
+        ...r,
+        alerts:   { ...DEFAULT_HQ_NOTIF_RULES.alerts,   ...(r.alerts   ?? {}) },
+        channels: { ...DEFAULT_HQ_NOTIF_RULES.channels, ...(r.channels ?? {}) },
+      };
+    },
     savePolicy: (p) => must(sb().from("hq_policy").upsert({ id: 1, ...toSnake(p as unknown as Row) })),
     saveTargets: (t) => must(sb().from("hq_targets").upsert({ id: 1, ...toSnake(t as unknown as Row) })),
     saveNotifRules: (r) => must(sb().from("hq_notif_rules").upsert({ id: 1, ...toSnake(r as unknown as Row) })),
