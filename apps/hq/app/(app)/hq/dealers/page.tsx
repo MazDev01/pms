@@ -15,7 +15,7 @@ import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/li
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
-import { createDealerAccount, deleteDealerAccount, impersonateDealer, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
+import { createDealerAccount, deleteDealerAccount, impersonateDealer, listDealerLoginEmails, moveDealerData } from "@pms/shared/lib/adminApi";
 import { CopyField, DealerPasswordField } from "@pms/shared/components/hq/DealerCredentialsCard";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -168,6 +168,11 @@ function HQDealersPageInner() {
   const [creating, setCreating] = useState(false); // กำลังสร้างบัญชีที่เซิร์ฟเวอร์ — กันกดปุ่มซ้ำระหว่างรอ
   // โมดัลแสดงรหัสหลังสร้างตัวแทนใหม่ (กรณีรีเซ็ตรหัสย้ายไปหน้ารายละเอียดตัวแทนแล้ว)
   const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials; mode: "created" | "reset" } | null>(null);
+  // สาขาที่ลบไม่ได้เพราะยังมีข้อมูล → เปิดกล่อง "ย้ายข้อมูลไปสาขาอื่น" ให้แทนที่จะจบแค่แจ้งเตือน
+  const [moveFrom, setMoveFrom] = useState<DealerRow | null>(null);
+  const [moveTo, setMoveTo] = useState("");
+  const [moving, setMoving] = useState(false);
+  const [moveErr, setMoveErr] = useState("");
   const [entering, setEntering] = useState<string | null>(null);
   const [selectedDealer, setSelectedDealer] = useState<DealerRow | null>(null);
 
@@ -263,7 +268,13 @@ function HQDealersPageInner() {
     //   ไม่ทิ้งบัญชีกำพร้า · เดิม dealersRepo.remove ลบได้แค่แถว dealers (RLS) บัญชียังค้าง
     if (DATA_SOURCE === "supabase") {
       void deleteDealerAccount(d.code).then(res => {
-        if (!res.ok) { alert("ลบตัวแทนไม่สำเร็จ: " + res.error); return; }
+        if (!res.ok) {
+          // สาขาที่ยังมีข้อมูลงานขายลบไม่ได้โดยตั้งใจ (409) — เดิมจบแค่แจ้งว่าลบไม่ได้
+          // แล้วผู้ดูแลไม่มีทางไปต่อ นอกจากลบข้อมูลลูกค้าจริงทิ้ง ซึ่งไม่มีใครกล้าทำ
+          // → เสนอทางที่สาม: ยกงานทั้งหมดให้สาขาที่รับช่วงต่อ แล้วค่อยลบสาขาที่ว่างแล้ว
+          if (/ยังมีข้อมูล/.test(res.error)) { setMoveFrom(d); return; }
+          alert("ลบตัวแทนไม่สำเร็จ: " + res.error); return;
+        }
         // ลบสำเร็จ (หรือสำเร็จบางส่วน) = ทะเบียนสาขาหายไปจากระบบจริงแล้ว ต้องเอาออกจากหน้าจอเสมอ
         //   เดิมกรณี "สำเร็จบางส่วน" ถูกตีความเป็นล้มเหลว แล้วคงสาขาไว้บนจอ ทั้งที่ในระบบไม่มีแล้ว
         //   ผู้ดูแลจึงเห็นเหมือนสาขาฟื้นกลับมา และไม่รู้ว่ายังมีบัญชีค้างต้องเคลียร์
@@ -565,6 +576,59 @@ function HQDealersPageInner() {
       )}
 
       {/* ── New Dealer Credentials Modal ── */}
+      {/* ── ย้ายข้อมูลไปสาขาอื่น (ทางออกของสาขาที่ลบไม่ได้เพราะยังมีข้อมูล) ── */}
+      {moveFrom && (
+        <div onClick={() => !moving && setMoveFrom(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <ModalCard onClose={() => !moving && setMoveFrom(null)} label="ย้ายข้อมูลตัวแทน"
+            style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
+            <div style={{ background: "#003366", color: "#fff", padding: "16px 22px", fontWeight: 800 }}>
+              ลบ &quot;{moveFrom.name}&quot; ไม่ได้ — ยังมีข้อมูลอยู่
+            </div>
+            <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: "0.84rem", color: "#2D2D2D", lineHeight: 1.7 }}>
+                สาขานี้ยังมีลูกค้า/ลูกค้าเป้าหมาย/ใบเสนอราคาอยู่ ระบบจึงไม่ยอมให้ลบ (กันข้อมูลการขายหายถาวร)
+                <br />ยกงานทั้งหมดให้สาขาที่รับช่วงต่อก่อน แล้วค่อยลบสาขานี้ได้
+              </div>
+              <div>
+                <label className="form-label">ย้ายไปที่สาขา</label>
+                <select className="form-input" value={moveTo} onChange={e => { setMoveTo(e.target.value); setMoveErr(""); }} disabled={moving}>
+                  <option value="">— เลือกสาขาปลายทาง —</option>
+                  {dealers.filter(x => x.code !== moveFrom.code).map(x => (
+                    <option key={x.code} value={x.code}>{x.code} · {x.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 14px", fontSize: "0.76rem", color: "#9a3412", lineHeight: 1.6 }}>
+                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>
+                  ย้ายได้เฉพาะเข้าสาขาที่ <b>ยังไม่มีข้อมูล</b> — ระบบนับเลขที่รายการแยกรายสาขา
+                  ถ้าปลายทางมีข้อมูลอยู่แล้วเลขจะชนกัน ระบบจะปฏิเสธและไม่แก้อะไรเลย
+                  <br />ย้ายแล้ว<b>ย้อนกลับอัตโนมัติไม่ได้</b> · ตั้งค่าสาขา (โลโก้/หัวกระดาษ) ไม่ย้ายตามไป
+                </span>
+              </div>
+              {moveErr && <div style={{ fontSize: "0.8rem", color: "#dc2626", fontWeight: 600, lineHeight: 1.6 }}>{moveErr}</div>}
+            </div>
+            <div style={{ padding: "14px 22px", borderTop: "1px solid #e5e7eb", background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn btn-secondary btn-md" disabled={moving} onClick={() => setMoveFrom(null)}>ยกเลิก</button>
+              <button className="btn btn-primary btn-md" disabled={!moveTo || moving}
+                style={!moveTo || moving ? { opacity: .5, cursor: "not-allowed" } : undefined}
+                onClick={async () => {
+                  if (!moveTo) return;
+                  setMoving(true); setMoveErr("");
+                  const res = await moveDealerData(moveFrom.code, moveTo);
+                  setMoving(false);
+                  if (!res.ok) { setMoveErr(res.error); return; }
+                  setMoveFrom(null); setMoveTo("");
+                  alert(`ย้ายข้อมูล ${res.total} รายการจาก "${moveFrom.code}" ไป "${moveTo}" เรียบร้อย — ลบสาขา "${moveFrom.code}" ได้แล้ว`);
+                }}>
+                {moving ? "กำลังย้าย…" : "ย้ายข้อมูล"}
+              </button>
+            </div>
+          </ModalCard>
+        </div>
+      )}
+
       {credsModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ ...CARD, width: 400, maxWidth: "100%" }}>

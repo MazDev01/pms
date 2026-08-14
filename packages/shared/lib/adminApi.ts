@@ -203,3 +203,27 @@ export async function deleteDealerAccount(code: string): Promise<
     return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
 }
+
+// ย้ายข้อมูลงานขายทั้งหมดของสาขาหนึ่งไปอีกสาขาหนึ่ง — ใช้ก่อนลบสาขาที่ยังมีข้อมูล
+// (สาขาที่มีข้อมูลลบไม่ได้โดยตั้งใจ · ดู DELETE /api/admin/dealers)
+export async function moveDealerData(from: string, to: string): Promise<
+  { ok: true; total: number } | { ok: false; error: string }
+> {
+  if (DATA_SOURCE !== "supabase") {
+    return { ok: false, error: "โหมดเดโม: ย้ายข้อมูลจริงไม่ได้" };
+  }
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch("/api/admin/dealers/move", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; total?: number };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, total: json.total ?? 0 };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
