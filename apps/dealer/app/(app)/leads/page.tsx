@@ -9,6 +9,7 @@ import {
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
+import type { QuotationMock } from "@pms/shared/lib/data/types";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { LeadTasks } from "@pms/shared/components/ui/LeadTasks";
@@ -823,6 +824,17 @@ export default function LeadsPage() {
   const [pendingLostReason, setPendingLostReason] = useState("");
   function requestStatusChange(id: string, status: LeadStatus) {
     if (status === "CANCELLED") { setPendingLostId(id); setPendingLostReason(""); return; }
+    // ── ขั้น "เสนอราคา" ต้องมีใบเสนอราคาจริง (บอสสั่ง 14 ส.ค. 69) ──
+    // ลาก/เลือกสถานะไปขั้นนี้ทั้งที่ยังไม่เคยออกใบ = ขั้นขยับแต่ไม่มีเอกสารถึงลูกค้า
+    // → พาไปออกใบแทน · พอบันทึกใบเสร็จ ระบบติ๊กงาน "จัดทำใบเสนอราคา" แล้วเลื่อนขั้นให้เอง
+    if (status === "QUOTED") {
+      const target = allLeads.find(l => l.id === id);
+      if (target && !quotations.some(q => quoteBelongsToLead(q, target))) {
+        openQuotationForm(target);
+        setToast("ขั้นเสนอราคาต้องมีใบเสนอราคา — ออกใบให้ลูกค้าก่อน แล้วขั้นจะเลื่อนให้เอง");
+        return;
+      }
+    }
     // ปิดการขายสำเร็จ = สร้างลูกค้าอัตโนมัติทันที ย้อนกลับไม่ได้ — ต้องยืนยันก่อนเสมอ (ทุกช่องทาง
     // ไม่ใช่แค่ปุ่มลัดในแผงลีด) ยืนยันจาก scenario test 31 ก.ค. 69: เดิมกดครั้งเดียวสร้างลูกค้าทันที
     if (status === "PAID") {
@@ -1026,17 +1038,39 @@ export default function LeadsPage() {
   const lid = current?.id ?? "";
 
   function resetApptForm() { setApptAdding(false); setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" }); }
+  // ใบเสนอราคาใบนี้เป็นของลีดนี้ไหม — กติกาเดียวกับที่แท็บใบเสนอราคาใช้กรองรายการ
+  // (ใบใหม่ผูกด้วย dealId · ใบเก่าก่อนมี dealId ผูกด้วยรหัสลูกค้า/ชื่อบริษัท)
+  function quoteBelongsToLead(q: QuotationMock, l: LeadRow): boolean {
+    if (q.dealId != null) return q.dealId === l.numId;
+    if (l.customerId && q.customerId === l.customerId) return true;
+    return q.customer === l.company;
+  }
+  // พาไปแท็บใบเสนอราคาของลีดนี้ — ใช้ทั้งตอนพาไปออกใบใหม่ และตอนพาไปกดส่งใบที่มีอยู่
+  const [quoteFormSignal, setQuoteFormSignal] = useState(0);
+  function focusQuotationTab(l: LeadRow) {
+    setSelectedLead(l); setDraft({ ...l });
+    setEditingField(null); setShowDeleteConfirm(false);
+    setPopupField(null); setEditPopupPos(null);
+    setShowStatusDropdown(false);
+    setActiveTab("quotation"); setDTab("quotation");
+  }
+  /** พาไปดูรายการใบของลีดนี้ (ไม่เปิดฟอร์ม) — ใช้ตอนพาไปกดส่งใบที่ออกไว้แล้ว */
+  function openQuotationList(l: LeadRow) { focusQuotationTab(l); setQuoteFormSignal(0); }
+  /** พาไปออกใบใหม่ — เพิ่มค่าสัญญาณเสมอ (ห้ามรีเซ็ตเป็น 0 ก่อน ไม่งั้นสั่งซ้ำรอบสองจะได้ค่าเดิม = ไม่เปิด) */
+  function openQuotationForm(l: LeadRow) { focusQuotationTab(l); setQuoteFormSignal(n => n + 1); }
+
   function openPanel(l: LeadRow) {
     if (selectedLead?.id === l.id) return closePanel();
     setSelectedLead(l); setDraft({...l});
     setEditingField(null); setShowDeleteConfirm(false);
     setActiveTab("overview"); setDTab("overview");
+    setQuoteFormSignal(0); // เปิดแผงตามปกติ = ไม่ได้สั่งออกใบ (กันฟอร์มค้างจากลีดก่อนหน้า)
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
     resetApptForm(); // กันฟอร์มนัดหมายค้างข้ามลีด
   }
   function closePanel() {
-    setSelectedLead(null); setDraft(null);
+    setSelectedLead(null); setDraft(null); setQuoteFormSignal(0);
     setEditingField(null); setShowDeleteConfirm(false);
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
@@ -1960,7 +1994,24 @@ export default function LeadsPage() {
         // ── Tab: งาน/ความคืบหน้า (Task-driven) — เช็กแล้วเลื่อน Stage อัตโนมัติ ──
         const tabTasks = (
           // ผู้ทำงาน = ผู้รับผิดชอบของลีดนั้น (ไม่ใช่บัญชีดีลเลอร์ที่ล็อกอิน)
-          <LeadTasks lead={c} performedBy={c.assigned || session.name} onSave={saveLead} />
+          // งาน "จัดทำใบเสนอราคา" ติ๊กเองไม่ได้ถ้ายังไม่มีใบ — ส่ง onRequestQuotation ไปพาออกใบแทน
+          <LeadTasks lead={c} performedBy={c.assigned || session.name} onSave={saveLead}
+            onRequestQuotation={taskKey => {
+              const mine = quotations.filter(q => quoteBelongsToLead(q, c));
+              // ยังไม่มีใบเลย → พาไปออกใบ (ทั้งงาน "จัดทำ" และ "ส่ง" ต้องมีใบก่อนทั้งคู่)
+              if (!mine.length) {
+                openQuotationForm(c);
+                setToast("ติ๊กงานนี้เองไม่ได้ — ออกใบเสนอราคาจริงแล้วระบบจะติ๊กให้เอง");
+                return true;
+              }
+              // มีใบแล้วแต่ยังไม่เคยส่งถึงลูกค้า → พาไปที่รายการใบ ให้กดปุ่มส่งของใบนั้น
+              if (taskKey === "sendQuote" && mine.every(q => q.status === "draft")) {
+                openQuotationList(c);
+                setToast("ติ๊กงานนี้เองไม่ได้ — กดปุ่มส่งใบเสนอราคาในรายการ แล้วระบบจะติ๊กให้เอง");
+                return true;
+              }
+              return false; // ของจริงมีแล้ว → ติ๊กได้ตามปกติ
+            }} />
         );
 
         // ── Tab: รายงานการติดตาม (Lead Report) — แก้ไข/เพิ่ม/ลบได้ทั้งหมด ──
@@ -2021,7 +2072,7 @@ export default function LeadsPage() {
         // ── Tab: ใบเสนอราคา — สร้าง/แก้/ดู/พิมพ์/ทำสำเนา/ลบ inline (ไม่ออกจากหน้า) ──
         const tabQuotation = (
           <DrawerSection title="ใบเสนอราคา">
-            <LeadQuotationsPanel lead={c} onToast={setToast} />
+            <LeadQuotationsPanel lead={c} onToast={setToast} openCreateSignal={quoteFormSignal} />
           </DrawerSection>
         );
 

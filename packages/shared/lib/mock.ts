@@ -604,6 +604,10 @@ export type LeadTaskDef = { key: string; label: string; stage: LeadStatus };
 
 /** งานสุดท้ายของเส้นทาง — ปิดการขาย · ห้ามลบ/ห้ามย้ายขั้น (ปุ่มปิดดีลทั้งระบบผูกกับ key นี้) */
 export const CLOSE_TASK_KEY = "close";
+/** งาน "จัดทำใบเสนอราคา" — ติ๊กเองไม่ได้ ต้องออกใบจริง แล้วระบบติ๊กให้ (ดู completeLeadQuoteTasks) */
+export const QUOTE_TASK_KEY = "makeQuote";
+/** งาน "ส่งใบเสนอราคา" — ติ๊กเองไม่ได้เช่นกัน ต้องกดส่งใบจริงถึงจะติ๊กให้ */
+export const SEND_QUOTE_TASK_KEY = "sendQuote";
 
 // เทมเพลต Checklist มาตรฐาน (สร้างอัตโนมัติทุก Lead) + stage ที่แต่ละ task พาไปถึง
 // ⚠️ นี่คือ "ค่าเริ่มต้น" เท่านั้น — ของจริง HQ แก้ได้ที่ /hq/settings › เส้นทางการขาย (เก็บใน hq_sales_journey.tasks)

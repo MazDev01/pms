@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
-  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel,
+  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
   type LeadRow, type LeadTask,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -20,8 +20,12 @@ function stampNow() {
 }
 
 // Task-driven Sales Journey — เช็ก Task → บันทึกเวลา/ผู้ทำ → คำนวณ % → เลื่อน Stage อัตโนมัติ
-export function LeadTasks({ lead, performedBy, onSave }: {
+export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
   lead: LeadRow; performedBy: string; onSave: (l: LeadRow) => void;
+  /** งานที่ต้องมี "ของจริง" ถึงจะติ๊กได้ (จัดทำ/ส่งใบเสนอราคา) — หน้าแม่ส่งฟังก์ชันนี้มาเมื่องานนั้น
+   *  ยังทำไม่ได้จริง แล้วพาผู้ใช้ไปทำของจริงแทน · คืน false = ไม่ได้จัดการ ให้ติ๊กตามปกติ
+   *  (กดติ๊กเองแล้วขั้นขยับทั้งที่ยังไม่มีใบ/ยังไม่ได้ส่ง = ตัวเลขบนแดชบอร์ดไม่ตรงกับของจริงที่ถึงลูกค้า) */
+  onRequestQuotation?: (taskKey: string) => boolean;
 }) {
   const lostReasons = useLostReasons(); // รายการที่ HQ กำหนด (อ่านผ่าน repo — ไม่ใช่ localStorage ของ origin ตัวเอง)
   const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ลีดที่ยังไม่มี checklist ใช้ชุดนี้สร้าง
@@ -46,6 +50,11 @@ export function LeadTasks({ lead, performedBy, onSave }: {
     const cur = normalTasks[i];
     if (!cur.done) {
       if (!canCheck(i)) { setHint("ทำขั้นตอนก่อนหน้าให้ครบก่อน จึงจะเช็กขั้นนี้ได้ (ห้ามข้ามขั้น)"); return; }
+      // งานที่ต้องมี "ของจริง" ถึงจะติ๊กได้ — พาไปออก/ส่งใบจริง แล้วระบบจะติ๊กให้เองตอนนั้น
+      if ((key === QUOTE_TASK_KEY || key === SEND_QUOTE_TASK_KEY) && onRequestQuotation?.(key)) {
+        setHint("");
+        return;
+      }
     } else {
       if (!canUncheck(i)) { setHint("ยกเลิกได้เฉพาะขั้นล่าสุด — ต้องยกเลิกขั้นถัดไปก่อน"); return; }
     }

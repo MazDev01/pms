@@ -25,11 +25,13 @@ type FormState = { project: string; buildingType: string; items: string; price: 
 // ต้องส่งมาอย่างใดอย่างหนึ่งเท่านั้น (lead หรือ customer) — เดิม prop เป็น optional ทั้งคู่แยกกัน
 //   TS ไม่บังคับ จึงต้องใช้ customer! เดาเอาว่ามาแน่ ๆ ตอนไม่มี lead (พังถ้ามีคนเรียกผิดในอนาคต)
 //   ตอนนี้เป็น discriminated union — เรียกไม่ครบ/เรียกทั้งคู่ = TS error ตั้งแต่คอมไพล์ ไม่ต้องพึ่ง !
+// openCreateSignal = ตัวนับจากหน้าแม่ — ค่าเปลี่ยนเมื่อไร แปลว่า "เปิดฟอร์มออกใบให้เลย"
+// ใช้ตอนตัวแทนลากลีดไปขั้นเสนอราคา / กดติ๊กงาน "จัดทำใบเสนอราคา" (ต้องมีใบจริงถึงจะขยับขั้นได้)
 type LeadQuotationsPanelProps =
-  | { lead: LeadRow; customer?: undefined; onToast?: (m: string) => void }
-  | { lead?: undefined; customer: CustomerRow; onToast?: (m: string) => void };
+  | { lead: LeadRow; customer?: undefined; onToast?: (m: string) => void; openCreateSignal?: number }
+  | { lead?: undefined; customer: CustomerRow; onToast?: (m: string) => void; openCreateSignal?: undefined };
 
-export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsPanelProps) {
+export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal }: LeadQuotationsPanelProps) {
   const { quotations, createQuotation, updateQuotation, deleteQuotation } = useSales();
   const catalog = useMasterCatalog(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
@@ -89,6 +91,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
     if (!seed.length) return;
     const total = boqSubtotal(seed);
     setForm(p => ({ ...p, lineItems: seed, items: String(seed.length), price: String(total) }));
+    setNeedCatalog(false); // ตั้งต้นได้แล้ว → กลับไปซ่อนปุ่มแคตตาล็อกตามปกติ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog, mode, form.lineItems.length, subj.product, subj.value, subj.area]);
   const set = <K extends keyof FormState>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -103,7 +106,28 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
   // มูลค่างาน (ก่อน VAT) = ผลรวมรายการสินค้า — ระบบไม่มีส่วนลดแล้ว
   function netTotal(f: FormState) { return parseBaht(f.price); }
 
-  function openCreate() { setEditing(null); setForm(emptyForm()); setMode("create"); }
+  // ปกติซ่อนปุ่ม "เลือกจากแคตตาล็อก" เพราะ BOQ ตั้งต้นมาจากแม่แบบของลีดให้แล้ว (บอสสั่ง)
+  // แต่ถ้าตั้งต้นไม่ได้ (ลีดกรอกแม่แบบเป็นข้อความที่ไม่มีในแคตตาล็อก / HQ ยังไม่ตั้งราคากลาง)
+  // ตารางจะว่างและเพิ่มแถวเองไม่ได้ = ออกใบไม่ได้เลยทั้งที่ขั้น "เสนอราคา" บังคับให้ต้องมีใบ
+  // → เปิดปุ่มให้เฉพาะฟอร์มที่เริ่มมาแบบว่าง (ค้างไว้ทั้งฟอร์ม ไม่ใช่หายทันทีที่เพิ่มแถวแรก)
+  const [needCatalog, setNeedCatalog] = useState(false);
+  function openCreate() {
+    const f = emptyForm();
+    setEditing(null); setForm(f); setNeedCatalog(f.lineItems.length === 0); setMode("create");
+  }
+
+  // หน้าแม่สั่งให้เปิดฟอร์มออกใบ (ลากลีดไปขั้นเสนอราคา / กดติ๊กงาน "จัดทำใบเสนอราคา")
+  // 0 = ไม่ได้สั่ง · >0 = สั่ง — ต้องเทียบกับ 0 เสมอ ไม่ใช่ค่าตอน mount:
+  //   ลีดที่ยังไม่เคยเปิดแผงจะ mount แผงนี้ "พร้อมกับ" คำสั่ง ถ้าจำค่าตอน mount ไว้จะไม่มีอะไรเกิดขึ้นเลย
+  //   (หน้าแม่รีเซ็ตกลับเป็น 0 ทุกครั้งที่เปิด/ปิดแผงตามปกติ จึงไม่เด้งฟอร์มใส่หน้าโดยไม่ได้สั่ง)
+  const lastSignal = useRef(0);
+  useEffect(() => {
+    if (!openCreateSignal || openCreateSignal === lastSignal.current) return;
+    lastSignal.current = openCreateSignal;
+    if (readOnly) return;
+    openCreate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCreateSignal]);
   function openEdit(q: QuotationMock) {
     setEditing(q);
     const lineItems: QuoteLineItem[] = boqLineItems(q);
@@ -220,8 +244,9 @@ export function LeadQuotationsPanel({ lead, customer, onToast }: LeadQuotationsP
           <label style={lbl}>ชื่อโครงการ / เอกสาร</label>
           <input value={form.project} onChange={e => set("project", e.target.value)} style={inp} placeholder="เช่น โกดังเก็บสินค้าเกษตร — บจ. ..." />
         </div>
-        {/* ไม่มีปุ่มเลือกแคตตาล็อก — BOQ ตั้งต้นจากแม่แบบของลูกค้าเป้าหมายให้แล้ว (บอสสั่ง) */}
-        <LineItemsEditor showCatalog={false} items={form.lineItems}
+        {/* ปกติไม่มีปุ่มเลือกแคตตาล็อก — BOQ ตั้งต้นจากแม่แบบของลูกค้าเป้าหมายให้แล้ว (บอสสั่ง)
+            ยกเว้นฟอร์มที่ตั้งต้นไม่ได้ ต้องเปิดให้เลือกเอง ไม่งั้นออกใบไม่ได้เลย (ดู needCatalog) */}
+        <LineItemsEditor showCatalog={needCatalog} items={form.lineItems}
           onChange={li => setForm(p => ({
             ...p, lineItems: li, items: String(li.length),
             price: String(li.reduce((s, it) => s + it.qty * it.unitPrice, 0)),
