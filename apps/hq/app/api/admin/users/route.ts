@@ -202,13 +202,21 @@ export const PATCH = withErrors("reset-hq-user-pw", async (req: NextRequest) => 
     return bad(400, "เส้นทางนี้ใช้ได้เฉพาะผู้ใช้สำนักงานใหญ่ — บัญชีตัวแทนให้รีเซ็ตที่หน้าทะเบียนตัวแทน");
   }
 
-  const password = strongPassword("BJ-");
+  // ผู้ดูแลตั้งรหัสเองได้ (บอสสั่ง 14 ส.ค. 69 — "เปลี่ยนแบบไม่ต้องส่งอีเมลยืนยัน")
+  //   ไม่ส่งอะไรมา = ให้เซิร์ฟเวอร์สุ่มให้เหมือนเดิม
+  //   ความยาวขั้นต่ำ 8 = เกณฑ์เดียวกับตอนผู้ใช้เปลี่ยนรหัสตัวเอง (supabaseAuth.ts) ไม่ตั้งคนละมาตรฐาน
+  const body = await req.json().catch(() => null) as { password?: string } | null;
+  const typed = (body?.password ?? "").trim();
+  if (typed && typed.length < 8) return bad(400, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+  const password = typed || strongPassword("BJ-");
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(id, { password });
   if (updateErr || !updated.user) {
     console.error(`[reset-hq-user-pw] ตั้งรหัสผ่านใหม่ให้ ${id} ไม่สำเร็จ`, updateErr);
     return bad(503, "ตั้งรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
 
-  await auditLog(admin, prof, "ตั้งรหัสผ่านใหม่ให้ผู้ใช้ HQ", `${target.name ?? ""} · ${updated.user.email ?? ""}`);
+  // บันทึกว่าเป็นรหัสที่ผู้ดูแลตั้งเองหรือระบบสุ่มให้ — ต่างกันตอนตรวจย้อนหลัง (ห้ามบันทึกตัวรหัส)
+  await auditLog(admin, prof, "ตั้งรหัสผ่านใหม่ให้ผู้ใช้ HQ",
+    `${target.name ?? ""} · ${updated.user.email ?? ""} · ${typed ? "ผู้ดูแลตั้งเอง" : "ระบบสุ่มให้"}`);
   return NextResponse.json({ ok: true, email: updated.user.email ?? "", password });
 });

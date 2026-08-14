@@ -375,16 +375,13 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // ── ตั้งรหัสผ่านใหม่ให้ทันที (บอสสั่ง 14 ส.ค. 69) ──
   // ต่างจาก "ส่งลิงก์ทางอีเมล" ตรงที่ไม่พึ่งอีเมลเลย — ใช้ได้แม้ยังไม่ได้ตั้ง SMTP
   // หรือผู้ใช้เข้าอีเมลไม่ได้ · เซิร์ฟเวอร์สุ่มรหัสให้แล้วคืนมาโชว์ครั้งเดียว
-  const [pwBusy, setPwBusy] = useState<string | null>(null);
-  async function setPasswordNow(u: AppUser) {
-    if (!confirm(`ตั้งรหัสผ่านใหม่ให้ "${u.name}"?
-รหัสเดิมจะใช้ไม่ได้ทันที และระบบจะแสดงรหัสใหม่ให้คัดลอกเพียงครั้งเดียว`)) return;
-    setPwBusy(u.id);
-    const res = await resetHQUserPassword(u.id);
-    setPwBusy(null);
-    if (!res.ok) { notify(`ตั้งรหัสผ่านไม่สำเร็จ: ${res.error}`); return; }
+  const [pwTarget, setPwTarget] = useState<AppUser | null>(null);
+  async function applyPassword(u: AppUser, typed: string) {
+    const res = await resetHQUserPassword(u.id, typed || undefined);
+    if (!res.ok) return res.error;
+    setPwTarget(null);
     setCreds({ name: u.name, email: res.email || u.email, password: res.password });
-    // audit บันทึกที่เซิร์ฟเวอร์แล้ว (การันตีกว่า) — ไม่จดซ้ำที่นี่
+    return "";  // audit บันทึกที่เซิร์ฟเวอร์แล้ว (การันตีกว่า) — ไม่จดซ้ำที่นี่
   }
 
   // หัวคอลัมน์เรียงลำดับ — ใช้ตัวกลาง SortableTh เพื่อให้กดด้วยคีย์บอร์ดได้
@@ -529,8 +526,8 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
           // ตั้งรหัสให้ตรง ๆ = สวมสิทธิ์เข้าระบบแทนเขาได้ จึงเปิดเฉพาะผู้ดูแลสูงสุด
           // (เซิร์ฟเวอร์ตรวจซ้ำอีกชั้น — ซ่อนเมนูอย่างเดียวไม่ใช่การป้องกัน)
           ...(canEditPrivileges ? [{
-            label: pwBusy === menu.user.id ? "กำลังตั้งรหัส…" : "ตั้งรหัสผ่านใหม่ทันที",
-            icon: <KeyRound size={14} />, onClick: () => void setPasswordNow(menu.user),
+            label: "ตั้งรหัสผ่านใหม่ทันที (ไม่ต้องส่งอีเมล)",
+            icon: <KeyRound size={14} />, onClick: () => setPwTarget(menu.user),
           }] : []),
           { label: menu.user.status === "active" ? "ปิดใช้งาน" : "เปิดใช้งาน", icon: <Power size={14} />, onClick: () => toggleStatus(menu.user) },
           { label: "ลบผู้ใช้", icon: <Trash2 size={14} />, danger: true, onClick: () => setDeleteTarget(menu.user) },
@@ -540,6 +537,9 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       {detailUser && <UserDetailDrawer user={detailUser} onClose={() => setDetailUser(null)} onEdit={() => { setDialogUser(detailUser); setDetailUser(null); }} />}
       {addOpen && <UserDialog onSave={data => saveUser(null, data)} onClose={() => setAddOpen(false)} />}
       {dialogUser && <UserDialog initial={dialogUser} canEditPrivileges={canEditPrivileges} onSave={data => saveUser(dialogUser.id, data)} onClose={() => setDialogUser(null)} />}
+
+      {/* ตั้งรหัสผ่านให้ตรง ๆ — ผู้ดูแลพิมพ์เองก็ได้ หรือให้ระบบสุ่มให้ (ไม่พึ่งอีเมลเลย) */}
+      {pwTarget && <SetPasswordDialog user={pwTarget} onApply={applyPassword} onClose={() => setPwTarget(null)} />}
 
       {/* Reset password = ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล (H4) */}
       {resetInfo && (
@@ -650,6 +650,72 @@ function DeleteUserDialog({ user, onConfirm, onClose }: { user: AppUser; onConfi
 // ── H4 · ส่งลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล ─────────────────────────────────────────
 // อ่าน "อีเมลล็อกอิน" จาก auth.users ที่ฝั่ง client ไม่ได้ (ต้อง service_role) → ให้ผู้ดูแลยืนยันอีเมล
 // (เติมอีเมลติดต่อไว้เป็นค่าเริ่มต้น) แล้วส่งลิงก์ · Supabase ตอบสำเร็จแม้ไม่พบอีเมล (กัน enumeration)
+// ── ตั้งรหัสผ่านให้ผู้ใช้ HQ ตรง ๆ (ไม่พึ่งอีเมล) ────────────────────────────────
+// บอสสั่ง 14 ส.ค. 69: "ผู้ดูแลระบบมีสิทธิเปลี่ยนแบบไม่ต้องส่งอีเมลยืนยัน"
+// พิมพ์รหัสเองก็ได้ (เช่น อยากตั้งรหัสชั่วคราวที่บอกทางโทรศัพท์ได้ง่าย)
+// หรือปล่อยว่างให้ระบบสุ่มให้ — ทั้งสองทางไม่มีอีเมลเข้ามาเกี่ยวเลย
+function SetPasswordDialog({ user, onApply, onClose }: {
+  user: AppUser; onApply: (u: AppUser, typed: string) => Promise<string>; onClose: () => void;
+}) {
+  const [pw, setPw] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const tooShort = pw.trim().length > 0 && pw.trim().length < 8;
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose);
+  async function go() {
+    if (tooShort) { setErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"); return; }
+    setBusy(true); setErr("");
+    const e = await onApply(user, pw.trim());
+    setBusy(false);
+    if (e) setErr(e);
+  }
+  const inpS: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "10px 12px", fontSize: "0.9rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "monospace" };
+  return (
+    <div onClick={() => !busy && onClose()} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ตั้งรหัสผ่านใหม่" onClick={e => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 480, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.24)" }}>
+        <div style={{ background: PRIMARY, color: "#fff", padding: "16px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}><KeyRound size={17} /> ตั้งรหัสผ่านใหม่</div>
+          <button onClick={onClose} disabled={busy} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+        <div style={{ padding: 22 }}>
+          <div style={{ fontSize: "0.86rem", color: STEEL, lineHeight: 1.7, marginBottom: 14 }}>
+            ตั้งรหัสผ่านใหม่ให้ <strong>{user.name}</strong> ({user.email})
+            <br /><span style={{ color: MUTED, fontSize: "0.8rem" }}>มีผลทันที ไม่ต้องส่งอีเมลยืนยัน · รหัสเดิมใช้ไม่ได้อีก</span>
+          </div>
+          <label style={{ fontSize: "0.76rem", color: MUTED, fontWeight: 700, display: "block", marginBottom: 6 }}>รหัสผ่านใหม่</label>
+          <div style={{ position: "relative" }}>
+            <input type={show ? "text" : "password"} value={pw} autoFocus
+              onChange={e => { setPw(e.target.value); setErr(""); }}
+              onKeyDown={e => { if (e.key === "Enter" && !busy) void go(); }}
+              placeholder="เว้นว่างไว้ = ให้ระบบสุ่มให้" style={{ ...inpS, paddingRight: 44 }} />
+            <button type="button" onClick={() => setShow(v => !v)} aria-label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 4 }}>
+              {show ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <div style={{ fontSize: "0.74rem", color: tooShort ? "#dc2626" : MUTED, marginTop: 6 }}>
+            อย่างน้อย 8 ตัวอักษร · เว้นว่างไว้ระบบจะสุ่มรหัสที่ปลอดภัยให้แทน
+          </div>
+          {err && <div style={{ fontSize: "0.8rem", color: "#dc2626", fontWeight: 600, marginTop: 10 }}>{err}</div>}
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 14px", marginTop: 14, fontSize: "0.78rem", color: "#9a3412", lineHeight: 1.6 }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>ระบบจะแสดงรหัสใหม่ให้คัดลอกเพียงครั้งเดียว — คัดลอกไปแจ้งเจ้าตัวก่อนปิดหน้าต่าง</span>
+          </div>
+        </div>
+        <div style={{ padding: "14px 22px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button onClick={onClose} disabled={busy} className="btn btn-secondary btn-md">ยกเลิก</button>
+          <button onClick={() => void go()} disabled={busy || tooShort} className="btn btn-primary btn-md"
+            style={busy || tooShort ? { opacity: .6, cursor: "not-allowed" } : undefined}>
+            {busy ? "กำลังตั้ง…" : pw.trim() ? "ตั้งรหัสนี้" : "สุ่มรหัสให้"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResetEmailDialog({ user, onSent, onClose }: { user: AppUser; onSent: (email: string) => void; onClose: () => void }) {
   const [email, setEmail] = useState(user.email || "");
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");

@@ -252,7 +252,7 @@ export async function clearAuditLog(): Promise<
 // ตั้งรหัสผ่านใหม่ให้ผู้ใช้สำนักงานใหญ่ — เฉพาะผู้ดูแลสูงสุด (เซิร์ฟเวอร์บังคับอีกชั้น)
 // คืนรหัสใหม่มาโชว์ครั้งเดียว ให้ผู้ดูแลคัดลอกไปแจ้งเจ้าตัว (แนวเดียวกับรีเซ็ตรหัสของตัวแทน)
 // ต่างจาก "ส่งลิงก์ทางอีเมล" ตรงที่ไม่พึ่งอีเมลเลย — ใช้ได้แม้ยังไม่ได้ตั้ง SMTP
-export async function resetHQUserPassword(id: string): Promise<
+export async function resetHQUserPassword(id: string, password?: string): Promise<
   { ok: true; email: string; password: string } | { ok: false; error: string }
 > {
   if (DATA_SOURCE !== "supabase") {
@@ -262,7 +262,9 @@ export async function resetHQUserPassword(id: string): Promise<
   if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
   try {
     const res = await fetch(`/api/admin/users?id=${encodeURIComponent(id)}`, {
-      method: "PATCH", headers: { authorization: `Bearer ${token}` },
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(password ? { password } : {}),
     });
     const json = (await res.json().catch(() => ({}))) as { error?: string; email?: string; password?: string };
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
