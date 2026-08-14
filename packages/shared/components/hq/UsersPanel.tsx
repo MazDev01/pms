@@ -201,6 +201,29 @@ function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; on
     const M = 8; // เว้นขอบจอไว้หน่อย ไม่ให้ติดขอบพอดีเป๊ะ
     setTop(Math.max(M, Math.min(pos.y, window.innerHeight - h - M)));
   }, [pos.y, items.length]);
+
+  // ── เลื่อนหน้าจอแล้วต้องปิดเมนูเอง (แก้ 14 ส.ค. 69) ──
+  // ฉากหลังใสที่คลุมทั้งจอไว้ดักคลิก ดัก "ล้อเมาส์" ไปด้วย — และหน้านี้เลื่อนในกล่องเนื้อหา
+  // ไม่ใช่เลื่อนทั้งหน้า ล้อจึงไปไม่ถึงกล่องที่เลื่อนได้จริง ผลคือเปิดเมนูค้างไว้แล้วหน้าจอนิ่งสนิท
+  // ต้องกดปิดก่อนถึงจะเลื่อนได้ (ผู้ใช้แจ้ง) · ปิดเมื่อเริ่มเลื่อน = ท่ามาตรฐานของเมนูแบบนี้
+  // ปิดเมื่อ resize ด้วย — ไม่งั้นเมนูค้างอยู่ตำแหน่งเดิมที่ไม่ตรงกับปุ่มอีกต่อไป
+  useEffect(() => {
+    const close = () => onClose();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    // capture=true → จับได้แม้กล่องด้านในเป็นตัวที่เลื่อน (scroll ไม่ bubble ขึ้น document)
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("touchmove", close, { passive: true });
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("touchmove", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 300 }} />
