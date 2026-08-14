@@ -20,12 +20,17 @@ import { readFileSync } from "node:fs";
 const FILE = "packages/shared/globals.css";
 const css = readFileSync(FILE, "utf8");
 
-const start = css.indexOf("\n.table-wrap {\n");
-if (start < 0) {
+// หาบล็อกด้วย regex ไม่ใช่การเทียบสตริงที่มี "\n" ติดมาด้วย
+//   ของเดิมมองหา "\n.table-wrap {\n" ตรง ๆ → พอมีคนแก้ไฟล์นี้ด้วยเครื่องมือที่บันทึกเป็น CRLF
+//   (Windows) ตัวคั่นบรรทัดกลายเป็น \r\n ทำให้หาไม่เจอ แล้วตัวตรวจฟ้องว่า "หากฎไม่เจอ"
+//   ทั้งที่กฎยังอยู่ครบ — ตัวตรวจที่ตกเพราะตัวเองพัง อันตรายกว่าไม่มีตัวตรวจ เพราะทำให้คนเลิกเชื่อ
+//   ^ กับ m flag = ต้องอยู่ต้นบรรทัด (กันไปเจอ ".chart-s > .table-wrap {" ที่ประกาศไว้ก่อนหน้า)
+const m = /^\.table-wrap\s*\{/m.exec(css);
+if (!m) {
   console.log(`${FILE}  หากฎ .table-wrap ไม่เจอ — ถ้าเปลี่ยนชื่อคลาสแล้ว ต้องอัปเดตตัวตรวจนี้ด้วย`);
   process.exit(1);
 }
-const block = css.slice(start + 1, css.indexOf("\n}", start) + 2);
+const block = css.slice(m.index, css.indexOf("\n}", m.index) + 2);
 const line = /background-size:\s*([^;]+);/.exec(block)?.[1];
 if (!line) {
   console.log(`${FILE}  .table-wrap ไม่มี background-size — เทคนิคเงาบอกทิศพังแล้ว`);
