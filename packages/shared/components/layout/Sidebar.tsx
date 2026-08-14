@@ -11,6 +11,7 @@ import {
 import { useRole } from "@pms/shared/context/RoleContext";
 import { roleLabelOf } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import { useDealerDisplayName } from "@pms/shared/lib/useCurrentDealer";
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
 type NavGroup = { group: string; items: NavItem[] };
@@ -76,6 +77,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   // โปรไฟล์ผู้ใช้ (/profile) → ชื่อ/รูปในการ์ดเจ้าของท้าย sidebar อัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
   // โปรไฟล์ผ่าน repo — เดิมอ่าน localStorage ต่อสาขา (ผู้ใช้ในสาขาเดียวกันทับกันเอง)
   const { profile } = useUserProfile();
+  const dealerDisplayName = useDealerDisplayName(); // ชื่อบริษัทที่สาขากรอก → ทะเบียน HQ → รหัสสาขา
 
   // เดิม prefetch ทั้งสองเส้นทางไม่ว่าง role ไหน — เส้นทางของอีกแอปไม่มีจริงในแอปนี้ (dealer ไม่มี /hq/*
   // และกลับกัน) ยิง 404 ซ้ำ ๆ ทุกครั้งที่ Sidebar โหลด (พบจริงจากทดสอบโหลด: เกือบ 300 ครั้งใน log)
@@ -86,8 +88,9 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
 
 
   const nav = isHQ ? HQ_NAV : DEALER_NAV;
-  // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน · HQ ใช้ชื่อผู้ใช้
-  const displayName = isHQ ? (profile?.name || session.name) : session.dealerName;
+  // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัทของสาขา · HQ ใช้ชื่อผู้ใช้
+  // (ชื่อสาขาผ่าน useDealerDisplayName เหมือนแถบบน — ไม่งั้นเมนูซ้ายขึ้นรหัสสาขาแต่แถบบนขึ้นชื่อบริษัท)
+  const displayName = isHQ ? (profile?.name || session.name) : dealerDisplayName;
 
   return (
     <aside className={`erp-sidebar${mobileOpen ? " open" : ""}`}>

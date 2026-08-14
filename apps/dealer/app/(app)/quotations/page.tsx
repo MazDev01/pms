@@ -314,7 +314,7 @@ export default function QuotationsPage(){
 
 function QuotationsPageInner(){
   const router = useRouter();
-  const { timeRange, passes } = useFilters();
+  const { passes } = useFilters(); // timeRange ใช้แค่ในคำโปรยหัวหน้า ซึ่งถูกเอาออกแล้ว
   // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — อายุใบมีผลกับการคิดวันหมดอายุ
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลีดใช้)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
@@ -558,7 +558,7 @@ function QuotationsPageInner(){
             headers={["เลขที่","ลูกค้า","ผู้รับผิดชอบ","โครงการ","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
             rows={filtered.map(q=>[q.id,q.customer,ownerOf(q) || "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
         </TopbarActions>
-        <p className="page-sub">จัดการใบเสนอราคาและติดตามสถานะ · {timeRange.subtitle}</p>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 
         {/* ── สรุป 5 ตัวชี้วัด — การ์ด KPI คลิกกรองได้ (มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย/ลูกค้า) ── */}
         {(() => {

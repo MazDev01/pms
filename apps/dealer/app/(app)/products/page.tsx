@@ -73,7 +73,7 @@ export default function DealerProductsPage() {
           />
         </div>
       </TopbarActions>
-      <p className="page-sub">แม่แบบอาคารสำเร็จรูป · ราคากลางกำหนดโดยสำนักงานใหญ่</p>
+      {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 
       {/* ── Banner: read-only ── */}
       <div

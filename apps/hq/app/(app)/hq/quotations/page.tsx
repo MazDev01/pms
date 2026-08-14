@@ -260,9 +260,8 @@ export default function NetworkQuotationPage() {
   return (
     <div className="erp">
       <div className="page-head">
-        <div>
-          <p style={{ margin: 0 }}>ใบเสนอราคาของตัวแทนทุกสาขา · {timeRange.subtitle}</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+        <div />
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {/* ช่วงเวลาอยู่ที่หัวหน้า — ที่เดียวกับทุกหน้า HQ (แดชบอร์ด/ภาพรวมยอดขาย/ลูกค้าเป้าหมาย) */}
           <FilterBar dims={[]} />

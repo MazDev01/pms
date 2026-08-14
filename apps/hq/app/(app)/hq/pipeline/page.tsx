@@ -389,9 +389,8 @@ export default function SalesAnalyticsPage() {
     <div className="erp">
       {/* ── HEADER ── */}
       <div className="page-head">
-        <div>
-          <p style={{ margin: 0 }}>วิเคราะห์และเปรียบเทียบประสิทธิภาพยอดขายของตัวแทนจำหน่ายทั่วประเทศ · {timeRange.subtitle}</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+        <div />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FilterBar dims={[]} />
           {/* ส่งออก = ตารางผลงานที่เห็นบนจอ (ผ่านตัวกรองทุกตัวแล้ว) */}

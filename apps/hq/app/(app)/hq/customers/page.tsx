@@ -208,9 +208,8 @@ export default function HQCustomersPage() {
   return (
     <div className="erp">
       <div className="page-head">
-        <div>
-          <p>ฐานข้อมูลลูกค้าทุกตัวแทน · ทั้งหมด {totalCount.toLocaleString()} ราย</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) — <div> ว่างคงไว้ให้ปุ่มชิดขวาเหมือนเดิม */}
+        <div />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu
             filename="hq-customers"

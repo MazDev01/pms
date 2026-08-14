@@ -29,7 +29,7 @@ const ROLE_LABEL: Record<string, { label: string; bg: string; color: string }> =
 
 export default function HQAuditPage() {
   const entries = useAuditEntries();
-  const { inRange, timeRange } = useFilters();
+  const { inRange } = useFilters(); // timeRange ใช้แค่ในคำโปรยหัวหน้า ซึ่งถูกเอาออกแล้ว
   const [q, setQ] = useState("");
   const [userFilter, setUserFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
@@ -87,9 +87,8 @@ export default function HQAuditPage() {
         />
       </TopbarActions>
       <div className="page-head">
-        <div>
-          <p>ตรวจสอบว่าผู้ใช้งานสำนักงานใหญ่แต่ละคนทำอะไรไปบ้าง — ใคร แก้อะไร เมื่อไร · {timeRange.subtitle}</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+        <div />
         <FilterBar dims={[]} />
       </div>
 

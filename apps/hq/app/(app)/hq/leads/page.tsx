@@ -412,9 +412,8 @@ export default function HQLeadsPage() {
   return (
     <div className="erp">
       <div className="page-head">
-        <div>
-          <p>ภาพรวมลูกค้าเป้าหมายของทุกตัวแทน · {timeRange.subtitle}</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+        <div />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FilterBar dims={[]} />
           {/* ส่งออก = สิ่งที่เห็นบนจอตอนนี้ (ผ่านตัวกรองทุกตัวแล้ว) · คอลัมน์เรียงตรงกับตาราง */}

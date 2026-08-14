@@ -305,9 +305,8 @@ export default function DealerDashboard() {
       <TopbarActions>
         <FilterBar dims={[]} />
       </TopbarActions>
-      <p className="page-sub" style={{ marginBottom: 16 }}>
-        สมุดงานของ {currentDealer.name} · {timeRange.subtitle}
-      </p>
+      {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้าทั้ง HQ และตัวแทน (บอสสั่ง 14 ส.ค. 69)
+          ชื่อสาขาและช่วงเวลายังอ่านได้จากแถบบน/ตัวกรอง — ไม่ต้องเขียนซ้ำใต้ชื่อหน้า */}
 
       {/* SECTION 1 — 4 KPI (ทั้งใบกดได้) */}
       <div className="dash-kpis" style={{ marginBottom: 24 }}>

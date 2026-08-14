@@ -25,7 +25,8 @@ import { confirmDiscard } from "@pms/shared/lib/useUnsavedGuard";
 import { useHQAlerts } from "@pms/shared/lib/useHQAlerts";
 import { useHQSearch } from "@pms/shared/lib/useNetworkData";
 import { type HQAlert } from "@pms/shared/lib/hqAlerts";
-import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { useCurrentDealer, useDealerDisplayName } from "@pms/shared/lib/useCurrentDealer";
+import { useReadNotifications } from "@pms/shared/lib/useReadNotifications";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
 // ── "วันนี้ของระบบ" (APP_NOW) — supabase=จริง / local=ตรึง · จัดกลุ่มการแจ้งเตือน วันนี้/เมื่อวาน ──
@@ -36,6 +37,11 @@ const BG       = "#fafafa";
 
 // ── notification shape ───────────────────────────────────────────
 type NotifBucket = "today" | "yesterday" | "older";
+
+// กุญแจของการแจ้งเตือนสำหรับจำว่า "อ่านแล้ว" — ต้องผูกกับเนื้อหา ไม่ใช่เลขลำดับ
+//   ฝั่งตัวแทนใช้เลขไล่ตอนสร้างรายการ ซึ่งเลื่อนได้ทุกครั้งที่มีของใหม่เข้ามา
+//   เก็บเลขไว้แล้ววันถัดไปเลขนั้นอาจไปตกที่การแจ้งเตือนคนละอัน = ทำเครื่องหมายอ่านผิดตัว
+const notifKey = (n: Notif) => `${n.sortDate}|${n.title}|${n.body}|${n.time}`;
 
 type Notif = {
   id: number;
@@ -315,8 +321,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   );
 
   const displayName = profile?.name || session.name;
-  // ชื่อบัญชี = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัท/ตัวแทน (ไม่ใช่ชื่อคน) · HQ ใช้ชื่อผู้ใช้
-  const acctName = isHQ ? displayName : session.dealerName;
+  // ชื่อบัญชี = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัทของสาขา (ไม่ใช่ชื่อคน/รหัสสาขา) · HQ ใช้ชื่อผู้ใช้
+  const dealerDisplayName = useDealerDisplayName(); // ชื่อบริษัทที่สาขากรอก → ทะเบียน HQ → รหัสสาขา
+  const acctName = isHQ ? displayName : dealerDisplayName;
   const acctSub = isHQ ? session.dealerName : `ผู้ดูแล: ${displayName}`;
   const avatarUrl = profile?.avatar;
   const initial = acctName.charAt(0).toUpperCase();
@@ -377,7 +384,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const [searchQ,    setSearchQ]        = useState("");
   // ค้นหาฝั่ง HQ — ดึงตรงจาก repo ตามคำค้น (M9 Phase 4) · dealer/local ใช้ array ของ SalesContext เหมือนเดิม
   const hqSearch = useHQSearch(isHQ ? searchQ : "");
-  const [readIds,    setReadIds]        = useState<Set<number>>(new Set());
+  // สถานะ "อ่านแล้ว" ต้องอยู่ข้ามการรีเฟรชหน้า — เดิมเก็บในหน่วยความจำหน้าเว็บอย่างเดียว
+  //   กด "อ่านทั้งหมด" แล้วรีเฟรช ทุกอย่างกลับมาเป็นยังไม่อ่านเหมือนเดิม (ผู้ใช้แจ้ง 14 ส.ค. 69)
+  //   แยกเก็บตามบัญชี ไม่งั้นสลับบัญชีแล้วเห็นสถานะของอีกคน
+  const { isRead, markRead } = useReadNotifications(isHQ ? "hq" : currentDealer.code);
 
   const notifsRef = useRef<HTMLDivElement>(null);
   const userRef   = useRef<HTMLDivElement>(null);
@@ -461,10 +471,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
   // งานค้างของเครือนับเข้าตัวเลขบนกระดิ่งด้วย — "อ่านแล้ว" กดปิดไม่ได้ เพราะงานยังไม่ได้ถูกจัดการจริง
   const alertCount = alertGroups.reduce((s, g) => s + g.items.length, 0);
-  const unreadCount = notifs.filter(n => !readIds.has(n.id)).length + alertCount;
+  const unreadCount = notifs.filter(n => !isRead(notifKey(n))).length + alertCount;
 
-  function markAll() { setReadIds(new Set(notifs.map(n => n.id))); }
-  function markOne(id: number) { setReadIds(prev => new Set([...prev, id])); }
+  function markAll() { markRead(notifs.map(notifKey)); }
+  function markOne(n: Notif) { markRead([notifKey(n)]); }
 
   // ทุกทางที่พาออกจากหน้าปัจจุบันต้องผ่าน confirmDiscard() ก่อน — หน้าที่มีฟอร์มค้าง (ตั้งค่า)
   // จะได้เตือนครบทุกทาง ไม่ใช่เตือนเฉพาะตอนสลับแท็บ (ดู @pms/shared/lib/useUnsavedGuard)
@@ -661,7 +671,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   </div>
                 )}
                 {(showAllNotifs ? notifs : notifs.slice(0, 8)).map((n, i, shown) => {
-                  const isRead = readIds.has(n.id);
+                  const อ่านแล้ว = isRead(notifKey(n));
                   const isBucketStart = i === 0 || shown[i - 1].bucket !== n.bucket;
                   return (
                     <div key={n.id}>
@@ -671,12 +681,12 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       </div>
                     )}
                     <button
-                      onClick={() => { if (!confirmDiscard()) return; markOne(n.id); setShowNotifs(false); router.push(n.href); }}
+                      onClick={() => { if (!confirmDiscard()) return; markOne(n); setShowNotifs(false); router.push(n.href); }}
                       style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"11px 16px", border:"none",
-                        borderBottom:`1px solid ${BG}`, background:isRead ? "#fff" : "#f6f9ff",
+                        borderBottom:`1px solid ${BG}`, background:อ่านแล้ว ? "#fff" : "#f6f9ff",
                         cursor:"pointer", textAlign:"left" }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = BG; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isRead ? "#fff" : "#f6f9ff"; }}>
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = อ่านแล้ว ? "#fff" : "#f6f9ff"; }}>
                       <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:32, height:32, borderRadius:"50%", background:n.iconBg, color:n.iconColor, flexShrink:0 }}>{n.iconEl}</span>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
