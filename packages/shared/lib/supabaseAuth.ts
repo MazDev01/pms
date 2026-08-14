@@ -109,10 +109,15 @@ export async function sbRestore(): Promise<MockSession | null> {
   const { data } = await getSupabase().auth.getSession();
   const s = data.session;
   if (!s) return null;
-  const session = sessionFromToken(s.access_token, s.user?.email ?? ""); // ชื่อจริงตามมาทาง sbOnChange
+  const session = sessionFromToken(s.access_token, s.user?.email ?? "");
   // โทเค็นที่ถืออยู่เพี้ยน (แก้ไข sessionStorage เอง/ไฟล์เก่าค้าง) → เคลียร์ session ทิ้งเลย ไม่ใช่แค่ปฏิเสธหน้านี้
   if (!session) { await sbSignOut(); return null; }
-  return session;
+  // เติมชื่อจริงให้เสร็จ "ก่อน" คืนค่า — ไม่ใช่ปล่อยให้ตามมาทีหลัง (แก้ 13 ส.ค. 69)
+  //   เดิมคืน session ที่ dealerName ยังเป็น "รหัสสาขา" ไปก่อน แล้วชื่อจริงตามมาทาง sbOnChange
+  //   หน้าจอจึงขึ้น "DSA" แวบหนึ่งแล้วเด้งเป็น "เชียงไหม่สติล" — ผู้ใช้เห็นเป็นชื่อสลับไปมา
+  //   ทั้งบนแถบบน เมนูข้าง และหัวการ์ดบัญชีดีลเลอร์ (ผู้ใช้แจ้ง 13 ส.ค. 69)
+  //   อ่านไม่ได้ (เน็ต/สิทธิ์) withNames คืนค่าเดิมให้อยู่แล้ว จึงไม่มีทางทำให้ล็อกอินไม่ผ่าน
+  return await withNames(session, (decodeClaims(s.access_token).sub as string) ?? "");
 }
 
 // ── H4 · รีเซ็ตรหัสผ่านด้วย "ลิงก์ทางอีเมล" (ไม่ต้องใช้ service_role) ──────────────

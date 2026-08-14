@@ -113,8 +113,11 @@ function CompanyTab() {
   useReport(useMemo(() => ({ dirty, save, reset }), [dirty, save, reset]));
 
   const roleLabel = ROLE_LABEL[session.role] ?? "ผู้ใช้งาน";
-  // ชื่อบัญชี = ชื่อดีลเลอร์ (อันเดียวกันทั้งแอป: topbar/dropdown/ก้น sidebar · ไม่ใช่ชื่อบุคคล)
-  const accountName = session.dealerName || form.company;
+  // ชื่อบัญชีต้องตรงกับ "ชื่อบริษัท" ที่กรอกไว้ในหน้าเดียวกันเสมอ (บอสสั่ง 13 ส.ค. 69)
+  //   เดิมเอาชื่อสาขาจากระบบมาก่อน → หัวการ์ดขึ้นชื่อหนึ่ง แต่ช่องชื่อบริษัทข้างล่างเป็นอีกชื่อ
+  //   ทั้งที่เป็นบริษัทเดียวกัน · ตัวแทนแก้ชื่อบริษัทแล้วหัวการ์ดไม่ขยับตาม เหมือนแก้ไม่ติด
+  //   ยังไม่ได้กรอกชื่อบริษัท ค่อยตกไปใช้ชื่อสาขาที่สำนักงานใหญ่ตั้งไว้
+  const accountName = form.company.trim() || session.dealerName || session.dealerCode;
   const initial = accountName.charAt(0).toUpperCase();
   const sec: React.CSSProperties = { display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 14, textTransform: "uppercase" };
   const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: "1px solid #e5e7eb", background: "#f7f8fa", borderRadius: 8, padding: "9px 12px", fontSize: "0.86rem", color: "#2D2D2D" };
