@@ -227,3 +227,24 @@ export async function moveDealerData(from: string, to: string): Promise<
     return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
 }
+
+// ล้างบันทึกการใช้งานทั้งหมด — เฉพาะผู้ดูแลสูงสุด (เซิร์ฟเวอร์บังคับอีกชั้น)
+// ⚠️ ปกติ audit_log ลบไม่ได้ (append-only) — เส้นทางนี้เป็นข้อยกเว้นเดียวที่บอสสั่งให้มี
+//    การล้างจะถูกบันทึกกลับเป็นรายการแรกเสมอ (ใครล้าง เมื่อไหร่ ไปกี่แถว)
+export async function clearAuditLog(): Promise<
+  { ok: true; removed: number } | { ok: false; error: string }
+> {
+  if (DATA_SOURCE !== "supabase") return { ok: false, error: "โหมดเดโม: ล้างบันทึกจริงไม่ได้" };
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch("/api/admin/audit/clear", {
+      method: "POST", headers: { authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; removed?: number };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, removed: json.removed ?? 0 };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
