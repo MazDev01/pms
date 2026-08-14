@@ -335,9 +335,8 @@ function HQDealersPageInner() {
     <div className="erp">
       {/* Header */}
       <div className="page-head">
-        <div>
-          <p>จัดการและติดตามผลการดำเนินงานของทุกตัวแทน</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+        <div />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}

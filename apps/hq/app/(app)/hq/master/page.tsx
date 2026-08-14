@@ -30,7 +30,7 @@ function todayTH() { const d = APP_NOW; return `${d.getDate()} ${TH_MONTHS[d.get
 
 type EditForm = { name: string; spec: string; unit: string; subtypes: string[]; image: string; subtypeImages: Record<string, string>; subtypePrices: Record<string, number> };
 
-const subInp: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: "0.8rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+const subInp: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 14px", fontSize: "0.92rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
 
 // ── ตัวจัดการแม่แบบย่อย — เพิ่ม / แก้ชื่อ / ลบ + อัปโหลดรูปรายแม่แบบย่อย ── (ใช้ร่วมฟอร์มเพิ่ม/แก้ไข)
 function SubtypeEditor({ value, images, prices, mainPrice, onChange, onImagesChange, onPricesChange }: {
@@ -91,7 +91,7 @@ function SubtypeEditor({ value, images, prices, mainPrice, onChange, onImagesCha
   return (
     <div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
-        {value.length === 0 && <span style={{ fontSize: "0.72rem", color: MUTED }}>ยังไม่มีแม่แบบย่อย (ไม่ใส่ก็ได้)</span>}
+        {value.length === 0 && <span style={{ fontSize: "0.82rem", color: MUTED }}>ยังไม่มีแม่แบบย่อย (ไม่ใส่ก็ได้)</span>}
         {value.map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, borderRadius: 9, padding: "6px 8px", background: "#fafafa" }}>
             {/* รูปรายแม่แบบย่อย — คลิกเพื่ออัปโหลด */}
@@ -107,20 +107,20 @@ function SubtypeEditor({ value, images, prices, mainPrice, onChange, onImagesCha
             {editIdx === i ? (
               <input autoFocus aria-label="แก้ไขข้อความ" value={editText} onChange={e => setEditText(e.target.value)} onBlur={commitEdit}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitEdit(); } else if (e.key === "Escape") { setEditIdx(null); setEditText(""); } }}
-                style={{ ...subInp, flex: 1, padding: "5px 8px", fontSize: "0.78rem" }} />
+                style={{ ...subInp, flex: 1, padding: "7px 10px", fontSize: "0.88rem" }} />
             ) : (
               <button type="button" onClick={() => { setEditIdx(i); setEditText(s); }} title="คลิกเพื่อแก้ชื่อ"
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.78rem", fontWeight: 600, color: STEEL, padding: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</button>
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "0.88rem", fontWeight: 600, color: STEEL, padding: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</button>
             )}
             {/* ราคากลางของแม่แบบย่อยนี้ — ว่างไว้ = ใช้ราคาแม่แบบหลัก (placeholder บอกว่าจะได้เท่าไหร่) */}
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <span style={{ fontSize: "0.7rem", color: MUTED }}>฿</span>
+              <span style={{ fontSize: "0.82rem", color: MUTED }}>฿</span>
               <input type="number" min="0" step="0.01" aria-label={`ราคากลางของ ${s}`}
                 value={prices[s] != null ? String(prices[s]) : ""}
                 onChange={e => setPrice(s, e.target.value)}
                 placeholder={mainPrice > 0 ? String(mainPrice) : "ราคาหลัก"}
                 title={prices[s] != null ? "ราคาเฉพาะของแม่แบบย่อยนี้" : "ยังไม่ตั้ง — ใช้ราคาของแม่แบบหลัก"}
-                style={{ ...subInp, width: 92, padding: "5px 7px", fontSize: "0.75rem", textAlign: "right",
+                style={{ ...subInp, width: 108, padding: "7px 9px", fontSize: "0.86rem", textAlign: "right",
                   fontWeight: prices[s] != null ? 700 : 400, color: prices[s] != null ? PRIMARY : STEEL }} />
             </div>
             {images[s] && <button type="button" onClick={() => clearImg(s)} title="ลบรูป" style={iconBtn}><Trash2 size={13} color="#dc2626" /></button>}
@@ -133,7 +133,7 @@ function SubtypeEditor({ value, images, prices, mainPrice, onChange, onImagesCha
           onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
         <button type="button" className="btn btn-secondary btn-md" onClick={add} style={{ flexShrink: 0 }}><Plus size={14} /> เพิ่ม</button>
       </div>
-      {value.length > 0 && <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 6 }}>คลิกที่ชื่อเพื่อแก้ · คลิกรูปเพื่ออัปโหลดรายแม่แบบย่อย · ✕ เพื่อลบ<br />ช่องราคา: ว่างไว้ = ใช้ราคาแม่แบบหลัก · ใส่ตัวเลข = ใช้ราคานั้นเฉพาะแม่แบบย่อยนี้</div>}
+      {value.length > 0 && <div style={{ fontSize: "0.76rem", color: "#9ca3af", marginTop: 8, lineHeight: 1.6 }}>คลิกที่ชื่อเพื่อแก้ · คลิกรูปเพื่ออัปโหลดรายแม่แบบย่อย · ✕ เพื่อลบ<br />ช่องราคา: ว่างไว้ = ใช้ราคาแม่แบบหลัก · ใส่ตัวเลข = ใช้ราคานั้นเฉพาะแม่แบบย่อยนี้</div>}
     </div>
   );
 }
@@ -164,7 +164,7 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (v: string)
           <input type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
         </label>
         {value && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange("")} style={{ color: "#dc2626" }}><Trash2 size={12} /> ลบรูป</button>}
-        <span style={{ fontSize: "0.65rem", color: "#9ca3af" }}>PNG, JPG · ไม่ใส่ก็ได้</span>
+        <span style={{ fontSize: "0.76rem", color: "#9ca3af" }}>PNG, JPG · ไม่ใส่ก็ได้</span>
       </div>
     </div>
   );
@@ -269,17 +269,17 @@ function HQMasterPageInner() {
     setDelTarget(null);
   }
 
-  const inp: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px", fontSize: "0.8rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
-  const lbl: React.CSSProperties = { display: "block", fontSize: "0.65rem", fontWeight: 700, color: MUTED, marginBottom: 5 };
+  // ขนาดตัวอักษร/ช่องกรอกของฟอร์มแม่แบบ — ขยายขึ้นทั้งชุดตามที่ผู้ใช้แจ้งว่าเล็กเกินไป (14 ส.ค. 69)
+  const inp: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 14px", fontSize: "0.92rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+  const lbl: React.CSSProperties = { display: "block", fontSize: "0.78rem", fontWeight: 700, color: MUTED, marginBottom: 7 };
   const pill: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", fontWeight: 700, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 99, padding: "7px 16px" };
 
   return (
     <div className="erp">
       {/* Header */}
       <div className="page-head">
-        <div>
-          <p>แหล่งเดียวทั้งเครือ — ตัวแทนเห็นแม่แบบและราคากลางชุดเดียวกันนี้ (อ่านอย่างเดียว)</p>
-        </div>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+        <div />
         <button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={15} /> เพิ่มแม่แบบ</button>
       </div>
 
@@ -487,12 +487,12 @@ function HQMasterPageInner() {
       {/* ── Add modal ── */}
       {adding && (
         <div onClick={() => setAdding(false)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 220, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <ModalCard onClose={() => setAdding(false)} label="เพิ่มแม่แบบใหม่" className="modal-pop-flex" style={{ position: "static", width: "100%", maxWidth: 460, maxHeight: "90vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
-            <div style={{ background: PRIMARY, color: "#fff", padding: "15px 20px", fontSize: "0.92rem", fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <ModalCard onClose={() => setAdding(false)} label="เพิ่มแม่แบบใหม่" className="modal-pop-flex" style={{ position: "static", width: "100%", maxWidth: 620, maxHeight: "92vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
+            <div style={{ background: PRIMARY, color: "#fff", padding: "17px 24px", fontSize: "1.08rem", fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               เพิ่มแม่แบบใหม่
               <button onClick={() => setAdding(false)} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 28, height: 28, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
             </div>
-            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 13, overflowY: "auto", flex: 1 }}>
+            <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", flex: 1 }}>
               <div><label style={lbl}>ชื่อแม่แบบ *</label><input style={inp} value={addForm.name} autoFocus onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="เช่น โกดังสำเร็จรูป" /></div>
               <div><label style={lbl}>รูปแม่แบบ</label><ImageUpload value={addForm.image} onChange={v => setAddForm(f => ({ ...f, image: v }))} /></div>
               <div><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={addForm.spec} onChange={e => setAddForm(f => ({ ...f, spec: e.target.value }))} /></div>

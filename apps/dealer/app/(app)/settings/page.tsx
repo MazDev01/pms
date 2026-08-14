@@ -912,7 +912,7 @@ export default function SettingsPage() {
           <button className="btn btn-secondary btn-sm" onClick={resetAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><RotateCcw size={14} /> รีเซ็ต</button>
           <button className="btn btn-primary btn-sm" onClick={saveAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><Save size={14} /> บันทึก</button>
         </TopbarActions>
-        <p className="page-sub">บัญชีดีลเลอร์ · ใบเสนอราคา · ผู้รับผิดชอบ · การแจ้งเตือน ของตัวแทน</p>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 
         {/* Tab bar */}
         <div className="card" style={{ marginBottom: 18 }}>

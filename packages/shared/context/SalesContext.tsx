@@ -19,6 +19,7 @@ import {
 
 import { parseBaht } from "@pms/shared/lib/format";
 import { shouldCloseWon } from "@pms/shared/lib/closeWon";
+import { customerDeletionImpact, blockReason } from "@pms/shared/lib/customerDeletion";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useQuoteValidityDays, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
@@ -489,25 +490,39 @@ export function SalesProvider({
     persistCustomer.update(customer);
   }, [persistCustomer]);
 
+  // ตัวชี้ไปยัง deleteQuotation ตัวจริง (ประกาศอยู่ท้ายไฟล์) — deleteCustomer ต้องใช้ก่อนถึงบรรทัดนั้น
+  const deleteQuotationRef = useRef<((id: string) => void) | null>(null);
+
   // ลบลูกค้า — ต้องไม่ทิ้ง "ข้อมูลกำพร้า" ไว้ (H1)
   // DB ยังผูก FK ระหว่างใบเสนอราคา/ลีด กับลูกค้าไม่ได้ (customerId ใช้ 0 แทน "ยังไม่มีลูกค้า")
-  // จึงต้องกันที่ชั้นแอป: มีใบเสนอราคา/ลีดผูกอยู่ = ลบไม่ได้ ต้องจัดการของที่ผูกก่อน
+  // จึงต้องกันที่ชั้นแอป
+  //
+  // ⚠️ เดิมกันแบบเหมารวม "มีลีดผูกอยู่ = ลบไม่ได้" ซึ่งกลายเป็นทางตันที่ออกไม่ได้เลย:
+  //   ดีลที่ปิดการขายแล้วก็ถูกนับด้วย แต่หน้าลูกค้าเป้าหมายตั้งใจซ่อนดีลที่ปิดแล้วไว้
+  //   ระบบจึงสั่งให้ไปลบของที่มันไม่ยอมให้เห็น → ลูกค้าที่ปิดการขายแล้วลบไม่ได้ตลอดกาล
+  //   (ผู้ใช้แจ้ง 14 ส.ค. 69 · ดู customerDeletion.ts สำหรับกติกาเต็ม)
   const deleteCustomer = useCallback((id: number) => {
-    const linkedQuotes = quotationsRef.current.filter(q => q.customerId === id).length;
-    const linkedLeads = leadsRef.current.filter(l => l.customerId === id).length;
-    if (linkedQuotes || linkedLeads) {
-      const parts = [
-        linkedQuotes ? `ใบเสนอราคา ${linkedQuotes} ใบ` : "",
-        linkedLeads ? `ลูกค้าเป้าหมาย ${linkedLeads} รายการ` : "",
-      ].filter(Boolean).join(" และ ");
-      setSyncError(`ลบลูกค้าไม่ได้ — ยังมี${parts}ผูกอยู่ · กรุณาย้าย/ลบรายการเหล่านั้นก่อน`);
-      return;
+    const impact = customerDeletionImpact(id, leadsRef.current, quotationsRef.current);
+    if (!impact.canDelete) { setSyncError(blockReason(impact)); return; }
+
+    // ดีลที่จบแล้ว + ใบเสนอราคาของดีลเหล่านั้น = ประวัติของลูกค้ารายนี้ → ไปพร้อมกัน
+    // ลบของที่ผูกอยู่ "ก่อน" ลูกค้าเสมอ — ถ้าลบลูกค้าก่อนแล้วพลาดกลางทาง จะเหลือของกำพร้า
+    // ที่ชี้ไปหาลูกค้าที่ไม่มีแล้ว และมองไม่เห็นจากหน้าจอไหนเลย
+    // เรียกผ่าน ref เพราะ deleteQuotation ถูกประกาศทีหลังในไฟล์นี้ — และต้องใช้ตัวจริงเท่านั้น
+    // (มันดูแลลบไฟล์ที่ระบบสร้าง + คำนวณยอดลูกค้าใหม่เมื่อใบที่ลบเป็นใบที่ปิดการขายได้)
+    for (const q of impact.quotations) deleteQuotationRef.current?.(q.id);
+    for (const l of impact.closedLeads) {
+      setLeads(prev => prev.filter(x => x.id !== l.id));
+      persistLead.remove(l.id);
     }
     setCustomers(prev => prev.filter(c => c.id !== id));
     persistCustomer.remove(id);
     // ลบไฟล์ที่แนบกับลูกค้ารายนี้ (source=customer · record_id/customer_id = id ของลูกค้า)
     void cleanupFilesFor(f => f.source === "customer" && (f.recordId === id || f.customerId === id));
-  }, [persistCustomer, cleanupFilesFor]);
+    // ไฟล์ที่แนบกับดีลที่จบแล้วก็ต้องไปด้วย — ไม่งั้นเหลือไฟล์กำพร้าใน Storage
+    const goneLeadIds = new Set(impact.closedLeads.map(l => l.numId).filter((n): n is number => n != null));
+    if (goneLeadIds.size) void cleanupFilesFor(f => f.source === "lead" && f.recordId != null && goneLeadIds.has(f.recordId));
+  }, [persistCustomer, persistLead, cleanupFilesFor]);
 
   // ── Quotation → เช็กงานของลีดอัตโนมัติ ─────────────────────────────
   // สร้างใบเสนอราคา = ติ๊ก "จัดทำใบเสนอราคา" · ส่งใบเสนอราคา = ติ๊ก "ส่งใบเสนอราคา"
@@ -628,6 +643,7 @@ export function SalesProvider({
       }
     })();
   }, [persistQuote, syncQuoteFile, reconcileCustomerTotal]);
+  deleteQuotationRef.current = deleteQuotation; // ให้ deleteCustomer เรียกตัวจริงได้ (ประกาศทีหลัง)
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
     const target = quotationsRef.current.find(q => q.id === id);

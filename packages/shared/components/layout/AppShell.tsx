@@ -11,10 +11,16 @@ import { purgeOldDealerKeys } from "@pms/shared/lib/mock";
 import { REPO_SAVE_ERROR_EVENT } from "@pms/shared/lib/useRepoState";
 import { REPO_READ_ERROR_EVENT } from "@pms/shared/lib/repoLog";
 
-// แถบเตือน "บันทึกไม่สำเร็จ" (C1) — ต้องเห็นทุกหน้า เพราะการเขียนเป็น optimistic
+// แถบเตือนขึ้นค้างอยู่กี่วินาทีก่อนหายเอง — ข้อความไทยยาวสุดในระบบอ่านจบใน ~6 วิ เผื่อไว้เล็กน้อย
+const ALERT_MS = 8000;
+
+// แถบเตือน "บันทึกไม่สำเร็จ" (C1) — การเขียนเป็น optimistic
 // ถ้าไม่แจ้ง ผู้ใช้จะเข้าใจว่าบันทึกแล้วทั้งที่ DB ปฏิเสธ (เช่น RLS/เน็ตหลุด)
+// บอสสั่ง (14 ส.ค. 69): ให้ขึ้นแป๊บเดียวแล้วหายเอง และอยู่เฉพาะหน้าที่กด ไม่ตามไปโผล่หน้าอื่น
+//   — ข้อความพวกนี้เป็นผลของ "สิ่งที่เพิ่งกดในหน้านี้" ไม่ใช่สถานะค้างของทั้งแอป
 function SyncErrorBar() {
   const { syncError, clearSyncError } = useSales();
+  const pathname = usePathname();
   // ข้อมูลระดับเครือ (ทะเบียนตัวแทน/แคตตาล็อก/ตั้งค่า) บันทึกผ่าน useRepoState คนละทางกับงานขาย
   // แต่ต้องเตือนที่เดียวกัน — ไม่งั้นลบตัวแทนไม่สำเร็จแล้วผู้ใช้ไม่รู้เลย
   const [repoError, setRepoError] = useState<string | null>(null);
@@ -23,6 +29,21 @@ function SyncErrorBar() {
     window.addEventListener(REPO_SAVE_ERROR_EVENT, onErr);
     return () => window.removeEventListener(REPO_SAVE_ERROR_EVENT, onErr);
   }, []);
+
+  // หายเองเมื่อครบเวลา
+  useEffect(() => {
+    if (!syncError) return;
+    const t = setTimeout(clearSyncError, ALERT_MS);
+    return () => clearTimeout(t);
+  }, [syncError, clearSyncError]);
+  useEffect(() => {
+    if (!repoError) return;
+    const t = setTimeout(() => setRepoError(null), ALERT_MS);
+    return () => clearTimeout(t);
+  }, [repoError]);
+
+  // เปลี่ยนหน้า = ล้างทิ้งทันที (แถบของหน้าเดิมไม่ตามมาหน้าใหม่)
+  useEffect(() => { clearSyncError(); setRepoError(null); }, [pathname, clearSyncError]);
 
   if (repoError && !syncError) {
     return (
@@ -55,13 +76,17 @@ function SyncErrorBar() {
 // เดิม catch แล้ว log เงียบๆ ตอนโหลดพัง หน้าจอจึงโชว์ "0 รายการ" เหมือนข้อมูลว่างจริง แยกไม่ออกจาก
 // ของจริงที่ยังไม่มีข้อมูล — ผู้ใช้อาจเข้าใจผิดว่าข้อมูลหาย (Critical, พบจากผลตรวจสอบระบบ 30 ก.ค. 69)
 // ไม่มี retry ต่อ hook ให้เรียก (มีหลายสิบจุด) — รีเฟรชทั้งหน้าคือทางที่ตรงและเชื่อถือได้สุด
+// แถบนี้ไม่หายเอง (ต่างจากแถบแดง) เพราะมันบอกว่า "ตัวเลขที่เห็นอยู่ตรงหน้าอาจไม่ครบ"
+//   ซึ่งยังเป็นจริงตราบที่ยังไม่รีเฟรช — แต่ล้างทิ้งเมื่อเปลี่ยนหน้า เพราะหน้าใหม่โหลดข้อมูลชุดใหม่
 function ReadErrorBar() {
   const [readError, setReadError] = useState<string | null>(null);
+  const pathname = usePathname();
   useEffect(() => {
     const onErr = (e: Event) => setReadError((e as CustomEvent<string>).detail || "โหลดข้อมูลไม่สำเร็จ");
     window.addEventListener(REPO_READ_ERROR_EVENT, onErr);
     return () => window.removeEventListener(REPO_READ_ERROR_EVENT, onErr);
   }, []);
+  useEffect(() => { setReadError(null); }, [pathname]);
   if (!readError) return null;
   return (
     <div role="alert" style={{

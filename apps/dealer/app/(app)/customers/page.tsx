@@ -65,6 +65,7 @@ import {
   Users, UserPlus, Package, ChevronRight, History as HistoryIcon,
 } from "lucide-react";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
+import { customerDeletionImpact } from "@pms/shared/lib/customerDeletion";
 
 // ── Design tokens ────────────────────────────────────────────
 const PRIMARY = "#003366";
@@ -803,7 +804,7 @@ export default function CustomersPage(){
             <Upload size={14}/> นำเข้าลูกค้าเดิม
           </button>
         </TopbarActions>
-        <p className="page-sub">ฐานข้อมูลลูกค้าที่ปิดการขายแล้ว · {timeRange.subtitle}</p>
+        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 
         {/* ── KPI 4 ใบ (ภาษาเดียวกับแดชบอร์ด) ── */}
         {(() => {
@@ -1739,6 +1740,26 @@ export default function CustomersPage(){
                 <div style={{fontSize:"1rem",fontWeight:800,color:STEEL}}>ลบลูกค้า</div>
               </div>
               <p style={{fontSize:"0.8rem",color:MUTED,lineHeight:1.6,margin:0}}>ต้องการลบ <strong style={{color:STEEL}}>{delTarget.company}</strong>? การลบไม่สามารถย้อนกลับได้</p>
+              {/* บอกให้ครบว่าอะไรจะหายไปด้วย — ประวัติการขายของลูกค้ารายนี้ถูกลบไปพร้อมกัน
+                  ผู้ใช้ต้องรู้ก่อนกด ไม่ใช่มารู้ตอนเปิดหารายงานย้อนหลังแล้วไม่เจอ */}
+              {(() => {
+                const im = customerDeletionImpact(delTarget.id, allLeadsRaw, allQuotations);
+                const parts = [
+                  im.closedLeads.length ? `ประวัติการขาย ${im.closedLeads.length} ดีล` : "",
+                  im.quotations.length ? `ใบเสนอราคา ${im.quotations.length} ใบ` : "",
+                ].filter(Boolean);
+                if (!im.canDelete) return (
+                  <p style={{fontSize:"0.78rem",color:"#b45309",lineHeight:1.6,margin:"8px 0 0",fontWeight:600}}>
+                    ลบไม่ได้ — ยังมีดีลที่ขายอยู่ {im.activeLeads.length} รายการ · ปิดการขายหรือลบดีลเหล่านั้นก่อน
+                  </p>
+                );
+                if (!parts.length) return null;
+                return (
+                  <p style={{fontSize:"0.78rem",color:"#b45309",lineHeight:1.6,margin:"8px 0 0",fontWeight:600}}>
+                    จะลบ{parts.join(" และ ")} ไปพร้อมกันด้วย
+                  </p>
+                );
+              })()}
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setDelTarget(null)}>ยกเลิก</button>
