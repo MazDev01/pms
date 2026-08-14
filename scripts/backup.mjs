@@ -68,7 +68,19 @@ async function dumpTable(table, pk) {
 // ชื่อโฟลเดอร์จากอาร์กิวเมนต์แรกที่ไม่ใช่ตัวเลือก (กัน --test ถูกเอาไปใช้เป็นชื่อโฟลเดอร์)
 const nameArg = process.argv.slice(2).find(a => !a.startsWith("--"));
 const stamp = nameArg ?? new Date().toISOString().slice(0, 16).replace(/[:T]/g, "").replace(/(\d{8})(\d{4})/, "$1-$2");
-const dir = path.join("backups", stamp);
+
+// ── ที่เก็บไฟล์สำรอง — ตั้งออกนอกเครื่องได้ (เพิ่ม 14 ส.ค. 69) ────────────────────
+// ความเสี่ยงที่ค้างอยู่: ไฟล์สำรองอยู่ในเครื่องเดียวกับที่ทำงาน — เครื่องพังคือเสียพร้อมกันทั้งคู่
+// ไม่ต้องรอซื้อบริการอะไร แค่ชี้ไปโฟลเดอร์ที่ซิงก์ขึ้นคลาวด์อยู่แล้ว (OneDrive / Google Drive)
+// หรือไดรฟ์สำรอง/ไดรฟ์เครือข่าย ก็ถือว่าอยู่นอกเครื่องแล้ว
+//
+//   ตั้งถาวร:   setx BACKUP_DIR "C:\Users\<ชื่อผู้ใช้>\OneDrive\benjamin-backups"
+//   ครั้งเดียว: $env:BACKUP_DIR="D:\backups"; node scripts\backup.mjs
+//
+// ⚠️ ไฟล์สำรองมีข้อมูลลูกค้าจริงและรหัสลับตัวแทน — ปลายทางต้องเป็นที่ที่คนนอกเข้าไม่ถึง
+//    ห้ามชี้ไปโฟลเดอร์ที่แชร์ให้คนอื่น และห้ามชี้กลับเข้ามาในโปรเจกต์นี้ (จะหลุดขึ้น git)
+const BASE = process.env.BACKUP_DIR?.trim() || "backups";
+const dir = path.join(BASE, stamp);
 mkdirSync(dir, { recursive: true });
 
 console.log(`\n══ สำรองข้อมูล → ${dir} ══\n`);
