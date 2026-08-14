@@ -678,7 +678,10 @@ body {
 @media (max-width: 860px)  { .hq-alert-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px)  { .hq-alert-row { grid-template-columns: 1fr; } }
 /* กราฟ "แยกตามตัวแทน" บนหน้า HQ — 2 คอลัมน์บนจอกว้าง */
-.hq-dealer-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; margin-bottom: 24px; }
+/* ระยะห่างการ์ดคู่ของหน้า HQ — ขยายจาก 24px เป็น 32px (ผู้ใช้แจ้ง 14 ส.ค. 69 ว่ากรอบชิดกันเกินไป)
+   การ์ดพวกนี้สูง 340–420px และมีกรอบ+เงาของตัวเอง ระยะ 24px ที่พอดีกับการ์ดเตี้ย ๆ
+   เลยดูอึดอัดเมื่อการ์ดสูงขนาดนี้วางติดกัน · ขยายทั้งช่องว่างระหว่างใบและระยะห่างจากแถวถัดไป */
+.hq-dealer-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; align-items: start; margin-bottom: 32px; }
 
 /* ── /hq/leads · แถวการ์ด 3 คอลัมน์ (ใช้ทั้งสองแถวให้คอลัมน์ตรงกันเป็นตาราง) ──
    คอลัมน์แรกกว้างกว่า: แถวบนเป็นแนวโน้ม 6 เดือน × 4 ชุด = 24 แท่ง, แถวล่างเป็นโดนัท + คำอธิบายเรียงข้าง
