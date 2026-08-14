@@ -3,7 +3,7 @@
 // ─── ตารางรายการสินค้าใบเสนอราคา (BOQ) ──────────────────────────────────────────
 // เลือกจากแคตตาล็อกแม่แบบ (main + subtypes) → ดึง "ราคากลาง HQ" (SolutionProduct.price) มาเติมให้อัตโนมัติ
 // แก้จำนวน/ราคาต่อหน่วยได้ · รวมต่อแถว + ยอดรวม คิดเอง · จำนวนรายการ = จำนวนแถว
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { catalogRate } from "@pms/shared/lib/boq";
@@ -35,6 +35,31 @@ const clamp = (n: number, max: number) => Math.min(max, Math.max(0, Number.isFin
 export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = true }: { items: QuoteLineItem[]; onChange: (items: QuoteLineItem[]) => void; defaultQty?: number; showCatalog?: boolean }) {
   const catalog = useMasterCatalog();
   const [pickOpen, setPickOpen] = useState(false);
+  const pickRef = useRef<HTMLDivElement>(null);
+  // ── เลื่อนหน้าจอขณะเปิดรายการแคตตาล็อกไม่ได้ (แก้ 14 ส.ค. 69 · อาการเดียวกับเมนูผู้ใช้ HQ) ──
+  // ฉากหลังใสที่คลุมทั้งจอไว้ดักคลิก ดักล้อเมาส์ไปด้วย — และป๊อปอัพนี้เลื่อนที่กล่องเนื้อหาข้างใน
+  // ล้อจึงไปไม่ถึงตัวที่เลื่อนได้จริง · ปิดรายการเมื่อเริ่มเลื่อน "นอกกล่อง" เท่านั้น
+  // ⚠️ ต้องยกเว้นการเลื่อนในตัวรายการเอง (maxHeight 320 + overflow) ไม่งั้นเลื่อนดูแม่แบบล่าง ๆ ไม่ได้
+  useEffect(() => {
+    if (!pickOpen) return;
+    const close = (e?: Event) => {
+      if (e && e.target instanceof Node && pickRef.current?.contains(e.target)) return;
+      setPickOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPickOpen(false); };
+    window.addEventListener("scroll", close, true);   // capture — scroll ไม่ bubble ขึ้น document
+    window.addEventListener("wheel", close, { passive: true });
+    window.addEventListener("touchmove", close, { passive: true });
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("wheel", close);
+      window.removeEventListener("touchmove", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [pickOpen]);
   const subtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
 
   // เติม id ให้แถวที่ยังไม่มี (ข้อมูลเก่าที่ persist ไว้ / ที่ synth มาจากที่อื่น) ครั้งเดียวตอนโหลด
@@ -58,7 +83,7 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
           {showCatalog && pickOpen && (
             <>
               <div onClick={() => setPickOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 220 }} />
-              <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 221, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, width: 300, maxHeight: 320, overflowY: "auto" }}>
+              <div ref={pickRef} style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 221, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, width: 300, maxHeight: 320, overflowY: "auto" }}>
                 {catalog.length === 0 && <div style={{ padding: 12, fontSize: "0.78rem", color: "#9ca3af", textAlign: "center" }}>ไม่มีแม่แบบ</div>}
                 {catalog.map(p => (
                   <div key={p.id}>

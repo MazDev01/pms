@@ -208,7 +208,12 @@ function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; on
   // ต้องกดปิดก่อนถึงจะเลื่อนได้ (ผู้ใช้แจ้ง) · ปิดเมื่อเริ่มเลื่อน = ท่ามาตรฐานของเมนูแบบนี้
   // ปิดเมื่อ resize ด้วย — ไม่งั้นเมนูค้างอยู่ตำแหน่งเดิมที่ไม่ตรงกับปุ่มอีกต่อไป
   useEffect(() => {
-    const close = () => onClose();
+    // ⚠️ ต้องไม่ปิดเมื่อเลื่อน "ในตัวเมนูเอง" — เมนูมี maxHeight/overflow เผื่อจอเตี้ย
+    //   ถ้าปิดทุกการเลื่อน ผู้ใช้จะเลื่อนดูรายการล่าง ๆ ของเมนูไม่ได้เลย
+    const close = (e?: Event) => {
+      if (e && e.target instanceof Node && boxRef.current?.contains(e.target)) return;
+      onClose();
+    };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     // capture=true → จับได้แม้กล่องด้านในเป็นตัวที่เลื่อน (scroll ไม่ bubble ขึ้น document)
     window.addEventListener("scroll", close, true);
