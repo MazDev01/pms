@@ -416,7 +416,10 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <ModalCard onClose={onClose} label="ยืนยันการลบไฟล์" className="card"
+        {/* ⚠️ ป้ายกำกับนี้คือสิ่งที่โปรแกรมอ่านหน้าจอประกาศตอนหน้าต่างเปิด — เดิมเขียนว่า
+            "ยืนยันการลบไฟล์" (ก๊อปมาจากกล่องลบแล้วลืมแก้) ผู้ใช้ที่ใช้โปรแกรมอ่านหน้าจอจึงได้ยินว่า
+            กำลังจะลบไฟล์ ทั้งที่แค่เปิดดูตัวอย่าง — คนละความหมายกันคนละเรื่อง (พบ 14 ส.ค. 69) */}
+        <ModalCard onClose={onClose} label="ดูตัวอย่างไฟล์" className="card"
           style={{ width: "100%", maxWidth: 640, maxHeight: "90vh", pointerEvents: "auto", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,51,102,.28)" }}>
           {/* Header */}
           <div style={{ background: PRIMARY, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
@@ -825,7 +828,8 @@ export default function FilesPage() {
         <>
           <div onClick={() => setDelId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 200 }} />
           <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-            <ModalCard onClose={() => setDelId(null)} label="เมนูไฟล์" className="card" style={{ width: 300, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
+            {/* ป้ายกำกับต้องตรงกับสิ่งที่กล่องนี้ทำจริง — เดิมเป็น "เมนูไฟล์" ซึ่งไม่บอกเลยว่ากำลังจะลบ */}
+            <ModalCard onClose={() => setDelId(null)} label="ยืนยันการลบไฟล์" className="card" style={{ width: 300, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
               <div style={{ padding: "16px 20px 14px", borderBottom: `1px solid ${BORDER}` }}>
                 <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL }}>ยืนยันการลบไฟล์</div>
                 <div style={{ fontSize: "0.72rem", color: MUTED, marginTop: 4 }}>
