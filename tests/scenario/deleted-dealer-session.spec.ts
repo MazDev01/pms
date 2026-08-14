@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
-import { ADMIN, RYG, skipReason } from "./supabaseEnv";
+import { ADMIN, RYG, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors } from "./funcHelpers";
 
@@ -11,9 +11,15 @@ import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors } fr
 //   ทุกคำขอข้อมูลถูกฐานข้อมูลปฏิเสธ หน้าจอจึงว่างเปล่า ผู้ใช้เห็นเป็น "ระบบพัง" ไม่ใช่ "ถูกลบสิทธิ์"
 //   ต้นเหตุ: การฟื้น session อ่านจากใบผ่านในเครื่องอย่างเดียว ไม่เคยถามว่าบัญชี/สาขายังอยู่ไหม
 //
-// เทสต์นี้ล็อกทั้งสองด้านไว้:
+// เรื่องเดียวกันกับ "ปิดใช้งานสาขา" (ผู้ใช้แจ้ง 14 ส.ค. 69): ล็อกอินใหม่ถูกปฏิเสธจริงตั้งแต่ที่
+//   ฐานข้อมูล (0032) แต่คนที่เปิดหน้าค้างอยู่ยังใช้ต่อได้ — ต้องเด้งออกเหมือนกัน
+//
+// เทสต์นี้ล็อกไว้ 4 ด้าน:
 //   1. สาขาถูกลบ → หน้าที่เปิดค้างต้องเด้งออกไปหน้าเข้าสู่ระบบ
 //   2. สาขาที่ยังอยู่ → ต้องใช้งานได้ตามปกติ (กันการแก้เผลอเด้งคนที่ยังมีสิทธิ์ออก)
+//   3. สาขาถูกปิดใช้งาน → ล็อกอินใหม่ไม่ได้ และหน้าที่เปิดค้างต้องเด้งออก
+//   4. การตรวจสาขาต้องอ่านผ่าน view dealers_directory — ตาราง dealers ถูกถอนสิทธิ์อ่านไปแล้ว (0090)
+//      เคยพลาดมาแล้ว: ยิงตรงที่ตาราง แล้วการตรวจกลายเป็นโค้ดตายที่ไม่เคยจับอะไรได้เลย
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(240_000);
 test.describe.configure({ mode: "serial" });
@@ -70,4 +76,43 @@ test("[auth] สาขาที่ยังอยู่ต้องใช้ง�
   await page.waitForTimeout(1500);
   expect(new URL(page.url()).pathname, "สาขาปกติต้องไม่ถูกเด้งออก").not.toContain("/login");
   await expect(page.getByText("บัญชีดีลเลอร์").first()).toBeVisible({ timeout: 15_000 });
+});
+
+test("[auth] ปิดใช้งานสาขา → ล็อกอินใหม่ไม่ได้ และหน้าที่เปิดค้างต้องเด้งออก", async ({ page, request }) => {
+  const errs = watchErrors(page);
+  const CODE2 = "ZTI";
+  const purge2 = async () => {
+    const { data: profs } = await admin.from("profiles").select("id").eq("dealer_code", CODE2);
+    for (const p of profs ?? []) await admin.auth.admin.deleteUser(String(p.id)).catch(() => {});
+    await admin.from("dealers").delete().eq("code", CODE2);
+  };
+  await purge2();
+  try {
+    const created = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
+      headers: { authorization: `Bearer ${await adminToken()}` },
+      data: { code: CODE2, name: "ZZTMP สาขาปิดใช้งาน", province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000 },
+    });
+    expect(created.status(), `สร้างสาขาต้องผ่าน (${await created.text()})`).toBe(200);
+    const cred = await created.json() as { email: string; password: string };
+
+    await loginUI(page, DEALER_ORIGIN, "/login", cred);
+    expect(new URL(page.url()).pathname, "ตอนยังเปิดใช้งานต้องเข้าได้ปกติ").not.toContain("/login");
+
+    // สำนักงานใหญ่กดปิดใช้งานสาขา
+    await admin.from("dealers").update({ status: "inactive" }).eq("code", CODE2);
+
+    // ล็อกอินใหม่จากศูนย์ต้องถูกปฏิเสธที่ฐานข้อมูล (ไม่ออกใบผ่านให้เลย)
+    const fresh = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await fresh.auth.signInWithPassword(cred);
+    expect(error, "สาขาที่ถูกปิดใช้งานต้องล็อกอินใหม่ไม่ได้").not.toBeNull();
+
+    // หน้าที่เปิดค้างอยู่ต้องเด้งออกเมื่อโหลดหน้าถัดไป
+    await page.goto(`${DEALER_ORIGIN}/settings`, { waitUntil: "domcontentloaded" });
+    await expect.poll(() => new URL(page.url()).pathname,
+      { timeout: 20_000, message: "สาขาถูกปิดใช้งานแล้ว ต้องเด้งไปหน้าเข้าสู่ระบบ" }).toContain("/login");
+
+    assertNoErrors(errs.filter(e => !/auth\/v1\/logout/.test(e) && !/status of 403/.test(e)), "ปิดใช้งานสาขาแล้วเด้งออก");
+  } finally {
+    await purge2();
+  }
 });

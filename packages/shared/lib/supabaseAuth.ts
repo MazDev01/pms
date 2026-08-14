@@ -9,6 +9,7 @@ import type { AuthResult } from "./auth";
 import { friendlyError } from "./friendlyError";
 import type { MockSession, UserRole } from "./mock";
 import { HQ_ROLES } from "./permissions";
+import { logRepoRead } from "./repoLog";
 
 const isHQRole = (r: UserRole): boolean => HQ_ROLES.includes(r);
 
@@ -85,23 +86,37 @@ async function withNames(base: MockSession, userId: string): Promise<MockSession
 //   ทุกคำขอข้อมูลถูกฐานข้อมูลปฏิเสธหมด หน้าจอจึงว่างเปล่า — ผู้ใช้เห็นเป็น "ระบบพัง" ไม่ใช่ "ถูกลบสิทธิ์"
 //   ต้นเหตุ: การฟื้น session อ่านจากใบผ่านในเครื่องอย่างเดียว ไม่เคยถามว่าบัญชี/สาขายังมีอยู่ไหม
 //
-// กติกา: "อ่านสำเร็จแต่ไม่มีแถว" = ถูกลบไปแล้ว → ใช้ต่อไม่ได้
+// เรื่องเดียวกันกับ "ปิดใช้งาน" (ผู้ใช้แจ้ง 14 ส.ค. 69): ปิดสาขาแล้ว "ล็อกอินใหม่เข้าไม่ได้" จริง
+//   (ด่านที่ฐานข้อมูล 0032 ไม่ออกใบผ่านให้) แต่คนที่เปิดหน้าค้างอยู่ยังใช้งานต่อได้จนใบหมดอายุ
+//   → ต้องตรวจ "สถานะ" ด้วย ไม่ใช่แค่ "ยังมีอยู่ไหม"
+//
+// กติกา: "อ่านสำเร็จแต่ไม่มีแถว" = ถูกลบไปแล้ว · "มีแถวแต่ status ไม่ใช่ active" = ถูกปิดใช้งาน
+//   ทั้งสองกรณีใช้ต่อไม่ได้
 //   · โปรไฟล์ของตัวเองอ่านได้เสมอตามสิทธิ์ (profiles_read: id = auth.uid()) — ไม่มีแถว = บัญชีถูกลบ
 //   · ทะเบียนสาขาอ่านได้ทุกคนที่ล็อกอิน — ไม่มีแถว = สาขาถูกลบ
 // ⚠️ "อ่านไม่ได้" (เน็ตล่ม/เซิร์ฟเวอร์ล่ม) ต้องไม่ถือว่าถูกลบ ไม่งั้นเน็ตกระตุกทีเดียวเด้งผู้ใช้ออกทั้งระบบ
+// ⚠️ status ที่อ่านไม่ออก/ไม่มีค่า ให้ถือว่าใช้งานได้ — ระบบเก่าบางแถวไม่มีค่านี้ ห้ามเด้งคนออกเพราะข้อมูลเก่า
 async function stillValid(base: MockSession, userId: string): Promise<boolean> {
   const sb = getSupabase();
+  const disabled = (s: unknown) => typeof s === "string" && s.trim() !== "" && s !== "active";
   if (userId) {
     try {
-      const { data, error } = await sb.from("profiles").select("id").eq("id", userId).maybeSingle();
-      if (!error && !data) return false;   // อ่านได้ แต่ไม่มีโปรไฟล์แล้ว = บัญชีถูกลบ
-    } catch { /* อ่านไม่ได้ = ไม่สรุป */ }
+      const { data, error } = await sb.from("profiles").select("id,status").eq("id", userId).maybeSingle();
+      if (error) logRepoRead("auth.checkProfile", error);              // อ่านไม่ได้ต้องรู้ ไม่ใช่กลืนเงียบ
+      if (!error && !data) return false;                               // ไม่มีโปรไฟล์แล้ว = บัญชีถูกลบ
+      if (!error && disabled((data as { status?: string } | null)?.status)) return false;  // บัญชีถูกปิดใช้งาน
+    } catch (e) { logRepoRead("auth.checkProfile", e); }
   }
   if (!base.scopeAll && base.dealerCode) {
     try {
-      const { data, error } = await sb.from("dealers").select("code").eq("code", base.dealerCode).maybeSingle();
-      if (!error && !data) return false;   // อ่านได้ แต่ไม่มีสาขาแล้ว = สาขาถูกลบ
-    } catch { /* อ่านไม่ได้ = ไม่สรุป */ }
+      // ⚠️ ต้องอ่านผ่าน view dealers_directory เท่านั้น — ตาราง dealers ถูกถอนสิทธิ์อ่าน
+      //    ออกจาก authenticated ไปแล้ว (0090) ยิงตรงจะถูกปฏิเสธทุกครั้ง แล้วการตรวจนี้
+      //    จะกลายเป็นโค้ดตายที่ "ไม่เคยจับอะไรได้เลย" โดยไม่มีอะไรฟ้อง (เจอจริง 14 ส.ค. 69)
+      const { data, error } = await sb.from("dealers_directory").select("code,status").eq("code", base.dealerCode).maybeSingle();
+      if (error) logRepoRead("auth.checkDealer", error);
+      if (!error && !data) return false;                               // ไม่มีสาขาแล้ว = สาขาถูกลบ
+      if (!error && disabled((data as { status?: string } | null)?.status)) return false;  // สาขาถูกปิดใช้งาน
+    } catch (e) { logRepoRead("auth.checkDealer", e); }
   }
   return true;
 }
