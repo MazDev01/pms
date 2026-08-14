@@ -15,6 +15,7 @@ import { fmtISOToThai } from "@pms/shared/lib/mock";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
+import { resetHQUserPassword } from "@pms/shared/lib/adminApi";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { users as usersRepo } from "@pms/shared/lib/data";
@@ -328,6 +329,20 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // H4 — รีเซ็ตรหัสผ่าน = "ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล" (ไม่ใช่ออกรหัสปลอมแล้วโชว์แบบเดิม)
   // เดิม genTempPassword() สร้างสตริงที่ล็อกอินไม่ได้จริง + ลง audit ว่ารีเซ็ตแล้วทั้งที่ไม่เคยส่งไปที่ระบบยืนยันตัวตน
   function resetPassword(u: AppUser) { setResetInfo({ user: u }); }
+  // ── ตั้งรหัสผ่านใหม่ให้ทันที (บอสสั่ง 14 ส.ค. 69) ──
+  // ต่างจาก "ส่งลิงก์ทางอีเมล" ตรงที่ไม่พึ่งอีเมลเลย — ใช้ได้แม้ยังไม่ได้ตั้ง SMTP
+  // หรือผู้ใช้เข้าอีเมลไม่ได้ · เซิร์ฟเวอร์สุ่มรหัสให้แล้วคืนมาโชว์ครั้งเดียว
+  const [pwBusy, setPwBusy] = useState<string | null>(null);
+  async function setPasswordNow(u: AppUser) {
+    if (!confirm(`ตั้งรหัสผ่านใหม่ให้ "${u.name}"?
+รหัสเดิมจะใช้ไม่ได้ทันที และระบบจะแสดงรหัสใหม่ให้คัดลอกเพียงครั้งเดียว`)) return;
+    setPwBusy(u.id);
+    const res = await resetHQUserPassword(u.id);
+    setPwBusy(null);
+    if (!res.ok) { notify(`ตั้งรหัสผ่านไม่สำเร็จ: ${res.error}`); return; }
+    setCreds({ name: u.name, email: res.email || u.email, password: res.password });
+    // audit บันทึกที่เซิร์ฟเวอร์แล้ว (การันตีกว่า) — ไม่จดซ้ำที่นี่
+  }
 
   // หัวคอลัมน์เรียงลำดับ — ใช้ตัวกลาง SortableTh เพื่อให้กดด้วยคีย์บอร์ดได้
   // และประกาศทิศทางการเรียงให้โปรแกรมอ่านหน้าจอรู้ (aria-sort)
@@ -467,7 +482,13 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
         <ActionMenu pos={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)} items={[
           { label: "ดูรายละเอียด", icon: <Eye size={14} />, onClick: () => setDetailUser(menu.user) },
           { label: "แก้ไข", icon: <Pencil size={14} />, onClick: () => setDialogUser(menu.user) },
-          { label: "รีเซ็ตรหัสผ่าน", icon: <KeyRound size={14} />, onClick: () => resetPassword(menu.user) },
+          { label: "รีเซ็ตรหัสผ่าน (ส่งลิงก์ทางอีเมล)", icon: <KeyRound size={14} />, onClick: () => resetPassword(menu.user) },
+          // ตั้งรหัสให้ตรง ๆ = สวมสิทธิ์เข้าระบบแทนเขาได้ จึงเปิดเฉพาะผู้ดูแลสูงสุด
+          // (เซิร์ฟเวอร์ตรวจซ้ำอีกชั้น — ซ่อนเมนูอย่างเดียวไม่ใช่การป้องกัน)
+          ...(canEditPrivileges ? [{
+            label: pwBusy === menu.user.id ? "กำลังตั้งรหัส…" : "ตั้งรหัสผ่านใหม่ทันที",
+            icon: <KeyRound size={14} />, onClick: () => void setPasswordNow(menu.user),
+          }] : []),
           { label: menu.user.status === "active" ? "ปิดใช้งาน" : "เปิดใช้งาน", icon: <Power size={14} />, onClick: () => toggleStatus(menu.user) },
           { label: "ลบผู้ใช้", icon: <Trash2 size={14} />, danger: true, onClick: () => setDeleteTarget(menu.user) },
         ]} />

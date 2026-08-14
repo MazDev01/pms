@@ -158,3 +158,57 @@ export const DELETE = withErrors("delete-user", async (req: NextRequest) => {
   await auditLog(admin, prof, "ลบผู้ใช้ HQ", String(target.name ?? id));
   return NextResponse.json({ ok: true });
 });
+
+// ── ตั้งรหัสผ่านใหม่ให้ผู้ใช้ HQ (ผู้ดูแลสูงสุดเท่านั้น) ──────────────────────────────
+//
+// ที่มา (บอสสั่ง 14 ส.ค. 69): "ผู้ดูแลระบบต้องเปลี่ยนรหัสของผู้ใช้สำนักงานใหญ่ได้ทุกคน"
+//
+// เดิมมีทางเดียวคือ "ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล" ซึ่งพึ่งอีเมลล้วน ๆ — ใช้ไม่ได้จริงเมื่อ:
+//   • ยังไม่ได้ตั้ง SMTP ของตัวเอง (บริการเดโมของ Supabase จำกัดปริมาณ/โดเมน)
+//   • ผู้ใช้เข้าอีเมลไม่ได้ / อีเมลติดต่อในระบบไม่ตรงกับอีเมลที่ใช้ล็อกอินจริง
+//   และ Supabase ตอบ "ส่งแล้ว" เสมอแม้อีเมลผิด → ผู้ดูแลไม่มีทางรู้ว่าไม่มีใครได้ลิงก์
+// เส้นทางนี้จึงตั้งรหัสให้ตรง ๆ แล้วคืนรหัสมาโชว์ครั้งเดียว (แนวเดียวกับรีเซ็ตรหัสของตัวแทน)
+//
+// ด่านที่ล้อมไว้:
+//   1) เฉพาะ SUPER_ADMIN — users:manage ยังกว้างไป (ผู้บริหาร HQ ก็มี) การตั้งรหัสให้คนอื่น
+//      = สวมสิทธิ์เข้าระบบแทนเขาได้ จึงต้องจำกัดที่บทบาทสูงสุดเท่านั้น
+//   2) เปลี่ยนได้เฉพาะ "ผู้ใช้ฝั่งสำนักงานใหญ่" — บัญชีตัวแทนมีเส้นทางของตัวเองที่เก็บรหัสไว้ให้ HQ ดู
+//      (PATCH /api/admin/dealers) ถ้าตั้งจากที่นี่ รหัสที่เก็บไว้จะไม่ตรงกับของจริงทันที
+//   3) จำกัด 10 ครั้ง/นาที · บันทึก audit ทุกครั้ง (ใครเปลี่ยนรหัสให้ใคร)
+export const PATCH = withErrors("reset-hq-user-pw", async (req: NextRequest) => {
+  const authz = await authorizeAdmin(req, "users:manage", DENY, NOT_CONFIGURED);
+  if (!authz.ok) return authz.res;
+  const { admin, callerId, prof } = authz.auth;
+
+  if (String(prof?.role) !== "SUPER_ADMIN") {
+    return bad(403, "ตั้งรหัสผ่านให้ผู้ใช้คนอื่นได้เฉพาะผู้ดูแลสูงสุด");
+  }
+  if (!(await checkRateLimit(admin, `reset-hq-user-pw:${callerId}`, 10, 60))) {
+    return bad(429, "ตั้งรหัสผ่านถี่เกินไป — รอสักครู่แล้วลองใหม่");
+  }
+
+  const id = (new URL(req.url).searchParams.get("id") ?? "").trim();
+  if (!id) return bad(400, "ไม่ได้ระบุผู้ใช้");
+
+  // ต้องเป็นผู้ใช้ฝั่งสำนักงานใหญ่จริง — อ่านจาก profiles ไม่เชื่อสิ่งที่หน้าจอส่งมา
+  const { data: target, error: profErr } = await admin
+    .from("profiles").select("id, name, role, dealer_code").eq("id", id).maybeSingle();
+  if (profErr) {
+    console.error("[reset-hq-user-pw] อ่านโปรไฟล์ปลายทางไม่สำเร็จ", profErr);
+    return bad(503, "อ่านข้อมูลผู้ใช้ไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
+  if (!target) return bad(404, "ไม่พบผู้ใช้รายนี้");
+  if (String(target.dealer_code ?? "") !== "" || !isHQRole(String(target.role))) {
+    return bad(400, "เส้นทางนี้ใช้ได้เฉพาะผู้ใช้สำนักงานใหญ่ — บัญชีตัวแทนให้รีเซ็ตที่หน้าทะเบียนตัวแทน");
+  }
+
+  const password = strongPassword("BJ-");
+  const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(id, { password });
+  if (updateErr || !updated.user) {
+    console.error(`[reset-hq-user-pw] ตั้งรหัสผ่านใหม่ให้ ${id} ไม่สำเร็จ`, updateErr);
+    return bad(503, "ตั้งรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
+
+  await auditLog(admin, prof, "ตั้งรหัสผ่านใหม่ให้ผู้ใช้ HQ", `${target.name ?? ""} · ${updated.user.email ?? ""}`);
+  return NextResponse.json({ ok: true, email: updated.user.email ?? "", password });
+});
