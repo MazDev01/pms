@@ -78,6 +78,34 @@ async function withNames(base: MockSession, userId: string): Promise<MockSession
   return out;
 }
 
+// ── ใบผ่านยังใช้ได้จริงไหม (ไม่ใช่แค่ "ลายเซ็นยังไม่หมดอายุ") ────────────────────
+//
+// บั๊กจริงที่ผู้ใช้แจ้ง 14 ส.ค. 69: สำนักงานใหญ่ลบสาขาไปแล้ว (ทะเบียน + บัญชีเข้าระบบหายจริง)
+//   แต่เบราว์เซอร์ที่ยังถือ JWT ใบเดิมอยู่ยังเปิดหน้าในระบบได้ต่อจนกว่าใบจะหมดอายุ (นานถึง 1 ชม.)
+//   ทุกคำขอข้อมูลถูกฐานข้อมูลปฏิเสธหมด หน้าจอจึงว่างเปล่า — ผู้ใช้เห็นเป็น "ระบบพัง" ไม่ใช่ "ถูกลบสิทธิ์"
+//   ต้นเหตุ: การฟื้น session อ่านจากใบผ่านในเครื่องอย่างเดียว ไม่เคยถามว่าบัญชี/สาขายังมีอยู่ไหม
+//
+// กติกา: "อ่านสำเร็จแต่ไม่มีแถว" = ถูกลบไปแล้ว → ใช้ต่อไม่ได้
+//   · โปรไฟล์ของตัวเองอ่านได้เสมอตามสิทธิ์ (profiles_read: id = auth.uid()) — ไม่มีแถว = บัญชีถูกลบ
+//   · ทะเบียนสาขาอ่านได้ทุกคนที่ล็อกอิน — ไม่มีแถว = สาขาถูกลบ
+// ⚠️ "อ่านไม่ได้" (เน็ตล่ม/เซิร์ฟเวอร์ล่ม) ต้องไม่ถือว่าถูกลบ ไม่งั้นเน็ตกระตุกทีเดียวเด้งผู้ใช้ออกทั้งระบบ
+async function stillValid(base: MockSession, userId: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (userId) {
+    try {
+      const { data, error } = await sb.from("profiles").select("id").eq("id", userId).maybeSingle();
+      if (!error && !data) return false;   // อ่านได้ แต่ไม่มีโปรไฟล์แล้ว = บัญชีถูกลบ
+    } catch { /* อ่านไม่ได้ = ไม่สรุป */ }
+  }
+  if (!base.scopeAll && base.dealerCode) {
+    try {
+      const { data, error } = await sb.from("dealers").select("code").eq("code", base.dealerCode).maybeSingle();
+      if (!error && !data) return false;   // อ่านได้ แต่ไม่มีสาขาแล้ว = สาขาถูกลบ
+    } catch { /* อ่านไม่ได้ = ไม่สรุป */ }
+  }
+  return true;
+}
+
 /** เข้าสู่ระบบด้วยอีเมล/รหัสผ่านจริง (Supabase Auth) */
 export async function sbSignIn(email: string, password: string): Promise<AuthResult> {
   localSignInAt = Date.now();   // บอกตัวกันสลับบัญชีว่าครั้งนี้แท็บนี้กดเอง อย่าสั่งโหลดหน้าใหม่
@@ -96,12 +124,25 @@ export async function sbSignIn(email: string, password: string): Promise<AuthRes
   // ชื่อจริงมาทีหลังผ่าน sbOnChange (RoleContext อัปเดต session ให้เอง)
   const session = sessionFromToken(data.session.access_token, data.user?.email ?? email);
   if (!session) return { ok: false, error: ERR_GENERIC };
+  // บัญชีที่สาขาถูกลบไปแล้วแต่บัญชีเข้าระบบยังค้าง (route ลบสาขาเตือนกรณีนี้ไว้เอง) ต้องเข้าไม่ได้
+  // ไม่งั้นล็อกอินผ่านแล้วเจอหน้าจอเปล่าเพราะฐานข้อมูลปฏิเสธทุกคำขอ — ผู้ใช้ไม่รู้ว่าเกิดอะไรขึ้น
+  if (!(await stillValid(session, data.user?.id ?? ""))) {
+    await sbSignOutLocal();
+    return { ok: false, error: "บัญชีนี้ถูกปิดการใช้งานแล้ว — ติดต่อสำนักงานใหญ่" };
+  }
   return { ok: true, session };
 }
 
 /** ออกจากระบบ (ล้าง session ฝั่ง Supabase) */
 export async function sbSignOut(): Promise<void> {
   await getSupabase().auth.signOut();
+}
+
+/** ล้าง session เฉพาะในเครื่อง — ใช้ตอนบัญชีถูกลบไปแล้ว
+ *  บัญชีที่ไม่มีอยู่แล้วสั่งออกจากระบบที่เซิร์ฟเวอร์ไม่ได้ (ตอบ 403) แล้วโผล่เป็น error แดงในคอนโซล
+ *  ทั้งที่เป็นสถานการณ์ที่เราตั้งใจจัดการอยู่ — ล้างในเครื่องอย่างเดียวก็พอ ใบผ่านตายไปพร้อมบัญชีแล้ว */
+async function sbSignOutLocal(): Promise<void> {
+  try { await getSupabase().auth.signOut({ scope: "local" }); } catch { /* ล้างไม่ได้ก็ยังต้องเด้งออก */ }
 }
 
 /** ฟื้น session ตอนโหลดหน้าใหม่ — คืน MockSession ถ้ายังล็อกอินอยู่ ไม่งั้น null */
@@ -117,7 +158,10 @@ export async function sbRestore(): Promise<MockSession | null> {
   //   หน้าจอจึงขึ้น "DSA" แวบหนึ่งแล้วเด้งเป็น "เชียงไหม่สติล" — ผู้ใช้เห็นเป็นชื่อสลับไปมา
   //   ทั้งบนแถบบน เมนูข้าง และหัวการ์ดบัญชีดีลเลอร์ (ผู้ใช้แจ้ง 13 ส.ค. 69)
   //   อ่านไม่ได้ (เน็ต/สิทธิ์) withNames คืนค่าเดิมให้อยู่แล้ว จึงไม่มีทางทำให้ล็อกอินไม่ผ่าน
-  return await withNames(session, (decodeClaims(s.access_token).sub as string) ?? "");
+  const uid = (decodeClaims(s.access_token).sub as string) ?? "";
+  // สาขา/บัญชีถูกลบระหว่างที่ยังถือใบผ่านอยู่ → ต้องออกจากระบบ ไม่ใช่ปล่อยให้เดินในระบบด้วยหน้าจอเปล่า
+  if (!(await stillValid(session, uid))) { await sbSignOutLocal(); return null; }
+  return await withNames(session, uid);
 }
 
 // ── H4 · รีเซ็ตรหัสผ่านด้วย "ลิงก์ทางอีเมล" (ไม่ต้องใช้ service_role) ──────────────
