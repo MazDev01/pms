@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { ScrollText, Search, X, User, Activity, Trash2, AlertTriangle } from "lucide-react";
-import { useAuditEntries, AUDIT_READ_CAP } from "@pms/shared/lib/useAudit";
+import { useAuditEntries, AUDIT_READ_CAP, AUDIT_EVENT } from "@pms/shared/lib/useAudit";
 import { hqAuditModule, HQ_AUDIT_MODULE_LABEL } from "@pms/shared/lib/mock";
 import { APP_NOW, parseDate } from "@pms/shared/context/FilterContext";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
@@ -214,7 +214,13 @@ export default function HQAuditPage() {
                   const res = await clearAuditLog();
                   setClearing(false);
                   if (!res.ok) { setClearErr(res.error); return; }
-                  setClearOpen(false); setPage(0);
+                  setClearOpen(false);
+                  // ล้างเสร็จต้องเห็นผลทันที ไม่ต้องให้ผู้ใช้กดโหลดหน้าใหม่เอง (บอสสั่ง 14 ส.ค. 69)
+                  //   ยิง AUDIT_EVENT = ทุกจุดที่อ่านบันทึก (ตารางนี้ + กระดิ่ง) โหลดรายการใหม่พร้อมกัน
+                  //   ตัวกรองต้องรีเซ็ตด้วย — ตัวเลือกที่ค้างอยู่เป็นของข้อมูลชุดที่เพิ่งถูกลบไปแล้ว
+                  //   กรองค้างไว้จะได้ตารางว่างทั้งที่มีรายการ "การล้างบันทึก" ที่ระบบเพิ่งเขียนไว้
+                  setPage(0); setQ(""); setUserFilter("all"); setModuleFilter("all");
+                  try { window.dispatchEvent(new Event(AUDIT_EVENT)); } catch { /* เบราว์เซอร์เก่า — ผู้ใช้กดโหลดใหม่เองได้ */ }
                   alert(`ล้างบันทึกแล้ว ${res.removed.toLocaleString()} รายการ`);
                 }}>
                 <Trash2 size={14} /> {clearing ? "กำลังล้าง…" : "ล้างบันทึกทั้งหมด"}
