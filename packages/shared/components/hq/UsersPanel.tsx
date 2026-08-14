@@ -3,7 +3,7 @@
 // ─── HQ · ผู้ใช้งานและสิทธิ์ (HQ Users เท่านั้น) ─────────────────────────────────
 // บริหารผู้ใช้ของ "สำนักงานใหญ่" เท่านั้น — ไม่แสดงผู้ใช้ Dealer (ดีลเลอร์จัดการใน Workspace ตัวเอง
 // ผ่านเมนู "ตัวแทน" → เจาะรายตัว). Stat · Filter · Data table · Action dropdown · Detail Drawer+Timeline · Permission Matrix
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { SortableTh } from "@pms/shared/components/ui/SortableTh";
 import { TablePagination } from "@pms/shared/components/ui/TablePagination";
 import { useModalA11y } from "@pms/shared/lib/useModalA11y";
@@ -185,11 +185,26 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
 }
 
 // ── Action dropdown (fixed-position, ไม่โดน clip) ────────────────────────────────
+//
+// ⚠️ ต้องดันขึ้นเองเมื่อชนขอบล่างจอ (แก้ 14 ส.ค. 69)
+//   เดิมวางที่ตำแหน่งปุ่มตรง ๆ โดยไม่ดูว่าเมนูสูงเท่าไรและเหลือที่ข้างล่างพอไหม
+//   แถวท้าย ๆ ของตาราง (หรือเมนูที่มีหลายรายการ) จึงถูกตัดหายไปครึ่งหนึ่ง
+//   ผู้ใช้กดคำสั่งที่อยู่ล่างสุดไม่ได้เลย และไม่รู้ด้วยซ้ำว่ามีคำสั่งอะไรอยู่ข้างล่าง
+//   (ผู้ใช้แจ้งหลังเพิ่มรายการ "ตั้งรหัสผ่านใหม่ทันที" ซึ่งทำให้เมนูสูงขึ้นจนพ้นจอ)
 function ActionMenu({ pos, onClose, items }: { pos: { x: number; y: number }; onClose: () => void; items: { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean }[] }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(pos.y);
+  // วัดความสูงจริงหลังวาด แล้วเลื่อนขึ้นให้พอดีจอ — วัดเองดีกว่าเดาจากจำนวนรายการ
+  // (ความสูงต่อรายการเปลี่ยนได้ตามความยาวข้อความที่ตัดขึ้นบรรทัดใหม่)
+  useLayoutEffect(() => {
+    const h = boxRef.current?.offsetHeight ?? 0;
+    const M = 8; // เว้นขอบจอไว้หน่อย ไม่ให้ติดขอบพอดีเป๊ะ
+    setTop(Math.max(M, Math.min(pos.y, window.innerHeight - h - M)));
+  }, [pos.y, items.length]);
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 300 }} />
-      <div style={{ position: "fixed", top: pos.y, left: pos.x, zIndex: 301, background: "#fff", borderRadius: 12, border: `1px solid ${BORDER}`, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, minWidth: 190, transform: "translateX(-100%)" }}>
+      <div ref={boxRef} style={{ position: "fixed", top, left: pos.x, zIndex: 301, background: "#fff", borderRadius: 12, border: `1px solid ${BORDER}`, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, minWidth: 190, maxHeight: "calc(100vh - 16px)", overflowY: "auto", transform: "translateX(-100%)" }}>
         {items.map((it, i) => (
           <button key={i} onClick={() => { it.onClick(); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, color: it.danger ? "#dc2626" : STEEL, textAlign: "left", fontFamily: "inherit" }} onMouseEnter={e => (e.currentTarget.style.background = it.danger ? "#fef2f2" : "#f5f7fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>{it.icon} {it.label}</button>
         ))}
