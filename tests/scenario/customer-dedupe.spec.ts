@@ -2,8 +2,8 @@ import { test, expect } from "@playwright/test";
 import { open } from "./helpers";
 import { EXISTING_CUSTOMER_NAME } from "./global-setup";
 
-// ลูกค้าซ้ำ (M3) — ลูกค้าเกิดได้ทางเดียวคือลีดที่ปิดการขายได้
-// ถ้าตัวแทนเปิดลีดใหม่ให้บริษัทที่เป็นลูกค้าอยู่แล้ว พอปิดการขายต้องไม่แตกเป็นลูกค้าคนที่สอง
+// ลูกค้าซ้ำ (M3) — ลูกค้าเกิดได้ทางเดียวคือลูกค้าเป้าหมายที่ปิดการขายได้
+// ถ้าตัวแทนเปิดลูกค้าเป้าหมายใหม่ให้บริษัทที่เป็นลูกค้าอยู่แล้ว พอปิดการขายต้องไม่แตกเป็นลูกค้าคนที่สอง
 // ลูกค้าตั้งต้นมาจาก global-setup.ts (seed ผูก dealer RYG ไว้แล้ว — ดู EXISTING_CUSTOMER_NAME)
 
 const EXISTING = EXISTING_CUSTOMER_NAME;
@@ -33,19 +33,19 @@ test("[dealer] ชื่อบริษัทใหม่จริง ๆ → �
   await expect(page.getByText("ชื่อใกล้เคียงกับลูกค้าเดิม")).toHaveCount(0);
 });
 
-test("[dealer] ปิดการขายลีดที่ชื่อตรงกับลูกค้าเดิม → ไม่เกิดลูกค้าซ้ำ", async ({ page }) => {
+test("[dealer] ปิดการขายลูกค้าเป้าหมายที่ชื่อตรงกับลูกค้าเดิม → ไม่เกิดลูกค้าซ้ำ", async ({ page }) => {
   // นับจำนวนลูกค้าชื่อนี้ก่อน (ต้องมี 1)
   await open(page, "dealer", "/customers");
   const before = await page.getByText(EXISTING, { exact: true }).count();
   expect(before, "สมุดตั้งต้นต้องมีลูกค้ารายนี้อยู่แล้ว").toBeGreaterThan(0);
 
-  // เปิดลีดใหม่ชื่อเดียวกัน
+  // เปิดลูกค้าเป้าหมายใหม่ชื่อเดียวกัน
   await openAddLeadForm(page);
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(EXISTING);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("ผู้ติดต่อทดสอบ");
   await page.getByRole("button", { name: "บันทึก" }).click();
 
-  // เลื่อนสถานะลีดใหม่ → ปิดการขายสำเร็จ (ทริกเกอร์การสร้างลูกค้า)
+  // เลื่อนสถานะลูกค้าเป้าหมายใหม่ → ปิดการขายสำเร็จ (ทริกเกอร์การสร้างลูกค้า)
   await page.getByRole("button", { name: "ตาราง" }).click();
   const row = page.locator("tbody tr").filter({ hasText: "ผู้ติดต่อทดสอบ" }).first();
   await expect(row).toBeVisible();

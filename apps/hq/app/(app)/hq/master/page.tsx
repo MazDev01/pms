@@ -228,7 +228,7 @@ function HQMasterPageInner() {
   function addProduct() {
     // กันกดซ้ำ (H8 · guard synchronous) — nid คำนวณจาก catalog ปิดคลุม (closure) ไม่ใช่ prev ข้างใน
     // updater กดรัว ๆ เร็วกว่า React re-render ทันจะได้ nid ซ้ำ (สร้างสองแม่แบบ id ชนกัน) — พบจาก
-    // Edge Case sweep เดียวกับที่เจอในฟอร์มเพิ่มลีด/ลูกค้าฝั่งตัวแทน (3 ส.ค. 69)
+    // Edge Case sweep เดียวกับที่เจอในฟอร์มเพิ่มลูกค้าเป้าหมาย/ลูกค้าฝั่งตัวแทน (3 ส.ค. 69)
     if (addingRef.current) return;
     const price = parseFloat(addForm.price);
     if (!addForm.name.trim() || !(price > 0)) return;

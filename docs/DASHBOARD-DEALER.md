@@ -43,7 +43,7 @@ const won = await db.quotation.aggregate({
 ```
 
 ### 💰 การ์ด 1.2 — มูลค่า Pipeline
-- **แสดง:** ผลรวมมูลค่าลีดที่ยังไม่ปิด (estValue)
+- **แสดง:** ผลรวมมูลค่าลูกค้าเป้าหมายที่ยังไม่ปิด (estValue)
 - **แหล่งข้อมูล:** `Lead(status ∈ NEW..NEGOTIATING)`
 ```ts
 db.lead.aggregate({ _sum: { estValue: true },
@@ -71,20 +71,20 @@ db.project.count({ where: { ...tenantWhere(ctx), status: { in: ['IN_PROGRESS','Q
 
 | รายการ | เงื่อนไข / แหล่งข้อมูล |
 |--------|------------------------|
-| ลีดใหม่/ค้าง | `Lead(status=NEW)` หรือ `updatedAt` ค้าง > 3 วัน |
+| ลูกค้าเป้าหมายใหม่/ค้าง | `Lead(status=NEW)` หรือ `updatedAt` ค้าง > 3 วัน |
 | ใบเสนอราคารออนุมัติ | `Quotation(approvalStatus=PENDING)` หรือ `status=APPROVED` (ยังไม่ส่ง) |
 | นัดหมายวันนี้ | `Activity(scheduledAt = today, doneAt=null)` |
 | โครงการล่าช้า | `ProjectPhase(status=ACTIVE, endDate < today)` หรือ `Task(dueDate<today, status≠DONE)` |
 | งานหน้างานวันนี้ | `Project` ที่ยังไม่มี `DailySiteReport(date=today)` (เฉพาะที่ตนรับผิดชอบ) |
 
 ```ts
-// ตัวอย่าง: ลีดค้าง
+// ตัวอย่าง: ลูกค้าเป้าหมายค้าง
 db.lead.findMany({ where: { ...tenantWhere(ctx), status: 'NEW',
   updatedAt: { lt: threeDaysAgo } }, take: 5, orderBy: { updatedAt: 'asc' } })
 ```
 
 ### 📊 การ์ด 2.2 — Sales Funnel
-- **แสดง:** จำนวน + มูลค่าลีดในแต่ละ stage (NEW→...→WON)
+- **แสดง:** จำนวน + มูลค่าลูกค้าเป้าหมายในแต่ละ stage (NEW→...→WON)
 - **แหล่งข้อมูล:** `Lead` group by `status`
 ```ts
 db.lead.groupBy({ by: ['status'], _count: { _all: true }, _sum: { estValue: true },
@@ -108,7 +108,7 @@ db.project.findMany({
 ---
 
 ### 🕐 การ์ด 4 — กิจกรรมล่าสุด (Activity Feed)
-- **แสดง:** ความเคลื่อนไหวล่าสุดในดีลเลอร์ (ลีดใหม่, ใบเสนอราคาออก, QC ผ่าน, รูปใหม่)
+- **แสดง:** ความเคลื่อนไหวล่าสุดในดีลเลอร์ (ลูกค้าเป้าหมายใหม่, ใบเสนอราคาออก, QC ผ่าน, รูปใหม่)
 - **แหล่งข้อมูล:** `AuditLog` (กรอง dealerId) หรือรวมจาก `Activity` + log
 ```ts
 db.auditLog.findMany({ where: { dealerId: ctx.dealerId },
@@ -122,7 +122,7 @@ db.auditLog.findMany({ where: { dealerId: ctx.dealerId },
 | การ์ด | DEALER_ADMIN | DEALER_SALES | DEALER_SITE |
 |-------|:---:|:---:|:---:|
 | KPI (เป้า/Pipeline/Win/งาน) | ✓ ทั้งดีลเลอร์ | ◐ เฉพาะของตน | ✗ |
-| Action Items | ✓ ครบ + รออนุมัติในวงเงิน | ◐ ลีด/ใบเสนอราคาตน | ◐ งานหน้างานตน |
+| Action Items | ✓ ครบ + รออนุมัติในวงเงิน | ◐ ลูกค้าเป้าหมาย/ใบเสนอราคาตน | ◐ งานหน้างานตน |
 | Sales Funnel | ✓ | ✓ (ของตน) | ✗ |
 | Active Projects | ✓ ทุกโครงการ | ◐ ที่ดูแล | ◐ ที่รับผิดชอบ |
 | Activity Feed | ✓ ทั้งทีม | ◐ ที่เกี่ยวข้อง | ◐ โครงการตน |

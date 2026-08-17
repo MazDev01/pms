@@ -121,7 +121,7 @@ function expiryOf(q:{date:string;expiry?:string}, validityDays:number):string{
 }
 // (nextQId ถูกลบ — เดิมแอปมีตัวออกเลขสองระบบที่ให้คำตอบคนละชุด:
 //  หน้านี้นับจากแถวที่โหลดมา + ค่าตั้งต้นใน localStorage → Q-2026-1101
-//  ส่วนแผงใบเสนอราคาในหน้าลีดใช้ newQuoteId() = RPC ของ DB → Q-2026-0001
+//  ส่วนแผงใบเสนอราคาในหน้าลูกค้าเป้าหมายใช้ newQuoteId() = RPC ของ DB → Q-2026-0001
 //  ออกใบจากคนละหน้าจึงได้เลขคนละชุด และชนกันเองได้ · ตอนนี้เหลือทางเดียวคือ newQuoteId())
 // ── Add / Edit Modal ──────────────────────────────────────────
 const TODAY = APP_NOW_ISO; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง) — วันหมดอายุใบใหม่นับจากวันนี้จริง
@@ -130,7 +130,7 @@ function defaultExpiry(validityDays:number): string {
   const d = new Date(TODAY); d.setDate(d.getDate() + validityDays);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-// ชื่อโครงการแนะนำจากลูกค้า — "{แม่แบบ} — {บริษัท}" (เหมือนตอนสร้างใบเสนอจากลีด) · แก้ได้
+// ชื่อโครงการแนะนำจากลูกค้า — "{แม่แบบ} — {บริษัท}" (เหมือนตอนสร้างใบเสนอจากลูกค้าเป้าหมาย) · แก้ได้
 function suggestProject(c?:CustomerRow):string{
   if(!c) return "";
   return c.category ? `${c.category} — ${c.company}` : c.company;
@@ -316,7 +316,7 @@ function QuotationsPageInner(){
   const router = useRouter();
   const { passes } = useFilters(); // timeRange ใช้แค่ในคำโปรยหัวหน้า ซึ่งถูกเอาออกแล้ว
   // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — อายุใบมีผลกับการคิดวันหมดอายุ
-  const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลีดใช้)
+  const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลูกค้าเป้าหมายใช้)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
   const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ค่าสำรองของใบที่ไม่มีสแนปช็อต
   const validityDays = useQuoteValidityDays();
@@ -326,8 +326,8 @@ function QuotationsPageInner(){
     updateCustomer, updateLead,
   } = useSales();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
-  // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน — RYG ไม่เห็นใบ/ลูกค้า/ลีดของ CNX (undefined = ของ CNX)
-  // (ลีด lookup ผู้รับผิดชอบด้วยชื่อบริษัท — ถ้าไม่กรอง ownerOf/saveQ ไปเจอ+เขียนทับลีดสาขาอื่นชื่อซ้ำ)
+  // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน — RYG ไม่เห็นใบ/ลูกค้า/ลูกค้าเป้าหมายของ CNX (undefined = ของ CNX)
+  // (ลูกค้าเป้าหมาย lookup ผู้รับผิดชอบด้วยชื่อบริษัท — ถ้าไม่กรอง ownerOf/saveQ ไปเจอ+เขียนทับลูกค้าเป้าหมายสาขาอื่นชื่อซ้ำ)
   const data = useMemo(() => allQuotationsRaw.filter(q => (q.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allQuotationsRaw, currentDealer.code]);
   const customers = useMemo(() => allCustomersRaw.filter(c => (c.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allCustomersRaw, currentDealer.code]);
   const leads = useMemo(
@@ -382,8 +382,8 @@ function QuotationsPageInner(){
   // ── ผู้รับผิดชอบของใบเสนอราคา (แหล่งเดียว ใช้ทั้งตาราง/ฟอร์มแก้ไข/ส่งออก) ──────
   // ใบเสนอราคาไม่มีฟิลด์ผู้รับผิดชอบของตัวเอง — ต้องไปหาจากที่มา 2 ทาง:
   //   1) ลูกค้าที่ผูกอยู่ (customerId) → customer.owner  — ใบที่ปิดการขายเป็นลูกค้าแล้ว
-  //   2) ลีดที่ยังไม่ปิด → lead.assigned              — ใบที่ออกให้ลีด (customerId=0)
-  // เดิมดูแต่ทาง 1 ใบที่ยังเป็นลีด (7/17 ใบ) เลยขึ้น "—" ทั้งที่ลีดระบุผู้รับผิดชอบไว้ครบ
+  //   2) ลูกค้าเป้าหมายที่ยังไม่ปิด → lead.assigned              — ใบที่ออกให้ลูกค้าเป้าหมาย (customerId=0)
+  // เดิมดูแต่ทาง 1 ใบที่ยังเป็นลูกค้าเป้าหมาย (7/17 ใบ) เลยขึ้น "—" ทั้งที่ลูกค้าเป้าหมายระบุผู้รับผิดชอบไว้ครบ
   // ผูกด้วย dealId ก่อน (แม่นสุด) ไม่มีค่อยเทียบชื่อบริษัท (วิธีเดียวกับที่ SalesContext ผูกย้อนหลัง)
   const ownerOf = useCallback((q:{customerId:number;customer:string;dealId?:number}):string => {
     const byCust = customers.find(c=>c.id===q.customerId)?.owner;
@@ -453,8 +453,8 @@ function QuotationsPageInner(){
       await createQuotation({...qf,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv});
     }
     // ผู้รับผิดชอบ → เขียนกลับที่ "ต้นทาง" ตามที่บอสสั่ง (ใบเสนอราคาไม่มีฟิลด์นี้)
-    // ปิดการขายแล้ว → เขียนที่ลูกค้า · ยังเป็นลีด → เขียนที่ลีด
-    // ถ้าเขียนแค่ที่ลูกค้าอย่างเดียว ใบที่ยังเป็นลีด (customerId=0) จะเลือกแล้วบันทึกไม่ลงแบบเงียบๆ
+    // ปิดการขายแล้ว → เขียนที่ลูกค้า · ยังเป็นลูกค้าเป้าหมาย → เขียนที่ลูกค้าเป้าหมาย
+    // ถ้าเขียนแค่ที่ลูกค้าอย่างเดียว ใบที่ยังเป็นลูกค้าเป้าหมาย (customerId=0) จะเลือกแล้วบันทึกไม่ลงแบบเงียบๆ
     // เปลี่ยนเฉพาะตอนค่าต่างจริง เพื่อไม่ไปแตะเรคคอร์ดต้นทางโดยไม่จำเป็น
     const cust = customers.find(c=>c.id===qf.customerId);
     if(cust){
@@ -487,7 +487,7 @@ function QuotationsPageInner(){
     setQuotationStatus(id,s);
     setSelected(p=>p?.id===id?{...p,status:s}:p);
   }
-  // "ลูกค้าปฏิเสธ" ต้องเลือกเหตุผลก่อนเสมอ — ใช้ชุดเหตุผลเดียวกับที่ลีดใช้ (HQ กำหนด)
+  // "ลูกค้าปฏิเสธ" ต้องเลือกเหตุผลก่อนเสมอ — ใช้ชุดเหตุผลเดียวกับที่ลูกค้าเป้าหมายใช้ (HQ กำหนด)
   // (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมกดปุ่มเดียวจบ ไม่เก็บเหตุผลอะไรเลย)
   const [pendingLostQ, setPendingLostQ] = useState<QuotationMock|null>(null);
   const [pendingLostReason, setPendingLostReason] = useState("");
@@ -673,7 +673,7 @@ function QuotationsPageInner(){
                         active={!!col.key && sortKey === col.key} dir={sortDir}
                         onSort={col.key?()=>handleSort(col.key as SortKey):undefined}
                         style={{cursor:col.key?"pointer":"default",userSelect:"none"}}>
-                        {/* nowrap กันหัวคอลัมน์ตกบรรทัดเวลาช่องแคบ (มาตรฐานเดียวกับตารางลีด/ลูกค้า) */}
+                        {/* nowrap กันหัวคอลัมน์ตกบรรทัดเวลาช่องแคบ (มาตรฐานเดียวกับตารางลูกค้าเป้าหมาย/ลูกค้า) */}
                         <span style={{display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>{col.label}{col.key&&<SortIcon k={col.key}/>}</span>
                       </SortableTh>
                     ))}
@@ -681,7 +681,7 @@ function QuotationsPageInner(){
                 </thead>
                 <tbody>
                   {filtered.length===0&&<tr><td colSpan={10-["project","type","owner","value","created","expiry"].filter(c=>hiddenCols.includes(c)).length} style={{padding:0}}>
-                    <EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="ใบเสนอราคาออกจากหน้า “ลูกค้าเป้าหมาย” — เปิดลีดแล้วสร้างในแท็บใบเสนอราคา"
+                    <EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="ใบเสนอราคาออกจากหน้า “ลูกค้าเป้าหมาย” — เปิดรายการแล้วสร้างในแท็บใบเสนอราคา"
                       action={<button className="btn btn-secondary btn-md" style={{color:"#003366"}} onClick={()=>router.push("/leads")}>ไปหน้าลูกค้าเป้าหมาย →</button>} />
                   </td></tr>}
                   {paged.map(q=>{
@@ -771,7 +771,7 @@ function QuotationsPageInner(){
         {view==="card"&&(
           <div className="card" style={{borderRadius:"0 0 var(--radius-xl) var(--radius-xl)",borderTop:"none"}}>
             <div style={{padding:16}}>
-            {filtered.length===0&&<EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="ใบเสนอราคาออกจากหน้า “ลูกค้าเป้าหมาย” — เปิดลีดแล้วสร้างในแท็บใบเสนอราคา"
+            {filtered.length===0&&<EmptyState icon={<FileText size={28}/>} title="ไม่พบใบเสนอราคา" description="ใบเสนอราคาออกจากหน้า “ลูกค้าเป้าหมาย” — เปิดรายการแล้วสร้างในแท็บใบเสนอราคา"
               action={<button className="btn btn-secondary btn-md" style={{color:"#003366"}} onClick={()=>router.push("/leads")}>ไปหน้าลูกค้าเป้าหมาย →</button>} />}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
               {paged.map(q=>{
@@ -848,7 +848,7 @@ function QuotationsPageInner(){
         <>
           <div onClick={()=>setSelected(null)} className="drawer-overlay" style={{position:"fixed",inset:0,background:"rgba(45,45,45,.45)",zIndex:200}}/>
 
-          {/* Quotation Detail — แผงกลางจอ · คอลัมน์เดียว (มาตรฐานเดียวกับ ลีด/ลูกค้า) */}
+          {/* Quotation Detail — แผงกลางจอ · คอลัมน์เดียว (มาตรฐานเดียวกับ ลูกค้าเป้าหมาย/ลูกค้า) */}
           <div className="modal-pop" style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
             width:820, maxWidth:"calc(100vw - 24px)", height:"min(920px, calc(100vh - 24px))",
             zIndex:210, background:"#fff", boxShadow:"0 30px 90px rgba(0,0,0,.32)", borderRadius:18,
@@ -1025,7 +1025,7 @@ function QuotationsPageInner(){
         </div>
       )}
 
-      {/* เลือกเหตุผลก่อน "ลูกค้าปฏิเสธ" — บังคับเลือกเสมอ (ชุดเหตุผลเดียวกับที่ลีดใช้) */}
+      {/* เลือกเหตุผลก่อน "ลูกค้าปฏิเสธ" — บังคับเลือกเสมอ (ชุดเหตุผลเดียวกับที่ลูกค้าเป้าหมายใช้) */}
       {pendingLostQ && (
         <div onClick={()=>setPendingLostQ(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:230,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:420,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,.3)"}}>

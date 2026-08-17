@@ -56,15 +56,15 @@ const ALL_STATUSES: LeadStatus[] = LEAD_STATUS_ORDER;
 // ความคืบหน้าตามขั้นตอน (module-level เพื่อใช้ใน OverviewEditor) — PAID=100, CANCELLED=0
 // (DEFAULT_PERSONS ถูกลบ — เดิมเป็นพนักงาน 5 คนจากชุดตัวอย่าง
 //  ตาราง responsible_persons ว่าง = ไม่มีวันถูกแทนที่ → ตัวแทนเลือกชื่อคนที่ไม่มีอยู่จริง
-//  แล้วชื่อนั้นถูกบันทึกลงลีดใน DB จริง)
+//  แล้วชื่อนั้นถูกบันทึกลงลูกค้าเป้าหมายใน DB จริง)
 // Lead Source ตามสเปก: Facebook / Website / LINE / Walk-in / Referral / Exhibition / Other
 // สีของแต่ละแหล่งที่มา (โดนัท) — วนใช้ตามลำดับจำนวนมาก→น้อย
 const SOURCE_COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#0D9488", "#94A3B8"];
 // ⚠️ "Walk-in" → "ลูกค้าเข้ามาเอง" (แก้ 10 ส.ค. 69) — เหลือคำอังกฤษคำเดียวในลิสต์ที่เป็นไทยหมด
-//    และไม่ใช่ชื่อแบรนด์อย่าง Facebook/LINE จึงแปลได้ (ดู legacySource ข้างล่าง — ลีดเก่าที่บันทึก
+//    และไม่ใช่ชื่อแบรนด์อย่าง Facebook/LINE จึงแปลได้ (ดู legacySource ข้างล่าง — ลูกค้าเป้าหมายเก่าที่บันทึก
 //    ค่าเดิมไว้ต้องยังเห็นค่าตัวเองในช่องเลือก ไม่ใช่ถูกเบราว์เซอร์สลับไปตัวเลือกแรกเงียบ ๆ)
 const SOURCES = ["Facebook","เว็บไซต์","LINE","ลูกค้าเข้ามาเอง","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
-/** ค่าที่บันทึกไว้แต่ไม่อยู่ในลิสต์มาตรฐาน (ลีดเก่า/ข้อมูลนำเข้า) → แทรกเป็นตัวเลือกเพิ่ม ห้ามทำค่าเดิมหาย */
+/** ค่าที่บันทึกไว้แต่ไม่อยู่ในลิสต์มาตรฐาน (ลูกค้าเป้าหมายเก่า/ข้อมูลนำเข้า) → แทรกเป็นตัวเลือกเพิ่ม ห้ามทำค่าเดิมหาย */
 const legacySource = (v: string) => (v && !SOURCES.includes(v) ? [v] : []);
 // ช่วงมูลค่าใน FilterRow — เดิมเป็นช่องกรอก "มูลค่าขั้นต่ำ/สูงสุด (M฿)" สองช่องในแผงตัวกรอง
 // เก็บเป็นสตริงหน่วยล้านบาท เพราะตัวกรองจริง (fValueMin/fValueMax) อ่านค่าแบบนั้นอยู่แล้ว
@@ -115,10 +115,10 @@ function fmtM(n: number) {
 //   เดิมพิมพ์อะไรที่อ่านไม่ออกลงไป พอคลิกออกจากช่อง ข้อความจะถูกเขียนทับเป็น "฿0" ทันที
 //   ผู้ใช้เห็นเป็นศูนย์แล้วนึกว่าระบบคิดให้ ทั้งที่จริงคือของที่พิมพ์หายไปแล้ว
 //   คงข้อความเดิมไว้ให้เห็นว่า "ยังผิดอยู่นะ" แล้วให้ตอนกดบันทึกเป็นคนฟ้อง
-// ── เพดานมูลค่าลีด — ค่ากลางของทั้งไฟล์ ────────────────────────────────────────────
+// ── เพดานมูลค่าลูกค้าเป้าหมาย — ค่ากลางของทั้งไฟล์ ────────────────────────────────────────────
 //
 // ⚠️ ต้องประกาศที่เดียว ห้ามแยกไว้ในฟังก์ชันใดฟังก์ชันหนึ่ง (บทเรียน 10 ส.ค. 69)
-//   เดิมประกาศไว้ในฟอร์มเพิ่มลีดเท่านั้น แผงแก้ไขในหน้ารายละเอียดจึงไม่มีเพดาน
+//   เดิมประกาศไว้ในฟอร์มเพิ่มลูกค้าเป้าหมายเท่านั้น แผงแก้ไขในหน้ารายละเอียดจึงไม่มีเพดาน
 //   ผู้ใช้กรอก 2,500 ล้านผ่านฟอร์มไม่ได้ แต่แก้ทีหลังในแผงกลับได้ = กฎเดียวกันบังคับไม่เท่ากัน
 //
 // ตั้งที่หนึ่งแสนล้านบาท: สูงกว่างานจริงที่ใหญ่ที่สุดหลายเท่า แต่กันเลขหลุดโลกได้
@@ -126,9 +126,9 @@ const MAX_LEAD_VALUE = 100_000_000_000;
 
 function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v; }
 
-// ความคืบหน้าของลีด (%) — จากงานที่เช็ก (แหล่งเดียวกับ LeadTasks) · PAID=100 · CANCELLED=0
+// ความคืบหน้าของลูกค้าเป้าหมาย (%) — จากงานที่เช็ก (แหล่งเดียวกับ LeadTasks) · PAID=100 · CANCELLED=0
 // tpl = งานมาตรฐานที่ HQ ตั้งไว้ (ส่งมาจากคอมโพเนนต์ที่เรียก useLeadTaskTemplate)
-// ลีดที่ยังไม่มี checklist ต้องนับจากชุดของ HQ ไม่ใช่ชุดเริ่มต้นในโค้ด — ไม่งั้น "0/10" ทั้งที่ HQ ตั้งไว้ 12 งาน
+// ลูกค้าเป้าหมายที่ยังไม่มี checklist ต้องนับจากชุดของ HQ ไม่ใช่ชุดเริ่มต้นในโค้ด — ไม่งั้น "0/10" ทั้งที่ HQ ตั้งไว้ 12 งาน
 function leadProg(l: LeadRow, tpl?: LeadTaskDef[]): number {
   if (l.status === "PAID") return 100;
   if (l.status === "CANCELLED") return 0;
@@ -139,10 +139,10 @@ function leadTaskCount(l: LeadRow, tpl?: LeadTaskDef[]): { done: number; total: 
   const t = l.tasks?.length ? l.tasks : buildLeadTasks(tpl);
   return { done: t.filter(x => x.done).length, total: t.length };
 }
-// กิจกรรมล่าสุดของลีด (activities เรียงใหม่สุดอยู่บน) — ไม่มีกิจกรรม/ไม่มีวันที่สร้าง = "—"
+// กิจกรรมล่าสุดของลูกค้าเป้าหมาย (activities เรียงใหม่สุดอยู่บน) — ไม่มีกิจกรรม/ไม่มีวันที่สร้าง = "—"
 // ห้าม fallback ไป leadCreatedDate(): มันสังเคราะห์วันจาก numId (numId × 17 % 150 วันก่อนวันนี้)
-// ซึ่งใช้ได้แค่กับกราฟรวมของลีด seed — เอามาโชว์เป็น "ติดต่อล่าสุด" คือโกหกคนอ่าน
-// (ลีดที่เพิ่งสร้างเคยขึ้น "11 ก.พ. 2569" ย้อนหลัง 5 เดือน → เซลส์นึกว่าลีดถูกทิ้งค้าง)
+// ซึ่งใช้ได้แค่กับกราฟรวมของลูกค้าเป้าหมาย seed — เอามาโชว์เป็น "ติดต่อล่าสุด" คือโกหกคนอ่าน
+// (ลูกค้าเป้าหมายที่เพิ่งสร้างเคยขึ้น "11 ก.พ. 2569" ย้อนหลัง 5 เดือน → เซลส์นึกว่าลูกค้าเป้าหมายถูกทิ้งค้าง)
 // กติกาเดียวกับ lastContactLabel() ใน leadMetrics และคอมเมนต์ที่ hq/leads/page.tsx:559
 function lastActivity(l: LeadRow): string { return l.activities?.[0]?.date ?? l.createdAt ?? "—"; }
 // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → เทียบแบบ "มีคนนี้อยู่ในรายชื่อ" ไม่ใช่เท่ากันเป๊ะ
@@ -159,13 +159,13 @@ function parseThaiDate(s?: string): Date | null {
   const y = +m[3] > 2500 ? +m[3] - 543 : +m[3];
   return new Date(y, TH_MONTH[m[2]], +m[1]);
 }
-// วันที่ล่าสุดของลีด (จากกิจกรรม) — ไม่มีกิจกรรม = ไม่ตัดออกจากตัวกรองเวลา
+// วันที่ล่าสุดของลูกค้าเป้าหมาย (จากกิจกรรม) — ไม่มีกิจกรรม = ไม่ตัดออกจากตัวกรองเวลา
 function leadLatestDate(l: LeadRow): Date | null {
   const dates = (l.activities ?? []).map(a => parseThaiDate(a.date)).filter(Boolean) as Date[];
   if (!dates.length) return null;
   return new Date(Math.max(...dates.map(d => d.getTime())));
 }
-// ── ลีดที่ต้องรีบติดตาม (ขาดการติดต่อเกิน 7 วัน) — กฎธุรกิจเดียวที่ต้องมี (ไม่มี SLA) ──
+// ── ลูกค้าเป้าหมายที่ต้องรีบติดตาม (ขาดการติดต่อเกิน 7 วัน) — กฎธุรกิจเดียวที่ต้องมี (ไม่มี SLA) ──
 const MOCK_TODAY_LEAD = APP_NOW; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง 30 มิ.ย. 2569)
 const CUR_YEAR = MOCK_TODAY_LEAD.getFullYear(); // กราฟรายเดือน = ปีปัจจุบันเท่านั้น (ข้อมูลมีของปีที่แล้วปนอยู่)
 function daysSinceContact(l: LeadRow): number | null {
@@ -181,7 +181,7 @@ function needsFollowUp(l: LeadRow, threshold = 7): boolean {
 
 // ─── Priority (ความสำคัญ) — deterministic by value tier ──────────────────────
 type Priority = "HIGH" | "MEDIUM" | "LOW";
-// PRIORITIES ถูกลบพร้อมตัวกรอง "ความสำคัญ" — ป้ายความสำคัญในแผงรายละเอียดลีดยังใช้ leadPriority/priorityLabel อยู่
+// PRIORITIES ถูกลบพร้อมตัวกรอง "ความสำคัญ" — ป้ายความสำคัญในแผงรายละเอียดลูกค้าเป้าหมายยังใช้ leadPriority/priorityLabel อยู่
 // priorityLabel = import จาก leadMetrics.ts (แหล่งเดียว — เดิม copy ซ้ำที่นี่)
 const priorityColor: Record<Priority, { text: string; bg: string }> = {
   HIGH:   { text: "#dc2626", bg: "#fee2e2" },
@@ -205,7 +205,7 @@ const TASK_ACTIVITY_TYPE: Record<string, string> = {
   appointment: "meeting", makeQuote: "doc", sendQuote: "doc",
   followup: "call", negotiate: "meeting", close: "doc",
 };
-// ไทม์ไลน์กิจกรรม — ถ้าลีดยังไม่มี activities ที่บันทึกไว้ ให้สร้างจากงานที่ติ๊กเสร็จจริง (ใหม่สุดอยู่บน)
+// ไทม์ไลน์กิจกรรม — ถ้าลูกค้าเป้าหมายยังไม่มี activities ที่บันทึกไว้ ให้สร้างจากงานที่ติ๊กเสร็จจริง (ใหม่สุดอยู่บน)
 function seedActivities(lead: LeadRow): { date: string; text: string; type?: string }[] {
   return (lead.tasks ?? [])
     .filter(t => t.done && t.doneAt)
@@ -249,7 +249,7 @@ function OverviewEditor({ lead, persons, onSave }: {
 }) {
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง (HQ แก้ → เห็นตรงกัน)
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ผ่าน repo)
-  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ใช้คิด % ของลีดที่ยังไม่มี checklist
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ใช้คิด % ของลูกค้าเป้าหมายที่ยังไม่มี checklist
   const seed = () => ({
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
     email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
@@ -289,10 +289,10 @@ function OverviewEditor({ lead, persons, onSave }: {
   const [valueErr, setValueErr] = useState("");
   const inp = OV_INP;
 
-  // ⚠️ ต้องตรวจมูลค่าเหมือนฟอร์มเพิ่มลีดทุกประการ (แก้ 10 ส.ค. 69 รอบสอง)
+  // ⚠️ ต้องตรวจมูลค่าเหมือนฟอร์มเพิ่มลูกค้าเป้าหมายทุกประการ (แก้ 10 ส.ค. 69 รอบสอง)
   //   เดิมเส้นทางนี้ไม่ตรวจอะไรเลย · แย่ลงกว่าเดิมหลังผมแก้ fmtVal ให้คืนข้อความเดิม
   //   (ก่อนหน้านั้นค่าเสียถูกแปลงเป็น "฿0" เงียบ ๆ ตอนนี้ค่าขยะลงฐานข้อมูลได้จริง)
-  //   ผลที่เอเจนต์ยืนยัน: พิมพ์ "abcxyz" แล้วบันทึก → ตารางลีดและหน้าสำนักงานใหญ่โชว์ "abcxyz" ดิบ ๆ
+  //   ผลที่เอเจนต์ยืนยัน: พิมพ์ "abcxyz" แล้วบันทึก → ตารางลูกค้าเป้าหมายและหน้าสำนักงานใหญ่โชว์ "abcxyz" ดิบ ๆ
   //   บทเรียน: แก้ตัวช่วยกลางแล้วต้องไล่ดูผู้เรียกทุกทาง ไม่ใช่แค่ทางที่กำลังแก้อยู่
   function save() {
     const v = f.value.trim();
@@ -345,7 +345,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           <span style={cellLbl}>บริษัท</span>
           <span style={{ flex:1, minWidth:0 }}><input aria-label="ชื่อบริษัท" value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></span>
         </div>
-        {/* ชื่อโครงการมีเฉพาะดีลที่สร้างจากลูกค้าเดิม — โชว์ให้แก้เมื่อมีจริงเท่านั้น (ลีดทั่วไปไม่มีฟิลด์นี้) */}
+        {/* ชื่อโครงการมีเฉพาะดีลที่สร้างจากลูกค้าเดิม — โชว์ให้แก้เมื่อมีจริงเท่านั้น (ลูกค้าเป้าหมายทั่วไปไม่มีฟิลด์นี้) */}
         {(lead.project ?? "") !== "" && (
           <div style={{ gridColumn:"1/-1", ...cell }}>
             <FileText size={14} color="#94a3b8" style={{ flexShrink:0 }} />
@@ -366,8 +366,8 @@ function OverviewEditor({ lead, persons, onSave }: {
           </select>
         </Cell>
         <Cell icon={Package} label="แม่แบบที่สนใจ">
-          {/* ใช้ตัวเดียวกับฟอร์มเพิ่มลีด — เดิมที่นี่ลิสต์เฉพาะแม่แบบหลัก ไม่มีแม่แบบย่อย
-              ลีดที่เลือกแม่แบบย่อยไว้จึงหาค่าตัวเองในลิสต์ไม่เจอ แล้วโชว์ตัวแรกผิด ๆ แบบเดียวกัน */}
+          {/* ใช้ตัวเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมาย — เดิมที่นี่ลิสต์เฉพาะแม่แบบหลัก ไม่มีแม่แบบย่อย
+              ลูกค้าเป้าหมายที่เลือกแม่แบบย่อยไว้จึงหาค่าตัวเองในลิสต์ไม่เจอ แล้วโชว์ตัวแรกผิด ๆ แบบเดียวกัน */}
           <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} ariaLabel="แม่แบบที่สนใจ" />
         </Cell>
         <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
@@ -458,7 +458,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 }) {
   const isEdit = !!initial;
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง
-  // สมุดลูกค้า + ลีดที่มีอยู่ของสาขา — ใช้เตือนว่าบริษัทนี้มีอยู่แล้ว (ดู dupHint ด้านล่าง)
+  // สมุดลูกค้า + ลูกค้าเป้าหมายที่มีอยู่ของสาขา — ใช้เตือนว่าบริษัทนี้มีอยู่แล้ว (ดู dupHint ด้านล่าง)
   const { customers, leads: existingLeads } = useSales();
   const myDealer = useCurrentDealer();
   const [form, setForm] = useState({
@@ -479,10 +479,10 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   // แต่ทั้งสองอย่างโหลดแบบไม่พร้อมกัน ถ้าผู้ใช้กดเปิดฟอร์มเร็วกว่าข้อมูลมาถึง
   // ค่าจะค้างเป็นว่างถาวร แล้ว useState ก็ไม่อ่านใหม่อีกเลยตลอดอายุฟอร์ม
   //
-  // ผลที่ผู้ใช้เจอจริง: บันทึกลีดโดยเข้าใจว่าเลือกแม่แบบไว้แล้ว (ช่องโชว์ตัวแรกให้)
+  // ผลที่ผู้ใช้เจอจริง: บันทึกลูกค้าเป้าหมายโดยเข้าใจว่าเลือกแม่แบบไว้แล้ว (ช่องโชว์ตัวแรกให้)
   // แต่ในระบบว่าง → ออกใบเสนอราคาไม่ได้เลย และย้อนกลับมาดูก็ยังเห็นแม่แบบอยู่ หาสาเหตุไม่เจอ
   //
-  // เติมเฉพาะตอน "เพิ่มลีดใหม่ และช่องยังว่างอยู่" — ห้ามไปทับค่าที่ผู้ใช้เลือกเองหรือค่าของลีดเดิม
+  // เติมเฉพาะตอน "เพิ่มลูกค้าเป้าหมายใหม่ และช่องยังว่างอยู่" — ห้ามไปทับค่าที่ผู้ใช้เลือกเองหรือค่าของลูกค้าเป้าหมายเดิม
   useEffect(() => {
     if (isEdit) return;
     setForm(f => {
@@ -498,7 +498,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   //   ที่อื่นไม่เตือน = ผู้ใช้เดาไม่ได้ว่าหน้าไหนปลอดภัยที่จะกดปิด
   //
   // ⚠️ ต้องเทียบกับ "ค่าตอนเปิดฟอร์ม" ไม่ใช่กับ initial (แก้ 10 ส.ค. 69 รอบสอง)
-  //   ตอนเพิ่มลีดใหม่ initial เป็น undefined แต่ฟอร์มมีค่าตั้งต้นไม่ว่าง (จังหวัด/แหล่งที่มา/ขั้นตอน/แม่แบบ)
+  //   ตอนเพิ่มลูกค้าเป้าหมายใหม่ initial เป็น undefined แต่ฟอร์มมีค่าตั้งต้นไม่ว่าง (จังหวัด/แหล่งที่มา/ขั้นตอน/แม่แบบ)
   //   เทียบแบบเดิมจึงถือว่า "แก้แล้ว" ตั้งแต่วินาทีที่เปิด → เด้งถามทุกครั้งแม้ยังไม่ได้พิมพ์อะไร
   //   คำเตือนที่เด้งทุกครั้งจะถูกกดผ่านโดยไม่อ่าน แล้ววันที่กรอกจริงก็จะเสียของ
   function closeGuarded() {
@@ -515,14 +515,14 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   const [submitError, setSubmitError] = useState("");
   // กันกดบันทึกซ้ำ (H8 · guard synchronous) — เดิมไม่มี guard เลย: กดรัว ๆ เร็วกว่า React จะ re-render
   // ปุ่ม/unmount โมดัลทัน (onClose() unmount แบบ synchronous หลัง onSave() แต่ React batch การอัปเดต
-  // ให้ effect จริงทำงานคนละ tick) → ยิง addLead() ซ้ำหลายครั้งได้จริง สร้างลีดซ้ำหลายแถว
+  // ให้ effect จริงทำงานคนละ tick) → ยิง addLead() ซ้ำหลายครั้งได้จริง สร้างลูกค้าเป้าหมายซ้ำหลายแถว
   // (พบจากทดสอบ Edge Case จริง 3 ส.ค. 69) แพตเทิร์นเดียวกับ apptSavingRef ที่ใช้กันฟอร์มนัดหมายอยู่แล้ว
   const savingRef = useRef(false);
-  // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้มีอยู่แล้ว — กันเปิดลีดซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
-  // แค่บอก ไม่ได้ห้าม (บางทีก็อยากเปิดลีดใหม่จริง ๆ) · ทางที่ถูกคือกด "สร้างดีลใหม่" จากหน้าลูกค้า
+  // เตือนตั้งแต่ตอนพิมพ์ว่าบริษัทนี้มีอยู่แล้ว — กันเปิดลูกค้าเป้าหมายซ้ำแล้วได้ลูกค้าซ้ำตอนปิดการขาย (M3)
+  // แค่บอก ไม่ได้ห้าม (บางทีก็อยากเปิดลูกค้าเป้าหมายใหม่จริง ๆ) · ทางที่ถูกคือกด "สร้างดีลใหม่" จากหน้าลูกค้า
   //
-  // เช็ค "ลีดที่มีอยู่" ด้วย ไม่ใช่แค่ลูกค้า: savingRef กันกดรัวได้เฉพาะในแท็บเดียว — เปิดสองแท็บแล้ว
-  // กรอกบริษัทเดียวกันทั้งคู่ ต่างคนต่างผ่าน guard ของตัวเอง ได้ลีดซ้ำ 2 แถวจริง (ยืนยันด้วยการทดสอบ
+  // เช็ค "ลูกค้าเป้าหมายที่มีอยู่" ด้วย ไม่ใช่แค่ลูกค้า: savingRef กันกดรัวได้เฉพาะในแท็บเดียว — เปิดสองแท็บแล้ว
+  // กรอกบริษัทเดียวกันทั้งคู่ ต่างคนต่างผ่าน guard ของตัวเอง ได้ลูกค้าเป้าหมายซ้ำ 2 แถวจริง (ยืนยันด้วยการทดสอบ
   // จริง 5 ส.ค. 69: แท็บเดียวกดรัว 5 ครั้ง → 1 แถว · สองแท็บพร้อมกัน → 2 แถว)
   // ไม่ใช้ unique constraint ที่ DB เพราะ "หลายดีลของบริษัทเดียวกัน" เป็นเรื่องปกติของงานขาย
   // การเตือนให้เห็นก่อนกดบันทึกจึงตรงกับปัญหาจริง (กดซ้ำเพราะนึกว่าไม่สำเร็จ) โดยไม่ขวางงานที่ถูกต้อง
@@ -553,7 +553,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     // ⚠️ มูลค่าที่กรอกแล้วอ่านไม่ออก ต้องฟ้อง ห้ามเงียบ (บั๊กจริง พบ 10 ส.ค. 69)
     //   ช่องนี้รับข้อความอิสระ (เขียน "1.4M" หรือ "฿1,400,000" ก็ได้) ตัวแปลงค่าจึงคืน 0
     //   เมื่ออ่านไม่ออก · เดิมกรอก "abcxyz" หรือ "-5000000" แล้วบันทึกผ่านเป็น ฿0 เงียบ ๆ
-    //   เซลส์ไม่รู้ว่ามูลค่าหาย แล้วลีดนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
+    //   เซลส์ไม่รู้ว่ามูลค่าหาย แล้วลูกค้าเป้าหมายนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
     if (form.value.trim() && parseBaht(form.value) > MAX_LEAD_VALUE) {
       setSubmitError("มูลค่าสูงเกินจริง — กรอกได้ไม่เกิน 100,000 ล้านบาท");
       return;
@@ -776,8 +776,8 @@ export default function LeadsPage() {
   } = useSales();
   // ปิดการขายสำเร็จ = เป็น "ลูกค้า" แล้ว → ไม่แสดงในหน้าลูกค้าเป้าหมาย (ไปอยู่ที่ /customers)
   // สมุดงานของ "ตัวแทนที่ล็อกอิน" เท่านั้น — กรองด้วย dealerCode
-  // จำเป็นตั้งแต่มีลีดของสาขาอื่นในระบบ (ก่อนหน้านี้มีสาขาเดียวเลยไม่กรองก็ไม่มีใครเห็นความต่าง)
-  // ลีดที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
+  // จำเป็นตั้งแต่มีลูกค้าเป้าหมายของสาขาอื่นในระบบ (ก่อนหน้านี้มีสาขาเดียวเลยไม่กรองก็ไม่มีใครเห็นความต่าง)
+  // ลูกค้าเป้าหมายที่ตัวแทนสร้างเองไม่มี dealerCode → ถือเป็นของสาขาตัวเอง
   // สมุดงานของสาขาตัวเอง "ทุกสถานะ" (รวมที่ปิดการขายสำเร็จแล้ว) — ใช้คิดอัตราปิดการขาย
   const myAllLeads = useMemo(
     () => allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
@@ -798,7 +798,7 @@ export default function LeadsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allLeads]);
 
-  // บันทึกลีด + sync snapshot ในโมดัลทันที (กันปัญหา "เช็ก task แล้วไม่ติ๊ก" เพราะ c เป็นค่าเก่า)
+  // บันทึกลูกค้าเป้าหมาย + sync snapshot ในโมดัลทันที (กันปัญหา "เช็ก task แล้วไม่ติ๊ก" เพราะ c เป็นค่าเก่า)
   function saveLead(l: LeadRow) {
     const prevStatus = selectedLead?.status;
     updateLead(l); setSelectedLead(l); setDraft(l);
@@ -811,15 +811,15 @@ export default function LeadsPage() {
         : `เลื่อนสถานะอัตโนมัติ → ${leadStatusLabel[l.status]}`);
     }
   }
-  // Global filter: ผู้รับผิดชอบ + ช่วงเวลา (วันเดือนปีจากตัวกรองกลาง — กรองจากวันที่กิจกรรมล่าสุดของลีด)
+  // Global filter: ผู้รับผิดชอบ + ช่วงเวลา (วันเดือนปีจากตัวกรองกลาง — กรองจากวันที่กิจกรรมล่าสุดของลูกค้าเป้าหมาย)
   const { person, timeRange } = useFilters();
   // Table toolbar: density + column show/hide (localStorage-backed)
   const { density, setDensity, hiddenCols, toggleCol } = useTableLayout("leads");
   const [view, setView] = useState<"list"|"kanban">("list"); // ค่าเริ่มต้น = ตาราง (สลับไปบอร์ดได้ที่ปุ่มมุมขวา)
   const [dragId, setDragId] = useState<string|null>(null); // การ์ดที่กำลังลากในมุมมอง Kanban
-  // ลีดที่กำลังจะปิดการขายไม่สำเร็จ (จากตาราง/Kanban) — รอเลือกเหตุผลก่อนค่อยเปลี่ยนสถานะจริง
+  // ลูกค้าเป้าหมายที่กำลังจะปิดการขายไม่สำเร็จ (จากตาราง/Kanban) — รอเลือกเหตุผลก่อนค่อยเปลี่ยนสถานะจริง
   // (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมสองช่องทางนี้ปิดได้โดยไม่ต้องกรอกเหตุผลเลย
-  //  ต่างจากปุ่ม "ปิดการขายไม่สำเร็จ" ในแผงลีดที่บังคับอยู่แล้ว — ทำให้ตรงกันทุกช่องทาง)
+  //  ต่างจากปุ่ม "ปิดการขายไม่สำเร็จ" ในแผงลูกค้าเป้าหมายที่บังคับอยู่แล้ว — ทำให้ตรงกันทุกช่องทาง)
   const [pendingLostId, setPendingLostId] = useState<string|null>(null);
   const [pendingLostReason, setPendingLostReason] = useState("");
   function requestStatusChange(id: string, status: LeadStatus) {
@@ -836,7 +836,7 @@ export default function LeadsPage() {
       }
     }
     // ปิดการขายสำเร็จ = สร้างลูกค้าอัตโนมัติทันที ย้อนกลับไม่ได้ — ต้องยืนยันก่อนเสมอ (ทุกช่องทาง
-    // ไม่ใช่แค่ปุ่มลัดในแผงลีด) ยืนยันจาก scenario test 31 ก.ค. 69: เดิมกดครั้งเดียวสร้างลูกค้าทันที
+    // ไม่ใช่แค่ปุ่มลัดในแผงลูกค้าเป้าหมาย) ยืนยันจาก scenario test 31 ก.ค. 69: เดิมกดครั้งเดียวสร้างลูกค้าทันที
     if (status === "PAID") {
       const target = allLeads.find(l => l.id === id);
       if (!target) return;
@@ -881,7 +881,7 @@ export default function LeadsPage() {
 
   // Panel state
   const [selectedLead, setSelectedLead] = useState<LeadRow|null>(null);
-  // (โหมดแก้ไข/อ่านถูกถอดแล้ว — OverviewEditor reseed เองเมื่อสลับลีดผ่าน useEffect ของมัน)
+  // (โหมดแก้ไข/อ่านถูกถอดแล้ว — OverviewEditor reseed เองเมื่อสลับลูกค้าเป้าหมายผ่าน useEffect ของมัน)
   const [activeTab, setActiveTab] = useState<"overview"|"tasks"|"report"|"activities"|"appts"|"quotation"|"files">("overview");
   const [editingField, setEditingField] = useState<string|null>(null);
   // Lead Detail (split layout) — refs สำหรับ quick action เลื่อนไปการ์ด + ปิดการขายไม่สำเร็จ (เลือกเหตุผล)
@@ -890,7 +890,7 @@ export default function LeadsPage() {
   const rightApptRef = useRef<HTMLDivElement>(null);
   const [quickLost, setQuickLost] = useState(false);
   const [quickLostReason, setQuickLostReason] = useState("");
-  // ฟอร์มนัดหมายในแท็บนัดหมายของลีด (นัดก่อนปิดการขาย)
+  // ฟอร์มนัดหมายในแท็บนัดหมายของลูกค้าเป้าหมาย (นัดก่อนปิดการขาย)
   const [apptAdding, setApptAdding] = useState(false);
   const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
   const apptSavingRef = useRef(false); // กันกดบันทึกนัดซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard synchronous)
@@ -973,7 +973,7 @@ export default function LeadsPage() {
       const matchS = filterStatus === "ALL" || l.status === filterStatus;
       // Global Responsible Person filter (FilterBar): drop leads not owned by selected person
       const matchPerson = person === "all" || assignedHas(l.assigned, person);
-      // ช่วงเวลา: เทียบวันที่กิจกรรมล่าสุด (ลีดที่ยังไม่มีกิจกรรมไม่ถูกตัดออก)
+      // ช่วงเวลา: เทียบวันที่กิจกรรมล่าสุด (ลูกค้าเป้าหมายที่ยังไม่มีกิจกรรมไม่ถูกตัดออก)
       const latest = leadLatestDate(l);
       const matchTime = !latest || (latest.getTime() >= timeRange.start.getTime() && latest.getTime() <= timeRange.end.getTime());
       const matchA = !fAssignee || assignedHas(l.assigned, fAssignee);
@@ -1004,7 +1004,7 @@ export default function LeadsPage() {
     return arr;
   }, [leadsData, query, filterStatus, person, timeRange, fAssignee, fProvince, fSource, fValueMin, fValueMax, sortKey, sortDir, followUpDays, session.name]);
 
-  // จำนวนลีดที่ต้องรีบติดตาม (ขาดการติดต่อเกินเกณฑ์กฎธุรกิจ) — สำหรับแจ้งเตือน "ด่วน"
+  // จำนวนลูกค้าเป้าหมายที่ต้องรีบติดตาม (ขาดการติดต่อเกินเกณฑ์กฎธุรกิจ) — สำหรับแจ้งเตือน "ด่วน"
   const followUpCount = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
 
   // ─── List pagination (LIST view only) ──────────────────────────────────
@@ -1038,14 +1038,14 @@ export default function LeadsPage() {
   const lid = current?.id ?? "";
 
   function resetApptForm() { setApptAdding(false); setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" }); }
-  // ใบเสนอราคาใบนี้เป็นของลีดนี้ไหม — กติกาเดียวกับที่แท็บใบเสนอราคาใช้กรองรายการ
+  // ใบเสนอราคาใบนี้เป็นของลูกค้าเป้าหมายนี้ไหม — กติกาเดียวกับที่แท็บใบเสนอราคาใช้กรองรายการ
   // (ใบใหม่ผูกด้วย dealId · ใบเก่าก่อนมี dealId ผูกด้วยรหัสลูกค้า/ชื่อบริษัท)
   function quoteBelongsToLead(q: QuotationMock, l: LeadRow): boolean {
     if (q.dealId != null) return q.dealId === l.numId;
     if (l.customerId && q.customerId === l.customerId) return true;
     return q.customer === l.company;
   }
-  // พาไปแท็บใบเสนอราคาของลีดนี้ — ใช้ทั้งตอนพาไปออกใบใหม่ และตอนพาไปกดส่งใบที่มีอยู่
+  // พาไปแท็บใบเสนอราคาของลูกค้าเป้าหมายนี้ — ใช้ทั้งตอนพาไปออกใบใหม่ และตอนพาไปกดส่งใบที่มีอยู่
   const [quoteFormSignal, setQuoteFormSignal] = useState(0);
   function focusQuotationTab(l: LeadRow) {
     setSelectedLead(l); setDraft({ ...l });
@@ -1054,7 +1054,7 @@ export default function LeadsPage() {
     setShowStatusDropdown(false);
     setActiveTab("quotation"); setDTab("quotation");
   }
-  /** พาไปดูรายการใบของลีดนี้ (ไม่เปิดฟอร์ม) — ใช้ตอนพาไปกดส่งใบที่ออกไว้แล้ว */
+  /** พาไปดูรายการใบของลูกค้าเป้าหมายนี้ (ไม่เปิดฟอร์ม) — ใช้ตอนพาไปกดส่งใบที่ออกไว้แล้ว */
   function openQuotationList(l: LeadRow) { focusQuotationTab(l); setQuoteFormSignal(0); }
   /** พาไปออกใบใหม่ — เพิ่มค่าสัญญาณเสมอ (ห้ามรีเซ็ตเป็น 0 ก่อน ไม่งั้นสั่งซ้ำรอบสองจะได้ค่าเดิม = ไม่เปิด) */
   function openQuotationForm(l: LeadRow) { focusQuotationTab(l); setQuoteFormSignal(n => n + 1); }
@@ -1064,10 +1064,10 @@ export default function LeadsPage() {
     setSelectedLead(l); setDraft({...l});
     setEditingField(null); setShowDeleteConfirm(false);
     setActiveTab("overview"); setDTab("overview");
-    setQuoteFormSignal(0); // เปิดแผงตามปกติ = ไม่ได้สั่งออกใบ (กันฟอร์มค้างจากลีดก่อนหน้า)
+    setQuoteFormSignal(0); // เปิดแผงตามปกติ = ไม่ได้สั่งออกใบ (กันฟอร์มค้างจากลูกค้าเป้าหมายก่อนหน้า)
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
-    resetApptForm(); // กันฟอร์มนัดหมายค้างข้ามลีด
+    resetApptForm(); // กันฟอร์มนัดหมายค้างข้ามลูกค้าเป้าหมาย
   }
   function closePanel() {
     setSelectedLead(null); setDraft(null); setQuoteFormSignal(0);
@@ -1227,10 +1227,10 @@ export default function LeadsPage() {
   const overdue7 = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
   const meetingToday = useMemo(() => appointments.filter(a => a.date === APP_NOW_ISO && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
   const newWaiting = useMemo(() => leadsData.filter(l => l.status === "WAITING").length, [leadsData]);
-  // Sales Opportunity = มูลค่ารวมของลีดที่ยังเปิดอยู่ (Expected Revenue)
+  // Sales Opportunity = มูลค่ารวมของลูกค้าเป้าหมายที่ยังเปิดอยู่ (Expected Revenue)
   const openValue = useMemo(() => leadsData.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0), [leadsData]);
   // Conversion Rate = ปิดได้ / (ปิดได้ + ปิดไม่ได้) — ใช้ myAllLeads เพราะ leadsData ตัด PAID ออกแล้ว
-  // ต้องเป็นของสาขาตัวเองเท่านั้น: เดิมใช้ allLeads จึงคิดรวมลีดของอีก 9 สาขาเข้ามาด้วย
+  // ต้องเป็นของสาขาตัวเองเท่านั้น: เดิมใช้ allLeads จึงคิดรวมลูกค้าเป้าหมายของอีก 9 สาขาเข้ามาด้วย
   const convRate = useMemo(() => {
     const won = myAllLeads.filter(l => l.status === "PAID").length;
     const lost = myAllLeads.filter(l => l.status === "CANCELLED").length;
@@ -1266,7 +1266,7 @@ export default function LeadsPage() {
     return { newLeads, won };
   }, [leadsData]);
 
-  // Lead vs Quotations — จำนวนลีด (น้ำเงิน) เทียบ ใบเสนอราคา (ส้ม) รายเดือน · ปีปัจจุบันเท่านั้น
+  // Lead vs Quotations — จำนวนลูกค้าเป้าหมาย (น้ำเงิน) เทียบ ใบเสนอราคา (ส้ม) รายเดือน · ปีปัจจุบันเท่านั้น
   const leadVsQuote = useMemo(() => {
     const leadC = Array(12).fill(0), quoteC = Array(12).fill(0);
     leadsData.forEach(l => { const d = leadCreatedDate(l); if (d.getFullYear() === CUR_YEAR) leadC[d.getMonth()]++; });
@@ -1332,7 +1332,7 @@ export default function LeadsPage() {
         {/* ── แถบตัวกรองแถวเดียว (มาตรฐานเดียวกับหน้า /hq/pipeline) ──
             เดิมเป็นปุ่ม "ตัวกรอง" + แผงเลื่อนจากขวา — ตอนนี้เห็นตัวกรองทุกตัวพร้อมกัน
             "ทุกสถานะ" ใช้ state เดียวกับการ์ด KPI ด้านบน → กดที่ไหนก็ตรงกัน
-            ปิดการขายสำเร็จ (PAID) ไม่อยู่ในตัวเลือก — ลีดที่ปิดแล้วย้ายไปหน้าลูกค้า (leadsData ตัดออก) */}
+            ปิดการขายสำเร็จ (PAID) ไม่อยู่ในตัวเลือก — ลูกค้าเป้าหมายที่ปิดแล้วย้ายไปหน้าลูกค้า (leadsData ตัดออก) */}
         <FilterRow
           query={query} onQuery={setQuery} placeholder="ค้นหาบริษัท ผู้ติดต่อ..."
           showClear={hasActiveFilters || filterStatus!=="ALL" || followUpDays!==0 || !!query}
@@ -1604,7 +1604,7 @@ export default function LeadsPage() {
                 onDrop={() => { if (dragId) { requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
                 style={{ minWidth:w, width:w, flexShrink:0, display:"flex", flexDirection:"column",
                   // คอลัมน์ยาวลงมาเต็มพื้นที่จอเสมอ ไม่หดตามจำนวนการ์ด — คอลัมน์ว่างจึงยังเป็นเป้าให้ลากมาวางได้ชัด ๆ
-                  // (เดิม alignSelf:"flex-start" ทำให้สูงพอดีเนื้อหา คอลัมน์ที่ยังไม่มีลีดเลยเหลือแค่แถบเตี้ย ๆ)
+                  // (เดิม alignSelf:"flex-start" ทำให้สูงพอดีเนื้อหา คอลัมน์ที่ยังไม่มีลูกค้าเป้าหมายเลยเหลือแค่แถบเตี้ย ๆ)
                   minHeight:"max(360px, calc(100vh - 330px))",
                   background: isOver ? "#eaf1fb" : "#f6f7f9", borderRadius:12, padding:10,
                   border: isOver ? "1.5px dashed #003366" : "1.5px solid transparent", transition:"background .12s, border-color .12s" }}>
@@ -1785,17 +1785,17 @@ export default function LeadsPage() {
           onClose={()=>setShowAddForm(false)}
           onSave={async (l)=>{
             // num_id ออกจากตัวนับ atomic ของ DB (M7) — เลิก Math.max+1 ฝั่ง client ที่ชนกันได้
-            // เมื่อสร้างลีดพร้อมกันในสาขาเดียว · id ที่แสดง (#L-…) derive จาก num_id นี้
+            // เมื่อสร้างลูกค้าเป้าหมายพร้อมกันในสาขาเดียว · id ที่แสดง (#L-…) derive จาก num_id นี้
             const nid = await newLeadNumId();
             // สร้าง "รายงานการติดตาม" + "Report Checklist (Task)" อัตโนมัติทุกครั้งที่สร้าง Lead
             // createdAt ต้องมีตั้งแต่ตอนสร้าง — ไม่มีแล้วหน้าไหนก็โชว์ "สร้างเมื่อ —"
             // และ leadCreatedDate() จะไปสังเคราะห์วันจาก numId แทน (ได้วันย้อนหลังหลายเดือน)
-            // ติด dealerCode ของสาขาที่ล็อกอิน → ลีดใหม่เป็นของสาขานั้น (multi-tenant) ไม่ตกเป็นของ CNX
+            // ติด dealerCode ของสาขาที่ล็อกอิน → ลูกค้าเป้าหมายใหม่เป็นของสาขานั้น (multi-tenant) ไม่ตกเป็นของ CNX
             const withIds = { ...l, dealerCode: currentDealer.code, numId: nid, id: `#L-${40321 + nid}`, createdAt: l.createdAt || thaiDateStr(APP_NOW) };
             addLead({
               ...withIds,
               report: l.report || buildLeadReport(withIds, thaiDateStr(APP_NOW)),
-              // ดีลเลอร์สร้างลีดหลังติดต่อลูกค้าแล้ว → ติ๊กงานให้ถึงสถานะที่เลือก (เริ่มต้น "ติดต่อแล้ว" = ติ๊กติดต่อครั้งแรก/เก็บข้อมูล)
+              // ดีลเลอร์สร้างลูกค้าเป้าหมายหลังติดต่อลูกค้าแล้ว → ติ๊กงานให้ถึงสถานะที่เลือก (เริ่มต้น "ติดต่อแล้ว" = ติ๊กติดต่อครั้งแรก/เก็บข้อมูล)
               tasks: l.tasks?.length ? l.tasks : seedLeadTasks(l.status, l.assigned || "—", 30, taskTpl),
             });
           }}
@@ -1803,7 +1803,7 @@ export default function LeadsPage() {
         />
       )}
 
-      {/* เลือกเหตุผลก่อนปิดการขายไม่สำเร็จ — จากตาราง/Kanban (บังคับเลือกเหมือนปุ่มในแผงลีด) */}
+      {/* เลือกเหตุผลก่อนปิดการขายไม่สำเร็จ — จากตาราง/Kanban (บังคับเลือกเหมือนปุ่มในแผงลูกค้าเป้าหมาย) */}
       {pendingLostId && (
         <>
           <div onClick={()=>setPendingLostId(null)} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.5)", zIndex:230 }} />
@@ -1899,7 +1899,7 @@ export default function LeadsPage() {
         const cInitials = (c.company || c.name).replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
         const activities = (c.activities && c.activities.length) ? c.activities : seedActivities(c);
         const drawerFiles = myFiles;
-        // เป็นลูกค้าเมื่อปิดการขายสำเร็จ (WON) เท่านั้น — mock บางลีดมี customerId ผูกไว้แต่ยังไม่ WON จึงไม่นับ
+        // เป็นลูกค้าเมื่อปิดการขายสำเร็จ (WON) เท่านั้น — mock บางลูกค้าเป้าหมายมี customerId ผูกไว้แต่ยังไม่ WON จึงไม่นับ
         const isCustomer = c.status === "PAID";
 
         const detailTabs = [
@@ -1925,8 +1925,8 @@ export default function LeadsPage() {
             company: c.company, contact: c.contact ?? "", phone: c.phone ?? "", province: c.province ?? "",
             project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
             buildingType: c.product ?? "",
-            // ⚠️ เดิมใส่ 0 ตายตัว ทั้งที่ช่องอื่นคัดลอกจากลีดหมด (แก้ 10 ส.ค. 69)
-            //   นัดหมายจึงบันทึกพื้นที่เป็น 0 เสมอ แม้ลีดจะระบุไว้ 800 ตร.ม. ก็ตาม
+            // ⚠️ เดิมใส่ 0 ตายตัว ทั้งที่ช่องอื่นคัดลอกจากลูกค้าเป้าหมายหมด (แก้ 10 ส.ค. 69)
+            //   นัดหมายจึงบันทึกพื้นที่เป็น 0 เสมอ แม้ลูกค้าเป้าหมายจะระบุไว้ 800 ตร.ม. ก็ตาม
             area: c.area ?? 0,
             date: apptForm.date, time: apptForm.time, type: apptForm.type,
             assigned: c.assigned || session.name, status: "upcoming", note: apptForm.note.trim(),
@@ -1993,7 +1993,7 @@ export default function LeadsPage() {
 
         // ── Tab: งาน/ความคืบหน้า (Task-driven) — เช็กแล้วเลื่อน Stage อัตโนมัติ ──
         const tabTasks = (
-          // ผู้ทำงาน = ผู้รับผิดชอบของลีดนั้น (ไม่ใช่บัญชีดีลเลอร์ที่ล็อกอิน)
+          // ผู้ทำงาน = ผู้รับผิดชอบของลูกค้าเป้าหมายนั้น (ไม่ใช่บัญชีดีลเลอร์ที่ล็อกอิน)
           // งาน "จัดทำใบเสนอราคา" ติ๊กเองไม่ได้ถ้ายังไม่มีใบ — ส่ง onRequestQuotation ไปพาออกใบแทน
           <LeadTasks lead={c} performedBy={c.assigned || session.name} onSave={saveLead}
             onRequestQuotation={taskKey => {
@@ -2144,7 +2144,7 @@ export default function LeadsPage() {
                       <div style={{ fontSize:"1.12rem", fontWeight:800, color:"#fff", lineHeight:1.2 }}>{c.company || c.name}</div>
                       {/* หัวแผงบอกแค่ว่า "นี่คือใคร ที่ไหน" — โทรศัพท์/อีเมล/วันที่สร้าง ตัดออกแล้ว
                           เพราะซ้ำกับการ์ด "ข้อมูลลูกค้า (OVERVIEW)" ในแท็บภาพรวมที่มีครบกว่า (มีแหล่งที่มา/ผู้รับผิดชอบ/ติดต่อล่าสุดด้วย)
-                          รหัสลีดก็ตัดออก — หัวแผงใช้ชื่อบริษัทระบุตัวอยู่แล้ว (และของเดิมเรนเดอร์เพี้ยนเป็น "##L-40336"
+                          รหัสลูกค้าเป้าหมายก็ตัดออก — หัวแผงใช้ชื่อบริษัทระบุตัวอยู่แล้ว (และของเดิมเรนเดอร์เพี้ยนเป็น "##L-40336"
                           เพราะ c.id มี "#" ติดมาอยู่แล้วแต่โค้ดเติม "#" ซ้ำอีกตัว) */}
                       <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", fontSize:"0.72rem", color:"rgba(255,255,255,.72)", marginTop:4 }}>
                         <span>{c.contact}</span>

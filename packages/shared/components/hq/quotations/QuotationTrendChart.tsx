@@ -10,7 +10,11 @@ export function QuotationTrendChart({ trend }: { trend: { months: string[]; bar:
   return (
     // ไม่ตรึงความสูงด้วย .chart-* — การ์ดนี้เป็น SVG ที่ยืดตามความกว้าง
     // ถ้าตรึงแล้วให้เลื่อน = กราฟเส้นโดนตัดครึ่ง (อ่านไม่ได้) ต้องคุมที่สัดส่วน viewBox แทน
-    <div className="card" style={{ marginBottom: 0 }}>
+    //
+    // ⚠️ ระยะห่างด้านล่างต้องเท่ากับช่องไฟของแถวการ์ดถัดไป (.hq-dealer-charts margin-bottom = 24px)
+    //   เดิมเป็น 0 → การ์ดแถวถัดไปชนขอบล่างพอดี พอเอาเมาส์ชี้แล้วการ์ดยกตัวขึ้นตามเอฟเฟกต์ hover
+    //   ขอบของมันจะพาดทับหัวข้อ "แนวโน้มใบเสนอราคารายเดือน" (ผู้ใช้แจ้ง 14 ส.ค. 69)
+    <div className="card" style={{ marginBottom: 24 }}>
       <div className="card-header">
         <div>
           <div className="card-title">แนวโน้มใบเสนอราคารายเดือน</div>

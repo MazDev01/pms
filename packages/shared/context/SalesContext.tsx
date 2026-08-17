@@ -25,7 +25,7 @@ import { useQuoteValidityDays, useLeadTaskTemplate } from "@pms/shared/lib/useHQ
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
 import { DATA_SOURCE } from "@pms/shared/lib/data/config";
 
-// โหมด backend — supabase: ลีดมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
+// โหมด backend — supabase: ลูกค้าเป้าหมายมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
 const USE_SUPABASE = DATA_SOURCE === "supabase";
 
 // ปิดใบหมดอายุ = คำสั่ง "เขียน" — ทำครั้งเดียวพอต่อสาขาต่อ session (M5)
@@ -53,7 +53,7 @@ export type SalesContextType = {
   leads: LeadRow[];
   updateLeadStatus: (leadId: string, status: LeadRow["status"]) => void;
   /** เลข num_id ถัดไปของสาขาแบบ atomic (M7) — id ที่แสดง (#L-…) derive จากค่านี้
-   *  เดิมหน้าจอใช้ Math.max+1 ฝั่ง client → สร้างลีดพร้อมกันในสาขาเดียว num_id/id ชนกันได้ */
+   *  เดิมหน้าจอใช้ Math.max+1 ฝั่ง client → สร้างลูกค้าเป้าหมายพร้อมกันในสาขาเดียว num_id/id ชนกันได้ */
   newLeadNumId: () => Promise<number>;
   addLead: (lead: LeadRow) => void;
   updateLead: (lead: LeadRow) => void;
@@ -73,7 +73,7 @@ export type SalesContextType = {
   deleteQuotation: (id: string) => void;
   setQuotationStatus: (id: string, status: QuotationStatus) => void;
   /** เลขนัดหมายถัดไปของสาขา — ออกจาก DB แบบ atomic เหมือนเลขลูกค้า/เลขที่ใบ
-   *  (เดิมหน้าปฏิทินใช้ Date.now() · หน้าลีดใช้ max+1 — คนละแบบและไม่กันชนจริง) */
+   *  (เดิมหน้าปฏิทินใช้ Date.now() · หน้าลูกค้าเป้าหมายใช้ max+1 — คนละแบบและไม่กันชนจริง) */
   newAppointmentId: () => Promise<number>;
 
 
@@ -106,12 +106,12 @@ export function SalesProvider({
   children: ReactNode;
   initialLeads: LeadRow[];
 }) {
-  // สาขาที่ล็อกอิน (multi-tenant) + auth พร้อมหรือยัง (hydrated) — โหลดลีดตามขอบเขตสาขา
+  // สาขาที่ล็อกอิน (multi-tenant) + auth พร้อมหรือยัง (hydrated) — โหลดลูกค้าเป้าหมายตามขอบเขตสาขา
   const { dealerCode, isHQ, hydrated, isLoggedIn } = useRole();
   const myDealerCode = dealerCode || DEFAULT_DEALER_CODE;
   // อายุใบเสนอราคา (นโยบาย HQ) — ใบที่ไม่ได้กรอก expiry เอง ใช้ค่านี้คำนวณวันหมดอายุ (0067)
   const quoteValidityDays = useQuoteValidityDays();
-  // งานมาตรฐานรายขั้นที่ HQ ตั้งไว้ — ตัวขับการเลื่อนขั้นของลีด (HQ แก้ได้ที่ /hq/settings › เส้นทางการขาย)
+  // งานมาตรฐานรายขั้นที่ HQ ตั้งไว้ — ตัวขับการเลื่อนขั้นของลูกค้าเป้าหมาย (HQ แก้ได้ที่ /hq/settings › เส้นทางการขาย)
   // ต้องอ่านผ่าน hook: ค่าตั้งต้นในโค้ดใช้ได้แค่ตอนยังโหลดไม่เสร็จ ไม่ใช่ของจริงที่ HQ ตั้ง
   const taskTpl = useLeadTaskTemplate();
   const taskTplRef = useRef(taskTpl);
@@ -124,7 +124,7 @@ export function SalesProvider({
   const gateHQ = USE_SUPABASE && isHQ;
 
   // ── Leads (Phase 1) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
-  // supabase: RLS ที่ DB คืนเฉพาะลีดสาขาตัวเอง (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
+  // supabase: RLS ที่ DB คืนเฉพาะลูกค้าเป้าหมายสาขาตัวเอง (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
   // seed แรก: local ใช้ initialLeads ทันที (ไม่มี network) · supabase เริ่มว่างแล้วเติมเมื่อโหลดเสร็จ (กัน flash ข้ามสาขา)
   const [leads, setLeads] = useState<LeadRow[]>(USE_SUPABASE ? [] : initialLeads);
   // ref อ่านค่า leads ล่าสุดใน callback โดยไม่พึ่ง closure (ใช้ใน updateLeadStatus / completeLeadQuoteTasks)
@@ -158,9 +158,9 @@ export function SalesProvider({
     }
   }, []);
 
-  // โหลดลีดเมื่อ auth พร้อม + รีโหลดเมื่อสลับสาขา (login คนละบัญชี) — scope ส่งให้ repo (RLS ฝั่ง supabase)
+  // โหลดลูกค้าเป้าหมายเมื่อ auth พร้อม + รีโหลดเมื่อสลับสาขา (login คนละบัญชี) — scope ส่งให้ repo (RLS ฝั่ง supabase)
   useEffect(() => {
-    if (!hydrated || gateHQ) return; // HQ/supabase: ไม่โหลดลีดทั้งเครือ (อ่านผ่าน RPC แทน)
+    if (!hydrated || gateHQ) return; // HQ/supabase: ไม่โหลดลูกค้าเป้าหมายทั้งเครือ (อ่านผ่าน RPC แทน)
     let alive = true;
     void loadFresh(() => leadsRepo.list({ dealerCode, isHQ }), setLeads, () => alive, "leads.list");
     return () => { alive = false; };
@@ -353,15 +353,15 @@ export function SalesProvider({
     });
   }, [hydrated, dealerCode, isHQ, gateHQ]);
   // ── Lead → Customer conversion (creates a REAL customer) ─────────
-  // removeLead = true → "เปลี่ยนลีดเป็นลูกค้า" (ลบออกจากรายการลูกค้าเป้าหมาย) · false → แค่ผูกลูกค้าให้ลีด (คงลีดไว้ เช่นตอนสร้างใบเสนอราคา)
+  // removeLead = true → "เปลี่ยนลูกค้าเป้าหมายเป็นลูกค้า" (ลบออกจากรายการลูกค้าเป้าหมาย) · false → แค่ผูกลูกค้าให้ลูกค้าเป้าหมาย (คงลูกค้าเป้าหมายไว้ เช่นตอนสร้างใบเสนอราคา)
   // targetQuoteId → ใบที่ต้องบังคับเป็น won เสมอ (เส้นทางจากหน้าใบเสนอราคา "ลูกค้าตอบรับ" ใบเดียว)
-  //   ไม่ใส่ = ไม่มีใบเป้าหมายเดี่ยว พึ่ง cascade (lead.status==="PAID") อย่างเดียว (เส้นทางจากลิ้นชักลีด)
+  //   ไม่ใส่ = ไม่มีใบเป้าหมายเดี่ยว พึ่ง cascade (lead.status==="PAID") อย่างเดียว (เส้นทางจากลิ้นชักลูกค้าเป้าหมาย)
   // async เพราะทั้งก้อน (หา/สร้างลูกค้า + relink ใบ + บังคับใบเป้าหมาย + รวมยอด) เป็น RPC เดียว atomic
   // ที่ DB (Phase 4, 0094/0095) — แทนที่ upsertForCompany + relink แยก + setStatus แยก + reconcile แยก
   // เดิม 4 คำสั่งเขียนคนละรอบ เน็ตหลุดกลางทางได้ (ประวัติพังจริงมาแล้ว 3 รอบ: 0069→0070→0071)
   const convertLeadToCustomer = useCallback(async (lead: LeadRow, removeLead = false, targetQuoteId?: string): Promise<CustomerRow> => {
     const ownerDealer = lead.dealerCode ?? myDealerCode;
-    // ใช้ lead.status==="PAID" เป็นสัญญาณ cascade — caller ฝั่งลีด (updateLead/updateLeadStatus) ตั้ง
+    // ใช้ lead.status==="PAID" เป็นสัญญาณ cascade — caller ฝั่งลูกค้าเป้าหมาย (updateLead/updateLeadStatus) ตั้ง
     // status=PAID ไว้ใน lead object ก่อนเรียกอยู่แล้ว · caller ฝั่งใบเสนอราคายังไม่แตะ lead.status
     // (จึง cascadeWon=false แต่ target quote ยังถูกบังคับ won ผ่าน targetQuoteId แยกต่างหาก)
     const cascadeWon = lead.status === "PAID";
@@ -381,8 +381,8 @@ export function SalesProvider({
       initials: deriveInitials(lead.company || lead.name),
       color: CUSTOMER_PALETTE[(lead.numId ?? 0) % CUSTOMER_PALETTE.length],
       totalValue: parseBaht(lead.value),
-      logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลีดมาด้วย
-      dealerCode: lead.dealerCode ?? DEFAULT_DEALER_CODE, // ลูกค้าเป็นของสาขาเดียวกับลีดที่ปิดการขาย (multi-tenant)
+      logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลูกค้าเป้าหมายมาด้วย
+      dealerCode: lead.dealerCode ?? DEFAULT_DEALER_CODE, // ลูกค้าเป็นของสาขาเดียวกับลูกค้าเป้าหมายที่ปิดการขาย (multi-tenant)
     };
     let result: { customer: CustomerRow; quotations: QuotationMock[] };
     try {
@@ -400,11 +400,11 @@ export function SalesProvider({
     const relinkedById = new Map(result.quotations.map(q => [q.id, q]));
     setQuotations(prev => prev.map(q => relinkedById.get(q.id) ?? q));
     if (removeLead) {
-      // ปิดการขาย/แปลงเป็นลูกค้า → ลีดกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
+      // ปิดการขาย/แปลงเป็นลูกค้า → ลูกค้าเป้าหมายกลายเป็นลูกค้าเต็มตัว จึงเอาออกจากรายการลูกค้าเป้าหมาย
       setLeads(prev => prev.filter(l => l.id !== lead.id));
       persistLead.remove(lead.id);
     } else {
-      // แค่ผูกลูกค้าให้ลีด (ยังเป็นลูกค้าเป้าหมายอยู่)
+      // แค่ผูกลูกค้าให้ลูกค้าเป้าหมาย (ยังเป็นลูกค้าเป้าหมายอยู่)
       setLeads(prev => prev.map(l => l.id !== lead.id ? l : { ...l, customerId: saved.id }));
       persistLead.update({ ...lead, customerId: saved.id });
     }
@@ -416,7 +416,7 @@ export function SalesProvider({
     // สร้างลูกค้าเฉพาะตอนปิดการขายสำเร็จ (WON) — ตัดสินใจนอก updater กัน StrictMode เรียกซ้ำใน dev
     const lead = leadsRef.current.find(l => l.id === leadId);
     if (!lead) return;
-    // ย้ายสถานะ → ติ๊กงานใน Checklist ให้ถึงสเตจนั้นอัตโนมัติ (ผู้ทำ = ผู้รับผิดชอบของลีด)
+    // ย้ายสถานะ → ติ๊กงานใน Checklist ให้ถึงสเตจนั้นอัตโนมัติ (ผู้ทำ = ผู้รับผิดชอบของลูกค้าเป้าหมาย)
     const updated: LeadRow = { ...lead, status, tasks: syncTasksToStage(lead.tasks, status, lead.assigned || "—", taskTplRef.current) };
     setLeads(prev => prev.map(l => l.id !== leadId ? l : updated));
     persistLead.update(updated); // สถานะ + tasks เปลี่ยน → update ทั้งแถว (แทน setStatus)
@@ -426,7 +426,7 @@ export function SalesProvider({
   }, [convertLeadToCustomer, persistLead]);
 
   const addLead = useCallback((lead: LeadRow) => {
-    // ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ลีดใหม่เป็นของสาขานั้น (RLS with-check ฝั่ง supabase)
+    // ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — ลูกค้าเป้าหมายใหม่เป็นของสาขานั้น (RLS with-check ฝั่ง supabase)
     const tagged: LeadRow = { ...lead, dealerCode: lead.dealerCode ?? myDealerCode };
     setLeads(prev => [tagged, ...prev]);
     persistLead.create(tagged);
@@ -442,7 +442,7 @@ export function SalesProvider({
   }, [convertLeadToCustomer, persistLead]);
 
   // เก็บกวาดไฟล์ที่ผูกกับเรคคอร์ดที่ถูกลบ (metadata + ไบต์ใน Storage) — กันไฟล์กำพร้า (A2.1)
-  //   files.record_id เป็น polymorphic (ลีด/ลูกค้า) ผูก FK/cascade ที่ DB ไม่ได้ จึงเก็บที่ชั้นแอป
+  //   files.record_id เป็น polymorphic (ลูกค้าเป้าหมาย/ลูกค้า) ผูก FK/cascade ที่ DB ไม่ได้ จึงเก็บที่ชั้นแอป
   //   best-effort: ล้มเหลว = แค่เหลือไฟล์กำพร้าเหมือนเดิม (ไม่บล็อกการลบเรคคอร์ด)
   const cleanupFilesFor = useCallback(async (match: (f: DealerFile) => boolean) => {
     const s = fileScopeRef.current;
@@ -457,18 +457,18 @@ export function SalesProvider({
     } catch (e) { console.warn("[cleanupFiles] อ่านรายการไฟล์ไม่สำเร็จ", e); }
   }, []);
 
-  // ลบลีด — ต้องไม่ทิ้งใบเสนอราคาที่ผูกอยู่ให้ลอยไม่มีลีดแม่ (เหตุผลเดียวกับ deleteCustomer ด้านล่าง
+  // ลบลูกค้าเป้าหมาย — ต้องไม่ทิ้งใบเสนอราคาที่ผูกอยู่ให้ลอยไม่มีลูกค้าเป้าหมายแม่ (เหตุผลเดียวกับ deleteCustomer ด้านล่าง
   // พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69: เดิมลบได้เลยแม้มีใบเสนอราคาผูก dealId ไว้อยู่)
   const deleteLead = useCallback((leadId: string) => {
     const lead = leadsRef.current.find(l => l.id === leadId);
     const linkedQuotes = lead?.numId != null ? quotationsRef.current.filter(q => q.dealId === lead.numId).length : 0;
     if (linkedQuotes) {
-      setSyncError(`ลบลีดไม่ได้ — ยังมีใบเสนอราคา ${linkedQuotes} ใบผูกอยู่ · กรุณาย้าย/ลบใบเหล่านั้นก่อน`);
+      setSyncError(`ลบลูกค้าเป้าหมายไม่ได้ — ยังมีใบเสนอราคา ${linkedQuotes} ใบผูกอยู่ · กรุณาย้าย/ลบใบเหล่านั้นก่อน`);
       return;
     }
     setLeads(prev => prev.filter(l => l.id !== leadId));
     persistLead.remove(leadId);
-    // ลบไฟล์ที่แนบกับลีดนี้ (source=lead · record_id = numId ของลีด)
+    // ลบไฟล์ที่แนบกับลูกค้าเป้าหมายนี้ (source=lead · record_id = numId ของลูกค้าเป้าหมาย)
     if (lead?.numId != null) void cleanupFilesFor(f => f.source === "lead" && f.recordId === lead.numId);
   }, [persistLead, cleanupFilesFor]);
 
@@ -494,10 +494,10 @@ export function SalesProvider({
   const deleteQuotationRef = useRef<((id: string) => void) | null>(null);
 
   // ลบลูกค้า — ต้องไม่ทิ้ง "ข้อมูลกำพร้า" ไว้ (H1)
-  // DB ยังผูก FK ระหว่างใบเสนอราคา/ลีด กับลูกค้าไม่ได้ (customerId ใช้ 0 แทน "ยังไม่มีลูกค้า")
+  // DB ยังผูก FK ระหว่างใบเสนอราคา/ลูกค้าเป้าหมาย กับลูกค้าไม่ได้ (customerId ใช้ 0 แทน "ยังไม่มีลูกค้า")
   // จึงต้องกันที่ชั้นแอป
   //
-  // ⚠️ เดิมกันแบบเหมารวม "มีลีดผูกอยู่ = ลบไม่ได้" ซึ่งกลายเป็นทางตันที่ออกไม่ได้เลย:
+  // ⚠️ เดิมกันแบบเหมารวม "มีลูกค้าเป้าหมายผูกอยู่ = ลบไม่ได้" ซึ่งกลายเป็นทางตันที่ออกไม่ได้เลย:
   //   ดีลที่ปิดการขายแล้วก็ถูกนับด้วย แต่หน้าลูกค้าเป้าหมายตั้งใจซ่อนดีลที่ปิดแล้วไว้
   //   ระบบจึงสั่งให้ไปลบของที่มันไม่ยอมให้เห็น → ลูกค้าที่ปิดการขายแล้วลบไม่ได้ตลอดกาล
   //   (ผู้ใช้แจ้ง 14 ส.ค. 69 · ดู customerDeletion.ts สำหรับกติกาเต็ม)
@@ -524,17 +524,17 @@ export function SalesProvider({
     if (goneLeadIds.size) void cleanupFilesFor(f => f.source === "lead" && f.recordId != null && goneLeadIds.has(f.recordId));
   }, [persistCustomer, persistLead, cleanupFilesFor]);
 
-  // ── Quotation → เช็กงานของลีดอัตโนมัติ ─────────────────────────────
+  // ── Quotation → เช็กงานของลูกค้าเป้าหมายอัตโนมัติ ─────────────────────────────
   // สร้างใบเสนอราคา = ติ๊ก "จัดทำใบเสนอราคา" · ส่งใบเสนอราคา = ติ๊ก "ส่งใบเสนอราคา"
-  // แล้วเลื่อนสถานะลีดตาม stageFromTasks (เลื่อนขึ้นเท่านั้น ไม่ดึงถอยหลัง)
+  // แล้วเลื่อนสถานะลูกค้าเป้าหมายตาม stageFromTasks (เลื่อนขึ้นเท่านั้น ไม่ดึงถอยหลัง)
   const completeLeadQuoteTasks = useCallback((quotation: QuotationMock, keys: string[]) => {
     const RANK: Partial<Record<LeadRow["status"], number>> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4 };
-    // คิดจาก leadsRef (ค่าล่าสุด) แทน updater เพื่อเก็บ "ลีดที่เปลี่ยน" ไป persist ทีละแถวได้
+    // คิดจาก leadsRef (ค่าล่าสุด) แทน updater เพื่อเก็บ "ลูกค้าเป้าหมายที่เปลี่ยน" ไป persist ทีละแถวได้
     const changedLeads: LeadRow[] = [];
     const nextList = leadsRef.current.map(l => {
-      // กันเขียนข้ามสาขา: repo คืนเฉพาะลีดสาขาที่ล็อกอินอยู่แล้ว แต่กันไว้อีกชั้น (ลีดไม่ระบุ dealerCode = CNX)
-      // ไม่งั้น match ด้วย company ชื่อซ้ำ/พิมพ์เอง จะเลื่อนสถานะ+ประทับผู้ทำทับลีดของสาขาอื่น
-      // (คู่แฝดฝั่งเขียนของบั๊กรั่วข้ามสาขา — ดู branch-isolation.spec.ts) · แตะเฉพาะลีดของสาขาที่ล็อกอิน
+      // กันเขียนข้ามสาขา: repo คืนเฉพาะลูกค้าเป้าหมายสาขาที่ล็อกอินอยู่แล้ว แต่กันไว้อีกชั้น (ลูกค้าเป้าหมายไม่ระบุ dealerCode = CNX)
+      // ไม่งั้น match ด้วย company ชื่อซ้ำ/พิมพ์เอง จะเลื่อนสถานะ+ประทับผู้ทำทับลูกค้าเป้าหมายของสาขาอื่น
+      // (คู่แฝดฝั่งเขียนของบั๊กรั่วข้ามสาขา — ดู branch-isolation.spec.ts) · แตะเฉพาะลูกค้าเป้าหมายของสาขาที่ล็อกอิน
       if ((l.dealerCode ?? DEFAULT_DEALER_CODE) !== myDealerCode) return l;
       const match = (quotation.customerId != null && quotation.customerId !== 0 && l.customerId === quotation.customerId)
         || l.company === quotation.customer;
@@ -544,7 +544,7 @@ export function SalesProvider({
       const tasks = base.map(t => {
         if (keys.includes(t.key) && !t.done) {
           changed = true;
-          // ผู้ทำงาน = ผู้รับผิดชอบของลีด (ไม่ใช่ "ระบบ"/ดีลเลอร์) · วันปิดงาน = วันนี้ของระบบ (supabase=จริง)
+          // ผู้ทำงาน = ผู้รับผิดชอบของลูกค้าเป้าหมาย (ไม่ใช่ "ระบบ"/ดีลเลอร์) · วันปิดงาน = วันนี้ของระบบ (supabase=จริง)
           return { ...t, done: true, doneAt: fmtISOToThai(APP_NOW_ISO), doneBy: l.assigned || "อัปเดตอัตโนมัติ" };
         }
         return t;
@@ -588,7 +588,7 @@ export function SalesProvider({
     setQuotations(prev => [created, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
     completeLeadQuoteTasks(created, created.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
-    syncQuoteFile.add(created); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลีด/ลูกค้า
+    syncQuoteFile.add(created); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลูกค้าเป้าหมาย/ลูกค้า
     return created;
   }, [completeLeadQuoteTasks, myDealerCode, syncQuoteFile, bumpWrite]);
 
@@ -650,13 +650,13 @@ export function SalesProvider({
     const prevStatus = target?.status;
     setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status })); // optimistic UI
     if (!target || status === "draft") { persistQuote.setStatus(id, status); return; }
-    // เปลี่ยนเป็นสถานะหลังการส่ง → ติ๊ก จัดทำ/ส่งใบเสนอราคา ให้ลีดอัตโนมัติ
+    // เปลี่ยนเป็นสถานะหลังการส่ง → ติ๊ก จัดทำ/ส่งใบเสนอราคา ให้ลูกค้าเป้าหมายอัตโนมัติ
     // (setTimeout กัน StrictMode เรียกซ้ำระหว่าง updater)
     const snap = { ...target, status };
     setTimeout(() => completeLeadQuoteTasks(snap, ["makeQuote", "sendQuote"]), 0);
 
-    // "ลูกค้าตอบรับ" (won) บนใบเสนอราคา → สร้าง/ผูกลูกค้าให้ลีดต้นทาง ผ่านเส้นทางเดียว
-    // กับการปิดจากลิ้นชักลีด (convertLeadToCustomer) — ได้ id จริง ข้อมูลครบ กันซ้ำ (trigger ถูกลบ 0033)
+    // "ลูกค้าตอบรับ" (won) บนใบเสนอราคา → สร้าง/ผูกลูกค้าให้ลูกค้าเป้าหมายต้นทาง ผ่านเส้นทางเดียว
+    // กับการปิดจากลิ้นชักลูกค้าเป้าหมาย (convertLeadToCustomer) — ได้ id จริง ข้อมูลครบ กันซ้ำ (trigger ถูกลบ 0033)
     //
     // ⚠️ atomicity เส้นทางเงินหลัก: ต้อง "สร้าง/ผูกลูกค้าสำเร็จก่อน" แล้วค่อย mark won ที่ DB
     //   ถ้าสร้างลูกค้าไม่ลง DB → ไม่ mark won + ย้อนสถานะใบใน UI (กัน "won ค้างโดยไม่มีลูกค้า")
@@ -680,9 +680,9 @@ export function SalesProvider({
       })();
       return;
     }
-    // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลีดต้นทาง) — mark สถานะตามปกติ
+    // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลูกค้าเป้าหมายต้นทาง) — mark สถานะตามปกติ
     // R6/H2: ใบที่ผูกลูกค้าเดิมอยู่แล้ว เปลี่ยนเป็น won (ดีลที่ 2+) หรือย้อน won ออก (→ lost/expired/sent)
-    //   → รวมยอดลูกค้าใหม่หลังเปลี่ยนสถานะ (finish() ครอบเฉพาะครั้งแรกผ่านลีด)
+    //   → รวมยอดลูกค้าใหม่หลังเปลี่ยนสถานะ (finish() ครอบเฉพาะครั้งแรกผ่านลูกค้าเป้าหมาย)
     //   เดิมคิดเฉพาะขา won → ย้อน won ออกแล้วยอดไม่ลด = ยอดค้างเกินจริง
     const needsReconcile = target.customerId && target.customerId > 0 && (status === "won" || prevStatus === "won");
     if (!needsReconcile) {
@@ -725,7 +725,7 @@ export function SalesProvider({
     [myDealerCode],
   );
 
-  // เลข num_id ถัดไปของลีด — atomic ต่อสาขา (M7) แบบเดียวกับลูกค้า/นัด/ใบเสนอราคา
+  // เลข num_id ถัดไปของลูกค้าเป้าหมาย — atomic ต่อสาขา (M7) แบบเดียวกับลูกค้า/นัด/ใบเสนอราคา
   const newLeadNumId = useCallback(() => leadsRepo.nextNumId(myDealerCode), [myDealerCode]);
 
   // ── Appointment mutations (Phase 4) — เขียนทะลุถึง repo ──────────

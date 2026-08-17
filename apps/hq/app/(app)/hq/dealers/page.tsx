@@ -176,7 +176,7 @@ function HQDealersPageInner() {
   const [entering, setEntering] = useState<string | null>(null);
   const [selectedDealer, setSelectedDealer] = useState<DealerRow | null>(null);
 
-  // ผลงานจริงจากใบเสนอราคา/ลีด — ห้ามอ่าน d.revenueActual / d.winRate / d.activeProjects อีก
+  // ผลงานจริงจากใบเสนอราคา/ลูกค้าเป้าหมาย — ห้ามอ่าน d.revenueActual / d.winRate / d.activeProjects อีก
   // (คอลัมน์พวกนั้นเป็นค่าเดโมที่ seed ไว้ ไม่ขยับตามข้อมูลจริง และขัดกับหน้าแดชบอร์ด)
   const perf = useDealerPerformance();
   const perfOf = (code: string) => perf.get(code) ?? EMPTY_PERF;
@@ -196,7 +196,7 @@ function HQDealersPageInner() {
   const totalProjects = filtered.reduce((s, d) => s + perfOf(d.code).openLeads, 0);
   // เฉลี่ยเฉพาะตัวแทนที่ "มีข้อมูล" (onTimePct > 0) — ตัวที่เป็น 0 = ยังไม่มีข้อมูล (ตารางแสดง "—")
   // เอามาเฉลี่ยเป็น 0 ไม่ได้ = เอา 0 สวมรอย "—" · ไม่มีใครมีข้อมูล → null → การ์ดแสดง "—"
-  // เฉลี่ยเฉพาะสาขาที่ "มีข้อมูลให้วัด" — สาขาที่ยังไม่มีลีด/ใบ ไม่เอา 0 มาถ่วงค่าเฉลี่ย
+  // เฉลี่ยเฉพาะสาขาที่ "มีข้อมูลให้วัด" — สาขาที่ยังไม่มีลูกค้าเป้าหมาย/ใบ ไม่เอา 0 มาถ่วงค่าเฉลี่ย
   const avgOf = (pick: (c: string) => number | null): number | null => {
     const vals = active.map(d => pick(d.code)).filter((v): v is number => v !== null);
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;

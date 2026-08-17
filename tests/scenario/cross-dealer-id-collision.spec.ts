@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { SUPABASE_URL, SUPABASE_ANON, SUPABASE_MODE, ADMIN } from "./supabaseEnv";
 
-// ── regression: id ลูกค้า/ลีด นับแยกต่อสาขา — ห้าม join/group ข้ามตารางด้วย id เปล่า ──
+// ── regression: id ลูกค้า/ลูกค้าเป้าหมาย นับแยกต่อสาขา — ห้าม join/group ข้ามตารางด้วย id เปล่า ──
 //
 // customers.id เป็นเลขนับ "ต่อสาขา" (composite PK dealer_code+id) — ลูกค้ารายแรกของทุกสาขาได้ id=1
 // เหมือนกันหมดโดยตั้งใจ (ดู 0012_per_dealer_ids.sql) ทุก query ที่ join/group ด้วย customer_id จึงต้อง
@@ -50,13 +50,13 @@ test.beforeAll(async () => {
     });
     if (eq) throw new Error(`เตรียมใบเสนอราคา ${d.code} ไม่สำเร็จ: ${eq.message}`);
 
-    // ลีดผูกลูกค้ารายเดียวกัน — ใช้ทดสอบ quotation_salesperson (ผู้รับผิดชอบต่างคนกันคนละสาขา)
+    // ลูกค้าเป้าหมายผูกลูกค้ารายเดียวกัน — ใช้ทดสอบ quotation_salesperson (ผู้รับผิดชอบต่างคนกันคนละสาขา)
     // เช็ค error ทุกจุด: ถ้าเตรียมข้อมูลพลาดเงียบ ๆ เทสต์จะ "ผ่าน" แบบไม่ได้ทดสอบอะไรเลย
     const { error: el } = await admin.from("leads").insert({
       id: d.leadId, num_id: d.leadId, dealer_code: d.code, company: `${TAG}-${d.code}`,
       customer_id: CID, assigned: d.who, status: "WAITING", province,
     });
-    if (el) throw new Error(`เตรียมลีด ${d.code} ไม่สำเร็จ: ${el.message}`);
+    if (el) throw new Error(`เตรียมลูกค้าเป้าหมาย ${d.code} ไม่สำเร็จ: ${el.message}`);
   }
 });
 
@@ -97,7 +97,7 @@ test("hq_customers_page: ลูกค้า id ชนกันข้ามสา
   expect(page.kpi?.repeat, "ลูกค้าประจำต้องเป็น 0 — ถ้าเป็น 2 แปลว่านับใบของสองสาขารวมกัน").toBe(0);
 });
 
-test("quotation_salesperson: ผู้รับผิดชอบต้องมาจากลีดสาขาเดียวกันเท่านั้น", async () => {
+test("quotation_salesperson: ผู้รับผิดชอบต้องมาจากลูกค้าเป้าหมายสาขาเดียวกันเท่านั้น", async () => {
   const sb = await hqClient();
   for (const d of [A, B]) {
     const other = d.code === A.code ? B : A;
@@ -116,7 +116,7 @@ const SAME_ID = `${TAG}-SAME-Q1`;
 test.beforeAll(async () => {
   await admin.from("quotations").delete().eq("id", SAME_ID);
   for (const d of [A, B]) {
-    // ผูกกับ "ลีด" ผ่าน deal_id แทน customer_id โดยตั้งใจ — ถ้าผูกกับลูกค้ารายเดิม
+    // ผูกกับ "ลูกค้าเป้าหมาย" ผ่าน deal_id แทน customer_id โดยตั้งใจ — ถ้าผูกกับลูกค้ารายเดิม
     // ใบใบนี้จะไปนับเป็นใบที่สองของลูกค้า แล้วทำให้ KPI "ลูกค้าประจำ" ของเทสต์ด้านบนเปลี่ยน
     // (เทสต์จะตกเพราะข้อมูลที่เราเติมเอง ไม่ใช่เพราะบั๊ก — ต้องแยกให้ขาดจากกัน)
     const { error } = await admin.from("quotations").insert({
@@ -147,7 +147,7 @@ test("quotation_salesperson: ไม่ระบุสาขาแล้วเล
   expect(name, `เลขที่ใบซ้ำ 2 สาขาแต่ไม่ระบุสาขา ต้องคืนค่าว่าง ไม่ใช่เดาเอาสาขาใดสาขาหนึ่ง (ได้ ${name})`).toBeNull();
 });
 
-test("hq_alerts: รายการแจ้งเตือนลีดต้องพกรหัสสาขามาด้วย", async () => {
+test("hq_alerts: รายการแจ้งเตือนลูกค้าเป้าหมายต้องพกรหัสสาขามาด้วย", async () => {
   // ไม่มีรหัสสาขา = HQ เห็นแค่ชื่อบริษัท ไม่รู้ว่าต้องตามกับสาขาไหน และลิงก์ในกระดิ่งก็กำกวม
   const sb = await hqClient();
   const { data, error } = await sb.rpc("hq_alerts", { p_as_of: "2026-06-30", p_unassigned_default_hours: 1, p_lead_idle_days: 1 });

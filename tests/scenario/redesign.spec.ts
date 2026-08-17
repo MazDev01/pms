@@ -62,10 +62,10 @@ test("[ux·dealer] โมดัลดูใบเสนอราคาแสด�
 });
 
 // ใบเสนอราคาที่สร้างใหม่ต้องเก็บ total เป็นเลขเต็ม (฿5,100,000) เหมือน seed ไม่ย่อ M/K
-// (งานขายเก็บลง localStorage → สร้างที่หน้าลีดแล้วข้ามไปหน้าใบเสนอราคาได้ ข้อมูลไม่หาย)
+// (งานขายเก็บลง localStorage → สร้างที่หน้าลูกค้าเป้าหมายแล้วข้ามไปหน้าใบเสนอราคาได้ ข้อมูลไม่หาย)
 test("[ux·dealer] ใบเสนอราคาที่สร้างใหม่โชว์ยอดเต็ม ไม่ย่อ M/K", async ({ page }) => {
   await openLeadQuotationForm(page);
-  // ฟอร์มมีรายการ BOQ ตั้งต้นจากแม่แบบของลีดอยู่แล้ว → ยอดถูกคำนวณให้ กดสร้างได้เลย
+  // ฟอร์มมีรายการ BOQ ตั้งต้นจากแม่แบบของลูกค้าเป้าหมายอยู่แล้ว → ยอดถูกคำนวณให้ กดสร้างได้เลย
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
   // รอให้ฟอร์มปิดจริง = ระบบรับใบแล้ว — ห้ามรอเป็นเวลาตายตัว (800ms ไม่พอตอนเครื่องรับงานหนัก
   // แล้วเทสต์จะไปต่อทั้งที่ใบยังไม่ถูกสร้าง → หน้า /quotations ว่าง แล้วสรุปผิดว่าระบบแสดงยอดพลาด)
@@ -88,7 +88,7 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
 });
 
 // ฟอร์มสร้างใบเสนอราคา inline ในหน้า Lead (รีสไตล์ให้เหมือน wizard) — VAT breakdown + section เหมือนกัน
-test("[ui·dealer] ฟอร์มใบเสนอราคา inline ในหน้าลีดรีสไตล์แล้ว (VAT breakdown)", async ({ page }) => {
+test("[ui·dealer] ฟอร์มใบเสนอราคา inline ในหน้าลูกค้าเป้าหมายรีสไตล์แล้ว (VAT breakdown)", async ({ page }) => {
   await open(page, "dealer", "/leads");
   await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตาราง
   await page.waitForTimeout(300);
@@ -126,20 +126,20 @@ test("[ux·dealer] ใบเสนอราคาที่สร้างให�
   ).toContain(expectedDate);
 });
 
-// Smart filter: ลีดขาดติดต่อ >7/14/30 วัน — จำนวนอยู่บนการ์ด KPI "เกิน 7 วัน" (ไม่ซ้ำ)
+// Smart filter: ลูกค้าเป้าหมายขาดติดต่อ >7/14/30 วัน — จำนวนอยู่บนการ์ด KPI "เกิน 7 วัน" (ไม่ซ้ำ)
 // ตัวกรองเกณฑ์วันเป็น dropdown บนแถบเครื่องมือ (เดิมเป็นชิป >7/>14/>30 — เปลี่ยนแล้ว)
 test("[ux·dealer] Smart filter ค้างติดต่อ (>7/14/30 วัน) + กรองได้", async ({ page }) => {
   await open(page, "dealer", "/leads");
   await assertHealthyPage(page, "ลูกค้าเป้าหมาย");
 
-  // ต้องรอให้รายการลีดโหลดเสร็จก่อน แล้วค่อยอ่านตัวเลขบนการ์ด
+  // ต้องรอให้รายการลูกค้าเป้าหมายโหลดเสร็จก่อน แล้วค่อยอ่านตัวเลขบนการ์ด
   // เทสต์นี้เอา "ตัวเลขบนการ์ด" ไปเทียบกับ "จำนวนแถวในตาราง" ซึ่งอ่านคนละจังหวะกัน
   // ถ้าอ่านการ์ดตอนข้อมูลยังมาไม่ถึง จะได้เลขของหน้าว่าง แล้วไปเทียบกับแถวที่โผล่มาทีหลัง = ไม่มีทางตรง
   // (ตกเป็นครั้งคราวเฉพาะตอนรันทั้งชุดพร้อมกัน ซึ่งทุกอย่างช้าลง — ได้ 0 เทียบกับ 3 แถว)
   await page.getByRole("button", { name: "ตาราง" }).click();
   await expect.poll(() => page.locator("tbody tr").count(), { timeout: 20_000 }).toBeGreaterThan(0);
 
-  // การ์ด KPI บอกจำนวนลีดที่ค้างเกิน 7 วัน
+  // การ์ด KPI บอกจำนวนลูกค้าเป้าหมายที่ค้างเกิน 7 วัน
   const kpi = page.getByRole("button", { name: /^เกิน 7 วัน/ });
   await expect(kpi).toBeVisible();
   const overdue = parseInt((await kpi.innerText()).split("\n")[1], 10);
@@ -157,7 +157,7 @@ test("[ux·dealer] Smart filter ค้างติดต่อ (>7/14/30 วั�
   // กรอง >7 วัน → จำนวนแถวต้องตรงกับตัวเลขบนการ์ด KPI (เช็คว่าการ์ดกับตัวกรองนับด้วยเกณฑ์เดียวกันจริง)
   // เทียบตรง ๆ ได้เพราะจำนวนน้อยกว่าขนาดหน้า (10) — ถ้าข้อมูลโตเกินนั้นต้องคิดเรื่องแบ่งหน้าด้วย
   await idle.selectOption("7");
-  expect(overdue, "ลีดค้างเกิน 7 วันต้องไม่เกิน 1 หน้า มิฉะนั้นเทียบกับแถวตรง ๆ ไม่ได้").toBeLessThanOrEqual(10);
+  expect(overdue, "ลูกค้าเป้าหมายค้างเกิน 7 วันต้องไม่เกิน 1 หน้า มิฉะนั้นเทียบกับแถวตรง ๆ ไม่ได้").toBeLessThanOrEqual(10);
   await expect.poll(() => rows.count(), { timeout: 5_000 }).toBe(overdue);
   expect(overdue, "กรองแล้วต้องเหลือน้อยกว่าทั้งหมด").toBeLessThanOrEqual(before);
 });
@@ -173,5 +173,5 @@ test("[ui·dealer] แผงลูกค้าเป้าหมายมีค�
     await expect(page.getByRole("button", { name: tab, exact: true }).first(), `ต้องมีแท็บ "${tab}"`).toBeVisible();
   }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "แผงลีดไม่ควรมี horizontal scroll").toBeLessThanOrEqual(3);
+  expect(overflow, "แผงลูกค้าเป้าหมายไม่ควรมี horizontal scroll").toBeLessThanOrEqual(3);
 });

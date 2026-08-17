@@ -40,7 +40,7 @@ const lead = (id: string, dealer: string) => ({
   id, dealer_code: dealer, company: `เทสต์อัตโนมัติ ${id}`, status: "WAITING",
 });
 
-test("[rls] แต่ละสาขาเห็นเฉพาะลีดของตัวเอง · HQ เห็นทั้งสองสาขา", async () => {
+test("[rls] แต่ละสาขาเห็นเฉพาะลูกค้าเป้าหมายของตัวเอง · HQ เห็นทั้งสองสาขา", async () => {
   const ryg = await signIn(RYG);
   const cnx = await signIn(CNX);
   const hq  = await signIn(ADMIN);
@@ -48,25 +48,25 @@ test("[rls] แต่ละสาขาเห็นเฉพาะลีดข�
   const both = [idR, idC];
 
   try {
-    // สร้างลีดจริงคนละสาขา — ถ้าสร้างไม่ได้ ทั้งเทสต์ไม่มีความหมาย จึงต้องฟ้องทันที
+    // สร้างลูกค้าเป้าหมายจริงคนละสาขา — ถ้าสร้างไม่ได้ ทั้งเทสต์ไม่มีความหมาย จึงต้องฟ้องทันที
     const insR = await ryg.from("leads").insert(lead(idR, "RYG")).select();
     const insC = await cnx.from("leads").insert(lead(idC, "CNX")).select();
-    expect(insR.error, `RYG สร้างลีดของตัวเองไม่ได้: ${JSON.stringify(insR.error)}`).toBeNull();
-    expect(insC.error, `CNX สร้างลีดของตัวเองไม่ได้: ${JSON.stringify(insC.error)}`).toBeNull();
+    expect(insR.error, `RYG สร้างลูกค้าเป้าหมายของตัวเองไม่ได้: ${JSON.stringify(insR.error)}`).toBeNull();
+    expect(insC.error, `CNX สร้างลูกค้าเป้าหมายของตัวเองไม่ได้: ${JSON.stringify(insC.error)}`).toBeNull();
 
     const seen = async (sb: SupabaseClient) =>
       ((await sb.from("leads").select("id").in("id", both)).data ?? []).map(r => r.id).sort();
 
-    expect(await seen(ryg), "RYG ต้องเห็นเฉพาะลีดของ RYG").toEqual([idR]);
-    expect(await seen(cnx), "CNX ต้องเห็นเฉพาะลีดของ CNX").toEqual([idC]);
-    expect(await seen(hq),  "HQ ต้องเห็นลีดของทั้งสองสาขา").toEqual([idC, idR].sort());
+    expect(await seen(ryg), "RYG ต้องเห็นเฉพาะลูกค้าเป้าหมายของ RYG").toEqual([idR]);
+    expect(await seen(cnx), "CNX ต้องเห็นเฉพาะลูกค้าเป้าหมายของ CNX").toEqual([idC]);
+    expect(await seen(hq),  "HQ ต้องเห็นลูกค้าเป้าหมายของทั้งสองสาขา").toEqual([idC, idR].sort());
   } finally {
     await ryg.from("leads").delete().eq("id", idR);
     await cnx.from("leads").delete().eq("id", idC);
   }
 });
 
-test("[rls] ตัวแทนแก้/ลบลีดของสาขาอื่นไม่ได้", async () => {
+test("[rls] ตัวแทนแก้/ลบลูกค้าเป้าหมายของสาขาอื่นไม่ได้", async () => {
   const ryg = await signIn(RYG);
   const cnx = await signIn(CNX);
   const id = "TEST-RLS-CROSS";
@@ -74,10 +74,10 @@ test("[rls] ตัวแทนแก้/ลบลีดของสาขาอ�
     expect((await cnx.from("leads").insert(lead(id, "CNX")).select()).error).toBeNull();
 
     const edited = await ryg.from("leads").update({ company: "โดนแก้ข้ามสาขา" }).eq("id", id).select();
-    expect(wasBlocked(edited), "RYG ต้องแก้ลีดของ CNX ไม่ได้").toBe(true);
+    expect(wasBlocked(edited), "RYG ต้องแก้ลูกค้าเป้าหมายของ CNX ไม่ได้").toBe(true);
 
     const deleted = await ryg.from("leads").delete().eq("id", id).select();
-    expect(wasBlocked(deleted), "RYG ต้องลบลีดของ CNX ไม่ได้").toBe(true);
+    expect(wasBlocked(deleted), "RYG ต้องลบลูกค้าเป้าหมายของ CNX ไม่ได้").toBe(true);
 
     // ของจริงต้องยังอยู่ครบ ไม่ถูกแตะ
     const still = (await cnx.from("leads").select("company").eq("id", id)).data ?? [];
@@ -87,7 +87,7 @@ test("[rls] ตัวแทนแก้/ลบลีดของสาขาอ�
   }
 });
 
-test("[rls] ตัวแทนสร้างลีดใส่สาขาอื่นไม่ได้", async () => {
+test("[rls] ตัวแทนสร้างลูกค้าเป้าหมายใส่สาขาอื่นไม่ได้", async () => {
   const sb = await signIn(RYG);
   const res = await sb.from("leads").insert(lead("TEST-RLS-XDEALER", "CNX")).select();
   expect(wasBlocked(res), "เขียนข้ามสาขาต้องถูกปฏิเสธ").toBe(true);
@@ -99,7 +99,7 @@ test("[rls] HQ เขียนงานขายของตัวแทนไ�
   expect(wasBlocked(res), "HQ มีสิทธิ์อ่านงานขาย แต่ต้องเขียนไม่ได้").toBe(true);
 });
 
-test("[fk] สร้างลีดใส่รหัสสาขาที่ไม่มีจริงไม่ได้ (0018)", async () => {
+test("[fk] สร้างลูกค้าเป้าหมายใส่รหัสสาขาที่ไม่มีจริงไม่ได้ (0018)", async () => {
   const sb = await signIn(RYG);
   const res = await sb.from("leads").insert(lead("TEST-RLS-GHOST", "ZZZ")).select();
   expect(wasBlocked(res), "รหัสสาขาที่ไม่มีใน dealers ต้องถูกปฏิเสธ").toBe(true);
@@ -200,12 +200,12 @@ test("[hq→dealer] เหตุผลปิดการขายไม่สำ
   }
 });
 
-test("[multi-tenant] สองสาขาสร้างลีด/ใบเสนอราคาเลขเดียวกันได้ (0022)", async () => {
+test("[multi-tenant] สองสาขาสร้างลูกค้าเป้าหมาย/ใบเสนอราคาเลขเดียวกันได้ (0022)", async () => {
   const ryg = await signIn(RYG);
   const cnx = await signIn(CNX);
-  // เลขที่แอปออกให้ "ลีดแรก" ของทุกสาขาเหมือนกัน เพราะนับจากลีดที่ตัวเองเห็น (RLS กรองรายสาขา)
+  // เลขที่แอปออกให้ "ลูกค้าเป้าหมายแรก" ของทุกสาขาเหมือนกัน เพราะนับจากลูกค้าเป้าหมายที่ตัวเองเห็น (RLS กรองรายสาขา)
   // ⚠️ ห้ามใช้เลขที่แอปออกให้จริง — "#L-40322" / "Q-{สาขา}-{ปี}-0001" คือเลขใบแรกเมื่อตารางว่าง
-  //    เทสต์ func-* สร้างลีด/ใบผ่านหน้าจอด้วย worker คนละตัวในเวลาเดียวกัน แล้วได้เลขชุดเดียวกันพอดี
+  //    เทสต์ func-* สร้างลูกค้าเป้าหมาย/ใบผ่านหน้าจอด้วย worker คนละตัวในเวลาเดียวกัน แล้วได้เลขชุดเดียวกันพอดี
   //    → ชน leads_pkey แบบสุ่ม · รันเดี่ยวผ่าน รันรวมพัง = เทสต์ที่เชื่อผลไม่ได้
   //    ประเด็นของเทสต์นี้คือ "สองสาขาใช้เลขเดียวกันได้" ตัวเลขเป็นอะไรก็ได้ ขอแค่ทั้งคู่ใช้ตัวเดียวกัน
   //    จึงใช้รูปแบบที่ตัวออกเลขของแอปไม่มีทางสร้างได้ (มีตัวอักษรตรงส่วนที่แอปใช้ตัวเลขล้วน)
@@ -217,8 +217,8 @@ test("[multi-tenant] สองสาขาสร้างลีด/ใบเส�
   try {
     const a = await ryg.from("leads").insert({ id: LID, dealer_code: "RYG", company: "ทดสอบ RYG", status: "WAITING" }).select();
     const b = await cnx.from("leads").insert({ id: LID, dealer_code: "CNX", company: "ทดสอบ CNX", status: "WAITING" }).select();
-    expect(a.error, `RYG สร้างลีดไม่ได้: ${JSON.stringify(a.error)}`).toBeNull();
-    expect(b.error, `CNX สร้างลีดเลขเดียวกันไม่ได้ = ระบบใช้หลายสาขาไม่ได้: ${JSON.stringify(b.error)}`).toBeNull();
+    expect(a.error, `RYG สร้างลูกค้าเป้าหมายไม่ได้: ${JSON.stringify(a.error)}`).toBeNull();
+    expect(b.error, `CNX สร้างลูกค้าเป้าหมายเลขเดียวกันไม่ได้ = ระบบใช้หลายสาขาไม่ได้: ${JSON.stringify(b.error)}`).toBeNull();
 
     // ต่างสาขาต่างเห็นของตัวเอง ไม่ปนกัน
     expect(((await ryg.from("leads").select("company").eq("id", LID)).data ?? [])[0]?.company).toBe("ทดสอบ RYG");
@@ -288,7 +288,7 @@ test("[schema] ตาราง dealers ไม่มีคอลัมน์ KPI 
   expect(error).toBeNull();
   const row = (data ?? [])[0];
   expect(row, "ต้องมีตัวแทนอย่างน้อย 1 สาขา").toBeTruthy();
-  // ค่าพวกนี้เป็น "ผลลัพธ์ที่คำนวณได้" จากใบเสนอราคา/ลีด — เก็บในตารางเมื่อไหร่ก็เพี้ยนจากของจริง
+  // ค่าพวกนี้เป็น "ผลลัพธ์ที่คำนวณได้" จากใบเสนอราคา/ลูกค้าเป้าหมาย — เก็บในตารางเมื่อไหร่ก็เพี้ยนจากของจริง
   for (const col of ["revenue_actual", "win_rate", "active_projects", "on_time_pct"]) {
     expect(Object.keys(row), `คอลัมน์ ${col} ต้องถูกลบไปแล้ว`).not.toContain(col);
   }
@@ -402,7 +402,7 @@ test("[notes] โน้ตลูกค้าเก็บที่ DB · สา�
     const hack = await cnx.from("customer_notes").update({ content: "โดนแก้" }).eq("id", id).select();
     expect(wasBlocked(hack), "CNX ต้องแก้โน้ตของ RYG ไม่ได้").toBe(true);
 
-    // HQ อ่านได้ทั้งเครือ แต่เขียนงานขายไม่ได้ (นิยามเดียวกับลีด/ใบเสนอราคา)
+    // HQ อ่านได้ทั้งเครือ แต่เขียนงานขายไม่ได้ (นิยามเดียวกับลูกค้าเป้าหมาย/ใบเสนอราคา)
     expect(((await hq.from("customer_notes").select("id").eq("id", id)).data ?? []).length).toBe(1);
     const byHQ = await hq.from("customer_notes").update({ content: "HQ แก้" }).eq("id", id).select();
     expect(wasBlocked(byHQ), "HQ ต้องแก้โน้ตของตัวแทนไม่ได้").toBe(true);

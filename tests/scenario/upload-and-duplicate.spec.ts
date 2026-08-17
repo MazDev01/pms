@@ -5,7 +5,7 @@ import { open } from "./helpers";
 
 // ── ความปลอดภัยรอง: ไฟล์รูปที่รับเข้าระบบ + การสร้างข้อมูลซ้ำ (ตรวจสอบระบบ 5 ส.ค. 69) ──
 //
-// 1) รูปทุกจุดในระบบ (โปรไฟล์ · โลโก้ลูกค้า/ลีด · โลโก้สาขา · แคตตาล็อกกลาง) เก็บเป็น data URL
+// 1) รูปทุกจุดในระบบ (โปรไฟล์ · โลโก้ลูกค้า/ลูกค้าเป้าหมาย · โลโก้สาขา · แคตตาล็อกกลาง) เก็บเป็น data URL
 //    ลงคอลัมน์ text ตรง ๆ ไม่ผ่าน Storage จึงไม่มีเพดานของ bucket มาช่วย — เดิมไม่ตรวจอะไรเลย
 //    และถ้าไฟล์ถอดรหัสเป็นรูปไม่ได้ จะเก็บ "ไฟล์ดิบทั้งก้อน" แทน = เลือกไฟล์อะไรก็ได้ก็ลง DB
 //
@@ -81,7 +81,7 @@ test("รูปจริงยังใช้ได้ตามปกติ (ไ
   ).toBeVisible({ timeout: 10_000 });
 });
 
-test("กดบันทึกรัวในแท็บเดียว ต้องได้ลีดเดียว (ตัวกันกดซ้ำยังทำงาน)", async ({ page }) => {
+test("กดบันทึกรัวในแท็บเดียว ต้องได้ลูกค้าเป้าหมายเดียว (ตัวกันกดซ้ำยังทำงาน)", async ({ page }) => {
   const company = tg("กดรัว");
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
@@ -109,20 +109,20 @@ test("กดบันทึกรัวในแท็บเดียว ต้�
   await page.waitForTimeout(4_000); // เผื่อแถวที่ 2 (ถ้ามี) ตามมาทีหลัง — ต้องรอถึงจะฟันธงว่าไม่ซ้ำ
 
   const { data } = await sb.from("leads").select("id").eq("company", company);
-  expect(data?.length, "กดรัว 5 ครั้งต้องได้ลีดเดียว").toBe(1);
+  expect(data?.length, "กดรัว 5 ครั้งต้องได้ลูกค้าเป้าหมายเดียว").toBe(1);
 });
 
-test("กรอกบริษัทที่มีลีดอยู่แล้ว ต้องเตือนก่อนกดบันทึก (กันซ้ำจากการเปิดหลายแท็บ)", async ({ page }) => {
+test("กรอกบริษัทที่มีลูกค้าเป้าหมายอยู่แล้ว ต้องเตือนก่อนกดบันทึก (กันซ้ำจากการเปิดหลายแท็บ)", async ({ page }) => {
   const company = tg("เตือนซ้ำ");
   const sb = await db(RYG);
-  // มีลีดของบริษัทนี้อยู่แล้วในสาขา (เหมือนเพิ่งกดบันทึกไปในอีกแท็บ)
+  // มีลูกค้าเป้าหมายของบริษัทนี้อยู่แล้วในสาขา (เหมือนเพิ่งกดบันทึกไปในอีกแท็บ)
   const { data: seq } = await sb.from("leads").select("num_id").order("num_id", { ascending: false }).limit(1);
   const nextId = Number(seq?.[0]?.num_id ?? 0) + 9001;
   const { error } = await sb.from("leads").insert({
     id: nextId, num_id: nextId, dealer_code: "RYG", company, contact: "คุณทดสอบ",
     status: "WAITING", province: "ระยอง",
   });
-  expect(error, `เตรียมลีดตั้งต้นต้องสำเร็จ (${error?.message ?? ""})`).toBeNull();
+  expect(error, `เตรียมลูกค้าเป้าหมายตั้งต้นต้องสำเร็จ (${error?.message ?? ""})`).toBeNull();
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
@@ -131,7 +131,7 @@ test("กรอกบริษัทที่มีลีดอยู่แล�
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
 
   await expect(page.getByText(/มีลูกค้าเป้าหมายชื่อ .* อยู่แล้ว/).first(),
-    "ต้องเตือนว่ามีลีดชื่อนี้อยู่แล้ว — ผู้ใช้จะได้รู้ตัวก่อนกดบันทึกซ้ำ",
+    "ต้องเตือนว่ามีลูกค้าเป้าหมายชื่อนี้อยู่แล้ว — ผู้ใช้จะได้รู้ตัวก่อนกดบันทึกซ้ำ",
   ).toBeVisible({ timeout: 10_000 });
 
   // เตือนเท่านั้น ห้ามบล็อก — หลายดีลของบริษัทเดียวกันเป็นเรื่องปกติของงานขาย

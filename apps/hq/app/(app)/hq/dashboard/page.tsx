@@ -35,7 +35,7 @@ import { fmtBaht, parseBaht } from "@pms/shared/lib/format";
 const PRIMARY = "#003366";
 // palette หลายสีสำหรับกราฟรายภาค/แม่แบบ — navy หลัก + สีเสริม (ไม่ฉูดฉาด)
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
-// ลีดทั้งเครือทุกช่วง (ตัวกรองว่าง) — อ้างอิงคงที่ กัน useLeadSummary รีเฟตช์ทุกเรนเดอร์
+// ลูกค้าเป้าหมายทั้งเครือทุกช่วง (ตัวกรองว่าง) — อ้างอิงคงที่ กัน useLeadSummary รีเฟตช์ทุกเรนเดอร์
 const EMPTY_LEAD_FILTER = {};
 const TH_MONTH: Record<string, number> = { "ม.ค.": 0, "ก.พ.": 1, "มี.ค.": 2, "เม.ย.": 3, "พ.ค.": 4, "มิ.ย.": 5, "ก.ค.": 6, "ส.ค.": 7, "ก.ย.": 8, "ต.ค.": 9, "พ.ย.": 10, "ธ.ค.": 11 };
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
@@ -83,13 +83,13 @@ export default function HQDashboard() {
   const prevRange = useNetworkQuoteRange(addDaysD(timeRange.start, -periodDays), addDaysD(timeRange.start, -1), selDealer?.code);
   // สรุปใบในช่วง (byStatus/byProduct/byMonth) ที่ DB — ป้อน productAgg/buildingPerf/quoteStatus/pipeline/wonVal
   const quoteSummary = useDashboardQuoteSummary(timeRange.start, timeRange.end, selDealer?.code);
-  // สรุปลีด + ลูกค้าทั้งเครือ ที่ DB · ผูกตัวแทนที่เลือก (selDealer) ให้ตรงกับฝั่งใบเสนอราคา (M3)
-  //   เดิมไม่ผูก selDealer → พอเลือกสาขา กราฟ/KPI ลีดยังโชว์ทั้งเครือ แต่ใบ/ยอดโชว์เฉพาะสาขา = ขัดกันในการ์ดเดียว
+  // สรุปลูกค้าเป้าหมาย + ลูกค้าทั้งเครือ ที่ DB · ผูกตัวแทนที่เลือก (selDealer) ให้ตรงกับฝั่งใบเสนอราคา (M3)
+  //   เดิมไม่ผูก selDealer → พอเลือกสาขา กราฟ/KPI ลูกค้าเป้าหมายยังโชว์ทั้งเครือ แต่ใบ/ยอดโชว์เฉพาะสาขา = ขัดกันในการ์ดเดียว
   //   ปลด journeyStages/leadQuoteSeries/monthly/bottomMetrics/barTrend/provinceTop6 ออกจาก array (M9 Phase 4)
   //   null (local/ยังไม่โหลด) → useMemo แต่ละใบ fallback คำนวณจาก allNetLeads/netCustomers เดิม
   const dashLeadSum = useLeadSummary(selDealer ? { dealerCodes: [selDealer.code] } : EMPTY_LEAD_FILTER);
   const custSummary = useNetworkCustomerSummary();
-  // ลีดรายเดือนปฏิทิน (index 0..11, รวมทุกปี ให้ตรง getMonth ฝั่ง client) + จำนวนลีดรวม จาก lead_summary
+  // ลูกค้าเป้าหมายรายเดือนปฏิทิน (index 0..11, รวมทุกปี ให้ตรง getMonth ฝั่ง client) + จำนวนลูกค้าเป้าหมายรวม จาก lead_summary
   const leadCal = useMemo(() => {
     if (!dashLeadSum) return null;
     const m = Array(12).fill(0);
@@ -350,7 +350,7 @@ export default function HQDashboard() {
   // ── ชุดข้อมูลรายเดือนสำหรับ sparkline บนการ์ด KPI ──
   const monthly = useMemo(() => {
     const mo = (s: string) => { const d = parseThaiDate(s); return d ? d.getMonth() : -1; };
-    const leadsM = Array(12).fill(0); // ใบมาจาก monthCal (DB) · ลีด: supabase=leadCal(DB) · local/ยังไม่กลับ=array
+    const leadsM = Array(12).fill(0); // ใบมาจาก monthCal (DB) · ลูกค้าเป้าหมาย: supabase=leadCal(DB) · local/ยังไม่กลับ=array
     if (leadCal) { for (let i = 0; i < 12; i++) leadsM[i] = leadCal[i]; }
     else allNetLeads.forEach(l => { const m = mo(l.createdAt ?? ""); if (m >= 0) leadsM[m]++; });
     const a = timeRange.start.getMonth(), b = timeRange.end.getMonth();
@@ -424,7 +424,7 @@ export default function HQDashboard() {
     return productArr.slice(0, 5).map((p, i) => ({ product: p.product, value: p.value, projects: p.projects, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
   }, [productArr]);
 
-  // ── กราฟแท่ง "ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)" — ปุ่มช่วงย้อนหลังของตัวเอง ──
+  // ── กราฟแท่ง "ลูกค้าเป้าหมาย · ใบเสนอราคา · ปิดการขาย (รายเดือน)" — ปุ่มช่วงย้อนหลังของตัวเอง ──
   // ไม่ผูกกับตัวกรองเวลาบนแถบบน (เป็นกราฟแนวโน้ม ต้องเห็นย้อนหลังเสมอ · กติกาเดียวกับแดชบอร์ดตัวแทน)
   // ถังเดือนใช้คีย์ YYYY-MM — ช่วง 12 เดือนคาบเกี่ยว 2 ปี ถ้านับแต่เลขเดือนยอดปีที่แล้วจะทับปีนี้
   const [barRange, setBarRange] = useState<MonthRange>(6);
@@ -438,9 +438,9 @@ export default function HQDashboard() {
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
     if (barSummary) { for (const r of barSummary.byMonth) { const k = monthKey(r.y, r.m); quotesM.set(k, r.quotes); wonM.set(k, r.won); } }
     else scopedQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (!d) return; const k = monthKeyOf(d); bump(quotesM, k); if (q.status === "won") bump(wonM, k); });
-    // ลีดต่อเดือน (คีย์ YYYY-MM): supabase = lead_summary.byMonth (all-time ครอบคลุมหน้าต่าง barRange) · local = array
+    // ลูกค้าเป้าหมายต่อเดือน (คีย์ YYYY-MM): supabase = lead_summary.byMonth (all-time ครอบคลุมหน้าต่าง barRange) · local = array
     if (dashLeadSum) { for (const r of dashLeadSum.byMonth) leadsM.set(monthKey(r.y, r.m), r.created); }
-    // local fallback: กรองลีดตามตัวแทนที่เลือกด้วย (M3) — ไม่งั้นแท่งลีดโชว์ทั้งเครือทั้งที่เลือกสาขาเดียว
+    // local fallback: กรองลูกค้าเป้าหมายตามตัวแทนที่เลือกด้วย (M3) — ไม่งั้นแท่งลูกค้าเป้าหมายโชว์ทั้งเครือทั้งที่เลือกสาขาเดียว
     else allNetLeads.filter(l => !selDealer || (l.dealerCode ?? DEFAULT_DEALER_CODE) === selDealer.code)
       .forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) bump(leadsM, monthKeyOf(d)); });
     return {
@@ -613,7 +613,7 @@ export default function HQDashboard() {
         ))}
       </div>
 
-      {/* แถวการ์ดแจ้งเตือน (ลีดไม่มีผู้รับผิดชอบ/ไม่ติดต่อ/ใบใกล้หมดอายุ/ตัวแทนยอดต่ำ) เอาออกตามที่บอสสั่ง */}
+      {/* แถวการ์ดแจ้งเตือน (ลูกค้าเป้าหมายไม่มีผู้รับผิดชอบ/ไม่ติดต่อ/ใบใกล้หมดอายุ/ตัวแทนยอดต่ำ) เอาออกตามที่บอสสั่ง */}
 
       {/* แถว 1: แนวโน้มยอดขายรวม · ยอดขายตามภูมิภาค */}
       <div className="hq-row2a" style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
@@ -687,19 +687,19 @@ export default function HQDashboard() {
         </div>
       </div>
 
-      {/* แถว 2: ลีด·ใบเสนอราคา·ปิดการขาย · เป้าหมายเทียบยอดขายจริง */}
+      {/* แถว 2: ลูกค้าเป้าหมาย·ใบเสนอราคา·ปิดการขาย · เป้าหมายเทียบยอดขายจริง */}
       <div className="hq-row2b" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem" }}>
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header">
-            <div className="card-title">ลีด · ใบเสนอราคา · ปิดการขาย (รายเดือน)</div>
-            <MonthRangeToggle value={barRange} onChange={setBarRange} label="ช่วงเวลากราฟลีด·ใบเสนอราคา·ปิดการขาย" />
+            <div className="card-title">ลูกค้าเป้าหมาย · ใบเสนอราคา · ปิดการขาย (รายเดือน)</div>
+            <MonthRangeToggle value={barRange} onChange={setBarRange} label="ช่วงเวลากราฟลูกค้าเป้าหมาย·ใบเสนอราคา·ปิดการขาย" />
           </div>
           {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
           <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
             จำนวนรายการต่อเดือน · {monthRangeSubtitle(barRange, APP_NOW)}
           </div>
           <div className="card-body" style={{ paddingTop: 4, flex: 1 }}>
-            {/* แท่งกลุ่ม ไม่ใช่แท่งซ้อน — ลีด/ใบเสนอราคา/ปิดการขาย เป็นขั้นของดีลเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
+            {/* แท่งกลุ่ม ไม่ใช่แท่งซ้อน — ลูกค้าเป้าหมาย/ใบเสนอราคา/ปิดการขาย เป็นขั้นของดีลเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
             <GroupedBarChart months={barTrend.months} vw={820} height={260} fmt={v => `${Math.round(v)}`}
               series={[
                 { name: "ลูกค้าเป้าหมาย", color: "#003366", data: barTrend.leads },

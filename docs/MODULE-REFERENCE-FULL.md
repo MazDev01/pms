@@ -193,7 +193,7 @@ Row 3:
 **Action Items (hardcoded):**
 | รายการ | จำนวน |
 |--------|-------|
-| ลีดค้างนาน | 3 |
+| ลูกค้าเป้าหมายค้างนาน | 3 |
 | ใบเสนอราคารออนุมัติ | 1 |
 | นัดสำรวจสัปดาห์นี้ | 2 |
 | โครงการล่าช้า | 1 |
@@ -259,7 +259,7 @@ const active = pathname === resolvedHref;
 | กลุ่ม | label | href | hqHref | hqOnly |
 |-------|-------|------|--------|--------|
 | งานหลัก | แดชบอร์ด | /dashboard | /hq/dashboard | - |
-| งานหลัก | ลีด (×6) | /leads | - | - |
+| งานหลัก | ลูกค้าเป้าหมาย (×6) | /leads | - | - |
 | งานหลัก | ลูกค้า | /customers | - | - |
 | งานหลัก | ใบเสนอราคา | /quotations | - | - |
 | งานหลัก | โครงการ | /projects | - | - |
@@ -286,7 +286,7 @@ const active = pathname === resolvedHref;
 | Element | Dealer mode | HQ mode |
 |---------|-------------|---------|
 | Subtitle | "ยินดีต้อนรับสู่ระบบบริหารจัดการ Benjamin" | "🏢 ยินดีต้อนรับ — สำนักงานใหญ่" |
-| Search placeholder | "ค้นหาลีด / ลูกค้า / โครงการ…" | "ค้นหาดีลเลอร์ / ลีด / โครงการ…" |
+| Search placeholder | "ค้นหาลูกค้าเป้าหมาย / ลูกค้า / โครงการ…" | "ค้นหาดีลเลอร์ / ลูกค้าเป้าหมาย / โครงการ…" |
 | Avatar | `bg-[#003366]` | `bg-orange-500` |
 
 **Elements:**
@@ -668,7 +668,7 @@ type ApprovalRow = {
 | `pipelineBreakdown` | array (3) | เสนอราคา/ต่อรอง/อื่นๆ | DonutChart |
 | `schedule` | array (2) | วันนี้ schedule | SchedulePanel |
 | `upcoming` | array (2) | milestone upcoming | SchedulePanel |
-| `leads` | `LeadRow[]` (6) | ลีดตัวอย่าง | LeadTable |
+| `leads` | `LeadRow[]` (6) | ลูกค้าเป้าหมายตัวอย่าง | LeadTable |
 | `hqKpis` | array (4) | revenue/pipeline/projects/ontime | HQ Dashboard |
 | `dealerLeaderboard` | `DealerRow[]` (5) | ระยอง/เชียงใหม่/เชียงราย/แม่สอด/นครสวรรค์ | LeaderboardCard |
 | `leadPool` | `LeadPoolRow[]` (3) | อุตรดิตถ์/ลำปาง/พะเยา | LeadPoolTable |
@@ -834,7 +834,7 @@ model Customer {
 
 ---
 
-### `Lead` — ลีด / CRM
+### `Lead` — ลูกค้าเป้าหมาย / CRM
 
 ```prisma
 model Lead {
@@ -1312,13 +1312,13 @@ model AuditLog {
 ### Leads
 | Method | Route | คำอธิบาย |
 |--------|-------|---------|
-| GET | `/api/leads` | ดึงลีด (scope by tenantWhere) |
-| POST | `/api/leads` | สร้างลีดใหม่ |
-| GET | `/api/leads/[id]` | ดึงลีด + activities |
+| GET | `/api/leads` | ดึงลูกค้าเป้าหมาย (scope by tenantWhere) |
+| POST | `/api/leads` | สร้างลูกค้าเป้าหมายใหม่ |
+| GET | `/api/leads/[id]` | ดึงลูกค้าเป้าหมาย + activities |
 | PATCH | `/api/leads/[id]` | แก้ไขสถานะ/มอบหมาย |
 | DELETE | `/api/leads/[id]` | Soft delete |
 | GET | `/api/leads/pool` | Lead Pool (HQ only, dealerId=null) |
-| POST | `/api/leads/[id]/assign` | มอบหมายลีดให้ดีลเลอร์ (HQ only) |
+| POST | `/api/leads/[id]/assign` | มอบหมายลูกค้าเป้าหมายให้ดีลเลอร์ (HQ only) |
 
 ### Activities
 | Method | Route | คำอธิบาย |
@@ -1421,10 +1421,10 @@ function requireRole(ctx: AuthContext, ...roles: UserRole[]): void {
 // src/lib/services/leadService.ts
 
 async function listLeads(ctx: AuthContext, filters?: LeadFilters): Promise<Lead[]>
-// ดึงลีดตาม tenantWhere(ctx) — HQ เห็นทุก dealer
+// ดึงลูกค้าเป้าหมายตาม tenantWhere(ctx) — HQ เห็นทุก dealer
 
 async function createLead(ctx: AuthContext, data: CreateLeadInput): Promise<Lead>
-// สร้างลีดใหม่ + dealerId = ctx.dealerId
+// สร้างลูกค้าเป้าหมายใหม่ + dealerId = ctx.dealerId
 
 async function updateLead(ctx: AuthContext, id: string, data: UpdateLeadInput): Promise<Lead>
 // อัปเดต + บันทึก AuditLog (before/after)

@@ -1,9 +1,9 @@
-// ── ตัวชี้วัดของลีด (pure functions) — แหล่งเดียว ใช้ร่วมกันทั้งหน้าลีดและแดชบอร์ด ──
+// ── ตัวชี้วัดของลูกค้าเป้าหมาย (pure functions) — แหล่งเดียว ใช้ร่วมกันทั้งหน้าลูกค้าเป้าหมายและแดชบอร์ด ──
 // ไม่มี state / ไม่มี UI — คำนวณล้วน · "วันนี้" ยึด APP_NOW (supabase=จริง / local=ตรึง 30 มิ.ย. 2569)
 import { buildLeadTasks, taskProgress, type LeadRow } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/lib/appTime";
 
-// ความสดของลีด / ช่วงเดือนกราฟ / YTD — เดินตาม "วันนี้ของระบบ" แหล่งเดียว (เลิกตรึงในโหมด supabase)
+// ความสดของลูกค้าเป้าหมาย / ช่วงเดือนกราฟ / YTD — เดินตาม "วันนี้ของระบบ" แหล่งเดียว (เลิกตรึงในโหมด supabase)
 export const MOCK_TODAY = APP_NOW;
 
 // ── มูลค่า ──
@@ -30,7 +30,7 @@ export function parseThaiDate(s?: string): Date | null {
   return new Date(y, TH_MONTH[m[2]], +m[1]);
 }
 
-// วันที่สร้างลีด — ลีด seed ส่วนใหญ่ไม่มี createdAt → ใช้วันที่คงที่ (deterministic) จาก numId
+// วันที่สร้างลูกค้าเป้าหมาย — ลูกค้าเป้าหมาย seed ส่วนใหญ่ไม่มี createdAt → ใช้วันที่คงที่ (deterministic) จาก numId
 // กระจายภายใน ~150 วันล่าสุด เพื่อให้กราฟ/ไทม์ไลน์มีข้อมูลจริง ไม่แบนที่ 0
 export function leadCreatedDate(l: LeadRow): Date {
   const d = parseThaiDate(l.createdAt);
@@ -40,7 +40,7 @@ export function leadCreatedDate(l: LeadRow): Date {
   return x;
 }
 
-// วันที่ติดต่อล่าสุดของลีด (จากกิจกรรม · ไม่มีกิจกรรม → ใช้วันที่สร้าง)
+// วันที่ติดต่อล่าสุดของลูกค้าเป้าหมาย (จากกิจกรรม · ไม่มีกิจกรรม → ใช้วันที่สร้าง)
 export function leadLatestDate(l: LeadRow): Date | null {
   const dates = (l.activities ?? []).map(a => parseThaiDate(a.date)).filter(Boolean) as Date[];
   if (!dates.length) return null;
@@ -48,7 +48,7 @@ export function leadLatestDate(l: LeadRow): Date | null {
 }
 export function lastContactLabel(l: LeadRow): string { return l.activities?.[0]?.date ?? (l.createdAt ?? "—"); }
 
-// ── ลีดที่ต้องรีบติดตาม (ขาดการติดต่อเกิน N วัน) — กฎธุรกิจเดียวที่มี (ไม่มี SLA) ──
+// ── ลูกค้าเป้าหมายที่ต้องรีบติดตาม (ขาดการติดต่อเกิน N วัน) — กฎธุรกิจเดียวที่มี (ไม่มี SLA) ──
 export function daysSinceContact(l: LeadRow): number | null {
   const d = leadLatestDate(l) ?? parseThaiDate(l.createdAt);
   if (!d) return null;

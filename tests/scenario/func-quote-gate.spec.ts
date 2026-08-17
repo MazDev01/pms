@@ -9,7 +9,7 @@ import {
 //
 // เดิมตัวแทนลากการ์ดไปคอลัมน์ "เสนอราคา" หรือกดติ๊กงาน "จัดทำใบเสนอราคา" ได้เลย
 // ขั้นก็ขยับทั้งที่ยังไม่มีเอกสารถึงลูกค้าสักใบ → ตัวเลขบนแดชบอร์ด/รายงานของ HQ
-// ("ลีดถึงขั้นเสนอราคากี่ราย") ไม่ตรงกับของจริงที่ส่งออกไป
+// ("ลูกค้าเป้าหมายถึงขั้นเสนอราคากี่ราย") ไม่ตรงกับของจริงที่ส่งออกไป
 //
 // กติกาที่ล็อกไว้ในไฟล์นี้:
 //   1. ยังไม่มีใบ → ทั้งสองทางพาไปที่ฟอร์มออกใบ · ขั้นไม่ขยับ · งานไม่ถูกติ๊ก
@@ -24,7 +24,7 @@ const NS = specNS("GATE");
 const tg = nsTag(NS);
 const COMPANY = tg("ด่านใบเสนอ");
 
-// ลีดตั้งต้น: ติ๊กงานก่อนหน้าครบถึงขั้น "รวบรวมความต้องการ" แล้ว
+// ลูกค้าเป้าหมายตั้งต้น: ติ๊กงานก่อนหน้าครบถึงขั้น "รวบรวมความต้องการ" แล้ว
 // (ระบบห้ามข้ามขั้นอยู่แล้ว ถ้าไม่ติ๊กมาก่อน ปุ่มจะถูกล็อกด้วยกฎนั้นแทน = วัดคนละเรื่อง)
 async function seedLead() {
   const sb = await db(RYG);
@@ -50,7 +50,7 @@ async function seedLead() {
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); await seedLead(); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
-/** เปิดลีดทดสอบ — ตารางแบ่งหน้า ต้องค้นหาก่อนเสมอ (สเปกอื่นเพิ่มลีดของสาขาเดียวกันตลอด) */
+/** เปิดลูกค้าเป้าหมายทดสอบ — ตารางแบ่งหน้า ต้องค้นหาก่อนเสมอ (สเปกอื่นเพิ่มลูกค้าเป้าหมายของสาขาเดียวกันตลอด) */
 async function openTestLead(page: import("@playwright/test").Page) {
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
@@ -79,7 +79,7 @@ test("[func] ติ๊กงาน 'จัดทำใบเสนอราค�
   assertNoErrors(errs, "ด่านใบเสนอราคา (ติ๊กงาน)");
 });
 
-test("[func] ย้ายลีดไปขั้น 'เสนอราคา' ทั้งที่ยังไม่มีใบ → พาไปออกใบ ขั้นไม่ขยับ", async ({ page }) => {
+test("[func] ย้ายลูกค้าเป้าหมายไปขั้น 'เสนอราคา' ทั้งที่ยังไม่มีใบ → พาไปออกใบ ขั้นไม่ขยับ", async ({ page }) => {
   const errs = watchErrors(page);
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await openTestLead(page);
@@ -109,7 +109,7 @@ test("[func] ออกใบจริงจากฟอร์มที่ถู�
   await page.getByRole("button", { name: "เสนอราคา", exact: true }).first().click();
   await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 15_000 });
 
-  // ลีดนี้ระบุแม่แบบที่ไม่มีในแคตตาล็อก → BOQ ตั้งต้นว่าง ต้องมีปุ่มเลือกแคตตาล็อกให้ ไม่งั้นออกใบไม่ได้
+  // ลูกค้าเป้าหมายนี้ระบุแม่แบบที่ไม่มีในแคตตาล็อก → BOQ ตั้งต้นว่าง ต้องมีปุ่มเลือกแคตตาล็อกให้ ไม่งั้นออกใบไม่ได้
   const pick = page.getByRole("button", { name: /เลือกจากแคตตาล็อก/ });
   await expect(pick.first(), "BOQ ตั้งต้นไม่ได้ ต้องเปิดให้เลือกรายการเอง").toBeVisible({ timeout: 10_000 });
   await pick.first().click();
@@ -132,7 +132,7 @@ test("[func] ออกใบจริงจากฟอร์มที่ถู�
   assertNoErrors(errs, "ออกใบแล้วขั้นเลื่อนเอง");
 });
 
-// รันต่อจากข้อบน (serial) — ตอนนี้ลีดมีใบแล้ว 1 ใบ สถานะ "ร่าง"
+// รันต่อจากข้อบน (serial) — ตอนนี้ลูกค้าเป้าหมายมีใบแล้ว 1 ใบ สถานะ "ร่าง"
 test("[func] ติ๊กงาน 'ส่งใบเสนอราคา' ทั้งที่ใบยังเป็นร่าง → พาไปรายการใบ งานไม่ถูกติ๊ก", async ({ page }) => {
   const errs = watchErrors(page);
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);

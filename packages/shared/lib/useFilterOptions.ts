@@ -23,13 +23,13 @@ export function useDealerOptions(): Option[] {
   return useMemo(() => dealers.map(d => ({ value: d.code, label: d.name })), [dealers]);
 }
 
-/** แม่แบบ — จากแคตตาล็อกกลางที่ HQ ดูแล (แหล่งเดียวกับฟอร์มลีด/ใบเสนอราคา) */
+/** แม่แบบ — จากแคตตาล็อกกลางที่ HQ ดูแล (แหล่งเดียวกับฟอร์มลูกค้าเป้าหมาย/ใบเสนอราคา) */
 export function useProductOptions(): Option[] {
   const catalog = useMasterCatalog();
   return useMemo(() => catalog.map(p => ({ value: p.name, label: p.name })), [catalog]);
 }
 
-/** จังหวัด — เก็บจากจังหวัดที่ "มีอยู่จริง" ในลูกค้า/ใบเสนอราคา/ลีด ไม่ใช่รายชื่อจังหวัดทั้งประเทศ */
+/** จังหวัด — เก็บจากจังหวัดที่ "มีอยู่จริง" ในลูกค้า/ใบเสนอราคา/ลูกค้าเป้าหมาย ไม่ใช่รายชื่อจังหวัดทั้งประเทศ */
 export function useProvinceOptions(): Option[] {
   const { customers, quotations, leads } = useSales();
   return useMemo(() => {

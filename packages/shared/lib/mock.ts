@@ -194,12 +194,12 @@ export const HQ_SETTINGS_EVENT = "bpms-hq-settings-updated";
 // ── กฎการดูแลลูกค้าเป้าหมาย (ตัวแทนตั้งเอง · แยกรายสาขา) ──────────────────────
 // ⚠️ เจ้าของกฎเปลี่ยนแล้ว (บอสสั่ง): เดิมเป็นเกณฑ์กลางที่ HQ ตั้งให้ทุกสาขาใช้ค่าเดียวกัน
 //    ตอนนี้ตัวแทนแต่ละสาขาตั้งของตัวเองที่ /settings → "การแจ้งเตือน" · HQ ตั้งให้ไม่ได้แล้ว
-//    → ห้ามอ่านกฎเป็น "ค่าเดียวทั้งเครือ" อีก ทุกจุดต้องอ่านด้วย dealerCode ของลีดใบนั้น
+//    → ห้ามอ่านกฎเป็น "ค่าเดียวทั้งเครือ" อีก ทุกจุดต้องอ่านด้วย dealerCode ของลูกค้าเป้าหมายใบนั้น
 //    (หน้า HQ ที่รวมหลายสาขาจะมีหลายเกณฑ์ปนกัน — ห้ามเขียนป้ายว่า "ภายใน N ชั่วโมง" ลอย ๆ)
 // เกณฑ์สองข้อนี้ถูกอ่านไปใช้จริง:
 //   unassignedAlertHours (ค่าเริ่มต้น 48 ชม.) → การ์ด "ยังไม่มีผู้รับผิดชอบ" ที่ /hq/leads + กระดิ่ง HQ
 //   followUpAlertDays (ค่าเริ่มต้น 7 วัน)     → ป้าย/การ์ด "ต้องติดตามด่วน" ที่ /hq/leads · /leads · แดชบอร์ดตัวแทน
-// ไม่มี leadExpirationDays (ลบลีดอัตโนมัติ) — ระบบไม่มีเครื่องมือลบจริง จึงเป็นการแจ้งเตือนแทน
+// ไม่มี leadExpirationDays (ลบลูกค้าเป้าหมายอัตโนมัติ) — ระบบไม่มีเครื่องมือลบจริง จึงเป็นการแจ้งเตือนแทน
 // ไม่มี autoReminder — ไม่มีตัวส่งเตือนอัตโนมัติจริง (เดิมเป็น toggle ที่ไม่มีใครอ่าน)
 export type LeadRules = { followUpAlertDays: number; unassignedAlertHours: number };
 /** ที่เก็บ = แผนที่ รหัสสาขา → กฎของสาขานั้น · สาขาที่ยังไม่ตั้งเองใช้ค่าเริ่มต้น */
@@ -214,21 +214,21 @@ export const DEFAULT_LEAD_RULES: LeadRules = { followUpAlertDays: 7, unassignedA
 export type HQAlertKey = "unassignedLead" | "idleLead" | "quoteExpiring" | "dealerIdle" | "targetAchieved" | "lostRate";
 export type HQAlertPref = { on: boolean; email: boolean; inapp: boolean };
 export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string }[] = [
-  { key: "unassignedLead", label: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ", desc: "ลีดใหม่ยังไม่มีผู้รับผิดชอบเกินกำหนด (เกณฑ์อยู่ที่ “เส้นทางการขาย”)" },
-  { key: "idleLead",       label: "ลูกค้าเป้าหมายไม่มีการติดต่อ",     desc: "ลีดที่ยังไม่ปิด และไม่มีความเคลื่อนไหวเกินกำหนด (คนละเกณฑ์กับกฎติดตาม 7 วันของตัวแทน)" },
+  { key: "unassignedLead", label: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ", desc: "ลูกค้าเป้าหมายรายใหม่ยังไม่มีผู้รับผิดชอบเกินกำหนด (เกณฑ์อยู่ที่ “เส้นทางการขาย”)" },
+  { key: "idleLead",       label: "ลูกค้าเป้าหมายไม่มีการติดต่อ",     desc: "ลูกค้าเป้าหมายที่ยังไม่ปิด และไม่มีความเคลื่อนไหวเกินกำหนด (คนละเกณฑ์กับกฎติดตาม 7 วันของตัวแทน)" },
   { key: "quoteExpiring",  label: "ใบเสนอราคาใกล้หมดอายุ",           desc: "ใบที่ส่งแล้วและจะหมดอายุภายในกำหนด" },
   { key: "dealerIdle",     label: "ตัวแทนไม่มีความเคลื่อนไหว",        desc: "ตัวแทนไม่ออกใบเสนอราคาใหม่เกินกำหนด" },
   { key: "targetAchieved", label: "ตัวแทนทำยอดถึงเป้า",              desc: "ตัวแทนทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี" },
-  { key: "lostRate",       label: "อัตราปิดการขายไม่สำเร็จสูง",       desc: "สัดส่วนลีดที่ปิดไม่สำเร็จของตัวแทนสูงเกินกำหนด" },
+  { key: "lostRate",       label: "อัตราปิดการขายไม่สำเร็จสูง",       desc: "สัดส่วนลูกค้าเป้าหมายที่ปิดไม่สำเร็จของตัวแทนสูงเกินกำหนด" },
 ];
 export type HQNotifRules = {
   alerts: Record<HQAlertKey, HQAlertPref>;
-  leadIdleDays: number;       // ลีดเงียบเกินกี่วัน HQ ถึงจะเตือน
+  leadIdleDays: number;       // ลูกค้าเป้าหมายเงียบเกินกี่วัน HQ ถึงจะเตือน
   quoteExpiringDays: number;  // ใบเสนอราคาจะหมดอายุภายในกี่วัน
   dealerIdleDays: number;     // ตัวแทนไม่มีใบเสนอราคาใหม่เกินกี่วัน
   targetAchievedPct: number;  // ตัวแทนทำได้ถึงกี่ % ของเป้าทั้งปี
-  lostRatePct: number;        // ตัวแทนปิดไม่สำเร็จเกินกี่ % ของลีดที่ปิดแล้ว
-  lostRateMinClosed: number;  // ต้องปิดลีดอย่างน้อยกี่ใบถึงจะคิด % ได้ (กันตัวแทนที่ปิด 1 ใบแล้วแพ้ = 100%)
+  lostRatePct: number;        // ตัวแทนปิดไม่สำเร็จเกินกี่ % ของลูกค้าเป้าหมายที่ปิดแล้ว
+  lostRateMinClosed: number;  // ต้องปิดลูกค้าเป้าหมายอย่างน้อยกี่ใบถึงจะคิด % ได้ (กันตัวแทนที่ปิด 1 ใบแล้วแพ้ = 100%)
   // ช่องทางแจ้งเตือนของแต่ละเรื่อง (อีเมล/ในระบบ) — ย้ายจาก localStorage คีย์ hq_notifications_v2
   // เดิมผู้ดูแลคนหนึ่งตั้งไว้ อีกคนไม่เห็น และล้างเบราว์เซอร์แล้วกลับไปค่าเริ่มต้น
   channels?: Record<string, HQNotifChannels>;
@@ -263,7 +263,7 @@ export function loadDealerLeadRulesMap(): DealerLeadRulesMap {
   try { const s = localStorage.getItem(DEALER_LEAD_RULES_KEY); if (s) return JSON.parse(s) as DealerLeadRulesMap; } catch {}
   return {};
 }
-/** กฎของสาขาเดียว — ใช้ที่นี่ที่เดียวเวลาจะรู้ว่า "ลีดใบนี้ใช้เกณฑ์อะไร" */
+/** กฎของสาขาเดียว — ใช้ที่นี่ที่เดียวเวลาจะรู้ว่า "ลูกค้าเป้าหมายใบนี้ใช้เกณฑ์อะไร" */
 export function leadRulesOf(map: DealerLeadRulesMap, dealerCode: string | undefined): LeadRules {
   return { ...DEFAULT_LEAD_RULES, ...(dealerCode ? map[dealerCode] : undefined) };
 }
@@ -414,7 +414,7 @@ export const NOTIF_PREFS_KEY = "dealer_notif_prefs";
 export const NOTIF_PREFS_EVENT = "bpms-notif-prefs-updated";
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = { newLead: true, followUp: true, meeting: true, quoteExpiry: true, won: true, lost: true };
 export const NOTIF_META: { key: NotifCategory; label: string; desc: string }[] = [
-  { key: "newLead",     label: "ลูกค้าเป้าหมายรอดำเนินการ", desc: "ลีดใหม่ที่ติดต่อแล้วแต่ยังไม่คืบหน้า" },
+  { key: "newLead",     label: "ลูกค้าเป้าหมายรอดำเนินการ", desc: "ลูกค้าเป้าหมายรายใหม่ที่ติดต่อแล้วแต่ยังไม่คืบหน้า" },
   { key: "followUp",    label: "เตือนติดตาม",              desc: "งานติดตาม/นัดติดตามที่ถึงกำหนด" },
   { key: "meeting",     label: "เตือนประชุม/นัดหมาย",       desc: "นัดพบ/นำเสนอที่กำลังจะถึง" },
   { key: "quoteExpiry", label: "ใบเสนอราคาใกล้หมดอายุ",     desc: "ใบเสนอราคาที่ส่งแล้ว/ใกล้หมดอายุ" },
@@ -520,8 +520,8 @@ export function removeDealerFile(id: number) {
   saveDealerFiles(loadDealerFiles().filter(f => f.id !== id));
 }
 
-// ─── Auto-link: ใบเสนอราคา → ไฟล์ (หมวด "ใบเสนอราคา") ผูกกับลีด/ลูกค้าอัตโนมัติ ──────
-// สร้างใบ → มีไฟล์โผล่ในแท็บ "ไฟล์" ของลีด/ลูกค้า + หน้าไฟล์กลางทันที · ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง
+// ─── Auto-link: ใบเสนอราคา → ไฟล์ (หมวด "ใบเสนอราคา") ผูกกับลูกค้าเป้าหมาย/ลูกค้าอัตโนมัติ ──────
+// สร้างใบ → มีไฟล์โผล่ในแท็บ "ไฟล์" ของลูกค้าเป้าหมาย/ลูกค้า + หน้าไฟล์กลางทันที · ลบใบ → ลบไฟล์อัตโนมัติที่ระบบสร้าง
 export const AUTO_FILE_BY = "ระบบ · จากใบเสนอราคา";
 export function quotationToFile(q: QuotationMock): Omit<DealerFile, "id"> {
   const isLead = !!q.dealId;
@@ -577,10 +577,10 @@ export type LeadRow = {
   category: string;
   status: LeadStatus;
   value: string;
-  area?: number;         // พื้นที่ใช้สอย (ตร.ม.) — กรอกตอนเพิ่ม/แก้ลีด · ส่งต่อเป็นค่าตั้งต้นของใบเสนอราคา
-                         // optional: ลีดเก่า/ลีดที่ยังไม่รู้พื้นที่ = ไม่มีค่า → หน้าจอขึ้น "—" (ห้ามเดาเป็น 0)
+  area?: number;         // พื้นที่ใช้สอย (ตร.ม.) — กรอกตอนเพิ่ม/แก้ลูกค้าเป้าหมาย · ส่งต่อเป็นค่าตั้งต้นของใบเสนอราคา
+                         // optional: ลูกค้าเป้าหมายเก่า/ลูกค้าเป้าหมายที่ยังไม่รู้พื้นที่ = ไม่มีค่า → หน้าจอขึ้น "—" (ห้ามเดาเป็น 0)
   assigned: string;      // ชื่อผู้รับผิดชอบ (พนักงานขาย) — ไม่ใช่ตัวแทนจำหน่าย
-  dealerCode?: string;   // ตัวแทนเจ้าของลีด (HQ ใช้ดูทั้งเครือ) — ไม่ระบุ = สมุดงานของตัวแทนที่ล็อกอิน
+  dealerCode?: string;   // ตัวแทนเจ้าของลูกค้าเป้าหมาย (HQ ใช้ดูทั้งเครือ) — ไม่ระบุ = สมุดงานของตัวแทนที่ล็อกอิน
   source?: string;
   note?: string;
   project?: string;      // ชื่อดีล/โครงการ (ลูกค้าเดิมสร้างดีลใหม่) — ไม่มีก็ใช้ "{แม่แบบ} — {บริษัท}"
@@ -588,12 +588,12 @@ export type LeadRow = {
   lostReason?: string;   // เหตุผลที่ปิดการขายไม่ได้ (เมื่อ status = CANCELLED)
   report?: string;       // รายงานการติดตามลูกค้า (สร้างอัตโนมัติตอนสร้าง Lead · แก้ไขได้ทั้งหมด)
   tasks?: LeadTask[];    // Report Checklist ขับเคลื่อนสถานะ/ความคืบหน้า (Task-driven Sales Journey)
-  activities?: LeadActivity[]; // ไทม์ไลน์กิจกรรมของลีด (บันทึกจริง · persist ผ่าน updateLead)
+  activities?: LeadActivity[]; // ไทม์ไลน์กิจกรรมของลูกค้าเป้าหมาย (บันทึกจริง · persist ผ่าน updateLead)
   customerId?: number;
   logo?: string;   // รูป/โลโก้ลูกค้า (base64) — อัปโหลดในฟอร์มเพิ่มลูกค้าเป้าหมาย
 };
 
-// กิจกรรมของลีด — บันทึกการโทร/ประชุม/โน้ต ฯลฯ ที่เกิดขึ้นจริง
+// กิจกรรมของลูกค้าเป้าหมาย — บันทึกการโทร/ประชุม/โน้ต ฯลฯ ที่เกิดขึ้นจริง
 export type LeadActivity = { id: number; date: string; icon: string; text: string; type: string };
 
 // ─── Task-driven Sales Journey ─────────────────────────────────────
@@ -653,7 +653,7 @@ export function buildLeadTasks(tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTas
   return tpl.map(t => ({ key: t.key, label: t.label, done: false }));
 }
 
-// seed งานของลีดตัวอย่างให้ "ตรงสถานะจริง" — เช็กงานครบถึงขั้นของสถานะ พร้อมผู้ทำ/เวลา (deterministic)
+// seed งานของลูกค้าเป้าหมายตัวอย่างให้ "ตรงสถานะจริง" — เช็กงานครบถึงขั้นของสถานะ พร้อมผู้ทำ/เวลา (deterministic)
 // ให้ % ความคืบหน้า/แถบ Kanban/stageFromTasks ของข้อมูลตัวอย่างสอดคล้องกับกลไก Task-driven ปัจจุบัน
 const STAGE_RANK: Record<LeadStatus, number> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4, PAID: 5, CANCELLED: 2 };
 export function seedLeadTasks(status: LeadStatus, doneBy: string, baseDay: number, tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTask[] {
@@ -690,7 +690,7 @@ export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStat
   if (status === "CANCELLED") return base; // ปิดการขายไม่สำเร็จ — ไม่แตะ Checklist
   const rank = STAGE_RANK[status];
   // ⚠️ เดิมฝังวันที่ "30 มิ.ย. 2569" ไว้ตายตัว — ของเก่าจากยุคข้อมูลตัวอย่าง (แก้ 10 ส.ค. 69)
-  //   ตอนนี้ระบบต่อฐานข้อมูลจริงแล้ว ลีดที่สร้างวันนี้จึงมีงาน "ทำเสร็จแล้ว" ลงวันที่ย้อนหลัง 6 สัปดาห์
+  //   ตอนนี้ระบบต่อฐานข้อมูลจริงแล้ว ลูกค้าเป้าหมายที่สร้างวันนี้จึงมีงาน "ทำเสร็จแล้ว" ลงวันที่ย้อนหลัง 6 สัปดาห์
   //   และค่านี้ถูกเขียนลงฐานข้อมูลจริง ไม่ใช่แค่แสดงผล = ประวัติการทำงานที่ไม่เคยเกิดขึ้น
   const stamp = nowStampTH();
   return tpl.map(def => {
@@ -741,8 +741,8 @@ export function buildLeadReport(lead: Partial<LeadRow>, dateStr = ""): string {
   ].join("\n");
 }
 
-// พื้นที่ (area) ของลีด seed — ที่มาเรียงตามความน่าเชื่อถือ:
-//   1) โน้ตของลีดระบุ ตร.ม. ไว้เอง (5 ใบ) → ใช้เลขนั้นตรง ๆ
+// พื้นที่ (area) ของลูกค้าเป้าหมาย seed — ที่มาเรียงตามความน่าเชื่อถือ:
+//   1) โน้ตของลูกค้าเป้าหมายระบุ ตร.ม. ไว้เอง (5 ใบ) → ใช้เลขนั้นตรง ๆ
 //   2) ใบเสนอราคา seed ที่ผูกกันและมูลค่าตรงกัน (ทีทีวาย Q-0096 · สมุทรโกดัง Q-0097) → ใช้เลขจากใบ
 //   3) ที่เหลือเติมตามสเกลเดียวกับ seed ที่มีอยู่ (~฿2,000/ตร.ม. — ทั้งโน้ตและใบเสนอราคา seed ตกราวนี้) ปัดเลขกลม
 export const leads: LeadRow[] = [
@@ -763,11 +763,11 @@ export const leads: LeadRow[] = [
   { id: "#L-40337", numId: 16, createdAt: "10 มิ.ย. 2569", name: "หจก. แม่ฮ่องสอนพาณิชย์", company: "หจก. แม่ฮ่องสอนพาณิชย์", contact: "คุณอนุชา ม.", phone: "089-000-1122", email: "anucha@mhscon.co.th", province: "แม่ฮ่องสอน", product: "อาคารสำเร็จรูปทุกประเภท", category: "อาคารสำเร็จรูปทุกประเภท", status: "CANCELLED", value: "฿950K", area: 480, assigned: "วิภา รัตนกุล", source: "แนะนำ", lostReason: "งบประมาณ", note: "โครงการถูกพับ — งบไม่อนุมัติ", tasks: seedLeadTasks("CANCELLED", "วิภา รัตนกุล", 3), activities: [ { id: 1, date: "10 มิ.ย. 2569", icon: "call", text: "ลูกค้าแจ้งพับโครงการ งบประมาณไม่ผ่าน", type: "call" } ] },
   { id: "#L-40327", numId: 6, createdAt: "21 มิ.ย. 2569", name: "บจ. ทีทีวาย", company: "บจ. ทีทีวาย อินเตอร์", contact: "คุณวิทยา ท.", phone: "086-789-0123", email: "wittaya@ttyinter.com", province: "นครสวรรค์", product: "โกดังสำเร็จรูป", category: "โกดังสำเร็จรูป", status: "PAID", value: "฿5.4M", area: 2400, assigned: "สมชาย เชียงใหม่", source: "แนะนำ", note: "ปิดการขายแล้ว รอทำสัญญา", customerId: 9, tasks: seedLeadTasks("PAID", "สมชาย เชียงใหม่", 4), activities: [ { id: 1, date: "28 มิ.ย. 2569", icon: "doc", text: "ปิดการขายสำเร็จ — ลูกค้ายืนยันสั่งซื้อ ฿5.4M", type: "doc" }, { id: 2, date: "21 มิ.ย. 2569", icon: "meeting", text: "เจรจาราคารอบสุดท้าย ตกลงเงื่อนไขชำระเงิน", type: "meeting" } ] },
 
-  // ── ลีดของสาขาอื่น (สมมุติขึ้นตามที่บอสสั่ง — ระบบมีสมุดงานจริงแค่ CNX สาขาเดียว) ──
-  // มีไว้ให้ HQ เทียบสาขา/ภาค/อัตราแปลงได้จริง · numId เริ่ม 201 กันชนกับลีดจริงของ CNX
+  // ── ลูกค้าเป้าหมายของสาขาอื่น (สมมุติขึ้นตามที่บอสสั่ง — ระบบมีสมุดงานจริงแค่ CNX สาขาเดียว) ──
+  // มีไว้ให้ HQ เทียบสาขา/ภาค/อัตราแปลงได้จริง · numId เริ่ม 201 กันชนกับลูกค้าเป้าหมายจริงของ CNX
   // ทุกค่าเลือกจากรายการจริงของระบบ (แม่แบบ/แหล่งที่มา/สถานะ/เหตุผลปิดไม่สำเร็จ/จังหวัดของสาขานั้น)
   // สร้างแบบ deterministic (ไม่ใช้ Math.random) — ข้อมูลจะไม่เปลี่ยนทุกครั้งที่โหลด
-  // ไม่มี tasks/activities — HQ ดูอย่างเดียว ไม่มีใครติ๊กงานให้ลีดสาขาอื่น
+  // ไม่มี tasks/activities — HQ ดูอย่างเดียว ไม่มีใครติ๊กงานให้ลูกค้าเป้าหมายสาขาอื่น
   { id: "#L-41201", numId: 201, name: "บจ. ระยองอุตสาหกรรม", company: "บจ. ระยองอุตสาหกรรม", contact: "คุณธนา ก.", phone: "0800-100-1000", province: "ระยอง", product: "โรงงาน", category: "โรงงาน", status: "WAITING", value: "฿480K", assigned: "สมชาย จ.", dealerCode: "RYG", source: "LINE", createdAt: "1 ม.ค. 2569" },
   { id: "#L-41202", numId: 202, name: "บจ. ระยองเทรดดิ้ง", company: "บจ. ระยองเทรดดิ้ง", contact: "คุณอนันต์ ช.", phone: "0800-103-1021", province: "ระยอง", product: "อาคารสำเร็จรูปทุกประเภท", category: "อาคารสำเร็จรูปทุกประเภท", status: "FOLLOWUP", value: "฿5.4M", assigned: "ธนา ต.", dealerCode: "RYG", source: "งานแสดงสินค้า", createdAt: "16 เม.ย. 2569" },
   { id: "#L-41203", numId: 203, name: "บจ. ระยองเกษตร", company: "บจ. ระยองเกษตร", contact: "คุณสุดา น.", phone: "0800-106-1042", province: "ระยอง", product: "งานรีโนเวท", category: "งานรีโนเวท", status: "CANCELLED", value: "฿4.1M", assigned: "อนันต์ ม.", dealerCode: "RYG", source: "เว็บไซต์", createdAt: "4 ม.ค. 2569", lostReason: "ราคา" },
@@ -816,7 +816,7 @@ export const leads: LeadRow[] = [
 ];
 
 // ─── CUSTOMER ROWS (rich, shared app-wide via SalesContext) ───
-// แหล่งความจริงเดียวของ "ลูกค้า" ที่ใช้ทั้งหน้า ลูกค้า / ใบเสนอราคา / การแปลงจากลีด
+// แหล่งความจริงเดียวของ "ลูกค้า" ที่ใช้ทั้งหน้า ลูกค้า / ใบเสนอราคา / การแปลงจากลูกค้าเป้าหมาย
 export type CustomerStatus = "active" | "inactive";
 // บันทึกการติดต่อลูกค้า (โทร/อีเมล/ประชุม ฯลฯ) — persist จริงผ่าน updateCustomer
 export type CustomerContact = { id:number; date:string; icon:string; text:string; type:string };
@@ -950,7 +950,7 @@ export type QuotationMock = {
   revision?: string; // เวอร์ชันใบเสนอราคา V1/V2/V3
   expiry?: string;   // วันหมดอายุใบเสนอราคา (Expiry Date)
   note?: string;        // หมายเหตุ
-  lostReason?: string;  // เหตุผลที่ลูกค้าปฏิเสธ (เมื่อ status = lost) — ตัวเลือกมาจาก HQ (getLostReasons ร่วมกับลีด)
+  lostReason?: string;  // เหตุผลที่ลูกค้าปฏิเสธ (เมื่อ status = lost) — ตัวเลือกมาจาก HQ (getLostReasons ร่วมกับลูกค้าเป้าหมาย)
   // สแนปช็อต % VAT ณ ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ ไม่ใช้ VAT ปัจจุบันของ HQ (ใบเก่าที่ไม่มีค่านี้ = fallback ไปใช้ hqPolicy.vat)
   vatPercent?: number;
   // paymentTerms / deliveryTime ถูกลบตามที่บอสสั่ง — มีที่เก็บแต่ไม่มีช่องกรอก ขึ้น "—" ทุกใบ
@@ -1052,7 +1052,7 @@ export type DealerRow = {
   revenueTarget: number;
   status: DealerStatus;
   // (revenueActual / winRate / activeProjects / onTimePct ถูกตัดออก — เป็นค่าที่ "คำนวณได้"
-  //  จากใบเสนอราคา/ลีดจริง ไม่ใช่ค่าที่ใครกรอก · เก็บไว้ในตารางแล้วมันไม่ขยับตามข้อมูล
+  //  จากใบเสนอราคา/ลูกค้าเป้าหมายจริง ไม่ใช่ค่าที่ใครกรอก · เก็บไว้ในตารางแล้วมันไม่ขยับตามข้อมูล
   //  ทำให้ /hq/dealers โชว์ ฿22.4M ขณะที่ /hq/dashboard คำนวณได้ ฿0 ของสาขาเดียวกัน
   //  → อ่านผ่าน useDealerPerformance() แทน)
   // บัญชีเข้าระบบของตัวแทน — มีเฉพาะโหมด local (mock) เท่านั้น
@@ -1141,7 +1141,7 @@ export const apptTypeLabel: Record<ApptType, string> = {
 export type AppointmentMock = {
   id: number; company: string; contact: string; phone: string;
   // ผูกกับลูกค้าเป้าหมายโดยตรง — ไม่เดาจากชื่อบริษัท (ชื่อซ้ำ/แก้ชื่อแล้วขาด)
-  // ว่างได้: นัดหมายที่สร้างจากหน้าปฏิทินเองยังไม่ผูกลีด
+  // ว่างได้: นัดหมายที่สร้างจากหน้าปฏิทินเองยังไม่ผูกลูกค้าเป้าหมาย
   leadId?: number;
   project: string; buildingType: string; area: number; province: string;
   date: string; time: string; type: ApptType; assigned: string;
@@ -1566,7 +1566,7 @@ export const hqAllQuotations: HQQuotation[] = [
   { id:"HQ-Q51", quoteNo:"Q-2026-0045", dealerCode:"NSN", dealerName:"นครสวรรค์เอ็นจิเนียริ่ง", customer:"เทศบาลเมืองนครสวรรค์", valueNum:900000,   status:"won",             createdAt:"28 ก.พ. 2569",  salesperson:"ธีรพล อ.",     productLine:"อาคารสำนักงาน" },
 ];
 
-// (DEALER PIPELINE ถูกลบทั้งบล็อก — ยุบกระดานดีลเข้ากับลีด: lead.status + tasks เป็นแหล่งเดียว
+// (DEALER PIPELINE ถูกลบทั้งบล็อก — ยุบกระดานดีลเข้ากับลูกค้าเป้าหมาย: lead.status + tasks เป็นแหล่งเดียว
 //  ไม่มี PipelineDealMock/pipelineDeals/pipelineStages/DealActivity อีกแล้ว · ดู SalesContext)
 
 // ─── DEALER NOTES (ported from pms-benjamin) ──────────────────────────────────

@@ -115,13 +115,13 @@ test("[func] คำนำหน้าเลขที่ใบเสนอรา�
   assertNoErrors(errs, "คำนำหน้าเลขที่ล็อก");
 });
 
-test("[func] ทะเบียนพนักงานขายจาก DB → เลือกได้ในฟอร์มลีด", async ({ page }) => {
+test("[func] ทะเบียนพนักงานขายจาก DB → เลือกได้ในฟอร์มลูกค้าเป้าหมาย", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const PERSON = tagged("พนักงาน");
 
   try {
-    // ใส่พนักงานผ่าน repo โดยตรง แล้วพิสูจน์ว่า "ฟอร์มลีดอ่านจากทะเบียนจริง"
+    // ใส่พนักงานผ่าน repo โดยตรง แล้วพิสูจน์ว่า "ฟอร์มลูกค้าเป้าหมายอ่านจากทะเบียนจริง"
     // (การกดเพิ่มผ่านโมดัลในหน้าตั้งค่า ยังไม่ได้คลุมในชุดนี้ — ดูหมายเหตุท้ายไฟล์)
     const ins = await sb.from("responsible_persons")
       .insert({ dealer_code: "RYG", name: PERSON, title: "ทดสอบ", active: true }).select();
@@ -132,7 +132,7 @@ test("[func] ทะเบียนพนักงานขายจาก DB →
     await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
 
     await expect.poll(async () => page.evaluate(() => document.body.innerText),
-      { timeout: 20_000, message: "ชื่อพนักงานจากทะเบียนต้องโผล่ในฟอร์มลีด" }).toContain(PERSON);
+      { timeout: 20_000, message: "ชื่อพนักงานจากทะเบียนต้องโผล่ในฟอร์มลูกค้าเป้าหมาย" }).toContain(PERSON);
 
     assertNoErrors(errs, "ทะเบียนพนักงาน");
   } finally {

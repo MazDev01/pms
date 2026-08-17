@@ -144,11 +144,11 @@ const numInput = (value: number, onChange: (n: number) => void, unit: string, st
 // regionDisplay = ใช้ของกลาง (hqQuotations.ts) แหล่งเดียว — เดิม copy ในไฟล์นี้ไม่มี guard "ไม่ระบุ" (1.4)
 
 // ═══════════════════════ 3 · เส้นทางการขาย ════════════════════════════════════
-// ขั้นการขาย = สถานะลีดจริงของระบบ (LeadStatus 7 ขั้น) — ชื่อ/สี/ลำดับของ "ขั้น" แก้ที่นี่ไม่ได้
+// ขั้นการขาย = สถานะลูกค้าเป้าหมายจริงของระบบ (LeadStatus 7 ขั้น) — ชื่อ/สี/ลำดับของ "ขั้น" แก้ที่นี่ไม่ได้
 // เพราะคัมบัง/ตาราง/แดชบอร์ด และชนิดข้อมูลใน DB (enum lead_status) ผูกกับ 7 ขั้นนี้
 //
 // สิ่งที่ HQ แก้ได้จริงคือ "งานมาตรฐาน" ในแต่ละขั้น (13 ส.ค. 69) — เก็บที่ hq_sales_journey.tasks
-// งานพวกนี้คือของจริงที่ตัวแทนเช็ก และเป็นตัวเลื่อนขั้นให้ลีด ไม่ใช่ข้อความประดับ
+// งานพวกนี้คือของจริงที่ตัวแทนเช็ก และเป็นตัวเลื่อนขั้นให้ลูกค้าเป้าหมาย ไม่ใช่ข้อความประดับ
 const STAGE_ORDER: LeadStatus[] = LEAD_STATUS_ORDER;
 // เหตุผลปิดการขายไม่สำเร็จ — ขั้น "ปิดไม่สำเร็จ" เป็นปลายทางหนึ่งของเส้นทางการขาย จึงอยู่แท็บนี้
 // (เดิมอยู่แท็บ "กฎธุรกิจ" ซึ่งยุบไปแล้ว — คีย์ hq_sales_journey เหมือนเดิม ค่าที่ตั้งไว้ไม่หาย)
@@ -158,8 +158,8 @@ type Journey = { lost: string[] };
 const DEFAULT_JOURNEY: Journey = { lost: [...LOST_REASONS] };
 
 // ── ตัวช่วยของการ์ด "ขั้นตอนการขายมาตรฐาน" ────────────────────────────────────
-// รหัสงาน (key) ผูกกับ checklist ที่บันทึกไว้ในลีดทุกใบ — งานใหม่ต้องได้ key ที่ไม่ซ้ำของเดิม
-// และห้ามเปลี่ยน key ของงานที่มีอยู่ (ลีดเก่าจะหาไม่เจอ = ประวัติการเช็กงานหาย) จึงแก้ได้แค่ "ชื่อ"
+// รหัสงาน (key) ผูกกับ checklist ที่บันทึกไว้ในลูกค้าเป้าหมายทุกใบ — งานใหม่ต้องได้ key ที่ไม่ซ้ำของเดิม
+// และห้ามเปลี่ยน key ของงานที่มีอยู่ (ลูกค้าเป้าหมายเก่าจะหาไม่เจอ = ประวัติการเช็กงานหาย) จึงแก้ได้แค่ "ชื่อ"
 function newTaskKey(existing: LeadTaskDef[], stage: LeadStatus): string {
   const base = `task_${stage.toLowerCase()}`;
   const used = new Set(existing.map(t => t.key));
@@ -195,7 +195,7 @@ function JourneyTab() {
   const addLost = () => { if (newLost.trim()) { jn.set(p => ({ ...p, lost: [...p.lost, newLost.trim()] })); setNewLost(""); } };
   const active = STAGE_ORDER.filter(s => s !== "PAID" && s !== "CANCELLED");
   const tasksOf = (s: LeadStatus) => tk.draft.filter(t => t.stage === s);
-  // แก้ได้แค่ชื่อ — key คงเดิมเสมอ (ผูกกับ checklist ของลีดที่บันทึกไว้แล้ว)
+  // แก้ได้แค่ชื่อ — key คงเดิมเสมอ (ผูกกับ checklist ของลูกค้าเป้าหมายที่บันทึกไว้แล้ว)
   const renameTask = (key: string, label: string) => tk.set(p => p.map(t => t.key === key ? { ...t, label } : t));
   const removeTask = (key: string) => tk.set(p => p.filter(t => t.key !== key));
   const addTask = (stage: LeadStatus) => tk.set(p => {
@@ -233,7 +233,7 @@ function JourneyTab() {
                   title={`เพิ่มงานในขั้น ${leadStatusLabel[s]}`}
                   style={{ padding: "2px 9px", fontSize: "0.7rem", color: NAVY }}><Plus size={12} /> เพิ่มงาน</button>
                 {!tasksOf(s).length && (
-                  <span style={{ fontSize: "0.7rem", color: "#b45309" }}>ยังไม่มีงาน — ลีดจะข้ามขั้นนี้ไปเลย</span>
+                  <span style={{ fontSize: "0.7rem", color: "#b45309" }}>ยังไม่มีงาน — ลูกค้าเป้าหมายจะข้ามขั้นนี้ไปเลย</span>
                 )}
               </span>
             </div>
@@ -256,7 +256,7 @@ function JourneyTab() {
         <UsedAt>
           7 ขั้นนี้คือสถานะจริงของลูกค้าเป้าหมายทั้งระบบ — ความคืบหน้าเลื่อนขั้นเองจาก “งานมาตรฐาน” ที่ตัวแทนเช็ก
           <br />ชื่อขั้นและลำดับขั้นแก้ไม่ได้ (ผูกกับคัมบัง/รายงาน/ฐานข้อมูล) แต่งานในแต่ละขั้นตั้งได้ตามต้องการ
-          <br />บันทึกแล้วมีผลกับ<strong>ลีดใหม่ทันที</strong> · ลีดเดิมยังเก็บงานที่เช็กไว้แล้วตามเดิม จนกว่าสถานะจะเปลี่ยน
+          <br />บันทึกแล้วมีผลกับ<strong>ลูกค้าเป้าหมายรายใหม่ทันที</strong> · รายเดิมยังเก็บงานที่เช็กไว้แล้วตามเดิม จนกว่าสถานะจะเปลี่ยน
           <br />งาน “ปิดการขาย” เป็นงานปิดท้ายของระบบ จึงไม่มีให้แก้ที่นี่ (ปุ่มปิดดีลของตัวแทนผูกกับงานนี้)
         </UsedAt>
       </SectionCard>
@@ -468,15 +468,15 @@ const CHANNELS: { k: keyof HQNotifChannels; label: string }[] = [
   { k: "inapp", label: "ในระบบ" },
 ];
 // เกณฑ์ของแต่ละกฎ (ถ้ามี) — "ผู้รับผิดชอบ" ใช้เกณฑ์จาก "เส้นทางการขาย" จึงไม่มีช่องกรอกซ้ำที่นี่
-// ลีดเงียบมีเกณฑ์ของ HQ เอง (คนละตัวกับกฎติดตาม 7 วันที่บังคับตัวแทน — ดู @pms/shared/lib/hqAlerts)
+// ลูกค้าเป้าหมายเงียบมีเกณฑ์ของ HQ เอง (คนละตัวกับกฎติดตาม 7 วันที่บังคับตัวแทน — ดู @pms/shared/lib/hqAlerts)
 type NumRuleKey = Exclude<keyof HQNotifRules, "alerts" | "channels">;
 const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: NumRuleKey; unit: string }[]>> = {
   idleLead:       [{ field: "leadIdleDays",      unit: "วัน" }],
   quoteExpiring:  [{ field: "quoteExpiringDays", unit: "วัน" }],
   dealerIdle:     [{ field: "dealerIdleDays",    unit: "วัน" }],
   targetAchieved: [{ field: "targetAchievedPct", unit: "% ของเป้า" }],
-  // ต้องมีทั้ง % และกลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลีดใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
-  lostRate:       [{ field: "lostRatePct",       unit: "%" }, { field: "lostRateMinClosed", unit: "ลีดขึ้นไป" }],
+  // ต้องมีทั้ง % และกลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลูกค้าเป้าหมายใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
+  lostRate:       [{ field: "lostRatePct",       unit: "%" }, { field: "lostRateMinClosed", unit: "รายขึ้นไป" }],
 };
 
 function NotificationsTab() {

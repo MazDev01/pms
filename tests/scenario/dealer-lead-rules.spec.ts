@@ -13,7 +13,7 @@ const SEED_LOCAL_ONLY = "seed ผ่าน localStorage — ใช้โหม�
 //   1. HQ ตั้งไม่ได้แล้ว (ต้องไม่มีช่องกรอกที่ /hq/settings)
 //   2. ตัวแทนตั้งได้จริงที่ /settings → การแจ้งเตือน และค่าถูกบันทึก
 //   3. ค่าที่ตั้ง "มีผลจริง" กับหน้าของตัวแทน — ไม่ใช่ช่องกรอกหลอก
-//   4. HQ ยังเห็นลีดของสาขานั้นตามเกณฑ์ที่สาขาตั้ง (HQ ไม่หลุดการมองเห็น)
+//   4. HQ ยังเห็นลูกค้าเป้าหมายของสาขานั้นตามเกณฑ์ที่สาขาตั้ง (HQ ไม่หลุดการมองเห็น)
 
 const RULES_KEY = "dealer_lead_rules";
 
@@ -45,7 +45,7 @@ test("[user·dealer] ตัวแทนตั้งกฎเองได้ท�
   const card = page.locator(".card").filter({ hasText: "กฎการดูแลลูกค้าเป้าหมาย" }).first();
   const nums = card.locator('input[type="number"]');
   await expect(nums).toHaveCount(2);
-  await nums.nth(1).fill("3");   // เตือนเมื่อลีดไม่มีการติดต่อเกิน 7 → 3 วัน
+  await nums.nth(1).fill("3");   // เตือนเมื่อลูกค้าเป้าหมายไม่มีการติดต่อเกิน 7 → 3 วัน
   await page.getByRole("button", { name: /^บันทึก/ }).first().click();
 
   // ค่าต้องลงคีย์ "รายสาขา" ไม่ใช่คีย์กลางของ HQ
@@ -62,7 +62,7 @@ test("[user·dealer] เกณฑ์ที่สาขาตั้ง มีผ�
   await expect(page.getByText("ต้องติดตามด่วน (เกิน 3 วัน)")).toBeVisible();
 });
 
-test("[user·dealer·edge] ตั้งเกณฑ์สูงมาก (999 วัน) → ไม่มีลีดไหนค้าง", async ({ page }) => {
+test("[user·dealer·edge] ตั้งเกณฑ์สูงมาก (999 วัน) → ไม่มีลูกค้าเป้าหมายไหนค้าง", async ({ page }) => {
   test.skip(SUPABASE_MODE, SEED_LOCAL_ONLY);
   await seedRules(page, "CNX", 999, 48);
   await open(page, "dealer", "/dashboard");
@@ -71,14 +71,14 @@ test("[user·dealer·edge] ตั้งเกณฑ์สูงมาก (999 �
 });
 
 // ── 4. HQ ยังเห็นตามเกณฑ์ที่สาขาตั้ง — และไม่โกหกว่าเป็น "กฎสำนักงานใหญ่" ──
-test("[ux·hq] หน้าลีด HQ ไม่อ้างว่าเกณฑ์เป็นของสำนักงานใหญ่แล้ว", async ({ page }) => {
+test("[ux·hq] หน้าลูกค้าเป้าหมาย HQ ไม่อ้างว่าเกณฑ์เป็นของสำนักงานใหญ่แล้ว", async ({ page }) => {
   await open(page, "hq", "/hq/leads");
   await assertHealthyPage(page, "ลูกค้าเป้าหมายทั้งเครือ");
   await expect(page.locator(".erp").getByText(/ตามกฎสำนักงานใหญ่/)).toHaveCount(0);
 });
 
 test("[user·hq] เกณฑ์ที่สาขาตั้ง มีผลกับการ์ดเตือนของ HQ ด้วย", async ({ page }) => {
-  // ตั้งเกณฑ์ต่ำมาก (1 ชม.) ให้สาขา CNX → ลีดที่ยังไม่มีผู้รับผิดชอบของ CNX ต้องเข้าเกณฑ์
+  // ตั้งเกณฑ์ต่ำมาก (1 ชม.) ให้สาขา CNX → ลูกค้าเป้าหมายที่ยังไม่มีผู้รับผิดชอบของ CNX ต้องเข้าเกณฑ์
   await seedRules(page, "CNX", 7, 1);
   await open(page, "hq", "/hq/leads");
   await assertHealthyPage(page, "ลูกค้าเป้าหมายทั้งเครือ");

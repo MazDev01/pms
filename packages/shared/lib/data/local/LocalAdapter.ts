@@ -435,7 +435,7 @@ export const LocalAdapter: DataAdapter = {
         const created = parseThaiDateLocal(l.createdAt ?? "");
         return ds.length ? new Date(Math.max(...ds.map(d => d.getTime()))) : created;
       };
-      // คำนวณวันที่แค่ครั้งเดียวต่อลีด (เดิม parse/lastContactOf ซ้ำ 2 รอบใน filter+map แล้วใช้ ! ยืนยันว่าไม่ null
+      // คำนวณวันที่แค่ครั้งเดียวต่อลูกค้าเป้าหมาย (เดิม parse/lastContactOf ซ้ำ 2 รอบใน filter+map แล้วใช้ ! ยืนยันว่าไม่ null
       //   ทั้งที่ map เป็นคนละ pass จาก filter — พึ่ง purity ของฟังก์ชันเฉย ๆ ไม่ได้การันตีจาก type)
       const unassigned = ls
         .filter(l => !l.assigned?.trim() && isOpen(l.status))
@@ -767,7 +767,7 @@ export const LocalAdapter: DataAdapter = {
     },
     salesperson: (quoteId, dealerCode) => {
       // เทียบ "สาขา + เลขที่" เหมือนฝั่ง supabase — เลขที่ใบซ้ำข้ามสาขาได้
-      // และลีดที่นำมาเทียบต้องเป็นของสาขาเดียวกันด้วย ไม่งั้นได้ชื่อผู้รับผิดชอบผิดสาขา
+      // และลูกค้าเป้าหมายที่นำมาเทียบต้องเป็นของสาขาเดียวกันด้วย ไม่งั้นได้ชื่อผู้รับผิดชอบผิดสาขา
       const same = (a?: string) => (a ?? DEFAULT_DEALER_CODE) === dealerCode;
       const q = readKey<QuotationMock[]>(SALES.quotations, quoteSeed).find(x => x.id === quoteId && same(x.dealerCode));
       if (!q) return ok(null);

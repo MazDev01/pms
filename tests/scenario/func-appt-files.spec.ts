@@ -47,16 +47,16 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
   assertNoErrors(errs, "สร้างนัดหมาย");
 });
 
-test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้น Storage และมีแถวใน DB", async ({ page }) => {
+test("[func] แนบไฟล์ที่ลูกค้าเป้าหมาย → ไบต์ขึ้น Storage และมีแถวใน DB", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
-  const COMPANY = tg("ลีดไฟล์");
+  const COMPANY = tg("ลูกค้าเป้าหมายไฟล์");
   // .pdf ไม่ใช่ .txt — ระบบรับเฉพาะ PDF/Word/Excel/PowerPoint/CAD/รูปภาพ (uploadLimits.ts)
   const FILENAME = `${NS}-เอกสารทดสอบ.pdf`;
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
-  // ต้องมีลีดก่อน — การแนบไฟล์อยู่ในลิ้นชักรายละเอียดลีด ไม่ใช่หน้าคลังไฟล์
+  // ต้องมีลูกค้าเป้าหมายก่อน — การแนบไฟล์อยู่ในลิ้นชักรายละเอียดลูกค้าเป้าหมาย ไม่ใช่หน้าคลังไฟล์
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
@@ -75,7 +75,7 @@ test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้�
   // (input ถูกซ่อนไว้โดยตั้งใจ — ปุ่มเป็นตัวสั่งเปิดหน้าต่างเลือกไฟล์)
   // ตัวที่ไม่มี accept คือช่องแนบไฟล์ทั่วไป · ที่มี accept="image/*" คือช่องอัปโหลดโลโก้
   const fileInput = page.locator('input[type="file"]:not([accept])').first();
-  await expect(fileInput, "ลิ้นชักลีดต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 15_000 });
+  await expect(fileInput, "ลิ้นชักลูกค้าเป้าหมายต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 15_000 });
   await fileInput
     .setInputFiles({ name: FILENAME, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 benjamin test") });
 
@@ -91,10 +91,10 @@ test("[func] แนบไฟล์ที่ลีด → ไบต์ขึ้�
   const signed = await sb.storage.from("dealer-files").createSignedUrl(f.storage_path!, 60);
   expect(signed.error, `ดึงไฟล์จาก Storage ไม่ได้: ${JSON.stringify(signed.error)}`).toBeNull();
 
-  assertNoErrors(errs, "แนบไฟล์ที่ลีด");
+  assertNoErrors(errs, "แนบไฟล์ที่ลูกค้าเป้าหมาย");
 });
 
-// เปิดลิ้นชักลีดที่ชื่อ company แล้วคืน locator ช่องแนบไฟล์ (ใช้ซ้ำในเทสต์ไฟล์ล้มเหลว)
+// เปิดลิ้นชักลูกค้าเป้าหมายที่ชื่อ company แล้วคืน locator ช่องแนบไฟล์ (ใช้ซ้ำในเทสต์ไฟล์ล้มเหลว)
 async function openLeadFileInput(page: Page, sb: SupabaseClient, company: string) {
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
@@ -109,7 +109,7 @@ async function openLeadFileInput(page: Page, sb: SupabaseClient, company: string
   await expect(row).toBeVisible({ timeout: 25_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
   const input = page.locator('input[type="file"]:not([accept])').first();
-  await expect(input, "ลิ้นชักลีดต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 25_000 });
+  await expect(input, "ลิ้นชักลูกค้าเป้าหมายต้องมีช่องแนบไฟล์").toBeAttached({ timeout: 25_000 });
   return input;
 }
 

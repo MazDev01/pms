@@ -1,7 +1,7 @@
 "use client";
 
 // ─── HQ · ลูกค้าเป้าหมายทั้งเครือ (Network Leads) ──────────────────────────────
-// ภาพรวมลีดของทุกตัวแทน · กรอง (ค้นหา/สถานะ/จังหวัด/ช่วงเวลา) · KPI · กราฟ · ตาราง drill-down
+// ภาพรวมลูกค้าเป้าหมายของทุกตัวแทน · กรอง (ค้นหา/สถานะ/จังหวัด/ช่วงเวลา) · KPI · กราฟ · ตาราง drill-down
 // ใช้ข้อมูลจริงจาก SalesContext (leads) — HQ ดูอย่างเดียว (Sales CRM เท่านั้น)
 import { useMemo, useState, useEffect, useRef } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
@@ -50,13 +50,13 @@ const parseThaiDate = (s: string): Date | null => {
   return new Date(y, TH_MONTH[mt[2]], +mt[1]);
 };
 const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-// ช่วงกว้างคงที่สำหรับสรุปใบรายเดือน (กราฟแนวโน้มลีด) — อ้างอิงคงที่ กัน hook รีเฟตช์
+// ช่วงกว้างคงที่สำหรับสรุปใบรายเดือน (กราฟแนวโน้มลูกค้าเป้าหมาย) — อ้างอิงคงที่ กัน hook รีเฟตช์
 const TREND_QUOTE_START = new Date(2000, 0, 1);
 const TREND_QUOTE_END = new Date(2999, 11, 31);
-// "ต้องติดตาม" = ลีดที่ยังไม่ปิด และเงียบเกินเกณฑ์ของสาขาเจ้าของลีด (needsFollowUp)
+// "ต้องติดตาม" = ลูกค้าเป้าหมายที่ยังไม่ปิด และเงียบเกินเกณฑ์ของสาขาเจ้าของลูกค้าเป้าหมาย (needsFollowUp)
 // ⚠️ ห้ามกลับไปใช้รายการสถานะ: เดิมเป็น ["WAITING","FOLLOWUP"] ซึ่งไม่ได้นับวันเลย
 //    แต่ป้ายเขียนว่า ">7 วัน" → ตัวเลขไม่ตรงกับคำ และไม่ตรงกับที่ตัวแทนเห็นบนหน้าตัวเอง
-//    เกณฑ์วันเป็นของแต่ละสาขา (ตัวแทนตั้งเอง) → ต้องถามด้วย dealerCode ของลีดใบนั้นเสมอ
+//    เกณฑ์วันเป็นของแต่ละสาขา (ตัวแทนตั้งเอง) → ต้องถามด้วย dealerCode ของลูกค้าเป้าหมายใบนั้นเสมอ
 
 export default function HQLeadsPage() {
   const router = useRouter();
@@ -74,17 +74,17 @@ export default function HQLeadsPage() {
   const [btSel, setBtSel] = useState<string>("ALL");
   const [srcSel, setSrcSel] = useState<string>("ALL");
 
-  // ลีดในช่วงเวลาที่เลือก (ตาม createdAt) — แหล่งเดียวของทั้งหน้า
+  // ลูกค้าเป้าหมายในช่วงเวลาที่เลือก (ตาม createdAt) — แหล่งเดียวของทั้งหน้า
   const scoped = useMemo(() => leads.filter(l => {
     const d = parseThaiDate(l.createdAt ?? "");
     return !d || (d >= timeRange.start && d <= timeRange.end);
   }), [leads, timeRange.start, timeRange.end]);
 
   // นัดหมาย + ไฟล์ — ใช้แสดงใน Drawer เท่านั้น (HQ ดูอย่างเดียว)
-  // นัดหมายผูกด้วย leadId · ไฟล์ผูกด้วย source="lead" + recordId — ทั้งคู่คือ numId ของลีด
+  // นัดหมายผูกด้วย leadId · ไฟล์ผูกด้วย source="lead" + recordId — ทั้งคู่คือ numId ของลูกค้าเป้าหมาย
   const { appointments } = useSales();
-  // นัดหมายของลีดที่กำลังเปิด drawer — supabase: ดึงตรง (M9 Phase 4) · local/ยังไม่กลับ: กรอง appointments array เดิม
-  // เลขลีด (numId) ซ้ำกันได้ข้ามสาขา — ต้องระบุสาขาของลีดที่เปิดอยู่ ไม่งั้นนัดหมายของสาขาอื่นจะปนเข้ามา
+  // นัดหมายของลูกค้าเป้าหมายที่กำลังเปิด drawer — supabase: ดึงตรง (M9 Phase 4) · local/ยังไม่กลับ: กรอง appointments array เดิม
+  // เลขลูกค้าเป้าหมาย (numId) ซ้ำกันได้ข้ามสาขา — ต้องระบุสาขาของลูกค้าเป้าหมายที่เปิดอยู่ ไม่งั้นนัดหมายของสาขาอื่นจะปนเข้ามา
   const drawerAppts = useLeadAppointments(viewLead?.numId ?? null, viewLead?.dealerCode ?? null);
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   // request token กันผลลัพธ์เก่าทับใหม่ — read ถูกยิงซ้ำได้ทุกครั้งที่มีการอัปโหลด/ลบไฟล์ทั้งเครือ
@@ -103,7 +103,7 @@ export default function HQLeadsPage() {
   const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
   const REGION_OF = useMemo(() => new Map(allDealers.map(d => [d.code, d.region])), [allDealers]);
 
-  // ตัวเลือกตัวกรอง — จากลีดจริงในช่วง (ไม่ hardcode) · supabase: lead_summary (เวลาอย่างเดียว) · local/ยังไม่กลับ: scoped
+  // ตัวเลือกตัวกรอง — จากลูกค้าเป้าหมายจริงในช่วง (ไม่ hardcode) · supabase: lead_summary (เวลาอย่างเดียว) · local/ยังไม่กลับ: scoped
   const optsSummary = useLeadSummary(useMemo(() => ({ dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end) }), [timeRange.start, timeRange.end]));
   const dealerOpts = useMemo(() => (optsSummary
     ? [...new Set(optsSummary.byDealer.map(d => d.dealerCode))]
@@ -141,7 +141,7 @@ export default function HQLeadsPage() {
     (!overdueOnly || needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays))
   ), [kpiBase, status, overdueOnly, rulesOf]);
 
-  // ── M9 Phase 2: สรุปลีดหลังกรองที่ DB (supabase) · local/overdue/ระหว่างโหลด = client fallback ──
+  // ── M9 Phase 2: สรุปลูกค้าเป้าหมายหลังกรองที่ DB (supabase) · local/overdue/ระหว่างโหลด = client fallback ──
   const leadDealerCodes = useMemo<string[] | undefined>(() => {
     let codes: string[] | undefined;
     const restrict = (pred: (c: string) => boolean) => { codes = (codes ?? allDealers.map(d => d.code)).filter(pred); };
@@ -158,7 +158,7 @@ export default function HQLeadsPage() {
   const sumCharts = useLeadSummary({ ...baseF, status: status === "ALL" ? undefined : status }); // กราฟ (filtered)
   const chartSummary = overdueOnly ? null : sumCharts;                               // overdue → client (พึ่ง last_contact + เกณฑ์)
 
-  // ── ตารางลีด: แบ่งหน้าที่ DB (M9 Phase 4) · local/ยังไม่กลับ = filtered (client) ──
+  // ── ตารางลูกค้าเป้าหมาย: แบ่งหน้าที่ DB (M9 Phase 4) · local/ยังไม่กลับ = filtered (client) ──
   // 10 แถว/หน้าเท่าทุกตารางในระบบ (บอสสั่ง 13 ส.ค. 69 — เดิมหน้านี้ 25 อยู่หน้าเดียวที่ไม่เหมือนใคร)
   const LEADS_PAGE = ROWS_PER_PAGE;
   const [leadPage, setLeadPage] = useState(0);
@@ -191,8 +191,8 @@ export default function HQLeadsPage() {
   }), [leadDealerCodes, province, btSel, srcSel, query, timeRange.start, timeRange.end, perDealerDays]);
   const followUpPage = useLeadsPage(followUpOpts);
 
-  // ── เตือน: ลีดยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
-  // ตอนนี้ลีดทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง · ตรรกะพร้อมใช้ พอมีลีด assigned ว่างเกินเกณฑ์ การ์ดจะเด้ง
+  // ── เตือน: ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบนานเกินเกณฑ์ (กฎธุรกิจ HQ · ค่าเริ่มต้น 48 ชม.) ──
+  // ตอนนี้ลูกค้าเป้าหมายทุกใบมีผู้รับผิดชอบ → ขึ้น 0 ซึ่งเป็นความจริง · ตรรกะพร้อมใช้ พอมีลูกค้าเป้าหมาย assigned ว่างเกินเกณฑ์ การ์ดจะเด้ง
   // อิงขอบเขต kpiBase (ตัวแทน/ภาค/จังหวัด/แม่แบบ/แหล่ง/ค้นหา + ช่วงเวลา) — ไม่ผูกสถานะ (เตือนไร้ผู้รับผิดชอบ ไม่เกี่ยวสถานะ)
   const perDealerHours = useMemo(() => Object.fromEntries(allDealers.map(d => [d.code, rulesOf(d.code).unassignedAlertHours])), [allDealers, rulesOf]);
   const unassignedSummary = useUnassignedLeads(useMemo(() => ({
@@ -244,14 +244,14 @@ export default function HQLeadsPage() {
     return { total, followUp, newThis, conv: pctOrNull(won, closed) };
   }, [sumBase, followUpPage, kpiBase, timeRange.end, rulesOf]);
 
-  // ── Section 1 · ลีด เทียบ ใบเสนอราคา รายตัวแทน ─────────────────────────────
-  // สาขาไหนรับลีดเยอะแต่ออกใบเสนอราคาน้อย = จุดที่ผู้บริหารต้องเร่ง
+  // ── Section 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา รายตัวแทน ─────────────────────────────
+  // สาขาไหนรับลูกค้าเป้าหมายเยอะแต่ออกใบเสนอราคาน้อย = จุดที่ผู้บริหารต้องเร่ง
   //
-  // อัตราแปลง = ลีดที่ไปถึงขั้น "เสนอราคา" ขึ้นไป ÷ ลีดทั้งหมด
-  // ตั้งใจไม่ใช้ "จำนวนใบเสนอราคา ÷ จำนวนลีด" เพราะผิดความจริง 2 ทาง:
-  //   1) ลีด 1 ใบออกใบเสนอราคาได้หลายใบ (revision/เสนอใหม่) → หารแล้วเกิน 100% ได้
-  //   2) ใบเสนอราคา seed ของสาขาอื่นไม่ได้ผูกกับลีด → เอามาหารกันคนละชุดข้อมูล
-  // สถานะของลีดบอกเองว่าเคยเสนอราคาแล้วหรือยัง — ใช้แหล่งเดียว ไม่มีทางเกิน 100%
+  // อัตราแปลง = ลูกค้าเป้าหมายที่ไปถึงขั้น "เสนอราคา" ขึ้นไป ÷ ลูกค้าเป้าหมายทั้งหมด
+  // ตั้งใจไม่ใช้ "จำนวนใบเสนอราคา ÷ จำนวนลูกค้าเป้าหมาย" เพราะผิดความจริง 2 ทาง:
+  //   1) ลูกค้าเป้าหมาย 1 ใบออกใบเสนอราคาได้หลายใบ (revision/เสนอใหม่) → หารแล้วเกิน 100% ได้
+  //   2) ใบเสนอราคา seed ของสาขาอื่นไม่ได้ผูกกับลูกค้าเป้าหมาย → เอามาหารกันคนละชุดข้อมูล
+  // สถานะของลูกค้าเป้าหมายบอกเองว่าเคยเสนอราคาแล้วหรือยัง — ใช้แหล่งเดียว ไม่มีทางเกิน 100%
   const netQuotes = useNetworkQuotations();
   const DEALER_NAME = useMemo(() => new Map(allDealers.map(d => [d.code, d.name])), [allDealers]);
   // ใบ/ยอดขายรายสาขาในช่วง ที่ DB (M9 Phase 4) — supabase · local/ยังไม่กลับ = netQuotes (client)
@@ -259,7 +259,7 @@ export default function HQLeadsPage() {
   const leadVsQuote = useMemo(() => {
     const m = new Map<string, { leads: number; quoted: number; quotes: number }>();
     const at = (c: string) => m.get(c) ?? (m.set(c, { leads: 0, quoted: 0, quotes: 0 }), m.get(c)!);
-    // ลีด/ถึงขั้นเสนอราคา รายสาขา: supabase = byDealer (chartSummary) · overdue/local = filtered
+    // ลูกค้าเป้าหมาย/ถึงขั้นเสนอราคา รายสาขา: supabase = byDealer (chartSummary) · overdue/local = filtered
     if (chartSummary) { chartSummary.byDealer.forEach(d => { const r = at(d.dealerCode); r.leads = d.leads; r.quoted = d.quoted; }); }
     else filtered.forEach(l => { const r = at(l.dealerCode || "—"); r.leads++; if (QUOTED_UP.includes(l.status)) r.quoted++; });
     // จำนวนใบในช่วง รายสาขา: supabase = rangeByDealer · local = netQuotes
@@ -268,7 +268,7 @@ export default function HQLeadsPage() {
     const arr = [...m.entries()].map(([code, v]) => ({
       code, name: DEALER_NAME.get(code) ?? code,
       leads: v.leads, quotes: v.quotes,
-      conv: v.leads > 0 ? Math.round(v.quoted / v.leads * 100) : null,  // ไม่มีลีด = คำนวณไม่ได้ ไม่ใส่ 0%
+      conv: v.leads > 0 ? Math.round(v.quoted / v.leads * 100) : null,  // ไม่มีลูกค้าเป้าหมาย = คำนวณไม่ได้ ไม่ใส่ 0%
     })).sort((a, b) => b.leads - a.leads);
     const max = Math.max(1, ...arr.flatMap(a => [a.leads, a.quotes]));
     return arr.map(a => ({ ...a, lPct: Math.round(a.leads / max * 100), qPct: Math.round(a.quotes / max * 100) }));
@@ -295,18 +295,18 @@ export default function HQLeadsPage() {
 
   const kpiCards = [
     { label: "ลูกค้าเป้าหมายทั้งหมด", value: `${kpis.total}`, sub: scopeLabel, Icon: Users, color: "#2563a8", on: status === "ALL", onClick: () => setStatus("ALL") },
-    { label: "ลีดใหม่ (เดือนนี้)", value: `${kpis.newThis}`, sub: "รายการ", Icon: PhoneCall, color: "#7c3aed", on: false, onClick: () => setStatus("ALL") },
+    { label: "ลูกค้าเป้าหมายใหม่ (เดือนนี้)", value: `${kpis.newThis}`, sub: "รายการ", Icon: PhoneCall, color: "#7c3aed", on: false, onClick: () => setStatus("ALL") },
     { label: "ต้องติดตามด่วน", value: `${kpis.followUp}`, sub: followUpSub, Icon: AlarmClock, color: "#EA580C", on: overdueOnly, onClick: () => { setStatus("ALL"); setOverdueOnly(v => !v); } },
     { label: "อัตราแปลงเป็นลูกค้า", value: kpis.conv === null ? "—" : `${kpis.conv}%`, sub: "ปิดได้ / ปิดทั้งหมด", Icon: Percent, color: "#059669", on: false, onClick: () => setStatus("ALL") },
   ];
 
-  // ── Section 7 · แนวโน้มรายเดือน — 4 เส้น: ลีดใหม่ · ใบเสนอราคา · ปิดได้ · ปิดไม่สำเร็จ ──
-  // ลีดนับตามเดือนที่สร้าง · ใบเสนอราคานับตามเดือนที่ออก (คนละแหล่ง จับคู่ด้วยเดือน)
+  // ── Section 7 · แนวโน้มรายเดือน — 4 เส้น: ลูกค้าเป้าหมายใหม่ · ใบเสนอราคา · ปิดได้ · ปิดไม่สำเร็จ ──
+  // ลูกค้าเป้าหมายนับตามเดือนที่สร้าง · ใบเสนอราคานับตามเดือนที่ออก (คนละแหล่ง จับคู่ด้วยเดือน)
   // ช่วงเดือนตัดตามตัวกรองเวลา — ไม่ฟิกซ์ 12 เดือน เพราะระบบมีข้อมูลปี 2569 ปีเดียว
   // ── กราฟแนวโน้มรายเดือน — ปุ่มช่วงย้อนหลังของตัวเอง (ไม่ผูกกับตัวกรองเวลาบนแถบบน) ──
   // ถังเดือนใช้คีย์ YYYY-MM — ช่วง 12 เดือนคาบเกี่ยว 2 ปี ถ้านับแต่เลขเดือน ยอดปีที่แล้วจะทับปีนี้
   const [trendRange, setTrendRange] = useState<MonthRange>(6);
-  // ใบเสนอราคารายเดือนทั้งเครือ (คนละ entity กับลีด ไม่ผูกตัวกรองลีด) — supabase: byMonth ที่ DB · local: netQuotes
+  // ใบเสนอราคารายเดือนทั้งเครือ (คนละ entity กับลูกค้าเป้าหมาย ไม่ผูกตัวกรองลูกค้าเป้าหมาย) — supabase: byMonth ที่ DB · local: netQuotes
   const quoteTrendSum = useDashboardQuoteSummary(TREND_QUOTE_START, TREND_QUOTE_END, undefined);
   const trend = useMemo(() => {
     const buckets = lastNMonths(trendRange, APP_NOW);
@@ -316,7 +316,7 @@ export default function HQLeadsPage() {
     // ใบเสนอราคา (quoteM): supabase = byMonth ที่ DB (key YYYY-MM) · local/ยังไม่กลับ = netQuotes
     if (quoteTrendSum) { for (const r of quoteTrendSum.byMonth) quoteM.set(monthKey(r.y, r.m), r.quotes); }
     else netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d) bump(quoteM, monthKeyOf(d)); });
-    if (chartSummary) { // ลีด: จาก byMonth ที่ DB (key YYYY-MM)
+    if (chartSummary) { // ลูกค้าเป้าหมาย: จาก byMonth ที่ DB (key YYYY-MM)
       chartSummary.byMonth.forEach(r => { const k = `${r.y}-${String(r.m + 1).padStart(2, "0")}`; newM.set(k, r.created); wonM.set(k, r.won); lostM.set(k, r.lost); });
     } else {
       filtered.forEach(l => {
@@ -331,7 +331,7 @@ export default function HQLeadsPage() {
     return { months: buckets.map(b => b.label), newM: pick(newM), wonM: pick(wonM), lostM: pick(lostM), quoteM: pick(quoteM) };
   }, [chartSummary, filtered, quoteTrendSum, netQuotes, trendRange]);
 
-  // ลีดตามแหล่งที่มา + ตามสถานะ (แท่งแนวนอน)
+  // ลูกค้าเป้าหมายตามแหล่งที่มา + ตามสถานะ (แท่งแนวนอน)
   const sources = useMemo(() => {
     const base = chartSummary
       ? chartSummary.bySource.map(r => ({ label: r.source, count: r.count }))
@@ -352,7 +352,7 @@ export default function HQLeadsPage() {
   }, [chartSummary, filtered]);
 
   // ── Section 3 · ประเภทอาคารที่ลูกค้าสนใจ ──────────────────────────────────
-  // จัดกลุ่มด้วย "แม่แบบที่สนใจ" ของลีด (product) — ใช้ค่าจริงในระบบ ไม่ยุบ/ไม่แปลงชื่อ
+  // จัดกลุ่มด้วย "แม่แบบที่สนใจ" ของลูกค้าเป้าหมาย (product) — ใช้ค่าจริงในระบบ ไม่ยุบ/ไม่แปลงชื่อ
   const buildingTypes = useMemo(() => {
     const base = chartSummary
       ? chartSummary.byProduct.map(r => ({ label: r.product, count: r.count }))
@@ -364,7 +364,7 @@ export default function HQLeadsPage() {
   }, [chartSummary, filtered]);
 
   // ── Section 4 · เหตุผลที่ปิดการขายไม่สำเร็จ ────────────────────────────────
-  // นับเฉพาะลีดที่ปิดไม่สำเร็จ "และบันทึกเหตุผลไว้จริง" — ไม่เดาเหตุผลให้ลีดที่ไม่ได้ระบุ
+  // นับเฉพาะลูกค้าเป้าหมายที่ปิดไม่สำเร็จ "และบันทึกเหตุผลไว้จริง" — ไม่เดาเหตุผลให้ลูกค้าเป้าหมายที่ไม่ได้ระบุ
   // รายการเหตุผลเป็นของ HQ (ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน
   const lostReasons = useMemo(() => {
     const base = chartSummary
@@ -393,7 +393,7 @@ export default function HQLeadsPage() {
       .slice(0, 10);
   }, [leadVsQuote, rangeByDealer, netQuotes, timeRange.start, timeRange.end]);
 
-  // Export — หนึ่งแถวต่อลีด (คอลัมน์ตรงกับตาราง) · supabase: ดึงทั้งชุดที่กรองจาก DB ตอนกด · local: จาก filtered
+  // Export — หนึ่งแถวต่อลูกค้าเป้าหมาย (คอลัมน์ตรงกับตาราง) · supabase: ดึงทั้งชุดที่กรองจาก DB ตอนกด · local: จาก filtered
   const leadToCells = (l: LeadRow) => [
     l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
     l.province, l.product, l.source || "—", l.value || "—",
@@ -418,7 +418,7 @@ export default function HQLeadsPage() {
           <FilterBar dims={[]} />
           {/* ส่งออก = สิ่งที่เห็นบนจอตอนนี้ (ผ่านตัวกรองทุกตัวแล้ว) · คอลัมน์เรียงตรงกับตาราง */}
           <ExportMenu filename="hq-leads" title="ลูกค้าเป้าหมายทั้งเครือ"
-            headers={["รหัสลีด","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","ต้องติดตาม","ผู้รับผิดชอบ","สถานะ"]}
+            headers={["รหัสลูกค้าเป้าหมาย","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","ต้องติดตาม","ผู้รับผิดชอบ","สถานะ"]}
             rows={filtered.map(leadToCells)} getRows={exportGetRows} />
         </div>
       </div>
@@ -467,7 +467,7 @@ export default function HQLeadsPage() {
         </div>
       </div>
 
-      {/* ── เตือน: ลีดยังไม่มีผู้รับผิดชอบเกิน 48 ชม. (กฎ HQ) ──
+      {/* ── เตือน: ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบเกิน 48 ชม. (กฎ HQ) ──
           อยู่บนสุดใต้ KPI — เป็นเรื่องต้องรีบ ไม่ควรให้ต้องเลื่อนผ่านกราฟ 4 ใบกว่าจะเจอ
           แสดงเฉพาะตอนมีจริง — ไม่มี = ไม่ขึ้นการ์ดเปล่า */}
       {unassignedCount > 0 && (
@@ -506,10 +506,10 @@ export default function HQLeadsPage() {
             {/* vw = ความกว้าง viewBox ต้องใกล้ความกว้างการ์ดจริง (~480px) ไม่งั้น SVG ถูกย่อตามสัดส่วน
                 เดิมไม่ได้ส่ง vw → ใช้ค่าเริ่มต้น 1180 → อัตราส่วน 1180:250 ทำให้กราฟสูงจริงแค่ ~100px ลอยอยู่กลางการ์ด
                 (หน้าอื่นที่การ์ดแคบส่ง vw กันหมดแล้ว — หน้านี้ตกหล่นอยู่หน้าเดียว)
-                แท่งกลุ่ม ไม่ใช่แท่งซ้อน — สี่ชุดนี้เป็นขั้นของลีดเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
+                แท่งกลุ่ม ไม่ใช่แท่งซ้อน — สี่ชุดนี้เป็นขั้นของลูกค้าเป้าหมายเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
             <GroupedBarChart months={trend.months} vw={560} height={210} fmt={v => `${Math.round(v)}`}
               series={[
-                { name: "ลีดใหม่", color: "#003366", data: trend.newM },
+                { name: "ลูกค้าเป้าหมายใหม่", color: "#003366", data: trend.newM },
                 { name: "ใบเสนอราคา", color: "#0891b2", data: trend.quoteM },
                 { name: "ปิดการขาย", color: "#10B981", data: trend.wonM },
                 { name: "ปิดไม่สำเร็จ", color: "#dc2626", data: trend.lostM },
@@ -531,10 +531,10 @@ export default function HQLeadsPage() {
             ); })}
           </div>
         </div>
-      {/* ⚠️ อย่าทำเป็นโดนัท: ลีดหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
+      {/* ⚠️ อย่าทำเป็นโดนัท: ลูกค้าเป้าหมายหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
       <div className="card chart-l" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
-          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลีดสนใจ · หน่วย: ราย</span></div>
+          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลูกค้าเป้าหมายสนใจ · หน่วย: ราย</span></div>
         <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
           {!buildingTypes.length ? (
             <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
@@ -562,7 +562,7 @@ export default function HQLeadsPage() {
       {/* ── แถว 2 · แหล่งที่มา · เหตุผลที่ไม่ปิด ── โดนัทสองใบ (สัดส่วนของก้อนเดียวทั้งคู่)
           กริด 2 คอลัมน์เท่ากัน — ไม่ใช่ .hq-leads-row (3 คอลัมน์) เพราะเหลือ 2 ใบแล้วจะเว้าขวา */}
       <div className="hq-dealer-charts" style={{ marginBottom: 16, alignItems: "stretch" }}>
-        {/* โดนัท: แหล่งที่มารวมกัน = ลีดทั้งหมดพอดี → สัดส่วนของก้อนเดียว
+        {/* โดนัท: แหล่งที่มารวมกัน = ลูกค้าเป้าหมายทั้งหมดพอดี → สัดส่วนของก้อนเดียว
             ย้ายมาจากแถว 3 · การ์ดกว้างขึ้น (ครึ่งจอ) → วางโดนัทซ้าย legend ขวา แบบเดียวกับใบข้าง ๆ */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header"><div className="card-title">ตามแหล่งที่มา</div><GitBranch size={16} color="#9ca3af" /></div>
@@ -572,7 +572,7 @@ export default function HQLeadsPage() {
             ) : (<>
               <Donut
                 segments={sources.map((s, i) => ({ label: s.label, value: s.count, color: RAMP[i % RAMP.length] }))}
-                centerLabel="ลีดทั้งหมด"
+                centerLabel="ทั้งหมด"
                 centerValue={`${sources.reduce((s, x) => s + x.count, 0)}`}
                 size={150}
               />
@@ -589,10 +589,10 @@ export default function HQLeadsPage() {
             </>)}
           </div>
         </div>
-        {/* โดนัท: เหตุผลรวมกันได้ 100% ของลีดที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง */}
+        {/* โดนัท: เหตุผลรวมกันได้ 100% ของลูกค้าเป้าหมายที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header"><div className="card-title">เหตุผลที่ปิดการขายไม่สำเร็จ</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เฉพาะลีดที่บันทึกเหตุผลไว้ · หน่วย: ราย</span></div>
+            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เฉพาะรายการที่บันทึกเหตุผลไว้ · หน่วย: ราย</span></div>
           <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
             {!lostReasons.length ? (
               <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
@@ -620,7 +620,7 @@ export default function HQLeadsPage() {
 
       {/* ── แถว 3 · ผลงานตัวแทนจำหน่าย (Top 10) — เต็มความกว้าง ──
           ตารางนี้มี 6 คอลัมน์ กว้างขั้นต่ำ 674px (colgroup) จึงอยู่ในช่องแคบไม่ได้
-          เคยอยู่ช่องที่ 3 ของกริด (~300px) → เห็นแค่คอลัมน์ "ลีด" ที่เหลือต้องเลื่อนแนวนอน */}
+          เคยอยู่ช่องที่ 3 ของกริด (~300px) → เห็นแค่คอลัมน์ "ลูกค้าเป้าหมาย" ที่เหลือต้องเลื่อนแนวนอน */}
       <div className="card" style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
         <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div>
           <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เรียงตามยอดขายในช่วง</span></div>
@@ -636,8 +636,8 @@ export default function HQLeadsPage() {
             </colgroup>
             <thead><tr>
               <th>อันดับ</th><th>ตัวแทนจำหน่าย</th>
-              <th className="num">ลีด</th><th className="num">ใบเสนอราคา</th>
-              <th className="num" title="ลีดที่ออกใบเสนอราคาแล้ว ÷ ลีดทั้งหมด — ไม่ใช่อัตราปิดการขาย">อัตราออกใบเสนอราคา</th><th className="num">ยอดขาย</th>
+              <th className="num">ลูกค้าเป้าหมาย</th><th className="num">ใบเสนอราคา</th>
+              <th className="num" title="ลูกค้าเป้าหมายที่ออกใบเสนอราคาแล้ว ÷ ลูกค้าเป้าหมายทั้งหมด — ไม่ใช่อัตราปิดการขาย">อัตราออกใบเสนอราคา</th><th className="num">ยอดขาย</th>
             </tr></thead>
             <tbody>
               {!dealerPerf.length ? (
@@ -662,7 +662,7 @@ export default function HQLeadsPage() {
         </div>
       </div>
 
-      {/* ── ตารางลีดทั้งเครือ — คอลัมน์ตามสเปก ──
+      {/* ── ตารางลูกค้าเป้าหมายทั้งเครือ — คอลัมน์ตามสเปก ──
           13 คอลัมน์ต้องการ ~1,500px แต่กรอบมี ~1,012px → เลื่อนแนวนอน (.table-wrap overflow-x:auto)
           ดีกว่าบีบจนอ่านไม่ออก · ความกว้างคุมที่ colgroup เท่านั้น (table-layout:fixed) */}
       {/* overflow: hidden — .card มีมุมโค้ง 16px แต่ไม่ตัดเนื้อใน (overflow: visible)
@@ -679,7 +679,7 @@ export default function HQLeadsPage() {
                 เพิ่ม/ลบคอลัมน์ต้องแก้ที่นี่เท่านั้น (table-layout: fixed — ใส่ที่ <th> ไม่มีผล)
                 และต้องคุมผลรวม minWidth ไม่ให้เกินกรอบ ไม่งั้นกลับมาล้นอีก */}
             <colgroup>
-              <col style={{ width: "7%", minWidth: 88 }} />{/* รหัสลีด */}
+              <col style={{ width: "7%", minWidth: 88 }} />{/* รหัสลูกค้าเป้าหมาย */}
               <col style={{ width: "12%", minWidth: 140 }} />{/* ตัวแทน (รหัส + ชื่อ) */}
               <col style={{ width: "11%", minWidth: 120 }} />{/* ลูกค้า */}
               <col style={{ width: "7%", minWidth: 84 }} />{/* จังหวัด */}
@@ -693,7 +693,7 @@ export default function HQLeadsPage() {
               <col style={{ width: "5%", minWidth: 52 }} />{/* ดู — ไอคอนล้วน (ปุ่ม 28px + padding ของ td) */}
             </colgroup>
             <thead><tr>
-              <th>รหัสลีด</th><th>ตัวแทน</th><th>ลูกค้า</th>
+              <th>รหัส</th><th>ตัวแทน</th><th>ลูกค้า</th>
               <th>จังหวัด</th><th>ประเภทอาคาร</th><th>แหล่งที่มา</th>
               {/* หัวคอลัมน์ต้องสั้นพอไม่ให้ถูกตัด (th ตั้ง white-space: nowrap ทั้งระบบ) — ไฟล์ส่งออกยังใช้ชื่อเต็ม */}
               <th className="num">มูลค่า</th><th>เสนอราคา</th><th>ติดต่อล่าสุด</th>
@@ -706,10 +706,10 @@ export default function HQLeadsPage() {
                 const c = leadStatusColor[l.status];
                 const followUp = needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays);
                 const quoted = QUOTED_UP.includes(l.status);
-                // ติดต่อล่าสุด = กิจกรรมล่าสุดของลีด · ลีดที่ไม่มีบันทึกกิจกรรม = "—" (ไม่เดาวันให้)
+                // ติดต่อล่าสุด = กิจกรรมล่าสุดของลูกค้าเป้าหมาย · ลูกค้าเป้าหมายที่ไม่มีบันทึกกิจกรรม = "—" (ไม่เดาวันให้)
                 const last = l.activities?.length ? l.activities[0].date : "—";
-                // คีย์ต้องพ่วงรหัสสาขา — เลขที่ลีดไม่ซ้ำ "เฉพาะภายในสาขา" (คีย์จริง = สาขา + เลขที่)
-                // หน้านี้รวมลีดทุกสาขาไว้ด้วยกัน เลขเดียวกันจากคนละสาขาจึงชนกันได้จริง
+                // คีย์ต้องพ่วงรหัสสาขา — เลขที่ลูกค้าเป้าหมายไม่ซ้ำ "เฉพาะภายในสาขา" (คีย์จริง = สาขา + เลขที่)
+                // หน้านี้รวมลูกค้าเป้าหมายทุกสาขาไว้ด้วยกัน เลขเดียวกันจากคนละสาขาจึงชนกันได้จริง
                 // พบจริงจากหน้าจอผู้ใช้ 7 ส.ค. 69: "two children with the same key #L-40322"
                 // ผลคือ React แยกสองแถวไม่ออก อาจสลับ/ซ้ำ/หายเวลาข้อมูลอัปเดต (ตารางลูกค้าแก้ถูกอยู่แล้ว)
                 return (
@@ -731,8 +731,8 @@ export default function HQLeadsPage() {
                     <td style={{ color: "var(--muted-foreground)", fontSize: "0.78rem", whiteSpace: "nowrap" }}>{l.source || "—"}</td>
                     <td className="num" style={{ fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>{l.value || "—"}</td>
                     <td>
-                      {/* ระบบไม่มี dealId ผูกใบเสนอราคากับลีด → นับจำนวนใบไม่ได้
-                          ใช้สถานะของลีดแทน (ไปถึงขั้นเสนอราคา = เคยออกใบแล้วจริง) */}
+                      {/* ระบบไม่มี dealId ผูกใบเสนอราคากับลูกค้าเป้าหมาย → นับจำนวนใบไม่ได้
+                          ใช้สถานะของลูกค้าเป้าหมายแทน (ไปถึงขั้นเสนอราคา = เคยออกใบแล้วจริง) */}
                       {quoted ? <span style={{ color: "#059669", fontWeight: 700, fontSize: "0.76rem" }}>เสนอแล้ว</span>
                               : <span style={{ color: "#9ca3af" }}>—</span>}
                     </td>
@@ -759,11 +759,11 @@ export default function HQLeadsPage() {
         {/* แถบเปลี่ยนหน้าแสดงตลอด แม้มีหน้าเดียว (มาตรฐานทุกตาราง HQ) · หน้านี้ 25 แถว/หน้า */}
         <TablePagination
           page={leadPagination.page} total={leadPagination.total} onPage={leadPagination.onPage}
-          size={LEADS_PAGE} unit="ลีด"
+          size={LEADS_PAGE} unit="ราย"
         />
       </div>
 
-      {/* ── Drawer · ดูรายละเอียดลีด (HQ ดูอย่างเดียว — ไม่มีแก้/ลบ/มอบหมาย) ──
+      {/* ── Drawer · ดูรายละเอียดลูกค้าเป้าหมาย (HQ ดูอย่างเดียว — ไม่มีแก้/ลบ/มอบหมาย) ──
           เปิดทับหน้าเดิม ไม่เปลี่ยนหน้า ตามสเปก · ไม่มีข้อมูล = "—" ไม่เดาให้ */}
       {viewLead && (() => {
         const l = viewLead;
@@ -914,7 +914,7 @@ export default function HQLeadsPage() {
               </div>
 
               <div style={{ padding: "12px 20px", borderTop: "1px solid #E5E7EB", background: "#fff", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", flex: 1 }}>สำนักงานใหญ่ดูอย่างเดียว — แก้ไขได้ที่ตัวแทนเจ้าของลีด</span>
+                <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", flex: 1 }}>สำนักงานใหญ่ดูอย่างเดียว — แก้ไขได้ที่ตัวแทนเจ้าของรายการ</span>
                 <button onClick={() => setViewLead(null)} className="btn btn-secondary btn-md" style={{ color: "#374151" }}>ปิด</button>
               </div>
             </div>

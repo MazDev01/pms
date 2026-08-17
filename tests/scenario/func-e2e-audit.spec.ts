@@ -6,7 +6,7 @@ import {
 } from "./funcHelpers";
 
 // ── E2E audit: end-to-end sales journey coverage NOT already in func-quote-win/func-dealer-sales ──
-// โฟกัส: (1) ปิดการขายผ่านลีดโดยไม่เคยส่ง/ตอบรับใบเสนอราคา (2) ดีลที่สองของลูกค้าเดิม — ยอดรวม
+// โฟกัส: (1) ปิดการขายผ่านลูกค้าเป้าหมายโดยไม่เคยส่ง/ตอบรับใบเสนอราคา (2) ดีลที่สองของลูกค้าเดิม — ยอดรวม
 //        (3) ลบใบที่ won แล้ว — ยอดลูกค้าต้องปรับตาม (4) ความสอดคล้องข้าม role (dealer เขียน → HQ เห็น)
 //        (5) ฟอร์มที่เปิดค้างไว้แล้วไม่กดบันทึก — ต้องไม่มีข้อมูลผีลง DB
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
@@ -29,14 +29,14 @@ async function forceQuoteTotal(sb: Awaited<ReturnType<typeof db>>, id: string, v
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
-test("[audit] ปิดการขายจากลีดโดยไม่เคยส่ง/ตอบรับใบเสนอราคา — ตรวจว่ายอดลูกค้ากับใบเสนอราคาสอดคล้องกันไหม", async ({ page }) => {
+test("[audit] ปิดการขายจากลูกค้าเป้าหมายโดยไม่เคยส่ง/ตอบรับใบเสนอราคา — ตรวจว่ายอดลูกค้ากับใบเสนอราคาสอดคล้องกันไหม", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const COMPANY = tg("ปิดลัดคิว");
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
-  // 1) สร้างลีด + ออกใบเสนอราคา (คงสถานะ "ร่าง" — ไม่ส่ง ไม่ตอบรับ)
+  // 1) สร้างลูกค้าเป้าหมาย + ออกใบเสนอราคา (คงสถานะ "ร่าง" — ไม่ส่ง ไม่ตอบรับ)
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
@@ -61,7 +61,7 @@ test("[audit] ปิดการขายจากลีดโดยไม่เ
   await forceQuoteTotal(sb, q.id, 770_000); // BOQ ว่าง (ไม่ได้เลือกแม่แบบ) → บังคับยอดที่รู้แน่นอนแทน เพื่อดูว่ายอดนี้ไปโผล่ที่ลูกค้าไหม
   console.log(`[audit] ใบ ${q.id} total_value=770000 status=${q.status}`);
 
-  // 2) ปิดจากฝั่งลีดโดยตรง (ไม่แตะใบเสนอราคาเลย) — action ที่ตัวแทนน่าจะกดเป็นธรรมชาติที่สุด
+  // 2) ปิดจากฝั่งลูกค้าเป้าหมายโดยตรง (ไม่แตะใบเสนอราคาเลย) — action ที่ตัวแทนน่าจะกดเป็นธรรมชาติที่สุด
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
   // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
@@ -84,7 +84,7 @@ test("[audit] ปิดการขายจากลีดโดยไม่เ
   console.log(`[audit] ใบถูก mark เป็น won ไหม: ${qAfter?.status === "won" ? "ใช่" : `*** ไม่ใช่ (ยังเป็น '${qAfter?.status}') ***`}`);
 
   // ยืนยันว่าใบถูก relink เข้ากับลูกค้าใหม่ (customer_id ต้องไม่ null)
-  expect(qAfter?.customer_id, "ใบเสนอราคาที่ออกให้ลีดนี้ต้องถูกผูกกับลูกค้าใหม่หลังปิดการขาย").toBe(cust.id);
+  expect(qAfter?.customer_id, "ใบเสนอราคาที่ออกให้ลูกค้าเป้าหมายนี้ต้องถูกผูกกับลูกค้าใหม่หลังปิดการขาย").toBe(cust.id);
 
   assertNoErrors(errs, "ปิดการขายลัดคิว");
 });
@@ -159,17 +159,17 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
   await expect(page.getByRole("button", { name: "สร้างโครงการ" })).toBeVisible({ timeout: 10_000 });
   // dealForm.product เริ่มที่ "" เสมอ (ไม่ได้ดึงจาก category ของลูกค้าอัตโนมัติแบบที่คอมเมนต์เดิมเข้าใจผิด
   // ไว้ — select ที่ไม่มี option ตรงค่า "" แค่ "โชว์" ตัวเลือกแรกตามพฤติกรรม browser เฉยๆ ไม่ได้เซ็ตค่าจริง
-  // ทำให้ลีดดีลใหม่ได้ product="" แล้ว BOQ ว่าง → ปุ่มสร้างใบถูก disable แบบสุ่ม/แล้วแต่จังหวะโหลดแคตตาล็อก)
+  // ทำให้ลูกค้าเป้าหมายดีลใหม่ได้ product="" แล้ว BOQ ว่าง → ปุ่มสร้างใบถูก disable แบบสุ่ม/แล้วแต่จังหวะโหลดแคตตาล็อก)
   await pickTemplate(page, "แม่แบบ"); // ต้องเลือกแม่แบบจริง ไม่งั้นปุ่มสร้างโครงการถูกปิด
   await page.getByRole("button", { name: "สร้างโครงการ" }).click();
 
-  // ดีลใหม่ = ลีดใหม่ผูก customerId — หาในหน้าลีด แล้วออกใบ + ปิดให้ผ่านฟลว์เดียวกัน
+  // ดีลใหม่ = ลูกค้าเป้าหมายใหม่ผูก customerId — หาในหน้าลูกค้าเป้าหมาย แล้วออกใบ + ปิดให้ผ่านฟลว์เดียวกัน
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
   // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const dealRow = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
-  await expect(dealRow, "ดีลที่สองต้องโผล่เป็นลีดใหม่ในสมุดงาน").toBeVisible({ timeout: 15_000 });
+  await expect(dealRow, "ดีลที่สองต้องโผล่เป็นลูกค้าเป้าหมายใหม่ในสมุดงาน").toBeVisible({ timeout: 15_000 });
   await dealRow.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();

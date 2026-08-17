@@ -93,12 +93,12 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
 function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDetail }) {
   // เกณฑ์ Win rate / ตรงเวลา = เป้าที่ HQ ตั้งไว้ (แหล่งเดียว) ไม่ hardcode
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
-  // ผลงานจริงจากใบเสนอราคา/ลีด — คอลัมน์ revenue_actual/win_rate/… ในตาราง dealers เป็นค่าเดโม
+  // ผลงานจริงจากใบเสนอราคา/ลูกค้าเป้าหมาย — คอลัมน์ revenue_actual/win_rate/… ในตาราง dealers เป็นค่าเดโม
   const perf = useDealerPerformance().get(dealer.code) ?? EMPTY_PERF;
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
   const barColor  = targetPct >= 80 ? "#059669" : targetPct >= 50 ? "#003366" : "#dc2626";
   // ⚠️ ไม่มีข้อมูลเลย = ยังตัดสินไม่ได้ ห้ามขึ้น "ล้าหลังเป้า" (แก้ 10 ส.ค. 69)
-  //   เดิมสาขาที่ยังไม่มีลีด/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
+  //   เดิมสาขาที่ยังไม่มีลูกค้าเป้าหมาย/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
   //   พร้อมแถบเตือน "ต้องกระตุ้นการปิดการขาย" ทันทีที่เปิดหน้า เพราะยอด 0 ย่อมน้อยกว่า 50%
   //   สาขาที่เพิ่งเปิดจึงถูกตีตราตั้งแต่วันแรก · การ์ด "ติดตามตรงเวลา" ในหน้าเดียวกันทำถูกอยู่แล้ว
   //   (ขึ้น "ยังไม่มีข้อมูล") — ใบนี้แค่ยังไม่ได้ทำตาม
@@ -428,7 +428,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   const perf = perfMap.get(code) ?? EMPTY_PERF;
   const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
   // ⚠️ ไม่มีข้อมูลเลย = ยังตัดสินไม่ได้ ห้ามขึ้น "ล้าหลังเป้า" (แก้ 10 ส.ค. 69)
-  //   เดิมสาขาที่ยังไม่มีลีด/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
+  //   เดิมสาขาที่ยังไม่มีลูกค้าเป้าหมาย/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
   //   พร้อมแถบเตือน "ต้องกระตุ้นการปิดการขาย" ทันทีที่เปิดหน้า เพราะยอด 0 ย่อมน้อยกว่า 50%
   //   สาขาที่เพิ่งเปิดจึงถูกตีตราตั้งแต่วันแรก · การ์ด "ติดตามตรงเวลา" ในหน้าเดียวกันทำถูกอยู่แล้ว
   //   (ขึ้น "ยังไม่มีข้อมูล") — ใบนี้แค่ยังไม่ได้ทำตาม

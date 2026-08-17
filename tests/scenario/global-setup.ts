@@ -23,7 +23,7 @@ export const tag = (s: string) => `${NS}-${s}`;
 
 const ID_BASE = 991_000_000; // ช่วง id สูงพอที่จะไม่ชนข้อมูลจริงในอนาคต
 
-// ลูกค้าตั้งต้นแบบ "มีอยู่แล้วในสมุด" — ใช้ทดสอบ dedup (customer-dedupe.spec.ts: เปิดลีดชื่อซ้ำ/ใกล้เคียง
+// ลูกค้าตั้งต้นแบบ "มีอยู่แล้วในสมุด" — ใช้ทดสอบ dedup (customer-dedupe.spec.ts: เปิดลูกค้าเป้าหมายชื่อซ้ำ/ใกล้เคียง
 // กับลูกค้าเดิม ต้องผูกเข้าลูกค้ารายเดิม ไม่สร้างซ้ำ) ⚠️ ต้องเป็นชื่อ "สะอาด" ไม่มีแท็กนำหน้า —
 // ใส่แท็กจะทำให้ matchCustomers() (customerMatch.ts: exactKey/looseKey เทียบแค่คำนำหน้านิติบุคคล
 // กับช่องว่าง ไม่ได้ตัดคำแปลกปลอมกลางชื่อ) จับคู่ไม่เจอ ทดสอบ dedup จริงไม่ได้เลย
@@ -113,7 +113,7 @@ export default async function globalSetup() {
   await restoreAlertsIfPending(admin); // เผื่อรันค้างจากรอบก่อน (ไม่งั้น snapshot ที่ค้างจะทับของจริงตอน teardown รอบนี้)
 
   // ── hq_notif_rules.alerts เดิมเป็น {} (ยังไม่มีใครเปิดกฎแจ้งเตือนเลย) → การ์ด "ต้องดูด่วน"
-  // ไม่มีทางโผล่ได้เลยไม่ว่าจะ seed ข้อมูลลีด/ใบเสนอราคาแบบไหน (ui/ux/hq-quotations spec ต้องการให้โผล่)
+  // ไม่มีทางโผล่ได้เลยไม่ว่าจะ seed ข้อมูลลูกค้าเป้าหมาย/ใบเสนอราคาแบบไหน (ui/ux/hq-quotations spec ต้องการให้โผล่)
   // snapshot ค่าเดิมไว้ก่อน แล้วเปิดครบ 6 กฎชั่วคราว — คืนค่าเดิมที่ global-teardown.ts เสมอ
   const before = await admin.from("hq_notif_rules").select("alerts").eq("id", 1).single();
   writeFileSync(ALERTS_SNAPSHOT_PATH, JSON.stringify(before.data?.alerts ?? {}));
@@ -206,7 +206,7 @@ export async function restoreAlertsIfPending(admin: SupabaseClient) {
 
 export async function teardownBaseline(admin: SupabaseClient) {
   // กวาด 2 ทาง: ทั้ง id ของใบที่เรา seed เอง (ZZTEST-BASE-Q-...) และใบที่ผู้ใช้/เทสต์สร้างผ่าน UI
-  // จากลีดที่ seed ไว้ (เช่น openLeadQuotationForm → "สร้างใบเสนอราคา") — ใบแบบหลังได้ id ออกเลขปกติ
+  // จากลูกค้าเป้าหมายที่ seed ไว้ (เช่น openLeadQuotationForm → "สร้างใบเสนอราคา") — ใบแบบหลังได้ id ออกเลขปกติ
   // จาก DB (เช่น "Q-2026-0384") ไม่มีแท็กในตัวเอง แต่ผูก customer = ชื่อบริษัทที่ seed ไว้
   // (พลาดมาแล้วรอบหนึ่ง: ลืมกวาดทางที่สอง ทำให้ใบที่เทสต์สร้างผ่าน UI ค้างสะสมใน DB จริงทุกรอบที่รัน)
   await admin.from("quotations").delete().like("id", `${NS}%`);
@@ -214,7 +214,7 @@ export async function teardownBaseline(admin: SupabaseClient) {
   await admin.from("customers").delete().like("company", `${NS}%`);
   await admin.from("leads").delete().like("company", `${NS}%`);
   // ลูกค้า "บจ. ไทยสตีล" (EXISTING_CUSTOMER_ID) เป็นชื่อสะอาดไม่มีแท็ก (เหตุผลดูที่ประกาศตัวแปร) —
-  // กวาดด้วย id ตรงๆ แทน · customer-dedupe.spec.ts ยังสร้างลีดชื่อเดียวกันผ่าน UI ได้ (ไม่มีแท็ก
+  // กวาดด้วย id ตรงๆ แทน · customer-dedupe.spec.ts ยังสร้างลูกค้าเป้าหมายชื่อเดียวกันผ่าน UI ได้ (ไม่มีแท็ก
   // เหมือนกัน) กวาดด้วยชื่อเป๊ะไปด้วยกันเลย — ปิดการขายสำเร็จแล้ว lead จะถูกลบออกจากตารางเองอยู่แล้ว
   // (removeLead=true) แต่เผื่อเทสต์ล้มกลางทางค้างไว้ก็กวาดซ้ำให้ชัวร์
   await admin.from("customers").delete().eq("id", EXISTING_CUSTOMER_ID);

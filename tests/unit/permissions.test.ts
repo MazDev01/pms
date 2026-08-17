@@ -13,7 +13,7 @@ const SALES_WRITE: Permission[] = [
 ];
 
 describe("hasPermission — พื้นฐาน", () => {
-  it("ตัวแทน (DEALER_ADMIN) สร้างลีดได้", () => {
+  it("ตัวแทน (DEALER_ADMIN) สร้างลูกค้าเป้าหมายได้", () => {
     expect(hasPermission("DEALER_ADMIN", "leads:create")).toBe(true);
   });
   it("บทบาทที่ไม่รู้จัก → false (ไม่ throw)", () => {

@@ -1,4 +1,4 @@
 "use client";
 
-// แดชบอร์ดตัวแทน (Sales CRM) — KPI · ยอดขายรายเดือน · ดีลสูงสุด · ลีดต้องติดตามด่วน · งานวันนี้
+// แดชบอร์ดตัวแทน (Sales CRM) — KPI · ยอดขายรายเดือน · ดีลสูงสุด · ลูกค้าเป้าหมายต้องติดตามด่วน · งานวันนี้
 export { default } from "@pms/shared/components/dashboard/DealerDashboard";

@@ -119,7 +119,7 @@ test("HQ ที่มีสิทธิ์ได้ลิงก์ที่ใ�
   const { count: cnxLeadCount } = await admin.from("leads").select("id", { count: "exact", head: true }).eq("dealer_code", "CNX");
   if ((cnxLeadCount ?? 0) > 0) {
     expect((seenLeads ?? []).length,
-      `CNX มีลีด ${cnxLeadCount} รายการ แต่ session ที่ได้กลับมองไม่เห็นเลย = ไม่ได้เข้าเป็นตัวแทนจริง`,
+      `CNX มีลูกค้าเป้าหมาย ${cnxLeadCount} รายการ แต่ session ที่ได้กลับมองไม่เห็นเลย = ไม่ได้เข้าเป็นตัวแทนจริง`,
     ).toBeGreaterThan(0);
   }
 

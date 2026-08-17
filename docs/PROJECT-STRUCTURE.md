@@ -32,7 +32,7 @@ pms-benjamin/
 │   │   │   └── settings/
 │   │   └── api/
 │   │       ├── webhooks/
-│   │       │   ├── web-lead/      # รับลีดจากฟอร์มเว็บ benjamin
+│   │       │   ├── web-lead/      # รับลูกค้าเป้าหมายจากฟอร์มเว็บ benjamin
 │   │       │   └── line/          # LINE webhook
 │   │       └── ...route handlers
 │   │

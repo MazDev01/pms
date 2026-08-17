@@ -1,6 +1,6 @@
 // ─── การแจ้งเตือนของสำนักงานใหญ่ (คำนวณล้วน) ──────────────────────────────────
 // แหล่งเดียวของ "กฎแจ้งเตือน 6 ข้อ" ที่ตั้งไว้ที่ /hq/settings → การแจ้งเตือน
-// ทุกข้อคำนวณจากข้อมูลจริงเท่านั้น (ลีด/ใบเสนอราคา/เป้าตัวแทน) — ไม่มีตัวเลขสังเคราะห์
+// ทุกข้อคำนวณจากข้อมูลจริงเท่านั้น (ลูกค้าเป้าหมาย/ใบเสนอราคา/เป้าตัวแทน) — ไม่มีตัวเลขสังเคราะห์
 // ผลลัพธ์เป็นข้อมูลล้วน (ไม่มี JSX) → Topbar เอาไปใส่ไอคอนแล้วขึ้นกระดิ่ง
 import {
   type HQAlertKey, type HQNotifRules, type LeadRules,
@@ -15,7 +15,7 @@ export type HQAlert = { key: HQAlertKey; title: string; body: string; href: stri
 
 const DAY_MS = 86_400_000;
 
-/** ลีดที่ยังไม่มีผู้รับผิดชอบ นานเกินเกณฑ์ของ "สาขาเจ้าของลีด" — นับจากวันที่สร้างลีด
+/** ลูกค้าเป้าหมายที่ยังไม่มีผู้รับผิดชอบ นานเกินเกณฑ์ของ "สาขาเจ้าของลูกค้าเป้าหมาย" — นับจากวันที่สร้างลูกค้าเป้าหมาย
  *  เกณฑ์ไม่ใช่ค่าเดียวทั้งเครืออีกแล้ว (ตัวแทนตั้งเอง) → ต้องถามเป็นรายใบด้วย dealerCode */
 export function unassignedLeads(leads: LeadRow[], rulesOf: (dealerCode: string | undefined) => LeadRules): LeadRow[] {
   return leads.filter(l => {
@@ -26,7 +26,7 @@ export function unassignedLeads(leads: LeadRow[], rulesOf: (dealerCode: string |
   });
 }
 
-/** ลีดที่ยังไม่ปิด และไม่มีการติดต่อเกินเกณฑ์ (กฎ 7 วัน) */
+/** ลูกค้าเป้าหมายที่ยังไม่ปิด และไม่มีการติดต่อเกินเกณฑ์ (กฎ 7 วัน) */
 export function idleLeads(leads: LeadRow[], days: number): LeadRow[] {
   return leads.filter(l => {
     if (!isLeadOpen(l)) return false;
@@ -78,14 +78,14 @@ export function dealersAtTarget(dealers: DealerRow[], pct: number, revenueOf: (c
     .sort((a, b) => b.achieved - a.achieved);
 }
 
-/** อัตราปิดไม่สำเร็จของตัวแทน = ลีดที่ปิดไม่สำเร็จ ÷ ลีดที่ปิดแล้วทั้งหมด (ยังไม่ปิด = ไม่นับ)
- *  minClosed = กลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลีดใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
- *  (ก่อนมีเกณฑ์นี้ กฎเด้ง 10 จาก 10 ตัวแทนด้วยข้อความ "1 จาก 1 ลีด" = เตือนทุกคนเท่ากับไม่เตือนใคร) */
+/** อัตราปิดไม่สำเร็จของตัวแทน = ลูกค้าเป้าหมายที่ปิดไม่สำเร็จ ÷ ลูกค้าเป้าหมายที่ปิดแล้วทั้งหมด (ยังไม่ปิด = ไม่นับ)
+ *  minClosed = กลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลูกค้าเป้าหมายใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
+ *  (ก่อนมีเกณฑ์นี้ กฎเด้ง 10 จาก 10 ตัวแทนด้วยข้อความ "1 จาก 1 ลูกค้าเป้าหมาย" = เตือนทุกคนเท่ากับไม่เตือนใคร) */
 export function dealersHighLostRate(dealers: DealerRow[], leads: LeadRow[], pct: number, minClosed: number) {
   // นับ ปิดไม่สำเร็จ/ปิดแล้ว ต่อสาขา "รอบเดียว" แทนการวน leads.filter ในลูป dealers (M10: O(n×m) → O(n+m))
   const stat = new Map<string, { lost: number; closed: number }>();
   for (const l of leads) {
-    if (l.status !== "CANCELLED" && l.status !== "PAID") continue; // นับเฉพาะลีดที่ปิดแล้ว
+    if (l.status !== "CANCELLED" && l.status !== "PAID") continue; // นับเฉพาะลูกค้าเป้าหมายที่ปิดแล้ว
     const key = l.dealerCode ?? "";
     const s = stat.get(key) ?? { lost: 0, closed: 0 };
     if (l.status === "CANCELLED") s.lost += 1;
@@ -114,8 +114,8 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
   const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
   const dOf = new Map(dealers.map(d => [d.code, d]));
   const out: HQAlert[] = [];
-  // ต้องบอกด้วยว่าเป็นลีดของ "สาขาไหน" — ไม่งั้น HQ ไม่รู้ว่าต้องตามกับใคร
-  // และเลขลีด (numId) ซ้ำกันได้ข้ามสาขา — ลิงก์จึงต้องพกรหัสสาขาไปด้วยเสมอ
+  // ต้องบอกด้วยว่าเป็นลูกค้าเป้าหมายของ "สาขาไหน" — ไม่งั้น HQ ไม่รู้ว่าต้องตามกับใคร
+  // และเลขลูกค้าเป้าหมาย (numId) ซ้ำกันได้ข้ามสาขา — ลิงก์จึงต้องพกรหัสสาขาไปด้วยเสมอ
   const at = (code: string | null) => (code ? ` · สาขา ${code}` : "");
   const leadHref = (numId: number, code: string | null) =>
     `/hq/leads?open=${numId}${code ? `&dealer=${encodeURIComponent(code)}` : ""}`;
@@ -150,7 +150,7 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
       .sort((a, b) => b.rate - a.rate);
     for (const x of rows) out.push({
       key: "lostRate", title: "อัตราปิดการขายไม่สำเร็จสูง",
-      body: `${x.d.code} · ${x.d.name} — ปิดไม่สำเร็จ ${x.rate}% (${x.lost} จาก ${x.closed} ลีดที่ปิดแล้ว)`, href: `/hq/dealers/${x.d.code}`,
+      body: `${x.d.code} · ${x.d.name} — ปิดไม่สำเร็จ ${x.rate}% (${x.lost} จาก ${x.closed} รายที่ปิดแล้ว)`, href: `/hq/dealers/${x.d.code}`,
     });
   }
   return out;
@@ -162,7 +162,7 @@ export function buildHQAlerts(input: {
   quotes: HQQuotation[];
   dealers: DealerRow[];
   rules: HQNotifRules;
-  /** เกณฑ์รายสาขา — ตัวแทนแต่ละรายตั้งเอง จึงต้องถามด้วยรหัสสาขาของลีดใบนั้น */
+  /** เกณฑ์รายสาขา — ตัวแทนแต่ละรายตั้งเอง จึงต้องถามด้วยรหัสสาขาของลูกค้าเป้าหมายใบนั้น */
   rulesOf: (dealerCode: string | undefined) => LeadRules;
   /** ยอดขายจริงรายสาขา (คำนวณจากใบที่ปิดได้) */
   revenueOf: (dealerCode: string) => number;
@@ -184,7 +184,7 @@ export function buildHQAlerts(input: {
   }
   if (on("idleLead")) {
     // เกณฑ์ของ HQ (30 วัน) — คนละตัวกับกฎติดตามของแต่ละสาขาที่ตัวแทนตั้งเอง
-    // ลีดเงียบ 8 วันเป็นงานของตัวแทน · ที่ HQ ต้องเห็นคือรายที่เงียบจนกลายเป็นเงินที่กำลังละลาย
+    // ลูกค้าเป้าหมายเงียบ 8 วันเป็นงานของตัวแทน · ที่ HQ ต้องเห็นคือรายที่เงียบจนกลายเป็นเงินที่กำลังละลาย
     for (const l of idleLeads(leads, rules.leadIdleDays)) {
       out.push({
         key: "idleLead",
@@ -229,7 +229,7 @@ export function buildHQAlerts(input: {
       out.push({
         key: "lostRate",
         title: "อัตราปิดการขายไม่สำเร็จสูง",
-        body: `${d.code} · ${d.name} — ปิดไม่สำเร็จ ${rate}% (${lost} จาก ${closed} ลีดที่ปิดแล้ว)`,
+        body: `${d.code} · ${d.name} — ปิดไม่สำเร็จ ${rate}% (${lost} จาก ${closed} รายที่ปิดแล้ว)`,
         href: `/hq/dealers/${d.code}`,
       });
     }

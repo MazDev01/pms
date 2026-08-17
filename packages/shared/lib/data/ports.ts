@@ -126,9 +126,9 @@ export interface DealerRollup {
   lost: number;
   /** Σ มูลค่าใบ won ที่ปีของ date = ปีที่ขอ */
   revenue: number;
-  /** ลีดที่ยังไม่ปิด (status ไม่ใช่ PAID/CANCELLED) */
+  /** ลูกค้าเป้าหมายที่ยังไม่ปิด (status ไม่ใช่ PAID/CANCELLED) */
   openLeads: number;
-  /** ลีดเปิดที่เงียบเกินเกณฑ์ (needsFollowUp) — ใช้คิด onTimePct = (open−stale)/open */
+  /** ลูกค้าเป้าหมายเปิดที่เงียบเกินเกณฑ์ (needsFollowUp) — ใช้คิด onTimePct = (open−stale)/open */
   staleLeads: number;
 }
 /** พารามิเตอร์คิด stale (onTimePct) — as_of + เกณฑ์วันรายสาขา (rules[code] ?? default) */
@@ -175,17 +175,17 @@ export interface QuoteSummaryFilters {
   dateEnd?: string;
   asOf?: string; // "วันนี้ของระบบ" (APP_NOW ISO) สำหรับคิดอายุใบ
 }
-/** สรุปลีด "หลังกรอง" สำหรับ /hq/leads (M9 Phase 2) */
+/** สรุปลูกค้าเป้าหมาย "หลังกรอง" สำหรับ /hq/leads (M9 Phase 2) */
 export interface LeadMonthRow { y: number; m: number; created: number; won: number; lost: number; }
 export interface LeadSummary {
   byStatus: { status: string; count: number; value: number }[];
   bySource: { source: string; count: number }[];
   byProduct: { product: string; count: number }[];
   byLostReason: { reason: string; count: number; value: number }[];
-  /** จังหวัด (ลูกค้า) ที่มีลีด — ป้อนตัวเลือกดรอปดาวน์ "จังหวัด" หน้า /hq/leads (M9 Phase 4) */
+  /** จังหวัด (ลูกค้า) ที่มีลูกค้าเป้าหมาย — ป้อนตัวเลือกดรอปดาวน์ "จังหวัด" หน้า /hq/leads (M9 Phase 4) */
   byProvince: { province: string; count: number }[];
   byMonth: LeadMonthRow[];
-  /** รายสาขา — leads=จำนวนลีด · quoted=ถึงขั้นเสนอราคาขึ้นไป (QUOTED_UP) · ป้อน leadVsQuote/dealerPerf */
+  /** รายสาขา — leads=จำนวนลูกค้าเป้าหมาย · quoted=ถึงขั้นเสนอราคาขึ้นไป (QUOTED_UP) · ป้อน leadVsQuote/dealerPerf */
   byDealer: { dealerCode: string; leads: number; quoted: number }[];
 }
 export interface LeadSummaryFilters {
@@ -197,7 +197,7 @@ export interface NetworkCustomerSummary {
   total: number;
   byProvince: { province: string; revenue: number; count: number }[];
 }
-/** ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) */
+/** ลูกค้าเป้าหมายไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) */
 export interface UnassignedSummary {
   total: number;
   byDealer: { dealerCode: string; count: number }[];
@@ -252,7 +252,7 @@ export interface MetricsRepo {
   /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง
    *  scope คุมด้วย RLS ฝั่ง supabase (ตัวแทน=สาขาตน · HQ=ทั้งเครือ) เหมือนที่ client เคยเห็น */
   dealerRollup(year: number, opts?: DealerRollupOpts): Promise<Map<string, DealerRollup>>;
-  /** สรุปลีดหลังกรอง (byStatus/bySource/byProduct/byLostReason/byMonth) — ป้อน analytics หน้า /hq/leads */
+  /** สรุปลูกค้าเป้าหมายหลังกรอง (byStatus/bySource/byProduct/byLostReason/byMonth) — ป้อน analytics หน้า /hq/leads */
   leadSummary(filters: LeadSummaryFilters): Promise<LeadSummary>;
   /** สรุปใบหลังกรอง (byDealer/byMonth/byProduct/aging) — ป้อน analytics หน้า /hq/quotations (M9 Phase 2) */
   hqQuotationsSummary(filters: QuoteSummaryFilters): Promise<HQQuotationsSummary>;
@@ -263,7 +263,7 @@ export interface MetricsRepo {
   dashboardQuoteSummary(start: string, end: string, dealer?: string): Promise<DashboardQuoteSummary>;
   /** สรุปลูกค้าทั้งเครือ (total + byProvince) — ปลด dashboard ออกจาก netCustomers array (M9 Phase 4) */
   networkCustomerSummary(): Promise<NetworkCustomerSummary>;
-  /** ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ปลดการ์ดเตือน /hq/leads ออกจาก netLeads array (M9 Phase 4) */
+  /** ลูกค้าเป้าหมายไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ปลดการ์ดเตือน /hq/leads ออกจาก netLeads array (M9 Phase 4) */
   unassignedLeads(filters: UnassignedFilters): Promise<UnassignedSummary>;
   /** ผู้สมัครกฎแจ้งเตือน HQ (unassigned/idle/expiring/dealerLatest/lostRate) — ปลดกระดิ่ง HQ ออกจาก array (M9 Phase 4) */
   hqAlerts(filters: HQAlertsFilters): Promise<HQAlertsData>;
@@ -276,7 +276,7 @@ export interface MetricsRepo {
 // ── โดเมนงานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) ──
 // write ทุกตัว implement ทั้ง LocalAdapter (localStorage) และ SupabaseAdapter (insert/update/delete)
 // ฝั่ง Supabase: dealer_code ต้องตรงสาขา session (บังคับด้วย RLS with-check ที่ DB)
-/** ตัวเลือกดึงลีดแบบ "แบ่งหน้า + กรอง ที่ DB" (M9 Phase 4) — ผู้เรียก resolve region→dealerCodes มาก่อน
+/** ตัวเลือกดึงลูกค้าเป้าหมายแบบ "แบ่งหน้า + กรอง ที่ DB" (M9 Phase 4) — ผู้เรียก resolve region→dealerCodes มาก่อน
  *  overdue (needsFollowUp) กรองที่ DB ด้วย last_contact_at + เกณฑ์รายสาขา (asOf/defaultDays/perDealer) */
 export interface LeadListOpts {
   limit: number;
@@ -289,13 +289,13 @@ export interface LeadListOpts {
   search?: string;             // ilike company/contact/province/product/assigned/id/dealer_code
   dateStart?: string;
   dateEnd?: string;
-  overdue?: boolean;           // เฉพาะลีดเปิดที่เงียบเกินเกณฑ์
+  overdue?: boolean;           // เฉพาะลูกค้าเป้าหมายเปิดที่เงียบเกินเกณฑ์
   asOf?: string; defaultDays?: number; perDealer?: Record<string, number>;
 }
 export interface LeadListResult { rows: LeadRow[]; total: number; }
 export interface LeadsRepo {
   list(scope?: Scope): Promise<LeadRow[]>;
-  /** หน้าเดียวของลีด + จำนวนรวมหลังกรอง (M9 Phase 4) — supabase: query ที่ DB · local: filter/sort/slice */
+  /** หน้าเดียวของลูกค้าเป้าหมาย + จำนวนรวมหลังกรอง (M9 Phase 4) — supabase: query ที่ DB · local: filter/sort/slice */
   listPage(scope: Scope | undefined, opts: LeadListOpts): Promise<LeadListResult>;
   /** เลข num_id ถัดไปของสาขาแบบ atomic (M7) — supabase: RPC next_entity_id · local: max+1
    *  id ที่แสดง (#L-....) แอป derive จาก num_id นี้ · เดิม Math.max+1 ฝั่ง client ชนกันได้ */
@@ -342,14 +342,14 @@ export interface QuotationsRepo {
   // validityDays: อายุใบเสนอราคาเริ่มต้น (นโยบาย HQ) — ใช้เป็น "หมดอายุ" ของใบที่ไม่ได้กรอก expiry เอง
   //   (นิยามเดียวกับที่ hq_alerts ใช้เตือน "ใกล้หมดอายุ" — ไม่งั้นสองจุดเห็นวันหมดอายุคนละวัน)
   expireOverdue(asOf: string, scope?: Scope, validityDays?: number): Promise<number>;
-  /** ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
+  /** ผู้รับผิดชอบใบ (จากลูกค้าเป้าหมายที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลูกค้าเป้าหมายทั้งเครือ (M9 Phase 4) · ไม่พบ = null */
   salesperson(quoteId: string, dealerCode: string): Promise<string | null>;
   /** ใบที่ won ของลูกค้ารายเดียว (ผูกด้วย customer_id) — ป้อนแท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์ของ
    *  CustomerDrawer โดยไม่ต้องโหลดใบทั้งเครือ (M9 Phase 6) — เหมือน appointments.listForLead */
   listForCustomer(customerId: number, dealerCode: string): Promise<QuotationMock[]>;
   /** ผูกใบเสนอราคา "กำพร้า" (customer_id ว่าง, ชื่อลูกค้าตรงกัน) เข้ากับลูกค้าที่เพิ่งสร้าง/พบ ทั้งชุด
    *  ในคำสั่งเดียว (atomic) — cascadeWon=true จะเลื่อนสถานะใบที่ยังไม่ปิด (ไม่ใช่ lost/expired) เป็น won
-   *  ด้วย (ปิดจากฝั่งลีดโดยตรง) · supabase: RPC relink_customer_quotes (Phase 4, กัน partial-relink
+   *  ด้วย (ปิดจากฝั่งลูกค้าเป้าหมายโดยตรง) · supabase: RPC relink_customer_quotes (Phase 4, กัน partial-relink
    *  ที่เดิมเป็น N คำขอ update แยกกัน) · local: วนอัปเดตในเครื่อง (เธรดเดียว = atomic โดยธรรมชาติ) */
   relinkCustomerQuotes(dealer: string, customerId: number, company: string, cascadeWon: boolean): Promise<QuotationMock[]>;
 }
@@ -372,7 +372,7 @@ export interface CustomersRepo {
   update(row: CustomerRow): Promise<CustomerRow>;
   remove(id: number): Promise<void>;
   // หา "ลูกค้าเดิมที่ชื่อบริษัทตรงเป๊ะ" หรือสร้างใหม่ — ทรานแซกชันเดียวที่ DB (supabase) กันแข่งกัน
-  // ปิดลีดชื่อเดียวกันพร้อมกัน 2 session สร้างลูกค้าซ้ำ · local: เช็ก+สร้างในเครื่อง (เครื่องเดียว ไม่มี race จริง)
+  // ปิดลูกค้าเป้าหมายชื่อเดียวกันพร้อมกัน 2 session สร้างลูกค้าซ้ำ · local: เช็ก+สร้างในเครื่อง (เครื่องเดียว ไม่มี race จริง)
   upsertForCompany(dealerCode: string, row: CustomerRow): Promise<CustomerRow>;
   // รวมยอดลูกค้าใหม่จากใบ won ปัจจุบันตรงจาก DB (ไม่รับผลรวมจาก client) — กัน race ตอนแก้ 2 ใบพร้อมกัน (0078)
   // supabase: subquery SUM ในสเตตเมนต์ UPDATE เดียว ที่ DB · local: คำนวณจากอาร์เรย์ในเครื่อง (ไม่มี race จริง)
@@ -390,7 +390,7 @@ export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;
   /** นัดหมายของสาขาหนึ่ง (HQ เจาะดูตัวแทน) — ดึงเฉพาะที่ต้องใช้ ไม่ต้องโหลดทั้งเครือ (M9 Phase 4) */
   listForDealer(dealerCode: string): Promise<AppointmentMock[]>;
-  /** นัดหมายของลีดหนึ่ง (drawer ดูลีด) — ผูกด้วย lead_id = numId (M9 Phase 4) */
+  /** นัดหมายของลูกค้าเป้าหมายหนึ่ง (drawer ดูลูกค้าเป้าหมาย) — ผูกด้วย lead_id = numId (M9 Phase 4) */
   listForLead(leadId: number, dealerCode: string): Promise<AppointmentMock[]>;
   nextId(dealerCode: string): Promise<number>;
   create(row: AppointmentMock): Promise<AppointmentMock>;

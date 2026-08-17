@@ -58,7 +58,7 @@ export async function openAs(page: Page, who: Account, appRole: "hq" | "dealer",
 export { RYG, CNX, ADMIN };
 
 // เปิดฟอร์ม "สร้างใบเสนอราคาใหม่" — ตอนนี้อยู่ในแผงรายละเอียดลูกค้าเป้าหมาย (แท็บใบเสนอราคา)
-// wizard เดิมบนหน้า /quotations ถูกลบทั้งฟีเจอร์ → ตัวแทนออกใบจากลีดเท่านั้น
+// wizard เดิมบนหน้า /quotations ถูกลบทั้งฟีเจอร์ → ตัวแทนออกใบจากลูกค้าเป้าหมายเท่านั้น
 export async function openLeadQuotationForm(page: Page) {
   await open(page, "dealer", "/leads");
   await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตาราง

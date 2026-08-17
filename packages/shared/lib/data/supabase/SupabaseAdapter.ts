@@ -115,7 +115,7 @@ async function rangedFetch<T extends Row>(
 
 // เน็ตหลุดชั่วคราวระหว่างยิงคำขอ (TypeError: Failed to fetch) — พบเป็นระยะตอนโหลดสูง/รันขนาน
 //   ไม่ใช่ error จาก DB (ไม่ผ่าน constraint/RLS/business logic ใด ๆ) แค่คำขอไปไม่ถึงปลายทางเฉย ๆ
-//   ลองใหม่ 1 ครั้งก่อนค่อยให้ผู้ใช้เห็น error จริง — ยืนยันจากผลตรวจสอบระบบ 30 ก.ค. 69 (สร้างลีดพลาดเป็นระยะ)
+//   ลองใหม่ 1 ครั้งก่อนค่อยให้ผู้ใช้เห็น error จริง — ยืนยันจากผลตรวจสอบระบบ 30 ก.ค. 69 (สร้างลูกค้าเป้าหมายพลาดเป็นระยะ)
 function isTransientNetworkError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e);
   return /Failed to fetch|NetworkError when attempting|Load failed/i.test(msg);
@@ -218,7 +218,7 @@ function quoteToRow(q: QuotationMock): Row {
   const r = toSnake(q as unknown as Row);
   delete r.product_line; // คอลัมน์ generated (0041) — เขียนไม่ได้ · เผลอส่งไป Postgres จะปฏิเสธทั้งคำสั่ง
   if (r.area != null) r.area = String(r.area);
-  // customer_id: แอปใช้ 0 = "ยังไม่มีลูกค้า" (ออกใบให้ลีด) → เก็บเป็น NULL ที่ DB (M6)
+  // customer_id: แอปใช้ 0 = "ยังไม่มีลูกค้า" (ออกใบให้ลูกค้าเป้าหมาย) → เก็บเป็น NULL ที่ DB (M6)
   // เพื่อให้ใส่ FK (dealer_code, customer_id) → customers ได้ · 0 ไม่ใช่ id ลูกค้าจริง (เริ่มที่ 1)
   if (!r.customer_id) r.customer_id = null;
   return r;
@@ -517,7 +517,7 @@ export const SupabaseAdapter: DataAdapter = {
       return row?.lost?.length ? row.lost : [...LOST_REASONS];
     },
     saveLostReasons: (lost) => must(sb().from("hq_sales_journey").upsert({ id: 1, lost })),
-    // tasks เป็น jsonb คอลัมน์เดียว (0137) — ยังไม่เคยตั้ง/ข้อมูลเพี้ยน = ใช้ชุดเริ่มต้น ไม่ปล่อยให้ลีดไม่มีงานเลย
+    // tasks เป็น jsonb คอลัมน์เดียว (0137) — ยังไม่เคยตั้ง/ข้อมูลเพี้ยน = ใช้ชุดเริ่มต้น ไม่ปล่อยให้ลูกค้าเป้าหมายไม่มีงานเลย
     getLeadTasks: async () => {
       const row = await one<{ tasks?: unknown }>("hq_sales_journey");
       return Array.isArray(row?.tasks) && row.tasks.length
@@ -975,7 +975,7 @@ export const SupabaseAdapter: DataAdapter = {
     update: (row) => updateRow<CustomerRow>("customers", row.id, row),
     remove: (id) => must(sb().from("customers").delete().eq("id", id)),
     // หาลูกค้าเดิม (ชื่อตรงเป๊ะ) หรือสร้างใหม่ แบบ atomic ที่ DB (0074) — กันแข่งกันสร้างลูกค้าซ้ำ
-    // เมื่อปิดลีดชื่อเดียวกันพร้อมกัน 2 session (id/created_at ให้ DB เป็นคนออก เหมือน create_quotation)
+    // เมื่อปิดลูกค้าเป้าหมายชื่อเดียวกันพร้อมกัน 2 session (id/created_at ให้ DB เป็นคนออก เหมือน create_quotation)
     upsertForCompany: async (dealerCode, row) => {
       const payload = toSnake(row as unknown as Row);
       delete payload.id; delete payload.created_at; delete payload.dealer_code;

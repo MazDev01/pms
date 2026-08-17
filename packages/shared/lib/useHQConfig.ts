@@ -63,7 +63,7 @@ export function useLostReasons(): string[] {
   return useHQValue<string[]>("settings.getLostReasons", () => settingsRepo.getLostReasons(), [...LOST_REASONS]);
 }
 
-/** งานมาตรฐานของแต่ละขั้น ที่ HQ ตั้งไว้ — ตัวแทนเช็กงานชุดนี้ และเป็นตัวเลื่อนขั้นให้ลีด
+/** งานมาตรฐานของแต่ละขั้น ที่ HQ ตั้งไว้ — ตัวแทนเช็กงานชุดนี้ และเป็นตัวเลื่อนขั้นให้ลูกค้าเป้าหมาย
  *  ห้ามใช้ LEAD_TASK_TEMPLATE ตรง ๆ ในหน้าจอ: นั่นเป็นแค่ค่าเริ่มต้น ไม่ใช่ของที่ HQ ตั้งไว้จริง */
 export function useLeadTaskTemplate(): LeadTaskDef[] {
   return useHQValue<LeadTaskDef[]>("settings.getLeadTasks", () => settingsRepo.getLeadTasks(), [...LEAD_TASK_TEMPLATE]);

@@ -105,7 +105,7 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
     { timeout: 45_000, message: `${code}: เบอร์โทรต้องอัปเดต` }).toBe("0899999999");
   mark("customer_edited");
 
-  // 4) สร้างดีลใหม่ (เพิ่มงานขายใหม่ → สร้างโครงการ) — เปิด redirect ไปหน้าลีดพร้อม detail
+  // 4) สร้างดีลใหม่ (เพิ่มงานขายใหม่ → สร้างโครงการ) — เปิด redirect ไปหน้าลูกค้าเป้าหมายพร้อม detail
   //    ต้องเลือกแม่แบบ + กรอกมูลค่าคาดการณ์ ไม่งั้น BOQ auto-seed จะว่าง (qty คำนวณจาก มูลค่า÷ราคากลาง)
   //    แล้วปุ่ม "สร้างใบเสนอราคา" ในขั้นถัดไปจะ disable ค้าง (เจอจริงระหว่างพัฒนาเทสต์นี้)
   await page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).first().click();
@@ -120,15 +120,15 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   await page.waitForURL(/\/leads\?open=/, { timeout: 60_000 });
   mark("deal_created");
 
-  // 5) แนบไฟล์ที่ลีด (ช่องไม่มี accept = ช่องแนบไฟล์ทั่วไป ต่างจากช่องอัปโหลดโลโก้)
+  // 5) แนบไฟล์ที่ลูกค้าเป้าหมาย (ช่องไม่มี accept = ช่องแนบไฟล์ทั่วไป ต่างจากช่องอัปโหลดโลโก้)
   const fileInput = page.locator('input[type="file"]:not([accept])').first();
-  await expect(fileInput, `${code}: ต้องมีช่องแนบไฟล์ในลิ้นชักลีด`).toBeAttached({ timeout: 45_000 });
+  await expect(fileInput, `${code}: ต้องมีช่องแนบไฟล์ในลิ้นชักลูกค้าเป้าหมาย`).toBeAttached({ timeout: 45_000 });
   await fileInput.setInputFiles({ name: `${TAG}-${code}-เอกสาร.pdf`, mimeType: "application/pdf", buffer: Buffer.from(`load test ${code}`) });
   await expect.poll(async () => (await sb.from("files").select("id").like("name", `%${code}-เอกสาร%`)).data?.length ?? 0,
     { timeout: 45_000, message: `${code}: ไฟล์ต้องขึ้น Storage/DB` }).toBeGreaterThan(0);
   mark("file_attached");
 
-  // 6) สร้างใบเสนอราคาจากลีด
+  // 6) สร้างใบเสนอราคาจากลูกค้าเป้าหมาย
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
   await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 30_000 });

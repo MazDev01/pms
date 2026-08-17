@@ -471,7 +471,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const { session } = useRole(); // ผู้รับผิดชอบเริ่มต้น = ผู้ใช้ที่ล็อกอิน
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน (multi-tenant)
   const { leads: allLeads, newAppointmentId } = useSales();
-  // เลือกได้เฉพาะลีดของตัวแทนที่ล็อกอิน — ไม่ให้เห็นลีดของตัวแทนรายอื่นทั้งเครือ
+  // เลือกได้เฉพาะลูกค้าเป้าหมายของตัวแทนที่ล็อกอิน — ไม่ให้เห็นลูกค้าเป้าหมายของตัวแทนรายอื่นทั้งเครือ
   const leads = useMemo(
     () => allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
     [allLeads, currentDealer.code],
@@ -507,7 +507,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
     try {
     const name = company.trim() || initial?.company || "กิจกรรมใหม่";
     // เลขนัดใหม่ออกจาก DB แบบ atomic (เหมือนเลขลูกค้า/เลขที่ใบเสนอราคา)
-    // เดิมใช้ Date.now() ซึ่งได้เลข 13 หลักที่ไม่ใช่ "เลขนับของสาขา" และคนละแบบกับหน้าลีด
+    // เดิมใช้ Date.now() ซึ่งได้เลข 13 หลักที่ไม่ใช่ "เลขนับของสาขา" และคนละแบบกับหน้าลูกค้าเป้าหมาย
     const freshId = initial ? initial.id : await newAppointmentId();
     onSave({
       // preserve all non-edited fields when editing (assigned/status/etc.)

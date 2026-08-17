@@ -1,7 +1,7 @@
 "use client";
 
 // Lead Detail มี UI เดียว = โมดัลใน "ลูกค้าเป้าหมาย" (One page · One workflow)
-// เส้นทางเก่า /leads/[id] จึง redirect ไปเปิดโมดัลของลีดตัวนั้นที่ /leads?open=N
+// เส้นทางเก่า /leads/[id] จึง redirect ไปเปิดโมดัลของลูกค้าเป้าหมายตัวนั้นที่ /leads?open=N
 // (ลิงก์เดิมจาก Dashboard / ลูกค้า / ใบเสนอราคา ยังใช้ได้ทั้งหมด)
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";

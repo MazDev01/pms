@@ -74,7 +74,7 @@ const BUCKET_LABEL: Record<NotifBucket, string> = {
 const BUCKET_ORDER: NotifBucket[] = ["today", "yesterday", "older"];
 
 // ── สร้างการแจ้งเตือนจาก mock (deterministic, mock วันนี้ = 2026-06-30) ──
-// ประเภท: ลีดใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายสำเร็จ · เสียโอกาส
+// ประเภท: ลูกค้าเป้าหมายใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายสำเร็จ · เสียโอกาส
 // รับ leads/quotations/appointments จาก SalesContext (ข้อมูลสดทั้งหมด)
 function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appointments: AppointmentMock[]): Notif[] {
   const out: Notif[] = [];
@@ -328,15 +328,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const avatarUrl = profile?.avatar;
   const initial = acctName.charAt(0).toUpperCase();
   const roleLabel = roleLabelOf(session.role, isHQ);   // แหล่งเดียวกับแถบข้าง — ห้ามเขียนชื่อบทบาทซ้ำที่นี่
-  // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลีด/ออกใบเสนอราคา/ปิดการขาย
+  // ข้อมูลสดจาก SalesContext → การแจ้งเตือนอัปเดตทันทีเมื่อเพิ่มลูกค้าเป้าหมาย/ออกใบเสนอราคา/ปิดการขาย
   const { leads: allLeads, quotations: liveQuotations, appointments: liveAppointments, customers: liveCustomers } = useSales();
 
-  // ── ขอบเขตข้อมูลของลีด (สำคัญ) ────────────────────────────────────────────
-  // SalesContext ถือลีดของ "ทั้งเครือ" 10 สาขา — ตัวแทนต้องเห็นเฉพาะสมุดงานตัวเอง
-  // กติกาเดียวกับ DealerDashboard/หน้า /leads: ไม่มี dealerCode = ลีดที่ตัวแทนสร้างเอง → ของสาขาตัวเอง
+  // ── ขอบเขตข้อมูลของลูกค้าเป้าหมาย (สำคัญ) ────────────────────────────────────────────
+  // SalesContext ถือลูกค้าเป้าหมายของ "ทั้งเครือ" 10 สาขา — ตัวแทนต้องเห็นเฉพาะสมุดงานตัวเอง
+  // กติกาเดียวกับ DealerDashboard/หน้า /leads: ไม่มี dealerCode = ลูกค้าเป้าหมายที่ตัวแทนสร้างเอง → ของสาขาตัวเอง
   // HQ เห็นทั้งเครือตามปกติ
   //
-  // เดิม Topbar ใช้ allLeads ตรง ๆ ทั้งกระดิ่งและช่องค้นหา → ตัวแทน CNX เห็นลีดของ RYG/MST
+  // เดิม Topbar ใช้ allLeads ตรง ๆ ทั้งกระดิ่งและช่องค้นหา → ตัวแทน CNX เห็นลูกค้าเป้าหมายของ RYG/MST
   // พร้อมชื่อผู้ติดต่อ เบอร์ มูลค่าดีล และชื่อเซลส์สาขาอื่น (ยืนยันด้วยเทสต์: ระยอง/ตาก โผล่ในกระดิ่ง CNX)
   const liveLeads = useMemo(
     () => isHQ ? allLeads : allLeads.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code),
@@ -422,7 +422,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     const srcLeads = hqSearch ? hqSearch.leads : liveLeads;
     const srcCustomers = hqSearch ? hqSearch.customers : liveCustomers;
     const srcQuotations = hqSearch ? hqSearch.quotes : liveQuotations;
-    // ลูกค้าไม่มี owner field → หาผู้รับผิดชอบจากลีดที่ผูก customerId เดียวกัน
+    // ลูกค้าไม่มี owner field → หาผู้รับผิดชอบจากลูกค้าเป้าหมายที่ผูก customerId เดียวกัน
     const ownerOfCustomer = (cid: number) => srcLeads.find(l => l.customerId === cid)?.assigned;
     return [
       // หน้า/เมนู — ค้นหาได้ทุกหน้าในระบบตามบทบาท (นำทางไปหน้านั้นทันที)
@@ -430,7 +430,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         .filter(p => p.keywords.toLowerCase().includes(q))
         .slice(0, 6)
         .map(p => ({ type: "หน้า", label: p.label, sub: "เปิดหน้านี้", href: p.href })),
-      // ลีด — match company/contact/name/phone/ผู้รับผิดชอบ
+      // ลูกค้าเป้าหมาย — match company/contact/name/phone/ผู้รับผิดชอบ
       ...srcLeads
         .filter((l: LeadRow) => has(l.name) || has(l.company) || has(l.contact) || has(l.phone) || has(l.assigned))
         .slice(0, 5)
@@ -443,7 +443,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
             : `${l.contact} · ${l.province} · ${l.value}`;
           return { type: "ลูกค้าเป้าหมาย", label: l.company, sub, href: `/leads?open=${l.numId}` };
         }),
-      // ลูกค้า — match company/name/province/phone/ผู้รับผิดชอบ (ผ่านลีดที่ผูกกัน)
+      // ลูกค้า — match company/name/province/phone/ผู้รับผิดชอบ (ผ่านลูกค้าเป้าหมายที่ผูกกัน)
       ...srcCustomers
         .filter((c: CustomerRow) => has(c.company) || has(c.name) || has(c.province) || has(c.phone) || has(ownerOfCustomer(c.id)))
         .slice(0, 5)

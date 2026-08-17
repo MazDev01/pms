@@ -131,7 +131,7 @@ export default function SalesAnalyticsPage() {
   const netCustomers = useNetworkCustomers();
   const { appointments } = useSales();
 
-  // ไฟล์แนบ — ใช้เฉพาะใน Drawer (ผูกกับลีดด้วย recordId = numId)
+  // ไฟล์แนบ — ใช้เฉพาะใน Drawer (ผูกกับลูกค้าเป้าหมายด้วย recordId = numId)
   const [dealerFiles, setDealerFiles] = useState<DealerFile[]>([]);
   // request token กันผลลัพธ์เก่าทับใหม่ — read ถูกยิงซ้ำได้ทุกครั้งที่มีการอัปโหลด/ลบไฟล์ทั้งเครือ
   const dealerFilesReqRef = useRef(0);
@@ -200,7 +200,7 @@ export default function SalesAnalyticsPage() {
     dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end), asOf: isoDateOf(APP_NOW),
   }), [codes, btSel, timeRange.start, timeRange.end]));
   const byDealer = useMemo(() => qSummary ? new Map(qSummary.byDealer.map(d => [d.dealerCode, d])) : null, [qSummary]);
-  // ลีดรายสาขา (leads/quoted) ที่ DB — ตัวกรองชุดเดียวกับ leads (codes + product · ไม่กรองเวลา)
+  // ลูกค้าเป้าหมายรายสาขา (leads/quoted) ที่ DB — ตัวกรองชุดเดียวกับ leads (codes + product · ไม่กรองเวลา)
   const leadSum = useLeadSummary(useMemo(() => ({ dealerCodes: [...codes], product: btSel !== ALL ? btSel : undefined }), [codes, btSel]));
   const leadByDealer = useMemo(() => leadSum ? new Map(leadSum.byDealer.map(d => [d.dealerCode, d])) : null, [leadSum]);
 
@@ -259,11 +259,11 @@ export default function SalesAnalyticsPage() {
   }, [perf, dealers, allDealers.length, targets.annualTarget]);
 
   // ── Section 1 · ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — สลับมุมมองได้ 4 แบบ ──
-  // "อัตราแปลง" ที่เคยต่อท้ายแต่ละแถวถูกตัดออก (บอสสั่ง 17 ก.ค. 69) — มันคิดจากสถานะลีด
-  // (ถึงขั้นเสนอราคาขึ้นไป ÷ ลีดทั้งหมด) ไม่ใช่เลขคู่ "ลีด / ใบ" ที่โชว์อยู่ข้างหน้า คนอ่านเลยตีความผิด
+  // "อัตราแปลง" ที่เคยต่อท้ายแต่ละแถวถูกตัดออก (บอสสั่ง 17 ก.ค. 69) — มันคิดจากสถานะลูกค้าเป้าหมาย
+  // (ถึงขั้นเสนอราคาขึ้นไป ÷ ลูกค้าเป้าหมายทั้งหมด) ไม่ใช่เลขคู่ "ลูกค้าเป้าหมาย / ใบ" ที่โชว์อยู่ข้างหน้า คนอ่านเลยตีความผิด
   // และ seed วนสถานะเท่า ๆ กันจนได้ 50% แทบทุกแถว ไม่มีสาระให้เทียบ
   const leadVsQuote = useMemo(() => {
-    const useRpc = leadSum && qSummary; // ลีด (leadSum, all-time) + ใบ (qSummary, ในช่วง) ที่ DB · ไม่งั้น client
+    const useRpc = leadSum && qSummary; // ลูกค้าเป้าหมาย (leadSum, all-time) + ใบ (qSummary, ในช่วง) ที่ DB · ไม่งั้น client
     if (view === "month") {
       const lM = new Map<string, number>(), qM = new Map<string, number>();
       if (useRpc) {
@@ -442,7 +442,7 @@ export default function SalesAnalyticsPage() {
           แท่งคู่ 10 ตัวแทน · ตัวเลขชุดเดียวกันอยู่ในตารางแถว 3 (แยกการ์ดเพื่อไม่ให้ใบเดียวสูง 1,010px) */}
       <DealerQuotationPerformance rows={quotePerf} />
 
-      {/* ── แถว 2 · เปรียบเทียบรายตัวแทน: ลีด→ใบเสนอราคา | มูลค่า→ยอดขายจริง ──
+      {/* ── แถว 2 · เปรียบเทียบรายตัวแทน: ลูกค้าเป้าหมาย→ใบเสนอราคา | มูลค่า→ยอดขายจริง ──
           สองใบนี้เป็นแท่งคู่รายตัวแทนเหมือนกันและสูงพอ ๆ กัน จับคู่ไว้แถวเดียว
           (เดิมทั้งหน้าเป็นการ์ดเต็มความกว้าง 8 ใบเรียงซ้อนกัน ยาว 4,800px) */}
       <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
@@ -491,12 +491,12 @@ export default function SalesAnalyticsPage() {
       {/* กราฟที่ถูกตัดออกจากหน้านี้ (ข้อมูลซ้ำ — ดูที่เจ้าของเรื่องแทน):
           · เหตุผลที่เสียโอกาสการขาย → /hq/leads และ /hq/quotations
           · เทียบรายภูมิภาค          → /hq/quotations
-          · แนวโน้มจำนวนรายการ/ยอดขาย → แดชบอร์ด HQ (SalesTrendChart + ลีด·ใบเสนอราคา·ปิดการขาย รายเดือน) */}
+          · แนวโน้มจำนวนรายการ/ยอดขาย → แดชบอร์ด HQ (SalesTrendChart + ลูกค้าเป้าหมาย·ใบเสนอราคา·ปิดการขาย รายเดือน) */}
       {/* ── PERFORMANCE TABLE — ตารางเต็มท้ายหน้าตามเดิม (ตามที่บอสสั่ง ไม่แยกแท็บ) ── */}
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">ตารางผลงานตัวแทนจำหน่าย</div>
-          <span style={{ fontSize: "0.62rem", color: MUTED }}>ลีด/ใบเสนอราคา/มูลค่า = ในช่วงที่เลือก · ยอดขายสะสม/เป้า = ทั้งปี (ตัวเลขทางการของตัวแทน)</span>
+          <span style={{ fontSize: "0.62rem", color: MUTED }}>ลูกค้าเป้าหมาย/ใบเสนอราคา/มูลค่า = ในช่วงที่เลือก · ยอดขายสะสม/เป้า = ทั้งปี (ตัวเลขทางการของตัวแทน)</span>
         </div>
         <div className="table-wrap">
           <table>
@@ -507,7 +507,7 @@ export default function SalesAnalyticsPage() {
               <col style={{ width: "5%", minWidth: 58 }} />{/* รหัส */}
               <col style={{ width: "12%", minWidth: 136 }} />{/* ตัวแทน */}
               <col style={{ width: "13%", minWidth: 148 }} />{/* ภูมิภาค — ป้ายชื่อภาคเต็ม ห้ามตัด */}
-              <col style={{ width: "5%", minWidth: 58 }} />{/* ลีด */}
+              <col style={{ width: "5%", minWidth: 58 }} />{/* ลูกค้าเป้าหมาย */}
               <col style={{ width: "8%", minWidth: 94 }} />{/* ใบเสนอราคา */}
               <col style={{ width: "9%", minWidth: 100 }} />{/* มูลค่าเสนอ */}
               <col style={{ width: "9%", minWidth: 100 }} />{/* ยอดขายสะสม */}
@@ -522,7 +522,7 @@ export default function SalesAnalyticsPage() {
                 <th>รหัส</th>
                 <th>ตัวแทนจำหน่าย</th>
                 <th>ภูมิภาค</th>
-                <th style={{ textAlign: "right" }}>ลีด</th>
+                <th style={{ textAlign: "right" }} title="ลูกค้าเป้าหมาย">เป้าหมาย</th>
                 <th style={{ textAlign: "right" }}>ใบเสนอราคา</th>
                 {/* หัวคอลัมน์ต้องสั้นพอไม่ให้ถูกเฉือน (th ตั้ง white-space: nowrap ทั้งระบบ) */}
                 <th style={{ textAlign: "right" }} title="มูลค่ารวมของใบเสนอราคาทั้งหมด">มูลค่าเสนอ</th>
@@ -579,7 +579,7 @@ export default function SalesAnalyticsPage() {
 }
 
 // ── Drawer ────────────────────────────────────────────────────────────────────
-// นัดหมาย/ไฟล์ ไม่มี dealerCode ในระบบ → ผูกผ่าน leadId/recordId = numId ของลีดตัวแทนรายนี้
+// นัดหมาย/ไฟล์ ไม่มี dealerCode ในระบบ → ผูกผ่าน leadId/recordId = numId ของลูกค้าเป้าหมายตัวแทนรายนี้
 // ตัวแทนที่ยังไม่มีนัดหมาย/ไฟล์บันทึกไว้จะขึ้น "—" ตามจริง (ไม่เติมข้อมูลปลอม)
 function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, files, onOpenDealer }: {
   d: { code: string; name: string; region: string; province: string; status: string; revenueActual: number; revenueTarget: number; tpct: number; leads: number; quoted: number; quotes: number; quoteVal: number; wonCount: number; wonVal: number; conv: number | null; latest: string };
@@ -679,7 +679,7 @@ function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, file
           )}
 
           <div style={head}><CalendarDays size={11} /> ไทม์ไลน์นัดหมาย</div>
-          {!appts.length ? empty("ไม่มีนัดหมายที่ผูกกับลีดของตัวแทนรายนี้") : (
+          {!appts.length ? empty("ไม่มีนัดหมายที่ผูกกับลูกค้าเป้าหมายของตัวแทนรายนี้") : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {appts.map(a => (
                 <div key={a.id} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "8px 10px" }}>
@@ -691,7 +691,7 @@ function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, file
           )}
 
           <div style={head}><FolderOpen size={11} /> เอกสาร</div>
-          {!docs.length ? empty("ไม่มีเอกสารที่ผูกกับลีดของตัวแทนรายนี้") : (
+          {!docs.length ? empty("ไม่มีเอกสารที่ผูกกับลูกค้าเป้าหมายของตัวแทนรายนี้") : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {docs.map(f => (
                 <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "7px 10px" }}>

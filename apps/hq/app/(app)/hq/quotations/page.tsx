@@ -100,8 +100,8 @@ export default function NetworkQuotationPage() {
   const trendRows = useMemo(() => allRows.filter(matchesNonTime), [allRows, matchesNonTime]);
   const rows = useMemo(() => trendRows.filter(r => inRange(r.createdAt)), [trendRows, inRange]);
 
-  // ลีดสำหรับกราฟ "ลีด → ใบเสนอราคา" และ "เหตุผลที่เสียโอกาส"
-  // กรองเฉพาะมิติที่ลีดมีจริง: ขอบเขตตัวแทน (ตัวแทน/ภูมิภาค/จังหวัดตัวแทน) + ช่วงเวลา
+  // ลูกค้าเป้าหมายสำหรับกราฟ "ลูกค้าเป้าหมาย → ใบเสนอราคา" และ "เหตุผลที่เสียโอกาส"
+  // กรองเฉพาะมิติที่ลูกค้าเป้าหมายมีจริง: ขอบเขตตัวแทน (ตัวแทน/ภูมิภาค/จังหวัดตัวแทน) + ช่วงเวลา
   // ไม่กรองด้วยสถานะของใบเสนอราคา — เป็นคนละเอกสารกัน จะกรองข้ามไม่ได้
   const leadRows = useMemo(() => netLeads.filter(l => {
     const code = l.dealerCode || "";
@@ -146,7 +146,7 @@ export default function NetworkQuotationPage() {
   const summary = useHQQuotationsSummary(qFilters);       // มีเวลา → analytics/KPI/ตาราง
   const trendSummary = useHQQuotationsSummary(baseFilters); // ไม่มีเวลา → กราฟแนวโน้ม 12 เดือน
 
-  // ลีดของสาขาในตัวกรอง (ขอบเขต+เวลาเดียวกับ leadRows) ที่ DB — ป้อน LeadsVsQuotations + LostReasons
+  // ลูกค้าเป้าหมายของสาขาในตัวกรอง (ขอบเขต+เวลาเดียวกับ leadRows) ที่ DB — ป้อน LeadsVsQuotations + LostReasons
   //   province ใช้ resolvedDealerCodes (จังหวัด "ของตัวแทน") ไม่ใช่ p_province ของ lead_summary (จังหวัดลูกค้า)
   const leadSum = useLeadSummary({ dealerCodes: resolvedDealerCodes, dateStart: qFilters.dateStart, dateEnd: qFilters.dateEnd });
   const leadsByDealer = useMemo<Record<string, number>>(() => {
@@ -170,7 +170,7 @@ export default function NetworkQuotationPage() {
     [leadSum, leadRows, totalLost, lostReasons],
   );
 
-  // dealerAgg = รายตัวแทน (supabase: DB · local/ยังไม่กลับ: client จาก rows) → ป้อน KPI/ภูมิภาค/อันดับ/ลีดเทียบใบ/มูลค่า
+  // dealerAgg = รายตัวแทน (supabase: DB · local/ยังไม่กลับ: client จาก rows) → ป้อน KPI/ภูมิภาค/อันดับ/ลูกค้าเป้าหมายเทียบใบ/มูลค่า
   const dealerAgg = useMemo<DealerAgg[]>(() => {
     if (summary) return summary.byDealer.map(d => ({
       code: d.dealerCode, name: nameOf.get(d.dealerCode) ?? d.dealerCode, region: look.regionOf(d.dealerCode),
@@ -231,7 +231,7 @@ export default function NetworkQuotationPage() {
       materialCost: q.materialCost, lineItems: q.lineItems,
     };
   };
-  // mapToHQ ปิดคลุม netLeads/nameOf — ขาดไปก่อนหน้านี้ทำให้ชื่อผู้รับผิดชอบค้างค่าเก่าถ้าลีด/ทะเบียนตัวแทน
+  // mapToHQ ปิดคลุม netLeads/nameOf — ขาดไปก่อนหน้านี้ทำให้ชื่อผู้รับผิดชอบค้างค่าเก่าถ้าลูกค้าเป้าหมาย/ทะเบียนตัวแทน
   // เปลี่ยนผ่าน realtime โดย pageResult reference เดิม (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
   // local ต้องตัดเป็นหน้า ๆ ที่ client ด้วย — ไม่งั้นแถบเปลี่ยนหน้าบอก "หน้า 1/9" แต่ตารางเทมาทั้ง 9 หน้า
   const localPageCount = Math.max(1, Math.ceil(tableRows.length / QPAGE_SIZE));
@@ -240,7 +240,7 @@ export default function NetworkQuotationPage() {
   const totalRows = pageResult ? pageResult.total : tableRows.length;
   const pagination = { page: pageResult ? tablePage : localPage, pageCount: Math.max(1, Math.ceil(totalRows / QPAGE_SIZE)), total: totalRows, onPage: setTablePage };
 
-  // ผู้รับผิดชอบใบใน drawer — supabase (แถวมาจาก listPage) เดิมได้ placeholder → เติมชื่อจริงจากลีดผ่าน RPC
+  // ผู้รับผิดชอบใบใน drawer — supabase (แถวมาจาก listPage) เดิมได้ placeholder → เติมชื่อจริงจากลูกค้าเป้าหมายผ่าน RPC
   //   local (ไม่มี pageResult) = viewQ.salesperson มาจาก array จริงอยู่แล้ว → hook คืน null ไม่ทับ
   // ต้องระบุสาขาของใบที่เปิดอยู่ — ไม่งั้นอาจได้ชื่อพนักงานของสาขาอื่นที่เลขที่ใบตรงกัน
   const drawerSp = useQuotationSalesperson(viewQ && pageResult ? viewQ.quoteNo : null, viewQ?.dealerCode ?? null);

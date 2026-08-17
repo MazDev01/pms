@@ -237,7 +237,7 @@ function deliveryDateFor(customerId:number, qs:QuotationMock[]): string {
 }
 
 // ── Deterministic drawer feeds (จากลูกค้า + quotations + leads) ──
-// ไทม์ไลน์กิจกรรม — สร้างจากใบเสนอราคาและลีดที่ผูกกับลูกค้ารายนี้ (deterministic)
+// ไทม์ไลน์กิจกรรม — สร้างจากใบเสนอราคาและลูกค้าเป้าหมายที่ผูกกับลูกค้ารายนี้ (deterministic)
 function activityItemsFor(customerId:number, joinDate:string, qs:QuotationMock[], ls:LeadRow[]): ActivityTimelineItem[] {
   const items: ActivityTimelineItem[] = [];
   // จากใบเสนอราคา
@@ -279,7 +279,7 @@ type CustomerForm = Omit<CustomerRow,"id"|"initials"|"color"|"totalValue">;
 // ─── ภาพรวม (แก้ไขในตัว) — ฟอร์มแก้ไขข้อมูลลูกค้าในแท็บ "ข้อมูล" ของโมดัลรายละเอียด ───
 // สไตล์ + Row ต้องอยู่นอกคอมโพเนนต์ — ประกาศข้างในจะได้ "ฟังก์ชันตัวใหม่" ทุกเรนเดอร์
 // React ถือเป็นคนละคอมโพเนนต์ → unmount/mount ช่องกรอกใหม่ทุกครั้งที่พิมพ์ → โฟกัสหลุดหลังพิมพ์ 1 ตัวอักษร
-// ช่องกรอกไม่มีกรอบของตัวเอง (บอสสั่ง 17 ก.ค. 69 — มาตรฐานเดียวกับการ์ดภาพรวมหน้าลีด)
+// ช่องกรอกไม่มีกรอบของตัวเอง (บอสสั่ง 17 ก.ค. 69 — มาตรฐานเดียวกับการ์ดภาพรวมหน้าลูกค้าเป้าหมาย)
 const CU_INP: React.CSSProperties = { width:"100%", height:28, padding:"0 8px", borderRadius:6, border:"none", outline:"none", fontSize:"0.78rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"transparent", boxSizing:"border-box" };
 // แต่ละแถวมีกรอบ + พื้นจาง — โทนเดียวกับช่องข้อมูลหน้าลูกค้าเป้าหมาย (OV_CELL: #fafbfc / ขอบ #eef1f5)
 // บอสสั่ง 17 ก.ค. 69: "เพิ่มกรอบข้างหลังที่มีสีให้ดูง่าย" · โครง "ป้าย : ค่า" เดิมคงไว้ทุกช่อง
@@ -395,13 +395,13 @@ export default function CustomersPage(){
   const [addingNote, setAddingNote] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteBody, setNoteBody] = useState(""); // โน้ตลูกค้าผ่าน repo (ผู้เขียน = ผู้ใช้ที่ล็อกอิน) // VAT จาก HQ ผ่าน repo (ตัวแทนตั้งเองไม่ได้ · อัปเดตตามเมื่อ HQ แก้)
-  // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลีดของ CNX
+  // scope ทุกอย่างเป็นของสาขาที่ล็อกอิน (multi-tenant) — RYG ไม่เห็นลูกค้า/ใบ/ลูกค้าเป้าหมายของ CNX
   // undefined = ของ CNX (สมุดงานเดิม) · ที่เหลือกรองด้วย dealerCode ตรง ๆ
   const data = useMemo(() => allCustomers.filter(c => (c.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allCustomers, currentDealer.code]);
   const quotations = useMemo(() => allQuotations.filter(q => (q.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allQuotations, currentDealer.code]);
   const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allLeadsRaw, currentDealer.code]);
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
-  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ดีลใหม่ต้องได้ checklist ชุดเดียวกับลีดอื่น
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ดีลใหม่ต้องได้ checklist ชุดเดียวกับลูกค้าเป้าหมายอื่น
   const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
   const [query, setQuery]             = useState("");
@@ -485,7 +485,7 @@ export default function CustomersPage(){
   const [viewProject, setViewProject] = useState<{ q: QuotationMock; template: string } | null>(null);
   // แม่แบบที่มีหลายงาน → กดการ์ดแล้วเปิดตัวเลือกก่อนว่าจะดูงานไหน (แม่แบบเดียวอาจมีถึง v30)
   const [pickGroup, setPickGroup] = useState<PurchasedGroup | null>(null);
-  // สร้างดีลใหม่ (ลูกค้าเดิมซื้อโครงการใหม่) — Deal = ลีดที่ผูก customerId
+  // สร้างดีลใหม่ (ลูกค้าเดิมซื้อโครงการใหม่) — Deal = ลูกค้าเป้าหมายที่ผูก customerId
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [dealCustomer, setDealCustomer] = useState<CustomerRow|null>(null);
   const [dealForm, setDealForm] = useState({project:"",product:"",value:"",assigned:"",note:""});
@@ -497,7 +497,7 @@ export default function CustomersPage(){
   const [legacyForm, setLegacyForm]   = useState({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
   const csvInputRef = useRef<HTMLInputElement>(null);
   // กันกดบันทึกซ้ำ (H8 · guard synchronous) — เดิม createLegacy() ไม่มี guard เลย กดรัว ๆ เร็วกว่า React
-  // จะปิดโมดัล/re-render ทัน สร้างลูกค้าซ้ำหลายแถวได้จริง (แพทเทิร์นเดียวกับที่พบในฟอร์มเพิ่มลีด — Edge Case, 3 ส.ค. 69)
+  // จะปิดโมดัล/re-render ทัน สร้างลูกค้าซ้ำหลายแถวได้จริง (แพทเทิร์นเดียวกับที่พบในฟอร์มเพิ่มลูกค้าเป้าหมาย — Edge Case, 3 ส.ค. 69)
   const savingLegacyRef = useRef(false);
   const savingImportRef = useRef(false); // กันกดนำเข้า CSV ซ้ำ — ดู commitImport()
   // ไฟล์แนบต่อลูกค้า — คลังไฟล์รวม (แหล่งเดียว) ปรากฏในหน้าไฟล์กลางด้วย
@@ -639,13 +639,13 @@ export default function CustomersPage(){
 
   // Related data for selected customer
   const relatedQuotations   = selected ? quotations.filter(q=>q.customerId===selected.id) : [];
-  // ไม่รวมลีดที่ปิดการขายสำเร็จ (PAID) — กลายเป็นลูกค้ารายนี้ไปแล้ว ลิงก์จะวนกลับหน้าเดิม
-  // "งานขายทั้งหมด" = ประวัติการปิดการขาย (ใบเสนอราคาที่ปิดการขาย) + โครงการที่กำลังทำ (ลีดที่ยังไม่ปิด)
-  // เดิมทั้งสองการ์ดอ่านจากลีดชุดเดียวกัน → โชว์ตัวที่กำลังทำซ้ำบน-ล่าง ส่วนที่ซื้อแล้วไม่โผล่เลย (บอสทัก)
+  // ไม่รวมลูกค้าเป้าหมายที่ปิดการขายสำเร็จ (PAID) — กลายเป็นลูกค้ารายนี้ไปแล้ว ลิงก์จะวนกลับหน้าเดิม
+  // "งานขายทั้งหมด" = ประวัติการปิดการขาย (ใบเสนอราคาที่ปิดการขาย) + โครงการที่กำลังทำ (ลูกค้าเป้าหมายที่ยังไม่ปิด)
+  // เดิมทั้งสองการ์ดอ่านจากลูกค้าเป้าหมายชุดเดียวกัน → โชว์ตัวที่กำลังทำซ้ำบน-ล่าง ส่วนที่ซื้อแล้วไม่โผล่เลย (บอสทัก)
   const wonProjects   = selected ? quotations.filter(q=>q.customerId===selected.id && q.status==="won") : [];
   const activeDeals   = selected ? leads.filter(l=>(l.customerId===selected.id||l.company===selected.company) && l.status!=="PAID") : [];
   const projectCount  = wonProjects.length + activeDeals.length;
-  // ลีดทุกสถานะของลูกค้ารายนี้ — ใช้ผูกใบเสนอราคากลับไปหาลีด (คนละชุดกับการ์ด "งานขายทั้งหมด")
+  // ลูกค้าเป้าหมายทุกสถานะของลูกค้ารายนี้ — ใช้ผูกใบเสนอราคากลับไปหาลูกค้าเป้าหมาย (คนละชุดกับการ์ด "งานขายทั้งหมด")
   const customerDeals = selected ? leads.filter(l=>l.customerId===selected.id||l.company===selected.company) : [];
   const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company) : [];
   // โน้ตของลูกค้ารายนี้ — จากตาราง customer_notes (ของสาขาตัวเอง)
@@ -716,9 +716,9 @@ export default function CustomersPage(){
   }
   // กันกดสร้างดีลซ้ำ (H8 · guard synchronous) — เดิมไม่มี guard: กดรัว ๆ ระหว่างรอ newLeadNumId() (async)
   // จะยิงขอเลขซ้อนกันได้หลายครั้ง สร้างดีลซ้ำหลายใบจากคลิกเดียว (แพทเทิร์นเดียวกับที่พบใน
-  // ฟอร์มเพิ่มลีด/ลูกค้า/แม่แบบ — Edge Case sweep 3 ส.ค. 69)
+  // ฟอร์มเพิ่มลูกค้าเป้าหมาย/ลูกค้า/แม่แบบ — Edge Case sweep 3 ส.ค. 69)
   const creatingDealRef = useRef(false);
-  // สร้างดีล = ลีดใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
+  // สร้างดีล = ลูกค้าเป้าหมายใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
   async function createDeal(){
     if(creatingDealRef.current) return;
     const c=dealCustomer; if(!c||!dealForm.product) return;
@@ -855,7 +855,7 @@ export default function CustomersPage(){
              เดิมขึ้นข้อความเดียวกันหมด — ตัวแทนที่ยังไม่มีลูกค้าสักรายเห็น "ลองล้างตัวกรอง"
              พร้อมปุ่มล้างตัวกรองที่กดแล้วไม่เกิดอะไร เพราะไม่ได้ตั้งตัวกรองไว้ตั้งแต่แรก
              = ชี้ทางผิด ผู้ใช้เสียเวลาหาว่าตัวเองตั้งตัวกรองอะไรไว้
-             ที่ถูกคือบอกว่าลูกค้าเกิดจากการปิดการขายลีด แล้วพาไปหน้าลูกค้าเป้าหมาย */}
+             ที่ถูกคือบอกว่าลูกค้าเกิดจากการปิดการขายลูกค้าเป้าหมาย แล้วพาไปหน้าลูกค้าเป้าหมาย */}
         {filtered.length===0?(
           <div className="card" style={{ marginBottom:16 }}>
             {hasActiveFilter ? (
@@ -890,7 +890,7 @@ export default function CustomersPage(){
                 <thead>
                   <tr>
                     {/* หัวคอลัมน์ครอบด้วย flex + nowrap ทุกช่อง — ไม่งั้นลูกศรเรียงตกไปบรรทัดล่างเวลาคอลัมน์แคบ
-                        (มาตรฐานเดียวกับตารางลีด/ใบเสนอราคา) · คอลัมน์ตัวเลขจัดชิดขวาให้ตรงกับค่าในเซลล์ */}
+                        (มาตรฐานเดียวกับตารางลูกค้าเป้าหมาย/ใบเสนอราคา) · คอลัมน์ตัวเลขจัดชิดขวาให้ตรงกับค่าในเซลล์ */}
                     {([
                       ["company","บริษัท",false],["name","ผู้ติดต่อ",false],["phone","โทรศัพท์",false],["province","จังหวัด",false],
                       [null,"แม่แบบ",false],[null,"ยอดขายรวม",true],[null,"โครงการ",true],["lastActivity","ติดต่อล่าสุด",false],
@@ -903,7 +903,7 @@ export default function CustomersPage(){
                         </span>
                       </th>
                     ))}
-                    <th></th>{/* คอลัมน์ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ (มาตรฐานเดียวกับตารางลีด/ใบเสนอราคา) */}
+                    <th></th>{/* คอลัมน์ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ (มาตรฐานเดียวกับตารางลูกค้าเป้าหมาย/ใบเสนอราคา) */}
                   </tr>
                 </thead>
                 <tbody>
@@ -942,7 +942,7 @@ export default function CustomersPage(){
                               style={{ width:28, height:28, borderRadius:7, border:"1px solid #dbe3ec", background:"#fff", color:PRIMARY, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <Eye size={13} />
                             </button>
-                            {/* ลบได้จากตารางเลย ไม่ต้องเปิดแผงรายละเอียดก่อน — ยังถามยืนยัน และยังลบไม่ได้ถ้ามีใบเสนอราคา/ลีดผูกอยู่ */}
+                            {/* ลบได้จากตารางเลย ไม่ต้องเปิดแผงรายละเอียดก่อน — ยังถามยืนยัน และยังลบไม่ได้ถ้ามีใบเสนอราคา/ลูกค้าเป้าหมายผูกอยู่ */}
                             <button title="ลบลูกค้า" onClick={()=>setDelTarget(c)}
                               style={{ width:28, height:28, borderRadius:7, border:"1px solid #f3c9c9", background:"#fff", color:"#dc2626", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <Trash2 size={13} />
@@ -968,9 +968,9 @@ export default function CustomersPage(){
         const qa: React.CSSProperties = { background:"rgba(255,255,255,.15)", border:"none", borderRadius:8, height:30, padding:"0 11px", cursor:"pointer", color:"#fff", display:"flex", alignItems:"center", gap:6, fontSize:"0.72rem", fontWeight:600, fontFamily:"inherit", whiteSpace:"nowrap" };
         const lcType = lifecycleTypeFor(selected.id, selected.joinDate, quotations);
         const lcMeta = LIFECYCLE_META[lcType];
-        // ลูกค้ามาจากลีดที่ปิดการขาย → ถ้ายังไม่มีใบเสนอราคาปิดผูกไว้ ใช้มูลค่าที่ยกมาจากลีด (totalValue) เป็นค่าตั้งต้น
+        // ลูกค้ามาจากลูกค้าเป้าหมายที่ปิดการขาย → ถ้ายังไม่มีใบเสนอราคาปิดผูกไว้ ใช้มูลค่าที่ยกมาจากลูกค้าเป้าหมาย (totalValue) เป็นค่าตั้งต้น
         const totalSales = totalSalesFor(selected.id, quotations) || selected.totalValue;
-        // สินค้าที่ซื้อ — จากใบเสนอราคาที่ปิด · ไม่มี → ใช้แม่แบบที่ลูกค้าซื้อ (มาจากลีด)
+        // สินค้าที่ซื้อ — จากใบเสนอราคาที่ปิด · ไม่มี → ใช้แม่แบบที่ลูกค้าซื้อ (มาจากลูกค้าเป้าหมาย)
         // โครงการที่ซื้อไปแล้ว (ใบเสนอราคาที่ปิดการขาย) — จัดกลุ่มตามแม่แบบ
         const purchasedGroups = purchasedGroupsFor(selected.id, quotations);
         // การ์ด = 1 ใบต่อ 1 งานที่ปิดการขาย · เรียงวันปิดล่าสุดขึ้นก่อน (ข้ามแม่แบบ)
@@ -1096,7 +1096,7 @@ export default function CustomersPage(){
               {/* ── ข้อมูลลูกค้า (แท็บแรก) = ข้อมูลลูกค้า + ตารางประวัติการปิดการขาย ── */}
               <div style={{ padding:16, display:custTab==="overview"?"flex":"none", flexDirection:"column", gap:14 }}>
                 <div style={cardStyle}>
-                  {/* แก้ไขได้ในที่เดิมตลอดเวลา — ปุ่มสลับโหมด "แก้ไขข้อมูล" ถูกถอดออก (บอสสั่ง 17 ก.ค. 69 · มาตรฐานเดียวกับหน้าลีด)
+                  {/* แก้ไขได้ในที่เดิมตลอดเวลา — ปุ่มสลับโหมด "แก้ไขข้อมูล" ถูกถอดออก (บอสสั่ง 17 ก.ค. 69 · มาตรฐานเดียวกับหน้าลูกค้าเป้าหมาย)
                       หัวการ์ด (ยอดขายรวม + ป้ายแม่แบบ) เป็นค่าที่ระบบคำนวณ คงไว้เหนือฟอร์ม · สถานะย้ายไปเป็นดรอปดาวน์ในฟอร์ม */}
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
                     <div style={{...secLabel,marginBottom:0}}><User size={13} color={PRIMARY}/> ข้อมูลลูกค้า</div>
@@ -1216,7 +1216,7 @@ export default function CustomersPage(){
                           </div>
                         </div>
                       ))}
-                      {/* ── โครงการที่กำลังทำ (ลีดที่ยังไม่ปิดการขาย) ── */}
+                      {/* ── โครงการที่กำลังทำ (ลูกค้าเป้าหมายที่ยังไม่ปิดการขาย) ── */}
                       {activeDeals.map(d=>{
                         const sc=leadStatusColor[d.status];
                         const dealQuoteCount=quotations.filter(q=>q.dealId===d.numId).length;
@@ -1244,9 +1244,9 @@ export default function CustomersPage(){
                     </div>
                   )}
                 </div>
-                {/* การ์ด "โครงการที่กำลังเริ่ม" เอาออกตามที่บอสสั่ง — มันโชว์ลีดชุดเดียวกับการ์ด
+                {/* การ์ด "โครงการที่กำลังเริ่ม" เอาออกตามที่บอสสั่ง — มันโชว์ลูกค้าเป้าหมายชุดเดียวกับการ์ด
                     "งานขายทั้งหมด" ข้างบน กลายเป็นตัวเดิมซ้ำบน-ล่าง · ตอนนี้การ์ดเดียวรวมครบแล้ว
-                    (ซื้อแล้ว = ใบที่ปิดการขาย · กำลังทำ = ลีดที่ยังไม่ปิด) */}
+                    (ซื้อแล้ว = ใบที่ปิดการขาย · กำลังทำ = ลูกค้าเป้าหมายที่ยังไม่ปิด) */}
               </div>
 
               {/* ── ใบเสนอราคา ── */}

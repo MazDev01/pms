@@ -23,7 +23,7 @@ async function openBell(page: import("@playwright/test").Page) {
   await page.waitForTimeout(500);
 }
 
-test("กระดิ่งตัวแทน (CNX) ไม่โผล่ลีดสาขาอื่น", async ({ page }) => {
+test("กระดิ่งตัวแทน (CNX) ไม่โผล่ลูกค้าเป้าหมายสาขาอื่น", async ({ page }) => {
   const otherBranch = await otherBranchCompanies("CNX");
   await openAs(page, CNX, "dealer", "/dashboard");
   await page.waitForTimeout(1500);
@@ -42,22 +42,22 @@ test("กระดิ่งตัวแทน (CNX) ไม่โผล่ลี�
   expect(leaked, "กระดิ่งตัวแทนต้องไม่มีบริษัทของสาขาอื่น").toEqual([]);
 });
 
-test("หน้า HQ เจาะสาขา CNX ไม่โผล่ลีดของสาขาอื่น", async ({ page }) => {
+test("หน้า HQ เจาะสาขา CNX ไม่โผล่ลูกค้าเป้าหมายของสาขาอื่น", async ({ page }) => {
   const otherBranch = await otherBranchCompanies("CNX");
   await open(page, "hq", "/hq/dealers/CNX");
   await page.waitForTimeout(1500);
-  // แท็บ "ลูกค้าเป้าหมาย" — ตารางลีดของสาขานี้
+  // แท็บ "ลูกค้าเป้าหมาย" — ตารางลูกค้าเป้าหมายของสาขานี้
   await page.getByRole("button", { name: /ลูกค้าเป้าหมาย/ }).first().click().catch(() => {});
   await page.waitForTimeout(500);
   const bodyText = await page.evaluate(() => document.body.innerText);
   const leaked = otherBranch.filter(name => bodyText.includes(name));
   console.log(`หน้าเจาะ CNX → โผล่บริษัทสาขาอื่น: ${leaked.length}`, JSON.stringify(leaked.slice(0, 6)));
-  expect(leaked, "หน้าเจาะสาขา CNX ต้องมีเฉพาะลีดของ CNX").toEqual([]);
-  // จำนวนแถวในตารางลีด ต้อง = จำนวนลีด CNX จริงใน DB (ไม่ใช่ทั้งเครือ)
+  expect(leaked, "หน้าเจาะสาขา CNX ต้องมีเฉพาะลูกค้าเป้าหมายของ CNX").toEqual([]);
+  // จำนวนแถวในตารางลูกค้าเป้าหมาย ต้อง = จำนวนลูกค้าเป้าหมาย CNX จริงใน DB (ไม่ใช่ทั้งเครือ)
   const cnxCount = (await admin.from("leads").select("id", { count: "exact", head: true }).eq("dealer_code", "CNX")).count ?? 0;
   const rows = await page.locator("table tbody tr").count();
-  console.log(`แถวตารางลีด = ${rows} · ลีด CNX จริง = ${cnxCount}`);
-  expect(rows, "จำนวนแถว = ลีด CNX เท่านั้น").toBe(cnxCount);
+  console.log(`แถวตารางลูกค้าเป้าหมาย = ${rows} · ลูกค้าเป้าหมาย CNX จริง = ${cnxCount}`);
+  expect(rows, "จำนวนแถว = ลูกค้าเป้าหมาย CNX เท่านั้น").toBe(cnxCount);
 });
 
 test("ค้นหาบน Topbar (CNX) ไม่โผล่ลูกค้า/ใบเสนอราคาสาขาอื่น", async ({ page }) => {

@@ -46,7 +46,7 @@ test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); await purge
 
 // ⚠️ เกณฑ์ข้อนี้เข้มขึ้นเมื่อ 10 ส.ค. 69 — เดิมยอมให้บันทึกผ่านตราบใดที่ไม่มีเลขติดลบลง DB
 //   (ของที่กรอกไปจะกลายเป็น "฿0" เงียบ ๆ) ซึ่งพอเจอในการใช้งานจริงแล้วไม่ดีพอ:
-//   เซลส์ไม่รู้ว่ามูลค่าหายไป แล้วลีดนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
+//   เซลส์ไม่รู้ว่ามูลค่าหายไป แล้วลูกค้าเป้าหมายนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
 //   ตอนนี้ต้อง "ฟ้องแล้วไม่บันทึก" — เทสต์นี้จึงเปลี่ยนตามพฤติกรรมที่ตั้งใจให้เป็น
 //   (ไม่ได้แก้เทสต์เพื่อให้ผ่าน — แก้เพราะข้อกำหนดเปลี่ยน และมีเทสต์เฉพาะเรื่องนี้เพิ่มไว้ที่
 //    form-shows-what-it-saves.spec.ts ด้วย)
@@ -70,7 +70,7 @@ test("[edge] มูลค่าประเมินติดลบ/ข้อค
   await expect(page.getByText(/มูลค่าอ่านไม่ออก/), `ตอน blur ในฟอร์มเห็น: "${afterBlur}"`).toBeVisible({ timeout: 10_000 });
   assertNoErrors(errs, "กรอกมูลค่าติดลบ");
 
-  // และต้องไม่มีลีดลงฐานข้อมูลเลย (เดิมลงเป็น "฿0" ซึ่งผู้ใช้ไม่มีทางรู้ว่ามูลค่าหายไปแล้ว)
+  // และต้องไม่มีลูกค้าเป้าหมายลงฐานข้อมูลเลย (เดิมลงเป็น "฿0" ซึ่งผู้ใช้ไม่มีทางรู้ว่ามูลค่าหายไปแล้ว)
   await page.waitForTimeout(1500);
   const { data } = await sb.from("leads").select("id,value").eq("dealer_code", "RYG").eq("company", COMPANY);
   expect(data?.length ?? 0, `ต้องไม่บันทึก แต่พบ ${JSON.stringify(data)}`).toBe(0);
@@ -97,7 +97,7 @@ test("[edge] ชื่อบริษัทยาวผิดปกติ (2000 
   // เปิดตารางแล้วต้องไม่พัง (ไม่ล้นจอ ไม่แครช) แม้มีชื่อยาวผิดปกติปนอยู่
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
-  // ต้องค้นหาก่อนเสมอ — ตารางลีดแบ่งหน้า และตอนรันทั้งชุดพร้อมกัน สเปกอื่นสร้างลีดใหม่ของสาขา
+  // ต้องค้นหาก่อนเสมอ — ตารางลูกค้าเป้าหมายแบ่งหน้า และตอนรันทั้งชุดพร้อมกัน สเปกอื่นสร้างลูกค้าเป้าหมายใหม่ของสาขา
   // เดียวกันแทรกเข้ามาตลอด (เรียงใหม่สุดขึ้นก่อน) แถวของเทสต์นี้จึงถูกดันตกหน้าแรกไปเป็นครั้งคราว
   // → ตกด้วยข้อความ "ไม่เจอแถว" ทั้งที่ข้อมูลอยู่ครบ · กับดักเดียวกับที่แก้ไปแล้ว 6 จุดเมื่อ 6 ส.ค. 69
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(tg("ยาว"));
@@ -124,8 +124,8 @@ test("[edge] อักขระพิเศษ/emoji/แท็ก HTML ในช
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
-  // ค้นหาก่อนเสมอ — ตารางลีดแบ่งหน้า ตอนรันชุดเต็มมีลีดของสเปกอื่นบนสาขา RYG เดียวกันเพิ่มเข้ามา
-  // ลีดของเราถูกดันไปหน้าหลัง แล้วเทสต์ล้มแบบสุ่มทั้งที่ระบบทำงานถูก (เป็นการหาผิดที่ ไม่ใช่บั๊ก)
+  // ค้นหาก่อนเสมอ — ตารางลูกค้าเป้าหมายแบ่งหน้า ตอนรันชุดเต็มมีลูกค้าเป้าหมายของสเปกอื่นบนสาขา RYG เดียวกันเพิ่มเข้ามา
+  // ลูกค้าเป้าหมายของเราถูกดันไปหน้าหลัง แล้วเทสต์ล้มแบบสุ่มทั้งที่ระบบทำงานถูก (เป็นการหาผิดที่ ไม่ใช่บั๊ก)
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(tg("แปลก"));
   const rowLoc = page.locator("tbody tr").filter({ hasText: tg("แปลก") }).first();
   await expect(rowLoc).toBeVisible({ timeout: 15_000 });
@@ -133,7 +133,7 @@ test("[edge] อักขระพิเศษ/emoji/แท็ก HTML ในช
   await expect(rowLoc.locator("b")).toHaveCount(0);
 });
 
-test("[edge] กดปุ่มบันทึกซ้ำเร็ว ๆ (double-submit) → สร้างลีดแค่ 1 แถว ไม่ซ้ำ", async ({ page }) => {
+test("[edge] กดปุ่มบันทึกซ้ำเร็ว ๆ (double-submit) → สร้างลูกค้าเป้าหมายแค่ 1 แถว ไม่ซ้ำ", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const COMPANY = tg("กดซ้ำ");
@@ -160,7 +160,7 @@ test("[edge] กดปุ่มบันทึกซ้ำเร็ว ๆ (doub
   const { data, error } = await sb.from("leads").select("id").eq("dealer_code", "RYG").eq("company", COMPANY);
   if (error) throw new Error(error.message);
   assertNoErrors(errs, "กดบันทึกซ้ำเร็ว ๆ");
-  expect(data?.length, `จำนวนแถวลีดที่สร้างจริงจากการกด ${COMPANY}`).toBe(1);
+  expect(data?.length, `จำนวนแถวลูกค้าเป้าหมายที่สร้างจริงจากการกด ${COMPANY}`).toBe(1);
 });
 
 test("[edge] พื้นที่ (ตร.ม.) ติดลบผ่าน fill() ตรง ๆ (ข้าม min=0 ของ browser) → ไม่พัง, ไม่เก็บค่าติดลบ", async ({ page }) => {
@@ -225,23 +225,23 @@ test("[edge] กดปุ่ม 'สร้างโครงการ' (ดี�
   assertNoErrors(errs, "กดสร้างโครงการซ้ำเร็ว ๆ");
   const { data: leadsFound, error: lErr } = await sb.from("leads").select("id").eq("dealer_code", "RYG").eq("company", COMPANY);
   if (lErr) throw new Error(lErr.message);
-  expect(leadsFound?.length, `จำนวนดีล(ลีด)ที่สร้างจริงจากลูกค้า ${COMPANY}`).toBe(1);
+  expect(leadsFound?.length, `จำนวนดีล(ลูกค้าเป้าหมาย)ที่สร้างจริงจากลูกค้า ${COMPANY}`).toBe(1);
 
   await sb.from("leads").delete().eq("dealer_code", "RYG").eq("company", COMPANY);
   await sb.from("customers").delete().eq("id", cust!.id as number);
 });
 
-test("[edge] แก้ 'มูลค่า' ลีดเดียวกันพร้อมกัน 2 แท็บ → ไม่พัง, ไม่มีแถวซ้ำ, ได้ค่าใดค่าหนึ่งจริง (ไม่ใช่ค่าผสม/เพี้ยน)", async ({ browser }) => {
+test("[edge] แก้ 'มูลค่า' ลูกค้าเป้าหมายเดียวกันพร้อมกัน 2 แท็บ → ไม่พัง, ไม่มีแถวซ้ำ, ได้ค่าใดค่าหนึ่งจริง (ไม่ใช่ค่าผสม/เพี้ยน)", async ({ browser }) => {
   const sb = await db(RYG);
   const COMPANY = tg("2แท็บ");
 
-  // สร้างลีดตั้งต้นตรงผ่าน DB (เร็วกว่าเปิดฟอร์ม + ตัดตัวแปรของฟอร์มออกไป เหลือแค่ประเด็น concurrent write)
+  // สร้างลูกค้าเป้าหมายตั้งต้นตรงผ่าน DB (เร็วกว่าเปิดฟอร์ม + ตัดตัวแปรของฟอร์มออกไป เหลือแค่ประเด็น concurrent write)
   const { data: created, error: cErr } = await sb.from("leads").insert({
     id: `${COMPANY}`, dealer_code: "RYG", company: COMPANY, contact: "คุณสองแท็บ",
     province: "ระยอง", product: "โกดังสำเร็จรูป", status: "WAITING", value: "฿1,000,000",
     assigned: "—", source: "เว็บไซต์",
   }).select("id").single();
-  if (cErr) throw new Error(`สร้างลีดตั้งต้นไม่สำเร็จ: ${cErr.message}`);
+  if (cErr) throw new Error(`สร้างลูกค้าเป้าหมายตั้งต้นไม่สำเร็จ: ${cErr.message}`);
 
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
@@ -259,7 +259,7 @@ test("[edge] แก้ 'มูลค่า' ลีดเดียวกันพ
     // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
     //
     // ⚠️ ต้องค้นหา "ทั้งสองแท็บ" — เดิมใส่ให้แท็บ A แท็บเดียว (พบ 10 ส.ค. 69)
-    //   แท็บ B จึงเห็นตารางที่ไม่ได้กรอง พอมีลีดของสาขา RYG เกิน 10 รายการ
+    //   แท็บ B จึงเห็นตารางที่ไม่ได้กรอง พอมีลูกค้าเป้าหมายของสาขา RYG เกิน 10 รายการ
     //   แถวเป้าหมายก็ตกไปอยู่หน้าถัดไป → หาไม่เจอ แล้วตกที่บรรทัด "รอให้แถว B ขึ้น"
     //   อาการคือ "ตกบ้างไม่ตกบ้าง" ขึ้นกับว่าสเปกอื่นสร้างข้อมูลค้างไว้เท่าไหร่ตอนนั้น
     //   ซึ่งเป็นกับดักเดียวกับที่เคยไล่เก็บไปแล้ว 13 จุด แต่จุดนี้รอดมาเพราะ "มีคำสั่งค้นหาอยู่จริง" หนึ่งอัน
@@ -288,7 +288,7 @@ test("[edge] แก้ 'มูลค่า' ลีดเดียวกันพ
 
     const { data: finalRows, error: fErr } = await sb.from("leads").select("id,value").eq("dealer_code", "RYG").eq("company", COMPANY);
     if (fErr) throw new Error(fErr.message);
-    expect(finalRows?.length, "ต้องไม่มีลีดซ้ำแถวจากการแก้พร้อมกัน").toBe(1);
+    expect(finalRows?.length, "ต้องไม่มีลูกค้าเป้าหมายซ้ำแถวจากการแก้พร้อมกัน").toBe(1);
     const finalValue = finalRows![0].value as string; // เก็บเป็นรูปย่อ เช่น "฿2.0M" ไม่ใช่ตัวเลขดิบ
     const m = /([\d.]+)\s*M/.exec(finalValue);
     const finalNum = m ? Math.round(parseFloat(m[1]) * 1e6) : NaN;
@@ -323,7 +323,7 @@ test("[edge·hq] กดปุ่ม 'สร้างตัวแทน' ซ้�
   await waitRow(sb, "dealers_directory", { code: NEW_DEALER_CODE }, 25_000);
   await page.waitForTimeout(3000); // เผื่อเวลาให้คำขอซ้ำ (ถ้ามี) ไปถึง DB/สร้าง auth user ซ้ำก่อนนับ
   // ไม่เรียก assertNoErrors ตรงนี้ — คำขอที่ 2-5 "ควร" โดนปฏิเสธด้วย 400 (รหัสตัวแทนซ้ำ) นี่คือพฤติกรรม
-  // ที่ถูกต้อง (มี unique constraint กันไว้ที่ระดับเซิร์ฟเวอร์แล้ว ต่างจากฟอร์มเพิ่มลีด/ลูกค้าที่ไม่มี
+  // ที่ถูกต้อง (มี unique constraint กันไว้ที่ระดับเซิร์ฟเวอร์แล้ว ต่างจากฟอร์มเพิ่มลูกค้าเป้าหมาย/ลูกค้าที่ไม่มี
   // การกันชนธรรมชาติแบบนี้) สิ่งที่ต้องยืนยันจริงคือ "จำนวนแถวสุดท้าย" ต้องเป็น 1 เท่านั้น ไม่ใช่ "ไม่มี error เลย"
   const dup400s = errs.filter(e => e.includes("[http 400]") && e.includes("/api/admin/dealers")).length;
   console.log(`[info] คำขอสร้างตัวแทนที่ถูกปฏิเสธเพราะรหัสซ้ำ (พฤติกรรมที่ถูกต้อง): ${dup400s} ครั้ง`);
@@ -385,7 +385,7 @@ test("[edge] พิมพ์เหตุผลปิดไม่สำเร็�
     province: "ระยอง", product: "โกดังสำเร็จรูป", status: "WAITING", value: "฿1,000,000",
     assigned: "—", source: "เว็บไซต์",
   });
-  if (insErr) throw new Error(`สร้างลีดตั้งต้นไม่สำเร็จ: ${insErr.message}`);
+  if (insErr) throw new Error(`สร้างลูกค้าเป้าหมายตั้งต้นไม่สำเร็จ: ${insErr.message}`);
 
   try {
     await loginUI(page, DEALER_ORIGIN, "/login", RYG);

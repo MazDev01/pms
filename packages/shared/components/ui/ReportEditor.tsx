@@ -13,11 +13,11 @@ const thaiDateStr = (d: Date) => `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${
 const todayStr = () => thaiDateStr(APP_NOW);
 
 export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: LeadRow) => void }) {
-  // ถ้ายังไม่มีรายงาน (ลีดเก่า) → เปิดด้วยเทมเพลตมาตรฐาน (พรีฟิลจากข้อมูลลีด) ให้แก้ต่อได้
+  // ถ้ายังไม่มีรายงาน (ลูกค้าเป้าหมายเก่า) → เปิดด้วยเทมเพลตมาตรฐาน (พรีฟิลจากข้อมูลลูกค้าเป้าหมาย) ให้แก้ต่อได้
   const initial = () => lead.report ?? buildLeadReport(lead, todayStr());
   const [text, setText] = useState(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
-  // ตั้งใจให้รีเซ็ตข้อความ "เฉพาะตอนเปลี่ยนลีด" เท่านั้น — ไม่ใช่ทุกครั้งที่ initial ถูกสร้างใหม่
+  // ตั้งใจให้รีเซ็ตข้อความ "เฉพาะตอนเปลี่ยนลูกค้าเป้าหมาย" เท่านั้น — ไม่ใช่ทุกครั้งที่ initial ถูกสร้างใหม่
   // ไม่งั้นสิ่งที่ผู้ใช้กำลังพิมพ์ค้างอยู่จะถูกเขียนทับด้วยเทมเพลตตั้งต้นระหว่างพิมพ์
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setText(initial()); }, [lead.id]);

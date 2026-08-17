@@ -44,7 +44,7 @@ export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): M
   return rows;
 }
 
-// หน้าเดียวของตารางลีด (paged/filtered ที่ DB) — M9 Phase 4 · supabase เท่านั้น · local คืน null
+// หน้าเดียวของตารางลูกค้าเป้าหมาย (paged/filtered ที่ DB) — M9 Phase 4 · supabase เท่านั้น · local คืน null
 export function useLeadsPage(opts: LeadListOpts): LeadListResult | null {
   const { salesVersion } = useSales();
   const key = JSON.stringify(opts);
@@ -63,7 +63,7 @@ export function useLeadsPage(opts: LeadListOpts): LeadListResult | null {
   return page;
 }
 
-// สรุปลีด "หลังกรอง" ที่ DB สำหรับ /hq/leads — M9 Phase 2 · supabase เท่านั้น · local คืน null → client fallback
+// สรุปลูกค้าเป้าหมาย "หลังกรอง" ที่ DB สำหรับ /hq/leads — M9 Phase 2 · supabase เท่านั้น · local คืน null → client fallback
 // reactive: refetch เมื่อ leads เปลี่ยน หรือ filters เปลี่ยน
 export function useLeadSummary(filters: LeadSummaryFilters): LeadSummary | null {
   const { salesVersion } = useSales();
@@ -122,7 +122,7 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
   return page;
 }
 
-// ผู้รับผิดชอบใบ (จากลีดที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลีดทั้งเครือ (M9 Phase 4)
+// ผู้รับผิดชอบใบ (จากลูกค้าเป้าหมายที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลูกค้าเป้าหมายทั้งเครือ (M9 Phase 4)
 // supabase เท่านั้น · local คืน null → หน้าใช้ค่า salesperson เดิมของ row (มาจาก array อยู่แล้ว)
 export function useQuotationSalesperson(quoteId: string | null, dealerCode: string | null): string | null {
   const [name, setName] = useState<string | null>(null);
@@ -207,7 +207,7 @@ export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string
   return summary;
 }
 
-// ลีดไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) · supabase เท่านั้น → null=fallback
+// ลูกค้าเป้าหมายไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) · supabase เท่านั้น → null=fallback
 export function useUnassignedLeads(filters: UnassignedFilters): UnassignedSummary | null {
   const { salesVersion } = useSales();
   const key = JSON.stringify(filters);
@@ -249,7 +249,7 @@ export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
 // โหมด local = ยังเป็นเดโม → คงพฤติกรรมเดิมไว้ให้หน้าจอมีข้อมูลให้ดู
 const USE_SEED = DATA_SOURCE !== "supabase";
 
-// ดีลเลอร์หลักของเดโม (สาขาที่ลีด/ใบไม่ระบุ dealerCode ถือเป็นของสาขานี้)
+// ดีลเลอร์หลักของเดโม (สาขาที่ลูกค้าเป้าหมาย/ใบไม่ระบุ dealerCode ถือเป็นของสาขานี้)
 export const CURRENT_DEALER = { code: "CNX", name: "เชียงใหม่สตีลบิลด์" };
 
 // multi-tenant: บันทึกที่สาขาอื่นสร้างจริง (SalesContext ติด dealerCode) → HQ ต้องระบุสาขาให้ถูก
@@ -295,8 +295,8 @@ export function useNetworkQuotations(): HQQuotation[] {
   }, [quotations, leads, dealerInfoOf]);
 }
 
-// ลีดทั้งเครือ = ลีดจริงจาก SalesContext เท่านั้น (ไม่มีข้อมูลเติมสังเคราะห์)
-// ลีดที่ระบุ dealerCode = ของสาขานั้น · ลีดที่ไม่ระบุ = สมุดงานของสาขา CNX (ดีลเลอร์ที่เล่นได้)
+// ลูกค้าเป้าหมายทั้งเครือ = ลูกค้าเป้าหมายจริงจาก SalesContext เท่านั้น (ไม่มีข้อมูลเติมสังเคราะห์)
+// ลูกค้าเป้าหมายที่ระบุ dealerCode = ของสาขานั้น · ลูกค้าเป้าหมายที่ไม่ระบุ = สมุดงานของสาขา CNX (ดีลเลอร์ที่เล่นได้)
 export function useNetworkLeads(): LeadRow[] {
   const { leads } = useSales();
   return useMemo(() => leads.map(l => ({ ...l, dealerCode: l.dealerCode ?? CURRENT_DEALER.code })), [leads]);
@@ -317,7 +317,7 @@ export function useNetworkCustomers(): HQCustomer[] {
         dealsWon: quotations.filter(q => q.customerId === c.id && q.status === "won").length,
         totalRevenue: c.totalValue,
         status: c.status === "inactive" ? "inactive" : "active",
-        // ระบบยังไม่บันทึก "วันติดต่อล่าสุด" ของลูกค้า (มีแต่ของลีด) → ไม่มีข้อมูลก็ต้องขึ้น "—"
+        // ระบบยังไม่บันทึก "วันติดต่อล่าสุด" ของลูกค้า (มีแต่ของลูกค้าเป้าหมาย) → ไม่มีข้อมูลก็ต้องขึ้น "—"
         // เดิมยัดวันเดียวกันให้ลูกค้าทุกรายทั้งเครือ = ค่าที่กุขึ้นมา
         lastContact: "—", segment: "sme",
       };
@@ -383,7 +383,7 @@ const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.",
 
 export function useNetworkDealerDetail(code: string): DealerDetail {
   const { leads, quotations, salesVersion } = useSales();
-  // supabase: ดึงลีด/ใบของสาขานี้ตรงจาก repo (RLS = ทั้งเครือ) — ไม่พึ่ง array ทั้งเครือของ SalesContext (M9 Phase 4)
+  // supabase: ดึงลูกค้าเป้าหมาย/ใบของสาขานี้ตรงจาก repo (RLS = ทั้งเครือ) — ไม่พึ่ง array ทั้งเครือของ SalesContext (M9 Phase 4)
   // local/ยังไม่กลับ: ใช้ array ของ SalesContext เหมือนเดิม (สาขา CNX มีข้อมูลสด · อื่น ๆ ใช้ seed ด้านล่าง)
   const [fetched, setFetched] = useState<{ leads: LeadRow[]; quotes: QuotationMock[] } | null>(null);
   useEffect(() => {
@@ -402,7 +402,7 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
     if (USE_SEED && code !== CURRENT_DEALER.code) {
       return dealerDetails[code] ?? { code, monthlySales: [], leads: [], projects: [], quotes: [] };
     }
-    // supabase: จากที่ดึงตรง (fetched) · local: กรอง array ของ SalesContext (CNX = ลีด/ใบไม่ระบุ dealerCode)
+    // supabase: จากที่ดึงตรง (fetched) · local: กรอง array ของ SalesContext (CNX = ลูกค้าเป้าหมาย/ใบไม่ระบุ dealerCode)
     const mine = fetched ? fetched.leads : leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === code);
     const myQuotes = fetched ? fetched.quotes : quotations.filter(q => (q.dealerCode ?? CURRENT_DEALER.code) === code);
     const quotes: DealerQuoteItem[] = myQuotes.map(q => ({
@@ -491,7 +491,7 @@ export function useHQSearch(query: string): { leads: LeadRow[]; quotes: Quotatio
   return res;
 }
 
-// นัดหมายของลีดหนึ่ง (drawer ดูลีด หน้า /hq/leads) — supabase: ดึงตรง · local/ยังไม่กลับ: null → ใช้ appointments array เดิม
+// นัดหมายของลูกค้าเป้าหมายหนึ่ง (drawer ดูลูกค้าเป้าหมาย หน้า /hq/leads) — supabase: ดึงตรง · local/ยังไม่กลับ: null → ใช้ appointments array เดิม
 export function useLeadAppointments(leadNumId: number | null, dealerCode: string | null): AppointmentMock[] | null {
   const { salesVersion } = useSales();
   const [appts, setAppts] = useState<AppointmentMock[] | null>(null);

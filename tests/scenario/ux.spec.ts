@@ -87,7 +87,7 @@ test("[ux·dealer] คำนำหน้าเลขที่ใบเสนอ�
 });
 
 // ฟอร์มเพิ่มลูกค้าเป้าหมาย: เลือกขั้นได้เฉพาะก่อน "เสนอราคา" (ขั้นเสนอราคาต้องมีใบก่อน)
-test("[ux·dealer] ฟอร์มเพิ่มลีดไม่มีขั้น 'เสนอราคา'", async ({ page }) => {
+test("[ux·dealer] ฟอร์มเพิ่มลูกค้าเป้าหมายไม่มีขั้น 'เสนอราคา'", async ({ page }) => {
   await open(page, "dealer", "/leads");
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).click();
   await expect(page.getByText("กรอกข้อมูลลูกค้าเป้าหมาย")).toBeVisible();

@@ -7,7 +7,7 @@ import { validateUpload } from "@pms/shared/lib/uploadLimits";
 
 // ── Edge Case / การใช้งานผิดวิธี: ใบเสนอราคา · ปิดการขาย · เน็ตหลุด ──────────────
 //
-// ชุด edge-cases เดิมครอบคลุมแค่ "ลีด" กับ "หน้าจัดการตัวแทน" — ส่วนที่เป็นหัวใจของธุรกิจ
+// ชุด edge-cases เดิมครอบคลุมแค่ "ลูกค้าเป้าหมาย" กับ "หน้าจัดการตัวแทน" — ส่วนที่เป็นหัวใจของธุรกิจ
 // (ออกใบเสนอราคา → ปิดการขาย → ยอดลูกค้า) ยังไม่เคยถูกทดสอบแบบใช้ผิดวิธีเลย
 // ทั้งที่เป็นจุดที่ผิดแล้ว "เสียเงินจริง": ยอดขายบวกซ้ำ ลูกค้าซ้ำ หรือบันทึกไม่ลงแบบเงียบ ๆ
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
@@ -19,7 +19,7 @@ const tg = nsTag(NS);
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
-/** สร้างลีดพร้อมแม่แบบ (BOQ ตั้งต้นไม่ว่าง) แล้วเปิดแผงรายละเอียดค้างไว้ */
+/** สร้างลูกค้าเป้าหมายพร้อมแม่แบบ (BOQ ตั้งต้นไม่ว่าง) แล้วเปิดแผงรายละเอียดค้างไว้ */
 async function newLeadOpened(page: import("@playwright/test").Page, company: string) {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
@@ -36,7 +36,7 @@ async function newLeadOpened(page: import("@playwright/test").Page, company: str
   await page.getByRole("button", { name: "ตาราง" }).click();
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(company); // ตารางแบ่งหน้า
   const row = page.locator("tbody tr").filter({ hasText: company }).first();
-  await expect(row, "ลีดที่เพิ่งสร้างต้องโผล่ในตาราง").toBeVisible({ timeout: 30_000 });
+  await expect(row, "ลูกค้าเป้าหมายที่เพิ่งสร้างต้องโผล่ในตาราง").toBeVisible({ timeout: 30_000 });
   return { sb, row };
 }
 
@@ -115,8 +115,8 @@ test("[edge] กด 'ปิดการขายสำเร็จ' รัว �
   ).toBe(wonSum);
 });
 
-test("[edge] แนบไฟล์ที่ลีด: ไฟล์ใหญ่เกิน/ชนิดที่ไม่รับ ต้องถูกปฏิเสธพร้อมบอกเหตุผล", async ({ page }) => {
-  // ช่องแนบไฟล์ในแผงลีดเคยไม่ตรวจอะไรเลย ทั้งที่เขียนลง "คลังไฟล์รวม" ก้อนเดียวกับหน้าไฟล์
+test("[edge] แนบไฟล์ที่ลูกค้าเป้าหมาย: ไฟล์ใหญ่เกิน/ชนิดที่ไม่รับ ต้องถูกปฏิเสธพร้อมบอกเหตุผล", async ({ page }) => {
+  // ช่องแนบไฟล์ในแผงลูกค้าเป้าหมายเคยไม่ตรวจอะไรเลย ทั้งที่เขียนลง "คลังไฟล์รวม" ก้อนเดียวกับหน้าไฟล์
   // และแผงลูกค้าซึ่งตรวจอยู่แล้ว → ไฟล์ 100 MB หรือ .exe เข้าระบบได้ทางนี้ทางเดียว
   const company = tg("แนบไฟล์");
   const { sb, row } = await newLeadOpened(page, company);
@@ -155,14 +155,14 @@ test("[edge] แนบไฟล์ที่ลีด: ไฟล์ใหญ่�
   expect(banned, `ไฟล์ชนิดที่ไม่รับต้องไม่ลงระบบ — พบ ${JSON.stringify(banned)}`).toEqual([]);
 });
 
-test("[edge] เน็ตหลุดตอนกดบันทึกลีด → ต้องเตือนให้เห็น ห้ามเงียบเหมือนบันทึกสำเร็จ", async ({ page }) => {
+test("[edge] เน็ตหลุดตอนกดบันทึกลูกค้าเป้าหมาย → ต้องเตือนให้เห็น ห้ามเงียบเหมือนบันทึกสำเร็จ", async ({ page }) => {
   // อาการที่อันตรายที่สุดคือ "ดูเหมือนสำเร็จ" — เซลส์ปิดหน้าไปแล้วข้อมูลไม่เคยลงระบบ
   // ของจริงเกิดได้ตลอด: เน็ตมือถือหลุด · wifi สลับ · เซิร์ฟเวอร์ตอบช้าเกินจนหลุด
   const company = tg("เน็ตหลุด");
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
 
-  // ตัดเฉพาะ "คำสั่งบันทึกลีด" — ส่วนอื่นของหน้ายังทำงานปกติ (จำลองเน็ตสะดุดช่วงสั้น ๆ)
+  // ตัดเฉพาะ "คำสั่งบันทึกลูกค้าเป้าหมาย" — ส่วนอื่นของหน้ายังทำงานปกติ (จำลองเน็ตสะดุดช่วงสั้น ๆ)
   await page.route(/\/rest\/v1\/leads(\?|$)/, async (route) => {
     if (route.request().method() === "POST") return route.abort("connectionfailed");
     return route.continue();
@@ -178,10 +178,10 @@ test("[edge] เน็ตหลุดตอนกดบันทึกลีด 
     "เน็ตหลุดตอนบันทึก ต้องขึ้นข้อความเตือนให้ผู้ใช้เห็น ห้ามเงียบ",
   ).toBeVisible({ timeout: 30_000 });
 
-  // และต้องไม่มีลีดค้างอยู่บนจอให้เข้าใจผิดว่าบันทึกแล้ว
+  // และต้องไม่มีลูกค้าเป้าหมายค้างอยู่บนจอให้เข้าใจผิดว่าบันทึกแล้ว
   const sb = await db(RYG);
   const { data } = await sb.from("leads").select("id").eq("company", company);
-  expect(data?.length ?? 0, "ลีดต้องไม่ถูกบันทึกจริง (คำสั่งถูกตัดไปแล้ว)").toBe(0);
+  expect(data?.length ?? 0, "ลูกค้าเป้าหมายต้องไม่ถูกบันทึกจริง (คำสั่งถูกตัดไปแล้ว)").toBe(0);
 });
 
 // ── ใบเสนอราคา: ตัวเลขที่กรอกผิด/จงใจกรอกมั่ว ต้องไม่ทำให้ยอดเพี้ยน ────────────────

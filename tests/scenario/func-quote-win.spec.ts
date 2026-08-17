@@ -5,7 +5,7 @@ import {
   db, waitRow, cleanup, specNS, nsTag, pickTemplate
 } from "./funcHelpers";
 
-// โซ่ธุรกิจหลักของทั้งระบบ: ลีด → ใบเสนอราคา (BOQ) → ปิดการขาย → ลูกค้า
+// โซ่ธุรกิจหลักของทั้งระบบ: ลูกค้าเป้าหมาย → ใบเสนอราคา (BOQ) → ปิดการขาย → ลูกค้า
 // ทุกขั้นต้องลง DB จริง ไม่ใช่แค่เปลี่ยนบนจอ
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(240_000);
@@ -19,13 +19,13 @@ const COMPANY = tg("โซ่ขาย");
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
-test("[func] ออกใบเสนอราคาจากลีด → ใบลง DB พร้อมรายการสินค้า", async ({ page }) => {
+test("[func] ออกใบเสนอราคาจากลูกค้าเป้าหมาย → ใบลง DB พร้อมรายการสินค้า", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
-  // 1) สร้างลีดต้นทาง
+  // 1) สร้างลูกค้าเป้าหมายต้นทาง
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
@@ -35,9 +35,9 @@ test("[func] ออกใบเสนอราคาจากลีด → ใ�
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
-  // 2) เปิดแผงลีด → แท็บใบเสนอราคา → สร้าง
+  // 2) เปิดแผงลูกค้าเป้าหมาย → แท็บใบเสนอราคา → สร้าง
   await page.getByRole("button", { name: "ตาราง" }).click();
-  // ตารางลีดแบ่งหน้า — ตอนรันชุดเต็มมีลีดทดสอบสะสมจนลีดของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
+  // ตารางลูกค้าเป้าหมายแบ่งหน้า — ตอนรันชุดเต็มมีลูกค้าเป้าหมายทดสอบสะสมจนลูกค้าเป้าหมายของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -66,7 +66,7 @@ test("[func] ปิดการขายสำเร็จ → ลูกค้�
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
-  // ตารางลีดแบ่งหน้า — ตอนรันชุดเต็มมีลีดทดสอบสะสมจนลีดของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
+  // ตารางลูกค้าเป้าหมายแบ่งหน้า — ตอนรันชุดเต็มมีลูกค้าเป้าหมายทดสอบสะสมจนลูกค้าเป้าหมายของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
 
   // ตารางแบ่งหน้า — ตอนรันชุดเต็ม สเปกอื่นเพิ่มข้อมูลของสาขาเดียวกันแทรกเข้ามาตลอด ต้องค้นหาก่อน
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
@@ -77,13 +77,13 @@ test("[func] ปิดการขายสำเร็จ → ลูกค้�
   page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
-  // ลูกค้าต้องถูกสร้างจากลีด — นี่คือจุดที่ระบบ "แปลงลีดเป็นลูกค้า"
+  // ลูกค้าต้องถูกสร้างจากลูกค้าเป้าหมาย — นี่คือจุดที่ระบบ "แปลงลูกค้าเป้าหมายเป็นลูกค้า"
   const cust = await waitRow<{ company: string; dealer_code: string; id: number }>(
     sb, "customers", { company: COMPANY }, 20_000);
-  expect(cust.dealer_code, "ลูกค้าต้องเป็นของสาขาเดียวกับลีด").toBe("RYG");
+  expect(cust.dealer_code, "ลูกค้าต้องเป็นของสาขาเดียวกับลูกค้าเป้าหมาย").toBe("RYG");
   expect(cust.id, "เลขลูกค้าต้องมาจากตัวนับของ DB").toBeGreaterThan(0);
 
-  // M6 — ใบที่ออกให้ลีด (customer_id เดิม NULL) ต้องถูก relink เข้ากับลูกค้าใหม่
+  // M6 — ใบที่ออกให้ลูกค้าเป้าหมาย (customer_id เดิม NULL) ต้องถูก relink เข้ากับลูกค้าใหม่
   //   และ FK (dealer_code, customer_id) → customers ต้องยอมรับ (ลูกค้าถูกสร้างก่อน relink แล้ว)
   //   ถ้า FK ปฏิเสธ/ยังไม่ relink → customer_id จะไม่เท่ากับ cust.id → poll หมดเวลา
   await expect.poll(async () =>
@@ -108,7 +108,7 @@ test("[func] ลูกค้าที่เกิดจากการปิด�
   assertNoErrors(errs, "หน้าลูกค้า");
 });
 
-// เส้นทางปิดการขายเส้นที่สอง: กด "ลูกค้าตอบรับ ✓" บน "หน้าใบเสนอราคา" (ไม่ใช่ลิ้นชักลีด)
+// เส้นทางปิดการขายเส้นที่สอง: กด "ลูกค้าตอบรับ ✓" บน "หน้าใบเสนอราคา" (ไม่ใช่ลิ้นชักลูกค้าเป้าหมาย)
 // เดิมเส้นนี้พึ่ง trigger on_quote_won ที่ DB ซึ่งสร้างลูกค้า id=0 ไร้ชื่อ (C6)
 // ตอนนี้ trigger ถูกลบแล้ว แอปต้องสร้างลูกค้าผ่าน convertLeadToCustomer เอง (id จริง ข้อมูลครบ)
 test("[func] ปิดการขายจากหน้าใบเสนอราคา → ลูกค้าถูกสร้าง id จริง ไม่ใช่ 0 (C6)", async ({ page }) => {
@@ -118,7 +118,7 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
-  // 1) ลีดใหม่ + ออกใบเสนอราคาจากลีด (ใบผูก dealId ของลีด · customerId = 0)
+  // 1) ลูกค้าเป้าหมายใหม่ + ออกใบเสนอราคาจากลูกค้าเป้าหมาย (ใบผูก dealId ของลูกค้าเป้าหมาย · customerId = 0)
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMP);
@@ -129,7 +129,7 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
   await waitRow(sb, "leads", { company: COMP });
 
   await page.getByRole("button", { name: "ตาราง" }).click();
-  // ตารางลีดแบ่งหน้า — ตอนรันชุดเต็มมีลีดทดสอบสะสมจนลีดของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
+  // ตารางลูกค้าเป้าหมายแบ่งหน้า — ตอนรันชุดเต็มมีลูกค้าเป้าหมายทดสอบสะสมจนลูกค้าเป้าหมายของเทสต์นี้หลุดไปหน้าหลัง ต้องค้นหาก่อน
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMP);
   const lrow = page.locator("tbody tr").filter({ hasText: COMP }).first();
   await expect(lrow).toBeVisible({ timeout: 25_000 });

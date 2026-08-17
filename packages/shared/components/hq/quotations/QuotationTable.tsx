@@ -66,7 +66,7 @@ export function QuotationTable({ rows, onView, pagination }: {
             ) : rows.map(q => {
               const sc = quotationStatusColor[q.status];
               // คีย์ต้องพ่วงรหัสสาขา — เลขที่ใบไม่ซ้ำ "เฉพาะภายในสาขา" (คีย์จริง = สาขา + เลขที่)
-              // ตารางนี้รวมใบของทุกสาขา เลขเดียวกันจากคนละสาขาจึงชนกันได้ (กับดักเดียวกับหน้าลีด 7 ส.ค. 69)
+              // ตารางนี้รวมใบของทุกสาขา เลขเดียวกันจากคนละสาขาจึงชนกันได้ (กับดักเดียวกับหน้าลูกค้าเป้าหมาย 7 ส.ค. 69)
               return (
                 <ClickableRow key={`${q.dealerCode ?? ""}-${q.id}`} onActivate={() => onView(q)} label={`เปิดรายละเอียดใบเสนอราคา ${q.quoteNo}`}>
                   <td style={{ color: PRIMARY, fontWeight: 700, whiteSpace: "nowrap" }}>{q.quoteNo}</td>

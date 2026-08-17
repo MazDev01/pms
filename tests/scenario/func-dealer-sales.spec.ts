@@ -20,12 +20,12 @@ test.describe.configure({ mode: "serial" }); // แชร์สมุดงา�
 // ช่องข้อมูลเฉพาะสเปกนี้ — กัน cleanup ข้ามไปลบข้อมูลของสเปกอื่นที่รันขนานกัน (ดู funcHelpers)
 const NS = specNS("SALES");
 const tg = nsTag(NS);
-const COMPANY = tg("ลีดวงจร");
+const COMPANY = tg("ลูกค้าเป้าหมายวงจร");
 
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
-test("[func] สร้างลีดผ่านหน้าจอ → ลงฐานข้อมูลจริง", async ({ page }) => {
+test("[func] สร้างลูกค้าเป้าหมายผ่านหน้าจอ → ลงฐานข้อมูลจริง", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
 
@@ -41,13 +41,13 @@ test("[func] สร้างลีดผ่านหน้าจอ → ลง�
   // ต้องอยู่ใน DB — ไม่ใช่แค่โผล่บนจอ
   const row = await waitRow<{ company: string; dealer_code: string; status: string }>(
     sb, "leads", { company: COMPANY });
-  expect(row.dealer_code, "ลีดใหม่ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
-  expect(row.status, "ลีดใหม่เริ่มที่ 'ติดต่อแล้ว'").toBe("WAITING");
+  expect(row.dealer_code, "ลูกค้าเป้าหมายใหม่ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
+  expect(row.status, "ลูกค้าเป้าหมายใหม่เริ่มที่ 'ติดต่อแล้ว'").toBe("WAITING");
 
-  assertNoErrors(errs, "สร้างลีด");
+  assertNoErrors(errs, "สร้างลูกค้าเป้าหมาย");
 });
 
-test("[func] แก้ลีดผ่านหน้าจอ → ค่าใหม่ลงฐานข้อมูล", async ({ page }) => {
+test("[func] แก้ลูกค้าเป้าหมายผ่านหน้าจอ → ค่าใหม่ลงฐานข้อมูล", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const PHONE = "081-999-0001";
@@ -56,11 +56,11 @@ test("[func] แก้ลีดผ่านหน้าจอ → ค่าใ�
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
 
-  // ต้องค้นหาก่อน — ตารางลีดแบ่งหน้า และตอนรันชุดเต็มมีลีดทดสอบของสเปกอื่นบนสาขา RYG เดียวกันเพิ่มเข้ามา
-  // ทำให้ลีดของเราหลุดไปหน้าหลัง แล้วเทสต์ล้มแบบสุ่ม (ไม่ใช่บั๊ก — เป็นการหาผิดที่)
+  // ต้องค้นหาก่อน — ตารางลูกค้าเป้าหมายแบ่งหน้า และตอนรันชุดเต็มมีลูกค้าเป้าหมายทดสอบของสเปกอื่นบนสาขา RYG เดียวกันเพิ่มเข้ามา
+  // ทำให้ลูกค้าเป้าหมายของเราหลุดไปหน้าหลัง แล้วเทสต์ล้มแบบสุ่ม (ไม่ใช่บั๊ก — เป็นการหาผิดที่)
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
-  await expect(row, "ลีดที่สร้างไว้ต้องโผล่ในตาราง").toBeVisible({ timeout: 15_000 });
+  await expect(row, "ลูกค้าเป้าหมายที่สร้างไว้ต้องโผล่ในตาราง").toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
 
   // แผงรายละเอียดแก้ในที่เดิม (ไม่มีปุ่มสลับโหมด) — พิมพ์แล้วปุ่มบันทึกถึงจะกดได้
@@ -74,10 +74,10 @@ test("[func] แก้ลีดผ่านหน้าจอ → ค่าใ�
     return data?.[0]?.phone;
   }, { timeout: 15_000, message: "เบอร์ที่แก้ต้องถูกบันทึกลง DB" }).toBe(PHONE);
 
-  assertNoErrors(errs, "แก้ลีด");
+  assertNoErrors(errs, "แก้ลูกค้าเป้าหมาย");
 });
 
-test("[func] เลื่อนสถานะลีด → สถานะใหม่ลงฐานข้อมูล", async ({ page }) => {
+test("[func] เลื่อนสถานะลูกค้าเป้าหมาย → สถานะใหม่ลงฐานข้อมูล", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
 
@@ -99,7 +99,7 @@ test("[func] เลื่อนสถานะลีด → สถานะใ�
   assertNoErrors(errs, "เลื่อนสถานะ");
 });
 
-test("[func] ลบลีดผ่านหน้าจอ → หายจากฐานข้อมูลจริง", async ({ page }) => {
+test("[func] ลบลูกค้าเป้าหมายผ่านหน้าจอ → หายจากฐานข้อมูลจริง", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
 
@@ -115,5 +115,5 @@ test("[func] ลบลีดผ่านหน้าจอ → หายจา�
   await row.getByTitle("ลบลูกค้าเป้าหมาย").first().click();
 
   await waitGone(sb, "leads", { company: COMPANY });
-  assertNoErrors(errs, "ลบลีด");
+  assertNoErrors(errs, "ลบลูกค้าเป้าหมาย");
 });

@@ -28,7 +28,7 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
   onRequestQuotation?: (taskKey: string) => boolean;
 }) {
   const lostReasons = useLostReasons(); // รายการที่ HQ กำหนด (อ่านผ่าน repo — ไม่ใช่ localStorage ของ origin ตัวเอง)
-  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ลีดที่ยังไม่มี checklist ใช้ชุดนี้สร้าง
+  const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ลูกค้าเป้าหมายที่ยังไม่มี checklist ใช้ชุดนี้สร้าง
   const tasks: LeadTask[] = lead.tasks?.length ? lead.tasks : buildLeadTasks(taskTpl);
   const closed = lead.status === "PAID" || lead.status === "CANCELLED";
   const pct = closed ? 100 : taskProgress(tasks);

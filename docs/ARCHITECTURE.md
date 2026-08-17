@@ -47,7 +47,7 @@
 | **Service (Domain)** | Business logic: lead routing, BOQ calc, approval, project workflow | TypeScript service modules |
 | **Data Access** | ORM, query, transaction | Prisma |
 | **Persistence** | ฐานข้อมูลหลัก + ไฟล์ | PostgreSQL + Object Storage |
-| **Integration** | แจ้งเตือน, รับลีด | LINE Messaging API, Email, Web lead webhook |
+| **Integration** | แจ้งเตือน, รับลูกค้าเป้าหมาย | LINE Messaging API, Email, Web lead webhook |
 
 ---
 
@@ -87,13 +87,13 @@ Login → Auth.js ตรวจรหัส → สร้าง session { userId,
 
 ## 5. การไหลของข้อมูลหลัก (Key Data Flows)
 
-**A. ลีดเข้าระบบ → ปิดการขาย → เปิดโครงการ**
+**A. ลูกค้าเป้าหมายเข้าระบบ → ปิดการขาย → เปิดโครงการ**
 
-> **ช่องทางหลัก = ดีลเลอร์กรอกลูกค้า/ลีดเอง** — เมื่อดีลเลอร์กรอก ระบบผูก `dealerId` = ดีลเลอร์ตนทันที (ข้ามขั้นมอบหมาย)
+> **ช่องทางหลัก = ดีลเลอร์กรอกลูกค้า/ลูกค้าเป้าหมายเอง** — เมื่อดีลเลอร์กรอก ระบบผูก `dealerId` = ดีลเลอร์ตนทันที (ข้ามขั้นมอบหมาย)
 
 ```
 [A1] ช่องทางหลัก: Dealer Sales กรอก Customer + Lead เอง
-       → dealerId = ดีลเลอร์ตน อัตโนมัติ (เป็นเจ้าของลีดทันที)
+       → dealerId = ดีลเลอร์ตน อัตโนมัติ (เป็นเจ้าของลูกค้าเป้าหมายทันที)
        → ทำ Activity/สำรวจ → สร้าง Quotation (BOQ)
        → อนุมัติ (เกินวงเงิน → HQ) → ส่งลูกค้า → ชนะ
        → แปลง Quotation → Project (สร้าง 6 ProjectPhase อัตโนมัติ)
@@ -123,7 +123,7 @@ Project → Phase 1..6 (อัปเดต progress, task, รูป, QC)
 |---------|---------------------|
 | คำนวณ BOQ | กึ่งอัตโนมัติ — มีสูตรพื้นที่/ปริมาณเหล็กช่วย แต่แก้มือทับได้ |
 | วงเงินอนุมัติ HQ | ส่วนลด > 10% หรือราคาต่ำกว่าราคาพื้น → ต้องให้ HQ อนุมัติ (ตั้งค่าได้) |
-| มอบหมายลีด | อัตโนมัติตามจังหวัด + HQ override ได้ |
+| มอบหมายลูกค้าเป้าหมาย | อัตโนมัติตามจังหวัด + HQ override ได้ |
 | Customer Portal | เลื่อนไปเฟส 5 (ไม่อยู่ใน MVP) |
 | ราคา | HQ ตั้งราคากลาง, ดีลเลอร์ปรับได้ในกรอบ margin ที่กำหนด |
 

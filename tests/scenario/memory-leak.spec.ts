@@ -39,7 +39,7 @@ function analyzeGrowth(samples: number[], label: string) {
   return { firstHalfGrowth, secondHalfGrowth, totalGrowthMB };
 }
 
-test("[memory] เปิด-ปิดแผงรายละเอียดลีดซ้ำ 15 รอบ → หน่วยความจำต้องไม่โตต่อเนื่องไม่หยุด", async ({ page }) => {
+test("[memory] เปิด-ปิดแผงรายละเอียดลูกค้าเป้าหมายซ้ำ 15 รอบ → หน่วยความจำต้องไม่โตต่อเนื่องไม่หยุด", async ({ page }) => {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();
@@ -61,7 +61,7 @@ test("[memory] เปิด-ปิดแผงรายละเอียดล�
   samples.push(await heap.sample());
   await heap.close();
 
-  const { secondHalfGrowth, totalGrowthMB } = analyzeGrowth(samples, "เปิด-ปิดแผงลีด 15 รอบ");
+  const { secondHalfGrowth, totalGrowthMB } = analyzeGrowth(samples, "เปิด-ปิดแผงลูกค้าเป้าหมาย 15 รอบ");
   // เกณฑ์: โตรวมทั้งหมดไม่เกิน 15MB (หน้านี้มีข้อมูล seed ไม่มาก) และครึ่งหลังต้องไม่โตต่อเนื่องแรงเท่าครึ่งแรก
   expect(totalGrowthMB, `หน่วยความจำโตรวม ${totalGrowthMB.toFixed(2)}MB จาก 15 รอบเปิด-ปิด`).toBeLessThan(15);
   expect(secondHalfGrowth, "ครึ่งหลังต้องไม่โตต่อเนื่องไม่หยุด (สัญญาณรั่ว)").toBeLessThan(8 * 1024 * 1024);

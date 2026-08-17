@@ -56,7 +56,7 @@ src/
 ### `SalesContext.tsx` — สถานะงานขายร่วม (Lead ↔ Pipeline sync)
 `SalesProvider` · `useSales()`
 - **ดีล:** `addDeal · updateDealTask · moveDealStage · closeDeal · updateDealNotes · addDealFile · logDealActivity`
-- **ลีด:** `addLead · updateLead · deleteLead · updateLeadStatus · updateLeadChecklist`
+- **ลูกค้าเป้าหมาย:** `addLead · updateLead · deleteLead · updateLeadStatus · updateLeadChecklist`
 - **เชื่อม Lead→Deal:** `openDealFromLead(lead) · getDealForLead(leadId)`
 - types: `DealSource` · `ChecklistItem` · `SalesContextType`
 
@@ -96,7 +96,7 @@ src/
 | Route | โมดูล |
 |---|---|
 | `/dashboard` | แผงควบคุม — KPI 3 การ์ด + แถบสถิติ 5 + กราฟยอดขาย + เป้า/จริง + โดนัทดีล |
-| `/leads` · `/leads/[id]` | ลีด: รายการ + รายละเอียด |
+| `/leads` · `/leads/[id]` | ลูกค้าเป้าหมาย: รายการ + รายละเอียด |
 | `/customers` · `/customers/[id]` | ลูกค้า: รายการ + รายละเอียด |
 | `/pipeline` | เส้นทางการขาย (kanban + ดีล) |
 | `/quotations` | ใบเสนอราคา |
@@ -120,7 +120,7 @@ src/
 | `/hq/customers` | ลูกค้าทุกสาขา |
 | `/hq/pipeline` | มอนิเตอร์โอกาสการขายทุกสาขา |
 | `/hq/quotations` | ใบเสนอราคาทุกสาขา |
-| `/hq/lead-pool` | ลีดพูลกลาง (มอบหมายสาขา) |
+| `/hq/lead-pool` | พูลลูกค้าเป้าหมายกลาง (มอบหมายสาขา) |
 | `/hq/master` | สินค้า/มาสเตอร์ดาต้า |
 | `/hq/company` | ข้อมูลบริษัท |
 | `/hq/users` | ผู้ใช้งาน & สิทธิ์ |
