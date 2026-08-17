@@ -155,7 +155,7 @@ export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, lead
   productTypes: { type: string; count: number; value: number }[];
   aging: { key: AgingBucket; count: number; value: number }[];
   trend: { months: string[]; bar: number[]; line: number[] };
-  leadsByDealer: Record<string, number>;
+  leadsByDealer: Record<string, { leads: number; quoted: number }>;
   lostReasons: { reason: string; count: number; value: number }[];
   unspecifiedLost: number;
   totalLost: number;

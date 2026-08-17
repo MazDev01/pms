@@ -3,25 +3,32 @@
 // ─── #1 ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน ─────────────────────────────────
 // วัดว่าแต่ละสาขาเปลี่ยน "ลูกค้าเป้าหมาย" เป็น "ใบเสนอราคา" ได้ดีแค่ไหน
 // ลูกค้าเป้าหมาย = รายการจริงในระบบที่ผูก dealerCode · ใบเสนอราคา = ใบของสาขานั้นในตัวกรองปัจจุบัน
-// อัตรา = ใบเสนอราคา ÷ ลูกค้าเป้าหมาย (เกิน 100% ได้ — ลูกค้ารายเดียวออกใบได้หลายใบ)
-// ⚠️ คำที่ผู้ใช้เห็นต้องเป็น "ลูกค้าเป้าหมาย" เสมอ ห้ามใช้ "ลูกค้าเป้าหมาย" (บอสสั่ง 14 ส.ค. 69 — ดู thai-ui-glossary)
+//
+// ⚠️ อัตรา = ลูกค้าเป้าหมายที่ถึงขั้นเสนอราคาแล้ว (quoted) ÷ ลูกค้าเป้าหมายทั้งหมด — "ราย ÷ ราย" เท่านั้น
+//    ห้ามหารด้วยจำนวนใบ: ของเดิมใช้ จำนวนใบ ÷ ราย แล้วโชว์ 150% (บริษัทเดียวออกได้หลายใบ · ใบของลูกค้าเก่า
+//    ก็ถูกนับทั้งที่เจ้าตัวไม่อยู่ในตัวส่วนแล้ว) → อ่านเหมือนอัตราปิดการขายเกิน 100% ซึ่งเป็นไปไม่ได้
+//    สูตรนี้ตรงกับ /hq/leads (conv) และ /hq/pipeline ("อัตราแปลงเป็นใบเสนอราคา") แล้ว — แก้ที่เดียวให้ตรงกันทั้งระบบ
+//
+// ⚠️ คำที่ผู้ใช้เห็นต้องเป็น "ลูกค้าเป้าหมาย" เสมอ ห้ามใช้คำว่า ลีด (บอสสั่ง 14 ส.ค. 69 — ดู thai-ui-glossary)
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { type DealerAgg } from "@pms/shared/lib/hqQuotations";
 
 const QUOTE_COLOR = "#003366";
 const LEAD_COLOR = "#94a3b8";
 
-// leadsByDealer = จำนวนลูกค้าเป้าหมายต่อรหัสสาขา (supabase: lead_summary.byDealer · local: นับจาก leadRows)
-export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg: DealerAgg[]; leadsByDealer: Record<string, number> }) {
+// leadsByDealer = ลูกค้าเป้าหมายต่อรหัสสาขา { leads = ทั้งหมด · quoted = ถึงขั้นเสนอราคาแล้ว }
+//   (supabase: lead_summary.byDealer · local: นับจาก leadRows ด้วย QUOTED_UP)
+export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg: DealerAgg[]; leadsByDealer: Record<string, { leads: number; quoted: number }> }) {
   const quoteByDealer = new Map(dealerAgg.map(d => [d.code, d]));
-  const leadByDealer = new Map<string, number>(Object.entries(leadsByDealer));
+  const leadByDealer = new Map(Object.entries(leadsByDealer));
 
   // แสดงทุกสาขาที่มีลูกค้าเป้าหมายหรือมีใบเสนอราคาอย่างน้อยหนึ่งอย่าง
   const codes = [...new Set([...quoteByDealer.keys(), ...leadByDealer.keys()])];
   const bars = codes.map(code => ({
     code,
     name: quoteByDealer.get(code)?.name ?? code,
-    leads: leadByDealer.get(code) ?? 0,
+    leads: leadByDealer.get(code)?.leads ?? 0,
+    quoted: leadByDealer.get(code)?.quoted ?? 0,
     quotes: quoteByDealer.get(code)?.count ?? 0,
   })).sort((a, b) => b.quotes - a.quotes || b.leads - a.leads);
 
@@ -32,7 +39,7 @@ export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg
       <div className="card-header">
         <div>
           <div className="card-title">ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน</div>
-          <div className="card-desc">มีลูกค้าเป้าหมายกี่ราย ออกใบเสนอราคาได้กี่ใบ</div>
+          <div className="card-desc">% = ลูกค้าเป้าหมายที่ออกใบเสนอราคาแล้ว ÷ ทั้งหมด (นับเป็นราย ไม่ใช่จำนวนใบ)</div>
         </div>
         <span style={{ display: "flex", gap: 10, fontSize: "0.62rem", color: "var(--muted-foreground)", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -55,9 +62,12 @@ export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg
                 <span style={{ fontFamily: "monospace", fontWeight: 700, color: QUOTE_COLOR, marginRight: 6 }}>{b.code}</span>
                 {b.name}
               </span>
-              <span style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: "var(--muted-foreground)" }}>
+              <span
+                title={b.leads ? `ออกใบเสนอราคาแล้ว ${b.quoted} จากลูกค้าเป้าหมาย ${b.leads} ราย (รวม ${b.quotes} ใบ)` : "ยังไม่มีลูกค้าเป้าหมายในช่วงที่เลือก"}
+                style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums", fontWeight: 700, color: "var(--muted-foreground)" }}
+              >
                 {/* ไม่มีลูกค้าเป้าหมาย = หารไม่ได้ → ขึ้น "—" ห้ามโชว์ 0% ให้เข้าใจผิด */}
-                {b.leads ? `${Math.round((b.quotes / b.leads) * 100)}%` : "—"}
+                {b.leads ? `${Math.round((b.quoted / b.leads) * 100)}%` : "—"}
               </span>
             </div>
             {/* แถบลูกค้าเป้าหมาย */}

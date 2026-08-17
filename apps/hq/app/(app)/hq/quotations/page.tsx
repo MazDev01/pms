@@ -4,7 +4,7 @@
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
 // จึงมีแค่ ดู / วิเคราะห์ / เปรียบเทียบ / ส่งออก — ไม่มีปุ่มสร้าง แก้ไข ลบ อนุมัติ
 import { useState, useMemo, useEffect } from "react";
-import { quotationStatusLabel, mainTemplateOf, fmtISOToThai, DEFAULT_DEALER_CODE, type HQQuotation } from "@pms/shared/lib/mock";
+import { quotationStatusLabel, mainTemplateOf, fmtISOToThai, DEFAULT_DEALER_CODE, QUOTED_UP, type HQQuotation } from "@pms/shared/lib/mock";
 import type { QuotationMock } from "@pms/shared/lib/data/types";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -149,10 +149,17 @@ export default function NetworkQuotationPage() {
   // ลูกค้าเป้าหมายของสาขาในตัวกรอง (ขอบเขต+เวลาเดียวกับ leadRows) ที่ DB — ป้อน LeadsVsQuotations + LostReasons
   //   province ใช้ resolvedDealerCodes (จังหวัด "ของตัวแทน") ไม่ใช่ p_province ของ lead_summary (จังหวัดลูกค้า)
   const leadSum = useLeadSummary({ dealerCodes: resolvedDealerCodes, dateStart: qFilters.dateStart, dateEnd: qFilters.dateEnd });
-  const leadsByDealer = useMemo<Record<string, number>>(() => {
-    if (leadSum) return Object.fromEntries(leadSum.byDealer.map(d => [d.dealerCode, d.leads]));
-    const m: Record<string, number> = {};
-    leadRows.forEach(l => { const c = l.dealerCode || ""; if (c) m[c] = (m[c] ?? 0) + 1; });
+  // leads = ลูกค้าเป้าหมายทั้งหมด · quoted = ที่ไปถึงขั้นเสนอราคาแล้ว (QUOTED_UP)
+  //   quoted ใช้คิด "อัตราแปลง" — สูตรเดียวกับ /hq/leads และ /hq/pipeline (เดิมกราฟนี้หาร "จำนวนใบ" จึงเกิน 100% ได้)
+  const leadsByDealer = useMemo<Record<string, { leads: number; quoted: number }>>(() => {
+    if (leadSum) return Object.fromEntries(leadSum.byDealer.map(d => [d.dealerCode, { leads: d.leads, quoted: d.quoted }]));
+    const m: Record<string, { leads: number; quoted: number }> = {};
+    leadRows.forEach(l => {
+      const c = l.dealerCode || ""; if (!c) return;
+      const r = m[c] ?? (m[c] = { leads: 0, quoted: 0 });
+      r.leads += 1;
+      if (QUOTED_UP.includes(l.status)) r.quoted += 1;
+    });
     return m;
   }, [leadSum, leadRows]);
   const lostReasons = useMemo(() => {

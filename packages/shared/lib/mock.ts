@@ -848,7 +848,7 @@ export const initialCustomers: CustomerRow[] = [
 ];
 
 // ─── แม่แบบอาคาร (Building Templates — กำหนดโดย HQ, ดีลเลอร์ดูอย่างเดียว) ───
-// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "แม่แบบที่สนใจ" ในฟอร์มลูกค้าเป้าหมาย
+// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "งานที่สนใจ" ในฟอร์มลูกค้าเป้าหมาย
 export type SolutionPriceHistory = { price: number; effectiveDate: string; note?: string };
 export type SolutionProduct = {
   id: string; name: string; spec: string;

@@ -365,10 +365,10 @@ function OverviewEditor({ lead, persons, onSave }: {
             {PROVINCES.map(x=><option key={x}>{x}</option>)}
           </select>
         </Cell>
-        <Cell icon={Package} label="แม่แบบที่สนใจ">
+        <Cell icon={Package} label="งานที่สนใจ">
           {/* ใช้ตัวเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมาย — เดิมที่นี่ลิสต์เฉพาะแม่แบบหลัก ไม่มีแม่แบบย่อย
               ลูกค้าเป้าหมายที่เลือกแม่แบบย่อยไว้จึงหาค่าตัวเองในลิสต์ไม่เจอ แล้วโชว์ตัวแรกผิด ๆ แบบเดียวกัน */}
-          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} ariaLabel="แม่แบบที่สนใจ" />
+          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} ariaLabel="งานที่สนใจ" />
         </Cell>
         <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
           <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
@@ -674,8 +674,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>แม่แบบที่สนใจ</label>
-                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} ariaLabel="แม่แบบที่สนใจ" />
+                <label style={labelStyle}>งานที่สนใจ</label>
+                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} ariaLabel="งานที่สนใจ" />
               </div>
               <div>
                 <label style={labelStyle}>พื้นที่ (ตร.ม.)</label>

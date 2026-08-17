@@ -98,3 +98,43 @@ test("[ux·hq] ลิ้นชักดูใบเสนอราคา อ่�
   await expect(drawer.getByText(/ส่วนลด|ประวัติการเปิดอ่าน/)).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: /แก้ไข|ลบ|อนุมัติ/ })).toHaveCount(0);
 });
+
+// อัตราแปลงต้องเป็น "ราย ÷ ราย" — ไม่ใช่ "จำนวนใบ ÷ ราย"
+// ของเดิมหารด้วยจำนวนใบ แล้วโชว์ 150% (บริษัทเดียวออกใบได้หลายใบ + ใบของลูกค้าเก่าถูกนับ
+// ทั้งที่เจ้าตัวไม่อยู่ในตัวส่วนแล้ว) — อ่านเหมือนปิดการขายเกิน 100% ซึ่งเป็นไปไม่ได้
+//
+// ⚠️ ห้ามตรวจแค่ "ไม่เกิน 100%" — เคยเขียนแบบนั้นแล้วเทสต์ผ่านทั้งที่สูตรผิด
+//    เพราะข้อมูลทดสอบมีใบน้อยกว่าราย เลยไม่มีทางเกิน 100% อยู่แล้ว (เทสต์โกหก)
+//    ต้องเทียบกับตัวเลขใน tooltip ซึ่งพก "รายที่ออกใบแล้ว / รายทั้งหมด / จำนวนใบ" มาครบ
+test("[ux·hq] อัตราแปลง = รายที่ออกใบแล้ว ÷ รายทั้งหมด (ไม่ใช่จำนวนใบ)", async ({ page }) => {
+  await open(page, "hq", "/hq/quotations");
+  await assertHealthyPage(page, "ใบเสนอราคาทั้งเครือ");
+  const card = page.locator(".card", { hasText: "ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน" }).first();
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/นับเป็นราย ไม่ใช่จำนวนใบ/)).toBeVisible();
+
+  const cells = card.locator("span[title*='ออกใบเสนอราคาแล้ว']");
+  const n = await cells.count();
+  expect(n, "กราฟต้องมีอย่างน้อยหนึ่งตัวแทนให้ตรวจ").toBeGreaterThan(0);
+
+  let checkedAgainstDocs = 0;
+  for (let i = 0; i < n; i++) {
+    const title = (await cells.nth(i).getAttribute("title")) ?? "";
+    const shown = ((await cells.nth(i).innerText()) ?? "").trim();
+    const m = title.match(/ออกใบเสนอราคาแล้ว (\d+) จากลูกค้าเป้าหมาย (\d+) ราย \(รวม (\d+) ใบ\)/);
+    expect(m, `tooltip ต้องบอกที่มาของตัวเลขครบ: "${title}"`).not.toBeNull();
+    const [quoted, leads, docs] = [Number(m![1]), Number(m![2]), Number(m![3])];
+
+    expect(quoted, `รายที่ออกใบแล้วต้องไม่เกินรายทั้งหมด (${title})`).toBeLessThanOrEqual(leads);
+    expect(shown, `อัตราต้องคิดจาก ${quoted}/${leads} ราย (${title})`).toBe(`${Math.round(quoted / leads * 100)}%`);
+
+    // เคสที่พิสูจน์ว่าไม่ได้หารด้วยจำนวนใบ: ใบ ≠ ราย แล้วค่าที่โชว์ยังไม่ใช่ผลของจำนวนใบ
+    if (docs !== quoted && Math.round(docs / leads * 100) !== Math.round(quoted / leads * 100)) {
+      expect(shown, `ค่าที่โชว์ตรงกับสูตรเก่า (จำนวนใบ ÷ ราย) — สูตรถูกย้อนกลับแล้ว (${title})`)
+        .not.toBe(`${Math.round(docs / leads * 100)}%`);
+      checkedAgainstDocs++;
+    }
+  }
+  expect(checkedAgainstDocs, "ข้อมูลทดสอบไม่มีตัวแทนที่จำนวนใบต่างจากจำนวนราย — เทสต์นี้จะพิสูจน์อะไรไม่ได้เลย").toBeGreaterThan(0);
+});
+
