@@ -63,7 +63,20 @@ export const GET = async (req: NextRequest): Promise<Response> => {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   // ⚠️ บรรทัดนี้คือหัวใจ — realtime มีชั้นยืนยันตัวตนของตัวเอง ไม่ได้อ่านจาก global headers
-  sb.realtime.setAuth(token);
+  //
+  // ⚠️⚠️ setAuth เป็นฟังก์ชัน "รอผล" (คืน Promise) — ต้อง await หรือดักพลาดเสมอ
+  //   เคยเขียนลอย ๆ ไม่ await มาก่อน แล้วเจอของจริง: พอใบผ่านหมดอายุ/ถูกยกเลิก มันจะ reject
+  //   เป็น unhandled rejection ซึ่ง Node ถือเป็นเหตุให้ "ปิดโปรเซสทั้งตัว"
+  //   = เซิร์ฟเวอร์ล่มทั้งเครื่องเพราะสายอัปเดตสดสายเดียว (พบตอนรันชุดเต็ม 18 ส.ค. 69
+  //     ทุกหน้าต่อไม่ติด 213 ครั้ง ทั้งที่โหมดปกติผ่านหมด)
+  try {
+    await sb.realtime.setAuth(token);
+  } catch (e) {
+    console.error("[api/v1/events] ตั้งใบผ่านให้ realtime ไม่สำเร็จ", e);
+    return new Response(JSON.stringify({ error: "เปิดสายอัปเดตสดไม่สำเร็จ — ลองใหม่อีกครั้ง" }), {
+      status: 503, headers: { "content-type": "application/json" },
+    });
+  }
 
   const enc = new TextEncoder();
   let channels: RealtimeChannel[] = [];

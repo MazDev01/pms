@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
@@ -78,6 +78,21 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     if (r.ok) go(r.session.scopeAll);
     else { setError(r.error); setLoading(false); }
   }
+
+  // ── มาจากปุ่มข้ามเดโม (?autologin=1) → เข้าให้เลย ไม่ต้องกดซ้ำที่หน้านี้ ──
+  // บอสสั่ง 18 ส.ค. 69: "กดเข้าใช้ให้เข้าไปเลย ไม่ต้องเด้งมาหน้า login อีกฝั่ง"
+  // ⚠️ อยู่ใต้ !REAL_BACKEND เหมือนปุ่มเดโม — ระบบจริงต่อฐานข้อมูลจริงเสมอ จึงเข้าเงื่อนไขนี้ไม่ได้เลย
+  //    (ต่อให้ใครเดาลิงก์ ?autologin=1 ยิงใส่ระบบจริง ก็ไม่มีผลอะไร)
+  const autoRan = useRef(false);   // กันยิงซ้ำตอน React เรนเดอร์รอบสอง (StrictMode/dev)
+  useEffect(() => {
+    if (REAL_BACKEND || autoRan.current) return;
+    if (new URLSearchParams(window.location.search).get("autologin") !== "1") return;
+    const acct = DEMO_LOGINS.find(d => (isHQ ? d.scopeAll : !d.scopeAll));
+    if (!acct) return;
+    autoRan.current = true;
+    void quickLogin(acct.email);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ใช้อีเมลในช่องที่กรอกไว้แล้ว — ไม่ต้องเปิดฟอร์มใหม่ซ้อน
   // ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตรหัสผ่านเอง — HQ เป็นผู้คุมรหัสผ่านของตัวแทนทั้งหมด (บอสสั่ง)

@@ -77,3 +77,15 @@ test("[security] ระบบที่ต่อฐานข้อมูลจร
     expect(box + btns, `${path} ต้องไม่มีทางลัดเข้าระบบ`).toBe(0);
   }
 });
+
+// ลิงก์ข้ามเดโมพก ?autologin=1 มาด้วย — ถ้ามีคนเดาลิงก์นี้ยิงใส่ระบบจริง
+// ต้องไม่เกิดอะไรขึ้นเลย — ต้องค้างอยู่หน้า login เหมือนเดิม
+test("[security] ?autologin=1 ต้องไม่มีผลกับระบบที่ต่อฐานข้อมูลจริง", async ({ page }) => {
+  for (const [origin, path] of [[DEALER_ORIGIN, "/login"], [HQ_ORIGIN, "/hq/login"]] as const) {
+    await page.goto(`${origin}${path}?autologin=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3000);
+    expect(page.url(), `${path} ต้องไม่ถูกพาเข้าระบบ`).toContain("login");
+    expect(await page.getByRole("button", { name: /เข้าสู่ระบบ/ }).count(),
+      "ต้องยังอยู่หน้ากรอกอีเมล/รหัสตามเดิม").toBeGreaterThan(0);
+  }
+});
