@@ -7,6 +7,11 @@ import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { DEMO_PASSWORD, DEMO_LOGINS } from "@pms/shared/lib/auth";
 import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 
+// ── ทางเข้าเดโมของอีกฝั่ง (ตั้งที่ Vercel ของโปรเจกต์เดโมเท่านั้น) ──
+// ว่าง = ไม่มีปุ่ม · ระบบจริงไม่ตั้งค่านี้
+const OTHER_DEMO_URL   = process.env.NEXT_PUBLIC_DEMO_OTHER_URL ?? "";
+const OTHER_DEMO_LABEL = process.env.NEXT_PUBLIC_DEMO_OTHER_LABEL || "เข้าใช้งานอีกฝั่ง";
+
 const FORGOT_MSG = "กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th";
 
 // ── inline SVG (feather/lucide style) — ไม่พึ่ง icon library ──
@@ -177,6 +182,16 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                     {d.label}
                   </button>
                 ))}
+                {/* ── ข้ามไปเดโมของอีกฝั่ง (บอสสั่ง 18 ส.ค. 69: รวมทางเข้าไว้ที่เดียว) ──
+                    ฝั่งตัวแทนกับสำนักงานใหญ่เป็นคนละแอป จึงคนละที่อยู่เว็บ — เชื่อมด้วยลิงก์
+                    ⚠️ ปลายทางมาจากค่าตั้งค่า ไม่ฝังในโค้ด · ระบบจริงไม่ตั้งค่านี้ = ไม่มีปุ่มนี้เลย
+                       (และถึงตั้ง ก็อยู่ในบล็อก !REAL_BACKEND ซึ่งระบบจริงไม่เรนเดอร์อยู่แล้ว) */}
+                {OTHER_DEMO_URL && (
+                  <a href={OTHER_DEMO_URL}
+                    className="flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-[#0e2a5c]/30 bg-white text-[0.85rem] font-bold text-[#0e2a5c] transition hover:bg-[#0e2a5c]/5">
+                    {OTHER_DEMO_LABEL}
+                  </a>
+                )}
               </div>
               <p className="mt-2.5 text-center text-[0.68rem] text-slate-400">ข้อมูลทั้งหมดเป็นข้อมูลตัวอย่าง</p>
             </div>
