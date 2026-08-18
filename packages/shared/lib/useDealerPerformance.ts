@@ -24,6 +24,7 @@ import { logRepoRead } from "./repoLog";
 import type { DealerRollup, DealerRollupOpts } from "./data/ports";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { DEFAULT_LEAD_RULES, type LeadStatus, type DealerLeadRulesMap } from "./mock";
+import { useAuthReady } from "./useAuthReady";
 
 // rollup รายสาขาจาก DB (M9 Phase 1) — supabase เท่านั้น
 //   • รวมยอดที่ DB (RPC dealer_rollup) แทนการวนรวมทุกแถวฝั่ง client
@@ -32,11 +33,12 @@ import { DEFAULT_LEAD_RULES, type LeadStatus, type DealerLeadRulesMap } from "./
 //   • ยังพึ่ง array ที่โหลดอยู่เป็น "สัญญาณเปลี่ยน" (transitional) — เฟสถัดไปตัด array แล้วเปลี่ยนไปฟัง realtime ตรง
 //   • โหมด local คืน null → useDealerPerformance คงเส้นทางคำนวณ client เดิม (เดโมผสม seed สาขาอื่น ห้ามหาย)
 function useDealerRollup(year: number, opts: DealerRollupOpts): Map<string, DealerRollup> | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const optsKey = JSON.stringify(opts);
   const [rollup, setRollup] = useState<Map<string, DealerRollup> | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setRollup(null); return; }
+    if (!REAL_BACKEND || !ready) { setRollup(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.dealerRollup(year, opts)
@@ -45,7 +47,7 @@ function useDealerRollup(year: number, opts: DealerRollupOpts): Map<string, Deal
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, optsKey, salesVersion]);
+  }, [ready, year, optsKey, salesVersion]);
   return rollup;
 }
 

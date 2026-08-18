@@ -21,6 +21,7 @@ import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSu
 import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo, customers as customersRepo, appointments as appointmentsRepo } from "@pms/shared/lib/data";
 import type { CustomerRow, AppointmentMock, QuotationMock } from "@pms/shared/lib/data/types";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { useAuthReady } from "@pms/shared/lib/useAuthReady";
 
 // ── aggregate ใบในช่วงวันที่ที่ DB (M9) — supabase เท่านั้น · local คืน null (คงเส้นทาง winQuotes เดิม) ──
 // reactive: refetch เมื่อ quotations เปลี่ยน หรือช่วง/สาขาเปลี่ยน · debounce 150ms
@@ -28,11 +29,12 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): Map<string, QuoteRangeRow> | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const s = isoDate(start), e = isoDate(end);
   const [rows, setRows] = useState<Map<string, QuoteRangeRow> | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setRows(null); return; }
+    if (!REAL_BACKEND || !ready) { setRows(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.networkQuoteRange(s, e, dealer)
@@ -40,17 +42,18 @@ export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): M
         .catch(err => logRepoRead("metrics.networkQuoteRange", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [s, e, dealer, salesVersion]);
+  }, [ready, s, e, dealer, salesVersion]);
   return rows;
 }
 
 // หน้าเดียวของตารางลูกค้าเป้าหมาย (paged/filtered ที่ DB) — M9 Phase 4 · supabase เท่านั้น · local คืน null
 export function useLeadsPage(opts: LeadListOpts): LeadListResult | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<LeadListResult | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setPage(null); return; }
+    if (!REAL_BACKEND || !ready) { setPage(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       leadsRepo.listPage(undefined, opts)
@@ -59,18 +62,19 @@ export function useLeadsPage(opts: LeadListOpts): LeadListResult | null {
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, salesVersion]);
+  }, [ready, key, salesVersion]);
   return page;
 }
 
 // สรุปลูกค้าเป้าหมาย "หลังกรอง" ที่ DB สำหรับ /hq/leads — M9 Phase 2 · supabase เท่านั้น · local คืน null → client fallback
 // reactive: refetch เมื่อ leads เปลี่ยน หรือ filters เปลี่ยน
 export function useLeadSummary(filters: LeadSummaryFilters): LeadSummary | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<LeadSummary | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setSummary(null); return; }
+    if (!REAL_BACKEND || !ready) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.leadSummary(filters)
@@ -79,18 +83,19 @@ export function useLeadSummary(filters: LeadSummaryFilters): LeadSummary | null 
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, salesVersion]);
+  }, [ready, key, salesVersion]);
   return summary;
 }
 
 // สรุปใบ "หลังกรอง" ที่ DB สำหรับ /hq/quotations (byDealer/byMonth/byProduct/aging) — M9 Phase 2
 // supabase เท่านั้น · local คืน null → หน้าใช้ client fallback (คำนวณจาก rows เดิม)
 export function useHQQuotationsSummary(filters: QuoteSummaryFilters): HQQuotationsSummary | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<HQQuotationsSummary | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setSummary(null); return; }
+    if (!REAL_BACKEND || !ready) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.hqQuotationsSummary(filters)
@@ -99,17 +104,18 @@ export function useHQQuotationsSummary(filters: QuoteSummaryFilters): HQQuotatio
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, salesVersion]);
+  }, [ready, key, salesVersion]);
   return summary;
 }
 
 // หน้าเดียวของตารางใบ (paged/filtered/sorted ที่ DB) — M9 Phase 2 · supabase เท่านั้น · local คืน null
 export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<QuoteListResult | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setPage(null); return; }
+    if (!REAL_BACKEND || !ready) { setPage(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       quotationsRepo.listPage(undefined, opts)
@@ -118,33 +124,35 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, salesVersion]);
+  }, [ready, key, salesVersion]);
   return page;
 }
 
 // ผู้รับผิดชอบใบ (จากลูกค้าเป้าหมายที่ผูก) รายใบ — ป้อน drawer โดยไม่ต้องโหลดลูกค้าเป้าหมายทั้งเครือ (M9 Phase 4)
 // supabase เท่านั้น · local คืน null → หน้าใช้ค่า salesperson เดิมของ row (มาจาก array อยู่แล้ว)
 export function useQuotationSalesperson(quoteId: string | null, dealerCode: string | null): string | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND || !quoteId || !dealerCode) { setName(null); return; }
+    if (!REAL_BACKEND || !ready || !quoteId || !dealerCode) { setName(null); return; }
     let alive = true;
     quotationsRepo.salesperson(quoteId, dealerCode)
       .then(r => { if (alive) setName(r); })
       .catch(err => logRepoRead("quotations.salesperson", err));
     return () => { alive = false; };
-  }, [quoteId, dealerCode]);
+  }, [ready, quoteId, dealerCode]);
   return name;
 }
 
 // หน้าเดียวของฐานข้อมูลลูกค้า HQ + KPI/กราฟ จากทั้งชุดที่กรองแล้ว — M9 Phase 6 (migration 0080)
 // supabase เท่านั้น · local คืน null → หน้าใช้ client fallback (useCustomerDbLocal)
 export function useHQCustomersPage(opts: HQCustomersPageOpts): HQCustomersPageResult | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<HQCustomersPageResult | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setPage(null); return; }
+    if (!REAL_BACKEND || !ready) { setPage(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.hqCustomersPage(opts)
@@ -153,49 +161,52 @@ export function useHQCustomersPage(opts: HQCustomersPageOpts): HQCustomersPageRe
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, salesVersion]);
+  }, [ready, key, salesVersion]);
   return page;
 }
 
 // ตัวเลือกตัวกรอง (ตัวแทน/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ) ของหน้าฐานข้อมูลลูกค้า — ไม่อิงตัวกรองปัจจุบัน
 // supabase เท่านั้น · local คืน null → หน้าคำนวณตัวเลือกจาก useCustomerDbLocal() เอง
 export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const [opts, setOpts] = useState<HQCustomersFilterOptions | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setOpts(null); return; }
+    if (!REAL_BACKEND || !ready) { setOpts(null); return; }
     let alive = true;
     metricsRepo2.hqCustomersFilterOptions()
       .then(r => { if (alive) setOpts(r); })
       .catch(err => logRepoRead("metrics.hqCustomersFilterOptions", err));
     return () => { alive = false; };
-  }, [salesVersion]);
+  }, [ready, salesVersion]);
   return opts;
 }
 
 // ใบ won ของลูกค้ารายเดียว — ป้อน CustomerDrawer (แท็บอาคาร/ประวัติ/ส่งมอบ/ไทม์ไลน์) โดยไม่โหลดใบทั้งเครือ
 // supabase เท่านั้น · local คืน null → หน้าใช้ buildings ที่มากับ CustomerDbRow จาก useCustomerDbLocal() อยู่แล้ว
 export function useCustomerBuildings(customerId: number | null, dealerCode: string | null): QuotationMock[] | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const [rows, setRows] = useState<QuotationMock[] | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND || customerId == null || !dealerCode) { setRows(null); return; }
+    if (!REAL_BACKEND || !ready || customerId == null || !dealerCode) { setRows(null); return; }
     let alive = true;
     quotationsRepo.listForCustomer(customerId, dealerCode)
       .then(r => { if (alive) setRows(r); })
       .catch(err => logRepoRead("quotations.listForCustomer", err));
     return () => { alive = false; };
-  }, [customerId, dealerCode]);
+  }, [ready, customerId, dealerCode]);
   return rows;
 }
 
 // สรุปใบในช่วง (byMonth/byStatus/byProduct) ที่ DB รอบเดียว — ป้อนหลายการ์ด (M9)
 // supabase เท่านั้น · local คืน null → dashboard คงคำนวณจาก winQuotes เดิม
 export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string): DashboardQuoteSummary | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const s = isoDate(start), e = isoDate(end);
   const [summary, setSummary] = useState<DashboardQuoteSummary | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setSummary(null); return; }
+    if (!REAL_BACKEND || !ready) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.dashboardQuoteSummary(s, e, dealer)
@@ -203,17 +214,18 @@ export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string
         .catch(err => logRepoRead("metrics.dashboardQuoteSummary", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [s, e, dealer, salesVersion]);
+  }, [ready, s, e, dealer, salesVersion]);
   return summary;
 }
 
 // ลูกค้าเป้าหมายไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ป้อนการ์ดเตือน /hq/leads (M9 Phase 4) · supabase เท่านั้น → null=fallback
 export function useUnassignedLeads(filters: UnassignedFilters): UnassignedSummary | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<UnassignedSummary | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setSummary(null); return; }
+    if (!REAL_BACKEND || !ready) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.unassignedLeads(filters)
@@ -222,16 +234,17 @@ export function useUnassignedLeads(filters: UnassignedFilters): UnassignedSummar
     }, 150);
     return () => { alive = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, salesVersion]);
+  }, [ready, key, salesVersion]);
   return summary;
 }
 
 // สรุปลูกค้าทั้งเครือ (total + byProvince) — ป้อน KPI ลูกค้า + provinceTop6 หน้า dashboard (M9 Phase 4)
 export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const [summary, setSummary] = useState<NetworkCustomerSummary | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setSummary(null); return; }
+    if (!REAL_BACKEND || !ready) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.networkCustomerSummary()
@@ -239,7 +252,7 @@ export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
         .catch(err => logRepoRead("metrics.networkCustomerSummary", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [salesVersion]);
+  }, [ready, salesVersion]);
   return summary;
 }
 
@@ -339,12 +352,13 @@ const HQ_CUSTOMERS_FETCH_CAP = 5000;
 // เดิมดึงลูกค้าทั้งเครือ (~5000 แถวสูงสุด) แล้วค่อยกรอง .filter() ฝั่ง client — วัดจริงพบ ~1.15MB/หน้า
 // ทั้งที่โชว์แค่สาขาเดียว (ผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69) แก้เป็นกรองที่ repo ตรงแทน
 export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const local = useNetworkCustomers().filter(c => c.dealerCode === code);
   const { salesVersion } = useSales();
   const dealerInfoOf = useDealerInfo();
   const [rows, setRows] = useState<CustomerRow[] | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setRows(null); return; }
+    if (!REAL_BACKEND || !ready) { setRows(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       // ⚠️ ต้องส่ง dealerCodes ไม่ใช่ dealerCode (แก้ 10 ส.ค. 69)
@@ -358,7 +372,7 @@ export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
         .catch(err => logRepoRead("customers.listPage(dealer)", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [code, salesVersion]);
+  }, [ready, code, salesVersion]);
   return useMemo(() => {
     if (!rows) return local; // local mode หรือ supabase ระหว่างโหลด
     // กรองซ้ำอีกชั้น — ถ้าชั้นล่างเปลี่ยนพฤติกรรมอีก หน้านี้ต้องไม่หลุดไปโชว์สาขาอื่น
@@ -382,12 +396,13 @@ const LEAD_PROGRESS: Record<LeadStatus, number> = { WAITING: 15, BULLET: 30, QUO
 const TH_MO = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 export function useNetworkDealerDetail(code: string): DealerDetail {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { leads, quotations, salesVersion } = useSales();
   // supabase: ดึงลูกค้าเป้าหมาย/ใบของสาขานี้ตรงจาก repo (RLS = ทั้งเครือ) — ไม่พึ่ง array ทั้งเครือของ SalesContext (M9 Phase 4)
   // local/ยังไม่กลับ: ใช้ array ของ SalesContext เหมือนเดิม (สาขา CNX มีข้อมูลสด · อื่น ๆ ใช้ seed ด้านล่าง)
   const [fetched, setFetched] = useState<{ leads: LeadRow[]; quotes: QuotationMock[] } | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND) { setFetched(null); return; }
+    if (!REAL_BACKEND || !ready) { setFetched(null); return; }
     let alive = true;
     Promise.all([
       leadsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
@@ -395,7 +410,7 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
     ]).then(([lp, qp]) => { if (alive) setFetched({ leads: lp.rows, quotes: qp.rows }); })
       .catch(e => logRepoRead("dealerDetail", e));
     return () => { alive = false; };
-  }, [code, salesVersion]);
+  }, [ready, code, salesVersion]);
   return useMemo(() => {
     // โหมด local (เดโม): มีข้อมูลสดเฉพาะสาขาที่เล่นได้ (CNX) — สาขาอื่นใช้ seed จำลอง
     // โหมด supabase: ทุกสาขามีข้อมูลจริงใน DB → สร้างจากข้อมูลจริงเสมอ (ห้ามใช้ seed)
@@ -444,10 +459,11 @@ export type DealerDrawerData = {
   appointments: AppointmentMock[];
 };
 export function useDealerDrawerData(code: string | null): DealerDrawerData | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const [data, setData] = useState<DealerDrawerData | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND || !code) { setData(null); return; }
+    if (!REAL_BACKEND || !ready || !code) { setData(null); return; }
     let alive = true;
     Promise.all([
       customersRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
@@ -464,17 +480,18 @@ export function useDealerDrawerData(code: string | null): DealerDrawerData | nul
       });
     }).catch(e => logRepoRead("dealerDrawerData", e));
     return () => { alive = false; };
-  }, [code, salesVersion]);
+  }, [ready, code, salesVersion]);
   return data;
 }
 
 // ค้นหาทั่วระบบฝั่ง HQ (spotlight) — ดึงเฉพาะที่ match คำค้นจาก repo (bounded) ไม่พึ่ง array ทั้งเครือ (M9 Phase 4)
 // supabase เท่านั้น · local/ไม่ใช่ HQ/คำสั้น = คืนว่าง → Topbar ใช้ array ของ SalesContext เอง (dealer scope)
 export function useHQSearch(query: string): { leads: LeadRow[]; quotes: QuotationMock[]; customers: CustomerRow[] } | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const [res, setRes] = useState<{ leads: LeadRow[]; quotes: QuotationMock[]; customers: CustomerRow[] } | null>(null);
   useEffect(() => {
     const q = query.trim();
-    if (!REAL_BACKEND || q.length < 2) { setRes(null); return; }
+    if (!REAL_BACKEND || !ready || q.length < 2) { setRes(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       Promise.all([
@@ -487,19 +504,20 @@ export function useHQSearch(query: string): { leads: LeadRow[]; quotes: Quotatio
       }).catch(e => logRepoRead("hqSearch", e));
     }, 200);
     return () => { alive = false; clearTimeout(t); };
-  }, [query]);
+  }, [ready, query]);
   return res;
 }
 
 // นัดหมายของลูกค้าเป้าหมายหนึ่ง (drawer ดูลูกค้าเป้าหมาย หน้า /hq/leads) — supabase: ดึงตรง · local/ยังไม่กลับ: null → ใช้ appointments array เดิม
 export function useLeadAppointments(leadNumId: number | null, dealerCode: string | null): AppointmentMock[] | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const [appts, setAppts] = useState<AppointmentMock[] | null>(null);
   useEffect(() => {
-    if (!REAL_BACKEND || leadNumId == null || !dealerCode) { setAppts(null); return; }
+    if (!REAL_BACKEND || !ready || leadNumId == null || !dealerCode) { setAppts(null); return; }
     let alive = true;
     appointmentsRepo.listForLead(leadNumId, dealerCode).then(r => { if (alive) setAppts(r); }).catch(e => logRepoRead("appointments.listForLead", e));
     return () => { alive = false; };
-  }, [leadNumId, dealerCode, salesVersion]);
+  }, [ready, leadNumId, dealerCode, salesVersion]);
   return appts;
 }

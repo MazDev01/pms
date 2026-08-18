@@ -18,14 +18,17 @@ import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerfo
 import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { buildHQAlerts, assembleHQAlerts, type HQAlert } from "@pms/shared/lib/hqAlerts";
 import type { HQAlertsData } from "@pms/shared/lib/data/ports";
+import { useAuthReady } from "./useAuthReady";
 
 // leadRulesMap = เกณฑ์ของทุกสาขา (ตัวแทนตั้งเอง) — ไม่ใช่ค่าเดียวของ HQ อีกแล้ว
 type HQRules = { rules: HQNotifRules; leadRulesMap: DealerLeadRulesMap; validityDays: number; dealers: DealerRow[] };
 
 /** อ่านกฎแจ้งเตือน/เกณฑ์/รายชื่อตัวแทนหลัง mount แล้วติดตามการแก้ที่หน้าตั้งค่า */
 export function useHQRules(): HQRules | null {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const [hqRules, setHqRules] = useState<HQRules | null>(null);
   useEffect(() => {
+    if (!ready) return;
     // อ่านผ่าน repository (local: localStorage · supabase: DB) — รวมทั้ง 4 แหล่งเป็นชุดเดียว
     const read = () => {
       Promise.all([
@@ -48,7 +51,7 @@ export function useHQRules(): HQRules | null {
       window.removeEventListener(DEALER_LEAD_RULES_EVENT, read);
       window.removeEventListener("storage", read);
     };
-  }, []);
+  }, [ready]);
   return hqRules;
 }
 

@@ -17,12 +17,15 @@ import {
 } from "@pms/shared/lib/mock";
 import { settings as settingsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { useAuthReady } from "./useAuthReady";
 
 /** แผนที่กฎของทุกสาขา — ใช้ในหน้า HQ ที่รวมลูกค้าเป้าหมายหลายสาขาไว้ด้วยกัน */
 export function useDealerLeadRulesMap(): DealerLeadRulesMap {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   // เริ่มที่ว่างเสมอ → SSR กับ client render แรกตรงกัน (กัน hydration mismatch)
   const [map, setMap] = useState<DealerLeadRulesMap>({});
   useEffect(() => {
+    if (!ready) return;
     // อ่านผ่าน repository (local: localStorage · supabase: DB)
     // โหลดพลาดต้องแจ้ง — ไม่งั้น map ค้างว่างตลอด แล้วทุกหน้าที่ใช้กฎจะแสดงเกณฑ์ตั้งต้นเงียบ ๆ
     const read = () => { settingsRepo.getLeadRulesMap().then(setMap).catch(e => logRepoRead("settings.getLeadRulesMap", e)); };
@@ -33,7 +36,7 @@ export function useDealerLeadRulesMap(): DealerLeadRulesMap {
       window.removeEventListener(DEALER_LEAD_RULES_EVENT, read);
       window.removeEventListener("storage", read);
     };
-  }, []);
+  }, [ready]);
   return map;
 }
 

@@ -11,6 +11,7 @@ import { logRepoRead } from "./repoLog";
 import { profile as repo } from "./data";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { defaultProfileEmail, PROFILE_UPDATED_EVENT, type UserProfile } from "./mock";
+import { useAuthReady } from "./useAuthReady";
 
 export type UseUserProfile = {
   profile: UserProfile;
@@ -19,6 +20,7 @@ export type UseUserProfile = {
 };
 
 export function useUserProfile(): UseUserProfile {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { session } = useRole();
   // ยังไม่มีโปรไฟล์บันทึกไว้ → ใช้ชื่อ/อีเมลจาก session ไปก่อน (ไม่ปล่อยให้ช่องว่างเปล่า)
   const fallback: UserProfile = {
@@ -30,6 +32,7 @@ export function useUserProfile(): UseUserProfile {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     const read = () => {
       repo.get()
@@ -45,7 +48,7 @@ export function useUserProfile(): UseUserProfile {
       window.removeEventListener("storage", read);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.dealerCode, session.name]);
+  }, [ready, session.dealerCode, session.name]);
 
   const save = useCallback(async (p: UserProfile) => {
     setProfile(p);

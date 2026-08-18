@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateA
 import { logRepoRead } from "./repoLog";
 import { captureError } from "./observability";
 import { friendlyError } from "./friendlyError";
+import { useAuthReady } from "./useAuthReady";
 
 // state ที่ผูกกับ repository (data layer) — drop-in แทน usePersistentState สำหรับข้อมูลระดับเครือ (HQ)
 //   • โหลดจาก repo ตอน mount (async) · เขียนกลับ "เฉพาะเมื่อผู้ใช้แก้จริง" หลังโหลดสำเร็จแล้ว
@@ -38,8 +39,12 @@ export function useRepoState<T>(
   // กันเขียนซ้ำโดยไม่มีใครสั่ง: หลังโหลดเสร็จ state เปลี่ยนค่าเพราะ "ผลลัพธ์การโหลด" ไม่ใช่การแก้ของผู้ใช้
   // ถ้า save ทุกครั้งที่ state เปลี่ยน จะ upsert ทั้งตารางกลับไปทุกครั้งที่เปิดหน้า
   const dirtyRef = useRef(false);
+  // ⚠️ ยังไม่รู้ว่าใครล็อกอินอยู่ = ห้ามอ่าน (ดูเหตุผลเต็มใน useAuthReady.ts)
+  //    ที่นี่เป็นทางผ่านของหน้าระดับเครือเกือบทั้งหมด — คุมจุดเดียวได้ทีเดียวหลายสิบจุด
+  const ready = useAuthReady();
 
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     load()
       // ผู้ใช้แก้ไปแล้วระหว่างที่ยังโหลดไม่เสร็จ → ผลการโหลดต้องไม่ทับของที่เขาเพิ่งทำ
@@ -56,7 +61,7 @@ export function useRepoState<T>(
       .catch((e) => { if (alive) logRepoRead("useRepoState.load", e); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
 
   // ห่อ setState เพื่อรู้ว่าการเปลี่ยนครั้งนี้มาจากผู้ใช้ (ไม่ใช่จากการโหลด)
   const setAndMark = useCallback<Dispatch<SetStateAction<T>>>((v) => {
@@ -92,13 +97,15 @@ export function useRepoValue<T>(load: () => Promise<T>, initial: T): T {
 export function useRepoValueLoaded<T>(load: () => Promise<T>, initial: T): { value: T; loaded: boolean } {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
+  const ready = useAuthReady();
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     load()
       .then((v) => { if (alive) { setValue(v); setLoaded(true); } })
       .catch((e) => { if (alive) { logRepoRead("useRepoValueLoaded.load", e); setLoaded(true); } });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
   return { value, loaded };
 }

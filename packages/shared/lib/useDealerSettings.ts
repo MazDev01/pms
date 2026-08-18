@@ -13,6 +13,7 @@ import { useCurrentDealer } from "./useCurrentDealer";
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, NOTIF_PREFS_EVENT } from "./mock";
 import { DEFAULT_DOC } from "./quotationPrint";
 import type { DealerSettings } from "./data/types";
+import { useAuthReady } from "./useAuthReady";
 
 export const EMPTY_DEALER_SETTINGS: DealerSettings = {
   issuer: DEFAULT_ISSUER,
@@ -32,11 +33,13 @@ export type UseDealerSettings = {
 };
 
 export function useDealerSettings(): UseDealerSettings {
+  const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const dealer = useCurrentDealer();
   const [settings, setSettings] = useState<DealerSettings>(EMPTY_DEALER_SETTINGS);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     const read = () => {
       repo.get(dealer.code)
@@ -58,7 +61,7 @@ export function useDealerSettings(): UseDealerSettings {
       window.removeEventListener("storage", onEvt);
       unsub();
     };
-  }, [dealer.code]);
+  }, [ready, dealer.code]);
 
   const save = useCallback(async (patch: Partial<DealerSettings>) => {
     // แสดงผลทันที แล้วค่อยเขียนลงที่เก็บ (เขียนไม่ผ่านจะ throw ให้ผู้เรียกจัดการ)
