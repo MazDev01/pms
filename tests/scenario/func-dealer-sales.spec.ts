@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
+import { settle } from "./helpers";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
   db, waitRow, waitGone, cleanup, specNS, nsTag,
@@ -133,7 +134,7 @@ test("[func] ปิดการขายไม่สำเร็จ: เลื�
   });
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(LOST_COMPANY);
   const row = page.locator("tbody tr").filter({ hasText: LOST_COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });

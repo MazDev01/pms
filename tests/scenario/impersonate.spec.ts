@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
-import { ADMIN, RYG, CNX, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
+import { ADMIN, RYG, CNX, SUPABASE_URL, SUPABASE_ANON, skipReason, appEnv } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { HQ_ORIGIN, DEALER_ORIGIN, db } from "./funcHelpers";
 import { open } from "./helpers";
@@ -155,10 +155,16 @@ test("ขอเข้าระบบแทนถี่เกินไป → ถ
 
 test("แถบเตือน 'กำลังเข้าระบบแทนโดย HQ' ต้องขึ้นในแอปตัวแทน พร้อมทางกลับ", async ({ page }) => {
   // จำลองการมาถึงด้วยลิงก์เข้าระบบแทน (?impersonated=1) โดยใช้ session ของตัวแทนจริง
-  const sb = await db(CNX);
-  const session = (await sb.auth.getSession()).data.session;
-  await page.addInitScript(({ key, s }) => { localStorage.setItem(key, JSON.stringify(s)); },
-    { key: `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`, s: session });
+  // ระยะ 4: โหมด api เก็บใบผ่านใน cookie httpOnly — ยัด localStorage ไม่มีผล ต้องล็อกอินผ่าน backend
+  if (appEnv("NEXT_PUBLIC_DATA_SOURCE") === "api") {
+    const r = await page.context().request.post(`${DEALER_ORIGIN}/api/v1/auth?op=login`, { data: CNX });
+    if (!r.ok()) throw new Error(`ล็อกอินตัวแทน CNX ผ่าน backend ไม่ผ่าน: ${r.status()}`);
+  } else {
+    const sb = await db(CNX);
+    const session = (await sb.auth.getSession()).data.session;
+    await page.addInitScript(({ key, s }) => { localStorage.setItem(key, JSON.stringify(s)); },
+      { key: `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`, s: session });
+  }
   await page.goto(`${DEALER_ORIGIN}/dashboard?impersonated=1`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByText(/กำลังเข้าระบบแทนตัวแทนโดยสำนักงานใหญ่/).first(),

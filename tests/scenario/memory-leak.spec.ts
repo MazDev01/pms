@@ -1,6 +1,7 @@
 import { test, expect, type Page, type CDPSession } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import { DEALER_ORIGIN, HQ_ORIGIN, loginUI } from "./funcHelpers";
+import { settle } from "./helpers";
 
 // ── Memory Leak — เปิด/ปิดหน้าเดิม หรือเปลี่ยนหน้าซ้ำๆ นานๆ แล้วดูว่าหน่วยความจำ (JS heap)
 //    ของเบราว์เซอร์โตขึ้นเรื่อยๆ ไม่มีที่สิ้นสุดไหม (สัญญาณของ event listener/subscription ที่ลืม cleanup)
@@ -74,7 +75,7 @@ test("[memory] สลับหน้าไปมา (ตัวแทน) 20 ร�
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   const labels = ["แดชบอร์ด", "ลูกค้าเป้าหมาย", "ใบเสนอราคา", "ลูกค้า"];
   await page.goto(`${DEALER_ORIGIN}/dashboard`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   const heap = await newHeapSampler(page);
 
   const samples: number[] = [];
@@ -97,7 +98,7 @@ test("[memory·hq] สลับหน้า HQ (มีกราฟ) 15 รอบ
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
   const labels = ["แดชบอร์ดสำนักงานใหญ่", "ภาพรวมยอดขาย", "ใบเสนอราคาทั้งเครือ", "ลูกค้าทั้งเครือ"];
   await page.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   const heap = await newHeapSampler(page);
 
   const samples: number[] = [];

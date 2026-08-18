@@ -42,7 +42,18 @@ for (const [file, keys] of Object.entries(NEED)) {
 }
 
 // ── 2) โหมดข้อมูลต้องเป็นของจริง ไม่ใช่ข้อมูลตัวอย่างในเครื่อง ──
-add(hq.NEXT_PUBLIC_DATA_SOURCE === "supabase", "โหมดข้อมูล", `ตั้งไว้ = ${hq.NEXT_PUBLIC_DATA_SOURCE || "(ไม่ได้ตั้ง)"} · ต้องเป็น supabase`);
+// "ของจริง" มีสองแบบ: supabase (หน้าเว็บคุยฐานข้อมูลตรง) · api (คุยผ่าน backend ของเราเอง)
+// ⚠️ ห้ามบังคับว่าต้องเป็น supabase อย่างเดียว — พอสลับไป api ใบนี้จะตกทั้งที่ตั้งถูกแล้ว
+// ⚠️ ทั้งสองแอปต้องเป็นโหมดเดียวกัน ถ้าคนละโหมดจะพังแบบไล่ยาก:
+//    ตัวแทนเก็บใบผ่านคนละที่กับสำนักงานใหญ่ → เข้าระบบแทนตัวแทนไม่ได้ · เด้งออกไม่พร้อมกัน
+const dealerEnv = existsSync("apps/dealer/.env.local") ? readEnvFile("apps/dealer/.env.local") : {};
+const REAL_MODES = ["supabase", "api"];
+const hqMode = hq.NEXT_PUBLIC_DATA_SOURCE || "(ไม่ได้ตั้ง)";
+const dealerMode = dealerEnv.NEXT_PUBLIC_DATA_SOURCE || "(ไม่ได้ตั้ง)";
+add(REAL_MODES.includes(hq.NEXT_PUBLIC_DATA_SOURCE), "โหมดข้อมูล",
+  `ตั้งไว้ = ${hqMode} · ต้องเป็น supabase หรือ api`);
+add(hqMode === dealerMode, "สองแอปโหมดตรงกัน",
+  hqMode === dealerMode ? `ทั้งคู่ = ${hqMode}` : `สำนักงานใหญ่ = ${hqMode} แต่ตัวแทน = ${dealerMode}`);
 
 // ── 3) ที่อยู่แอปตัวแทน ──
 // ⚠️ ค่าที่มีผลจริงตอนขึ้นระบบคือค่าบนเซิร์ฟเวอร์ (Vercel → Environment Variables)

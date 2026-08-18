@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import { DEALER_ORIGIN, HQ_ORIGIN, loginUI, db, cleanup, specNS, nsTag } from "./funcHelpers";
+import { settle } from "./helpers";
 
 // ── ยืนยันว่า HQ Dashboard อัปเดต "โดยไม่ต้องรีเฟรชเอง" จริงไหม (ไม่ใช่แค่ถูกต้องตอน navigate ใหม่) ──
 // เปิด HQ dashboard ค้างไว้ 1 แท็บ แล้วให้ตัวแทนสร้างลูกค้าใหม่ผ่านอีกช่องทาง (ตรงผ่าน DB จำลอง
@@ -39,7 +40,7 @@ test("[realtime] HQ dashboard เปิดค้างไว้ → ตัวเ
 
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
   await page.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
 
   const kpiLocator = page.locator(".card").filter({ hasText: "ลูกค้าทั้งเครือ" }).first();
   await expect(kpiLocator).toBeVisible({ timeout: 15_000 });

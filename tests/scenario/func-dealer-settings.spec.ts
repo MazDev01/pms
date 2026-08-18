@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
+import { settle } from "./helpers";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors, db, tagged,
 } from "./funcHelpers";
@@ -16,7 +17,7 @@ test.describe.configure({ mode: "serial" });
 // จึงต้องกรอกแล้ว "ยืนยันว่าค่ายังอยู่" ถ้าโดนทับก็กรอกซ้ำ (กติกาเดียวกับตอนล็อกอิน)
 async function fillWhenSettled(box: import("@playwright/test").Locator, value: string) {
   const page = box.page();
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   for (let i = 0; i < 8; i++) {
     await box.fill(value);
     await page.waitForTimeout(700);

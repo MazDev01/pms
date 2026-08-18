@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ADMIN, RYG, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors } from "./funcHelpers";
+import { settle } from "./helpers";
 
 // ── ลบสาขาแล้ว บัญชีของสาขานั้นต้องใช้งานระบบต่อไม่ได้ (ผู้ใช้แจ้ง 14 ส.ค. 69) ──────
 //
@@ -23,6 +24,13 @@ import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors } fr
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(240_000);
 test.describe.configure({ mode: "serial" });
+
+// เสียงที่ "ต้องมี" ตามธรรมชาติของสถานการณ์นี้ — ไม่ใช่ข้อบกพร่องของแอป:
+//   โหมด supabase: คำสั่งออกจากระบบถูกตอบ 403 เพราะบัญชีถูกลบไปแล้วจริง ๆ
+//   โหมด api: การถามว่า "ตอนนี้เป็นใคร" ถูกตอบ 401 — นั่นแหละคือกลไกที่ทำให้เด้งออกได้
+//             (เบราว์เซอร์รายงาน 401 เป็น error เสมอ ห้ามใช้เป็นหลักฐานว่าแอปพัง)
+//   ทั้งสองแบบจบเหมือนกัน: ใบผ่านถูกล้าง ผู้ใช้ถูกพากลับหน้าเข้าสู่ระบบ — ซึ่งเทสต์ยืนยันไว้ข้างบนแล้ว
+const INHERENT = /auth\/v1\/logout|status of 403|\/api\/v1\/auth|status of 401/;
 
 const CODE = "ZTG"; // รหัสสาขาทดสอบเฉพาะไฟล์นี้ — ไม่ชนกับ CNX/RYG/UBN ของจริง
 const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -64,15 +72,13 @@ test("[auth] ลบสาขาแล้ว หน้าที่เปิดค
   await expect.poll(() => new URL(page.url()).pathname,
     { timeout: 20_000, message: "สาขาถูกลบแล้ว ต้องเด้งไปหน้าเข้าสู่ระบบ" }).toContain("/login");
 
-  // เหลือ error เดียวที่ "ต้องมี" ตามธรรมชาติของสถานการณ์: คำสั่งออกจากระบบถูกเซิร์ฟเวอร์ตอบ 403
-  // เพราะบัญชีถูกลบไปแล้วจริง ๆ (ล้างใบผ่านในเครื่องสำเร็จ ผู้ใช้ถูกเด้งออกตามปกติ)
-  assertNoErrors(errs.filter(e => !/auth\/v1\/logout/.test(e) && !/status of 403/.test(e)), "ลบสาขาแล้วเด้งออก");
+  assertNoErrors(errs.filter(e => !INHERENT.test(e)), "ลบสาขาแล้วเด้งออก");
 });
 
 test("[auth] สาขาที่ยังอยู่ต้องใช้งานได้ตามปกติ (ไม่เด้งออกผิดคน)", async ({ page }) => {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/settings`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   await page.waitForTimeout(1500);
   expect(new URL(page.url()).pathname, "สาขาปกติต้องไม่ถูกเด้งออก").not.toContain("/login");
   await expect(page.getByText("บัญชีดีลเลอร์").first()).toBeVisible({ timeout: 15_000 });
@@ -111,7 +117,7 @@ test("[auth] ปิดใช้งานสาขา → ล็อกอิน�
     await expect.poll(() => new URL(page.url()).pathname,
       { timeout: 20_000, message: "สาขาถูกปิดใช้งานแล้ว ต้องเด้งไปหน้าเข้าสู่ระบบ" }).toContain("/login");
 
-    assertNoErrors(errs.filter(e => !/auth\/v1\/logout/.test(e) && !/status of 403/.test(e)), "ปิดใช้งานสาขาแล้วเด้งออก");
+    assertNoErrors(errs.filter(e => !INHERENT.test(e)), "ปิดใช้งานสาขาแล้วเด้งออก");
   } finally {
     await purge2();
   }

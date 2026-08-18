@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
+import { settle } from "./helpers";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
   db, cleanup, specNS, nsTag,
@@ -53,7 +54,7 @@ test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 /** เปิดลูกค้าเป้าหมายทดสอบ — ตารางแบ่งหน้า ต้องค้นหาก่อนเสมอ (สเปกอื่นเพิ่มลูกค้าเป้าหมายของสาขาเดียวกันตลอด) */
 async function openTestLead(page: import("@playwright/test").Page) {
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
   await expect(page.locator("tbody tr").filter({ hasText: COMPANY }).first()).toBeVisible({ timeout: 20_000 });
 }

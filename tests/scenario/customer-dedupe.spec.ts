@@ -36,8 +36,11 @@ test("[dealer] ชื่อบริษัทใหม่จริง ๆ → �
 test("[dealer] ปิดการขายลูกค้าเป้าหมายที่ชื่อตรงกับลูกค้าเดิม → ไม่เกิดลูกค้าซ้ำ", async ({ page }) => {
   // นับจำนวนลูกค้าชื่อนี้ก่อน (ต้องมี 1)
   await open(page, "dealer", "/customers");
-  const before = await page.getByText(EXISTING, { exact: true }).count();
-  expect(before, "สมุดตั้งต้นต้องมีลูกค้ารายนี้อยู่แล้ว").toBeGreaterThan(0);
+  // ต้อง "รอให้โผล่" ไม่ใช่ "นับทันทีที่เปิดหน้า" — รายชื่อลูกค้ามาแบบไม่พร้อมหน้า
+  // นับเลยจะได้ 0 เพราะข้อมูลยังมาไม่ถึง แล้วสรุปผิดว่าไม่มีลูกค้ารายนี้ในระบบ
+  const existing = page.getByText(EXISTING, { exact: true });
+  await expect(existing.first(), "สมุดตั้งต้นต้องมีลูกค้ารายนี้อยู่แล้ว").toBeVisible({ timeout: 20_000 });
+  const before = await existing.count();
 
   // เปิดลูกค้าเป้าหมายใหม่ชื่อเดียวกัน
   await openAddLeadForm(page);

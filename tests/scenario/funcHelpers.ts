@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_ANON, type Account } from "./supabaseEnv";
-import { SESSION_KEY, getSession } from "./helpers";
+import { SUPABASE_URL, SUPABASE_ANON, type Account, appEnv } from "./supabaseEnv";
+import { SESSION_KEY, getSession, settle } from "./helpers";
 
 export const DEALER_ORIGIN = "http://localhost:3001";
 export const HQ_ORIGIN = "http://localhost:3002";
@@ -38,20 +38,33 @@ export function assertNoErrors(errs: string[], label: string) {
 //   เป็นวิธีเดียวกับที่ helpers.ts (openAs) ใช้อยู่แล้วและไม่เคยมีปัญหา
 //   ถ้ายัดแล้วแอปไม่ยอมรับ (ยังอยู่หน้าล็อกอิน) จะตกกลับไปล็อกอินผ่านหน้าจอจริงเหมือนเดิม
 const HOME_AFTER_LOGIN: Record<string, string> = { "/login": "/dashboard", "/hq/login": "/hq/dashboard" };
+// โหมด api เก็บใบผ่านใน cookie httpOnly (ระยะ 4) — เทสต์ต้องล็อกอินผ่าน backend
+const COOKIE_AUTH = appEnv("NEXT_PUBLIC_DATA_SOURCE") === "api";
 
 export async function loginUI(page: Page, origin: string, path: string, who: Account) {
+  // ระยะ 4: โหมด api เก็บใบผ่านใน cookie httpOnly — ยัด session ลง localStorage ไม่มีผลอีกต่อไป
+  // ต้องล็อกอินผ่าน backend จริงเหมือนผู้ใช้ (เหตุผลเดียวกับ openAs ใน helpers.ts)
+  if (COOKIE_AUTH) {
+    const res = await page.context().request.post(`${origin}/api/v1/auth?op=login`, {
+      data: { email: who.email, password: who.password },
+    });
+    if (!res.ok()) throw new Error(`ล็อกอิน ${who.email} ผ่าน backend ไม่ผ่าน: ${res.status()} ${await res.text()}`);
+    await page.goto(`${origin}${HOME_AFTER_LOGIN[path] ?? path}`, { waitUntil: "domcontentloaded" });
+    await settle(page);
+    return;
+  }
   try {
     const session = await getSession(who);
     await page.addInitScript(({ key, session }) => {
       localStorage.setItem(key as string, JSON.stringify(session));
     }, { key: SESSION_KEY, session });
     await page.goto(`${origin}${HOME_AFTER_LOGIN[path] ?? path}`, { waitUntil: "domcontentloaded" });
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await settle(page);
     if (!page.url().includes("/login")) return;
   } catch { /* ยัด session ไม่สำเร็จ → ล็อกอินผ่านหน้าจอจริงข้างล่าง */ }
 
   await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   const email = page.getByLabel(/อีเมล/i).first();
   const pass = page.getByLabel(/รหัสผ่าน/i).first();
   for (let attempt = 1; attempt <= 3; attempt++) {

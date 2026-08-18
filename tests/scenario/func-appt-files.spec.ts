@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { RYG, skipReason } from "./supabaseEnv";
+import { settle } from "./helpers";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
   db, waitRow, cleanup, specNS, nsTag,
@@ -27,7 +28,7 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/calendar`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
 
   await page.getByRole("button", { name: "เพิ่มกิจกรรม" }).first().click();
   const note = page.getByPlaceholder("รายละเอียดกิจกรรม");

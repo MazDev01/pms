@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { RYG, ADMIN, skipReason, type Account } from "./supabaseEnv";
+import { settle } from "./helpers";
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(180_000); // เดินหลายหน้าในเทสต์เดียว — เวลาเริ่มต้น 30 วิไม่พอ
@@ -12,7 +13,7 @@ const NOISE = /favicon|hydrat|Download the React DevTools|Fast Refresh|preloaded
 
 async function login(page: Page, origin: string, path: string, who: Account) {
   await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   const email = page.getByLabel(/อีเมล/i).first();
   const pass = page.getByLabel(/รหัสผ่าน/i).first();
   for (let a = 1; a <= 3; a++) {

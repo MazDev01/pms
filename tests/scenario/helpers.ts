@@ -1,6 +1,6 @@
 import { Page, expect } from "@playwright/test";
 import { createClient, type Session } from "@supabase/supabase-js";
-import { RYG, CNX, ADMIN, SUPABASE_URL, SUPABASE_ANON, REAL_BACKEND, type Account } from "./supabaseEnv";
+import { RYG, CNX, ADMIN, SUPABASE_URL, SUPABASE_ANON, REAL_BACKEND, type Account, appEnv } from "./supabaseEnv";
 
 // สลับ role ก่อนโหลดหน้า (RoleProvider อ่านจาก localStorage ตอน mount) — ใช้ได้เฉพาะโหมด local mock data
 export async function loginAs(page: Page, role: "hq" | "dealer") {
@@ -34,6 +34,8 @@ export async function getSession(who: Account): Promise<Session> {
 
 // โมโนเรโป: แอปตัวแทน (dealer) รันที่ :3001 · แอปสำนักงานใหญ่ (hq) รันที่ :3002
 const APP_ORIGIN = { hq: "http://localhost:3002", dealer: "http://localhost:3001" } as const;
+// โหมด api เก็บใบผ่านใน cookie httpOnly (ระยะ 4) — เทสต์ต้องล็อกอินผ่าน backend ไม่ใช่ยัด localStorage
+const COOKIE_AUTH = appEnv("NEXT_PUBLIC_DATA_SOURCE") === "api";
 // role ทั่วไปแมปกับบัญชีจริงบัญชีเดียว (RYG/ADMIN) — เทสต์ที่ต้องเจาะจงบัญชีอื่น (เช่น CNX สำหรับ
 // branch-isolation.spec.ts) ใช้ openAs() แทน
 const ROLE_ACCOUNT: Record<"hq" | "dealer", Account> = { hq: ADMIN, dealer: RYG };
@@ -47,12 +49,58 @@ export async function open(page: Page, role: "hq" | "dealer", path: string) {
 
 /** เปิดหน้าด้วยบัญชีจริงที่ระบุเจาะจง (เช่น CNX สำหรับเทสต์ตรวจการกันข้ามสาขา) */
 export async function openAs(page: Page, who: Account, appRole: "hq" | "dealer", path: string) {
-  const session = await getSession(who);
-  await page.addInitScript(({ key, session }) => {
-    localStorage.setItem(key, JSON.stringify(session));
-  }, { key: SESSION_KEY, session });
+  if (COOKIE_AUTH) {
+    // ระยะ 4: ใบผ่านอยู่ใน cookie httpOnly แล้ว — ยัด session ลง localStorage ไม่มีผลอีกต่อไป
+    // ต้องล็อกอินผ่าน backend จริงเพื่อให้ได้ cookie มาอยู่ในเบราว์เซอร์ของเทสต์
+    const res = await page.context().request.post(`${APP_ORIGIN[appRole]}/api/v1/auth?op=login`, {
+      data: { email: who.email, password: who.password },
+    });
+    if (!res.ok()) throw new Error(`ล็อกอิน ${who.email} ผ่าน backend ไม่ผ่าน: ${res.status()} ${await res.text()}`);
+  } else {
+    const session = await getSession(who);
+    await page.addInitScript(({ key, session }) => {
+      localStorage.setItem(key, JSON.stringify(session));
+    }, { key: SESSION_KEY, session });
+  }
   await page.goto(APP_ORIGIN[appRole] + path, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
+}
+
+/** รอจน "ไม่มีคำขอข้อมูลค้างแล้ว" — เวอร์ชันที่ไม่นับสายอัปเดตสด
+ *
+ * ⚠️ ห้ามใช้ waitForLoadState("networkidle") กับแอปนี้:
+ *    โหมด api เปิดสายอัปเดตสด (SSE) ค้างไว้ตลอดโดยตั้งใจ — เป็นคำขอ HTTP ที่ไม่มีวันจบ
+ *    เงื่อนไข "ไม่มีคำขอค้างเลย" จึงไม่มีวันเป็นจริง → รอจนหมดเวลา 20 วินาทีทุกครั้งที่เปิดหน้า
+ *    (วัดจริง 18 ส.ค. 69: ชุดเต็มโหมด api 31 นาที เทียบโหมดปกติ 9 นาที · ทุกหน้าเสียคงที่ ~20 วินาที)
+ *    โหมดปกติไม่เจอเพราะใช้ WebSocket ซึ่งตัวนับ networkidle ไม่นับ — ไม่ได้แปลว่าแอปเร็วกว่าจริง
+ *
+ * ⚠️ และห้ามเปลี่ยนไปหน่วงเวลาตายตัวแทน — เคยลองแล้วพัง:
+ *    รอ 600 มิลลิวินาทีเฉย ๆ ทำให้เทสต์อ่านหน้าก่อนข้อมูลมาถึง ล้มเพิ่ม 7 ข้อ "ทั้งสองโหมด"
+ *    ต้องรอ "จนคำขอข้อมูลหยุดจริง" เหมือน networkidle เดิม แค่ไม่นับสายอัปเดตสดเข้าไปด้วย
+ */
+export async function settle(page: Page, quietMs = 500, timeoutMs = 15_000) {
+  await page.waitForLoadState("load").catch(() => {});
+  const isStream = (u: string) => u.includes("/api/v1/events");
+  let pending = 0;
+  const onStart = (r: { url(): string }) => { if (!isStream(r.url())) pending += 1; };
+  const onEnd   = (r: { url(): string }) => { if (!isStream(r.url())) pending = Math.max(0, pending - 1); };
+  page.on("request", onStart);
+  page.on("requestfinished", onEnd);
+  page.on("requestfailed", onEnd);
+  const deadline = Date.now() + timeoutMs;
+  let quietSince = Date.now();
+  try {
+    while (Date.now() < deadline) {
+      if (pending > 0) quietSince = Date.now();
+      else if (Date.now() - quietSince >= quietMs) return;
+      await page.waitForTimeout(50);
+    }
+  } catch { /* หน้าถูกปิดระหว่างรอ — ไม่ใช่ความผิดพลาด */ }
+  finally {
+    page.off("request", onStart);
+    page.off("requestfinished", onEnd);
+    page.off("requestfailed", onEnd);
+  }
 }
 
 export { RYG, CNX, ADMIN };

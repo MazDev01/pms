@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import { DEALER_ORIGIN, HQ_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag } from "./funcHelpers";
+import { settle } from "./helpers";
 
 // ── สิ่งที่หน้าจอโชว์ ต้องเท่ากับสิ่งที่บันทึกลงระบบจริง ─────────────────────────────
 //
@@ -130,7 +131,7 @@ test("[func·hq] ปรับราคากลางเป็น 0 ต้อง
 test("[func] ดาว * ต้องกันการบันทึกจริง — โทรศัพท์/จังหวัดว่าง ต้องบันทึกไม่ผ่าน", async ({ page }) => {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await settle(page);
   await page.getByRole("button", { name: /เพิ่มลูกค้าเป้าหมาย/ }).first().click();
   await page.waitForTimeout(1200);
   const dlg = page.getByRole("dialog");

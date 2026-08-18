@@ -1,7 +1,8 @@
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
+import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason, appEnv } from "./supabaseEnv";
 import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate } from "./funcHelpers";
+import { settle } from "./helpers";
 
 // ── Multi-Dealer Load / Stress Test ──────────────────────────────────────────
 // จำลอง 10 ตัวแทนใช้งานพร้อมกันจริง (บัญชี auth จริง ไม่ใช่ mock) + HQ ติดตามแบบเรียลไทม์
@@ -43,13 +44,22 @@ async function provisionDealer(token: string, code: string): Promise<Provisioned
 }
 
 const SESSION_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
+const COOKIE_AUTH = appEnv("NEXT_PUBLIC_DATA_SOURCE") === "api";   // ใบผ่านอยู่ใน cookie (ระยะ 4)
 async function openAsDealer(context: BrowserContext, dealer: Provisioned): Promise<{ page: Page; sb: SupabaseClient }> {
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await sb.auth.signInWithPassword({ email: dealer.email, password: dealer.password });
   if (error || !data.session) throw new Error(`ล็อกอินตัวแทน ${dealer.code} ไม่ผ่าน: ${error?.message}`);
   const page = await context.newPage();
-  await page.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)); },
-    { key: SESSION_KEY, session: data.session });
+  // ระยะ 4: โหมด api เก็บใบผ่านใน cookie httpOnly — ยัด localStorage ไม่มีผล ต้องล็อกอินผ่าน backend
+  if (COOKIE_AUTH) {
+    const r = await context.request.post(`${DEALER_ORIGIN}/api/v1/auth?op=login`, {
+      data: { email: dealer.email, password: dealer.password },
+    });
+    if (!r.ok()) throw new Error(`ล็อกอินตัวแทน ${dealer.code} ผ่าน backend ไม่ผ่าน: ${r.status()}`);
+  } else {
+    await page.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)); },
+      { key: SESSION_KEY, session: data.session });
+  }
   return { page, sb };
 }
 
@@ -212,10 +222,15 @@ test("[stress] 10 ตัวแทนทำงานพร้อมกันเ�
 
   const hqCtx = await browser.newContext();
   const hqPage = await hqCtx.newPage();
-  await hqPage.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)); },
-    { key: SESSION_KEY, session: (await hqSb.auth.getSession()).data.session });
+  if (COOKIE_AUTH) {
+    const r = await hqCtx.request.post(`${HQ_ORIGIN}/api/v1/auth?op=login`, { data: ADMIN });
+    if (!r.ok()) throw new Error(`ล็อกอิน HQ ผ่าน backend ไม่ผ่าน: ${r.status()}`);
+  } else {
+    await hqPage.addInitScript(({ key, session }) => { localStorage.setItem(key, JSON.stringify(session)); },
+      { key: SESSION_KEY, session: (await hqSb.auth.getSession()).data.session });
+  }
   await hqPage.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
-  await hqPage.waitForLoadState("networkidle").catch(() => {});
+  await settle(hqPage);
 
   // ── เปิด 10 บริบทเบราว์เซอร์ ล็อกอินจริงแยกบัญชี แล้วรันขั้นตอนทั้งหมดพร้อมกัน ──
   const timings: Record<string, number> = {};
@@ -276,7 +291,7 @@ test("[stress] 10 ตัวแทนทำงานพร้อมกันเ�
 
   // ── HQ dashboard ต้องเห็นตัวเลขใหม่หลังรีเฟรช (real-time ผ่านการโหลดข้อมูลใหม่) ──
   await hqPage.reload({ waitUntil: "domcontentloaded" });
-  await hqPage.waitForLoadState("networkidle").catch(() => {});
+  await settle(hqPage);
   const { count: custAfter } = await hqSb.from("customers").select("id", { count: "exact", head: true });
   const { count: quoteAfter } = await hqSb.from("quotations").select("id", { count: "exact", head: true });
   expect((custAfter ?? 0) - (custBefore ?? 0), "จำนวนลูกค้าทั้งเครือต้องเพิ่มขึ้นตามจำนวนที่สร้างจริง").toBeGreaterThanOrEqual(N);
