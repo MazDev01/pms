@@ -12,6 +12,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { roleLabelOf } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useDealerDisplayName } from "@pms/shared/lib/useCurrentDealer";
+import { useAuthReady } from "@pms/shared/lib/useAuthReady";
 
 type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
 type NavGroup = { group: string; items: NavItem[] };
@@ -79,15 +80,27 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   const { profile } = useUserProfile();
   const dealerDisplayName = useDealerDisplayName(); // ชื่อบริษัทที่สาขากรอก → ทะเบียน HQ → รหัสสาขา
 
+  // ── เมนูต้องรอจนรู้ว่าใครล็อกอินอยู่ก่อนเสมอ ────────────────────────────────
+  //
+  // ⚠️ isHQ มาจาก session ซึ่งค่าเริ่มต้นคือ "สาขาเดโม" — ก่อนรู้ตัวตนจริง แอปสำนักงานใหญ่
+  //    จึงเรนเดอร์เมนูของ *ตัวแทน* ออกมาชั่วขณะ แล้ว Next.js ไปดึงหน้าเหล่านั้นล่วงหน้า
+  //    (/leads /quotations /customers /products /calendar /files /settings)
+  //    ซึ่งไม่มีอยู่ในแอปสำนักงานใหญ่ → 404 เจ็ดครั้งทุกครั้งที่เปิดหน้า (วัดได้จริงบนของจริง 18 ส.ค. 69)
+  //
+  // ⚠️ เดาจาก URL แทนไม่ได้ — แอปสำนักงานใหญ่มี /dashboard และ /profile ของตัวเองที่ไม่ได้ขึ้นต้นด้วย /hq
+  //
+  // รอ useAuthReady ก่อน = ตอนเรนเดอร์เมนู session เป็นของจริงเสมอ เลือกเมนูถูกตั้งแต่ครั้งแรก
+  // (ยังไม่ล็อกอิน = กำลังจะถูกพาไปหน้าเข้าสู่ระบบอยู่แล้ว ไม่มีเมนูให้ดูก็ไม่เสียหาย)
+  const ready = useAuthReady();
+
   // เดิม prefetch ทั้งสองเส้นทางไม่ว่าง role ไหน — เส้นทางของอีกแอปไม่มีจริงในแอปนี้ (dealer ไม่มี /hq/*
   // และกลับกัน) ยิง 404 ซ้ำ ๆ ทุกครั้งที่ Sidebar โหลด (พบจริงจากทดสอบโหลด: เกือบ 300 ครั้งใน log)
   useEffect(() => {
+    if (!ready) return;
     router.prefetch(isHQ ? "/hq/dashboard" : "/dashboard");
-  }, [router, isHQ]);
+  }, [ready, router, isHQ]);
 
-
-
-  const nav = isHQ ? HQ_NAV : DEALER_NAV;
+  const nav = ready ? (isHQ ? HQ_NAV : DEALER_NAV) : [];
   // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัทของสาขา · HQ ใช้ชื่อผู้ใช้
   // (ชื่อสาขาผ่าน useDealerDisplayName เหมือนแถบบน — ไม่งั้นเมนูซ้ายขึ้นรหัสสาขาแต่แถบบนขึ้นชื่อบริษัท)
   const displayName = isHQ ? (profile?.name || session.name) : dealerDisplayName;
