@@ -2,13 +2,13 @@ import { test, expect } from "@playwright/test";
 import { open, openAs, CNX } from "./helpers";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { SUPABASE_MODE } from "./supabaseEnv";
+import { REAL_BACKEND } from "./supabaseEnv";
 
 // ── ขอบเขตข้อมูลข้ามสาขา (regression) — บั๊กประเภท "กระดิ่ง/หน้า HQ รั่วข้ามสาขา" ──
 // เดิมเทียบกับ mock.ts (ข้อมูลจำลอง local mode) — ใช้ไม่ได้แล้วเพราะแอปรันโหมด supabase จริง
 // (DB จริงว่างเปล่าก่อน seed — ดู global-setup.ts) เปลี่ยนมาเทียบกับข้อมูลตั้งต้น ZZTEST-BASE ที่ seed ไว้แทน
 // เคยหลุดมาแล้ว 2 จุด: Topbar (กระดิ่ง+ค้นหา) และ useNetworkDealerDetail (หน้าเจาะสาขา)
-test.skip(!SUPABASE_MODE, "ต้องใช้ backend จริง (RLS) เพื่อตรวจการกันข้ามสาขา");
+test.skip(!REAL_BACKEND, "ต้องใช้ backend จริง (RLS) เพื่อตรวจการกันข้ามสาขา");
 
 const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY);
 

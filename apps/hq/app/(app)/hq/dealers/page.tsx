@@ -10,7 +10,7 @@ import {
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
@@ -237,7 +237,7 @@ function HQDealersPageInner() {
     // ── สร้างตัวแทนใหม่ ──
     // โหมดจริง: ต้องสร้าง "บัญชีเข้าระบบ" ด้วย ซึ่งทำได้เฉพาะที่เซิร์ฟเวอร์ (service_role) → เรียก route (H5)
     //   เดิมสร้างแค่แถว dealers + โชว์รหัสปลอม → ตัวแทนล็อกอินไม่ได้เลย (บั๊ก H5)
-    if (DATA_SOURCE === "supabase") {
+    if (REAL_BACKEND) {
       setCreating(true);
       setFormErr("");
       const res = await createDealerAccount({
@@ -266,7 +266,7 @@ function HQDealersPageInner() {
     if (!confirm(`ลบ "${d.name}" ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
     // โหมดจริง (supabase): ลบผ่าน route เซิร์ฟเวอร์ (service_role) → ลบบัญชี auth ของสาขาด้วย
     //   ไม่ทิ้งบัญชีกำพร้า · เดิม dealersRepo.remove ลบได้แค่แถว dealers (RLS) บัญชียังค้าง
-    if (DATA_SOURCE === "supabase") {
+    if (REAL_BACKEND) {
       void deleteDealerAccount(d.code).then(res => {
         if (!res.ok) {
           // สาขาที่ยังมีข้อมูลงานขายลบไม่ได้โดยตั้งใจ (409) — เดิมจบแค่แจ้งว่าลบไม่ได้
@@ -311,7 +311,7 @@ function HQDealersPageInner() {
   // จึงไม่กระทบ session ของ HQ เองในแท็บปัจจุบันเลย
   const canImpersonate = true;
   async function enterDealer(d: DealerRow) {
-    if (DATA_SOURCE !== "supabase") {
+    if (!REAL_BACKEND) {
       setEntering(d.id);
       login("dealer");
       router.push("/dashboard");
@@ -512,7 +512,8 @@ function HQDealersPageInner() {
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
+              <div className="form-grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
+                <div className="form-section">ข้อมูลตัวแทน</div>
                 <InputField label="รหัสตัวแทน *">
                   <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase().slice(0, 6) }))} placeholder="เช่น BKK" disabled={!!editTarget}
                     style={{ ...INPUT_STYLE, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em", opacity: editTarget ? 0.6 : 1 }} />
@@ -523,7 +524,8 @@ function HQDealersPageInner() {
                 </InputField>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="form-grid">
+                <div className="form-section">พื้นที่รับผิดชอบ</div>
                 {/* ภาคมาก่อนจังหวัด — เพราะจังหวัดที่เลือกได้ขึ้นกับภาคที่เลือกไว้ */}
                 <InputField label="ภาค">
                   <select aria-label="ภูมิภาค" value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
@@ -535,13 +537,14 @@ function HQDealersPageInner() {
                       ไม่งั้นแค่เปิดฟอร์มมาแก้ชื่อ จังหวัดก็หายไปเงียบ ๆ แล้วถูกบันทึกทับเป็นค่าว่าง */}
                   <select aria-label="จังหวัดที่ตั้ง" value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))}
                     style={{ ...INPUT_STYLE, cursor: "pointer" }}>
-                    <option value="">เลือกจังหวัด</option>
+                    <option value="">— ยังไม่ระบุ —</option>
                     {provincesOfRegion(form.region).map(p => <option key={p} value={p}>{p}</option>)}
                     {form.province && !provincesOfRegion(form.region).includes(form.province) && (
                       <option value={form.province}>{form.province} (นอกภาค {form.region})</option>
                     )}
                   </select>
                 </InputField>
+                <div className="form-section">เป้าหมายและสถานะ</div>
                 <InputField label="เป้ายอดขาย (บาท/ปี)">
                   {/* เป้ายอดขายติดลบไม่มีอยู่จริงในทางธุรกิจ และทำให้ตัวเลขอื่นเพี้ยนตามเป็นทอด ๆ:
                       เปอร์เซ็นต์ความสำเร็จของสาขา · เป้ารวมทั้งเครือบนหัวตาราง · กราฟเทียบเป้า
@@ -553,16 +556,15 @@ function HQDealersPageInner() {
                     </div>
                   )}
                 </InputField>
+                <InputField label="สถานะ">
+                  <select aria-label="สถานะตัวแทน" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as DealerStatus }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                    <option value="active">{dealerStatusLabel.active}</option>
+                    <option value="inactive">{dealerStatusLabel.inactive}</option>
+                  </select>
+                </InputField>
               </div>
 
-              <InputField label="สถานะ">
-                <select aria-label="สถานะตัวแทน" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as DealerStatus }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
-                  <option value="active">{dealerStatusLabel.active}</option>
-                  <option value="inactive">{dealerStatusLabel.inactive}</option>
-                </select>
-              </InputField>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
                 <button onClick={() => setShowForm(false)} disabled={creating} className="btn btn-secondary btn-md">ยกเลิก</button>
                 <button onClick={() => void save()} disabled={creating} className="btn btn-primary btn-md"
                   style={creating ? { opacity: .6, cursor: "not-allowed" } : undefined}>

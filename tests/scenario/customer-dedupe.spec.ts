@@ -43,6 +43,9 @@ test("[dealer] ปิดการขายลูกค้าเป้าหม�
   await openAddLeadForm(page);
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(EXISTING);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("ผู้ติดต่อทดสอบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: "บันทึก" }).click();
 
   // เลื่อนสถานะลูกค้าเป้าหมายใหม่ → ปิดการขายสำเร็จ (ทริกเกอร์การสร้างลูกค้า)

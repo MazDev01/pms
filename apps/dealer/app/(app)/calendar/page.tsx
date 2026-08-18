@@ -482,11 +482,12 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const [phone, setPhone] = useState(initial?.phone ?? "—");
   const [date, setDate] = useState(initial?.date ?? defaultDate);
   const [time, setTime] = useState(initial?.time ?? "09:00");
-  const [type, setType] = useState<ApptType>(initial?.type ?? "visit");
+  const [type, setType] = useState<ApptType | "">(initial?.type ?? "");  // ยังไม่เลือก = ว่าง (ห้ามยัด "นัดพบลูกค้า" ให้เอง)
   const [province, setProvince] = useState(initial?.province ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
   const savingRef = useRef(false); // กันกดปุ่มบันทึกซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard แบบ synchronous)
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่มให้เห็น (visual)
+  const [err, setErr] = useState("");           // ช่องบังคับยังไม่ครบ — ต้องฟ้องให้เห็น ห้ามบันทึกเงียบ
 
   // เลือกลูกค้าเป้าหมาย → ผูก leadId แล้วเติมชื่อบริษัท/ผู้ติดต่อ/เบอร์/จังหวัดอัตโนมัติ
   // เลือกด้วย numId ไม่ใช่ชื่อบริษัท — ชื่อซ้ำกันได้ และแก้ชื่อทีหลังแล้วจะขาดจากกัน
@@ -503,6 +504,11 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
     // กันกดซ้ำ (H8): ระหว่างรอเลขนัดจาก DB ปุ่มยังคลิกได้ · กด 2 ครั้ง = 2 นัด/เลขหาย 1
     // ref กันเข้าซ้ำแบบ synchronous ก่อน React re-render ทัน
     if (savingRef.current) return;
+    // วันที่/เวลา มีค่าตั้งต้นให้ แต่ผู้ใช้ล้างทิ้งได้ — ปล่อยผ่านแล้วจะได้นัดหมายที่ไม่มีวันเวลา
+    // (โผล่ในปฏิทินไม่ได้ ตามงานต่อไม่ได้) ดาว * บนป้ายกำกับต้องตรงกับที่ตรวจตรงนี้เสมอ
+    if (!type) { setErr("ต้องเลือกประเภทกิจกรรม"); return; }
+    if (!date || !time) { setErr("ต้องระบุวันที่และเวลา"); return; }
+    setErr("");
     savingRef.current = true; setSaving(true);
     try {
     const name = company.trim() || initial?.company || "กิจกรรมใหม่";
@@ -536,42 +542,47 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
             <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>{isEdit ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
           </div>
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label className="form-label">ลูกค้าเป้าหมาย</label>
-              <select value={leadId ?? ""} onChange={e => pickLead(e.target.value)} className="form-select">
-                <option value="">— ไม่ผูกลูกค้าเป้าหมาย —</option>
-                {leads.map(l => <option key={l.numId} value={l.numId}>{l.company}{l.contact ? ` · ${l.contact}` : ""}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ padding: 20 }}>
+            <div className="form-grid">
+              <div className="form-section">กิจกรรม</div>
               <div>
-                <label className="form-label">วันที่</label>
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="form-input" />
-              </div>
-              <div>
-                <label className="form-label">เวลา</label>
-                <input type="time" value={time} onChange={e => setTime(e.target.value)} className="form-input" />
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label className="form-label">ประเภท</label>
-                <select value={type} onChange={e => setType(e.target.value as ApptType)} className="form-select">
+                <label className="form-label">ประเภท *</label>
+                <select aria-label="ประเภท" value={type} onChange={e => setType(e.target.value as ApptType | "")} className="form-select">
+                  <option value="">— ยังไม่ระบุ —</option>
                   {(Object.keys(apptTypeLabel) as ApptType[]).map(t => <option key={t} value={t}>{apptTypeLabel[t]}</option>)}
                 </select>
               </div>
               <div>
+                <label className="form-label">ลูกค้าเป้าหมาย</label>
+                <select value={leadId ?? ""} onChange={e => pickLead(e.target.value)} className="form-select">
+                  <option value="">— ไม่ผูกลูกค้าเป้าหมาย —</option>
+                  {leads.map(l => <option key={l.numId} value={l.numId}>{l.company}{l.contact ? ` · ${l.contact}` : ""}</option>)}
+                </select>
+              </div>
+
+              <div className="form-section">วันเวลาและสถานที่</div>
+              <div>
+                <label className="form-label">วันที่ *</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="form-input" />
+              </div>
+              <div>
+                <label className="form-label">เวลา *</label>
+                <input type="time" value={time} onChange={e => setTime(e.target.value)} className="form-input" />
+              </div>
+              <div className="col-full">
                 <label className="form-label">จังหวัด</label>
                 <input value={province} onChange={e => setProvince(e.target.value)} placeholder="จังหวัด" className="form-input" />
               </div>
-            </div>
-            <div>
-              <label className="form-label">บันทึก</label>
-              <input value={note} onChange={e => setNote(e.target.value)} placeholder="รายละเอียดกิจกรรม" className="form-input" />
+
+              <div className="form-section">รายละเอียด</div>
+              <div className="col-full">
+                <label className="form-label">บันทึก</label>
+                <input value={note} onChange={e => setNote(e.target.value)} placeholder="รายละเอียดกิจกรรม" className="form-input" />
+              </div>
             </div>
           </div>
-          <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
+          <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", background: "#fafafa" }}>
+            {err && <div style={{ marginRight: "auto", color: "#dc2626", fontSize: "0.74rem", fontWeight: 600 }}>{err}</div>}
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
             <button onClick={save} disabled={saving} className="btn btn-primary btn-md" style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}>{isEdit ? <><Edit2 size={13} /> บันทึก</> : <><Plus size={13} /> เพิ่มกิจกรรม</>}</button>
           </div>

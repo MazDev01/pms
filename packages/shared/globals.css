@@ -251,6 +251,35 @@ body {
     box-shadow: 0 0 0 3px rgba(0,51,102,.1);
   }
 
+  /* ── การจัดกลุ่มช่องกรอก (บอสสั่ง 17 ส.ค. 69: "จัดกลุ่มแบบนี้ทุกอัน ทั้ง hq และ dealer") ──
+     ฟอร์มทุกใบใช้ 3 คลาสนี้เท่านั้น — ห้ามเขียน grid/หัวข้อเองรายฟอร์ม ไม่งั้นหน้าตาเพี้ยนกันคนละแบบ
+       .form-grid    = 2 คอลัมน์ · ช่องที่ยาวเต็มแถวใส่ .col-full
+       .form-section = หัวข้อกลุ่ม (กินเต็มแถว มีเส้นคั่นใต้)
+     ⚠️ align-items:start สำคัญ — ช่องที่มีข้อความช่วยใต้กล่องจะสูงกว่าเพื่อนในแถวเดียวกัน
+        ถ้าปล่อย stretch กล่องข้าง ๆ จะถูกยืดจนกล่องกรอกลอยไม่ตรงแนว = อาการ "จัดวางมั่ว" ที่ผู้ใช้แจ้ง */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .form-grid > .col-full { grid-column: 1 / -1; }
+  .form-section {
+    grid-column: 1 / -1;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #003366;
+    letter-spacing: 0.04em;
+    padding-bottom: 6px;
+    margin-top: 6px;
+    border-bottom: 1px solid #eef1f5;
+  }
+  .form-grid > .form-section:first-child { margin-top: 0; }
+  /* จอแคบ (มือถือ/แท็บเล็ตแนวตั้ง) — สองคอลัมน์บีบจนกรอกไม่ไหว ยุบเหลือคอลัมน์เดียว */
+  @media (max-width: 560px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+
   /* ── Tabs ─────────────────────────────────────────────────── */
   .tab-bar {
     display: flex;

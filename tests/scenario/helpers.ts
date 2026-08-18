@@ -1,6 +1,6 @@
 import { Page, expect } from "@playwright/test";
 import { createClient, type Session } from "@supabase/supabase-js";
-import { RYG, CNX, ADMIN, SUPABASE_URL, SUPABASE_ANON, SUPABASE_MODE, type Account } from "./supabaseEnv";
+import { RYG, CNX, ADMIN, SUPABASE_URL, SUPABASE_ANON, REAL_BACKEND, type Account } from "./supabaseEnv";
 
 // สลับ role ก่อนโหลดหน้า (RoleProvider อ่านจาก localStorage ตอน mount) — ใช้ได้เฉพาะโหมด local mock data
 export async function loginAs(page: Page, role: "hq" | "dealer") {
@@ -40,7 +40,7 @@ const ROLE_ACCOUNT: Record<"hq" | "dealer", Account> = { hq: ADMIN, dealer: RYG 
 
 /** เปิดหน้าแบบล็อกอินจริง (โหมด supabase) หรือจำลอง role (โหมด local) ตามที่แอปตั้งค่าไว้ */
 export async function open(page: Page, role: "hq" | "dealer", path: string) {
-  if (SUPABASE_MODE) return openAs(page, ROLE_ACCOUNT[role], role, path);
+  if (REAL_BACKEND) return openAs(page, ROLE_ACCOUNT[role], role, path);
   await loginAs(page, role);
   await page.goto(APP_ORIGIN[role] + path, { waitUntil: "domcontentloaded" });
 }

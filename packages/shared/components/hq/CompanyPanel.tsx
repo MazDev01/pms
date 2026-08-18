@@ -129,15 +129,18 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
           </div>
 
           {/* Fields */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <div style={{ gridColumn: "1/-1" }}>
+          <div className="form-grid" style={{ marginBottom: 28 }}>
+            <div className="form-section">ข้อมูลบริษัท</div>
+            <div className="col-full">
               <label className="form-label">ชื่อบริษัท</label>
               <input className="form-input" value={form.name} onChange={e => set("name", e.target.value)} />
             </div>
-            <div>
+            <div className="col-full">
               <label className="form-label">เลขประจำตัวผู้เสียภาษี</label>
               <input className="form-input" value={form.taxId} onChange={e => set("taxId", e.target.value)} placeholder="0105XXXXXXXXX" />
             </div>
+
+            <div className="form-section">ช่องทางติดต่อ</div>
             <div>
               <label className="form-label">โทรศัพท์</label>
               <input className="form-input" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="02-000-0000" />
@@ -146,17 +149,17 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
               <label className="form-label">อีเมล</label>
               <input className="form-input" value={form.email} onChange={e => set("email", e.target.value)} placeholder="info@example.co.th" />
             </div>
-            <div>
+            <div className="col-full">
               <label className="form-label">เว็บไซต์</label>
               <input className="form-input" value={form.website} onChange={e => set("website", e.target.value)} placeholder="www.example.co.th" />
             </div>
-          </div>
-          <div style={{ marginBottom: 28 }}>
-            <label className="form-label">ที่อยู่</label>
-            <textarea className="form-textarea" value={form.address} rows={3}
-              onChange={e => set("address", e.target.value)}
-              placeholder="ที่อยู่เต็ม รวมจังหวัดและรหัสไปรษณีย์"
-              style={{ resize: "vertical" }} />
+            <div className="col-full">
+              <label className="form-label">ที่อยู่</label>
+              <textarea className="form-textarea" value={form.address} rows={3}
+                onChange={e => set("address", e.target.value)}
+                placeholder="ที่อยู่เต็ม รวมจังหวัดและรหัสไปรษณีย์"
+                style={{ resize: "vertical" }} />
+            </div>
           </div>
 
           {/* โหมดฝัง → ใช้ปุ่มบันทึกกลางบนหัวหน้าตั้งค่า (ไม่มีปุ่มของตัวเอง = ไม่ซ้ำ) */}

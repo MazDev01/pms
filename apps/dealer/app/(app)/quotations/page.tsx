@@ -173,10 +173,11 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
             <div style={{fontSize:"0.92rem",fontWeight:800,color:"#fff"}}>{title}</div>
             <button onClick={onClose} style={{width:28,height:28,borderRadius:8,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={13}/></button>
           </div>
-          <div style={{padding:"20px 22px",overflowY:"auto",maxHeight:"68vh",display:"flex",flexDirection:"column",gap:14}}>
+          <div className="form-grid" style={{padding:"20px 22px",overflowY:"auto",maxHeight:"68vh"}}>
+            <div className="form-section">ลูกค้า</div>
             {/* เลขที่ — โชว์อย่างเดียวตามที่บอสสั่ง (HQ กำหนดรูปแบบ ตัวแทนแก้ไม่ได้) */}
             {quoteId && (
-              <div>
+              <div className="col-full">
                 <label style={LBL}>เลขที่</label>
                 <div style={{...INP,background:"#f4f6f9",color:MUTED,fontFamily:"monospace",fontWeight:700,display:"flex",alignItems:"center",gap:7}}>
                   <Lock size={11}/> {quoteId}
@@ -185,7 +186,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
               </div>
             )}
             {/* Customer */}
-            <div>
+            <div className="col-full">
               <label style={LBL}>ลูกค้า *</label>
               <select value={form.customerId} onChange={e=>pickCustomer(Number(e.target.value))} style={INP}>
                 {customers.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
@@ -195,7 +196,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
             </div>
             {/* ผู้รับผิดชอบ — เป็นข้อมูลของ "ลูกค้า" ไม่ใช่ของใบเสนอราคา
                 บอสสั่งให้แก้ที่นี่ได้ → บันทึกแล้วจะไปเปลี่ยนที่ตัวลูกค้า (มีผลกับใบอื่นของลูกค้าคนนี้ด้วย) */}
-            <div>
+            <div className="col-full">
               <label style={LBL}>ผู้รับผิดชอบ</label>
               <PersonPicker value={form.owner} onChange={v=>set("owner",v)} multiple />
               <div style={{fontSize:"0.62rem",color:MUTED,marginTop:5,display:"flex",alignItems:"center",gap:4}}>
@@ -205,23 +206,22 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
               </div>
             </div>
             {/* Project */}
-            <div>
+            <div className="form-section">โครงการ</div>
+            <div className="col-full">
               <label style={LBL}>ชื่อโครงการ *</label>
               <input value={form.project} onChange={e=>set("project",e.target.value)} placeholder="เช่น โกดังสินค้า ABC" style={INP}/>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div>
-                <label style={LBL}>จังหวัด</label>
-                <input value={form.province} onChange={e=>set("province",e.target.value)} placeholder="จังหวัด" style={INP}/>
-              </div>
-              <div>
-                <label style={LBL}>พื้นที่ (ตร.ม.)</label>
-                <input type="number" value={form.area||""} onChange={e=>set("area",Number(e.target.value))} placeholder="0" style={INP}/>
-              </div>
+            <div>
+              <label style={LBL}>จังหวัด</label>
+              <input value={form.province} onChange={e=>set("province",e.target.value)} placeholder="จังหวัด" style={INP}/>
+            </div>
+            <div>
+              <label style={LBL}>พื้นที่ (ตร.ม.)</label>
+              <input type="number" value={form.area||""} onChange={e=>set("area",Number(e.target.value))} placeholder="0" style={INP}/>
             </div>
             {/* ประเภท — โชว์ให้ครบตามตาราง แต่แก้เองไม่ได้ เพราะระบบดึงจากรายการ BOQ แถวแรกอัตโนมัติ
                 (เปลี่ยนรายการแรกใน BOQ ข้างล่าง = ประเภทเปลี่ยนตาม) */}
-            <div>
+            <div className="col-full">
               <label style={LBL}>ประเภท</label>
               <div style={{...INP,background:"#f4f6f9",color:form.buildingType?STEEL:MUTED,display:"flex",alignItems:"center",gap:7}}>
                 <Lock size={11} color={MUTED}/> {form.buildingType || "—"}
@@ -229,15 +229,17 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
               </div>
             </div>
             {/* รายการสินค้า (BOQ) — เลือกจากแคตตาล็อก → ราคากลาง HQ · แม่แบบ derive จากรายการแรก (ไม่มีช่องแม่แบบซ้ำ) */}
-            <LineItemsEditor items={form.lineItems} defaultQty={form.area}
-              onChange={li=>setForm(p=>({...p,lineItems:li,buildingType:li.length?li[0].name.split(" · ")[0]:p.buildingType}))} />
+            <div className="form-section">รายการสินค้า</div>
+            <div className="col-full"><LineItemsEditor items={form.lineItems} defaultQty={form.area}
+              onChange={li=>setForm(p=>({...p,lineItems:li,buildingType:li.length?li[0].name.split(" · ")[0]:p.buildingType}))} /></div>
             {/* Total preview */}
-            {total>0&&<div style={{padding:"10px 14px",background:"#dce5f0",borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {total>0&&<div className="col-full" style={{padding:"10px 14px",background:"#dce5f0",borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่ารวม (คำนวณ)</span>
               <span style={{fontSize:"1rem",fontWeight:800,color:PRIMARY}}>{fmtMoney(total)}</span>
             </div>}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div>
+
+            <div className="form-section">สถานะและกำหนดเวลา</div>
+              <div className="col-full">
                 <label style={LBL}>สถานะ</label>
                 {/* "ปิดการขายสำเร็จ" ตั้งจากที่นี่ตรงๆ ไม่ได้ — ต้องผ่านปุ่ม "ลูกค้าตอบรับ ✓" เท่านั้น
                     เพราะขั้นตอนนั้นสร้าง/ผูกลูกค้าให้ก่อนเสมอ · ฟอร์มนี้เขียนแค่ฟิลด์ตรงๆ ไม่ผ่านขั้นตอนนั้น
@@ -258,7 +260,6 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
                 <label style={LBL}>วันหมดอายุ</label>
                 <input type="date" value={form.expiry} onChange={e=>set("expiry",e.target.value)} style={INP}/>
               </div>
-            </div>
           </div>
           <div style={{padding:"13px 22px",borderTop:`1px solid ${BORDER}`,display:"flex",gap:8,justifyContent:"flex-end",background:"#fafafa"}}>
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>

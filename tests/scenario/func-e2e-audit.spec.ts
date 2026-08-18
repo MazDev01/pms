@@ -19,9 +19,14 @@ const tg = nsTag(NS);
 // ตั้งยอดใบเสนอราคาให้เป็นค่าที่รู้แน่นอน หลังสร้างจริงผ่าน UI แล้ว (ต้องเลือกแม่แบบก่อนถึงสร้างได้ —
 // ปุ่มสร้างใบถูก disable ถ้า BOQ ว่าง, ดู H-audit fix) — override เป็นเลขที่จำง่าย/พิสูจน์ผลรวมได้ชัด
 // แทนยอดจริงจาก area×ราคากลาง ซึ่งคำนวณผ่านได้แต่ตัวเลขไม่กลมพอจะอ่าน assertion ตามให้ทัน
+//
+// ⚠️ ต้องเปลี่ยนรายการ BOQ ให้ตรงกับยอดใหม่ด้วย — ฐานข้อมูลบังคับว่ายอดต้องเท่ากับ Σ รายการเสมอ (0142)
+//    ตั้งแต่ยอดเป็นตัวเลขที่เอาไปรายงานเป็นยอดขาย การปล่อยให้เอกสารกับยอดไม่ตรงกันคือบั๊กจริง
+//    เทสต์ชุดนี้ไม่ได้ตรวจเนื้อใน BOQ (ตรวจแค่ยอดไหลไปถึงลูกค้าไหม) จึงยัดเป็นรายการเดียวได้
 async function forceQuoteTotal(sb: Awaited<ReturnType<typeof db>>, id: string, value: number) {
   const { error } = await sb.from("quotations").update({
     total_value: value, material_cost: Math.round(value * 0.7), total: `฿${value.toLocaleString("th-TH")}`,
+    line_items: [{ name: "ยอดที่กำหนดไว้ในเทสต์", qty: 1, unit: "งาน", unitPrice: value }],
   }).eq("id", id);
   if (error) throw new Error(`ตั้งยอดใบเสนอราคาไม่สำเร็จ: ${error.message}`);
 }
@@ -41,6 +46,9 @@ test("[audit] ปิดการขายจากลูกค้าเป้า
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณลัดคิว");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
   await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
@@ -101,6 +109,9 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
     await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
     await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
     await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill(contact);
+    // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+    await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+    await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
     await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
     await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
     await page.getByRole("button", { name: "บันทึก" }).click();
@@ -211,6 +222,9 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณลบวอน");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
   await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();
@@ -288,6 +302,9 @@ test("[audit] เปิดฟอร์มสร้างใบเสนอรา
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณค้างฟอร์ม");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
@@ -327,6 +344,9 @@ test("[audit] cross-role: ตัวแทนปิดการขาย → HQ �
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณครอสโรล");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
   await pickTemplate(page); // ต้องเลือกแม่แบบจริง ไม่งั้น BOQ ว่าง → ปุ่มสร้างใบถูก disable (H-audit fix)
   await page.getByRole("button", { name: "บันทึก" }).click();

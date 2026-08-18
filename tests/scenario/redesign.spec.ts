@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { open, assertHealthyPage, openLeadQuotationForm } from "./helpers";
-import { SUPABASE_MODE } from "./supabaseEnv";
+import { REAL_BACKEND } from "./supabaseEnv";
 
 // "วันนี้ของระบบ" (APP_NOW) เดินตามแหล่งข้อมูล: supabase = วันจริง · local = ตรึง 30 มิ.ย. 2569
 // เทสต์ประทับวันใบใหม่จึงต้องคำนวณวันคาดหวังแบบเดียวกัน (ไม่ hardcode "30 มิ.ย.")
 const TH_MO_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function appNowThaiShort(): string {
-  const d = SUPABASE_MODE ? new Date() : new Date(2026, 5, 30); // ตรงกับ APP_NOW ใน FilterContext
+  const d = REAL_BACKEND ? new Date() : new Date(2026, 5, 30); // ตรงกับ APP_NOW ใน FilterContext
   return `${d.getDate()} ${TH_MO_ABBR[d.getMonth()]}`;           // เช่น "30 มิ.ย." (ตรงกับ fmtISOToThai แบบไม่รวมปี)
 }
 

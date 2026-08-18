@@ -19,7 +19,7 @@ import { useRepoValue } from "./useRepoState";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { settings as settingsRepo, metrics as metricsRepo } from "./data";
 import { DEFAULT_DEALER_CODE } from "./mock";
-import { DATA_SOURCE } from "./data/config";
+import { REAL_BACKEND } from "./data/config";
 import { logRepoRead } from "./repoLog";
 import type { DealerRollup, DealerRollupOpts } from "./data/ports";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -36,7 +36,7 @@ function useDealerRollup(year: number, opts: DealerRollupOpts): Map<string, Deal
   const optsKey = JSON.stringify(opts);
   const [rollup, setRollup] = useState<Map<string, DealerRollup> | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setRollup(null); return; }
+    if (!REAL_BACKEND) { setRollup(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.dealerRollup(year, opts)
@@ -141,7 +141,7 @@ export function useDealerPerformance(): DealerPerfMap {
     }
     // โหมด local คิดจบในเครื่องทันที = พร้อมเสมอ · โหมดจริงต้องรอ rollup จากเซิร์ฟเวอร์ก่อน
     Object.defineProperty(m, "ready", {
-      value: DATA_SOURCE !== "supabase" || serverRollup !== null,
+      value: !REAL_BACKEND || serverRollup !== null,
       enumerable: false,
     });
     return m;

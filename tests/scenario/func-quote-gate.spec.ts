@@ -36,13 +36,13 @@ async function seedLead() {
     contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสินค้า", status: "BULLET",
     value: "฿600,000", assigned: "ผู้ทดสอบ",
     tasks: [
-      done("contact", "ติดต่อครั้งแรก"), done("collect", "เก็บข้อมูลลูกค้า"),
-      done("requirement", "รวบรวมความต้องการ"), done("catalog", "ส่งแม่แบบให้ลูกค้า"), done("appointment", "นัดหมาย"),
+      done("contact", "ติดต่อแล้ว"), done("collect", "เก็บข้อมูลลูกค้า"), done("appointment", "นัดหมาย"),
       { key: "makeQuote", label: "จัดทำใบเสนอราคา", done: false },
       { key: "sendQuote", label: "ส่งใบเสนอราคา", done: false },
+      { key: "catalog", label: "ส่งแม่แบบให้ลูกค้า", done: false },
       { key: "followup", label: "ติดตามผล", done: false },
       { key: "negotiate", label: "เจรจา", done: false },
-      { key: "close", label: "ปิดการขาย", done: false },
+      { key: "close", label: "ปิดการขาย / ไม่สำเร็จ", done: false },
     ],
   });
 }
@@ -113,7 +113,12 @@ test("[func] ออกใบจริงจากฟอร์มที่ถู�
   const pick = page.getByRole("button", { name: /เลือกจากแคตตาล็อก/ });
   await expect(pick.first(), "BOQ ตั้งต้นไม่ได้ ต้องเปิดให้เลือกรายการเอง").toBeVisible({ timeout: 10_000 });
   await pick.first().click();
-  await page.locator("button").filter({ hasText: /฿[\d,]+\// }).first().click();
+  // ต้องเปิดติดตั้งแต่คลิกแรก — เคยพังตรงนี้ (17 ส.ค. 69): ฟอร์มที่ถูกพามาเลื่อนจอแบบ smooth อยู่
+  // เมนูดัก event "scroll" ไว้ปิดตัวเอง เลยปิดทันทีที่เพิ่งเปิด → ผู้ใช้เห็นเป็น "กดแล้วไม่ขึ้น" ออกใบไม่ได้เลย
+  const catalogItem = page.locator("button").filter({ hasText: /฿[\d,]+\// }).first();
+  await expect(catalogItem, "กดเลือกจากแคตตาล็อกครั้งเดียวแล้วรายการต้องขึ้น (เมนูต้องไม่ปิดตัวเองเพราะจอเลื่อนอัตโนมัติ)")
+    .toBeVisible({ timeout: 10_000 });
+  await catalogItem.click();
 
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
   await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toHaveCount(0, { timeout: 30_000 });

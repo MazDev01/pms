@@ -20,7 +20,7 @@ import type { DealerRow } from "@pms/shared/lib/data/types";
 import type { QuoteRangeRow, DashboardQuoteSummary, HQQuotationsSummary, QuoteSummaryFilters, QuoteListOpts, QuoteListResult, LeadSummary, LeadSummaryFilters, LeadListOpts, LeadListResult, NetworkCustomerSummary, UnassignedSummary, UnassignedFilters, HQCustomersPageOpts, HQCustomersPageResult, HQCustomersFilterOptions } from "@pms/shared/lib/data/ports";
 import { metrics as metricsRepo2, quotations as quotationsRepo, leads as leadsRepo, customers as customersRepo, appointments as appointmentsRepo } from "@pms/shared/lib/data";
 import type { CustomerRow, AppointmentMock, QuotationMock } from "@pms/shared/lib/data/types";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 
 // ── aggregate ใบในช่วงวันที่ที่ DB (M9) — supabase เท่านั้น · local คืน null (คงเส้นทาง winQuotes เดิม) ──
 // reactive: refetch เมื่อ quotations เปลี่ยน หรือช่วง/สาขาเปลี่ยน · debounce 150ms
@@ -32,7 +32,7 @@ export function useNetworkQuoteRange(start: Date, end: Date, dealer?: string): M
   const s = isoDate(start), e = isoDate(end);
   const [rows, setRows] = useState<Map<string, QuoteRangeRow> | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setRows(null); return; }
+    if (!REAL_BACKEND) { setRows(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.networkQuoteRange(s, e, dealer)
@@ -50,7 +50,7 @@ export function useLeadsPage(opts: LeadListOpts): LeadListResult | null {
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<LeadListResult | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setPage(null); return; }
+    if (!REAL_BACKEND) { setPage(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       leadsRepo.listPage(undefined, opts)
@@ -70,7 +70,7 @@ export function useLeadSummary(filters: LeadSummaryFilters): LeadSummary | null 
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<LeadSummary | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    if (!REAL_BACKEND) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.leadSummary(filters)
@@ -90,7 +90,7 @@ export function useHQQuotationsSummary(filters: QuoteSummaryFilters): HQQuotatio
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<HQQuotationsSummary | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    if (!REAL_BACKEND) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.hqQuotationsSummary(filters)
@@ -109,7 +109,7 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<QuoteListResult | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setPage(null); return; }
+    if (!REAL_BACKEND) { setPage(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       quotationsRepo.listPage(undefined, opts)
@@ -127,7 +127,7 @@ export function useQuotationsPage(opts: QuoteListOpts): QuoteListResult | null {
 export function useQuotationSalesperson(quoteId: string | null, dealerCode: string | null): string | null {
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || !quoteId || !dealerCode) { setName(null); return; }
+    if (!REAL_BACKEND || !quoteId || !dealerCode) { setName(null); return; }
     let alive = true;
     quotationsRepo.salesperson(quoteId, dealerCode)
       .then(r => { if (alive) setName(r); })
@@ -144,7 +144,7 @@ export function useHQCustomersPage(opts: HQCustomersPageOpts): HQCustomersPageRe
   const key = JSON.stringify(opts);
   const [page, setPage] = useState<HQCustomersPageResult | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setPage(null); return; }
+    if (!REAL_BACKEND) { setPage(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.hqCustomersPage(opts)
@@ -163,7 +163,7 @@ export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
   const { salesVersion } = useSales();
   const [opts, setOpts] = useState<HQCustomersFilterOptions | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setOpts(null); return; }
+    if (!REAL_BACKEND) { setOpts(null); return; }
     let alive = true;
     metricsRepo2.hqCustomersFilterOptions()
       .then(r => { if (alive) setOpts(r); })
@@ -178,7 +178,7 @@ export function useHQCustomersFilterOptions(): HQCustomersFilterOptions | null {
 export function useCustomerBuildings(customerId: number | null, dealerCode: string | null): QuotationMock[] | null {
   const [rows, setRows] = useState<QuotationMock[] | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || customerId == null || !dealerCode) { setRows(null); return; }
+    if (!REAL_BACKEND || customerId == null || !dealerCode) { setRows(null); return; }
     let alive = true;
     quotationsRepo.listForCustomer(customerId, dealerCode)
       .then(r => { if (alive) setRows(r); })
@@ -195,7 +195,7 @@ export function useDashboardQuoteSummary(start: Date, end: Date, dealer?: string
   const s = isoDate(start), e = isoDate(end);
   const [summary, setSummary] = useState<DashboardQuoteSummary | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    if (!REAL_BACKEND) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.dashboardQuoteSummary(s, e, dealer)
@@ -213,7 +213,7 @@ export function useUnassignedLeads(filters: UnassignedFilters): UnassignedSummar
   const key = JSON.stringify(filters);
   const [summary, setSummary] = useState<UnassignedSummary | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    if (!REAL_BACKEND) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo2.unassignedLeads(filters)
@@ -231,7 +231,7 @@ export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
   const { salesVersion } = useSales();
   const [summary, setSummary] = useState<NetworkCustomerSummary | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setSummary(null); return; }
+    if (!REAL_BACKEND) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       metricsRepo.networkCustomerSummary()
@@ -247,7 +247,7 @@ export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
 // → ห้ามเอา seed จำลอง (hqAllQuotations/hqAllCustomers/dealerDetails) มาผสมเด็ดขาด
 //   ไม่งั้น HQ จะเห็น "ข้อมูลที่ไม่มีอยู่จริง" ปนกับของจริง (กติกา: ห้ามกุข้อมูล)
 // โหมด local = ยังเป็นเดโม → คงพฤติกรรมเดิมไว้ให้หน้าจอมีข้อมูลให้ดู
-const USE_SEED = DATA_SOURCE !== "supabase";
+const USE_SEED = !REAL_BACKEND;
 
 // ดีลเลอร์หลักของเดโม (สาขาที่ลูกค้าเป้าหมาย/ใบไม่ระบุ dealerCode ถือเป็นของสาขานี้)
 export const CURRENT_DEALER = { code: "CNX", name: "เชียงใหม่สตีลบิลด์" };
@@ -344,7 +344,7 @@ export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
   const dealerInfoOf = useDealerInfo();
   const [rows, setRows] = useState<CustomerRow[] | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setRows(null); return; }
+    if (!REAL_BACKEND) { setRows(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       // ⚠️ ต้องส่ง dealerCodes ไม่ใช่ dealerCode (แก้ 10 ส.ค. 69)
@@ -387,7 +387,7 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
   // local/ยังไม่กลับ: ใช้ array ของ SalesContext เหมือนเดิม (สาขา CNX มีข้อมูลสด · อื่น ๆ ใช้ seed ด้านล่าง)
   const [fetched, setFetched] = useState<{ leads: LeadRow[]; quotes: QuotationMock[] } | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase") { setFetched(null); return; }
+    if (!REAL_BACKEND) { setFetched(null); return; }
     let alive = true;
     Promise.all([
       leadsRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
@@ -447,7 +447,7 @@ export function useDealerDrawerData(code: string | null): DealerDrawerData | nul
   const { salesVersion } = useSales();
   const [data, setData] = useState<DealerDrawerData | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || !code) { setData(null); return; }
+    if (!REAL_BACKEND || !code) { setData(null); return; }
     let alive = true;
     Promise.all([
       customersRepo.listPage(undefined, { limit: 5000, offset: 0, dealerCodes: [code] }),
@@ -474,7 +474,7 @@ export function useHQSearch(query: string): { leads: LeadRow[]; quotes: Quotatio
   const [res, setRes] = useState<{ leads: LeadRow[]; quotes: QuotationMock[]; customers: CustomerRow[] } | null>(null);
   useEffect(() => {
     const q = query.trim();
-    if (DATA_SOURCE !== "supabase" || q.length < 2) { setRes(null); return; }
+    if (!REAL_BACKEND || q.length < 2) { setRes(null); return; }
     let alive = true;
     const t = setTimeout(() => {
       Promise.all([
@@ -496,7 +496,7 @@ export function useLeadAppointments(leadNumId: number | null, dealerCode: string
   const { salesVersion } = useSales();
   const [appts, setAppts] = useState<AppointmentMock[] | null>(null);
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || leadNumId == null || !dealerCode) { setAppts(null); return; }
+    if (!REAL_BACKEND || leadNumId == null || !dealerCode) { setAppts(null); return; }
     let alive = true;
     appointmentsRepo.listForLead(leadNumId, dealerCode).then(r => { if (alive) setAppts(r); }).catch(e => logRepoRead("appointments.listForLead", e));
     return () => { alive = false; };

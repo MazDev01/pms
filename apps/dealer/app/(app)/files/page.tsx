@@ -183,14 +183,18 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
               <div style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 600 }}>{fileError}</div>
             )}
             {/* Manual name override */}
-            <div>
-              <label className="form-label">ชื่อไฟล์</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อไฟล์.pdf" className="form-input" />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid">
+              <div className="form-section">รายละเอียดไฟล์</div>
+              <div className="col-full">
+                <label className="form-label">ชื่อไฟล์</label>
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อไฟล์.pdf" className="form-input" />
+              </div>
               <div>
                 <label className="form-label">โฟลเดอร์</label>
-                <select value={cat} onChange={e => setCat(e.target.value as FileCategory)} className="form-select">
+                <select aria-label="โฟลเดอร์" value={cat} onChange={e => setCat(e.target.value as FileCategory)} className="form-select">
+                  {/* ⚠️ ต้องมี "ยังไม่ระบุ" เสมอ (บอสสั่ง 17 ส.ค. 69) — ไม่งั้นเบราว์เซอร์เลือกตัวแรกให้เอง
+                      แล้วไฟล์จะถูกยัดเข้าโฟลเดอร์ที่ไม่มีใครเลือก หาไม่เจอทีหลัง */}
+                  <option value="">— ยังไม่ระบุ —</option>
                   {ALL_CATS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -240,14 +244,18 @@ function EditFileModal({ file, onSave, onClose }: { file: FileMock; onSave: (f: 
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
           </div>
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label className="form-label">ชื่อไฟล์</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อไฟล์.pdf" className="form-input" />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid">
+              <div className="form-section">รายละเอียดไฟล์</div>
+              <div className="col-full">
+                <label className="form-label">ชื่อไฟล์</label>
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อไฟล์.pdf" className="form-input" />
+              </div>
               <div>
                 <label className="form-label">โฟลเดอร์</label>
-                <select value={cat} onChange={e => setCat(e.target.value as FileCategory)} className="form-select">
+                <select aria-label="โฟลเดอร์" value={cat} onChange={e => setCat(e.target.value as FileCategory)} className="form-select">
+                  {/* ⚠️ ต้องมี "ยังไม่ระบุ" เสมอ (บอสสั่ง 17 ส.ค. 69) — ไม่งั้นเบราว์เซอร์เลือกตัวแรกให้เอง
+                      แล้วไฟล์จะถูกยัดเข้าโฟลเดอร์ที่ไม่มีใครเลือก หาไม่เจอทีหลัง */}
+                  <option value="">— ยังไม่ระบุ —</option>
                   {ALL_CATS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>

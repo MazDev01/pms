@@ -60,6 +60,9 @@ test("[edge] มูลค่าประเมินติดลบ/ข้อค
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("-500000");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").blur();
   const afterBlur = await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").inputValue();
@@ -86,6 +89,9 @@ test("[edge] ชื่อบริษัทยาวผิดปกติ (2000 
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(LONG);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณยาว");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
   await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
@@ -114,6 +120,9 @@ test("[edge] อักขระพิเศษ/emoji/แท็ก HTML ในช
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(WEIRD);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณแปลก");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
   await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
@@ -143,6 +152,9 @@ test("[edge] กดปุ่มบันทึกซ้ำเร็ว ๆ (doub
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณกดซ้ำ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
   await pickTemplate(page);
 
@@ -173,6 +185,9 @@ test("[edge] พื้นที่ (ตร.ม.) ติดลบผ่าน fil
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณพื้นที่ลบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   // type=number min=0 กัน spinner ได้ แต่ fill() เขียนค่าตรง ๆ ผ่าน DOM (จำลอง paste ค่าติดลบ)
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("-999");
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").fill("500000");
@@ -349,6 +364,9 @@ test("[edge·hq] กดปุ่ม 'บันทึก' (เพิ่มผู�
   await page.getByRole("button", { name: "เพิ่มผู้ใช้งาน HQ" }).click();
   await page.getByPlaceholder("ชื่อ", { exact: true }).fill(NAME);
   await page.getByPlaceholder("name@benjamin.co.th").fill(EMAIL);
+  // บทบาท/แผนก = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — เริ่มที่ "ยังไม่ระบุ" จึงต้องเลือกเอง
+  await page.getByRole("dialog").getByLabel("บทบาท", { exact: true }).selectOption({ index: 1 });
+  await page.getByRole("dialog").getByLabel("แผนก", { exact: true }).selectOption({ index: 1 });
 
   const saveBtn = page.getByRole("button", { name: "บันทึก" });
   await expect(saveBtn).toBeEnabled({ timeout: 10_000 });

@@ -492,16 +492,19 @@ function HQMasterPageInner() {
               เพิ่มแม่แบบใหม่
               <button onClick={() => setAdding(false)} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 28, height: 28, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
             </div>
-            <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", flex: 1 }}>
-              <div><label style={lbl}>ชื่อแม่แบบ *</label><input style={inp} value={addForm.name} autoFocus onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="เช่น โกดังสำเร็จรูป" /></div>
-              <div><label style={lbl}>รูปแม่แบบ</label><ImageUpload value={addForm.image} onChange={v => setAddForm(f => ({ ...f, image: v }))} /></div>
-              <div><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={addForm.spec} onChange={e => setAddForm(f => ({ ...f, spec: e.target.value }))} /></div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div><label style={lbl}>ราคากลาง (บาท) *</label><input style={inp} type="number" min="0" step="0.01" value={addForm.price} onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="5100" /></div>
-                <div><label style={lbl}>หน่วย</label><input style={inp} value={addForm.unit} onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))} /></div>
-              </div>
+            <div className="form-grid" style={{ padding: 24, overflowY: "auto", flex: 1 }}>
+              <div className="form-section">ข้อมูลแม่แบบ</div>
+              <div className="col-full"><label style={lbl}>ชื่อแม่แบบ *</label><input style={inp} value={addForm.name} autoFocus onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="เช่น โกดังสำเร็จรูป" /></div>
+              <div className="col-full"><label style={lbl}>รูปแม่แบบ</label><ImageUpload value={addForm.image} onChange={v => setAddForm(f => ({ ...f, image: v }))} /></div>
+              <div className="col-full"><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={addForm.spec} onChange={e => setAddForm(f => ({ ...f, spec: e.target.value }))} /></div>
+
+              <div className="form-section">ราคากลาง</div>
+              <div><label style={lbl}>ราคากลาง (บาท) *</label><input style={inp} type="number" min="0" step="0.01" value={addForm.price} onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="5100" /></div>
+              <div><label style={lbl}>หน่วย</label><input style={inp} value={addForm.unit} onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))} /></div>
+
               {/* แม่แบบย่อย — ใส่/แก้/ลบ ได้ตั้งแต่ตอนสร้าง */}
-              <div>
+              <div className="form-section">แม่แบบย่อย</div>
+              <div className="col-full">
                 <label style={lbl}>แม่แบบย่อย ({addForm.subtypes.length})</label>
                 <SubtypeEditor value={addForm.subtypes} images={addForm.subtypeImages}
                   prices={addForm.subtypePrices} mainPrice={parseFloat(addForm.price) || 0}
@@ -527,13 +530,15 @@ function HQMasterPageInner() {
               แก้ไขแม่แบบ
               <button onClick={() => setEditing(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, width: 28, height: 28, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={14} /></button>
             </div>
-            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 13, overflowY: "auto", flex: 1 }}>
-              <div><label style={lbl}>ชื่อแม่แบบ *</label><input style={inp} value={editForm.name} autoFocus onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
-              <div><label style={lbl}>รูปแม่แบบ</label><ImageUpload value={editForm.image} onChange={v => setEditForm(f => ({ ...f, image: v }))} /></div>
-              <div><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={editForm.spec} onChange={e => setEditForm(f => ({ ...f, spec: e.target.value }))} /></div>
-              <div><label style={lbl}>หน่วย</label><input style={inp} value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} /></div>
+            <div className="form-grid" style={{ padding: 20, overflowY: "auto", flex: 1 }}>
+              <div className="form-section">ข้อมูลแม่แบบ</div>
+              <div className="col-full"><label style={lbl}>ชื่อแม่แบบ *</label><input style={inp} value={editForm.name} autoFocus onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div className="col-full"><label style={lbl}>รูปแม่แบบ</label><ImageUpload value={editForm.image} onChange={v => setEditForm(f => ({ ...f, image: v }))} /></div>
+              <div className="col-full"><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={editForm.spec} onChange={e => setEditForm(f => ({ ...f, spec: e.target.value }))} /></div>
+              <div className="col-full"><label style={lbl}>หน่วย</label><input style={inp} value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} /></div>
               {/* แม่แบบย่อย — เพิ่ม/แก้ไขชื่อ/ลบได้ (เลือกได้ในฟอร์มลูกค้าเป้าหมาย/ใบเสนอราคา) */}
-              <div>
+              <div className="form-section">แม่แบบย่อย</div>
+              <div className="col-full">
                 <label style={lbl}>แม่แบบย่อย ({editForm.subtypes.length})</label>
                 <SubtypeEditor value={editForm.subtypes} images={editForm.subtypeImages}
                   prices={editForm.subtypePrices} mainPrice={editing?.price ?? 0}

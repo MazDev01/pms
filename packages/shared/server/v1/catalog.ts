@@ -1,0 +1,41 @@
+// ── /api/v1/catalog — แคตตาล็อกแม่แบบ/ราคากลาง (กลุ่มแรกที่ย้ายมา backend) ──────────
+//
+// เลือกกลุ่มนี้ขึ้นก่อนเพราะเสี่ยงต่ำสุด: อ่านบ่อยมาก เขียนน้อย ไม่มี pagination ไม่มี RPC
+// และมีเทสต์เดิมครอบอยู่แล้วหลายจุด (ราคากลางไปโผล่ในใบเสนอราคาทุกใบ)
+//
+// พฤติกรรมต้องเหมือน SupabaseAdapter.catalog เป๊ะ — คัดมาจากที่นั่นตรง ๆ:
+//   list   : เรียงตาม id · แปลง snake_case → camelCase
+//   save   : upsert ตามชุดที่ส่งมา (ไม่ลบแถวที่ไม่ได้ส่ง) · ตัด created_at ทิ้ง (เป็นของ DB)
+//   remove : ลบตาม id ตรง ๆ
+import type { NextRequest } from "next/server";
+import { handler, ok, dbFail, fail } from "./_ctx";
+import { toCamelList, toSnakeList } from "@pms/shared/lib/data/supabase/mappers";
+import type { SolutionProduct } from "@pms/shared/lib/data/types";
+
+type Row = Record<string, unknown>;
+
+export { runtime } from "./_ctx";
+
+export const GET = handler("catalog.list", async (_req: NextRequest, sb) => {
+  const { data, error } = await sb.from("master_catalog").select("*").order("id", { ascending: true });
+  if (error) return dbFail("catalog.list", error);
+  return ok(toCamelList<SolutionProduct>((data ?? []) as Row[]));
+});
+
+export const PUT = handler("catalog.save", async (req: NextRequest, sb) => {
+  const body = (await req.json().catch(() => null)) as SolutionProduct[] | null;
+  if (!Array.isArray(body)) return fail(400, "ต้องส่งรายการแม่แบบมาเป็น array");
+  // created_at เป็นของฐานข้อมูล — ส่งกลับไปจะทับเวลาสร้างเดิม (เหตุผลเดียวกับ dealers.save)
+  const rows = toSnakeList(body as unknown as Row[]).map(r => { const c = { ...r }; delete c.created_at; return c; });
+  const { error } = await sb.from("master_catalog").upsert(rows);
+  if (error) return dbFail("catalog.save", error);
+  return ok({ ok: true });
+});
+
+export const DELETE = handler("catalog.remove", async (req: NextRequest, sb) => {
+  const id = (new URL(req.url).searchParams.get("id") ?? "").trim();
+  if (!id) return fail(400, "ไม่ได้ระบุแม่แบบที่จะลบ");
+  const { error } = await sb.from("master_catalog").delete().eq("id", id);
+  if (error) return dbFail("catalog.remove", error);
+  return ok({ ok: true });
+});

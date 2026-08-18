@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, Copy, Check, Key, X } from "lucide-react";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { viewDealerPassword, resetDealerPassword, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { fmtISOToThai, type DealerRow } from "@pms/shared/lib/mock";
 import { useRole } from "@pms/shared/context/RoleContext";
 
@@ -118,7 +118,7 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
 
   async function doReset() {
     if (!confirm(`ออกรหัสผ่านใหม่ให้ "${dealer.name}"?\nรหัสเดิมจะใช้เข้าระบบไม่ได้ทันที`)) return;
-    if (DATA_SOURCE !== "supabase") { alert("โหมดทดลองใช้งานไม่รองรับการรีเซ็ตรหัสผ่าน"); return; }
+    if (!REAL_BACKEND) { alert("โหมดทดลองใช้งานไม่รองรับการรีเซ็ตรหัสผ่าน"); return; }
     setResetting(true);
     const res = await resetDealerPassword(dealer.code);
     setResetting(false);

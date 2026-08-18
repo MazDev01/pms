@@ -37,7 +37,9 @@ test("เพิ่มลูกค้าระหว่างรายการ�
   //    เพราะนั่นคือการส่งคำขอช้า เซิร์ฟเวอร์จะได้ภาพ ณ ตอนที่ส่ง (มีแถวใหม่อยู่แล้ว) = ไม่เกิดจังหวะที่ต้องการวัด
   //    สิ่งที่ต้องจำลองคือ "ภาพถ่ายไว้ตั้งแต่ต้น แต่มาถึงจอทีหลัง"
   let delayed = false;
-  await page.route(/\/rest\/v1\/customers\?.*select/, async (route) => {
+  // โหมด supabase อ่านลูกค้าที่ /rest/v1/customers?...select · โหมด api ที่ /api/v1/customers?dealer=…
+  // ต้องดักทั้งคู่ ไม่งั้นสลับโหมดแล้วไม่มีอะไรถูกถ่วง = เทสต์วัดไม่ตรงจุดโดยไม่มีอะไรฟ้อง
+  await page.route(/\/rest\/v1\/customers\?.*select|\/api\/v1\/customers(\?|$)/, async (route) => {
     if (route.request().method() !== "GET" || delayed) return route.continue();
     delayed = true;
     const res = await route.fetch();          // ถ่ายภาพเดี๋ยวนี้ (ยังไม่มีลูกค้ารายใหม่)

@@ -10,6 +10,7 @@
 import { DATA_SOURCE } from "./config";
 import { LocalAdapter } from "./local/LocalAdapter";
 import { SupabaseAdapter } from "./supabase/SupabaseAdapter";
+import { HttpAdapter } from "./http/HttpAdapter";
 import { dedupeRead, ttlCacheRead, invalidateCache } from "./dedupe";
 
 // TTL ของแคชข้อมูลอ้างอิง (ทะเบียนตัวแทน/แคตตาล็อก/กฎธุรกิจ/ผู้รับผิดชอบ) — สั้นพอที่ผู้ใช้จะไม่รู้สึกว่า
@@ -17,7 +18,11 @@ import { dedupeRead, ttlCacheRead, invalidateCache } from "./dedupe";
 const REF_TTL_MS = 30_000;
 import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo, ProfileRepo } from "./ports";
 
-const adapter: DataAdapter = DATA_SOURCE === "supabase" ? SupabaseAdapter : LocalAdapter;
+// "api" = คุยผ่าน backend ของเราเอง (ระยะ 0 — ยังเป็นโครงว่าง ดู http/HttpAdapter.ts)
+const adapter: DataAdapter =
+  DATA_SOURCE === "supabase" ? SupabaseAdapter
+  : DATA_SOURCE === "api" ? HttpAdapter
+  : LocalAdapter;
 
 export const storage = adapter.storage;   // ไฟล์จริง (bytes) — local: no-op · supabase: Storage
 export const realtime = adapter.realtime; // ฟังการเปลี่ยนแปลงสด — local: no-op · supabase: postgres_changes

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { SUPABASE_MODE } from "./supabaseEnv";
+import { REAL_BACKEND } from "./supabaseEnv";
 
 // ── ยอดสะสมของลูกค้า ต้องตรงกับใบที่ปิดการขายได้ "เสมอ" แม้ไม่มีใครสั่งให้คำนวณ ─────────
 //
@@ -11,7 +11,7 @@ import { SUPABASE_MODE } from "./supabaseEnv";
 //
 // 0114 ย้ายการรับประกันลงไปที่ชั้นฐานข้อมูล — เทสต์นี้เขียนข้อมูลตรงเข้าฐานข้อมูล
 // (ไม่ผ่านแอปเลย) แล้วดูว่ายอดขยับเองถูกต้องไหม
-test.skip(!SUPABASE_MODE, "ต้องใช้ฐานข้อมูลจริง");
+test.skip(!REAL_BACKEND, "ต้องใช้ฐานข้อมูลจริง");
 test.describe.configure({ mode: "serial" });
 
 const db = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });

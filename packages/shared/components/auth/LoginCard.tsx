@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { DEMO_PASSWORD, DEMO_LOGINS } from "@pms/shared/lib/auth";
 import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 
 const FORGOT_MSG = "กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th";
@@ -59,11 +60,23 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     else { setError(r.error); setLoading(false); }
   }
 
+  // ── เข้าระบบทันที (เฉพาะโหมดเดโม) ─────────────────────────────────────────────
+  // ⚠️ ต้องผูกกับ !REAL_BACKEND เท่านั้น ห้ามใช้ธงอื่น (เช่น NODE_ENV) เด็ดขาด
+  //    ระบบจริงตั้ง NEXT_PUBLIC_DATA_SOURCE=supabase → REAL_BACKEND=true → ปุ่มนี้ไม่ถูกเรนเดอร์เลย
+  //    ถ้าหลุดไปโผล่บนระบบจริง = ใครก็กดเข้าเป็นผู้ดูแลได้โดยไม่ต้องรู้รหัสผ่าน
+  async function quickLogin(demoEmail: string) {
+    setError(null);
+    setLoading(true);
+    const r = await signIn(demoEmail, DEMO_PASSWORD);
+    if (r.ok) go(r.session.scopeAll);
+    else { setError(r.error); setLoading(false); }
+  }
+
   // ใช้อีเมลในช่องที่กรอกไว้แล้ว — ไม่ต้องเปิดฟอร์มใหม่ซ้อน
   // ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตรหัสผ่านเอง — HQ เป็นผู้คุมรหัสผ่านของตัวแทนทั้งหมด (บอสสั่ง)
   // จึงเปิดลิงก์รีเซ็ตทางอีเมลจริงให้เฉพาะฝั่ง HQ เท่านั้น ฝั่งตัวแทนให้ไปติดต่อ HQ เสมอ
   async function handleForgot() {
-    if (DATA_SOURCE !== "supabase" || !isHQ) { alert(FORGOT_MSG); return; } // โหมดเดโม/ฝั่งตัวแทน ไม่มีสิทธิ์รีเซ็ตเอง
+    if (!REAL_BACKEND || !isHQ) { alert(FORGOT_MSG); return; } // โหมดเดโม/ฝั่งตัวแทน ไม่มีสิทธิ์รีเซ็ตเอง
     const e = email.trim();
     if (!/^\S+@\S+\.\S+$/.test(e)) {
       setForgotMsg({ ok: false, text: "กรอกอีเมลในช่องด้านบนก่อน แล้วกด \"ลืมรหัสผ่าน?\" อีกครั้ง" });
@@ -149,6 +162,25 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                 : "เข้าสู่ระบบ"}
             </button>
           </form>
+
+          {/* ── โหมดเดโม: กดเข้าใช้งานได้เลย ไม่ต้องจำอีเมล/รหัส ──
+              ไม่มีในระบบจริง (REAL_BACKEND=true) — ดูเหตุผลที่ quickLogin */}
+          {!REAL_BACKEND && (
+            <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3.5">
+              <p className="mb-2.5 text-center text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">
+                โหมดสาธิต — เข้าใช้งานได้เลย
+              </p>
+              <div className="flex flex-col gap-2">
+                {DEMO_LOGINS.filter(d => (isHQ ? d.scopeAll : !d.scopeAll)).map(d => (
+                  <button key={d.email} type="button" disabled={busy} onClick={() => void quickLogin(d.email)}
+                    className="flex h-10 w-full items-center justify-center rounded-lg border border-[#0e2a5c]/25 bg-white text-[0.85rem] font-bold text-[#0e2a5c] transition hover:bg-[#0e2a5c]/5 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60">
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2.5 text-center text-[0.68rem] text-slate-400">ข้อมูลทั้งหมดเป็นข้อมูลตัวอย่าง</p>
+            </div>
+          )}
 
           {/* Helper */}
           <p className="mt-4 text-center text-[0.8rem] text-slate-500">

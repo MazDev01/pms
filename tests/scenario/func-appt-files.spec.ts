@@ -32,6 +32,8 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
   await page.getByRole("button", { name: "เพิ่มกิจกรรม" }).first().click();
   const note = page.getByPlaceholder("รายละเอียดกิจกรรม");
   await expect(note, "ฟอร์มนัดหมายต้องเปิด").toBeVisible({ timeout: 10_000 });
+  // ประเภทกิจกรรม = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — เริ่มที่ "ยังไม่ระบุ"
+  await page.getByLabel("ประเภท").selectOption({ index: 1 });
   await page.getByPlaceholder("จังหวัด").fill(CUSTOMER);
   await note.fill("นัดทดสอบอัตโนมัติ");
   await page.getByRole("button", { name: "เพิ่มกิจกรรม" }).last().click();
@@ -61,6 +63,9 @@ test("[func] แนบไฟล์ที่ลูกค้าเป้าหม�
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณไฟล์");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company: COMPANY });
 
@@ -100,6 +105,9 @@ async function openLeadFileInput(page: Page, sb: SupabaseClient, company: string
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณไฟล์ล้ม");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: "บันทึก" }).click();
   await waitRow(sb, "leads", { company });
   await page.getByRole("button", { name: "ตาราง" }).click();
@@ -125,7 +133,7 @@ test("[func] อัปโหลดไฟล์ล้มเหลว → ขึ�
   const fileInput = await openLeadFileInput(page, sb, COMPANY);
 
   // บังคับให้ Storage ปฏิเสธการอัปโหลด (จำลอง RLS/quota/เน็ตหลุด) — ต้องดักก่อนแนบไฟล์
-  await page.route("**/storage/v1/object/**", (r) =>
+  await page.route(/\/storage\/v1\/object\/|\/api\/v1\/storage(\?|$)/, (r) =>
     r.request().method() === "POST"
       ? r.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "forced upload fail" }) })
       : r.continue());
@@ -163,7 +171,7 @@ test("[func] ลบไฟล์แต่ลบไบต์ไม่สำเร�
     { timeout: 20_000, message: "ไฟล์ต้องโผล่ในคลัง" }).toContain(FILENAME);
 
   // บังคับให้ Storage ปฏิเสธการลบไบต์ (DELETE) — การลบ metadata ต้องไม่เกิดขึ้นตาม
-  await page.route("**/storage/v1/object/**", (r) =>
+  await page.route(/\/storage\/v1\/object\/|\/api\/v1\/storage(\?|$)/, (r) =>
     r.request().method() === "DELETE"
       ? r.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "forced delete fail" }) })
       : r.continue());

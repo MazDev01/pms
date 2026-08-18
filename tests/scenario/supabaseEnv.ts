@@ -37,7 +37,12 @@ function testEnv(key: string): string {
 
 export const SUPABASE_URL = appEnv("NEXT_PUBLIC_SUPABASE_URL");
 export const SUPABASE_ANON = appEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-export const SUPABASE_MODE = appEnv("NEXT_PUBLIC_DATA_SOURCE") === "supabase";
+/** แอปคุยกับ backend จริงอยู่หรือเปล่า (ไม่ใช่ชุดตัวอย่างในเครื่อง)
+ *  ⚠️ "จริง" มีสองแบบแล้ว: supabase = ยิงเข้าฐานตรง · api = ผ่าน backend ของเราเอง (ระยะ 1)
+ *  เทียบกับ "supabase" อย่างเดียวจะทำให้ทั้งชุดข้ามตัวเองเงียบ ๆ ตอนรันโหมด api
+ *  แล้วรายงานว่า "ผ่าน" ทั้งที่ไม่ได้ทดสอบอะไรเลย — กับดักเดียวกับ REAL_BACKEND ฝั่งแอป */
+const SRC = appEnv("NEXT_PUBLIC_DATA_SOURCE");
+export const REAL_BACKEND = SRC === "supabase" || SRC === "api";
 
 export type Account = { email: string; password: string };
 type Role = "RYG" | "CNX" | "ADMIN";
@@ -55,7 +60,7 @@ const missing = ([["RYG", RYG], ["CNX", CNX], ["ADMIN", ADMIN]] as const)
 
 /** เหตุผลที่ต้องข้ามชุดเทสต์นี้ — คืน "" ถ้าพร้อมรัน */
 export function skipReason(): string {
-  if (!SUPABASE_MODE) return "ข้ามเพราะแอปตั้งเป็นโหมด local (ชุดนี้ทดสอบ backend จริง)";
+  if (!REAL_BACKEND) return "ข้ามเพราะแอปตั้งเป็นโหมด local (ชุดนี้ทดสอบ backend จริง)";
   if (!SUPABASE_URL || !SUPABASE_ANON) return "ข้ามเพราะ apps/dealer/.env.local ยังไม่มี URL/anon key";
   if (missing.length) return `ข้ามเพราะยังไม่ได้ตั้งบัญชีทดสอบ ${missing.join("/")} — ดู tests/.env.example`;
   return "";

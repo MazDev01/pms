@@ -385,7 +385,14 @@ export interface CustomersRepo {
     dealer: string; knownCustomerId: number | null; leadCompany: string;
     targetQuoteId: string | null; cascadeWon: boolean; customerPayload: CustomerRow;
   }): Promise<{ customer: CustomerRow; quotations: QuotationMock[] }>;
+  /** ลบลูกค้าพร้อมประวัติทั้งก้อนแบบ atomic (ระยะ 2, 0141) — ดีลที่จบแล้ว + ใบ + ไฟล์ ไปพร้อมกัน
+   *  "ยังมีดีลที่ขายอยู่ = ลบไม่ได้" บังคับที่ฐานข้อมูล ไม่ใช่แค่ที่หน้าจอซึ่งข้ามได้
+   *  เดิมเป็นคำสั่งลบแยกกันหลายคำสั่ง เน็ตหลุดกลางทาง = ประวัติลูกค้าหายไปครึ่งเดียว
+   *  คืนพาธไฟล์ใน Storage ให้ผู้เรียกลบไบต์ตาม — ฐานข้อมูลลบข้ามระบบให้ไม่ได้ */
+  deleteCascade(id: number): Promise<CustomerDeletionResult>;
 }
+/** ผลของการลบลูกค้าพร้อมประวัติ — จำนวนที่ลบจริง + ไบต์ที่ผู้เรียกต้องตามไปลบใน Storage */
+export type CustomerDeletionResult = { quotations: number; leads: number; storagePaths: string[] };
 export interface AppointmentsRepo {
   list(scope?: Scope): Promise<AppointmentMock[]>;
   /** นัดหมายของสาขาหนึ่ง (HQ เจาะดูตัวแทน) — ดึงเฉพาะที่ต้องใช้ ไม่ต้องโหลดทั้งเครือ (M9 Phase 4) */

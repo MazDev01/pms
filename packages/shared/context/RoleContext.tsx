@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock";
 import { hasPermission, HQ_ROLES, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { sbSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
 import { audit as auditRepo } from "@pms/shared/lib/data";
 import { isAbortedRequest } from "@pms/shared/lib/repoLog";
@@ -29,7 +29,8 @@ function logAuthEvent(action: string, s: MockSession) {
 }
 
 // โหมด backend — supabase = auth จริง (JWT) · local = mock เดิม (localStorage)
-const USE_SUPABASE = DATA_SOURCE === "supabase";
+// "ของจริง" = supabase หรือ api (ไม่ใช่โหมดเดโม) — ดู REAL_BACKEND ใน data/config.ts
+const USE_SUPABASE = REAL_BACKEND;
 
 type RoleContextType = {
   session: MockSession;

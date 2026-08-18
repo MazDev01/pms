@@ -3,7 +3,7 @@ import { Noto_Sans_Thai } from "next/font/google";
 import { RoleProvider } from "@pms/shared/context/RoleContext";
 import { SalesProvider } from "@pms/shared/context/SalesContext";
 import { leads as demoLeads } from "@pms/shared/lib/mock";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import "@pms/shared/globals.css";
 
 // ── สร้างหน้าตอนถูกเรียก ไม่ใช่สร้างล่วงหน้าตอน build ─────────────────────────────
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             ของ "ทุกหน้า ทุกคำขอ" รวมหน้าที่ยังไม่ล็อกอิน · เจอจริงบนระบบจริง 14 ส.ค. 69:
             ชื่อบริษัท/ผู้ติดต่อ/เบอร์โทรของข้อมูลตัวอย่างติดมากับ HTML หน้าแดชบอร์ด ~15KB ต่อคำขอ
             ทั้งที่โหมด supabase ไม่เคยใช้ค่านี้เลย (SalesContext เริ่มด้วยรายการว่างเสมอ) */}
-        <RoleProvider><SalesProvider initialLeads={DATA_SOURCE === "supabase" ? [] : demoLeads}>{children}</SalesProvider></RoleProvider>
+        <RoleProvider><SalesProvider initialLeads={REAL_BACKEND ? [] : demoLeads}>{children}</SalesProvider></RoleProvider>
       </body>
     </html>
   );

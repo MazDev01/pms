@@ -23,10 +23,11 @@ import { customerDeletionImpact, blockReason } from "@pms/shared/lib/customerDel
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useQuoteValidityDays, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 
 // โหมด backend — supabase: ลูกค้าเป้าหมายมาจาก DB (RLS แยกสาขา) · local: LocalAdapter (localStorage)
-const USE_SUPABASE = DATA_SOURCE === "supabase";
+// "ของจริง" = supabase หรือ api (ไม่ใช่โหมดเดโม) — ดู REAL_BACKEND ใน data/config.ts
+const USE_SUPABASE = REAL_BACKEND;
 
 // ปิดใบหมดอายุ = คำสั่ง "เขียน" — ทำครั้งเดียวพอต่อสาขาต่อ session (M5)
 // เดิมยิงทุกครั้งที่ mount/สลับสาขา → เขียนซ้ำโดยไม่จำเป็น (ยิ่งหลายแท็บยิ่งบ่อย)
@@ -491,7 +492,6 @@ export function SalesProvider({
   }, [persistCustomer]);
 
   // ตัวชี้ไปยัง deleteQuotation ตัวจริง (ประกาศอยู่ท้ายไฟล์) — deleteCustomer ต้องใช้ก่อนถึงบรรทัดนั้น
-  const deleteQuotationRef = useRef<((id: string) => void) | null>(null);
 
   // ลบลูกค้า — ต้องไม่ทิ้ง "ข้อมูลกำพร้า" ไว้ (H1)
   // DB ยังผูก FK ระหว่างใบเสนอราคา/ลูกค้าเป้าหมาย กับลูกค้าไม่ได้ (customerId ใช้ 0 แทน "ยังไม่มีลูกค้า")
@@ -501,28 +501,37 @@ export function SalesProvider({
   //   ดีลที่ปิดการขายแล้วก็ถูกนับด้วย แต่หน้าลูกค้าเป้าหมายตั้งใจซ่อนดีลที่ปิดแล้วไว้
   //   ระบบจึงสั่งให้ไปลบของที่มันไม่ยอมให้เห็น → ลูกค้าที่ปิดการขายแล้วลบไม่ได้ตลอดกาล
   //   (ผู้ใช้แจ้ง 14 ส.ค. 69 · ดู customerDeletion.ts สำหรับกติกาเต็ม)
+  // ── ระยะ 2: กติกาและการลบทั้งก้อน ย้ายไปอยู่ที่ฐานข้อมูลแล้ว (RPC delete_customer_cascade, 0141) ──
+  //   เดิมที่นี่สั่งลบทีละอย่าง (ใบ → ดีล → ลูกค้า) เป็นคนละคำสั่งกัน — เน็ตหลุดกลางทาง
+  //   = ประวัติลูกค้าหายไปครึ่งเดียว ย้อนกลับไม่ได้ · และกติกา "ยังมีดีลที่ขายอยู่ = ลบไม่ได้"
+  //   อยู่แค่ในหน้าเว็บ ซึ่งคนที่ล็อกอินแล้วสั่งงานเข้าฐานข้อมูลตรง ๆ ข้ามได้
+  //
+  //   ที่ยังคำนวณฝั่งนี้: ข้อความบอกเหตุผล/กล่องยืนยัน (เพื่อให้ผู้ใช้รู้ทันทีว่าจะเกิดอะไร)
+  //   แต่ "คนตัดสิน" คือฐานข้อมูล — ถ้าข้อมูลเปลี่ยนระหว่างนั้น ฐานข้อมูลจะปฏิเสธเอง
   const deleteCustomer = useCallback((id: number) => {
     const impact = customerDeletionImpact(id, leadsRef.current, quotationsRef.current);
     if (!impact.canDelete) { setSyncError(blockReason(impact)); return; }
 
-    // ดีลที่จบแล้ว + ใบเสนอราคาของดีลเหล่านั้น = ประวัติของลูกค้ารายนี้ → ไปพร้อมกัน
-    // ลบของที่ผูกอยู่ "ก่อน" ลูกค้าเสมอ — ถ้าลบลูกค้าก่อนแล้วพลาดกลางทาง จะเหลือของกำพร้า
-    // ที่ชี้ไปหาลูกค้าที่ไม่มีแล้ว และมองไม่เห็นจากหน้าจอไหนเลย
-    // เรียกผ่าน ref เพราะ deleteQuotation ถูกประกาศทีหลังในไฟล์นี้ — และต้องใช้ตัวจริงเท่านั้น
-    // (มันดูแลลบไฟล์ที่ระบบสร้าง + คำนวณยอดลูกค้าใหม่เมื่อใบที่ลบเป็นใบที่ปิดการขายได้)
-    for (const q of impact.quotations) deleteQuotationRef.current?.(q.id);
-    for (const l of impact.closedLeads) {
-      setLeads(prev => prev.filter(x => x.id !== l.id));
-      persistLead.remove(l.id);
-    }
-    setCustomers(prev => prev.filter(c => c.id !== id));
-    persistCustomer.remove(id);
-    // ลบไฟล์ที่แนบกับลูกค้ารายนี้ (source=customer · record_id/customer_id = id ของลูกค้า)
-    void cleanupFilesFor(f => f.source === "customer" && (f.recordId === id || f.customerId === id));
-    // ไฟล์ที่แนบกับดีลที่จบแล้วก็ต้องไปด้วย — ไม่งั้นเหลือไฟล์กำพร้าใน Storage
-    const goneLeadIds = new Set(impact.closedLeads.map(l => l.numId).filter((n): n is number => n != null));
-    if (goneLeadIds.size) void cleanupFilesFor(f => f.source === "lead" && f.recordId != null && goneLeadIds.has(f.recordId));
-  }, [persistCustomer, persistLead, cleanupFilesFor]);
+    void (async () => {
+      let gone: { storagePaths: string[] };
+      try {
+        gone = await customersRepo.deleteCascade(id);
+      } catch (e) {
+        onFail("customers", "ลบลูกค้า")(e);
+        return;
+      }
+      // ลบสำเร็จที่ฐานข้อมูลแล้ว — ค่อยเอาออกจากหน้าจอ (ไม่ใช่เอาออกก่อนแล้วค่อยลุ้น)
+      const goneQuoteIds = new Set(impact.quotations.map(q => q.id));
+      setQuotations(prev => prev.filter(q => !goneQuoteIds.has(q.id)));
+      setLeads(prev => prev.filter(l => l.customerId !== id));
+      setCustomers(prev => prev.filter(c => c.id !== id));
+      bumpWrite();
+      // ไบต์ใน Storage เป็นคนละระบบกับฐานข้อมูล ลบพร้อมกันในทรานแซกชันเดียวไม่ได้
+      // ทำตามหลัง best-effort — ล้มเหลวก็แค่เหลือไบต์ที่ไม่มีใครอ้างถึง ไม่ใช่ข้อมูลเสียหาย
+      await Promise.all(gone.storagePaths.map(p =>
+        fileStorage.remove(p).catch(e => console.warn("[deleteCustomer] ลบไบต์ไฟล์ไม่สำเร็จ", p, e))));
+    })();
+  }, [bumpWrite]);
 
   // ── Quotation → เช็กงานของลูกค้าเป้าหมายอัตโนมัติ ─────────────────────────────
   // สร้างใบเสนอราคา = ติ๊ก "จัดทำใบเสนอราคา" · ส่งใบเสนอราคา = ติ๊ก "ส่งใบเสนอราคา"
@@ -643,7 +652,6 @@ export function SalesProvider({
       }
     })();
   }, [persistQuote, syncQuoteFile, reconcileCustomerTotal]);
-  deleteQuotationRef.current = deleteQuotation; // ให้ deleteCustomer เรียกตัวจริงได้ (ประกาศทีหลัง)
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
     const target = quotationsRef.current.find(q => q.id === id);

@@ -21,7 +21,7 @@ import { customerCode, fmtISOToThai } from "@pms/shared/lib/mock";
 import { useCustomerDbLocal, buildingOf, regionOf, REGIONS, type CustomerDbRow } from "@pms/shared/lib/customerDb";
 import { useHQCustomersPage, useHQCustomersFilterOptions, useCustomerBuildings } from "@pms/shared/lib/useNetworkData";
 import { metrics as metricsRepo } from "@pms/shared/lib/data";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import type { HQCustomerPageRow, HQCustomersKPI, HQCustomersCharts } from "@pms/shared/lib/data/ports";
 import { CustomerKPICards } from "@pms/shared/components/hq/customers/CustomerKPICards";
 import { CustomerAnalytics } from "@pms/shared/components/hq/customers/CustomerAnalytics";
@@ -150,7 +150,7 @@ export default function HQCustomersPage() {
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const pagination = totalCount > 0 ? { page, pageCount, total: totalCount, onPage: setPage } : undefined;
   // supabase: RPC หน้าแรกยังไม่กลับ (pageResult ยัง null) — ต้องแยกจาก "กรองแล้วไม่เจอจริง ๆ" (Critical เดิม 30 ก.ค. 69)
-  const isLoading = DATA_SOURCE === "supabase" && pageResult === null;
+  const isLoading = REAL_BACKEND && pageResult === null;
 
   // ── แผงรายละเอียด — local: ได้ CustomerDbRow เต็มจาก localFiltered ตรง ๆ (มี buildings อยู่แล้ว)
   //    supabase: ต้องเฟตช์ใบ won ของลูกค้ารายนั้นแยก (ไม่ได้มากับแถวสรุปที่แบ่งหน้า) ──

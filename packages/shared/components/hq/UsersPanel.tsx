@@ -19,7 +19,7 @@ import { resetHQUserPassword } from "@pms/shared/lib/adminApi";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import { users as usersRepo } from "@pms/shared/lib/data";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 import { createHQUser, deleteHQUser } from "@pms/shared/lib/adminApi";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -128,7 +128,8 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
   const lockPriv = !!initial && !canEditPrivileges;
   const [f, setF] = useState<UserForm>(() => {
     if (initial) { const [fn, ...ln] = initial.name.split(" "); return { firstName: fn, lastName: ln.join(" "), email: initial.email, phone: initial.phone, role: initial.role, department: initial.department, tempPassword: "", status: initial.status, avatar: initial.avatar }; }
-    return { firstName: "", lastName: "", email: "", phone: "", role: "HQ_STAFF", department: "ฝ่ายขาย", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
+    // ผู้ใช้ใหม่: บทบาท/แผนก เริ่มที่ "ยังไม่ระบุ" — ห้ามตั้งสิทธิ์ให้เองโดยที่คนเพิ่มไม่ได้เลือก
+    return { firstName: "", lastName: "", email: "", phone: "", role: "" as RoleKey, department: "", tempPassword: genTempPassword("newuser@benjamin.co.th"), status: "active" };
   });
   const fileRef = useRef<HTMLInputElement>(null);
   async function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
@@ -139,7 +140,9 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
       setF(p => ({ ...p, avatar: url }));
     } catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
   }
-  const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email);
+  // ⚠️ ดาว * ต้องตรงกับที่ตรวจตรงนี้เสมอ — บทบาท/แผนก มีตัวเลือก "ยังไม่ระบุ" แล้ว (17 ส.ค. 69)
+  //    ถ้าไม่บังคับ จะได้ผู้ใช้ที่ไม่มีบทบาท = เข้าระบบมาแล้วไม่รู้ว่าเห็นอะไรได้บ้าง
+  const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email) && !!f.role && !!f.department;
   const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: `1px solid ${BORDER}`, fontSize: "0.84rem", color: STEEL, background: "#fff", outline: "none", boxSizing: "border-box" };
   const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: f.department, status: f.status, avatar: f.avatar }); onClose(); };
   const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
@@ -150,15 +153,16 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
           <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}>{initial ? <Pencil size={16} /> : <UserPlus size={17} />} {initial ? "แก้ไขผู้ใช้ HQ" : "เพิ่มผู้ใช้งาน HQ"}</div>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={15} /></button>
         </div>
-        <div style={{ padding: 22, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="form-grid" style={{ padding: 22 }}>
           {/* รูปโปรไฟล์ — คลิกเพื่ออัปโหลด/เปลี่ยน */}
-          <div style={{ gridColumn: "1/-1", display: "flex", justifyContent: "center", marginBottom: 4 }}>
+          <div className="col-full" style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
             <label title="อัปโหลด/เปลี่ยนรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pickAvatar} />
+              {/* ยังไม่เลือกบทบาท = ไม่มีสีประจำ — ห้ามอ่าน .tone จาก undefined (หน้าจะขาว) */}
               {f.avatar
                 ? <img src={f.avatar} alt="" style={{ width: 84, height: 84, borderRadius: "50%", objectFit: "cover", border: `3px solid ${PRIMARY}` }} />
                 : f.firstName.trim()
-                ? <span style={{ width: 84, height: 84, borderRadius: "50%", background: ROLE_BY_KEY[f.role].tone, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "2rem" }}>{f.firstName.trim().charAt(0)}</span>
+                ? <span style={{ width: 84, height: 84, borderRadius: "50%", background: ROLE_BY_KEY[f.role]?.tone ?? PRIMARY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "2rem" }}>{f.firstName.trim().charAt(0)}</span>
                 // ฟอร์มเปล่า (ยังไม่พิมพ์ชื่อ) ต้องเห็นไอคอน "เพิ่มรูป" ไม่ใช่ "?" ที่อ่านได้ว่ารูปเสีย
                 //   แบบเดียวกับฟอร์มเพิ่มผู้รับผิดชอบฝั่งตัวแทน (ผู้ใช้แจ้ง 7 ส.ค. 69)
                 : <span style={{ width: 84, height: 84, borderRadius: "50%", background: "#eef3f8", border: `2px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}><ImagePlus size={30} strokeWidth={1.8} /></span>}
@@ -166,14 +170,16 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
               {f.avatar && <button type="button" onClick={e => { e.preventDefault(); setF(p => ({ ...p, avatar: undefined })); }} style={{ position: "absolute", left: 0, bottom: 2, width: 24, height: 24, borderRadius: "50%", background: "#fff", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#dc2626", cursor: "pointer" }}><X size={12} /></button>}
             </label>
           </div>
+          <div className="form-section">ข้อมูลผู้ใช้</div>
           <div><label className="form-label">ชื่อ *</label><input style={inp} value={f.firstName} autoFocus onChange={e => setF({ ...f, firstName: e.target.value })} placeholder="ชื่อ" /></div>
           <div><label className="form-label">นามสกุล</label><input style={inp} value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} placeholder="นามสกุล" /></div>
-          <div style={{ gridColumn: "1/-1" }}><label className="form-label">อีเมล (ใช้เข้าระบบ) *</label><input style={inp} value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="name@benjamin.co.th" /></div>
+          <div className="col-full"><label className="form-label">อีเมล (ใช้เข้าระบบ) *</label><input style={inp} value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="name@benjamin.co.th" /></div>
           <div><label className="form-label">เบอร์โทร</label><input style={inp} value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} placeholder="08x-xxx-xxxx" /></div>
-          <div><label className="form-label">แผนก</label><select style={inp} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
-          <div><label className="form-label">บทบาท (Role){lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}>{ROLES.filter(r => r.key !== "SUPER_ADMIN" || canEditPrivileges).map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
+          <div className="form-section">สิทธิ์การใช้งาน</div>
+          <div><label className="form-label">แผนก *</label><select aria-label="แผนก" style={inp} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}><option value="">— ยังไม่ระบุ —</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+          <div><label className="form-label">บทบาท (Role) *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} aria-label="บทบาท" disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}><option value="">— ยังไม่ระบุ —</option>{ROLES.filter(r => r.key !== "SUPER_ADMIN" || canEditPrivileges).map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
           <div><label className="form-label">สถานะ{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} disabled={lockPriv} value={f.status} onChange={e => setF({ ...f, status: e.target.value as UserStatus })}><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select></div>
-          {!initial && <div style={{ gridColumn: "1/-1" }}><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ผู้ใช้ต้องเปลี่ยนเองหลังเข้าระบบครั้งแรก</div></div>}
+          {!initial && <><div className="form-section">การเข้าระบบครั้งแรก</div><div className="col-full"><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ผู้ใช้ต้องเปลี่ยนเองหลังเข้าระบบครั้งแรก</div></div></>}
         </div>
         <div style={{ padding: "14px 22px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button className="btn btn-secondary btn-md" onClick={onClose}>ยกเลิก</button>
@@ -336,7 +342,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       return;
     }
     // โหมดจริง (supabase): สร้างบัญชีเข้าระบบจริงผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ (service_role)
-    if (DATA_SOURCE === "supabase") { void createRemote(data); return; }
+    if (REAL_BACKEND) { void createRemote(data); return; }
     // โหมดเดโม (local): ไม่มีระบบยืนยันตัวตนจริง — เพิ่มไว้ในมุมมองพอให้ทดลอง UI
     if (!canCreate) {
       notify("เพิ่มผู้ใช้จากหน้านี้ไม่ได้ — บัญชีเข้าระบบถูกจัดการโดยระบบยืนยันตัวตน ต้องสร้างบัญชีที่นั่นก่อน แล้วชื่อจะขึ้นในหน้านี้เอง");
@@ -359,7 +365,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   }
   // ลบผู้ใช้ HQ จริง — supabase: ลบ auth+profile ผ่าน route · local: เอาออกจากมุมมอง
   async function doDelete(u: AppUser): Promise<{ ok: boolean; error?: string }> {
-    if (DATA_SOURCE === "supabase") {
+    if (REAL_BACKEND) {
       const r = await deleteHQUser(u.id);
       if (!r.ok) return { ok: false, error: r.error };
       reload(); return { ok: true }; // audit บันทึกที่ route (server-side · การันตี) แล้ว
@@ -722,7 +728,7 @@ function ResetEmailDialog({ user, onSent, onClose }: { user: AppUser; onSent: (e
   const [err, setErr] = useState("");
   async function send() {
     setErr("");
-    if (DATA_SOURCE !== "supabase") { setErr("โหมดเดโม: ส่งลิงก์รีเซ็ตจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)"); return; }
+    if (!REAL_BACKEND) { setErr("โหมดเดโม: ส่งลิงก์รีเซ็ตจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)"); return; }
     setState("sending");
     const r = await sbSendPasswordReset(email);
     if (!r.ok) { setState("idle"); setErr(r.error); return; }

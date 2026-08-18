@@ -352,7 +352,7 @@ export default function HQLeadsPage() {
   }, [chartSummary, filtered]);
 
   // ── Section 3 · ประเภทอาคารที่ลูกค้าสนใจ ──────────────────────────────────
-  // จัดกลุ่มด้วย "งานที่สนใจ" ของลูกค้าเป้าหมาย (product) — ใช้ค่าจริงในระบบ ไม่ยุบ/ไม่แปลงชื่อ
+  // จัดกลุ่มด้วย "แม่แบบ" ของลูกค้าเป้าหมาย (product) — ใช้ค่าจริงในระบบ ไม่ยุบ/ไม่แปลงชื่อ
   const buildingTypes = useMemo(() => {
     const base = chartSummary
       ? chartSummary.byProduct.map(r => ({ label: r.product, count: r.count }))
@@ -534,7 +534,7 @@ export default function HQLeadsPage() {
       {/* ⚠️ อย่าทำเป็นโดนัท: ลูกค้าเป้าหมายหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
       <div className="card chart-l" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
-          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>งานที่ลูกค้าเป้าหมายสนใจ · หน่วย: ราย</span></div>
+          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลูกค้าเป้าหมายสนใจ · หน่วย: ราย</span></div>
         <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
           {!buildingTypes.length ? (
             <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>

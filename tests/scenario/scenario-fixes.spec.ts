@@ -7,7 +7,7 @@
 // 5. คำว่า "อัตราปิด/ปิดได้ %" ถูกใช้กับหลายสูตร จนอ่านเหมือนตัวเลขขัดกัน
 import { test, expect } from "@playwright/test";
 import { open } from "./helpers";
-import { SUPABASE_MODE } from "./supabaseEnv";
+import { REAL_BACKEND } from "./supabaseEnv";
 
 // เทสต์ [2]/[3] seed กฎผ่าน localStorage ใช้ได้กับ "โหมด local" เท่านั้น —
 // โหมด supabase แอปอ่านกฎจาก DB (dealer_lead_rules) ไม่ใช่ localStorage → seed ไม่มีผล
@@ -36,7 +36,7 @@ test.describe("อื่น ๆ", () => {
 
   // ข้อ 2 — การ์ด/ตัวกรองฝั่งตัวแทน ต้องใช้เกณฑ์ของสาขา
   test("[2] /leads ป้ายกับตัวกรองตรงกับกฎที่ตั้ง", async ({ page }) => {
-    test.skip(SUPABASE_MODE, SEED_LOCAL_ONLY);
+    test.skip(REAL_BACKEND, SEED_LOCAL_ONLY);
     await page.addInitScript(() => localStorage.setItem("dealer_lead_rules", JSON.stringify({ CNX: { followUpAlertDays: 3, unassignedAlertHours: 48 } })));
     await open(page, "dealer", "/leads");
     const card = page.locator(".card").filter({ hasText: /^เกิน \d+ วัน/ }).first();
@@ -46,7 +46,7 @@ test.describe("อื่น ๆ", () => {
 
   // ข้อ 3 — HQ ต้องนับตามเกณฑ์รายสาขา ไม่ใช่รายการสถานะ
   test("[3] HQ ต้องติดตามด่วน ขยับตามกฎสาขา", async ({ page }) => {
-    test.skip(SUPABASE_MODE, SEED_LOCAL_ONLY);
+    test.skip(REAL_BACKEND, SEED_LOCAL_ONLY);
     await page.addInitScript(() => localStorage.setItem("dealer_lead_rules", JSON.stringify({ CNX: { followUpAlertDays: 1, unassignedAlertHours: 48 } })));
     await open(page, "hq", "/hq/leads");
     const card = page.locator("button.card").filter({ hasText: "ต้องติดตามด่วน" }).first();

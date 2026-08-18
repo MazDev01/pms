@@ -26,6 +26,9 @@ async function newLeadOpened(page: import("@playwright/test").Page, company: str
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
   await pickTemplate(page);
   await page.getByRole("button", { name: "บันทึก" }).click();
@@ -163,7 +166,12 @@ test("[edge] เน็ตหลุดตอนกดบันทึกลูก�
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
 
   // ตัดเฉพาะ "คำสั่งบันทึกลูกค้าเป้าหมาย" — ส่วนอื่นของหน้ายังทำงานปกติ (จำลองเน็ตสะดุดช่วงสั้น ๆ)
-  await page.route(/\/rest\/v1\/leads(\?|$)/, async (route) => {
+  // ⚠️ ต้องดักทั้งสองโหมด — supabase ยิงเข้า /rest/v1/leads ตรง ๆ · api ยิงเข้า /api/v1/leads
+  //    ดักทางเดียวแล้วสลับโหมด = คำสั่งไม่เคยถูกตัด เทสต์ล้มเหมือนระบบมีบั๊ก ทั้งที่เทสต์ดักผิดที่
+  // ⚠️ ต้องดักทั้งสองโหมด — supabase ยิงเข้า /rest/v1/leads ตรง ๆ · api ยิงเข้า /api/v1/leads
+  //    และต้องตัด "เฉพาะคำสั่งสร้าง" เท่านั้น — โหมด api ขอเลขที่ถัดไปด้วย POST /api/v1/leads?op=next
+  //    ถ้าดักเหมารวม จะไปตัดขั้นขอเลขแทน = คนละจังหวะกับที่ตั้งใจวัด
+  await page.route(/\/rest\/v1\/leads(\?|$)|\/api\/v1\/leads$/, async (route) => {
     if (route.request().method() === "POST") return route.abort("connectionfailed");
     return route.continue();
   });
@@ -171,6 +179,9 @@ test("[edge] เน็ตหลุดตอนกดบันทึกลูก�
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(company);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณเน็ตหลุด");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByRole("button", { name: "บันทึก" }).click();
 
   // ต้องมีข้อความบอกผู้ใช้ว่าบันทึกไม่สำเร็จ — ไม่ใช่ปิดฟอร์มแล้วจบเหมือนปกติ

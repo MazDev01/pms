@@ -2,7 +2,7 @@ import { createClient , type SupabaseClient } from "@supabase/supabase-js";
 import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { SUPABASE_MODE } from "./supabaseEnv";
+import { REAL_BACKEND } from "./supabaseEnv";
 
 // snapshot ของ hq_notif_rules.alerts เดิม (singleton row จริง ไม่ใช่ข้อมูลแท็กที่ลบทิ้งได้เฉยๆ)
 // ต้องคืนค่าเดิมใน teardown เสมอ — ไม่ใช่ตั้งเป็นค่า test แล้วปล่อยทิ้งไว้
@@ -102,7 +102,7 @@ const QUOTES: QuoteSeed[] = [
 ];
 
 export default async function globalSetup() {
-  if (!SUPABASE_MODE || !ADMIN_SUPABASE_URL || !ADMIN_SERVICE_ROLE_KEY) {
+  if (!REAL_BACKEND || !ADMIN_SUPABASE_URL || !ADMIN_SERVICE_ROLE_KEY) {
     console.log("[global-setup] ข้ามการ seed — ไม่ใช่โหมด supabase หรือยังไม่มี service role key");
     return;
   }

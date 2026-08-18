@@ -17,6 +17,7 @@ import {
 // ชั้นข้อมูลกลับเข้ามา ทำให้เกิดวงจร import จริงตอนรัน (ดูเหตุผลเต็มใน auditStore.ts)
 import { loadAudit, appendAudit } from "@pms/shared/lib/auditStore";
 import { exactKey } from "@pms/shared/lib/customerMatch";
+import { isClosedDeal } from "@pms/shared/lib/customerDeletion";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
 import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE,
@@ -899,6 +900,34 @@ export const LocalAdapter: DataAdapter = {
       // ใบที่เกี่ยวข้องทั้งหมด — mirror เงื่อนไขเดียวกับฝั่ง supabase (ตรงชื่อบริษัท หรือคือใบเป้าหมาย)
       const related = nextQ.filter(q => q.customerId === custId && (q.customer === leadCompany || q.id === targetQuoteId));
       return ok({ customer: updated, quotations: related });
+    },
+    // ลบลูกค้าพร้อมประวัติ — เธรดเดียวจึง atomic โดยธรรมชาติ · เงื่อนไขต้องตรงกับ RPC ฝั่ง supabase (0141) เป๊ะ
+    deleteCascade: (id) => {
+      const leads = readKey<LeadRow[]>(SALES.leads, leadSeed);
+      const linked = leads.filter(l => l.customerId === id);
+      const active = linked.filter(l => !isClosedDeal(l.status));
+      if (active.length) throw new Error(`ลบลูกค้าไม่ได้ — ยังมีดีลที่ขายอยู่ ${active.length} รายการ`);
+
+      const closedIds = new Set(linked.map(l => l.numId).filter((n): n is number => n != null));
+      const quotes = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
+      const goneQuotes = quotes.filter(q => (q.customerId > 0 && q.customerId === id) || (q.dealId != null && closedIds.has(q.dealId)));
+      const allFiles = loadDealerFiles();
+      const goneFiles = allFiles.filter(f =>
+        (f.source === "customer" && (f.recordId === id || f.customerId === id))
+        || (f.source === "lead" && f.recordId != null && closedIds.has(f.recordId)));
+
+      const goneQuoteIds = new Set(goneQuotes.map(q => q.id));
+      const goneFileIds = new Set(goneFiles.map(f => f.id));
+      writeKey(SALES.quotations, quotes.filter(q => !goneQuoteIds.has(q.id)));
+      writeKey(SALES.leads, leads.filter(l => l.customerId !== id));
+      saveDealerFiles(allFiles.filter(f => !goneFileIds.has(f.id)));
+      writeKey(SALES.customers, readKey<CustomerRow[]>(SALES.customers, initialCustomers).filter(c => c.id !== id));
+
+      return ok({
+        quotations: goneQuotes.length,
+        leads: linked.length,
+        storagePaths: goneFiles.map(f => f.storagePath).filter((p): p is string => !!p),
+      });
     },
   },
   appointments: {

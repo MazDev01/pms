@@ -1,4 +1,4 @@
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * "วันนี้ของระบบ" (APP_NOW) — แหล่งเดียวของทั้งแอป ยึดที่นี่ที่เดียว
@@ -11,7 +11,7 @@ import { DATA_SOURCE } from "@pms/shared/lib/data/config";
  * ไลบรารีธรรมดา (leadMetrics ฯลฯ) อ้างค่าเดียวกันได้โดยไม่ผูกไลบรารีเข้ากับ React context
  * ประเมินครั้งเดียวตอนโหลดโมดูล — ยึดเป็น "วันนี้" ตลอดเซสชัน (เพียงพอสำหรับตัวกรอง/วันที่ในหน้าจอ)
  * ────────────────────────────────────────────────────────────────────────── */
-export const APP_NOW = DATA_SOURCE === "supabase" ? new Date() : new Date(2026, 5, 30);
+export const APP_NOW = REAL_BACKEND ? new Date() : new Date(2026, 5, 30);
 
 // "วันนี้" แบบ ISO (YYYY-MM-DD) สำหรับฟิลด์ที่เก็บเป็น ISO เช่น uploadedAt / joinDate
 // ประกอบเองทีละส่วน ห้ามใช้ APP_NOW.toISOString() — มันแปลงเป็น UTC ก่อน ไทย (UTC+7) จะได้ย้อนไป 1 วัน

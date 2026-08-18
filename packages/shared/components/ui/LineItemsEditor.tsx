@@ -38,8 +38,15 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
   const pickRef = useRef<HTMLDivElement>(null);
   // ── เลื่อนหน้าจอขณะเปิดรายการแคตตาล็อกไม่ได้ (แก้ 14 ส.ค. 69 · อาการเดียวกับเมนูผู้ใช้ HQ) ──
   // ฉากหลังใสที่คลุมทั้งจอไว้ดักคลิก ดักล้อเมาส์ไปด้วย — และป๊อปอัพนี้เลื่อนที่กล่องเนื้อหาข้างใน
-  // ล้อจึงไปไม่ถึงตัวที่เลื่อนได้จริง · ปิดรายการเมื่อเริ่มเลื่อน "นอกกล่อง" เท่านั้น
+  // ล้อจึงไปไม่ถึงตัวที่เลื่อนได้จริง · ปิดรายการเมื่อผู้ใช้ "ลงมือเลื่อน" นอกกล่องเท่านั้น
   // ⚠️ ต้องยกเว้นการเลื่อนในตัวรายการเอง (maxHeight 320 + overflow) ไม่งั้นเลื่อนดูแม่แบบล่าง ๆ ไม่ได้
+  //
+  // ⚠️ ห้ามดัก event "scroll" (17 ส.ค. 69): มันยิงตอนจอเลื่อน "เอง" ด้วย ไม่ใช่แค่ตอนผู้ใช้เลื่อน
+  //    อาการที่เจอ: กดขั้น "เสนอราคา" → ระบบเปิดฟอร์มออกใบแล้วเลื่อนจอไปหาแบบนุ่ม ๆ (smooth)
+  //    ถ้ากด "เลือกจากแคตตาล็อก" ระหว่างที่จอยังเลื่อนอยู่ → scroll ยิง → เมนูปิดทันทีที่เพิ่งเปิด
+  //    ผู้ใช้เห็นเป็น "กดแล้วไม่ขึ้น" ต้องกดสองครั้ง → ออกใบไม่ได้ → ไปขั้นเสนอราคาไม่ได้ทั้งเส้นทาง
+  //    wheel/touchmove ยิงจากมือผู้ใช้เท่านั้น จึงใช้แทนได้โดยไม่กระทบเจตนาเดิม
+  //    (ป๊อปอัพนี้เป็น absolute เกาะปุ่มอยู่แล้ว จอเลื่อนก็เลื่อนตามไปด้วย ไม่ต้องปิดทิ้ง)
   useEffect(() => {
     if (!pickOpen) return;
     const close = (e?: Event) => {
@@ -47,13 +54,11 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
       setPickOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPickOpen(false); };
-    window.addEventListener("scroll", close, true);   // capture — scroll ไม่ bubble ขึ้น document
     window.addEventListener("wheel", close, { passive: true });
     window.addEventListener("touchmove", close, { passive: true });
     window.addEventListener("resize", close);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("scroll", close, true);
       window.removeEventListener("wheel", close);
       window.removeEventListener("touchmove", close);
       window.removeEventListener("resize", close);
@@ -127,7 +132,7 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
                     ใบเก่าที่หน่วยไม่อยู่ในลิสต์มาตรฐาน ให้แทรกค่าเดิมเป็นตัวเลือกแรก — ห้ามทำค่าที่บันทึกไว้หาย */}
                 <td style={{ padding: "5px 6px" }}>
                   <select style={{ ...inp, cursor: "pointer", padding: "6px 4px" }} value={it.unit} onChange={e => set(i, { unit: e.target.value })} aria-label="หน่วย">
-                    {!it.unit && <option value="">— หน่วย —</option>}
+                    {!it.unit && <option value="">— ยังไม่ระบุ —</option>}
                     {it.unit && !UNIT_OPTIONS.includes(it.unit) && <option value={it.unit}>{it.unit}</option>}
                     {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>

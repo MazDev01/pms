@@ -150,6 +150,11 @@ export const TAGS: { key: TagKey; label: string; bg: string; color: string }[] =
 export const LOST_REASONS = [
   "ราคาสูงเกินงบประมาณ", "คู่แข่งให้ข้อเสนอดีกว่า", "งบประมาณไม่พร้อม", "ลูกค้าไม่ตอบสนอง",
 ] as const;
+/** ค่าธงของตัวเลือก "อื่นๆ (ระบุเอง)" — เหตุผลจริงไม่ตรงกับรายการที่ HQ ตั้งไว้
+ *  ⚠️ เป็นแค่ "โหมดพิมพ์เอง" ของหน้าจอ ห้ามบันทึกค่านี้ลงฐานข้อมูลเด็ดขาด
+ *     ทุกจุดที่ใช้ต้องล็อกปุ่มยืนยันจนกว่าผู้ใช้จะพิมพ์เหตุผลจริง
+ *     (ไม่งั้นกราฟ "เหตุผลที่เสียโอกาส" จะมีแท่งชื่อ __OTHER__ โผล่ขึ้นมา) */
+export const OTHER_LOST_REASON = "__OTHER__";
 export const HQ_JOURNEY_KEY = "hq_sales_journey";
 // เหตุผลปิดการขายไม่สำเร็จ (Lost) — จัดการโดย HQ (หน้า HQ ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน
 // อ่านตรงจาก localStorage แบบนี้ใช้ได้เฉพาะโหมด local · ทุกหน้าจอต้องเรียกผ่าน useLostReasons()
@@ -612,17 +617,24 @@ export const SEND_QUOTE_TASK_KEY = "sendQuote";
 // เทมเพลต Checklist มาตรฐาน (สร้างอัตโนมัติทุก Lead) + stage ที่แต่ละ task พาไปถึง
 // ⚠️ นี่คือ "ค่าเริ่มต้น" เท่านั้น — ของจริง HQ แก้ได้ที่ /hq/settings › เส้นทางการขาย (เก็บใน hq_sales_journey.tasks)
 //    ทุกหน้าจอต้องอ่านผ่าน useLeadTaskTemplate() ไม่ใช่ค่านี้ตรง ๆ (คนละ origin = ค่าที่ HQ ตั้งไม่ข้ามมาเอง)
+// ⚠️ ลำดับนี้บอสสั่งเอง (17 ส.ค. 69) — เปลี่ยนจากของเดิม 2 อย่าง:
+//    · "ติดต่อครั้งแรก" → "ติดต่อแล้ว"
+//    · ย้าย "ส่งแม่แบบให้ลูกค้า" ไปไว้ "หลัง" ส่งใบเสนอราคา (ยืนยันแล้วว่าตั้งใจ ไม่ใช่พิมพ์สลับ)
+//      → stage ต้องเป็น QUOTED ไม่ใช่ BULLET ไม่งั้น normalize เรียงตามขั้นแล้วเด้งกลับไปอยู่ก่อนออกใบ
+//    · ตัด "รวบรวมความต้องการ" ออก (ชื่อ "ขั้น" BULLET ยังเป็นคำนี้อยู่ ไม่ได้เปลี่ยน)
+//    · งานสุดท้าย "ปิดการขาย" → "ปิดการขาย / ไม่สำเร็จ" (บอสส่งรายการมายืนยันซ้ำแบบนี้)
+//      ⚠️ ติ๊กงานนี้ = ปิดการขาย "สำเร็จ" (ไปขั้น PAID) เสมอ · ปิดไม่สำเร็จใช้ปุ่มแยก (CANCELLED)
+//      ชื่อเป็นแค่ป้ายบนหน้าจอ กลไกผูกกับ key "close" ไม่ใช่ชื่อ — เปลี่ยนชื่อไม่กระทบการทำงาน
 export const LEAD_TASK_TEMPLATE: LeadTaskDef[] = [
-  { key: "contact",     label: "ติดต่อครั้งแรก",      stage: "WAITING"  },
+  { key: "contact",     label: "ติดต่อแล้ว",          stage: "WAITING"  },
   { key: "collect",     label: "เก็บข้อมูลลูกค้า",     stage: "WAITING"  },
-  { key: "requirement", label: "รวบรวมความต้องการ",   stage: "BULLET"   },
-  { key: "catalog",     label: "ส่งแม่แบบให้ลูกค้า",   stage: "BULLET"   },
   { key: "appointment", label: "นัดหมาย",            stage: "BULLET"   },
   { key: "makeQuote",   label: "จัดทำใบเสนอราคา",     stage: "QUOTED"   },
   { key: "sendQuote",   label: "ส่งใบเสนอราคา",       stage: "QUOTED"   },
+  { key: "catalog",     label: "ส่งแม่แบบให้ลูกค้า",   stage: "QUOTED"   },
   { key: "followup",    label: "ติดตามผล",           stage: "FOLLOWUP" },
   { key: "negotiate",   label: "เจรจา",              stage: "NEGO"     },
-  { key: "close",       label: "ปิดการขาย",          stage: "PAID"     },
+  { key: "close",       label: "ปิดการขาย / ไม่สำเร็จ", stage: "PAID"   },
 ];
 
 /** ตรวจ/ซ่อมชุดงานที่ HQ ตั้งไว้ก่อนเอาไปใช้จริง — กันข้อมูลเพี้ยนจาก DB/หน้าจอ
@@ -848,7 +860,7 @@ export const initialCustomers: CustomerRow[] = [
 ];
 
 // ─── แม่แบบอาคาร (Building Templates — กำหนดโดย HQ, ดีลเลอร์ดูอย่างเดียว) ───
-// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "งานที่สนใจ" ในฟอร์มลูกค้าเป้าหมาย
+// แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "แม่แบบ" ในฟอร์มลูกค้าเป้าหมาย
 export type SolutionPriceHistory = { price: number; effectiveDate: string; note?: string };
 export type SolutionProduct = {
   id: string; name: string; spec: string;

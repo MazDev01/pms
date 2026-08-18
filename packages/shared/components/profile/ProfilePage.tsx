@@ -16,7 +16,7 @@ import {
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { sbChangeOwnPassword } from "@pms/shared/lib/supabaseAuth";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
@@ -89,7 +89,7 @@ export default function ProfilePage() {
     if (pw.next !== pw.confirm) { setPwMsg({ ok: false, text: "ยืนยันรหัสผ่านใหม่ไม่ตรงกัน" }); return; }
 
     // H3 — เปลี่ยนรหัสจริงในโหมด supabase (ยืนยันรหัสปัจจุบันก่อน) · โหมดเดโมไม่มีระบบยืนยันตัวตนจริง
-    if (DATA_SOURCE !== "supabase") {
+    if (!REAL_BACKEND) {
       setPwMsg({ ok: false, text: "โหมดเดโม: เปลี่ยนรหัสผ่านจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" });
       return;
     }

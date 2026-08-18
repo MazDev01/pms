@@ -29,6 +29,13 @@ async function collectReadErrorTags(page: Page): Promise<() => Promise<string[]>
   return async () => page.evaluate(() => (window as unknown as { __readErrTags: string[] }).__readErrTags ?? []);
 }
 
+/** ที่มาของข้อมูลชุดหนึ่ง — โหมด supabase ยิงเข้า /rest/v1/<ตาราง> ตรง ๆ
+ *  โหมด api ยิงเข้า /api/v1/<เส้นทาง> ของ backend เราเอง (ระยะ 1 ของแผนแยก backend)
+ *  ต้องดักทั้งสองแบบ ไม่งั้นพอสลับโหมดแล้วความล้มเหลวที่จำลองไว้ไม่เกิดขึ้นเลย
+ *  → เทสต์ล้มแบบดูเหมือนบั๊กของระบบ ทั้งที่เป็นเพราะเทสต์ดักผิดที่ */
+const source = (table: string, apiPath: string) =>
+  new RegExp(`/rest/v1/${table}|/api/v1/${apiPath}`, "i");
+
 /** ทำให้คำขอที่ URL ตรงกับ pattern ล้มเหลวแบบ "เซิร์ฟเวอร์ตอบ error" (ไม่ใช่ถูกยกเลิก)
  *  ต้องเป็น error จริง — repoLog ตั้งใจข้ามกรณีคำขอถูกยกเลิกตอนเปลี่ยนหน้า (ไม่ใช่ความผิดพลาด) */
 async function breakRequests(page: Page, pattern: RegExp) {
@@ -40,7 +47,7 @@ async function breakRequests(page: Page, pattern: RegExp) {
 test("นโยบาย HQ (VAT/อายุใบเสนอราคา) โหลดไม่สำเร็จ → ต้องรายงาน ไม่ใช่เงียบแล้วใช้ค่าตั้งต้น", async ({ page }) => {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   const tags = await collectReadErrorTags(page);
-  await breakRequests(page, /\/rest\/v1\/hq_policy/i);   // แหล่งของ VAT + อายุใบเสนอราคา
+  await breakRequests(page, source("hq_policy", "settings"));   // แหล่งของ VAT + อายุใบเสนอราคา
   await page.goto(`${DEALER_ORIGIN}/quotations`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByText(BANNER).first(), "ต้องมีแถบเตือนให้ผู้ใช้เห็น").toBeVisible({ timeout: 20_000 });
@@ -52,7 +59,7 @@ test("นโยบาย HQ (VAT/อายุใบเสนอราคา) โ
 test("ทะเบียนผู้รับผิดชอบโหลดไม่สำเร็จ → ต้องรายงาน ไม่ใช่ดูเหมือนทะเบียนว่าง", async ({ page }) => {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   const tags = await collectReadErrorTags(page);
-  await breakRequests(page, /\/rest\/v1\/responsible_persons/i);
+  await breakRequests(page, source("responsible_persons", "persons"));
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByText(BANNER).first(), "ต้องมีแถบเตือนให้ผู้ใช้เห็น").toBeVisible({ timeout: 20_000 });
@@ -62,7 +69,7 @@ test("ทะเบียนผู้รับผิดชอบโหลดไ�
 
 test("รายการไฟล์ของ HQ โหลดไม่สำเร็จ → ต้องรายงาน", async ({ page }) => {
   const tags = await collectReadErrorTags(page);
-  await breakRequests(page, /\/rest\/v1\/files/i);
+  await breakRequests(page, source("files", "files"));
   await open(page, "hq", "/hq/leads");
 
   await expect(page.getByText(BANNER).first(), "ต้องมีแถบเตือนให้ผู้ใช้เห็น").toBeVisible({ timeout: 20_000 });
@@ -73,7 +80,7 @@ test("รายการไฟล์ของ HQ โหลดไม่สำเ�
 test("รายการไฟล์ฝั่งตัวแทนโหลดไม่สำเร็จ → ต้องรายงาน", async ({ page }) => {
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   const tags = await collectReadErrorTags(page);
-  await breakRequests(page, /\/rest\/v1\/files/i);
+  await breakRequests(page, source("files", "files"));
   await page.goto(`${DEALER_ORIGIN}/files`, { waitUntil: "domcontentloaded" });
 
   await expect(page.getByText(BANNER).first(), "ต้องมีแถบเตือนให้ผู้ใช้เห็น").toBeVisible({ timeout: 20_000 });

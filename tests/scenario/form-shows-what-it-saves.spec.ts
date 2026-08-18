@@ -43,17 +43,23 @@ test("[func] ฟอร์มลูกค้าเป้าหมาย: แม�
 
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
+  // โทรศัพท์/จังหวัด เป็นช่องบังคับแล้ว (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-234-5678");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
 
   // ⚠️ ต้องอ่าน "สิ่งที่ผู้ใช้เห็น" ณ วินาทีที่กดบันทึก ไม่ใช่ก่อนหน้านั้น
   //   แคตตาล็อกมาถึงทีหลังแล้วเติมค่าตั้งต้นให้ ซึ่งถูกต้องตามที่ออกแบบไว้
   //   ถ้าอ่านเร็วเกินไปจะได้ค่าคนละจังหวะกับตอนบันทึก แล้วเทสต์ตกทั้งที่ระบบทำถูก
-  await expect(page.getByLabel("งานที่สนใจ").first()).toBeVisible();
+  await expect(page.getByLabel("แม่แบบ").first()).toBeVisible();
   await page.waitForTimeout(1500);   // เผื่อให้แคตตาล็อกมาถึงและเติมค่าตั้งต้นเสร็จ
   // ⚠️ ต้องเทียบ "ค่าที่เบราว์เซอร์ถือว่าถูกเลือกอยู่" (value) ไม่ใช่ข้อความที่เห็น (text)
   //   ป้ายบางตัวมีคำต่อท้ายเพื่อความเข้าใจ เช่น "โกดังสำเร็จรูป · ทั่วไป" ซึ่งค่าจริงคือ "โกดังสำเร็จรูป"
   //   และที่สำคัญ: value นี่แหละคือตัวที่จับกับดักได้ — เมื่อค่าจริงในโปรแกรมเป็นว่างแต่ไม่มีตัวเลือกว่าง
   //   เบราว์เซอร์จะเลื่อนไปเลือกตัวแรกให้เอง แล้ว value ก็จะไม่ตรงกับที่บันทึกลงระบบทันที
-  const sel = page.getByLabel("งานที่สนใจ").first();
+  const sel = page.getByLabel("แม่แบบ").first();
   const shown = await sel.evaluate(el => (el as HTMLSelectElement).value);
   const shownText = await sel.evaluate(el => { const s = el as HTMLSelectElement; return s.options[s.selectedIndex]?.text ?? ""; });
 
@@ -78,6 +84,9 @@ test("[func] ฟอร์มลูกค้าเป้าหมาย: มู�
 
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(C2);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — ไม่กรอกจะบันทึกไม่ผ่าน
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   await page.getByPlaceholder("เช่น 1200000 หรือ ฿1.2M").first().fill("abcxyz");
   await page.getByRole("button", { name: "บันทึก" }).click();
 
@@ -116,4 +125,22 @@ test("[func·hq] ปรับราคากลางเป็น 0 ต้อง
 
   await expect(page.getByText("ราคากลางต้องมากกว่า 0 บาท")).toBeVisible({ timeout: 10_000 });
   await expect(priceInput, "กล่องต้องยังเปิดอยู่ ไม่ใช่ปิดไปเหมือนสำเร็จ").toBeVisible();
+});
+
+test("[func] ดาว * ต้องกันการบันทึกจริง — โทรศัพท์/จังหวัดว่าง ต้องบันทึกไม่ผ่าน", async ({ page }) => {
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.getByRole("button", { name: /เพิ่มลูกค้าเป้าหมาย/ }).first().click();
+  await page.waitForTimeout(1200);
+  const dlg = page.getByRole("dialog");
+  await dlg.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill("ZZREQ ทดสอบดาว");
+  await dlg.getByPlaceholder("ชื่อผู้ติดต่อ").fill("ผู้ทดสอบ");
+  await dlg.getByRole("button", { name: "บันทึก" }).click();
+  await page.waitForTimeout(800);
+  // ดาวหลอก = ป้ายกำกับบอกว่าบังคับ แต่ระบบไม่ตรวจจริง — เทสต์นี้กันไว้
+  const err = await dlg.locator("text=/กรอกให้ครบก่อนบันทึก/").innerText().catch(() => "");
+  expect(err).toContain("โทรศัพท์");
+  expect(err).toContain("จังหวัด");
+  await expect(dlg, "ต้องยังไม่ปิดฟอร์ม (ยังไม่บันทึก)").toBeVisible();
 });

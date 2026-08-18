@@ -5,7 +5,7 @@
 // จึงยิงไปที่ Route Handler ของแอป HQ (/api/admin/*) ที่ถือ service_role ฝั่งเซิร์ฟเวอร์แทน
 // (โมดูลนี้อยู่ฝั่ง client — ส่งแค่ JWT ของผู้เรียกไปให้เซิร์ฟเวอร์ตรวจสิทธิ์เอง ไม่แตะ service_role)
 import { getSupabase } from "./data/supabase/client";
-import { DATA_SOURCE } from "./data/config";
+import { REAL_BACKEND } from "./data/config";
 import { friendlyError } from "./friendlyError";
 
 export type CreateDealerInput = {
@@ -18,7 +18,7 @@ export type CreateDealerResult =
 /** สร้างตัวแทน "พร้อมบัญชีเข้าระบบจริง" ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ (H5) */
 export async function createDealerAccount(input: CreateDealerInput): Promise<CreateDealerResult> {
   // โหมดเดโม (local) ไม่มีระบบยืนยันตัวตนจริงให้ผูก — บอกตามจริง ไม่แกล้งทำสำเร็จ
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: สร้างบัญชีตัวแทนจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
   let token = "";
@@ -61,7 +61,7 @@ export type CreateHQUserResult =
 
 /** สร้างผู้ใช้ HQ "พร้อมบัญชีเข้าระบบจริง" — รหัสผ่านสุ่มที่เซิร์ฟเวอร์ คืนมาโชว์ครั้งเดียว */
 export async function createHQUser(input: CreateHQUserInput): Promise<CreateHQUserResult> {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: สร้างบัญชีผู้ใช้จริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
   const token = await callerToken();
@@ -82,7 +82,7 @@ export async function createHQUser(input: CreateHQUserInput): Promise<CreateHQUs
 
 /** ลบผู้ใช้ HQ จริง (auth + profile) ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ */
 export async function deleteHQUser(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: ลบบัญชีจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
   const token = await callerToken();
@@ -103,7 +103,7 @@ export async function deleteHQUser(id: string): Promise<{ ok: true } | { ok: fal
 /** ออกรหัสผ่านใหม่ให้ตัวแทน (HQ คุมรหัสผ่านของตัวแทนเท่านั้น — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตเอง)
  *  รหัสใหม่สุ่มที่เซิร์ฟเวอร์เสมอ คืนมาโชว์ครั้งเดียวเหมือนตอนสร้างบัญชี */
 export async function resetDealerPassword(code: string): Promise<CreateDealerResult> {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: รีเซ็ตรหัสผ่านจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
   const token = await callerToken();
@@ -124,7 +124,7 @@ export async function resetDealerPassword(code: string): Promise<CreateDealerRes
 /** อีเมลเข้าระบบจริงของแต่ละสาขา (รหัสสาขา → อีเมล) — สาขาที่ไม่มีบัญชีจะไม่มีคีย์
  *  ต้องถามเซิร์ฟเวอร์ ห้ามคำนวณเอาเองจากรหัสสาขา (อีเมลจริงของแต่ละสาขาไม่ได้เป็นสูตรเดียวกัน) */
 export async function listDealerLoginEmails(): Promise<Record<string, string>> {
-  if (DATA_SOURCE !== "supabase") return {};
+  if (!REAL_BACKEND) return {};
   const token = await callerToken();
   if (!token) return {};
   try {
@@ -140,7 +140,7 @@ export async function listDealerLoginEmails(): Promise<Record<string, string>> {
 export async function viewDealerPassword(code: string): Promise<
   { ok: true; password: string; updatedAt: string; updatedBy: string } | { ok: false; error: string }
 > {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: รหัสผ่านแสดงอยู่ในหน้าอยู่แล้ว" };
   }
   const token = await callerToken();
@@ -161,7 +161,7 @@ export async function viewDealerPassword(code: string): Promise<
 /** ขอลิงก์ "เข้าระบบแทนตัวแทน" — ไม่ต้องรู้/รีเซ็ตรหัสผ่านตัวแทนเลย (ใช้ Supabase magic-link)
  *  ลิงก์ใช้ได้ครั้งเดียวแล้วหมดอายุ — เปิดในแท็บใหม่ไปยังแอปตัวแทนเสมอ (คนละ origin กับ HQ) */
 export async function impersonateDealer(code: string): Promise<{ ok: true; link: string } | { ok: false; error: string }> {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: ไม่ต้องขอลิงก์ — ใช้ปุ่มเข้าระบบแทนแบบเดโมได้เลย" };
   }
   const token = await callerToken();
@@ -184,7 +184,7 @@ export async function impersonateDealer(code: string): Promise<{ ok: true; link:
 export async function deleteDealerAccount(code: string): Promise<
   { ok: true; warning?: string } | { ok: false; error: string }
 > {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: ลบบัญชีจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
   const token = await callerToken();
@@ -209,7 +209,7 @@ export async function deleteDealerAccount(code: string): Promise<
 export async function moveDealerData(from: string, to: string): Promise<
   { ok: true; total: number } | { ok: false; error: string }
 > {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: ย้ายข้อมูลจริงไม่ได้" };
   }
   const token = await callerToken();
@@ -234,7 +234,7 @@ export async function moveDealerData(from: string, to: string): Promise<
 export async function clearAuditLog(): Promise<
   { ok: true; removed: number } | { ok: false; error: string }
 > {
-  if (DATA_SOURCE !== "supabase") return { ok: false, error: "โหมดเดโม: ล้างบันทึกจริงไม่ได้" };
+  if (!REAL_BACKEND) return { ok: false, error: "โหมดเดโม: ล้างบันทึกจริงไม่ได้" };
   const token = await callerToken();
   if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
   try {
@@ -255,7 +255,7 @@ export async function clearAuditLog(): Promise<
 export async function resetHQUserPassword(id: string, password?: string): Promise<
   { ok: true; email: string; password: string } | { ok: false; error: string }
 > {
-  if (DATA_SOURCE !== "supabase") {
+  if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: ตั้งรหัสผ่านจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
   const token = await callerToken();

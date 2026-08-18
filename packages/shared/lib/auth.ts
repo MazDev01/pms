@@ -36,6 +36,14 @@ const BUILT_IN: { email: string; session: MockSession }[] = [
   { email: "cnx@dealer.com",     session: sessions.dealer },  // ตัวแทนเชียงใหม่ (CNX)
 ];
 
+/** บัญชีที่ปุ่ม "เข้าใช้งานได้เลย" บนหน้าล็อกอินใช้ — โหมดเดโมเท่านั้น
+ *  ⚠️ ปุ่มนั้นถูกกันด้วย !REAL_BACKEND ที่ LoginCard · ระบบจริงไม่เรนเดอร์เลย
+ *     ค่าที่นี่จึงเป็นแค่ "ทางลัดของชุดสาธิต" ไม่ใช่ช่องทางเข้าระบบจริง */
+export const DEMO_LOGINS: { email: string; label: string; scopeAll: boolean }[] = [
+  { email: "admin@benjamin.com", label: "เข้าใช้งานเป็น สำนักงานใหญ่", scopeAll: true },
+  { email: "cnx@dealer.com",     label: "เข้าใช้งานเป็น ตัวแทนจำหน่าย", scopeAll: false },
+];
+
 type StoredHQUser = { name: string; email: string; role: string; status: string };
 
 function loadHQUsers(): StoredHQUser[] {

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { SUPABASE_URL, SUPABASE_ANON, SUPABASE_MODE, ADMIN } from "./supabaseEnv";
+import { SUPABASE_URL, SUPABASE_ANON, REAL_BACKEND, ADMIN } from "./supabaseEnv";
 
 // ── regression: id ลูกค้า/ลูกค้าเป้าหมาย นับแยกต่อสาขา — ห้าม join/group ข้ามตารางด้วย id เปล่า ──
 //
@@ -14,7 +14,7 @@ import { SUPABASE_URL, SUPABASE_ANON, SUPABASE_MODE, ADMIN } from "./supabaseEnv
 //   2. hq_customers_page             → แก้ที่ 0104 (พบจากตรวจสอบระบบ 5 ส.ค. 69)
 //   3. quotation_salesperson         → แก้ที่ 0104 (พบจากตรวจสอบระบบ 5 ส.ค. 69)
 // เทสต์นี้กันข้อ 2-3 ไม่ให้ย้อนกลับ (ข้อ 1 มี multi-dealer-stress.spec.ts คุมอยู่แล้ว)
-test.skip(!SUPABASE_MODE, "ต้องใช้ backend จริง (RPC + RLS) เพื่อตรวจการปนข้ามสาขา");
+test.skip(!REAL_BACKEND, "ต้องใช้ backend จริง (RPC + RLS) เพื่อตรวจการปนข้ามสาขา");
 // serial: ทั้งไฟล์ใช้ข้อมูลชุดเดียวกันที่สร้างใน beforeAll (ลูกค้า id ตายตัวเพื่อให้ "ชนกัน" ตามที่ต้องการทดสอบ)
 // ถ้าปล่อยขนาน Playwright จะกระจายเทสต์ไปคนละ worker แล้ว beforeAll รันซ้ำ → ชน customers_pkey กันเอง
 test.describe.configure({ mode: "serial" });

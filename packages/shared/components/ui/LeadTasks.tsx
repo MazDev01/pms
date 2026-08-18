@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
   buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
+  OTHER_LOST_REASON,
   type LeadRow, type LeadTask,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -34,6 +35,9 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
   const pct = closed ? 100 : taskProgress(tasks);
   const [lostOpen, setLostOpen] = useState(false);
   const [lostReason, setLostReason] = useState("");
+  const [otherText, setOtherText] = useState("");   // เหตุผลที่พิมพ์เอง (ใช้เมื่อเลือก "อื่นๆ")
+  // เหตุผลที่จะบันทึกจริง — โหมด "อื่นๆ" ต้องพิมพ์ก่อนถึงจะยืนยันได้ (ค่า __OTHER__ ห้ามหลุดลง DB)
+  const finalLostReason = lostReason === OTHER_LOST_REASON ? otherText.trim() : lostReason;
   const [hint, setHint] = useState("");
 
   // ลำดับงาน (ไม่รวม "ปิดการขาย") — ใช้บังคับติ๊กตามลำดับ ห้ามข้ามขั้น
@@ -74,7 +78,7 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
     // ปิดการขาย → ทุก task ถือว่าเสร็จ = 100% · stage = Won / Lost
     const next = tasks.map(t => ({ ...t, done: true, doneAt: t.doneAt ?? now, doneBy: t.doneBy ?? performedBy }));
     onSave({ ...lead, tasks: next, status: outcome === "won" ? "PAID" : "CANCELLED", lostReason: outcome === "lost" ? (reason ?? "") : undefined });
-    setLostOpen(false); setLostReason("");
+    setLostOpen(false); setLostReason(""); setOtherText("");
   }
 
   function reopen() {
@@ -170,20 +174,39 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
           </div>
         ) : lostOpen ? (
           <div style={{ padding: "12px 14px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca" }}>
-            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {lostReasons.map(r => (
-                <button key={r} type="button" onClick={() => setLostReason(r)}
-                  style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
-                    border: `1px solid ${lostReason === r ? "#dc2626" : "#e5e7eb"}`, background: lostReason === r ? "#fee2e2" : "#fff",
-                    color: lostReason === r ? "#dc2626" : "#2D2D2D", fontWeight: lostReason === r ? 700 : 400 }}>{r}</button>
-              ))}
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>
+              {lostReason === OTHER_LOST_REASON ? "ระบุเหตุผลที่ปิดการขายไม่ได้" : "เลือกเหตุผลที่ปิดการขายไม่ได้"}
             </div>
+            {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 17 ส.ค. 69)
+                ⚠️ ค่า __OTHER__ เป็นแค่ "โหมดพิมพ์เอง" ห้ามบันทึกลงฐานข้อมูล — ปุ่มยืนยันจึงล็อกไว้จนกว่าจะพิมพ์จริง
+                   (ไม่งั้นรายงาน "เหตุผลที่เสียโอกาส" จะมีแท่งชื่อ __OTHER__ โผล่มา) */}
+            {lostReason === OTHER_LOST_REASON ? (
+              <div style={{ marginBottom: 10 }}>
+                <input autoFocus value={otherText} onChange={e => setOtherText(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                  style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 11px", fontSize: "0.8rem", color: "#2D2D2D", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+                <button type="button" onClick={() => { setLostReason(""); setOtherText(""); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#003366", fontSize: "0.72rem", fontWeight: 700, padding: "6px 0 0" }}>
+                  ← กลับไปเลือกจากรายการ
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+                {lostReasons.map(r => (
+                  <button key={r} type="button" onClick={() => setLostReason(r)}
+                    style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
+                      border: `1px solid ${lostReason === r ? "#dc2626" : "#e5e7eb"}`, background: lostReason === r ? "#fee2e2" : "#fff",
+                      color: lostReason === r ? "#dc2626" : "#2D2D2D", fontWeight: lostReason === r ? 700 : 400 }}>{r}</button>
+                ))}
+                <button type="button" onClick={() => setLostReason(OTHER_LOST_REASON)}
+                  style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
+                    border: "1px dashed #9ca3af", background: "#fafafa", color: "#6b7280", fontWeight: 700 }}>อื่นๆ (ระบุเอง)</button>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setLostOpen(false); setLostReason(""); }}>ยกเลิก</button>
-              <button type="button" className="btn btn-sm" disabled={!lostReason}
-                style={{ background: lostReason ? "#dc2626" : "#f3f4f6", color: lostReason ? "#fff" : "#9ca3af", cursor: lostReason ? "pointer" : "not-allowed" }}
-                onClick={() => close("lost", lostReason)}>ยืนยันปิดการขาย</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setLostOpen(false); setLostReason(""); setOtherText(""); }}>ยกเลิก</button>
+              <button type="button" className="btn btn-sm" disabled={!finalLostReason}
+                style={{ background: finalLostReason ? "#dc2626" : "#f3f4f6", color: finalLostReason ? "#fff" : "#9ca3af", cursor: finalLostReason ? "pointer" : "not-allowed" }}
+                onClick={() => close("lost", finalLostReason)}>ยืนยันปิดการขาย</button>
             </div>
           </div>
         ) : (

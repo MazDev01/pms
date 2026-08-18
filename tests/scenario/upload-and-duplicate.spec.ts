@@ -91,6 +91,9 @@ test("กดบันทึกรัวในแท็บเดียว ต้�
   const contactInput = page.getByPlaceholder("ชื่อผู้ติดต่อ");
   await companyInput.fill(company);
   await contactInput.fill("คุณทดสอบ");
+  // โทรศัพท์/จังหวัด = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69)
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
   // ยืนยันว่าค่าติดอยู่ในฟอร์มจริงก่อนกด — ช่องเป็น controlled input ตอนรันขนานหนัก ๆ React อาจยัง
   // ไม่ทัน commit ค่า แล้วกดบันทึกจะติด validation "ต้องระบุชื่อบริษัท" แทนที่จะบันทึก (ไม่มีแถวลง DB เลย)
   // แพตเทิร์นเดียวกับที่ loginUI ใช้กันปัญหานี้อยู่แล้ว

@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
 import { ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+import { DEALER_ORIGIN, HQ_ORIGIN } from "./funcHelpers";
 
 // ── คนที่ยังไม่ล็อกอิน ต้องอ่านอะไรไม่ได้เลย — ตรวจ "ทุกตาราง/วิว" ไม่ใช่เฉพาะที่นึกออก ──
 //
@@ -63,4 +64,16 @@ test("กุญแจสาธารณะเขียนข้อมูลไ�
     if (r.ok) writable.push(t);
   }
   expect(writable, `ตารางเหล่านี้ยอมให้คนยังไม่ล็อกอินเขียนข้อมูลได้: ${writable.join(", ")}`).toEqual([]);
+});
+
+// ปุ่ม "เข้าใช้งานได้เลย" มีไว้ให้เดโมเท่านั้น (บอสสั่ง 17 ส.ค. 69) — กันด้วย !REAL_BACKEND ที่ LoginCard
+// ถ้ามันหลุดไปโผล่บนระบบจริง = ใครก็กดเข้าเป็นผู้ดูแลสำนักงานใหญ่ได้โดยไม่ต้องรู้รหัสผ่าน — เทสต์นี้คือตัวกัน
+test("[security] ระบบที่ต่อฐานข้อมูลจริง ห้ามมีปุ่มทางลัดเข้าระบบของโหมดสาธิต", async ({ page }) => {
+  for (const [origin, path] of [[DEALER_ORIGIN, "/login"], [HQ_ORIGIN, "/hq/login"]] as const) {
+    await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    const box = await page.getByText("โหมดสาธิต — เข้าใช้งานได้เลย").count();
+    const btns = await page.getByRole("button", { name: /เข้าใช้งานเป็น/ }).count();
+    expect(box + btns, `${path} ต้องไม่มีทางลัดเข้าระบบ`).toBe(0);
+  }
 });

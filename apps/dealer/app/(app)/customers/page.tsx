@@ -43,6 +43,10 @@ import { PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { provincesOfRegion } from "@pms/shared/lib/provinces";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import type { DealerRow } from "@pms/shared/lib/data/types";
 import { useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -81,6 +85,21 @@ type SortKey = "company"|"name"|"phone"|"province"|"owner"|"lastActivity"|"quota
 type SortDir = "asc"|"desc";
 
 const PROVINCES  =["กรุงเทพฯ","เชียงใหม่","ระยอง","เชียงราย","นนทบุรี","สมุทรสาคร","สมุทรปราการ","นครสวรรค์","ราชบุรี","ขอนแก่น","ตาก","อุตรดิตถ์","อื่นๆ"];
+
+// ── จังหวัดที่เลือกได้ = จังหวัดใน "ภาค" ของสาขาที่ล็อกอิน (บอสสั่ง 17 ส.ค. 69) ──
+// กติกาเดียวกับหน้าลูกค้าเป้าหมาย · ค่าที่บันทึกไว้แล้วแต่อยู่นอกภาค ต้องยังเห็นในลิสต์ ห้ามให้หายเงียบ
+function useMyProvinces(): string[] {
+  const me = useCurrentDealer();
+  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  return useMemo(() => {
+    const mine = dealers.find(d => d.code === me.code);
+    const inRegion = provincesOfRegion(mine?.region ?? "");
+    if (inRegion.length) {
+      return mine?.province && !inRegion.includes(mine.province) ? [mine.province, ...inRegion] : inRegion;
+    }
+    return [...PROVINCES];
+  }, [dealers, me.code]);
+}
 
 function initials(name:string){ return name.replace(/บจ\.|หจก\./g,"").trim().slice(0,2); }
 // ── นำเข้าลูกค้าเดิม (CSV) ──────────────────────────────────
@@ -304,6 +323,7 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
   });
   const [f, setF] = useState<CustomerForm>(seed);
   const logoRef = useRef<HTMLInputElement>(null);
+  const myProvinces = useMyProvinces();  // จังหวัดตามภาคของสาขาที่ล็อกอิน
   // ตั้งค่าฟอร์มใหม่เฉพาะตอน "สลับไปลูกค้าคนอื่น" เท่านั้น — จงใจไม่ใส่ seed ใน dependency
   // (seed ถูกสร้างใหม่ทุก render จะทำให้ล้างสิ่งที่ผู้ใช้กำลังพิมพ์อยู่ทิ้งทุกครั้ง)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -339,7 +359,11 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
               style={{ ...inp, height:"auto", padding:"5px 8px", resize:"vertical", lineHeight:1.4, fontWeight:400 }} />
           </Row>
           <Row label="จังหวัด">
-            <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={{ ...inp, cursor:"pointer" }}>{PROVINCES.map(p=><option key={p}>{p}</option>)}</select>
+            <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={{ ...inp, cursor:"pointer" }}>
+              <option value="">— ยังไม่ระบุ —</option>
+              {myProvinces.map(p=><option key={p}>{p}</option>)}
+              {f.province && !myProvinces.includes(f.province) && <option value={f.province}>{f.province} (นอกภาค)</option>}
+            </select>
           </Row>
           <Row label="แม่แบบ"><TemplateSelect value={f.category} onChange={v=>set("category",v)} style={inp} /></Row>
           {/* joinDate = วันที่เข้าระบบเป็นลูกค้า — ป้าย "วันที่สมัคร" เดิมชวนเข้าใจผิด (บอสสั่งเปลี่ยน 17 ก.ค. 69) */}
@@ -1613,26 +1637,25 @@ export default function CustomersPage(){
               </div>
               <button onClick={()=>setShowManual(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
             </div>
-            <div style={{padding:20,display:"flex",flexDirection:"column",gap:12,overflow:"visible"}}>
-              <div><label className="form-label">บริษัท / ชื่อลูกค้า *</label>
-                <input className="form-input" value={legacyForm.company} autoFocus onChange={e=>setLegacyForm(f=>({...f,company:e.target.value}))} placeholder="ชื่อบริษัท / ชื่อลูกค้า" /></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{padding:20,overflow:"visible"}}>
+              <div className="form-grid">
+                <div className="form-section">ข้อมูลบริษัท</div>
+                <div className="col-full"><label className="form-label">บริษัท / ชื่อลูกค้า *</label>
+                  <input className="form-input" value={legacyForm.company} autoFocus onChange={e=>setLegacyForm(f=>({...f,company:e.target.value}))} placeholder="ชื่อบริษัท / ชื่อลูกค้า" /></div>
+                <div><label className="form-label">จังหวัด</label>
+                  <input className="form-input" value={legacyForm.province} onChange={e=>setLegacyForm(f=>({...f,province:e.target.value}))} /></div>
+                <div><label className="form-label">แม่แบบ</label>
+                  <TemplateSelect value={legacyForm.category} onChange={v=>setLegacyForm(f=>({...f,category:v}))} className="form-select" /></div>
+
+                <div className="form-section">ผู้ติดต่อ</div>
                 <div><label className="form-label">ผู้ติดต่อ</label>
                   <input className="form-input" value={legacyForm.name} onChange={e=>setLegacyForm(f=>({...f,name:e.target.value}))} placeholder="ชื่อผู้ติดต่อ" /></div>
                 <div><label className="form-label">โทรศัพท์</label>
                   <input className="form-input" value={legacyForm.phone} onChange={e=>setLegacyForm(f=>({...f,phone:e.target.value}))} placeholder="0XX-XXX-XXXX" /></div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div><label className="form-label">อีเมล</label>
+                <div className="col-full"><label className="form-label">อีเมล</label>
                   <input className="form-input" value={legacyForm.email} onChange={e=>setLegacyForm(f=>({...f,email:e.target.value}))} placeholder="email@company.com" /></div>
-                <div><label className="form-label">จังหวัด</label>
-                  <input className="form-input" value={legacyForm.province} onChange={e=>setLegacyForm(f=>({...f,province:e.target.value}))} /></div>
               </div>
-              <div>
-                <label className="form-label">แม่แบบ</label>
-                <TemplateSelect value={legacyForm.category} onChange={v=>setLegacyForm(f=>({...f,category:v}))} className="form-select" />
-              </div>
-              <div style={{fontSize:"0.65rem",color:"#9ca3af"}}>ลูกค้านำเข้าจะติดป้าย &ldquo;นำเข้า&rdquo; · ลูกค้าใหม่ปกติเกิดจากปิดการขาย (Lead→Won)</div>
+              <div style={{fontSize:"0.65rem",color:"#9ca3af",marginTop:12}}>ลูกค้านำเข้าจะติดป้าย &ldquo;นำเข้า&rdquo; · ลูกค้าใหม่ปกติเกิดจากปิดการขาย (Lead→Won)</div>
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowManual(false)}>ยกเลิก</button>

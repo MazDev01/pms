@@ -7,6 +7,7 @@ import {
   leadStatusLabel, leadStatusColor,
   buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
+  OTHER_LOST_REASON,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
 import type { QuotationMock } from "@pms/shared/lib/data/types";
@@ -44,6 +45,10 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { Donut } from "@pms/shared/components/ui/Charts";
 import { leadCreatedDate, priorityLabel } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { provincesOfRegion } from "@pms/shared/lib/provinces";
+import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import type { DealerRow } from "@pms/shared/lib/data/types";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
@@ -64,6 +69,24 @@ const SOURCE_COLORS = ["#2563EB", "#16A34A", "#F59E0B", "#7C3AED", "#EA580C", "#
 //    และไม่ใช่ชื่อแบรนด์อย่าง Facebook/LINE จึงแปลได้ (ดู legacySource ข้างล่าง — ลูกค้าเป้าหมายเก่าที่บันทึก
 //    ค่าเดิมไว้ต้องยังเห็นค่าตัวเองในช่องเลือก ไม่ใช่ถูกเบราว์เซอร์สลับไปตัวเลือกแรกเงียบ ๆ)
 const SOURCES = ["Facebook","เว็บไซต์","LINE","ลูกค้าเข้ามาเอง","แนะนำต่อ","งานแสดงสินค้า","อื่นๆ"];
+
+// ── จังหวัดที่เลือกได้ = จังหวัดใน "ภาค" ของสาขาที่ล็อกอิน (บอสสั่ง 17 ส.ค. 69) ──
+// เดิมเป็นรายการตายตัว 10 จังหวัดเหมือนกันทุกสาขา — สาขาใต้ก็ยังเห็นเชียงใหม่/เชียงราย
+// ⚠️ ต้องไม่ทำให้ค่าที่บันทึกไว้แล้วหาย: ลูกค้าเป้าหมายเก่าที่จังหวัดอยู่นอกภาค (ย้ายสาขา/ข้อมูลเก่า)
+//    ต้องยังเห็นค่าเดิมของตัวเองในลิสต์ ไม่งั้นแค่เปิดฟอร์มมาแก้ชื่อ จังหวัดก็ถูกบันทึกทับเป็นค่าว่าง
+function useMyProvinces(): string[] {
+  const me = useCurrentDealer();
+  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
+  return useMemo(() => {
+    const mine = dealers.find(d => d.code === me.code);
+    const inRegion = provincesOfRegion(mine?.region ?? "");
+    if (inRegion.length) {
+      // จังหวัดที่ตั้งของสาขาต้องอยู่ในลิสต์เสมอ (บางสาขาตั้งอยู่คนละภาคกับที่รับผิดชอบ)
+      return mine?.province && !inRegion.includes(mine.province) ? [mine.province, ...inRegion] : inRegion;
+    }
+    return [...PROVINCES]; // ยังไม่รู้ภาค (ทะเบียนยังไม่โหลด) → รายการเดิมไปก่อน
+  }, [dealers, me.code]);
+}
 /** ค่าที่บันทึกไว้แต่ไม่อยู่ในลิสต์มาตรฐาน (ลูกค้าเป้าหมายเก่า/ข้อมูลนำเข้า) → แทรกเป็นตัวเลือกเพิ่ม ห้ามทำค่าเดิมหาย */
 const legacySource = (v: string) => (v && !SOURCES.includes(v) ? [v] : []);
 // ช่วงมูลค่าใน FilterRow — เดิมเป็นช่องกรอก "มูลค่าขั้นต่ำ/สูงสุด (M฿)" สองช่องในแผงตัวกรอง
@@ -78,7 +101,7 @@ const PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ร
 // เหตุผลปิดการขายไม่สำเร็จมาจากรายการที่ HQ กำหนดเท่านั้น (useLostReasons) — ถ้าเหตุผลจริงไม่ตรงกับ
 // รายการนั้นเลย ต้องมีทางกรอกเอง (บอสสั่ง 31 ก.ค. 69) ใช้ sentinel นี้เฉพาะตอนเลือกใน <select> เพื่อ
 // สลับเป็นช่องพิมพ์เอง — ไม่เคยถูกบันทึกลง DB จริง (lostReason ที่บันทึกคือข้อความที่กรอก)
-const OTHER_REASON = "__OTHER__";
+
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 function thaiDateStr(d: Date) { return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
@@ -250,9 +273,10 @@ function OverviewEditor({ lead, persons, onSave }: {
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง (HQ แก้ → เห็นตรงกัน)
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ผ่าน repo)
   const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ใช้คิด % ของลูกค้าเป้าหมายที่ยังไม่มี checklist
+  const myProvinces = useMyProvinces();  // จังหวัดตามภาคของสาขาที่ล็อกอิน
   const seed = () => ({
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
-    email: lead.email ?? "", province: lead.province ?? PROVINCES[0], source: lead.source ?? SOURCES[0],
+    email: lead.email ?? "", province: lead.province ?? "", source: lead.source ?? "",
     product: lead.product ?? catalog[0]?.name ?? "", status: lead.status,
     assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
     area: lead.area != null ? String(lead.area) : "",
@@ -310,7 +334,7 @@ function OverviewEditor({ lead, persons, onSave }: {
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
       area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
       project: f.project.trim() || undefined,
-      lostReason: f.status === "CANCELLED" && f.lostReason.trim() && f.lostReason !== OTHER_REASON ? f.lostReason.trim() : undefined,
+      lostReason: f.status === "CANCELLED" && f.lostReason.trim() && f.lostReason !== OTHER_LOST_REASON ? f.lostReason.trim() : undefined,
     });
   }
 
@@ -362,13 +386,14 @@ function OverviewEditor({ lead, persons, onSave }: {
         <Cell icon={MapPin}  label="จังหวัด">
           <select aria-label="จังหวัด" value={f.province} onChange={e=>set("province",e.target.value)} style={inp}>
             <option value="">— ยังไม่ระบุ —</option>
-            {PROVINCES.map(x=><option key={x}>{x}</option>)}
+            {myProvinces.map(x=><option key={x}>{x}</option>)}
+            {f.province && !myProvinces.includes(f.province) && <option value={f.province}>{f.province} (นอกภาค)</option>}
           </select>
         </Cell>
-        <Cell icon={Package} label="งานที่สนใจ">
+        <Cell icon={Package} label="แม่แบบ">
           {/* ใช้ตัวเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมาย — เดิมที่นี่ลิสต์เฉพาะแม่แบบหลัก ไม่มีแม่แบบย่อย
               ลูกค้าเป้าหมายที่เลือกแม่แบบย่อยไว้จึงหาค่าตัวเองในลิสต์ไม่เจอ แล้วโชว์ตัวแรกผิด ๆ แบบเดียวกัน */}
-          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} ariaLabel="งานที่สนใจ" />
+          <TemplateSelect value={f.product} onChange={v=>set("product",v)} style={inp} ariaLabel="แม่แบบ" />
         </Cell>
         <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
           <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
@@ -393,11 +418,11 @@ function OverviewEditor({ lead, persons, onSave }: {
               <select aria-label="เหตุผลที่ปิดการขายไม่สำเร็จ" value={f.lostReason} onChange={e=>set("lostReason", e.target.value)} style={inp}>
                 <option value="">— เลือก —</option>
                 {lostReasons.map(r => <option key={r} value={r}>{r}</option>)}
-                <option value={OTHER_REASON}>อื่นๆ (ระบุเอง)</option>
+                <option value={OTHER_LOST_REASON}>อื่นๆ (ระบุเอง)</option>
               </select>
             ) : (
               <span style={{ display:"flex", gap:6, alignItems:"center" }}>
-                <input value={f.lostReason === OTHER_REASON ? "" : f.lostReason} onChange={e=>set("lostReason", e.target.value)} placeholder="ระบุเหตุผล…" style={inp} autoFocus />
+                <input value={f.lostReason === OTHER_LOST_REASON ? "" : f.lostReason} onChange={e=>set("lostReason", e.target.value)} placeholder="ระบุเหตุผล…" style={inp} autoFocus />
                 <button type="button" onClick={()=>set("lostReason","")} title="กลับไปเลือกจากรายการ" style={{ background:"none", border:"none", cursor:"pointer", color:"#9ca3af", flexShrink:0, padding:4 }}><X size={14}/></button>
               </span>
             )}
@@ -461,16 +486,17 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   // สมุดลูกค้า + ลูกค้าเป้าหมายที่มีอยู่ของสาขา — ใช้เตือนว่าบริษัทนี้มีอยู่แล้ว (ดู dupHint ด้านล่าง)
   const { customers, leads: existingLeads } = useSales();
   const myDealer = useCurrentDealer();
+  const myProvinces = useMyProvinces();  // จังหวัดตามภาคของสาขาที่ล็อกอิน
   const [form, setForm] = useState({
     company: initial?.company ?? "", contact: initial?.contact ?? "",
     phone: initial?.phone ?? "", email: initial?.email ?? "",
-    province: initial?.province ?? "กรุงเทพฯ", product: initial?.product ?? catalog[0]?.name ?? "",
+    province: initial?.province ?? "", product: initial?.product ?? catalog[0]?.name ?? "",
     value: initial?.value ?? "",
     // เก็บเป็นสตริง ให้ปล่อยว่างได้ (= ยังไม่รู้พื้นที่) — ตอนบันทึกค่อยแปลงเป็นตัวเลข
     area: initial?.area != null ? String(initial.area) : "",
     status: (initial?.status ?? "WAITING") as LeadStatus,
     assigned: initial?.assigned ?? persons[0] ?? "",  // ไม่มีทะเบียนพนักงาน = ไม่ระบุ (ห้ามยัดชื่อสมมติลง DB)
-    source: initial?.source ?? "เว็บไซต์", note: initial?.note ?? "",
+    source: initial?.source ?? "", note: initial?.note ?? "",
     logo: initial?.logo ?? "",
   });
   // ── เติมค่าตั้งต้นเมื่อข้อมูลมาถึงทีหลัง (บั๊กจริง พบ 10 ส.ค. 69) ──────────────────
@@ -546,8 +572,16 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   }
   function submit() {
     if (savingRef.current) return;
-    if (!form.company.trim() || !form.contact.trim()) {
-      setSubmitError("กรอกบริษัทและผู้ติดต่อให้ครบก่อนบันทึก");
+    // ช่องบังคับ (บอสสั่ง 17 ส.ค. 69 เพิ่มโทรศัพท์+จังหวัด) — ดาว * บนป้ายกำกับต้องตรงกับที่ตรวจจริงตรงนี้เสมอ
+    //   โทรศัพท์: ไม่มีเบอร์ = ตามงานต่อไม่ได้เลย · จังหวัด: ใช้แบ่งเขต/ทำรายงานรายภาค ถ้าว่างตัวเลขจะเพี้ยน
+    const missing = [
+      !form.company.trim() && "บริษัท",
+      !form.contact.trim() && "ผู้ติดต่อ",
+      !form.phone.trim() && "โทรศัพท์",
+      !form.province.trim() && "จังหวัด",
+    ].filter(Boolean) as string[];
+    if (missing.length) {
+      setSubmitError(`กรอกให้ครบก่อนบันทึก: ${missing.join(" · ")}`);
       return;
     }
     // ⚠️ มูลค่าที่กรอกแล้วอ่านไม่ออก ต้องฟ้อง ห้ามเงียบ (บั๊กจริง พบ 10 ส.ค. 69)
@@ -597,10 +631,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     marginTop:6, padding:"7px 10px", borderRadius:8, background:"#fff8ed",
     border:"1px solid #fcd9a4", color:"#8a5a10", fontSize:"0.7rem", lineHeight:1.5,
   };
-  const secHead: React.CSSProperties = {
-    gridColumn:"1/-1", fontSize:"0.7rem", fontWeight:800, color:"#003366",
-    letterSpacing:"0.04em", paddingBottom:6, marginTop:6, borderBottom:"1px solid #eef1f5",
-  };
 
   return (
     <>
@@ -634,11 +664,12 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
 
           {/* Body */}
           <div style={{ padding:"24px", overflowY:"auto", maxHeight:"65vh" }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            {/* .form-grid / .form-section / .col-full = มาตรฐานกลาง (globals.css) — ห้ามเขียน grid เอง */}
+            <div className="form-grid">
 
               {/* ── ข้อมูลบริษัท ── */}
-              <div style={secHead}>ข้อมูลบริษัท</div>
-              <div style={{ gridColumn:"1/-1", display:"flex", alignItems:"center", gap:14 }}>
+              <div className="form-section">ข้อมูลบริษัท</div>
+              <div className="col-full" style={{ display:"flex", alignItems:"center", gap:14 }}>
                 <div style={{ width:56, height:56, borderRadius:14, flexShrink:0, overflow:"hidden",
                   border:`2px dashed ${form.logo ? "transparent" : "#e5e7eb"}`, background:form.logo ? "#fff" : "#f8fafc",
                   display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -661,21 +692,51 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                   </div>
                 </div>
               </div>
-              <div style={{ gridColumn:"1/-1" }}>
+              <div className="col-full">
                 <label style={labelStyle}>บริษัท *</label>
                 <input value={form.company} onChange={e=>set("company",e.target.value)}
                   placeholder="เช่น บริษัท ตัวอย่าง จำกัด" style={inputStyle} autoFocus />
                 {dupHint && <div style={dupHintStyle}>{dupHint}</div>}
               </div>
               <div>
-                <label style={labelStyle}>จังหวัด</label>
-                <select value={form.province} onChange={e=>set("province",e.target.value)} style={inputStyle}>
-                  {PROVINCES.map(p=><option key={p}>{p}</option>)}
+                <label style={labelStyle}>จังหวัด *</label>
+                <select aria-label="จังหวัด" value={form.province} onChange={e=>set("province",e.target.value)} style={inputStyle}>
+                  <option value="">— ยังไม่ระบุ —</option>
+                  {myProvinces.map(p=><option key={p}>{p}</option>)}
+                  {form.province && !myProvinces.includes(form.province) && <option value={form.province}>{form.province} (นอกภาค)</option>}
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>งานที่สนใจ</label>
-                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} ariaLabel="งานที่สนใจ" />
+                <label style={labelStyle}>แหล่งที่มา</label>
+                <select aria-label="แหล่งที่มา" value={form.source} onChange={e=>set("source",e.target.value)} style={inputStyle}>
+                  <option value="">— ยังไม่ระบุ —</option>
+                  {[...legacySource(form.source), ...SOURCES].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+
+              {/* ── ผู้ติดต่อ ── */}
+              <div className="form-section">ผู้ติดต่อ</div>
+              <div>
+                <label style={labelStyle}>ผู้ติดต่อ *</label>
+                <input value={form.contact} onChange={e=>set("contact",e.target.value)}
+                  placeholder="ชื่อผู้ติดต่อ" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>โทรศัพท์ *</label>
+                <input value={form.phone} onChange={e=>set("phone",e.target.value)}
+                  placeholder="0XX-XXX-XXXX" style={inputStyle} />
+              </div>
+              <div className="col-full">
+                <label style={labelStyle}>อีเมล</label>
+                <input value={form.email} onChange={e=>set("email",e.target.value)}
+                  placeholder="email@company.com" type="email" style={inputStyle} />
+              </div>
+
+              {/* ── รายละเอียดงาน ── */}
+              <div className="form-section">รายละเอียดงาน</div>
+              <div>
+                <label style={labelStyle}>แม่แบบ</label>
+                <TemplateSelect value={form.product} onChange={v=>set("product",v)} style={inputStyle} ariaLabel="แม่แบบ" />
               </div>
               <div>
                 <label style={labelStyle}>พื้นที่ (ตร.ม.)</label>
@@ -683,23 +744,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                   placeholder="เช่น 1200" style={inputStyle} />
                 <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ยังไม่รู้ก็เว้นว่างได้ · ใช้เป็นค่าตั้งต้นตอนออกใบเสนอราคา</div>
               </div>
-
-              <div>
-                <label style={labelStyle}>ผู้ติดต่อ *</label>
-                <input value={form.contact} onChange={e=>set("contact",e.target.value)}
-                  placeholder="ชื่อผู้ติดต่อ" style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>โทรศัพท์</label>
-                <input value={form.phone} onChange={e=>set("phone",e.target.value)}
-                  placeholder="0XX-XXX-XXXX" style={inputStyle} />
-              </div>
-              <div style={{ gridColumn:"1/-1" }}>
-                <label style={labelStyle}>อีเมล</label>
-                <input value={form.email} onChange={e=>set("email",e.target.value)}
-                  placeholder="email@company.com" type="email" style={inputStyle} />
-              </div>
-
               <div>
                 <label style={labelStyle}>มูลค่าประเมิน</label>
                 <input value={form.value} onChange={e=>set("value",e.target.value)}
@@ -715,17 +759,14 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 </select>
                 {!isEdit && <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ขั้น “เสนอราคา” ขึ้นไปจะเลื่อนอัตโนมัติเมื่อสร้างใบเสนอราคา</div>}
               </div>
-              <div>
-                <label style={labelStyle}>แหล่งที่มา</label>
-                <select value={form.source} onChange={e=>set("source",e.target.value)} style={inputStyle}>
-                  {[...legacySource(form.source), ...SOURCES].map(s=><option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
+
+              {/* ── การดูแล ── */}
+              <div className="form-section">การดูแล</div>
+              <div className="col-full">
                 <label style={labelStyle}>ผู้รับผิดชอบ</label>
                 <PersonPicker value={form.assigned} onChange={v=>set("assigned",v)} multiple />
               </div>
-              <div style={{ gridColumn:"1/-1" }}>
+              <div className="col-full">
                 <label style={labelStyle}>หมายเหตุ</label>
                 <textarea value={form.note} onChange={e=>set("note",e.target.value)}
                   rows={3} placeholder="รายละเอียดเพิ่มเติม..."
@@ -850,7 +891,7 @@ export default function LeadsPage() {
   }
   function confirmPendingLost() {
     const reason = pendingLostReason.trim();
-    if (!pendingLostId || !reason || reason === OTHER_REASON) return;
+    if (!pendingLostId || !reason || reason === OTHER_LOST_REASON) return;
     const target = allLeads.find(l => l.id === pendingLostId);
     if (!target) { setPendingLostId(null); return; }
     updateLead({ ...target, status: "CANCELLED", lostReason: reason });
@@ -1795,7 +1836,7 @@ export default function LeadsPage() {
             addLead({
               ...withIds,
               report: l.report || buildLeadReport(withIds, thaiDateStr(APP_NOW)),
-              // ดีลเลอร์สร้างลูกค้าเป้าหมายหลังติดต่อลูกค้าแล้ว → ติ๊กงานให้ถึงสถานะที่เลือก (เริ่มต้น "ติดต่อแล้ว" = ติ๊กติดต่อครั้งแรก/เก็บข้อมูล)
+              // ดีลเลอร์สร้างลูกค้าเป้าหมายหลังติดต่อลูกค้าแล้ว → ติ๊กงานให้ถึงสถานะที่เลือก (เริ่มต้น "ติดต่อแล้ว" = ติ๊กงานติดต่อแล้ว/เก็บข้อมูลลูกค้า)
               tasks: l.tasks?.length ? l.tasks : seedLeadTasks(l.status, l.assigned || "—", 30, taskTpl),
             });
           }}
@@ -1825,7 +1866,7 @@ export default function LeadsPage() {
                       </button>
                     ))}
                     {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
-                    <button onClick={()=>setPendingLostReason(OTHER_REASON)}
+                    <button onClick={()=>setPendingLostReason(OTHER_LOST_REASON)}
                       style={{ padding:"8px 10px", borderRadius:9, border:"1px dashed #9ca3af",
                         background:"#fafafa", color:"#6b7280", fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
                       อื่นๆ (ระบุเอง)
@@ -1838,15 +1879,15 @@ export default function LeadsPage() {
                     <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
                     <button type="button" onClick={()=>setPendingLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
                   </div>
-                  <input autoFocus value={pendingLostReason === OTHER_REASON ? "" : pendingLostReason} onChange={e=>setPendingLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                  <input autoFocus value={pendingLostReason === OTHER_LOST_REASON ? "" : pendingLostReason} onChange={e=>setPendingLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
                     style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
                 </>
               )}
             </div>
             <div style={{ padding:"12px 18px", borderTop:"1px solid #f0f4f8", display:"flex", justifyContent:"flex-end", gap:8, background:"#fafafa" }}>
               <button onClick={()=>setPendingLostId(null)} className="btn btn-secondary btn-md">ยกเลิก</button>
-              <button onClick={confirmPendingLost} disabled={!pendingLostReason.trim() || pendingLostReason===OTHER_REASON} className="btn btn-md"
-                style={{ background:"#dc2626", color:"#fff", opacity:pendingLostReason.trim() && pendingLostReason!==OTHER_REASON ?1:0.5, cursor:pendingLostReason.trim() && pendingLostReason!==OTHER_REASON ?"pointer":"not-allowed" }}>
+              <button onClick={confirmPendingLost} disabled={!pendingLostReason.trim() || pendingLostReason===OTHER_LOST_REASON} className="btn btn-md"
+                style={{ background:"#dc2626", color:"#fff", opacity:pendingLostReason.trim() && pendingLostReason!==OTHER_LOST_REASON ?1:0.5, cursor:pendingLostReason.trim() && pendingLostReason!==OTHER_LOST_REASON ?"pointer":"not-allowed" }}>
                 ยืนยันปิดการขาย
               </button>
             </div>
@@ -1948,7 +1989,7 @@ export default function LeadsPage() {
               <div style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:14, marginBottom:12, background:"#fafbfc" }}>
                 <div style={{ fontSize:"0.8rem", fontWeight:800, color:"#2D2D2D", marginBottom:12 }}>นัดหมายใหม่ · {c.company}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  <div style={{ gridColumn:"1/-1" }}>
+                  <div className="col-full">
                     <label style={aLbl}>ประเภทนัดหมาย</label>
                     <select value={apptForm.type} onChange={e => setApptForm(f => ({ ...f, type: e.target.value as ApptType }))} style={aInp}>
                       {(Object.keys(apptTypeLabel) as ApptType[]).map(t => <option key={t} value={t}>{apptTypeLabel[t]}</option>)}
@@ -1958,9 +1999,9 @@ export default function LeadsPage() {
                     <input type="date" value={apptForm.date} onChange={e => setApptForm(f => ({ ...f, date: e.target.value }))} style={aInp} /></div>
                   <div><label style={aLbl}>เวลา</label>
                     <input type="time" value={apptForm.time} onChange={e => setApptForm(f => ({ ...f, time: e.target.value }))} style={aInp} /></div>
-                  <div style={{ gridColumn:"1/-1" }}><label style={aLbl}>หัวข้อ</label>
+                  <div className="col-full"><label style={aLbl}>หัวข้อ</label>
                     <input value={apptForm.title} onChange={e => setApptForm(f => ({ ...f, title: e.target.value }))} placeholder={apptTypeLabel[apptForm.type]} style={aInp} /></div>
-                  <div style={{ gridColumn:"1/-1" }}><label style={aLbl}>รายละเอียด</label>
+                  <div className="col-full"><label style={aLbl}>รายละเอียด</label>
                     <input value={apptForm.note} onChange={e => setApptForm(f => ({ ...f, note: e.target.value }))} placeholder="บันทึกเพิ่มเติม" style={aInp} /></div>
                 </div>
                 <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
@@ -2247,7 +2288,7 @@ export default function LeadsPage() {
                               border:`1px solid ${quickLostReason===r ? "#dc2626" : "#e5e7eb"}`, background:quickLostReason===r ? "#fee2e2" : "#fff", color:quickLostReason===r ? "#dc2626" : "#2D2D2D", fontWeight:quickLostReason===r ? 700 : 400 }}>{r}</button>
                           ))}
                           {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
-                          <button onClick={()=>setQuickLostReason(OTHER_REASON)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
+                          <button onClick={()=>setQuickLostReason(OTHER_LOST_REASON)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
                             border:"1px dashed #9ca3af", background:"#fafafa", color:"#6b7280" }}>อื่นๆ (ระบุเอง)</button>
                         </div>
                       </>
@@ -2257,14 +2298,14 @@ export default function LeadsPage() {
                           <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
                           <button type="button" onClick={()=>setQuickLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
                         </div>
-                        <input autoFocus value={quickLostReason === OTHER_REASON ? "" : quickLostReason} onChange={e=>setQuickLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
+                        <input autoFocus value={quickLostReason === OTHER_LOST_REASON ? "" : quickLostReason} onChange={e=>setQuickLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
                           style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
                       </>
                     )}
                   </div>
                   <div style={{ padding:"12px 18px", borderTop:"1px solid #f0f4f8", background:"#fafafa", display:"flex", justifyContent:"flex-end", gap:8 }}>
                     <button onClick={()=>{ setQuickLost(false); setQuickLostReason(""); }} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>
-                    <button onClick={()=>markLost(quickLostReason.trim())} disabled={!quickLostReason.trim() || quickLostReason===OTHER_REASON} className="btn btn-sm" style={{ background:quickLostReason.trim() && quickLostReason!==OTHER_REASON ? "#dc2626" : "#f3f4f6", color:quickLostReason.trim() && quickLostReason!==OTHER_REASON ? "#fff" : "#9ca3af", cursor:quickLostReason.trim() && quickLostReason!==OTHER_REASON ? "pointer" : "not-allowed" }}>ยืนยันปิดการขาย</button>
+                    <button onClick={()=>markLost(quickLostReason.trim())} disabled={!quickLostReason.trim() || quickLostReason===OTHER_LOST_REASON} className="btn btn-sm" style={{ background:quickLostReason.trim() && quickLostReason!==OTHER_LOST_REASON ? "#dc2626" : "#f3f4f6", color:quickLostReason.trim() && quickLostReason!==OTHER_LOST_REASON ? "#fff" : "#9ca3af", cursor:quickLostReason.trim() && quickLostReason!==OTHER_LOST_REASON ? "pointer" : "not-allowed" }}>ยืนยันปิดการขาย</button>
                   </div>
                 </div>
               </>

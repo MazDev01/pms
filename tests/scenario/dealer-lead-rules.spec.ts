@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { open, assertHealthyPage } from "./helpers";
-import { SUPABASE_MODE } from "./supabaseEnv";
+import { REAL_BACKEND } from "./supabaseEnv";
 
 // เทสต์ที่ seed กฎผ่าน localStorage ใช้ได้กับ "โหมด local" เท่านั้น —
 // โหมด supabase แอปอ่านกฎจาก DB (dealer_lead_rules) ไม่ใช่ localStorage → seed ไม่มีผล
@@ -35,7 +35,7 @@ test("[user·hq] /hq/settings ไม่มีช่องตั้งเกณ�
 
 // ── 2. ตัวแทนตั้งเองได้ + ค่าถูกบันทึกลงคีย์รายสาขา ──
 test("[user·dealer] ตัวแทนตั้งกฎเองได้ที่ ตั้งค่า › การแจ้งเตือน แล้วค่าถูกบันทึก", async ({ page }) => {
-  test.skip(SUPABASE_MODE, SEED_LOCAL_ONLY);
+  test.skip(REAL_BACKEND, SEED_LOCAL_ONLY);
   await open(page, "dealer", "/settings");
   // ต้องเจาะที่ .tab-bar — ชื่อ "การแจ้งเตือน" ชนกับกระดิ่งบนแถบบน (aria-label เดียวกัน)
   await page.locator(".tab-bar").getByRole("button", { name: "การแจ้งเตือน" }).click();
@@ -56,14 +56,14 @@ test("[user·dealer] ตัวแทนตั้งกฎเองได้ท�
 
 // ── 3. ค่าที่ตั้งมีผลจริงกับหน้าของตัวแทน (ไม่ใช่ช่องกรอกหลอก) ──
 test("[user·dealer] เกณฑ์ที่สาขาตั้ง มีผลกับการ์ด 'ต้องติดตามด่วน' บนแดชบอร์ด", async ({ page }) => {
-  test.skip(SUPABASE_MODE, SEED_LOCAL_ONLY);
+  test.skip(REAL_BACKEND, SEED_LOCAL_ONLY);
   await seedRules(page, "CNX", 3, 48);   // ตั้ง 3 วัน
   await open(page, "dealer", "/dashboard");
   await expect(page.getByText("ต้องติดตามด่วน (เกิน 3 วัน)")).toBeVisible();
 });
 
 test("[user·dealer·edge] ตั้งเกณฑ์สูงมาก (999 วัน) → ไม่มีลูกค้าเป้าหมายไหนค้าง", async ({ page }) => {
-  test.skip(SUPABASE_MODE, SEED_LOCAL_ONLY);
+  test.skip(REAL_BACKEND, SEED_LOCAL_ONLY);
   await seedRules(page, "CNX", 999, 48);
   await open(page, "dealer", "/dashboard");
   await expect(page.getByText("ต้องติดตามด่วน (เกิน 999 วัน)")).toBeVisible();

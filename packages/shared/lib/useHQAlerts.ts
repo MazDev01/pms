@@ -11,7 +11,7 @@ import {
   type HQNotifRules, type DealerLeadRulesMap, type DealerRow,
 } from "@pms/shared/lib/mock";
 import { settings as settingsRepo, dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
-import { DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
@@ -58,7 +58,7 @@ function useHQAlertsData(hqRules: HQRules | null): HQAlertsData | null {
   const [data, setData] = useState<HQAlertsData | null>(null);
   const key = hqRules ? JSON.stringify({ r: hqRules.rules, m: hqRules.leadRulesMap, v: hqRules.validityDays, d: hqRules.dealers.map(d => d.code) }) : "";
   useEffect(() => {
-    if (DATA_SOURCE !== "supabase" || !hqRules) { setData(null); return; }
+    if (!REAL_BACKEND || !hqRules) { setData(null); return; }
     const perDealer: Record<string, number> = {};
     for (const d of hqRules.dealers) perDealer[d.code] = leadRulesOf(hqRules.leadRulesMap, d.code).unassignedAlertHours;
     let alive = true;
