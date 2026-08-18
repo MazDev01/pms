@@ -40,7 +40,7 @@ const IconEyeOff = () => (
 );
 
 export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" | "hq" }) {
-  const { signIn } = useRole();
+  const { signIn, logout } = useRole();
   const router = useRouter();
   const isHQ = variant === "hq";
 
@@ -55,7 +55,32 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   const [forgotMsg, setForgotMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const busy = loading;
-  const go = (scopeAll: boolean) => router.push(scopeAll ? "/hq/dashboard" : "/dashboard");
+
+  // ── บัญชีต้องตรงกับแอปที่กำลังเข้า ──────────────────────────────────────────
+  //
+  // ⚠️ บั๊กจริง (ผู้ใช้แจ้ง 18 ส.ค. 69): เอารหัสสำนักงานใหญ่ไปกรอกที่หน้าเข้าสู่ระบบของตัวแทน
+  //    แล้ว "เข้าได้" แถมถูกพาไป /hq/dashboard ซึ่งไม่มีอยู่ในแอปตัวแทน → เจอหน้า 404
+  //    ต้นเหตุ: หลังล็อกอินสำเร็จโค้ดดูแค่ "บัญชีนี้เป็น HQ หรือตัวแทน" แล้วส่งไปตามนั้น
+  //    ไม่เคยถามว่า "แอปที่เขายืนอยู่ตอนนี้ใช่ที่ของเขาหรือเปล่า"
+  //    (สองแอปคนละที่อยู่ ทางที่ถูกคือปฏิเสธแล้วบอกให้ไปเข้าที่ถูก ไม่ใช่พาข้ามแอปให้)
+  //
+  // ⚠️ ต้องออกจากระบบให้ด้วย — ตอนเช็คเจอ ใบผ่านถูกออกให้ไปแล้ว
+  //    ถ้าปล่อยไว้ = มีใบผ่านของคนสำนักงานใหญ่ค้างอยู่บนโดเมนของตัวแทน
+  const WRONG_APP = isHQ
+    ? "บัญชีนี้เป็นของตัวแทนจำหน่าย — กรุณาเข้าสู่ระบบที่หน้าของตัวแทนจำหน่าย"
+    : "บัญชีนี้เป็นของสำนักงานใหญ่ — กรุณาเข้าสู่ระบบที่หน้าของสำนักงานใหญ่";
+
+  /** เข้าได้จริงหรือไม่ · คืน true = พาเข้าแล้ว · false = ปฏิเสธและแสดงเหตุผลแล้ว */
+  const enter = (scopeAll: boolean): boolean => {
+    if (scopeAll !== isHQ) {
+      logout();
+      setError(WRONG_APP);
+      setLoading(false);
+      return false;
+    }
+    router.push(scopeAll ? "/hq/dashboard" : "/dashboard");
+    return true;
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +88,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setLoading(true);
     // signIn เป็น async แล้ว — โหมด supabase รอ signInWithPassword จริง · โหมด local เร็วทันที
     const r = await signIn(email.trim(), password);
-    if (r.ok) go(r.session.scopeAll);
+    if (r.ok) enter(r.session.scopeAll);
     else { setError(r.error); setLoading(false); }
   }
 
@@ -75,7 +100,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setError(null);
     setLoading(true);
     const r = await signIn(demoEmail, DEMO_PASSWORD);
-    if (r.ok) go(r.session.scopeAll);
+    if (r.ok) enter(r.session.scopeAll);
     else { setError(r.error); setLoading(false); }
   }
 
