@@ -14,6 +14,8 @@ import {
 } from "./mock";
 import { settings as settingsRepo, realtime } from "./data";
 import { logRepoRead } from "./repoLog";
+import { useRole } from "@pms/shared/context/RoleContext";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 
 // โครงร่วม: โหลดค่าผ่าน repo แล้วโหลดซ้ำเมื่อ HQ แก้
 //
@@ -23,7 +25,14 @@ import { logRepoRead } from "./repoLog";
 //   (พบจากผลตรวจสอบระบบ 5 ส.ค. 69 · แพตเทิร์นเดียวกับที่เคยแก้ไปแล้วใน SalesContext/useNetworkData)
 function useHQValue<T>(tag: string, load: () => Promise<T>, initial: T): T {
   const [value, setValue] = useState<T>(initial);
+  // ⚠️ ห้ามอ่านก่อนล็อกอิน — ค่าพวกนี้ต้องมีสิทธิ์ถึงจะอ่านได้
+  //    เดิมยิงตั้งแต่ mount ทำให้หน้าเข้าสู่ระบบยิง settings ออกไปแล้วถูกปฏิเสธทุกครั้ง
+  //    โหมด supabase ปฏิเสธเงียบ ๆ (ค่าตกไปใช้ default) แต่โหมด api ตอบ 401 ให้เห็นชัด
+  //    ทั้งสองแบบผิดเหมือนกัน — ต้องรอจนรู้ตัวตนก่อนแล้วค่อยอ่าน
+  const { hydrated, isLoggedIn } = useRole();
+  const ready = hydrated && (!REAL_BACKEND || isLoggedIn);
   useEffect(() => {
+    if (!ready) return;
     let alive = true;
     const read = () => { load().then(v => { if (alive) setValue(v); }).catch(e => logRepoRead(tag, e)); };
     read();
@@ -37,7 +46,7 @@ function useHQValue<T>(tag: string, load: () => Promise<T>, initial: T): T {
       window.removeEventListener("storage", read);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
   return value;
 }
 
