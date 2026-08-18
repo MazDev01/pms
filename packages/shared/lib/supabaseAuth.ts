@@ -258,6 +258,9 @@ const LOCAL_SIGNIN_GRACE_MS = 5000;
 /** ติดตามการเปลี่ยนสถานะ auth (login/logout/token refresh) — คืนฟังก์ชัน unsubscribe */
 export function sbOnChange(cb: (session: MockSession | null) => void): () => void {
   const { data } = getSupabase().auth.onAuthStateChange((_event, s) => {
+    // ใบผ่านเปลี่ยน (ออกจากระบบ/สลับบัญชี/ต่ออายุ) → ทิ้งใบที่ HttpAdapter จำไว้ทันที
+    // ไม่งั้นโหมด api จะยิงคำขอด้วยใบของคนเดิมต่อไปจนกว่าใบจะหมดอายุเอง
+    void import("@pms/shared/lib/data/http/HttpAdapter").then(m => m.forgetCallerToken()).catch(() => {});
     if (!s) { tabUserId = null; cb(null); return; }
     const uid = s.user?.id ?? "";
     const justSignedInHere = Date.now() - localSignInAt < LOCAL_SIGNIN_GRACE_MS;

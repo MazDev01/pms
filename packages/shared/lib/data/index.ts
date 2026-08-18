@@ -6,7 +6,8 @@
 //   import { dealers, leads, audit } from "@pms/shared/lib/data";
 //   const rows = await dealers.list();
 //
-// สถานะ: Step 0 (จัดบ้าน) — LocalAdapter ห่อ loader เดิม · SupabaseAdapter เป็นโครงว่าง (เฟส B)
+// สถานะ (18 ส.ค. 69): ครบทั้งสามเส้นทาง — LocalAdapter (เดโม) · SupabaseAdapter (ที่ใช้จริงตอนนี้)
+//   · HttpAdapter (ผ่าน backend ของเราเอง · ย้ายครบ 18 พอร์ตแล้ว รอสลับใช้จริง)
 import { DATA_SOURCE } from "./config";
 import { LocalAdapter } from "./local/LocalAdapter";
 import { SupabaseAdapter } from "./supabase/SupabaseAdapter";
@@ -18,7 +19,7 @@ import { dedupeRead, ttlCacheRead, invalidateCache } from "./dedupe";
 const REF_TTL_MS = 30_000;
 import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo, ProfileRepo } from "./ports";
 
-// "api" = คุยผ่าน backend ของเราเอง (ระยะ 0 — ยังเป็นโครงว่าง ดู http/HttpAdapter.ts)
+// "api" = คุยผ่าน backend ของเราเอง (ครบทุกพอร์ตแล้ว · ดู http/HttpAdapter.ts และ docs/BACKEND-MIGRATION.md)
 const adapter: DataAdapter =
   DATA_SOURCE === "supabase" ? SupabaseAdapter
   : DATA_SOURCE === "api" ? HttpAdapter

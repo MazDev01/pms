@@ -12,6 +12,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PageError } from "./_page";
+import { callerToken } from "./_cookie";
 
 export const runtime = "nodejs";
 
@@ -30,10 +31,10 @@ export function ok<T>(data: T) {
   return NextResponse.json(data as object, { headers: { "Cache-Control": "no-store, private" } });
 }
 
-/** สร้าง client ที่ "เป็นตัวผู้ใช้คนที่เรียกมา" — RLS ทำงานเหมือนตอนเบราว์เซอร์ยิงเอง */
+/** สร้าง client ที่ "เป็นตัวผู้ใช้คนที่เรียกมา" — RLS ทำงานเหมือนตอนเบราว์เซอร์ยิงเอง
+ *  ใบผ่านมาจาก cookie (ระยะ 4) หรือ header (สคริปต์ดูแลระบบ/ชุดทดสอบ) — ดู _cookie.ts */
 export function asCaller(req: NextRequest): SupabaseClient | null {
-  const auth = req.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const token = callerToken(req);
   if (!token || !URL_ || !ANON) return null;
   return createClient(URL_, ANON, {
     auth: { persistSession: false, autoRefreshToken: false },

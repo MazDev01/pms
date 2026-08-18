@@ -8,6 +8,7 @@
 //
 // รวมไว้ที่เดียว = แก้ครั้งเดียวมีผลทุก route และ route ใหม่ได้ของถูกต้องมาตั้งแต่ต้น
 import { NextResponse, type NextRequest } from "next/server";
+import { callerToken } from "@pms/shared/server/v1/_cookie";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { hasPermission, type Permission } from "@pms/shared/lib/permissions";
 import type { UserRole } from "@pms/shared/lib/mock";
@@ -43,7 +44,9 @@ export async function authorizeAdmin(
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  // ระยะ 4: ใบผ่านย้ายไปอยู่ใน cookie httpOnly แล้ว (หน้าเว็บแนบ header เองไม่ได้)
+  // ยังรับ header ไว้ด้วย — สคริปต์ดูแลระบบและชุดทดสอบยิงด้วย Bearer
+  const token = callerToken(req);
   if (!token) return { ok: false, res: bad(401, "unauthorized") };
   const { data: caller, error: authErr } = await admin.auth.getUser(token);
   if (authErr || !caller.user) return { ok: false, res: bad(401, "unauthorized") };

@@ -13,6 +13,9 @@
 //    ฝั่งนี้จึงต้องต่อใหม่ทันทีเมื่อสายจบแบบปกติ ไม่ใช่ถือว่าพัง
 import { captureError } from "@pms/shared/lib/observability";
 import type { SalesChange } from "../ports";
+import { DATA_SOURCE } from "../config";
+
+const COOKIE_AUTH = DATA_SOURCE === "api";   // ใบผ่านอยู่ใน cookie (ระยะ 4)
 
 /** ชื่อช่อง — ต้องตรงกับที่เซิร์ฟเวอร์ส่งมา (events.ts) */
 export type EventChannel = "sales" | "catalog" | "settings" | "notes" | "dealerSettings";
@@ -90,15 +93,21 @@ async function loop(my: number) {
     const ac = new AbortController();
     abort = ac;
     let connected = false;
+    const startedAt = Date.now();
     try {
-      const t = await token();
+      // โหมด cookie ไม่ต้องหาใบผ่านมาแนบ — เบราว์เซอร์ส่ง cookie ไปให้เอง (ระยะ 4)
+      const t = COOKIE_AUTH ? "" : await token();
       if (!mine()) break;
-      if (!t) { await wait(1_000); continue; }   // ยังกู้เซสชันไม่เสร็จ — รอแล้วลองใหม่
+      if (!COOKIE_AUTH && !t) { await wait(1_000); continue; }   // ยังกู้เซสชันไม่เสร็จ
       const res = await fetch("/api/v1/events", {
-        headers: { authorization: `Bearer ${t}` },
+        headers: t ? { authorization: `Bearer ${t}` } : {},
+        credentials: "same-origin",
         signal: ac.signal,
         cache: "no-store",
       });
+      // ⚠️ 401/403 = "ยังไม่ได้ล็อกอิน / หมดสิทธิ์แล้ว" ไม่ใช่สายขัดข้อง — ต่อใหม่ถี่ ๆ ก็ได้ 401 เหมือนเดิม
+      //    ต้องรอเงียบ ๆ ไม่ใช่รายงานว่า "อัปเดตสดใช้ไม่ได้" ให้ผู้ใช้ตกใจตอนอยู่หน้าเข้าสู่ระบบ
+      if (res.status === 401 || res.status === 403) { await wait(30_000); continue; }
       if (!res.ok) throw new Error(`เซิร์ฟเวอร์ตอบกลับ ${res.status}`);
       connected = await readStream(res);
     } catch (e) {
@@ -116,9 +125,24 @@ async function loop(my: number) {
       await wait(RETRY_MS[attempt++]);
       continue;
     }
-    // สายจบแบบปกติ = เซิร์ฟเวอร์ปิดตามเพดานอายุ → ต่อใหม่ทันที (ไม่ใช่ความผิดพลาด)
-    if (connected) attempt = 0;
-    await wait(connected ? 0 : 500);
+    // ── สายจบแล้ว จะต่อใหม่เร็วแค่ไหน ต้องดู "อยู่ได้นานพอไหม" ไม่ใช่แค่ "เคยได้ข้อมูลไหม" ──
+    //
+    // ⚠️ กับดักที่เจอจริง (18 ส.ค. 69): เซิร์ฟเวอร์ส่ง ready ทันทีที่เปิดสาย → ฝั่งนี้นับว่า "ต่อติดแล้ว"
+    //    ถ้าหลังจากนั้นช่องมีปัญหาแล้วปิดทันที เราจะต่อใหม่แบบไม่หน่วงเลย → ปิด-เปิดรัวไม่หยุด
+    //    หลายแท็บพร้อมกัน = ถล่มเซิร์ฟเวอร์ตัวเองจนทุกหน้าเปิดไม่ขึ้น
+    //    (อาการที่เห็นคือ "ต่อเซิร์ฟเวอร์ไม่ได้" ทั้งระบบ ซึ่งดูไม่ออกเลยว่ามาจากสายอัปเดตสด)
+    //
+    // เกณฑ์: อยู่ได้เกิน 5 วินาที = สายดี (เซิร์ฟเวอร์ปิดตามเพดานอายุตามปกติ) → ต่อใหม่ได้ไว
+    //        ปิดเร็วกว่านั้น = ผิดปกติ → ถอยห่างขึ้นเรื่อย ๆ เหมือนกรณีต่อไม่ติด
+    const HEALTHY_MS = 5_000;
+    const MIN_GAP_MS = 300;      // ไม่ว่ากรณีไหน ห้ามยิงติดกันโดยไม่เว้นวรรคเลย
+    const lived = Date.now() - startedAt;
+    if (connected && lived >= HEALTHY_MS) {
+      attempt = 0;
+      await wait(MIN_GAP_MS);
+    } else {
+      await wait(attempt < RETRY_MS.length ? RETRY_MS[attempt++] : RETRY_MS[RETRY_MS.length - 1]);
+    }
   }
   if (gen === my) running = false;   // รอบเก่าที่ถูกแทนแล้ว ห้ามไปปิดสวิตช์ของรอบใหม่
 }

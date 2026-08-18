@@ -31,13 +31,18 @@ import {
 import { DbError } from "@pms/shared/lib/friendlyError";
 import { reportPartialData } from "@pms/shared/lib/repoLog";
 import { onChannel } from "./eventStream";
+import { DATA_SOURCE } from "../config";
+
+// ระยะ 4: โหมด api เก็บใบผ่านไว้ใน cookie httpOnly — หน้าเว็บแนบ header เองไม่ได้ (และไม่ต้อง)
+const COOKIE_AUTH = DATA_SOURCE === "api";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
 
 // ยังไม่เคยตั้งข้อมูลบริษัท = คืนฟอร์มเปล่า (ค่าเดียวกับ SupabaseAdapter — ห้ามใส่ข้อมูลตัวอย่าง)
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
-/** กลุ่มงานที่ย้ายมาอยู่บน backend แล้ว — เติมทีละบรรทัดตอนย้ายเสร็จแต่ละกลุ่ม (ระยะ 1) */
+/** กลุ่มงานที่ backend รองรับ — ครบทั้ง 18 กลุ่มแล้ว (ระยะ 1 จบ 17 ส.ค. 69)
+ *  ใช้รายงานผ่าน /api/v1/ping เพื่อเช็กว่า backend ที่ deploy อยู่เป็นรุ่นที่ครบจริง */
 export const MIGRATED: readonly string[] = [
   "catalog",
   "audit",
@@ -65,13 +70,37 @@ export const MIGRATED: readonly string[] = [
 export const API_BASE = "/api/v1";
 
 // ใบผ่านของผู้ใช้ที่ล็อกอินอยู่ — backend เอาไปทำงาน "ในนามเขา" ต่อ (RLS จึงยังบังคับเหมือนเดิม)
-// อ่านจาก client ตัวเดียวกับที่ระบบล็อกอินใช้ ไม่ได้เก็บสำเนาไว้เอง
-async function callerToken(): Promise<string> {
+// อ่านจาก client ตัวเดียวกับที่ระบบล็อกอินใช้ ไม่ได้เก็บสำเนาถาวรไว้เอง
+//
+// ⚠️ ห้ามเรียก getSession() ทุกคำขอ — วัดแล้วเป็นคอขวดตัวใหญ่ที่สุดของโหมดนี้
+//    getSession() จับล็อกร่วม และต่ออายุใบผ่านให้เองถ้าใกล้หมด (= ยิงเน็ตออกไปอีกที)
+//    หน้าเดียวขอข้อมูลหลายสิบชุดพร้อมกัน ทุกคำขอจึงไปเข้าคิวรอกันเป็นทอด ๆ
+//    ของจริงที่วัดได้: บางหน้าใช้เวลา 2 วินาที → 23 วินาที (ช้าลง 10 เท่า, 18 ส.ค. 69)
+//
+// เก็บไว้ในหน่วยความจำแล้วใช้ซ้ำจนใกล้หมดอายุ · คำขอที่มาพร้อมกันใช้คำตอบเดียวกัน (ไม่ยิงซ้ำซ้อน)
+let tokenCache: { token: string; expiresAtMs: number } | null = null;
+let tokenInFlight: Promise<string> | null = null;
+const TOKEN_EARLY_MS = 60_000;   // ต่ออายุล่วงหน้า 1 นาที กันใช้ใบที่หมดพอดีระหว่างทาง
+
+async function readTokenFresh(): Promise<string> {
   try {
     const { getSupabase } = await import("../supabase/client");
     const { data } = await getSupabase().auth.getSession();
-    return data.session?.access_token ?? "";
-  } catch { return ""; }
+    const s = data.session;
+    if (!s?.access_token) { tokenCache = null; return ""; }
+    tokenCache = { token: s.access_token, expiresAtMs: (s.expires_at ?? 0) * 1000 };
+    return s.access_token;
+  } catch { tokenCache = null; return ""; }
+}
+
+/** ล้างใบผ่านที่จำไว้ — ต้องเรียกเมื่อออกจากระบบ/สลับบัญชี ไม่งั้นยังยิงด้วยใบของคนเดิม */
+export function forgetCallerToken(): void { tokenCache = null; tokenInFlight = null; }
+
+async function callerToken(): Promise<string> {
+  const c = tokenCache;
+  if (c && Date.now() < c.expiresAtMs - TOKEN_EARLY_MS) return c.token;
+  if (!tokenInFlight) tokenInFlight = readTokenFresh().finally(() => { tokenInFlight = null; });
+  return tokenInFlight;
 }
 
 // รอใบผ่านสั้น ๆ ก่อนยิง — ตอนเปิดหน้าครั้งแรก session ยังกู้คืนไม่เสร็จ
@@ -86,16 +115,28 @@ async function tokenReady(): Promise<string> {
   return "";
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await tokenReady();
-  const res = await fetch(`${API_BASE}${path}`, {
+/** ยิงคำขอหนึ่งครั้ง — โหมด cookie ไม่ต้องแนบ header อะไรเลย เบราว์เซอร์ส่ง cookie ให้เอง */
+async function once(path: string, init?: RequestInit): Promise<Response> {
+  const token = COOKIE_AUTH ? "" : await tokenReady();
+  return fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "same-origin",
     headers: {
       "content-type": "application/json",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
+}
+
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  let res = await once(path, init);
+  // ใบผ่านหมดอายุระหว่างใช้งาน — ต่ออายุที่เซิร์ฟเวอร์แล้วลองใหม่ครั้งเดียว
+  // (หน้าเว็บต่ออายุเองไม่ได้แล้ว เพราะไม่มีใบผ่านอยู่ในมือ — นั่นคือเจตนาของระยะ 4)
+  if (res.status === 401 && COOKIE_AUTH) {
+    const { caRefresh } = await import("@pms/shared/lib/cookieAuth");
+    if (await caRefresh()) res = await once(path, init);
+  }
   // อ่าน body ก่อนเช็ค ok — ข้อความอธิบายเหตุผลอยู่ใน body ไม่ใช่ status
   const body = (await res.json().catch(() => null)) as { error?: string; code?: string } | T | null;
   if (!res.ok) {

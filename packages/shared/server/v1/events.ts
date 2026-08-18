@@ -18,6 +18,7 @@ import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
 import { rowToLead, rowToQuote, rowToAppt } from "@pms/shared/lib/data/supabase/rowMappers";
 import { toCamel } from "@pms/shared/lib/data/supabase/mappers";
 import type { CustomerRow } from "@pms/shared/lib/data/types";
+import { callerToken } from "./_cookie";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";   // ห้ามแคช — เป็นสายที่ไหลตลอด ไม่ใช่หน้าเว็บ
@@ -50,8 +51,7 @@ const PING_TABLES: { table: string; ch: string }[] = [
 ];
 
 export const GET = async (req: NextRequest): Promise<Response> => {
-  const auth = req.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const token = callerToken(req);   // cookie ก่อน แล้วค่อย header (ระยะ 4)
   if (!token || !URL_ || !ANON) {
     return new Response(JSON.stringify({ error: "ยังไม่ได้เข้าสู่ระบบ" }), {
       status: 401, headers: { "content-type": "application/json" },

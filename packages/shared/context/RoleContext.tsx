@@ -4,8 +4,13 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock";
 import { hasPermission, HQ_ROLES, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
-import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND, DATA_SOURCE } from "@pms/shared/lib/data/config";
 import { sbSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
+import { caSignIn, caSignOut, caRestore, caAdoptFromUrl } from "@pms/shared/lib/cookieAuth";
+
+// โหมด api: ใบผ่านอยู่ใน cookie ที่ JavaScript อ่านไม่ได้ (ระยะ 4) — เส้นทางล็อกอินจึงคนละตัว
+// โหมด supabase: หน้าเว็บต้องถือใบผ่านเอง เพราะต้องคุยกับฐานข้อมูลตรง
+const COOKIE_AUTH = DATA_SOURCE === "api";
 import { audit as auditRepo } from "@pms/shared/lib/data";
 import { isAbortedRequest } from "@pms/shared/lib/repoLog";
 
@@ -62,6 +67,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (USE_SUPABASE) {
       let alive = true;
+      // โหมด api ไม่มี onAuthStateChange ให้ฟัง (หน้าเว็บไม่ได้ถือ session ของ Supabase แล้ว)
+      // การต่ออายุเป็นหน้าที่ของเซิร์ฟเวอร์ · ที่นี่แค่ถามว่า "ตอนนี้เป็นใคร" ตอนเปิดหน้า
+      if (COOKIE_AUTH) {
+        // ลิงก์เข้าระบบแทนตัวแทนแนบใบผ่านมาทาง #hash — ต้องแลกเป็น cookie ก่อน ไม่งั้นจะเห็นเป็น "ยังไม่ล็อกอิน"
+        caAdoptFromUrl()
+          .catch(() => null)
+          .then((adopted) => (adopted ? adopted : caRestore()))
+          .then((s) => {
+            if (!alive) return;
+            if (s) { setSession(s); setIsLoggedIn(true); }
+            setHydrated(true);
+          })
+          .catch(() => { if (alive) setHydrated(true); });
+        return () => { alive = false; };
+      }
       sbRestore()
         .then((s) => {
           if (!alive) return;
@@ -108,7 +128,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   // supabase: signInWithPassword (JWT) · local: mock authenticate + persist localStorage
   const signIn = async (email: string, password: string): Promise<AuthResult> => {
     if (USE_SUPABASE) {
-      const r = await sbSignIn(email, password);
+      const r = COOKIE_AUTH ? await caSignIn(email, password) : await sbSignIn(email, password);
       if (r.ok) { setSession(r.session); setIsLoggedIn(true); logAuthEvent("เข้าสู่ระบบ", r.session); }
       return r;
     }
@@ -128,7 +148,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setIsLoggedIn(false);
     logAuthEvent("ออกจากระบบ", session);
-    if (USE_SUPABASE) { void sbSignOut(); return; }
+    if (USE_SUPABASE) { void (COOKIE_AUTH ? caSignOut() : sbSignOut()); return; }
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_LOGIN);
     localStorage.removeItem(STORAGE_SESSION);

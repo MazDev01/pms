@@ -1,2 +1,6 @@
 // เส้นทาง /api/v1/dealers — handler จริงอยู่ในแพ็กเกจกลาง
-export { dealersGET as GET, dealersPUT as PUT, dealersDELETE as DELETE, runtime } from "@pms/shared/server/v1/reference";
+export { dealersGET as GET, dealersPUT as PUT, dealersDELETE as DELETE } from "@pms/shared/server/v1/reference";
+
+// ⚠️ ต้องประกาศตรงนี้เป็นค่าตัวอักษร ห้าม re-export มาจากไฟล์กลาง —
+//    Next.js อ่านค่าพวกนี้จากตัวอักษรในไฟล์ route เท่านั้น re-export มาแล้วมันเตือนแล้วใช้ค่าเริ่มต้นแทน
+export const runtime = "nodejs";
