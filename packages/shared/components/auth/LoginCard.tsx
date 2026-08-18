@@ -9,8 +9,10 @@ import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
 
 // ── ทางเข้าเดโมของอีกฝั่ง (ตั้งที่ Vercel ของโปรเจกต์เดโมเท่านั้น) ──
 // ว่าง = ไม่มีปุ่ม · ระบบจริงไม่ตั้งค่านี้
-const OTHER_DEMO_URL   = process.env.NEXT_PUBLIC_DEMO_OTHER_URL ?? "";
-const OTHER_DEMO_LABEL = process.env.NEXT_PUBLIC_DEMO_OTHER_LABEL || "เข้าใช้งานอีกฝั่ง";
+// ⚠️ เก็บเฉพาะ "ที่อยู่" ในค่าตั้งค่า — ข้อความไทยอยู่ในโค้ด
+//    (เคยเอาข้อความไปไว้ในค่าตั้งค่าแล้วภาษาไทยเพี้ยนเป็น ????? บนหน้าเว็บจริง · 18 ส.ค. 69)
+//    และผูกชื่อปุ่มกับฝั่งที่เปิดอยู่ — ชื่อกับปลายทางจึงสลับกันไม่ได้
+const OTHER_DEMO_URL = process.env.NEXT_PUBLIC_DEMO_OTHER_URL ?? "";
 
 const FORGOT_MSG = "กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th";
 
@@ -189,7 +191,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                 {OTHER_DEMO_URL && (
                   <a href={OTHER_DEMO_URL}
                     className="flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-[#0e2a5c]/30 bg-white text-[0.85rem] font-bold text-[#0e2a5c] transition hover:bg-[#0e2a5c]/5">
-                    {OTHER_DEMO_LABEL}
+                    {isHQ ? "เข้าใช้งานเป็น ตัวแทนจำหน่าย" : "เข้าใช้งานเป็น สำนักงานใหญ่"}
                   </a>
                 )}
               </div>
