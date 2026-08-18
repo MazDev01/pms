@@ -118,6 +118,14 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     await must(admin.from("profiles").upsert({
       id: uid, role: "DEALER_ADMIN", dealer_code: code, name, status: "active",
     }, { onConflict: "id" }));
+    // ชื่อบริษัทตั้งต้น = ชื่อที่ HQ ตั้งให้ตอนเปิดสาขา (บอสสั่ง 18 ส.ค. 69)
+    //   เดิมช่อง "ชื่อบริษัท" ของสาขาว่างเอาไว้ → หัวเอกสาร/แถบบน/เมนูซ้ายเลยตกไปขึ้น "รหัสสาขา"
+    //   จนกว่าสาขาจะไปกรอกเอง — ชื่อใน HQ กับที่สาขาเห็นจึงไม่ตรงกัน (ผู้ใช้แจ้ง)
+    //   ⚙️ เป็นแค่ "ค่าตั้งต้น" — สาขาแก้ทีหลังได้ตามปกติที่หน้าตั้งค่า และจะไม่ทับของสาขาที่เคยตั้งไว้ (onConflict do nothing)
+    const { error: setErr } = await admin.from("dealer_settings")
+      .insert({ dealer_code: code, issuer: { company: name } });
+    // ล้มตรงนี้ไม่ควรทำให้การสร้างสาขาล้มทั้งหมด — แต่ห้ามเงียบ ต้องมีร่องรอยให้ตามได้
+    if (setErr && setErr.code !== "23505") console.error(`[create-dealer] ตั้งชื่อบริษัทตั้งต้นของสาขา ${code} ไม่สำเร็จ`, setErr);
   } catch (e) {
     // ย้อนทุกอย่างที่อาจสร้างไปแล้ว ไม่ให้เหลือบัญชี/แถวกำพร้า
     // ต้อง log ถ้าการย้อนเองล้มเหลว — ไม่งั้นเหลือของกำพร้าโดยไม่มีใครรู้ (คือบั๊กที่การย้อนพยายามกันอยู่แท้ ๆ)

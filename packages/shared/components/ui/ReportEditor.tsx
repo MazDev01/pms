@@ -39,7 +39,7 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
 
   return (
     <div>
-      <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid #C0C0C044" }}>
+      <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 10 }}>
         รายงานการติดตาม · แก้ไขได้ทั้งหมด
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>

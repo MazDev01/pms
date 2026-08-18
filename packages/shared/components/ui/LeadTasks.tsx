@@ -90,7 +90,7 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
 
   return (
     <div>
-      <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid #C0C0C044" }}>
+      <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 12 }}>
         รายงานการทำงาน · เช็กแล้วเลื่อน Stage อัตโนมัติ
       </div>
 

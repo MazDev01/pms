@@ -263,3 +263,58 @@ test("[func·hq] หน้า /reset-password เปิดตรงโดยไ�
   await expect(page.getByText("ลิงก์ไม่ถูกต้องหรือหมดอายุ"), "ไม่มี token ต้องแจ้งลิงก์ไม่ถูกต้อง")
     .toBeVisible({ timeout: 10_000 });
 });
+
+// ── ฟอร์มตัวแทน: ภาคต้องเลือกก่อนจังหวัด (ผู้ใช้แจ้ง 18 ส.ค. 69) ──
+// เดิมช่อง "ภาค" ตั้งต้นเป็น "กลาง" ให้เองทั้งที่ไม่มีใครเลือก — ตัวแทนภาคอื่นจึงถูกบันทึกเป็นภาคกลางได้ง่าย ๆ
+// และเพราะรายการจังหวัดขึ้นกับภาค ถ้ายังไม่เลือกภาคก็เลือกจังหวัดไม่ได้เลย — ต้องบอกให้รู้ ห้ามเงียบ
+test("[func·hq] ฟอร์มตัวแทน: ภาคเริ่มที่ “ยังไม่ระบุ” · ไม่เลือกภาค = เลือกจังหวัดไม่ได้ และบันทึกไม่ผ่าน", async ({ page }) => {
+  await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
+  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /เพิ่มตัวแทน/ }).first().click();
+  const dlg = page.getByRole("dialog");
+  const region = dlg.getByLabel("ภูมิภาค", { exact: true });
+  const prov = dlg.getByLabel("จังหวัดที่ตั้ง", { exact: true });
+
+  await expect(region, "ต้องไม่เลือกภาคให้เอง").toHaveValue("");
+  expect((await prov.locator("option").allInnerTexts()).join(" "),
+    "ยังไม่เลือกภาค → ต้องบอกว่าให้เลือกภาคก่อน").toContain("เลือกภาคก่อน");
+
+  await dlg.getByPlaceholder("เช่น BKK").fill("ZZR");
+  await dlg.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill("ZZ ทดสอบภาค");
+  await dlg.getByRole("button", { name: /สร้างตัวแทน/ }).click();
+  await expect(dlg.getByText(/ต้องเลือกภาคก่อน/),
+    "กดบันทึกโดยไม่เลือกภาค → ต้องฟ้อง ห้ามบันทึกผ่าน").toBeVisible();
+
+  await region.selectOption({ index: 1 });
+  expect((await prov.locator("option").count()),
+    "เลือกภาคแล้วต้องมีจังหวัดให้เลือก").toBeGreaterThan(1);
+});
+
+// ── สร้างตัวแทน → ต้องตั้งชื่อบริษัทให้ด้วย (บอสสั่ง 18 ส.ค. 69) ──
+// เดิมสาขาใหม่เกิดมาโดยช่อง "ชื่อบริษัท" ว่าง → หัวเอกสาร/แถบบน/เมนูซ้ายตกไปขึ้น "รหัสสาขา"
+// ชื่อที่ HQ เห็นกับที่สาขาเห็นจึงไม่ตรงกัน — ผู้ใช้แจ้งจริง
+test("[func·hq] สร้างตัวแทน → ชื่อบริษัทของสาขาถูกตั้งให้ตั้งแต่ต้น ไม่ปล่อยว่าง", async ({ page }) => {
+  // ⚠️ ห้ามชนรหัสกับ NEW_CODE ของเทสต์ H5 ด้านบน — รันคู่กันแล้วบัญชี auth ชนกัน สร้างไม่ผ่าน
+  const CODE = "ZZS", NAME = "ZZ บริษัทชื่อทดสอบ";
+  const sb = await db(ADMIN);
+  // ต้องลบบัญชี auth ด้วย — ลบแค่แถวในตาราง รอบถัดไปจะสร้างไม่ผ่าน ("อีเมลถูกใช้ไปแล้ว")
+  const wipe = async () => {
+    await purgeDealerAccount(CODE);
+    await sb.from("dealer_settings").delete().eq("dealer_code", CODE);
+    await sb.from("dealers").delete().eq("code", CODE);
+  };
+  await wipe();
+
+  await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
+  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /เพิ่มตัวแทน/ }).first().click();
+  await fillDealerForm(page, CODE, NAME);
+  await page.getByRole("button", { name: /สร้างตัวแทน/ }).click();
+
+  await expect.poll(async () => {
+    const r = (await sb.from("dealer_settings").select("issuer").eq("dealer_code", CODE).maybeSingle()).data as { issuer?: { company?: string } } | null;
+    return r?.issuer?.company ?? "";
+  }, { timeout: 30_000, message: "ต้องตั้งชื่อบริษัทให้ตั้งแต่ตอนสร้าง" }).toBe(NAME);
+
+  await wipe();
+});

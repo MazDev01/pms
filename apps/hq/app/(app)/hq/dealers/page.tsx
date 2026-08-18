@@ -161,7 +161,7 @@ function HQDealersPageInner() {
   // Modals
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<DealerRow | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", province: "", region: "กลาง", revenueTarget: 0, status: "active" as "active" | "inactive" });
+  const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" as "active" | "inactive" });
   // ผู้ใช้แก้ช่องเป้าเองหรือยัง — ถ้ายัง เปลี่ยนภาคจะเติมค่าเริ่มต้นตามภาคให้ (โหมดเพิ่มใหม่เท่านั้น)
   const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
@@ -204,7 +204,7 @@ function HQDealersPageInner() {
   const avgOnTime = avgOf(c => perfOf(c).onTimePct);
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
-  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "กลาง", revenueTarget: regionDefaultTarget("กลาง"), status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
+  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
   function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setTargetTouched(true); setFormErr(""); setShowForm(true); }
 
   // เปลี่ยนภาค: อัปเดตภาค + ถ้ายังไม่แก้เป้าเอง (โหมดเพิ่มใหม่) เติมค่าเริ่มต้นตามภาคให้
@@ -223,6 +223,7 @@ function HQDealersPageInner() {
     const code = form.code.trim().toUpperCase();
     if (!code) { setFormErr("ต้องระบุรหัสตัวแทน"); return; }
     if (!form.name.trim()) { setFormErr("ต้องระบุชื่อตัวแทน"); return; }
+    if (!form.region.trim()) { setFormErr("ต้องเลือกภาคก่อน — รายการจังหวัดขึ้นกับภาคที่เลือก"); return; }
     if (!form.province.trim()) { setFormErr("ต้องระบุจังหวัด"); return; }
     const dupe = dealers.find(d => d.code === code && d.id !== editTarget?.id);
     if (dupe) { setFormErr(`รหัส "${code}" มีอยู่แล้ว`); return; }
@@ -247,6 +248,10 @@ function HQDealersPageInner() {
       setCreating(false);
       if (!res.ok) { setFormErr(res.error); return; } // ล้มเหลวต้องบอกจริง คงฟอร์มไว้ให้แก้
       await dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e)); // route เพิ่งเพิ่มแถวที่เซิร์ฟเวอร์ → ดึงชุดจริง
+      // อีเมลเข้าระบบของสาขาที่เพิ่งสร้าง — ต้องเติมเข้าตารางเองด้วย (ผู้ใช้แจ้ง 18 ส.ค. 69)
+      //   รายชื่ออีเมลถูกดึงครั้งเดียวตอนเปิดหน้า → สาขาที่สร้างหลังจากนั้นจึงขึ้น "—" จนกว่าจะรีโหลดหน้า
+      //   ใช้ค่าที่ route คืนมาตรง ๆ — แม่นกว่ายิงถามซ้ำ และไม่เดาสูตรอีเมลเอง
+      setLoginEmails(m => ({ ...m, [code]: res.email }));
       // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
       setShowForm(false);
       // รหัสจริงจากเซิร์ฟเวอร์ (บัญชีล็อกอินได้แล้วจริง) — โชว์ให้ก๊อปไปแจ้งครั้งเดียว
@@ -527,8 +532,11 @@ function HQDealersPageInner() {
               <div className="form-grid">
                 <div className="form-section">พื้นที่รับผิดชอบ</div>
                 {/* ภาคมาก่อนจังหวัด — เพราะจังหวัดที่เลือกได้ขึ้นกับภาคที่เลือกไว้ */}
-                <InputField label="ภาค">
+                <InputField label="ภาค *">
+                  {/* ต้องมี "ยังไม่ระบุ" เหมือนช่องอื่น — เดิมเด้งเป็น "กลาง" ให้เองทั้งที่ไม่มีใครเลือก
+                      และติดดาว * เพราะ "จังหวัด" ขึ้นกับภาค — ไม่เลือกภาคก็เลือกจังหวัดไม่ได้เลย (ผู้ใช้แจ้ง 18 ส.ค. 69) */}
                   <select aria-label="ภูมิภาค" value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                    <option value="">— ยังไม่ระบุ —</option>
                     {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </InputField>
@@ -537,7 +545,7 @@ function HQDealersPageInner() {
                       ไม่งั้นแค่เปิดฟอร์มมาแก้ชื่อ จังหวัดก็หายไปเงียบ ๆ แล้วถูกบันทึกทับเป็นค่าว่าง */}
                   <select aria-label="จังหวัดที่ตั้ง" value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))}
                     style={{ ...INPUT_STYLE, cursor: "pointer" }}>
-                    <option value="">— ยังไม่ระบุ —</option>
+                    <option value="">{form.region ? "— ยังไม่ระบุ —" : "— เลือกภาคก่อน —"}</option>
                     {provincesOfRegion(form.region).map(p => <option key={p} value={p}>{p}</option>)}
                     {form.province && !provincesOfRegion(form.region).includes(form.province) && (
                       <option value={form.province}>{form.province} (นอกภาค {form.region})</option>
@@ -550,7 +558,8 @@ function HQDealersPageInner() {
                       เปอร์เซ็นต์ความสำเร็จของสาขา · เป้ารวมทั้งเครือบนหัวตาราง · กราฟเทียบเป้า
                       เดิมรับค่าติดลบตรง ๆ (พิมพ์ -5000000 แล้วบันทึกลงระบบได้จริง · พบ 6 ส.ค. 69) */}
                   <input type="number" min={0} value={form.revenueTarget || ""} onChange={e => { setTargetTouched(true); setForm(f => ({ ...f, revenueTarget: Math.max(0, Number(e.target.value) || 0) })); }} placeholder="0" style={INPUT_STYLE} />
-                  {!editTarget && !targetTouched && (
+                  {/* ยังไม่เลือกภาค = ยังแนะนำค่าไม่ได้ — ห้ามขึ้นเลขลอย ๆ ที่ไม่รู้ว่ามาจากไหน */}
+                  {!editTarget && !targetTouched && form.region && (
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
                       ค่าเริ่มต้นแนะนำตามภาค {form.region} · ฿{(regionDefaultTarget(form.region) / 1_000_000).toFixed(0)}M — แก้ไขได้
                     </div>

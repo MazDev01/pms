@@ -70,11 +70,16 @@ async function withNames(base: MockSession, userId: string): Promise<MockSession
     } catch { /* คงอีเมลไว้ */ }
   }
   if (!out.scopeAll && base.dealerCode) {
+    // อ่านผ่านวิว dealers_directory — มุมมองเดียวกับที่ stillValid ใช้ และเลี่ยงคอลัมน์ที่ถูกตัดสิทธิ์ไว้ (revenue_target · migration 0090)
+    //   ⚠️ สำคัญกว่าคือ "ต้องบันทึกเมื่ออ่านไม่สำเร็จ" — เดิม catch ทิ้งเงียบ ๆ แล้วตกกลับไปใช้ "รหัสสาขา" เป็นชื่อ
+    //     ผู้ใช้แจ้ง (18 ส.ค. 69) ว่าแถบบน/เมนูซ้ายขึ้นรหัสสาขาแทนชื่อบริษัท — ทำซ้ำในเครื่องทดสอบไม่ได้
+    //     ถ้ามี log ตั้งแต่แรก จะรู้ทันทีว่าคำสั่งนี้พลาด แทนที่จะต้องมานั่งเดา
     try {
-      const { data } = await sb.from("dealers").select("name").eq("code", base.dealerCode).maybeSingle();
+      const { data, error } = await sb.from("dealers_directory").select("name").eq("code", base.dealerCode).maybeSingle();
+      if (error) logRepoRead("auth.dealerName", error);
       const n = (data as { name?: string } | null)?.name?.trim();
       if (n) out.dealerName = n;
-    } catch { /* คงรหัสสาขาไว้ */ }
+    } catch (e) { logRepoRead("auth.dealerName", e); }
   }
   return out;
 }
