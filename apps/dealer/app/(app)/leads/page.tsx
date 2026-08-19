@@ -277,8 +277,8 @@ function OverviewEditor({ lead, persons, onSave }: {
   const seed = () => ({
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
     email: lead.email ?? "", province: lead.province ?? "", source: lead.source ?? "",
-    product: lead.product ?? catalog[0]?.name ?? "", status: lead.status,
-    assigned: lead.assigned ?? persons[0], value: lead.value ?? "",
+    product: lead.product ?? "", status: lead.status,
+    assigned: lead.assigned ?? "", value: lead.value ?? "",
     area: lead.area != null ? String(lead.area) : "",
     project: lead.project ?? "",
     note: lead.note ?? "", lostReason: lead.lostReason ?? "", logo: lead.logo ?? "",
@@ -490,18 +490,18 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   const [form, setForm] = useState({
     company: initial?.company ?? "", contact: initial?.contact ?? "",
     phone: initial?.phone ?? "", email: initial?.email ?? "",
-    province: initial?.province ?? "", product: initial?.product ?? catalog[0]?.name ?? "",
+    province: initial?.province ?? "", product: initial?.product ?? "",
     value: initial?.value ?? "",
     // เก็บเป็นสตริง ให้ปล่อยว่างได้ (= ยังไม่รู้พื้นที่) — ตอนบันทึกค่อยแปลงเป็นตัวเลข
     area: initial?.area != null ? String(initial.area) : "",
     status: (initial?.status ?? "WAITING") as LeadStatus,
-    assigned: initial?.assigned ?? persons[0] ?? "",  // ไม่มีทะเบียนพนักงาน = ไม่ระบุ (ห้ามยัดชื่อสมมติลง DB)
+    assigned: initial?.assigned ?? "",  // เริ่มที่ "ยังไม่ระบุ" — ห้ามยัดคนแรกในทะเบียนให้เอง
     source: initial?.source ?? "", note: initial?.note ?? "",
     logo: initial?.logo ?? "",
   });
   // ── เติมค่าตั้งต้นเมื่อข้อมูลมาถึงทีหลัง (บั๊กจริง พบ 10 ส.ค. 69) ──────────────────
   //
-  // ค่าตั้งต้นข้างบนอ่านจาก catalog[0] / persons[0] ซึ่ง useState อ่าน "ครั้งเดียวตอนเปิดฟอร์ม"
+  // ทุกช่องเริ่มที่ "ยังไม่ระบุ" — ไม่มีการเดาค่าให้จากรายการอีกต่อไป
   // แต่ทั้งสองอย่างโหลดแบบไม่พร้อมกัน ถ้าผู้ใช้กดเปิดฟอร์มเร็วกว่าข้อมูลมาถึง
   // ค่าจะค้างเป็นว่างถาวร แล้ว useState ก็ไม่อ่านใหม่อีกเลยตลอดอายุฟอร์ม
   //
@@ -509,14 +509,9 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   // แต่ในระบบว่าง → ออกใบเสนอราคาไม่ได้เลย และย้อนกลับมาดูก็ยังเห็นแม่แบบอยู่ หาสาเหตุไม่เจอ
   //
   // เติมเฉพาะตอน "เพิ่มลูกค้าเป้าหมายใหม่ และช่องยังว่างอยู่" — ห้ามไปทับค่าที่ผู้ใช้เลือกเองหรือค่าของลูกค้าเป้าหมายเดิม
-  useEffect(() => {
-    if (isEdit) return;
-    setForm(f => {
-      const product = f.product || catalog[0]?.name || "";
-      const assigned = f.assigned || persons[0] || "";
-      return (product === f.product && assigned === f.assigned) ? f : { ...f, product, assigned };
-    });
-  }, [isEdit, catalog, persons]);
+  // ⚠️ เคยมีตัวเติม "แม่แบบตัวแรก / ผู้รับผิดชอบคนแรก" ให้เอง — ถอดออกแล้ว (บอสสั่ง 18 ส.ค. 69)
+  //   กติกาเดียวกันกับจังหวัด/แหล่งที่มา/โฟลเดอร์: ช่องที่ผู้ใช้ยังไม่ได้เลือก ต้องขึ้น "ยังไม่ระบุ"
+  //   ห้ามยัดตัวแรกในรายการให้ — ไม่งั้นจะได้ข้อมูลที่ไม่มีใครระบุเข้าฐานข้อมูลเงียบ ๆ
 
   // ⚠️ ปิดฟอร์มทั้งที่ยังมีของที่กรอกค้างไว้ ต้องถามก่อน (แก้ 10 ส.ค. 69)
   //   เดิมกด "ยกเลิก" หรือเผลอคลิกโดนฉากหลัง ป๊อปอัพปิดทันทีโดยไม่ถามอะไรเลย

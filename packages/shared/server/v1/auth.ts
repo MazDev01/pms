@@ -150,12 +150,25 @@ export const POST = async (req: NextRequest): Promise<Response> => {
     const at = (b?.access_token ?? "").trim();
     if (!at) return fail(400, "ลิงก์เข้าระบบไม่สมบูรณ์");
     if (!URL_ || !ANON) return fail(503, "ระบบยังไม่ได้ตั้งค่าเชื่อมต่อฐานข้อมูล");
-    const check = createClient(URL_, ANON, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${at}` } },
-    });
-    const { data: u, error: uErr } = await check.auth.getUser(at);
-    if (uErr || !u?.user) return fail(401, "ลิงก์เข้าระบบหมดอายุหรือถูกใช้ไปแล้ว");
+    // ⚠️ ค่านี้มาจากเบราว์เซอร์ ใครส่งอะไรมาก็ได้ — ต้องกันของที่ "ไม่ใช่ใบผ่านด้วยซ้ำ" ก่อน
+    //    JWT ต้องเป็นอักขระ ASCII สามท่อนคั่นด้วยจุด · ถ้ามีอักขระอื่นปน (เช่นภาษาไทย)
+    //    การเอาไปใส่ header จะโยน error ทะลุออกมาเป็น 500 แทนที่จะปฏิเสธสุภาพ ๆ
+    //    (เจอจริง 18 ส.ค. 69 จาก api-mode-session.spec.ts — ส่งขยะเข้าไปแล้วเซิร์ฟเวอร์พังภายใน)
+    if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/.test(at)) {
+      return fail(401, "ลิงก์เข้าระบบไม่ถูกต้อง");
+    }
+    let userOk = false;
+    try {
+      const check = createClient(URL_, ANON, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${at}` } },
+      });
+      const { data: u, error: uErr } = await check.auth.getUser(at);
+      userOk = !uErr && !!u?.user;
+    } catch (e) {
+      console.error("[api/v1/auth?op=adopt] ตรวจใบผ่านไม่สำเร็จ", e);
+    }
+    if (!userOk) return fail(401, "ลิงก์เข้าระบบหมดอายุหรือถูกใช้ไปแล้ว");
 
     const { alive, ...me } = await publicSession(at);
     if (!alive) return evict(GONE);
@@ -192,11 +205,22 @@ export const POST = async (req: NextRequest): Promise<Response> => {
 // ── ถามว่าตอนนี้เป็นใคร (ใช้ตอนเปิดหน้าใหม่/รีเฟรช) ──
 export const GET = async (req: NextRequest): Promise<Response> => {
   const token = callerToken(req);
-  // ⚠️ "ไม่มีใบผ่านติดมาเลย" = คนนี้ยังไม่ได้ล็อกอิน ซึ่งเป็นเรื่องปกติของหน้าเข้าสู่ระบบ
-  //    ตอบ 401 จะกลายเป็น error สีแดงใน console ทุกครั้งที่มีคนเปิดหน้าเข้าสู่ระบบ
-  //    (โหมด supabase ไม่มีอาการนี้เพราะฟื้น session จากในเครื่อง ไม่ต้องถามเซิร์ฟเวอร์)
-  //    204 = "ตอบแล้ว แต่ไม่มีเนื้อหา" — ฝั่งหน้าเว็บแปลว่า "ยังไม่ได้ล็อกอิน" ได้ตรงตัว
-  if (!token) return new NextResponse(null, { status: 204, headers: { "cache-control": "no-store" } });
+  // ⚠️ "ไม่มีใบผ่าน" มีสองความหมาย แยกให้ออก ไม่งั้นเด้งผู้ใช้ออกทั้งที่ยังมีสิทธิ์อยู่
+  //
+  //    (ก) ไม่มีทั้งใบผ่านและใบต่ออายุ = ยังไม่เคยล็อกอิน — เป็นเรื่องปกติของหน้าเข้าสู่ระบบ
+  //        ตอบ 401 จะกลายเป็น error สีแดงใน console ทุกครั้งที่มีคนเปิดหน้านั้น
+  //        204 = "ตอบแล้ว แต่ไม่มีเนื้อหา" ซึ่งแปลว่า "ยังไม่ได้ล็อกอิน" ได้ตรงตัว
+  //
+  //    (ข) ไม่มีใบผ่าน แต่ยังมีใบต่ออายุ = ใบผ่านหมดอายุแล้ว (cookie ถูกลบตามอายุที่ตั้งไว้)
+  //        ⚠️ กรณีนี้ต้องตอบ 401 เพื่อให้หน้าเว็บไปต่ออายุ — ถ้าตอบ 204 เหมือนกรณี (ก)
+  //           หน้าเว็บจะเข้าใจว่า "ไม่เคยล็อกอิน" แล้วเลิกทันทีโดยไม่ลองต่ออายุ
+  //           = ผู้ใช้ถูกเด้งออกทุก 1 ชั่วโมงตามอายุใบผ่าน ทั้งที่ใบต่ออายุมีอายุ 30 วัน
+  //           (เจอจริง 18 ส.ค. 69 จาก api-mode-session.spec.ts — ตาเปล่ามองไม่เห็นเพราะ
+  //            ต้องรอครบชั่วโมงถึงจะเกิด และ "เด้งออก" ดูเหมือนพฤติกรรมปกติของระบบ)
+  if (!token) {
+    if (req.cookies.get(REFRESH_COOKIE)?.value) return fail(401, "เซสชันหมดอายุ");
+    return new NextResponse(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
   const c = claimsOf(token);
   // ใบผ่านหมดอายุแล้ว → บอกให้ไปต่ออายุ ไม่ใช่ตอบว่ายังล็อกอินอยู่
   if (c.exp && c.exp * 1000 <= Date.now()) return fail(401, "เซสชันหมดอายุ");

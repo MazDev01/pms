@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
-  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
-  OTHER_LOST_REASON,
-  type LeadRow, type LeadTask,
+  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
+  QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, OTHER_LOST_REASON,
+  type LeadRow, type LeadTask, type LeadStatus,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
@@ -46,6 +46,24 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
   // เช็กขั้นนี้ได้ก็ต่อเมื่อขั้นก่อนหน้าเสร็จครบ · ยกเลิกได้เฉพาะขั้นล่าสุด (ไม่มีขั้นถัดไปที่เช็กไว้)
   const canCheck   = (i: number) => normalTasks.slice(0, i).every(x => x.done);
   const canUncheck = (i: number) => !normalTasks.slice(i + 1).some(x => x.done);
+
+  // ── จับงานเข้ากับ "ขั้น" ของเส้นทางการขาย ────────────────────────────────────
+  // งานที่บันทึกไว้ในลูกค้าเป้าหมายเก็บแค่ ชื่อ/ติ๊กแล้วหรือยัง — ขั้นของงานอยู่ที่แม่แบบของ HQ
+  // ไม่จัดกลุ่มให้เห็น ผู้ใช้จะเดาไม่ออกว่าติ๊กงานไหนแล้วการ์ดจะเลื่อนไปคอลัมน์ไหนบนกระดาน
+  //   (บอสสั่ง 19 ส.ค. 69: "ทำให้งานสัมพันธ์กับเส้นทางการขาย")
+  // ⚠️ ห้ามเรียงงานใหม่ตามขั้น — ลำดับที่เก็บไว้คือกติกาการติ๊ก (ห้ามข้ามขั้น) เรียงใหม่ = ลำดับติ๊กเพี้ยน
+  //   จึงแค่ "ตัดกลุ่ม" ตามลำดับเดิม · งานเก่าที่ HQ ลบออกจากแม่แบบแล้วไม่มีขั้น ให้อยู่กลุ่มเดียวกับงานก่อนหน้า
+  const stageGroups = useMemo(() => {
+    const stageOf = new Map(taskTpl.map(t => [t.key, t.stage]));
+    const groups: { stage: LeadStatus; items: { t: LeadTask; i: number }[] }[] = [];
+    normalTasks.forEach((t, i) => {
+      const last = groups[groups.length - 1];
+      const stage = stageOf.get(t.key) ?? last?.stage ?? "WAITING";
+      if (last && last.stage === stage) last.items.push({ t, i });
+      else groups.push({ stage, items: [{ t, i }] });
+    });
+    return groups;
+  }, [normalTasks, taskTpl]);
 
   function toggle(key: string) {
     if (closed) return;
@@ -118,9 +136,28 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
         </div>
       )}
 
-      {/* ── Checklist งาน (ติ๊กตามลำดับ ห้ามข้ามขั้น) ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {normalTasks.map((t, i) => {
+      {/* ── Checklist งาน — จัดกลุ่มตามขั้นของเส้นทางการขาย (ติ๊กตามลำดับ ห้ามข้ามขั้น) ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+        {stageGroups.map(g => {
+        const sc = leadStatusColor[g.stage];
+        const groupDone = g.items.every(x => x.t.done);
+        const groupCurrent = !closed && !groupDone && g.items.some(x => x.t.done || canCheck(x.i));
+        const dim = !groupDone && !groupCurrent;   // ขั้นที่ยังไม่ถึง — จางไว้ให้สายตาโฟกัสขั้นที่ทำอยู่
+        return (
+        <div key={`${g.stage}-${g.items[0].i}`}>
+          {/* หัวขั้น — จุดสี + ชื่อขั้น ชุดเดียวกับหัวคอลัมน์บนกระดาน เพื่อให้เห็นว่าติ๊กแล้วการ์ดไปอยู่คอลัมน์ไหน */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 2px 8px" }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: sc.text, flexShrink: 0, opacity: dim ? 0.35 : 1 }} />
+            <span style={{ fontSize: "0.72rem", fontWeight: 800, color: dim ? "#9aa4b0" : "#2D2D2D", whiteSpace: "nowrap" }}>{leadStatusLabel[g.stage]}</span>
+            {groupDone
+              ? <span className="badge" style={{ background: "#e5faf0", color: "#059669", border: "none" }}>ผ่านแล้ว</span>
+              : groupCurrent
+                ? <span className="badge" style={{ background: sc.bg, color: sc.text, border: "none" }}>กำลังทำ</span>
+                : <span className="badge" style={{ background: "#f4f6f8", color: "#9aa4b0", border: "none" }}>ยังไม่ถึง</span>}
+            <span style={{ flex: 1, height: 1, background: "#eef0f4" }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {g.items.map(({ t, i }) => {
           const lockedCheck = !closed && !t.done && !canCheck(i);   // ยังเช็กไม่ได้ (ขั้นก่อนหน้ายังไม่ครบ)
           const lockedUncheck = !closed && t.done && !canUncheck(i); // ยกเลิกไม่ได้ (มีขั้นถัดไปที่เช็กแล้ว)
           const locked = lockedCheck || lockedUncheck;
@@ -148,10 +185,14 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
                     ✓ {t.doneBy ?? "—"}{t.doneAt ? ` · ${t.doneAt}` : ""}
                   </span>
                 )}
-                {lockedCheck && <span style={{ display: "block", fontSize: "0.62rem", color: "#b6bfca", marginTop: 2 }}>ล็อก — ทำขั้นก่อนหน้าให้ครบก่อน</span>}
+                {lockedCheck && <span style={{ display: "block", fontSize: "0.62rem", color: "#b6bfca", marginTop: 2 }}>ล็อก — ทำงานก่อนหน้าให้ครบก่อน</span>}
               </span>
             </button>
           );
+        })}
+          </div>
+        </div>
+        );
         })}
       </div>
 
