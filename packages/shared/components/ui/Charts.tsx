@@ -75,6 +75,21 @@ function monotonePath(pts: Array<{ x: number; y: number }>): string {
   return d;
 }
 
+/** แสดงป้ายแกนนอนทุกกี่ช่อง — กันตัวหนังสือชนกันจนอ่านไม่ออก (บอสแจ้ง 19 ส.ค. 69)
+ *
+ *  กราฟทุกใบเคยวาดป้ายทุกจุดเสมอ พอช่วง 12 เดือนหรือการ์ดแคบ ชื่อเดือนก็ซ้อนทับกันเป็นพรืด
+ *  คืนเป็น "ทุกกี่อันแสดง 1 อัน" โดยนับถอยหลังจากตัวสุดท้าย — เดือนล่าสุดต้องมีเสมอ (คนอ่านกราฟจากขวามาซ้าย)
+ *  slot = ที่ว่างต่อหนึ่งป้าย (px ในพิกัด viewBox) · กว้างของข้อความประมาณจากจำนวนอักษรที่ยาวสุด */
+function labelStep(slot: number, fontSize: number, labels: string[]): number {
+  const longest = labels.reduce((m, l) => Math.max(m, String(l).length), 1);
+  const need = fontSize * 0.55 * longest + 8;   // ความกว้างข้อความ + ช่องไฟขั้นต่ำ
+  return Math.max(1, Math.ceil(need / Math.max(slot, 1)));
+}
+/** ป้ายนี้ควรแสดงไหม — นับจากตัวสุดท้าย เพื่อให้ช่วงล่าสุดอยู่บนแกนเสมอ */
+function showLabel(i: number, total: number, step: number): boolean {
+  return step <= 1 || (total - 1 - i) % step === 0;
+}
+
 export type BarPoint = { label: string; actual: number; plan: number };
 
 /** Grouped bar chart — actual (navy) vs plan (silver), exceeded month highlighted.
@@ -102,6 +117,7 @@ export function PlanVsActualBars({
   const slot = cW / n;
   const bw = Math.min(20, slot / 3);
   const yAt = (v: number) => pT + (1 - v / max) * cH;
+  const xStep = labelStep(slot, 9.5, data.map(d => d.label));
   const baseY = pT + cH;
   const fmt = fmtProp ?? ((v: number) => `฿${Math.round(v * 10) / 10}${unit}`);
   // ⚠️ กราฟที่นับ "จำนวนรายการ" ต้องใช้ขั้นเป็นจำนวนเต็ม (แก้ 10 ส.ค. 69)
@@ -144,7 +160,7 @@ export function PlanVsActualBars({
             {/* plan (silver) */}
             <rect x={cx + 2} y={drawn ? yAt(d.plan) : baseY} width={bw} height={drawn ? pH : 0} rx={4}
               fill={bFill ?? "url(#pva-silver)"} opacity={d.plan > 0 ? (hover === null || isHover ? 1 : 0.5) : 0} style={grow} />
-            <text x={cx} y={H - 12} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{d.label}</text>
+            {showLabel(i, n, xStep) && <text x={cx} y={H - 12} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{d.label}</text>}
             {isHover && (
               <g style={{ pointerEvents: "none" }}>
                 <rect x={Math.min(Math.max(cx - 52, pL), W - pR - 104)} y={pT} width="104" height="40" rx="8" fill="#2D2D2D" />
@@ -354,7 +370,7 @@ export function SalesLineChart({
         );
       })}
 
-      {pts.map(p => <text key={`x${p.label}`} x={p.x} y={H - 10} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{p.label}</text>)}
+      {pts.map((p, i) => showLabel(i, pts.length, labelStep(cW / Math.max(pts.length - 1, 1), 9.5, pts.map(q => q.label))) && <text key={`x${p.label}`} x={p.x} y={H - 10} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{p.label}</text>)}
 
       {/* ชั้นรับเมาส์ + เส้นตั้ง + ป้ายค่า (เดือนที่ชี้เท่านั้น) */}
       {hover !== null && (() => {
@@ -500,7 +516,7 @@ export function LineTrendChart({
         <line key={i} x1={p.x} y1={pT} x2={p.x} y2={bottomY} stroke="#e8ecf2" strokeWidth={1} strokeDasharray="4,5" />
       ))}
       {data.map((d, i) => (
-        <text key={i} x={cx(i)} y={bottomY + 26} textAnchor="middle" fontSize="15" fill="#6b7280">{d.month}</text>
+        showLabel(i, data.length, labelStep(cW / Math.max(data.length, 1), 15, data.map(x => x.month))) ? <text key={i} x={cx(i)} y={bottomY + 26} textAnchor="middle" fontSize="15" fill="#6b7280">{d.month}</text> : null
       ))}
       {/* พื้นที่เติมสี + เส้น (เผยจากซ้าย) */}
       <clipPath id={gid}><rect x={pL - 6} y={0} width={drawn ? cW + 12 : 0} height={H} style={{ transition: "width 1s cubic-bezier(.4,0,.2,1)" }} /></clipPath>
@@ -615,7 +631,7 @@ export function GroupedBarChart({
                   </g>
                 );
               })}
-              <text x={pL + band * i + band / 2} y={bottomY + (narrow ? 22 : 26)} textAnchor="middle" fontSize={fs} fill="#6b7280">{m}</text>
+              {showLabel(i, n, labelStep(band, fs, months)) && <text x={pL + band * i + band / 2} y={bottomY + (narrow ? 22 : 26)} textAnchor="middle" fontSize={fs} fill="#6b7280">{m}</text>}
             </g>
           );
         })}
@@ -698,7 +714,7 @@ export function BarLineChart({
                 width={bw} height={drawn ? Math.max(h, val > 0 ? 2 : 1.5) : 0}
                 rx={3} fill={bar.color} opacity={val > 0 ? (hover === null || isHover ? 1 : 0.45) : 0.22}
                 style={{ transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" }} />
-              <text x={cx(i)} y={bottomY + (narrow ? 22 : 26)} textAnchor="middle" fontSize={fs} fill="#6b7280">{m}</text>
+              {showLabel(i, n, labelStep(band, fs, months)) && <text x={cx(i)} y={bottomY + (narrow ? 22 : 26)} textAnchor="middle" fontSize={fs} fill="#6b7280">{m}</text>}
             </g>
           );
         })}
