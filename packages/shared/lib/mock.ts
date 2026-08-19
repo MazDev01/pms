@@ -999,6 +999,22 @@ export type QuotationStatus = "draft" | "sent_to_client" | "won" | "lost" | "exp
 // รายการสินค้าในใบเสนอราคา (BOQ) — ราคา/หน่วยดึงจากราคากลาง HQ (แคตตาล็อกแม่แบบ) แก้ได้
 export type QuoteLineItem = { id?: string; name: string; qty: number; unit: string; unitPrice: number };
 
+// หนึ่งรอบของการต่อรองราคา — ยอดก่อน → ยอดหลัง พร้อมเวลาที่เปลี่ยน
+// at = เวลาไทยแบบ "2026-08-19T14:05:00" (ฐานข้อมูลแปลงมาให้แล้ว) · by = รหัสผู้ใช้ที่แก้
+export type PriceChange = { at: string; from: number; to: number; by?: string; note?: string };
+
+// ส่วนต่างของการต่อรองทั้งใบ: ยอดตั้งต้น → ยอดปัจจุบัน · ลดไปเท่าไร กี่เปอร์เซ็นต์ กี่รอบ
+// ไม่มีประวัติ = ยังไม่เคยต่อรอง → คืน null (หน้าจอขึ้น "—" ไม่ใช่ 0%)
+export function negotiationSummary(q: Pick<QuotationMock, "priceHistory" | "totalValue">):
+  { first: number; last: number; diff: number; pct: number; rounds: number } | null {
+  const h = q.priceHistory ?? [];
+  if (!h.length) return null;
+  const first = h[0].from;
+  const last = h[h.length - 1].to;
+  const diff = last - first;
+  return { first, last, diff, pct: first > 0 ? (diff / first) * 100 : 0, rounds: h.length };
+}
+
 export type QuotationMock = {
   id: string; customer: string; project: string;
   total: string; totalValue: number;
@@ -1018,6 +1034,9 @@ export type QuotationMock = {
   // paymentTerms / deliveryTime ถูกลบตามที่บอสสั่ง — มีที่เก็บแต่ไม่มีช่องกรอก ขึ้น "—" ทุกใบ
   // (HQCustomer.deliveryTime เป็นคนละตัว ฝั่ง HQ ยังใช้คิดวันส่งมอบอยู่ ไม่แตะ)
   issuer?: IssuerProfile; // สแนปช็อตโปรไฟล์บริษัทผู้ออก ณ ตอนสร้าง — ใบเก่าคงชื่อเดิมแม้เปลี่ยนโปรไฟล์
+  // ประวัติการต่อรองราคา — ฐานข้อมูลเขียนให้เองทุกครั้งที่ยอดรวมเปลี่ยน (trigger 0148)
+  // ⚠️ อ่านอย่างเดียว: แอปไม่ส่งค่านี้กลับไปเขียน (quoteToRow ตัดทิ้ง) ไม่งั้นสำเนาเก่าจะทับประวัติจริง
+  priceHistory?: PriceChange[];
   dealerCode?: string; // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (สมุดงานเดิม)
 };
 

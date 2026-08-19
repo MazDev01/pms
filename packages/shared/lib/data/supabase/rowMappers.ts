@@ -50,6 +50,9 @@ export function rowToLead(row: Row): LeadRow {
 export function quoteToRow(q: QuotationMock): Row {
   const r = toSnake(q as unknown as Row);
   delete r.product_line; // คอลัมน์ generated (0041) — เขียนไม่ได้ · เผลอส่งไป Postgres จะปฏิเสธทั้งคำสั่ง
+  // ประวัติการต่อรองราคา (0148) ฐานข้อมูลดูแลเอง — ส่งสำเนาจากหน้าจอกลับไปจะทับของจริง
+  // (หน้าจอที่เปิดค้างไว้นาน ๆ ถือประวัติเวอร์ชันเก่า พอกดบันทึกก็ลบรอบที่คนอื่นเพิ่งบันทึกทิ้ง)
+  delete r.price_history;
   if (r.area != null) r.area = String(r.area);
   // customer_id: แอปใช้ 0 = "ยังไม่มีลูกค้า" (ออกใบให้ลูกค้าเป้าหมาย) → เก็บเป็น NULL ที่ DB (M6)
   // เพื่อให้ใส่ FK (dealer_code, customer_id) → customers ได้ · 0 ไม่ใช่ id ลูกค้าจริง (เริ่มที่ 1)

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor,
   DEFAULT_ISSUER, DEFAULT_DEALER_CODE,
+  negotiationSummary,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
@@ -29,7 +30,7 @@ import {
   X, FileText, LayoutList, LayoutGrid,
   Edit2, Trash2, ChevronUp, ChevronDown, Printer, Eye,
   ExternalLink, ArrowRight, ChevronLeft, ChevronRight,
-  Send, Coins, MapPin, Package, Layers, Check, Lock,
+  Send, Coins, MapPin, Package, Layers, Check, Lock, History,
 } from "lucide-react";
 
 // ── Tokens ────────────────────────────────────────────────────
@@ -104,6 +105,12 @@ type Issuer = IssuerProfile;
 
 // ── Helpers ───────────────────────────────────────────────────
 function fmtDate(d:string){ if(!d||d==="—") return "—"; const [y,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]} ${parseInt(y)+543}`; }
+// วัน+เวลาของรอบต่อรอง — ฐานข้อมูลส่งมาเป็นเวลาไทยแล้ว ("2026-08-19T14:05:00") แสดงตรง ๆ ไม่แปลงโซนซ้ำ
+function fmtStamp(s:string){
+  const m=/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(s||"");
+  if(!m) return s||"—";
+  return `${fmtDate(`${m[1]}-${m[2]}-${m[3]}`)} ${m[4]}:${m[5]}`;
+}
 // วันที่แบบสั้น (ไม่มีปี พ.ศ.) — ใช้เฉพาะในตาราง ตามรูปแบบที่บอสกำหนดมา ("28 มิ.ย." / "28 ก.ค.")
 // ทำให้ 9 คอลัมน์พอดีกรอบโดยไม่ต้องเลื่อนแนวนอน · แผงรายละเอียด/เอกสารพิมพ์ยังใช้วันที่เต็มมีปี
 function fmtDateShort(d:string){ if(!d||d==="—") return "—"; const [,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]}`; }
@@ -968,6 +975,56 @@ function QuotationsPageInner(){
 
               {/* สรุป/สถานะ/ลูกค้า/ลูกค้าเป้าหมาย — ต่อในคอลัมน์เดียวกัน */}
               <div style={{width:"100%",padding:"0 16px 16px",display:"flex",flexDirection:"column",gap:14}}>
+
+                {/* ประวัติการต่อรองราคา — ฐานข้อมูลบันทึกให้เองทุกครั้งที่ยอดเปลี่ยน (0148)
+                    ไม่เคยต่อรอง = ไม่มีการ์ดนี้ ไม่ขึ้นการ์ดว่างให้รก */}
+                {(() => {
+                  const nego = negotiationSummary(selected);
+                  if (!nego) return null;
+                  const ลด = nego.diff < 0;
+                  return (
+                    <div style={cardStyle}>
+                      <div style={secLabel}><History size={13} color={PRIMARY}/> ประวัติการต่อรองราคา</div>
+                      {/* สรุปหัวการ์ด: ตั้งต้น → ปัจจุบัน · ต่างกันเท่าไร กี่เปอร์เซ็นต์ */}
+                      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                        <span style={{fontSize:"0.78rem",color:MUTED,textDecoration:"line-through"}}>{fmtBaht(nego.first)}</span>
+                        <ArrowRight size={12} color="#8a929c"/>
+                        <span style={{fontSize:"0.9rem",fontWeight:800,color:STEEL}}>{fmtBaht(nego.last)}</span>
+                        <span style={{fontSize:"0.7rem",fontWeight:700,padding:"2px 8px",borderRadius:99,
+                          background: ลด ? "#fef0e6" : "#e5faf0", color: ลด ? "#b45309" : "#059669"}}>
+                          {ลด ? "ลด" : "เพิ่ม"} {fmtBaht(Math.abs(nego.diff))} ({Math.abs(nego.pct).toFixed(1)}%)
+                        </span>
+                        <span style={{fontSize:"0.68rem",color:"#8a929c",marginLeft:"auto"}}>{nego.rounds} รอบ</span>
+                      </div>
+                      {/* ทีละรอบ ใหม่สุดอยู่บน */}
+                      <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                        {[...(selected.priceHistory ?? [])].reverse().map((h, i, arr) => {
+                          const รอบ = arr.length - i;
+                          const ต่าง = h.to - h.from;
+                          return (
+                            <div key={`${h.at}-${รอบ}`} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",
+                              borderTop: i === 0 ? "1px solid #eef1f5" : "1px solid #f6f8fa"}}>
+                              <span style={{flexShrink:0,width:22,height:22,borderRadius:99,background:"#f4f7fb",color:PRIMARY,
+                                fontSize:"0.62rem",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{รอบ}</span>
+                              <div style={{minWidth:0,flex:1}}>
+                                <div style={{fontSize:"0.74rem",color:STEEL,fontVariantNumeric:"tabular-nums"}}>
+                                  {fmtBaht(h.from)} <span style={{color:"#8a929c"}}>→</span> <span style={{fontWeight:700}}>{fmtBaht(h.to)}</span>
+                                </div>
+                                {h.note && <div style={{fontSize:"0.68rem",color:MUTED,marginTop:2}}>{h.note}</div>}
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0}}>
+                                <div style={{fontSize:"0.7rem",fontWeight:700,color: ต่าง < 0 ? "#b45309" : "#059669",fontVariantNumeric:"tabular-nums"}}>
+                                  {ต่าง < 0 ? "−" : "+"}{fmtBaht(Math.abs(ต่าง))}
+                                </div>
+                                <div style={{fontSize:"0.63rem",color:"#9ca3af"}}>{fmtStamp(h.at)}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Status workflow */}
                 {STATUS_ACTIONS[selected.status].length>0&&(
