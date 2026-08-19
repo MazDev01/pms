@@ -1525,11 +1525,15 @@ export default function LeadsPage() {
                           </button>
                           {statusMenu?.id === l.id && (
                             <>
-                              <div onClick={e => { e.stopPropagation(); setStatusMenu(null); }}
-                                style={{ position:"fixed", inset:0, zIndex:299 }}/>
                               {/* ⛔ ห้ามเอา portal ออก — ถ้าเมนูอยู่ในเซลล์ตาราง ตัวเลือกจะไปโผล่ใต้ขอบจอกดไม่ได้ */}
                               {/* (วัดจริง 19 ส.ค. 69: ตัวเลือก 7 ตัวหลุดจอทั้งหมด) มีเทสต์คุมใน redesign.spec.ts */}
+                              {/* ⬆ ฉากคลิกปิดก็ต้องอยู่ใน portal เดียวกัน (ผู้ใช้แจ้ง 19 ส.ค. 69 "กดนอกตารางช้อยไม่หาย")
+                                  เดิมวางไว้ในเซลล์ตาราง — ถึงจะเป็น fixed ก็โดน .table-wrap (overflow) ตัดเหลือแค่พื้นที่ตาราง
+                                  คลิกพื้นที่นอกตารางจึงไม่โดนอะไรเลย เมนูค้างคาอยู่อย่างนั้น */}
                               {createPortal(
+                              <>
+                              <div onClick={e => { e.stopPropagation(); setStatusMenu(null); }}
+                                style={{ position:"fixed", inset:0, zIndex:299 }}/>
                               <div data-menu="stage" style={{ position:"fixed", top:statusMenu.y, left:statusMenu.x, zIndex:300,
                                 background:"#fff", border:"1px solid #e5e7eb", borderRadius:12,
                                 boxShadow:"0 8px 24px rgba(0,0,0,.14)", minWidth:168, overflow:"hidden" }}>
@@ -1549,7 +1553,8 @@ export default function LeadsPage() {
                                     </button>
                                   );
                                 })}
-                              </div>, document.body)}
+                              </div>
+                              </>, document.body)}
                             </>
                           )}
                         </td>
