@@ -12,6 +12,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PageError } from "./_page";
+import { BadInput } from "./_valid";
 import { callerToken } from "./_cookie";
 
 export const runtime = "nodejs";
@@ -90,6 +91,8 @@ export function handler(
     try {
       return await fn(req, sb);
     } catch (e) {
+      // ข้อมูลขาเข้าผิดรูป — ผู้เรียกแก้เองได้ ต้องบอกให้ชัดว่าช่องไหนผิด ไม่ใช่ 503 "ระบบขัดข้อง"
+      if (e instanceof BadInput) return fail(400, e.message);
       // error ของฐานข้อมูลที่หลุดออกมาระหว่างไล่หน้า — ต้องส่งข้อความจริงกลับไป ไม่ใช่กลืนเป็น "ขัดข้อง"
       if (e instanceof PageError) return dbFail(name, e);
       console.error(`[api/v1/${name}]`, e);
