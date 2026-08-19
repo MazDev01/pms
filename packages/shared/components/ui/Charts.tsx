@@ -124,6 +124,8 @@ export function PlanVsActualBars({
   //   เดิมแบ่ง 4 ส่วนเท่า ๆ กันเสมอ ตอนข้อมูลน้อยจึงได้ป้าย 1.2 · 0.9 · 0.6 · 0.3 · 0
   //   "ลูกค้าเป้าหมาย 0.3 ราย" ไม่มีอยู่จริง — ผู้อ่านสับสนว่าหน่วยคืออะไร
   const ticks = axisTicks(max);
+  // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด
+  const maxTick = ticks[ticks.length - 1];
   const grow = { transition: "y .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1), opacity .15s" } as const;
   const hasExceeded = highlightExceeded && data.some(d => d.actual > d.plan);
 
@@ -139,7 +141,7 @@ export function PlanVsActualBars({
       {ticks.map((v, i) => (
         <g key={i}>
           <line x1={pL} y1={yAt(v)} x2={W - pR} y2={yAt(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
-          <text x={pL - 6} y={yAt(v) + 3} textAnchor="end" fontSize="9.5" fill="#aab2bd">{Math.round(v * 10) / 10}</text>
+          <text x={pL - 6} y={yAt(v) + (v === maxTick ? 10 : 3)} textAnchor="end" fontSize="9.5" fill="#aab2bd">{Math.round(v * 10) / 10}</text>
         </g>
       ))}
       {data.map((d, i) => {
@@ -325,6 +327,8 @@ export function SalesLineChart({
   //   เดิมแบ่ง 4 ส่วนเท่า ๆ กันเสมอ ตอนข้อมูลน้อยจึงได้ป้าย 1.2 · 0.9 · 0.6 · 0.3 · 0
   //   "ลูกค้าเป้าหมาย 0.3 ราย" ไม่มีอยู่จริง — ผู้อ่านสับสนว่าหน่วยคืออะไร
   const ticks = axisTicks(max);
+  // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด
+  const maxTick = ticks[ticks.length - 1];
   const fadeIn = (d: number) => ({ transition: `opacity .5s ease ${d}s` });
 
   return (
@@ -340,7 +344,7 @@ export function SalesLineChart({
       {ticks.map((v, i) => (
         <g key={i}>
           <line x1={pL} y1={cy(v)} x2={W - pR} y2={cy(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
-          <text x={pL - 6} y={cy(v) + 3} textAnchor="end" fontSize="9.5" fill="#aab2bd">{fmt(v)}</text>
+          <text x={pL - 6} y={cy(v) + (v === maxTick ? 10 : 3)} textAnchor="end" fontSize="9.5" fill="#aab2bd">{fmt(v)}</text>
         </g>
       ))}
 
@@ -488,6 +492,8 @@ export function LineTrendChart({
   const line = smoothPath(pts); // เส้นโค้งเนียน (Catmull-Rom) แทนเส้นหักตรง
   const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${bottomY} L${pts[0].x.toFixed(2)},${bottomY} Z` : "";
   const yTicks = axisTicks(hi);
+  // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด
+  const maxTick = yTicks[yTicks.length - 1];
   const last = pts[n - 1];
   const hp = hover !== null ? pts[hover] : null;
   const gid = "line-clip-" + n;
@@ -509,7 +515,7 @@ export function LineTrendChart({
       </defs>
       {/* y labels (จาง) */}
       {yTicks.map((v, i) => (
-        <text key={i} x={pL - 10} y={cy(v) + 4} textAnchor="end" fontSize="14" fill="#c4cbd4">{fmt(v)}</text>
+        <text key={i} x={pL - 10} y={cy(v) + (v === maxTick ? 13 : 4)} textAnchor="end" fontSize="14" fill="#c4cbd4">{fmt(v)}</text>
       ))}
       {/* เส้นประแนวตั้งทุกจุด */}
       {pts.map((p, i) => (
@@ -592,6 +598,8 @@ export function GroupedBarChart({
   const groupW = Math.min(band * 0.68, 24 * series.length);
   const bw = groupW / series.length;
   const yTicks = axisTicks(ceiling);
+  // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด
+  const maxTick = yTicks[yTicks.length - 1];
   const bottomY = pT + cH;
   const fs = narrow ? 13 : 15;
 
@@ -603,7 +611,7 @@ export function GroupedBarChart({
           return (
             <g key={i}>
               <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#eef1f5" strokeWidth={1} />
-              <text x={pL - 10} y={y + 4} textAnchor="end" fontSize={fs} fill="#9ca3af">{fmt(v)}</text>
+              <text x={pL - 10} y={y + (v === maxTick ? fs - 1 : 4)} textAnchor="end" fontSize={fs} fill="#9ca3af">{fmt(v)}</text>
             </g>
           );
         })}
@@ -681,6 +689,8 @@ export function BarLineChart({
   const band = cW / n;
   const bw = Math.min(band * 0.5, 34);
   const yTicks = axisTicks(ceiling);
+  // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด
+  const maxTick = yTicks[yTicks.length - 1];
   const bottomY = pT + cH;
   const fs = narrow ? 13 : 15;
   const cx = (i: number) => pL + band * i + band / 2;
@@ -696,7 +706,7 @@ export function BarLineChart({
           return (
             <g key={i}>
               <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#eef1f5" strokeWidth={1} />
-              <text x={pL - 10} y={y + 4} textAnchor="end" fontSize={fs} fill="#9ca3af">{fmt(v)}</text>
+              <text x={pL - 10} y={y + (v === maxTick ? fs - 1 : 4)} textAnchor="end" fontSize={fs} fill="#9ca3af">{fmt(v)}</text>
             </g>
           );
         })}

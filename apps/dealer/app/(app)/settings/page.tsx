@@ -821,10 +821,6 @@ function NotificationsTab() {
           ))}
         </div>
         {/* แถบบอกว่าค่านี้ถูกใช้ที่ไหน — แนวเดียวกับ UsedAt ของหน้าตั้งค่า HQ */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.76rem", color: "#6b7280", lineHeight: 1.6 }}>
-          <Lock size={14} color="#003366" style={{ flexShrink: 0, marginTop: 2 }} />
-          <span>ค่านี้คุมกระดิ่งแจ้งเตือนบนแถบบนของตัวแทน · ปิดเรื่องไหน เรื่องนั้นจะไม่ขึ้นกระดิ่ง — กด “บันทึก” บนแถบบนแล้วมีผลทันที</span>
-        </div>
       </div>
       <LeadRulesCard draft={rulesDraft} set={setRule} />
     </>
@@ -869,13 +865,6 @@ function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRu
           num(draft.unassignedAlertHours, n => set("unassignedAlertHours", n), "ชั่วโมง"))}
         {row("เตือนเมื่อลูกค้าเป้าหมายไม่มีการติดต่อเกิน", "รายการที่ยังไม่ปิดและเงียบเกินกำหนด → ขึ้นป้าย “ต้องติดตามด่วน”",
           num(draft.followUpAlertDays, n => set("followUpAlertDays", n), "วัน"))}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.76rem", color: "#6b7280", lineHeight: 1.6 }}>
-          <Lock size={14} color="#003366" style={{ flexShrink: 0, marginTop: 2 }} />
-          <span>
-            สองเกณฑ์นี้ถูกใช้จริงที่: หน้าลูกค้าเป้าหมายของสาขา · แดชบอร์ดสาขา · และสำนักงานใหญ่ใช้ดูลูกค้าเป้าหมายของสาขานี้ด้วย
-            <br />รายการที่เงียบนานจะถูก “เตือน” เท่านั้น — ระบบไม่ลบให้อัตโนมัติ (ข้อมูลลูกค้าเป้าหมายไม่หายเอง)
-          </span>
-        </div>
       </div>
     </div>
   );

@@ -52,7 +52,7 @@ import { SettingsBusCtx as BusCtx, type SectionApi } from "@pms/shared/lib/setti
 import {
   Building2, Users, GitMerge, Target, Bell,
   Save, RotateCcw, Plus, Trash2, Check, X,
-  Download, Upload, RefreshCw, Lock, AlertCircle,
+  Download, Upload, RefreshCw, AlertCircle,
   ShieldCheck,
 } from "lucide-react";
 
@@ -125,14 +125,6 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
       style={{ width: 42, height: 24, borderRadius: 99, border: "none", cursor: "pointer", flexShrink: 0, background: on ? NAVY : "#d1d5db", position: "relative", transition: "background .15s" }}>
       <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.25)", transition: "left .15s" }} />
     </button>
-  );
-}
-// แถบบอกว่า "ค่านี้ถูกใช้ที่ไหน" — กันไม่ให้ตั้งค่าแล้วเข้าใจผิดว่าไม่มีผล
-function UsedAt({ children }: { children: ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#f5f7fa", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", marginTop: 12, fontSize: "0.76rem", color: "#6b7280", lineHeight: 1.6 }}>
-      <Lock size={14} color={NAVY} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{children}</span>
-    </div>
   );
 }
 const numInput = (value: number, onChange: (n: number) => void, unit: string, step?: number) => (
@@ -253,12 +245,6 @@ function JourneyTab() {
             </div>
           ))}
         </div>
-        <UsedAt>
-          7 ขั้นนี้คือสถานะจริงของลูกค้าเป้าหมายทั้งระบบ — ความคืบหน้าเลื่อนขั้นเองจาก “งานมาตรฐาน” ที่ตัวแทนเช็ก
-          <br />ชื่อขั้นและลำดับขั้นแก้ไม่ได้ (ผูกกับคัมบัง/รายงาน/ฐานข้อมูล) แต่งานในแต่ละขั้นตั้งได้ตามต้องการ
-          <br />บันทึกแล้วมีผลกับ<strong>ลูกค้าเป้าหมายรายใหม่ทันที</strong> · รายเดิมยังเก็บงานที่เช็กไว้แล้วตามเดิม จนกว่าสถานะจะเปลี่ยน
-          <br />งาน “ปิดการขาย” เป็นงานปิดท้ายของระบบ จึงไม่มีให้แก้ที่นี่ (ปุ่มปิดดีลของตัวแทนผูกกับงานนี้)
-        </UsedAt>
       </SectionCard>
 
       {/* การ์ด "กฎการดูแลลูกค้าเป้าหมาย" (48 ชม. / 7 วัน) ถูกย้ายไปหน้าตั้งค่าของตัวแทนตามคำสั่ง
@@ -294,7 +280,6 @@ function JourneyTab() {
             onKeyDown={e => { if (e.key === "Enter") addLost(); }} />
           <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }} onClick={addLost}><Plus size={14} /></button>
         </div>
-        <UsedAt>รายการนี้คือตัวเลือกจริงในหน้าปิดดีลของตัวแทน และเป็นที่มาของรายงาน “เหตุผลที่เสียโอกาส”</UsedAt>
       </SectionCard>
 
 

@@ -76,18 +76,6 @@ export default function DealerProductsPage() {
       {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 
       {/* ── Banner: read-only ── */}
-      <div
-        style={{
-          display: "flex", alignItems: "center", gap: 10,
-          background: "#f5f7fa", border: `1px solid ${BORDER}`,
-          borderRadius: 12, padding: "10px 14px", marginBottom: 18,
-          color: MUTED, fontSize: "0.8rem",
-        }}
-      >
-        <Lock size={15} style={{ color: PRIMARY, flexShrink: 0 }} />
-        <span>แม่แบบ รายละเอียด และราคากลางกำหนดโดยสำนักงานใหญ่ — ตัวแทนจำหน่ายดูเพื่อนำเสนอ/อ้างอิงได้ แต่แก้ไขไม่ได้</span>
-      </div>
-
       {/* ── แคตตาล็อกแม่แบบ (grid) ── */}
       {filtered.length === 0 ? (
         <div className="card" style={{ padding: "48px 24px", textAlign: "center", color: MUTED }}>
