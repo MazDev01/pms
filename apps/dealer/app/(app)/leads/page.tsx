@@ -341,7 +341,7 @@ function OverviewEditor({ lead, persons, onSave }: {
       {/* มูลค่า + ป้ายสถานะ — ตำแหน่งเดียวกับตอนอ่าน */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:12 }}>
         <div style={{ minWidth:0 }}>
-          <div style={{ fontSize:"0.62rem", color:"#8a929c", fontWeight:700 }}>มูลค่าประเมิน</div>
+          <div style={{ fontSize:"0.62rem", color:"#8a929c", fontWeight:700 }}>ประเมินราคา</div>
           <input value={f.value} onChange={e=>set("value",e.target.value)} placeholder="฿1.4M"
             style={{ ...inp, width:170, marginTop:4, fontSize:"1rem", fontWeight:800, color:"#003366" }} />
           <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap", alignItems:"center" }}>
@@ -717,7 +717,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 <label style={labelStyle}>ที่อยู่</label>
                 <input value={form.address} onChange={e=>set("address",e.target.value)}
                   placeholder="เลขที่ ถนน ตำบล/แขวง อำเภอ/เขต รหัสไปรษณีย์" style={inputStyle} />
-                <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ยังไม่รู้ก็เว้นว่างได้ · ใช้ต่อเป็นที่อยู่ลูกค้าตอนปิดการขายสำเร็จ</div>
               </div>
 
               {/* ── ผู้ติดต่อ ── */}
@@ -748,10 +747,9 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 <label style={labelStyle}>พื้นที่ (ตร.ม.)</label>
                 <input type="number" min={0} value={form.area} onChange={e=>set("area",e.target.value)}
                   placeholder="เช่น 1200" style={inputStyle} />
-                <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ยังไม่รู้ก็เว้นว่างได้ · ใช้เป็นค่าตั้งต้นตอนออกใบเสนอราคา</div>
               </div>
               <div>
-                <label style={labelStyle}>มูลค่าประเมิน</label>
+                <label style={labelStyle}>ประเมินราคา</label>
                 <input value={form.value} onChange={e=>set("value",e.target.value)}
                   onBlur={()=>{ if(form.value.trim()) set("value", fmtVal(form.value)); }}
                   placeholder="เช่น 1200000 หรือ ฿1.2M" style={inputStyle} />
@@ -763,7 +761,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 <select aria-label="ขั้นตอน" value={form.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inputStyle}>
                   {(isEdit ? ALL_STATUSES : (["WAITING","BULLET"] as LeadStatus[])).map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}
                 </select>
-                {!isEdit && <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ขั้น “เสนอราคา” ขึ้นไปจะเลื่อนอัตโนมัติเมื่อสร้างใบเสนอราคา</div>}
               </div>
 
               {/* ── การดูแล ── */}
@@ -1576,7 +1573,7 @@ export default function LeadsPage() {
                           <td className="num" style={{ fontSize:"0.8rem", fontWeight:700, color:"#2D2D2D" }}
                             onClick={e => { e.stopPropagation(); setEditValueId(l.id); setValueDraft(String(parseValue(l.value) || "")); }}>
                             {editValueId === l.id ? (
-                              <input autoFocus aria-label="มูลค่าประเมิน" type="number" value={valueDraft}
+                              <input autoFocus aria-label="ประเมินราคา" type="number" value={valueDraft}
                                 onChange={e => setValueDraft(e.target.value)}
                                 onClick={e => e.stopPropagation()}
                                 onBlur={() => commitValue(l)}

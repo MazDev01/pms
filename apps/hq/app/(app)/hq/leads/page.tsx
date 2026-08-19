@@ -817,7 +817,7 @@ export default function HQLeadsPage() {
               <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.source || "—"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>มูลค่าประเมิน</span>
+              <span style={{ color: "#8a929c", flexShrink: 0 }}>ประเมินราคา</span>
               <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.value || "—"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
