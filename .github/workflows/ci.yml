@@ -1,0 +1,52 @@
+# ตรวจอัตโนมัติทุกครั้งที่ push / เปิด PR (P2 จากผลตรวจระบบ 19 ส.ค. 69)
+#
+# ทำไมต้องมี: ที่ผ่านมาการตรวจ typecheck + เทสย่อยอยู่ที่เครื่องคนทำงานอย่างเดียว
+#   ลืมรันครั้งเดียวของพังก็ขึ้นเว็บได้ทันที · ด่านนี้เป็นตาข่ายรับสุดท้ายที่ลืมไม่ได้
+#
+# ตั้งใจให้เร็ว (~2-3 นาที) จะได้ไม่มีใครอยากข้าม — ไม่รวมเทสหน้าจอ (Playwright)
+#   ที่ต้องยกฐานข้อมูลจริงขึ้นมาและใช้ความลับของโปรเจกต์ นั่นรันตอน deploy แยกต่างหาก
+name: ตรวจก่อนขึ้นเว็บ
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# push รัวหลายครั้งติดกัน ให้ยกเลิกรอบเก่าที่ยังค้าง — เอาผลของโค้ดล่าสุดพอ
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ชื่อ job (คีย์) ต้องเป็นอังกฤษตามกติกาของ GitHub — ชื่อที่คนอ่านอยู่ที่ name ข้างล่าง
+  verify:
+    name: typecheck + เทสย่อย + ตัวตรวจกับดัก
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: ติดตั้ง dependency
+        run: pnpm install --frozen-lockfile
+
+      # ── ด่านที่ 1: ชนิดข้อมูลทั้ง monorepo + เทสสคริปต์ ──
+      - name: ตรวจชนิดข้อมูล (typecheck)
+        run: pnpm run typecheck
+
+      # ── ด่านที่ 2: เทสย่อย (ตรรกะล้วน ไม่ต้องต่อฐานข้อมูล) ──
+      - name: เทสย่อย (unit)
+        run: pnpm exec vitest run tests/unit
+
+      # ── ด่านที่ 3: ตัวตรวจกับดักเฉพาะโปรเจกต์นี้ 8 ตัว ──
+      #   (เรียงลำดับตารางไม่นิ่ง · คำสั่งเปลี่ยนข้อมูลที่ไม่ตรวจผล · ตัวกรองไม่รีเซ็ตหน้า ฯลฯ)
+      - name: ตัวตรวจกับดัก
+        run: pnpm run checks
