@@ -71,14 +71,14 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
     if (i < 0) return;
     const cur = normalTasks[i];
     if (!cur.done) {
-      if (!canCheck(i)) { setHint("ทำขั้นตอนก่อนหน้าให้ครบก่อน จึงจะเช็กขั้นนี้ได้ (ห้ามข้ามขั้น)"); return; }
+      if (!canCheck(i)) { setHint("ทำงานก่อนหน้าให้ครบก่อน จึงจะติ๊กงานนี้ได้ (ห้ามข้ามขั้น)"); return; }
       // งานที่ต้องมี "ของจริง" ถึงจะติ๊กได้ — พาไปออก/ส่งใบจริง แล้วระบบจะติ๊กให้เองตอนนั้น
       if ((key === QUOTE_TASK_KEY || key === SEND_QUOTE_TASK_KEY) && onRequestQuotation?.(key)) {
         setHint("");
         return;
       }
     } else {
-      if (!canUncheck(i)) { setHint("ยกเลิกได้เฉพาะขั้นล่าสุด — ต้องยกเลิกขั้นถัดไปก่อน"); return; }
+      if (!canUncheck(i)) { setHint("ยกเลิกได้เฉพาะงานล่าสุด — ต้องยกเลิกงานถัดไปก่อน"); return; }
     }
     setHint("");
     const now = stampNow();
@@ -109,7 +109,7 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
   return (
     <div>
       <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 12 }}>
-        รายงานการทำงาน · เช็กแล้วเลื่อน Stage อัตโนมัติ
+        งานตามเส้นทางการขาย · ติ๊กแล้วเลื่อนขั้นอัตโนมัติ
       </div>
 
       {/* ── ความคืบหน้า (คำนวณจากจำนวน Task · อ่านอย่างเดียว) ── */}
@@ -125,7 +125,7 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
           <div className="bar-grow" style={{ height: "100%", width: `${pct}%`, borderRadius: 999, background: barColor }} />
         </div>
         <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 6 }}>
-          คำนวณจาก {tasks.filter(t => t.done).length}/{tasks.length} งาน — เลื่อน Stage อัตโนมัติเมื่อเช็กงาน (ปรับ % / ลาก bar เองไม่ได้)
+          คำนวณจาก {tasks.filter(t => t.done).length}/{tasks.length} งาน — เลื่อนขั้นอัตโนมัติเมื่อติ๊กงาน (ปรับ % เองไม่ได้)
         </div>
       </div>
 
@@ -141,19 +141,24 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
         {stageGroups.map(g => {
         const sc = leadStatusColor[g.stage];
         const groupDone = g.items.every(x => x.t.done);
-        const groupCurrent = !closed && !groupDone && g.items.some(x => x.t.done || canCheck(x.i));
-        const dim = !groupDone && !groupCurrent;   // ขั้นที่ยังไม่ถึง — จางไว้ให้สายตาโฟกัสขั้นที่ทำอยู่
+        // ขั้นที่การ์ดยืนอยู่จริงบนกระดาน = สถานะของลูกค้าเป้าหมาย · หัวข้อต้องตรงกัน ไม่งั้นอ่านแล้วขัดกันเอง
+        const isCurrentStage = !closed && lead.status === g.stage;
+        // งานชุดถัดไปที่ติ๊กได้แล้วตอนนี้ — การ์ดจะเลื่อนมาคอลัมน์นี้เมื่อติ๊ก
+        const groupNext = !closed && !groupDone && !isCurrentStage && g.items.some(x => canCheck(x.i));
+        const dim = !groupDone && !isCurrentStage && !groupNext;   // ขั้นที่ยังไม่ถึง — จางไว้ให้สายตาโฟกัสขั้นที่ทำอยู่
         return (
         <div key={`${g.stage}-${g.items[0].i}`}>
           {/* หัวขั้น — จุดสี + ชื่อขั้น ชุดเดียวกับหัวคอลัมน์บนกระดาน เพื่อให้เห็นว่าติ๊กแล้วการ์ดไปอยู่คอลัมน์ไหน */}
-          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 2px 8px" }}>
+          <div data-stage-head={g.stage} style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 2px 8px" }}>
             <span style={{ width: 9, height: 9, borderRadius: "50%", background: sc.text, flexShrink: 0, opacity: dim ? 0.35 : 1 }} />
             <span style={{ fontSize: "0.72rem", fontWeight: 800, color: dim ? "#9aa4b0" : "#2D2D2D", whiteSpace: "nowrap" }}>{leadStatusLabel[g.stage]}</span>
-            {groupDone
-              ? <span className="badge" style={{ background: "#e5faf0", color: "#059669", border: "none" }}>ผ่านแล้ว</span>
-              : groupCurrent
-                ? <span className="badge" style={{ background: sc.bg, color: sc.text, border: "none" }}>กำลังทำ</span>
-                : <span className="badge" style={{ background: "#f4f6f8", color: "#9aa4b0", border: "none" }}>ยังไม่ถึง</span>}
+            {isCurrentStage
+              ? <span className="badge" style={{ background: sc.bg, color: sc.text, border: "none" }}>ขั้นปัจจุบัน</span>
+              : groupDone
+                ? <span className="badge" style={{ background: "#e5faf0", color: "#059669", border: "none" }}>ผ่านแล้ว</span>
+                : groupNext
+                  ? <span className="badge" style={{ background: "#eef3f8", color: "#003366", border: "none" }}>ทำต่อได้เลย</span>
+                  : <span className="badge" style={{ background: "#f4f6f8", color: "#9aa4b0", border: "none" }}>ยังไม่ถึง</span>}
             <span style={{ flex: 1, height: 1, background: "#eef0f4" }} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -163,7 +168,7 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
           const locked = lockedCheck || lockedUncheck;
           return (
             <button key={t.key} type="button" onClick={() => toggle(t.key)} disabled={closed}
-              title={lockedCheck ? "ทำขั้นก่อนหน้าให้ครบก่อน" : lockedUncheck ? "ยกเลิกได้เฉพาะขั้นล่าสุด" : undefined}
+              title={lockedCheck ? "ทำงานก่อนหน้าให้ครบก่อน" : lockedUncheck ? "ยกเลิกได้เฉพาะงานล่าสุด" : undefined}
               style={{
                 display: "flex", alignItems: "flex-start", gap: 11, width: "100%", textAlign: "left",
                 padding: "10px 12px", borderRadius: 10, border: `1px solid ${t.done ? "#bbf7d0" : lockedCheck ? "#eceff3" : "#e5e7eb"}`,

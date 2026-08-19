@@ -61,22 +61,8 @@ export function needsFollowUp(l: LeadRow, threshold = 7): boolean {
   return days !== null && days > threshold;
 }
 
-// ── ความสำคัญ (deterministic ตามมูลค่า) ──
-export type Priority = "HIGH" | "MEDIUM" | "LOW";
-export const PRIORITIES: Priority[] = ["HIGH", "MEDIUM", "LOW"];
-export const priorityLabel: Record<Priority, string> = { HIGH: "สูง", MEDIUM: "กลาง", LOW: "ต่ำ" };
-export const priorityColor: Record<Priority, { text: string; bg: string }> = {
-  HIGH:   { text: "#DC3545", bg: "#fee2e2" },
-  MEDIUM: { text: "#FFC107", bg: "#fff8e1" },
-  LOW:    { text: "#6b7280", bg: "#f0f0f5" },
-};
-export const priorityRank: Record<Priority, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-export function leadPriority(lead: LeadRow): Priority {
-  const v = parseValue(lead.value);
-  if (v >= 3e6) return "HIGH";
-  if (v >= 1e6) return "MEDIUM";
-  return "LOW";
-}
+// ฟีเจอร์ "ความสำคัญ" ถูกลบทั้งหมด (บอสสั่ง 18 ส.ค. 69)
+// เดิมระบบคิดเองจากมูลค่าแล้วติดป้ายให้ — ตั้งเอง/ปิดไม่ได้ จึงเอาออกทั้งชุด ไม่ทิ้งโค้ดตายไว้
 
 // ── ความคืบหน้า (%) — จากงานมาตรฐาน 7 ข้อเท่านั้น (ห้ามลาก slider) ──
 export function leadProgress(l: LeadRow): number {

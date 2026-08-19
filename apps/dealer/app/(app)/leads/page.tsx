@@ -43,7 +43,7 @@ import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { FilterRow, FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { Donut } from "@pms/shared/components/ui/Charts";
-import { leadCreatedDate, priorityLabel } from "@pms/shared/lib/leadMetrics";
+import { leadCreatedDate } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -105,7 +105,7 @@ const PROVINCES = ["กรุงเทพฯ","เชียงใหม่","ร
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 function thaiDateStr(d: Date) { return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
-type SortKey = "company"|"value"|"status"|"assigned"|"priority";
+type SortKey = "company"|"value"|"status"|"assigned";
 
 // คอลัมน์ที่ซ่อน/แสดงได้ (optional) สำหรับ TableTools — key ตรงกับ th/td/col ในตาราง
 const COLS: { key: string; label: string }[] = [
@@ -200,24 +200,6 @@ function needsFollowUp(l: LeadRow, threshold = 7): boolean {
   if (l.status === "PAID" || l.status === "CANCELLED") return false; // ปิดแล้วไม่ต้องตาม
   const days = daysSinceContact(l);
   return days !== null && days > threshold;
-}
-
-// ─── Priority (ความสำคัญ) — deterministic by value tier ──────────────────────
-type Priority = "HIGH" | "MEDIUM" | "LOW";
-// PRIORITIES ถูกลบพร้อมตัวกรอง "ความสำคัญ" — ป้ายความสำคัญในแผงรายละเอียดลูกค้าเป้าหมายยังใช้ leadPriority/priorityLabel อยู่
-// priorityLabel = import จาก leadMetrics.ts (แหล่งเดียว — เดิม copy ซ้ำที่นี่)
-const priorityColor: Record<Priority, { text: string; bg: string }> = {
-  HIGH:   { text: "#dc2626", bg: "#fee2e2" },
-  MEDIUM: { text: "#d97706", bg: "#fff3cd" },
-  LOW:    { text: "#6b7280", bg: "#f0f0f5" },
-};
-const priorityRank: Record<Priority, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-// value≥3M → สูง, ≥1M → กลาง, ต่ำกว่า → ต่ำ (deterministic, ไม่มีการสุ่ม)
-function leadPriority(lead: LeadRow): Priority {
-  const v = parseValue(lead.value);
-  if (v >= 3e6) return "HIGH";
-  if (v >= 1e6) return "MEDIUM";
-  return "LOW";
 }
 
 // ─── Deterministic drawer seeds (no randomness) ───────────────────────────
@@ -355,9 +337,6 @@ function OverviewEditor({ lead, persons, onSave }: {
             <select aria-label="สถานะลูกค้าเป้าหมาย" value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", height:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700, border:"1px solid #eef1f5", background:"#fafbfc" }}>
               {(Object.keys(leadStatusLabel) as LeadStatus[]).map(k => <option key={k} value={k}>{leadStatusLabel[k]}</option>)}
             </select>
-            {/* ป้ายความสำคัญ — ย้ายมาจากมุมมองอ่านเดิม (คิดจากมูลค่าที่บันทึกแล้ว ไม่ใช่ค่าที่กำลังพิมพ์) */}
-            {(() => { const pr = leadPriority(lead), pc = priorityColor[pr];
-              return <span style={{ padding:"3px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:pc.bg, color:pc.text }}>ความสำคัญ {priorityLabel[pr]}</span>; })()}
           </div>
         </div>
       </div>
@@ -913,7 +892,7 @@ export default function LeadsPage() {
   const [fValueMax, setFValueMax] = useState("");
   const [fProvince, setFProvince] = useState("");
   const [fSource, setFSource] = useState("");
-  // ตัวกรอง "ความสำคัญ" (fPriority) ถูกลบตามที่บอสสั่ง — ไม่เหลือ UI ที่ตั้งค่าได้
+  // ฟีเจอร์ "ความสำคัญ" ถูกลบออกทั้งหมด (ตัวกรอง · ป้าย · การเรียง) — บอสสั่ง 18 ส.ค. 69
 
   // Panel state
   const [selectedLead, setSelectedLead] = useState<LeadRow|null>(null);
@@ -1026,7 +1005,6 @@ export default function LeadsPage() {
     arr = [...arr].sort((a,b) => {
       let av: string|number = 0, bv: string|number = 0;
       if (sortKey === "value") { av = parseValue(a.value); bv = parseValue(b.value); }
-      else if (sortKey === "priority") { av = priorityRank[leadPriority(a)]; bv = priorityRank[leadPriority(b)]; }
       else { av = (a[sortKey] as string) ?? ""; bv = (b[sortKey] as string) ?? ""; }
       // เรียงข้อความไทยตามพยัญชนะ (locale "th") — เรียงด้วย < > ตรงๆ จะได้ลำดับ Unicode ที่ไม่ตรงตามตัวอักษรไทย
       if (typeof av === "string" && typeof bv === "string") {
@@ -1420,7 +1398,7 @@ export default function LeadsPage() {
                   {!hiddenCols.includes("source")   && <col style={{width:"10%", minWidth:100}} />}
                   {!hiddenCols.includes("product")  && <col style={{width:"13%", minWidth:110}} />}
                   {!hiddenCols.includes("area")     && <col style={{width:"8%", minWidth:100}} />}
-                  <col style={{width:"13%", minWidth:90}} />{/* ขั้นตอน */}
+                  <col style={{width:"14%", minWidth:150}} />{/* ขั้นตอน — minWidth ต้องพอให้ชื่อขั้นที่ยาวที่สุด ("รวบรวมความต้องการ") อยู่ได้ */}
                   <col style={{width:"13%", minWidth:110}} />{/* ความคืบหน้า */}
                   <col style={{width:"11%", minWidth:90}} />{/* มูลค่า */}
                   <col style={{width:"12%", minWidth:110}} />{/* ผู้รับผิดชอบ */}
@@ -1484,10 +1462,18 @@ export default function LeadsPage() {
                             {l.area != null ? l.area.toLocaleString() : "—"}
                           </td>
                         )}
+                        {/* ⚠️ ป้ายห้ามล้นออกนอกช่อง — ผู้ใช้แจ้ง 18 ส.ค. 69 ว่า "กดไม่ได้ ขอบเหลื่อมล้ำ"
+                            ⛔ ห้ามใส่ z-index ที่ <td> นี้เด็ดขาด — เคยใส่แล้วเมนูเลือกขั้นกดไม่ได้ทันที (18 ส.ค. 69)
+                            เพราะ z-index สร้าง stacking context ใหม่ → เมนูข้างในถูกขังอยู่ใต้แถวถัดไป กดไม่โดน
+                            การแก้ที่ถูกคือ "ล็อกป้ายไม่ให้ล้น" อย่างเดียว — ไม่ต้องมี z-index
+                            ช่องนี้ต้องเปิด overflow ไว้ให้เมนูเลือกขั้นกางออกมาได้ แต่ผลข้างเคียงคือป้ายที่ชื่อยาวก็ล้นไปด้วย
+                            ช่อง "ความคืบหน้า" อยู่ถัดไปและวาดทีหลัง จึงมาทับส่วนที่ล้น → คลิกโดนช่องข้างแทน */}
                         <td className="ovf-visible" style={{ position:"relative" }}
                           onClick={e => { e.stopPropagation(); setOpenStatusId(openStatusId === l.id ? null : l.id); }}>
-                          <button className="badge" style={{ background:sc.bg, color:sc.text, border:"none", cursor:"pointer" }}>
-                            {leadStatusLabel[l.status]} ▾
+                          <button className="badge" title={leadStatusLabel[l.status]}
+                            style={{ background:sc.bg, color:sc.text, border:"none", cursor:"pointer",
+                              maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", display:"inline-flex" }}>
+                            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{leadStatusLabel[l.status]}</span> ▾
                           </button>
                           {openStatusId === l.id && (
                             <>
@@ -1930,8 +1916,6 @@ export default function LeadsPage() {
       {selectedLead && current && (() => {
         const c = current;
         const sc = leadStatusColor[c.status];
-        const pri = leadPriority(c);
-        const pc = priorityColor[pri];
         const cInitials = (c.company || c.name).replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
         const activities = (c.activities && c.activities.length) ? c.activities : seedActivities(c);
         const drawerFiles = myFiles;
@@ -2202,7 +2186,6 @@ export default function LeadsPage() {
                 {/* Badges: stage · priority · template · est value */}
                 <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginTop:12 }}>
                   <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:sc.bg, color:sc.text }}>{leadStatusLabel[c.status]}</span>
-                  <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:pc.bg, color:pc.text }}>{priorityLabel[pri]}</span>
                   <span style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:"rgba(255,255,255,.18)", color:"#fff" }}><Package size={11} /> {c.product}</span>
                   <span style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:800, background:"#fff", color:"#003366" }}><Coins size={11} /> {c.value}</span>
                 </div>

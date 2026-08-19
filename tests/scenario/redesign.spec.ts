@@ -175,3 +175,28 @@ test("[ui·dealer] แผงลูกค้าเป้าหมายมีค�
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, "แผงลูกค้าเป้าหมายไม่ควรมี horizontal scroll").toBeLessThanOrEqual(3);
 });
+
+// ป้าย "ขั้นตอน" ในตารางลูกค้าเป้าหมาย — ห้ามล้นออกนอกช่องของตัวเอง (ผู้ใช้แจ้ง 18 ส.ค. 69)
+//
+// อาการที่เจอ: ชื่อขั้นที่ยาว ("ปิดการขายไม่สำเร็จ" / "รวบรวมความต้องการ") ล้นไปทับช่อง "ความคืบหน้า"
+// ช่องที่อยู่ถัดไปถูกวาดทีหลัง จึงมาทับส่วนที่ล้น → คลิกตรงนั้นไม่โดนป้าย = "กดไม่ได้"
+// วัดขอบจริงบนหน้าจอ ไม่เชื่อสายตา · พิสูจน์แล้วว่าโค้ดก่อนแก้ ล้น 24px จริง
+test("[ui·dealer] ป้ายขั้นตอนต้องอยู่ในช่องของตัวเอง และกดที่ปลายขวาแล้วเมนูต้องเปิด", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page, "dealer", "/leads");
+  await page.waitForTimeout(2000);
+  const chip = page.locator("tbody tr").first().locator("button.badge").first();
+  await expect(chip).toBeVisible({ timeout: 15_000 });
+
+  const m = await chip.evaluate(el => {
+    const td = el.closest("td")!;
+    return { chip: Math.round(el.getBoundingClientRect().right), cell: Math.round(td.getBoundingClientRect().right) };
+  });
+  expect(m.chip, `ป้ายล้นออกนอกช่อง ${m.chip - m.cell}px — จะไปทับช่องข้างๆ แล้วกดไม่โดน`).toBeLessThanOrEqual(m.cell);
+
+  // จุดที่เคยกดไม่โดน: ปลายขวาสุดของป้าย
+  const box = (await chip.boundingBox())!;
+  await page.mouse.click(box.x + box.width - 6, box.y + box.height / 2);
+  await expect(page.getByRole("button", { name: "เสนอราคา", exact: true }).first(),
+    "กดปลายขวาของป้ายแล้วเมนูเลือกขั้นต้องเปิด").toBeVisible({ timeout: 10_000 });
+});
