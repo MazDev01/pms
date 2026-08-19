@@ -6,6 +6,8 @@
 import { useState, useRef, useEffect } from "react";
 import { buildLeadReport, type LeadRow } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
+import { leads as leadsRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const thaiDateStr = (d: Date) => `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`;
@@ -13,15 +15,32 @@ const thaiDateStr = (d: Date) => `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${
 const todayStr = () => thaiDateStr(APP_NOW);
 
 export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: LeadRow) => void }) {
-  // ถ้ายังไม่มีรายงาน (ลูกค้าเป้าหมายเก่า) → เปิดด้วยเทมเพลตมาตรฐาน (พรีฟิลจากข้อมูลลูกค้าเป้าหมาย) ให้แก้ต่อได้
-  const initial = () => lead.report ?? buildLeadReport(lead, todayStr());
-  const [text, setText] = useState(initial);
+  // ⚠ รายการลูกค้าเป้าหมายไม่ได้ส่ง report มาด้วย (เป็นข้อความยาว กินขนส่งราว 1 ใน 3 ของขนาดแถว)
+  //   ตัวนี้จึงโหลดเองตอนเปิด — ทำที่เดียวตรงนี้ ทุกหน้าที่เรียกใช้จึงปลอดภัยเหมือนกัน
+  //   ห้ามเดาว่าไม่มีรายงานแล้วเสนอเทมเพลตทันที — ผู้ใช้กดบันทึกครั้งเดียว รายงานจริงหายทันที
+  const [text, setText] = useState("");
+  const [พร้อม, setพร้อม] = useState(false);   // รู้เนื้อหาจริงของรายนี้แล้วหรือยัง
+  const [เดิม, setเดิม] = useState("");             // ข้อความที่บันทึกไว้จริง (ใช้เทียบว่ามีการแก้หรือยัง)
   const ref = useRef<HTMLTextAreaElement>(null);
-  // ตั้งใจให้รีเซ็ตข้อความ "เฉพาะตอนเปลี่ยนลูกค้าเป้าหมาย" เท่านั้น — ไม่ใช่ทุกครั้งที่ initial ถูกสร้างใหม่
-  // ไม่งั้นสิ่งที่ผู้ใช้กำลังพิมพ์ค้างอยู่จะถูกเขียนทับด้วยเทมเพลตตั้งต้นระหว่างพิมพ์
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setText(initial()); }, [lead.id]);
-  const dirty = text !== (lead.report ?? "");
+
+  useEffect(() => {
+    let alive = true;
+    const ใช้ = (r: string | undefined) => {
+      if (!alive) return;
+      setเดิม(r ?? "");
+      setText(r ?? buildLeadReport(lead, todayStr()));
+      setพร้อม(true);
+    };
+    if (lead.report !== undefined) { ใช้(lead.report); return () => { alive = false; }; }
+    setพร้อม(false); setText("");
+    leadsRepo.get(lead.id)
+      .then(full => ใช้(full?.report ?? ""))
+      .catch(e => { logRepoRead("leads.get", e); if (alive) setพร้อม(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, lead.report]);
+
+  const dirty = พร้อม && text !== เดิม;
 
   // แทรก bullet บรรทัดใหม่ที่ตำแหน่งเคอร์เซอร์
   function insertBullet() {
@@ -49,12 +68,12 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
           <button type="button" onClick={resetTemplate} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "4px 10px" }}>รีเซ็ตเทมเพลต</button>
         </div>
       </div>
-      <textarea ref={ref} aria-label="เนื้อหารายงาน" value={text} onChange={e => setText(e.target.value)}
-        spellCheck={false}
+      <textarea ref={ref} aria-label="เนื้อหารายงาน" value={พร้อม ? text : "กำลังโหลดรายงาน…"} onChange={e => setText(e.target.value)}
+        readOnly={!พร้อม} spellCheck={false}
         style={{ width: "100%", minHeight: 320, padding: "12px 14px", borderRadius: 10, border: "1px solid #e5e7eb",
           fontSize: "0.8rem", lineHeight: 1.7, fontFamily: "inherit", color: "#2D2D2D", background: "#fff", resize: "vertical", whiteSpace: "pre-wrap" }} />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-        {dirty && <button onClick={() => setText(initial())} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>ยกเลิก</button>}
+        {dirty && <button onClick={() => setText(เดิม || buildLeadReport(lead, todayStr()))} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>ยกเลิก</button>}
         <button onClick={() => onSave({ ...lead, report: text })} disabled={!dirty}
           className="btn btn-primary btn-sm" style={!dirty ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
           บันทึกรายงาน

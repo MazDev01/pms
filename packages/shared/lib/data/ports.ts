@@ -294,7 +294,12 @@ export interface LeadListOpts {
 }
 export interface LeadListResult { rows: LeadRow[]; total: number; }
 export interface LeadsRepo {
+  /** รายการลูกค้าเป้าหมาย — ไม่รวมคอลัมน์หนักที่ใช้เฉพาะในแผงรายละเอียด (ดู get) */
   list(scope?: Scope): Promise<LeadRow[]>;
+  /** ลูกค้าเป้าหมายรายเดียวแบบครบทุกคอลัมน์ — ใช้ตอนเปิดแผงรายละเอียด
+   *  จำเป็นเพราะรายการ (list) ไม่ดึง report มาด้วย — คอลัมน์นั้นหนักแต่ใช้ที่เดียว
+   *  คืน null เมื่อหาไม่เจอ (ถูกลบไปแล้ว/อยู่คนละสาขา) */
+  get(id: string): Promise<LeadRow | null>;
   /** หน้าเดียวของลูกค้าเป้าหมาย + จำนวนรวมหลังกรอง (M9 Phase 4) — supabase: query ที่ DB · local: filter/sort/slice */
   listPage(scope: Scope | undefined, opts: LeadListOpts): Promise<LeadListResult>;
   /** เลข num_id ถัดไปของสาขาแบบ atomic (M7) — supabase: RPC next_entity_id · local: max+1

@@ -52,6 +52,15 @@ export const leadsGET = handler("leads.list", async (req, sb) => {
 
 export const leadsPOST = handler("leads.write", async (req, sb) => {
   const o = op(req);
+  // ลูกค้าเป้าหมายรายเดียวแบบครบทุกคอลัมน์ — แผงรายละเอียดเรียกตอนเปิด
+  //   (รายการไม่ดึง report มาด้วยเพราะเป็นข้อความยาว — ดู LEAD_LIST_COLS ใน SupabaseAdapter)
+  if (o === "get") {
+    const b = await body<{ id?: string }>(req);
+    if (!b?.id) return fail(400, "ไม่ได้ระบุลูกค้าเป้าหมาย");
+    const { data, error } = await sb.from("leads").select("*").eq("id", b.id).maybeSingle();
+    if (error) return dbFail("leads.get", error);
+    return ok(data ? rowToLead(data as Row) : null);
+  }
   if (o === "next") {
     const b = await body<{ dealerCode?: string }>(req);
     if (!b?.dealerCode) return fail(400, "ไม่ได้ระบุสาขา");

@@ -616,6 +616,8 @@ export const LocalAdapter: DataAdapter = {
   // งานขาย — list (อ่าน) + CRUD เต็ม (Phase 0) · เขียนลง localStorage คีย์เดียวกับ SalesContext
   leads: {
     list: (scope) => ok(scopeByDealer(readKey<LeadRow[]>(SALES.leads, leadSeed), scope)),
+    // โหมดข้อมูลในเครื่องเก็บทุกคอลัมน์อยู่แล้ว — คืนแถวที่ตรง id ตรง ๆ
+    get: (id) => ok(readKey<LeadRow[]>(SALES.leads, leadSeed).find(l => l.id === id) ?? null),
     // หน้าเดียว + กรอง (M9 Phase 4) — mirror leads_page ฝั่ง DB
     listPage: (scope, opts) => {
       const search = (opts.search ?? "").trim().toLowerCase();

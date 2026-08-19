@@ -67,6 +67,12 @@ type RowsResult = { data: unknown[] | null; error: { message: string } | null };
 // ผลคือรายการเดียวกันโผล่สองหน้า หรือหายไปเลย โดยไม่มีอะไรฟ้อง
 // จึงต้องพ่วง dealer_code เป็นตัวตัดสินท้ายสุดทุกครั้ง — ฝั่งตัวแทนไม่มีผลอะไร (มีสาขาเดียว)
 const TIEBREAK_COL = "dealer_code";
+
+// คอลัมน์ที่รายการลูกค้าเป้าหมายต้องใช้จริง (ทุกตัวยกเว้น report)
+//   report เป็นข้อความยาวที่ใช้เฉพาะในแผงรายละเอียด ดึงมาทั้งชุดคือค่าขนส่งเปล่าๆ
+//   ⚠ เพิ่มคอลัมน์ใหม่ในตาราง leads ต้องเติมชื่อที่นี่ด้วย ไม่งั้นหน้าจอจะไม่เห็นค่านั้นเลย
+const LEAD_LIST_COLS = "id,dealer_code,num_id,name,company,contact,phone,email,province,address,product,category,status,value,area,assigned,source,note,customer_id,lost_reason,tasks,activities,logo,project,created_at,created_label";
+
 // ── กันเบราว์เซอร์ค้าง (M8) ──
 // pageAll วนดึงทีละ PAGE_ROWS จน "หมดตาราง" — ที่สเกลใหญ่ (หลายแสนแถว) โหลดทั้งก้อนเข้าหน่วยความจำ
 // = แท็บค้าง/ตาย · ใส่เพดานแข็ง: เกินแล้ว "หยุด + เตือนดังในคอนโซล" (ไม่เงียบ) แทนที่จะค้างจนตาย
@@ -747,16 +753,25 @@ export const SupabaseAdapter: DataAdapter = {
     },
   },
 
-  // งานขาย — RLS ที่ DB คุมขอบเขต (insert ต้องมี dealer_code = สาขา session · with-check)
+// งานขาย — RLS ที่ DB คุมขอบเขต (insert ต้องมี dealer_code = สาขา session · with-check)
   // leads ใช้ mapper เฉพาะ (leadToRow/rowToLead) เพราะ id เป็น text + createdAt/area ต้องแปลงพิเศษ
   leads: {
+    // รายการไม่ดึง report — เป็นข้อความยาวที่ใช้เฉพาะในแผงรายละเอียด แต่กินที่ราว 1 ใน 3 ของขนาดแถว
+    //   (วัดจริง 19 ส.ค. 69: แถวละ 2.18 KB · 3,000 แถว ≈ 6.4 MB ต่อการเปิดหน้าหนึ่งครั้ง)
+    //   แผงรายละเอียดเรียก get() เติมให้ตอนเปิด — ห้ามเอา report กลับมาใส่ตรงนี้
+    //   เด็ดขาด: ตัวแก้รายงานจะเห็นรายงานว่าง แล้วเขียนทับของจริงทันทีที่กดบันทึก
     list: async (scope) => {
       const rows = await pageAll((from, to) => {
-        const base = sb().from("leads").select("*")
+        const base = sb().from("leads").select(LEAD_LIST_COLS)
           .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
         return scope && !scope.isHQ && scope.dealerCode ? base.eq("dealer_code", scope.dealerCode) : base;
       }, "leads");
       return rows.map(rowToLead);
+    },
+    get: async (id) => {
+      const { data, error } = await sb().from("leads").select("*").eq("id", id).maybeSingle();
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
+      return data ? rowToLead(data as Row) : null;
     },
     listPage: async (scope, opts) => {
       const { data, error } = await sb().rpc("leads_page", {

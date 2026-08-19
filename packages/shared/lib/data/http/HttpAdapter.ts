@@ -310,6 +310,8 @@ const metrics: MetricsRepo = {
 // scope ส่งไปกับคำขอ (?hq=1 / ?dealer=…) — RLS ที่ DB ยังเป็นด่านจริง อันนี้แค่ไม่ดึงเกินจำเป็น
 const leads: LeadsRepo = {
   list: (scope) => listAll<LeadRow>("/leads", "ลูกค้าเป้าหมาย", scope),
+  // รายเดียวแบบครบทุกคอลัมน์ (รวม report ที่รายการไม่ดึง) — แผงรายละเอียดเรียกตอนเปิด
+  get: (id) => post<LeadRow | null>("/leads?op=get", { id }),
   listPage: (scope, opts) => post("/leads?op=page", {
     ...opts,
     // ไม่ระบุมา = ใช้สาขาของ scope (พฤติกรรมเดิมของ SupabaseAdapter)

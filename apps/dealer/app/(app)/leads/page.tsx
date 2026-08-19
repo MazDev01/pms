@@ -51,7 +51,7 @@ import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
-import { persons as personsRepo, files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
+import { persons as personsRepo, files as filesRepo, storage as fileStorage, leads as leadsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
@@ -1126,6 +1126,16 @@ export default function LeadsPage() {
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
     resetApptForm(); // กันฟอร์มนัดหมายค้างข้ามลูกค้าเป้าหมาย
+    // รายงานติดตาม (report) ไม่ได้มากับรายการ — เป็นข้อความยาวที่กินขนส่งเปล่า ๆ ตอนโหลดทั้งตาราง
+    //   จึงมาเติมตอนเปิดแผงแทน · ⚠️ ต้องเติมให้ทัน ไม่งั้นตัวแก้รายงานจะเห็นว่าว่าง
+    //   แล้วเสนอเทมเพลตใหม่ — ผู้ใช้กดบันทึกก็ทับของจริงทันที (ดู ReportEditor)
+    void leadsRepo.get(l.id)
+      .then(full => {
+        if (!full) return;
+        setSelectedLead(prev => prev && prev.id === l.id ? { ...prev, report: full.report } : prev);
+        setDraft(prev => prev && prev.id === l.id ? { ...prev, report: full.report } : prev);
+      })
+      .catch(e => logRepoRead("leads.get", e));
   }
   function closePanel() {
     setSelectedLead(null); setDraft(null); setQuoteFormSignal(0);
