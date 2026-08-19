@@ -96,7 +96,8 @@ export function PlanVsActualBars({
   const [drawn, setDrawn] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
   const max = Math.max(...data.flatMap(d => [d.actual, d.plan]), 1) * 1.15;
-  const W = 700, H = height ?? 210, pL = 34, pR = 12, pT = 16, pB = 34;
+  // pT เผื่อที่ให้ตัวเลขขีดบนสุด — เดิมชิดขอบจนเด้งไปทับคำอธิบายเหนือกราฟ (ผู้ใช้แจ้ง 19 ส.ค. 69)
+  const W = 700, H = height ?? 210, pL = 34, pR = 12, pT = 26, pB = 34;
   const cW = W - pL - pR, cH = H - pT - pB, n = data.length;
   const slot = cW / n;
   const bw = Math.min(20, slot / 3);
@@ -567,7 +568,9 @@ export function GroupedBarChart({
   // เพดานแกนคิดจากค่าสูงสุดของแท่งเดี่ยว (ไม่ใช่ผลรวม) เพราะแท่งวางข้างกัน ไม่ได้ซ้อน
   const ceiling = niceCeil(Math.max(...series.flatMap(s => s.data), 1) * 1.08);
   const narrow = vw < 800;
-  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 24, pT = 22, pB = narrow ? 34 : 42;
+  // pT ต้องเผื่อที่ให้ตัวเลขขีดบนสุดของแกนตั้ง — เดิม 22 ทำให้เลขชิดขอบบนของ svg
+  // แล้วเด้งขึ้นไปชนบรรทัดคำอธิบายเหนือกราฟ (svg ตั้ง overflow:visible จึงล้นออกมาได้) — ผู้ใช้แจ้ง 19 ส.ค. 69
+  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 24, pT = 34, pB = narrow ? 34 : 42;
   const cW = W - pL - pR, cH = H - pT - pB;
   const band = cW / n;
   const groupW = Math.min(band * 0.68, 24 * series.length);
@@ -655,7 +658,9 @@ export function BarLineChart({
   // เพดานคิดจากค่าสูงสุดของ "แท่ง" อย่างเดียวก็พอ — เส้นเป็นสับเซต จึงไม่มีวันสูงกว่าแท่ง
   const ceiling = niceCeil(Math.max(...bar.data, ...line.data, 1) * 1.08);
   const narrow = vw < 800;
-  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 24, pT = 22, pB = narrow ? 34 : 42;
+  // pT ต้องเผื่อที่ให้ตัวเลขขีดบนสุดของแกนตั้ง — เดิม 22 ทำให้เลขชิดขอบบนของ svg
+  // แล้วเด้งขึ้นไปชนบรรทัดคำอธิบายเหนือกราฟ (svg ตั้ง overflow:visible จึงล้นออกมาได้) — ผู้ใช้แจ้ง 19 ส.ค. 69
+  const W = vw, H = height, pL = narrow ? 46 : 60, pR = narrow ? 14 : 24, pT = 34, pB = narrow ? 34 : 42;
   const cW = W - pL - pR, cH = H - pT - pB;
   const band = cW / n;
   const bw = Math.min(band * 0.5, 34);
