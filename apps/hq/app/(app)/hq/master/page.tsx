@@ -283,23 +283,28 @@ function HQMasterPageInner() {
         <button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={15} /> เพิ่มแม่แบบ</button>
       </div>
 
-      {/* Summary — KPI พรีเมียม (ชุดเดียวกับหน้า HQ อื่น) */}
-      <div className="hqx-kpis" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
-        <div className="hqx-kpi">
-          <span className="acc" style={{ background: "#003366" }} />
-          <span className="ic" style={{ background: "#dce5f0", color: "#003366" }}><Building2 size={20} /></span>
-          <div><div className="v"><CountUp value={`${catalog.length}`} /></div><div className="l">แม่แบบทั้งหมด</div></div>
-        </div>
-        <div className="hqx-kpi">
-          <span className="acc" style={{ background: "#003366" }} />
-          <span className="ic" style={{ background: "#dce5f0", color: "#003366" }}><Tag size={20} /></span>
-          <div><div className="v"><CountUp value={fmtBaht(avgPrice)} /></div><div className="l">ราคากลางเฉลี่ย /ตร.ม.</div></div>
-        </div>
-        <div className="hqx-kpi">
-          <span className="acc" style={{ background: "#0a4a86" }} />
-          <span className="ic" style={{ background: "#e0ecf7", color: "#0a4a86" }}><Layers size={20} /></span>
-          <div><div className="v"><CountUp value={`${totalSub}`} /></div><div className="l">แม่แบบย่อยทั้งหมด</div></div>
-        </div>
+      {/* Summary — KPI มาตรฐานของ HQ (.hq-kpi4) : ป้าย → ตัวเลข → หน่วย/บริบท · ไอคอนกล่องสีจางมุมขวา
+          เดิมหน้านี้ใช้ .hqx-kpi ชุดเก่า (แถบสีซ้าย + ไอคอนซ้าย + ตัวเลขขึ้นก่อนป้าย)
+          หน้าเดียวในระบบที่หน้าตาไม่เหมือนชาวบ้าน (บอสแจ้ง 19 ส.ค. 69) · 3 ใบในตะแกรง 4 ช่อง → การ์ดกว้างเท่าหน้าอื่น */}
+      <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
+        {([
+          { label: "แม่แบบทั้งหมด", value: `${catalog.length}`, sub: "รายการ", Icon: Building2, color: "#003366", bg: "#E8F0FE" },
+          { label: "ราคากลางเฉลี่ย", value: fmtBaht(avgPrice), sub: "ต่อ ตร.ม.", Icon: Tag, color: "#0891B2", bg: "#E6F4F9" },
+          { label: "แม่แบบย่อยทั้งหมด", value: `${totalSub}`, sub: "รายการ", Icon: Layers, color: "#059669", bg: "#E6F6EF" },
+        ] as const).map(t => (
+          <div key={t.label} className="card" style={{ marginBottom: 0, padding: "14px 14px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.label}</div>
+              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#1F2937", lineHeight: 1.2, marginTop: 5, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.015em", whiteSpace: "nowrap" }}>
+                <CountUp value={t.value} />
+              </div>
+              <div style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.sub}</div>
+            </div>
+            <span style={{ width: 34, height: 34, borderRadius: 10, background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <t.Icon size={17} color={t.color} strokeWidth={2.1} />
+            </span>
+          </div>
+        ))}
       </div>
 
       {/* Toolbar */}
