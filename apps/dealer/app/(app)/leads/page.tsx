@@ -885,6 +885,19 @@ export default function LeadsPage() {
     if (status === "PAID") {
       const target = allLeads.find(l => l.id === id);
       if (!target) return;
+      // ด่านเดียวกับปุ่ม "ได้งาน" ในแท็บงาน — ปิดการขายสำเร็จต้องมีใบที่ส่งถึงลูกค้าแล้ว
+      //   ปิดได้โดยไม่มีใบ = ได้ลูกค้ายอดสะสม ฿0 ปนในฐาน ยอดขาย/อัตราปิดการขายเพี้ยน (พบจากทดสอบหาบั๊ก 19 ส.ค. 69)
+      const ของลูกค้าเป้าหมาย = quotations.filter(q => quoteBelongsToLead(q, target));
+      if (!ของลูกค้าเป้าหมาย.length) {
+        openQuotationForm(target);
+        setToast("ปิดการขายสำเร็จต้องมีใบเสนอราคา — ออกใบแล้วส่งให้ลูกค้าก่อน");
+        return;
+      }
+      if (ของลูกค้าเป้าหมาย.every(q => q.status === "draft")) {
+        openQuotationList(target);
+        setToast("ใบเสนอราคายังเป็นร่าง — กดส่งให้ลูกค้าก่อน จึงจะปิดการขายสำเร็จได้");
+        return;
+      }
       if (!confirm(`ปิดการขายสำเร็จสำหรับ "${target.company || target.name}"?\nระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
       updateLeadStatus(id, status);
       setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ");
@@ -2101,6 +2114,15 @@ export default function LeadsPage() {
                 return true;
               }
               return false; // ของจริงมีแล้ว → ติ๊กได้ตามปกติ
+            }}
+            // ปิดการขายสำเร็จต้องมีใบที่ส่งถึงลูกค้าแล้วเสมอ (บอสสั่ง 19 ส.ค. 69)
+            //   เดิมกดได้งานได้ตั้งแต่ขั้นแรก → ได้ลูกค้ายอดสะสม ฿0 ปนในฐาน อัตราปิดการขายก็เพี้ยน
+            //   กติกาเดียวกับด่านของขั้น "เสนอราคา" ที่บังคับว่าต้องมีใบจริงก่อน
+            whyCannotWin={() => {
+              const mine = quotations.filter(q => quoteBelongsToLead(q, c));
+              if (!mine.length) return "ยังปิดการขายไม่ได้ — ต้องออกใบเสนอราคาและส่งให้ลูกค้าก่อน";
+              if (mine.every(q => q.status === "draft")) return "ยังปิดการขายไม่ได้ — ใบเสนอราคายังเป็นร่าง กดส่งให้ลูกค้าก่อน";
+              return "";
             }} />
         );
 

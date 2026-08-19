@@ -34,7 +34,9 @@ export function friendlyError(e: unknown, fallback = "เกิดข้อผ�
 
   // RPC ที่เราเขียนเองส่วนใหญ่ raise exception เป็นไทยอยู่แล้ว (เช่น "ไม่มีสิทธิ์แก้พนักงานขายของสาขานี้")
   // — ข้อความแบบนี้อ่านเข้าใจได้เลย ใช้ตรง ๆ ไม่ต้องแปลซ้ำ
-  if (THAI_RE.test(msg)) return msg;
+  // ตัดรหัสข้อผิดพลาดที่ RPC ติดหน้ามาออก (เช่น "no_sent_quotation: …" · "id_conflict:…")
+  // — รหัสนั้นมีไว้ให้โค้ดฝั่งแอปแยกเคส ไม่ใช่สิ่งที่ผู้ใช้ต้องอ่าน
+  if (THAI_RE.test(msg)) return msg.replace(/^[a-z0-9_]+:\s*/i, "");
 
   // RPC บางตัว raise exception เป็น "forbidden: ..." (ภาษาอังกฤษ) — เคสสิทธิ์ที่เจาะจงได้
   if (/^forbidden:/i.test(msg)) return "ไม่มีสิทธิ์ทำรายการนี้";

@@ -21,12 +21,16 @@ function stampNow() {
 }
 
 // Task-driven Sales Journey — เช็ก Task → บันทึกเวลา/ผู้ทำ → คำนวณ % → เลื่อน Stage อัตโนมัติ
-export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
+export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, whyCannotWin }: {
   lead: LeadRow; performedBy: string; onSave: (l: LeadRow) => void;
   /** งานที่ต้องมี "ของจริง" ถึงจะติ๊กได้ (จัดทำ/ส่งใบเสนอราคา) — หน้าแม่ส่งฟังก์ชันนี้มาเมื่องานนั้น
    *  ยังทำไม่ได้จริง แล้วพาผู้ใช้ไปทำของจริงแทน · คืน false = ไม่ได้จัดการ ให้ติ๊กตามปกติ
    *  (กดติ๊กเองแล้วขั้นขยับทั้งที่ยังไม่มีใบ/ยังไม่ได้ส่ง = ตัวเลขบนแดชบอร์ดไม่ตรงกับของจริงที่ถึงลูกค้า) */
   onRequestQuotation?: (taskKey: string) => boolean;
+  /** เหตุที่ยังปิดการขายสำเร็จไม่ได้ — คืนสตริงว่าง = ปิดได้
+   *  บอสสั่ง (19 ส.ค. 69): ห้ามปิดการขายถ้ายังไม่มีใบเสนอราคาที่ส่งถึงลูกค้าแล้ว
+   *  เดิมกด "ได้งาน" ได้ตลอด → ได้ลูกค้ายอดสะสม ฿0 ปนในฐาน ทำให้ยอดขาย/อัตราปิดการขายในรายงานเพี้ยน */
+  whyCannotWin?: () => string;
 }) {
   const lostReasons = useLostReasons(); // รายการที่ HQ กำหนด (อ่านผ่าน repo — ไม่ใช่ localStorage ของ origin ตัวเอง)
   const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ลูกค้าเป้าหมายที่ยังไม่มี checklist ใช้ชุดนี้สร้าง
@@ -107,6 +111,8 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
   }
 
   const barColor = lead.status === "CANCELLED" ? "#dc2626" : lead.status === "PAID" ? "#059669" : "#003366";
+  // เหตุที่กด "ได้งาน" ไม่ได้ (ว่าง = กดได้) — หน้าแม่เป็นคนตัดสิน เพราะมีข้อมูลใบเสนอราคาของลูกค้าเป้าหมายรายนี้
+  const winBlock = closed ? "" : (whyCannotWin?.() ?? "");
 
   return (
     <div>
@@ -258,12 +264,22 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
             </div>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <span style={{ flex: 1, fontSize: "0.8rem", fontWeight: 700, color: "#374151", alignSelf: "center" }}>ปิดการขาย :</span>
+            {/* ปิดการขายสำเร็จได้ก็ต่อเมื่อมีใบที่ส่งถึงลูกค้าแล้ว (กติกาเดียวกับด่านของขั้นเสนอราคา) */}
             <button type="button" className="btn btn-sm" onClick={() => close("won")}
-              style={{ background: "#059669", color: "#fff" }}><Trophy size={13} /> ได้งาน</button>
+              disabled={!!winBlock} title={winBlock || undefined}
+              style={winBlock
+                ? { background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" }
+                : { background: "#059669", color: "#fff" }}><Trophy size={13} /> ได้งาน</button>
             <button type="button" className="btn btn-sm" onClick={() => setLostOpen(true)}
               style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}><XCircle size={13} /> ไม่ได้งาน</button>
+            {winBlock && (
+              <div style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: 7, marginTop: 2,
+                background: "#fff7ed", border: "1px solid #fed7aa", color: "#b45309", borderRadius: 9, padding: "8px 11px", fontSize: "0.72rem", fontWeight: 600 }}>
+                <Lock size={13} style={{ flexShrink: 0 }} /> {winBlock}
+              </div>
+            )}
           </div>
         )}
       </div>
