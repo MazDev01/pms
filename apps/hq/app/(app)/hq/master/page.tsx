@@ -250,7 +250,10 @@ function HQMasterPageInner() {
   /** เปิดกล่องปรับราคา — ดึงราคาแม่แบบย่อยที่ตั้งไว้มาด้วย จะได้ปรับพร้อมกันทั้งกลุ่ม */
   function openReprice(p: SolutionProduct) {
     setReprice(p); setRpPrice(String(p.price)); setRpNote(""); setRpError(""); setRpScale(true);
-    setRpSubs(Object.fromEntries(Object.entries(p.subtypePrices ?? {}).map(([k, v]) => [k, String(v)])));
+    // แสดงแม่แบบย่อย "ทุกตัว" ไม่ใช่เฉพาะตัวที่ตั้งราคาเฉพาะไว้ (บอสสั่ง 19 ส.ค. 69
+    //   "ตอนปรับราคาให้แม่แบบหลักและแม่แบบรองพร้อมกัน") — ตัวที่ช่องว่างคือตัวที่ใช้ราคาแม่แบบหลัก (ขยับตามอยู่แล้ว)
+    //   เดิมแสดงเฉพาะตัวที่มีราคาเฉพาะ คนกดจึงไม่มั่นใจว่าตัวที่ไม่ขึ้นจอจะโดนปรับด้วยหรือเปล่า
+    setRpSubs(Object.fromEntries((p.subtypes ?? []).map(name => [name, p.subtypePrices?.[name] != null ? String(p.subtypePrices[name]) : ""])));
   }
   /** ราคาย่อยที่จะบันทึกจริง (ตรรกะการคิดอยู่ที่ repricing.ts — มีเทสต์คุม) */
   function repricedSubs(next: number): Record<string, number> {
@@ -595,9 +598,14 @@ function HQMasterPageInner() {
                   ใบเสนอราคาที่ออกจากแม่แบบย่อยจึงยังคิดราคาเดิมทั้งที่ผู้ดูแลเชื่อว่าปรับทั้งกลุ่มแล้ว (บอสแจ้ง 19 ส.ค. 69) */}
               {Object.keys(rpSubs).length > 0 && (
                 <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "#f8fafc", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, color: STEEL }}>
-                    <input type="checkbox" checked={rpScale} onChange={e => setRpScale(e.target.checked)} />
-                    ปรับราคาแม่แบบย่อยตามสัดส่วนด้วย ({Object.keys(rpSubs).length} รายการ)
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 12px", background: "#f8fafc", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, color: STEEL }}>
+                    <input type="checkbox" checked={rpScale} onChange={e => setRpScale(e.target.checked)} style={{ marginTop: 2 }} />
+                    <span>
+                      ปรับราคาแม่แบบย่อยพร้อมกัน ({Object.keys(rpSubs).length} รายการ)
+                      <span style={{ display: "block", fontWeight: 500, color: MUTED, fontSize: "0.7rem", marginTop: 2 }}>
+                        ตัวที่ตั้งราคาเฉพาะไว้ ขยับตามสัดส่วนเดิม · ตัวที่ใช้ราคาแม่แบบหลัก ขยับตามอยู่แล้ว
+                      </span>
+                    </span>
                   </label>
                   <div style={{ padding: "8px 12px 10px", display: "flex", flexDirection: "column", gap: 6, maxHeight: 190, overflowY: "auto" }}>
                     {Object.entries(rpSubs).map(([name, val]) => {
@@ -607,7 +615,10 @@ function HQMasterPageInner() {
                         <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem" }}>
                           <span style={{ flex: 1, minWidth: 0, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
                           {changed && <span style={{ fontSize: "0.7rem", color: "#9ca3af", textDecoration: "line-through", flexShrink: 0 }}>{fmtBaht(parseFloat(val))}</span>}
+                          {/* ช่องว่าง = แม่แบบย่อยนี้ใช้ราคาของแม่แบบหลัก จึงขยับตามอยู่แล้ว — บอกไว้ให้เห็นชัด */}
+                          {!val.trim() && <span style={{ fontSize: "0.68rem", color: "#9ca3af", flexShrink: 0 }}>ตามแม่แบบหลัก</span>}
                           <input aria-label={`ราคากลางของ ${name}`} type="number" min="0" step="0.01"
+                            placeholder={rpPrice || "—"}
                             value={changed ? String(next) : val}
                             onChange={e => { setRpScale(false); setRpSubs(prev => ({ ...prev, [name]: e.target.value })); }}
                             style={{ width: 108, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 9px", fontSize: "0.8rem", color: STEEL, outline: "none", fontFamily: "inherit", flexShrink: 0 }} />
