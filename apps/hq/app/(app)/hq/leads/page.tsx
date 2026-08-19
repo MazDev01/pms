@@ -533,8 +533,7 @@ export default function HQLeadsPage() {
         </div>
       {/* ⚠️ อย่าทำเป็นโดนัท: ลูกค้าเป้าหมายหนึ่งรายนับแม่แบบเดียว แต่ที่นี่ตัดเป็น 11 ชนิดย่อย — เป็นการเทียบค่า ไม่ใช่สัดส่วนก้อนเดียว */}
       <div className="card chart-l" style={{ marginBottom: 0 }}>
-        <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div>
-          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>แม่แบบที่ลูกค้าเป้าหมายสนใจ · หน่วย: ราย</span></div>
+        <div className="card-header"><div className="card-title">ประเภทอาคารที่สนใจ</div></div>
         <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
           {!buildingTypes.length ? (
             <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
@@ -591,8 +590,7 @@ export default function HQLeadsPage() {
         </div>
         {/* โดนัท: เหตุผลรวมกันได้ 100% ของลูกค้าเป้าหมายที่ปิดไม่สำเร็จพอดี → เป็นสัดส่วนของก้อนเดียว เหมาะกับโดนัทมากกว่าแท่ง */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-header"><div className="card-title">เหตุผลที่ปิดการขายไม่สำเร็จ</div>
-            <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เฉพาะรายการที่บันทึกเหตุผลไว้ · หน่วย: ราย</span></div>
+          <div className="card-header"><div className="card-title">เหตุผลที่ปิดการขายไม่สำเร็จ</div></div>
           <div className="card-body" style={{ paddingTop: 6, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
             {!lostReasons.length ? (
               <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>— ไม่มีข้อมูลในช่วงที่เลือก</div>
@@ -622,8 +620,7 @@ export default function HQLeadsPage() {
           ตารางนี้มี 6 คอลัมน์ กว้างขั้นต่ำ 674px (colgroup) จึงอยู่ในช่องแคบไม่ได้
           เคยอยู่ช่องที่ 3 ของกริด (~300px) → เห็นแค่คอลัมน์ "ลูกค้าเป้าหมาย" ที่เหลือต้องเลื่อนแนวนอน */}
       <div className="card" style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
-        <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div>
-          <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>เรียงตามยอดขายในช่วง</span></div>
+        <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div></div>
         <div className="table-wrap">
           <table>
             <colgroup>
