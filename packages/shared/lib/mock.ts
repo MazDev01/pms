@@ -724,6 +724,29 @@ export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStat
     return { key: def.key, label: def.label, done: false };
   });
 }
+/** ปรับรายการงานของลูกค้าเป้าหมายให้ตรงกับ "งานมาตรฐาน" ล่าสุดที่ HQ ตั้งไว้
+ *
+ *  บอสแจ้ง (19 ส.ค. 69): "แก้ใน hq แล้ว ดีลเลอร์ยังไม่เปลี่ยน"
+ *  เดิมหน้าจออ่าน lead.tasks ที่ฝังอยู่กับลูกค้าเป้าหมายตรง ๆ — รายที่มีอยู่ก่อนจึงค้างชุดเก่าตลอดไป
+ *  HQ เป็นเจ้าของเส้นทางการขาย ทุกสาขาต้องเหมือนกัน จึงต้องยึดแม่แบบเป็นหลักเสมอ
+ *
+ *  · ชุดงาน/ลำดับ/ชื่อ = ตามแม่แบบเสมอ · งานที่รหัสตรงกัน คงติ๊ก/ผู้ทำ/เวลาเดิมไว้
+ *  · งานที่ HQ ลบทิ้งแล้วจะหลุดจากรายการ (ตั้งใจ — HQ สั่งเอาออก)
+ *    ⚠ ลบงานแล้วเพิ่มใหม่ชื่อเดิม = คนละงาน (รหัสใหม่) ประวัตการติ๊กของงานเก่าจึงหาย — อยากเก็บประวัติไว้ให้แก้ชื่อแทน
+ *  · ลูกค้าเป้าหมายที่ปิดแล้ว (สำเร็จ/ไม่สำเร็จ) ไม่แตะเลย — ประวัติที่ปิดไปแล้วต้องคงที่
+ */
+export function applyTaskTemplate(
+  tasks: LeadTask[] | undefined, tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE, status?: LeadStatus,
+): LeadTask[] {
+  if (!tasks?.length) return buildLeadTasks(tpl);
+  if (status === "PAID" || status === "CANCELLED") return tasks;
+  const by = new Map(tasks.map(t => [t.key, t]));
+  return tpl.map(def => {
+    const cur = by.get(def.key);
+    return cur ? { ...cur, label: def.label } : { key: def.key, label: def.label, done: false };
+  });
+}
+
 export function stageFromTasks(tasks: LeadTask[] = [], tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadStatus {
   let stage: LeadStatus = "WAITING";
   for (const def of tpl) {

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
-  buildLeadTasks, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
+  buildLeadTasks, applyTaskTemplate, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
   QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, OTHER_LOST_REASON,
   type LeadRow, type LeadTask, type LeadStatus,
 } from "@pms/shared/lib/mock";
@@ -30,7 +30,9 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation }: {
 }) {
   const lostReasons = useLostReasons(); // รายการที่ HQ กำหนด (อ่านผ่าน repo — ไม่ใช่ localStorage ของ origin ตัวเอง)
   const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ลูกค้าเป้าหมายที่ยังไม่มี checklist ใช้ชุดนี้สร้าง
-  const tasks: LeadTask[] = lead.tasks?.length ? lead.tasks : buildLeadTasks(taskTpl);
+  // งานที่เห็นต้องตรงกับชุดที่ HQ ตั้งไว้เสมอ — เดิมอ่าน lead.tasks ตรง ๆ
+  // ลูกค้าเป้าหมายที่มีอยู่ก่อน HQ แก้งานจึงค้างชุดเก่าตลอดไป (บอสแจ้ง 19 ส.ค. 69)
+  const tasks: LeadTask[] = applyTaskTemplate(lead.tasks, taskTpl, lead.status);
   const closed = lead.status === "PAID" || lead.status === "CANCELLED";
   const pct = closed ? 100 : taskProgress(tasks);
   const [lostOpen, setLostOpen] = useState(false);

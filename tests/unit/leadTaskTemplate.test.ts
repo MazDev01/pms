@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  normalizeLeadTaskTemplate, buildLeadTasks, stageFromTasks, syncTasksToStage,
+  normalizeLeadTaskTemplate, buildLeadTasks, applyTaskTemplate, stageFromTasks, syncTasksToStage,
   LEAD_TASK_TEMPLATE, CLOSE_TASK_KEY,
   type LeadTaskDef,
 } from "../../packages/shared/lib/mock";
@@ -112,3 +112,49 @@ describe("ลำดับงานมาตรฐานตามที่บอ�
   });
 });
 
+
+// ── งานของลูกค้าเป้าหมายต้องเดินตามแม่แบบล่าสุดที่ HQ ตั้ง ────────────────────────
+// บอสแจ้ง (19 ส.ค. 69): "แก้ใน hq แล้ว ดีลเลอร์ยังไม่เปลี่ยน"
+// เดิมหน้าจออ่าน lead.tasks ที่ฝังอยู่กับลูกค้าเป้าหมายตรง ๆ รายที่มีอยู่ก่อนจึงค้างชุดเก่าตลอดไป
+describe("ปรับงานของลูกค้าเป้าหมายตามแม่แบบล่าสุด", () => {
+  const tpl: LeadTaskDef[] = [
+    { key: "contact", label: "ติดต่อแล้ว", stage: "WAITING" },
+    { key: "req", label: "สรุปความต้องการ", stage: "BULLET" },
+    { key: "close", label: "ปิดการขาย / ไม่สำเร็จ", stage: "PAID" },
+  ];
+
+  it("งานใหม่ที่ HQ เพิ่มต้องโผล่ที่ตัวแทน (ยังไม่ติ๊ก)", () => {
+    const out = applyTaskTemplate([{ key: "contact", label: "ติดต่อแล้ว", done: true }], tpl);
+    expect(out.map(t => t.key)).toEqual(["contact", "req", "close"]);
+    expect(out.find(t => t.key === "req")?.done).toBe(false);
+  });
+
+  it("งานที่ติ๊กไว้แล้วต้องคงติ๊ก + ผู้ทำ/เวลาเดิม", () => {
+    const เดิม = { key: "contact", label: "ติดต่อครั้งแรก", done: true, doneAt: "1 ส.ค. 2569 · 10:00", doneBy: "สมชาย" };
+    const out = applyTaskTemplate([เดิม], tpl);
+    expect(out[0]).toMatchObject({ done: true, doneAt: เดิม.doneAt, doneBy: "สมชาย" });
+  });
+
+  it("HQ เปลี่ยนชื่องาน → ตัวแทนเห็นชื่อใหม่ทันที", () => {
+    const out = applyTaskTemplate([{ key: "contact", label: "ติดต่อครั้งแรก", done: true }], tpl);
+    expect(out[0].label).toBe("ติดต่อแล้ว");
+  });
+
+  it("งานที่ HQ ลบทิ้งต้องหลุดจากรายการ", () => {
+    const out = applyTaskTemplate([
+      { key: "contact", label: "ติดต่อแล้ว", done: true },
+      { key: "เก่า", label: "งานที่ถูกยกเลิก", done: true },
+    ], tpl);
+    expect(out.some(t => t.key === "เก่า")).toBe(false);
+  });
+
+  it("ลูกค้าเป้าหมายที่ปิดแล้วห้ามแตะ — ประวัติต้องคงเดิม", () => {
+    const เก่า = [{ key: "อะไรก็ตาม", label: "งานเก่า", done: true }];
+    expect(applyTaskTemplate(เก่า, tpl, "PAID")).toEqual(เก่า);
+    expect(applyTaskTemplate(เก่า, tpl, "CANCELLED")).toEqual(เก่า);
+  });
+
+  it("ยังไม่มี checklist เลย → สร้างจากแม่แบบทั้งชุด", () => {
+    expect(applyTaskTemplate(undefined, tpl).map(t => t.key)).toEqual(["contact", "req", "close"]);
+  });
+});

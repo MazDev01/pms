@@ -6,7 +6,7 @@ import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
 import {
   leadStatusLabel, leadStatusColor,
-  buildLeadReport, buildLeadTasks, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
+  buildLeadReport, buildLeadTasks, applyTaskTemplate, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
   OTHER_LOST_REASON,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
@@ -156,11 +156,11 @@ function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v
 function leadProg(l: LeadRow, tpl?: LeadTaskDef[]): number {
   if (l.status === "PAID") return 100;
   if (l.status === "CANCELLED") return 0;
-  return taskProgress(l.tasks?.length ? l.tasks : buildLeadTasks(tpl));
+  return taskProgress(applyTaskTemplate(l.tasks, tpl, l.status));
 }
 // จำนวนงานที่ทำเสร็จ / ทั้งหมด (ไว้แสดงบนการ์ดบอร์ด)
 function leadTaskCount(l: LeadRow, tpl?: LeadTaskDef[]): { done: number; total: number } {
-  const t = l.tasks?.length ? l.tasks : buildLeadTasks(tpl);
+  const t = applyTaskTemplate(l.tasks, tpl, l.status);
   return { done: t.filter(x => x.done).length, total: t.length };
 }
 // กิจกรรมล่าสุดของลูกค้าเป้าหมาย (activities เรียงใหม่สุดอยู่บน) — ไม่มีกิจกรรม/ไม่มีวันที่สร้าง = "—"
@@ -704,6 +704,13 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                   {form.province && !myProvinces.includes(form.province) && <option value={form.province}>{form.province} (นอกภาค)</option>}
                 </select>
               </div>
+              <div>
+                <label style={labelStyle}>แหล่งที่มา</label>
+                <select aria-label="แหล่งที่มา" value={form.source} onChange={e=>set("source",e.target.value)} style={inputStyle}>
+                  <option value="">— ยังไม่ระบุ —</option>
+                  {[...legacySource(form.source), ...SOURCES].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
               {/* ที่อยู่ — กรอกตั้งแต่ตอนเป็นลูกค้าเป้าหมาย แล้วส่งต่อเป็นที่อยู่ลูกค้าตอนปิดการขายสำเร็จ
                   เดิมช่องนี้มีเฉพาะฝั่งลูกค้า เซลส์จึงต้องไปตามถามซ้ำหลังปิดการขาย (บอสแจ้ง 19 ส.ค. 69) */}
               <div className="col-full">
@@ -711,13 +718,6 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 <input value={form.address} onChange={e=>set("address",e.target.value)}
                   placeholder="เลขที่ ถนน ตำบล/แขวง อำเภอ/เขต รหัสไปรษณีย์" style={inputStyle} />
                 <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ยังไม่รู้ก็เว้นว่างได้ · ใช้ต่อเป็นที่อยู่ลูกค้าตอนปิดการขายสำเร็จ</div>
-              </div>
-              <div>
-                <label style={labelStyle}>แหล่งที่มา</label>
-                <select aria-label="แหล่งที่มา" value={form.source} onChange={e=>set("source",e.target.value)} style={inputStyle}>
-                  <option value="">— ยังไม่ระบุ —</option>
-                  {[...legacySource(form.source), ...SOURCES].map(s=><option key={s}>{s}</option>)}
-                </select>
               </div>
 
               {/* ── ผู้ติดต่อ ── */}
