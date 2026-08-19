@@ -1,5 +1,6 @@
 "use client";
 
+import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useState, useMemo, useRef, type ReactNode } from "react";
@@ -179,19 +180,19 @@ export default function CalendarPage() {
       <div className="kpi-bar">
         <div className="kpi">
           <div className="kpi-icon kpi-navy"><CalendarDays size={18} /></div>
-          <div><div className="kpi-val">{monthAppts.length}</div><div className="kpi-label">นัดหมายเดือนนี้</div></div>
+          <div><div className="kpi-val"><CountUp value={`${monthAppts.length}`} /></div><div className="kpi-label">นัดหมายเดือนนี้</div></div>
         </div>
         <div className="kpi">
           <div className="kpi-icon kpi-amber"><CalendarCheck size={18} /></div>
-          <div><div className="kpi-val">{monthUpcoming}</div><div className="kpi-label">กำลังจะถึง</div></div>
+          <div><div className="kpi-val"><CountUp value={`${monthUpcoming}`} /></div><div className="kpi-label">กำลังจะถึง</div></div>
         </div>
         <div className="kpi">
           <div className="kpi-icon kpi-green"><CalendarDays size={18} /></div>
-          <div><div className="kpi-val">{monthDays}</div><div className="kpi-label">วันที่มีนัด</div></div>
+          <div><div className="kpi-val"><CountUp value={`${monthDays}`} /></div><div className="kpi-label">วันที่มีนัด</div></div>
         </div>
         <div className="kpi">
           <div className="kpi-icon kpi-steel"><Clock size={18} /></div>
-          <div><div className="kpi-val">{selectedAppts.length}</div><div className="kpi-label">นัดวันที่เลือก</div></div>
+          <div><div className="kpi-val"><CountUp value={`${selectedAppts.length}`} /></div><div className="kpi-label">นัดวันที่เลือก</div></div>
         </div>
       </div>
 
