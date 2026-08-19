@@ -838,7 +838,7 @@ export default function CustomersPage(){
             { label:"ยอดขายรวม",         value:fmtC(totalValue),     sub:"ทุกโครงการ", Icon:Coins,    color:"#EA580C", bg:"#FEF0E6" },
           ];
           return (
-            <div className="dash-kpis kpi-2" style={{ marginBottom:16 }}>
+            <div className="dash-kpis" style={{ marginBottom:16 }}>
               {kpis.map(k => (
                 <div key={k.label} className="card" style={{ padding:"16px 14px", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
                   <div style={{ minWidth:0 }}>

@@ -1276,8 +1276,8 @@ textarea:focus-visible {
    กติกา: ทุกหน้าใช้ KPI 4 ใบเท่ากัน — ห้ามเพิ่มเป็น 5+ (ตัวหลักเคยเป็น 5 คอลัมน์ + ตัวช่วย .kpi-4 ลบไปแล้ว)
    หมายเหตุ: อย่าเปลี่ยนเป็น auto-fit — การ์ดจะตกบรรทัดเป็น 2 แถวบนจอ 1280 */
 .dash-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-/* หน้าลูกค้า — เหลือ KPI 2 ใบ (ตัด "โครงการที่ส่งมอบ"/"อยู่ในประกัน" ออกตามคำสั่ง) */
-.dash-kpis.kpi-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* ⚑ หน้าลูกค้ามี KPI แค่ 2 ใบ (ตัด "ส่งมอบ"/"อยู่ในประกัน" ออกตามคำสั่ง) — แต่ยังใช้ตะแกรง 4 ช่องเหมือนเดิม
+   เคยมี .kpi-2 ที่ยืดการ์ดสองใบเต็มความกว้าง — การ์ดใหญ่กว่าทุกหน้าจนผิดสัดส่วน (บอสแจ้ง 19 ส.ค. 69) ลบทิ้งแล้ว */
 @media (max-width: 1100px) { .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px)  { .dash-kpis { grid-template-columns: 1fr; } }
 /* การ์ด KPI แคบลง → ลด padding/ขนาดตัวเลขให้พอดี ไม่ล้น */
