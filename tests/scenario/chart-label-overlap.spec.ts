@@ -15,6 +15,14 @@ async function overlaps(page: import("@playwright/test").Page) {
     document.querySelectorAll("svg").forEach((svg, si) => {
       const texts = [...svg.querySelectorAll("text")]
         .filter(t => (t.textContent ?? "").trim() !== "" && t.getBoundingClientRect().width > 0);
+      // ป้ายที่หลุดออกเหนือกรอบกราฟ — svg ตั้ง overflow:visible มันจึงไปทับหัวข้อ/คำอธิบายของการ์ด
+      //   (เคสจริง 19 ส.ค. 69: ขีดบนสุดเกินเพดาน → ตำแหน่งติดลบ ล้นขึ้นไป 40px)
+      //   เทสที่ดูแค่ "ป้ายทับกันเอง" จับเคสนี้ไม่ได้
+      const box = svg.getBoundingClientRect();
+      texts.forEach(t => {
+        const b = t.getBoundingClientRect();
+        if (b.top < box.top - 0.5) bad.push(`svg#${si}: “${t.textContent}” ล้นเหนือกรอบกราฟ ${(box.top - b.top).toFixed(1)}px`);
+      });
       for (let a = 0; a < texts.length; a++) {
         for (let b = a + 1; b < texts.length; b++) {
           const r1 = texts[a].getBoundingClientRect(), r2 = texts[b].getBoundingClientRect();

@@ -16,8 +16,17 @@ const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 //   ผู้อ่านเห็นเลขซ้ำ 2 คู่ แล้วอ่านสเกลของกราฟไม่ออก
 //
 // แก้: เพดานต่ำ ๆ ให้ใช้ขั้นเป็นจำนวนเต็ม (นับของนับไม่ได้ครึ่งใบอยู่แล้ว)
+/** ขีดบนแกนตั้ง — ห้ามมีขีดที่เกิน "เพดาน" เด็ดขาด
+ *
+ *  บั๊กจริง (บอสแจ้ง 19 ส.ค. 69 "เลขทับซ้อนกัน"): เดิมปัดเพดานเป็นจำนวนเต็มก่อนสร้างขีด
+ *  เพดาน 1.5 (กรณีกราฟที่ค่าสูงสุดเป็น 1) จึงได้ขีด [0,1,2] — ขีด "2" เกินเพดาน
+ *  ตำแหน่งการวาดจึงติดลบ (อยู่เหนือกรอบกราฟ 34 หน่วย) แล้ว svg ตั้ง overflow:visible มันจึงไปโผล่ทับหัวข้อการ์ด
+ *  วัดจริงจากหน้าเว็บ: ล้นเหนือกรอบ svg 40.1px */
 function axisTicks(ceiling: number): number[] {
-  if (ceiling <= 4) return Array.from({ length: Math.max(2, Math.round(ceiling) + 1) }, (_, i) => i);
+  if (ceiling <= 4) {
+    const top = Math.max(1, Math.floor(ceiling));
+    return Array.from({ length: top + 1 }, (_, i) => i);
+  }
   if (ceiling <= 8) return [0, 2, 4, 6, 8].filter(v => v <= ceiling);
   return Array.from({ length: 5 }, (_, i) => (ceiling / 4) * i);
 }
@@ -361,8 +370,10 @@ export function SalesLineChart({
       {/* เส้นประเป้าหมาย — วาดทับเส้น ให้เห็นว่าเดือนไหนอยู่เหนือเส้น */}
       <line x1={pL} y1={tY} x2={W - pR} y2={tY} stroke="#EA580C" strokeWidth="1.6" strokeDasharray="6 4"
         opacity={drawn ? 1 : 0} style={fadeIn(0.5)} />
-      <text x={W - pR + 6} y={tY - 3} fontSize="9.5" fill="#EA580C" fontWeight="700" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{targetLabel}</text>
-      <text x={W - pR + 6} y={tY + 9} fontSize="9.5" fill="#EA580C" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{fmt(target)}</text>
+      {/* ชื่อเส้นเป้ากับตัวเลขเป้า — ต้องห่างอย่างน้อยเท่าความสูงตัวอักษร
+          เดิมห่าง 12 หน่วย กับตัวอักษร 9.5 → กล่องข้อความซ้อนทับกันเอง (วัดจริงจากหน้าเว็บ 19 ส.ค. 69) */}
+      <text x={W - pR + 6} y={tY - 5} fontSize="9.5" fill="#EA580C" fontWeight="700" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{targetLabel}</text>
+      <text x={W - pR + 6} y={tY + 12} fontSize="9.5" fill="#EA580C" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{fmt(target)}</text>
 
       {/* จุดรายเดือน — เขียว = ถึงเป้า · ขนาด >=8px ตามสเปกมาร์ก */}
       {pts.map((p, i) => {
