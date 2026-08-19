@@ -54,6 +54,7 @@ import type { DealerRow } from "@pms/shared/lib/data/types";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage, leads as leadsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { lastContactLabel, leadLatestDate as leadLatestDateOf } from "@pms/shared/lib/leadMetrics";
+import { useLeadSummary, useLeadsPage } from "@pms/shared/lib/useNetworkData";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
@@ -1287,23 +1288,50 @@ export default function LeadsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLead, showDeleteConfirm, popupField]);
 
+  // ─── สรุปจากฐานข้อมูล (ลดการพึ่งข้อมูลทั้งสาขาในเบราว์เซอร์) ─────────
+  // ตัวเลขบนการ์ด/กราฟคิดที่ฐานข้อมูล — ไม่ต้องขนลูกค้าเป้าหมายทั้งสาขามานับเอง
+  //   โหมดข้อมูลในเครื่อง (local) คืน null → ตกกลับไปคำนวณฝั่งหน้าจอเหมือนเดิม (ตัวเลขต้องเท่ากัน)
+  const summaryFilters = useMemo(() => ({ dealerCodes: [currentDealer.code] }), [currentDealer.code]);
+  const leadSummary = useLeadSummary(summaryFilters);
+  // นับ "เกิน N วัน" ที่ฐานข้อมูล — เกณฑ์เป็นของสาขา คิดฝั่งหน้าจอไม่ได้ถ้าไม่มีข้อมูลครบ
+  const overdueOpts = useMemo(() => ({
+    limit: 1, offset: 0, overdue: true, dealerCodes: [currentDealer.code],
+    defaultDays: followUpAlertDays,
+  }), [currentDealer.code, followUpAlertDays]);
+  const overduePage = useLeadsPage(overdueOpts);
+
   // ─── สรุปด้านบน: 5 ตัวชี้วัด + กราฟแนวโน้ม + แหล่งที่มา ────────────────
   // นับจาก leadsData (ชุดที่ผ่านตัวกรองหลักแล้ว) — คลิกการ์ดเพื่อกรองต่อ
   const newThisMonth = useMemo(
     () => leadsData.filter(l => { const d = leadCreatedDate(l); return d.getMonth() === MOCK_TODAY_LEAD.getMonth() && d.getFullYear() === MOCK_TODAY_LEAD.getFullYear(); }).length,
     [leadsData]);
-  const overdue7 = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
+  const overdue7 = useMemo(
+    () => overduePage ? overduePage.total : leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length,
+    [overduePage, leadsData, followUpAlertDays]);
   const meetingToday = useMemo(() => appointments.filter(a => a.date === APP_NOW_ISO && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
-  const newWaiting = useMemo(() => leadsData.filter(l => l.status === "WAITING").length, [leadsData]);
+  const newWaiting = useMemo(
+    () => leadSummary
+      ? (leadSummary.byStatus.find(r => r.status === "WAITING")?.count ?? 0)
+      : leadsData.filter(l => l.status === "WAITING").length,
+    [leadSummary, leadsData]);
   // Sales Opportunity = มูลค่ารวมของลูกค้าเป้าหมายที่ยังเปิดอยู่ (Expected Revenue)
-  const openValue = useMemo(() => leadsData.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0), [leadsData]);
+  const openValue = useMemo(() => {
+    if (leadSummary) {
+      return leadSummary.byStatus
+        .filter(r => r.status !== "PAID" && r.status !== "CANCELLED")
+        .reduce((s, r) => s + r.value, 0);
+    }
+    return leadsData.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0);
+  }, [leadSummary, leadsData]);
   // Conversion Rate = ปิดได้ / (ปิดได้ + ปิดไม่ได้) — ใช้ myAllLeads เพราะ leadsData ตัด PAID ออกแล้ว
   // ต้องเป็นของสาขาตัวเองเท่านั้น: เดิมใช้ allLeads จึงคิดรวมลูกค้าเป้าหมายของอีก 9 สาขาเข้ามาด้วย
   const convRate = useMemo(() => {
-    const won = myAllLeads.filter(l => l.status === "PAID").length;
-    const lost = myAllLeads.filter(l => l.status === "CANCELLED").length;
+    const นับ = (st: string) => leadSummary
+      ? (leadSummary.byStatus.find(r => r.status === st)?.count ?? 0)
+      : myAllLeads.filter(l => l.status === st).length;
+    const won = นับ("PAID"), lost = นับ("CANCELLED");
     return won + lost ? Math.round((won / (won + lost)) * 1000) / 10 : 0;
-  }, [myAllLeads]);
+  }, [leadSummary, myAllLeads]);
   const fmtCompact = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
 
   // การ์ด = ปุ่มกรอง · on = กำลังกรองด้วยเงื่อนไขนี้อยู่ (กดซ้ำ = ล้าง)
@@ -1323,25 +1351,38 @@ export default function LeadsPage() {
 
   // แนวโน้ม 12 เดือน — ลูกค้าเป้าหมายใหม่ เทียบ ปิดการขาย · ปีปัจจุบันเท่านั้น
   // ข้อมูลมีทั้งปี 2568 และ 2569 — เดิมนับแต่เดือนโดยไม่ดูปี ของปีที่แล้วเลยมาโผล่ในกราฟปีนี้
+  // ⚠️ leadsData ตัด PAID ออกไปแล้ว — เส้น "ปิดการขาย" ที่นับจากมันจึงเป็น 0 ตลอดทั้งกราฟ
+  // สรุปจากฐานนับครบทุกสถานะ จึงแก้เส้นที่หายไปด้วย (จัดกลุ่มตามเดือนที่สร้าง เหมือนเดิม)
   const leadTrend = useMemo(() => {
     const newLeads = Array(12).fill(0), won = Array(12).fill(0);
-    leadsData.forEach(l => {
+    if (leadSummary) {
+      leadSummary.byMonth.filter(r => r.y === CUR_YEAR).forEach(r => {
+        if (r.m < 0 || r.m > 11) return;
+        newLeads[r.m] = r.created; won[r.m] = r.won;
+      });
+      return { newLeads, won };
+    }
+    myAllLeads.forEach(l => {
       const d = leadCreatedDate(l);
       if (d.getFullYear() !== CUR_YEAR) return;
       newLeads[d.getMonth()]++;
       if (l.status === "PAID") won[d.getMonth()]++;
     });
     return { newLeads, won };
-  }, [leadsData]);
+  }, [leadSummary, myAllLeads]);
 
   // Lead vs Quotations — จำนวนลูกค้าเป้าหมาย (น้ำเงิน) เทียบ ใบเสนอราคา (ส้ม) รายเดือน · ปีปัจจุบันเท่านั้น
   const leadVsQuote = useMemo(() => {
     const leadC = Array(12).fill(0), quoteC = Array(12).fill(0);
-    leadsData.forEach(l => { const d = leadCreatedDate(l); if (d.getFullYear() === CUR_YEAR) leadC[d.getMonth()]++; });
+    if (leadSummary) {
+      leadSummary.byMonth.filter(r => r.y === CUR_YEAR).forEach(r => { if (r.m >= 0 && r.m <= 11) leadC[r.m] = r.created; });
+    } else {
+      myAllLeads.forEach(l => { const d = leadCreatedDate(l); if (d.getFullYear() === CUR_YEAR) leadC[d.getMonth()]++; });
+    }
     quotations.filter(q => q.date.slice(0, 4) === String(CUR_YEAR))
       .forEach(q => { const mo = parseInt(q.date.slice(5, 7), 10) - 1; if (mo >= 0 && mo < 12) quoteC[mo]++; });
     return { leadC, quoteC };
-  }, [leadsData, quotations]);
+  }, [leadSummary, myAllLeads, quotations]);
 
   // stageStats (Sales Journey) ถูกลบพร้อมการ์ดเส้นทาง/action center — เหลือแต่การคำนวณที่ไม่มีใครอ่าน
   // และนับจาก allLeads ทั้งเครือ ซึ่งผิดขอบเขตของหน้าตัวแทน
