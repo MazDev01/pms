@@ -18,6 +18,36 @@ export const runtime = "nodejs";
 
 const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+// ── จำกัดจำนวนคำขอต่อคนต่อนาที (ผลตรวจระบบ 19 ส.ค. 69) ──────────────────────────
+//
+// เดิมด่านนี้มีเฉพาะ /api/admin/* (7 เส้นทาง) ส่วนงานขายทั้งหมดยิงได้ไม่จำกัด
+// บัญชีตัวแทนที่ถูกขโมยจึงดูดข้อมูลทั้งสาขาออกไปได้เร็วมาก โดยไม่มีอะไรหน่วง
+//
+// โควตาตั้งจากการใช้งานจริง: เปิดหน้าหนึ่งยิงราว 10-15 คำขอ (โหลด 5 ตาราง + สรุป + ตั้งค่า)
+//   เซลส์ที่ทำงานหนักเปิดหลายหน้าต่อนาทีก็ยังอยู่ใต้ 600 สบาย ๆ — ด่านนี้จึงไม่รบกวนคนทำงานจริง
+//   แต่หยุดสคริปต์ที่ไล่ดูดข้อมูลรัว ๆ ได้ทันที
+// การเขียนตั้งต่ำกว่ามาก — คนทำงานปกติกดบันทึกหลักสิบครั้ง/นาทีก็มากแล้ว
+const LIMIT_READ  = { max: 600, windowSec: 60 };
+const LIMIT_WRITE = { max: 120, windowSec: 60 };
+
+/** ตรวจโควตาของผู้เรียกเอง — นับด้วย client ของผู้ใช้คนนั้น ไม่ต้องใช้กุญแจระดับระบบ
+ *
+ *  ⚠️ แอปตัวแทนไม่มี (และไม่ควรมี) กุญแจระดับระบบ ถ้าผูกด่านนี้ไว้กับกุญแจนั้น
+ *     ฝั่งตัวแทนจะข้ามด่านทั้งหมดแบบเงียบ ๆ — ซึ่งเป็นฝั่งที่ต้องกันมากที่สุด
+ *  คีย์ประกอบจาก auth.uid() ที่ฝั่งฐานข้อมูล (0146) ผู้เรียกเลือกไม่ได้ว่าจะนับให้ใคร
+ *  fail-open: ตัวนับมีปัญหา = ปล่อยผ่าน ดีกว่าปิดบริการเพราะตัวนับพัง */
+async function withinQuota(sb: SupabaseClient, scope: "read" | "write", max: number, windowSec: number): Promise<boolean> {
+  try {
+    const { data, error } = await sb.rpc("check_own_rate_limit", {
+      p_scope: scope, p_max: max, p_window_seconds: windowSec,
+    });
+    if (error) { console.warn("[rateLimit] RPC ขัดข้อง — ปล่อยผ่าน", error.message); return true; }
+    return data !== false;
+  } catch (e) {
+    console.warn("[rateLimit] ปล่อยผ่าน", e);
+    return true;
+  }
+}
 
 /** ตอบกลับแบบมีเหตุผลติดไปด้วยเสมอ — หน้าเว็บเอาไปแสดงตรง ๆ ได้
  *  code = รหัสของ Postgres (เช่น 23503 ชน FK) — ฝั่งแอปแปลงเป็นข้อความที่คนอ่านรู้เรื่องต่อ
@@ -50,6 +80,13 @@ export function handler(
   return async (req: NextRequest): Promise<Response> => {
     const sb = asCaller(req);
     if (!sb) return fail(401, "ยังไม่ได้เข้าสู่ระบบ");
+    // ด่านจำกัดจำนวนคำขอ — อ่านกับเขียนแยกถังกัน (โหลดหน้าจอไม่ควรกินโควตาของการบันทึก)
+    const เขียน = req.method !== "GET" && req.method !== "HEAD";
+    const { max, windowSec } = เขียน ? LIMIT_WRITE : LIMIT_READ;
+    if (!(await withinQuota(sb, เขียน ? "write" : "read", max, windowSec))) {
+      console.warn(`[api/v1/${name}] เกินโควตา (${เขียน ? "write" : "read"})`);
+      return fail(429, "คำขอถี่เกินไป — รอสักครู่แล้วลองใหม่อีกครั้ง");
+    }
     try {
       return await fn(req, sb);
     } catch (e) {
