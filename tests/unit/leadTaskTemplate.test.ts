@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  normalizeLeadTaskTemplate, buildLeadTasks, applyTaskTemplate, stageFromTasks, syncTasksToStage,
+  normalizeLeadTaskTemplate, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks, syncTasksToStage,
   LEAD_TASK_TEMPLATE, CLOSE_TASK_KEY,
   type LeadTaskDef,
 } from "../../packages/shared/lib/mock";
@@ -156,5 +156,47 @@ describe("ปรับงานของลูกค้าเป้าหมา�
 
   it("ยังไม่มี checklist เลย → สร้างจากแม่แบบทั้งชุด", () => {
     expect(applyTaskTemplate(undefined, tpl).map(t => t.key)).toEqual(["contact", "req", "close"]);
+  });
+});
+
+// ── บันทึกนัดหมายจริง → งาน "นัดหมาย" ต้องถูกติ๊กให้เอง (บอสสั่ง 19 ส.ค. 69) ────────
+// กติกาเดียวกับงานใบเสนอราคา: งานที่มี "ของจริง" รองรับ ระบบติ๊กเอง ไม่ให้เซลส์มานั่งติ๊กซ้ำ
+describe("หางานนัดหมายจากชุดที่ HQ ตั้ง", () => {
+  it("เจอจากรหัสมาตรฐาน", () => {
+    expect(findAppointmentTask(LEAD_TASK_TEMPLATE)?.label).toBe("นัดหมาย");
+  });
+
+  it("HQ ลบแล้วสร้างใหม่ (รหัสเปลี่ยน) ก็ยังต้องเจอจากชื่อ", () => {
+    const tpl: LeadTaskDef[] = [
+      { key: "contact", label: "ติดต่อแล้ว", stage: "WAITING" },
+      { key: "task_bullet_1", label: "นัดหมาย", stage: "BULLET" },
+      { key: "close", label: "ปิดการขาย / ไม่สำเร็จ", stage: "PAID" },
+    ];
+    expect(findAppointmentTask(tpl)?.key).toBe("task_bullet_1");
+  });
+
+  it("ไม่มีงานนัดหมายเลย → คืน undefined (ห้ามเดาไปติ๊กงานอื่น)", () => {
+    const tpl: LeadTaskDef[] = [
+      { key: "contact", label: "ติดต่อแล้ว", stage: "WAITING" },
+      { key: "close", label: "ปิดการขาย / ไม่สำเร็จ", stage: "PAID" },
+    ];
+    expect(findAppointmentTask(tpl)).toBeUndefined();
+  });
+
+  it("ติ๊กงานแล้วต้องแตะเฉพาะงานนั้น และคงเวลาเดิมของงานที่ติ๊กไว้แล้ว", () => {
+    const tasks = [
+      { key: "contact", label: "ติดต่อแล้ว", done: true, doneAt: "1 ส.ค. 2569 · 09:00", doneBy: "สมชาย" },
+      { key: "appointment", label: "นัดหมาย", done: false },
+      { key: "followup", label: "ติดตามผล", done: false },
+    ];
+    const out = completeTask(tasks, "appointment", "วิภา", "19 ส.ค. 2569 · 10:00");
+    expect(out[0]).toEqual(tasks[0]);                                   // ของเดิมไม่ถูกแตะ
+    expect(out[1]).toMatchObject({ done: true, doneBy: "วิภา", doneAt: "19 ส.ค. 2569 · 10:00" });
+    expect(out[2].done).toBe(false);                                    // งานถัดไปไม่ถูกติ๊กข้ามขั้น
+  });
+
+  it("ติ๊กงานที่เสร็จอยู่แล้วซ้ำ ต้องไม่ทับเวลา/ผู้ทำเดิม", () => {
+    const tasks = [{ key: "appointment", label: "นัดหมาย", done: true, doneAt: "1 ส.ค. 2569 · 09:00", doneBy: "สมชาย" }];
+    expect(completeTask(tasks, "appointment", "วิภา", "19 ส.ค. 2569 · 10:00")).toEqual(tasks);
   });
 });

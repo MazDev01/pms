@@ -6,7 +6,8 @@ import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
 import {
   leadStatusLabel, leadStatusColor,
-  buildLeadReport, buildLeadTasks, applyTaskTemplate, seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
+  buildLeadReport, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
+  seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
   OTHER_LOST_REASON,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
@@ -2006,7 +2007,23 @@ export default function LeadsPage() {
           });
           setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
           setApptAdding(false);
-          setToast("บันทึกนัดหมายแล้ว");
+          // นัดหมายจริงแล้ว = งาน "นัดหมาย" เสร็จ — ติ๊กให้เอง (บอสสั่ง 19 ส.ค. 69)
+          //   กติกาเดียวกับงานใบเสนอราคา: งานที่มี "ของจริง" รองรับ ระบบติ๊กเอง ไม่ให้เซลส์มานั่งติ๊กซ้ำ
+          //   ลูกค้าเป้าหมายที่ปิดแล้วไม่แตะ · ขั้นเลื่อนได้อย่างเดียว ห้ามถอยหลัง
+          const apptDef = findAppointmentTask(taskTpl);
+          let ติ๊กให้ = "";
+          if (apptDef && c.status !== "PAID" && c.status !== "CANCELLED") {
+            const base = applyTaskTemplate(c.tasks, taskTpl, c.status);
+            if (!base.find(t => t.key === apptDef.key)?.done) {
+              const tasks = completeTask(base, apptDef.key, c.assigned || session.name);
+              const next = stageFromTasks(tasks, taskTpl);
+              const rank = (st: LeadStatus) => LEAD_STATUS_ORDER.indexOf(st);
+              saveLead({ ...c, tasks, status: rank(next) > rank(c.status) ? next : c.status });
+              ติ๊กให้ = apptDef.label;
+            }
+          }
+          // saveLead มี toast ของตัวเองตอนขั้นเลื่อน — ที่นี่จึงเขียนทับทีหลัง ให้เห็นผลของสิ่งที่เพิ่งกด
+          setToast(ติ๊กให้ ? `บันทึกนัดหมายแล้ว · ติ๊กงาน “${ติ๊กให้}” ให้อัตโนมัติ` : "บันทึกนัดหมายแล้ว");
           } finally { apptSavingRef.current = false; setApptSaving(false); }
         };
         const aInp: React.CSSProperties = { width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"8px 11px", fontSize:"0.8rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" };

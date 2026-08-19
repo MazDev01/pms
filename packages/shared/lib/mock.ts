@@ -735,6 +735,21 @@ export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStat
  *    ⚠ ลบงานแล้วเพิ่มใหม่ชื่อเดิม = คนละงาน (รหัสใหม่) ประวัตการติ๊กของงานเก่าจึงหาย — อยากเก็บประวัติไว้ให้แก้ชื่อแทน
  *  · ลูกค้าเป้าหมายที่ปิดแล้ว (สำเร็จ/ไม่สำเร็จ) ไม่แตะเลย — ประวัติที่ปิดไปแล้วต้องคงที่
  */
+/** งาน "นัดหมาย" — ระบบติ๊กให้เองเมื่อบันทึกนัดหมายจริง (กติกาเดียวกับงานใบเสนอราคา) */
+export const APPOINTMENT_TASK_KEY = "appointment";
+
+/** หา "งานนัดหมาย" ในชุดที่ HQ ตั้งไว้
+ *  ยึดรหัสมาตรฐานก่อน · ถ้า HQ ลบงานนั้นแล้วสร้างใหม่ รหัสจะเปลี่ยน (เช่น task_bullet_1)
+ *  จึงเผื่อหาจากชื่อไว้ด้วย — ไม่งั้นการติ๊กอัตโนมัติจะเงียบหายทันทีที่ HQ แก้รายการงาน โดยไม่มีอะไรฟ้อง */
+export function findAppointmentTask(tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTaskDef | undefined {
+  return tpl.find(t => t.key === APPOINTMENT_TASK_KEY) ?? tpl.find(t => t.label.includes("นัด"));
+}
+
+/** ติ๊กงานหนึ่งงานให้เสร็จ (ที่ติ๊กแล้วคงเดิม) — คืน checklist ชุดใหม่ ไม่แตะงานอื่น */
+export function completeTask(tasks: LeadTask[], key: string, doneBy: string, stamp: string = nowStampTH()): LeadTask[] {
+  return tasks.map(t => t.key === key && !t.done ? { ...t, done: true, doneAt: stamp, doneBy } : t);
+}
+
 export function applyTaskTemplate(
   tasks: LeadTask[] | undefined, tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE, status?: LeadStatus,
 ): LeadTask[] {
