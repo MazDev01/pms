@@ -857,24 +857,28 @@ body {
 @keyframes cardIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .erp { animation: erpFade 0.3s ease backwards; }
 /* Stagger content cards + KPI stat cards (any layout) so everything settles in sequence */
+/* ต้องครอบตะแกรง KPI ทุกแบบที่มีในระบบ — เดิมตก .kpi-bar > .kpi (หน้าปฏิทิน)
+   กับ .dash-kpis (หน้าลูกค้าเป้าหมาย/ลูกค้า/ใบเสนอราคา) — การ์ดโผล่มาเฉย ๆ ต่างจากหน้าอื่น (บอสแจ้ง 19 ส.ค. 69) */
 .erp > .card, .erp > section > .card, .erp .section-stack > .card,
 .erp .stat-grid > .stat-card, .erp .kpi-row > .card, .erp .kpi-row > .kc,
-.erp .kpi-bar > .card, .erp .kpi-bar > .kc, .erp .hqx-kpis > .hqx-kpi {
+.erp .kpi-bar > .card, .erp .kpi-bar > .kc, .erp .kpi-bar > .kpi,
+.erp .hqx-kpis > .hqx-kpi, .erp .dash-kpis > * {
   animation: cardIn 0.42s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 .erp > .card:nth-child(1), .erp .section-stack > .card:nth-child(1),
-.erp .stat-grid > *:nth-child(1), .erp .kpi-row > *:nth-child(1), .erp .kpi-bar > *:nth-child(1), .erp .hqx-kpis > *:nth-child(1) { animation-delay: 40ms; }
+.erp .stat-grid > *:nth-child(1), .erp .kpi-row > *:nth-child(1), .erp .kpi-bar > *:nth-child(1), .erp .hqx-kpis > *:nth-child(1), .erp .dash-kpis > *:nth-child(1) { animation-delay: 40ms; }
 .erp > .card:nth-child(2), .erp .section-stack > .card:nth-child(2),
-.erp .stat-grid > *:nth-child(2), .erp .kpi-row > *:nth-child(2), .erp .kpi-bar > *:nth-child(2), .erp .hqx-kpis > *:nth-child(2) { animation-delay: 95ms; }
+.erp .stat-grid > *:nth-child(2), .erp .kpi-row > *:nth-child(2), .erp .kpi-bar > *:nth-child(2), .erp .hqx-kpis > *:nth-child(2), .erp .dash-kpis > *:nth-child(2) { animation-delay: 95ms; }
 .erp > .card:nth-child(3), .erp .section-stack > .card:nth-child(3),
-.erp .stat-grid > *:nth-child(3), .erp .kpi-row > *:nth-child(3), .erp .kpi-bar > *:nth-child(3), .erp .hqx-kpis > *:nth-child(3) { animation-delay: 150ms; }
+.erp .stat-grid > *:nth-child(3), .erp .kpi-row > *:nth-child(3), .erp .kpi-bar > *:nth-child(3), .erp .hqx-kpis > *:nth-child(3), .erp .dash-kpis > *:nth-child(3) { animation-delay: 150ms; }
 .erp > .card:nth-child(4), .erp .section-stack > .card:nth-child(4),
-.erp .stat-grid > *:nth-child(4), .erp .kpi-row > *:nth-child(4), .erp .kpi-bar > *:nth-child(4), .erp .hqx-kpis > *:nth-child(4) { animation-delay: 205ms; }
+.erp .stat-grid > *:nth-child(4), .erp .kpi-row > *:nth-child(4), .erp .kpi-bar > *:nth-child(4), .erp .hqx-kpis > *:nth-child(4), .erp .dash-kpis > *:nth-child(4) { animation-delay: 205ms; }
 .erp > .card:nth-child(n+5), .erp .section-stack > .card:nth-child(n+5) { animation-delay: 250ms; }
 @media (prefers-reduced-motion: reduce) {
   .erp, .erp > .card, .erp > section > .card, .erp .section-stack > .card,
   .erp .stat-grid > .stat-card, .erp .kpi-row > .card, .erp .kpi-row > .kc,
-  .erp .kpi-bar > .card, .erp .kpi-bar > .kc, .erp .hqx-kpis > .hqx-kpi { animation: none; }
+  .erp .kpi-bar > .card, .erp .kpi-bar > .kc, .erp .kpi-bar > .kpi,
+  .erp .hqx-kpis > .hqx-kpi, .erp .dash-kpis > * { animation: none; }
 }
 /* Compact density — add class `dense` to a .table-wrap to shrink row height */
 .table-wrap.dense th, .table-wrap.dense td { padding: 0.4rem 0.7rem; font-size: 0.76rem; }
