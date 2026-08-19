@@ -11,6 +11,7 @@ import {
   type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile,
   type AppointmentMock,
+  type LeadActivity,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -45,7 +46,7 @@ import { useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
-import { dealers as dealersRepo } from "@pms/shared/lib/data";
+import { leads as leadsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
@@ -507,6 +508,23 @@ export default function CustomersPage(){
   const [detailTab, setDetailTab]     = useState<"info"|"deals"|"quotes"|"appts"|"notes"|"files">("info");
   // โครงการที่กดดู (จากตาราง "ประวัติการปิดการขาย") → เปิดแผงรายละเอียดโครงการซ้อนขึ้นมา
   const [viewProject, setViewProject] = useState<{ q: QuotationMock; template: string } | null>(null);
+  // ไทม์ไลน์กิจกรรมของดีลที่กำลังเปิดดู — รายการลูกค้าเป้าหมายไม่ขน activities มาแล้ว (กินขนส่ง)
+  //   จึงโหลดเฉพาะตอนเปิดแผงใบเสนอราคา · ไม่โหลด = ไทม์ไลน์ว่างทั้งที่มีข้อมูลจริง
+  const [dealActs, setDealActs] = useState<LeadActivity[] | null>(null);
+  const viewDealId = viewProject?.q.dealId ?? null;
+  useEffect(() => {
+    setDealActs(null);
+    if (viewDealId == null) return;
+    const target = leads.find(l => l.numId === viewDealId);
+    if (!target) return;
+    if (target.activities) { setDealActs(target.activities); return; }
+    let alive = true;
+    leadsRepo.get(target.id)
+      .then(full => { if (alive) setDealActs(full?.activities ?? []); })
+      .catch(e => logRepoRead("leads.get", e));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewDealId]);
   // แม่แบบที่มีหลายงาน → กดการ์ดแล้วเปิดตัวเลือกก่อนว่าจะดูงานไหน (แม่แบบเดียวอาจมีถึง v30)
   const [pickGroup, setPickGroup] = useState<PurchasedGroup | null>(null);
   // สร้างดีลใหม่ (ลูกค้าเดิมซื้อโครงการใหม่) — Deal = ลูกค้าเป้าหมายที่ผูก customerId
@@ -1384,7 +1402,7 @@ export default function CustomersPage(){
         const vatPct = q.vatPercent ?? dealerVat;   // สแนปช็อตที่ตรึงไว้กับใบ · ใบเก่าที่ไม่มีค่อยใช้ค่าที่สาขาตั้งไว้
         // ดีลที่ผูกกับใบนี้ → ไทม์ไลน์กิจกรรมจริงของดีล
         const deal = customerDeals.find(l => (q.dealId!=null && l.numId===q.dealId)) ?? customerDeals.find(l=>l.company===q.customer);
-        const acts = deal?.activities ?? [];
+        const acts = deal?.activities ?? dealActs ?? [];
         const projNotes = relatedNotes;
         const projAppts = relatedAppointments;
 

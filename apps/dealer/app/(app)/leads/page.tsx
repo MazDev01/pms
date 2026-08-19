@@ -53,6 +53,7 @@ import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage, leads as leadsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { lastContactLabel, leadLatestDate as leadLatestDateOf } from "@pms/shared/lib/leadMetrics";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
@@ -169,7 +170,8 @@ function leadTaskCount(l: LeadRow, tpl?: LeadTaskDef[]): { done: number; total: 
 // ซึ่งใช้ได้แค่กับกราฟรวมของลูกค้าเป้าหมาย seed — เอามาโชว์เป็น "ติดต่อล่าสุด" คือโกหกคนอ่าน
 // (ลูกค้าเป้าหมายที่เพิ่งสร้างเคยขึ้น "11 ก.พ. 2569" ย้อนหลัง 5 เดือน → เซลส์นึกว่าลูกค้าเป้าหมายถูกทิ้งค้าง)
 // กติกาเดียวกับ lastContactLabel() ใน leadMetrics และคอมเมนต์ที่ hq/leads/page.tsx:559
-function lastActivity(l: LeadRow): string { return l.activities?.[0]?.date ?? l.createdAt ?? "—"; }
+// ตารางไม่มีไทม์ไลน์ติดมาแล้ว (กินขนส่ง) — ใช้ค่าที่ฐานข้อมูลคำนวณไว้แทน (lastContactLabel)
+function lastActivity(l: LeadRow): string { return lastContactLabel(l); }
 // ผู้รับผิดชอบเก็บได้หลายคน (คั่นด้วย ", ") → เทียบแบบ "มีคนนี้อยู่ในรายชื่อ" ไม่ใช่เท่ากันเป๊ะ
 function assignedHas(assigned: string, person: string): boolean {
   return assigned.split(",").map(s => s.trim()).includes(person);
@@ -184,12 +186,9 @@ function parseThaiDate(s?: string): Date | null {
   const y = +m[3] > 2500 ? +m[3] - 543 : +m[3];
   return new Date(y, TH_MONTH[m[2]], +m[1]);
 }
-// วันที่ล่าสุดของลูกค้าเป้าหมาย (จากกิจกรรม) — ไม่มีกิจกรรม = ไม่ตัดออกจากตัวกรองเวลา
-function leadLatestDate(l: LeadRow): Date | null {
-  const dates = (l.activities ?? []).map(a => parseThaiDate(a.date)).filter(Boolean) as Date[];
-  if (!dates.length) return null;
-  return new Date(Math.max(...dates.map(d => d.getTime())));
-}
+// วันที่ล่าสุดของลูกค้าเป้าหมาย — ใช้ตัวกลางของระบบ (อ่านจากค่าที่ฐานคำนวณไว้ก่อน)
+//   ไม่มีวันติดต่อ = ไม่ตัดออกจากตัวกรองเวลา
+const leadLatestDate = leadLatestDateOf;
 // ── ลูกค้าเป้าหมายที่ต้องรีบติดตาม (ขาดการติดต่อเกิน 7 วัน) — กฎธุรกิจเดียวที่ต้องมี (ไม่มี SLA) ──
 const MOCK_TODAY_LEAD = APP_NOW; // "วันนี้ของระบบ" (supabase=จริง / local=ตรึง 30 มิ.ย. 2569)
 const CUR_YEAR = MOCK_TODAY_LEAD.getFullYear(); // กราฟรายเดือน = ปีปัจจุบันเท่านั้น (ข้อมูลมีของปีที่แล้วปนอยู่)
@@ -1126,14 +1125,15 @@ export default function LeadsPage() {
     setPopupField(null); setEditPopupPos(null);
     setShowStatusDropdown(false);
     resetApptForm(); // กันฟอร์มนัดหมายค้างข้ามลูกค้าเป้าหมาย
-    // รายงานติดตาม (report) ไม่ได้มากับรายการ — เป็นข้อความยาวที่กินขนส่งเปล่า ๆ ตอนโหลดทั้งตาราง
-    //   จึงมาเติมตอนเปิดแผงแทน · ⚠️ ต้องเติมให้ทัน ไม่งั้นตัวแก้รายงานจะเห็นว่าว่าง
-    //   แล้วเสนอเทมเพลตใหม่ — ผู้ใช้กดบันทึกก็ทับของจริงทันที (ดู ReportEditor)
+    // รายงานติดตาม (report) กับไทม์ไลน์ (activities) ไม่ได้มากับรายการ
+    //   ทั้งสองกินขนส่งมากแต่ใช้เฉพาะในแผงนี้ — จึงมาเติมตอนเปิดแทน
+    //   ⚠️ report ต้องเติมให้ทัน ไม่งั้นตัวแก้รายงานจะเห็นว่าว่างแล้วเสนอเทมเพลตใหม่ (ดู ReportEditor)
     void leadsRepo.get(l.id)
       .then(full => {
         if (!full) return;
-        setSelectedLead(prev => prev && prev.id === l.id ? { ...prev, report: full.report } : prev);
-        setDraft(prev => prev && prev.id === l.id ? { ...prev, report: full.report } : prev);
+        const เติม = (p: LeadRow) => ({ ...p, report: full.report, activities: full.activities });
+        setSelectedLead(prev => prev && prev.id === l.id ? เติม(prev) : prev);
+        setDraft(prev => prev && prev.id === l.id ? เติม(prev) : prev);
       })
       .catch(e => logRepoRead("leads.get", e));
   }

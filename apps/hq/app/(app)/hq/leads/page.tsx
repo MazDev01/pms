@@ -13,7 +13,7 @@ import type { LeadSummaryFilters, LeadListOpts } from "@pms/shared/lib/data/port
 import { DEFAULT_LEAD_RULES } from "@pms/shared/lib/mock";
 import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
 import { unassignedLeads } from "@pms/shared/lib/hqAlerts";
-import { needsFollowUp } from "@pms/shared/lib/leadMetrics";
+import { lastContactLabel, needsFollowUp } from "@pms/shared/lib/leadMetrics";
 import { fmtISOToThai, type LeadRow } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, leads as leadsRepo } from "@pms/shared/lib/data";
@@ -398,7 +398,7 @@ export default function HQLeadsPage() {
     l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
     l.province, l.product, l.source || "—", l.value || "—",
     QUOTED_UP.includes(l.status) ? "เสนอแล้ว" : "—",
-    l.activities?.length ? l.activities[0].date : "—",
+    lastContactLabel(l),
     needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays) ? "ต้องติดตาม" : "—",
     l.assigned || "—", leadStatusLabel[l.status],
   ];
@@ -704,7 +704,7 @@ export default function HQLeadsPage() {
                 const followUp = needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays);
                 const quoted = QUOTED_UP.includes(l.status);
                 // ติดต่อล่าสุด = กิจกรรมล่าสุดของลูกค้าเป้าหมาย · ลูกค้าเป้าหมายที่ไม่มีบันทึกกิจกรรม = "—" (ไม่เดาวันให้)
-                const last = l.activities?.length ? l.activities[0].date : "—";
+                const last = lastContactLabel(l);
                 // คีย์ต้องพ่วงรหัสสาขา — เลขที่ลูกค้าเป้าหมายไม่ซ้ำ "เฉพาะภายในสาขา" (คีย์จริง = สาขา + เลขที่)
                 // หน้านี้รวมลูกค้าเป้าหมายทุกสาขาไว้ด้วยกัน เลขเดียวกันจากคนละสาขาจึงชนกันได้จริง
                 // พบจริงจากหน้าจอผู้ใช้ 7 ส.ค. 69: "two children with the same key #L-40322"

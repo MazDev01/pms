@@ -41,12 +41,26 @@ export function leadCreatedDate(l: LeadRow): Date {
 }
 
 // วันที่ติดต่อล่าสุดของลูกค้าเป้าหมาย (จากกิจกรรม · ไม่มีกิจกรรม → ใช้วันที่สร้าง)
+/** วันติดต่อล่าสุดของลูกค้าเป้าหมาย
+ *  อ่านจาก lastContactAt ก่อน — ฐานข้อมูลคำนวณไว้ให้แล้วทุกครั้งที่บันทึก (trigger 0046)
+ *  ทำให้ตารางไม่ต้องขนไทม์ไลน์ทั้งก้อนมาคำนวณเอง (ลดขนาดข้อมูลที่ส่งลงมาก)
+ *  ถ้าไม่มี (โหมดข้อมูลในเครื่อง/ข้อมูลเก่า) ค่อยคิดจากไทม์ไลน์เหมือนเดิม */
 export function leadLatestDate(l: LeadRow): Date | null {
+  if (l.lastContactAt) {
+    const d = new Date(l.lastContactAt + (l.lastContactAt.length === 10 ? "T00:00:00" : ""));
+    if (!isNaN(d.getTime())) return d;
+  }
   const dates = (l.activities ?? []).map(a => parseThaiDate(a.date)).filter(Boolean) as Date[];
   if (!dates.length) return null;
   return new Date(Math.max(...dates.map(d => d.getTime())));
 }
-export function lastContactLabel(l: LeadRow): string { return l.activities?.[0]?.date ?? (l.createdAt ?? "—"); }
+const THAI_MO = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+/** ข้อความ "ติดต่อล่าสุด" สำหรับแสดงบนตาราง (วันที่ไทย) */
+export function lastContactLabel(l: LeadRow): string {
+  const d = leadLatestDate(l);
+  if (d) return `${d.getDate()} ${THAI_MO[d.getMonth()]} ${d.getFullYear() + 543}`;
+  return l.createdAt ?? "—";
+}
 
 // ── ลูกค้าเป้าหมายที่ต้องรีบติดตาม (ขาดการติดต่อเกิน N วัน) — กฎธุรกิจเดียวที่มี (ไม่มี SLA) ──
 export function daysSinceContact(l: LeadRow): number | null {
