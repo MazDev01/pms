@@ -318,10 +318,14 @@ export function SalesProvider({
     if (!ready) return;
     if (gateHQ) { setSalesVersion(v => v + 1); return; } // HQ อ่านผ่าน RPC — แค่บอกให้ไปดึงใหม่
     const scope = { dealerCode, isHQ };
-    leadsRepo.list(scope).then(setLeads).catch(() => {});
-    customersRepo.list(scope).then(setCustomers).catch(() => {});
-    quotationsRepo.list(scope).then(setQuotations).catch(() => {});
-    appointmentsRepo.list(scope).then(setAppointments).catch(() => {});
+    // ⚠️ ตาข่ายนี้พังเงียบไม่ได้ — มันคือด่านสุดท้ายที่กัน "หน้าจอค้างข้อมูลเก่าโดยไม่มีใครรู้"
+    //   ถ้าตัวมันเองล้มเหลวแล้วเรากลืน error ทิ้ง ผู้ใช้จะเห็นตัวเลขเก่าต่อไปเรื่อย ๆ
+    //   โดยไม่มีสัญญาณอะไรเลยแม้แต่ใน log — ซึ่งเป็นสถานการณ์ที่ตาข่ายนี้ถูกสร้างมาเพื่อกัน
+    //   logRepoRead ข้ามคำขอที่ถูกยกเลิก/ยังไม่มี session ให้แล้ว จึงไม่ส่งเสียงตอนสลับหน้า
+    leadsRepo.list(scope).then(setLeads).catch(e => logRepoRead("resync.leads", e));
+    customersRepo.list(scope).then(setCustomers).catch(e => logRepoRead("resync.customers", e));
+    quotationsRepo.list(scope).then(setQuotations).catch(e => logRepoRead("resync.quotations", e));
+    appointmentsRepo.list(scope).then(setAppointments).catch(e => logRepoRead("resync.appointments", e));
   }, [ready, gateHQ, dealerCode, isHQ]);
 
   useEffect(() => {
