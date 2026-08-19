@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState, useRef, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
 import {
@@ -239,6 +240,15 @@ function SortIcon({ field, sortKey, sortDir }: { field:string; sortKey:string; s
 const OV_INP: React.CSSProperties = { width:"100%", height:26, padding:"0 8px", borderRadius:6, border:"none", outline:"none", fontSize:"0.8rem", fontWeight:700, fontFamily:"inherit", color:"#2D2D2D", background:"transparent", boxSizing:"border-box" };
 const OV_CELL: React.CSSProperties = { display:"flex", alignItems:"center", gap:10, padding:"5px 10px", border:"1px solid #eef1f5", borderRadius:9, background:"#fafbfc", minWidth:0 };
 const OV_CELL_LBL: React.CSSProperties = { fontSize:"0.7rem", color:"#8a929c", fontWeight:600, flexShrink:0 };
+// หัวข้อกลุ่มในแผงรายละเอียด — 11 ช่องเรียงติดกันรวดเดียวอ่านยาก แบ่งเป็นก้อนตามความหมาย
+// (บอสสั่ง 19 ส.ค. 69) · เป็นแค่ style ไม่ใช่คอมโพเนนต์ใหม่ เพราะประกาศคอมโพเนนต์ซ้อนใน
+// OverviewEditor จะทำให้ React สร้าง element ใหม่ทุกครั้งที่พิมพ์ แล้วโฟกัสหลุดจากช่องที่กำลังกรอก
+const OV_GROUP: React.CSSProperties = {
+  gridColumn: "1/-1", fontSize: "0.62rem", color: "#9ca3af", fontWeight: 700,
+  letterSpacing: "0.02em", marginTop: 6,
+};
+const OV_GROUP_FIRST: React.CSSProperties = { ...OV_GROUP, marginTop: 0 };
+
 function OvCell({ icon:Ic, label, children }:{ icon: typeof User; label:string; children:React.ReactNode }) {
   return (
     <div style={OV_CELL}>
@@ -258,7 +268,8 @@ function OverviewEditor({ lead, persons, onSave }: {
   const myProvinces = useMyProvinces();  // จังหวัดตามภาคของสาขาที่ล็อกอิน
   const seed = () => ({
     company: lead.company ?? "", contact: lead.contact ?? "", phone: lead.phone ?? "",
-    email: lead.email ?? "", province: lead.province ?? "", source: lead.source ?? "",
+    email: lead.email ?? "", province: lead.province ?? "", address: lead.address ?? "",
+    source: lead.source ?? "",
     product: lead.product ?? "", status: lead.status,
     assigned: lead.assigned ?? "", value: lead.value ?? "",
     area: lead.area != null ? String(lead.area) : "",
@@ -313,6 +324,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     setValueErr("");
     onSave({
       ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value),
+      address: f.address.trim() || undefined,   // ว่าง = ไม่มีข้อมูล (undefined) — ห้ามเก็บสตริงว่างหลอกว่ากรอกแล้ว
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
       area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
       project: f.project.trim() || undefined,
@@ -343,6 +355,7 @@ function OverviewEditor({ lead, persons, onSave }: {
 
       {/* รายละเอียด — แถวเดียวกับตอนอ่าน แต่ค่าแก้ได้ */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, borderTop:"1px solid #eef1f5", paddingTop:14 }}>
+        <div style={OV_GROUP_FIRST}>ข้อมูลติดต่อ</div>
         <div style={{ gridColumn:"1/-1", ...cell }}>
           <Building2 size={14} color="#94a3b8" style={{ flexShrink:0 }} />
           <span style={cellLbl}>บริษัท</span>
@@ -369,6 +382,12 @@ function OverviewEditor({ lead, persons, onSave }: {
             {f.province && !myProvinces.includes(f.province) && <option value={f.province}>{f.province} (นอกภาค)</option>}
           </select>
         </Cell>
+        <div style={{ gridColumn:"1/-1", ...cell }}>
+          <MapPin size={14} color="#94a3b8" style={{ flexShrink:0 }} />
+          <span style={cellLbl}>ที่อยู่</span>
+          <span style={{ flex:1, minWidth:0 }}><input aria-label="ที่อยู่" value={f.address} onChange={e=>set("address",e.target.value)} placeholder="—" style={inp} /></span>
+        </div>
+        <div style={OV_GROUP}>รายละเอียดงาน</div>
         <Cell icon={Package} label="แม่แบบ">
           {/* ใช้ตัวเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมาย — เดิมที่นี่ลิสต์เฉพาะแม่แบบหลัก ไม่มีแม่แบบย่อย
               ลูกค้าเป้าหมายที่เลือกแม่แบบย่อยไว้จึงหาค่าตัวเองในลิสต์ไม่เจอ แล้วโชว์ตัวแรกผิด ๆ แบบเดียวกัน */}
@@ -377,6 +396,7 @@ function OverviewEditor({ lead, persons, onSave }: {
         <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
           <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
         </Cell>
+        <div style={OV_GROUP}>การดูแล</div>
         <Cell icon={Target}  label="แหล่งที่มา">
           <select aria-label="ช่องทางที่มา" value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>
             <option value="">— ยังไม่ระบุ —</option>
@@ -407,7 +427,9 @@ function OverviewEditor({ lead, persons, onSave }: {
             )}
           </Cell>
         )}
-        {/* สองแถวนี้ระบบคำนวณ/ประทับเอง — โชว์ไว้ให้ครบเหมือนมุมมองอ่านเดิม แต่แก้ไม่ได้ */}
+        {/* สองแถวนี้ระบบคำนวณ/ประทับเอง — โชว์ไว้ให้ครบเหมือนมุมมองอ่านเดิม แต่แก้ไม่ได้
+            แยกกลุ่มไว้ท้ายสุด เพื่อให้เห็นได้ทันทีว่าอันไหนกรอกเองได้ อันไหนระบบใส่ให้ */}
+        <div style={OV_GROUP}>ระบบบันทึกให้</div>
         <Cell icon={MessageSquare} label="ติดต่อล่าสุด"><span style={{ display:"block", fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D", textAlign:"right" }}>{lastActivity(lead)}</span></Cell>
         <Cell icon={CalendarClock} label="สร้างเมื่อ"><span style={{ display:"block", fontSize:"0.82rem", fontWeight:700, color:"#2D2D2D", textAlign:"right" }}>{lead.createdAt || "—"}</span></Cell>
       </div>
@@ -469,7 +491,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   const [form, setForm] = useState({
     company: initial?.company ?? "", contact: initial?.contact ?? "",
     phone: initial?.phone ?? "", email: initial?.email ?? "",
-    province: initial?.province ?? "", product: initial?.product ?? "",
+    province: initial?.province ?? "", address: initial?.address ?? "",
+    product: initial?.product ?? "",
     value: initial?.value ?? "",
     // เก็บเป็นสตริง ให้ปล่อยว่างได้ (= ยังไม่รู้พื้นที่) — ตอนบันทึกค่อยแปลงเป็นตัวเลข
     area: initial?.area != null ? String(initial.area) : "",
@@ -576,7 +599,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
       name: form.company,
       company: form.company, contact: form.contact,
       phone: form.phone, email: form.email,
-      province: form.province, product: form.product,
+      province: form.province, address: form.address.trim() || undefined,
+      product: form.product,
       category: mainTemplateOf(form.product), value: form.value,
       status: form.status, assigned: form.assigned,
       source: form.source, note: form.note,
@@ -679,6 +703,14 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                   {myProvinces.map(p=><option key={p}>{p}</option>)}
                   {form.province && !myProvinces.includes(form.province) && <option value={form.province}>{form.province} (นอกภาค)</option>}
                 </select>
+              </div>
+              {/* ที่อยู่ — กรอกตั้งแต่ตอนเป็นลูกค้าเป้าหมาย แล้วส่งต่อเป็นที่อยู่ลูกค้าตอนปิดการขายสำเร็จ
+                  เดิมช่องนี้มีเฉพาะฝั่งลูกค้า เซลส์จึงต้องไปตามถามซ้ำหลังปิดการขาย (บอสแจ้ง 19 ส.ค. 69) */}
+              <div className="col-full">
+                <label style={labelStyle}>ที่อยู่</label>
+                <input value={form.address} onChange={e=>set("address",e.target.value)}
+                  placeholder="เลขที่ ถนน ตำบล/แขวง อำเภอ/เขต รหัสไปรษณีย์" style={inputStyle} />
+                <div style={{fontSize:"0.62rem",color:"#9ca3af",marginTop:4}}>ยังไม่รู้ก็เว้นว่างได้ · ใช้ต่อเป็นที่อยู่ลูกค้าตอนปิดการขายสำเร็จ</div>
               </div>
               <div>
                 <label style={labelStyle}>แหล่งที่มา</label>
@@ -953,7 +985,8 @@ export default function LeadsPage() {
   }, [currentDealer.code]);
 
   // Inline status dropdown (table view)
-  const [openStatusId, setOpenStatusId] = useState<string|null>(null);
+  // เมนูเลือกขั้น — ต้องเก็บพิกัดปุ่มด้วย เพราะเมนูวางแบบ "ลอย" (fixed) ให้พ้นกล่องตาราง
+  const [statusMenu, setStatusMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // แก้ไข "มูลค่า" ในตารางโดยตรง (inline) — persist ผ่าน updateLead → ข้อมูลเดียวกับ Kanban
   const [editValueId, setEditValueId] = useState<string|null>(null);
   const [valueDraft, setValueDraft] = useState("");
@@ -1462,31 +1495,49 @@ export default function LeadsPage() {
                             {l.area != null ? l.area.toLocaleString() : "—"}
                           </td>
                         )}
-                        {/* ⚠️ ป้ายห้ามล้นออกนอกช่อง — ผู้ใช้แจ้ง 18 ส.ค. 69 ว่า "กดไม่ได้ ขอบเหลื่อมล้ำ"
+                        {/* ⚠️ เมนูเลือกขั้นต้องวางแบบ "ลอย" (position:fixed ตามพิกัดปุ่ม) — ผู้ใช้แจ้ง 19 ส.ค. 69
+                            กล่องตาราง (.table-wrap) ตั้ง overflow-x:auto → เบราว์เซอร์ตัดแนวตั้งด้วย
+                            เมนูที่วางแบบ absolute จึงโดนตัดหาย — เห็นแค่ขอบขาว ๆ โผล่ใต้แถว เลือกสถานะไม่ได้เลย
+                            ท่านี้เป็นท่าเดียวกับเมนูจัดการผู้ใช้ที่ HQ (UsersPanel ActionMenu) ที่เจอปัญหาเดียวกันมาก่อน
+                            ⛔ ห้ามใส่ z-index ที่ <td> นี้เด็ดขาด — เคยใส่แล้วเมนูกดไม่ได้ทันที (18 ส.ค. 69)
                             ⛔ ห้ามใส่ z-index ที่ <td> นี้เด็ดขาด — เคยใส่แล้วเมนูเลือกขั้นกดไม่ได้ทันที (18 ส.ค. 69)
                             เพราะ z-index สร้าง stacking context ใหม่ → เมนูข้างในถูกขังอยู่ใต้แถวถัดไป กดไม่โดน
                             การแก้ที่ถูกคือ "ล็อกป้ายไม่ให้ล้น" อย่างเดียว — ไม่ต้องมี z-index
                             ช่องนี้ต้องเปิด overflow ไว้ให้เมนูเลือกขั้นกางออกมาได้ แต่ผลข้างเคียงคือป้ายที่ชื่อยาวก็ล้นไปด้วย
                             ช่อง "ความคืบหน้า" อยู่ถัดไปและวาดทีหลัง จึงมาทับส่วนที่ล้น → คลิกโดนช่องข้างแทน */}
-                        <td className="ovf-visible" style={{ position:"relative" }}
-                          onClick={e => { e.stopPropagation(); setOpenStatusId(openStatusId === l.id ? null : l.id); }}>
+                        <td style={{ position:"relative" }}
+                          onClick={e => { e.stopPropagation(); }}>
                           <button className="badge" title={leadStatusLabel[l.status]}
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (statusMenu?.id === l.id) { setStatusMenu(null); return; }
+                              const r = e.currentTarget.getBoundingClientRect();
+                              // ความสูงเมนูคำนวณได้แน่นอน (จำนวนขั้น × สูงแถว + ขอบ) — ไม่ต้องรอวัดหลังเรนเดอร์
+                              //   ถ้าเพิ่ม/ลดขั้น หรือเปลี่ยนความสูงแถว ต้องอัปเดตเลข 38 ด้วย
+                              const H = ALL_STATUSES.length * 38 + 12;
+                              const below = r.bottom + 4;
+                              const y = below + H <= window.innerHeight - 8 ? below : Math.max(8, r.top - 4 - H);
+                              setStatusMenu({ id: l.id, x: r.left, y });
+                            }}
                             style={{ background:sc.bg, color:sc.text, border:"none", cursor:"pointer",
                               maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", display:"inline-flex" }}>
                             <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{leadStatusLabel[l.status]}</span> ▾
                           </button>
-                          {openStatusId === l.id && (
+                          {statusMenu?.id === l.id && (
                             <>
-                              <div onClick={e => { e.stopPropagation(); setOpenStatusId(null); }}
-                                style={{ position:"fixed", inset:0, zIndex:19 }}/>
-                              <div style={{ position:"absolute", top:"calc(100% - 4px)", left:10, zIndex:20,
+                              <div onClick={e => { e.stopPropagation(); setStatusMenu(null); }}
+                                style={{ position:"fixed", inset:0, zIndex:299 }}/>
+                              {/* ⛔ ห้ามเอา portal ออก — ถ้าเมนูอยู่ในเซลล์ตาราง ตัวเลือกจะไปโผล่ใต้ขอบจอกดไม่ได้ */}
+                              {/* (วัดจริง 19 ส.ค. 69: ตัวเลือก 7 ตัวหลุดจอทั้งหมด) มีเทสต์คุมใน redesign.spec.ts */}
+                              {createPortal(
+                              <div data-menu="stage" style={{ position:"fixed", top:statusMenu.y, left:statusMenu.x, zIndex:300,
                                 background:"#fff", border:"1px solid #e5e7eb", borderRadius:12,
                                 boxShadow:"0 8px 24px rgba(0,0,0,.14)", minWidth:168, overflow:"hidden" }}>
                                 {ALL_STATUSES.map(s => {
                                   const c = leadStatusColor[s];
                                   return (
                                     <button key={s}
-                                      onClick={e => { e.stopPropagation(); requestStatusChange(l.id, s); setOpenStatusId(null); }}
+                                      onClick={e => { e.stopPropagation(); requestStatusChange(l.id, s); setStatusMenu(null); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 14px",
                                         border:"none", background:s===l.status?"#f0f4f8":"transparent",
                                         cursor:"pointer", textAlign:"left" }}>
@@ -1498,7 +1549,7 @@ export default function LeadsPage() {
                                     </button>
                                   );
                                 })}
-                              </div>
+                              </div>, document.body)}
                             </>
                           )}
                         </td>

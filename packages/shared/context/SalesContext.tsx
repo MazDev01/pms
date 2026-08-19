@@ -18,6 +18,7 @@ import {
 } from "@pms/shared/lib/mock";
 
 import { parseBaht } from "@pms/shared/lib/format";
+import { customerPayloadFromLead } from "@pms/shared/lib/leadToCustomer";
 import { shouldCloseWon } from "@pms/shared/lib/closeWon";
 import { customerDeletionImpact, blockReason } from "@pms/shared/lib/customerDeletion";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -376,24 +377,8 @@ export function SalesProvider({
     // (จึง cascadeWon=false แต่ target quote ยังถูกบังคับ won ผ่าน targetQuoteId แยกต่างหาก)
     const cascadeWon = lead.status === "PAID";
     // payload ใช้เฉพาะตอนต้องสร้างลูกค้าใหม่จริง (RPC ไม่แตะข้อมูลเดิมเลยถ้าเจอ known id/ชื่อตรง)
-    const payload: CustomerRow = {
-      id: 0, // ไม่ใช้ค่านี้ — DB เป็นคนออก id จริงให้ (หรือคืนลูกค้าเดิมถ้าชื่อตรงเป๊ะ)
-      name: lead.contact || lead.company,
-      company: lead.company,
-      email: lead.email ?? "",
-      phone: lead.phone ?? "",
-      province: lead.province,
-      category: lead.category || lead.product || "อื่นๆ",
-      status: "active",
-      projects: 0,
-      joinDate: APP_NOW_ISO, // วันสมัคร = วันนี้ของระบบ (supabase=จริง / local=ตรึง)
-      owner: lead.assigned,
-      initials: deriveInitials(lead.company || lead.name),
-      color: CUSTOMER_PALETTE[(lead.numId ?? 0) % CUSTOMER_PALETTE.length],
-      totalValue: parseBaht(lead.value),
-      logo: lead.logo,   // พารูป/โลโก้ที่อัปโหลดไว้ตอนเป็นลูกค้าเป้าหมายมาด้วย
-      dealerCode: lead.dealerCode ?? DEFAULT_DEALER_CODE, // ลูกค้าเป็นของสาขาเดียวกับลูกค้าเป้าหมายที่ปิดการขาย (multi-tenant)
-    };
+    // สร้างจากตัวแปลงกลาง — ทุกช่องที่ลูกค้าเป้าหมายกรอกไว้ต้องไหลมาครบ (ดู leadToCustomer.ts)
+    const payload = customerPayloadFromLead(lead, { joinDate: APP_NOW_ISO, defaultDealerCode: DEFAULT_DEALER_CODE });
     let result: { customer: CustomerRow; quotations: QuotationMock[] };
     try {
       result = await customersRepo.closeWon({
@@ -802,8 +787,4 @@ export function useSales(): SalesContextType {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
-const CUSTOMER_PALETTE = ["#003366","#059669","#f59e0b","#dc2626","#002244","#8fa3b8","#2D2D2D","#C0C0C0"];
-function deriveInitials(name: string): string {
-  return name.replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
-}
 

@@ -578,6 +578,8 @@ export type LeadRow = {
   phone?: string;
   email?: string;
   province: string;
+  address?: string;      // ที่อยู่ลูกค้า — กรอกตอนเพิ่ม/แก้ลูกค้าเป้าหมาย · ส่งต่อเป็นที่อยู่ของลูกค้าเมื่อปิดการขายสำเร็จ
+                         // ไม่มี = undefined (หน้าจอขึ้น "—") — ห้ามเก็บค่าว่างหลอกว่ามีข้อมูล
   product: string;
   category: string;
   status: LeadStatus;

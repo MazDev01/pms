@@ -197,6 +197,39 @@ test("[ui·dealer] ป้ายขั้นตอนต้องอยู่ใ�
   // จุดที่เคยกดไม่โดน: ปลายขวาสุดของป้าย
   const box = (await chip.boundingBox())!;
   await page.mouse.click(box.x + box.width - 6, box.y + box.height / 2);
-  await expect(page.getByRole("button", { name: "เสนอราคา", exact: true }).first(),
-    "กดปลายขวาของป้ายแล้วเมนูเลือกขั้นต้องเปิด").toBeVisible({ timeout: 10_000 });
+  // ⛔ ต้องเล็งด้วย [data-menu="stage"] เท่านั้น — คำว่า "เสนอราคา" มีปุ่มอื่นในตารางชื่อซ้ำ
+  //   (เคยหลง 19 ส.ค. 69: เทสต์เขียวเพราะไปจับปุ่มในแถว ทั้งที่เมนูจริงโดนตัด)
+  const menu = page.locator('[data-menu="stage"]');
+  await expect(menu, "กดปลายขวาของป้ายแล้วเมนูเลือกขั้นต้องเปิด").toBeVisible({ timeout: 10_000 });
+});
+
+test("[ui·dealer] ตารางเหลือแถวเดียว — เมนูเปลี่ยนขั้นต้องเห็นครบและกดโดนทุกตัวเลือก", async ({ page }) => {
+  // เคสจริงของผู้ใช้: กรองจนเหลือแถวเดียว → กล่องตารางเตี้ยมาก
+  //   เมนูเคยถูก .table-wrap { overflow-x: auto } ตัดจนเหลือแถบเดียว → เลือกขั้นไม่ได้
+  //   → เมนูจึงต้องเป็น position: fixed และพลิกขึ้นด้านบนเองเมื่อที่ด้านล่างไม่พอ
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page, "dealer", "/leads");
+  await page.waitForTimeout(2000);
+  const rows = page.locator("tbody tr");
+  const first = (await rows.first().locator("td").first().innerText()).split(String.fromCharCode(10))[0].trim();
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(first);
+  await page.waitForTimeout(1200);
+  expect(await rows.count(), "ต้องกรองจนเหลือแถวเดียว").toBe(1);
+
+  await rows.first().locator("button.badge").first().click();
+  const menu = page.locator('[data-menu="stage"]');
+  await expect(menu).toBeVisible({ timeout: 10_000 });
+
+  // วัดของจริง: ทุกตัวเลือกต้องอยู่ในจอ และจิ้มกลางตัวมันต้องโดนตัวมันเอง (ไม่ถูกบัง)
+  const bad = await menu.evaluate(el => {
+    const out: string[] = [];
+    for (const it of Array.from(el.querySelectorAll("button"))) {
+      const b = it.getBoundingClientRect();
+      if (b.bottom > window.innerHeight || b.top < 0) { out.push(`"${it.textContent}" หลุดจอ`); continue; }
+      const hitEl = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      if (!hitEl || !(hitEl === it || it.contains(hitEl))) out.push(`"${it.textContent}" ถูกบัง`);
+    }
+    return out;
+  });
+  expect(bad, "ตัวเลือกขั้นที่กดไม่ได้").toEqual([]);
 });

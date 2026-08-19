@@ -753,7 +753,7 @@ export default function CustomersPage(){
       const newDeal: LeadRow={
         id:`#L-${40321+nid}`, numId:nid,
         name:c.company, company:c.company,                              // ── ข้อมูลลูกค้าเดิม ──
-        contact:c.name, phone:c.phone, email:c.email, province:c.province,
+        contact:c.name, phone:c.phone, email:c.email, province:c.province, address:c.address,
         assigned:dealForm.assigned||c.owner, logo:c.logo, customerId:c.id,
         product, category:mainTemplateOf(product),                     // ── รายละเอียดดีล ──
         value:fmtDealValue(dealForm.value),

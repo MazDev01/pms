@@ -66,7 +66,8 @@ test("[func] แท็บงานจัดกลุ่มตามขั้น�
 
   // ลำดับงานเดิมห้ามถูกสลับจากการจัดกลุ่ม (ลำดับคือกติกาการติ๊กห้ามข้ามขั้น)
   const labels = await page.locator("[data-stage-head] ~ div button span:nth-child(2) > span:first-child").allInnerTexts();
-  expect(labels.slice(0, 4).map(s => s.trim())).toEqual(["ติดต่อแล้ว", "เก็บข้อมูลลูกค้า", "นัดหมาย", "จัดทำใบเสนอราคา"]);
+  expect(labels.slice(0, 5).map(s => s.trim()))
+    .toEqual(["ติดต่อแล้ว", "เก็บข้อมูลลูกค้า", "นัดหมาย", "สรุปความต้องการ", "จัดทำใบเสนอราคา"]);
 
   assertNoErrors(errs, "จัดกลุ่มงานตามขั้น");
 });
