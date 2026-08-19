@@ -7,6 +7,7 @@ import { useState, useRef } from "react";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
+import { scaleSubtypePrices } from "@pms/shared/lib/repricing";
 import { catalog as catalogRepo } from "@pms/shared/lib/data";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 // เริ่มด้วยรายการว่าง — เดิมตั้งต้นด้วยชุดตัวอย่าง ทำให้เห็นแม่แบบปลอมกะพริบก่อนของจริงมา
@@ -192,6 +193,10 @@ function HQMasterPageInner() {
   const [reprice, setReprice]   = useState<SolutionProduct | null>(null);
   const [rpPrice, setRpPrice]   = useState("");
   const [rpNote, setRpNote]     = useState("");
+  // ราคาของแม่แบบย่อยในกล่องปรับราคา — เก็บเป็นข้อความเพื่อให้ลบจนว่างได้ระหว่างพิมพ์
+  const [rpSubs, setRpSubs]     = useState<Record<string, string>>({});
+  // ปรับราคาแม่แบบย่อยตามสัดส่วนเดิมหรือไม่ (ค่าเริ่มต้น = ปรับ — คนกด "ปรับราคา" คาดหวังให้ทั้งกลุ่มขยับ)
+  const [rpScale, setRpScale]   = useState(true);
   const [rpError, setRpError]   = useState("");   // ข้อความบอกว่าทำไมปรับราคาไม่ได้ — ต้องมี ไม่งั้นกล่องปิดเงียบ
   const [history, setHistory]   = useState<SolutionProduct | null>(null);
   const [delTarget, setDelTarget] = useState<SolutionProduct | null>(null);
@@ -242,6 +247,17 @@ function HQMasterPageInner() {
     setAddForm({ name: "", spec: "", price: "", unit: "ตร.ม.", subtypes: [], image: "", subtypeImages: {}, subtypePrices: {} }); setAdding(false);
     addingRef.current = false;
   }
+  /** เปิดกล่องปรับราคา — ดึงราคาแม่แบบย่อยที่ตั้งไว้มาด้วย จะได้ปรับพร้อมกันทั้งกลุ่ม */
+  function openReprice(p: SolutionProduct) {
+    setReprice(p); setRpPrice(String(p.price)); setRpNote(""); setRpError(""); setRpScale(true);
+    setRpSubs(Object.fromEntries(Object.entries(p.subtypePrices ?? {}).map(([k, v]) => [k, String(v)])));
+  }
+  /** ราคาย่อยที่จะบันทึกจริง (ตรรกะการคิดอยู่ที่ repricing.ts — มีเทสต์คุม) */
+  function repricedSubs(next: number): Record<string, number> {
+    if (!reprice) return {};
+    return scaleSubtypePrices(rpSubs, reprice.price, next, rpScale);
+  }
+
   function saveReprice() {
     if (!reprice) return;
     const price = parseFloat(rpPrice);
@@ -252,12 +268,15 @@ function HQMasterPageInner() {
     if (!(price > 0)) { setRpError("ราคากลางต้องมากกว่า 0 บาท"); return; }
     if (price === reprice.price) { setRpError("ราคาใหม่เท่ากับราคาเดิม — ไม่มีอะไรต้องเปลี่ยน"); return; }
     setRpError("");
+    const subs = repricedSubs(price);
     setCatalog(prev => prev.map(p => p.id !== reprice.id ? p : {
       ...p, price, effectiveDate: todayTH(),
       // ราคาปัจจุบันถูกดันลงประวัติ (ใหม่สุดอยู่บน)
       priceHistory: [{ price: p.price, effectiveDate: p.effectiveDate, note: rpNote.trim() || undefined }, ...p.priceHistory],
+      // ราคาแม่แบบย่อยขยับตามด้วย — เดิมปรับแต่ราคาหลัก ย่อยค้างราคาเก่าตลอดไป (บอสแจ้ง 19 ส.ค. 69)
+      subtypePrices: Object.keys(subs).length ? subs : undefined,
     }));
-    setReprice(null); setRpPrice(""); setRpNote(""); setRpError("");
+    setReprice(null); setRpPrice(""); setRpNote(""); setRpError(""); setRpSubs({});
   }
   function deleteProduct() {
     if (!delTarget) return;
@@ -368,7 +387,7 @@ function HQMasterPageInner() {
               {/* ปุ่มจัดการ (คลิกที่การ์ดเพื่อดูรายละเอียด · ปุ่มเหล่านี้ไม่เปิดหน้ารายละเอียด) */}
               <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
                 <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={e => { e.stopPropagation(); openEdit(p); }}><Pencil size={12} /> แก้ไข</button>
-                <button className="btn btn-tint btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={e => { e.stopPropagation(); setReprice(p); setRpPrice(String(p.price)); }}><TrendingUp size={12} /> ปรับราคา</button>
+                <button className="btn btn-tint btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={e => { e.stopPropagation(); openReprice(p); }}><TrendingUp size={12} /> ปรับราคา</button>
                 <button className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 38, padding: 0, justifyContent: "center" }} aria-label={`ประวัติราคา ${p.name}`} onClick={e => { e.stopPropagation(); setHistory(p); }}><History size={13} /></button>
                 <button className="btn btn-danger btn-sm" title="ลบแม่แบบ" style={{ width: 38, padding: 0, justifyContent: "center" }} aria-label={`ลบแม่แบบ ${p.name}`} onClick={e => { e.stopPropagation(); setDelTarget(p); }}><Trash2 size={13} /></button>
               </div>
@@ -448,7 +467,7 @@ function HQMasterPageInner() {
               {/* การจัดการ (HQ ควบคุมได้จากหน้าดูเลย) */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <button className="btn btn-secondary btn-md" style={{ justifyContent: "center" }} onClick={() => { const p = viewing; setViewing(null); openEdit(p); }}><Pencil size={13} /> แก้ไข</button>
-                <button className="btn btn-tint btn-md" style={{ justifyContent: "center" }} onClick={() => { const p = viewing; setViewing(null); setReprice(p); setRpPrice(String(p.price)); }}><TrendingUp size={13} /> ปรับราคา</button>
+                <button className="btn btn-tint btn-md" style={{ justifyContent: "center" }} onClick={() => { const p = viewing; setViewing(null); openReprice(p); }}><TrendingUp size={13} /> ปรับราคา</button>
                 <button className="btn btn-secondary btn-md" style={{ justifyContent: "center", color: STEEL }} onClick={() => { const p = viewing; setViewing(null); setHistory(p); }}><History size={13} /> ประวัติราคา</button>
                 <button className="btn btn-danger btn-md" style={{ justifyContent: "center" }} onClick={() => { const p = viewing; setViewing(null); setDelTarget(p); }}><Trash2 size={13} /> ลบแม่แบบ</button>
               </div>
@@ -572,6 +591,32 @@ function HQMasterPageInner() {
                   → โปรแกรมอ่านหน้าจอไม่รู้ว่าช่องนี้คือช่องอะไร · ใส่ aria-label กำกับไว้ */}
               <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input aria-label="ราคากลางใหม่ (บาท)" style={inp} type="number" min="0" step="0.01" value={rpPrice} autoFocus onChange={e => setRpPrice(e.target.value)} /></div>
               <div><label style={lbl}>หมายเหตุ</label><input style={inp} value={rpNote} onChange={e => setRpNote(e.target.value)} placeholder="เช่น ปรับตามราคาเหล็ก" /></div>
+              {/* แม่แบบย่อยที่ตั้งราคาเฉพาะไว้ — เดิมกดปรับราคาแล้วขยับแค่ราคาหลัก ย่อยค้างราคาเก่าตลอดไป
+                  ใบเสนอราคาที่ออกจากแม่แบบย่อยจึงยังคิดราคาเดิมทั้งที่ผู้ดูแลเชื่อว่าปรับทั้งกลุ่มแล้ว (บอสแจ้ง 19 ส.ค. 69) */}
+              {Object.keys(rpSubs).length > 0 && (
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "#f8fafc", cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, color: STEEL }}>
+                    <input type="checkbox" checked={rpScale} onChange={e => setRpScale(e.target.checked)} />
+                    ปรับราคาแม่แบบย่อยตามสัดส่วนด้วย ({Object.keys(rpSubs).length} รายการ)
+                  </label>
+                  <div style={{ padding: "8px 12px 10px", display: "flex", flexDirection: "column", gap: 6, maxHeight: 190, overflowY: "auto" }}>
+                    {Object.entries(rpSubs).map(([name, val]) => {
+                      const next = repricedSubs(parseFloat(rpPrice))[name];
+                      const changed = rpScale && next != null && String(next) !== val;
+                      return (
+                        <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem" }}>
+                          <span style={{ flex: 1, minWidth: 0, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                          {changed && <span style={{ fontSize: "0.7rem", color: "#9ca3af", textDecoration: "line-through", flexShrink: 0 }}>{fmtBaht(parseFloat(val))}</span>}
+                          <input aria-label={`ราคากลางของ ${name}`} type="number" min="0" step="0.01"
+                            value={changed ? String(next) : val}
+                            onChange={e => { setRpScale(false); setRpSubs(prev => ({ ...prev, [name]: e.target.value })); }}
+                            style={{ width: 108, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 9px", fontSize: "0.8rem", color: STEEL, outline: "none", fontFamily: "inherit", flexShrink: 0 }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {rpError && <div role="alert" style={{ fontSize: "0.74rem", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>{rpError}</div>}
               <div style={{ fontSize: "0.65rem", color: "#9ca3af" }}>ราคาเดิมจะถูกบันทึกลงประวัติราคาโดยอัตโนมัติ · มีผลทันทีทุกตัวแทน</div>
             </div>
