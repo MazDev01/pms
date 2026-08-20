@@ -24,11 +24,11 @@ for (const [role, path, label] of PAGES) {
   });
 }
 
-// count-up ของ KPI ต้องเรนเดอร์ค่าครบ (ไม่ค้าง 0 / ไม่พังเป็นว่าง)
-// หมายเหตุ: /hq/dealers ย้าย KPI ไปใช้มาตรฐาน .hq-kpi4 แล้ว (ไม่มี CountUp) — หมุดจึงอยู่ที่หน้าที่ยังใช้จริง
-test("[ui·hq] KPI count-up แสดงค่าครบ", async ({ page }) => {
+// KPI ต้องเรนเดอร์ค่าครบ (ไม่ค้าง 0 / ไม่พังเป็นว่าง)
+// หมายเหตุ 20 ส.ค. 69: หน้าแม่แบบย้ายจาก .hqx-kpi ชุดเก่า มาใช้มาตรฐาน .hq-kpi4 เหมือนหน้า HQ อื่น (บอสสั่ง)
+test("[ui·hq] KPI หน้าแม่แบบแสดงค่าครบ", async ({ page }) => {
   await open(page, "hq", "/hq/master");
-  await expect(page.locator(".hqx-kpi").first()).not.toBeEmpty();
+  await expect(page.locator(".hq-kpi4 > .card").first()).not.toBeEmpty();
 });
 
 // KPI ของ /hq/dealers ต้องเป็นดีไซน์เดียวกับหน้า HQ อื่น: .hq-kpi4 · 4 ใบ · ตัวเลขเข้ม (ไม่ใส่สี) + ไอคอน
@@ -75,7 +75,8 @@ test("[ui·desktop] modal ลูกค้า HQ ครอบเต็มจอ (
 const ENTRANCE_ANIMS = ["cardIn", "chart-fade-in"];
 for (const [path, selector, label] of [
   ["/hq/dealers/CNX", ".stat-card", "หน้ารายละเอียดตัวแทน (.stat-card)"],
-  ["/hq/master", ".hqx-kpis > .hqx-kpi", "หน้าแม่แบบ (.hqx-kpi)"],
+  ["/hq/master", ".hq-kpi4 > .card", "หน้าแม่แบบ (.hq-kpi4)"],
+  ["/hq/quotations", ".hq-kpi4 > .card", "หน้าใบเสนอราคาทั้งเครือ (.hq-kpi4)"],
 ] as const) {
   test(`[ui·hq] KPI cards ${label} มีแอนิเมชันเข้า`, async ({ page }) => {
     await open(page, "hq", path);

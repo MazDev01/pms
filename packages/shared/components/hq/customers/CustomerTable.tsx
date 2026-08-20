@@ -53,7 +53,6 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
           <col style={{ width: "7%", minWidth: 76 }} />{/* ภาค */}
           <col style={{ width: "10%", minWidth: 104 }} />{/* ประเภทอาคาร */}
           <col style={{ width: "9%", minWidth: 96 }} />{/* แม่แบบ */}
-          <col style={{ width: "8%", minWidth: 92 }} />{/* วันที่ส่งมอบ */}
           <col style={{ width: "7%", minWidth: 96 }} />{/* ยอดซื้อรวม — หัวคอลัมน์ต้องอ่านครบ (th ไม่ตัดบรรทัด) */}
           <col style={{ width: "8%", minWidth: 92 }} />{/* ซื้อล่าสุด */}
           <col style={{ width: "4%", minWidth: 56 }} />{/* ปุ่มดู */}
@@ -68,7 +67,6 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
             <th>ภาค</th>
             <th>ประเภทอาคาร</th>
             <th>แม่แบบ</th>
-            <th>วันที่ส่งมอบ</th>
             <th className="num">ยอดซื้อรวม</th>
             <th>ซื้อล่าสุด</th>
             <th></th>{/* ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ */}
@@ -96,7 +94,6 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
                 <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{regionOf(c.province) ?? DASH}</td>
                 <td><MultiCell values={c.buildingTypes} /></td>
                 <td><MultiCell values={c.templates} /></td>
-                <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.deliveredAt ? fmtISOToThai(c.deliveredAt) : DASH}</td>
                 <td className="num" style={{ whiteSpace: "nowrap", fontWeight: c.totalValue > 0 ? 700 : 400, color: c.totalValue > 0 ? PRIMARY : "#6b7280" }}>
                   {c.totalValue > 0 ? fmtM(c.totalValue) : DASH}
                 </td>

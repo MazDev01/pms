@@ -467,7 +467,7 @@ export const SupabaseAdapter: DataAdapter = {
   dealerSettings: {
     get: async (dealerCode) => {
       const { data, error } = await sb().from("dealer_settings")
-        .select("issuer,document,logo,notif_prefs").eq("dealer_code", dealerCode).maybeSingle();
+        .select("issuer,document,logo,notif_prefs,pricing").eq("dealer_code", dealerCode).maybeSingle();
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const r = (data ?? {}) as Record<string, unknown>;
       // ยังไม่เคยตั้งค่า = คืนค่ากลาง (หน้าจอจะได้มีอะไรให้แก้ ไม่ใช่ฟอร์มว่างเปล่า)
@@ -476,6 +476,7 @@ export const SupabaseAdapter: DataAdapter = {
         document:   { ...DEFAULT_DOC, ...(r.document as object ?? {}) },
         logo:       (r.logo as string) ?? "",
         notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...(r.notif_prefs as object ?? {}) },
+        pricing:    (r.pricing as object ?? {}),
       } as DealerSettings;
     },
     save: async (dealerCode, patch) => {
@@ -484,6 +485,7 @@ export const SupabaseAdapter: DataAdapter = {
       if (patch.document)               row.document = patch.document;
       if (patch.logo !== undefined)     row.logo = patch.logo;
       if (patch.notifPrefs)             row.notif_prefs = patch.notifPrefs;
+      if (patch.pricing)                row.pricing = patch.pricing;
       await must(sb().from("dealer_settings").upsert(row, { onConflict: "dealer_code" }));
     },
   },
@@ -702,7 +704,7 @@ export const SupabaseAdapter: DataAdapter = {
         p_dealer_code: opts.dealerCode ?? null,
         p_provinces: opts.provinces?.length ? opts.provinces : null,
         p_building_type: opts.buildingType ?? null,
-        p_delivery_year: opts.deliveryYear ?? null,
+        p_delivery_year: null,   // เลิกใช้ตัวกรองปีที่ส่งมอบ — วันส่งมอบเป็นค่าที่ระบบคิดเอง ไม่ใช่ข้อมูลจริง
         p_limit: opts.limit, p_offset: opts.offset,
       });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
@@ -722,15 +724,16 @@ export const SupabaseAdapter: DataAdapter = {
           id: Number(r.id), name: String(r.name ?? ""), dealerCode: String(r.dealer_code), dealerName: String(r.dealer_name ?? r.dealer_code),
           province: String(r.province ?? ""), totalValue: Number(r.total_value ?? 0),
           buildingTypes: (r.building_types as string[] | null) ?? [], templates: (r.templates as string[] | null) ?? [],
-          deliveredAt: (r.delivered_at as string | null) ?? null, lastPurchaseAt: (r.last_purchase_at as string | null) ?? null,
+          lastPurchaseAt: (r.last_purchase_at as string | null) ?? null,
         })),
       };
     },
     hqCustomersFilterOptions: async () => {
       const { data, error } = await sb().rpc("hq_customers_filter_options");
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
-      const d = data as { dealers: { code: string; name: string }[]; provinces: string[]; types: string[]; years: number[] };
-      return d;
+      const d = data as { dealers: { code: string; name: string }[]; provinces: string[]; types: string[] };
+      // RPC ยังคืน years มาด้วย (ของเดิม) แต่เลิกใช้แล้ว — วันส่งมอบไม่ใช่ข้อมูลจริง
+      return { dealers: d.dealers, provinces: d.provinces, types: d.types };
     },
     hqQuotationsSummary: async (f) => {
       const { data, error } = await sb().rpc("hq_quotations_summary", {

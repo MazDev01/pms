@@ -420,6 +420,8 @@ export function loadQuoteValidityDays(): number {
 export type NotifCategory = "newLead" | "followUp" | "meeting" | "quoteExpiry" | "won" | "lost";
 export type NotifPrefs = Record<NotifCategory, boolean>;
 export const NOTIF_PREFS_KEY = "dealer_notif_prefs";
+/** ส่วนบวกเพิ่มจากราคากลางของสาขา (โหมดเดโม/local) — โหมดจริงเก็บที่ dealer_settings.pricing */
+export const DEALER_PRICING_KEY = "dealer_pricing";
 export const NOTIF_PREFS_EVENT = "bpms-notif-prefs-updated";
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = { newLead: true, followUp: true, meeting: true, quoteExpiry: true, won: true, lost: true };
 export const NOTIF_META: { key: NotifCategory; label: string; desc: string }[] = [
@@ -1587,7 +1589,9 @@ export const hqAllCustomers: HQCustomer[] = [
 
 // ระยะเวลาส่งมอบมาตรฐาน (วัน) — HQ กำหนดเป็นกฎธุรกิจ ใช้เมื่อใบเสนอราคาไม่ได้ระบุ deliveryTime ไว้เอง
 // วันส่งมอบ = วันปิดการขาย + ระยะเวลานี้ (ดู delivery.ts)
-export const DEFAULT_DELIVERY_DAYS = 90;
+// ⚠️ เคยมี DEFAULT_DELIVERY_DAYS = 90 ตรงนี้ — ลบแล้ว (บอสสั่ง 20 ส.ค. 69)
+//    มันคือ "ระยะเวลาส่งมอบมาตรฐาน" ที่ใช้เสกวันส่งมอบให้ทุกงาน ทั้งที่ไม่มีใครกรอกวันส่งมอบจริง
+//    ตัวเลขที่โชว์จึงเป็นของที่โปรแกรมคิดเอง ไม่ใช่ข้อมูลของงาน — ตัดทั้งสายแล้ว
 
 export type HQQuotation = {
   id: string;
@@ -1600,7 +1604,6 @@ export type HQQuotation = {
   createdAt: string;
   salesperson: string;
   productLine: string;
-  deliveryTime?: string;  // ระยะเวลาส่งมอบเฉพาะใบ (เช่น "120 วัน") — ไม่ระบุ = DEFAULT_DELIVERY_DAYS
   // ── รายละเอียดราคา: มีเฉพาะใบที่ดีลเลอร์สร้างจริง (สาขา CNX) — ใบ seed ของสาขาอื่นไม่มี ──
   // valueNum = มูลค่างานก่อน VAT · materialCost = ราคารวมจากรายการสินค้า (เท่ากับ valueNum)
   materialCost?: number;

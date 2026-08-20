@@ -134,7 +134,7 @@ const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape: (d: u
     args: a => ({
       p_search: a.search ?? null, p_dealer_code: a.dealerCode ?? null,
       p_provinces: (a.provinces as string[] | undefined)?.length ? a.provinces : null,
-      p_building_type: a.buildingType ?? null, p_delivery_year: a.deliveryYear ?? null,
+      p_building_type: a.buildingType ?? null, p_delivery_year: null,
       p_limit: a.limit, p_offset: a.offset,
     }),
     shape: (d) => {
@@ -145,7 +145,7 @@ const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape: (d: u
           id: N(r.id), name: S(r.name), dealerCode: S(r.dealer_code), dealerName: S(r.dealer_name || r.dealer_code),
           province: S(r.province), totalValue: N(r.total_value),
           buildingTypes: (r.building_types as string[] | null) ?? [], templates: (r.templates as string[] | null) ?? [],
-          deliveredAt: (r.delivered_at as string | null) ?? null, lastPurchaseAt: (r.last_purchase_at as string | null) ?? null,
+          lastPurchaseAt: (r.last_purchase_at as string | null) ?? null,
         })),
       };
     },

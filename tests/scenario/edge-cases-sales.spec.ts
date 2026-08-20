@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
-  DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag, pickTemplate
+  DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag, pickTemplate, markQuotationSent
 } from "./funcHelpers";
 import { validateUpload } from "@pms/shared/lib/uploadLimits";
 
@@ -88,6 +88,8 @@ test("[edge] กด 'ปิดการขายสำเร็จ' รัว �
   await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
   await waitRow(sb, "quotations", { customer: company }, 60_000);
+  // กฎ 19 ส.ค. 69: ต้องมีใบที่ "ส่งแล้ว" ถึงจะปิดการขายได้ — เทสต์นี้ตรวจเรื่องกดรัว ไม่ใช่เรื่องด่าน
+  await markQuotationSent(sb, "RYG", company);
 
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "ตาราง" }).click();

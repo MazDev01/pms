@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import { settle } from "./helpers";
-import { DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors, db, cleanup, specNS, nsTag } from "./funcHelpers";
+import { DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors, db, cleanup, specNS, nsTag, ensureSentQuotation } from "./funcHelpers";
 
 // ── ที่อยู่ที่กรอกตอนเป็นลูกค้าเป้าหมาย ต้องตามไปเป็นที่อยู่ของลูกค้าเมื่อปิดการขาย ──
 // บอสแจ้ง (19 ส.ค. 69): "ตอนเพิ่มลูกค้าเป้าหมายไม่มีที่อยู่ แต่พอเป็นลูกค้าแล้วมี
@@ -48,6 +48,9 @@ test("[func] กรอกที่อยู่ตอนเพิ่มลูก�
 test("[func] ปิดการขายสำเร็จ → ที่อยู่ตามไปที่ระเบียนลูกค้า ไม่ต้องกรอกซ้ำ", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
+  // กฎ 19 ส.ค. 69: ปิดการขายสำเร็จไม่ได้ถ้ายังไม่มีใบที่ส่งแล้ว — เทสต์นี้ตรวจเรื่อง "ที่อยู่ตามไปไหม"
+  // ไม่ได้ตรวจเรื่องออกใบ จึงจัดฉากให้ผ่านด่านนั้นก่อน
+  await ensureSentQuotation(sb, "RYG", COMPANY);
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await settle(page);

@@ -39,21 +39,15 @@ function niceCeil(v: number): number {
   return step * pow;
 }
 
-// Catmull-Rom → cubic-bezier smoothing
-function smoothPath(pts: Array<{ x: number; y: number }>): string {
+// เส้นตรงต่อจุดต่อจุด — ไม่เกลี่ยโค้งเลย
+// เส้นโค้งทำให้ยอดระหว่างเดือนดูเหมือนมีค่าจริง ทั้งที่ข้อมูลมีแค่รายเดือน — อ่านยอดผิด
+function linearPath(pts: Array<{ x: number; y: number }>): string {
   if (pts.length < 2) return "";
-  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
-  }
-  return d;
+  return pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
 }
 
 // เส้นโค้งแบบ monotone (Fritsch–Carlson) — โค้งเนียนแต่ "ห้ามแกว่งเกินจุดข้อมูล"
-// ต่างจาก smoothPath (Catmull-Rom) ที่ overshoot ได้: ยอดพุ่งแล้วดิ่ง เส้นจะจุ่มต่ำกว่าจุดจริง
+// ต่างจาก Catmull-Rom ที่ overshoot ได้: ยอดพุ่งแล้วดิ่ง เส้นจะจุ่มต่ำกว่าจุดจริง
 // เช่น ยอดขาย ฿11.8M เดือนหนึ่งแล้ว ฿0 เดือนถัดไป Catmull-Rom จะลากเส้นลงต่ำกว่าศูนย์ = ติดลบ
 // ซึ่งเป็นไปไม่ได้ในข้อมูลจริง · monotone รับประกันว่าเส้นอยู่ระหว่างค่าสองจุดเสมอ
 function monotonePath(pts: Array<{ x: number; y: number }>): string {
@@ -414,15 +408,31 @@ export function SalesLineChart({
 
 export type DonutSeg = { label: string; value: number; color: string };
 
-/** Donut with centered total + arc segments — กวาด (sweep) จาก 0 → เต็มตอน mount */
-export function Donut({ segments, centerLabel, centerValue, size = 190 }: {
+/** Donut with centered total + arc segments — กวาด (sweep) จาก 0 → เต็มตอน mount
+ *
+ *  ชี้ที่สีไหน สีนั้นเด่นขึ้น (บอสสั่ง 20 ส.ค. 69):
+ *    ก้อนที่ชี้หนาขึ้นและคงสีเต็ม · ก้อนที่เหลือจางลง · ตรงกลางเปลี่ยนเป็นชื่อ+ยอด+% ของก้อนนั้น
+ *    ทำที่ตัวโดนัทเอง = โดนัททุกใบในระบบได้พฤติกรรมเดียวกันหมด ไม่ต้องไปไล่แก้ทีละหน้า
+ *
+ *  ใช้ได้ 2 แบบ:
+ *    • ปล่อยให้จัดการเอง (ไม่ส่ง activeIndex) — ชี้ที่วงกลมแล้วทำงานเลย
+ *    • ให้ข้างนอกคุม (ส่ง activeIndex + onActiveChange) — เอาไว้ให้ "ชี้ที่แถวคำอธิบาย" แล้วก้อนเด่นตามด้วย
+ */
+export function Donut({ segments, centerLabel, centerValue, size = 190, activeIndex, onActiveChange }: {
   segments: DonutSeg[]; centerLabel: string; centerValue: string; size?: number;
+  /** ก้อนที่กำลังเน้น (ให้ข้างนอกคุม) · undefined = โดนัทจำเอง */
+  activeIndex?: number | null;
+  onActiveChange?: (i: number | null) => void;
 }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   const r = size / 2 - 16, c = 2 * Math.PI * r, sw = 20;
   // sweep: เริ่มทุก segment ยาว 0 แล้วขยายเข้าตำแหน่งจริงพร้อมกัน (transition dasharray/dashoffset)
   const [drawn, setDrawn] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
+  // เน้นก้อนไหนอยู่ — ถ้าข้างนอกส่ง activeIndex มา ให้ของข้างนอกเป็นใหญ่
+  const [เน้นเอง, setเน้นเอง] = useState<number | null>(null);
+  const เน้น = activeIndex !== undefined ? activeIndex : เน้นเอง;
+  const ตั้งเน้น = (i: number | null) => { setเน้นเอง(i); onActiveChange?.(i); };
   let offset = 0;
   // ⚠️ ไม่มีข้อมูล = ต้องบอกผู้ใช้ ห้ามปล่อยกล่องเปล่า/ขีดเดียว (แก้ 10 ส.ค. 69)
   //   ผลตรวจรอบสุดท้ายพบการ์ดแบบนี้ 7 ใบ ที่มีแค่ "—" ในกล่องขาวสูง 340-420px
@@ -434,26 +444,78 @@ export function Donut({ segments, centerLabel, centerValue, size = 190 }: {
       </div>
     );
   }
+  const ก้อนที่เน้น = เน้น != null ? segments[เน้น] : undefined;
+
+  // ── วาดแต่ละก้อนเป็น "เส้นโค้งของตัวเอง" ไม่ใช่วงกลมเต็มวงซ้อนกัน ──────────────
+  //
+  // ของเดิมทุกก้อนเป็น <circle> เต็มวงแล้วใช้เส้นประโชว์เฉพาะช่วงของตัวเอง
+  //   หน้าตาถูก แต่ "การรับเมาส์" ผิด: เบราว์เซอร์นับทั้งวงเป็นพื้นที่ของก้อนนั้น
+  //   ก้อนที่วาดทีหลังจึงบังก้อนก่อนหน้าทั้งหมด → ชี้ตรงไหนก็ได้ก้อนสุดท้ายเสมอ
+  //   (เจอจากชุดทดสอบ 20 ส.ค. 69 — ลอง pointer-events: stroke/painted แล้วไม่ช่วย
+  //    เพราะ Chrome ไม่ได้เว้นช่วงที่เป็นช่องว่างของเส้นประออกจากการรับเมาส์)
+  // แก้ที่รูปทรง: ก้อนไหนกินมุมเท่าไรก็วาดเส้นโค้งเท่านั้น → ชี้สีไหนได้ก้อนนั้นจริง
+  const cx0 = size / 2, cy0 = size / 2;
+  const จุด = (มุม: number) => [
+    cx0 + r * Math.cos((มุม - 90) * Math.PI / 180),
+    cy0 + r * Math.sin((มุม - 90) * Math.PI / 180),
+  ] as const;
+  let มุมสะสม = 0;
   return (
-    <div className="donut-area" style={{ width: size, height: size }}>
+    <div className="donut-area" style={{ width: size, height: size }}
+      onMouseLeave={() => ตั้งเน้น(null)}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#eef1f5" strokeWidth={sw} />
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          {segments.map((s, i) => {
-            const len = (s.value / total) * c;
-            const el = <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.color} strokeWidth={sw}
-              strokeDasharray={drawn ? `${len} ${c - len}` : `0 ${c}`}
-              strokeDashoffset={drawn ? -offset : 0}
-              strokeLinecap="butt"
-              style={{ transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1), stroke-dashoffset 0.9s cubic-bezier(0.4,0,0.2,1)" }} />;
-            offset += len;
-            return el;
-          })}
-        </g>
+        <circle cx={cx0} cy={cy0} r={r} fill="none" stroke="#eef1f5" strokeWidth={sw} />
+        {segments.map((s, i) => {
+          const สัดส่วน = s.value / total;
+          const เริ่ม = มุมสะสม, จบ = มุมสะสม + สัดส่วน * 360;
+          มุมสะสม = จบ;
+          const นี่แหละ = เน้น === i;
+          const จาง = เน้น != null && !นี่แหละ;
+          const ร่วม = {
+            fill: "none" as const, stroke: s.color,
+            strokeWidth: นี่แหละ ? sw + 7 : sw,
+            opacity: จาง ? 0.32 : 1,
+            tabIndex: 0, role: "img",
+            "aria-label": `${s.label} ${s.value} (${Math.round(สัดส่วน * 100)}%)`,
+            onMouseEnter: () => ตั้งเน้น(i),
+            onFocus: () => ตั้งเน้น(i),
+            onBlur: () => ตั้งเน้น(null),
+            style: {
+              cursor: "pointer",
+              // กวาดเข้า: ตอน mount ยังไม่วาด แล้วค่อยยืดเต็มความยาวของตัวเอง
+              strokeDasharray: drawn ? "1 0" : "0 1",
+              transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1), stroke-width 0.18s ease, opacity 0.18s ease",
+            } as React.CSSProperties,
+          };
+          // ก้อนเดียวกินทั้งวง — เส้นโค้งจะเริ่มและจบที่จุดเดียวกัน วาดไม่ออก ต้องใช้วงกลมแทน
+          if (สัดส่วน >= 0.9999) {
+            return <circle key={i} cx={cx0} cy={cy0} r={r} pathLength={1} {...ร่วม} />;
+          }
+          const [x1, y1] = จุด(เริ่ม), [x2, y2] = จุด(จบ);
+          const โค้งใหญ่ = จบ - เริ่ม > 180 ? 1 : 0;
+          return (
+            <path key={i} pathLength={1} strokeLinecap="butt"
+              d={`M${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${โค้งใหญ่},1 ${x2.toFixed(2)},${y2.toFixed(2)}`}
+              {...ร่วม} />
+          );
+        })}
       </svg>
-      <div className="donut-center">
-        <div className="dc-lbl">{centerLabel}</div>
-        <div className="dc-val">{centerValue}</div>
+      {/* ตรงกลาง: ปกติ = ยอดรวม · ชี้ก้อนไหนอยู่ = ชื่อ/ยอด/% ของก้อนนั้น */}
+      <div className="donut-center" style={{ pointerEvents: "none" }}>
+        {ก้อนที่เน้น ? (
+          <>
+            <div className="dc-lbl" style={{ color: ก้อนที่เน้น.color, maxWidth: size - 62, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {ก้อนที่เน้น.label}
+            </div>
+            <div className="dc-val">{ก้อนที่เน้น.value}</div>
+            <div className="dc-lbl">{Math.round(ก้อนที่เน้น.value / total * 100)}%</div>
+          </>
+        ) : (
+          <>
+            <div className="dc-lbl">{centerLabel}</div>
+            <div className="dc-val">{centerValue}</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -500,7 +562,8 @@ export function LineTrendChart({
   const cy = (v: number) => pT + (1 - (v - lo) / (hi - lo)) * cH;
   const bottomY = pT + cH;
   const pts = data.map((d, i) => ({ x: cx(i), y: cy(d.value), ...d }));
-  const line = smoothPath(pts); // เส้นโค้งเนียน (Catmull-Rom) แทนเส้นหักตรง
+  // เส้นตรงต่อจุดต่อจุด (บอสสั่ง 19 ส.ค. 69 — ของเดิมโค้งเกินจนอ่านผิด)
+  const line = linearPath(pts);
   const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${bottomY} L${pts[0].x.toFixed(2)},${bottomY} Z` : "";
   const yTicks = axisTicks(hi);
   // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด

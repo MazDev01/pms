@@ -9,7 +9,9 @@
 //
 // ไม่มีตัวกรองช่วงเวลา (FilterBar) บนหน้านี้ตั้งใจ — นี่คือ "ฐานข้อมูล" ไม่ใช่รายงานรายงวด
 // ถ้ากรองด้วยช่วงเวลา ลูกค้าที่ซื้อครั้งสุดท้ายก่อนช่วงนั้นจะหายไปทั้งราย (ตัวเลือกกว้างสุดของ FilterBar
-// คือ "ปีนี้" → ลูกค้าที่ซื้อปี 2568 ลงไปจะไม่มีวันแสดง) ความต้องการด้านเวลาใช้ตัวกรอง "ปีที่ส่งมอบ" แทน
+// คือ "ปีนี้" → ลูกค้าที่ซื้อปี 2568 ลงไปจะไม่มีวันแสดง)
+// ⚠️ เคยมีตัวกรอง "ปีที่ส่งมอบ" ตรงนี้ — ลบทั้งฟีเจอร์แล้ว (บอสสั่ง 20 ส.ค. 69)
+//    ไม่มีที่กรอกวันส่งมอบจริงทั้งสองแอป ตัวเลขที่เคยโชว์คือ "วันปิดการขาย + 90 วัน" ที่ระบบคิดเอง
 //
 // ── M9 Phase 6: filter + pagination + KPI/กราฟ ย้ายไปคำนวณที่ DB (migration 0080) ──
 // เดิมดึงลูกค้าทั้งเครือมาไว้ในเครื่องทั้งก้อนแล้วทำทุกอย่างฝั่ง client — ที่สเกลจริง (พันรายขึ้นไป) ไม่ไหว
@@ -37,12 +39,11 @@ export default function HQCustomersPage() {
   const [regionSel, setRegionSel] = useState("all");
   const [provinceSel, setProvinceSel] = useState("all");
   const [typeSel, setTypeSel] = useState("all");
-  const [yearSel, setYearSel] = useState("all");        // ปีที่ส่งมอบ
   const [page, setPage] = useState(0);
   const [viewId, setViewId] = useState<number | null>(null);
 
   // เปลี่ยนตัวกรอง (ไม่ใช่หน้า) → กลับไปหน้า 1 เสมอ
-  useEffect(() => { setPage(0); }, [search, dealerSel, regionSel, provinceSel, typeSel, yearSel]);
+  useEffect(() => { setPage(0); }, [search, dealerSel, regionSel, provinceSel, typeSel]);
 
   // ── fallback ฝั่ง local/demo (ยังไม่กลับ) — ไม่ยิง fetch เลยในโหมด HQ+supabase (ดูคอมเมนต์ที่ hook) ──
   const localSource = useCustomerDbLocal();
@@ -70,13 +71,6 @@ export default function HQCustomersPage() {
     return [...new Set(localSource.flatMap(c => c.buildingTypes))].sort((a, b) => a.localeCompare(b, "th"));
   }, [remoteOptions, localSource]);
 
-  const yearOptions = useMemo<number[]>(() => {
-    if (remoteOptions) return remoteOptions.years;
-    const set = new Set<number>();
-    localSource.forEach(c => c.buildings.forEach(b => b.deliveredAt && set.add(b.deliveredAt.getFullYear() + 543)));
-    return [...set].sort((a, b) => b - a);
-  }, [remoteOptions, localSource]);
-
   // region → provinces[] (resolve ให้ RPC ก่อนส่ง — ตารางไม่มีคอลัมน์ region เก็บตรง ๆ)
   const resolvedProvinces = useMemo<string[] | undefined>(() => {
     if (provinceSel !== "all") return [provinceSel];
@@ -89,9 +83,8 @@ export default function HQCustomersPage() {
     dealerCode: dealerSel === "all" ? undefined : dealerSel,
     provinces: resolvedProvinces,
     buildingType: typeSel === "all" ? undefined : typeSel,
-    deliveryYear: yearSel === "all" ? undefined : Number(yearSel),
     limit: PAGE_SIZE, offset: page * PAGE_SIZE,
-  }), [search, dealerSel, resolvedProvinces, typeSel, yearSel, page]);
+  }), [search, dealerSel, resolvedProvinces, typeSel, page]);
 
   const pageResult = useHQCustomersPage(pageOpts);
 
@@ -105,11 +98,10 @@ export default function HQCustomersPage() {
         if (regionSel !== "all" && c.region !== regionSel) return false;
         if (provinceSel !== "all" && c.province !== provinceSel) return false;
         if (typeSel !== "all" && !c.buildingTypes.includes(typeSel)) return false;
-        if (yearSel !== "all" && !c.buildings.some(b => b.deliveredAt && b.deliveredAt.getFullYear() + 543 === +yearSel)) return false;
         return true;
       })
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [localSource, search, dealerSel, regionSel, provinceSel, typeSel, yearSel]);
+  }, [localSource, search, dealerSel, regionSel, provinceSel, typeSel]);
 
   // kpi/charts/rows — supabase: ตรงจาก RPC · local: derive จาก localFiltered ให้ shape เดียวกัน
   const kpi: HQCustomersKPI = pageResult ? pageResult.kpi : {
@@ -143,7 +135,6 @@ export default function HQCustomersPage() {
     : localFiltered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map(c => ({
         id: c.id, name: c.name, dealerCode: c.dealerCode, dealerName: c.dealerName, province: c.province,
         totalValue: c.totalRevenue, buildingTypes: c.buildingTypes, templates: c.templates,
-        deliveredAt: c.deliveredAt ? c.deliveredAt.toISOString().slice(0, 10) : null,
         lastPurchaseAt: c.lastPurchaseAt ? c.lastPurchaseAt.toISOString().slice(0, 10) : null,
       }));
   const totalCount = pageResult ? pageResult.total : localFiltered.length;
@@ -169,10 +160,6 @@ export default function HQCustomersPage() {
     const buildings = (remoteBuildQuotes ?? [])
       .map(q => buildingOf({ quoteNo: q.id, productLine: q.buildingType || q.project || "", valueNum: q.totalValue, createdAt: fmtISOToThai(q.date) }))
       .sort((a, b) => (a.wonAt?.getTime() ?? 0) - (b.wonAt?.getTime() ?? 0));
-    const latest = [...buildings]
-      .filter((b): b is typeof b & { deliveredAt: Date } => !!b.deliveredAt)
-      .sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime())
-      .pop() ?? null;
     const lastBuy = [...buildings].filter(b => b.wonAt).pop() ?? null;
     return {
       id: remoteRowMeta.id, localId: remoteRowMeta.id, name: remoteRowMeta.name,
@@ -181,7 +168,6 @@ export default function HQCustomersPage() {
       region: regionOf(remoteRowMeta.province), buildings,
       buildingTypes: [...new Set(buildings.map(b => b.buildingType).filter(Boolean))],
       templates: [...new Set(buildings.map(b => b.template).filter((t): t is string => !!t))],
-      deliveredAt: latest?.deliveredAt ?? null,
       lastPurchase: lastBuy?.wonDate ?? null, lastPurchaseAt: lastBuy?.wonAt ?? null,
       isRepeat: buildings.length > 1,
     };
@@ -197,12 +183,12 @@ export default function HQCustomersPage() {
   const rowToCells = (c: HQCustomerPageRow) => [
     customerCode(c.dealerCode, c.id), c.name, c.dealerCode, c.dealerName, c.province, regionOf(c.province) ?? "—",
     c.buildingTypes.join(", ") || "—", c.templates.join(", ") || "—",
-    c.deliveredAt ? fmtISOToThai(c.deliveredAt) : "—", c.totalValue, c.lastPurchaseAt ? fmtISOToThai(c.lastPurchaseAt) : "—",
+    c.totalValue, c.lastPurchaseAt ? fmtISOToThai(c.lastPurchaseAt) : "—",
   ];
   const localExportRows = localFiltered.map(c => [
     customerCode(c.dealerCode, c.localId ?? c.id), c.name, c.dealerCode, c.dealerName, c.province, c.region ?? "—",
     c.buildingTypes.join(", ") || "—", c.templates.join(", ") || "—",
-    c.deliveredAt ? fmtISOToThai(c.deliveredAt.toISOString().slice(0, 10)) : "—", c.totalRevenue, c.lastPurchase ?? "—",
+    c.totalRevenue, c.lastPurchase ?? "—",
   ]);
 
   return (
@@ -214,7 +200,7 @@ export default function HQCustomersPage() {
           <ExportMenu
             filename="hq-customers"
             title="ลูกค้าทั้งเครือ"
-            headers={["รหัสลูกค้า", "ลูกค้า", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ประเภทอาคาร", "แม่แบบ", "วันที่ส่งมอบ", "ยอดซื้อรวม", "ซื้อล่าสุด"]}
+            headers={["รหัสลูกค้า", "ลูกค้า", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ประเภทอาคาร", "แม่แบบ", "ยอดซื้อรวม", "ซื้อล่าสุด"]}
             rows={pageResult ? tableRows.map(rowToCells) : localExportRows}
             getRows={pageResult
               ? async () => {
@@ -228,7 +214,7 @@ export default function HQCustomersPage() {
 
       <CustomerKPICards kpi={kpi} />
 
-      {/* ตัวกรอง — ค้นหา + ตัวแทน/ภาค/จังหวัด/ประเภทอาคาร/ปีที่ส่งมอบ */}
+      {/* ตัวกรอง — ค้นหา + ตัวแทน/ภาค/จังหวัด/ประเภทอาคาร */}
       <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "nowrap", padding: "10px 14px" }}>
         {/* ช่องค้นหายืดกินที่ว่างตอนจอกว้าง และยุบก่อนตัวกรองตอนจอแคบ (จึงไม่ต้องมี spacer คั่น) */}
         <div className="search-bar" style={{ flex: "1 1 216px", width: "auto", minWidth: 132 }}>
@@ -264,11 +250,6 @@ export default function HQCustomersPage() {
         <select aria-label="กรองตามประเภทอาคาร" value={typeSel} onChange={e => setTypeSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกประเภทอาคาร</option>
           {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-
-        <select aria-label="กรองตามปี" value={yearSel} onChange={e => setYearSel(e.target.value)} className="form-select" style={selectStyle}>
-          <option value="all">ทุกปีที่ส่งมอบ</option>
-          {yearOptions.map(y => <option key={y} value={y}>ส่งมอบปี {y}</option>)}
         </select>
 
       </div>

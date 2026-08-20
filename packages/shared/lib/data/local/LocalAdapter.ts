@@ -21,7 +21,7 @@ import { isClosedDeal } from "@pms/shared/lib/customerDeletion";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
 import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE,
-  DEFAULT_LEAD_RULES, DEFAULT_HQ_NOTIF_RULES, DEFAULT_HQ_POLICY, DEFAULT_DELIVERY_DAYS, mainTemplateOf, type UserProfile } from "@pms/shared/lib/mock";
+  DEFAULT_LEAD_RULES, DEFAULT_HQ_NOTIF_RULES, DEFAULT_HQ_POLICY, mainTemplateOf, type UserProfile } from "@pms/shared/lib/mock";
 
 // โหมด local ไม่มี session จริง — อ่านรหัสสาขาจากคีย์ที่ RoleContext เก็บไว้ (คีย์เดิมของแอป)
 function currentDealerCode(): string {
@@ -42,7 +42,7 @@ const HQ_COMPANY_KEY = "hq_company_profile";
 const NOTES_KEY = "customer_notes_v1";
 const HQ_USERS_KEY = "hq_users_v4";
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
-import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY } from "@pms/shared/lib/mock";
+import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY, DEALER_PRICING_KEY } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC, DOC_KEY } from "@pms/shared/lib/quotationPrint";
 
 // โลโก้ไอคอนบนแถบเมนู — คีย์เดิมของหน้าตั้งค่าตัวแทน
@@ -185,12 +185,14 @@ export const LocalAdapter: DataAdapter = {
       document: { ...DEFAULT_DOC, ...readKey(DOC_KEY, DEFAULT_DOC) },
       logo: readKey<string>(LOGO_KEY, ""),
       notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...readKey(NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS) },
+      pricing: readKey(DEALER_PRICING_KEY, {}),
     }),
     save: (_dealerCode, patch) => {
       if (patch.issuer)     writeKey(ISSUER_KEY, patch.issuer);
       if (patch.document)   writeKey(DOC_KEY, patch.document);
       if (patch.logo !== undefined)     writeKey(LOGO_KEY, patch.logo);
       if (patch.notifPrefs) writeKey(NOTIF_PREFS_KEY, patch.notifPrefs);
+      if (patch.pricing)    writeKey(DEALER_PRICING_KEY, patch.pricing);
       return done();
     },
   },
@@ -512,7 +514,7 @@ export const LocalAdapter: DataAdapter = {
       const quotes = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
       const dealerNameOf = new Map(loadHQDealers().map(d => [d.code, d.name]));
 
-      type Agg = { buildingTypes: Set<string>; templates: Set<string>; deliveredAt: string | null; lastPurchaseAt: string | null; count: number; deliveryYears: Set<number> };
+      type Agg = { buildingTypes: Set<string>; templates: Set<string>; lastPurchaseAt: string | null; count: number };
       const aggByCustomer = new Map<number, Agg>();
       for (const q of quotes) {
         if (q.status !== "won" || !q.customerId) continue;
@@ -521,15 +523,11 @@ export const LocalAdapter: DataAdapter = {
         const main = mainTemplateOf(q.buildingType) || q.buildingType || "";
         if (!main) continue;
         let a = aggByCustomer.get(q.customerId);
-        if (!a) { a = { buildingTypes: new Set(), templates: new Set(), deliveredAt: null, lastPurchaseAt: null, count: 0, deliveryYears: new Set() }; aggByCustomer.set(q.customerId, a); }
+        if (!a) { a = { buildingTypes: new Set(), templates: new Set(), lastPurchaseAt: null, count: 0 }; aggByCustomer.set(q.customerId, a); }
         a.buildingTypes.add(main);
         if (main !== q.buildingType) a.templates.add(q.buildingType);
-        const deliveredD = new Date(wonDate); deliveredD.setDate(deliveredD.getDate() + DEFAULT_DELIVERY_DAYS);
-        const deliveredIso = deliveredD.toISOString().slice(0, 10);
-        if (!a.deliveredAt || deliveredIso > a.deliveredAt) a.deliveredAt = deliveredIso;
         if (!a.lastPurchaseAt || wonDate > a.lastPurchaseAt) a.lastPurchaseAt = wonDate;
         a.count++;
-        a.deliveryYears.add(deliveredD.getFullYear() + 543);
       }
 
       const search = (opts.search ?? "").trim().toLowerCase();
@@ -540,15 +538,14 @@ export const LocalAdapter: DataAdapter = {
           dealerName: dealerNameOf.get(c.dealerCode ?? DEFAULT_DEALER_CODE) ?? (c.dealerCode ?? DEFAULT_DEALER_CODE),
           province: c.province ?? "", totalValue: c.totalValue ?? 0,
           buildingTypes: a ? [...a.buildingTypes] : [], templates: a ? [...a.templates] : [],
-          deliveredAt: a?.deliveredAt ?? null, lastPurchaseAt: a?.lastPurchaseAt ?? null,
-          isRepeat: (a?.count ?? 0) > 1, deliveryYears: a ? [...a.deliveryYears] : [],
+          lastPurchaseAt: a?.lastPurchaseAt ?? null,
+          isRepeat: (a?.count ?? 0) > 1,
         };
       }).filter(c => {
         if (search && !c.name.toLowerCase().includes(search) && !c.province.toLowerCase().includes(search)) return false;
         if (opts.dealerCode && c.dealerCode !== opts.dealerCode) return false;
         if (opts.provinces?.length && !opts.provinces.includes(c.province)) return false;
         if (opts.buildingType && !c.buildingTypes.includes(opts.buildingType)) return false;
-        if (opts.deliveryYear && !c.deliveryYears.includes(opts.deliveryYear)) return false;
         return true;
       });
 
@@ -581,7 +578,7 @@ export const LocalAdapter: DataAdapter = {
       const rows = sorted.slice(opts.offset, opts.offset + opts.limit).map(c => ({
         id: c.id, name: c.name, dealerCode: c.dealerCode, dealerName: c.dealerName, province: c.province,
         totalValue: c.totalValue, buildingTypes: c.buildingTypes, templates: c.templates,
-        deliveredAt: c.deliveredAt, lastPurchaseAt: c.lastPurchaseAt,
+        lastPurchaseAt: c.lastPurchaseAt,
       }));
       return ok({ total, kpi, charts, rows });
     },
@@ -594,21 +591,17 @@ export const LocalAdapter: DataAdapter = {
       const provinces = new Set<string>();
       custs.forEach(c => { if (c.province) provinces.add(c.province); });
       const types = new Set<string>();
-      const years = new Set<number>();
       quotes.forEach(q => {
         if (q.status !== "won" || !q.customerId) return;
         const wonDate = /^\d{4}-\d{2}-\d{2}/.exec(q.date || "")?.[0];
         if (!wonDate) return;
         const main = mainTemplateOf(q.buildingType) || q.buildingType || "";
         if (main) types.add(main);
-        const d = new Date(wonDate); d.setDate(d.getDate() + DEFAULT_DELIVERY_DAYS);
-        years.add(d.getFullYear() + 543);
       });
       return ok({
         dealers: [...dealers.entries()].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code)),
         provinces: [...provinces].sort((a, b) => a.localeCompare(b, "th")),
         types: [...types].sort((a, b) => a.localeCompare(b, "th")),
-        years: [...years].sort((a, b) => b - a),
       });
     },
   },

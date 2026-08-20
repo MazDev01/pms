@@ -216,6 +216,47 @@ export async function fillDealerForm(
  *    แล้วเทสต์จะตกด้วยอาการที่ไม่เกี่ยวกับสิ่งที่มันตั้งใจตรวจเลย
  *  เลือกด้วย "ความหมาย" แทนตำแหน่ง — เพิ่ม/ลด/สลับตัวเลือกทีหลังก็ยังใช้ได้
  */
+/** ทำให้ใบเสนอราคาของลูกค้ารายนี้อยู่ในสถานะ "ส่งแล้ว"
+ *
+ *  ทำไมต้องมี (กฎใหม่ 19 ส.ค. 69 · migration 0145):
+ *    ระบบห้ามปิดการขายสำเร็จถ้ายังไม่มีใบเสนอราคาที่ "ส่งถึงลูกค้าแล้ว" อย่างน้อยหนึ่งใบ
+ *    เทสต์ที่โฟกัสเรื่อง "ปิดการขายแล้วเกิดอะไรขึ้นต่อ" จึงต้องจัดฉากให้ผ่านด่านนี้ก่อน
+ *    ไม่งั้นจะล้มด้วยอาการที่ไม่เกี่ยวกับสิ่งที่มันตั้งใจตรวจ
+ *
+ *  ใช้ client ของผู้ใช้จริง (ไม่ใช่สิทธิ์ระดับระบบ) — การกดส่งใบเป็นสิ่งที่ตัวแทนทำได้เองอยู่แล้ว
+ *  ถ้าจะตรวจ "ปุ่มส่งใบบนหน้าจอ" ให้เขียนเป็นเทสต์ของตัวเอง อย่ามาใช้ตัวนี้แทน */
+export async function markQuotationSent(
+  sb: SupabaseClient, dealerCode: string, company: string,
+): Promise<void> {
+  const q = await waitRow<{ id: string }>(sb, "quotations", { dealer_code: dealerCode, customer: company });
+  const { error } = await sb.from("quotations")
+    .update({ status: "sent_to_client" }).eq("dealer_code", dealerCode).eq("id", q.id);
+  if (error) throw new Error(`ส่งใบเสนอราคา ${q.id} ไม่สำเร็จ: ${error.message}`);
+}
+
+/** มีใบเสนอราคาที่ "ส่งแล้ว" ให้ลูกค้ารายนี้แน่ ๆ — ไม่มีก็ออกให้ใหม่
+ *  ใช้กับเทสต์ที่โฟกัสเรื่องหลังปิดการขาย แต่ไม่ได้ออกใบไว้เองในขั้นตอนของมัน
+ *  ออกใบผ่าน RPC ตัวเดียวกับที่หน้าจอใช้ (create_quotation) เพื่อให้ผ่านด่านทุกชั้นเหมือนของจริง */
+export async function ensureSentQuotation(
+  sb: SupabaseClient, dealerCode: string, company: string, amount = 500_000,
+): Promise<void> {
+  const { data: มีอยู่ } = await sb.from("quotations")
+    .select("id").eq("dealer_code", dealerCode).eq("customer", company).limit(1);
+  if (!มีอยู่?.length) {
+    const { error } = await sb.rpc("create_quotation", {
+      p_dealer: dealerCode, p_prefix: "Q-",
+      p_payload: {
+        customer: company, project: company, date: "2026-08-19",
+        province: "ระยอง", building_type: "โกดังสำเร็จรูป", area: "1",
+        total: String(amount), total_value: amount, material_cost: amount, items: 1,
+        line_items: [{ name: "งานตามสัญญา", qty: 1, unit: "งาน", unitPrice: amount }],
+      },
+    });
+    if (error) throw new Error(`ออกใบเสนอราคาให้ ${company} ไม่สำเร็จ: ${error.message}`);
+  }
+  await markQuotationSent(sb, dealerCode, company);
+}
+
 export async function pickTemplate(page: Page, label = "แม่แบบ") {
   const sel = page.getByLabel(label).first();
   // ⚠️ ต้องรอให้แคตตาล็อกมาถึงก่อน — ตอนเปิดฟอร์มใหม่ ๆ ในช่องมีแต่ "ยังไม่ระบุ" ตัวเดียว

@@ -5,7 +5,7 @@ import { sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock"
 import { hasPermission, HQ_ROLES, type Permission } from "@pms/shared/lib/permissions";
 import { authenticate, type AuthResult } from "@pms/shared/lib/auth";
 import { REAL_BACKEND, DATA_SOURCE } from "@pms/shared/lib/data/config";
-import { sbSignIn, sbSignOut, sbRestore, sbOnChange } from "@pms/shared/lib/supabaseAuth";
+import { sbSignIn, sbSignOut, sbRestoreSafe, sbOnChange, hasStoredSession } from "@pms/shared/lib/supabaseAuth";
 import { caSignIn, caSignOut, caRestore, caAdoptFromUrl } from "@pms/shared/lib/cookieAuth";
 
 // โหมด api: ใบผ่านอยู่ใน cookie ที่ JavaScript อ่านไม่ได้ (ระยะ 4) — เส้นทางล็อกอินจึงคนละตัว
@@ -82,20 +82,53 @@ export function RoleProvider({ children }: { children: ReactNode }) {
           .catch(() => { if (alive) setHydrated(true); });
         return () => { alive = false; };
       }
-      sbRestore()
-        .then((s) => {
+      // ── เข้าระบบแล้วต้องอยู่ต่อจนกว่าจะกดออกเอง (บอสสั่ง 20 ส.ค. 69) ────────────
+      //
+      // เดิมถามครั้งเดียวว่า "ยังล็อกอินอยู่ไหม" ถามไม่สำเร็จ = ถือว่าไม่ได้ล็อกอิน
+      //   แล้ว AuthGuard เด้งไปหน้าเข้าสู่ระบบทันที — เน็ตสะดุดแวบเดียว ปิดฝาโน้ตบุ๊กแล้วเปิด
+      //   หรือสัญญาณหลุดตอนโหลดหน้า ก็โดนเตะออกทั้งที่ใบผ่านยังอยู่ครบในเครื่อง
+      //
+      // ตอนนี้ sbRestoreSafe แยก "ออกแล้วจริง" ออกจาก "ยังไม่รู้" ให้ · ที่นี่จัดการต่อว่า
+      //   ยังไม่รู้ + ยังมีใบผ่านในเครื่อง → ลองใหม่เรื่อย ๆ และ **ไม่ตั้ง hydrated**
+      //   (hydrated=false = หน้าจอค้างที่ "กำลังเชื่อมต่อ" ไม่ใช่เด้งออก)
+      let ครั้งที่ = 0;
+      let ตัดสินแล้ว = false;   // ⚠️ อ่าน isLoggedIn ใน closure นี้ไม่ได้ — มันค้างค่าตอนสร้าง effect
+      const ลองฟื้น = () => {
+        void sbRestoreSafe().then((r) => {
           if (!alive) return;
-          if (s) { setSession(s); setIsLoggedIn(true); }
-          setHydrated(true);
-        })
-        .catch(() => { if (alive) setHydrated(true); });
+          if (typeof r !== "string") { ตัดสินแล้ว = true; setSession(r); setIsLoggedIn(true); setHydrated(true); return; }
+          if (r === "ออกแล้ว" || !hasStoredSession()) { ตัดสินแล้ว = true; setIsLoggedIn(false); setHydrated(true); return; }
+          // ยังไม่รู้ + มีใบผ่านค้างอยู่ = ยังไม่ตัดสิน · ถอยห่างขึ้นเรื่อย ๆ สูงสุด 30 วินาที
+          ครั้งที่ += 1;
+          const รอ = Math.min(30_000, 1000 * 2 ** Math.min(ครั้งที่, 5));
+          setTimeout(() => { if (alive) ลองฟื้น(); }, รอ);
+        }).catch(() => {
+          if (!alive) return;
+          if (!hasStoredSession()) { ตัดสินแล้ว = true; setIsLoggedIn(false); setHydrated(true); return; }
+          ครั้งที่ += 1;
+          setTimeout(() => { if (alive) ลองฟื้น(); }, Math.min(30_000, 1000 * 2 ** Math.min(ครั้งที่, 5)));
+        });
+      };
+      ลองฟื้น();
+      // เน็ตกลับมา / กลับมาที่แท็บนี้ → ลองทันที ไม่ต้องรอรอบถัดไป
+      const ลองทันที = () => { if (alive && !ตัดสินแล้ว && hasStoredSession()) { ครั้งที่ = 0; ลองฟื้น(); } };
+      const เห็นแท็บ = () => { if (document.visibilityState === "visible") ลองทันที(); };
+      window.addEventListener("online", ลองทันที);
+      document.addEventListener("visibilitychange", เห็นแท็บ);
+
       // ติดตาม login/logout/refresh (เช่น token หมดอายุ) → ซิงก์ session ให้เสมอ
       const unsub = sbOnChange((s) => {
         if (!alive) return;
-        if (s) { setSession(s); setIsLoggedIn(true); }
-        else { setIsLoggedIn(false); }
+        if (s) { setSession(s); setIsLoggedIn(true); setHydrated(true); }
+        // ⚠️ ไม่มี session ที่นี่ = supabase แจ้งว่าออกจากระบบแล้วจริง (กดออกเอง/กุญแจต่ออายุตาย)
+        //    ต่างจาก "ถามไม่สำเร็จ" ข้างบน — อันนั้นไม่ผ่านทางนี้
+        else { setIsLoggedIn(false); setHydrated(true); }
       });
-      return () => { alive = false; unsub(); };
+      return () => {
+        alive = false; unsub();
+        window.removeEventListener("online", ลองทันที);
+        document.removeEventListener("visibilitychange", เห็นแท็บ);
+      };
     }
 
     // ── โหมด local (mock) ──

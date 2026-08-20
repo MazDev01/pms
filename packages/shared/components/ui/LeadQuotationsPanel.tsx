@@ -34,7 +34,8 @@ type LeadQuotationsPanelProps =
 export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal }: LeadQuotationsPanelProps) {
   const { quotations, createQuotation, updateQuotation, deleteQuotation } = useSales();
   // ready = โหลดแคตตาล็อกจบแล้ว — ต้องรอก่อนถึงจะบอกว่า "ยังไม่มีแม่แบบ" (ว่างเพราะยังโหลดไม่เสร็จไม่นับ)
-  const { catalog, ready: catalogReady } = useMasterCatalogState(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
+  const { catalog, ready: catalogReady } = useMasterCatalogState();
+ // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -42,6 +43,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const policy = useHQPolicy(); // นโยบาย HQ — อายุใบ ฯลฯ (VAT ย้ายไปเป็นของสาขาแล้ว · 7 ส.ค. 69)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับ/VAT ของสาขา (ผ่าน repo)
+  // ส่วนบวกเพิ่มจากราคากลางที่สาขาตั้งไว้เองที่หน้าแม่แบบ — ใช้ตั้งต้นราคาต่อหน่วยใน BOQ
+  const pricing = dealerCfg.settings.pricing;
   const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ใช้ตอนออกใบใหม่และเป็นค่าสำรองของใบเก่า
   const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document };
 
@@ -72,7 +75,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   // ลูกค้าเป้าหมายอาจระบุ "แม่แบบย่อย" (เช่น โรงงานอาหาร อยู่ใต้ โรงงาน) → หาในแคตตาล็อกทั้ง 2 ชั้น
   // ทั้งสองทางเป็นแค่ "ค่าตั้งต้น" — ตัวแทนแก้ทับใน BOQ ได้ และพื้นที่บนใบยึดตาม BOQ ตอนบันทึกเสมอ
   const emptyForm = (): FormState => {
-    const seed = seedLineItems({ product: subj.product, value: subj.value, area: subj.area }, catalog);
+    const seed = seedLineItems({ product: subj.product, value: subj.value, area: subj.area }, catalog, pricing);
     const total = boqSubtotal(seed);
     return {
       project: defProject(), buildingType: subj.product,
@@ -88,11 +91,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   // เติมเฉพาะตอน "สร้างใหม่ + ยังไม่มีแถวเลย" จึงไม่ทับของที่ตัวแทนแก้ไว้
   useEffect(() => {
     if (mode !== "create" || form.lineItems.length > 0 || catalog.length === 0) return;
-    const seed = seedLineItems({ product: subj.product, value: subj.value, area: subj.area }, catalog);
+    const seed = seedLineItems({ product: subj.product, value: subj.value, area: subj.area }, catalog, pricing);
     if (!seed.length) return;
     const total = boqSubtotal(seed);
     setForm(p => ({ ...p, lineItems: seed, items: String(seed.length), price: String(total) }));
-    setNeedCatalog(false); // ตั้งต้นได้แล้ว → กลับไปซ่อนปุ่มแคตตาล็อกตามปกติ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog, mode, form.lineItems.length, subj.product, subj.value, subj.area]);
   const set = <K extends keyof FormState>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -107,14 +109,30 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   // มูลค่างาน (ก่อน VAT) = ผลรวมรายการสินค้า — ระบบไม่มีส่วนลดแล้ว
   function netTotal(f: FormState) { return parseBaht(f.price); }
 
-  // ปกติซ่อนปุ่ม "เลือกจากแคตตาล็อก" เพราะ BOQ ตั้งต้นมาจากแม่แบบของลูกค้าเป้าหมายให้แล้ว (บอสสั่ง)
-  // แต่ถ้าตั้งต้นไม่ได้ (ลูกค้าเป้าหมายกรอกแม่แบบเป็นข้อความที่ไม่มีในแคตตาล็อก / HQ ยังไม่ตั้งราคากลาง)
-  // ตารางจะว่างและเพิ่มแถวเองไม่ได้ = ออกใบไม่ได้เลยทั้งที่ขั้น "เสนอราคา" บังคับให้ต้องมีใบ
-  // → เปิดปุ่มให้เฉพาะฟอร์มที่เริ่มมาแบบว่าง (ค้างไว้ทั้งฟอร์ม ไม่ใช่หายทันทีที่เพิ่มแถวแรก)
-  const [needCatalog, setNeedCatalog] = useState(false);
+  // ── ปุ่ม "เลือกจากแคตตาล็อก" เปิดตลอด (บอสสั่ง 20 ส.ค. 69) ────────────────────
+  //
+  // เดิมซ่อนไว้ เพราะ BOQ ตั้งต้นมาจากแม่แบบของลูกค้าเป้าหมายให้แล้ว (บอสสั่งไว้เมื่อก่อน)
+  //   ผลข้างเคียงที่เพิ่งเห็นชัด: พอเพิ่มรายการที่สองในใบเดิมไม่ได้ ตัวแทนก็ไปกดออกใบใหม่แทน
+  //   ลูกค้ารายเดียวเลยมีใบเสนอราคา 2 ฉบับ ทั้งที่เป็นงานเดียวกัน แค่มีของหลายรายการ
+  // เปิดปุ่มไว้เสมอ = เพิ่มรายการในใบเดิมได้ ไม่ต้องออกใบใหม่ (แก้ที่ต้นเหตุของ "2 ใบ")
+  //   ปุ่มลบรายการก็กลับมาด้วย (LineItemsEditor ผูกสองอย่างนี้ไว้ด้วยกัน) — แก้รายการในใบเดิมได้ครบ
+  // ── หนึ่งดีล = ใบเสนอราคาใบเดียว (บอสสั่ง 20 ส.ค. 69) ─────────────────────────
+  //
+  // เดิมกด "สร้างใบเสนอราคา" ทีไรก็ได้ใบใหม่ทุกครั้ง ลูกค้ารายเดียวเลยมีใบ 2-3 ฉบับ
+  //   ทั้งที่เป็นงานเดียวกัน แค่เพิ่มรายการสินค้าเข้าไป
+  // ตอนนี้ถ้ามีใบที่ยังแก้ได้อยู่แล้ว = พาไปเพิ่มรายการในใบนั้น ไม่ออกใบใหม่
+  //
+  // ⚠️ ใบที่ปิดไปแล้ว (ตอบรับ/ปฏิเสธ/หมดอายุ) ห้ามแก้ — เป็นบันทึกของการขายที่จบแล้ว
+  //    ยอดขายและยอดสะสมของลูกค้าอ้างอิงใบพวกนี้อยู่ · ถ้าลูกค้าซื้อรอบใหม่ก็ต้องเป็นใบใหม่จริง ๆ
+  const ใบที่ยังแก้ได้ = related.find(q => q.status === "draft" || q.status === "sent_to_client");
   function openCreate() {
+    if (ใบที่ยังแก้ได้) {
+      openEdit(ใบที่ยังแก้ได้);
+      onToast?.(`เพิ่มรายการในใบ ${ใบที่ยังแก้ได้.id} ที่มีอยู่แล้ว — ไม่ออกใบใหม่`);
+      return;
+    }
     const f = emptyForm();
-    setEditing(null); setForm(f); setNeedCatalog(f.lineItems.length === 0); setMode("create");
+    setEditing(null); setForm(f); setMode("create");
   }
 
   // หน้าแม่สั่งให้เปิดฟอร์มออกใบ (ลากลูกค้าเป้าหมายไปขั้นเสนอราคา / กดติ๊กงาน "จัดทำใบเสนอราคา")
@@ -251,9 +269,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
           <label style={lbl}>ชื่อโครงการ / เอกสาร</label>
           <input value={form.project} onChange={e => set("project", e.target.value)} style={inp} placeholder="เช่น โกดังเก็บสินค้าเกษตร — บจ. ..." />
         </div>
-        {/* ปกติไม่มีปุ่มเลือกแคตตาล็อก — BOQ ตั้งต้นจากแม่แบบของลูกค้าเป้าหมายให้แล้ว (บอสสั่ง)
-            ยกเว้นฟอร์มที่ตั้งต้นไม่ได้ ต้องเปิดให้เลือกเอง ไม่งั้นออกใบไม่ได้เลย (ดู needCatalog) */}
-        <LineItemsEditor showCatalog={needCatalog} items={form.lineItems}
+        {/* เปิดปุ่มเลือกแคตตาล็อกเสมอ — ให้เพิ่มรายการในใบเดิมได้ แทนที่จะไปออกใบใหม่ */}
+        <LineItemsEditor items={form.lineItems}
           onChange={li => setForm(p => ({
             ...p, lineItems: li, items: String(li.length),
             price: String(li.reduce((s, it) => s + it.qty * it.unitPrice, 0)),
@@ -394,7 +411,13 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
         <div style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 700 }}>ใบเสนอราคา · {related.length} ฉบับ{readOnly && " · ดูอย่างเดียว"}</div>
-        {!readOnly && <button onClick={openCreate} className="btn btn-primary btn-sm"><FilePlus size={13} /> สร้างใบเสนอราคา</button>}
+        {/* มีใบที่ยังแก้ได้ = ปุ่มนี้พาไปเพิ่มรายการในใบเดิม ไม่ออกใบใหม่ — ป้ายต้องบอกตรง ๆ
+            ไม่งั้นกดคำว่า "สร้าง" แล้วได้หน้าแก้ไขใบเก่า ผู้ใช้จะงงว่ากดผิดหรือระบบพัง */}
+        {!readOnly && (
+          <button onClick={openCreate} className="btn btn-primary btn-sm">
+            <FilePlus size={13} /> {ใบที่ยังแก้ได้ ? "เพิ่มรายการในใบเสนอราคา" : "สร้างใบเสนอราคา"}
+          </button>
+        )}
       </div>
 
       {related.length === 0 ? (

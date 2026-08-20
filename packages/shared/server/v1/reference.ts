@@ -125,7 +125,7 @@ export const dsGET = handler("dealerSettings.get", async (req: NextRequest, sb) 
   const dealer = (new URL(req.url).searchParams.get("dealer") ?? "").trim();
   if (!dealer) return fail(400, "ไม่ได้ระบุสาขา");
   const { data, error } = await sb.from("dealer_settings")
-    .select("issuer,document,logo,notif_prefs").eq("dealer_code", dealer).maybeSingle();
+    .select("issuer,document,logo,notif_prefs,pricing").eq("dealer_code", dealer).maybeSingle();
   if (error) return dbFail("dealerSettings.get", error);
   return ok(data ?? {});
 });

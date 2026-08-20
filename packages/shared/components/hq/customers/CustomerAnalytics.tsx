@@ -9,6 +9,7 @@
 //   แท่งตั้ง = เทียบค่าข้ามหมวดที่ป้ายสั้น (รหัสตัวแทน) และมี 2 ชุดตัวเลขหน่วยเดียวกัน
 //   แท่งนอน = อันดับ/ป้ายไทยยาว หรือกลุ่มที่ "ทับกันได้" (ลูกค้า 1 รายซื้อหลายประเภทอาคาร → นับซ้ำในหลายแถว
 //             เอาไปทำโดนัทไม่ได้ ผลรวมจะเกินจำนวนลูกค้าจริง)
+import { useState } from "react";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { Donut, GroupedBarChart } from "@pms/shared/components/ui/Charts";
 import type { HQCustomersCharts } from "@pms/shared/lib/data/ports";
@@ -19,6 +20,52 @@ const DEALER_RAMP = ["#003366", "#0d5c9e", "#0891b2", "#0d9488", "#7c3aed", "#d9
 const REST_COLOR = "#94a3b8";
 
 type HRow = { label: string; value: number; note?: string };
+
+/** โดนัท + แถวคำอธิบายที่เน้นก้อนเดียวกัน — ชี้ที่วงกลมหรือชี้ที่แถวก็ได้ผลเหมือนกัน
+ *  (ตัวเน้นอยู่ที่นี่ที่เดียว แล้วส่งให้ทั้งสองฝั่งใช้ — ไม่งั้นชี้คนละที่ได้คนละผล) */
+function DonutWithLegend({ segments, total, centerLabel }: {
+  segments: { label: string; value: number; color: string }[]; total: number; centerLabel: string;
+}) {
+  const [เน้น, setเน้น] = useState<number | null>(null);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <Donut segments={segments} centerLabel={centerLabel} centerValue={`${total}`} size={150}
+        activeIndex={เน้น} onActiveChange={setเน้น} />
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}
+        onMouseLeave={() => setเน้น(null)}>
+        {segments.map((s, i) => {
+          const นี่แหละ = เน้น === i;
+          const จาง = เน้น != null && !นี่แหละ;
+          return (
+            <div key={s.label}
+              onMouseEnter={() => setเน้น(i)}
+              onFocus={() => setเน้น(i)}
+              onBlur={() => setเน้น(null)}
+              tabIndex={0}
+              aria-label={`${s.label} ${s.value} (${Math.round(s.value / (total || 1) * 100)}%)`}
+              style={{
+                display: "flex", alignItems: "center", gap: 7, fontSize: "0.7rem",
+                padding: "2px 6px", margin: "0 -6px", borderRadius: 7, cursor: "default",
+                background: นี่แหละ ? "var(--muted, #f1f5f9)" : "transparent",
+                opacity: จาง ? 0.45 : 1,
+                transition: "background 0.15s ease, opacity 0.15s ease",
+              }}>
+              <span style={{
+                width: นี่แหละ ? 11 : 9, height: นี่แหละ ? 11 : 9, borderRadius: 3,
+                background: s.color, flexShrink: 0, transition: "width 0.15s ease, height 0.15s ease",
+              }} />
+              <span style={{ flex: 1, color: "#374151", fontWeight: นี่แหละ ? 800 : 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
+              <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{s.value}</span>
+              <span style={{ color: "var(--muted-foreground)", minWidth: 32, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                {Math.round(s.value / (total || 1) * 100)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /** แท่งแนวนอน — เติมจากซ้าย (.bar-grow) ตามมาตรฐานแถบของระบบ · โชว์ 5 อันดับแรก ที่เหลือกดดู */
 // ⚠️ ค่าตั้งต้นของข้อความว่างต้องเป็นประโยค ไม่ใช่ขีดเดียว (แก้ 10 ส.ค. 69)
@@ -118,21 +165,8 @@ export function CustomerAnalytics({ charts }: { charts: HQCustomersCharts }) {
         {!dealerTotal ? (
           <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <Donut segments={dealerDonut} centerLabel="ลูกค้า" centerValue={`${dealerTotal}`} size={150} />
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
-              {dealerDonut.map(s => (
-                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.7rem" }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
-                  <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{s.value}</span>
-                  <span style={{ color: "var(--muted-foreground)", minWidth: 32, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                    {Math.round(s.value / dealerTotal * 100)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          // ชี้ที่ก้อนสี หรือชี้ที่แถวคำอธิบาย ก็เน้นก้อนเดียวกัน (บอสสั่ง 20 ส.ค. 69)
+          <DonutWithLegend segments={dealerDonut} total={dealerTotal} centerLabel="ลูกค้า" />
         )}
       </Card>
 

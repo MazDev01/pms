@@ -15,7 +15,7 @@
 import { useMemo } from "react";
 import { mainTemplateOf, type HQCustomer } from "@pms/shared/lib/mock";
 import { useNetworkCustomers, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
-import { deliveryDateOf, parseThaiDate } from "@pms/shared/lib/delivery";
+import { parseThaiDate } from "@pms/shared/lib/thaiDate";
 
 // ─── ภาค — ย้ายไปอยู่ที่ lib/provinces.ts แล้ว (ใช้ร่วมกับ /hq/dealers ที่ต้องเลือกจังหวัดตามภาค)
 // re-export ไว้ที่เดิมด้วย เพื่อไม่ให้หน้าที่ import จากไฟล์นี้อยู่แล้วต้องแก้ตาม
@@ -32,7 +32,9 @@ export type PurchasedBuilding = {
   value: number;
   wonDate: string;          // วันปิดการขาย (ไทย)
   wonAt: Date | null;
-  deliveredAt: Date | null; // วันส่งมอบ = วันปิดการขาย + ระยะส่งมอบ
+  // ⚠️ เคยมี deliveredAt (วันส่งมอบ) ตรงนี้ — ลบทั้งฟีเจอร์แล้ว (บอสสั่ง 20 ส.ค. 69)
+  //    ไม่มีที่กรอกวันส่งมอบจริงทั้งฝั่งตัวแทนและสำนักงานใหญ่ · ค่าที่เคยโชว์คือ
+  //    "วันปิดการขาย + 90 วัน" ที่ระบบคิดขึ้นเอง = ตัวเลขที่ไม่มีอยู่จริงในงาน
 };
 
 export type CustomerDbRow = HQCustomer & {
@@ -40,15 +42,13 @@ export type CustomerDbRow = HQCustomer & {
   buildings: PurchasedBuilding[];
   buildingTypes: string[];      // แม่แบบหลักที่ซื้อ (ไม่ซ้ำ)
   templates: string[];          // แม่แบบย่อยที่ซื้อ (ไม่ซ้ำ)
-  /** วันส่งมอบล่าสุด — ลูกค้าซื้อหลายอาคารจะยึดอาคารที่ส่งมอบทีหลังสุด */
-  deliveredAt: Date | null;
   lastPurchase: string | null;  // วันปิดการขายล่าสุด (ไทย)
   lastPurchaseAt: Date | null;
   isRepeat: boolean;            // ซื้อซ้ำ = มีอาคารที่ซื้อแล้วมากกว่า 1
 };
 
 // ข้อมูลขั้นต่ำที่ใช้สร้าง 1 อาคาร — HQQuotation ก็เข้าได้ (fallback) · rollup จาก DB map มาให้ (M9 Phase 2)
-export type BuildingSrc = { quoteNo: string; productLine: string; valueNum: number; createdAt: string; deliveryTime?: string };
+export type BuildingSrc = { quoteNo: string; productLine: string; valueNum: number; createdAt: string };
 export const buildingOf = (q: BuildingSrc): PurchasedBuilding => {
   const product = q.productLine ?? "";
   const main = mainTemplateOf(product) || product;
@@ -60,7 +60,6 @@ export const buildingOf = (q: BuildingSrc): PurchasedBuilding => {
     value: q.valueNum,
     wonDate: q.createdAt,
     wonAt: parseThaiDate(q.createdAt),
-    deliveredAt: deliveryDateOf(q.createdAt, q.deliveryTime),
   };
 };
 
@@ -82,7 +81,7 @@ export function useCustomerDbLocal(): CustomerDbRow[] {
     quotations.forEach(q => {
       if (q.status !== "won") return;
       const key = `${q.dealerCode}|${q.customer}`;
-      const b: BuildingSrc = { quoteNo: q.quoteNo, productLine: q.productLine ?? "", valueNum: q.valueNum, createdAt: q.createdAt, deliveryTime: q.deliveryTime };
+      const b: BuildingSrc = { quoteNo: q.quoteNo, productLine: q.productLine ?? "", valueNum: q.valueNum, createdAt: q.createdAt };
       const list = srcByCustomer.get(key);
       if (list) list.push(b); else srcByCustomer.set(key, [b]);
     });
@@ -92,10 +91,6 @@ export function useCustomerDbLocal(): CustomerDbRow[] {
       const buildings = won
         .map(buildingOf)
         .sort((a, b) => (a.wonAt?.getTime() ?? 0) - (b.wonAt?.getTime() ?? 0));
-      const latest = [...buildings]
-        .filter((b): b is PurchasedBuilding & { deliveredAt: Date } => !!b.deliveredAt)
-        .sort((a, b) => a.deliveredAt.getTime() - b.deliveredAt.getTime())
-        .pop() ?? null;
       const lastBuy = [...buildings].filter(b => b.wonAt).pop() ?? null;
 
       return {
@@ -104,7 +99,6 @@ export function useCustomerDbLocal(): CustomerDbRow[] {
         buildings,
         buildingTypes: [...new Set(buildings.map(b => b.buildingType).filter(Boolean))],
         templates: [...new Set(buildings.map(b => b.template).filter((t): t is string => !!t))],
-        deliveredAt: latest?.deliveredAt ?? null,
         lastPurchase: lastBuy?.wonDate ?? null,
         lastPurchaseAt: lastBuy?.wonAt ?? null,
         isRepeat: buildings.length > 1,

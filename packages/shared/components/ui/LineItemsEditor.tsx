@@ -6,7 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
-import { catalogRate } from "@pms/shared/lib/boq";
+import { sellRate } from "@pms/shared/lib/boq";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import type { QuoteLineItem } from "@pms/shared/lib/mock";
 
 const PRIMARY = "#003366";
@@ -34,6 +35,10 @@ const clamp = (n: number, max: number) => Math.min(max, Math.max(0, Number.isFin
 // ยังแก้ชื่อ/จำนวน/ราคาต่อหน่วยได้ตามปกติ
 export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = true }: { items: QuoteLineItem[]; onChange: (items: QuoteLineItem[]) => void; defaultQty?: number; showCatalog?: boolean }) {
   const catalog = useMasterCatalog();
+  // ราคาที่โชว์ในตัวเลือก = "ราคาขายของสาขา" (ราคากลาง + ส่วนบวกเพิ่มที่ตั้งไว้ที่หน้าแม่แบบ)
+  // ต้องเป็นตัวเลขเดียวกับที่หน้าแม่แบบโชว์ ไม่งั้นตัวแทนเห็นราคาหนึ่ง แต่ใบออกมาอีกราคา
+  const pricing = useDealerSettings().settings.pricing;
+  const ราคาขาย = (p: typeof catalog[number], subtype?: string) => sellRate(p, subtype ?? p.name, pricing);
   const [pickOpen, setPickOpen] = useState(false);
   const pickRef = useRef<HTMLDivElement>(null);
   // ── เลื่อนหน้าจอขณะเปิดรายการแคตตาล็อกไม่ได้ (แก้ 14 ส.ค. 69 · อาการเดียวกับเมนูผู้ใช้ HQ) ──
@@ -98,18 +103,18 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
                 )}
                 {catalog.map(p => (
                   <div key={p.id}>
-                    <button type="button" onClick={() => addFromCatalog(p.name, p.unit, p.price)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "8px 10px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D", textAlign: "left", fontFamily: "inherit" }}
+                    <button type="button" onClick={() => addFromCatalog(p.name, p.unit, ราคาขาย(p))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "8px 10px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D", textAlign: "left", fontFamily: "inherit" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#f0f4fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>
                       <span>{p.name}</span>
                       {/* ราคา 0 = สำนักงานใหญ่ยังไม่ได้ตั้ง — บอกตรงนี้เลย ไม่ให้ตัวแทนเลือกไปแล้วงงว่าทำไมบันทึกไม่ได้ */}
                       <span style={{ fontSize: "0.68rem", color: p.price > 0 ? PRIMARY : "#b45309", fontWeight: 800, flexShrink: 0 }}>
-                        {p.price > 0 ? `฿${fmt(p.price)}/${p.unit}` : "ยังไม่ได้ตั้งราคา"}
+                        {p.price > 0 ? `฿${fmt(ราคาขาย(p))}/${p.unit}` : "ยังไม่ได้ตั้งราคา"}
                       </span>
                     </button>
                     {p.subtypes?.map(st => (
-                      <button key={st} type="button" onClick={() => addFromCatalog(`${p.name} · ${st}`, p.unit, catalogRate(p, st))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "6px 10px 6px 22px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.74rem", color: "#6b7280", textAlign: "left", fontFamily: "inherit" }}
+                      <button key={st} type="button" onClick={() => addFromCatalog(`${p.name} · ${st}`, p.unit, ราคาขาย(p, st))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "6px 10px 6px 22px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.74rem", color: "#6b7280", textAlign: "left", fontFamily: "inherit" }}
                         onMouseEnter={e => (e.currentTarget.style.background = "#f0f4fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-                        <span>{st}</span><span style={{ fontSize: "0.64rem", color: "#9ca3af", flexShrink: 0 }}>฿{fmt(catalogRate(p, st))}</span>
+                        <span>{st}</span><span style={{ fontSize: "0.64rem", color: "#9ca3af", flexShrink: 0 }}>฿{fmt(ราคาขาย(p, st))}</span>
                       </button>
                     ))}
                   </div>
@@ -168,7 +173,7 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
           )}
         </table>
       </div>
-      <div style={{ fontSize: "0.64rem", color: "#9ca3af", marginTop: 5 }}>ราคา/หน่วยดึงจากราคากลางของสำนักงานใหญ่ (แคตตาล็อกแม่แบบ) · ปรับได้ตามการเจรจา · แม่แบบที่ยังไม่ได้ตั้งราคาจะขึ้นเป็น 0 ให้พิมพ์เอง</div>
+      <div style={{ fontSize: "0.64rem", color: "#9ca3af", marginTop: 5 }}>ราคา/หน่วยตั้งต้นจากราคาขายของสาขา (ราคากลางสำนักงานใหญ่ + ส่วนบวกเพิ่มที่ตั้งไว้ที่หน้าแม่แบบ) · ปรับได้ตามการเจรจา</div>
     </div>
   );
 }

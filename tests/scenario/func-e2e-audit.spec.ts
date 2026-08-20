@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, HQ_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag, pickTemplate
+  db, waitRow, cleanup, specNS, nsTag, pickTemplate, markQuotationSent
 } from "./funcHelpers";
 
 // ── E2E audit: end-to-end sales journey coverage NOT already in func-quote-win/func-dealer-sales ──
@@ -34,7 +34,10 @@ async function forceQuoteTotal(sb: Awaited<ReturnType<typeof db>>, id: string, v
 test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
-test("[audit] ปิดการขายจากลูกค้าเป้าหมายโดยไม่เคยส่ง/ตอบรับใบเสนอราคา — ตรวจว่ายอดลูกค้ากับใบเสนอราคาสอดคล้องกันไหม", async ({ page }) => {
+// ⚠️ เทสต์นี้เคยตรวจ "ปิดการขายลัดคิว" ว่าทำได้ไหมและยอดเพี้ยนไหม
+//    ตั้งแต่ 19 ส.ค. 69 บอสสั่งปิดช่องนั้น (ห้ามปิดการขายถ้ายังไม่มีใบที่ส่งแล้ว · migration 0145)
+//    เทสต์จึงเปลี่ยนเป็น 2 ท่อน: (ก) ลัดคิวต้องถูกกัน (ข) พอส่งใบแล้ว ยอดต้องสอดคล้องกันตามเดิม
+test("[audit] ปิดการขายลัดคิวต้องถูกกัน · พอส่งใบแล้วยอดลูกค้าต้องตรงกับใบเสนอราคา", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const COMPANY = tg("ปิดลัดคิว");
@@ -78,6 +81,22 @@ test("[audit] ปิดการขายจากลูกค้าเป้า
   await expect(row2).toBeVisible({ timeout: 15_000 });
   await row2.getByRole("button", { name: /▾/ }).first().click();
   page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
+  await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
+
+  // (ก) ด่านต้องกันไว้ — ใบยังเป็นร่าง ยังไม่เคยส่งถึงลูกค้า จึงต้องยังไม่มีลูกค้าเกิดขึ้น
+  await new Promise(r => setTimeout(r, 4000));
+  const { data: ลัดคิว } = await sb.from("customers").select("id").eq("company", COMPANY);
+  expect(ลัดคิว?.length ?? 0, "ยังไม่ส่งใบให้ลูกค้า = ปิดการขายไม่ได้ ต้องไม่มีลูกค้าถูกสร้าง").toBe(0);
+
+  // (ข) ส่งใบให้ลูกค้าแล้วปิดใหม่ — คราวนี้ต้องผ่าน และยอดต้องสอดคล้องกัน
+  await markQuotationSent(sb, "RYG", COMPANY);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
+  const row3 = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row3).toBeVisible({ timeout: 15_000 });
+  await row3.getByRole("button", { name: /▾/ }).first().click();
+  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
   const cust = await waitRow<{ id: number; total_value: number; company: string }>(sb, "customers", { company: COMPANY }, 20_000);

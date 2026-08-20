@@ -20,6 +20,7 @@ export const EMPTY_DEALER_SETTINGS: DealerSettings = {
   document: DEFAULT_DOC,
   logo: "",
   notifPrefs: DEFAULT_NOTIF_PREFS,
+  pricing: {},
 };
 
 /** แจ้งหน้าอื่นใน origin เดียวกันว่าตั้งค่าสาขาเปลี่ยน (โหมด local ไม่มี Realtime) */

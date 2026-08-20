@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { type SolutionProduct } from "@pms/shared/lib/mock";
-import { catalogRate } from "@pms/shared/lib/boq";
+import { catalogRate, markupPctOf, withMarkup } from "@pms/shared/lib/boq";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { TemplateHero } from "@pms/shared/components/ui/TemplateHero";
 import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
@@ -26,6 +27,45 @@ export default function DealerProductsPage() {
   const [viewP, setViewP] = useState<Product | null>(null);
   const [historyP, setHistoryP] = useState<Product | null>(null);
   const [subView, setSubView] = useState<{ parent: Product; sub: string } | null>(null); // ดูรายละเอียดแม่แบบย่อย
+
+  // ── ส่วนบวกเพิ่มจากราคากลาง — ตัวแทนตั้งเอง (บอสสั่ง 20 ส.ค. 69) ───────────────
+  // เก็บที่ตั้งค่าของสาขา (dealer_settings.pricing) → ตามไปทุกเครื่อง/ทุกเบราว์เซอร์ของสาขานั้น
+  // ร่าง = ค่าที่กำลังพิมพ์อยู่ (ยังไม่บันทึก) แยกจากค่าจริง เพื่อให้พิมพ์ "1" ก่อนเป็น "12" ได้
+  //   โดยหน้าจอไม่กระตุกและไม่ยิงบันทึกทุกตัวอักษร — บันทึกตอนออกจากช่อง/กด Enter
+  const { settings: dealerSet, loaded: setLoaded, save: saveDealer } = useDealerSettings();
+  const pricing = dealerSet.pricing;
+  const [ร่าง, setร่าง] = useState<Record<string, string>>({});
+  const [กำลังบันทึก, setกำลังบันทึก] = useState(false);
+  const [ทุกแม่แบบ, setทุกแม่แบบ] = useState("");
+  const [บันทึกแล้วเมื่อ, setบันทึกแล้วเมื่อ] = useState<string>("");
+
+  const เขียนเปอร์เซ็นต์ = async (byTemplate: Record<string, number>) => {
+    setกำลังบันทึก(true);
+    try {
+      await saveDealer({ pricing: { ...pricing, byTemplate } });
+      setบันทึกแล้วเมื่อ(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+    } finally { setกำลังบันทึก(false); }
+  };
+
+  const บันทึกเปอร์เซ็นต์ = async (templateId: string) => {
+    const ข้อความ = (ร่าง[templateId] ?? "").trim();
+    const เดิม = markupPctOf(pricing, templateId);
+    // ล้างช่องทิ้ง = ไม่บวกเพิ่ม (0) — ไม่ใช่ "ไม่เปลี่ยนแปลง"
+    const ใหม่ = ข้อความ === "" ? 0 : Number(ข้อความ);
+    if (!Number.isFinite(ใหม่) || ใหม่ === เดิม) { setร่าง(v => { const n = { ...v }; delete n[templateId]; return n; }); return; }
+    const byTemplate = { ...(pricing.byTemplate ?? {}) };
+    if (ใหม่ === 0) delete byTemplate[templateId]; else byTemplate[templateId] = ใหม่;
+    await เขียนเปอร์เซ็นต์(byTemplate);
+    setร่าง(v => { const n = { ...v }; delete n[templateId]; return n; });
+  };
+
+  /** ใช้ % ที่กรอกไว้ล่าสุดกับทุกแม่แบบ — สาขาที่บวกเท่ากันทั้งหมดจะได้ไม่ต้องพิมพ์ทีละใบ */
+  const ใช้กับทุกแม่แบบ = async (pct: number) => {
+    const byTemplate: Record<string, number> = {};
+    if (pct !== 0) for (const p of PRODUCTS) byTemplate[p.id] = pct;
+    await เขียนเปอร์เซ็นต์(byTemplate);
+    setร่าง({});
+  };
   // แคตตาล็อกเดียวทั้งเครือ — อ่านผ่าน repository (local: localStorage · supabase: DB)
   const PRODUCTS = useMasterCatalog();
 
@@ -74,6 +114,31 @@ export default function DealerProductsPage() {
         </div>
       </TopbarActions>
       {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
+
+      {/* ── แถบส่วนบวกเพิ่มของสาขา ────────────────────────────────────────────
+          บอกให้ชัดว่าตัวเลขไหนของสำนักงานใหญ่ ตัวไหนของสาขา แล้วให้ทางลัดสำหรับ
+          สาขาที่บวกเท่ากันทุกแม่แบบ จะได้ไม่ต้องพิมพ์ทีละใบ */}
+      <div className="card" style={{ padding: "12px 16px", marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: "0.82rem", fontWeight: 800, color: STEEL }}>ราคาขายของสาขา = ราคากลาง + ส่วนบวกเพิ่มที่คุณตั้งเอง</div>
+          <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 2 }}>
+            สำนักงานใหญ่กำหนดราคากลาง · ส่วนบวกเพิ่มเป็นของสาขา ตั้งได้อิสระไม่มีเพดาน · ใบเสนอราคาใหม่จะตั้งต้นด้วยราคาขายนี้ (แก้รายแถวได้)
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <label htmlFor="pct-ทุกแม่แบบ" style={{ fontSize: "0.7rem", color: MUTED, fontWeight: 700 }}>ตั้งพร้อมกันทุกแม่แบบ</label>
+          <input id="pct-ทุกแม่แบบ" type="number" inputMode="decimal" step="0.5" aria-label="บวกเพิ่มทุกแม่แบบ"
+            value={ทุกแม่แบบ} onChange={e => setทุกแม่แบบ(e.target.value)} placeholder="0"
+            style={{ width: 70, textAlign: "right", padding: "6px 8px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: "0.8rem", fontWeight: 700, color: STEEL, background: "#fff", outline: "none", fontFamily: "inherit" }} />
+          <span style={{ fontSize: "0.78rem", fontWeight: 700, color: MUTED }}>%</span>
+          <button className="btn btn-secondary btn-sm" disabled={กำลังบันทึก || ทุกแม่แบบ.trim() === ""}
+            onClick={() => { const n = Number(ทุกแม่แบบ); if (Number.isFinite(n)) void ใช้กับทุกแม่แบบ(n); }}
+            style={{ color: STEEL, opacity: (กำลังบันทึก || ทุกแม่แบบ.trim() === "") ? .5 : 1 }}>ใช้กับทุกแม่แบบ</button>
+          {กำลังบันทึก
+            ? <span style={{ fontSize: "0.7rem", color: MUTED }}>กำลังบันทึก…</span>
+            : บันทึกแล้วเมื่อ && <span style={{ fontSize: "0.7rem", color: "#059669", fontWeight: 700 }}>บันทึกแล้ว {บันทึกแล้วเมื่อ}</span>}
+        </div>
+      </div>
 
       {/* ── Banner: read-only ── */}
       {/* ── แคตตาล็อกแม่แบบ (grid) ── */}
@@ -140,22 +205,49 @@ export default function DealerProductsPage() {
 
                 {/* เส้นคั่น */}
                 <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: "auto", paddingTop: 12 }}>
-                  {/* ราคากลาง (HQ-managed / read-only) */}
+                  {/* ราคากลางจากสำนักงานใหญ่ (อ่านอย่างเดียว) */}
                   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 700, marginBottom: 1 }}>ราคากลาง</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 1 }}>
+                        <Lock size={9} style={{ color: MUTED, flexShrink: 0 }} />
+                        <span style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 700 }}>ราคากลางจากสำนักงานใหญ่</span>
+                      </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                        <span style={{ fontSize: "1.3rem", fontWeight: 800, color: PRIMARY, letterSpacing: "-0.01em" }}>{fmtMoney(p.price)}</span>
-                        <span style={{ fontSize: "0.72rem", color: MUTED }}>/ {p.unit}</span>
+                        <span style={{ fontSize: "0.98rem", fontWeight: 700, color: STEEL }}>{fmtMoney(p.price)}</span>
+                        <span style={{ fontSize: "0.7rem", color: MUTED }}>/ {p.unit}</span>
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, color: MUTED, fontSize: "0.65rem", whiteSpace: "nowrap" }}>
                       <CalendarClock size={11} /> {p.effectiveDate}
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5 }}>
-                    <Lock size={10} style={{ color: MUTED, flexShrink: 0 }} />
-                    <span style={{ fontSize: "0.65rem", color: MUTED }}>กำหนดโดยสำนักงานใหญ่ · อ่านอย่างเดียว</span>
+
+                  {/* ── ส่วนบวกเพิ่มของสาขา — ตัวแทนตั้งเอง (บอสสั่ง 20 ส.ค. 69) ──
+                      ราคากลาง = ต้นทุนที่สำนักงานใหญ่ตั้ง · ราคาขายเป็นสิทธิ์ของตัวแทน
+                      ไม่มีเพดาน ไม่มีขั้นต่ำ — ห้ามใส่ตัวตรวจเทียบราคากลาง */}
+                  <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, padding: "9px 10px", background: "#f7f9fc", border: `1px solid ${BORDER}`, borderRadius: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <label htmlFor={`pct-${p.id}`} style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 700 }}>บวกเพิ่มจากราคากลาง</label>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <input id={`pct-${p.id}`} type="number" inputMode="decimal" step="0.5" aria-label={`บวกเพิ่มจากราคากลาง ${p.name}`}
+                          value={ร่าง[p.id] ?? String(markupPctOf(pricing, p.id) || "")}
+                          placeholder="0"
+                          onChange={e => setร่าง(v => ({ ...v, [p.id]: e.target.value }))}
+                          onBlur={() => บันทึกเปอร์เซ็นต์(p.id)}
+                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          style={{ width: 68, textAlign: "right", padding: "5px 8px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: "0.8rem", fontWeight: 700, color: STEEL, background: "#fff", outline: "none", fontFamily: "inherit" }} />
+                        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: MUTED }}>%</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginTop: 7 }}>
+                      <span style={{ fontSize: "0.65rem", color: MUTED, fontWeight: 700 }}>ราคาขายของเรา</span>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                        <span style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, letterSpacing: "-0.01em" }}>
+                          {fmtMoney(withMarkup(p.price, Number(ร่าง[p.id] ?? markupPctOf(pricing, p.id)) || 0))}
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: MUTED }}>/ {p.unit}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -208,7 +300,8 @@ export default function DealerProductsPage() {
                         </div>
                         <div style={{ padding: "6px 8px 7px", textAlign: "center", lineHeight: 1.3 }}>
                           <div style={{ fontSize: "0.7rem", fontWeight: 600, color: STEEL }}>{s}</div>
-                          <div style={{ fontSize: "0.64rem", marginTop: 2, fontWeight: 700, color: PRIMARY }}>{fmtMoney(catalogRate(viewP, s))}</div>
+                          {/* โชว์ "ราคาขายของสาขา" ให้ตรงกับที่จะไปโผล่ในใบเสนอราคา ไม่ใช่ราคากลางดิบ */}
+                          <div style={{ fontSize: "0.64rem", marginTop: 2, fontWeight: 700, color: PRIMARY }}>{fmtMoney(withMarkup(catalogRate(viewP, s), markupPctOf(pricing, viewP.id)))}</div>
                         </div>
                       </button>
                     ))}
@@ -260,9 +353,13 @@ export default function DealerProductsPage() {
                 <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{subView.parent.spec}</div>
               </div>
               <div>
-                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (ตามแม่แบบหลัก · สำนักงานใหญ่กำหนด)</div>
-                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(catalogRate(subView.parent, subView.sub))}</span>
+                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคาขายของสาขา</div>
+                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(withMarkup(catalogRate(subView.parent, subView.sub), markupPctOf(pricing, subView.parent.id)))}</span>
                 <span style={{ fontSize: "0.72rem", color: MUTED }}> / {subView.parent.unit}</span>
+                <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 4 }}>
+                  ราคากลาง {fmtMoney(catalogRate(subView.parent, subView.sub))}
+                  {markupPctOf(pricing, subView.parent.id) !== 0 && ` · บวกเพิ่ม ${markupPctOf(pricing, subView.parent.id)}%`}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
                   <CalendarClock size={12} style={{ color: MUTED }} />
                   <span style={{ fontSize: "0.72rem", color: MUTED }}>มีผล {subView.parent.effectiveDate}</span>

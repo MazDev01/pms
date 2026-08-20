@@ -223,11 +223,14 @@ export interface HQAlertsFilters {
 export interface HQCustomerPageRow {
   id: number; name: string; dealerCode: string; dealerName: string; province: string;
   totalValue: number; buildingTypes: string[]; templates: string[];
-  /** ISO date (ไม่ใช่ Thai string) — client format เองด้วย toThaiDate/fmtISOToThai ตอนแสดงผล */
-  deliveredAt: string | null; lastPurchaseAt: string | null;
+  // ⚠️ เคยมี deliveredAt (วันส่งมอบ) ตรงนี้ — ลบทั้งฟีเจอร์แล้ว (บอสสั่ง 20 ส.ค. 69)
+  //    เพราะไม่มีที่กรอกวันส่งมอบจริงทั้งฝั่งตัวแทนและสำนักงานใหญ่ ตัวเลขที่โชว์คือ
+  //    "วันปิดการขาย + 90 วัน" ซึ่งเป็นค่าที่ระบบคิดขึ้นเอง ไม่ใช่ข้อมูลจริงของงาน
+  /** ISO date (ไม่ใช่ Thai string) — client format เองด้วย fmtISOToThai ตอนแสดงผล */
+  lastPurchaseAt: string | null;
 }
 export interface HQCustomersPageOpts {
-  search?: string; dealerCode?: string; provinces?: string[]; buildingType?: string; deliveryYear?: number;
+  search?: string; dealerCode?: string; provinces?: string[]; buildingType?: string;
   limit: number; offset: number;
 }
 export interface HQCustomersKPI { total: number; active: number; revenue: number; repeat: number; }
@@ -246,7 +249,6 @@ export interface HQCustomersFilterOptions {
   dealers: { code: string; name: string }[];
   provinces: string[];
   types: string[];
-  years: number[];
 }
 export interface MetricsRepo {
   /** rollup รายสาขาของปีที่ระบุ (key = dealerCode) — supabase: RPC dealer_rollup · local: คำนวณจาก array เอง

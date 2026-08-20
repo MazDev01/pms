@@ -238,6 +238,7 @@ const dealerSettings: DealerSettingsRepo = {
       document:   { ...DEFAULT_DOC, ...((r.document as object) ?? {}) },
       logo:       (r.logo as string) ?? "",
       notifPrefs: { ...DEFAULT_NOTIF_PREFS, ...((r.notif_prefs as object) ?? {}) },
+      pricing:    ((r.pricing as object) ?? {}),
     } as DealerSettings;
   },
   save: async (dealerCode, patch) => {

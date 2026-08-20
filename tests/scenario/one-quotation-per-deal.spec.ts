@@ -1,0 +1,85 @@
+// ── หนึ่งดีล = ใบเสนอราคาใบเดียว (บอสสั่ง 20 ส.ค. 69) ──────────────────────────
+//
+// ต้นเหตุเดิม: ฟอร์มออกใบซ่อนปุ่ม "เลือกจากแคตตาล็อก" ไว้ เพิ่มรายการที่สองไม่ได้
+//   ตัวแทนจึงไปกดออกใบใหม่แทน → ลูกค้ารายเดียวมีใบ 2 ฉบับทั้งที่เป็นงานเดียวกัน
+// ตอนนี้: เพิ่มรายการในใบเดิมได้ · และปุ่มบนหัวแผงพาไปแก้ใบเดิม ไม่ออกใบใหม่
+import { test, expect } from "@playwright/test";
+import { RYG, skipReason } from "./supabaseEnv";
+import {
+  DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag, pickTemplate,
+} from "./funcHelpers";
+
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
+test.setTimeout(240_000);
+test.describe.configure({ mode: "serial" });
+
+const NS = specNS("ONEQ");
+const COMPANY = nsTag(NS)("ใบเดียว");
+
+test.beforeAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
+
+test("[func] เพิ่มรายการที่สองในใบเดิมได้ → ไม่ต้องออกใบใหม่", async ({ page }) => {
+  const sb = await db(RYG);
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+
+  // 1) ลูกค้าเป้าหมายใหม่ (มีแม่แบบ + พื้นที่ → BOQ ตั้งต้นให้ 1 รายการ)
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
+  await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณใบเดียว");
+  await page.getByPlaceholder("0XX-XXX-XXXX").fill("081-000-0000");
+  await page.getByRole("dialog").getByLabel("จังหวัด").first().selectOption({ index: 1 });
+  await page.getByPlaceholder("เช่น 1200", { exact: true }).fill("500");
+  await pickTemplate(page);
+  await page.getByRole("button", { name: "บันทึก" }).click();
+  await waitRow(sb, "leads", { company: COMPANY });
+
+  // 2) เปิดฟอร์มออกใบ — ปุ่มเลือกจากแคตตาล็อกต้องมีให้ใช้เสมอ
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
+  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 20_000 });
+
+  const แถว = page.getByLabel("ราคาต่อหน่วย");
+  await expect(แถว).toHaveCount(1, { timeout: 20_000 });   // ตั้งต้นจากแม่แบบ 1 รายการ
+
+  // 3) เพิ่มรายการที่สองลงในใบเดียวกัน
+  await page.getByRole("button", { name: /เลือกจากแคตตาล็อก/ }).click();
+  // แถวในรายการแคตตาล็อกเขียนราคาแบบ "฿5,100/ตร.ม." — ใช้หน่วยเป็นตัวแยกจากปุ่มอื่นในหน้า
+  await page.locator("button").filter({ hasText: /฿[\d,]+\/\S+/ }).first().click();
+  await expect(แถว, "เพิ่มรายการที่สองในใบเดิมต้องได้").toHaveCount(2, { timeout: 10_000 });
+
+  // 4) บันทึก → ต้องได้ใบเดียวที่มี 2 รายการ ไม่ใช่ 2 ใบ
+  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
+  const q = await waitRow<{ id: string; items: number }>(sb, "quotations", { customer: COMPANY }, 60_000);
+  const { data: ทั้งหมด } = await sb.from("quotations").select("id").eq("dealer_code", "RYG").eq("customer", COMPANY);
+  expect(ทั้งหมด?.length, "ต้องมีใบเสนอราคาใบเดียว").toBe(1);
+  expect(q.items, "ใบนั้นต้องมี 2 รายการ").toBe(2);
+});
+
+test("[func] มีใบที่ยังแก้ได้อยู่ → ปุ่มบนหัวแผงพาไปเพิ่มรายการในใบเดิม ไม่ออกใบใหม่", async ({ page }) => {
+  const sb = await db(RYG);
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+
+  // ป้ายปุ่มต้องบอกตรง ๆ ว่าจะไปเพิ่มรายการ ไม่ใช่ออกใบใหม่
+  const ปุ่ม = page.getByRole("button", { name: "เพิ่มรายการในใบเสนอราคา" }).first();
+  await expect(ปุ่ม, "มีใบที่ยังแก้ได้ ปุ่มต้องเปลี่ยนเป็นเพิ่มรายการ").toBeVisible({ timeout: 20_000 });
+  await ปุ่ม.click();
+
+  // เข้าโหมดแก้ใบเดิม (หัวฟอร์มขึ้น "แก้ไข <เลขที่ใบ>")
+  await expect(page.getByText(/^แก้ไข /), "ต้องเข้าโหมดแก้ใบเดิม").toBeVisible({ timeout: 20_000 });
+  const { data: ทั้งหมด } = await sb.from("quotations").select("id").eq("dealer_code", "RYG").eq("customer", COMPANY);
+  expect(ทั้งหมด?.length, "ยังต้องมีใบเดียวเหมือนเดิม").toBe(1);
+});

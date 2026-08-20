@@ -4,7 +4,8 @@
 //   signInWithPassword · signOut · restore session · onAuthStateChange
 // อ่าน dealer_code / user_role จาก JWT claims (ใส่โดย custom_access_token_hook ที่ DB)
 // แล้วปั้นเป็น MockSession รูปเดียวกับโหมด local → RoleContext ใช้ร่วมกันได้ทั้งสองโหมด
-import { getSupabase } from "./data/supabase/client";
+import type { Session } from "@supabase/supabase-js";
+import { getSupabase, hasStoredSession } from "./data/supabase/client";
 import type { AuthResult } from "./auth";
 import { friendlyError } from "./friendlyError";
 import type { MockSession, UserRole } from "./mock";
@@ -165,24 +166,61 @@ async function sbSignOutLocal(): Promise<void> {
   try { await getSupabase().auth.signOut({ scope: "local" }); } catch { /* ล้างไม่ได้ก็ยังต้องเด้งออก */ }
 }
 
-/** ฟื้น session ตอนโหลดหน้าใหม่ — คืน MockSession ถ้ายังล็อกอินอยู่ ไม่งั้น null */
-export async function sbRestore(): Promise<MockSession | null> {
-  const { data } = await getSupabase().auth.getSession();
-  const s = data.session;
-  if (!s) return null;
-  const session = sessionFromToken(s.access_token, s.user?.email ?? "");
-  // โทเค็นที่ถืออยู่เพี้ยน (แก้ไข sessionStorage เอง/ไฟล์เก่าค้าง) → เคลียร์ session ทิ้งเลย ไม่ใช่แค่ปฏิเสธหน้านี้
-  if (!session) { await sbSignOut(); return null; }
-  // เติมชื่อจริงให้เสร็จ "ก่อน" คืนค่า — ไม่ใช่ปล่อยให้ตามมาทีหลัง (แก้ 13 ส.ค. 69)
-  //   เดิมคืน session ที่ dealerName ยังเป็น "รหัสสาขา" ไปก่อน แล้วชื่อจริงตามมาทาง sbOnChange
-  //   หน้าจอจึงขึ้น "DSA" แวบหนึ่งแล้วเด้งเป็น "เชียงไหม่สติล" — ผู้ใช้เห็นเป็นชื่อสลับไปมา
-  //   ทั้งบนแถบบน เมนูข้าง และหัวการ์ดบัญชีดีลเลอร์ (ผู้ใช้แจ้ง 13 ส.ค. 69)
-  //   อ่านไม่ได้ (เน็ต/สิทธิ์) withNames คืนค่าเดิมให้อยู่แล้ว จึงไม่มีทางทำให้ล็อกอินไม่ผ่าน
+/** ผลของการฟื้น session
+ *   session — ล็อกอินอยู่
+ *   "ออกแล้ว" — ไม่ได้ล็อกอินจริง ๆ (ไม่มีใบผ่าน/ใบผ่านตายแล้ว/บัญชีถูกปิด) → พาไปหน้าเข้าสู่ระบบได้
+ *   "ยังไม่รู้" — ถามไม่สำเร็จชั่วคราว (เน็ตสะดุด/เซิร์ฟเวอร์ตอบช้า) → **ห้ามเตะออก** ให้รอแล้วลองใหม่ */
+export type RestoreResult = MockSession | "ออกแล้ว" | "ยังไม่รู้";
+
+/** เก็บใบผ่านไว้ในเครื่องอยู่ไหม — ใช้แยก "ยังไม่ได้ล็อกอิน" ออกจาก "ล็อกอินอยู่แต่ถามไม่สำเร็จ" */
+export { hasStoredSession };
+
+/** ฟื้น session แบบไม่เตะผู้ใช้ออกเพราะเรื่องชั่วคราว (บอสสั่ง 20 ส.ค. 69)
+ *
+ *  กติกา: เข้าระบบแล้วต้องอยู่ต่อไปจนกว่าจะกดออกเอง ไม่ว่าจะทำอะไร
+ *  ของเดิมถามครั้งเดียว ถ้าไม่ได้คำตอบก็ถือว่า "ไม่ได้ล็อกอิน" แล้วเด้งไปหน้าเข้าสู่ระบบทันที
+ *  เน็ตสะดุดแวบเดียว ปิดฝาโน้ตบุ๊กแล้วเปิด หรือสัญญาณหลุดตอนโหลดหน้า = โดนเตะออกทั้งที่ใบผ่านยังอยู่ครบ
+ *
+ *  ⚠️ และของเดิม "อ่านใบไม่ออก = สั่งออกจากระบบ" ซึ่งลบกุญแจต่ออายุทิ้งด้วย
+ *     พอลบแล้วต่ออายุไม่ได้อีกเลย ต้องพิมพ์รหัสผ่านใหม่สถานเดียว — แรงเกินกว่าเหตุมาก
+ *     ตอนนี้ลองต่ออายุก่อนเสมอ จะออกจากระบบก็ต่อเมื่อกุญแจต่ออายุตายจริง ๆ */
+export async function sbRestoreSafe(): Promise<RestoreResult> {
+  let s: Session | null = null;
+  try {
+    const { data, error } = await getSupabase().auth.getSession();
+    if (error) return "ยังไม่รู้";          // ถามไม่ได้ ≠ ไม่ได้ล็อกอิน
+    s = data.session;
+  } catch { return "ยังไม่รู้"; }            // เน็ตหลุดกลางคัน
+
+  // ไม่มีใบผ่านในเครื่องเลย = ยังไม่เคยล็อกอิน (หรือกดออกไปแล้ว) — อันนี้เตะออกได้
+  if (!s) return hasStoredSession() ? "ยังไม่รู้" : "ออกแล้ว";
+
+  let session = sessionFromToken(s.access_token, s.user?.email ?? "");
+  if (!session) {
+    // ใบผ่านอ่านไม่ออก — ลองขอใบใหม่ด้วยกุญแจต่ออายุก่อน (ส่วนใหญ่แค่ใบเก่าค้าง)
+    try {
+      const { data, error } = await getSupabase().auth.refreshSession();
+      if (error || !data.session) return "ยังไม่รู้";   // ต่อไม่ได้ตอนนี้ ≠ ตายถาวร
+      s = data.session;
+      session = sessionFromToken(s.access_token, s.user?.email ?? "");
+    } catch { return "ยังไม่รู้"; }
+    // ต่ออายุแล้วยังอ่านไม่ออก = ใบผ่านเสียจริง (คนละสคีมา/ถูกแก้เอง) → ล้างทิ้งได้
+    if (!session) { await sbSignOut(); return "ออกแล้ว"; }
+  }
+
   const uid = (decodeClaims(s.access_token).sub as string) ?? "";
-  // สาขา/บัญชีถูกลบระหว่างที่ยังถือใบผ่านอยู่ → ต้องออกจากระบบ ไม่ใช่ปล่อยให้เดินในระบบด้วยหน้าจอเปล่า
-  if (!(await stillValid(session, uid))) { await sbSignOutLocal(); return null; }
+  // สาขา/บัญชีถูกลบหรือถูกปิด = เหตุผลที่ "ถูกต้อง" ที่จะออกจากระบบ (stillValid คืน true เมื่ออ่านไม่ได้)
+  if (!(await stillValid(session, uid))) { await sbSignOutLocal(); return "ออกแล้ว"; }
   return await withNames(session, uid);
 }
+
+/** ฟื้น session ตอนโหลดหน้าใหม่ — คืน MockSession ถ้ายังล็อกอินอยู่ ไม่งั้น null
+ *  (รูปแบบเดิม เก็บไว้ให้ผู้เรียกที่ไม่ต้องแยก "ยังไม่รู้" · ตัวที่ควรใช้คือ sbRestoreSafe) */
+export async function sbRestore(): Promise<MockSession | null> {
+  const r = await sbRestoreSafe();
+  return typeof r === "string" ? null : r;
+}
+
 
 // ── H4 · รีเซ็ตรหัสผ่านด้วย "ลิงก์ทางอีเมล" (ไม่ต้องใช้ service_role) ──────────────
 // ผู้ดูแลกดรีเซ็ต → ระบบส่งลิงก์ไปที่อีเมลล็อกอินของผู้ใช้ → ผู้ใช้กดลิงก์แล้วตั้งรหัสเอง

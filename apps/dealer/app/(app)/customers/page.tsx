@@ -7,7 +7,7 @@ import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import {
   buildLeadTasks, leadStatusLabel, leadStatusColor, QUOTED_UP, DEFAULT_DEALER_CODE,
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, customerCode,
-  DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel, DEFAULT_DELIVERY_DAYS,
+  DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
   type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile,
   type AppointmentMock,
@@ -244,17 +244,9 @@ function purchasedGroupsFor(customerId:number, qs:QuotationMock[]): PurchasedGro
     }))
     .sort((a,b)=>b.total-a.total);
 }
-// วันส่งมอบงานล่าสุด = วันปิดการขาย + ระยะเวลาส่งมอบมาตรฐาน (DEFAULT_DELIVERY_DAYS)
-// สูตรเดียวกับที่ฝั่ง HQ ใช้ (0080_hq_customers_page.sql: won_date + 90) — เดิมหน้านี้แสดงแค่วันปิดการขาย
-// เฉยๆ (บวก 0 วัน) ไม่ตรงกับ HQ (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมมี 3 สูตรไม่ตรงกันในระบบ)
-function deliveryDateFor(customerId:number, qs:QuotationMock[]): string {
-  const won = qs.filter(q=>q.customerId===customerId && q.status==="won").sort((a,b)=>a.date<b.date?1:-1)[0];
-  if (!won?.date) return "—";
-  const d = new Date(won.date);
-  if (Number.isNaN(d.getTime())) return "—";
-  d.setDate(d.getDate() + DEFAULT_DELIVERY_DAYS);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-}
+// ⚠️ เคยมี deliveryDateFor (วันส่งมอบ) ตรงนี้ — ลบทั้งฟีเจอร์แล้ว (บอสสั่ง 20 ส.ค. 69)
+//    ไม่มีที่ให้ใครกรอกวันส่งมอบจริงเลยทั้งระบบ · ค่าที่เคยใส่ในไฟล์ส่งออกคือ
+//    "วันปิดการขาย + 90 วัน" ที่โปรแกรมคิดขึ้นเอง = ตัวเลขที่ไม่มีอยู่จริงในงาน
 
 // ── Deterministic drawer feeds (จากลูกค้า + quotations + leads) ──
 // ไทม์ไลน์กิจกรรม — สร้างจากใบเสนอราคาและลูกค้าเป้าหมายที่ผูกกับลูกค้ารายนี้ (deterministic)
@@ -836,10 +828,10 @@ export default function CustomersPage(){
         <TopbarActions>
           <FilterBar dims={[]} />
           <ExportMenu filename="customers" title="รายชื่อลูกค้า"
-            headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","สินค้าที่ซื้อไป","วันส่งมอบ"]}
+            headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","สินค้าที่ซื้อไป"]}
             rows={filtered.map(c=>{
               const bought=purchasedItemsFor(c.id,quotations);
-              return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),bought.length?bought.join(", "):"—",fmtDate(deliveryDateFor(c.id,quotations))];
+              return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),bought.length?bought.join(", "):"—"];
             })} />
           {/* นำเข้าลูกค้าเดิม (คีย์มือ/CSV) — ลูกค้าใหม่ยังเกิดจาก Lead→Won เท่านั้น */}
           <button className="btn btn-primary btn-sm" onClick={()=>{setImportRows([]);setImportErr("");setShowImport(true);}}>

@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag, pickTemplate
+  db, waitRow, cleanup, specNS, nsTag, pickTemplate, markQuotationSent
 } from "./funcHelpers";
 
 // โซ่ธุรกิจหลักของทั้งระบบ: ลูกค้าเป้าหมาย → ใบเสนอราคา (BOQ) → ปิดการขาย → ลูกค้า
@@ -65,6 +65,10 @@ test("[func] ออกใบเสนอราคาจากลูกค้า�
 test("[func] ปิดการขายสำเร็จ → ลูกค้าถูกสร้างใน DB", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
+
+  // กฎ 19 ส.ค. 69: ปิดการขายสำเร็จไม่ได้ถ้ายังไม่มีใบที่ "ส่งแล้ว" — เทสต์นี้ตรวจสิ่งที่เกิด "หลัง" ปิดการขาย
+  // จึงจัดฉากให้ผ่านด่านนั้นก่อน (ใบถูกสร้างไว้แล้วจากเทสต์ก่อนหน้าในไฟล์เดียวกัน)
+  await markQuotationSent(sb, "RYG", COMPANY);
 
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });

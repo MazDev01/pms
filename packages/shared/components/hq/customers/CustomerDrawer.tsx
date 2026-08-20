@@ -7,7 +7,7 @@ import { Building2, Truck } from "lucide-react";
 import { RightDrawer, type DrawerTab } from "@pms/shared/components/ui/RightDrawer";
 import { customerCode, noteCategoryColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
-import { toThaiDate } from "@pms/shared/lib/delivery";
+import { toThaiDate } from "@pms/shared/lib/thaiDate";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useCustomerNotesForDealer } from "@pms/shared/lib/useCustomerNotes";
 import { type CustomerDbRow, type PurchasedBuilding } from "@pms/shared/lib/customerDb";
@@ -63,9 +63,6 @@ function BuildingCard({ b }: { b: PurchasedBuilding }) {
           {b.buildingType} · {b.quoteNo}
         </div>
         <div style={{ fontSize: "0.7rem", fontWeight: 700, color: PRIMARY, marginTop: 4 }}>{fmtBaht(b.value)}</div>
-        <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
-          ส่งมอบ {b.deliveredAt ? toThaiDate(b.deliveredAt) : "—"}
-        </div>
       </div>
     </div>
   );
@@ -149,30 +146,9 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
         </>
       ) : <Empty text="ไม่มีใบเสนอราคาที่ปิดการขายได้ผูกกับลูกค้ารายนี้" />,
     },
-    {
-      key: "delivery",
-      label: "การส่งมอบ",
-      content: row.buildings.some(b => b.deliveredAt) ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {row.buildings.filter(b => b.deliveredAt).map(b => (
-            <div key={b.quoteNo} style={{ border: "1px solid #e9edf2", borderRadius: 10, padding: 11 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-                <Truck size={15} color="#059669" />
-                <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#2D2D2D" }}>{b.template ?? b.buildingType}</span>
-                <span style={{ fontSize: "0.66rem", fontWeight: 700, color: PRIMARY, marginLeft: "auto" }}>{b.quoteNo}</span>
-              </div>
-              <Grid>
-                <Field label="วันปิดการขาย" value={b.wonDate} />
-                <Field label="วันส่งมอบ" value={toThaiDate(b.deliveredAt!)} />
-              </Grid>
-            </div>
-          ))}
-          <div style={{ fontSize: "0.63rem", color: "#9ca3af" }}>
-            วันส่งมอบ = วันปิดการขาย + ระยะเวลาส่งมอบของใบนั้น
-          </div>
-        </div>
-      ) : <Empty text="ยังไม่มีการส่งมอบ" />,
-    },
+    // ⚠️ เคยมีแท็บ "การส่งมอบ" ตรงนี้ — ลบทั้งแท็บแล้ว (บอสสั่ง 20 ส.ค. 69)
+    //    ไม่มีที่กรอกวันส่งมอบจริงทั้งฝั่งตัวแทนและสำนักงานใหญ่ · ที่โชว์อยู่คือ
+    //    "วันปิดการขาย + 90 วัน" ที่ระบบคิดเอง = ตัวเลขที่ไม่มีอยู่จริงในงาน
     {
       key: "timeline",
       label: "ไทม์ไลน์",
@@ -180,7 +156,6 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
           {row.buildings.flatMap(b => [
             { at: b.wonAt, label: `ปิดการขาย ${b.quoteNo}`, sub: `${b.template ?? b.buildingType} · ${fmtBaht(b.value)}`, color: PRIMARY },
-            ...(b.deliveredAt ? [{ at: b.deliveredAt, label: `ส่งมอบ ${b.template ?? b.buildingType}`, sub: b.quoteNo, color: "#059669" }] : []),
           ])
             .filter((e): e is { at: Date; label: string; sub: string; color: string } => !!e.at)
             .sort((a, b) => b.at.getTime() - a.at.getTime())
