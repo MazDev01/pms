@@ -11,7 +11,7 @@ import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
 import { boqLineItems, boqSubtotal, seedLineItems } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
-import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { useMasterCatalogState } from "@pms/shared/lib/useMasterCatalog";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -33,7 +33,8 @@ type LeadQuotationsPanelProps =
 
 export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal }: LeadQuotationsPanelProps) {
   const { quotations, createQuotation, updateQuotation, deleteQuotation } = useSales();
-  const catalog = useMasterCatalog(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
+  // ready = โหลดแคตตาล็อกจบแล้ว — ต้องรอก่อนถึงจะบอกว่า "ยังไม่มีแม่แบบ" (ว่างเพราะยังโหลดไม่เสร็จไม่นับ)
+  const { catalog, ready: catalogReady } = useMasterCatalogState(); // ราคากลาง HQ — ใช้ตั้งราคา/หน่วยของ BOQ ตั้งต้น
   const [mode, setMode] = useState<"list" | "create" | "edit" | "view">("list");
   const [editing, setEditing] = useState<QuotationMock | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -200,6 +201,12 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     const hasItems = form.lineItems.length > 0;
     const hasAmount = net > 0;
     const canSave = hasItems && hasAmount;
+    // ── ต้นเหตุที่พบจากการใช้งานจริง (19 ส.ค. 69): สำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ/ราคา ──
+    //   รายการสินค้าเพิ่มได้ทางเดียวคือเลือกจากแคตตาล็อก ตัวแทนจึงตันโดยไม่รู้ว่าติดตรงไหน
+    //   ข้อความเดิมบอกแค่ "ยอดรวมเป็น ฿0" ซึ่งฟังเหมือนตัวแทนกรอกผิดเอง
+    const แม่แบบว่าง = catalogReady && catalog.length === 0;
+    const ราคาแม่แบบยังไม่ตั้ง = !แม่แบบว่าง && hasItems && !hasAmount
+      && form.lineItems.every(it => it.unitPrice <= 0);
     // ฟอร์มออกใบ: ใช้ VAT ที่สาขาตั้งไว้ (ตั้งค่า › ใบเสนอราคา) — ต้องเป็นค่าเดียวกับที่จะตรึงลงใบตอนบันทึก
     const vatPct = dealerVat;
     const vatAmt = Math.round(net * vatPct / 100);
@@ -281,9 +288,13 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 16 }}>
           {!canSave && (
             <div style={{ marginRight: "auto", color: "#dc2626", fontSize: "0.72rem", fontWeight: 600 }}>
-              {!hasItems
-                ? "ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนบันทึก"
-                : "ยอดรวมเป็น ฿0 — ระบุจำนวนและราคาต่อหน่วยก่อนออกใบ"}
+              {แม่แบบว่าง
+                ? "สำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ — ออกใบเสนอราคาไม่ได้จนกว่าจะมีแม่แบบพร้อมราคา กรุณาแจ้งสำนักงานใหญ่"
+                : ราคาแม่แบบยังไม่ตั้ง
+                  ? "สำนักงานใหญ่ยังไม่ได้ตั้งราคาของแม่แบบนี้ — พิมพ์ราคาต่อหน่วยเองได้ หรือแจ้งสำนักงานใหญ่ให้ตั้งราคากลางก่อน"
+                  : !hasItems
+                    ? "ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนบันทึก"
+                    : "ยอดรวมเป็น ฿0 — ระบุจำนวนและราคาต่อหน่วยก่อนออกใบ"}
             </div>
           )}
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>ยกเลิก</button>

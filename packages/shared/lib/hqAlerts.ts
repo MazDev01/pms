@@ -1,10 +1,11 @@
 // ─── การแจ้งเตือนของสำนักงานใหญ่ (คำนวณล้วน) ──────────────────────────────────
-// แหล่งเดียวของ "กฎแจ้งเตือน 6 ข้อ" ที่ตั้งไว้ที่ /hq/settings → การแจ้งเตือน
+// แหล่งเดียวของ "กฎแจ้งเตือน" ที่ตั้งไว้ที่ /hq/settings → การแจ้งเตือน
 // ทุกข้อคำนวณจากข้อมูลจริงเท่านั้น (ลูกค้าเป้าหมาย/ใบเสนอราคา/เป้าตัวแทน) — ไม่มีตัวเลขสังเคราะห์
 // ผลลัพธ์เป็นข้อมูลล้วน (ไม่มี JSX) → Topbar เอาไปใส่ไอคอนแล้วขึ้นกระดิ่ง
 import {
+  templatesMissingPrice,
   type HQAlertKey, type HQNotifRules, type LeadRules,
-  type LeadRow, type DealerRow, type HQQuotation,
+  type LeadRow, type DealerRow, type HQQuotation, type SolutionProduct,
 } from "@pms/shared/lib/mock";
 import type { HQAlertsData } from "@pms/shared/lib/data/ports";
 import { parseDate, APP_NOW } from "@pms/shared/context/FilterContext";
@@ -12,6 +13,27 @@ import { leadCreatedDate, daysSinceContact, isLeadOpen } from "@pms/shared/lib/l
 import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
 
 export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string };
+
+/** แม่แบบไม่มี/ไม่มีราคา = ตัวแทนออกใบเสนอราคาไม่ได้เลย (พบจากการใช้งานจริง 19 ส.ค. 69)
+ *
+ *  ทำไมต้องเป็นการแจ้งเตือน ไม่ใช่แค่ปล่อยให้ตัวแทนบ่น:
+ *    รายการสินค้าในใบเสนอราคาเพิ่มได้ทางเดียวคือเลือกจากแคตตาล็อก — ไม่มีแม่แบบ = เพิ่มไม่ได้
+ *    = บันทึกใบไม่ได้ = ปิดการขายไม่ได้ · ตัวแทนแก้เองไม่ได้ ต้องรอสำนักงานใหญ่เท่านั้น
+ *    ถ้าสำนักงานใหญ่ไม่รู้ตัว ทั้งเครือจะค้างอยู่แบบนั้นโดยไม่มีใครเห็นสาเหตุ */
+function catalogAlerts(catalog: SolutionProduct[]): HQAlert[] {
+  if (!catalog.length) return [{
+    key: "catalogNoPrice",
+    title: "ยังไม่มีแม่แบบในระบบ",
+    body: "ตัวแทนออกใบเสนอราคาไม่ได้เลยจนกว่าจะมีแม่แบบอย่างน้อย 1 รายการพร้อมราคา",
+    href: "/hq/master",
+  }];
+  return templatesMissingPrice(catalog).map(name => ({
+    key: "catalogNoPrice" as HQAlertKey,
+    title: "แม่แบบยังไม่ได้ตั้งราคา",
+    body: `${name} — ตัวแทนหยิบไปออกใบเสนอราคาแล้วยอดเป็น ฿0 บันทึกไม่ได้`,
+    href: "/hq/master",
+  }));
+}
 
 const DAY_MS = 86_400_000;
 
@@ -109,6 +131,8 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
   dealers: DealerRow[];
   rules: HQNotifRules;
   revenueOf: (dealerCode: string) => number;
+  /** แคตตาล็อกแม่แบบ — undefined = ยังโหลดไม่เสร็จ (ไม่ใช่ "ไม่มีแม่แบบ") จึงยังไม่เตือน */
+  catalog?: SolutionProduct[];
 }): HQAlert[] {
   const { dealers, rules, revenueOf } = input;
   const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
@@ -142,6 +166,7 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
     key: "targetAchieved", title: "ตัวแทนทำยอดถึงเป้า",
     body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(actual)} จาก ${fmtB(d.revenueTarget)})`, href: `/hq/dealers/${d.code}`,
   });
+  if (on("catalogNoPrice") && input.catalog) out.push(...catalogAlerts(input.catalog));
   if (on("lostRate")) {
     // type predicate แทน x.d && ... เฉย ๆ — ให้ TS แคบชนิด d: DealerRow|undefined → DealerRow ไม่ต้องพึ่ง !
     const rows = data.lostRate
@@ -156,7 +181,7 @@ export function assembleHQAlerts(data: HQAlertsData, input: {
   return out;
 }
 
-/** รวมการแจ้งเตือนทั้ง 6 ข้อตามกฎที่เปิดไว้ (เฉพาะข้อที่ inapp = ขึ้นกระดิ่ง) */
+/** รวมการแจ้งเตือนทุกข้อตามกฎที่เปิดไว้ (เฉพาะข้อที่ inapp = ขึ้นกระดิ่ง) */
 export function buildHQAlerts(input: {
   leads: LeadRow[];
   quotes: HQQuotation[];
@@ -167,6 +192,8 @@ export function buildHQAlerts(input: {
   /** ยอดขายจริงรายสาขา (คำนวณจากใบที่ปิดได้) */
   revenueOf: (dealerCode: string) => number;
   validityDays: number;
+  /** แคตตาล็อกแม่แบบ — undefined = ยังโหลดไม่เสร็จ (ไม่ใช่ "ไม่มีแม่แบบ") จึงยังไม่เตือน */
+  catalog?: SolutionProduct[];
 }): HQAlert[] {
   const { leads, quotes, dealers, rules, rulesOf, validityDays } = input;
   const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
@@ -224,6 +251,7 @@ export function buildHQAlerts(input: {
       });
     }
   }
+  if (on("catalogNoPrice") && input.catalog) out.push(...catalogAlerts(input.catalog));
   if (on("lostRate")) {
     for (const { d, rate, lost, closed } of dealersHighLostRate(dealers, leads, rules.lostRatePct, rules.lostRateMinClosed)) {
       out.push({

@@ -89,12 +89,22 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
             <>
               <div onClick={() => setPickOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 220 }} />
               <div ref={pickRef} style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 221, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.16)", padding: 6, width: 300, maxHeight: 320, overflowY: "auto" }}>
-                {catalog.length === 0 && <div style={{ padding: 12, fontSize: "0.78rem", color: "#9ca3af", textAlign: "center" }}>ไม่มีแม่แบบ</div>}
+                {catalog.length === 0 && (
+                  // ต้นเหตุจริงคือสำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ — ตัวแทนแก้เองไม่ได้ ต้องบอกให้รู้ว่าไปบอกใคร
+                  <div style={{ padding: "12px 14px", fontSize: "0.75rem", color: "#b45309", background: "#fef7ed", borderRadius: 8, lineHeight: 1.6 }}>
+                    สำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ<br />
+                    <span style={{ color: "#92400e" }}>ออกใบเสนอราคาไม่ได้จนกว่าจะมีแม่แบบพร้อมราคา — กรุณาแจ้งสำนักงานใหญ่</span>
+                  </div>
+                )}
                 {catalog.map(p => (
                   <div key={p.id}>
                     <button type="button" onClick={() => addFromCatalog(p.name, p.unit, p.price)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "8px 10px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D", textAlign: "left", fontFamily: "inherit" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#f0f4fa")} onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-                      <span>{p.name}</span><span style={{ fontSize: "0.68rem", color: PRIMARY, fontWeight: 800, flexShrink: 0 }}>฿{fmt(p.price)}/{p.unit}</span>
+                      <span>{p.name}</span>
+                      {/* ราคา 0 = สำนักงานใหญ่ยังไม่ได้ตั้ง — บอกตรงนี้เลย ไม่ให้ตัวแทนเลือกไปแล้วงงว่าทำไมบันทึกไม่ได้ */}
+                      <span style={{ fontSize: "0.68rem", color: p.price > 0 ? PRIMARY : "#b45309", fontWeight: 800, flexShrink: 0 }}>
+                        {p.price > 0 ? `฿${fmt(p.price)}/${p.unit}` : "ยังไม่ได้ตั้งราคา"}
+                      </span>
                     </button>
                     {p.subtypes?.map(st => (
                       <button key={st} type="button" onClick={() => addFromCatalog(`${p.name} · ${st}`, p.unit, catalogRate(p, st))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "6px 10px 6px 22px", border: "none", background: "none", cursor: "pointer", borderRadius: 8, fontSize: "0.74rem", color: "#6b7280", textAlign: "left", fontFamily: "inherit" }}
@@ -123,7 +133,11 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && <tr><td colSpan={6} style={{ padding: 18, textAlign: "center", color: "#9ca3af", fontSize: "0.76rem" }}>{showCatalog ? "ยังไม่มีรายการ — กด “เลือกจากแคตตาล็อก” เพื่อเพิ่ม" : "ยังไม่มีรายการ — ระบุแม่แบบและมูลค่าประเมินที่ลูกค้าเป้าหมายก่อน"}</td></tr>}
+            {items.length === 0 && <tr><td colSpan={6} style={{ padding: 18, textAlign: "center", color: "#9ca3af", fontSize: "0.76rem" }}>{!showCatalog
+                ? "ยังไม่มีรายการ — ระบุแม่แบบและมูลค่าประเมินที่ลูกค้าเป้าหมายก่อน"
+                : catalog.length === 0
+                  ? "ยังไม่มีรายการ — สำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ จึงเพิ่มรายการไม่ได้"
+                  : "ยังไม่มีรายการ — กด “เลือกจากแคตตาล็อก” เพื่อเพิ่ม"}</td></tr>}
             {items.map((it, i) => (
               <tr key={it.id ?? i} style={{ borderTop: `1px solid #f1f5f9` }}>
                 <td style={{ padding: "5px 8px" }}><input style={inp} value={it.name} onChange={e => set(i, { name: e.target.value })} placeholder="ชื่อรายการ" /></td>
@@ -154,7 +168,7 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
           )}
         </table>
       </div>
-      <div style={{ fontSize: "0.64rem", color: "#9ca3af", marginTop: 5 }}>ราคา/หน่วยดึงจากราคากลางของสำนักงานใหญ่ (แคตตาล็อกแม่แบบ) · ปรับได้ตามการเจรจา</div>
+      <div style={{ fontSize: "0.64rem", color: "#9ca3af", marginTop: 5 }}>ราคา/หน่วยดึงจากราคากลางของสำนักงานใหญ่ (แคตตาล็อกแม่แบบ) · ปรับได้ตามการเจรจา · แม่แบบที่ยังไม่ได้ตั้งราคาจะขึ้นเป็น 0 ให้พิมพ์เอง</div>
     </div>
   );
 }

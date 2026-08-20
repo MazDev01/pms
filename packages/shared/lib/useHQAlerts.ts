@@ -1,5 +1,5 @@
 // ─── การแจ้งเตือน HQ (hook) ────────────────────────────────────────────────────
-// แหล่งเดียวของ "กฎแจ้งเตือน 6 ข้อ" ฝั่ง React — คำนวณจริงใน @pms/shared/lib/hqAlerts
+// แหล่งเดียวของ "กฎแจ้งเตือน" ฝั่ง React — คำนวณจริงใน @pms/shared/lib/hqAlerts
 // ใช้ร่วมกันระหว่างกระดิ่ง Topbar และการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ
 // (ห้าม usePersistentState: มันเขียนกลับ → ค่า seed จะทับของจริงทุกครั้งที่ mount)
 "use client";
@@ -10,13 +10,14 @@ import {
   HQ_NOTIF_UPDATED_EVENT, DEALER_LEAD_RULES_EVENT,
   type HQNotifRules, type DealerLeadRulesMap, type DealerRow,
 } from "@pms/shared/lib/mock";
-import { settings as settingsRepo, dealers as dealersRepo, metrics as metricsRepo } from "@pms/shared/lib/data";
+import { settings as settingsRepo, dealers as dealersRepo, metrics as metricsRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
 import { buildHQAlerts, assembleHQAlerts, type HQAlert } from "@pms/shared/lib/hqAlerts";
+import type { SolutionProduct } from "@pms/shared/lib/mock";
 import type { HQAlertsData } from "@pms/shared/lib/data/ports";
 import { useAuthReady } from "./useAuthReady";
 
@@ -76,9 +77,25 @@ function useHQAlertsData(hqRules: HQRules | null): HQAlertsData | null {
   return data;
 }
 
-/** การแจ้งเตือน 6 ข้อของทั้งเครือ ตามกฎที่เปิดไว้ที่ /hq/settings → การแจ้งเตือน */
+/** แคตตาล็อกแม่แบบ — ใช้เตือนว่า "ยังไม่ได้ตั้งราคา" ซึ่งทำให้ตัวแทนออกใบเสนอราคาไม่ได้
+ *  คืน undefined ระหว่างที่ยังโหลดไม่เสร็จ เพื่อไม่ให้เตือนผิดว่า "ไม่มีแม่แบบ" ตอนหน้าจอเพิ่งเปิด */
+function useCatalogForAlerts(ready: boolean): SolutionProduct[] | undefined {
+  const [list, setList] = useState<SolutionProduct[] | undefined>(undefined);
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    catalogRepo.list()
+      .then(r => { if (alive) setList(r); })
+      .catch(e => logRepoRead("catalog.list(alerts)", e));
+    return () => { alive = false; };
+  }, [ready]);
+  return list;
+}
+
+/** การแจ้งเตือนของทั้งเครือ ตามกฎที่เปิดไว้ที่ /hq/settings → การแจ้งเตือน */
 export function useHQAlerts(): HQAlert[] {
   const hqRules = useHQRules();
+  const catalog = useCatalogForAlerts(!!hqRules);
   const networkLeads = useNetworkLeads();
   const networkQuotes = useNetworkQuotations();
   const perf = useDealerPerformance();
@@ -87,12 +104,12 @@ export function useHQAlerts(): HQAlert[] {
     if (!hqRules) return [];
     const revenueOf = (code: string) => (perf.get(code) ?? EMPTY_PERF).revenue;
     // supabase: ประกอบจากผู้สมัครที่ DB (ไม่พึ่ง array ทั้งเครือ) · local: คิดจาก array เหมือนเดิม
-    if (alertsData) return assembleHQAlerts(alertsData, { dealers: hqRules.dealers, rules: hqRules.rules, revenueOf });
+    if (alertsData) return assembleHQAlerts(alertsData, { dealers: hqRules.dealers, rules: hqRules.rules, revenueOf, catalog });
     return buildHQAlerts({
       leads: networkLeads, quotes: networkQuotes, dealers: hqRules.dealers,
       rules: hqRules.rules, validityDays: hqRules.validityDays,
       rulesOf: code => leadRulesOf(hqRules.leadRulesMap, code),
-      revenueOf,
+      revenueOf, catalog,
     });
-  }, [hqRules, alertsData, networkLeads, networkQuotes, perf]);
+  }, [hqRules, alertsData, networkLeads, networkQuotes, perf, catalog]);
 }

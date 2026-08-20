@@ -213,10 +213,10 @@ export const DEALER_LEAD_RULES_KEY = "dealer_lead_rules";
 export const DEALER_LEAD_RULES_EVENT = "bpms-dealer-lead-rules-updated";
 export const DEFAULT_LEAD_RULES: LeadRules = { followUpAlertDays: 7, unassignedAlertHours: 48 };
 
-// ─── การแจ้งเตือนของสำนักงานใหญ่ (6 เรื่อง) — ตั้งที่ /hq/settings → "การแจ้งเตือน" ──
+// ─── การแจ้งเตือนของสำนักงานใหญ่ — ตั้งที่ /hq/settings → "การแจ้งเตือน" ──
 // ทุกข้อคำนวณจากข้อมูลจริงและขึ้นกระดิ่ง HQ จริง (ดู @pms/shared/lib/hqAlerts + Topbar) — ไม่ใช่ toggle เปล่า
 // เกณฑ์ของ 2 ข้อแรกเป็นของแต่ละสาขา (ตัวแทนตั้งเองที่ /settings → การแจ้งเตือน) — ที่นี่คุมแค่ "เปิด/ปิด + ช่องทาง"
-export type HQAlertKey = "unassignedLead" | "idleLead" | "quoteExpiring" | "dealerIdle" | "targetAchieved" | "lostRate";
+export type HQAlertKey = "unassignedLead" | "idleLead" | "quoteExpiring" | "dealerIdle" | "targetAchieved" | "lostRate" | "catalogNoPrice";
 export type HQAlertPref = { on: boolean; email: boolean; inapp: boolean };
 export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string }[] = [
   { key: "unassignedLead", label: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ", desc: "ลูกค้าเป้าหมายรายใหม่ยังไม่มีผู้รับผิดชอบเกินกำหนด (เกณฑ์อยู่ที่ “เส้นทางการขาย”)" },
@@ -225,6 +225,8 @@ export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string }[] =
   { key: "dealerIdle",     label: "ตัวแทนไม่มีความเคลื่อนไหว",        desc: "ตัวแทนไม่ออกใบเสนอราคาใหม่เกินกำหนด" },
   { key: "targetAchieved", label: "ตัวแทนทำยอดถึงเป้า",              desc: "ตัวแทนทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี" },
   { key: "lostRate",       label: "อัตราปิดการขายไม่สำเร็จสูง",       desc: "สัดส่วนลูกค้าเป้าหมายที่ปิดไม่สำเร็จของตัวแทนสูงเกินกำหนด" },
+  // เรื่องนี้ปิดกั้นงานขายทั้งเครือ ไม่ใช่แค่เตือนให้รู้ — ตัวแทนออกใบเสนอราคาไม่ได้จนกว่าจะมีราคา
+  { key: "catalogNoPrice", label: "แม่แบบยังไม่ได้ตั้งราคา",          desc: "แม่แบบที่ราคากลางยังเป็น 0 — ตัวแทนหยิบไปออกใบเสนอราคาแล้วยอดเป็น ฿0 บันทึกไม่ได้" },
 ];
 export type HQNotifRules = {
   alerts: Record<HQAlertKey, HQAlertPref>;
@@ -248,6 +250,8 @@ export const DEFAULT_HQ_NOTIF_RULES: HQNotifRules = {
     dealerIdle:     alertPref(true, false),
     targetAchieved: alertPref(true, false),
     lostRate:       alertPref(true, true),
+    // เปิดทั้งสองช่องเป็นค่าเริ่มต้น — ถ้าไม่มีราคา ตัวแทนทำงานไม่ได้เลย ต้องเห็นทันที
+    catalogNoPrice: alertPref(true, true),
   },
   leadIdleDays: 30, quoteExpiringDays: 7, dealerIdleDays: 30, targetAchievedPct: 100,
   lostRatePct: 40, lostRateMinClosed: 5,
@@ -977,6 +981,23 @@ const _SUBTYPE_TO_PARENT: Record<string, string> = (() => {
 // ถ้าใช้แค่ CUS-00001 พอ HQ เอาทุกสาขามารวม เลขจะซ้ำกันข้ามสาขาทันที (ลูกค้าคนละคนรหัสเดียวกัน)
 export function customerCode(dealerCode: string, localId: number): string {
   return `${dealerCode}-${String(localId).padStart(5, "0")}`;
+}
+
+/** แม่แบบที่ยังไม่ได้ตั้งราคา (หลักหรือย่อยก็นับ) — ตัวแทนหยิบไปออกใบแล้วยอดเป็น ฿0 บันทึกไม่ได้
+ *  คืนเป็นรายชื่อ "แม่แบบ · แม่แบบย่อย" เพื่อให้สำนักงานใหญ่รู้ว่าต้องไปตั้งราคาตัวไหน
+ *  ⚠️ แม่แบบย่อยที่ไม่ได้ตั้งราคาเอง ถือว่าใช้ราคาแม่แบบหลัก (ตาม catalogRate) — ไม่นับว่าขาด */
+export function templatesMissingPrice(catalog: { name: string; price: number; subtypes?: string[]; subtypePrices?: Record<string, number> }[]): string[] {
+  const out: string[] = [];
+  for (const p of catalog) {
+    const หลักมีราคา = (p.price ?? 0) > 0;
+    if (!หลักมีราคา) out.push(p.name);
+    for (const st of p.subtypes ?? []) {
+      const ราคาย่อย = p.subtypePrices?.[st] ?? 0;
+      // ย่อยไม่มีราคาของตัวเอง แต่หลักมีราคา = ใช้ของหลักได้ ไม่ขาด
+      if (ราคาย่อย <= 0 && !หลักมีราคา) out.push(`${p.name} · ${st}`);
+    }
+  }
+  return out;
 }
 
 export function mainTemplateOf(name: string | undefined | null): string {

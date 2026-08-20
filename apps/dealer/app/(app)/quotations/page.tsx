@@ -10,6 +10,7 @@ import {
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
+import { useMasterCatalogState } from "@pms/shared/lib/useMasterCatalog";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
 import { AssigneeAvatars, PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/lib/quotationPrint";
@@ -152,11 +153,28 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
   quoteId?:string; // เลขที่ใบ — โชว์อย่างเดียว แก้ไม่ได้ (HQ กำหนดรูปแบบ/เลขรัน)
 }){
   const [form,setForm]=useState<QForm>(initial);
+  // แคตตาล็อกแม่แบบ — ใช้บอกต้นเหตุตอนบันทึกไม่ได้ · ready กันขึ้นข้อความผิดตอนยังโหลดไม่เสร็จ
+  const { catalog: catalogForForm, ready: catalogReady }=useMasterCatalogState();
   const [busy,setBusy]=useState(false); // กันกดบันทึกซ้ำ + รอออกเลขที่ใบจาก DB (H8)
   const INP:React.CSSProperties={width:"100%",border:`1px solid ${BORDER}`,borderRadius:9,padding:"8px 12px",fontSize:"0.8rem",outline:"none",color:STEEL,boxSizing:"border-box"};
   const LBL:React.CSSProperties={fontSize:"0.65rem",fontWeight:700,color:MUTED,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
   function set<K extends keyof QForm>(k:K,v:QForm[K]){setForm(p=>({...p,[k]:v}));}
   const total=form.lineItems.reduce((s,it)=>s+it.qty*it.unitPrice,0); // = Σ รายการ (BOQ)
+  // ── กันออกใบที่บันทึกไม่ได้ พร้อมบอกต้นเหตุจริง (บอสแจ้ง 19 ส.ค. 69) ──
+  //   ฐานข้อมูลปฏิเสธใบที่ไม่มีรายการอยู่แล้ว (ใบ 0073) แต่ฟอร์มนี้ไม่ได้กันไว้
+  //   ตัวแทนจึงกดบันทึกแล้วเจอข้อความของฐานข้อมูลดิบ ๆ แทนที่จะรู้ว่าติดตรงไหน
+  //   และต้นเหตุที่พบจริงคือสำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ/ราคา ซึ่งตัวแทนแก้เองไม่ได้
+  const แม่แบบว่าง=catalogReady&&catalogForForm.length===0;
+  const ราคาแม่แบบยังไม่ตั้ง=!แม่แบบว่าง&&form.lineItems.length>0&&total<=0
+    &&form.lineItems.every(it=>it.unitPrice<=0);
+  const เหตุที่บันทึกไม่ได้=
+    แม่แบบว่าง ? "สำนักงานใหญ่ยังไม่ได้ตั้งแม่แบบ — ออกใบเสนอราคาไม่ได้จนกว่าจะมีแม่แบบพร้อมราคา กรุณาแจ้งสำนักงานใหญ่"
+    : ราคาแม่แบบยังไม่ตั้ง ? "สำนักงานใหญ่ยังไม่ได้ตั้งราคาของแม่แบบนี้ — พิมพ์ราคาต่อหน่วยเองได้ หรือแจ้งสำนักงานใหญ่ให้ตั้งราคากลางก่อน"
+    : form.lineItems.length===0 ? "ต้องมีรายการสินค้าอย่างน้อย 1 รายการก่อนบันทึก"
+    : total<=0 ? "ยอดรวมเป็น ฿0 — ระบุจำนวนและราคาต่อหน่วยก่อนออกใบ"
+    : !form.customer ? "ต้องระบุลูกค้าก่อนบันทึก"
+    : !form.project ? "ต้องระบุชื่องานก่อนบันทึก"
+    : "";
   function pickCustomer(id:number){
     const c=customers.find(c=>c.id===id);
     if(!c) return;
@@ -165,7 +183,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
     setForm(p=>({...p,customerId:c.id,customer:c.company,province:c.province||p.province,buildingType:c.category||p.buildingType,project:suggestProject(c),owner:c.owner??""}));
   }
   async function submit(){
-    if(!form.customer||!form.project||busy)return;
+    if(เหตุที่บันทึกไม่ได้||busy)return;
     setBusy(true);
     // await ให้ออกเลข+บันทึกเสร็จก่อนปิด — ปิดทันทีแบบเดิมทำให้กดซ้ำได้ระหว่างรอเลขจาก DB
     try { await onSave({...form, items:form.lineItems.length, materialCost:total}); onClose(); }
@@ -270,7 +288,8 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
           </div>
           <div style={{padding:"13px 22px",borderTop:`1px solid ${BORDER}`,display:"flex",gap:8,justifyContent:"flex-end",background:"#fafafa"}}>
             <button onClick={onClose} className="btn btn-secondary btn-md">ยกเลิก</button>
-            <button onClick={()=>void submit()} disabled={busy} className="btn btn-primary btn-md" style={busy?{opacity:.6,cursor:"not-allowed"}:undefined}>{busy?"กำลังบันทึก…":"บันทึก"}</button>
+            {!!เหตุที่บันทึกไม่ได้&&<div style={{marginRight:"auto",color:"#dc2626",fontSize:"0.7rem",fontWeight:600,lineHeight:1.5,maxWidth:340}}>{เหตุที่บันทึกไม่ได้}</div>}
+            <button onClick={()=>void submit()} disabled={busy||!!เหตุที่บันทึกไม่ได้} className="btn btn-primary btn-md" style={(busy||เหตุที่บันทึกไม่ได้)?{opacity:.6,cursor:"not-allowed"}:undefined}>{busy?"กำลังบันทึก…":"บันทึก"}</button>
           </div>
         </div>
       </div>
