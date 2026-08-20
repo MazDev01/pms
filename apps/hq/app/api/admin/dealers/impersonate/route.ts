@@ -69,6 +69,22 @@ export const POST = withErrors("impersonate-dealer", async (req: NextRequest) =>
   }
 
   // บันทึกทันทีตอนออกลิงก์ (ไม่ใช่ตอนคลิก) — ลิงก์นี้ = สิทธิ์เข้าถึงเต็มรูปแบบ ต้องมีร่องรอยเสมอ
+  // ── ส่งใบผ่านไปที่แอปตัวแทนเอง ไม่ใช้ลิงก์ยืนยันของ Supabase ตรง ๆ (แก้ 20 ส.ค. 69) ──
+  //
+  // ลิงก์ของ Supabase จะพากลับไปปลายทางที่ขอไว้ "ก็ต่อเมื่อ" ปลายทางนั้นอยู่ในรายการที่อนุญาต
+  //   (Authentication → URL Configuration → Redirect URLs) ถ้าไม่อยู่ มันไม่แจ้งอะไรเลย
+  //   แค่เงียบ ๆ แล้วพาไป Site URL ของโปรเจกต์แทน → เปิดแท็บมาเจอหน้าเปล่า/หน้า error
+  //   (บอสแจ้งว่ากดแล้วไม่ได้ · ตรวจของจริงพบ redirect_to=http://127.0.0.1:3000)
+  //
+  // ตอนนี้ส่ง "ใบผ่านครั้งเดียว" ไปที่หน้า /impersonate ของแอปตัวแทน แล้วให้หน้านั้นแลกเป็น session เอง
+  //   ไม่ต้องพึ่งการตั้งค่าใน Supabase อีก ใช้ได้เหมือนกันทั้งตอนพัฒนาและระบบจริง
+  //   ใส่ไว้หลัง # เพื่อไม่ให้ใบผ่านถูกส่งไปกับคำขอ HTTP (ไม่ไปโผล่ใน log ของตัวกลางใด ๆ)
+  const tokenHash = link.properties?.hashed_token;
+  if (!tokenHash) {
+    console.error(`[impersonate-dealer] ลิงก์ของสาขา ${code} ไม่มี hashed_token`);
+    return bad(503, "สร้างลิงก์เข้าระบบไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+  }
+
   await auditLog(admin, prof, "เข้าระบบแทนตัวแทน", code);
-  return NextResponse.json({ ok: true, link: link.properties.action_link });
+  return NextResponse.json({ ok: true, link: `${DEALER_APP_URL}/impersonate#th=${encodeURIComponent(tokenHash)}` });
 });

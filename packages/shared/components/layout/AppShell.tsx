@@ -6,6 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { FilterProvider } from "@pms/shared/context/FilterContext";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { useImpersonating, clearImpersonation } from "@pms/shared/lib/useImpersonating";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { purgeOldDealerKeys } from "@pms/shared/lib/mock";
 import { REPO_SAVE_ERROR_EVENT } from "@pms/shared/lib/useRepoState";
@@ -111,31 +112,13 @@ function ReadErrorBar() {
 // (ต่างจากใบผ่านเข้าระบบซึ่งอยู่ที่ localStorage ใช้ร่วมกันทุกแท็บ) เพราะการสวมสิทธิ์ดูแทนตัวแทน
 // เป็นเรื่องของหน้าต่างที่กำลังดูอยู่ ไม่ควรลามไปแท็บอื่นที่เปิดค้างไว้
 // เพื่อให้แถบยังอยู่ต่อแม้เปลี่ยนหน้าในแอปตัวแทน ไม่ใช่แค่หน้าแรกที่ query param ?impersonated=1 มาถึง
-const IMPERSONATING_KEY = "pms_impersonating";
 function ImpersonationBanner() {
-  const [active, setActive] = useState(false);
+  const active = useImpersonating();
   const { logout } = useRole();
-
-  useEffect(() => {
-    try {
-      const url = new URL(window.location.href);
-      if (url.searchParams.get("impersonated") === "1") {
-        sessionStorage.setItem(IMPERSONATING_KEY, "1");
-        url.searchParams.delete("impersonated");
-        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-      }
-      setActive(sessionStorage.getItem(IMPERSONATING_KEY) === "1");
-    } catch { /* sessionStorage ไม่พร้อม (โหมด private/ปิด storage) — ไม่ต้องโชว์แถบ */ }
-  }, []);
 
   if (!active) return null;
 
-  function backToHQ() {
-    try { sessionStorage.removeItem(IMPERSONATING_KEY); } catch {}
-    logout();
-    // แท็บนี้เปิดจาก HQ ผ่าน window.open() เสมอ — ปิดได้ · ถ้าเบราว์เซอร์ไม่ยอมปิด ผู้ใช้ก็ออกจากระบบแล้วอยู่ดี
-    window.close();
-  }
+  const backToHQ = () => clearImpersonation(logout);
 
   return (
     <div role="status" style={{

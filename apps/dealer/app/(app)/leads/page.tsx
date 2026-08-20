@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
@@ -229,6 +229,28 @@ function seedFiles(_lead: LeadRow): string[] {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────
+// ── แถวป้ายกำกับบนการ์ดกระดาน — "หัวข้อ: ค่า" ทีละบรรทัด (บอสสั่ง 20 ส.ค. 69) ────
+//
+// ยึดหน้าตาตามระบบเดิมที่บอสใช้อยู่ (Grow CRM) เพื่อให้อ่านการ์ดได้โดยไม่ต้องเรียนรู้ใหม่
+// ⚠️ ไม่มีข้อมูล = ขึ้น "—" เสมอ ห้ามซ่อนทั้งบรรทัด: การ์ดแต่ละใบจะได้มีบรรทัดชุดเดียวกัน
+//    กวาดตาเทียบกันได้ และผู้ใช้แยกออกว่า "ยังไม่ได้กรอก" ต่างจาก "ไม่มีช่องนี้"
+function CardField({ icon: Ic, label, value, tone }: {
+  icon: typeof User; label: string; value?: string | null; tone?: string;
+}) {
+  const มีค่า = !!value && value !== "—";
+  return (
+    <span style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
+      <Ic size={10} color="#94a3b8" style={{ flexShrink:0 }} />
+      <span style={{ color:"#94a3b8", fontWeight:600, flexShrink:0 }}>{label}:</span>
+      <span title={มีค่า ? String(value) : undefined}
+        style={{ color: มีค่า ? (tone ?? "#475569") : "#cbd5e1", fontWeight: tone ? 700 : 600,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
+        {มีค่า ? value : "—"}
+      </span>
+    </span>
+  );
+}
+
 function SortIcon({ field, sortKey, sortDir }: { field:string; sortKey:string; sortDir:"asc"|"desc" }) {
   if (sortKey !== field) return <ArrowUpDown size={11} color="#e5e7eb" />;
   return sortDir === "asc" ? <ArrowUp size={11} color="#003366" /> : <ArrowDown size={11} color="#003366" />;
@@ -915,6 +937,84 @@ export default function LeadsPage() {
     setPendingLostId(null); setPendingLostReason("");
   }
   const [dragOver, setDragOver] = useState<LeadStatus|null>(null); // คอลัมน์ที่กำลังลากค้างอยู่ (ไฮไลต์)
+
+  // ── ลากการ์ดไปชิดขอบ = กระดานเลื่อนตามให้เอง (บอสสั่ง 20 ส.ค. 69) ─────────────
+  //
+  // คอลัมน์รวมกันกว้างเกินจอ ต้องเลื่อนแนวนอนถึงจะเห็นคอลัมน์ท้าย ๆ
+  // แต่ระหว่างลากการ์ดอยู่ ผู้ใช้ปล่อยเมาส์ไปเลื่อนแถบเลื่อนไม่ได้ (ปล่อย = วางการ์ด)
+  // จึงย้ายการ์ดข้ามไปคอลัมน์ที่มองไม่เห็นไม่ได้เลย — ต้องให้กระดานเลื่อนเองเมื่อลากไปชิดขอบ
+  //
+  // ใช้ตัวจับเวลาแทนการเลื่อนใน onDragOver ตรง ๆ เพราะ onDragOver จะหยุดยิงเมื่อเมาส์หยุดนิ่ง
+  // (ผู้ใช้ที่ค้างเมาส์ไว้ที่ขอบจะเห็นกระดานหยุดเลื่อนทั้งที่ยังลากอยู่)
+  const กระดานRef = useRef<HTMLDivElement>(null);
+  // ── ความสูงกระดาน: ยืดลงไปจนสุดขอบล่างจอ (บอสสั่ง 20 ส.ค. 69) ─────────────────
+  //
+  // เดิมตรึงไว้ว่า calc(100vh - 330px) ซึ่งเป็นการ "เดา" ว่าของเหนือกระดานสูงเท่าไร
+  //   จอ/ความสูงของแถบตัวกรองเปลี่ยนเมื่อไร ตัวเลขนั้นก็ผิดทันที — เหลือที่ว่างขาวใต้กระดาน
+  //   คอลัมน์เลยดูสั้นกึด และช่องวางการ์ดก็สั้นตามไปด้วย
+  // ตอนนี้วัดจากตำแหน่งจริงของกระดานบนจอ แล้วยืดลงไปจนเกือบสุด (เว้นที่ให้แถบเลื่อน)
+  const [ความสูงกระดาน, setความสูงกระดาน] = useState<number | null>(null);
+  useEffect(() => {
+    const วัด = () => {
+      const el = กระดานRef.current;
+      if (!el) return;
+      const บนสุด = el.getBoundingClientRect().top;
+      setความสูงกระดาน(Math.max(360, Math.round(window.innerHeight - บนสุด - 18)));
+    };
+    วัด();
+    window.addEventListener("resize", วัด);
+    // ของเหนือกระดาน (การ์ดตัวเลข/แถบตัวกรอง) สูงเปลี่ยนได้เอง เช่น ตอนตัวกรองขึ้นบรรทัดที่สอง
+    const ro = new ResizeObserver(วัด);
+    if (กระดานRef.current?.parentElement) ro.observe(กระดานRef.current.parentElement);
+    return () => { window.removeEventListener("resize", วัด); ro.disconnect(); };
+  }, [view]);
+  const ทิศเลื่อนRef = useRef(0);
+  const ตัวเลื่อนRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const หยุดเลื่อนกระดาน = useCallback(() => {
+    ทิศเลื่อนRef.current = 0;
+    if (ตัวเลื่อนRef.current) { clearInterval(ตัวเลื่อนRef.current); ตัวเลื่อนRef.current = null; }
+  }, []);
+  const เลื่อนกระดานตามเมาส์ = useCallback((clientX: number) => {
+    const el = กระดานRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const ระยะขอบ = 100;   // เข้าใกล้ขอบเท่านี้ถึงเริ่มเลื่อน — แคบกว่านี้จะเล็งยาก
+    const ทิศ = clientX > r.right - ระยะขอบ ? 1 : clientX < r.left + ระยะขอบ ? -1 : 0;
+    ทิศเลื่อนRef.current = ทิศ;
+    if (ทิศ === 0) { หยุดเลื่อนกระดาน(); return; }
+    if (!ตัวเลื่อนRef.current) {
+      ตัวเลื่อนRef.current = setInterval(() => {
+        const box = กระดานRef.current;
+        if (!box || ทิศเลื่อนRef.current === 0) return;
+        box.scrollLeft += ทิศเลื่อนRef.current * 18;
+      }, 16);
+    }
+  }, [หยุดเลื่อนกระดาน]);
+  // ── ต้องดักที่ทั้งหน้า ไม่ใช่แค่บนกระดาน (บอสแจ้ง 20 ส.ค. 69: "ขยับออกมันไม่เลื่อนตาม") ──
+  //
+  // เดิมดัก dragover ไว้ที่กล่องกระดานอย่างเดียว ซึ่งพังในกรณีที่ผู้ใช้ทำจริงที่สุด:
+  //   ลากการ์ดออกไปทางซ้าย/ขวาจนพ้นกระดาน (ไปทับแถบเมนูข้าง หรือขอบจอ)
+  //   → เบราว์เซอร์ยิง dragover ให้เฉพาะสิ่งที่อยู่ใต้เมาส์ กระดานจึงไม่ได้ยินอะไรเลย
+  //   ซ้ำร้าย onDragLeave ยังสั่งหยุดเลื่อนทันทีที่เมาส์พ้นขอบ — ตรงข้ามกับที่ควรเป็น
+  // ตอนนี้ฟังที่ document ตลอดช่วงที่ยังลากอยู่ และถ้าเมาส์เลยขอบกระดานออกไปแล้ว
+  //   ให้ถือว่า "เลื่อนเต็มที่" ไปทางนั้น ไม่ใช่หยุด
+  //
+  // ไม่ผูกกับสถานะ "กำลังลาก" ของหน้าจอ: dragover เกิดได้เฉพาะตอนมีการลากอยู่จริงอยู่แล้ว
+  //   ผูกเพิ่มมีแต่จะพลาดกรณีขอบ ๆ (เช่นลากจากที่อื่นเข้ามา)
+  useEffect(() => {
+    const ขยับ = (e: DragEvent) => เลื่อนกระดานตามเมาส์(e.clientX);
+    document.addEventListener("dragover", ขยับ);
+    document.addEventListener("dragend", หยุดเลื่อนกระดาน);
+    document.addEventListener("drop", หยุดเลื่อนกระดาน);
+    return () => {
+      document.removeEventListener("dragover", ขยับ);
+      document.removeEventListener("dragend", หยุดเลื่อนกระดาน);
+      document.removeEventListener("drop", หยุดเลื่อนกระดาน);
+      หยุดเลื่อนกระดาน();
+    };
+  }, [เลื่อนกระดานตามเมาส์, หยุดเลื่อนกระดาน]);
+  // ลากค้างไว้แล้วออกจากหน้า/ปล่อยนอกกระดาน — ต้องหยุดเลื่อนเสมอ ไม่งั้นกระดานไหลต่อเอง
+  useEffect(() => () => หยุดเลื่อนกระดาน(), [หยุดเลื่อนกระดาน]);
   const [hideEmpty, setHideEmpty] = useState(false); // ซ่อนคอลัมน์ที่ไม่มีการ์ด
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<LeadStatus|"ALL">("ALL");
@@ -946,8 +1046,6 @@ export default function LeadsPage() {
   const journeyRef = useRef<HTMLDivElement>(null);
   const rightQuoteRef = useRef<HTMLDivElement>(null);
   const rightApptRef = useRef<HTMLDivElement>(null);
-  const [quickLost, setQuickLost] = useState(false);
-  const [quickLostReason, setQuickLostReason] = useState("");
   // ฟอร์มนัดหมายในแท็บนัดหมายของลูกค้าเป้าหมาย (นัดก่อนปิดการขาย)
   const [apptAdding, setApptAdding] = useState(false);
   const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
@@ -1741,11 +1839,11 @@ export default function LeadsPage() {
               <div key={status}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOver !== status) setDragOver(status); }}
                 onDragLeave={() => setDragOver(o => o === status ? null : o)}
-                onDrop={() => { if (dragId) { requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
+                onDrop={() => { หยุดเลื่อนกระดาน(); if (dragId) { requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
                 style={{ minWidth:w, width:w, flexShrink:0, display:"flex", flexDirection:"column",
                   // คอลัมน์ยาวลงมาเต็มพื้นที่จอเสมอ ไม่หดตามจำนวนการ์ด — คอลัมน์ว่างจึงยังเป็นเป้าให้ลากมาวางได้ชัด ๆ
                   // (เดิม alignSelf:"flex-start" ทำให้สูงพอดีเนื้อหา คอลัมน์ที่ยังไม่มีลูกค้าเป้าหมายเลยเหลือแค่แถบเตี้ย ๆ)
-                  minHeight:"max(360px, calc(100vh - 330px))",
+                  minHeight: ความสูงกระดาน ?? "max(360px, calc(100vh - 330px))",
                   background: isOver ? "#eaf1fb" : "#f6f7f9", borderRadius:12, padding:10,
                   border: isOver ? "1.5px dashed #003366" : "1.5px solid transparent", transition:"background .12s, border-color .12s" }}>
                 {/* header */}
@@ -1795,8 +1893,15 @@ export default function LeadsPage() {
                         <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }} title={l.company}>{l.company}</div>
                         <Eye size={13} color="#9ca3af" style={{ flexShrink:0 }} />
                       </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:"0.72rem", color:"#6b7280", marginBottom:6 }}>
-                        <User size={10} /> {l.contact}
+                      <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:6, margin:"6px 0" }}>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:"0.68rem", fontWeight:600, color:"#64748b",
+                          background:"#f1f5f9", borderRadius:6, padding:"2px 8px", maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.contact}>
+                          <User size={10} /> {l.contact}
+                        </span>
+                        <span style={{ display:"inline-flex", alignItems:"center", fontSize:"0.72rem", fontWeight:800, color:"#003366",
+                          background:"#e3f0fb", borderRadius:6, padding:"2px 8px", fontVariantNumeric:"tabular-nums" }}>
+                          {fmtVal(l.value)}
+                        </span>
                       </div>
                       {l.product && (
                         <div style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:"0.66rem", fontWeight:600, color:"#003366",
@@ -1805,28 +1910,24 @@ export default function LeadsPage() {
                         </div>
                       )}
 
-                      {/* ข้อมูลติดต่อ + เตือนขาดการติดต่อ */}
-                      <div style={{ display:"flex", flexDirection:"column", gap:3, fontSize:"0.68rem", color:"#475569",
+                      {/* ข้อมูลติดต่อแบบแถวป้ายกำกับ + เตือนขาดการติดต่อ */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:3, fontSize:"0.68rem",
                         borderTop:"1px solid #f1f5f9", borderBottom:"1px solid #f1f5f9", padding:"7px 0", marginBottom:9 }}>
-                        {l.phone && <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><Phone size={10} color="#94a3b8" /> {l.phone}</span>}
-                        {l.province && <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}><MapPin size={10} color="#94a3b8" /> {l.province}</span>}
+                        <CardField icon={Phone} label="โทรศัพท์" value={l.phone} />
+                        <CardField icon={Mail} label="อีเมล" value={l.email} />
+                        <CardField icon={MapPin} label="จังหวัด" value={l.province} />
+                        <CardField icon={Calendar} label="สร้าง" value={l.createdAt} />
                         {(() => {
                           const d = daysSinceContact(l);
-                          if (d === null) return null;
+                          // ไม่เคยติดต่อ = "—" (ห้ามเดาว่าเพิ่งติดต่อ) · เกินกำหนดของสำนักงานใหญ่ = แดง
+                          if (d === null) return <CardField icon={AlarmClock} label="ติดต่อล่าสุด" value={null} />;
                           const late = d > followUpAlertDays;
-                          return (
-                            <span style={{ display:"inline-flex", alignItems:"center", gap:5, color: late ? "#DC3545" : "#94a3b8", fontWeight: late ? 700 : 600 }}>
-                              <AlarmClock size={10} /> ติดต่อล่าสุด {d} วันที่แล้ว
-                            </span>
-                          );
+                          return <CardField icon={AlarmClock} label="ติดต่อล่าสุด" value={`${d} วันที่แล้ว`} tone={late ? "#DC3545" : undefined} />;
                         })()}
                       </div>
 
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                        <span>
-                          <span style={{ display:"block", fontSize:"0.6rem", color:"#9ca3af", fontWeight:700 }}>มูลค่าโครงการ</span>
-                          <span style={{ fontSize:"0.86rem", fontWeight:800, color:"#003366", fontVariantNumeric:"tabular-nums" }}>{fmtVal(l.value)}</span>
-                        </span>
+                      {/* มูลค่าย้ายไปเป็นป้ายด้านบนแล้ว (ตามระบบเดิม) — ตรงนี้เหลือผู้รับผิดชอบ ไม่แสดงซ้ำสองที่ */}
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-start", marginBottom:10 }}>
                         <AssigneeAvatars value={l.assigned} size={24} showName={false} />
                       </div>
 
@@ -1849,15 +1950,27 @@ export default function LeadsPage() {
                       </div>
                     </div>
                   ))}
+                  {/* ── ช่องวางการ์ด ───────────────────────────────────────────────
+                      ลากการ์ดมาค้างไว้เหนือคอลัมน์ = โชว์ช่องวาง "ท้ายรายการ" ให้เห็นชัดว่าการ์ดจะไปอยู่ตรงไหน
+                      (บอสสั่ง 20 ส.ค. 69 — เดิมคอลัมน์ที่มีการ์ดอยู่แล้วไม่มีช่องวางเลย
+                       ส่วนคอลัมน์ว่างก็ลอยอยู่กลางช่อง ไม่ตรงกับตำแหน่งที่การ์ดจะตกจริง) */}
+                  {isOver && col.length > 0 && (
+                    <div style={{ height:60, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:"0.65rem", color:"#003366", border:"1.5px dashed #003366", borderRadius:10, background:"#eaf1fb" }}>
+                      วางการ์ดที่นี่
+                    </div>
+                  )}
                   {col.length === 0 && (
-                    <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"16px 6px", fontSize:"0.65rem", color: isOver ? "#003366" : "#c7ccd3", border:`1.5px dashed ${isOver ? "#003366" : "#e5e7eb"}`, borderRadius:10 }}>วางการ์ดที่นี่</div>
+                    <div style={{ flex:1, display:"flex", alignItems:"flex-end", justifyContent:"center", padding: isOver ? "16px 6px 28px" : "16px 6px", fontSize:"0.65rem", color: isOver ? "#003366" : "#c7ccd3", border:`1.5px dashed ${isOver ? "#003366" : "#e5e7eb"}`, borderRadius:10, background: isOver ? "#eaf1fb" : undefined, transition:"padding .12s" }}>วางการ์ดที่นี่</div>
                   )}
                 </div>
               </div>
             );
           };
           return (
-            <div style={{ display:"flex", gap:16, overflowX:"auto", paddingBottom:10, alignItems:"stretch" }}>
+            <div ref={กระดานRef}
+              onDrop={หยุดเลื่อนกระดาน}
+              style={{ display:"flex", gap:16, overflowX:"auto", paddingBottom:10, alignItems:"stretch" }}>
               {ACTIVE.map(s => renderColumn(s, true))}
               {/* เส้นคั่นก่อนกลุ่มปิดการขาย (ปิดการขายสำเร็จ/ปิดการขายไม่สำเร็จ) — หัวคอลัมน์ตรงแนวเดียวกัน */}
               <div style={{ width:1, alignSelf:"stretch", background:"#e5e7eb", flexShrink:0, margin:"2px 0" }} />
@@ -2283,14 +2396,6 @@ export default function LeadsPage() {
         const progressPct = leadProg(c, taskTpl);
         const scrollTo = (r: React.RefObject<HTMLDivElement|null>) => r.current?.scrollIntoView({ behavior:"smooth", block:"nearest" });
         // ย้อนกลับไม่ได้ (สร้างลูกค้าทันที) — ต้องยืนยันก่อนเสมอ เหมือนช่องทางอื่น (ดรอปดาวน์สถานะ)
-        const markWon = () => {
-          if (!confirm(`ปิดการขายสำเร็จสำหรับ "${c.company || c.name}"?\nระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
-          const t = (c.tasks?.length ? c.tasks : buildLeadTasks(taskTpl)).map(x => ({ ...x, done:true }));
-          saveLead({ ...c, tasks:t, status:"PAID" });
-          setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ");
-          setJustWonCompany(c.company || c.name);
-        };
-        const markLost = (reason:string) => { saveLead({ ...c, status:"CANCELLED", lostReason:reason }); setQuickLost(false); setQuickLostReason(""); setToast("บันทึกปิดการขายไม่สำเร็จแล้ว"); };
 
         return (
           <>
@@ -2392,55 +2497,15 @@ export default function LeadsPage() {
               <div style={{ flexShrink:0, borderTop:"1px solid #e6eaf0", background:"#fff", padding:"12px 20px",
                 display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
                 <div />{/* ปุ่มสร้างใบเสนอราคา/นัดหมาย เอาออกตามที่บอสสั่ง — ทำได้ที่แท็บ "ใบเสนอราคา" และ "ไทม์ไลน์" */}
-                {!isCustomer && (
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <button onClick={()=>setQuickLost(true)} className="btn btn-md" style={{ background:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca" }}><XCircle size={14} /> ปิดการขายไม่สำเร็จ</button>
-                    <button onClick={markWon} className="btn btn-md" style={{ background:"#059669", color:"#fff", boxShadow:"0 4px 12px rgba(5,150,105,.25)" }}><Trophy size={14} /> ปิดการขาย</button>
-                  </div>
-                )}
+                {/* ── ปุ่ม "ปิดการขาย / ปิดการขายไม่สำเร็จ" ตรงนี้ถูกเอาออก (บอสทักว่าซ้ำ 20 ส.ค. 69) ──
+                    ซ้ำกับปุ่ม "ได้งาน / ไม่ได้งาน" ในแท็บงาน ซึ่งเป็นที่ที่ถูกต้องกว่า
+                    และสำคัญกว่านั้น: คู่ปุ่มตรงนี้ "ไม่มีด่านกัน" — กดปิดการขายได้เลย
+                    ข้ามกฎที่บอสสั่งไว้ว่าต้องมีใบเสนอราคาที่ส่งถึงลูกค้าแล้วก่อน (19 ส.ค. 69)
+                    ปุ่มในแท็บงานมีด่านนั้นอยู่ (ปิดปุ่มพร้อมบอกเหตุผล) จึงเหลือไว้ทางเดียว */}
               </div>
             </div>
 
             {/* ปิดการขายไม่สำเร็จ — เลือกเหตุผล */}
-            {quickLost && (
-              <>
-                <div onClick={()=>setQuickLost(false)} style={{ position:"fixed", inset:0, background:"rgba(45,45,45,.5)", zIndex:230 }} />
-                <div style={{ position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)", zIndex:240, width:420, maxWidth:"calc(100vw - 32px)", background:"#fff", borderRadius:16, overflow:"hidden", boxShadow:"0 24px 80px rgba(0,0,0,.3)" }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid #f0f4f8", display:"flex", alignItems:"center", gap:9 }}>
-                    <XCircle size={17} color="#dc2626" /><span style={{ fontSize:"0.9rem", fontWeight:800, color:"#dc2626" }}>ปิดการขายไม่สำเร็จ</span>
-                  </div>
-                  <div style={{ padding:"16px 18px" }}>
-                    {lostReasons.includes(quickLostReason) || quickLostReason === "" ? (
-                      <>
-                        <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                          {lostReasons.map(r => (
-                            <button key={r} onClick={()=>setQuickLostReason(r)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
-                              border:`1px solid ${quickLostReason===r ? "#dc2626" : "#e5e7eb"}`, background:quickLostReason===r ? "#fee2e2" : "#fff", color:quickLostReason===r ? "#dc2626" : "#2D2D2D", fontWeight:quickLostReason===r ? 700 : 400 }}>{r}</button>
-                          ))}
-                          {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
-                          <button onClick={()=>setQuickLostReason(OTHER_LOST_REASON)} style={{ padding:"8px 10px", borderRadius:8, cursor:"pointer", fontSize:"0.78rem", fontFamily:"inherit", textAlign:"left",
-                            border:"1px dashed #9ca3af", background:"#fafafa", color:"#6b7280" }}>อื่นๆ (ระบุเอง)</button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <span>ระบุเหตุผลที่ปิดการขายไม่ได้</span>
-                          <button type="button" onClick={()=>setQuickLostReason("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#003366", fontSize:"0.72rem", fontWeight:700 }}>← กลับไปเลือกจากรายการ</button>
-                        </div>
-                        <input autoFocus value={quickLostReason === OTHER_LOST_REASON ? "" : quickLostReason} onChange={e=>setQuickLostReason(e.target.value)} placeholder="พิมพ์เหตุผล…"
-                          style={{ width:"100%", border:"1px solid #e5e7eb", borderRadius:9, padding:"9px 12px", fontSize:"0.82rem", color:"#2D2D2D", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
-                      </>
-                    )}
-                  </div>
-                  <div style={{ padding:"12px 18px", borderTop:"1px solid #f0f4f8", background:"#fafafa", display:"flex", justifyContent:"flex-end", gap:8 }}>
-                    <button onClick={()=>{ setQuickLost(false); setQuickLostReason(""); }} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>
-                    <button onClick={()=>markLost(quickLostReason.trim())} disabled={!quickLostReason.trim() || quickLostReason===OTHER_LOST_REASON} className="btn btn-sm" style={{ background:quickLostReason.trim() && quickLostReason!==OTHER_LOST_REASON ? "#dc2626" : "#f3f4f6", color:quickLostReason.trim() && quickLostReason!==OTHER_LOST_REASON ? "#fff" : "#9ca3af", cursor:quickLostReason.trim() && quickLostReason!==OTHER_LOST_REASON ? "pointer" : "not-allowed" }}>ยืนยันปิดการขาย</button>
-                  </div>
-                </div>
-              </>
-            )}
           </>
         );
       })()}

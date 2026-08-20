@@ -6,11 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Phone, Package,
   Settings, GitMerge, ScrollText, Users,
-  CalendarDays, FolderOpen, History, LogOut, Crown,
+  CalendarDays, FolderOpen, History, LogOut, Crown, ArrowLeft,
 } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { roleLabelOf } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
+import { useImpersonating, clearImpersonation } from "@pms/shared/lib/useImpersonating";
 import { useDealerDisplayName } from "@pms/shared/lib/useCurrentDealer";
 import { useAuthReady } from "@pms/shared/lib/useAuthReady";
 
@@ -73,6 +74,8 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   const pathname = usePathname();
   const router = useRouter();
   const { isHQ, session, logout } = useRole();
+  // แท็บนี้เปิดมาจากปุ่ม "เข้าระบบแทนตัวแทน" ของสำนักงานใหญ่หรือเปล่า
+  const สวมสิทธิ์อยู่ = useImpersonating();
   // แถบเมนูใช้แบรนด์ Benjamin มาตรฐานเดียวเสมอทุกบทบาท (ดู .sidebar-brand ด้านล่าง)
   // — เดิมอ่านโลโก้/ชื่อแบรนด์จาก localStorage มาเก็บใน state แต่ไม่เคยเอาไปแสดง (โค้ดตาย) จึงเอาออก
   // โปรไฟล์ผู้ใช้ (/profile) → ชื่อ/รูปในการ์ดเจ้าของท้าย sidebar อัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
@@ -142,10 +145,20 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
 
       {/* Footer — Log Out + การ์ดเจ้าของ (HQ=เจ้าของแพลตฟอร์ม · ตัวแทน=เจ้าของบัญชีตัวแทน) */}
       <div className="sidebar-footer" style={{ padding: "8px 10px 10px" }}>
-        <button onClick={logout} className="nav-item"
-          style={{ width: "100%", color: "#dc2626", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-          <LogOut size={16} /> <span style={{ flex: 1, textAlign: "left" }}>ออกจากระบบ</span>
-        </button>
+        {/* ── เข้ามาแบบสวมสิทธิ์จากสำนักงานใหญ่ = ปุ่มนี้ต้องเป็น "กลับสู่ HQ" (บอสสั่ง 20 ส.ค. 69) ──
+            ผู้ดูแลที่กดเข้ามาดูแทนตัวแทน ไม่ได้ต้องการ "ออกจากระบบ" แต่ต้องการกลับไปทำงานของตัวเอง
+            (ปุ่มนี้ล้างใบผ่านของตัวแทนในแท็บนี้ให้ด้วย — ไม่ทิ้งบัญชีคนอื่นค้างไว้บนเครื่อง) */}
+        {สวมสิทธิ์อยู่ ? (
+          <button onClick={() => clearImpersonation(logout)} className="nav-item"
+            style={{ width: "100%", color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+            <ArrowLeft size={16} /> <span style={{ flex: 1, textAlign: "left" }}>กลับสู่ HQ</span>
+          </button>
+        ) : (
+          <button onClick={logout} className="nav-item"
+            style={{ width: "100%", color: "#dc2626", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+            <LogOut size={16} /> <span style={{ flex: 1, textAlign: "left" }}>ออกจากระบบ</span>
+          </button>
+        )}
         {/* ขนาดต้องพอดีกับแถบข้างตัวแทนที่กว้างแค่ 200px — อวตาร 46px + ฟอนต์ 0.82/0.74
             เคยกินที่จนชื่อโดนตัดเหลือ "เชียงใหม่ส…" และป้ายบทบาทพับสองบรรทัด (บอสสั่งปรับ 17 ก.ค. 69) */}
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 6, padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
