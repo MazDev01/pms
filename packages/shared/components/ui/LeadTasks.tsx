@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
   buildLeadTasks, applyTaskTemplate, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
-  QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, OTHER_LOST_REASON,
+  QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, APPOINTMENT_TASK_KEY, OTHER_LOST_REASON,
   type LeadRow, type LeadTask, type LeadStatus,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -21,12 +21,16 @@ function stampNow() {
 }
 
 // Task-driven Sales Journey — เช็ก Task → บันทึกเวลา/ผู้ทำ → คำนวณ % → เลื่อน Stage อัตโนมัติ
-export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, whyCannotWin }: {
+export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, onRequestAppointment, whyCannotWin }: {
   lead: LeadRow; performedBy: string; onSave: (l: LeadRow) => void;
   /** งานที่ต้องมี "ของจริง" ถึงจะติ๊กได้ (จัดทำ/ส่งใบเสนอราคา) — หน้าแม่ส่งฟังก์ชันนี้มาเมื่องานนั้น
    *  ยังทำไม่ได้จริง แล้วพาผู้ใช้ไปทำของจริงแทน · คืน false = ไม่ได้จัดการ ให้ติ๊กตามปกติ
    *  (กดติ๊กเองแล้วขั้นขยับทั้งที่ยังไม่มีใบ/ยังไม่ได้ส่ง = ตัวเลขบนแดชบอร์ดไม่ตรงกับของจริงที่ถึงลูกค้า) */
   onRequestQuotation?: (taskKey: string) => boolean;
+  /** งาน "นัดหมาย" ก็ต้องมีของจริงเหมือนกัน (บอสสั่ง 20 ส.ค. 69)
+   *  ยังไม่เคยลงนัดหมายเลย = ติ๊กเองไม่ได้ ต้องกดนัดหมายจริงก่อน แล้วระบบติ๊กให้
+   *  คืน true = จัดการแทนแล้ว (พาไปลงนัด) · false = มีนัดจริงแล้ว ติ๊กได้ตามปกติ */
+  onRequestAppointment?: () => boolean;
   /** เหตุที่ยังปิดการขายสำเร็จไม่ได้ — คืนสตริงว่าง = ปิดได้
    *  บอสสั่ง (19 ส.ค. 69): ห้ามปิดการขายถ้ายังไม่มีใบเสนอราคาที่ส่งถึงลูกค้าแล้ว
    *  เดิมกด "ได้งาน" ได้ตลอด → ได้ลูกค้ายอดสะสม ฿0 ปนในฐาน ทำให้ยอดขาย/อัตราปิดการขายในรายงานเพี้ยน */
@@ -80,6 +84,11 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, whyCa
       if (!canCheck(i)) { setHint("ทำงานก่อนหน้าให้ครบก่อน จึงจะติ๊กงานนี้ได้ (ห้ามข้ามขั้น)"); return; }
       // งานที่ต้องมี "ของจริง" ถึงจะติ๊กได้ — พาไปออก/ส่งใบจริง แล้วระบบจะติ๊กให้เองตอนนั้น
       if ((key === QUOTE_TASK_KEY || key === SEND_QUOTE_TASK_KEY) && onRequestQuotation?.(key)) {
+        setHint("");
+        return;
+      }
+      // งาน "นัดหมาย" — ต้องมีนัดจริงก่อน ถึงจะถือว่าทำแล้ว (เหมือนงานที่ต้องมีใบเสนอราคา)
+      if (key === APPOINTMENT_TASK_KEY && onRequestAppointment?.()) {
         setHint("");
         return;
       }

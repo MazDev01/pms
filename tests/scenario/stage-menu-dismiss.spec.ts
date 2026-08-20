@@ -20,7 +20,7 @@ test.beforeAll(async () => {
   const numId = 920000 + (Date.now() % 9000);
   await sb.from("leads").insert({
     id: `#L-${numId}`, num_id: numId, dealer_code: "RYG", company: COMPANY, name: COMPANY,
-    contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสินค้า", status: "WAITING",
+    contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสำเร็จรูป", status: "WAITING",
     value: "฿600,000", assigned: "ผู้ทดสอบ",
   });
 });

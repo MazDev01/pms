@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { FilePlus, Eye, Pencil, Printer, Copy, Trash2, X, ArrowLeft, Send, FileText, Calendar, Coins, AlertTriangle } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  quotationStatusLabel, quotationStatusColor,
+  quotationStatusLabel, quotationStatusColor, fmtISOToThai,
   type LeadRow, type CustomerRow, type QuotationMock, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
@@ -12,13 +12,22 @@ import { boqLineItems, boqSubtotal, seedLineItems } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
 import { useMasterCatalogState } from "@pms/shared/lib/useMasterCatalog";
-import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
+import { useHQPolicy, useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
 // "วันนี้ของระบบ" (ISO) — โหมด supabase = วันจริง · โหมด local = 30 มิ.ย. 2569 (ดู APP_NOW ใน FilterContext)
 // ใบเสนอราคาที่สร้าง/ส่งใหม่ลงวันที่นี้ → ตรงกับตัวกรอง/รายงานที่อิง APP_NOW เสมอ
 const MOCK_TODAY = APP_NOW_ISO;
+
+/** วันหมดอายุของใบ = วันที่ออกใบ + อายุใบที่สำนักงานใหญ่ตั้งไว้ (บอสสั่ง 20 ส.ค. 69)
+ *  คิดจุดเดียวที่นี่ — ตัวแทนไม่ต้องพิมพ์เอง จะได้ไม่มีทางพิมพ์ผิดหรือขัดกับนโยบาย */
+function วันหมดอายุจาก(วันออกใบ: string, อายุวัน: number): string {
+  const d = new Date(วันออกใบ);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + (อายุวัน > 0 ? อายุวัน : 0));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
 
@@ -42,6 +51,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   const savingRef = useRef(false); // กันกดออกใบซ้ำระหว่างรอเลขที่ใบจาก DB (H8 · guard synchronous)
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const policy = useHQPolicy(); // นโยบาย HQ — อายุใบ ฯลฯ (VAT ย้ายไปเป็นของสาขาแล้ว · 7 ส.ค. 69)
+  // อายุใบเสนอราคาที่สำนักงานใหญ่ประกาศไว้ — ใช้คิดวันหมดอายุแทนการให้ตัวแทนพิมพ์เอง
+  const validityDays = useQuoteValidityDays();
+  // ใบใหม่: นับจากวันที่ออกใบ · ใบเดิมที่เคยระบุวันไว้แล้ว: คงวันเดิม ไม่เขียนทับของเก่า
+  const วันหมดอายุ = (mode === "edit" && editing?.expiry) ? editing.expiry : วันหมดอายุจาก(MOCK_TODAY, validityDays);
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับ/VAT ของสาขา (ผ่าน repo)
   // ส่วนบวกเพิ่มจากราคากลางที่สาขาตั้งไว้เองที่หน้าแม่แบบ — ใช้ตั้งต้นราคาต่อหน่วยใน BOQ
   const pricing = dealerCfg.settings.pricing;
@@ -163,7 +176,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     if (mode === "edit" && editing) {
       updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
         lineItems: form.lineItems, materialCost: parseBaht(form.price), totalValue: net, total: "฿" + net.toLocaleString("th-TH"),
-        expiry: form.expiry || "", note: form.note || undefined });
+        expiry: วันหมดอายุ, note: form.note || undefined });
       onToast?.("บันทึกใบเสนอราคาแล้ว");
     } else {
       // สร้างใหม่ — ออกเลข + insert แบบ atomic (H8) · ออกใบในนาม subject (ลูกค้าเป้าหมาย/ลูกค้า)
@@ -174,7 +187,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
         province: subj.province, buildingType: form.buildingType,
         area: form.lineItems.filter(it => it.unit === "ตร.ม.").reduce((s, it) => s + it.qty, 0),
         status: "draft", date: MOCK_TODAY, items: form.lineItems.length, lineItems: form.lineItems,
-        customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: form.expiry || "",
+        customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: วันหมดอายุ,
         note: form.note || undefined,
         vatPercent: dealerVat, // สแนปช็อต VAT ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ (ไม่ใช้ค่าที่สาขาแก้ทีหลัง)
       });
@@ -278,10 +291,18 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
             buildingType: li.length ? li[0].name.split(" · ")[0] : p.buildingType,
           })) } />
 
-        {/* วันหมดอายุ */}
+        {/* ── วันหมดอายุ: ระบบกำหนดให้เอง ไม่ต้องกรอก (บอสสั่ง 20 ส.ค. 69) ──────────
+            อายุใบเป็นนโยบายของสำนักงานใหญ่อยู่แล้ว (ตั้งที่ ตั้งค่า › ใบเสนอราคา)
+            ให้ตัวแทนพิมพ์เองซ้ำ = พิมพ์ผิดได้ และไม่ตรงกับนโยบายที่ประกาศไว้
+            นับจากวันที่ออกใบเสมอ · ใบเก่าที่เคยระบุวันไว้เองยังคงวันเดิม ไม่ถูกเขียนทับ */}
         <div style={{ marginTop: 14 }}>
           <label style={lbl}><Calendar size={11} style={{ verticalAlign: "-1px" }} /> วันหมดอายุ</label>
-          <input type="date" value={form.expiry} onChange={e => set("expiry", e.target.value)} style={inp} />
+          <div style={{ ...inp, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "#f7f9fc", color: "#374151" }}>
+            <span style={{ fontWeight: 700 }}>{fmtISOToThai(วันหมดอายุ)}</span>
+            <span style={{ fontSize: "0.68rem", color: "#8a929c" }}>
+              {mode === "edit" && editing?.expiry ? "ตามที่ระบุไว้ในใบนี้" : `อายุใบ ${validityDays} วันนับจากวันที่ออกใบ`}
+            </span>
+          </div>
         </div>
 
         {/* หมายเหตุ */}

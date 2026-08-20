@@ -169,27 +169,38 @@ test("[func·hq→dealer] HQ เพิ่มแม่แบบในแคตต
   }
 });
 
-test("[func·hq→dealer] HQ เปลี่ยน VAT → ตัวแทนใช้ค่าใหม่ทันที", async ({ page }) => {
+// ── VAT เป็นของสาขา ไม่ใช่ของสำนักงานใหญ่ ────────────────────────────────────
+// เดิมอัตราภาษีเป็นค่ากลางของทั้งเครือ (สำนักงานใหญ่ตั้ง) แล้วตัวแทนใช้ตาม
+// ต่อมาย้ายให้แต่ละสาขาตั้งเอง (ตั้งค่า › ใบเสนอราคา) เพราะจดทะเบียนภาษีคนละแบบกัน
+// เทสต์นี้จึงเปลี่ยนหน้าที่: จากเดิม "ค่าต้องไหลลงมา" เป็น "ค่าของสาขาต้องไม่ถูกทับ"
+//   ถ้าวันหนึ่งมีใครผูกสองอย่างนี้กลับเข้าหากัน เทสต์นี้จะจับได้ทันที
+test("[func·hq→dealer] สำนักงานใหญ่แก้ VAT แล้วต้องไม่ทับค่าที่สาขาตั้งเอง", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(ADMIN);
   const { data: before } = await sb.from("hq_policy").select("vat").eq("id", 1).maybeSingle();
   const origVat = (before?.vat as number) ?? 7;
   const newVat = origVat === 7 ? 10 : 7;
 
+  // ค่าที่สาขา RYG ตั้งไว้เอง — คือค่าที่ต้องเห็นบนหน้าจอตัวแทนเสมอ
+  const dealerSb = await db(RYG);
+  const { data: ds } = await dealerSb.from("dealer_settings").select("document").eq("dealer_code", "RYG").maybeSingle();
+  const vatของสาขา = (ds?.document as { vatPercent?: number } | null)?.vatPercent ?? 7;
+
   try {
-    // HQ เปลี่ยนอัตราภาษีของทั้งเครือ
     const up = await sb.from("hq_policy").update({ vat: newVat }).eq("id", 1).select();
     expect(up.error, `HQ แก้ VAT ไม่ได้: ${JSON.stringify(up.error)}`).toBeNull();
 
-    // ตัวแทนต้องเห็นค่าใหม่ที่หน้าตั้งค่า (ช่องติดกุญแจ + ป้าย HQ)
     await loginUI(page, DEALER_ORIGIN, "/login", RYG);
     await page.goto(`${DEALER_ORIGIN}/settings`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "ตั้งค่าใบเสนอราคา" }).first().click();
 
-    await expect.poll(async () => page.evaluate(() => document.body.innerText),
-      { timeout: 20_000, message: "ตัวแทนต้องเห็น VAT ที่ HQ ตั้งใหม่" }).toContain(String(newVat));
+    // ค่าอยู่ในช่องกรอก ไม่ใช่ข้อความในหน้า — ต้องอ่านจากช่องโดยตรง
+    const ช่องVat = page.getByLabel("ภาษีมูลค่าเพิ่ม %");
+    await expect(ช่องVat, "หน้าตั้งค่าของตัวแทนต้องโหลดเสร็จ").toBeVisible({ timeout: 20_000 });
+    await expect(ช่องVat, "ต้องเห็น VAT ของสาขาตัวเอง ไม่ใช่ค่าที่สำนักงานใหญ่เพิ่งเปลี่ยน")
+      .toHaveValue(String(vatของสาขา), { timeout: 20_000 });
 
-    assertNoErrors(errs, "VAT ถึงตัวแทน");
+    assertNoErrors(errs, "VAT ของสาขาไม่ถูกสำนักงานใหญ่ทับ");
   } finally {
     await sb.from("hq_policy").update({ vat: origVat }).eq("id", 1);
   }

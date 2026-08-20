@@ -66,10 +66,11 @@ test("[ux·dealer] โมดัลดูใบเสนอราคาแสด�
 test("[ux·dealer] ใบเสนอราคาที่สร้างใหม่โชว์ยอดเต็ม ไม่ย่อ M/K", async ({ page }) => {
   await openLeadQuotationForm(page);
   // ฟอร์มมีรายการ BOQ ตั้งต้นจากแม่แบบของลูกค้าเป้าหมายอยู่แล้ว → ยอดถูกคำนวณให้ กดสร้างได้เลย
-  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
+  // ปุ่มส่งฟอร์ม: โหมดออกใบใหม่เขียน "สร้างใบเสนอราคา" · โหมดเพิ่มรายการในใบเดิมเขียน "บันทึก"
+  await page.getByRole("button", { name: /^(สร้างใบเสนอราคา|บันทึก)$/ }).last().click();
   // รอให้ฟอร์มปิดจริง = ระบบรับใบแล้ว — ห้ามรอเป็นเวลาตายตัว (800ms ไม่พอตอนเครื่องรับงานหนัก
   // แล้วเทสต์จะไปต่อทั้งที่ใบยังไม่ถูกสร้าง → หน้า /quotations ว่าง แล้วสรุปผิดว่าระบบแสดงยอดพลาด)
-  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByText(/สร้างใบเสนอราคาใหม่|^แก้ไข /)).toHaveCount(0, { timeout: 30_000 });
 
   // ใบสร้างบนแอปตัวแทน (:3001) → localStorage อยู่ origin นั้น ต้องเปิด /quotations ของ :3001 (ไม่ใช่ baseURL :3002 = HQ)
   await page.goto("http://localhost:3001/quotations", { waitUntil: "domcontentloaded" });
@@ -95,8 +96,9 @@ test("[ui·dealer] ฟอร์มใบเสนอราคา inline ใน�
   await page.locator("tbody tr").first().locator("td").first().click(); // เปิดแผงรายละเอียด
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click(); // แท็บใบเสนอราคา
   await page.waitForTimeout(300);
-  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click(); // ปุ่มสร้างในแผง
-  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible();
+  // ปุ่มบนหัวแท็บ: ยังไม่มีใบ = "สร้างใบเสนอราคา" · มีใบที่ยังแก้ได้ = "เพิ่มรายการในใบเสนอราคา"
+  await page.getByRole("button", { name: /(สร้าง|เพิ่มรายการใน)ใบเสนอราคา/ }).first().click();
+  await expect(page.getByText(/สร้างใบเสนอราคาใหม่|^แก้ไข /)).toBeVisible();
   // แม่แบบ + BOQ รวมเป็นก้อนเดียว "รายการใบเสนอราคา" — เลือกแม่แบบจากแคตตาล็อกใน BOQ (ไม่มีช่องแม่แบบซ้ำ)
   await expect(page.getByText("รายการใบเสนอราคา")).toBeVisible();
   await expect(page.getByText("ชื่อโครงการ / เอกสาร")).toBeVisible();
@@ -112,7 +114,8 @@ test("[ui·dealer] ฟอร์มใบเสนอราคา inline ใน�
 // (วันที่ออกไม่ใช่ช่องให้กรอกอีกแล้ว — ระบบประทับให้ตอนบันทึก · ช่องวันที่ในฟอร์ม = วันหมดอายุ)
 test("[ux·dealer] ใบเสนอราคาที่สร้างใหม่ลงวันที่วันนี้ของระบบ", async ({ page }) => {
   await openLeadQuotationForm(page);
-  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).last().click();
+  // ปุ่มส่งฟอร์ม: โหมดออกใบใหม่เขียน "สร้างใบเสนอราคา" · โหมดเพิ่มรายการในใบเดิมเขียน "บันทึก"
+  await page.getByRole("button", { name: /^(สร้างใบเสนอราคา|บันทึก)$/ }).last().click();
   await page.waitForTimeout(800);
 
   // ใบสร้างบนแอปตัวแทน (:3001) → localStorage อยู่ origin นั้น ต้องเปิด /quotations ของ :3001 (ไม่ใช่ baseURL :3002 = HQ)
@@ -214,7 +217,13 @@ test("[ui·dealer] ตารางเหลือแถวเดียว — �
   const first = (await rows.first().locator("td").first().innerText()).split(String.fromCharCode(10))[0].trim();
   await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(first);
   await page.waitForTimeout(1200);
-  expect(await rows.count(), "ต้องกรองจนเหลือแถวเดียว").toBe(1);
+  // ⚠️ ห้ามยืนยันว่า "เหลือแถวเดียวเป๊ะ" — ชื่อบริษัทในข้อมูลทดสอบซ้ำกันได้
+  //   (ชุดข้อมูลตั้งต้นใช้คำนำหน้าเดียวกันทุกราย ค้นแล้วติดมาหลายแถวเป็นปกติ)
+  //   สิ่งที่เทสต์นี้ตรวจจริงคือ "ตารางสั้น ๆ แล้วเมนูเปลี่ยนขั้นต้องยังอยู่ในจอ"
+  //   ตารางเหลือไม่กี่แถวก็สร้างเงื่อนไขนั้นได้เหมือนกัน
+  const เหลือ = await rows.count();
+  expect(เหลือ, "ต้องกรองให้ตารางสั้นลงจริง").toBeGreaterThan(0);
+  expect(เหลือ, "ต้องกรองให้เหลือไม่กี่แถว").toBeLessThanOrEqual(5);
 
   await rows.first().locator("button.badge").first().click();
   const menu = page.locator('[data-menu="stage"]');

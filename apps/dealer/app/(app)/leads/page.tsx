@@ -2150,6 +2150,16 @@ export default function LeadsPage() {
           // ผู้ทำงาน = ผู้รับผิดชอบของลูกค้าเป้าหมายนั้น (ไม่ใช่บัญชีดีลเลอร์ที่ล็อกอิน)
           // งาน "จัดทำใบเสนอราคา" ติ๊กเองไม่ได้ถ้ายังไม่มีใบ — ส่ง onRequestQuotation ไปพาออกใบแทน
           <LeadTasks lead={c} performedBy={c.assigned || session.name} onSave={saveLead}
+            // งาน "นัดหมาย" ก็ต้องมีของจริงเหมือนงานที่ต้องมีใบเสนอราคา (บอสสั่ง 20 ส.ค. 69)
+            //   ยังไม่เคยลงนัดกับลูกค้าเป้าหมายรายนี้ = ติ๊กเองไม่ได้ → พาไปลงนัดจริง
+            //   พอบันทึกนัดเสร็จ ระบบติ๊กงานให้เอง (ดูตัวติ๊กอัตโนมัติในแท็บนัดหมาย)
+            onRequestAppointment={() => {
+              const มีนัดแล้ว = appointments.some(a => a.leadId === c.numId && a.status !== "cancelled");
+              if (มีนัดแล้ว) return false;   // มีนัดจริงแล้ว → ติ๊กได้ตามปกติ
+              setDTab("timeline"); setApptAdding(true);
+              setToast("ติ๊กงานนี้เองไม่ได้ — ลงนัดหมายจริงก่อน แล้วระบบจะติ๊กให้เอง");
+              return true;
+            }}
             onRequestQuotation={taskKey => {
               const mine = quotations.filter(q => quoteBelongsToLead(q, c));
               // ยังไม่มีใบเลย → พาไปออกใบ (ทั้งงาน "จัดทำ" และ "ส่ง" ต้องมีใบก่อนทั้งคู่)

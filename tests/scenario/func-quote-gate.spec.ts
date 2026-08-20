@@ -34,10 +34,14 @@ async function seedLead() {
     ({ key, label, done: true, doneAt: "1 ส.ค. 2569 · 10:00", doneBy: "ผู้ทดสอบ" });
   await sb.from("leads").insert({
     id: `#L-${numId}`, num_id: numId, dealer_code: "RYG", company: COMPANY, name: COMPANY,
-    contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสินค้า", status: "BULLET",
+    contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสำเร็จรูป", status: "BULLET",
     value: "฿600,000", assigned: "ผู้ทดสอบ",
     tasks: [
+      // ⚠️ ต้องติ๊ก "ทุกงานก่อนหน้า" ให้ครบตามเส้นทางที่สำนักงานใหญ่ตั้งไว้
+      //    ไม่งั้นระบบจะตอบว่า "ทำงานก่อนหน้าให้ครบก่อน" แล้วไม่พาไปออกใบ
+      //    (เส้นทางเพิ่มงาน "สรุปความต้องการ" เมื่อ 19 ส.ค. 69 — seed เดิมจึงไม่ครบ)
       done("contact", "ติดต่อแล้ว"), done("collect", "เก็บข้อมูลลูกค้า"), done("appointment", "นัดหมาย"),
+      done("requirement", "สรุปความต้องการ"),
       { key: "makeQuote", label: "จัดทำใบเสนอราคา", done: false },
       { key: "sendQuote", label: "ส่งใบเสนอราคา", done: false },
       { key: "catalog", label: "ส่งแม่แบบให้ลูกค้า", done: false },
@@ -68,8 +72,10 @@ test("[func] ติ๊กงาน 'จัดทำใบเสนอราค�
   await page.getByRole("button", { name: "งาน", exact: true }).first().click();
   await page.getByText("จัดทำใบเสนอราคา").first().click();
 
-  await expect(page.getByText("สร้างใบเสนอราคาใหม่"),
-    "ต้องพาไปฟอร์มออกใบ ไม่ใช่ติ๊กงานให้เฉย ๆ").toBeVisible({ timeout: 15_000 });
+  // กติกา 20 ส.ค. 69: ถ้ามีใบที่ยังแก้ได้อยู่แล้ว ระบบพาไปเพิ่มรายการในใบนั้น (ไม่ออกใบที่สอง)
+  // สิ่งที่เทสต์นี้ตรวจคือ "ต้องพาไปฟอร์มใบเสนอราคา ไม่ใช่ติ๊กงานให้เฉย ๆ" — ได้ทั้งสองโหมด
+  await expect(page.getByText(/สร้างใบเสนอราคาใหม่|^แก้ไข /),
+    "ต้องพาไปฟอร์มใบเสนอราคา ไม่ใช่ติ๊กงานให้เฉย ๆ").toBeVisible({ timeout: 15_000 });
 
   const sb = await db(RYG);
   const lead = (await sb.from("leads").select("tasks,status").eq("company", COMPANY).single())

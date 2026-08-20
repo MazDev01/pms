@@ -123,19 +123,5 @@ begin
   return result;
 end $$;
 
--- quotation_salesperson() — เพิ่มเงื่อนไข dealer_code ให้ join สาขา fallback (ผ่าน customer_id) ด้วย
--- เหมือนสาขาแรก (ผ่าน deal_id) ที่ผูก dealer_code อยู่แล้ว
-create or replace function quotation_salesperson(p_quote_id text)
-returns text
-language sql
-stable
-as $$
-  select l.assigned
-  from quotations q
-  join leads l
-    on (q.deal_id is not null and l.num_id = q.deal_id and coalesce(l.dealer_code,'CNX') = coalesce(q.dealer_code,'CNX'))
-    or (coalesce(q.customer_id, 0) > 0 and l.customer_id = q.customer_id and coalesce(l.dealer_code,'CNX') = coalesce(q.dealer_code,'CNX'))
-  where q.id = p_quote_id
-  order by (q.deal_id is not null and l.num_id = q.deal_id) desc  -- ให้ deal_id ชนะ customer_id (ตรงกว่า)
-  limit 1;
-$$;
+-- หมายเหตุ 20 ส.ค. 69: ไฟล์นี้เคยมี quotation_salesperson() ติดมาด้วย (ตอนคัดลอกใบ 0104 มาทั้งไฟล์)
+--   ซึ่งไปปลุกฟังก์ชันรุ่นเก่าที่ใบ 0113 ลบทิ้งไปแล้วให้กลับมา — ตัดออกแล้ว และใบ 0154 ลบรุ่นเก่าซ้ำอีกชั้น

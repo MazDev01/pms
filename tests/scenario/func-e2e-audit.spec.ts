@@ -39,6 +39,9 @@ test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 //    เทสต์จึงเปลี่ยนเป็น 2 ท่อน: (ก) ลัดคิวต้องถูกกัน (ข) พอส่งใบแล้ว ยอดต้องสอดคล้องกันตามเดิม
 test("[audit] ปิดการขายลัดคิวต้องถูกกัน · พอส่งใบแล้วยอดลูกค้าต้องตรงกับใบเสนอราคา", async ({ page }) => {
   const errs = watchErrors(page);
+  // ปิดการขายถาม confirm() ทุกครั้ง · เทสต์นี้กดสองรอบ (รอบแรกถูกกัน รอบสองผ่าน)
+  //   ใช้ตัวจัดการเดียวตลอดเทสต์ — ถ้าใช้ once ต่อรอบ ตัวที่ยังไม่ถูกใช้จะค้างแล้วชนกับตัวถัดไป
+  page.on("dialog", d => { void d.accept().catch(() => {}); });
   const sb = await db(RYG);
   const COMPANY = tg("ปิดลัดคิว");
 
@@ -80,7 +83,6 @@ test("[audit] ปิดการขายลัดคิวต้องถูก
   const row2 = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row2).toBeVisible({ timeout: 15_000 });
   await row2.getByRole("button", { name: /▾/ }).first().click();
-  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
   // (ก) ด่านต้องกันไว้ — ใบยังเป็นร่าง ยังไม่เคยส่งถึงลูกค้า จึงต้องยังไม่มีลูกค้าเกิดขึ้น
@@ -96,7 +98,6 @@ test("[audit] ปิดการขายลัดคิวต้องถูก
   const row3 = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row3).toBeVisible({ timeout: 15_000 });
   await row3.getByRole("button", { name: /▾/ }).first().click();
-  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
 
   const cust = await waitRow<{ id: number; total_value: number; company: string }>(sb, "customers", { company: COMPANY }, 20_000);

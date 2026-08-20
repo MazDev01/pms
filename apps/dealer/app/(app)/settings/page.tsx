@@ -365,7 +365,9 @@ function DocumentsTab() {
               {/* เดิมล็อกไว้ให้สำนักงานใหญ่กำหนดทั้งเครือ · บอสสั่งเปิดให้ตัวแทนตั้งเอง (7 ส.ค. 69)
                   ใบที่ออกไปแล้วไม่กระทบ — ทุกใบตรึง % VAT ไว้ตั้งแต่ตอนสร้าง */}
               <label className="form-label">ภาษีมูลค่าเพิ่ม %</label>
-              <input className="form-input" type="number" min={0} max={100} step="0.01" value={doc.vatPercent}
+              {/* ผูกชื่อช่องไว้ด้วย — โปรแกรมอ่านหน้าจอต้องบอกได้ว่าช่องตัวเลขนี้คืออะไร
+                  (ป้ายข้างบนไม่ได้ผูกกับช่องด้วย htmlFor จึงต้องระบุที่ตัวช่องเอง) */}
+              <input className="form-input" aria-label="ภาษีมูลค่าเพิ่ม %" type="number" min={0} max={100} step="0.01" value={doc.vatPercent}
                 onChange={e => set("vatPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
                 style={{ fontFamily: "monospace" }} />
             </div>

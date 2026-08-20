@@ -112,8 +112,23 @@ export async function openLeadQuotationForm(page: Page) {
   await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตาราง
   await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
   await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
-  await page.getByRole("button", { name: "สร้างใบเสนอราคา" }).first().click();
-  await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible();
+
+  // ── กติกา 20 ส.ค. 69: หนึ่งดีล = ใบเสนอราคาใบเดียว ──────────────────────────
+  // ลูกค้าเป้าหมายที่ยังไม่มีใบ → ปุ่มเขียนว่า "สร้างใบเสนอราคา" (เข้าฟอร์มออกใบใหม่)
+  // ลูกค้าเป้าหมายที่มีใบที่ยังแก้ได้ → ปุ่มเขียนว่า "เพิ่มรายการในใบเสนอราคา" (เข้าฟอร์มแก้ใบเดิม)
+  // เทสต์ที่แค่ "ขอให้ได้ฟอร์มใบเสนอราคา" จึงต้องรับได้ทั้งสองทาง
+  await page.getByRole("button", { name: /(สร้าง|เพิ่มรายการใน)ใบเสนอราคา/ }).first().click();
+  await expect(page.getByText(/สร้างใบเสนอราคาใหม่|^แก้ไข /)).toBeVisible();
+
+  // BOQ ต้องมีอย่างน้อย 1 รายการ ปุ่มบันทึกถึงจะกดได้
+  //   ลูกค้าเป้าหมายบางรายตั้งต้นไม่ได้ (แม่แบบไม่ตรงแคตตาล็อก / ยังไม่มีราคากลาง / ไม่ได้กรอกพื้นที่)
+  //   ตอนนี้ปุ่มเลือกจากแคตตาล็อกเปิดไว้เสมอแล้ว จึงเติมเองได้ ไม่ต้องพึ่งว่าลูกค้าเป้าหมายใบไหนถูกหยิบมา
+  const ราคาต่อหน่วย = page.getByLabel("ราคาต่อหน่วย");
+  if (await ราคาต่อหน่วย.count() === 0) {
+    await page.getByRole("button", { name: /เลือกจากแคตตาล็อก/ }).click();
+    await page.locator("button").filter({ hasText: /฿[\d,]+\/\S+/ }).first().click();
+    await expect(ราคาต่อหน่วย.first()).toBeVisible({ timeout: 10_000 });
+  }
 }
 
 // ตรวจหน้าโหลดสมบูรณ์: มีหัวข้อ h2 + ไม่มี uncaught error + ไม่มี body เลื่อนแนวนอน

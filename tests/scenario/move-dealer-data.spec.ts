@@ -59,11 +59,11 @@ test("[admin] ย้ายข้อมูลไปสาขาที่รับ
   await admin.from("leads").insert({
     id: `#L-${leadNum}`, num_id: leadNum, dealer_code: FROM, customer_id: custId,
     company: "ZZTMP ลูกค้าย้ายสาขา", name: "ZZTMP ลูกค้าย้ายสาขา", contact: "ผู้ทดสอบ",
-    province: "ระยอง", product: "โกดังสินค้า", status: "PAID", value: "฿500,000", assigned: "ผู้ทดสอบ",
+    province: "ระยอง", product: "โกดังสำเร็จรูป", status: "PAID", value: "฿500,000", assigned: "ผู้ทดสอบ",
   });
   await admin.from("quotations").insert({
     id: "Q-ZTA-0001", dealer_code: FROM, customer_id: custId, deal_id: leadNum,
-    customer: "ZZTMP ลูกค้าย้ายสาขา", project: "งานทดสอบย้ายสาขา", building_type: "โกดังสินค้า",
+    customer: "ZZTMP ลูกค้าย้ายสาขา", project: "งานทดสอบย้ายสาขา", building_type: "โกดังสำเร็จรูป",
     total_value: 500000, status: "won", date: "2026-08-01", items: 1, area: 100,
   });
 
