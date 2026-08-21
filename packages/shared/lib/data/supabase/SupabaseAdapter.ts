@@ -656,8 +656,12 @@ export const SupabaseAdapter: DataAdapter = {
         })),
       };
     },
-    networkCustomerSummary: async () => {
-      const { data, error } = await sb().rpc("network_customer_summary");
+    networkCustomerSummary: async (f) => {
+      const { data, error } = await sb().rpc("network_customer_summary", {
+        p_dealer_code: f?.dealerCode ?? null,
+        p_date_start: f?.dateStart ?? null,
+        p_date_end: f?.dateEnd ?? null,
+      });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { total?: number; byProvince?: Row[] };
       return {

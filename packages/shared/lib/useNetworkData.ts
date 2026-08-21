@@ -239,7 +239,9 @@ export function useUnassignedLeads(filters: UnassignedFilters): UnassignedSummar
 }
 
 // สรุปลูกค้าทั้งเครือ (total + byProvince) — ป้อน KPI ลูกค้า + provinceTop6 หน้า dashboard (M9 Phase 4)
-export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
+export function useNetworkCustomerSummary(
+  filters?: { dealerCode?: string; dateStart?: string; dateEnd?: string },
+): NetworkCustomerSummary | null {
   const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
   const { salesVersion } = useSales();
   const [summary, setSummary] = useState<NetworkCustomerSummary | null>(null);
@@ -247,12 +249,15 @@ export function useNetworkCustomerSummary(): NetworkCustomerSummary | null {
     if (!REAL_BACKEND || !ready) { setSummary(null); return; }
     let alive = true;
     const t = setTimeout(() => {
-      metricsRepo.networkCustomerSummary()
+      metricsRepo.networkCustomerSummary(filters)
         .then(r => { if (alive) setSummary(r); })
         .catch(err => logRepoRead("metrics.networkCustomerSummary", err));
     }, 150);
     return () => { alive = false; clearTimeout(t); };
-  }, [ready, salesVersion]);
+    // ⚠️ ต้องมีตัวกรองใน dependency ด้วย — ไม่งั้นเปลี่ยนตัวแทน/ช่วงเวลาแล้วตัวเลขค้างของเดิม
+    //    (คีย์เป็นสตริงเพื่อไม่ให้ object ที่สร้างใหม่ทุกเรนเดอร์ยิงซ้ำไม่รู้จบ)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, salesVersion, JSON.stringify(filters ?? {})]);
   return summary;
 }
 

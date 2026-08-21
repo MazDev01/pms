@@ -105,7 +105,9 @@ export const metrics: MetricsRepo = {
     dedupeRead(`metrics.dashboardQuoteSummary:${start}:${end}:${dealer ?? ""}`, () => _metrics.dashboardQuoteSummary(start, end, dealer)),
   hqQuotationsSummary: (f) =>
     dedupeRead(`metrics.hqQuotationsSummary:${JSON.stringify(f)}`, () => _metrics.hqQuotationsSummary(f)),
-  networkCustomerSummary: () => dedupeRead("metrics.networkCustomerSummary", () => _metrics.networkCustomerSummary()),
+  // ⚠️ คีย์ต้องมีตัวกรองด้วย ไม่งั้นตัวกันยิงซ้ำจะคืน "ผลของตัวกรองก่อนหน้า" ให้คำขอที่กรองคนละแบบ
+  networkCustomerSummary: (f) =>
+    dedupeRead(`metrics.networkCustomerSummary:${JSON.stringify(f ?? {})}`, () => _metrics.networkCustomerSummary(f)),
   unassignedLeads: (f) => dedupeRead(`metrics.unassignedLeads:${JSON.stringify(f)}`, () => _metrics.unassignedLeads(f)),
   hqAlerts: (f) => dedupeRead(`metrics.hqAlerts:${JSON.stringify(f)}`, () => _metrics.hqAlerts(f)),
   hqCustomersPage: (opts) => dedupeRead(`metrics.hqCustomersPage:${JSON.stringify(opts)}`, () => _metrics.hqCustomersPage(opts)),

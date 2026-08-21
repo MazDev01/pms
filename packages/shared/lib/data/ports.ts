@@ -264,7 +264,8 @@ export interface MetricsRepo {
   /** สรุปใบในช่วง (byMonth/byStatus/byProduct) รอบเดียว — ป้อนการ์ด dashboard หลายใบ (M9) */
   dashboardQuoteSummary(start: string, end: string, dealer?: string): Promise<DashboardQuoteSummary>;
   /** สรุปลูกค้าทั้งเครือ (total + byProvince) — ปลด dashboard ออกจาก netCustomers array (M9 Phase 4) */
-  networkCustomerSummary(): Promise<NetworkCustomerSummary>;
+  /** สรุปลูกค้าทั้งเครือ · กรองตามตัวแทน/ช่วงเวลาได้ (0155) — ไม่ส่งอะไร = ทั้งหมดเหมือนเดิม */
+  networkCustomerSummary(f?: { dealerCode?: string; dateStart?: string; dateEnd?: string }): Promise<NetworkCustomerSummary>;
   /** ลูกค้าเป้าหมายไร้ผู้รับผิดชอบเกินเกณฑ์ (ชม.) รายสาขา — ปลดการ์ดเตือน /hq/leads ออกจาก netLeads array (M9 Phase 4) */
   unassignedLeads(filters: UnassignedFilters): Promise<UnassignedSummary>;
   /** ผู้สมัครกฎแจ้งเตือน HQ (unassigned/idle/expiring/dealerLatest/lostRate) — ปลดกระดิ่ง HQ ออกจาก array (M9 Phase 4) */

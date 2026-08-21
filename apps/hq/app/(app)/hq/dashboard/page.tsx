@@ -18,6 +18,7 @@ import {
   DEFAULT_HQ_TARGETS, hqAuditCategory,
   DEFAULT_DEALER_CODE,
   type DealerRow, type HQTargets,
+  isDealerSalesAudit,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
@@ -96,7 +97,11 @@ export default function HQDashboard() {
     ...(selDealer ? { dealerCodes: [selDealer.code] } : {}),
     dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
   }), [selDealer, timeRange.start, timeRange.end]));
-  const custSummary = useNetworkCustomerSummary();
+  // การ์ด "ลูกค้าทั้งเครือ" ต้องเดินตามตัวกรองเหมือนใบอื่น (บอสสั่ง 21 ส.ค. 69 · ฐานข้อมูล 0155)
+  const custSummary = useNetworkCustomerSummary(useMemo(() => ({
+    dealerCode: selDealer?.code,
+    dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+  }), [selDealer, timeRange.start, timeRange.end]));
   // ลูกค้าเป้าหมายรายเดือนปฏิทิน (index 0..11, รวมทุกปี ให้ตรง getMonth ฝั่ง client) + จำนวนลูกค้าเป้าหมายรวม จาก lead_summary
   const leadCal = useMemo(() => {
     if (!dashLeadSum) return null;
@@ -478,6 +483,8 @@ export default function HQDashboard() {
       return !d || (d >= timeRange.start && d <= timeRange.end); // อ่านวันไม่ได้ = ไม่ตัดทิ้ง
     };
     return auditEntries
+      // เฉพาะงานของสำนักงานใหญ่ (บอสสั่ง 21 ส.ค. 69) — ร่องรอยงานขายรายวันของสาขาดูได้ที่หน้าบันทึกการใช้งาน
+      .filter(e => !isDealerSalesAudit(e.action))
       .filter(e => inRange(e.at))
       // เลื่อนอ่านในการ์ดได้ จึงไม่ต้องตัดเหลือ 7 รายการเหมือนตอนยังไม่มีแถบเลื่อน
       // เพดาน 50 กันการ์ดวาดยาวเกินจำเป็น (บันทึกทั้งหมดดูได้ที่หน้า "บันทึกการใช้งาน" ซึ่งเก็บสูงสุด 300)
