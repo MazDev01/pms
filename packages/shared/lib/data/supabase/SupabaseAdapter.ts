@@ -622,8 +622,8 @@ export const SupabaseAdapter: DataAdapter = {
         byProduct: (d.byProduct ?? []).map(r => ({ product: String(r.product), count: Number(r.count) })),
         byProvince: (d.byProvince ?? []).map(r => ({ province: String(r.province), count: Number(r.count) })),
         byLostReason: (d.byLostReason ?? []).map(r => ({ reason: String(r.reason), count: Number(r.count), value: Number(r.value) })),
-        byMonth: (d.byMonth ?? []).map(r => ({ y: Number(r.y), m: Number(r.m), created: Number(r.new), won: Number(r.won), lost: Number(r.lost) })),
-        byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), leads: Number(r.leads), quoted: Number(r.quoted) })),
+        byMonth: (d.byMonth ?? []).map(r => ({ y: Number(r.y), m: Number(r.m), created: Number(r.new), won: Number(r.won), lost: Number(r.lost), quoted: Number(r.quoted ?? 0) })),
+        byDealer: (d.byDealer ?? []).map(r => ({ dealerCode: String(r.dealer_code), leads: Number(r.leads), quoted: Number(r.quoted), won: Number(r.won ?? 0) })),
       };
     },
     networkQuoteRange: async (start, end, dealer) => {

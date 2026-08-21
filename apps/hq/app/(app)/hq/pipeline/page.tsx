@@ -277,14 +277,24 @@ export default function SalesAnalyticsPage() {
   //    ตอนนี้แท่งหลัง = "ลูกค้าเป้าหมายที่ออกใบเสนอราคาแล้ว" (QUOTED_UP) จึงไม่มีทางเกินแท่งหน้า
   //    สูตรเดียวกับ /hq/leads และการ์ด "อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา" ที่ /hq/quotations
   const leadVsQuote = useMemo(() => {
-    // ทั้งสองแท่งมาจาก leadSum ก้อนเดียวแล้ว ไม่ต้องรอสรุปใบเสนอราคาอีกก้อน
+    // ⚠️ ปิดการขายได้แล้ว = เป็น "ลูกค้า" ไปแล้ว ไม่ใช่ลูกค้าเป้าหมายอีกต่อไป จึงหักออกทั้งสองแท่ง
+    //    (บอสสั่ง 21 ส.ค. 69) การ์ดนี้จึงเป็นภาพของ "รายที่ยังไล่อยู่" ไม่ใช่ยอดสะสมตลอดกาล
+    //    รายที่ปิดไม่สำเร็จยังนับอยู่ — เขาไม่เคยเป็นลูกค้า จึงยังเป็นตัวหารของความพยายามในช่วงนั้น
+    // ⚠️ ต้องหักจากตัวเลขที่ฐานข้อมูลสรุปมา (ใบ 0157 เพิ่ม won รายสาขา + quoted รายเดือน)
+    //    ห้ามหันไปนับจากรายการดิบฝั่งหน้าจอ — หน้าสำนักงานใหญ่ไม่ได้โหลดลูกค้าเป้าหมายทั้งเครือไว้
+    //    (ลองแล้วได้การ์ดว่าง "ไม่พบข้อมูลในช่วงที่เลือก" ทั้งที่ข้อมูลมีอยู่จริง)
+    const useRpc = !!leadSum;
     if (view === "month") {
       // รายเดือน = มองเป็นรุ่น (cohort): ลูกค้าเป้าหมายที่เข้ามาเดือนนั้น กี่รายไปถึงขั้นออกใบเสนอราคา
-      // นับจากรายการจริงทั้งสองแท่ง เพื่อให้มาจากแหล่งเดียวกันเสมอ (RPC ยังไม่มี quoted รายเดือน)
       const lM = new Map<string, number>(), qM = new Map<string, number>();
-      {
+      if (useRpc) {
+        leadSum.byMonth.forEach(r => {
+          lM.set(`${r.y}-${r.m}`, Math.max(0, r.created - r.won));
+          qM.set(`${r.y}-${r.m}`, Math.max(0, r.quoted - r.won));
+        });
+      } else {
         const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
-        leads.forEach(l => {
+        leads.filter(l => l.status !== "PAID").forEach(l => {
           const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
           lM.set(mk(d), (lM.get(mk(d)) ?? 0) + 1);
           if (QUOTED_UP.includes(l.status)) qM.set(mk(d), (qM.get(mk(d)) ?? 0) + 1);
@@ -305,10 +315,13 @@ export default function SalesAnalyticsPage() {
       : (DEALER_META.get(code)?.province ?? "—");
     const m = new Map<string, { a: number; b: number }>();
     const add = (k: string, f: "a" | "b", n: number) => { const r = m.get(k) ?? { a: 0, b: 0 }; r[f] += n; m.set(k, r); };
-    if (leadSum) {
-      leadSum.byDealer.forEach(d => { add(keyOf(d.dealerCode), "a", d.leads); add(keyOf(d.dealerCode), "b", d.quoted); });
+    if (useRpc) {
+      leadSum.byDealer.forEach(d => {
+        add(keyOf(d.dealerCode), "a", Math.max(0, d.leads - d.won));
+        add(keyOf(d.dealerCode), "b", Math.max(0, d.quoted - d.won));
+      });
     } else {
-      leads.forEach(l => {
+      leads.filter(l => l.status !== "PAID").forEach(l => {
         add(keyOf(l.dealerCode ?? ""), "a", 1);
         if (QUOTED_UP.includes(l.status)) add(keyOf(l.dealerCode ?? ""), "b", 1);
       });
@@ -470,6 +483,10 @@ export default function SalesAnalyticsPage() {
             {([["dealer", "ตัวแทน"], ["region", "ภูมิภาค"], ["province", "จังหวัด"], ["month", "รายเดือน"]] as const)
               .map(([v, l]) => viewTab(view, v, l, () => setView(v)))}
           </div>
+        </div>
+        {/* บอกกติกาไว้ใต้หัวข้อ ไม่งั้นผู้อ่านเทียบกับตารางท้ายหน้าแล้วงงว่าทำไมเลขไม่ตรง */}
+        <div style={{ fontSize: "0.62rem", color: MUTED, marginTop: -6, marginBottom: 6 }}>
+          ในช่วงที่เลือก · ไม่รวมรายที่ปิดการขายได้แล้ว (เป็นลูกค้าแล้ว) · คลิกเพื่อเจาะรายตัวแทน
         </div>
         <HBars rows={leadVsQuote} aLabel="ลูกค้าเป้าหมาย" bLabel="ออกใบเสนอราคาแล้ว" bColor="#0891b2" fmt={v => `${v} ราย`} />
       </div>

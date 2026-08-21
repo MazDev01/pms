@@ -176,7 +176,8 @@ export interface QuoteSummaryFilters {
   asOf?: string; // "วันนี้ของระบบ" (APP_NOW ISO) สำหรับคิดอายุใบ
 }
 /** สรุปลูกค้าเป้าหมาย "หลังกรอง" สำหรับ /hq/leads (M9 Phase 2) */
-export interface LeadMonthRow { y: number; m: number; created: number; won: number; lost: number; }
+/** quoted = ราย (ไม่ใช่ใบ) ของรุ่นเดือนนั้นที่ไปถึงขั้นเสนอราคาแล้ว · won = ปิดการขายได้ = เป็นลูกค้าแล้ว */
+export interface LeadMonthRow { y: number; m: number; created: number; won: number; lost: number; quoted: number; }
 export interface LeadSummary {
   byStatus: { status: string; count: number; value: number }[];
   bySource: { source: string; count: number }[];
@@ -185,8 +186,9 @@ export interface LeadSummary {
   /** จังหวัด (ลูกค้า) ที่มีลูกค้าเป้าหมาย — ป้อนตัวเลือกดรอปดาวน์ "จังหวัด" หน้า /hq/leads (M9 Phase 4) */
   byProvince: { province: string; count: number }[];
   byMonth: LeadMonthRow[];
-  /** รายสาขา — leads=จำนวนลูกค้าเป้าหมาย · quoted=ถึงขั้นเสนอราคาขึ้นไป (QUOTED_UP) · ป้อน leadVsQuote/dealerPerf */
-  byDealer: { dealerCode: string; leads: number; quoted: number }[];
+  /** รายสาขา — leads=จำนวนลูกค้าเป้าหมาย · quoted=ถึงขั้นเสนอราคาขึ้นไป (QUOTED_UP)
+   *  won=ปิดการขายได้แล้ว (เป็นลูกค้าแล้ว) · ป้อน leadVsQuote/dealerPerf */
+  byDealer: { dealerCode: string; leads: number; quoted: number; won: number }[];
 }
 export interface LeadSummaryFilters {
   dealerCodes?: string[]; province?: string; product?: string; source?: string;

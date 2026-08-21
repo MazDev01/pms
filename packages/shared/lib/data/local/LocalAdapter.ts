@@ -321,10 +321,11 @@ export const LocalAdapter: DataAdapter = {
       rows.forEach(l => { const p = (l.province ?? "").trim(); if (p) provM.set(p, (provM.get(p) ?? 0) + 1); });
       const lostM = new Map<string, { count: number; value: number }>();
       rows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => { const r = lostM.get(l.lostReason!) ?? { count: 0, value: 0 }; r.count += 1; r.value += parseBaht(l.value); lostM.set(l.lostReason!, r); });
-      const monthM = new Map<string, { y: number; m: number; created: number; won: number; lost: number }>();
-      rows.forEach(l => { const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return; const y = d.getFullYear(), m = d.getMonth(), k = `${y}-${m}`; let r = monthM.get(k); if (!r) { r = { y, m, created: 0, won: 0, lost: 0 }; monthM.set(k, r); } r.created++; if (l.status === "PAID") r.won++; if (l.status === "CANCELLED") r.lost++; });
-      const dealerM = new Map<string, { leads: number; quoted: number }>();
-      rows.forEach(l => { const code = l.dealerCode ?? DEFAULT_DEALER_CODE; let r = dealerM.get(code); if (!r) { r = { leads: 0, quoted: 0 }; dealerM.set(code, r); } r.leads++; if (QUOTED_UP.includes(l.status)) r.quoted++; });
+      // quoted/won ต้องมีครบเหมือนฝั่งฐานข้อมูล (ใบ 0157) ไม่งั้นโหมด local กับ supabase ให้เลขคนละชุด
+      const monthM = new Map<string, { y: number; m: number; created: number; won: number; lost: number; quoted: number }>();
+      rows.forEach(l => { const d = parseThaiDateLocal(l.createdAt ?? ""); if (!d) return; const y = d.getFullYear(), m = d.getMonth(), k = `${y}-${m}`; let r = monthM.get(k); if (!r) { r = { y, m, created: 0, won: 0, lost: 0, quoted: 0 }; monthM.set(k, r); } r.created++; if (l.status === "PAID") r.won++; if (l.status === "CANCELLED") r.lost++; if (QUOTED_UP.includes(l.status)) r.quoted++; });
+      const dealerM = new Map<string, { leads: number; quoted: number; won: number }>();
+      rows.forEach(l => { const code = l.dealerCode ?? DEFAULT_DEALER_CODE; let r = dealerM.get(code); if (!r) { r = { leads: 0, quoted: 0, won: 0 }; dealerM.set(code, r); } r.leads++; if (QUOTED_UP.includes(l.status)) r.quoted++; if (l.status === "PAID") r.won++; });
       return ok({
         byStatus: [...statusM.entries()].map(([status, count]) => ({ status, count, value: statusValM.get(status) ?? 0 })),
         bySource: [...sourceM.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count),
