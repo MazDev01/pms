@@ -17,7 +17,8 @@ import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/li
 import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
-import { useHQPolicy, useQuoteValidityDays, useLostReasons } from "@pms/shared/lib/useHQConfig";
+import { useHQPolicy, useLostReasons } from "@pms/shared/lib/useHQConfig";
+import { useQuoteValidity } from "@pms/shared/lib/useQuoteValidity";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { useFilters, FilterProvider, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
@@ -116,9 +117,9 @@ function fmtStamp(s:string){
 // ทำให้ 9 คอลัมน์พอดีกรอบโดยไม่ต้องเลื่อนแนวนอน · แผงรายละเอียด/เอกสารพิมพ์ยังใช้วันที่เต็มมีปี
 function fmtDateShort(d:string){ if(!d||d==="—") return "—"; const [,m,day]=d.split("-"); const mo=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]; return `${parseInt(day)} ${mo[parseInt(m)-1]}`; }
 // วันหมดอายุที่ใช้แสดงผล — ใบที่กรอกวันเองใช้ค่านั้น · ใบที่ไม่ได้กรอก (11 จาก 17 ใบใน seed)
-// คำนวณจาก วันที่สร้าง + อายุใบเสนอราคา (ค่ากลางจาก HQ ผ่าน useQuoteValidityDays) ตามที่บอสสั่ง
+// คำนวณจาก วันที่สร้าง + อายุใบเสนอราคา (ของสาขา ถ้าไม่ได้ตั้งค่อยใช้ของ HQ — ดู useQuoteValidity)
 // ไม่ใช่การเดา — "อายุใบเสนอราคา" เป็นนโยบายจริงในหน้าตั้งค่า และเป็นกฎที่ใช้ตอนสร้างใบใหม่อยู่แล้ว
-// validityDays ส่งเข้ามาจากหน้าจอ (useQuoteValidityDays) — ห้ามอ่าน localStorage ตรงนี้
+// validityDays ส่งเข้ามาจากหน้าจอ (useQuoteValidity) — ห้ามอ่าน localStorage ตรงนี้
 // เพราะโหมด supabase ค่าจริงอยู่ใน DB ที่ HQ ตั้งไว้ ไม่ใช่ค่า default ในเครื่อง
 function expiryOf(q:{date:string;expiry?:string}, validityDays:number):string{
   if(q.expiry) return q.expiry;
@@ -346,7 +347,8 @@ function QuotationsPageInner(){
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลูกค้าเป้าหมายใช้)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
   const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ค่าสำรองของใบที่ไม่มีสแนปช็อต
-  const validityDays = useQuoteValidityDays();
+  // อายุใบของ "สาขา" มาก่อนนโยบายเครือ (บอสสั่ง 20 ส.ค. 69) — สาขาตั้งไว้เท่าไรต้องใช้ค่านั้นจริง
+  const validityDays = useQuoteValidity();
   const {
     quotations: allQuotationsRaw, customers: allCustomersRaw, leads: allLeads,
     createQuotation, updateQuotation, deleteQuotation: ctxDeleteQuotation, setQuotationStatus,
@@ -457,7 +459,17 @@ function QuotationsPageInner(){
   const rangeTo   = Math.min(pageStart+PAGE_SIZE, filtered.length);
 
   // สรุปด้านบนนับจากชุดที่อยู่ในช่วงเวลา/จังหวัดของ FilterBar (ไม่ผูกกับ pill สถานะในเครื่อง)
-  const scoped       = useMemo(()=>data.filter(q=>passes({ date:q.date, province:q.province })),[data,passes]);
+  // ── ฐานของการ์ด KPI = ผ่านตัวกรองของหน้านี้ทั้งหมด ยกเว้น "สถานะ" (บอสสั่ง 20 ส.ค. 69) ──
+  //   ยกเว้นสถานะเพราะการ์ด KPI เป็นตัวสลับสถานะเอง — ถ้ารวมเข้าไปด้วย พอกดกรอง "ตอบรับแล้ว"
+  //   การ์ด "ปฏิเสธแล้ว" จะกลายเป็น 0 แล้วกดสลับกลับไม่ได้อีก
+  //   ส่วนที่เหลือ (ค้นหา/ประเภทอาคาร/ผู้รับผิดชอบ/จังหวัด/ช่วงเวลา) ต้องคุมการ์ดได้ทั้งหมด
+  const scoped = useMemo(()=>data.filter(q=>{
+    const matchQ=!query||q.id.toLowerCase().includes(query.toLowerCase())||q.customer.toLowerCase().includes(query.toLowerCase())||q.project.toLowerCase().includes(query.toLowerCase())||q.province?.includes(query);
+    const matchType=typeFilter==="ALL"||q.buildingType===typeFilter;
+    const matchOwner=ownerFilter==="ALL"||ownerOf(q)===ownerFilter;
+    const matchProv=provFilter==="ALL"||q.province===provFilter;
+    return !!matchQ&&matchType&&matchOwner&&matchProv&&passes({ date:q.date, province:q.province });
+  }),[data,passes,query,typeFilter,ownerFilter,provFilter,ownerOf]);
 
   // Related data for selected quotation
 
@@ -531,7 +543,7 @@ function QuotationsPageInner(){
     const updated:QuotationMock={...q,status:"sent_to_client",date:RESENT_DATE};
     updateQuotation(updated);
     setSelected(p=>p?.id===q.id?updated:p);
-    showToast(`ส่งใบเสนอราคา ${q.id} ให้ลูกค้าอีกครั้งแล้ว`);
+    showToast(`ส่งใบเสนอราคา ${q.id} พร้อมแม่แบบ ให้ลูกค้าอีกครั้งแล้ว`);
   }
   // (ทำสำเนา/สร้างเวอร์ชัน ถูกตัดออกตามการรีวิว — ปุ่มไม่ได้ใช้)
   function deleteQ(){
@@ -582,8 +594,8 @@ function QuotationsPageInner(){
         <TopbarActions>
           <FilterBar dims={[]} />
           <ExportMenu filename="quotations" title="ใบเสนอราคา" small
-            headers={["เลขที่","ลูกค้า","ผู้รับผิดชอบ","โครงการ","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
-            rows={filtered.map(q=>[q.id,q.customer,ownerOf(q) || "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
+            headers={["เลขที่","ฉบับ","ลูกค้า","ผู้รับผิดชอบ","โครงการ","จังหวัด","ประเภท","พื้นที่","มูลค่ารวม","สถานะ","วันที่"]}
+            rows={filtered.map(q=>[q.id,q.revision ?? "V1",q.customer,ownerOf(q) || "—",q.project,q.province,q.buildingType,q.area,q.totalValue,quotationStatusLabel[q.status],q.date])} />
         </TopbarActions>
         {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 
@@ -592,13 +604,19 @@ function QuotationsPageInner(){
           const fmtC = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
           // STATUS_LIST ถูกลบพร้อมชิปกรองสถานะ — ไม่มีใครอ่านแล้ว
           const valOf = (list: QuotationMock[]) => list.reduce((a,q)=>a+q.totalValue,0);
-          const totalVal = valOf(scoped); // สรุปตามช่วงเวลาที่กรอง (ตรงกับตาราง)
+          // ── มูลค่ารวมต้องเดินตามสถานะที่กรองอยู่ (บอสสั่ง 20 ส.ค. 69) ──────────────
+          //   เดิมรวมทุกสถานะเสมอ กดกรอง "ตอบรับแล้ว" ตารางเหลือ 2 ใบ แต่การ์ดยังโชว์ ฿8.7M
+          //   ของทั้งหน้า → อ่านแล้วเข้าใจว่าที่ตอบรับมีมูลค่าเท่านั้น ทั้งที่ไม่ใช่
+          //   ตอนนี้รวมเฉพาะใบที่ตรงสถานะที่เลือก และเขียนกำกับไว้ว่ากำลังรวมของสถานะไหน
+          //   ⚠️ ไม่ผูกกับช่องค้นหา — การ์ด KPI เป็นภาพรวมของสถานะ ไม่ใช่ผลค้นหารายใบ
+          const ตามสถานะ = filterStatus === "ALL" ? scoped : scoped.filter(q => q.status === filterStatus);
+          const totalVal = valOf(ตามสถานะ); // สรุปตามช่วงเวลา + สถานะที่กรอง
           const wonList  = scoped.filter(q=>q.status==="won");
           const lostList = scoped.filter(q=>q.status==="lost");
           const clear    = () => setFilterStatus("ALL");
           const kpis = [
             { label:"ใบเสนอราคาทั้งหมด", value:`${scoped.length}`,      sub:"รายการ",            Icon:FileText, color:"#2563EB", bg:"#E8F0FE", on: filterStatus==="ALL", onClick: clear },
-            { label:"มูลค่ารวม",         value:fmtC(totalVal),          sub:"ทุกสถานะ",           Icon:Coins,    color:"#16A34A", bg:"#E6F7EE", on: false,                onClick: clear },
+            { label:"มูลค่ารวม",         value:fmtC(totalVal),          sub: filterStatus==="ALL" ? "ทุกสถานะ" : quotationStatusLabel[filterStatus], Icon:Coins, color:"#16A34A", bg:"#E6F7EE", on: false, onClick: clear },
             { label:"ตอบรับแล้ว",        value:`${wonList.length}`,     sub:fmtC(valOf(wonList)), Icon:Check,    color:"#0D9488", bg:"#E6F7F5", on: filterStatus==="won",  onClick:()=>setFilterStatus(filterStatus==="won"?"ALL":"won") },
             { label:"ปฏิเสธแล้ว",        value:`${lostList.length}`,    sub:fmtC(valOf(lostList)), Icon:X,       color:"#DC2626", bg:"#FEE2E2", on: filterStatus==="lost", onClick:()=>setFilterStatus(filterStatus==="lost"?"ALL":"lost") },
           ];
@@ -719,7 +737,12 @@ function QuotationsPageInner(){
                         style={{background:isSel?"#f0f6ff":undefined}}>
                         {/* ไอคอนเอกสารหน้าเลขที่เอาออก — ซ้ำกันทุกแถว ไม่ได้บอกอะไร แลกที่ให้คอลัมน์อื่น */}
                         <td>
-                          <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace",whiteSpace:"nowrap"}}>{q.id}</span>
+                          {/* เลขที่ + ฉบับ (บอสสั่ง 21 ส.ค. 69) — ต้องรู้จากตารางเลยว่าใบนี้แก้มากี่รอบแล้ว */}
+                          <span style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace",whiteSpace:"nowrap"}}>{q.id}</span>
+                            <span className="badge" style={{background:"#eef3f8",color:PRIMARY,fontSize:"0.62rem",fontWeight:800}}
+                            title="ฉบับที่เท่าไรของใบนี้ — แก้ใบที่ส่งไปแล้วจะขึ้นฉบับใหม่">{q.revision ?? "V1"}</span>
+                          </span>
                         </td>
                         <td>
                           {q.customerId ? (
@@ -812,6 +835,8 @@ function QuotationsPageInner(){
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
                         <div style={{width:28,height:28,borderRadius:8,background:"#dce5f0",display:"flex",alignItems:"center",justifyContent:"center"}}><FileText size={12} color={PRIMARY}/></div>
                         <span style={{fontSize:"0.8rem",fontWeight:700,color:STEEL,fontFamily:"monospace"}}>{q.id}</span>
+                        <span className="badge" style={{background:"#eef3f8",color:PRIMARY,fontSize:"0.62rem",fontWeight:800}}
+                        title="ฉบับที่เท่าไรของใบนี้ — แก้ใบที่ส่งไปแล้วจะขึ้นฉบับใหม่">{q.revision ?? "V1"}</span>
                       </div>
                       <span className="badge" style={{background:sc.bg,color:sc.text}}>{quotationStatusLabel[q.status]}</span>
                     </div>

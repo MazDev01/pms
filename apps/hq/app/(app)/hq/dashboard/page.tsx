@@ -37,6 +37,8 @@ const PRIMARY = "#003366";
 const RAMP = ["#003366", "#0891b2", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 // ลูกค้าเป้าหมายทั้งเครือทุกช่วง (ตัวกรองว่าง) — อ้างอิงคงที่ กัน useLeadSummary รีเฟตช์ทุกเรนเดอร์
 const EMPTY_LEAD_FILTER = {};
+// วันที่แบบ YYYY-MM-DD จากเวลาท้องถิ่น (toISOString จะเลื่อนวันเพราะแปลงเป็น UTC ก่อน)
+const isoDateOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const TH_MONTH: Record<string, number> = { "ม.ค.": 0, "ก.พ.": 1, "มี.ค.": 2, "เม.ย.": 3, "พ.ค.": 4, "มิ.ย.": 5, "ก.ค.": 6, "ส.ค.": 7, "ก.ย.": 8, "ต.ค.": 9, "พ.ย.": 10, "ธ.ค.": 11 };
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const parseThaiDate = (s: string): Date | null => {
@@ -87,7 +89,13 @@ export default function HQDashboard() {
   //   เดิมไม่ผูก selDealer → พอเลือกสาขา กราฟ/KPI ลูกค้าเป้าหมายยังโชว์ทั้งเครือ แต่ใบ/ยอดโชว์เฉพาะสาขา = ขัดกันในการ์ดเดียว
   //   ปลด journeyStages/leadQuoteSeries/monthly/bottomMetrics/barTrend/provinceTop6 ออกจาก array (M9 Phase 4)
   //   null (local/ยังไม่โหลด) → useMemo แต่ละใบ fallback คำนวณจาก allNetLeads/netCustomers เดิม
-  const dashLeadSum = useLeadSummary(selDealer ? { dealerCodes: [selDealer.code] } : EMPTY_LEAD_FILTER);
+  // ── ทุกอย่างบนแดชบอร์ดต้องเดินตามตัวกรองของหน้า (บอสสั่ง 21 ส.ค. 69) ──────────────
+  //   เดิมสรุปลูกค้าเป้าหมายผูกแค่ "ตัวแทน" ไม่ผูก "ช่วงเวลา" → เลือกช่วง 3 เดือน
+  //   การ์ดใบเสนอราคาเปลี่ยนตาม แต่การ์ด/กราฟลูกค้าเป้าหมายยังเป็นของทุกช่วง = ขัดกันในหน้าเดียว
+  const dashLeadSum = useLeadSummary(useMemo(() => ({
+    ...(selDealer ? { dealerCodes: [selDealer.code] } : {}),
+    dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+  }), [selDealer, timeRange.start, timeRange.end]));
   const custSummary = useNetworkCustomerSummary();
   // ลูกค้าเป้าหมายรายเดือนปฏิทิน (index 0..11, รวมทุกปี ให้ตรง getMonth ฝั่ง client) + จำนวนลูกค้าเป้าหมายรวม จาก lead_summary
   const leadCal = useMemo(() => {
@@ -317,17 +325,18 @@ export default function HQDashboard() {
     });
   }, [dashLeadSum, allNetLeads]);
 
-  // ── Lead vs Quotation (รายเดือน) — นับทุกใบทั้งเครือ ทุกช่วง แยกตามเดือนปฏิทิน ──
-  // qC จาก summary ทั้งเครือทุกช่วง (dealer=undefined) — supabase · local/ยังไม่กลับ = netQuotes เดิม
-  const allQuoteSummary = useDashboardQuoteSummary(new Date(1970, 0, 1), new Date(2999, 11, 31), undefined);
+  // ── Lead vs Quotation (รายเดือน) — เดินตามตัวกรองของหน้า (บอสสั่ง 21 ส.ค. 69) ──────
+  //   เดิมกราฟนี้จงใจนับ "ทุกใบ ทุกสาขา ทุกช่วง" ซึ่งขัดกับการ์ดข้างบนที่กรองแล้ว
+  //   เลือกสาขาหนึ่งแล้วการ์ดเปลี่ยน แต่กราฟยังเป็นของทั้งเครือ — อ่านคู่กันแล้วสรุปผิด
+  //   ทั้งสองเส้นใช้สรุปชุดเดียวกับการ์ด: ลูกค้าเป้าหมายจาก dashLeadSum · ใบจาก quoteSummary
   const leadQuoteSeries = useMemo(() => {
     const lC = Array(12).fill(0), qC = Array(12).fill(0);
-    if (leadCal) { for (let i = 0; i < 12; i++) lC[i] = leadCal[i]; }        // supabase: lead_summary.byMonth
+    if (leadCal) { for (let i = 0; i < 12; i++) lC[i] = leadCal[i]; }        // supabase: lead_summary.byMonth (กรองแล้ว)
     else allNetLeads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d) lC[d.getMonth()]++; });
-    if (allQuoteSummary) { for (const r of allQuoteSummary.byMonth) qC[r.m] += r.quotes; }
-    else netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (d) qC[d.getMonth()]++; });
+    if (quoteSummary) { for (const r of quoteSummary.byMonth) qC[r.m] += r.quotes; }
+    else scopedQuotes.forEach(q => { const d = parseThaiDate(q.createdAt); if (d) qC[d.getMonth()]++; });
     return { lC, qC };
-  }, [leadCal, allNetLeads, allQuoteSummary, netQuotes]);
+  }, [leadCal, allNetLeads, quoteSummary, scopedQuotes]);
 
   // ── สถานะใบเสนอราคา (กราฟแท่ง) — สีตามสเปค: ร่าง เทา · ส่ง navy · ตอบรับ เขียว · ปฏิเสธ แดง · หมดอายุ ส้ม ──
   const quoteStatus = useMemo(() => {

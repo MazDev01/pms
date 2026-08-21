@@ -11,7 +11,7 @@ import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, QUOTE_PREFIX,
   type IssuerProfile,
   appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
-  quotationToFile, AUTO_FILE_BY, fmtISOToThai, DEFAULT_DEALER_CODE,
+  quotationToFile, AUTO_FILE_BY, fmtISOToThai, DEFAULT_DEALER_CODE, leadStatusLabel,
   type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
   type AppointmentMock, type DealerFile,
@@ -22,6 +22,7 @@ import { customerPayloadFromLead } from "@pms/shared/lib/leadToCustomer";
 import { shouldCloseWon } from "@pms/shared/lib/closeWon";
 import { customerDeletionImpact, blockReason } from "@pms/shared/lib/customerDeletion";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import { toThaiDate } from "@pms/shared/lib/thaiDate";
 import { useQuoteValidityDays, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
@@ -71,7 +72,9 @@ export type SalesContextType = {
   quotations: QuotationMock[];
   /** สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) · รับ draft ที่ยังไม่มี id · คืนใบที่บันทึกจริง */
   createQuotation: (draft: Omit<QuotationMock, "id">) => Promise<QuotationMock>;
-  updateQuotation: (quotation: QuotationMock) => void;
+  /** แก้ใบเสนอราคา · opts.แนบแม่แบบ = ผู้ใช้ยืนยันว่าส่งแม่แบบไปกับใบด้วย (ติ๊กงาน "ส่งแม่แบบให้ลูกค้า" ให้)
+   *  ไม่ส่ง opts มา = ไม่ติ๊กงานนั้น — ห้ามเดาแทนผู้ใช้ว่าแนบไปหรือเปล่า */
+  updateQuotation: (quotation: QuotationMock, opts?: { แนบแม่แบบ?: boolean }) => void;
   deleteQuotation: (id: string) => void;
   setQuotationStatus: (id: string, status: QuotationStatus) => void;
   /** เลขนัดหมายถัดไปของสาขา — ออกจาก DB แบบ atomic เหมือนเลขลูกค้า/เลขที่ใบ
@@ -431,7 +434,73 @@ export function SalesProvider({
     persistLead.create(tagged);
   }, [myDealerCode, persistLead]);
 
+  // ── บันทึกกิจกรรมลงไทม์ไลน์ของลูกค้าเป้าหมาย (บอสสั่ง 21 ส.ค. 69) ────────────────
+  //
+  // "ทำอะไรกับดีลไว้บ้าง" ต้องอ่านย้อนได้จากที่เดียว — เดิมไทม์ไลน์ว่างเปล่าเสมอ
+  //   เพราะไม่มีใครเขียนลงไปเลย หน้าจอจึงต้อง "เดา" ไทม์ไลน์จากงานที่ติ๊กไว้แทน
+  //   ผลคือการกระทำที่ไม่ใช่การติ๊กงาน (ออกใบ/แก้ใบ/ส่งใบ/ปิดการขาย) หายไปจากประวัติทั้งหมด
+  //
+  // ⚠️ ต่อท้ายเสมอ (เก่าอยู่บน ใหม่อยู่ล่าง) ให้ตรงกับลำดับที่หน้าจอแสดง
+  // ⚠️ best-effort: บันทึกไม่ลงต้องไม่ทำให้การกระทำหลักล้ม (ออกใบสำเร็จแล้วแต่จดประวัติไม่ได้ = ยังดีกว่าออกใบไม่ได้)
+  const logLeadActivity = useCallback((dealId: number | undefined, text: string, type = "task") => {
+    const เวลาตอนนี้ = () => {
+      const d = new Date();
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    };
+    if (dealId == null) return;
+    const lead = leadsRef.current.find(l => l.numId === dealId);
+    if (!lead) return;
+    const เดิม = lead.activities ?? [];
+    const next: LeadRow = {
+      ...lead,
+      activities: [...เดิม, {
+        id: (เดิม.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0) || 0) + 1,
+        // ⚠️ ต้องเป็นวันที่แบบไทย ("21 ส.ค. 2569") ให้ตรงกับที่ทั้งระบบอ่าน —
+        //    ตัวคำนวณ "ติดต่อล่าสุด/ค้างติดต่อกี่วัน" อ่านวันจากไทม์ไลน์ด้วยตัวแปลงแบบไทยเท่านั้น
+        //    ถ้าเขียนเป็น 2026-08-21 มันจะอ่านไม่ออกแล้วมองว่าดีลนี้ "ไม่เคยติดต่อเลย" เงียบ ๆ
+        // เวลาต่อท้ายด้วย " · HH:MM" (บอสสั่ง 21 ส.ค. 69: ต้องรู้ว่าทำอะไร วันไหน เวลาเท่าไร)
+        //    ตัวแปลงวันไทยอ่านเฉพาะส่วนหน้า จึงต่อเวลาไว้ท้ายได้โดยไม่กระทบการคำนวณวัน
+        date: `${toThaiDate(new Date(APP_NOW_ISO))} · ${เวลาตอนนี้()}`, icon: type, text, type,
+      }],
+    };
+    // ⚠️ ต้องอัปเดต leadsRef ทันทีด้วย ไม่ใช่รอ re-render (บั๊กจริง 21 ส.ค. 69)
+    //    ref จะตามทันก็ต่อเมื่อ React เรนเดอร์รอบใหม่ — แต่ในจังหวะเดียวกันนี้ยังมีตัวเขียนอื่น
+    //    (ติ๊กงานอัตโนมัติ) ที่อ่าน leadsRef ไปประกอบ "ทั้งแถว" แล้วเขียนทับลงฐานข้อมูล
+    //    ถ้า ref ยังเป็นภาพเก่า กิจกรรมที่เพิ่งบันทึกจะถูกทับหายไปเงียบ ๆ (เขียนทีหลังชนะ)
+    leadsRef.current = leadsRef.current.map(l => l.id !== next.id ? l : next);
+    setLeads(prev => prev.map(l => l.id !== next.id ? l : next));
+    persistLead.update(next);
+  }, [persistLead]);
+
   const updateLead = useCallback((lead: LeadRow) => {
+    // ── ทุกการกระทำกับดีลต้องขึ้นไทม์ไลน์ (บอสสั่ง 21 ส.ค. 69) ─────────────────────
+    //   เทียบกับของเดิมในหน่วยความจำ แล้วจดเฉพาะ "สิ่งที่เพิ่งเปลี่ยนจริง"
+    //   ⚠️ ต้องต่อกิจกรรมเข้าไปใน "แถวเดียวกัน" ที่กำลังจะเขียน ไม่ใช่เขียนแยกอีกรอบ
+    //      เขียนแยก = สองคำสั่งชนกัน แล้วอันหลังทับอันแรกหาย (บั๊กจริง 21 ส.ค. 69)
+    const ก่อน = leadsRef.current.find(l => l.id === lead.id);
+    const เพิ่ม: { id: number; date: string; icon: string; text: string; type: string }[] = [];
+    const เวลา = () => {
+      const d = new Date();
+      return `${toThaiDate(new Date(APP_NOW_ISO))} · ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    };
+    if (ก่อน) {
+      const เดิมทำแล้ว = new Set((ก่อน.tasks ?? []).filter(t => t.done).map(t => t.key));
+      for (const t of lead.tasks ?? []) {
+        if (t.done && !เดิมทำแล้ว.has(t.key)) เพิ่ม.push({ id: 0, date: เวลา(), icon: "task", text: `ทำงาน: ${t.label}`, type: "task" });
+      }
+      if (ก่อน.status !== lead.status) {
+        เพิ่ม.push({ id: 0, date: เวลา(), icon: "task", text: `เปลี่ยนขั้นเป็น "${leadStatusLabel[lead.status]}"`, type: "task" });
+      }
+      if ((ก่อน.assigned ?? "") !== (lead.assigned ?? "") && lead.assigned) {
+        เพิ่ม.push({ id: 0, date: เวลา(), icon: "note", text: `เปลี่ยนผู้รับผิดชอบเป็น ${lead.assigned}`, type: "note" });
+      }
+    }
+    if (เพิ่ม.length) {
+      const เดิม = lead.activities ?? ก่อน?.activities ?? [];
+      let next = เดิม.reduce((m, a) => Math.max(m, Number(a.id) || 0), 0);
+      lead = { ...lead, activities: [...เดิม, ...เพิ่ม.map(a => ({ ...a, id: ++next }))] };
+    }
+    leadsRef.current = leadsRef.current.map(l => l.id !== lead.id ? l : lead);
     setLeads(prev => prev.map(l => l.id !== lead.id ? l : lead));
     persistLead.update(lead);
     // ปิดการขายสำเร็จ → เดินเส้นทางปิดการขายเสมอ (สร้างลูกค้าถ้ายังไม่มี · ปิดใบเสนอราคา · รวมยอดใหม่)
@@ -533,6 +602,8 @@ export function SalesProvider({
 
   // ── Quotation → เช็กงานของลูกค้าเป้าหมายอัตโนมัติ ─────────────────────────────
   // สร้างใบเสนอราคา = ติ๊ก "จัดทำใบเสนอราคา" · ส่งใบเสนอราคา = ติ๊ก "ส่งใบเสนอราคา"
+  // งาน "ส่งแม่แบบให้ลูกค้า" ติ๊กเฉพาะตอนที่ผู้ใช้ยืนยันในกล่องถามว่าแนบแม่แบบไปด้วย (บอสสั่ง 21 ส.ค. 69)
+  //   ⚠️ ห้ามติ๊กให้เองโดยไม่ถาม — เซลส์อาจตั้งใจส่งเฉพาะใบ ไม่ส่งสเปกสินค้าให้ลูกค้า
   // แล้วเลื่อนสถานะลูกค้าเป้าหมายตาม stageFromTasks (เลื่อนขึ้นเท่านั้น ไม่ดึงถอยหลัง)
   const completeLeadQuoteTasks = useCallback((quotation: QuotationMock, keys: string[]) => {
     const RANK: Partial<Record<LeadRow["status"], number>> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4 };
@@ -564,6 +635,9 @@ export function SalesProvider({
       return nl;
     });
     if (changedLeads.length) {
+      // อัปเดต ref ทันทีด้วยเหตุผลเดียวกับ logLeadActivity — ตัวเขียนถัดไปในจังหวะเดียวกัน
+      // ต้องเห็นงานที่เพิ่งติ๊ก ไม่งั้นมันจะเขียนทับด้วยภาพเก่า
+      leadsRef.current = nextList;
       setLeads(nextList);
       changedLeads.forEach(l => persistLead.update(l));
     }
@@ -595,18 +669,48 @@ export function SalesProvider({
     setQuotations(prev => [created, ...prev]);
     // สร้างใบ → จัดทำใบเสนอราคา (ถ้าสร้างเป็นสถานะส่งแล้วขึ้นไป ให้ติ๊กส่งด้วย)
     completeLeadQuoteTasks(created, created.status === "draft" ? ["makeQuote"] : ["makeQuote", "sendQuote"]);
+      logLeadActivity(created.dealId, `ออกใบเสนอราคา ${created.id} (${created.revision ?? "V1"}) · ยอด ${created.total}`, "doc");
     syncQuoteFile.add(created); // auto-link → ไฟล์ (หมวดใบเสนอราคา) ผูกกับลูกค้าเป้าหมาย/ลูกค้า
     return created;
   }, [completeLeadQuoteTasks, myDealerCode, syncQuoteFile, bumpWrite]);
 
-  const updateQuotation = useCallback((quotation: QuotationMock) => {
+  /** แปลง "ใบก่อน → ใบหลัง" เป็นบรรทัดกิจกรรมที่คนอ่านรู้เรื่อง
+   *  ส่งใบ / ขึ้นเวอร์ชันใหม่ / แก้ยอด — เขียนคนละแบบ ไม่เหมารวมเป็น "แก้ไขใบ" เฉย ๆ */
+  const จดกิจกรรมของใบ = useCallback((
+    before: QuotationMock | undefined, after: QuotationMock, opts?: { แนบแม่แบบ?: boolean },
+  ) => {
+    if (before && before.status === "draft" && after.status === "sent_to_client") {
+      logLeadActivity(after.dealId,
+        `ส่งใบเสนอราคา ${after.id} (${after.revision ?? "V1"}) ให้ลูกค้า${opts?.แนบแม่แบบ ? " พร้อมแม่แบบ" : " (ไม่ได้แนบแม่แบบ)"}`, "doc");
+      return;
+    }
+    if (before && before.status !== "draft" && after.status === "sent_to_client" && before.revision === after.revision) {
+      logLeadActivity(after.dealId, `ส่งใบเสนอราคา ${after.id} (${after.revision ?? "V1"}) ให้ลูกค้าอีกครั้ง`, "doc");
+      return;
+    }
+    if (before && before.revision !== after.revision) {
+      logLeadActivity(after.dealId,
+        `แก้ไขใบเสนอราคา ${after.id} เป็นฉบับ ${after.revision} · ยอด ${after.total}`, "doc");
+      return;
+    }
+    if (before && before.totalValue !== after.totalValue) {
+      logLeadActivity(after.dealId, `แก้ยอดใบเสนอราคา ${after.id} เป็น ${after.total}`, "doc");
+      return;
+    }
+    if (before) logLeadActivity(after.dealId, `แก้ไขรายละเอียดใบเสนอราคา ${after.id}`, "doc");
+  }, [logLeadActivity]);
+
+  const updateQuotation = useCallback((quotation: QuotationMock, opts?: { แนบแม่แบบ?: boolean }) => {
+    // งานที่ระบบติ๊กให้เมื่อใบถูกส่งจริง — "ส่งแม่แบบให้ลูกค้า" ติ๊กเฉพาะเมื่อผู้ใช้ยืนยันว่าแนบไปด้วย
+    const งานที่ติ๊ก = opts?.แนบแม่แบบ ? ["makeQuote", "sendQuote", "catalog"] : ["makeQuote", "sendQuote"];
     const before = quotationsRef.current.find(q => q.id === quotation.id);
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));
     // แก้ใบที่ won (หรือเคย won) ที่ผูกลูกค้า → ยอดลูกค้าต้องตาม (แก้ totalValue/สถานะ) · H2
     const needsReconcile = quotation.customerId && quotation.customerId > 0 && (quotation.status === "won" || before?.status === "won");
     if (!needsReconcile) {
       persistQuote.update(quotation);
-      if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
+      if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, งานที่ติ๊ก);
+      จดกิจกรรมของใบ(before, quotation, opts);
       return;
     }
     // ต้อง await การเขียนใบให้ commit จริงก่อนค่อย reconcile — RPC คำนวณผลรวมจาก DB สด (กัน race, 0078)
@@ -617,7 +721,8 @@ export function SalesProvider({
         onFail("quotations", "แก้ไขใบเสนอราคา")(e);
         return;
       }
-      if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, ["makeQuote", "sendQuote"]);
+      if (quotation.status !== "draft") completeLeadQuoteTasks(quotation, งานที่ติ๊ก);
+      จดกิจกรรมของใบ(before, quotation, opts);
       try {
         await reconcileCustomerTotal(quotation.customerId);
       } catch (e) {
@@ -649,7 +754,7 @@ export function SalesProvider({
         onFail("customers", "คำนวณยอดลูกค้าใหม่")(e);
       }
     })();
-  }, [persistQuote, syncQuoteFile, reconcileCustomerTotal]);
+  }, [persistQuote, syncQuoteFile, reconcileCustomerTotal, completeLeadQuoteTasks, จดกิจกรรมของใบ]);
 
   const setQuotationStatus = useCallback((id: string, status: QuotationStatus) => {
     const target = quotationsRef.current.find(q => q.id === id);
@@ -660,6 +765,13 @@ export function SalesProvider({
     // (setTimeout กัน StrictMode เรียกซ้ำระหว่าง updater)
     const snap = { ...target, status };
     setTimeout(() => completeLeadQuoteTasks(snap, ["makeQuote", "sendQuote"]), 0);
+    // เปลี่ยนสถานะใบ = เหตุการณ์สำคัญของดีล ต้องอยู่ในไทม์ไลน์ (บอสสั่ง 21 ส.ค. 69)
+    const ชื่อสถานะ: Record<string, string> = {
+      sent_to_client: "ส่งให้ลูกค้า", won: "ลูกค้าตอบรับ", lost: "ลูกค้าปฏิเสธ", expired: "หมดอายุ",
+    };
+    if (ชื่อสถานะ[status]) {
+      setTimeout(() => logLeadActivity(snap.dealId, `ใบเสนอราคา ${snap.id} (${snap.revision ?? "V1"}) — ${ชื่อสถานะ[status]}`, "doc"), 0);
+    }
 
     // "ลูกค้าตอบรับ" (won) บนใบเสนอราคา → สร้าง/ผูกลูกค้าให้ลูกค้าเป้าหมายต้นทาง ผ่านเส้นทางเดียว
     // กับการปิดจากลิ้นชักลูกค้าเป้าหมาย (convertLeadToCustomer) — ได้ id จริง ข้อมูลครบ กันซ้ำ (trigger ถูกลบ 0033)
@@ -740,7 +852,9 @@ export function SalesProvider({
     const tagged: AppointmentMock = { ...appt, dealerCode: appt.dealerCode ?? myDealerCode };
     setAppointments(prev => [...prev, tagged]);
     persistAppt.create(tagged);
-  }, [myDealerCode, persistAppt]);
+    // นัดหมายเป็นการกระทำกับดีลโดยตรง — ต้องอยู่ในไทม์ไลน์ด้วย (บอสสั่ง 21 ส.ค. 69)
+    logLeadActivity(tagged.leadId, `นัดหมาย ${tagged.date}${tagged.time ? ` ${tagged.time} น.` : ""}${tagged.note ? ` · ${tagged.note}` : ""}`, "meeting");
+  }, [myDealerCode, persistAppt, logLeadActivity]);
   const updateAppointment = useCallback((appt: AppointmentMock) => {
     setAppointments(prev => prev.map(a => a.id !== appt.id ? a : appt));
     persistAppt.update(appt);

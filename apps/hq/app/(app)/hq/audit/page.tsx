@@ -118,7 +118,7 @@ export default function HQAuditPage() {
 
       {/* Toolbar */}
       <div className="card" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", marginBottom: 16 }}>
-        <div className="search-bar" style={{ width: 300, maxWidth: "100%" }}>
+        <div className="search-bar">
           <Search size={14} color="#9ca3af" />
           <input value={q} onChange={e => { setQ(e.target.value); setPage(0); }} placeholder="ค้นหาผู้ใช้ / การกระทำ / รายละเอียด..." />
           {q && <button onClick={() => setQ("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", padding: 0 }}><X size={13} /></button>}

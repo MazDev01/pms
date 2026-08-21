@@ -269,3 +269,35 @@ export async function pickTemplate(page: Page, label = "แม่แบบ") {
     [...(el as HTMLSelectElement).options].map(o => o.value).find(v => v !== "") ?? "");
   await sel.selectOption(value);
 }
+
+// ── ชุดงานของลูกค้าเป้าหมายสำหรับ seed — อ่านเส้นทางจริงจากฐานข้อมูล (ห้ามอิงคีย์ตายตัว) ──
+//
+// ⚠️ ทำไมต้องอ่านจากฐานข้อมูล: เส้นทางการขายแก้ได้ที่หน้าตั้งค่าของสำนักงานใหญ่ และการแก้ชื่องาน
+//    ทำให้ "รหัสงาน" เปลี่ยนไปด้วย (เจอจริง 21 ส.ค. 69: appointment → task_bullet_1)
+//    seed ที่ยึดรหัสตายตัวจะติ๊กงานผิดตัว แล้วเทสต์ล้มด้วยเหตุผลที่ไม่เกี่ยวกับสิ่งที่ตรวจ
+//
+// ติ๊กถึงขั้นไหน = งานของขั้นก่อนหน้าและขั้นนั้นถูกติ๊กหมด (ใช้ตอนอยากให้ลูกค้าเป้าหมาย "ผ่านด่าน" ของกระดาน)
+export async function งานตามเส้นทาง(
+  sb: SupabaseClient, ติ๊กถึงขั้น: "WAITING" | "BULLET" | "QUOTED" | "FOLLOWUP" | "NEGO" | "none" = "none",
+) {
+  const ลำดับขั้น = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"];
+  const { data } = await sb.from("hq_sales_journey").select("tasks").eq("id", 1).maybeSingle();
+  const tpl = (data?.tasks as { key: string; label: string; stage: string }[] | null) ?? [];
+  const ถึง = ติ๊กถึงขั้น === "none" ? -1 : ลำดับขั้น.indexOf(ติ๊กถึงขั้น);
+  return tpl.map(t => {
+    const done = ถึง >= 0 && ลำดับขั้น.indexOf(t.stage) <= ถึง && t.key !== "close";
+    return { key: t.key, label: t.label, done, ...(done ? { doneAt: "1 ส.ค. 2569 · 10:00", doneBy: "ผู้ทดสอบ" } : {}) };
+  });
+}
+
+/** ชุดงานที่ "ติ๊กครบทุกงานก่อนหน้างานที่ระบุ" ตามเส้นทางจริง — ใช้ตอนอยากให้งานนั้นเป็นงานถัดไปที่ติ๊กได้
+ *  หางานด้วยชื่อ (ไม่ใช่รหัส) เพราะรหัสเปลี่ยนได้เมื่อสำนักงานใหญ่แก้ชื่องาน */
+export async function งานก่อนหน้าครบถึง(sb: SupabaseClient, ชื่องาน: string) {
+  const { data } = await sb.from("hq_sales_journey").select("tasks").eq("id", 1).maybeSingle();
+  const tpl = (data?.tasks as { key: string; label: string; stage: string }[] | null) ?? [];
+  const ที่ = tpl.findIndex(t => t.label.includes(ชื่องาน));
+  return tpl.map((t, i) => {
+    const done = ที่ >= 0 && i < ที่;
+    return { key: t.key, label: t.label, done, ...(done ? { doneAt: "1 ส.ค. 2569 · 10:00", doneBy: "ผู้ทดสอบ" } : {}) };
+  });
+}

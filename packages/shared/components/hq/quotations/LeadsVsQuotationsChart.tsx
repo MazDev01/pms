@@ -1,6 +1,6 @@
 "use client";
 
-// ─── #1 ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน ─────────────────────────────────
+// ─── #1 อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา แยกตามตัวแทน ───────────────────
 // วัดว่าแต่ละสาขาเปลี่ยน "ลูกค้าเป้าหมาย" เป็น "ใบเสนอราคา" ได้ดีแค่ไหน
 // ลูกค้าเป้าหมาย = รายการจริงในระบบที่ผูก dealerCode · ใบเสนอราคา = ใบของสาขานั้นในตัวกรองปัจจุบัน
 //
@@ -30,23 +30,27 @@ export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg
     leads: leadByDealer.get(code)?.leads ?? 0,
     quoted: leadByDealer.get(code)?.quoted ?? 0,
     quotes: quoteByDealer.get(code)?.count ?? 0,
-  })).sort((a, b) => b.quotes - a.quotes || b.leads - a.leads);
+  })).sort((a, b) => b.leads - a.leads || b.quoted - a.quoted);
 
-  const max = Math.max(...bars.map(b => Math.max(b.leads, b.quotes)), 1);
+  const max = Math.max(...bars.map(b => b.leads), 1);
+
+  // ⚠️ ทั้งสองชุดต้องเป็นหน่วยเดียวกัน = "ราย" (บอสแจ้ง 21 ส.ค. 69: "มันไม่เท่ากัน")
+  //   เดิมชุดที่สองวัดด้วย "จำนวนใบ" แต่ % คิดจาก "จำนวนราย" — ความยาวแท่งกับ % จึงไม่ตรงกัน
+  //   (ตัวอย่างจริง: 14 ราย · 9 ใบ · 57% — 9/14 = 64% ไม่ใช่ 57% เพราะ 57% มาจาก 8 รายที่ออกใบแล้ว)
 
   return (
     <div className="card chart-l" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div>
-          <div className="card-title">ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน</div>
-          <div className="card-desc">% = ลูกค้าเป้าหมายที่ออกใบเสนอราคาแล้ว ÷ ทั้งหมด (นับเป็นราย ไม่ใช่จำนวนใบ)</div>
+          {/* ชื่อการ์ดบอกสิ่งที่วัดตรง ๆ แล้ว (บอสสั่ง 21 ส.ค. 69) จึงไม่ต้องมีคำอธิบายสูตรใต้หัวข้ออีก */}
+          <div className="card-title">อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา แยกตามตัวแทน</div>
         </div>
         <span style={{ display: "flex", gap: 10, fontSize: "0.62rem", color: "var(--muted-foreground)", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: LEAD_COLOR }} />ลูกค้าเป้าหมาย
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 3, background: QUOTE_COLOR }} />ใบเสนอราคา
+            <span style={{ width: 9, height: 9, borderRadius: 3, background: QUOTE_COLOR }} />ออกใบเสนอราคาแล้ว
           </span>
         </span>
       </div>
@@ -70,19 +74,19 @@ export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg
                 {b.leads ? `${Math.round((b.quoted / b.leads) * 100)}%` : "—"}
               </span>
             </div>
-            {/* แถบลูกค้าเป้าหมาย */}
+            {/* แถบลูกค้าเป้าหมายทั้งหมด */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
               <div style={{ flex: 1, height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
                 <div className="bar-grow" style={{ height: "100%", width: `${Math.round(b.leads / max * 100)}%`, background: LEAD_COLOR, borderRadius: 999 }} />
               </div>
               <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 46, textAlign: "right" }}>{b.leads} ราย</span>
             </div>
-            {/* แถบใบเสนอราคา */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* แถบ "ออกใบเสนอราคาแล้ว" — นับเป็นราย หน่วยเดียวกับแถบบน จึงยาวตรงกับ % เสมอ */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }} title={`ออกใบเสนอราคาแล้ว ${b.quoted} ราย · รวม ${b.quotes} ใบ`}>
               <div style={{ flex: 1, height: 6, background: "var(--muted)", borderRadius: 999, overflow: "hidden" }}>
-                <div className="bar-grow" style={{ height: "100%", width: `${Math.round(b.quotes / max * 100)}%`, background: QUOTE_COLOR, borderRadius: 999 }} />
+                <div className="bar-grow" style={{ height: "100%", width: `${Math.round(b.quoted / max * 100)}%`, background: QUOTE_COLOR, borderRadius: 999 }} />
               </div>
-              <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 46, textAlign: "right" }}>{b.quotes} ใบ</span>
+              <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", fontWeight: 700, minWidth: 46, textAlign: "right" }}>{b.quoted} ราย</span>
             </div>
           </div>
           ))}

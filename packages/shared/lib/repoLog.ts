@@ -43,8 +43,20 @@ function isNoSession(e: unknown): boolean {
 }
 
 /** บันทึกความล้มเหลวของการอ่าน — ข้ามกรณีที่คำขอถูกยกเลิกเพราะเปลี่ยนหน้า/ยังไม่ล็อกอิน */
+/** เวลาของเครื่องกับเซิร์ฟเวอร์ไม่ตรงกัน (ใบผ่าน "ออกในอนาคต") — หายเองในไม่กี่วินาที
+ *  ชั้นข้อมูลลองส่งใหม่ให้แล้ว (ดู client.ts) ถ้ายังไม่ผ่านให้เตือนแบบ "คำเตือน" ไม่ใช่ "ข้อผิดพลาด"
+ *  และบอกต้นเหตุตรง ๆ ไม่งั้นผู้ใช้เห็นข้อความอังกฤษดิบแล้วนึกว่าระบบพัง */
+function isClockSkew(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /issued at future/i.test(msg);
+}
+
 export function logRepoRead(tag: string, e: unknown): void {
   if (isAbortedRequest(e) || isNoSession(e)) return;
+  if (isClockSkew(e)) {
+    console.warn(`[${tag}] เวลาของเครื่องนี้ไม่ตรงกับเซิร์ฟเวอร์ — ระบบลองใหม่ให้แล้ว ถ้ายังเจอซ้ำให้ตั้งเวลาเครื่องเป็นอัตโนมัติ`);
+    return;
+  }
   console.error(`[${tag}]`, e);
   reportRepoReadError(tag, e);
 }

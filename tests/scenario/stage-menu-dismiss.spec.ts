@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import { settle } from "./helpers";
-import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag } from "./funcHelpers";
+import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag, งานตามเส้นทาง } from "./funcHelpers";
 
 // ── เมนูเลือกขั้นในตารางลูกค้าเป้าหมาย: คลิกที่ว่างนอกตารางแล้วต้องปิด ──────────────
 // ผู้ใช้แจ้ง (19 ส.ค. 69): "กดนอกตารางช้อยไม่หาย ต้องไปกดในตาราง"
@@ -22,6 +22,8 @@ test.beforeAll(async () => {
     id: `#L-${numId}`, num_id: numId, dealer_code: "RYG", company: COMPANY, name: COMPANY,
     contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสำเร็จรูป", status: "WAITING",
     value: "฿600,000", assigned: "ผู้ทดสอบ",
+    // ติ๊กงานของขั้นแรกไว้ ไม่งั้นกระดานจะกันการย้ายขั้น (ด่านใหม่ 21 ส.ค. 69) — คนละเรื่องกับที่เทสต์นี้ตรวจ
+    tasks: await งานตามเส้นทาง(sb, "WAITING"),
   });
 });
 test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });

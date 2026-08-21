@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
   buildLeadTasks, applyTaskTemplate, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
-  QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, APPOINTMENT_TASK_KEY, OTHER_LOST_REASON,
+  QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, findAppointmentTask, OTHER_LOST_REASON, OTHER_REASON_OPTION,
   type LeadRow, type LeadTask, type LeadStatus,
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
@@ -88,7 +88,9 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, onReq
         return;
       }
       // งาน "นัดหมาย" — ต้องมีนัดจริงก่อน ถึงจะถือว่าทำแล้ว (เหมือนงานที่ต้องมีใบเสนอราคา)
-      if (key === APPOINTMENT_TASK_KEY && onRequestAppointment?.()) {
+      // ⚠️ ห้ามเทียบรหัสตายตัว: สำนักงานใหญ่แก้ชื่องานเมื่อไร รหัสเปลี่ยนตาม (appointment → task_bullet_1)
+      //    แล้วด่านนี้จะเงียบหายไปเฉย ๆ โดยไม่มีอะไรฟ้อง (เจอจริง 21 ส.ค. 69 — ติ๊กงานนัดหมายเองได้ทั้งที่ยังไม่มีนัด)
+      if (key === findAppointmentTask(tasks.map(t => ({ key: t.key, label: t.label, stage: "BULLET" as const })))?.key && onRequestAppointment?.()) {
         setHint("");
         return;
       }
@@ -254,15 +256,20 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, onReq
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+                {/* ⚠️ "อื่นๆ (ระบุเอง)" อยู่ในรายการที่สำนักงานใหญ่ตั้งไว้แล้ว (บอสสั่ง 21 ส.ค. 69)
+                    กดปุ่มนี้ = เปิดโหมดพิมพ์เอง ไม่ใช่บันทึกคำว่า "อื่นๆ" ลงไปตรง ๆ
+                    และห้ามมีปุ่มซ้ำสองอัน — ปุ่มพิมพ์เองที่ต่อท้ายจึงโผล่เฉพาะตอนที่รายการไม่มีตัวเลือกนี้ */}
                 {lostReasons.map(r => (
-                  <button key={r} type="button" onClick={() => setLostReason(r)}
+                  <button key={r} type="button" onClick={() => setLostReason(r === OTHER_REASON_OPTION ? OTHER_LOST_REASON : r)}
                     style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
                       border: `1px solid ${lostReason === r ? "#dc2626" : "#e5e7eb"}`, background: lostReason === r ? "#fee2e2" : "#fff",
                       color: lostReason === r ? "#dc2626" : "#2D2D2D", fontWeight: lostReason === r ? 700 : 400 }}>{r}</button>
                 ))}
-                <button type="button" onClick={() => setLostReason(OTHER_LOST_REASON)}
-                  style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
-                    border: "1px dashed #9ca3af", background: "#fafafa", color: "#6b7280", fontWeight: 700 }}>อื่นๆ (ระบุเอง)</button>
+                {!lostReasons.includes(OTHER_REASON_OPTION) && (
+                  <button type="button" onClick={() => setLostReason(OTHER_LOST_REASON)}
+                    style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit", textAlign: "left",
+                      border: "1px dashed #9ca3af", background: "#fafafa", color: "#6b7280", fontWeight: 700 }}>{OTHER_REASON_OPTION}</button>
+                )}
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

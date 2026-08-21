@@ -89,12 +89,15 @@ test("HQ ที่มีสิทธิ์ได้ลิงก์ที่ใ�
 
   const body = await res.json() as { ok?: boolean; link?: string };
   expect(body.ok, "ต้องตอบว่าสำเร็จ").toBe(true);
-  expect(String(body.link ?? ""), "ต้องได้ลิงก์ยืนยันตัวตนกลับมา").toMatch(/token/);
-
-  // ── ลิงก์ต้องใช้ได้จริง: แลก token เป็น session แล้วต้องได้สิทธิ์ของสาขา CNX ──
+  // ── รูปแบบลิงก์เปลี่ยนแล้ว (20 ส.ค. 69) ────────────────────────────────────────
+  // เดิมส่ง "ลิงก์ยืนยันของ Supabase" ตรง ๆ ซึ่งพาไปที่ Site URL ของโปรเจกต์เงียบ ๆ
+  //   ถ้าปลายทางของแอปตัวแทนไม่ได้อยู่ในรายการ Redirect URLs ที่อนุญาต → ผู้ใช้เจอหน้าเปล่า
+  // ตอนนี้ส่งใบผ่านครั้งเดียวมาที่หน้า /impersonate ของแอปตัวแทนเอง แล้วหน้านั้นแลกเป็น session
+  //   ⚠️ ใบผ่านอยู่หลัง # (hash) โดยตั้งใจ — hash ไม่ถูกส่งไปกับคำขอ HTTP จึงไม่ไปโผล่ใน log ใคร
   const url = new URL(String(body.link));
-  const tokenHash = url.searchParams.get("token") ?? url.searchParams.get("token_hash") ?? "";
-  expect(tokenHash, "ลิงก์ต้องมี token").not.toBe("");
+  expect(url.pathname, "ลิงก์ต้องพาไปหน้าแลกใบผ่านของแอปตัวแทน").toBe("/impersonate");
+  const tokenHash = new URLSearchParams(url.hash.replace(/^#/, "")).get("th") ?? "";
+  expect(tokenHash, "ลิงก์ต้องมีใบผ่าน (#th=)").not.toBe("");
 
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: verified, error: vErr } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });

@@ -41,6 +41,7 @@ import {
   type SolutionProduct,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
   type HQAlertKey, type DealerRow, type LeadStatus, type LeadTaskDef,
+  OTHER_REASON_OPTION,
 } from "@pms/shared/lib/mock";
 // แท็บ "บริษัท" / "ผู้ใช้งาน" ฝังหน้าจัดการจริงเต็ม
 import { CompanyPanel } from "@pms/shared/components/hq/CompanyPanel";
@@ -274,6 +275,14 @@ function JourneyTab() {
               ต้องมีอย่างน้อย 1 เหตุผล — ไม่งั้นตัวแทนจะไม่มีตัวเลือกตอนปิดดีลไม่สำเร็จ
             </div>
           )}
+
+          {/* ── "อื่นๆ (ระบุเอง)" อยู่ในรายการจริงแล้ว (บอสสั่ง 21 ส.ค. 69) ────────────────
+              เพิ่ม/ลบ/แก้ได้เหมือนเหตุผลอื่นทุกประการ — ตัวแทนเห็นตรงกับที่ตั้งไว้ที่นี่เป๊ะ
+              ⚠️ ตัวเลือกนี้พิเศษตรงที่ "กดแล้วให้พิมพ์เอง": ระบบเก็บข้อความที่ตัวแทนพิมพ์
+                 ไม่ได้เก็บคำว่า "อื่นๆ" — รายงานจึงยังเห็นเหตุผลจริงรายใบ ไม่ใช่กองรวมกัน */}
+          <div style={{ fontSize: "0.7rem", color: "#8a929c", marginTop: 2 }}>
+            ตัวเลือก “{OTHER_REASON_OPTION}” ในรายการนี้ = ตัวแทนกดแล้วพิมพ์เหตุผลเองได้ · ระบบเก็บข้อความที่พิมพ์จริง
+          </div>
         </div>
         <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 420 }}>
           <input className="form-input" value={newLost} placeholder="เพิ่มเหตุผล…" onChange={e => setNewLost(e.target.value)}

@@ -59,3 +59,30 @@ for (const path of หน้าสำนักงานใหญ่) {
     expect(await overlaps(page), `พบป้ายทับกันในกราฟหน้า ${path}`).toEqual([]);
   });
 }
+
+// ── เส้นแนวโน้มกลับมาเป็นเส้นโค้ง (บอสสั่ง 21 ส.ค. 69 — ทับคำสั่งเดิม 19 ส.ค. ที่ให้เป็นเส้นตรง) ──
+//
+// ข้อกังวลเดิมยังอยู่: โค้งแบบ Catmull-Rom โป่งเกินจุดข้อมูล เดือนที่ยอด 0 เส้นยังนูนขึ้น
+//   คนอ่านกราฟจึงเห็นค่าที่ไม่มีอยู่จริง
+// จึงใช้โค้งแบบ monotone (Fritsch–Carlson) ที่ "ห้ามแกว่งเกินค่าของจุดสองข้าง" แทน
+// เทสต์นี้จึงตรวจสองอย่างพร้อมกัน: ต้องโค้งจริง และต้องไม่มีจุดใดของเส้นต่ำกว่าเส้นศูนย์
+test("[ui·hq] กราฟยอดขายรายเดือนเป็นเส้นโค้ง และไม่แกว่งต่ำกว่าศูนย์", async ({ page }) => {
+  await openAs(page, ADMIN, "hq", "/hq/dashboard");
+  await settle(page);
+  const card = page.locator(".card", { hasText: "รายเดือน" }).first();
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  const ds = await card.locator("svg path").evaluateAll(els =>
+    els.map(e => e.getAttribute("d") ?? "").filter(d => d.length > 60));
+  expect(ds.length, "ไม่เจอเส้นกราฟเลย").toBeGreaterThan(0);
+  expect(ds.some(d => /C/.test(d)), "เส้นกราฟต้องเป็นเส้นโค้ง").toBe(true);
+
+  // จุดต่ำสุดของเส้นต้องไม่เลยเส้นฐานของกราฟ (โค้งที่แกว่งเกิน = อ่านเป็นยอดติดลบ)
+  const เกินฐาน = await card.locator("svg").evaluate(svg => {
+    const path = Array.from(svg.querySelectorAll("path")).find(p => (p.getAttribute("d") ?? "").includes("C"));
+    if (!path) return false;
+    const box = (path as SVGGraphicsElement).getBBox();
+    const กรอบ = (svg as SVGSVGElement).viewBox.baseVal;
+    return box.y + box.height > กรอบ.y + กรอบ.height + 1;
+  });
+  expect(เกินฐาน, "เส้นโค้งต้องไม่แกว่งต่ำกว่าเส้นฐานของกราฟ").toBe(false);
+});

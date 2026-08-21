@@ -67,6 +67,7 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   // ── 2) ตรวจ payload ──
   const body = (await req.json().catch(() => null)) as null | {
     code?: string; name?: string; province?: string; region?: string; revenueTarget?: number;
+    email?: string; password?: string;
   };
   if (!body) return bad(400, "รูปแบบข้อมูลไม่ถูกต้อง");
   const code = String(body.code ?? "").trim().toUpperCase();
@@ -90,8 +91,23 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   }
   if (dupe) return bad(409, `รหัส "${code}" มีอยู่แล้ว`);
 
-  const email = `${code.toLowerCase()}@${DEALER_EMAIL_DOMAIN}`;
-  const password = strongPassword("PEB-");
+  // ── อีเมล/รหัสผ่าน: HQ กรอกเองได้ (บอสสั่ง 20 ส.ค. 69) · ไม่กรอก = ระบบตั้งให้เหมือนเดิม ──
+  //
+  // ทำไมต้องให้กรอกเอง: สาขาจริงใช้อีเมลธุรกิจของตัวเอง (เช่น sales@cmsteelbuild.co.th)
+  //   อีเมลที่ระบบประกอบจากรหัสสาขาไม่มีอยู่จริง — รับอีเมลยืนยัน/ลืมรหัสผ่านไม่ได้เลย
+  //
+  // ⚠️ ต้องตรวจที่เซิร์ฟเวอร์เสมอ ห้ามเชื่อว่าหน้าจอตรวจมาแล้ว (ใครยิง route ตรงก็ถึง)
+  //    รหัสผ่านสั้น ๆ ที่หลุดเข้ามาทางนี้ = บัญชีของสาขาถูกเดารหัสได้จริง
+  const อีเมลที่กรอก = String(body.email ?? "").trim().toLowerCase();
+  const รหัสที่กรอก = String(body.password ?? "");
+  if (อีเมลที่กรอก && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมลที่กรอก)) {
+    return bad(400, "รูปแบบอีเมลไม่ถูกต้อง");
+  }
+  if (รหัสที่กรอก && รหัสที่กรอก.length < 8) {
+    return bad(400, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+  }
+  const email = อีเมลที่กรอก || `${code.toLowerCase()}@${DEALER_EMAIL_DOMAIN}`;
+  const password = รหัสที่กรอก || strongPassword("PEB-");
 
   // ── 3) สร้างบัญชี auth (ยืนยันอีเมลให้เลย เพราะเป็นบัญชีที่ HQ ออกให้) ──
   const { data: createdUser, error: createErr } = await admin.auth.admin.createUser({
@@ -166,16 +182,36 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   const found = await findDealerAccount(admin, code);
   if (!found.ok) return found.res;
 
-  const password = strongPassword("PEB-");
-  const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, { password });
+  // ── HQ แก้อีเมล/ตั้งรหัสผ่านเองได้ (บอสสั่ง 20 ส.ค. 69) ────────────────────────
+  //   ไม่ส่งอะไรมาเลย = "รีเซ็ตรหัสผ่าน" แบบเดิม (สุ่มรหัสให้)
+  //   ส่ง email มา = เปลี่ยนอีเมลเข้าระบบของสาขา · ส่ง password มา = ตั้งรหัสตามที่กรอก
+  //   ⚠️ ตรวจที่เซิร์ฟเวอร์เสมอ เหมือนตอนสร้าง — ห้ามเชื่อว่าหน้าจอตรวจมาแล้ว
+  const แก้ = (await req.json().catch(() => null)) as null | { email?: string; password?: string };
+  const อีเมลใหม่ = String(แก้?.email ?? "").trim().toLowerCase();
+  const รหัสที่กรอก = String(แก้?.password ?? "");
+  if (อีเมลใหม่ && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมลใหม่)) return bad(400, "รูปแบบอีเมลไม่ถูกต้อง");
+  if (รหัสที่กรอก && รหัสที่กรอก.length < 8) return bad(400, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+
+  // ขอแก้เฉพาะอีเมล = ห้ามเปลี่ยนรหัสผ่านทิ้งโดยไม่ได้ขอ (สาขาที่ใช้รหัสเดิมอยู่จะหลุดทันที)
+  const แก้อีเมลอย่างเดียว = !!อีเมลใหม่ && !รหัสที่กรอก;
+  const password = แก้อีเมลอย่างเดียว ? "" : (รหัสที่กรอก || strongPassword("PEB-"));
+
+  const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, {
+    ...(password ? { password } : {}),
+    ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),
+  });
   if (updateErr || !updated.user) {
-    // รหัสใหม่สุ่มที่เซิร์ฟเวอร์เอง ผู้ใช้ไม่ได้กรอกอะไรเลย — พังตรงนี้คือฝั่งระบบล้วน ๆ
-    console.error(`[reset-dealer-pw] ตั้งรหัสผ่านใหม่ให้สาขา ${code} ไม่สำเร็จ`, updateErr);
-    return bad(503, "รีเซ็ตรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+    const msg = updateErr?.message ?? "";
+    // อีเมลชนกับบัญชีอื่น = ผู้ใช้แก้เองได้ (เปลี่ยนอีเมล) ไม่ใช่ระบบขัดข้อง
+    if (/already|registered|exists/i.test(msg)) return bad(400, `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบยืนยันตัวตน`);
+    console.error(`[reset-dealer-pw] แก้บัญชีเข้าระบบของสาขา ${code} ไม่สำเร็จ`, updateErr);
+    return bad(503, "แก้บัญชีเข้าระบบไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
 
-  await rememberSecret(admin, code, password, String(prof.name ?? ""));
-  await auditLog(admin, prof, "รีเซ็ตรหัสผ่านตัวแทน", code);
+  if (password) await rememberSecret(admin, code, password, String(prof.name ?? ""));
+  await auditLog(admin, prof,
+    อีเมลใหม่ ? (password ? "แก้อีเมลและรหัสผ่านตัวแทน" : "แก้อีเมลเข้าระบบตัวแทน") : "รีเซ็ตรหัสผ่านตัวแทน",
+    อีเมลใหม่ ? `${code} · ${อีเมลใหม่}` : code);
   return NextResponse.json({ ok: true, email: updated.user.email ?? "", password });
 });
 

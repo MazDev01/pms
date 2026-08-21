@@ -1,4 +1,5 @@
 "use client";
+import { formatPhone } from "@pms/shared/lib/format";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -143,7 +144,7 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
             <div className="form-section">ช่องทางติดต่อ</div>
             <div>
               <label className="form-label">โทรศัพท์</label>
-              <input className="form-input" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="02-000-0000" />
+              <input className="form-input" inputMode="tel" value={form.phone} onChange={e => set("phone", formatPhone(e.target.value))} placeholder="02-000-0000" />
             </div>
             <div>
               <label className="form-label">อีเมล</label>

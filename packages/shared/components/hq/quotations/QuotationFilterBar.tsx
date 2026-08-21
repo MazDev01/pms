@@ -26,15 +26,13 @@ export const EMPTY_FILTERS: QuotationFilters = {
 };
 
 export function QuotationFilterBar({
-  filters, onChange, dealers, regions, provinces, products, resultCount,
-}: {
+  filters, onChange, dealers, regions, provinces, products, }: {
   filters: QuotationFilters;
   onChange: (f: QuotationFilters) => void;
   dealers: { code: string; name: string }[];
   regions: string[];
   provinces: string[];
   products: string[];
-  resultCount: number;
 }) {
   const set = <K extends keyof QuotationFilters>(k: K, v: QuotationFilters[K]) => onChange({ ...filters, [k]: v });
   const dirty = filters.search !== "" || filters.dealer !== "all" || filters.region !== "all"
@@ -42,26 +40,19 @@ export function QuotationFilterBar({
 
   return (
     <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: "1.25rem", padding: "10px 14px" }}>
-      <div style={{ position: "relative", width: 300, maxWidth: "100%", flexShrink: 0 }}>
-        <Search size={14} color={MUTED} strokeWidth={2} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+      {/* ใช้ .search-bar ตัวมาตรฐาน (280px) ให้เท่ากับทุกหน้า — เดิมหน้านี้ประกอบเองกว้าง 300 */}
+      <div className="search-bar">
+        <Search size={14} color={MUTED} strokeWidth={2} />
         <input
           type="text"
           placeholder="ค้นหาเลขที่ / ลูกค้า / ตัวแทน / รหัสตัวแทน..."
           value={filters.search}
           onChange={e => set("search", e.target.value)}
-          className="form-input"
-          style={{ paddingLeft: 32 }}
         />
       </div>
 
       <div style={{ flex: 1 }} />
 
-      {/* ⚠️ ต้องมีคำว่า "พบ" นำหน้า (แก้ 10 ส.ค. 69) — เดิมเขียนแค่ "0 ใบ" ลอยอยู่กลางแถบตัวกรอง
-          ระหว่างช่องค้นหากับช่องเลือกตัวแทน อ่านไม่ออกว่าเป็นจำนวนอะไร ดูเหมือนป้ายของช่องข้างหลัง
-          และหลักพันต้องมีจุลภาค — ทั้งเครือมีใบเสนอราคาหลักพันใบได้ */}
-      <span style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-        พบ {resultCount.toLocaleString()} ใบ
-      </span>
 
       <select aria-label="กรองตามตัวแทน" value={filters.dealer} onChange={e => set("dealer", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
         <option value="all">ทุกตัวแทน</option>

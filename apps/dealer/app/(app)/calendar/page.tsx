@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { apptTypeLabel, fmtISOToThai, DEFAULT_DEALER_CODE, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { useMyProvinces } from "@pms/shared/lib/useMyProvinces";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { ChevronLeft, ChevronRight, Clock, MapPin, CalendarDays, CalendarCheck, Plus, X, User, Phone, Building2, GitBranch, Users, Edit2, Trash2 } from "lucide-react";
@@ -485,6 +486,8 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   const [time, setTime] = useState(initial?.time ?? "09:00");
   const [type, setType] = useState<ApptType | "">(initial?.type ?? "");  // ยังไม่เลือก = ว่าง (ห้ามยัด "นัดพบลูกค้า" ให้เอง)
   const [province, setProvince] = useState(initial?.province ?? "");
+  // ส่งค่าปัจจุบันเข้าไปด้วย — นัดหมายเก่าที่จังหวัดอยู่นอกเขต จะได้ไม่ถูกล้างทิ้งตอนเปิดมาแก้
+  const จังหวัดของฉัน = useMyProvinces(province);
   const [note, setNote] = useState(initial?.note ?? "");
   const savingRef = useRef(false); // กันกดปุ่มบันทึกซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard แบบ synchronous)
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่มให้เห็น (visual)
@@ -572,7 +575,12 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
               </div>
               <div className="col-full">
                 <label className="form-label">จังหวัด</label>
-                <input value={province} onChange={e => setProvince(e.target.value)} placeholder="จังหวัด" className="form-input" />
+                {/* เลือกจากจังหวัดในเขตของสาขาเท่านั้น (บอสสั่ง 20 ส.ค. 69) — เดิมเป็นช่องพิมพ์อิสระ
+                    พิมพ์จังหวัดนอกเขต/สะกดคนละแบบได้ แล้วตัวกรองจังหวัดก็จับไม่ตรง */}
+                <select aria-label="จังหวัด" value={province} onChange={e => setProvince(e.target.value)} className="form-select">
+                  <option value="">— ยังไม่ระบุ —</option>
+                  {จังหวัดของฉัน.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
               </div>
 
               <div className="form-section">รายละเอียด</div>

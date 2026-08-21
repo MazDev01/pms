@@ -57,6 +57,19 @@ type LeadSeed = {
   ageDays: number; lostReason?: string;
 };
 
+// ── ข้อมูลชุดตั้งต้น "กรอกครบทุกช่อง" (บอสสั่ง 20 ส.ค. 69) ──────────────────────
+//
+// เดิมทุกแถวใช้ค่าเดียวกันหมด (คุณทดสอบ / 0800000000 / test@example.com / มูลค่า "0")
+//   หน้าจอที่เปิดดูจึงเป็น "—" กับ 0 เต็มไปหมด ดูไม่ออกว่าของจริงจะหน้าตายังไง
+//   และบั๊กที่โผล่เฉพาะตอนมีข้อมูล (เช่นคอลัมน์ล้น/ตัวเลขไม่จัดหลัก) ก็ไม่มีทางเจอ
+// ตอนนี้แต่ละแถวมีค่าของตัวเองครบทุกช่อง — ยังเป็นข้อมูลทดสอบที่ติดป้าย ZZTEST เหมือนเดิม
+const ผู้ติดต่อ = ["คุณสมชาย ใจดี", "คุณวราภรณ์ ศรีสุข", "คุณธนากร พงษ์ทอง", "คุณปิยะนุช แก้วมณี",
+  "คุณอนุชา รุ่งเรือง", "คุณกมลชนก อินทร์แก้ว", "คุณเจษฎา วัฒนกิจ", "คุณศิริพร ทองดี"];
+/** ราคากลางคร่าว ๆ ต่อ ตร.ม. ของแต่ละแม่แบบ — ใช้คิดมูลค่าให้สมจริง (ไม่ใช่เลขสุ่ม) */
+const ราคาต่อตรม: Record<string, number> = {
+  "โรงงาน": 6800, "อาคารสำเร็จรูปทุกประเภท": 6200, "งานตามแบบของลูกค้า": 7000,
+};
+
 const LEADS: LeadSeed[] = [
   // ── RYG ──
   { idOffset: 1, dealerCode: "RYG", company: tag("บจ. อาร์วายจีหนึ่ง"), province: "ระยอง", product: "โรงงาน", status: "WAITING", ageDays: 2 },
@@ -131,17 +144,23 @@ export default async function globalSetup() {
     num_id: 800_000 + l.idOffset,
     name: l.company,
     company: l.company,
-    contact: "คุณทดสอบ",
-    phone: "0800000000",
-    email: "test@example.com",
+    contact: ผู้ติดต่อ[(l.idOffset - 1) % ผู้ติดต่อ.length],
+    phone: `08${(1 + (l.idOffset % 9))}-${String(200 + l.idOffset).padStart(3, "0")}-${String(1000 + l.idOffset * 7).slice(-4)}`,
+    email: `lead${l.idOffset}@example.co.th`,
+    address: `${100 + l.idOffset} ถนนทดสอบ ต.ในเมือง อ.เมือง จ.${l.province}`,
     province: l.province,
     product: l.product,
     category: l.product,
     status: l.status,
-    value: "0",
-    area: "500",
+    // มูลค่า = พื้นที่ × ราคากลางของแม่แบบ — กติกาเดียวกับที่หน้าจอคิดให้ (ไม่ใช่เลขลอย ๆ)
+    value: String((300 + l.idOffset * 25) * (ราคาต่อตรม[l.product] ?? 6500)),
+    area: String(300 + l.idOffset * 25),
     assigned: "ทดสอบระบบ",
-    source: "เว็บไซต์",
+    source: ["เว็บไซต์", "Facebook", "โทรเข้า", "ลูกค้าแนะนำ", "ออกบูธ"][l.idOffset % 5],
+    note: `ข้อมูลชุดทดสอบ — กรอกครบทุกช่องไว้ให้ดูหน้าจอได้เหมือนใช้งานจริง (${l.company})`,
+    project: `โครงการ${l.product} ${l.province}`,
+    // ติดต่อล่าสุด = ครึ่งทางของอายุลูกค้าเป้าหมาย → มีทั้งรายที่เพิ่งคุยและรายที่เงียบไปนาน
+    last_contact_at: isoDate(Math.max(0, Math.round(l.ageDays / 2))),
     lost_reason: l.lostReason ?? null,
     created_at: daysAgo(l.ageDays),
     created_label: thaiDateLabel(l.ageDays),
@@ -154,8 +173,8 @@ export default async function globalSetup() {
     dealer_code: q.dealerCode,
     name: q.customer,
     company: q.customer,
-    email: "test@example.com",
-    phone: "0800000000",
+    email: `customer-${q.idSuffix.toLowerCase()}@example.co.th`,
+    phone: `08${q.dealerCode === "RYG" ? "1" : "2"}-500-${String(1000 + (q.customerIdOffset ?? 0)).slice(-4)}`,
     province: q.province,
     category: q.buildingType,
     status: "active",
@@ -217,8 +236,16 @@ export async function teardownBaseline(admin: SupabaseClient) {
   // กวาดด้วย id ตรงๆ แทน · customer-dedupe.spec.ts ยังสร้างลูกค้าเป้าหมายชื่อเดียวกันผ่าน UI ได้ (ไม่มีแท็ก
   // เหมือนกัน) กวาดด้วยชื่อเป๊ะไปด้วยกันเลย — ปิดการขายสำเร็จแล้ว lead จะถูกลบออกจากตารางเองอยู่แล้ว
   // (removeLead=true) แต่เผื่อเทสต์ล้มกลางทางค้างไว้ก็กวาดซ้ำให้ชัวร์
+  // ⚠️ ต้องกวาด "ใบเสนอราคาของลูกค้ารายนี้" ก่อนเสมอ (พลาดมาแล้ว 20 ส.ค. 69)
+  //   ใบที่เทสต์ออกให้ลูกค้า/ลูกค้าเป้าหมายชื่อนี้ไม่มีแท็กในตัวเอง และผูก FK ไว้ทั้งกับลูกค้าและกับดีล
+  //   ลบแม่ก่อนจึงถูกฐานข้อมูลปฏิเสธเงียบ ๆ (โค้ดนี้ไม่ได้เช็ค error) → ลูกค้า/ลีดค้างข้ามรอบ
+  //   แล้วรอบถัดไป seed ทับไม่ได้ ล้มตั้งแต่ setup ด้วย duplicate key ทั้งชุด
+  await admin.from("quotations").delete().eq("customer", EXISTING_CUSTOMER_NAME);
+  const { data: staleLeads } = await admin.from("leads").select("id").eq("company", EXISTING_CUSTOMER_NAME);
+  for (const l of staleLeads ?? []) await admin.from("quotations").delete().eq("deal_id", l.id);
   await admin.from("customers").delete().eq("id", EXISTING_CUSTOMER_ID);
-  await admin.from("leads").delete().eq("company", EXISTING_CUSTOMER_NAME).eq("dealer_code", "RYG");
+  const { error: leadErr } = await admin.from("leads").delete().eq("company", EXISTING_CUSTOMER_NAME).eq("dealer_code", "RYG");
+  if (leadErr) console.warn(`[teardown] ลบลูกค้าเป้าหมาย "${EXISTING_CUSTOMER_NAME}" ไม่สำเร็จ: ${leadErr.message}`);
   // แอปสร้างไฟล์ PDF อัตโนมัติผูกกับใบเสนอราคาทุกใบที่สร้างผ่าน UI (ชื่อไฟล์ฝัง quote id/ชื่อลูกค้า
   // ไว้ด้วย) — พลาดมาแล้วอีกรอบ: ลืมกวาดตารางนี้ ทำให้ไฟล์ค้างสะสมจนล้นหน้าแรก (12 ต่อหน้า) แล้วไป
   // ทำให้ func-appt-files.spec.ts หาไฟล์ที่เพิ่งอัปโหลดจริงไม่เจอภายใน timeout (บั๊กจากดาต้าค้าง

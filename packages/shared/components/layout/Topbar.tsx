@@ -17,6 +17,7 @@ import {
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { useImpersonating } from "@pms/shared/lib/useImpersonating";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown, Tag } from "lucide-react";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
@@ -297,6 +298,8 @@ const HQ_PAGES: PageEntry[] = [
 
 export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const { session, isHQ, logout } = useRole();
+  // แท็บนี้เปิดมาจาก "สำนักงานใหญ่กดเข้าระบบแทนตัวแทน" หรือเปล่า — ใช้ซ่อนปุ่มออกจากระบบ
+  const สวมสิทธิ์อยู่ = useImpersonating();
   const currentDealer = useCurrentDealer(); // สาขาที่ล็อกอิน — กระดิ่งฝั่งตัวแทน scope ด้วย code นี้
   const router = useRouter();
   const pathname = usePathname();
@@ -772,7 +775,11 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 ))}
               </div>
 
-              {/* Logout */}
+              {/* Logout — ซ่อนตอน "สำนักงานใหญ่กำลังเข้าระบบแทนตัวแทน" (บอสสั่ง 20 ส.ค. 69)
+                  แท็บนี้มีทางกลับอยู่แล้วสองที่ (แถบแจ้งด้านบน + ท้ายเมนูข้าง) ปุ่มออกจากระบบ
+                  จึงเป็นทางที่สาม ที่พาไปผิดที่ด้วย: ออกจากบัญชีสาขาแล้วค้างอยู่หน้าเข้าสู่ระบบ
+                  ทั้งที่สิ่งที่ผู้ดูแลต้องการคือ "กลับไปหน้า HQ ของตัวเอง" */}
+              {!สวมสิทธิ์อยู่ && (
               <div style={{ padding:"6px 0 8px", borderTop:`1px solid ${BORDER}` }}>
                 <button onClick={handleLogout}
                   style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"9px 16px", border:"none", background:"none", cursor:"pointer", color:"#dc2626", fontSize:"0.8rem", fontWeight:700, textAlign:"left" }}
@@ -781,6 +788,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   <LogOut size={15} strokeWidth={2} /> ออกจากระบบ
                 </button>
               </div>
+              )}
             </div>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { REAL_BACKEND } from "./supabaseEnv";
-import { teardownBaseline, restoreAlertsIfPending } from "./global-setup";
+import { teardownBaseline, restoreAlertsIfPending, NS, EXISTING_CUSTOMER_NAME } from "./global-setup";
 
 // ── กวาดข้อมูลทดสอบ "ครั้งสุดท้าย" หลังทุกอย่างจบจริง ─────────────────────────────
 //
@@ -15,10 +15,15 @@ import { teardownBaseline, restoreAlertsIfPending } from "./global-setup";
 // เงื่อนไขความปลอดภัย: แตะเฉพาะแถวที่ชื่อมีป้าย ZZTEST/ZZLOAD เท่านั้น — ข้อมูลจริงไม่มีป้ายนี้
 const TEST_MARKS = ["ZZTEST", "ZZLOAD"];
 
-async function sweep(admin: SupabaseClient): Promise<string> {
+async function sweep(admin: SupabaseClient, เก็บชุดตั้งต้นไว้ = false): Promise<string> {
   const removed: string[] = [];
   const del = async (table: string, column: string, mark: string) => {
-    const { data, error } = await admin.from(table).delete().like(column, `%${mark}%`).select("id");
+    // ⚠️ ตอนสั่งให้เก็บชุดตั้งต้นไว้ ต้องกันแถวของชุดนั้นออกจากการกวาดด้วย
+    //    ไม่งั้นชุดตั้งต้น (ZZTEST-BASE-…) จะโดนกวาดตกไปกับป้าย ZZTEST ที่ครอบมันอยู่
+    //    (พลาดมาแล้วรอบหนึ่ง: บอกว่า "เก็บไว้" แต่กวาดทิ้ง 16 แถวในบรรทัดถัดมา)
+    let q = admin.from(table).delete().like(column, `%${mark}%`);
+    if (เก็บชุดตั้งต้นไว้) q = q.not(column, "like", `${NS}%`);
+    const { data, error } = await q.select("id");
     if (error) { removed.push(`${table}:อ่านไม่ได้(${error.code ?? "?"})`); return; }
     if (data?.length) removed.push(`${table} ${data.length}`);
   };
@@ -39,8 +44,16 @@ async function sweep(admin: SupabaseClient): Promise<string> {
 export default async function globalTeardown() {
   if (!REAL_BACKEND || !ADMIN_SUPABASE_URL || !ADMIN_SERVICE_ROLE_KEY) return;
   const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY);
-  await teardownBaseline(admin);
+  // KEEP_TEST_DATA=1 → เก็บ "ชุดข้อมูลตั้งต้น" ไว้ให้เปิดหน้าจอดูต่อได้หลังรันจบ (บอสสั่ง 20 ส.ค. 69)
+  //   แต่ยังกวาดของตกค้างของแต่ละสเปกเสมอ — ของพวกนั้นเป็นเศษจากการทดสอบ ไม่ใช่ข้อมูลไว้ดู
+  //   ถ้าไม่กวาด จะสะสมทุกรอบจนเทสต์ที่นับจำนวนแถวล้มเอง (เจอจริง: ลูกค้าเป้าหมายซ้ำ 9 แถว)
+  const เก็บชุดตั้งต้นไว้ = process.env.KEEP_TEST_DATA === "1";
+  if (!เก็บชุดตั้งต้นไว้) await teardownBaseline(admin);
   await restoreAlertsIfPending(admin); // คืน hq_notif_rules.alerts เป็นค่าเดิมก่อน seed
-  const leftovers = await sweep(admin);
-  console.log(`[global-teardown] ลบข้อมูลตั้งต้น (ZZTEST-BASE) + คืนค่า alerts เดิมแล้ว${leftovers ? ` · เก็บของตกค้าง: ${leftovers}` : ""}`);
+  // ลูกค้าเป้าหมายชื่อ "บจ. ไทยสตีล" ที่ customer-dedupe.spec.ts สร้างผ่านหน้าจอ ไม่มีป้าย ZZTEST
+  //   (ต้องเป็นชื่อสะอาด ไม่งั้นตัวจับคู่ลูกค้าซ้ำทำงานไม่ได้ — ดูเหตุผลที่ global-setup.ts)
+  //   จึงต้องกวาดด้วยชื่อเป๊ะเสมอ แม้ในโหมดเก็บชุดตั้งต้นไว้ ไม่งั้นสะสมทุกรอบ
+  await admin.from("leads").delete().eq("company", EXISTING_CUSTOMER_NAME).eq("dealer_code", "RYG");
+  const leftovers = await sweep(admin, เก็บชุดตั้งต้นไว้);
+  console.log(`[global-teardown] ${เก็บชุดตั้งต้นไว้ ? "เก็บข้อมูลตั้งต้น (ZZTEST-BASE) ไว้ตามที่สั่ง" : "ลบข้อมูลตั้งต้น (ZZTEST-BASE)"} + คืนค่า alerts เดิมแล้ว${leftovers ? ` · เก็บของตกค้าง: ${leftovers}` : ""}`);
 }

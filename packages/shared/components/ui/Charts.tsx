@@ -39,13 +39,6 @@ function niceCeil(v: number): number {
   return step * pow;
 }
 
-// เส้นตรงต่อจุดต่อจุด — ไม่เกลี่ยโค้งเลย
-// เส้นโค้งทำให้ยอดระหว่างเดือนดูเหมือนมีค่าจริง ทั้งที่ข้อมูลมีแค่รายเดือน — อ่านยอดผิด
-function linearPath(pts: Array<{ x: number; y: number }>): string {
-  if (pts.length < 2) return "";
-  return pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
-}
-
 // เส้นโค้งแบบ monotone (Fritsch–Carlson) — โค้งเนียนแต่ "ห้ามแกว่งเกินจุดข้อมูล"
 // ต่างจาก Catmull-Rom ที่ overshoot ได้: ยอดพุ่งแล้วดิ่ง เส้นจะจุ่มต่ำกว่าจุดจริง
 // เช่น ยอดขาย ฿11.8M เดือนหนึ่งแล้ว ฿0 เดือนถัดไป Catmull-Rom จะลากเส้นลงต่ำกว่าศูนย์ = ติดลบ
@@ -562,8 +555,12 @@ export function LineTrendChart({
   const cy = (v: number) => pT + (1 - (v - lo) / (hi - lo)) * cH;
   const bottomY = pT + cH;
   const pts = data.map((d, i) => ({ x: cx(i), y: cy(d.value), ...d }));
-  // เส้นตรงต่อจุดต่อจุด (บอสสั่ง 19 ส.ค. 69 — ของเดิมโค้งเกินจนอ่านผิด)
-  const line = linearPath(pts);
+  // ── กลับมาเป็นเส้นโค้ง (บอสสั่ง 21 ส.ค. 69 — ทับคำสั่งเดิม 19 ส.ค. ที่ให้เป็นเส้นตรง) ──
+  //   ใช้ monotone (Fritsch–Carlson) ไม่ใช่โค้งแบบเดิมที่เคยมีปัญหา:
+  //   โค้งแบบเดิม (Catmull-Rom) แกว่งเกินจุดข้อมูลได้ — ยอดพุ่งแล้วดิ่งจะลากเส้นต่ำกว่าศูนย์
+  //   ซึ่งอ่านแล้วเข้าใจว่ายอดติดลบ · monotone รับประกันว่าเส้นอยู่ระหว่างค่าสองจุดเสมอ
+  //   (ตัวเดียวกับกราฟยอดขายฝั่งตัวแทนที่ใช้อยู่แล้ว — ทั้งระบบจึงโค้งเหมือนกัน)
+  const line = monotonePath(pts);
   const area = pts.length ? `${line} L${pts[n - 1].x.toFixed(2)},${bottomY} L${pts[0].x.toFixed(2)},${bottomY} Z` : "";
   const yTicks = axisTicks(hi);
   // ขีดบนสุด — ป้ายต้องหลบมาอยู่ใต้เส้น ไม่งั้นจะโผล่พ้นขอบบนไปทับหัวข้อการ์ด

@@ -1,4 +1,5 @@
 "use client";
+import { formatPhone } from "@pms/shared/lib/format";
 
 // ─── HQ · ผู้ใช้งานและสิทธิ์ (HQ Users เท่านั้น) ─────────────────────────────────
 // บริหารผู้ใช้ของ "สำนักงานใหญ่" เท่านั้น — ไม่แสดงผู้ใช้ Dealer (ดีลเลอร์จัดการใน Workspace ตัวเอง
@@ -174,7 +175,7 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
           <div><label className="form-label">ชื่อ *</label><input style={inp} value={f.firstName} autoFocus onChange={e => setF({ ...f, firstName: e.target.value })} placeholder="ชื่อ" /></div>
           <div><label className="form-label">นามสกุล</label><input style={inp} value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} placeholder="นามสกุล" /></div>
           <div className="col-full"><label className="form-label">อีเมล (ใช้เข้าระบบ) *</label><input style={inp} value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="name@benjamin.co.th" /></div>
-          <div><label className="form-label">เบอร์โทร</label><input style={inp} value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} placeholder="08x-xxx-xxxx" /></div>
+          <div><label className="form-label">เบอร์โทร</label><input style={inp} inputMode="tel" value={f.phone} onChange={e => setF({ ...f, phone: formatPhone(e.target.value) })} placeholder="08x-xxx-xxxx" /></div>
           <div className="form-section">สิทธิ์การใช้งาน</div>
           <div><label className="form-label">แผนก *</label><select aria-label="แผนก" style={inp} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}><option value="">— ยังไม่ระบุ —</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
           <div><label className="form-label">บทบาท (Role) *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} aria-label="บทบาท" disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}><option value="">— ยังไม่ระบุ —</option>{ROLES.filter(r => r.key !== "SUPER_ADMIN" || canEditPrivileges).map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
@@ -810,7 +811,7 @@ function UserDetailDrawer({ user, onClose, onEdit }: { user: AppUser; onClose: (
         <div><div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL }}>{user.name}</div><div style={{ marginTop: 3 }}><RoleBadge role={user.role} /></div></div>
       </div>
       <Field label="อีเมล" value={user.email} />
-      <Field label="เบอร์โทร" value={<span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Phone size={12} color={MUTED} />{user.phone || "—"}</span>} />
+      <Field label="เบอร์โทร" value={<span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Phone size={12} color={MUTED} />{formatPhone(user.phone) || "—"}</span>} />
       <Field label="แผนก" value={user.department} />
       <Field label="สถานะ" value={<StatusDot status={user.status} />} />
       <Field label="วันที่สร้างบัญชี" value={user.createdAt} />

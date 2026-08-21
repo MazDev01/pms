@@ -12,8 +12,11 @@
 // อัตราปิด = ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) — ตัวหารนับเฉพาะใบที่รู้ผลแล้ว
 //    นิยามเดียวกับคอลัมน์ "อัตราปิด" ในตารางผลงาน และ KPI ของหน้านี้ (ห้ามใช้คนละสูตรในหน้าเดียวกัน)
 //
-// สเปกจากบอส: ไม่มี animation · ไม่มี gradient · ไม่มี 3D · พื้นหลังขาว
-import { useState } from "react";
+// สเปกจากบอส: ไม่มี gradient · ไม่มี 3D · พื้นหลังขาว
+// ⚠️ ข้อ "ไม่มี animation" ถูกยกเลิกแล้ว (บอสสั่ง 20 ส.ค. 69: "หน้ากราฟอื่นทุกอันใส่แอนิเมชั่นไปด้วย")
+//    ใส่เฉพาะ "แท่งโตขึ้นจากเส้นฐานตอนเปิดหน้า" แบบเดียวกับกราฟแท่งอื่นในระบบ
+//    ไม่ใส่ gradient/3D เพิ่ม — ข้อห้ามที่เหลือยังอยู่ตามเดิม
+import { useEffect, useState } from "react";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 
 const NAVY = "#003366";   // ใบเสนอราคาที่ออก
@@ -35,6 +38,10 @@ export function DealerQuotationPerformance({ rows }: {
   rows: DealerQuotePerf[];
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  // แท่งเริ่มที่ความสูง 0 แล้วโตขึ้นหลังเรนเดอร์แรก — หน่วงสั้น ๆ ให้เบราว์เซอร์ทันวาดสถานะเริ่มต้นก่อน
+  const [โตแล้ว, setโตแล้ว] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setโตแล้ว(true), 60); return () => clearTimeout(t); }, []);
+  const โต = { transition: "y 0.75s cubic-bezier(.4,0,.2,1), height 0.75s cubic-bezier(.4,0,.2,1)" } as React.CSSProperties;
 
   if (!rows.length) {
     return (
@@ -101,10 +108,12 @@ export function DealerQuotationPerformance({ rows }: {
               <g key={d.code} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                 {isHover && <rect x={cx - slot / 2 + 3} y={pT} width={slot - 6} height={cH} rx={6} fill="#f2f6fc" />}
                 <rect x={cx - slot / 2} y={pT} width={slot} height={cH} fill="transparent" style={{ cursor: "crosshair" }} />
-                {/* ใบเสนอราคาที่ออก (น้ำเงิน) — สีทึบ ไม่มี gradient/animation ตามสเปก */}
-                <rect x={cx - bw - 2} y={yAt(d.quotes)} width={bw} height={baseY - yAt(d.quotes)} fill={NAVY} opacity={dim} />
+                {/* ใบเสนอราคาที่ออก (น้ำเงิน) — สีทึบ ไม่มี gradient ตามสเปก */}
+                <rect x={cx - bw - 2} y={โตแล้ว ? yAt(d.quotes) : baseY} width={bw} height={โตแล้ว ? baseY - yAt(d.quotes) : 0}
+                  fill={NAVY} opacity={dim} style={โต} />
                 {/* ปิดการขายได้ (เขียว) */}
-                <rect x={cx + 2} y={yAt(d.won)} width={bw} height={baseY - yAt(d.won)} fill={GREEN} opacity={d.won > 0 ? dim : 0} />
+                <rect x={cx + 2} y={โตแล้ว ? yAt(d.won) : baseY} width={bw} height={โตแล้ว ? baseY - yAt(d.won) : 0}
+                  fill={GREEN} opacity={d.won > 0 ? dim : 0} style={โต} />
                 <text x={cx} y={H - 26} textAnchor="middle" fontSize="9.5" fontWeight={700} fill="#6b7280"
                   fontFamily="ui-monospace, monospace">{d.code}</text>
               </g>

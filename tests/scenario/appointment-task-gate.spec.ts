@@ -3,7 +3,7 @@
 // ติ๊กเองไม่ได้ = ตัวเลขความคืบหน้าและขั้นของลูกค้าเป้าหมายสะท้อนงานที่ทำจริงเท่านั้น
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
-import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag } from "./funcHelpers";
+import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag, งานก่อนหน้าครบถึง } from "./funcHelpers";
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(240_000);
@@ -21,8 +21,9 @@ async function seedLead() {
     contact: "ผู้ทดสอบ", province: "ระยอง", product: "โกดังสำเร็จรูป", status: "WAITING",
     value: "฿600,000", assigned: "ผู้ทดสอบ",
     // ติ๊กงานก่อนหน้าให้ครบ เพื่อให้ "นัดหมาย" เป็นงานถัดไปที่ติ๊กได้
-    tasks: [done("contact", "ติดต่อแล้ว"), done("collect", "เก็บข้อมูลลูกค้า"),
-            { key: "appointment", label: "นัดหมาย", done: false }],
+    // ⚠️ ต้องอิง "เส้นทางจริง" ไม่ใช่รายการที่พิมพ์ตายตัว — ลำดับ/รหัสงานเปลี่ยนได้เมื่อสำนักงานใหญ่แก้
+    //    (เจอจริง 21 ส.ค. 69: นัดหมายถูกย้ายไปหลัง "สรุปความต้องการ" seed เดิมจึงทำให้งานถูกล็อก)
+    tasks: await งานก่อนหน้าครบถึง(sb, "นัด"),
   });
 }
 
@@ -47,7 +48,8 @@ test("[func] ติ๊กงาน 'นัดหมาย' เองทั้ง
   await expect(page.getByText(/ลงนัดหมายจริงก่อน/), "ต้องบอกว่าติ๊กเองไม่ได้").toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(2500);
   const lead = (await sb.from("leads").select("tasks").eq("dealer_code", "RYG").eq("company", COMPANY).single())
-    .data as { tasks?: { key: string; done: boolean }[] };
-  expect(lead.tasks?.find(t => t.key === "appointment")?.done,
-    "ยังไม่มีนัดจริง → งานต้องไม่ถูกติ๊ก").toBe(false);
+    .data as { tasks?: { key: string; label?: string; done: boolean }[] };
+  // ⚠️ หาด้วย "ชื่องาน" ไม่ใช่รหัส — รหัสเปลี่ยนได้เมื่อสำนักงานใหญ่แก้ชื่องาน (task_bullet_1)
+  const งานนัด = (lead.tasks ?? []).find(t => String((t as { label?: string }).label ?? "").includes("นัด"));
+  expect(งานนัด?.done, "ยังไม่มีนัดจริง → งานต้องไม่ถูกติ๊ก").toBe(false);
 });

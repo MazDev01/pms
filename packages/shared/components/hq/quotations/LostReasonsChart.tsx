@@ -11,6 +11,7 @@
 // รายการของ HQ มีหน้าที่เป็น "ตัวเลือกตอนปิดดีล" เท่านั้น ไม่ใช่ตัวกรองรายงานย้อนหลัง
 // (วิธีเดียวกับโดนัทที่ /hq/leads และ /hq/pipeline ซึ่งนับจากข้อมูลจริงและแสดงได้ปกติมาตลอด)
 import { fmtBaht } from "@pms/shared/lib/format";
+import { withUnspecified } from "@pms/shared/lib/lostReasons";
 import { Donut } from "@pms/shared/components/ui/Charts";
 
 // โทนแดง-ส้ม ชุดเดียวกับโดนัท "เหตุผล" ที่ /hq/leads และ /hq/pipeline
@@ -23,7 +24,9 @@ export function LostReasonsChart({ reasons, unspecified, totalLost }: {
   unspecified: number;
   totalLost: number;
 }) {
-  const rows = [...reasons].sort((a, b) => b.count - a.count);
+  // เติมก้อน "อื่นๆ (ไม่ได้ระบุเหตุผล)" เข้ากราฟด้วย (บอสสั่ง 21 ส.ค. 69)
+  //   เดิมบอกไว้เป็นเชิงอรรถใต้การ์ดเท่านั้น ผลรวมของชิ้นในวงจึงไม่เท่ากับจำนวนที่ปิดไม่สำเร็จจริง
+  const rows = withUnspecified([...reasons].sort((a, b) => b.count - a.count), unspecified);
   const lost = { length: totalLost };
   const total = rows.reduce((s, r) => s + r.count, 0);
 

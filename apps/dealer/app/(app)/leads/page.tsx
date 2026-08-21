@@ -8,7 +8,7 @@ import {
   leadStatusLabel, leadStatusColor,
   buildLeadReport, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
   seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
-  DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES,
+  DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES, CLOSE_TASK_KEY, APPOINTMENT_TASK_KEY, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
   OTHER_LOST_REASON,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
@@ -19,12 +19,14 @@ import { LeadTasks } from "@pms/shared/components/ui/LeadTasks";
 import { LeadQuotationsPanel } from "@pms/shared/components/ui/LeadQuotationsPanel";
 import { PersonPicker, AssigneeAvatars } from "@pms/shared/components/ui/PersonPicker";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
+import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { estimateLeadValue } from "@pms/shared/lib/boq";
 import { matchCustomers } from "@pms/shared/lib/customerMatch";
 import { useLeadRules } from "@pms/shared/lib/useHQRules";
 import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
-import { parseBaht } from "@pms/shared/lib/format";
+import { parseBaht, formatPhone } from "@pms/shared/lib/format";
 import { useEscapeKey } from "@pms/shared/lib/useModalA11y";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
@@ -49,12 +51,12 @@ import { leadCreatedDate } from "@pms/shared/lib/leadMetrics";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { useMyProvinces } from "@pms/shared/lib/useMyProvinces";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage, leads as leadsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { lastContactLabel, leadLatestDate as leadLatestDateOf } from "@pms/shared/lib/leadMetrics";
-import { useLeadSummary, useLeadsPage } from "@pms/shared/lib/useNetworkData";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
@@ -76,21 +78,6 @@ const SOURCES = ["Facebook","เว็บไซต์","LINE","ลูกค้�
 
 // ── จังหวัดที่เลือกได้ = จังหวัดใน "ภาค" ของสาขาที่ล็อกอิน (บอสสั่ง 17 ส.ค. 69) ──
 // เดิมเป็นรายการตายตัว 10 จังหวัดเหมือนกันทุกสาขา — สาขาใต้ก็ยังเห็นเชียงใหม่/เชียงราย
-// ⚠️ ต้องไม่ทำให้ค่าที่บันทึกไว้แล้วหาย: ลูกค้าเป้าหมายเก่าที่จังหวัดอยู่นอกภาค (ย้ายสาขา/ข้อมูลเก่า)
-//    ต้องยังเห็นค่าเดิมของตัวเองในลิสต์ ไม่งั้นแค่เปิดฟอร์มมาแก้ชื่อ จังหวัดก็ถูกบันทึกทับเป็นค่าว่าง
-function useMyProvinces(): string[] {
-  const me = useCurrentDealer();
-  const dealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
-  return useMemo(() => {
-    const mine = dealers.find(d => d.code === me.code);
-    const inRegion = provincesOfRegion(mine?.region ?? "");
-    if (inRegion.length) {
-      // จังหวัดที่ตั้งของสาขาต้องอยู่ในลิสต์เสมอ (บางสาขาตั้งอยู่คนละภาคกับที่รับผิดชอบ)
-      return mine?.province && !inRegion.includes(mine.province) ? [mine.province, ...inRegion] : inRegion;
-    }
-    return [...PROVINCES]; // ยังไม่รู้ภาค (ทะเบียนยังไม่โหลด) → รายการเดิมไปก่อน
-  }, [dealers, me.code]);
-}
 /** ค่าที่บันทึกไว้แต่ไม่อยู่ในลิสต์มาตรฐาน (ลูกค้าเป้าหมายเก่า/ข้อมูลนำเข้า) → แทรกเป็นตัวเลือกเพิ่ม ห้ามทำค่าเดิมหาย */
 const legacySource = (v: string) => (v && !SOURCES.includes(v) ? [v] : []);
 // ช่วงมูลค่าใน FilterRow — เดิมเป็นช่องกรอก "มูลค่าขั้นต่ำ/สูงสุด (M฿)" สองช่องในแผงตัวกรอง
@@ -153,6 +140,33 @@ const MAX_LEAD_VALUE = 100_000_000_000;
 
 function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v; }
 
+// ราคาเต็มจำนวน ไม่ย่อ (บอสสั่ง 20 ส.ค. 69: "แสดงราคาด้วย" — อ้างอิงระบบเดิม ฿10,000,000.00)
+// ป้ายบนการ์ดกระดานใช้ตัวนี้ ไม่ใช่ ฿10.0M: ราคาย่อดูเร็วก็จริง แต่เทียบดีลกันไม่ได้
+//   (฿10.4M กับ ฿10.5M ต่างกันแสนหนึ่งแต่ปัดมาชนกันได้) และผู้ใช้ยังต้องเปิดดูตัวเต็มอยู่ดี
+// ⚠️ อ่านค่าไม่ออก = คืนข้อความเดิมเหมือน fmtVal ห้ามกลายเป็น "฿0"
+// ── ราคาในช่องกรอก: ใส่ลูกน้ำ + บอกหน่วย (บอสสั่ง 21 ส.ค. 69) ────────────────────
+//
+// "5310000" อ่านยากมาก ต้องนับหลักเอง และไม่รู้ว่าเป็นบาทหรือหน่วยอื่น
+// กติกา: ตอนไม่ได้พิมพ์ = โชว์ "5,310,000 บาท" · ตอนคลิกเข้าไปพิมพ์ = โชว์ตัวเลขล้วน
+//   ถ้าใส่ลูกน้ำระหว่างพิมพ์ ตำแหน่งเคอร์เซอร์จะกระโดดทุกครั้งที่พิมพ์ (พิมพ์ต่อไม่ได้)
+// ⚠️ ค่าที่ "อ่านไม่ออก" ต้องโชว์ตามที่พิมพ์ไว้ ห้ามแปลงเป็น 0 หรือลบทิ้ง (กติกาเดิมของไฟล์นี้)
+function ราคาอ่านง่าย(v: string): string {
+  const ดิบ = String(v ?? "").trim();
+  if (!ดิบ) return "";
+  const n = parseValue(ดิบ);
+  return n > 0 ? `${n.toLocaleString("th-TH")} บาท` : ดิบ;
+}
+
+function fmtBahtFull(v: string) {
+  const ดิบ = String(v ?? "").trim();
+  if (!ดิบ) return "—";                  // ยังไม่กรอกมูลค่า — ห้ามเดาเป็น ฿0
+  const n = parseValue(ดิบ);
+  if (n > 0) return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // เหลือสองกรณีที่ parseValue คืน 0 เท่ากัน แต่คนละความหมาย:
+  //   กรอกศูนย์จริง → แสดง ฿0.00   ·   พิมพ์อะไรที่อ่านไม่ออก → คงข้อความเดิมไว้ให้เห็นว่ายังผิดอยู่
+  return /\d/.test(ดิบ) ? "฿0.00" : ดิบ;
+}
+
 // ความคืบหน้าของลูกค้าเป้าหมาย (%) — จากงานที่เช็ก (แหล่งเดียวกับ LeadTasks) · PAID=100 · CANCELLED=0
 // tpl = งานมาตรฐานที่ HQ ตั้งไว้ (ส่งมาจากคอมโพเนนต์ที่เรียก useLeadTaskTemplate)
 // ลูกค้าเป้าหมายที่ยังไม่มี checklist ต้องนับจากชุดของ HQ ไม่ใช่ชุดเริ่มต้นในโค้ด — ไม่งั้น "0/10" ทั้งที่ HQ ตั้งไว้ 12 งาน
@@ -212,11 +226,11 @@ const TASK_ACTIVITY_TYPE: Record<string, string> = {
   appointment: "meeting", makeQuote: "doc", sendQuote: "doc",
   followup: "call", negotiate: "meeting", close: "doc",
 };
-// ไทม์ไลน์กิจกรรม — ถ้าลูกค้าเป้าหมายยังไม่มี activities ที่บันทึกไว้ ให้สร้างจากงานที่ติ๊กเสร็จจริง (ใหม่สุดอยู่บน)
+// ไทม์ไลน์กิจกรรม — ถ้าลูกค้าเป้าหมายยังไม่มี activities ที่บันทึกไว้ ให้สร้างจากงานที่ติ๊กเสร็จจริง
+// เรียงเก่า→ใหม่ ตามลำดับงานในเส้นทางการขาย (ตรงกับลำดับที่ไทม์ไลน์แสดง — บอสสั่ง 21 ส.ค. 69)
 function seedActivities(lead: LeadRow): { date: string; text: string; type?: string }[] {
   return (lead.tasks ?? [])
     .filter(t => t.done && t.doneAt)
-    .slice().reverse()
     .map(t => ({
       date: t.doneAt!,
       text: t.doneBy ? `${t.label} · ${t.doneBy}` : t.label,
@@ -300,6 +314,17 @@ function OverviewEditor({ lead, persons, onSave }: {
     note: lead.note ?? "", lostReason: lead.lostReason ?? "", logo: lead.logo ?? "",
   });
   const [f, setF] = useState(seed);
+  // ── ประเมินราคาให้อัตโนมัติ: พื้นที่ × ราคาขายของเรา (บอสสั่ง 20 ส.ค. 69) ──────────
+  // คิดให้เป็นค่าตั้งต้นเท่านั้น · พิมพ์ทับเมื่อไรก็หยุดคิดให้ทันที (ห้ามเขียนทับของที่ผู้ใช้ตั้งใจใส่)
+  // ⚠️ คิดไม่ได้ = ปล่อยว่าง ให้หน้าจอขึ้น "—" ห้ามใส่ 0
+  const { settings: dealerSet } = useDealerSettings();
+  const [กรอกราคาเอง, setกรอกราคาเอง] = useState(parseBaht(lead.value ?? "") > 0);
+  const [พิมพ์ราคาอยู่, setพิมพ์ราคาอยู่] = useState(false);   // กำลังพิมพ์ = โชว์ตัวเลขล้วน (ดู ราคาอ่านง่าย)
+  const ราคาประเมิน = estimateLeadValue(f.product, Number(f.area) > 0 ? Number(f.area) : undefined, catalog, dealerSet.pricing);
+  useEffect(() => {
+    if (กรอกราคาเอง) return;
+    setF(p => (String(ราคาประเมิน || "") === p.value ? p : { ...p, value: ราคาประเมิน > 0 ? String(ราคาประเมิน) : "" }));
+  }, [ราคาประเมิน, กรอกราคาเอง]);
   const logoRef = useRef<HTMLInputElement>(null);
   // reseed เมื่อสลับลูกค้าเป้าหมาย
   // จงใจไม่ใส่ seed ใน dependency — seed ถูกสร้างใหม่ทุก render จะล้างสิ่งที่ผู้ใช้กำลังพิมพ์ทิ้ง
@@ -346,7 +371,8 @@ function OverviewEditor({ lead, persons, onSave }: {
     }
     setValueErr("");
     onSave({
-      ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: fmtVal(f.value),
+      // value: เก็บตามที่พิมพ์ ไม่ย่อเป็น ฿1.2M ตอนบันทึก (จะปัดเงินหายเหมือนฟอร์มเพิ่ม)
+      ...lead, ...f, logo: f.logo || undefined, category: mainTemplateOf(f.product), value: f.value.trim(),
       address: f.address.trim() || undefined,   // ว่าง = ไม่มีข้อมูล (undefined) — ห้ามเก็บสตริงว่างหลอกว่ากรอกแล้ว
       // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ไม่ใช่ 0
       area: f.area.trim() && Number(f.area) > 0 ? Number(f.area) : undefined,
@@ -364,10 +390,29 @@ function OverviewEditor({ lead, persons, onSave }: {
       {/* มูลค่า + ป้ายสถานะ — ตำแหน่งเดียวกับตอนอ่าน */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:12 }}>
         <div style={{ minWidth:0 }}>
-          <div style={{ fontSize:"0.62rem", color:"#8a929c", fontWeight:700 }}>ประเมินราคา</div>
-          <input value={f.value} onChange={e=>set("value",e.target.value)} placeholder="฿1.4M"
-            style={{ ...inp, width:170, marginTop:4, fontSize:"1rem", fontWeight:800, color:"#003366" }} />
-          <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap", alignItems:"center" }}>
+          {/* ── รูปลูกค้า/โลโก้ อยู่บนสุด (บอสสั่ง 21 ส.ค. 69) ─────────────────────────
+          เดิมอยู่ท้ายการ์ดปนกับปุ่มบันทึก ต้องเลื่อนจอลงไปสุดถึงจะเจอ
+          รูปเป็น "หน้าตาของลูกค้ารายนี้" ควรเห็นตั้งแต่เปิดการ์ด เหมือนหน้าลูกค้า */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+        <span style={{ width:28, height:28, borderRadius:8, flexShrink:0, overflow:"hidden", background:f.logo?"#fff":"#f8fafc",
+          border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
+        </span>
+        <input ref={logoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{ display:"none" }} onChange={uploadLogo} />
+        <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
+          <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+        </button>
+        {f.logo && (
+          <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
+            <X size={12} /> ลบรูป
+          </button>
+        )}
+      </div>
+
+      {/* ประเมินราคาย้ายไปอยู่ในกลุ่ม "รายละเอียดงาน" ให้ตรงกับฟอร์มเพิ่มลูกค้าเป้าหมาย
+              (บอสแจ้ง 20 ส.ค. 69: "ข้อมูลที่กรอกและที่แก้ไม่ตรงกัน") — เดิมอยู่ลอยบนหัวการ์ด
+              ผู้ใช้ที่ไปหาในกลุ่มเดียวกับ แม่แบบ/พื้นที่ จึงหาไม่เจอ นึกว่าแก้ไม่ได้ */}
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
             {/* สถานะลอยเดี่ยวนอกแถว — คงกรอบบางไว้ให้รู้ว่ากดได้ (กรอบที่ถอดคือกรอบซ้อนในแถวข้อมูล) */}
             <select aria-label="สถานะลูกค้าเป้าหมาย" value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", height:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700, border:"1px solid #eef1f5", background:"#fafbfc" }}>
               {(Object.keys(leadStatusLabel) as LeadStatus[]).map(k => <option key={k} value={k}>{leadStatusLabel[k]}</option>)}
@@ -393,7 +438,7 @@ function OverviewEditor({ lead, persons, onSave }: {
           </div>
         )}
         <Cell icon={User}    label="ผู้ติดต่อ"><input aria-label="ชื่อผู้ติดต่อ" value={f.contact} onChange={e=>set("contact",e.target.value)} style={inp} /></Cell>
-        <Cell icon={Phone}   label="โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Cell>
+        <Cell icon={Phone}   label="โทรศัพท์"><input inputMode="tel" value={f.phone} onChange={e=>set("phone",formatPhone(e.target.value))} placeholder="0XX-XXX-XXXX" style={inp} /></Cell>
         <Cell icon={Mail}    label="อีเมล"><input aria-label="อีเมล" value={f.email} onChange={e=>set("email",e.target.value)} type="email" style={inp} /></Cell>
         {/* ⚠️ ทุกช่องเลือกในแผงนี้ต้องมีตัวเลือก "ยังไม่ระบุ" (บั๊กจริง พบ 10 ส.ค. 69)
             ค่าจริงเป็นว่างได้ทุกช่อง แต่ถ้าไม่มีตัวเลือกว่างให้ตรง เบราว์เซอร์จะโชว์ตัวเลือกแรกแทน
@@ -419,6 +464,19 @@ function OverviewEditor({ lead, persons, onSave }: {
         <Cell icon={Ruler}   label="พื้นที่ (ตร.ม.)">
           <input type="number" min={0} value={f.area} onChange={e=>set("area",e.target.value)} placeholder="—" style={inp} />
         </Cell>
+        <Cell icon={Coins}   label="ประเมินราคา">
+          <input aria-label="ประเมินราคา"
+            value={พิมพ์ราคาอยู่ ? f.value : ราคาอ่านง่าย(f.value)}
+            onFocus={()=>setพิมพ์ราคาอยู่(true)}
+            onBlur={()=>setพิมพ์ราคาอยู่(false)}
+            onChange={e=>{ setกรอกราคาเอง(true); set("value",e.target.value); }}
+            placeholder={ราคาประเมิน > 0 ? "—" : "เช่น 1200000"} style={{ ...inp, fontWeight:800, color:"#003366" }} />
+        </Cell>
+        <div style={{ gridColumn:"1/-1", fontSize:"0.66rem", color:"#8a929c", fontWeight:600, margin:"-2px 0 2px 4px" }}>
+          {กรอกราคาเอง ? "กรอกเอง — ระบบจะไม่คิดให้ทับ"
+            : ราคาประเมิน > 0 ? `คิดให้จาก พื้นที่ × ราคาขายของเรา — พิมพ์ทับได้`
+            : "กรอกพื้นที่และแม่แบบแล้วระบบจะคิดให้ — หรือพิมพ์เอง"}
+        </div>
         <div style={OV_GROUP}>การดูแล</div>
         <Cell icon={Target}  label="แหล่งที่มา">
           <select aria-label="ช่องทางที่มา" value={f.source} onChange={e=>set("source",e.target.value)} style={inp}>
@@ -464,21 +522,8 @@ function OverviewEditor({ lead, persons, onSave }: {
           style={{ ...inp, height:"auto", resize:"vertical", lineHeight:1.6 }} />
       </div>
 
-      {/* รูป/โลโก้ + ปุ่ม — บรรทัดเดียว กันการ์ดขยายตอนสลับโหมด */}
+      {/* แถวล่าง: ข้อความเตือน + ปุ่มบันทึก (รูปย้ายขึ้นไปบนสุดแล้ว — บอสสั่ง 21 ส.ค. 69) */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12, paddingTop:10, borderTop:"1px solid #f4f6f9", flexWrap:"wrap" }}>
-        <span style={{ width:28, height:28, borderRadius:8, flexShrink:0, overflow:"hidden", background:f.logo?"#fff":"#f8fafc",
-          border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
-        </span>
-        <input ref={logoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{ display:"none" }} onChange={uploadLogo} />
-        <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
-          <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
-        </button>
-        {f.logo && (
-          <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
-            <X size={12} /> ลบรูป
-          </button>
-        )}
         <span style={{ flex:1 }} />
         {valueErr && <span role="alert" style={{ fontSize:"0.72rem", color:"#b91c1c", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"5px 9px" }}>{valueErr}</span>}
         {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
@@ -524,6 +569,16 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     source: initial?.source ?? "", note: initial?.note ?? "",
     logo: initial?.logo ?? "",
   });
+  // ประเมินราคาให้อัตโนมัติ — กติกาเดียวกับแผงแก้ไข (ดูคอมเมนต์ที่ OverviewEditor)
+  const { settings: dealerSetForm } = useDealerSettings();
+  const [กรอกราคาเอง, setกรอกราคาเอง] = useState(parseBaht(initial?.value ?? "") > 0);
+  const [พิมพ์ราคาอยู่, setพิมพ์ราคาอยู่] = useState(false);
+  const ราคาประเมิน = estimateLeadValue(form.product, Number(form.area) > 0 ? Number(form.area) : undefined, catalog, dealerSetForm.pricing);
+  useEffect(() => {
+    if (กรอกราคาเอง) return;
+    setForm(f => (String(ราคาประเมิน || "") === f.value ? f : { ...f, value: ราคาประเมิน > 0 ? String(ราคาประเมิน) : "" }));
+  }, [ราคาประเมิน, กรอกราคาเอง]);
+
   // ── เติมค่าตั้งต้นเมื่อข้อมูลมาถึงทีหลัง (บั๊กจริง พบ 10 ส.ค. 69) ──────────────────
   //
   // ทุกช่องเริ่มที่ "ยังไม่ระบุ" — ไม่มีการเดาค่าให้จากรายการอีกต่อไป
@@ -751,7 +806,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               </div>
               <div>
                 <label style={labelStyle}>โทรศัพท์ *</label>
-                <input value={form.phone} onChange={e=>set("phone",e.target.value)}
+                <input inputMode="tel" value={form.phone} onChange={e=>set("phone",formatPhone(e.target.value))}
                   placeholder="0XX-XXX-XXXX" style={inputStyle} />
               </div>
               <div className="col-full">
@@ -773,9 +828,19 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
               </div>
               <div>
                 <label style={labelStyle}>ประเมินราคา</label>
-                <input value={form.value} onChange={e=>set("value",e.target.value)}
-                  onBlur={()=>{ if(form.value.trim()) set("value", fmtVal(form.value)); }}
+                {/* ⚠️ เดิมพอออกจากช่องจะย่อค่าที่พิมพ์เป็น "฿1.2M" แล้วเก็บแบบนั้นจริง ๆ
+                    → พิมพ์ 1,234,567 กลายเป็น 1,200,000 เงียบ ๆ (ปัดทิ้งสามหมื่นกว่าบาท)
+                    ตอนนี้เก็บตัวเลขที่พิมพ์ไว้ครบ ส่วนการย่อเป็นเรื่องของ "ตอนแสดงผล" เท่านั้น */}
+                <input value={พิมพ์ราคาอยู่ ? form.value : ราคาอ่านง่าย(form.value)}
+                  onFocus={()=>setพิมพ์ราคาอยู่(true)}
+                  onBlur={()=>setพิมพ์ราคาอยู่(false)}
+                  onChange={e=>{ setกรอกราคาเอง(true); set("value",e.target.value); }}
                   placeholder="เช่น 1200000 หรือ ฿1.2M" style={inputStyle} />
+                <div style={{ fontSize:"0.66rem", color:"#8a929c", fontWeight:600, marginTop:3 }}>
+                  {กรอกราคาเอง ? "กรอกเอง — ระบบจะไม่คิดให้ทับ"
+                    : ราคาประเมิน > 0 ? "คิดให้จาก พื้นที่ × ราคาขายของเรา — พิมพ์ทับได้"
+                    : "กรอกพื้นที่และแม่แบบแล้วระบบจะคิดให้ — หรือพิมพ์เอง"}
+                </div>
               </div>
               <div>
                 <label style={labelStyle}>ขั้นตอน</label>
@@ -889,8 +954,80 @@ export default function LeadsPage() {
   //  ต่างจากปุ่ม "ปิดการขายไม่สำเร็จ" ในแผงลูกค้าเป้าหมายที่บังคับอยู่แล้ว — ทำให้ตรงกันทุกช่องทาง)
   const [pendingLostId, setPendingLostId] = useState<string|null>(null);
   const [pendingLostReason, setPendingLostReason] = useState("");
+  /** พาไปแท็บ "งาน" ของลูกค้าเป้าหมายรายนี้ — ใช้ตอนบล็อกการย้ายขั้นเพราะงานยังไม่ครบ */
+  function openLeadTasks(l: LeadRow) {
+    setSelectedLead(l); setDraft({ ...l });
+    setEditingField(null); setShowDeleteConfirm(false);
+    setPopupField(null); setEditPopupPos(null); setShowStatusDropdown(false);
+    setActiveTab("tasks"); setDTab("tasks");
+  }
+
+  /** ── พาไป "ลงมือทำงานนั้น" จริง ๆ ไม่ใช่แค่บอกว่าเหลืองานอะไร (บอสสั่ง 21 ส.ค. 69) ──
+   *
+   *  ลากการ์ดข้ามขั้นแล้วโดนบล็อก ผู้ใช้ต้องได้ไปอยู่หน้าที่ "ทำงานนั้นได้ทันที"
+   *  งานที่ต้องมีของจริงจึงพาไปที่ฟอร์มของจริง (ลงนัด/ออกใบ/กดส่งใบ)
+   *  งานอื่นที่ติ๊กได้เอง พาไปแท็บงาน แล้วผู้ใช้ติ๊กต่อได้ทีละงานตามลำดับ
+   */
+  function พาไปทำงาน(l: LeadRow, taskKey: string) {
+    const ของลูกค้าเป้าหมาย = quotations.filter(q => quoteBelongsToLead(q, l));
+    if (taskKey === findAppointmentTask(taskTpl)?.key) {
+      const มีนัดแล้ว = appointments.some(a => a.leadId === l.numId && a.status !== "cancelled");
+      if (!มีนัดแล้ว) {
+        setSelectedLead(l); setDraft({ ...l });
+        setActiveTab("appts"); setDTab("timeline"); setApptAdding(true);
+        return;
+      }
+    }
+    if (taskKey === QUOTE_TASK_KEY && !ของลูกค้าเป้าหมาย.length) { openQuotationForm(l); return; }
+    if (taskKey === SEND_QUOTE_TASK_KEY) {
+      if (!ของลูกค้าเป้าหมาย.length) { openQuotationForm(l); return; }
+      if (ของลูกค้าเป้าหมาย.every(q => q.status === "draft")) { openQuotationList(l); return; }
+    }
+    openLeadTasks(l);
+  }
+
   function requestStatusChange(id: string, status: LeadStatus) {
     if (status === "CANCELLED") { setPendingLostId(id); setPendingLostReason(""); return; }
+
+    // ── ย้ายขั้นบนกระดาน: ข้ามงานไม่ได้ · ถอยหลังต้องยืนยัน (บอสสั่ง 21 ส.ค. 69) ────────
+    //
+    // ทำไมต้องกั้น: ลากการ์ดข้ามไปขั้นท้าย ๆ ได้เลย = ขั้นของดีลบอกว่าทำงานถึงตรงนั้นแล้ว
+    //   ทั้งที่งานจริง (นัดหมาย/สรุปความต้องการ/ออกใบ) ยังไม่ได้ทำ — รายงานของสำนักงานใหญ่
+    //   จะอ่านว่า "ดีลนี้ถึงขั้นเจรจาแล้ว" ทั้งที่ยังไม่เคยคุยราคากับลูกค้าเลยสักครั้ง
+    // วิธีกั้น: ต้องติ๊กงานของขั้นก่อนหน้าให้ครบก่อน — พาไปทำทีละงานตามลำดับที่สำนักงานใหญ่ตั้งไว้
+    const เป้าหมาย = allLeads.find(l => l.id === id);
+    if (เป้าหมาย && status !== "PAID") {
+      const ลำดับ = (st: LeadStatus) => LEAD_STATUS_ORDER.indexOf(st);
+      const ขั้นเดิม = ลำดับ(เป้าหมาย.status), ขั้นใหม่ = ลำดับ(status);
+
+      // ถอยกลับ = ต้องยืนยันเสมอ (ความคืบหน้าที่บันทึกไว้จะดูขัดกับขั้นที่ถอยไป)
+      if (ขั้นใหม่ < ขั้นเดิม && เป้าหมาย.status !== "CANCELLED") {
+        const ตกลง = confirm(
+          `ย้อนขั้นของ "${เป้าหมาย.company || เป้าหมาย.name}"
+` +
+          `จาก "${leadStatusLabel[เป้าหมาย.status]}" กลับไป "${leadStatusLabel[status]}" ?
+
+` +
+          "งานที่ติ๊กไว้แล้วจะไม่ถูกล้าง — ขั้นกับงานจะไม่ตรงกันชั่วคราว",
+        );
+        if (!ตกลง) return;
+      }
+
+      // เดินหน้า = งานของทุกขั้นก่อนหน้าต้องครบ (ไม่รวมงานปิดการขาย ซึ่งเป็นงานของขั้นสุดท้าย)
+      if (ขั้นใหม่ > ขั้นเดิม) {
+        const ทำแล้ว = new Set((เป้าหมาย.tasks ?? []).filter(t => t.done).map(t => t.key));
+        const ค้าง = taskTpl.filter(t =>
+          t.key !== CLOSE_TASK_KEY && ลำดับ(t.stage) < ขั้นใหม่ && !ทำแล้ว.has(t.key));
+        if (ค้าง.length) {
+          // พาไปลงมือทำงานที่ค้างอยู่ "งานแรก" ทันที — ทำเสร็จแล้วค่อยลากใหม่ ระบบจะไล่งานถัดไปให้เอง
+          พาไปทำงาน(เป้าหมาย, ค้าง[0].key);
+          setToast(ค้าง.length === 1
+            ? `ย้ายขั้นไม่ได้ — เหลืองาน "${ค้าง[0].label}" อีก 1 งาน · พามาทำให้แล้ว`
+            : `ย้ายขั้นไม่ได้ — เหลืออีก ${ค้าง.length} งาน · เริ่มที่ "${ค้าง[0].label}"`);
+          return;
+        }
+      }
+    }
     // ── ขั้น "เสนอราคา" ต้องมีใบเสนอราคาจริง (บอสสั่ง 14 ส.ค. 69) ──
     // ลาก/เลือกสถานะไปขั้นนี้ทั้งที่ยังไม่เคยออกใบ = ขั้นขยับแต่ไม่มีเอกสารถึงลูกค้า
     // → พาไปออกใบแทน · พอบันทึกใบเสร็จ ระบบติ๊กงาน "จัดทำใบเสนอราคา" แล้วเลื่อนขั้นให้เอง
@@ -1119,29 +1256,40 @@ export default function LeadsPage() {
 
 
   // ─── Derived ──────────────────────────────────────────────────────────
+  // ── ตัวกรองพื้นฐานของหน้านี้ — ใช้ร่วมกันทั้งตารางและการ์ด KPI (บอสสั่ง 20 ส.ค. 69) ──
+  //
+  // "ให้พวกนี้คุมได้" — เดิมการ์ด KPI คิดจากลูกค้าเป้าหมายทั้งสาขาเสมอ (สรุปที่ฐานข้อมูล)
+  //   เลือกจังหวัด/ผู้รับผิดชอบ/ช่องทาง/ช่วงมูลค่า ตารางเปลี่ยน แต่ตัวเลขบนการ์ดนิ่งสนิท
+  //   → อ่านคู่กันแล้วขัดกันเอง ("กรองเหลือ 3 ราย แต่การ์ดบอก 16 ราย")
+  //
+  // ⚠️ จงใจไม่รวม "สถานะ" กับ "ค้างติดต่อ" ไว้ในฐานนี้ เพราะการ์ด KPI เป็นตัวสลับสองอย่างนั้นเอง
+  //    ถ้ารวมเข้าไปด้วย พอกดกรองสถานะหนึ่ง การ์ดอื่นจะกลายเป็น 0 แล้วกดสลับกลับไม่ได้อีก
+  const ตรงตัวกรองพื้นฐาน = useCallback((l: LeadRow) => {
+    const q = query.toLowerCase();
+    const matchQ = !query
+      || l.company.toLowerCase().includes(q)
+      || l.contact.toLowerCase().includes(q)
+      || l.province.toLowerCase().includes(q)
+      || l.id.toLowerCase().includes(q);
+    const matchPerson = person === "all" || assignedHas(l.assigned, person);
+    const latest = leadLatestDate(l);
+    const matchTime = !latest || (latest.getTime() >= timeRange.start.getTime() && latest.getTime() <= timeRange.end.getTime());
+    const matchA = !fAssignee || assignedHas(l.assigned, fAssignee);
+    const matchP = !fProvince || l.province === fProvince;
+    const matchSrc = !fSource || (l.source ?? "") === fSource;
+    const val = parseValue(l.value);
+    const matchMin = !fValueMin || val >= parseFloat(fValueMin.replace(/[฿,M]/g,""))*1e6;
+    const matchMax = !fValueMax || val <= parseFloat(fValueMax.replace(/[฿,M]/g,""))*1e6;
+    return matchQ && matchPerson && matchTime && matchA && matchP && matchSrc && matchMin && matchMax;
+  }, [query, person, timeRange, fAssignee, fProvince, fSource, fValueMin, fValueMax]);
+
   const filtered = useMemo(() => {
     let arr = leadsData.filter(l => {
-      const q = query.toLowerCase();
-      const matchQ = !query
-        || l.company.toLowerCase().includes(q)
-        || l.contact.toLowerCase().includes(q)
-        || l.province.toLowerCase().includes(q)
-        || l.id.toLowerCase().includes(q);
+      // ตัวกรองพื้นฐาน (ค้นหา/ผู้รับผิดชอบ/ช่วงเวลา/จังหวัด/ช่องทาง/ช่วงมูลค่า) ใช้ตัวเดียวกับการ์ด KPI
       const matchS = filterStatus === "ALL" || l.status === filterStatus;
-      // Global Responsible Person filter (FilterBar): drop leads not owned by selected person
-      const matchPerson = person === "all" || assignedHas(l.assigned, person);
-      // ช่วงเวลา: เทียบวันที่กิจกรรมล่าสุด (ลูกค้าเป้าหมายที่ยังไม่มีกิจกรรมไม่ถูกตัดออก)
-      const latest = leadLatestDate(l);
-      const matchTime = !latest || (latest.getTime() >= timeRange.start.getTime() && latest.getTime() <= timeRange.end.getTime());
-      const matchA = !fAssignee || assignedHas(l.assigned, fAssignee);
-      const matchP = !fProvince || l.province === fProvince;
-      const matchSrc = !fSource || (l.source ?? "") === fSource;
-      const val = parseValue(l.value);
-      const matchMin = !fValueMin || val >= parseFloat(fValueMin.replace(/[฿,M]/g,""))*1e6;
-      const matchMax = !fValueMax || val <= parseFloat(fValueMax.replace(/[฿,M]/g,""))*1e6;
       const matchFollow = followUpDays === 0 || needsFollowUp(l, followUpDays);
       // ตัวกรอง quick (วันนี้/สัปดาห์นี้/ของฉัน/ค้างเกิน 7 วัน/ปิดไม่สำเร็จ) ถูกลบพร้อมชิปกรองด่วน
-      return matchQ && matchS && matchPerson && matchTime && matchA && matchP && matchSrc && matchMin && matchMax && matchFollow;
+      return ตรงตัวกรองพื้นฐาน(l) && matchS && matchFollow;
     });
 
     arr = [...arr].sort((a,b) => {
@@ -1158,7 +1306,7 @@ export default function LeadsPage() {
       return 0;
     });
     return arr;
-  }, [leadsData, query, filterStatus, person, timeRange, fAssignee, fProvince, fSource, fValueMin, fValueMax, sortKey, sortDir, followUpDays, session.name]);
+  }, [leadsData, ตรงตัวกรองพื้นฐาน, filterStatus, sortKey, sortDir, followUpDays]);
 
   // จำนวนลูกค้าเป้าหมายที่ต้องรีบติดตาม (ขาดการติดต่อเกินเกณฑ์กฎธุรกิจ) — สำหรับแจ้งเตือน "ด่วน"
   const followUpCount = useMemo(() => leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length, [leadsData, followUpAlertDays]);
@@ -1386,50 +1534,39 @@ export default function LeadsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLead, showDeleteConfirm, popupField]);
 
-  // ─── สรุปจากฐานข้อมูล (ลดการพึ่งข้อมูลทั้งสาขาในเบราว์เซอร์) ─────────
-  // ตัวเลขบนการ์ด/กราฟคิดที่ฐานข้อมูล — ไม่ต้องขนลูกค้าเป้าหมายทั้งสาขามานับเอง
-  //   โหมดข้อมูลในเครื่อง (local) คืน null → ตกกลับไปคำนวณฝั่งหน้าจอเหมือนเดิม (ตัวเลขต้องเท่ากัน)
-  const summaryFilters = useMemo(() => ({ dealerCodes: [currentDealer.code] }), [currentDealer.code]);
-  const leadSummary = useLeadSummary(summaryFilters);
-  // นับ "เกิน N วัน" ที่ฐานข้อมูล — เกณฑ์เป็นของสาขา คิดฝั่งหน้าจอไม่ได้ถ้าไม่มีข้อมูลครบ
-  const overdueOpts = useMemo(() => ({
-    limit: 1, offset: 0, overdue: true, dealerCodes: [currentDealer.code],
-    defaultDays: followUpAlertDays,
-  }), [currentDealer.code, followUpAlertDays]);
-  const overduePage = useLeadsPage(overdueOpts);
+  // ── เลิกใช้ "สรุปทั้งสาขาจากฐานข้อมูล" ที่หน้านี้ (บอสสั่ง 20 ส.ค. 69) ──────────
+  //   สรุปนั้นเร็วก็จริง แต่ไม่รู้จักตัวกรองของหน้า (จังหวัด/ผู้รับผิดชอบ/ช่องทาง/ช่วงมูลค่า)
+  //   ตัวเลขบนการ์ดกับกราฟจึงนิ่งอยู่กับที่ ขัดกับตารางที่กรองแล้วตรงหน้า
+  //   ข้อมูลของสาขาถูกโหลดมาอยู่ในหน้าอยู่แล้ว (ตารางใช้ชุดเดียวกัน) — คิดฝั่งหน้าจอจึงไม่ได้เพิ่มภาระ
+
+  // ฐานของการ์ด KPI = ผ่านตัวกรองพื้นฐานทั้งหมดของหน้านี้ (ยังไม่กรองสถานะ/ค้างติดต่อ)
+  //   สองชุด: ไม่รวมที่ปิดการขายแล้ว (เหมือนตาราง) และรวมทุกสถานะ (ใช้คิดอัตราปิดการขาย)
+  const ฐานสรุป = useMemo(() => leadsData.filter(ตรงตัวกรองพื้นฐาน), [leadsData, ตรงตัวกรองพื้นฐาน]);
+  const ฐานสรุปรวมปิดแล้ว = useMemo(() => myAllLeads.filter(ตรงตัวกรองพื้นฐาน), [myAllLeads, ตรงตัวกรองพื้นฐาน]);
 
   // ─── สรุปด้านบน: 5 ตัวชี้วัด + กราฟแนวโน้ม + แหล่งที่มา ────────────────
   // นับจาก leadsData (ชุดที่ผ่านตัวกรองหลักแล้ว) — คลิกการ์ดเพื่อกรองต่อ
   const newThisMonth = useMemo(
     () => leadsData.filter(l => { const d = leadCreatedDate(l); return d.getMonth() === MOCK_TODAY_LEAD.getMonth() && d.getFullYear() === MOCK_TODAY_LEAD.getFullYear(); }).length,
     [leadsData]);
+  // ⚠️ ต้องนับจากฐานที่ผ่านตัวกรองของหน้านี้ ไม่ใช่ยอดทั้งสาขาจากฐานข้อมูล (overduePage)
+  //    ไม่งั้นกรองจังหวัดแล้วการ์ด "เกิน N วัน" ยังนับของทั้งสาขาอยู่ = ขัดกับตารางตรงหน้า
   const overdue7 = useMemo(
-    () => overduePage ? overduePage.total : leadsData.filter(l => needsFollowUp(l, followUpAlertDays)).length,
-    [overduePage, leadsData, followUpAlertDays]);
+    () => ฐานสรุป.filter(l => needsFollowUp(l, followUpAlertDays)).length,
+    [ฐานสรุป, followUpAlertDays]);
   const meetingToday = useMemo(() => appointments.filter(a => a.date === APP_NOW_ISO && a.status !== "cancelled" && a.type !== "follow_up").length, [appointments]);
-  const newWaiting = useMemo(
-    () => leadSummary
-      ? (leadSummary.byStatus.find(r => r.status === "WAITING")?.count ?? 0)
-      : leadsData.filter(l => l.status === "WAITING").length,
-    [leadSummary, leadsData]);
+  const newWaiting = useMemo(() => ฐานสรุป.filter(l => l.status === "WAITING").length, [ฐานสรุป]);
   // Sales Opportunity = มูลค่ารวมของลูกค้าเป้าหมายที่ยังเปิดอยู่ (Expected Revenue)
-  const openValue = useMemo(() => {
-    if (leadSummary) {
-      return leadSummary.byStatus
-        .filter(r => r.status !== "PAID" && r.status !== "CANCELLED")
-        .reduce((s, r) => s + r.value, 0);
-    }
-    return leadsData.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0);
-  }, [leadSummary, leadsData]);
-  // Conversion Rate = ปิดได้ / (ปิดได้ + ปิดไม่ได้) — ใช้ myAllLeads เพราะ leadsData ตัด PAID ออกแล้ว
-  // ต้องเป็นของสาขาตัวเองเท่านั้น: เดิมใช้ allLeads จึงคิดรวมลูกค้าเป้าหมายของอีก 9 สาขาเข้ามาด้วย
+  const openValue = useMemo(
+    () => ฐานสรุป.filter(l => l.status !== "PAID" && l.status !== "CANCELLED").reduce((s, l) => s + parseValue(l.value), 0),
+    [ฐานสรุป]);
+  // Conversion Rate = ปิดได้ / (ปิดได้ + ปิดไม่ได้) — ต้องนับจากฐานที่ "รวมที่ปิดการขายแล้ว" ด้วย
+  // (ตารางตัด PAID ออก) และต้องเป็นของสาขาตัวเองเท่านั้น
   const convRate = useMemo(() => {
-    const นับ = (st: string) => leadSummary
-      ? (leadSummary.byStatus.find(r => r.status === st)?.count ?? 0)
-      : myAllLeads.filter(l => l.status === st).length;
+    const นับ = (st: string) => ฐานสรุปรวมปิดแล้ว.filter(l => l.status === st).length;
     const won = นับ("PAID"), lost = นับ("CANCELLED");
     return won + lost ? Math.round((won / (won + lost)) * 1000) / 10 : 0;
-  }, [leadSummary, myAllLeads]);
+  }, [ฐานสรุปรวมปิดแล้ว]);
   const fmtCompact = (v:number) => v>=1e6 ? `฿${(v/1e6).toFixed(1)}M` : v>=1e3 ? `฿${Math.round(v/1e3)}K` : `฿${v}`;
 
   // การ์ด = ปุ่มกรอง · on = กำลังกรองด้วยเงื่อนไขนี้อยู่ (กดซ้ำ = ล้าง)
@@ -1441,7 +1578,7 @@ export default function LeadsPage() {
   );
   const noFilter = filterStatus === "ALL" && followUpDays === 0;
   const leadKpis = [
-    { label:"ลูกค้าเป้าหมายทั้งหมด", value:`${leadsData.length}`,   sub:"รายการ",       Icon:Users,      color:"#2563EB", bg:"#E8F0FE", on: noFilter,                 onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
+    { label:"ลูกค้าเป้าหมายทั้งหมด", value:`${ฐานสรุป.length}`,   sub:"รายการ",       Icon:Users,      color:"#2563EB", bg:"#E8F0FE", on: noFilter,                 onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
     { label:"โอกาสการขาย",          value:fmtCompact(openValue),    sub:"มูลค่าที่เปิดอยู่", Icon:TrendingUp, color:"#16A34A", bg:"#E6F7EE", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
     { label:`เกิน ${followUpAlertDays} วัน`, value:`${overdue7}`,     sub:"รายการ",       Icon:AlarmClock, color:"#EA580C", bg:"#FEF0E6", on: followUpDays === followUpAlertDays, onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(followUpDays === followUpAlertDays ? 0 : followUpAlertDays); } },
     { label:"อัตราปิดการขาย",       value:`${convRate}%`,           sub:"ปิดได้/ปิดทั้งหมด", Icon:Percent,   color:"#0D9488", bg:"#E6F7F5", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
@@ -1451,36 +1588,27 @@ export default function LeadsPage() {
   // ข้อมูลมีทั้งปี 2568 และ 2569 — เดิมนับแต่เดือนโดยไม่ดูปี ของปีที่แล้วเลยมาโผล่ในกราฟปีนี้
   // ⚠️ leadsData ตัด PAID ออกไปแล้ว — เส้น "ปิดการขาย" ที่นับจากมันจึงเป็น 0 ตลอดทั้งกราฟ
   // สรุปจากฐานนับครบทุกสถานะ จึงแก้เส้นที่หายไปด้วย (จัดกลุ่มตามเดือนที่สร้าง เหมือนเดิม)
+  // ⚠️ ต้องนับจากฐานที่ผ่านตัวกรองของหน้านี้ (ไม่ใช่สรุปทั้งสาขาที่ฐานข้อมูล) — ไม่งั้นเลือกจังหวัดแล้ว
+  //    การ์ดกับตารางเปลี่ยน แต่กราฟยังเป็นของทั้งสาขา อ่านคู่กันแล้วขัดกันเอง
   const leadTrend = useMemo(() => {
     const newLeads = Array(12).fill(0), won = Array(12).fill(0);
-    if (leadSummary) {
-      leadSummary.byMonth.filter(r => r.y === CUR_YEAR).forEach(r => {
-        if (r.m < 0 || r.m > 11) return;
-        newLeads[r.m] = r.created; won[r.m] = r.won;
-      });
-      return { newLeads, won };
-    }
-    myAllLeads.forEach(l => {
+    ฐานสรุปรวมปิดแล้ว.forEach(l => {
       const d = leadCreatedDate(l);
       if (d.getFullYear() !== CUR_YEAR) return;
       newLeads[d.getMonth()]++;
       if (l.status === "PAID") won[d.getMonth()]++;
     });
     return { newLeads, won };
-  }, [leadSummary, myAllLeads]);
+  }, [ฐานสรุปรวมปิดแล้ว]);
 
   // Lead vs Quotations — จำนวนลูกค้าเป้าหมาย (น้ำเงิน) เทียบ ใบเสนอราคา (ส้ม) รายเดือน · ปีปัจจุบันเท่านั้น
   const leadVsQuote = useMemo(() => {
     const leadC = Array(12).fill(0), quoteC = Array(12).fill(0);
-    if (leadSummary) {
-      leadSummary.byMonth.filter(r => r.y === CUR_YEAR).forEach(r => { if (r.m >= 0 && r.m <= 11) leadC[r.m] = r.created; });
-    } else {
-      myAllLeads.forEach(l => { const d = leadCreatedDate(l); if (d.getFullYear() === CUR_YEAR) leadC[d.getMonth()]++; });
-    }
+    ฐานสรุปรวมปิดแล้ว.forEach(l => { const d = leadCreatedDate(l); if (d.getFullYear() === CUR_YEAR) leadC[d.getMonth()]++; });
     quotations.filter(q => q.date.slice(0, 4) === String(CUR_YEAR))
       .forEach(q => { const mo = parseInt(q.date.slice(5, 7), 10) - 1; if (mo >= 0 && mo < 12) quoteC[mo]++; });
     return { leadC, quoteC };
-  }, [leadSummary, myAllLeads, quotations]);
+  }, [ฐานสรุปรวมปิดแล้ว, quotations]);
 
   // stageStats (Sales Journey) ถูกลบพร้อมการ์ดเส้นทาง/action center — เหลือแต่การคำนวณที่ไม่มีใครอ่าน
   // และนับจาก allLeads ทั้งเครือ ซึ่งผิดขอบเขตของหน้าตัวแทน
@@ -1743,7 +1871,10 @@ export default function LeadsPage() {
                                 onKeyDown={e => { if (e.key === "Enter") commitValue(l); if (e.key === "Escape") setEditValueId(null); }}
                                 style={{ width:"100%", textAlign:"right", border:"1px solid #003366", borderRadius:7, padding:"4px 7px", fontSize:"0.8rem", fontWeight:700, outline:"none", fontFamily:"inherit" }} />
                             ) : (
-                              <span title="คลิกเพื่อแก้ไขมูลค่า" style={{ cursor:"text" }}>{fmtVal(l.value)}</span>
+                              // ยังไม่มีมูลค่า = "—" ไม่ใช่ช่องว่าง ๆ (ผู้ใช้แยกไม่ออกว่าไม่มีข้อมูลหรือจอเพี้ยน)
+                              <span title="คลิกเพื่อแก้ไขมูลค่า" style={{ cursor:"text", color: l.value.trim() ? undefined : "#cbd5e1" }}>
+                                {l.value.trim() ? fmtVal(l.value) : "—"}
+                              </span>
                             )}
                           </td>
                         )}
@@ -1889,9 +2020,20 @@ export default function LeadsPage() {
                       {/* Sales-only — ไม่มีรูปอาคาร/building type (โฟกัสโอกาสการขายอย่างเดียว)
                           ไอคอนตา = แค่บอกใบ้ว่าคลิกการ์ดเปิดรายละเอียดได้ (การ์ดทั้งใบคลิกได้อยู่แล้ว เลยไม่ต้องมี onClick ซ้ำ)
                           เดิมไม่มี affordance เลย ผู้ใช้ที่ไม่คุ้น kanban อาจไม่รู้ว่าคลิกการ์ดได้ */}
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6 }}>
-                        <div style={{ fontSize:"0.86rem", fontWeight:700, color:"#2D2D2D", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }} title={l.company}>{l.company}</div>
-                        <Eye size={13} color="#9ca3af" style={{ flexShrink:0 }} />
+                      {/* ── หัวการ์ด = แม่แบบ · ชื่อลูกค้าอยู่ใต้ (บอสสั่ง 20 ส.ค. 69) ────────────
+                          ยึดตามระบบเดิม: สิ่งที่จะขายเป็นพาดหัว ลูกค้าเป็นบรรทัดรอง
+                          ป้าย "สนใจ: …" เดิมถูกถอด เพราะแม่แบบขึ้นมาเป็นหัวการ์ดแล้ว = บอกซ้ำสองที่
+                          ยังไม่เลือกแม่แบบ = ขึ้น "ยังไม่ระบุแม่แบบ" สีจาง ไม่ใช่หัวการ์ดว่าง ๆ */}
+                      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:6 }}>
+                        <div style={{ fontSize:"0.86rem", fontWeight:800, color: l.product ? "#2D2D2D" : "#b6bec9", minWidth:0,
+                          display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", lineHeight:1.35 }}
+                          title={l.product || undefined}>
+                          {l.product || "ยังไม่ระบุแม่แบบ"}
+                        </div>
+                        <Eye size={13} color="#9ca3af" style={{ flexShrink:0, marginTop:2 }} />
+                      </div>
+                      <div style={{ fontSize:"0.74rem", fontWeight:700, color:"#6b7280", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.company}>
+                        {l.company}
                       </div>
                       <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:6, margin:"6px 0" }}>
                         <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:"0.68rem", fontWeight:600, color:"#64748b",
@@ -1900,15 +2042,9 @@ export default function LeadsPage() {
                         </span>
                         <span style={{ display:"inline-flex", alignItems:"center", fontSize:"0.72rem", fontWeight:800, color:"#003366",
                           background:"#e3f0fb", borderRadius:6, padding:"2px 8px", fontVariantNumeric:"tabular-nums" }}>
-                          {fmtVal(l.value)}
+                          {fmtBahtFull(l.value)}
                         </span>
                       </div>
-                      {l.product && (
-                        <div style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:"0.66rem", fontWeight:600, color:"#003366",
-                          background:"#eef3f8", border:"1px solid #dce5f0", borderRadius:6, padding:"2px 8px", marginBottom:8, maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={l.product}>
-                          สนใจ: {l.product}
-                        </div>
-                      )}
 
                       {/* ข้อมูลติดต่อแบบแถวป้ายกำกับ + เตือนขาดการติดต่อ */}
                       <div style={{ display:"flex", flexDirection:"column", gap:3, fontSize:"0.68rem",
@@ -2148,7 +2284,27 @@ export default function LeadsPage() {
         const c = current;
         const sc = leadStatusColor[c.status];
         const cInitials = (c.company || c.name).replace(/บจ\.|หจก\./g, "").trim().slice(0, 2) || "—";
-        const activities = (c.activities && c.activities.length) ? c.activities : seedActivities(c);
+        // ── ไทม์ไลน์ = "ทุกอย่างที่ทำกับดีลนี้" ตั้งแต่ต้นจนถึงตอนนี้ (บอสสั่ง 21 ส.ค. 69) ──
+        //
+        // ⚠️ ต้อง "รวม" สองแหล่ง ไม่ใช่เลือกอย่างใดอย่างหนึ่ง (บั๊กจริง — บอสเห็นกิจกรรมเหลือบรรทัดเดียว):
+        //   1) กิจกรรมที่ระบบบันทึกไว้ (ออกใบ/ส่งใบ/แก้ใบ/นัดหมาย/เปลี่ยนขั้น)
+        //   2) งานในเช็กลิสต์ที่ติ๊กเสร็จไปแล้ว — ของเก่าที่ทำก่อนระบบจะเริ่มบันทึกกิจกรรม
+        //   เดิมเขียนว่า "ถ้ามี (1) ให้ใช้ (1) อย่างเดียว" → พอมีกิจกรรมใหม่แค่บรรทัดเดียว
+        //   ประวัติการทำงานทั้งหมดก่อนหน้านั้นก็หายไปจากหน้าจอทันที
+        // กันซ้ำ: ถ้างานนั้นถูกบันทึกเป็นกิจกรรมไว้แล้ว (ข้อความมีชื่องาน) ไม่ต้องเติมซ้ำอีก
+        const บันทึกไว้ = c.activities ?? [];
+        const จากงาน = seedActivities(c).filter(g =>
+          !บันทึกไว้.some(a => String(a.text ?? "").includes(g.text.split(" · ")[0])));
+        const activities = [...บันทึกไว้, ...จากงาน]
+          .sort((a, b) => {
+            const เวลา = (x: { date?: string; id?: number }) => {
+              const t = Date.parse(String(x.date ?? ""));
+              return Number.isFinite(t) ? t : 0;
+            };
+            const ต่าง = เวลา(a) - เวลา(b);
+            // วันเดียวกัน/อ่านวันไม่ออก (ป้ายวันแบบไทย) → เรียงตามลำดับที่ถูกบันทึก (id)
+            return ต่าง !== 0 ? ต่าง : (Number((a as { id?: number }).id ?? 0) - Number((b as { id?: number }).id ?? 0));
+          });
         const drawerFiles = myFiles;
         // เป็นลูกค้าเมื่อปิดการขายสำเร็จ (WON) เท่านั้น — mock บางลูกค้าเป้าหมายมี customerId ผูกไว้แต่ยังไม่ WON จึงไม่นับ
         const isCustomer = c.status === "PAID";

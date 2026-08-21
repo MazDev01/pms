@@ -35,12 +35,14 @@ test("[func] สร้างนัดหมายผ่านหน้าจอ 
   await expect(note, "ฟอร์มนัดหมายต้องเปิด").toBeVisible({ timeout: 10_000 });
   // ประเภทกิจกรรม = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — เริ่มที่ "ยังไม่ระบุ"
   await page.getByLabel("ประเภท").selectOption({ index: 1 });
-  await page.getByPlaceholder("จังหวัด").fill(CUSTOMER);
-  await note.fill("นัดทดสอบอัตโนมัติ");
+  // ช่องจังหวัดเป็น "ตัวเลือกตามเขตของสาขา" แล้ว (บอสสั่ง 20 ส.ค. 69) พิมพ์เองไม่ได้อีก
+  await page.getByLabel("จังหวัด").selectOption({ index: 1 });
+  await note.fill(`นัดทดสอบอัตโนมัติ ${CUSTOMER}`);
   await page.getByRole("button", { name: "เพิ่มกิจกรรม" }).last().click();
 
+  // ตามหาแถวด้วย "หมายเหตุ" แทนจังหวัด (จังหวัดเลือกจากรายการแล้ว ใส่ป้ายทดสอบไม่ได้)
   const row = await waitRow<{ dealer_code: string; id: number }>(
-    sb, "appointments", { province: CUSTOMER }, 20_000);
+    sb, "appointments", { note: `นัดทดสอบอัตโนมัติ ${CUSTOMER}` }, 20_000);
   expect(row.dealer_code, "นัดใหม่ต้องเป็นของสาขาที่ล็อกอิน").toBe("RYG");
   // เลขต้องมาจากตัวนับของ DB (next_entity_id) ไม่ใช่ Date.now()
   // ค่าจาก Date.now() เป็นเลข 13 หลัก (~1.7e12) — เลขนับของสาขาต้องเล็กกว่ามาก

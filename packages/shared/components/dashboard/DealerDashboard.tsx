@@ -206,7 +206,14 @@ export default function DealerDashboard() {
   const cmpBaht = (v: number) => v >= 1e6 ? `฿${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `฿${Math.round(v / 1e3)}K` : `฿${v}`;
 
   // ── การ์ดรายการ ──────────────────────────────────────────────────────────
-  const urgentLeads = useMemo(() => leadsIn.filter(l => needsFollowUp(l, followUpAlertDays)).sort((a, b) => (daysSinceContact(b) ?? 0) - (daysSinceContact(a) ?? 0)).slice(0, 4), [leadsIn, followUpAlertDays]);
+  // เรียงจากวันน้อยไปมาก (บอสสั่ง 21 ส.ค. 69) — รายที่เพิ่งเลยกำหนดอยู่บนสุด
+  //   เหตุผล: รายที่เงียบไป 2-3 เดือนมักเย็นไปแล้ว ส่วนรายที่เพิ่งเลยกำหนดไม่กี่วันคือรายที่โทรกลับแล้วได้ผลจริง
+  //   ⚠️ ตัดเหลือ 4 รายการ "หลังเรียง" เสมอ — สลับลำดับแล้วรายการที่โชว์จะเปลี่ยนชุดไปด้วย
+  const urgentLeads = useMemo(
+    () => leadsIn.filter(l => needsFollowUp(l, followUpAlertDays))
+      .sort((a, b) => (daysSinceContact(a) ?? 0) - (daysSinceContact(b) ?? 0))
+      .slice(0, 4),
+    [leadsIn, followUpAlertDays]);
   const todayTasks = useMemo(() => appointments.filter(a => a.date === TODAY_ISO && a.status !== "cancelled").sort((a, b) => a.time.localeCompare(b.time)).slice(0, 4), [appointments]);
   const latestQuotes = useMemo(() => [...quotesIn].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), [quotesIn]);
 

@@ -22,7 +22,7 @@ test("[ux·hq] KPI 4 ตัว คำนวณสอดคล้องกัน 
 test("[ux·hq] มีกราฟครบตามที่ข้อมูลจริงรองรับ", async ({ page }) => {
   await open(page, "hq", "/hq/quotations");
   for (const title of [
-    "ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน",
+    "อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา แยกตามตัวแทน",
     "มูลค่าใบเสนอราคา เทียบ ยอดขายจริง",
     // "ออกใบเสนอราคาเยอะ แต่ปิดได้น้อย" ถูกย้ายไป /hq/pipeline (ดูเทสต์ด้านล่าง) — ไม่อยู่หน้านี้แล้ว
     "ประเภทอาคาร",
@@ -109,9 +109,12 @@ test("[ux·hq] ลิ้นชักดูใบเสนอราคา อ่�
 test("[ux·hq] อัตราแปลง = รายที่ออกใบแล้ว ÷ รายทั้งหมด (ไม่ใช่จำนวนใบ)", async ({ page }) => {
   await open(page, "hq", "/hq/quotations");
   await assertHealthyPage(page, "ใบเสนอราคาทั้งเครือ");
-  const card = page.locator(".card", { hasText: "ลูกค้าเป้าหมาย → ใบเสนอราคา รายตัวแทน" }).first();
+  const card = page.locator(".card", { hasText: "อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา แยกตามตัวแทน" }).first();
   await expect(card).toBeVisible();
-  await expect(card.getByText(/นับเป็นราย ไม่ใช่จำนวนใบ/)).toBeVisible();
+  // คำอธิบายใต้หัวข้อถูกถอดออก (ชื่อการ์ดบอกครบในตัวแล้ว) — ตรวจที่ "หน่วยของแถบ" แทน
+  // ทั้งสองแถบต้องเป็น "ราย" ไม่งั้น % กับความยาวแถบจะไม่ตรงกันเหมือนบั๊กเดิม
+  await expect(card.getByText(/\d+ ราย/).first()).toBeVisible();
+  await expect(card.getByText(/\d+ ใบ$/), "แถบต้องไม่กลับไปวัดด้วยจำนวนใบอีก").toHaveCount(0);
 
   const cells = card.locator("span[title*='ออกใบเสนอราคาแล้ว']");
   const n = await cells.count();

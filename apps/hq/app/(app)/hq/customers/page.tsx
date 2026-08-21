@@ -216,8 +216,10 @@ export default function HQCustomersPage() {
 
       {/* ตัวกรอง — ค้นหา + ตัวแทน/ภาค/จังหวัด/ประเภทอาคาร */}
       <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "nowrap", padding: "10px 14px" }}>
-        {/* ช่องค้นหายืดกินที่ว่างตอนจอกว้าง และยุบก่อนตัวกรองตอนจอแคบ (จึงไม่ต้องมี spacer คั่น) */}
-        <div className="search-bar" style={{ flex: "1 1 216px", width: "auto", minWidth: 132 }}>
+        {/* ขนาดช่องค้นหาต้องเท่ากันทุกหน้า (บอสสั่ง 20 ส.ค. 69) — ใช้ .search-bar ตัวมาตรฐาน
+            เดิมหน้านี้สั่งให้ยืดกินที่ว่าง จึงกว้างกว่าหน้าอื่นเกือบสามเท่าเวลาจอกว้าง
+            ตัวกรองถูกดันไปชิดขวาด้วย spacer แทน — วางตำแหน่งเหมือนหน้าใบเสนอราคาทั้งเครือ */}
+        <div className="search-bar">
           <Search size={14} color="#9ca3af" strokeWidth={2} />
           <input
             type="text"
@@ -226,6 +228,8 @@ export default function HQCustomersPage() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+
+        <div style={{ flex: 1 }} />
 
         <select aria-label="กรองตามตัวแทน" value={dealerSel} onChange={e => setDealerSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกตัวแทน</option>

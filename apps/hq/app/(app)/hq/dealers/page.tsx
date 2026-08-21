@@ -162,6 +162,9 @@ function HQDealersPageInner() {
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<DealerRow | null>(null);
   const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" as "active" | "inactive" });
+  // บัญชีเข้าระบบของสาขาใหม่ — HQ กรอกเองได้ (บอสสั่ง 20 ส.ค. 69) · เว้นว่าง = ระบบตั้งให้
+  //   สาขาจริงใช้อีเมลธุรกิจของตัวเอง อีเมลที่ระบบประกอบจากรหัสสาขาไม่มีอยู่จริง
+  const [บัญชีใหม่, setบัญชีใหม่] = useState({ email: "", password: "" });
   // ผู้ใช้แก้ช่องเป้าเองหรือยัง — ถ้ายัง เปลี่ยนภาคจะเติมค่าเริ่มต้นตามภาคให้ (โหมดเพิ่มใหม่เท่านั้น)
   const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
@@ -204,7 +207,7 @@ function HQDealersPageInner() {
   const avgOnTime = avgOf(c => perfOf(c).onTimePct);
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
-  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
+  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" }); setบัญชีใหม่({ email: "", password: "" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
   function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setTargetTouched(true); setFormErr(""); setShowForm(true); }
 
   // เปลี่ยนภาค: อัปเดตภาค + ถ้ายังไม่แก้เป้าเอง (โหมดเพิ่มใหม่) เติมค่าเริ่มต้นตามภาคให้
@@ -241,9 +244,15 @@ function HQDealersPageInner() {
     if (REAL_BACKEND) {
       setCreating(true);
       setFormErr("");
+      // ตรวจที่หน้าจอก่อนยิง เพื่อบอกผู้ใช้ทันทีตรงช่องที่ผิด — เซิร์ฟเวอร์ยังตรวจซ้ำเสมอ
+      const อีเมล = บัญชีใหม่.email.trim();
+      const รหัส = บัญชีใหม่.password;
+      if (อีเมล && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมล)) { setFormErr("รูปแบบอีเมลไม่ถูกต้อง"); return; }
+      if (รหัส && รหัส.length < 8) { setFormErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"); return; }
       const res = await createDealerAccount({
         code, name: form.name.trim(), province: form.province.trim(),
         region: form.region, revenueTarget: form.revenueTarget,
+        email: อีเมล || undefined, password: รหัส || undefined,
       });
       setCreating(false);
       if (!res.ok) { setFormErr(res.error); return; } // ล้มเหลวต้องบอกจริง คงฟอร์มไว้ให้แก้
@@ -562,6 +571,26 @@ function HQDealersPageInner() {
                     )}
                   </select>
                 </InputField>
+                {!editTarget && (<>
+                  {/* ── บัญชีเข้าระบบของสาขา (เฉพาะตอนสร้างใหม่) ──────────────────────
+                      แก้อีเมล/รหัสผ่านของสาขาที่มีอยู่แล้วต้องใช้ปุ่ม "รีเซ็ตรหัสผ่าน" ในตาราง
+                      ไม่ใช่ฟอร์มนี้ — ฟอร์มนี้แก้ทะเบียนสาขา ไม่ได้แตะระบบยืนยันตัวตน */}
+                  <div className="form-section">บัญชีเข้าระบบ</div>
+                  <InputField label="อีเมลเข้าระบบ">
+                    <input type="email" value={บัญชีใหม่.email} onChange={e => setบัญชีใหม่(v => ({ ...v, email: e.target.value }))}
+                      aria-label="อีเมลเข้าระบบ" placeholder={form.code ? `${form.code.toLowerCase()}@partner-agent.co.th` : "เว้นว่าง = ระบบตั้งให้"} style={INPUT_STYLE} />
+                    <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
+                      เว้นว่าง = ระบบตั้งให้จากรหัสสาขา · แนะนำให้ใส่อีเมลจริงของสาขา จะได้รับอีเมลลืมรหัสผ่านได้
+                    </div>
+                  </InputField>
+                  <InputField label="รหัสผ่าน">
+                    <input type="text" value={บัญชีใหม่.password} onChange={e => setบัญชีใหม่(v => ({ ...v, password: e.target.value }))}
+                      aria-label="รหัสผ่าน" placeholder="เว้นว่าง = ระบบสุ่มให้" style={INPUT_STYLE} />
+                    <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
+                      อย่างน้อย 8 ตัวอักษร · แสดงเป็นตัวอักษรปกติโดยตั้งใจ — HQ ต้องคัดลอกไปแจ้งสาขา
+                    </div>
+                  </InputField>
+                </>)}
                 <div className="form-section">เป้าหมายและสถานะ</div>
                 <InputField label="เป้ายอดขาย (บาท/ปี)">
                   {/* เป้ายอดขายติดลบไม่มีอยู่จริงในทางธุรกิจ และทำให้ตัวเลขอื่นเพี้ยนตามเป็นทอด ๆ:

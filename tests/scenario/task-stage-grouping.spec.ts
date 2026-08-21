@@ -41,6 +41,7 @@ test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 
 test("[func] แท็บงานจัดกลุ่มตามขั้นของเส้นทางการขาย + ชี้ขั้นปัจจุบันตรงกับสถานะการ์ด", async ({ page }) => {
   const errs = watchErrors(page);
+  const sb = await db(RYG);
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await settle(page);
@@ -65,9 +66,13 @@ test("[func] แท็บงานจัดกลุ่มตามขั้น�
   await expect(page.locator("[data-stage-head]").filter({ hasText: "ขั้นปัจจุบัน" })).toHaveCount(1);
 
   // ลำดับงานเดิมห้ามถูกสลับจากการจัดกลุ่ม (ลำดับคือกติกาการติ๊กห้ามข้ามขั้น)
+  // ⚠️ ห้ามเทียบกับรายชื่องานที่พิมพ์ตายตัว — เส้นทางการขายแก้ได้ที่หน้าตั้งค่าของสำนักงานใหญ่
+  //    (ลำดับ/ชื่องานเปลี่ยนได้จริง เจอมาแล้ว 21 ส.ค. 69) เทสต์ต้องเทียบกับ "เส้นทางจริง" ในฐานข้อมูล
+  const { data: journey } = await sb.from("hq_sales_journey").select("tasks").eq("id", 1).maybeSingle();
+  const ตามเส้นทาง = ((journey?.tasks as { label: string }[] | null) ?? []).map(t => t.label);
   const labels = await page.locator("[data-stage-head] ~ div button span:nth-child(2) > span:first-child").allInnerTexts();
-  expect(labels.slice(0, 5).map(s => s.trim()))
-    .toEqual(["ติดต่อแล้ว", "เก็บข้อมูลลูกค้า", "นัดหมาย", "สรุปความต้องการ", "จัดทำใบเสนอราคา"]);
+  expect(labels.map(s => s.trim()).slice(0, ตามเส้นทาง.length),
+    "ลำดับงานบนหน้าจอต้องตรงกับเส้นทางการขายที่สำนักงานใหญ่ตั้งไว้").toEqual(ตามเส้นทาง);
 
   assertNoErrors(errs, "จัดกลุ่มงานตามขั้น");
 });

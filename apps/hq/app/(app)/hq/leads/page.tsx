@@ -34,7 +34,19 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { leadStatusLabel, leadStatusColor, QUOTED_UP, LEAD_STATUS_ORDER, type LeadStatus } from "@pms/shared/lib/mock";
-import { fmtBaht, pctOrNull } from "@pms/shared/lib/format";
+import { fmtBaht, pctOrNull, parseBaht, fmtFull, formatPhone } from "@pms/shared/lib/format";
+import { groupLostReasons, withUnspecified } from "@pms/shared/lib/lostReasons";
+
+// ── ตัวเลขและเบอร์โทรบนหน้าสำนักงานใหญ่ ต้องอ่านง่ายเหมือนฝั่งตัวแทน (บอสสั่ง 21 ส.ค. 69) ──
+//   มูลค่าเก็บเป็นข้อความอิสระ ("5310000" / "฿1.4M" / เว้นว่าง) — แปลงเป็นตัวเลขก่อนแล้วค่อยใส่ลูกน้ำ
+//   ⚠️ อ่านค่าไม่ออก = คืนข้อความเดิม ห้ามกลายเป็น ฿0 (กติกาเดิมของทั้งระบบ)
+const มูลค่าอ่านง่าย = (v?: string) => {
+  const ดิบ = String(v ?? "").trim();
+  if (!ดิบ) return "—";
+  const n = parseBaht(ดิบ);
+  return n > 0 ? fmtFull(n) : ดิบ;
+};
+const เบอร์อ่านง่าย = (v?: string) => formatPhone(String(v ?? "")) || "—";
 
 const PRIMARY = "#003366";
 // 8 สี — โดนัท "ตามแหล่งที่มา" มีได้ถึง 8 ชิ้น ถ้าสีวนซ้ำจะอ่านผิดว่าเป็นชิ้นเดียวกัน
@@ -367,13 +379,16 @@ export default function HQLeadsPage() {
   // นับเฉพาะลูกค้าเป้าหมายที่ปิดไม่สำเร็จ "และบันทึกเหตุผลไว้จริง" — ไม่เดาเหตุผลให้ลูกค้าเป้าหมายที่ไม่ได้ระบุ
   // รายการเหตุผลเป็นของ HQ (ตั้งค่า › เส้นทางการขาย) ใช้ร่วมทุกตัวแทน
   const lostReasons = useMemo(() => {
-    const base = chartSummary
+    const ดิบ = chartSummary
       ? chartSummary.byLostReason.map(r => ({ reason: r.reason, count: r.count }))
       : (() => { const m = new Map<string, number>(); filtered.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => m.set(l.lostReason!, (m.get(l.lostReason!) ?? 0) + 1)); return [...m.entries()].map(([reason, count]) => ({ reason, count })); })();
-    const arr = [...base].sort((a, b) => b.count - a.count);
-    const max = Math.max(...arr.map(a => a.count), 1);
-    const total = arr.reduce((s, a) => s + a.count, 0) || 1;
-    return arr.map(a => ({ ...a, pct: Math.round(a.count / max * 100), share: Math.round(a.count / total * 100) }));
+    // โชว์ทุกเหตุผลตามจริง · ยุบเฉพาะหางยาวที่เกิน 6 ชิ้น (ดู groupLostReasons)
+    // แล้วเติมก้อน "อื่นๆ (ไม่ได้ระบุเหตุผล)" ให้ผลรวมของชิ้นเท่ากับเลขกลางวงเสมอ
+    const ปิดไม่สำเร็จทั้งหมด = chartSummary
+      ? (chartSummary.byStatus.find(s => s.status === "CANCELLED")?.count ?? 0)
+      : filtered.filter(l => l.status === "CANCELLED").length;
+    const มีเหตุผล = ดิบ.reduce((s, r) => s + r.count, 0);
+    return withUnspecified(groupLostReasons(ดิบ), ปิดไม่สำเร็จทั้งหมด - มีเหตุผล);
   }, [chartSummary, filtered]);
 
 
@@ -396,11 +411,13 @@ export default function HQLeadsPage() {
   // Export — หนึ่งแถวต่อลูกค้าเป้าหมาย (คอลัมน์ตรงกับตาราง) · supabase: ดึงทั้งชุดที่กรองจาก DB ตอนกด · local: จาก filtered
   const leadToCells = (l: LeadRow) => [
     l.id, l.dealerCode ?? "—", DEALER_NAME.get(l.dealerCode ?? "") ?? "—", l.company, l.contact,
-    l.province, l.product, l.source || "—", l.value || "—",
+    l.province, l.product, l.source || "—", มูลค่าอ่านง่าย(l.value),
     QUOTED_UP.includes(l.status) ? "เสนอแล้ว" : "—",
     lastContactLabel(l),
     needsFollowUp(l, rulesOf(l.dealerCode).followUpAlertDays) ? "ต้องติดตาม" : "—",
     l.assigned || "—", leadStatusLabel[l.status],
+    // เหตุผลที่ปิดไม่สำเร็จ — มีเฉพาะดีลที่ปิดไม่สำเร็จ (บอสสั่ง 21 ส.ค. 69)
+    l.status === "CANCELLED" ? (l.lostReason || "ไม่ได้ระบุเหตุผล") : "—",
   ];
   const exportGetRows = leadsPage
     ? async () => {
@@ -418,7 +435,7 @@ export default function HQLeadsPage() {
           <FilterBar dims={[]} />
           {/* ส่งออก = สิ่งที่เห็นบนจอตอนนี้ (ผ่านตัวกรองทุกตัวแล้ว) · คอลัมน์เรียงตรงกับตาราง */}
           <ExportMenu filename="hq-leads" title="ลูกค้าเป้าหมายทั้งเครือ"
-            headers={["รหัสลูกค้าเป้าหมาย","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","ต้องติดตาม","ผู้รับผิดชอบ","สถานะ"]}
+            headers={["รหัสลูกค้าเป้าหมาย","รหัสตัวแทน","ตัวแทน","ลูกค้า","ผู้ติดต่อ","จังหวัด","ประเภทอาคาร","แหล่งที่มา","มูลค่า","เสนอราคาแล้ว","ติดต่อล่าสุด","ต้องติดตาม","ผู้รับผิดชอบ","สถานะ","เหตุผลที่ปิดไม่สำเร็จ"]}
             rows={filtered.map(leadToCells)} getRows={exportGetRows} />
         </div>
       </div>
@@ -602,14 +619,19 @@ export default function HQLeadsPage() {
                 size={150}
               />
               <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 9 }}>
-                {lostReasons.map((r, i) => (
-                  <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: LOST_RAMP[i % LOST_RAMP.length], flexShrink: 0 }} />
-                    <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</span>
-                    <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
-                    <span style={{ color: "var(--muted-foreground)", minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.share}%</span>
-                  </div>
-                ))}
+                {(() => {
+                  const รวม = lostReasons.reduce((s, r) => s + r.count, 0) || 1;
+                  return lostReasons.map((r, i) => (
+                    // ก้อน "อื่นๆ (ระบุเอง)" ชี้เมาส์แล้วเห็นข้อความจริงที่ตัวแทนพิมพ์ไว้ (ยุบเพื่อให้อ่านง่าย ไม่ใช่ซ่อน)
+                    <div key={r.reason} title={r.details?.length ? r.details.join(" · ") : undefined}
+                      style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.72rem" }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 3, background: LOST_RAMP[i % LOST_RAMP.length], flexShrink: 0 }} />
+                      <span style={{ flex: 1, color: "#374151", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.reason}</span>
+                      <span style={{ fontWeight: 800, color: "#1F2937", fontVariantNumeric: "tabular-nums" }}>{r.count}</span>
+                      <span style={{ color: "var(--muted-foreground)", minWidth: 34, textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{Math.round(r.count / รวม * 100)}%</span>
+                    </div>
+                  ));
+                })()}
               </div>
             </>)}
           </div>
@@ -726,7 +748,7 @@ export default function HQLeadsPage() {
                     <td style={{ color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>{l.province}</td>
                     <td title={l.product} style={{ color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.product}</td>
                     <td style={{ color: "var(--muted-foreground)", fontSize: "0.78rem", whiteSpace: "nowrap" }}>{l.source || "—"}</td>
-                    <td className="num" style={{ fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>{l.value || "—"}</td>
+                    <td className="num" style={{ fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>{มูลค่าอ่านง่าย(l.value)}</td>
                     <td>
                       {/* ระบบไม่มี dealId ผูกใบเสนอราคากับลูกค้าเป้าหมาย → นับจำนวนใบไม่ได้
                           ใช้สถานะของลูกค้าเป้าหมายแทน (ไปถึงขั้นเสนอราคา = เคยออกใบแล้วจริง) */}
@@ -739,7 +761,20 @@ export default function HQLeadsPage() {
                         ? <span className="badge" style={{ background: "#fff3e6", color: "#d97706", whiteSpace: "nowrap" }}>ต้องติดตาม</span>
                         : <span style={{ color: "#9ca3af" }}>—</span>}
                     </td>
-                    <td><span className="badge" style={{ background: c.bg, color: c.text, whiteSpace: "nowrap" }}>{leadStatusLabel[l.status]}</span></td>
+                    {/* ── ปิดไม่สำเร็จ = ต้องเห็นเหตุผลจากหน้ารายการเลย (บอสสั่ง 21 ส.ค. 69) ──────
+                        เดิมต้องเปิดแผงรายละเอียดทีละใบถึงจะรู้ว่าเสียงานเพราะอะไร
+                        ⚠️ ใส่ไว้ใต้ป้ายสถานะ ไม่เพิ่มคอลัมน์ใหม่ — ตารางนี้เต็มความกว้างพอดีแล้ว
+                           (ดูหมายเหตุที่ colgroup: เพิ่มคอลัมน์แล้วจะกลับมามีแถบเลื่อนแนวนอนอีก) */}
+                    <td>
+                      <span className="badge" style={{ background: c.bg, color: c.text, whiteSpace: "nowrap" }}>{leadStatusLabel[l.status]}</span>
+                      {l.status === "CANCELLED" && (
+                        <span title={l.lostReason || "ไม่ได้ระบุเหตุผล"}
+                          style={{ display: "block", fontSize: "0.65rem", color: l.lostReason ? "#dc2626" : "#9ca3af", marginTop: 3,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {l.lostReason || "— ไม่ได้ระบุเหตุผล"}
+                        </span>
+                      )}
+                    </td>
                     <td onClick={e => e.stopPropagation()}>
                       {/* ปุ่มไอคอนล้วน — ข้อความ "ดู" ซ้ำกับที่ไอคอนสื่ออยู่แล้ว · title/aria-label คงไว้ให้ screen reader */}
                       <button onClick={() => setViewLead(l)} title="ดูรายละเอียด" aria-label="ดูรายละเอียด" className="btn btn-secondary btn-sm"
@@ -778,7 +813,7 @@ export default function HQLeadsPage() {
                   <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,.75)", marginTop: 3 }}>{l.id} · {l.contact}</div>
                   <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                     <span className="badge" style={{ background: c.bg, color: c.text }}>{leadStatusLabel[l.status]}</span>
-                    <span className="badge" style={{ background: "rgba(255,255,255,.15)", color: "#fff" }}>{l.value || "—"}</span>
+                    <span className="badge" style={{ background: "rgba(255,255,255,.15)", color: "#fff" }}>{มูลค่าอ่านง่าย(l.value)}</span>
                   </div>
                 </div>
                 <button onClick={() => setViewLead(null)} title="ปิด" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid rgba(255,255,255,.2)",
@@ -795,7 +830,7 @@ export default function HQLeadsPage() {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
               <span style={{ color: "#8a929c", flexShrink: 0 }}>โทรศัพท์</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.phone || "—"}</span>
+              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{เบอร์อ่านง่าย(l.phone)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
               <span style={{ color: "#8a929c", flexShrink: 0 }}>อีเมล</span>
@@ -815,7 +850,7 @@ export default function HQLeadsPage() {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
               <span style={{ color: "#8a929c", flexShrink: 0 }}>ประเมินราคา</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.value || "—"}</span>
+              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{มูลค่าอ่านง่าย(l.value)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
               <span style={{ color: "#8a929c", flexShrink: 0 }}>สร้างเมื่อ</span>

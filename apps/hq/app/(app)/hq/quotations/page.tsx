@@ -19,6 +19,7 @@ import {
   STATUS_ORDER, type QuoteRow, type DealerAgg, type AgingBucket,
 } from "@pms/shared/lib/hqQuotations";
 import { parseBaht } from "@pms/shared/lib/format";
+import { groupLostReasons } from "@pms/shared/lib/lostReasons";
 
 const TH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const QPAGE_SIZE = 10;
@@ -100,7 +101,7 @@ export default function NetworkQuotationPage() {
   const trendRows = useMemo(() => allRows.filter(matchesNonTime), [allRows, matchesNonTime]);
   const rows = useMemo(() => trendRows.filter(r => inRange(r.createdAt)), [trendRows, inRange]);
 
-  // ลูกค้าเป้าหมายสำหรับกราฟ "ลูกค้าเป้าหมาย → ใบเสนอราคา" และ "เหตุผลที่เสียโอกาส"
+  // ลูกค้าเป้าหมายสำหรับกราฟ "อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา แยกตามตัวแทน" และ "เหตุผลที่เสียโอกาส"
   // กรองเฉพาะมิติที่ลูกค้าเป้าหมายมีจริง: ขอบเขตตัวแทน (ตัวแทน/ภูมิภาค/จังหวัดตัวแทน) + ช่วงเวลา
   // ไม่กรองด้วยสถานะของใบเสนอราคา — เป็นคนละเอกสารกัน จะกรองข้ามไม่ได้
   const leadRows = useMemo(() => netLeads.filter(l => {
@@ -162,11 +163,14 @@ export default function NetworkQuotationPage() {
     });
     return m;
   }, [leadSum, leadRows]);
+  // โชว์ทุกเหตุผลตามจริงในกราฟ · ยุบเฉพาะหางยาวเป็น "อื่นๆ" (ดู groupLostReasons)
   const lostReasons = useMemo(() => {
-    if (leadSum) return leadSum.byLostReason;
-    const m = new Map<string, { count: number; value: number }>();
-    leadRows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => { const r = m.get(l.lostReason!) ?? { count: 0, value: 0 }; r.count += 1; r.value += parseBaht(l.value); m.set(l.lostReason!, r); });
-    return [...m.entries()].map(([reason, x]) => ({ reason, ...x })).sort((a, b) => b.count - a.count);
+    const ดิบ = leadSum ? leadSum.byLostReason : (() => {
+      const m = new Map<string, { count: number; value: number }>();
+      leadRows.filter(l => l.status === "CANCELLED" && l.lostReason).forEach(l => { const r = m.get(l.lostReason!) ?? { count: 0, value: 0 }; r.count += 1; r.value += parseBaht(l.value); m.set(l.lostReason!, r); });
+      return [...m.entries()].map(([reason, x]) => ({ reason, ...x }));
+    })();
+    return groupLostReasons(ดิบ);
   }, [leadSum, leadRows]);
   const totalLost = useMemo(
     () => leadSum ? (leadSum.byStatus.find(s => s.status === "CANCELLED")?.count ?? 0) : leadRows.filter(l => l.status === "CANCELLED").length,
@@ -291,7 +295,6 @@ export default function NetworkQuotationPage() {
         regions={look.allRegions}
         provinces={look.allProvinces}
         products={products}
-        resultCount={agg.count}
       />
 
       <QuotationAnalytics dealerAgg={dealerAgg} productTypes={productTypes} aging={aging} trend={trend} leadsByDealer={leadsByDealer} lostReasons={lostReasons} unspecifiedLost={unspecifiedLost} totalLost={totalLost} />

@@ -112,7 +112,10 @@ function guessExt(name: string): FileExt {
 function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File | null) => void; onClose: () => void }) {
   const [name, setName]     = useState("");
   const [size, setSize]     = useState("");
-  const [cat, setCat]       = useState<FileCategory>("อื่นๆ");
+  // เริ่มที่ "ยังไม่ระบุ" เสมอ (บอสสั่ง 20 ส.ค. 69) — เดิมตั้งต้นเป็น "อื่นๆ" ไว้
+  //   ช่องจึงโชว์คำตอบมาให้แล้วทั้งที่ผู้ใช้ยังไม่ได้เลือก และคนส่วนใหญ่ก็กดอัปโหลดผ่านไปเลย
+  //   ไฟล์เลยไปกองรวมกันในโฟลเดอร์เดียว · ไม่เลือกจริง ๆ ค่อยลงเป็น "อื่นๆ" ตอนบันทึก
+  const [cat, setCat]       = useState<FileCategory | "">("");
   const [project, setProj]  = useState("");
   const [blob, setBlob]     = useState<File | null>(null); // ไฟล์จริง → อัปโหลดเข้า Storage (โหมด supabase)
   const [fileError, setFileError] = useState<string | null>(null);
@@ -141,7 +144,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
       id: Date.now(), name: fileName,
       size: size || "—",
       ext: guessExt(fileName),
-      category: cat,
+      category: (cat || "อื่นๆ") as FileCategory,   // ไม่เลือก = โฟลเดอร์รวม ไม่ใช่ค่าว่างที่ไม่มีจริง
       project: project.trim() || "—",
       uploadedBy: "คุณ",
       uploadedAt: APP_NOW_ISO,
@@ -191,7 +194,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
               </div>
               <div>
                 <label className="form-label">โฟลเดอร์</label>
-                <select aria-label="โฟลเดอร์" value={cat} onChange={e => setCat(e.target.value as FileCategory)} className="form-select">
+                <select aria-label="โฟลเดอร์" value={cat} onChange={e => setCat(e.target.value as FileCategory | "")} className="form-select">
                   {/* ⚠️ ต้องมี "ยังไม่ระบุ" เสมอ (บอสสั่ง 17 ส.ค. 69) — ไม่งั้นเบราว์เซอร์เลือกตัวแรกให้เอง
                       แล้วไฟล์จะถูกยัดเข้าโฟลเดอร์ที่ไม่มีใครเลือก หาไม่เจอทีหลัง */}
                   <option value="">— ยังไม่ระบุ —</option>

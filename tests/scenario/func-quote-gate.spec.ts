@@ -30,25 +30,36 @@ const COMPANY = tg("ด่านใบเสนอ");
 async function seedLead() {
   const sb = await db(RYG);
   const numId = 970000 + (Date.now() % 9000);
-  const done = (key: string, label: string) =>
-    ({ key, label, done: true, doneAt: "1 ส.ค. 2569 · 10:00", doneBy: "ผู้ทดสอบ" });
+
+  // ── ติ๊กงานก่อนหน้าตาม "เส้นทางที่สำนักงานใหญ่ตั้งไว้จริง" ไม่ใช่รายการที่ hardcode ไว้ ──
+  //
+  // ⚠️ พลาดมาแล้ว 21 ส.ค. 69: seed ติ๊กงานคีย์ "appointment" แต่เส้นทางจริงในฐานข้อมูล
+  //   ใช้คีย์ "task_bullet_1" (เกิดตอนมีคนแก้ชื่องานผ่านหน้าตั้งค่า) — งานนั้นจึงนับว่ายังไม่เสร็จ
+  //   งาน "จัดทำใบเสนอราคา" เลยถูกล็อกด้วยกฎ "ทำงานก่อนหน้าให้ครบก่อน" แล้วเทสต์ล้ม
+  //   ทั้งที่ไม่เกี่ยวกับสิ่งที่เทสต์นี้ตรวจเลย · อ่านเส้นทางจริงมาใช้ = ไม่ผูกกับคีย์ตายตัวอีก
+  const { data: journey } = await sb.from("hq_sales_journey").select("tasks").eq("id", 1).maybeSingle();
+  const tpl = (journey?.tasks as { key: string; label: string }[] | null)?.length
+    ? (journey!.tasks as { key: string; label: string }[])
+    : [
+        { key: "contact", label: "ติดต่อแล้ว" }, { key: "collect", label: "เก็บข้อมูลลูกค้า" },
+        { key: "appointment", label: "นัดหมาย" }, { key: "requirement", label: "สรุปความต้องการ" },
+        { key: "makeQuote", label: "จัดทำใบเสนอราคา" }, { key: "sendQuote", label: "ส่งใบเสนอราคา" },
+        { key: "catalog", label: "ส่งแม่แบบให้ลูกค้า" }, { key: "followup", label: "ติดตามผล" },
+        { key: "negotiate", label: "เจรจาต่อรอง" }, { key: "close", label: "ปิดการขาย / ไม่สำเร็จ" },
+      ];
+  const เริ่มขั้นเสนอราคา = tpl.findIndex(t => t.key === "makeQuote");
+  const tasks = tpl.map((t, idx) => ({
+    key: t.key, label: t.label,
+    done: เริ่มขั้นเสนอราคา >= 0 && idx < เริ่มขั้นเสนอราคา,
+    ...(เริ่มขั้นเสนอราคา >= 0 && idx < เริ่มขั้นเสนอราคา
+      ? { doneAt: "1 ส.ค. 2569 · 10:00", doneBy: "ผู้ทดสอบ" } : {}),
+  }));
+
   await sb.from("leads").insert({
     id: `#L-${numId}`, num_id: numId, dealer_code: "RYG", company: COMPANY, name: COMPANY,
     contact: "ผู้ทดสอบ", province: "เชียงใหม่", product: "โกดังสำเร็จรูป", status: "BULLET",
     value: "฿600,000", assigned: "ผู้ทดสอบ",
-    tasks: [
-      // ⚠️ ต้องติ๊ก "ทุกงานก่อนหน้า" ให้ครบตามเส้นทางที่สำนักงานใหญ่ตั้งไว้
-      //    ไม่งั้นระบบจะตอบว่า "ทำงานก่อนหน้าให้ครบก่อน" แล้วไม่พาไปออกใบ
-      //    (เส้นทางเพิ่มงาน "สรุปความต้องการ" เมื่อ 19 ส.ค. 69 — seed เดิมจึงไม่ครบ)
-      done("contact", "ติดต่อแล้ว"), done("collect", "เก็บข้อมูลลูกค้า"), done("appointment", "นัดหมาย"),
-      done("requirement", "สรุปความต้องการ"),
-      { key: "makeQuote", label: "จัดทำใบเสนอราคา", done: false },
-      { key: "sendQuote", label: "ส่งใบเสนอราคา", done: false },
-      { key: "catalog", label: "ส่งแม่แบบให้ลูกค้า", done: false },
-      { key: "followup", label: "ติดตามผล", done: false },
-      { key: "negotiate", label: "เจรจา", done: false },
-      { key: "close", label: "ปิดการขาย / ไม่สำเร็จ", done: false },
-    ],
+    tasks,
   });
 }
 
@@ -175,12 +186,32 @@ test("[func] กดส่งใบจริง → ระบบติ๊กง�
 
   await page.getByTitle("ส่งใบเสนอราคา").first().click();
 
+  // ── ต้องถามก่อนว่าแนบแม่แบบไปด้วยไหม (บอสสั่ง 21 ส.ค. 69) ────────────────────
+  //   ห้ามส่งทันทีแบบเงียบ ๆ — แม่แบบเป็นเอกสารคนละใบ เซลส์ต้องเป็นคนตัดสินใจ
+  await expect(page.getByText("ส่ง แม่แบบ (สเปกสินค้า) ไปให้ลูกค้าพร้อมใบเสนอราคาด้วยไหม")
+    .or(page.getByText(/ไปให้ลูกค้าพร้อมใบเสนอราคาด้วยไหม/)),
+  "กดส่งแล้วต้องมีกล่องถามเรื่องแม่แบบก่อน").toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: /แนบแม่แบบไปด้วย/ }).click();
+
+  // ข้อความแจ้งต้องบอกด้วยว่า "แม่แบบไปกับใบ" (บอสสั่ง 21 ส.ค. 69)
+  //   ⚠️ ข้อความโผล่ ~2.6 วินาทีแล้วหายเอง — ต้องเฝ้าดูแบบถี่ ๆ ไม่งั้นจับไม่ทันเป็นบางครั้ง
+  await page.waitForFunction(
+    () => /ส่งใบเสนอราคา .* พร้อมแม่แบบ/.test(document.body.innerText),
+    undefined, { timeout: 20_000, polling: 100 },
+  );
+
   const sb = await db(RYG);
   await expect.poll(async () => {
     const l = (await sb.from("leads").select("tasks").eq("company", COMPANY).single())
       .data as { tasks?: { key: string; done: boolean }[] };
     return l.tasks?.find(t => t.key === "sendQuote")?.done;
   }, { timeout: 20_000, message: "ส่งใบจริงแล้วระบบต้องติ๊กงานให้เอง" }).toBe(true);
+
+  // ส่งใบ = ส่งแม่แบบไปด้วย → งาน "ส่งแม่แบบให้ลูกค้า" ต้องถูกติ๊กพร้อมกัน ไม่ค้างให้ติ๊กเองทีหลัง
+  const หลังส่ง = (await sb.from("leads").select("tasks").eq("company", COMPANY).single())
+    .data as { tasks?: { key: string; done: boolean }[] };
+  expect(หลังส่ง.tasks?.find(t => t.key === "catalog")?.done,
+    "ส่งใบแล้วงาน 'ส่งแม่แบบให้ลูกค้า' ต้องถูกติ๊กด้วย").toBe(true);
 
   const q = (await sb.from("quotations").select("status").eq("customer", COMPANY).limit(1).single()).data as { status: string };
   expect(q.status, "ใบต้องเปลี่ยนเป็น 'ส่งแล้ว' จริง").toBe("sent_to_client");

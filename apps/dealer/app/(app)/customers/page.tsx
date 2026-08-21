@@ -15,7 +15,7 @@ import {
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
-import { fmtFull as fmtMoney } from "@pms/shared/lib/format";
+import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
 
 // กันข้อมูลหายถ้าผู้ใช้รีเฟรช/ปิดแท็บระหว่างกำลังบันทึก (พบจริงจากทดสอบโหลด: รีเฟรชทันทีหลังกดบันทึก
 // ทำให้คำขอที่กำลังส่งถูกตัดตอนกลางทาง ข้อมูลไม่ถูกสร้างเลยโดยผู้ใช้ไม่รู้ตัว) — เตือนผู้ใช้ก่อนออกจากหน้า
@@ -337,12 +337,30 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
 
   return (
     <>
+      {/* ── รูปลูกค้า/โลโก้ อยู่บนสุด (บอสสั่ง 21 ส.ค. 69) — ให้ตรงกับการ์ดลูกค้าเป้าหมาย ─── */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+        <span style={{ ...keyS, flex:"0 0 96px" }}>รูป / โลโก้</span><span style={colonS}>:</span>
+        <span style={{ width:28, height:28, borderRadius:8, flexShrink:0, overflow:"hidden", background:f.logo?"#fff":"#f8fafc",
+          border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
+        </span>
+        <input ref={logoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{ display:"none" }} onChange={uploadLogo} />
+        <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
+          <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+        </button>
+        {f.logo && (
+          <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
+            <X size={12} /> ลบรูป
+          </button>
+        )}
+      </div>
+
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 28px", borderTop:"1px solid #eef1f5", paddingTop:12 }}>
         <div style={{ display:"flex", flexDirection:"column" }}>
           <Row label="รหัสลูกค้า"><span style={{ fontSize:"0.8rem", fontWeight:700, color:"#9ca3af" }}>{code}</span></Row>
           <Row label="บริษัท"><input aria-label="ชื่อบริษัท" value={f.company} onChange={e=>set("company",e.target.value)} style={inp} /></Row>
           <Row label="ชื่อ-สกุล"><input aria-label="ชื่อ-สกุลผู้ติดต่อ" value={f.name} onChange={e=>set("name",e.target.value)} style={inp} /></Row>
-          <Row label="เบอร์โทรศัพท์"><input value={f.phone} onChange={e=>set("phone",e.target.value)} placeholder="0XX-XXX-XXXX" style={inp} /></Row>
+          <Row label="เบอร์โทรศัพท์"><input inputMode="tel" value={f.phone} onChange={e=>set("phone",formatPhone(e.target.value))} placeholder="0XX-XXX-XXXX" style={inp} /></Row>
           <Row label="อีเมล"><input value={f.email} onChange={e=>set("email",e.target.value)} type="email" placeholder="email@company.com" style={inp} /></Row>
         </div>
         <div style={{ display:"flex", flexDirection:"column" }}>
@@ -366,22 +384,8 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
               (เหมือนก่อนมีตัวแก้ในที่เดิม: ไม่เคยมี UI แก้สถานะมาก่อน ดรอปดาวน์นี้เพิ่งถูกเพิ่มแล้วถูกสั่งถอด) */}
         </div>
       </div>
-      {/* รูป/โลโก้ + ปุ่ม อยู่บรรทัดเดียวกัน — กันการ์ดขยายตอนสลับมาโหมดแก้ไข */}
+      {/* แถวล่าง: ปุ่มบันทึก (รูปย้ายขึ้นบนสุดแล้ว — บอสสั่ง 21 ส.ค. 69) */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:8, paddingTop:8, borderTop:"1px solid #f4f6f9", flexWrap:"wrap" }}>
-        <span style={{ ...keyS, flex:"0 0 96px" }}>รูป / โลโก้</span><span style={colonS}>:</span>
-        <span style={{ width:28, height:28, borderRadius:8, flexShrink:0, overflow:"hidden", background:f.logo?"#fff":"#f8fafc",
-          border:`1px ${f.logo?"solid":"dashed"} #e5e7eb`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          {f.logo ? <img src={f.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <User size={13} color="#9ca3af" />}
-        </span>
-        <input ref={logoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{ display:"none" }} onChange={uploadLogo} />
-        <button type="button" onClick={()=>logoRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>
-          <Paperclip size={12} /> {f.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
-        </button>
-        {f.logo && (
-          <button type="button" onClick={()=>set("logo","")} className="btn btn-secondary btn-sm" style={{ color:"#dc2626" }}>
-            <X size={12} /> ลบรูป
-          </button>
-        )}
         <span style={{ flex:1 }} />
         {dirty && <button onClick={()=>setF(seed())} className="btn btn-secondary btn-sm" style={{ color:"#374151" }}>ยกเลิก</button>}
         <button onClick={()=>onSave(f)} disabled={!dirty} className="btn btn-primary btn-sm"
@@ -643,8 +647,19 @@ export default function CustomersPage(){
   const rangeFrom = filtered.length === 0 ? 0 : pageStart + 1;
   const rangeTo   = Math.min(pageStart + PAGE_SIZE, filtered.length);
 
-  // สรุปด้านบนนับจากลูกค้าทั้งหมด (ไม่ผูกกับตัวกรองสถานะ/หมวดในเครื่อง)
-  const scoped        = data;
+  // ── สรุปด้านบนต้องเดินตามตัวกรองของหน้านี้ (บอสสั่ง 20 ส.ค. 69) ─────────────────
+  //   เดิมนับจากลูกค้าทั้งหมดเสมอ เลือกจังหวัด/แม่แบบ/ผู้ดูแลแล้วตารางเหลือไม่กี่ราย
+  //   แต่การ์ด "ลูกค้าทั้งหมด/ยอดขายรวม" กับกราฟยังเป็นของทั้งสาขา = อ่านคู่กันแล้วขัดกันเอง
+  //   หน้านี้ไม่มีการ์ดที่ใช้สลับตัวกรอง จึงรวมทุกตัวกรองได้เลย (ต่างจากหน้าลูกค้าเป้าหมาย/ใบเสนอราคา)
+  const scoped = useMemo(()=>data.filter(c=>{
+    const q=query.toLowerCase();
+    const matchQ=!q||c.company.toLowerCase().includes(q)||c.name.toLowerCase().includes(q)||c.province.toLowerCase().includes(q)||c.phone.includes(q);
+    const matchC=catFilter==="ALL"||mainTemplateOf(c.category)===catFilter;
+    const matchP=provFilter==="ALL"||c.province===provFilter;
+    const matchO=ownerFilter==="ALL"||(c.owner||"")===ownerFilter;
+    const matchT=passes({date:lastActivityFor(c.id,c.joinDate,quotations)});
+    return matchQ&&matchC&&matchP&&matchO&&matchT;
+  }),[data,query,catFilter,provFilter,ownerFilter,passes,quotations]);
   const totalAll      = scoped.length;
   const totalValue    = scoped.reduce((s,c)=>s+c.totalValue,0);
 
@@ -1661,7 +1676,7 @@ export default function CustomersPage(){
                 <div><label className="form-label">ผู้ติดต่อ</label>
                   <input className="form-input" value={legacyForm.name} onChange={e=>setLegacyForm(f=>({...f,name:e.target.value}))} placeholder="ชื่อผู้ติดต่อ" /></div>
                 <div><label className="form-label">โทรศัพท์</label>
-                  <input className="form-input" value={legacyForm.phone} onChange={e=>setLegacyForm(f=>({...f,phone:e.target.value}))} placeholder="0XX-XXX-XXXX" /></div>
+                  <input className="form-input" inputMode="tel" value={legacyForm.phone} onChange={e=>setLegacyForm(f=>({...f,phone:formatPhone(e.target.value)}))} placeholder="0XX-XXX-XXXX" /></div>
                 <div className="col-full"><label className="form-label">อีเมล</label>
                   <input className="form-input" value={legacyForm.email} onChange={e=>setLegacyForm(f=>({...f,email:e.target.value}))} placeholder="email@company.com" /></div>
               </div>

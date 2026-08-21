@@ -11,6 +11,7 @@
 //    ฝั่งเซิร์ฟเวอร์บันทึกทุกครั้งว่าใครเปิดดูรหัสของสาขาไหน
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Copy, Check, Key, X } from "lucide-react";
+import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { viewDealerPassword, resetDealerPassword, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
@@ -99,6 +100,12 @@ export function DealerPasswordField({ code, fallback }: { code: string; fallback
   );
 }
 
+const ช่องกรอก: React.CSSProperties = {
+  width: "100%", marginTop: 5, padding: "9px 12px", borderRadius: 10, border: "1px solid #e5e7eb",
+  fontSize: "0.8rem", color: "#2D2D2D", outline: "none", background: "#fafafa", boxSizing: "border-box",
+  fontFamily: "inherit", fontWeight: 600,
+};
+
 export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
   const { can } = useRole();
   // อีเมลเข้าระบบจริง — ห้ามคำนวณจากรหัสสาขา (สูตรนั้นใช้ได้เฉพาะบัญชีที่สร้างผ่านหน้าจอนี้
@@ -106,6 +113,11 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
   const [email, setEmail] = useState("—");
   const [resetting, setResetting] = useState(false);
   const [newCreds, setNewCreds] = useState<{ email: string; password: string } | null>(null);
+  // แก้อีเมล/ตั้งรหัสผ่านเอง (บอสสั่ง 20 ส.ค. 69) — เว้นช่องไหนไว้ = ไม่แตะของเดิมช่องนั้น
+  const [แก้บัญชี, setแก้บัญชี] = useState<{ email: string; password: string } | null>(null);
+  // ผู้ใช้พิมพ์ในช่องอีเมลเองแล้วหรือยัง — กันไม่ให้ค่าที่เพิ่งโหลดมาทับสิ่งที่กำลังพิมพ์
+  const [พิมพ์อีเมลเอง, setพิมพ์อีเมลเอง] = useState(false);
+  const [ผิดพลาด, setผิดพลาด] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -113,18 +125,37 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
     return () => { alive = false; };
   }, [dealer.code]);
 
+  // ⚠️ อีเมลของสาขาโหลดมาทีหลัง (ต้องถามเซิร์ฟเวอร์ ห้ามเดาจากรหัสสาขา)
+  //    ถ้าผู้ใช้กดปุ่มแก้ "ก่อน" อีเมลมาถึง ช่องจะว่างเปล่าค้างอยู่แบบนั้นตลอด
+  //    (บอสเจอจริง 20 ส.ค. 69 — การ์ดโชว์อีเมลอยู่ แต่ในโมดัลกลับว่าง)
+  //    จึงเติมให้เมื่ออีเมลมาถึง ตราบใดที่ผู้ใช้ยังไม่ได้พิมพ์เอง
+  useEffect(() => {
+    if (!แก้บัญชี || พิมพ์อีเมลเอง || email === "—") return;
+    setแก้บัญชี(v => (v && !v.email ? { ...v, email } : v));
+  }, [email, แก้บัญชี, พิมพ์อีเมลเอง]);
+
   // จัดการบัญชีตัวแทนได้เฉพาะผู้มีสิทธิ์ — ผู้ใช้ HQ ระดับปฏิบัติงานไม่ควรเห็นรหัสของสาขา
   if (!can("dealers:manage")) return null;
 
-  async function doReset() {
-    if (!confirm(`ออกรหัสผ่านใหม่ให้ "${dealer.name}"?\nรหัสเดิมจะใช้เข้าระบบไม่ได้ทันที`)) return;
-    if (!REAL_BACKEND) { alert("โหมดทดลองใช้งานไม่รองรับการรีเซ็ตรหัสผ่าน"); return; }
+
+  async function บันทึกบัญชี() {
+    if (!แก้บัญชี) return;
+    const อีเมล = แก้บัญชี.email.trim();
+    const รหัส = แก้บัญชี.password;
+    if (!อีเมล && !รหัส) { setผิดพลาด("กรอกอีเมลใหม่หรือรหัสผ่านใหม่อย่างน้อยหนึ่งอย่าง"); return; }
+    if (อีเมล && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมล)) { setผิดพลาด("รูปแบบอีเมลไม่ถูกต้อง"); return; }
+    if (รหัส && รหัส.length < 8) { setผิดพลาด("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"); return; }
+    if (!REAL_BACKEND) { setผิดพลาด("โหมดทดลองใช้งานไม่รองรับการแก้บัญชีเข้าระบบ"); return; }
     setResetting(true);
-    const res = await resetDealerPassword(dealer.code);
+    setผิดพลาด("");
+    const res = await resetDealerPassword(dealer.code, { email: อีเมล || undefined, password: รหัส || undefined });
     setResetting(false);
-    if (!res.ok) { alert("รีเซ็ตรหัสผ่านไม่สำเร็จ: " + res.error); return; }
-    // audit บันทึกที่ฝั่งเซิร์ฟเวอร์แล้ว (การันตีว่าลงเสมอ) — ไม่ลงซ้ำที่ฝั่งหน้าจอ
-    setNewCreds({ email: res.email, password: res.password });
+    if (!res.ok) { setผิดพลาด(res.error); return; }
+    setEmail(res.email || อีเมล || email);
+    setแก้บัญชี(null);
+    // รหัสผ่านจะโชว์ให้คัดลอกเฉพาะตอนที่ "มีรหัสใหม่จริง" — แก้อีเมลอย่างเดียวไม่ต้องโชว์
+    if (res.password) setNewCreds({ email: res.email, password: res.password });
+    else alert(`เปลี่ยนอีเมลเข้าระบบของ "${dealer.name}" เป็น ${res.email} แล้ว — รหัสผ่านเดิมยังใช้ได้`);
   }
 
   return (
@@ -141,16 +172,76 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
         <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>
           ตัวแทนใช้อีเมลนี้เข้าสู่ระบบที่หน้าเข้าสู่ระบบของตัวแทน
         </div>
-        <button onClick={doReset} disabled={resetting}
-          style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid #fecaca", background: "#fff", color: "#dc2626",
+        {/* เหลือปุ่มเดียว (บอสสั่ง 20 ส.ค. 69) — ปุ่ม "รีเซ็ตรหัสผ่าน" ถูกถอดออก
+            เพราะซ้ำกับปุ่มนี้: อยากได้รหัสใหม่ก็พิมพ์รหัสที่ต้องการลงไปตรง ๆ ได้เลย
+            และแบบนั้นผู้ดูแลรู้ว่ารหัสคืออะไรทันที ไม่ต้องรอระบบสุ่มมาแล้วค่อยคัดลอก */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => { setผิดพลาด(""); setพิมพ์อีเมลเอง(false); setแก้บัญชี({ email: email === "—" ? "" : email, password: "" }); }} disabled={resetting}
+          style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid #d5dbe4", background: "#fff", color: "#003366",
             fontSize: "0.76rem", fontWeight: 700, cursor: resetting ? "not-allowed" : "pointer", opacity: resetting ? 0.6 : 1,
             display: "flex", alignItems: "center", gap: 7, fontFamily: "inherit" }}>
-          <Key size={13} /> {resetting ? "กำลังรีเซ็ต…" : "รีเซ็ตรหัสผ่าน"}
+          <Key size={13} /> แก้อีเมล/รหัสผ่าน
         </button>
+        </div>
       </div>
+
+      {/* แก้บัญชีเข้าระบบเอง — เว้นช่องไหนไว้ = ไม่แตะของเดิมช่องนั้น
+          (แก้อีเมลอย่างเดียวต้องไม่ไปเปลี่ยนรหัสผ่านทิ้ง ไม่งั้นสาขาหลุดจากระบบทันทีโดยไม่มีใครตั้งใจ) */}
+      {/* ⚠️ ต้องแขวนที่ <body> ผ่าน ModalPortal เสมอ (บอสเจอ 20 ส.ค. 69: ปุ่มบันทึกถูกการ์ดถัดไปทับ)
+          โมดัลนี้อยู่ในกล่อง .card ซึ่งมี transform (อนิเมชันตอนการ์ดโผล่ + ยกตัวตอนชี้เมาส์)
+          กล่องแม่ที่มี transform จะ "ดึง" position: fixed มายึดกับตัวเอง แล้ว z-index ของโมดัล
+          ก็ถูกขังอยู่ในลำดับชั้นของการ์ดใบนั้น → การ์ดที่อยู่หลังกว่าในหน้าเลยวาดทับได้ */}
+      {แก้บัญชี && (
+        <ModalPortal>
+        <div onClick={() => setแก้บัญชี(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <ModalCard onClose={() => setแก้บัญชี(null)} label="แก้บัญชีเข้าระบบของตัวแทน"
+            style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)", width: 400, maxWidth: "100%" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: "#2D2D2D" }}>แก้บัญชีเข้าระบบ</h3>
+                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{dealer.name}</div>
+              </div>
+              <button onClick={() => setแก้บัญชี(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={16} /></button>
+            </div>
+            <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>
+                อีเมลเข้าสู่ระบบ
+                <input type="email" aria-label="อีเมลเข้าสู่ระบบใหม่" value={แก้บัญชี.email}
+                  onChange={e => { setพิมพ์อีเมลเอง(true); setแก้บัญชี(v => v && ({ ...v, email: e.target.value })); }}
+                  placeholder="เว้นไว้ = ใช้อีเมลเดิม" style={ช่องกรอก} />
+                {/* บอกของเดิมไว้เสมอ — ผู้ใช้จะได้รู้ว่ากำลังจะเปลี่ยนจากอะไรเป็นอะไร ไม่ต้องเดาจากช่องว่าง */}
+                <span style={{ display: "block", fontWeight: 600, color: "#8a929c", marginTop: 4 }}>
+                  อีเมลปัจจุบัน: {email}
+                </span>
+              </label>
+              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>
+                รหัสผ่านใหม่
+                <input type="text" aria-label="รหัสผ่านใหม่" value={แก้บัญชี.password}
+                  onChange={e => setแก้บัญชี(v => v && ({ ...v, password: e.target.value }))}
+                  placeholder="เว้นไว้ = ใช้รหัสเดิม (อย่างน้อย 8 ตัว)" style={ช่องกรอก} />
+                <span style={{ display: "block", fontWeight: 600, color: "#8a929c", marginTop: 4 }}>
+                  ไม่ต้องการเปลี่ยนรหัส ปล่อยว่างไว้ได้ — รหัสเดิมของสาขาจะยังใช้ได้ตามปกติ
+                </span>
+              </label>
+              {ผิดพลาด && (
+                <div role="alert" style={{ fontSize: "0.74rem", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 11px" }}>{ผิดพลาด}</div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button onClick={() => setแก้บัญชี(null)} style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid #d5dbe4", background: "#fff", color: "#374151", fontSize: "0.76rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
+                <button onClick={บันทึกบัญชี} disabled={resetting}
+                  style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: "#003366", color: "#fff", fontSize: "0.76rem", fontWeight: 700, cursor: resetting ? "not-allowed" : "pointer", opacity: resetting ? 0.6 : 1, fontFamily: "inherit" }}>
+                  {resetting ? "กำลังบันทึก…" : "บันทึก"}
+                </button>
+              </div>
+            </div>
+          </ModalCard>
+        </div>
+        </ModalPortal>
+      )}
 
       {/* รหัสใหม่หลังรีเซ็ต — ต้องคัดลอกไปแจ้งตัวแทนทันที ปิดแล้วดูซ้ำได้ที่ปุ่ม "ดูรหัสผ่าน" ด้านบน */}
       {newCreds && (
+        <ModalPortal>
         <div onClick={() => setNewCreds(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <ModalCard onClose={() => setNewCreds(null)} label="รหัสผ่านใหม่ของตัวแทน"
             style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)", width: 380, maxWidth: "100%" }}>
@@ -170,6 +261,7 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
             </div>
           </ModalCard>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

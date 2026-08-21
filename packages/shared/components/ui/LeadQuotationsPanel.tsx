@@ -8,11 +8,14 @@ import {
   type LeadRow, type CustomerRow, type QuotationMock, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
+import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { boqLineItems, boqSubtotal, seedLineItems } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
 import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
 import { useMasterCatalogState } from "@pms/shared/lib/useMasterCatalog";
-import { useHQPolicy, useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
+import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
+import { useQuoteValidity } from "@pms/shared/lib/useQuoteValidity";
 import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
@@ -52,7 +55,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   const [saving, setSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
   const policy = useHQPolicy(); // นโยบาย HQ — อายุใบ ฯลฯ (VAT ย้ายไปเป็นของสาขาแล้ว · 7 ส.ค. 69)
   // อายุใบเสนอราคาที่สำนักงานใหญ่ประกาศไว้ — ใช้คิดวันหมดอายุแทนการให้ตัวแทนพิมพ์เอง
-  const validityDays = useQuoteValidityDays();
+  // อายุใบเสนอราคาของ "สาขา" มาก่อนนโยบายเครือเสมอ (บอสสั่ง 20 ส.ค. 69)
+  const validityDays = useQuoteValidity();
   // ใบใหม่: นับจากวันที่ออกใบ · ใบเดิมที่เคยระบุวันไว้แล้ว: คงวันเดิม ไม่เขียนทับของเก่า
   const วันหมดอายุ = (mode === "edit" && editing?.expiry) ? editing.expiry : วันหมดอายุจาก(MOCK_TODAY, validityDays);
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับ/VAT ของสาขา (ผ่าน repo)
@@ -174,10 +178,18 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     try {
     const net = netTotal(form);
     if (mode === "edit" && editing) {
+      // ── ใบที่ส่งให้ลูกค้าไปแล้ว แก้ทีไร = ขึ้นเวอร์ชันใหม่ V1 → V2 → V3 (บอสสั่ง 21 ส.ค. 69) ──
+      //   ทำไมนับเฉพาะใบที่ส่งแล้ว: ใบร่างยังไม่ถึงมือลูกค้า แก้กี่รอบก็ยังเป็นฉบับเดิม
+      //   ส่วนใบที่ส่งไปแล้ว ลูกค้าถือฉบับเก่าอยู่ในมือ — ต้องมีเลขเวอร์ชันให้อ้างอิงตรงกันเวลาคุยกัน
+      const เวอร์ชันเดิม = Number(String(editing.revision ?? "V1").replace(/\D/g, "")) || 1;
+      const ขึ้นเวอร์ชัน = editing.status !== "draft";
+      const เวอร์ชันใหม่ = `V${ขึ้นเวอร์ชัน ? เวอร์ชันเดิม + 1 : เวอร์ชันเดิม}`;
       updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
         lineItems: form.lineItems, materialCost: parseBaht(form.price), totalValue: net, total: "฿" + net.toLocaleString("th-TH"),
-        expiry: วันหมดอายุ, note: form.note || undefined });
-      onToast?.("บันทึกใบเสนอราคาแล้ว");
+        expiry: วันหมดอายุ, note: form.note || undefined, revision: เวอร์ชันใหม่ });
+      onToast?.(ขึ้นเวอร์ชัน
+        ? `บันทึกเป็นฉบับแก้ไข ${เวอร์ชันใหม่} แล้ว — ส่งให้ลูกค้าอีกครั้งเพื่อให้ได้ฉบับล่าสุด`
+        : "บันทึกใบเสนอราคาแล้ว");
     } else {
       // สร้างใหม่ — ออกเลข + insert แบบ atomic (H8) · ออกใบในนาม subject (ลูกค้าเป้าหมาย/ลูกค้า)
       await createQuotation({
@@ -208,11 +220,21 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     } finally { savingRef.current = false; setSaving(false); }
   }
 
-  // ส่งใบเสนอราคาให้ลูกค้า → สถานะเป็น "ส่งแล้ว" (เลื่อน stage + ติ๊กงานให้ลูกค้าเป้าหมายอัตโนมัติผ่าน context)
-  function sendQuote(q: QuotationMock) {
+  // ── กดส่ง → ถามก่อนว่า "แนบแม่แบบไปด้วยไหม" (บอสสั่ง 21 ส.ค. 69) ─────────────────
+  //
+  // ทำไมต้องถาม ไม่ใช่ติ๊กให้เอง: แม่แบบ (สเปกสินค้า) เป็นเอกสารคนละใบกับใบเสนอราคา
+  //   เซลส์บางรายส่งเฉพาะใบ ไม่ส่งสเปกให้ลูกค้าถือไว้ · ถ้าระบบติ๊กงาน "ส่งแม่แบบให้ลูกค้า" ให้เอง
+  //   เช็กลิสต์จะบอกว่าส่งแล้วทั้งที่ไม่ได้ส่ง = ข้อมูลในระบบไม่ตรงกับความจริง
+  // ตอบว่าแนบ → ติ๊กงานให้ · ตอบว่าไม่แนบ → ส่งเฉพาะใบ งานนั้นยังค้างไว้ให้ทำจริงทีหลัง
+  const [ถามแนบแม่แบบ, setถามแนบแม่แบบ] = useState<QuotationMock | null>(null);
+
+  function sendQuote(q: QuotationMock, แนบแม่แบบ: boolean) {
     const resend = q.status !== "draft";
-    updateQuotation({ ...q, status: "sent_to_client", date: MOCK_TODAY });
-    onToast?.(resend ? `ส่งใบเสนอราคา ${q.id} ให้ลูกค้าอีกครั้งแล้ว` : `ส่งใบเสนอราคา ${q.id} ให้ลูกค้าแล้ว`);
+    updateQuotation({ ...q, status: "sent_to_client", date: MOCK_TODAY }, { แนบแม่แบบ });
+    const ท้าย = resend ? "ให้ลูกค้าอีกครั้งแล้ว" : "ให้ลูกค้าแล้ว";
+    onToast?.(แนบแม่แบบ
+      ? `ส่งใบเสนอราคา ${q.id} พร้อมแม่แบบ ${ท้าย}`
+      : `ส่งใบเสนอราคา ${q.id} ${ท้าย} (ไม่ได้แนบแม่แบบ)`);
   }
 
   const lbl: React.CSSProperties = { display: "block", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 4 };
@@ -353,7 +375,11 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <button onClick={() => setMode("list")} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "5px 10px" }}><ArrowLeft size={13} /> กลับ</button>
-          <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{q.id}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#003366" }}>{q.id}</div>
+            <span className="badge" style={{ background: "#eef3f8", color: "#003366", fontSize: "0.65rem", fontWeight: 800 }}
+                        title="ฉบับที่เท่าไรของใบนี้ — แก้ใบที่ส่งไปแล้วจะขึ้นฉบับใหม่">{q.revision ?? "V1"}</span>
+          </div>
           <span className="badge" style={{ background: c.bg, color: c.text, marginLeft: "auto" }}>{quotationStatusLabel[q.status]}</span>
         </div>
 
@@ -418,7 +444,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
           <button onClick={() => printQuotation(q, { company: subj.company, name: subj.contact, phone: subj.phone, province: subj.province }, q.vatPercent ?? dealerVat, printCfg)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Printer size={13} /> พิมพ์ PDF</button>
           {!readOnly && <button onClick={() => openEdit(q)} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}><Pencil size={13} /> แก้ไข</button>}
           {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
-            <button onClick={() => { sendQuote(q); setMode("list"); }} className="btn btn-primary btn-sm">
+            <button onClick={() => { setถามแนบแม่แบบ(q); setMode("list"); }} className="btn btn-primary btn-sm">
               <Send size={13} /> {q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
             </button>
           )}
@@ -453,6 +479,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                       <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#2D2D2D" }}>{q.id}</span>
+                      {/* ฉบับที่เท่าไร (บอสสั่ง 21 ส.ค. 69) — ต้องเห็นคู่กับเลขที่ใบเสมอ
+                          ลูกค้าถืออาจถือฉบับเก่าอยู่ เวลาคุยกันต้องอ้างอิงเลขฉบับให้ตรงกัน */}
+                      <span className="badge" style={{ background: "#eef3f8", color: "#003366", fontSize: "0.65rem", fontWeight: 800 }}
+                        title="ฉบับที่เท่าไรของใบนี้ — แก้ใบที่ส่งไปแล้วจะขึ้นฉบับใหม่">{q.revision ?? "V1"}</span>
                       <span className="badge" style={{ background: c.bg, color: c.text, fontSize: "0.65rem" }}>{quotationStatusLabel[q.status]}</span>
                     </div>
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>{q.date} · {fmtBaht(q.totalValue)}</div>
@@ -460,7 +490,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     {/* ส่งใบเสนอราคา — เด่นเป็นปุ่ม navy · แสดงเฉพาะใบที่ยังส่งได้ (ร่าง/ส่งแล้ว) · ซ่อนเมื่อดูอย่างเดียว */}
                     {!readOnly && (q.status === "draft" || q.status === "sent_to_client") && (
-                      <button onClick={() => sendQuote(q)} title={q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
+                      <button onClick={() => setถามแนบแม่แบบ(q)} title={q.status === "draft" ? "ส่งใบเสนอราคา" : "ส่งอีกครั้ง"}
                         className="btn btn-primary btn-sm" style={{ height: 28, padding: "0 11px" }}>
                         <Send size={12} /> {q.status === "draft" ? "ส่ง" : "ส่งอีกครั้ง"}
                       </button>
@@ -491,6 +521,48 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
             );
           })}
         </div>
+      )}
+
+      {/* ── ถามก่อนส่ง: แนบแม่แบบไปด้วยไหม (บอสสั่ง 21 ส.ค. 69) ────────────────────
+          ⚠️ แขวนที่ระดับหน้าเว็บผ่าน ModalPortal — แผงนี้อยู่ในกล่องการ์ดที่มี transform
+          ถ้าไม่แขวน กล่องถามจะไปยึดกับการ์ดแล้วโดนการ์ดใบถัดไปวาดทับ (เจอมาแล้ว 20 ส.ค.) */}
+      {ถามแนบแม่แบบ && (
+        <ModalPortal>
+          <div onClick={() => setถามแนบแม่แบบ(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <ModalCard onClose={() => setถามแนบแม่แบบ(null)} label="ส่งใบเสนอราคาให้ลูกค้า"
+              style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)", width: 420, maxWidth: "100%" }}>
+              <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb" }}>
+                <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#2D2D2D" }}>ส่งใบเสนอราคาให้ลูกค้า</h3>
+                <div style={{ fontSize: "0.74rem", color: "#6b7280", marginTop: 3 }}>
+                  {ถามแนบแม่แบบ.id} · {subj.company}
+                </div>
+              </div>
+              <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ fontSize: "0.84rem", color: "#374151", lineHeight: 1.6 }}>
+                  ส่ง <b>แม่แบบ (สเปกสินค้า)</b> ไปให้ลูกค้าพร้อมใบเสนอราคาด้วยไหม
+                  <span style={{ display: "block", fontSize: "0.74rem", color: "#6b7280", marginTop: 4 }}>
+                    เลือก “แนบแม่แบบไปด้วย” ระบบจะติ๊กงาน “ส่งแม่แบบให้ลูกค้า” ให้เอง
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button onClick={() => { sendQuote(ถามแนบแม่แบบ, true); setถามแนบแม่แบบ(null); }}
+                    className="btn btn-primary btn-sm" style={{ justifyContent: "center", padding: "10px 14px" }}>
+                    <Send size={13} /> ส่งใบเสนอราคา + แนบแม่แบบไปด้วย
+                  </button>
+                  <button onClick={() => { sendQuote(ถามแนบแม่แบบ, false); setถามแนบแม่แบบ(null); }}
+                    className="btn btn-secondary btn-sm" style={{ justifyContent: "center", padding: "10px 14px", color: "#374151" }}>
+                    ส่งเฉพาะใบเสนอราคา (ไม่แนบแม่แบบ)
+                  </button>
+                  <button onClick={() => setถามแนบแม่แบบ(null)}
+                    style={{ background: "none", border: "none", color: "#6b7280", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: "4px 0" }}>
+                    ยกเลิก
+                  </button>
+                </div>
+              </div>
+            </ModalCard>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

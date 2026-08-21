@@ -581,13 +581,14 @@ body {
 .kc.clickable:hover,
 .pms-dash .kc.clickable:hover,
 .pms-dash .cc:hover,
+.kpi:hover,
 .cust-card:hover {
   transform: var(--card-lift); box-shadow: var(--card-lift-sh); border-color: var(--card-lift-bd);
 }
 @media (prefers-reduced-motion: reduce) {
   .card:hover, .card.clickable:hover, .dash-tile:hover, .tpl-card:hover, .stat-card:hover,
   .hqx-kpi:hover, .hqx-fcard:hover, .kc.clickable:hover, .pms-dash .kc.clickable:hover,
-  .pms-dash .cc:hover, .cust-card:hover { transform: none; }
+  .pms-dash .cc:hover, .kpi:hover, .cust-card:hover { transform: none; }
 }
 
 /* ⛔ การ์ดที่มีป๊อปอัพเปิดอยู่ข้างใน "ห้ามยกตัว" — กันป๊อปอัพเด้งไปมา
@@ -931,7 +932,10 @@ body {
 
 /* ─── KPI bar (Seller-center style) ─── */
 .kpi-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.75rem; }
-.kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+/* ⚠️ ต้องมี transition เหมือน .card — ไม่งั้นตอนชี้เมาส์การ์ดจะ "กระโดด" แทนที่จะยกขึ้นนุ่ม ๆ
+   (บอสแจ้ง 20 ส.ค. 69 ที่หน้าปฏิทิน: "มันไม่ขยับเหมือนหน้าอื่น" — การ์ด KPI ตระกูลนี้ตกหล่นจากกฎ hover กลาง) */
+.kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem;
+  transition: var(--card-lift-tr); }
 .kpi-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .kpi-navy   { background: #dce5f0; color: #003366; }
 .kpi-amber  { background: #fff3cd; color: #d97706; }
@@ -1127,8 +1131,13 @@ select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--primary, #003366);
   outline-offset: 2px;
-  border-radius: 6px;
 }
+/* ⚠️ ห้ามบังคับ border-radius ตรงนี้ (ถอดออก 20 ส.ค. 69 — บอสถามว่า "ทำไมเส้นมันซ้อนกัน 2 ชั้น")
+   เดิมสั่ง border-radius: 6px ทับของเดิมตอนโฟกัส กล่องพื้นหลังของเมนูที่เลือกอยู่ (มุมมนกว่า)
+   กับวงโฟกัสจึงมีมุมคนละองศา + เว้นช่องว่าง 2px กลายเป็นเส้นสองชั้นซ้อนกัน
+   ปล่อยให้แต่ละปุ่ม/เมนูใช้มุมมนของตัวเอง วงโฟกัสจะแนบไปกับรูปทรงจริงเสมอ */
+/* เมนูข้าง: วาดวงโฟกัสไว้ "ด้านใน" ขอบเมนู — ไม่งั้นชนขอบแถบเมนูและดูเป็นสองชั้นอีก */
+.nav-item:focus-visible { outline-offset: -2px; }
 
 /* ── Responsive: ยุบกริดหลายคอลัมน์บนจอแคบ (แท็บเล็ต/มือถือ) ── */
 @media (max-width:1024px){

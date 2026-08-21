@@ -70,6 +70,25 @@ export function sellRate(
   return withMarkup(catalogRate(prod, productName), markupPctOf(pricing, prod?.id));
 }
 
+// ── ประเมินราคาของลูกค้าเป้าหมาย = พื้นที่ × ราคาขายของสาขา (บอสสั่ง 20 ส.ค. 69) ──
+//
+// เดิมช่อง "ประเมินราคา" ให้เซลส์กรอกเองล้วน ๆ ถ้าไม่กรอกก็ไม่มีมูลค่า
+// ทั้งที่ข้อมูลพอจะคิดให้ได้อยู่แล้ว (พื้นที่ที่กรอก + ราคาขายของแม่แบบที่เลือก)
+// จึงคิดให้เป็นค่าตั้งต้น แล้วเซลส์แก้ทับได้เสมอ — ไม่ใช่ตัวเลขที่ล็อกไว้
+//
+// ⚠️ คิดไม่ได้ = คืน 0 ให้ผู้เรียกไปขึ้น "—" ห้ามคืนเลขมั่ว:
+//    ไม่มีพื้นที่ · แม่แบบไม่ได้คิดเป็น ตร.ม. · สำนักงานใหญ่ยังไม่ได้ตั้งราคากลาง
+export function estimateLeadValue(
+  product: string | undefined, area: number | undefined,
+  catalog: SolutionProduct[], pricing?: DealerMarkup,
+): number {
+  if (!product || !((area ?? 0) > 0)) return 0;
+  const prod = catalog.find(p => p.name === product) ?? catalog.find(p => p.subtypes?.includes(product));
+  if (!prod || prod.unit !== "ตร.ม.") return 0;   // แม่แบบที่ขายเป็น "หลัง"/"ชุด" คูณพื้นที่ไม่ได้
+  const rate = sellRate(prod, product, pricing);
+  return rate > 0 ? Math.round(rate * area!) : 0;
+}
+
 /** ข้อมูลจากลูกค้าเป้าหมาย/ลูกค้า ที่ใช้ตั้งต้น BOQ ของใบใหม่ */
 export type SeedSubject = {
   /** แม่แบบที่เลือกไว้ — ตรงกับชื่อหลัก หรือชื่อประเภทย่อยในแคตตาล็อก */

@@ -29,6 +29,8 @@ const authHeaders = (token: string, json = false): Record<string, string> => ({
 
 export type CreateDealerInput = {
   code: string; name: string; province: string; region: string; revenueTarget: number;
+  /** อีเมล/รหัสผ่านที่ HQ กรอกเอง — เว้นว่าง = ให้เซิร์ฟเวอร์ตั้งให้ (บอสสั่ง 20 ส.ค. 69) */
+  email?: string; password?: string;
 };
 export type CreateDealerResult =
   | { ok: true; email: string; password: string }
@@ -112,7 +114,12 @@ export async function deleteHQUser(id: string): Promise<{ ok: true } | { ok: fal
 
 /** ออกรหัสผ่านใหม่ให้ตัวแทน (HQ คุมรหัสผ่านของตัวแทนเท่านั้น — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตเอง)
  *  รหัสใหม่สุ่มที่เซิร์ฟเวอร์เสมอ คืนมาโชว์ครั้งเดียวเหมือนตอนสร้างบัญชี */
-export async function resetDealerPassword(code: string): Promise<CreateDealerResult> {
+export async function resetDealerPassword(
+  code: string,
+  /** แก้เองได้ (บอสสั่ง 20 ส.ค. 69): ส่งอีเมลใหม่/รหัสใหม่ · ไม่ส่ง = สุ่มรหัสให้เหมือนเดิม
+   *  ส่งเฉพาะ email = เปลี่ยนอีเมลอย่างเดียว รหัสเดิมยังใช้ได้ (ห้ามเตะสาขาหลุดโดยไม่ได้ขอ) */
+  แก้?: { email?: string; password?: string },
+): Promise<CreateDealerResult> {
   if (!REAL_BACKEND) {
     return { ok: false, error: "โหมดเดโม: รีเซ็ตรหัสผ่านจริงไม่ได้ (ต้องมีระบบยืนยันตัวตน)" };
   }
@@ -121,7 +128,8 @@ export async function resetDealerPassword(code: string): Promise<CreateDealerRes
   try {
     const res = await fetch(`/api/admin/dealers?code=${encodeURIComponent(code)}`, { credentials: "same-origin",
       method: "PATCH",
-      headers: authHeaders(token),
+      headers: authHeaders(token, true),
+      body: JSON.stringify({ email: แก้?.email?.trim() || undefined, password: แก้?.password || undefined }),
     });
     const json = (await res.json().catch(() => ({}))) as { error?: string; email?: string; password?: string };
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
