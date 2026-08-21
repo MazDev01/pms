@@ -59,7 +59,9 @@ export function DealerQuotationPerformance({ rows }: {
   // ── เรขาคณิตของกราฟ ──
   // W ต้องใกล้ความกว้างที่เรนเดอร์จริง (การ์ดเต็มแถว ≈ 1,130px) ไม่งั้น SVG ถูกสเกลทั้งใบ:
   // ตัวอักษร/แท่งใหญ่ผิดส่วน และการ์ดสูงตามอัตราส่วน (760 → สเกล 1.5 เท่า = การ์ดสูง 478px เกินเพดาน 420)
-  const W = 1130, H = 262, pL = 40, pR = 14, pT = 14, pB = 42;
+  // pT เผื่อที่ให้ป้ายหน่วย "ใบ" ยืนเหนือขีดบนสุดได้ — ขีดบนสุดวาดที่ y = pT พอดี
+  // ถ้าเว้นน้อยกว่านี้ ป้ายหน่วยจะไปทับตัวเลขขีดบนสุด (เจอจริง 21 ส.ค. 69: “16” ทับ “ใบ”)
+  const W = 1130, H = 262, pL = 40, pR = 14, pT = 24, pB = 42;
   const cW = W - pL - pR, cH = H - pT - pB, n = rows.length;
   const slot = cW / n;
   const bw = Math.min(20, slot / 3.2);
@@ -98,7 +100,7 @@ export function DealerQuotationPerformance({ rows }: {
               <text x={pL - 7} y={yAt(v) + 3} textAnchor="end" fontSize="9.5" fill="#aab2bd">{v}</text>
             </g>
           ))}
-          <text x={pL - 7} y={pT - 4} textAnchor="end" fontSize="8.5" fill="#aab2bd">ใบ</text>
+          <text x={pL - 7} y={pT - 10} textAnchor="end" fontSize="8.5" fill="#aab2bd">ใบ</text>
 
           {rows.map((d, i) => {
             const cx = pL + slot * i + slot / 2;

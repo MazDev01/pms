@@ -178,9 +178,12 @@ export default function SalesAnalyticsPage() {
     () => netQuotes.filter(x => codes.has(x.dealerCode) && inRange(x.createdAt) && (btSel === ALL || x.productLine === btSel)),
     [netQuotes, codes, inRange, btSel],
   );
+  // ⚠️ ต้องกรองช่วงเวลาด้วย (inRange) เหมือน quotes ข้างบน — เดิมไม่กรอง ทำให้ทุกการ์ดที่จับคู่
+  //    "ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา" เอาลูกค้าเป้าหมาย "ทั้งหมดตั้งแต่เปิดสาขา" ไปเทียบกับใบ "เฉพาะช่วงที่เลือก"
+  //    เลือกช่วงแคบ ๆ แล้วแท่งสองอันจึงไม่มีทางสัมพันธ์กันเลย (บอสแจ้ง 21 ส.ค. 69: "ทำไมมันไม่เท่ากัน")
   const leads = useMemo(
-    () => netLeads.filter(l => codes.has(l.dealerCode ?? "") && (btSel === ALL || l.product === btSel)),
-    [netLeads, codes, btSel],
+    () => netLeads.filter(l => codes.has(l.dealerCode ?? "") && inRange(l.createdAt ?? "") && (btSel === ALL || l.product === btSel)),
+    [netLeads, codes, inRange, btSel],
   );
 
   // filter(Boolean) จำเป็น ไม่ใช่กันไว้เฉย ๆ — ตัวแทนที่บันทึกไว้ก่อนมีฟิลด์ province/region จะได้ค่า undefined
@@ -200,8 +203,12 @@ export default function SalesAnalyticsPage() {
     dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end), asOf: isoDateOf(APP_NOW),
   }), [codes, btSel, timeRange.start, timeRange.end]));
   const byDealer = useMemo(() => qSummary ? new Map(qSummary.byDealer.map(d => [d.dealerCode, d])) : null, [qSummary]);
-  // ลูกค้าเป้าหมายรายสาขา (leads/quoted) ที่ DB — ตัวกรองชุดเดียวกับ leads (codes + product · ไม่กรองเวลา)
-  const leadSum = useLeadSummary(useMemo(() => ({ dealerCodes: [...codes], product: btSel !== ALL ? btSel : undefined }), [codes, btSel]));
+  // ลูกค้าเป้าหมายรายสาขา (leads/quoted) ที่ DB — ตัวกรองชุดเดียวกับ leads: codes + product + ช่วงเวลา
+  // ⚠️ ช่วงเวลาต้องส่งไปด้วย ไม่งั้นได้ยอด "ทั้งหมดตั้งแต่เปิดสาขา" มาเทียบกับใบเสนอราคาเฉพาะช่วงที่เลือก
+  const leadSum = useLeadSummary(useMemo(() => ({
+    dealerCodes: [...codes], product: btSel !== ALL ? btSel : undefined,
+    dateStart: isoDateOf(timeRange.start), dateEnd: isoDateOf(timeRange.end),
+  }), [codes, btSel, timeRange.start, timeRange.end]));
   const leadByDealer = useMemo(() => leadSum ? new Map(leadSum.byDealer.map(d => [d.dealerCode, d])) : null, [leadSum]);
 
   // ── สถิติรายตัวแทน — แหล่งเดียวของทุกกราฟ/ตาราง (คำนวณครั้งเดียว) ──
@@ -262,17 +269,26 @@ export default function SalesAnalyticsPage() {
   // "อัตราแปลง" ที่เคยต่อท้ายแต่ละแถวถูกตัดออก (บอสสั่ง 17 ก.ค. 69) — มันคิดจากสถานะลูกค้าเป้าหมาย
   // (ถึงขั้นเสนอราคาขึ้นไป ÷ ลูกค้าเป้าหมายทั้งหมด) ไม่ใช่เลขคู่ "ลูกค้าเป้าหมาย / ใบ" ที่โชว์อยู่ข้างหน้า คนอ่านเลยตีความผิด
   // และ seed วนสถานะเท่า ๆ กันจนได้ 50% แทบทุกแถว ไม่มีสาระให้เทียบ
+  //
+  // ⚠️ หน่วยของสองแท่งต้องเป็น "ราย" เหมือนกัน (บอสแจ้ง 21 ส.ค. 69: "ทำไมมันไม่เท่ากัน")
+  //    ของเดิมแท่งหลังนับ "จำนวนใบเสนอราคา" ซึ่งเป็นคนละหน่วยกับแท่งหน้าที่นับ "จำนวนราย"
+  //    ลูกค้าหนึ่งรายออกได้หลายใบ · ใบของลูกค้าเก่าก็ถูกนับทั้งที่เจ้าตัวไม่อยู่ในแท่งหน้า
+  //    → เชียงใหม่จึงขึ้น 16 / 24 แท่งหลังยาวกว่าแท่งหน้า ทั้งที่ควรเป็นส่วนย่อยของกันและกัน
+  //    ตอนนี้แท่งหลัง = "ลูกค้าเป้าหมายที่ออกใบเสนอราคาแล้ว" (QUOTED_UP) จึงไม่มีทางเกินแท่งหน้า
+  //    สูตรเดียวกับ /hq/leads และการ์ด "อัตราลูกค้าเป้าหมายที่ออกใบเสนอราคา" ที่ /hq/quotations
   const leadVsQuote = useMemo(() => {
-    const useRpc = leadSum && qSummary; // ลูกค้าเป้าหมาย (leadSum, all-time) + ใบ (qSummary, ในช่วง) ที่ DB · ไม่งั้น client
+    // ทั้งสองแท่งมาจาก leadSum ก้อนเดียวแล้ว ไม่ต้องรอสรุปใบเสนอราคาอีกก้อน
     if (view === "month") {
+      // รายเดือน = มองเป็นรุ่น (cohort): ลูกค้าเป้าหมายที่เข้ามาเดือนนั้น กี่รายไปถึงขั้นออกใบเสนอราคา
+      // นับจากรายการจริงทั้งสองแท่ง เพื่อให้มาจากแหล่งเดียวกันเสมอ (RPC ยังไม่มี quoted รายเดือน)
       const lM = new Map<string, number>(), qM = new Map<string, number>();
-      if (useRpc) {
-        leadSum.byMonth.forEach(r => lM.set(`${r.y}-${r.m}`, r.created));
-        qSummary.byMonth.forEach(r => qM.set(`${r.y}-${r.m}`, r.quotes));
-      } else {
+      {
         const mk = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
-        leads.forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (!d) return; lM.set(mk(d), (lM.get(mk(d)) ?? 0) + 1); });
-        quotes.forEach(x => { const d = parseThaiDate(x.createdAt); if (!d) return; qM.set(mk(d), (qM.get(mk(d)) ?? 0) + 1); });
+        leads.forEach(l => {
+          const d = parseThaiDate(l.createdAt ?? ""); if (!d) return;
+          lM.set(mk(d), (lM.get(mk(d)) ?? 0) + 1);
+          if (QUOTED_UP.includes(l.status)) qM.set(mk(d), (qM.get(mk(d)) ?? 0) + 1);
+        });
       }
       const out: { key: string; label: string; a: number; b: number }[] = [];
       const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), 1);
@@ -289,19 +305,20 @@ export default function SalesAnalyticsPage() {
       : (DEALER_META.get(code)?.province ?? "—");
     const m = new Map<string, { a: number; b: number }>();
     const add = (k: string, f: "a" | "b", n: number) => { const r = m.get(k) ?? { a: 0, b: 0 }; r[f] += n; m.set(k, r); };
-    if (useRpc) {
-      leadSum.byDealer.forEach(d => add(keyOf(d.dealerCode), "a", d.leads));
-      qSummary.byDealer.forEach(d => add(keyOf(d.dealerCode), "b", d.count));
+    if (leadSum) {
+      leadSum.byDealer.forEach(d => { add(keyOf(d.dealerCode), "a", d.leads); add(keyOf(d.dealerCode), "b", d.quoted); });
     } else {
-      leads.forEach(l => add(keyOf(l.dealerCode ?? ""), "a", 1));
-      quotes.forEach(x => add(keyOf(x.dealerCode), "b", 1));
+      leads.forEach(l => {
+        add(keyOf(l.dealerCode ?? ""), "a", 1);
+        if (QUOTED_UP.includes(l.status)) add(keyOf(l.dealerCode ?? ""), "b", 1);
+      });
     }
     return [...m.entries()].map(([k, v]) => ({
       key: k, a: v.a, b: v.b,
       label: view === "dealer" ? `${k} – ${DEALER_META.get(k)?.name ?? k}` : view === "region" ? regionDisplay(k) : k,
       onClick: view === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
     })).sort((x, y) => y.a - x.a);
-  }, [view, leadSum, qSummary, leads, quotes, DEALER_META, timeRange, router]);
+  }, [view, leadSum, leads, DEALER_META, timeRange, router]);
 
   // ── Section 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง (รายตัวแทน) ──
   const quoteVsSales = useMemo(() => perf.map(d => ({
@@ -448,13 +465,13 @@ export default function SalesAnalyticsPage() {
       <div className="hq-dealer-charts" style={{ marginBottom: "1.25rem", alignItems: "stretch" }}>
       <div className="card chart-m" style={{ marginBottom: 0 }}>
         <div className="card-header">
-          <div className="card-title">ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</div>
+          <div className="card-title">ลูกค้าเป้าหมาย เทียบ ที่ออกใบเสนอราคาแล้ว</div>
           <div style={{ display: "flex", gap: 5 }}>
             {([["dealer", "ตัวแทน"], ["region", "ภูมิภาค"], ["province", "จังหวัด"], ["month", "รายเดือน"]] as const)
               .map(([v, l]) => viewTab(view, v, l, () => setView(v)))}
           </div>
         </div>
-        <HBars rows={leadVsQuote} aLabel="ลูกค้าเป้าหมาย" bLabel="ใบเสนอราคา" bColor="#0891b2" fmt={v => `${v}`} />
+        <HBars rows={leadVsQuote} aLabel="ลูกค้าเป้าหมาย" bLabel="ออกใบเสนอราคาแล้ว" bColor="#0891b2" fmt={v => `${v} ราย`} />
       </div>
 
       {/* ── SECTION 2 · มูลค่าใบเสนอราคา เทียบ ยอดขายจริง ── */}

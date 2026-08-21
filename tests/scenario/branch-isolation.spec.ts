@@ -54,10 +54,14 @@ test("หน้า HQ เจาะสาขา CNX ไม่โผล่ลู�
   console.log(`หน้าเจาะ CNX → โผล่บริษัทสาขาอื่น: ${leaked.length}`, JSON.stringify(leaked.slice(0, 6)));
   expect(leaked, "หน้าเจาะสาขา CNX ต้องมีเฉพาะลูกค้าเป้าหมายของ CNX").toEqual([]);
   // จำนวนแถวในตารางลูกค้าเป้าหมาย ต้อง = จำนวนลูกค้าเป้าหมาย CNX จริงใน DB (ไม่ใช่ทั้งเครือ)
+  // ⚠️ ตารางนี้แบ่งหน้า หน้าละ 10 แถว — ถ้าสาขามีมากกว่านั้น หน้าแรกย่อมมีแค่ 10
+  //    เทียบกับยอดรวมดิบ ๆ จะตกทันทีที่ข้อมูลตัวอย่างเยอะขึ้น ทั้งที่การกันข้ามสาขายังทำงานถูก
+  //    (เจอจริง 21 ส.ค. 69 หลังเติมข้อมูลตัวอย่างให้ครบทุกสาขา: CNX 22 ราย เห็นหน้าแรก 10 แถว)
+  const PAGE_SIZE = 10;
   const cnxCount = (await admin.from("leads").select("id", { count: "exact", head: true }).eq("dealer_code", "CNX")).count ?? 0;
   const rows = await page.locator("table tbody tr").count();
   console.log(`แถวตารางลูกค้าเป้าหมาย = ${rows} · ลูกค้าเป้าหมาย CNX จริง = ${cnxCount}`);
-  expect(rows, "จำนวนแถว = ลูกค้าเป้าหมาย CNX เท่านั้น").toBe(cnxCount);
+  expect(rows, "จำนวนแถว = ลูกค้าเป้าหมาย CNX เท่านั้น (สูงสุดเท่าหนึ่งหน้า)").toBe(Math.min(cnxCount, PAGE_SIZE));
 });
 
 test("ค้นหาบน Topbar (CNX) ไม่โผล่ลูกค้า/ใบเสนอราคาสาขาอื่น", async ({ page }) => {
