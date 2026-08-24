@@ -173,7 +173,7 @@ export function PlanVsActualBars({
 
       {/* คำอธิบายสี — ต้องมีเสมอ ไม่งั้นแท่งคู่ + แท่งเขียวอ่านไม่ออกว่าอันไหนคืออะไร
           "เกินเป้า" ขึ้นเฉพาะตอนมีเดือนที่เกินจริง — ไม่อธิบายสีที่ไม่ได้อยู่บนจอ */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", justifyContent: "center",
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", justifyContent: "flex-start",
         marginTop: 12, paddingTop: 12, borderTop: "1px solid #f0f4f8", fontSize: "0.72rem", color: "#6B7280" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 10, height: 10, borderRadius: 3, background: aFill ?? NAVY, flexShrink: 0 }} /> {aLabel}
