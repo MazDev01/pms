@@ -17,6 +17,7 @@
 // เดิมดึงลูกค้าทั้งเครือมาไว้ในเครื่องทั้งก้อนแล้วทำทุกอย่างฝั่ง client — ที่สเกลจริง (พันรายขึ้นไป) ไม่ไหว
 // supabase: useHQCustomersPage/useHQCustomersFilterOptions (RPC) · local/demo: useCustomerDbLocal (client, ไม่ยิง fetch)
 import { useState, useMemo, useEffect } from "react";
+import { APP_NOW } from "@pms/shared/lib/appTime";
 import { Search } from "lucide-react";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { customerCode, fmtISOToThai } from "@pms/shared/lib/mock";
@@ -103,10 +104,12 @@ export default function HQCustomersPage() {
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
   }, [localSource, search, dealerSel, regionSel, provinceSel, typeSel]);
 
+  const ปีที่แล้ว = useMemo(() => { const d = new Date(APP_NOW); d.setFullYear(d.getFullYear() - 1); return d.getTime(); }, []);
   // kpi/charts/rows — supabase: ตรงจาก RPC · local: derive จาก localFiltered ให้ shape เดียวกัน
   const kpi: HQCustomersKPI = pageResult ? pageResult.kpi : {
     total: localFiltered.length,
-    active: localFiltered.filter(r => r.buildings.length > 0).length,
+    // "ยังซื้ออยู่" = ซื้อภายใน 12 เดือนล่าสุด — กติกาเดียวกับฐานข้อมูล (ใบ 0158)
+    active: localFiltered.filter(r => r.lastPurchaseAt && r.lastPurchaseAt.getTime() >= ปีที่แล้ว).length,
     revenue: localFiltered.reduce((s, r) => s + r.totalRevenue, 0),
     repeat: localFiltered.filter(r => r.isRepeat).length,
   };

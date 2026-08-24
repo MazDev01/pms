@@ -235,6 +235,8 @@ export interface HQCustomersPageOpts {
   search?: string; dealerCode?: string; provinces?: string[]; buildingType?: string;
   limit: number; offset: number;
 }
+/** active = ลูกค้าที่ "ยังซื้ออยู่" — มีการซื้อภายใน 12 เดือนล่าสุด (ใบ 0158)
+ *  ไม่ใช่ "เคยซื้อแล้ว" ซึ่งเท่ากับ total เสมอ เพราะลูกค้าเกิดจากการปิดการขายทางเดียว */
 export interface HQCustomersKPI { total: number; active: number; revenue: number; repeat: number; }
 export interface HQCustomersCharts {
   byType: { label: string; value: number }[];

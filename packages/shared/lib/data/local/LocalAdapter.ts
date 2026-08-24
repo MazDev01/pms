@@ -20,6 +20,7 @@ import { exactKey } from "@pms/shared/lib/customerMatch";
 import { isClosedDeal } from "@pms/shared/lib/customerDeletion";
 import { parseThaiDate as parseThaiDateLocal } from "@pms/shared/lib/leadMetrics";
 import { parseBaht } from "@pms/shared/lib/format";
+import { APP_NOW_ISO } from "@pms/shared/lib/appTime";
 import { profileKey, PROFILE_UPDATED_EVENT, sessions, QUOTED_UP, DEFAULT_DEALER_CODE,
   DEFAULT_LEAD_RULES, DEFAULT_HQ_NOTIF_RULES, DEFAULT_HQ_POLICY, mainTemplateOf, type UserProfile } from "@pms/shared/lib/mock";
 
@@ -551,9 +552,11 @@ export const LocalAdapter: DataAdapter = {
       });
 
       const total = base.length;
+      // "ยังซื้ออยู่" = ซื้อภายใน 12 เดือนล่าสุด (กติกาเดียวกับฐานข้อมูล ใบ 0158)
+      const เมื่อปีก่อน = (() => { const d = new Date(APP_NOW_ISO); d.setFullYear(d.getFullYear() - 1); return d.toISOString().slice(0, 10); })();
       const kpi = {
         total,
-        active: base.filter(c => c.buildingTypes.length > 0).length,
+        active: base.filter(c => (c.lastPurchaseAt ?? "") >= เมื่อปีก่อน).length,
         revenue: base.reduce((s, c) => s + c.totalValue, 0),
         repeat: base.filter(c => c.isRepeat).length,
       };
