@@ -64,18 +64,6 @@ export function SalesTrendChart({
     ? Math.round(((data[data.length - 1].value - data[0].value) / data[0].value) * 100)
     : null;
 
-  // ── แถบสรุปท้ายกราฟ: สูงสุด / ต่ำสุด / เฉลี่ยต่อเดือน ──────────────────────────
-  // คิดจาก `data` ชุดเดียวกับที่วาดกราฟและใช้คิดยอดรวม → เปลี่ยนช่วง 3/6/12 เดือนแล้วขยับตามทันที
-  // ⚠️ ทุกเดือนเป็น 0 (ยังไม่มีการปิดการขายในช่วงนี้) = ไม่มี "เดือนที่สูงสุด/ต่ำสุด" ให้ชี้
-  //    ต้องขึ้น "—" ห้ามชี้เดือนแรกแบบมั่ว ๆ ว่าเป็นเดือนยอดสูงสุดทั้งที่ยอดเป็นศูนย์เท่ากันหมด
-  const มีข้อมูล = data.some(d => d.value > 0);
-  const สถิติ = (() => {
-    if (!data.length || !มีข้อมูล) return null;
-    let สูง = data[0], ต่ำ = data[0];
-    for (const d of data) { if (d.value > สูง.value) สูง = d; if (d.value < ต่ำ.value) ต่ำ = d; }
-    return { สูง, ต่ำ, เฉลี่ย: total / data.length };
-  })();
-  const fmtM = (v: number) => `฿${(Math.round(v * 10) / 10).toFixed(1)}M`;
 
   return (
     <div style={{ width: "100%" }}>
@@ -103,9 +91,6 @@ export function SalesTrendChart({
           .trend-pill:focus-visible{outline:2px solid #003366;outline-offset:2px}
           .trend-pill[aria-pressed="true"]{background:#003366;border-color:#003366;color:#fff}
           .trend-pill[aria-pressed="true"]:hover{background:#00284f}
-          .trend-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
-            margin-top:14px;padding-top:12px;border-top:1px solid #eef1f5}
-          @media (max-width:520px){.trend-stats{grid-template-columns:1fr}}
         `}</style>
         <div role="group" aria-label="ช่วงเวลากราฟแนวโน้มยอดขาย" style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
           {RANGE_PILLS.map(p => (
@@ -118,20 +103,6 @@ export function SalesTrendChart({
 
       <LineTrendChart key={range} data={data} height={height} />
 
-      {/* สรุปสามช่อง — ตัวเลขทั้งหมดคิดจากชุดข้อมูลเดียวกับกราฟ ไม่มีค่าฝังตาย */}
-      <div className="trend-stats">
-        {[
-          { label: "ยอดสูงสุด", value: สถิติ ? fmtM(สถิติ.สูง.value) : "—", note: สถิติ ? สถิติ.สูง.month : "ยังไม่มียอดปิดการขายในช่วงนี้" },
-          { label: "ยอดต่ำสุด", value: สถิติ ? fmtM(สถิติ.ต่ำ.value) : "—", note: สถิติ ? สถิติ.ต่ำ.month : "—" },
-          { label: "ค่าเฉลี่ยต่อเดือน", value: สถิติ ? fmtM(สถิติ.เฉลี่ย) : "—", note: `${data.length} เดือน` },
-        ].map(c => (
-          <div key={c.label} style={{ minWidth: 0 }}>
-            <div style={{ fontSize: "0.68rem", color: "var(--sub, #8a94a3)", fontWeight: 600, marginBottom: 2 }}>{c.label}</div>
-            <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#003366", lineHeight: 1.2 }}>{c.value}</div>
-            <div style={{ fontSize: "0.66rem", color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.note}</div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

@@ -548,7 +548,15 @@ export function LineTrendChart({
   const vals = data.map(d => d.value);
   const max = Math.max(...vals, 0);
   const lo = 0, hi = niceCeil(max * 1.15) || 1;           // แกน Y เริ่มที่ 0 + เผื่อหัว (สไตล์ Chateau MRR) เส้นไม่ชิดขอบบน
-  const W = vw, H = height, pL = narrow ? 46 : 56, pR = narrow ? 16 : 40, pT = 26, pB = 40;
+  // ⚠️ ระยะขอบซ้ายต้องกว้างตาม "ป้ายแกนตั้งที่ยาวที่สุด" ไม่ใช่ค่าคงที่ (บอสแจ้ง 24 ส.ค. 69: ตัวเลขทะลุกรอบ)
+  //   ป้ายวางชิดขวาที่ x = pL - 12 → ยิ่งข้อความยาว ยิ่งกินที่ไปทางซ้าย
+  //   ยอดหลักร้อยล้าน ("฿112.5M") ยาวกว่าค่าคงที่เดิม 56 จึงล้นออกนอกการ์ดแล้วโดนตัดหัว
+  //   คิดความกว้างโดยประมาณจากจำนวนตัวอักษร (ตัวเลข/สัญลักษณ์กว้างราว 0.58 เท่าของขนาดฟอนต์)
+  const Y_FS = 13.5;
+  const ป้ายยาวสุด = axisTicks(hi).reduce((m, v) => Math.max(m, `฿${Math.round(v * 10) / 10}${unit}`.length), 3);
+  const W = vw, H = height,
+    pL = Math.max(narrow ? 46 : 56, Math.ceil(ป้ายยาวสุด * Y_FS * 0.58) + 16),
+    pR = narrow ? 16 : 40, pT = 26, pB = 40;
   const cW = W - pL - pR, cH = H - pT - pB;
   const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
   const cy = (v: number) => pT + (1 - (v - lo) / (hi - lo)) * cH;
@@ -589,7 +597,7 @@ export function LineTrendChart({
       {yTicks.map((v, i) => (
         <g key={i}>
           <line x1={pL} y1={cy(v)} x2={W - pR} y2={cy(v)} stroke="#e6e9f0" strokeWidth={1} strokeDasharray="5,5" />
-          <text x={pL - 12} y={cy(v) + (v === maxTick ? 13 : 4)} textAnchor="end" fontSize="13.5" fill="#b8bfca">{fmt(v)}</text>
+          <text x={pL - 12} y={cy(v) + (v === maxTick ? 13 : 4)} textAnchor="end" fontSize={Y_FS} fill="#b8bfca">{fmt(v)}</text>
         </g>
       ))}
       {data.map((d, i) => (
