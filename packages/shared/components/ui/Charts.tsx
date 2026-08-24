@@ -426,7 +426,6 @@ export function Donut({ segments, centerLabel, centerValue, size = 190, activeIn
   const [เน้นเอง, setเน้นเอง] = useState<number | null>(null);
   const เน้น = activeIndex !== undefined ? activeIndex : เน้นเอง;
   const ตั้งเน้น = (i: number | null) => { setเน้นเอง(i); onActiveChange?.(i); };
-  let offset = 0;
   // ⚠️ ไม่มีข้อมูล = ต้องบอกผู้ใช้ ห้ามปล่อยกล่องเปล่า/ขีดเดียว (แก้ 10 ส.ค. 69)
   //   ผลตรวจรอบสุดท้ายพบการ์ดแบบนี้ 7 ใบ ที่มีแค่ "—" ในกล่องขาวสูง 340-420px
   //   ต้องเช็ก "หลัง" เรียก hook ครบแล้วเท่านั้น — คืนค่าก่อน hook ผิดกฎของ React
@@ -594,7 +593,7 @@ export function LineTrendChart({
         </g>
       ))}
       {data.map((d, i) => (
-        showLabel(i, data.length, labelStep(cW / Math.max(data.length, 1), 15, data.map(x => x.month))) ? <text key={i} x={cx(i)} y={bottomY + 26} textAnchor="middle" fontSize="15" fill="#6b7280">{d.month}</text> : null
+        showLabel(i, data.length, labelStep(cW / Math.max(data.length, 1), 15, data.map(x => x.month))) ? <text key={i} x={cx(i)} y={bottomY + 26} textAnchor="middle" fontSize="13.5" fill="#64748b">{d.month}</text> : null
       ))}
       {/* พื้นที่เติมสี + เส้น (เผยจากซ้าย) */}
       <clipPath id={gid}><rect x={pL - 6} y={0} width={drawn ? cW + 12 : 0} height={H} style={{ transition: "width 1s cubic-bezier(.4,0,.2,1)" }} /></clipPath>
@@ -605,23 +604,42 @@ export function LineTrendChart({
       </g>
       {/* hover — เส้นไกด์ประแนวตั้ง + จุดทึบ + การ์ดทูลทิปลอย (สไตล์ Chateau) */}
       {hp && (() => {
-        // การ์ดค่าอ่านง่าย: บรรทัดบน = เดือน (ตัวเล็กสีจาง) · บรรทัดล่าง = ตัวเลขตัวใหญ่
+        // การ์ดค่าอ่านง่าย: เดือน (ตัวเล็กสีจาง) · ยอดตัวใหญ่ · เทียบกับเดือนก่อนหน้า
         // เส้นไกด์ลากจาก "จุดข้อมูลลงล่าง" เท่านั้น — ไม่ลากทะลุขึ้นบน จะได้ไม่ตัดผ่านการ์ดค่า
-        const tw = 168, th = 62;
+        //
+        // ⚠️ เดือนก่อนหน้าเป็น 0 หรือไม่มีเดือนก่อนหน้า = คิดเป็นเปอร์เซ็นต์ไม่ได้ → ไม่ต้องขึ้นบรรทัดนั้นเลย
+        //    (ห้ามโชว์ "+0%" หรือ "+∞%" ให้เข้าใจผิด — กติกาเดียวกับ growth บนหัวการ์ด)
+        const prev = hover !== null && hover > 0 ? pts[hover - 1] : null;
+        const diffPct = prev && prev.value ? ((hp.value - prev.value) / prev.value) * 100 : null;
+        const tw = 190, th = diffPct === null ? 62 : 84;
         const tx = Math.min(Math.max(hp.x - tw / 2, pL - 6), W - pR - tw);
-        const ty = Math.max(hp.y - th - 16, 2);
+        // วางเหนือจุดเป็นหลัก · ถ้าที่เหนือจุดไม่พอ ย้ายไปใต้จุด เพื่อไม่ให้การ์ดโดนขอบบนตัด
+        const above = hp.y - th - 16 >= 2;
+        const ty = above ? hp.y - th - 16 : Math.min(hp.y + 16, bottomY - th);
         return (
           <g style={{ pointerEvents: "none" }}>
             <line x1={hp.x} y1={hp.y} x2={hp.x} y2={bottomY} stroke={color} strokeWidth={1.2} strokeDasharray="4,5" opacity={0.55} />
+            <circle cx={hp.x} cy={hp.y} r={11} fill={color} opacity={0.14} />
             <circle cx={hp.x} cy={hp.y} r={6.5} fill="#fff" stroke={color} strokeWidth={2.5} />
             <g transform={`translate(${tx},${ty})`} filter="url(#line-tt-shadow)">
-              <rect x={0} y={0} width={tw} height={th} rx={12} fill="#fff" stroke="#eef1f5" strokeWidth={1} />
-              <text x={16} y={23} fontSize="12.5" fill="#9ca3af">{hp.month}</text>
-              <text x={16} y={47} fontSize="21" fontWeight="800" fill="#1f2937">{fmt(hp.value)}</text>
+              <rect x={0} y={0} width={tw} height={th} rx={13} fill="#fff" stroke="#eef1f5" strokeWidth={1} />
+              <text x={16} y={24} fontSize="12.5" fill="#9ca3af">{hp.month}</text>
+              <text x={16} y={48} fontSize="21" fontWeight="800" fill={color}>{fmt(hp.value)}</text>
+              {diffPct !== null && prev && (
+                <text x={16} y={70} fontSize="12.5" fontWeight="700" fill={diffPct >= 0 ? "#059669" : "#dc2626"}>
+                  {diffPct >= 0 ? "+" : "−"}{Math.abs(Math.round(diffPct * 10) / 10)}% จาก {prev.month}
+                </text>
+              )}
             </g>
           </g>
         );
       })()}
+      {/* จุดข้อมูลทุกเดือน — เล็กและจาง บอกว่า "ตรงไหนมีค่าจริง" โดยไม่ต้องเขียนตัวเลขกำกับทุกจุด (จะรก)
+          จุดที่ชี้อยู่ไม่ต้องวาดซ้ำ เพราะมีวงแหวนใหญ่ทับอยู่แล้ว */}
+      {drawn && pts.map((p, i) => (
+        i === hover || (i === n - 1 && !hp) ? null
+          : <circle key={i} cx={p.x} cy={p.y} r={3.2} fill="#fff" stroke={color} strokeWidth={1.6} opacity={0.85} />
+      ))}
       {/* จุดปลายแบบวงแหวน (target dot) */}
       {last && !hp && drawn && (
         <g>
