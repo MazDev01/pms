@@ -544,7 +544,11 @@ export default function HQDashboard() {
   const kpiCards = [
     { label: "เป้าหมายยอดขายทั้งเครือ", tip: "เป้าหมายยอดขายทั้งปีของทั้งเครือ เทียบกับยอดปิดการขายสะสมในช่วงเวลาที่เลือก", Icon: Target, color: "#2563EB", bg: "#E8F0FE", href: "/hq/quotations", ring: true },
     { label: "ใบเสนอราคารวม", tip: "จำนวนใบเสนอราคาทั้งเครือในช่วงเวลาที่เลือก", Icon: FileText, color: "#0891B2", bg: "#E6F4F9", href: "/hq/quotations", value: sc.quotes.value, sub1: "ใบ" },
-    { label: "ลูกค้าทั้งเครือ", tip: "จำนวนลูกค้าทั้งหมดในเครือ", Icon: Users2, color: "#7C3AED", bg: "#F0EBFB", href: "/hq/customers", value: sc.customers.value, sub1: "ราย" },
+    // ⚠️ การ์ดนี้เดินตามตัวกรองช่วงเวลา (ใบ 0155) = นับ "ลูกค้าที่เริ่มเป็นลูกค้าในช่วงที่เลือก"
+    //    ป้ายเดิมเขียนว่า "ลูกค้าทั้งเครือ / จำนวนลูกค้าทั้งหมดในเครือ" ซึ่งขัดกับค่าที่นับจริง
+    //    (ตรวจพบ 24 ส.ค. 69: การ์ดขึ้น 11 ราย แต่หน้าลูกค้าทั้งเครือขึ้น 51 ราย — อ่านแล้วเหมือนข้อมูลหาย)
+    //    ชื่อจึงต้องบอกว่าเป็น "ลูกค้าใหม่ในช่วงนั้น" ไม่ใช่ยอดสะสมทั้งหมด
+    { label: "ลูกค้าใหม่ทั้งเครือ", tip: "จำนวนลูกค้าที่เริ่มเป็นลูกค้าในช่วงเวลาที่เลือก (ยอดสะสมทั้งหมดดูที่หน้าลูกค้าทั้งเครือ)", Icon: Users2, color: "#7C3AED", bg: "#F0EBFB", href: "/hq/customers", value: sc.customers.value, sub1: "ราย" },
     { label: "ดีลที่ปิดการขาย", tip: "จำนวนดีลที่ปิดการขายสำเร็จในช่วงเวลาที่เลือก", Icon: Trophy, color: "#D97706", bg: "#FEF0E6", href: "/hq/quotations", value: sc.won.value, sub1: "ดีล" },
   ];
   const kSub: React.CSSProperties = { fontSize: "0.8rem", color: "var(--muted-foreground)" };

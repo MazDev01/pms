@@ -23,7 +23,7 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
   leadStatusLabel, leadStatusColor, apptTypeLabel, fmtISOToThai,
-  quotationStatusLabel, quotationStatusColor, mainTemplateOf, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE,
+  quotationStatusLabel, quotationStatusColor, mainTemplateOf, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, QUOTED_UP,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
@@ -136,17 +136,26 @@ export default function DealerDashboard() {
     [wonByKey],
   );
   const monthTargetM = Math.round((monthTarget / 1e6) * 10) / 10;
-  // ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา: แท่งคู่รายเดือน (จำนวนรายการ ไม่ใช่บาท)
+  // ── ลูกค้าเป้าหมาย เทียบ ที่ออกใบเสนอราคาแล้ว: แท่งคู่รายเดือน หน่วย "ราย" ทั้งคู่ ──
+  //
+  // ⚠️ ของเดิมแท่งหลังนับ "จำนวนใบเสนอราคา" ซึ่งเป็นคนละหน่วยกับแท่งหน้าที่นับ "จำนวนราย"
+  //    ลูกค้าหนึ่งรายออกได้หลายใบ · ใบของลูกค้าเก่าก็ถูกนับทั้งที่เจ้าตัวไม่อยู่ในแท่งหน้า
+  //    แท่งหลังจึงยาวเกินแท่งหน้าได้ ทั้งที่ควรเป็นส่วนย่อยของกัน (บอสทักอาการเดียวกันฝั่ง HQ 21 ส.ค. 69)
+  //    ตอนนี้แท่งหลัง = ลูกค้าเป้าหมาย "รุ่นเดือนนั้น" ที่ไปถึงขั้นออกใบเสนอราคาแล้ว
+  //
+  // ⚠️ ที่นี่ "ไม่ตัด" รายที่ปิดการขายได้ออก (ต่างจากการ์ดของสำนักงานใหญ่ที่บอสสั่งให้ตัด)
+  //    เพราะการ์ดนี้อ่านว่า "ที่รับเข้ามาเดือนนั้น ได้เสนอราคากี่ราย" — รายที่ปิดได้ก็ผ่านการเสนอราคามาแล้ว
+  //    ถ้าตัดออก เดือนที่ขายดีจะดูเหมือนเสนอราคาได้น้อย ซึ่งกลับหัวกลับหางกับความจริง
   // นับลงถังตามคีย์ปี-เดือน → ข้อมูลข้ามปีไม่ทับกัน ไม่ต้องกรองปีทิ้งอีก
   const leadQuoteData = useMemo(() => {
     const lC = new Map<string, number>(), qC = new Map<string, number>();
     myLeads.forEach(l => {
       const d = leadCreatedDate(l), k = monthKey(d.getFullYear(), d.getMonth());
       lC.set(k, (lC.get(k) ?? 0) + 1);
+      if (QUOTED_UP.includes(l.status)) qC.set(k, (qC.get(k) ?? 0) + 1);
     });
-    quotations.forEach(q => { const k = q.date.slice(0, 7); qC.set(k, (qC.get(k) ?? 0) + 1); });
     return lastNMonths(lqRange, MOCK_TODAY).map(b => ({ label: b.label, actual: lC.get(b.key) ?? 0, plan: qC.get(b.key) ?? 0 }));
-  }, [myLeads, quotations, lqRange]);
+  }, [myLeads, lqRange]);
 
   const dealStatus = useMemo(() => {
     const m = new Map<string, number>();
@@ -361,18 +370,18 @@ export default function DealerDashboard() {
         {/* ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา — จำนวนรายการ */}
         <div className="card" style={card}>
           <div style={hd}>
-            <span style={title}>ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา</span>
+            <span style={title}>ลูกค้าเป้าหมาย เทียบ ที่ออกใบเสนอราคาแล้ว</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
               <MonthRangeToggle value={lqRange} onChange={setLqRange} label="ช่วงเวลากราฟลูกค้าเป้าหมายเทียบใบเสนอราคา" />
               {more("/leads")}
             </span>
           </div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>จำนวนรายการต่อเดือน · {monthRangeSubtitle(lqRange, MOCK_TODAY)} · ยิ่งสองแท่งใกล้กัน = เสนอราคาได้มากเทียบกับที่รับเข้ามา</div>
+          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>จำนวนราย (ไม่ใช่จำนวนใบ) ต่อเดือน · {monthRangeSubtitle(lqRange, MOCK_TODAY)} · ยิ่งสองแท่งใกล้กัน = เสนอราคาได้มากเทียบกับที่รับเข้ามา</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             {/* คำอธิบายสีอยู่ใน PlanVsActualBars แล้ว — เดิมเขียนมือซ้ำไว้ใต้การ์ดนี้ใบเดียว
                 (อีก 2 การ์ดที่ใช้กราฟตัวเดียวกันเลยไม่มีคำอธิบายสีมาตลอด) */}
-            <PlanVsActualBars data={leadQuoteData} height={260} aLabel="ลูกค้าเป้าหมายใหม่" bLabel="ใบเสนอราคาที่ออก"
-              fmt={v => `${Math.round(v)} รายการ`} highlightExceeded={false} aFill="#2563EB" bFill={AMBER} />
+            <PlanVsActualBars data={leadQuoteData} height={260} aLabel="ลูกค้าเป้าหมายใหม่" bLabel="ออกใบเสนอราคาแล้ว"
+              fmt={v => `${Math.round(v)} ราย`} highlightExceeded={false} aFill="#2563EB" bFill={AMBER} />
           </div>
         </div>
 
