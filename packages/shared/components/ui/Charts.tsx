@@ -584,13 +584,14 @@ export function LineTrendChart({
           <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#0f2a52" floodOpacity="0.14" />
         </filter>
       </defs>
-      {/* y labels (จาง) */}
+      {/* ── เส้นกริดแนวนอนแบบเส้นประ + ป้ายแกนตั้งด้านซ้าย (บอสสั่ง 21 ส.ค. 69 — ตามภาพตัวอย่าง) ──
+          เดิมเป็นเส้นประ "แนวตั้ง" ทุกจุด ซึ่งช่วยอ่านค่าไม่ได้เลย (มันบอกแค่ตำแหน่งเดือนที่รู้อยู่แล้ว)
+          เส้นประแนวนอนวางตรงระดับตัวเลขแกนตั้ง → กวาดสายตาจากเส้นไปอ่านค่าได้ทันที */}
       {yTicks.map((v, i) => (
-        <text key={i} x={pL - 10} y={cy(v) + (v === maxTick ? 13 : 4)} textAnchor="end" fontSize="14" fill="#c4cbd4">{fmt(v)}</text>
-      ))}
-      {/* เส้นประแนวตั้งทุกจุด */}
-      {pts.map((p, i) => (
-        <line key={i} x1={p.x} y1={pT} x2={p.x} y2={bottomY} stroke="#e8ecf2" strokeWidth={1} strokeDasharray="4,5" />
+        <g key={i}>
+          <line x1={pL} y1={cy(v)} x2={W - pR} y2={cy(v)} stroke="#e6e9f0" strokeWidth={1} strokeDasharray="5,5" />
+          <text x={pL - 12} y={cy(v) + (v === maxTick ? 13 : 4)} textAnchor="end" fontSize="13.5" fill="#b8bfca">{fmt(v)}</text>
+        </g>
       ))}
       {data.map((d, i) => (
         showLabel(i, data.length, labelStep(cW / Math.max(data.length, 1), 15, data.map(x => x.month))) ? <text key={i} x={cx(i)} y={bottomY + 26} textAnchor="middle" fontSize="15" fill="#6b7280">{d.month}</text> : null
@@ -599,23 +600,24 @@ export function LineTrendChart({
       <clipPath id={gid}><rect x={pL - 6} y={0} width={drawn ? cW + 12 : 0} height={H} style={{ transition: "width 1s cubic-bezier(.4,0,.2,1)" }} /></clipPath>
       <g clipPath={`url(#${gid})`}>
         <path d={area} fill={`url(#${grad})`} />
-        {/* เรืองแสงนุ่มใต้เส้น */}
-        <path d={line} fill="none" stroke={color} strokeWidth={8} opacity={0.12} strokeLinecap="round" strokeLinejoin="round" />
-        <path d={line} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+        {/* เส้นเดี่ยวคมชัด ไม่มีเงาเรืองใต้เส้น — เงานั้นทำให้เส้นดูหนาฟุ้งและกลืนกับพื้นที่เติมสี */}
+        <path d={line} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
       </g>
       {/* hover — เส้นไกด์ประแนวตั้ง + จุดทึบ + การ์ดทูลทิปลอย (สไตล์ Chateau) */}
       {hp && (() => {
-        const tw = 152, th = 50;
-        const tx = Math.min(Math.max(hp.x + 14, pL), W - pR - tw);
-        const ty = Math.min(Math.max(hp.y - th - 10, pT + 2), bottomY - th);
+        // การ์ดค่าอ่านง่าย: บรรทัดบน = เดือน (ตัวเล็กสีจาง) · บรรทัดล่าง = ตัวเลขตัวใหญ่
+        // เส้นไกด์ลากจาก "จุดข้อมูลลงล่าง" เท่านั้น — ไม่ลากทะลุขึ้นบน จะได้ไม่ตัดผ่านการ์ดค่า
+        const tw = 168, th = 62;
+        const tx = Math.min(Math.max(hp.x - tw / 2, pL - 6), W - pR - tw);
+        const ty = Math.max(hp.y - th - 16, 2);
         return (
           <g style={{ pointerEvents: "none" }}>
-            <line x1={hp.x} y1={pT} x2={hp.x} y2={bottomY} stroke={color} strokeWidth={1.3} strokeDasharray="5,4" opacity={0.45} />
-            <circle cx={hp.x} cy={hp.y} r={6} fill={color} stroke="#fff" strokeWidth={2.5} />
+            <line x1={hp.x} y1={hp.y} x2={hp.x} y2={bottomY} stroke={color} strokeWidth={1.2} strokeDasharray="4,5" opacity={0.55} />
+            <circle cx={hp.x} cy={hp.y} r={6.5} fill="#fff" stroke={color} strokeWidth={2.5} />
             <g transform={`translate(${tx},${ty})`} filter="url(#line-tt-shadow)">
-              <rect x={0} y={0} width={tw} height={th} rx={10} fill="#fff" stroke="#eef1f5" strokeWidth={1} />
-              <text x={13} y={20} fontSize="13.5" fill="#9ca3af">{hp.month}</text>
-              <text x={13} y={39} fontSize="15" fontWeight="800" fill={color}>ยอดขาย : {fmt(hp.value)}</text>
+              <rect x={0} y={0} width={tw} height={th} rx={12} fill="#fff" stroke="#eef1f5" strokeWidth={1} />
+              <text x={16} y={23} fontSize="12.5" fill="#9ca3af">{hp.month}</text>
+              <text x={16} y={47} fontSize="21" fontWeight="800" fill="#1f2937">{fmt(hp.value)}</text>
             </g>
           </g>
         );
