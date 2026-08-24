@@ -34,6 +34,7 @@ import {
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { leadStatusLabel, leadStatusColor, QUOTED_UP, LEAD_STATUS_ORDER, type LeadStatus } from "@pms/shared/lib/mock";
+import { dealerCodeOf } from "@pms/shared/lib/dealerCode";
 import { fmtBaht, pctOrNull, parseBaht, fmtFull, formatPhone } from "@pms/shared/lib/format";
 import { groupLostReasons, withUnspecified } from "@pms/shared/lib/lostReasons";
 
@@ -122,7 +123,7 @@ export default function HQLeadsPage() {
     : [...new Set(scoped.map(l => l.dealerCode).filter(Boolean))] as string[]).sort(), [optsSummary, scoped]);
   const regionOpts = useMemo(() => (optsSummary
     ? [...new Set(optsSummary.byDealer.map(d => REGION_OF.get(d.dealerCode)).filter(Boolean))]
-    : [...new Set(scoped.map(l => REGION_OF.get(l.dealerCode ?? "")).filter(Boolean))]).sort() as string[], [optsSummary, scoped, REGION_OF]);
+    : [...new Set(scoped.map(l => REGION_OF.get(dealerCodeOf(l))).filter(Boolean))]).sort() as string[], [optsSummary, scoped, REGION_OF]);
   const btOpts = useMemo(() => (optsSummary
     ? optsSummary.byProduct.map(p => p.product).filter(p => p !== "ไม่ระบุ")
     : [...new Set(scoped.map(l => l.product).filter(Boolean))]).sort((a, b) => a.localeCompare(b, "th")), [optsSummary, scoped]);
@@ -141,7 +142,7 @@ export default function HQLeadsPage() {
     return scoped.filter(l =>
       (province === "ALL" || l.province === province) &&
       (dealerSel === "ALL" || l.dealerCode === dealerSel) &&
-      (regionSel === "ALL" || REGION_OF.get(l.dealerCode ?? "") === regionSel) &&
+      (regionSel === "ALL" || REGION_OF.get(dealerCodeOf(l)) === regionSel) &&
       (btSel === "ALL" || l.product === btSel) &&
       (srcSel === "ALL" || (l.source || "ไม่ระบุ") === srcSel) &&
       (!q || (l.company + l.contact + l.province + l.product + l.assigned + (l.id ?? "") + (l.dealerCode ?? "")).toLowerCase().includes(q))
@@ -217,7 +218,7 @@ export default function HQLeadsPage() {
   const unassignedCount = unassignedSummary ? unassignedSummary.total : unassignedClient.length;
   // ป้ายบอกเกณฑ์ — หน้านี้รวมหลายสาขาที่ตั้งเกณฑ์ต่างกันได้ จึงสรุปเป็นช่วงเมื่อไม่เท่ากัน
   const unassignedHoursText = useMemo(() => {
-    const codes = unassignedSummary ? unassignedSummary.byDealer.map(d => d.dealerCode) : unassignedClient.map(l => l.dealerCode ?? "");
+    const codes = unassignedSummary ? unassignedSummary.byDealer.map(d => d.dealerCode) : unassignedClient.map(dealerCodeOf);
     const hrs = [...new Set(codes.map(c => rulesOf(c).unassignedAlertHours))].sort((a, b) => a - b);
     if (!hrs.length) return "—";
     return hrs.length === 1 ? `เกิน ${hrs[0]} ชั่วโมง` : `เกิน ${hrs[0]}–${hrs[hrs.length - 1]} ชั่วโมง แล้วแต่สาขา`;

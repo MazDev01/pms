@@ -35,6 +35,7 @@ import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { useNetworkQuotations, useNetworkLeads, useNetworkCustomers, useHQQuotationsSummary, useLeadSummary, useDealerDrawerData } from "@pms/shared/lib/useNetworkData";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { fmtBaht } from "@pms/shared/lib/format";
+import { dealerCodeOf } from "@pms/shared/lib/dealerCode";
 
 const PRIMARY = "#003366";
 const STEEL = "#2D2D2D";
@@ -182,7 +183,7 @@ export default function SalesAnalyticsPage() {
   //    "ลูกค้าเป้าหมาย เทียบ ใบเสนอราคา" เอาลูกค้าเป้าหมาย "ทั้งหมดตั้งแต่เปิดสาขา" ไปเทียบกับใบ "เฉพาะช่วงที่เลือก"
   //    เลือกช่วงแคบ ๆ แล้วแท่งสองอันจึงไม่มีทางสัมพันธ์กันเลย (บอสแจ้ง 21 ส.ค. 69: "ทำไมมันไม่เท่ากัน")
   const leads = useMemo(
-    () => netLeads.filter(l => codes.has(l.dealerCode ?? "") && inRange(l.createdAt ?? "") && (btSel === ALL || l.product === btSel)),
+    () => netLeads.filter(l => codes.has(dealerCodeOf(l)) && inRange(l.createdAt ?? "") && (btSel === ALL || l.product === btSel)),
     [netLeads, codes, inRange, btSel],
   );
 
@@ -322,8 +323,8 @@ export default function SalesAnalyticsPage() {
       });
     } else {
       leads.filter(l => l.status !== "PAID").forEach(l => {
-        add(keyOf(l.dealerCode ?? ""), "a", 1);
-        if (QUOTED_UP.includes(l.status)) add(keyOf(l.dealerCode ?? ""), "b", 1);
+        add(keyOf(dealerCodeOf(l)), "a", 1);
+        if (QUOTED_UP.includes(l.status)) add(keyOf(dealerCodeOf(l)), "b", 1);
       });
     }
     return [...m.entries()].map(([k, v]) => ({

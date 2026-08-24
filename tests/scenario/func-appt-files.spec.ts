@@ -168,8 +168,12 @@ test("[func] ลบไฟล์แต่ลบไบต์ไม่สำเร�
   const f = await waitRow<{ id: number; storage_path: string | null }>(sb, "files", { name: FILENAME }, 20_000);
   expect(f.storage_path, "ต้องอัปโหลดไบต์สำเร็จก่อน").toBeTruthy();
 
-  // ไปหน้าคลังไฟล์ → รอไฟล์โผล่
+  // ไปหน้าคลังไฟล์ → ค้นหาก่อนแล้วค่อยรอไฟล์โผล่
+  // ⚠️ ตารางไฟล์แบ่งหน้า — พอสาขามีไฟล์เกินหนึ่งหน้า ไฟล์ที่เพิ่งอัปอาจไปอยู่หน้าถัดไป
+  //    เทสต์ที่มองแค่หน้าแรกจะตกทั้งที่ระบบทำงานถูก (เจอจริง 24 ส.ค. 69 ตอนไฟล์ตัวอย่างเยอะขึ้น)
+  //    กติกาเดียวกับตัวดัก check-paginated-lookup: จะหาแถวในตารางแบ่งหน้า ต้องค้นหาก่อนเสมอ
   await page.goto(`${DEALER_ORIGIN}/files`, { waitUntil: "domcontentloaded" });
+  await page.getByPlaceholder("ค้นหาไฟล์ / โอกาสการขาย...").fill(FILENAME);
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 20_000, message: "ไฟล์ต้องโผล่ในคลัง" }).toContain(FILENAME);
 

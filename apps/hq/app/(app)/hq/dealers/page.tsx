@@ -56,7 +56,12 @@ function StatusBadge({ status }: { status: DealerStatus }) {
 // ── Sub-components ──────────────────────────────────────────────
 
 function RevBar({ actual, target }: { actual: number; target: number }) {
-  const pct = target > 0 ? Math.min(100, Math.round(actual / target * 100)) : 0;
+  // ⚠️ ตัวเลขที่โชว์ต้องเป็นค่าจริง · ตัดที่ 100 ได้เฉพาะ "ความยาวแท่ง" (บอสสั่ง 24 ส.ค. 69)
+  //   เดิมใช้ค่าที่ตัดแล้วทั้งสองที่ → ตัวแทนที่ทำได้ 410% ของเป้าขึ้นว่า "100%"
+  //   อ่านแล้วเข้าใจว่าถึงเป้าพอดี ทั้งที่ทำได้เกินเป้าสี่เท่า และหน้าเดียวกัน (แผงเจาะรายสาขา)
+  //   กลับโชว์ 410% อยู่ — เลขสองตัวในหน้าเดียวขัดกันเอง
+  const pct = target > 0 ? Math.round(actual / target * 100) : 0;
+  const pctBar = Math.min(100, pct);
   const color = pct >= 100 ? "#059669" : pct >= 75 ? "#003366" : pct >= 50 ? "#f59e0b" : "#dc2626";
   return (
     // ⚠️ ห้ามใส่ minWidth ที่กล่องข้างใน (แก้ 10 ส.ค. 69)
@@ -69,7 +74,7 @@ function RevBar({ actual, target }: { actual: number; target: number }) {
         <span style={{ fontWeight: 700, color }}>{pct}%</span>
       </div>
       <div style={{ height: 6, background: "#f0f0f5", borderRadius: 99, overflow: "hidden" }}>
-        <div className="top5-bar" style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 99 }} />
+        <div className="top5-bar" style={{ height: "100%", width: `${pctBar}%`, background: color, borderRadius: 99 }} />
       </div>
       <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>
         เป้า ฿{(target / 1_000_000).toFixed(1)}M

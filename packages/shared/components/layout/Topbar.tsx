@@ -29,9 +29,12 @@ import { type HQAlert } from "@pms/shared/lib/hqAlerts";
 import { useCurrentDealer, useDealerDisplayName } from "@pms/shared/lib/useCurrentDealer";
 import { useReadNotifications } from "@pms/shared/lib/useReadNotifications";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 
 // ── "วันนี้ของระบบ" (APP_NOW) — supabase=จริง / local=ตรึง · จัดกลุ่มการแจ้งเตือน วันนี้/เมื่อวาน ──
 const MOCK_TODAY = APP_NOW_ISO;
+// วันที่ของชุดข้อมูลตัวอย่าง แบบอ่านง่าย (ใช้บนป้ายเตือนโหมดตัวอย่าง)
+const APP_NOW_TH = `${APP_NOW.getDate()} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543}`;
 
 const BORDER   = "#e5e7eb";
 const BG       = "#fafafa";
@@ -590,6 +593,21 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
         {/* ชื่อหน้า — แหล่งเดียวของหัวหน้า (ทุกหน้าอยู่แถวนี้ ไม่มีหัวซ้ำในเนื้อหา) */}
         <h1 className="topbar-title">{pageTitle(pathname)}</h1>
+
+        {/* ── ป้ายบอกว่ากำลังดูชุดข้อมูลตัวอย่าง (บอสสั่ง 24 ส.ค. 69 · ผลตรวจภายนอก DL-05/HQ-12a) ──
+            โหมดตัวอย่างตรึง "วันนี้ของระบบ" ไว้ที่ยุคของข้อมูล (ดู appTime.ts) ไม่ใช่วันจริง
+            ถ้าไม่บอกไว้ ผู้ใช้จะอ่านคำว่า "วันนี้/เกิน 7 วัน" เป็นวันจริงแล้วสรุปผิด
+            ⚠️ ขึ้นเฉพาะโหมดตัวอย่างเท่านั้น — ระบบจริงต่อฐานข้อมูลอยู่ ห้ามมีป้ายนี้ */}
+        {!REAL_BACKEND && (
+          <span title={`ข้อมูลตัวอย่างสำหรับสาธิต · ระบบตรึงวันที่ไว้ที่ ${APP_NOW_TH} ทุกคำว่า "วันนี้" ในจอนับจากวันนั้น`}
+            style={{
+              marginLeft: 10, flexShrink: 0, whiteSpace: "nowrap", padding: "3px 9px", borderRadius: 999,
+              fontSize: "0.64rem", fontWeight: 800, letterSpacing: "0.01em",
+              background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A",
+            }}>
+            ข้อมูลตัวอย่าง · {APP_NOW_TH}
+          </span>
+        )}
 
         <div className="topbar-right">
 

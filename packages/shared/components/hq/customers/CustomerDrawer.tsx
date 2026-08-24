@@ -11,6 +11,7 @@ import { toThaiDate } from "@pms/shared/lib/thaiDate";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { useCustomerNotesForDealer } from "@pms/shared/lib/useCustomerNotes";
 import { type CustomerDbRow, type PurchasedBuilding } from "@pms/shared/lib/customerDb";
+import { dealerCodeOf } from "@pms/shared/lib/dealerCode";
 
 const noteColorOf = (cat: string) =>
   (noteCategoryColor as Record<string, { bg: string; text: string; dot: string }>)[cat] ?? noteCategoryColor["ทั่วไป"];
@@ -70,7 +71,7 @@ function BuildingCard({ b }: { b: PurchasedBuilding }) {
 
 export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; onClose: () => void }) {
   // ต้องเรียก hook ก่อน early-return เสมอ (Rules of Hooks) — dealerCode ว่างตอน row ยังไม่มา ก็ไม่ยิง fetch
-  const { notes: dealerNotes } = useCustomerNotesForDealer(row?.dealerCode ?? "");
+  const { notes: dealerNotes } = useCustomerNotesForDealer(row ? dealerCodeOf(row) : "");
   if (!row) return null;
 
   const customerNotes = dealerNotes.filter(n => n.customerId === (row.localId ?? row.id));

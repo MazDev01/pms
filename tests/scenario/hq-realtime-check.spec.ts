@@ -42,7 +42,9 @@ test("[realtime] HQ dashboard เปิดค้างไว้ → ตัวเ
   await page.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
   await settle(page);
 
-  const kpiLocator = page.locator(".card").filter({ hasText: "ลูกค้าทั้งเครือ" }).first();
+  // ⚠️ จับด้วยรูปแบบ ไม่ใช่ข้อความตายตัว — ป้ายการ์ดถูกเปลี่ยนเป็น "ลูกค้าใหม่ทั้งเครือ" (24 ส.ค. 69)
+  //    เพราะค่าที่นับคือลูกค้าที่เริ่มเป็นลูกค้าในช่วงที่เลือก · ถ้าล็อกข้อความไว้ เทสต์จะพังทุกครั้งที่ปรับคำ
+  const kpiLocator = page.locator(".card").filter({ hasText: /ลูกค้า(ใหม่)?ทั้งเครือ/ }).first();
   await expect(kpiLocator).toBeVisible({ timeout: 15_000 });
   const before = (await kpiLocator.innerText()).trim();
   console.log(`[realtime] ตัวเลขก่อนตัวแทนเพิ่มลูกค้า: "${before.replace(/\n/g, " | ")}"`);

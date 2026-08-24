@@ -95,7 +95,10 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
   const targets = useRepoValue<HQTargets>(() => settingsRepo.getTargets(), DEFAULT_HQ_TARGETS);
   // ผลงานจริงจากใบเสนอราคา/ลูกค้าเป้าหมาย — คอลัมน์ revenue_actual/win_rate/… ในตาราง dealers เป็นค่าเดโม
   const perf = useDealerPerformance().get(dealer.code) ?? EMPTY_PERF;
-  const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
+  // ⚠️ ตัวเลขที่โชว์ต้องเป็นค่าจริง · ตัดที่ 100 ได้เฉพาะความยาวแท่ง (บอสสั่ง 24 ส.ค. 69)
+  //   เดิมสาขาที่ทำได้เกินเป้าขึ้น "100%" เท่ากันหมด แยกไม่ออกว่าใครทำได้ 101% หรือ 410%
+  const targetPct = dealer.revenueTarget > 0 ? Math.round(perf.revenue / dealer.revenueTarget * 100) : 0;
+  const targetBar = Math.min(100, targetPct);
   const barColor  = targetPct >= 80 ? "#059669" : targetPct >= 50 ? "#003366" : "#dc2626";
   // ⚠️ ไม่มีข้อมูลเลย = ยังตัดสินไม่ได้ ห้ามขึ้น "ล้าหลังเป้า" (แก้ 10 ส.ค. 69)
   //   เดิมสาขาที่ยังไม่มีลูกค้าเป้าหมาย/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
@@ -121,7 +124,7 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
               <span style={{ fontSize: "1rem", fontWeight: 700, color: barColor }}>{targetPct}%</span>
             </div>
             <div style={{ height: 8, background: "#f0f0f5", borderRadius: 99, overflow: "hidden" }}>
-              <div className="top5-bar" style={{ height: "100%", width: `${targetPct}%`, background: barColor, borderRadius: 99 }} />
+              <div className="top5-bar" style={{ height: "100%", width: `${targetBar}%`, background: barColor, borderRadius: 99 }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
               <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>ยอดจริง</span>
@@ -426,7 +429,7 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
   }
 
   const perf = perfMap.get(code) ?? EMPTY_PERF;
-  const targetPct = dealer.revenueTarget > 0 ? Math.min(100, Math.round(perf.revenue / dealer.revenueTarget * 100)) : 0;
+  const targetPct = dealer.revenueTarget > 0 ? Math.round(perf.revenue / dealer.revenueTarget * 100) : 0;
   // ⚠️ ไม่มีข้อมูลเลย = ยังตัดสินไม่ได้ ห้ามขึ้น "ล้าหลังเป้า" (แก้ 10 ส.ค. 69)
   //   เดิมสาขาที่ยังไม่มีลูกค้าเป้าหมาย/ใบเสนอราคา/ลูกค้าสักรายการ ถูกขึ้นป้ายแดง "ล้าหลังเป้า"
   //   พร้อมแถบเตือน "ต้องกระตุ้นการปิดการขาย" ทันทีที่เปิดหน้า เพราะยอด 0 ย่อมน้อยกว่า 50%

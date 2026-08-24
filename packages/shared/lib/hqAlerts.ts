@@ -11,6 +11,7 @@ import type { HQAlertsData } from "@pms/shared/lib/data/ports";
 import { parseDate, APP_NOW } from "@pms/shared/context/FilterContext";
 import { leadCreatedDate, daysSinceContact, isLeadOpen } from "@pms/shared/lib/leadMetrics";
 import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
+import { dealerCodeOf } from "@pms/shared/lib/dealerCode";
 
 export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string };
 
@@ -108,7 +109,7 @@ export function dealersHighLostRate(dealers: DealerRow[], leads: LeadRow[], pct:
   const stat = new Map<string, { lost: number; closed: number }>();
   for (const l of leads) {
     if (l.status !== "CANCELLED" && l.status !== "PAID") continue; // นับเฉพาะลูกค้าเป้าหมายที่ปิดแล้ว
-    const key = l.dealerCode ?? "";
+    const key = dealerCodeOf(l);
     const s = stat.get(key) ?? { lost: 0, closed: 0 };
     if (l.status === "CANCELLED") s.lost += 1;
     s.closed += 1;
