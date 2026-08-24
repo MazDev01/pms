@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   quotationStatusLabel, quotationStatusColor,
   DEFAULT_ISSUER, DEFAULT_DEALER_CODE,
-  negotiationSummary,
+  negotiationSummary, OTHER_REASON_OPTION,
   type QuotationStatus, type QuotationMock, type CustomerRow, type IssuerProfile, type QuoteLineItem,
 } from "@pms/shared/lib/mock";
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
@@ -1139,20 +1139,25 @@ function QuotationsPageInner(){
                 <>
                   <div style={{fontSize:"0.75rem",color:MUTED,marginBottom:10}}>เลือกเหตุผลที่ลูกค้าปฏิเสธใบเสนอราคานี้</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    {/* ⚠️ ถ้า "อื่นๆ (ระบุเอง)" อยู่ในรายการที่สำนักงานใหญ่ตั้งไว้ กดตัวนั้น = เปิดโหมดพิมพ์เอง
+                        ไม่ใช่บันทึกคำว่า "อื่นๆ" ลงไปตรง ๆ (กติกาเดียวกับหน้าลูกค้าเป้าหมาย) */}
                     {lostReasons.map(r=>(
-                      <button key={r} onClick={()=>setPendingLostReason(r)}
+                      <button key={r} onClick={()=>setPendingLostReason(r===OTHER_REASON_OPTION?OTHER_REASON:r)}
                         style={{padding:"8px 10px",borderRadius:9,border:`1px solid ${pendingLostReason===r?"#dc2626":BORDER}`,
                           background:pendingLostReason===r?"#fef2f2":"#fff",color:pendingLostReason===r?"#dc2626":"#374151",
                           fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
                         {r}
                       </button>
                     ))}
-                    {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
-                    <button onClick={()=>setPendingLostReason(OTHER_REASON)}
-                      style={{padding:"8px 10px",borderRadius:9,border:"1px dashed #9ca3af",
-                        background:"#fafafa",color:"#6b7280",fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
-                      อื่นๆ (ระบุเอง)
-                    </button>
+                    {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69)
+                        โผล่เฉพาะตอนรายการยังไม่มีตัวเลือกนี้ ไม่งั้นจะมีปุ่มชื่อเดียวกันสองอันในจอเดียว */}
+                    {!lostReasons.includes(OTHER_REASON_OPTION) && (
+                      <button onClick={()=>setPendingLostReason(OTHER_REASON)}
+                        style={{padding:"8px 10px",borderRadius:9,border:"1px dashed #9ca3af",
+                          background:"#fafafa",color:"#6b7280",fontSize:"0.76rem",fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+                        {OTHER_REASON_OPTION}
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (

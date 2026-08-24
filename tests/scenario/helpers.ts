@@ -107,11 +107,31 @@ export { RYG, CNX, ADMIN };
 
 // เปิดฟอร์ม "สร้างใบเสนอราคาใหม่" — ตอนนี้อยู่ในแผงรายละเอียดลูกค้าเป้าหมาย (แท็บใบเสนอราคา)
 // wizard เดิมบนหน้า /quotations ถูกลบทั้งฟีเจอร์ → ตัวแทนออกใบจากลูกค้าเป้าหมายเท่านั้น
-export async function openLeadQuotationForm(page: Page) {
+export async function openLeadQuotationForm(page: Page, opts?: { ใบใหม่เท่านั้น?: boolean }) {
   await open(page, "dealer", "/leads");
   await page.getByRole("button", { name: "ตาราง" }).click(); // ค่าเริ่มต้น=บอร์ด → สลับเป็นตาราง
-  await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
-  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+
+  // ⚠️ ลูกค้าเป้าหมายแถวแรกอาจ "มีใบเสนอราคาอยู่แล้ว" (หนึ่งดีล = ใบเดียว → ปุ่มกลายเป็น "เพิ่มรายการในใบเดิม")
+  //    เทสต์ที่ต้องการ "ใบที่เพิ่งสร้างใหม่" จะได้ใบเก่ามาแทน แล้วตกแบบงง ๆ (เจอจริง 21 ส.ค. 69:
+  //    ไปแก้ใบ ZZTEST-BASE-Q-RYG-6 ซึ่งวันที่ออกเป็นของเดิม ไม่ใช่วันนี้ — ถูกต้องแล้วแต่ไม่ใช่สิ่งที่วัด)
+  //    ตัวเลือกนี้จึงไล่หาแถวที่ยังไม่มีใบจริง ๆ ก่อน
+  const เปิดแถว = async (i: number) => {
+    await page.getByRole("button", { name: "ดูรายละเอียด" }).nth(i).click();
+    await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+  };
+  if (opts?.ใบใหม่เท่านั้น) {
+    const จำนวนแถว = Math.min(await page.getByRole("button", { name: "ดูรายละเอียด" }).count(), 10);
+    let เจอ = false;
+    for (let i = 0; i < จำนวนแถว; i++) {
+      await เปิดแถว(i);
+      if (await page.getByRole("button", { name: "สร้างใบเสนอราคา", exact: true }).count() > 0) { เจอ = true; break; }
+      await page.keyboard.press("Escape");   // ปิดแผงแล้วลองแถวถัดไป
+      await page.waitForTimeout(200);
+    }
+    if (!เจอ) throw new Error("หาลูกค้าเป้าหมายที่ยังไม่มีใบเสนอราคาไม่เจอใน 10 แถวแรก");
+  } else {
+    await เปิดแถว(0);
+  }
 
   // ── กติกา 20 ส.ค. 69: หนึ่งดีล = ใบเสนอราคาใบเดียว ──────────────────────────
   // ลูกค้าเป้าหมายที่ยังไม่มีใบ → ปุ่มเขียนว่า "สร้างใบเสนอราคา" (เข้าฟอร์มออกใบใหม่)

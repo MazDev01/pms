@@ -9,7 +9,7 @@ import {
   buildLeadReport, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
   seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES, CLOSE_TASK_KEY, APPOINTMENT_TASK_KEY, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
-  OTHER_LOST_REASON,
+  OTHER_LOST_REASON, OTHER_REASON_OPTION,
   type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
 import type { QuotationMock } from "@pms/shared/lib/data/types";
@@ -2205,20 +2205,26 @@ export default function LeadsPage() {
                 <>
                   <div style={{ fontSize:"0.75rem", color:"#6b7280", marginBottom:10 }}>เลือกเหตุผลที่ปิดการขายไม่ได้</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                    {/* ⚠️ "อื่นๆ (ระบุเอง)" อยู่ในรายการที่สำนักงานใหญ่ตั้งไว้แล้ว (บอสสั่ง 21 ส.ค. 69)
+                        กดตัวนี้ = เปิดโหมดพิมพ์เอง ไม่ใช่บันทึกคำว่า "อื่นๆ" ลงไปตรง ๆ
+                        กติกาเดียวกับแท็บงาน (LeadTasks) — ห้ามมีปุ่มซ้ำสองอันในจอเดียว */}
                     {lostReasons.map(r => (
-                      <button key={r} onClick={()=>setPendingLostReason(r)}
+                      <button key={r} onClick={()=>setPendingLostReason(r === OTHER_REASON_OPTION ? OTHER_LOST_REASON : r)}
                         style={{ padding:"8px 10px", borderRadius:9, border:`1px solid ${pendingLostReason===r?"#dc2626":"#e5e7eb"}`,
                           background:pendingLostReason===r?"#fef2f2":"#fff", color:pendingLostReason===r?"#dc2626":"#374151",
                           fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
                         {r}
                       </button>
                     ))}
-                    {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69) */}
-                    <button onClick={()=>setPendingLostReason(OTHER_LOST_REASON)}
-                      style={{ padding:"8px 10px", borderRadius:9, border:"1px dashed #9ca3af",
-                        background:"#fafafa", color:"#6b7280", fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
-                      อื่นๆ (ระบุเอง)
-                    </button>
+                    {/* เหตุผลจริงไม่ตรงกับรายการที่ HQ กำหนดเลย → กรอกเองได้ (บอสสั่ง 31 ก.ค. 69)
+                        โผล่เฉพาะตอนที่รายการยังไม่มีตัวเลือกนี้ ไม่งั้นจะมีปุ่มชื่อเดียวกันสองอัน */}
+                    {!lostReasons.includes(OTHER_REASON_OPTION) && (
+                      <button onClick={()=>setPendingLostReason(OTHER_LOST_REASON)}
+                        style={{ padding:"8px 10px", borderRadius:9, border:"1px dashed #9ca3af",
+                          background:"#fafafa", color:"#6b7280", fontSize:"0.76rem", fontWeight:700, cursor:"pointer", textAlign:"left" }}>
+                        {OTHER_REASON_OPTION}
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (

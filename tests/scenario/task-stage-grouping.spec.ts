@@ -68,8 +68,12 @@ test("[func] แท็บงานจัดกลุ่มตามขั้น�
   // ลำดับงานเดิมห้ามถูกสลับจากการจัดกลุ่ม (ลำดับคือกติกาการติ๊กห้ามข้ามขั้น)
   // ⚠️ ห้ามเทียบกับรายชื่องานที่พิมพ์ตายตัว — เส้นทางการขายแก้ได้ที่หน้าตั้งค่าของสำนักงานใหญ่
   //    (ลำดับ/ชื่องานเปลี่ยนได้จริง เจอมาแล้ว 21 ส.ค. 69) เทสต์ต้องเทียบกับ "เส้นทางจริง" ในฐานข้อมูล
+  // ⚠️ งาน "ปิดการขาย" ไม่ได้อยู่ในรายการติ๊ก — ติ๊กเองไม่ได้ตามกติกา (ปิดสำเร็จ/ไม่สำเร็จใช้ปุ่มแยก)
+  //    จึงต้องตัดออกก่อนเทียบ ไม่งั้นเทสต์ตกทั้งที่หน้าจอถูกแล้ว (เจอจริง 21 ส.ค. 69)
   const { data: journey } = await sb.from("hq_sales_journey").select("tasks").eq("id", 1).maybeSingle();
-  const ตามเส้นทาง = ((journey?.tasks as { label: string }[] | null) ?? []).map(t => t.label);
+  const ตามเส้นทาง = ((journey?.tasks as { key?: string; label: string }[] | null) ?? [])
+    .filter(t => t.key !== "close")
+    .map(t => t.label);
   const labels = await page.locator("[data-stage-head] ~ div button span:nth-child(2) > span:first-child").allInnerTexts();
   expect(labels.map(s => s.trim()).slice(0, ตามเส้นทาง.length),
     "ลำดับงานบนหน้าจอต้องตรงกับเส้นทางการขายที่สำนักงานใหญ่ตั้งไว้").toEqual(ตามเส้นทาง);
