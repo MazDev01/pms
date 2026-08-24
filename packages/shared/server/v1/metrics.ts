@@ -134,7 +134,8 @@ const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape: (d: u
     args: a => ({
       p_search: a.search ?? null, p_dealer_code: a.dealerCode ?? null,
       p_provinces: (a.provinces as string[] | undefined)?.length ? a.provinces : null,
-      p_building_type: a.buildingType ?? null, p_delivery_year: null,
+      p_building_type: a.buildingType ?? null,
+      p_bought_from: a.boughtFrom ?? null, p_bought_to: a.boughtTo ?? null,
       p_limit: a.limit, p_offset: a.offset,
     }),
     shape: (d) => {

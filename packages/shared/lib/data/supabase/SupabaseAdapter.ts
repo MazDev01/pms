@@ -708,7 +708,9 @@ export const SupabaseAdapter: DataAdapter = {
         p_dealer_code: opts.dealerCode ?? null,
         p_provinces: opts.provinces?.length ? opts.provinces : null,
         p_building_type: opts.buildingType ?? null,
-        p_delivery_year: null,   // เลิกใช้ตัวกรองปีที่ส่งมอบ — วันส่งมอบเป็นค่าที่ระบบคิดเอง ไม่ใช่ข้อมูลจริง
+        // ⚠️ เคยมี p_delivery_year ตรงนี้ — ใบ 0159 ถอดออกแล้ว (วันส่งมอบเป็นค่าที่ระบบคิดเอง ไม่ใช่ข้อมูลจริง)
+        p_bought_from: opts.boughtFrom ?? null,
+        p_bought_to: opts.boughtTo ?? null,
         p_limit: opts.limit, p_offset: opts.offset,
       });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);

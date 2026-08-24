@@ -205,6 +205,12 @@ function HQDealersPageInner() {
   const totalRevenue = filtered.reduce((s, d) => s + perfOf(d.code).revenue, 0);
   const totalTarget = filtered.reduce((s, d) => s + d.revenueTarget, 0);
   const totalProjects = filtered.reduce((s, d) => s + perfOf(d.code).openLeads, 0);
+  // ── ตัวแทนที่ปิดใช้งาน ยังถูกนับรวมในการ์ดยอดรวม (บอสตัดสิน 24 ส.ค. 69) ──
+  // เหตุผล: ยอดขายที่เคยทำไว้ยังเป็นของเครือ ตัดออกแล้วยอดรวมทั้งเครือจะหด ทั้งที่เงินเข้าจริง
+  // แต่ต้องเขียนบอกไว้ ไม่งั้นอ่านแล้วขัดกับ "เปิดใช้งาน N ตัวแทน" บนการ์ดใบแรก (ผลตรวจภายนอก HQ-11)
+  const ปิดใช้งาน = filtered.filter(d => dealerStatus(d) !== "active");
+  const มีงานค้างที่ปิดใช้งาน = ปิดใช้งาน.filter(d => perfOf(d.code).openLeads > 0).length;
+  const หมายเหตุปิดใช้งาน = ปิดใช้งาน.length > 0 ? ` · รวมตัวแทนที่ปิดใช้งาน ${ปิดใช้งาน.length} ราย` : "";
   // เฉลี่ยเฉพาะตัวแทนที่ "มีข้อมูล" (onTimePct > 0) — ตัวที่เป็น 0 = ยังไม่มีข้อมูล (ตารางแสดง "—")
   // เอามาเฉลี่ยเป็น 0 ไม่ได้ = เอา 0 สวมรอย "—" · ไม่มีใครมีข้อมูล → null → การ์ดแสดง "—"
   // เฉลี่ยเฉพาะสาขาที่ "มีข้อมูลให้วัด" — สาขาที่ยังไม่มีลูกค้าเป้าหมาย/ใบ ไม่เอา 0 มาถ่วงค่าเฉลี่ย
@@ -388,8 +394,8 @@ function HQDealersPageInner() {
       <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>
         {([
           { label: "ตัวแทนทั้งหมด", value: dealersLoaded ? `${filtered.length}` : "—", sub: dealersLoaded ? `เปิดใช้งาน ${active.length} ตัวแทน` : "กำลังโหลด…", Icon: Store, color: "#003366", bg: "#E8F0FE" },
-          { label: "รายได้รวม", value: dealersLoaded ? `฿${(totalRevenue / 1_000_000).toFixed(1)}M` : "—", sub: `${totalPct}% ของผลรวมเป้ารายตัวแทน ฿${(totalTarget / 1_000_000).toFixed(1)}M`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
-          { label: "โอกาสการขายทั้งหมด", value: dealersLoaded ? `${totalProjects}` : "—", sub: dealersLoaded ? `${active.filter(d => perfOf(d.code).openLeads > 0).length} จาก ${active.length} ตัวแทนที่เปิดใช้งาน มีงานอยู่` : "กำลังโหลด…", Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
+          { label: "รายได้รวม", value: dealersLoaded ? `฿${(totalRevenue / 1_000_000).toFixed(1)}M` : "—", sub: `${totalPct}% ของผลรวมเป้ารายตัวแทน ฿${(totalTarget / 1_000_000).toFixed(1)}M${หมายเหตุปิดใช้งาน}`, Icon: Coins, color: "#059669", bg: "#E6F6EF" },
+          { label: "โอกาสการขายทั้งหมด", value: dealersLoaded ? `${totalProjects}` : "—", sub: dealersLoaded ? `${active.filter(d => perfOf(d.code).openLeads > 0).length} จาก ${active.length} ตัวแทนที่เปิดใช้งาน มีงานอยู่${มีงานค้างที่ปิดใช้งาน > 0 ? ` · ปิดใช้งานแต่ยังมีงานค้าง ${มีงานค้างที่ปิดใช้งาน} ราย` : ""}` : "กำลังโหลด…", Icon: Briefcase, color: "#0891B2", bg: "#E6F4F9" },
           { label: "ติดตามตรงเวลา", value: avgOnTime === null ? "—" : `${avgOnTime}%`, sub: avgOnTime === null ? "ยังไม่มีข้อมูล" : `${avgOnTime >= 85 ? "ดี" : avgOnTime >= 70 ? "พอใช้" : "ต้องปรับปรุง"} · เฉลี่ยเท่าที่มีข้อมูล`, Icon: Clock, color: "#7C3AED", bg: "#F0EBFB" },
         ] as const).map(t => (
           <div key={t.label} className="card" style={{ marginBottom: 0, padding: "18px 18px 15px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>

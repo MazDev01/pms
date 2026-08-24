@@ -548,6 +548,9 @@ export const LocalAdapter: DataAdapter = {
         if (opts.dealerCode && c.dealerCode !== opts.dealerCode) return false;
         if (opts.provinces?.length && !opts.provinces.includes(c.province)) return false;
         if (opts.buildingType && !c.buildingTypes.includes(opts.buildingType)) return false;
+        // ตัวกรอง "ซื้อล่าสุด" — กติกาเดียวกับฐานข้อมูล (ใบ 0159): ไม่มีวันซื้อ = ไม่เข้าเกณฑ์
+        if (opts.boughtFrom && (c.lastPurchaseAt ?? "") < opts.boughtFrom) return false;
+        if (opts.boughtTo && (!c.lastPurchaseAt || c.lastPurchaseAt > opts.boughtTo)) return false;
         return true;
       });
 

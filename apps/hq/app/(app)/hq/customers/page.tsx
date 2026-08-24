@@ -7,9 +7,12 @@
 // ตัวกรอง "ประเภทธุรกิจ (Industry)" และคอลัมน์ "บุคคล/บริษัท" ไม่มีในหน้านี้
 // เพราะระบบไม่เก็บข้อมูลสองอย่างนั้น (ตัดออกตามที่ตัดสินไว้ — อย่าใส่กลับโดยไม่มีฟิลด์จริง)
 //
-// ไม่มีตัวกรองช่วงเวลา (FilterBar) บนหน้านี้ตั้งใจ — นี่คือ "ฐานข้อมูล" ไม่ใช่รายงานรายงวด
-// ถ้ากรองด้วยช่วงเวลา ลูกค้าที่ซื้อครั้งสุดท้ายก่อนช่วงนั้นจะหายไปทั้งราย (ตัวเลือกกว้างสุดของ FilterBar
-// คือ "ปีนี้" → ลูกค้าที่ซื้อปี 2568 ลงไปจะไม่มีวันแสดง)
+// ไม่ใช้ตัวกรองช่วงเวลาส่วนกลาง (FilterBar) บนหน้านี้ — นี่คือ "ฐานข้อมูล" ไม่ใช่รายงานรายงวด
+// ถ้าผูกกับ FilterBar ลูกค้าที่ซื้อครั้งสุดท้ายก่อนช่วงนั้นจะหายไปทั้งราย ตั้งแต่เปิดหน้ามา
+// (ตัวเลือกกว้างสุดของ FilterBar คือ "ปีนี้" → ลูกค้าที่ซื้อปี 2568 ลงไปจะไม่มีวันแสดง)
+// ⚠️ บอสสั่งเพิ่มตัวกรองเวลา 24 ส.ค. 69 → เพิ่มเป็นตัวกรอง "ซื้อล่าสุด" ของหน้านี้เอง
+//    ค่าเริ่มต้น "ทุกช่วงเวลา" (ไม่กรอง) เพื่อไม่ให้เปิดหน้ามาแล้วลูกค้าเก่าหายเงียบ ๆ ตามเหตุผลข้างบน
+//    กรองด้วย last_purchase_at (วันปิดการขายล่าสุด) — ค่าที่มีอยู่แล้ว ไม่ได้เพิ่มข้อมูลใหม่ (ใบ 0159)
 // ⚠️ เคยมีตัวกรอง "ปีที่ส่งมอบ" ตรงนี้ — ลบทั้งฟีเจอร์แล้ว (บอสสั่ง 20 ส.ค. 69)
 //    ไม่มีที่กรอกวันส่งมอบจริงทั้งสองแอป ตัวเลขที่เคยโชว์คือ "วันปิดการขาย + 90 วัน" ที่ระบบคิดเอง
 //
@@ -33,6 +36,33 @@ import { CustomerDrawer } from "@pms/shared/components/hq/customers/CustomerDraw
 
 const PAGE_SIZE = 10;
 
+// ── ตัวกรอง "ซื้อล่าสุด" (เฉพาะหน้านี้) ─────────────────────────────────────────
+// วัดจาก last_purchase_at = วันปิดการขายล่าสุดของลูกค้ารายนั้น
+// "all" ต้องเป็นค่าเริ่มต้นเสมอ — ฐานข้อมูลลูกค้าต้องเห็นครบก่อน แล้วผู้ใช้ค่อยแคบเอง
+const BOUGHT_OPTIONS = [
+  { key: "all",     label: "ทุกช่วงเวลาที่ซื้อ" },
+  { key: "m6",      label: "ซื้อล่าสุดใน 6 เดือน" },
+  { key: "m12",     label: "ซื้อล่าสุดใน 12 เดือน" },
+  { key: "thisYear",label: "ซื้อล่าสุดปีนี้" },
+  { key: "over12",  label: "ไม่ซื้อเกิน 12 เดือนแล้ว" },
+] as const;
+type BoughtKey = typeof BOUGHT_OPTIONS[number]["key"];
+
+/** แปลงตัวเลือกเป็นช่วงวันที่ (ISO) — ไม่คืนอะไรเลยแปลว่าไม่กรอง */
+function boughtRange(key: BoughtKey): { from?: string; to?: string } {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const ย้อนเดือน = (n: number) => { const d = new Date(APP_NOW); d.setMonth(d.getMonth() - n); return iso(d); };
+  switch (key) {
+    case "m6": return { from: ย้อนเดือน(6) };
+    case "m12": return { from: ย้อนเดือน(12) };
+    case "thisYear": return { from: `${new Date(APP_NOW).getFullYear()}-01-01` };
+    // "ไม่ซื้อเกิน 12 เดือนแล้ว" = ซื้อครั้งสุดท้ายก่อนหน้านั้น (ลูกค้าที่ยังไม่เคยมีใบปิดการขายไม่เข้าเกณฑ์
+    // เพราะไม่มีวันที่ให้เทียบ — ไม่ใช่ระบบตัดทิ้ง)
+    case "over12": return { to: ย้อนเดือน(12) };
+    default: return {};
+  }
+}
+
 export default function HQCustomersPage() {
   // ตัวกรองเฉพาะหน้านี้ (ไม่จำข้ามหน้า) — ช่วงเวลาใช้ FilterBar ส่วนกลาง
   const [search, setSearch] = useState("");
@@ -40,11 +70,12 @@ export default function HQCustomersPage() {
   const [regionSel, setRegionSel] = useState("all");
   const [provinceSel, setProvinceSel] = useState("all");
   const [typeSel, setTypeSel] = useState("all");
+  const [boughtSel, setBoughtSel] = useState<BoughtKey>("all");
   const [page, setPage] = useState(0);
   const [viewId, setViewId] = useState<number | null>(null);
 
   // เปลี่ยนตัวกรอง (ไม่ใช่หน้า) → กลับไปหน้า 1 เสมอ
-  useEffect(() => { setPage(0); }, [search, dealerSel, regionSel, provinceSel, typeSel]);
+  useEffect(() => { setPage(0); }, [search, dealerSel, regionSel, provinceSel, typeSel, boughtSel]);
 
   // ── fallback ฝั่ง local/demo (ยังไม่กลับ) — ไม่ยิง fetch เลยในโหมด HQ+supabase (ดูคอมเมนต์ที่ hook) ──
   const localSource = useCustomerDbLocal();
@@ -84,8 +115,10 @@ export default function HQCustomersPage() {
     dealerCode: dealerSel === "all" ? undefined : dealerSel,
     provinces: resolvedProvinces,
     buildingType: typeSel === "all" ? undefined : typeSel,
+    boughtFrom: boughtRange(boughtSel).from,
+    boughtTo: boughtRange(boughtSel).to,
     limit: PAGE_SIZE, offset: page * PAGE_SIZE,
-  }), [search, dealerSel, resolvedProvinces, typeSel, page]);
+  }), [search, dealerSel, resolvedProvinces, typeSel, boughtSel, page]);
 
   const pageResult = useHQCustomersPage(pageOpts);
 
@@ -99,10 +132,18 @@ export default function HQCustomersPage() {
         if (regionSel !== "all" && c.region !== regionSel) return false;
         if (provinceSel !== "all" && c.province !== provinceSel) return false;
         if (typeSel !== "all" && !c.buildingTypes.includes(typeSel)) return false;
+        // กติกาเดียวกับฐานข้อมูล (ใบ 0159): ไม่มีวันซื้อ = ไม่เข้าเกณฑ์เมื่อเปิดตัวกรองนี้
+        const ช่วง = boughtRange(boughtSel);
+        if (ช่วง.from || ช่วง.to) {
+          const ซื้อล่าสุด = c.lastPurchaseAt ? c.lastPurchaseAt.toISOString().slice(0, 10) : null;
+          if (!ซื้อล่าสุด) return false;
+          if (ช่วง.from && ซื้อล่าสุด < ช่วง.from) return false;
+          if (ช่วง.to && ซื้อล่าสุด > ช่วง.to) return false;
+        }
         return true;
       })
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [localSource, search, dealerSel, regionSel, provinceSel, typeSel]);
+  }, [localSource, search, dealerSel, regionSel, provinceSel, typeSel, boughtSel]);
 
   const ปีที่แล้ว = useMemo(() => { const d = new Date(APP_NOW); d.setFullYear(d.getFullYear() - 1); return d.getTime(); }, []);
   // kpi/charts/rows — supabase: ตรงจาก RPC · local: derive จาก localFiltered ให้ shape เดียวกัน
@@ -252,6 +293,10 @@ export default function HQCustomersPage() {
         <select aria-label="กรองตามจังหวัด" value={provinceSel} onChange={e => setProvinceSel(e.target.value)} className="form-select" style={selectStyle}>
           <option value="all">ทุกจังหวัด</option>
           {provinceOptions.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+
+        <select aria-label="กรองตามช่วงเวลาที่ซื้อล่าสุด" value={boughtSel} onChange={e => setBoughtSel(e.target.value as BoughtKey)} className="form-select" style={selectStyle}>
+          {BOUGHT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
 
         <select aria-label="กรองตามประเภทอาคาร" value={typeSel} onChange={e => setTypeSel(e.target.value)} className="form-select" style={selectStyle}>
