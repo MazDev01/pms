@@ -14,7 +14,7 @@
 //
 // ⚠️ ใบผ่านมาทาง #hash ไม่ใช่ query string — hash ไม่ถูกส่งไปกับคำขอ HTTP
 //    จึงไม่มีทางไปโผล่ใน log ของเซิร์ฟเวอร์/ตัวกลางระหว่างทาง
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@pms/shared/lib/data/supabase/client";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
@@ -22,6 +22,39 @@ import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 export default function ImpersonatePage() {
   const router = useRouter();
   const [ผิดพลาด, setผิดพลาด] = useState("");
+  const [ถอยใน, setถอยใน] = useState<number | null>(null);   // วินาทีที่เหลือก่อนพากลับเอง
+
+  // ── เข้าไม่ได้ = พากลับไปหน้าที่กดมา ไม่ใช่ทิ้งไว้ที่หน้าเข้าสู่ระบบของตัวแทน (บอสสั่ง 24 ส.ค. 69) ──
+  //
+  // คนที่มาถึงหน้านี้คือ "ผู้ดูแลสำนักงานใหญ่" ไม่ใช่ตัวแทน — เขาไม่มีรหัสของสาขานั้นอยู่แล้ว
+  // การโยนไปหน้าเข้าสู่ระบบของตัวแทนจึงเป็นทางตัน ต้องพากลับไปหน้าตัวแทนของสำนักงานใหญ่
+  //
+  // ⚠️ ไม่ส่ง URL ปลายทางมากับลิงก์ (จะกลายเป็นช่องให้คนอื่นแต่งลิงก์พาไปเว็บปลอมได้)
+  //    ใช้ของที่เบราว์เซอร์รู้อยู่แล้วแทน:
+  //      · เปิดเป็นแท็บใหม่ (ปกติ) → หน้าสำนักงานใหญ่ยังเปิดค้างอยู่แท็บเดิม แค่ปิดแท็บนี้แล้วโฟกัสกลับ
+  //      · ป๊อปอัพถูกบล็อกจนต้องเปิดในแท็บเดิม → ถอยกลับหนึ่งหน้าก็คือหน้าสำนักงานใหญ่พอดี
+  const กลับไปสำนักงานใหญ่ = useCallback(() => {
+    const แท็บที่กดมา = window.opener as Window | null;
+    if (แท็บที่กดมา && !แท็บที่กดมา.closed) {
+      try { แท็บที่กดมา.focus(); } catch { /* บางเบราว์เซอร์ไม่ให้โฟกัสข้ามแท็บ — ปิดแท็บนี้ก็พอ */ }
+      window.close();
+      return;
+    }
+    if (window.history.length > 1) { window.history.back(); return; }
+    window.location.href = "/login";   // ไม่มีที่ให้กลับจริง ๆ (เปิดลิงก์ตรงจากที่อื่น)
+  }, []);
+
+  // นับถอยหลังแล้วพากลับเอง — ให้เวลาอ่านข้อความว่าพลาดเพราะอะไรก่อน
+  useEffect(() => {
+    if (!ผิดพลาด) return;
+    setถอยใน(5);
+    const t = setInterval(() => setถอยใน(n => {
+      if (n === null) return null;
+      if (n <= 1) { clearInterval(t); กลับไปสำนักงานใหญ่(); return 0; }
+      return n - 1;
+    }), 1000);
+    return () => clearInterval(t);
+  }, [ผิดพลาด, กลับไปสำนักงานใหญ่]);
 
   useEffect(() => {
     if (!REAL_BACKEND) { setผิดพลาด("โหมดเดโมไม่ต้องใช้หน้านี้"); return; }
@@ -53,7 +86,15 @@ export default function ImpersonatePage() {
       {ผิดพลาด ? (
         <>
           <div style={{ fontSize: "1rem", fontWeight: 800, color: "#b4232a" }}>{ผิดพลาด}</div>
-          <a href="/login" style={{ fontSize: "0.85rem", color: "#003366", fontWeight: 700 }}>ไปหน้าเข้าสู่ระบบ</a>
+          <div style={{ fontSize: "0.82rem", color: "#6b7280" }}>
+            ลิงก์เข้าระบบแทนใช้ได้ครั้งเดียวและมีอายุสั้น — กลับไปกดใหม่ที่หน้าตัวแทนได้เลย
+          </div>
+          <button type="button" onClick={กลับไปสำนักงานใหญ่}
+            style={{ fontFamily: "inherit", fontSize: "0.85rem", fontWeight: 800, color: "#fff", background: "#003366",
+              border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer" }}>
+            กลับไปหน้าตัวแทนของสำนักงานใหญ่{ถอยใน !== null && ถอยใน > 0 ? ` (${ถอยใน})` : ""}
+          </button>
+          <a href="/login" style={{ fontSize: "0.78rem", color: "#8a94a3", fontWeight: 600 }}>หรือเข้าสู่ระบบด้วยบัญชีตัวแทน</a>
         </>
       ) : (
         <>
