@@ -474,7 +474,7 @@ export default function HQLeadsPage() {
           {leadSel(dealerSel, setDealerSel, "ทุกตัวแทน", dealerOpts.map(o => ({ v: o, l: `${o} – ${DEALER_NAME.get(o) ?? o}` })))}
           {leadSel(regionSel, setRegionSel, "ทุกภูมิภาค", regionOpts.map(o => ({ v: o, l: regionDisplay(o) })))}
           {leadSel(province, setProvince, "ทุกจังหวัด", provinces.map(p => ({ v: p, l: p })))}
-          {leadSel(btSel, setBtSel, "ทุกประเภทอาคาร", btOpts.map(o => ({ v: o, l: o })))}
+          {leadSel(btSel, setBtSel, "ทุกประเภทอาคาร (จากลูกค้าเป้าหมาย)", btOpts.map(o => ({ v: o, l: o })))}
           {leadSel(srcSel, setSrcSel, "ทุกแหล่งที่มา", srcOpts.map(o => ({ v: o, l: o })))}
           {leadSel(status, v => setStatus(v as LeadStatus | "ALL"), "ทุกสถานะ",
             LEAD_STATUS_ORDER.map(s => ({ v: s, l: leadStatusLabel[s] })))}

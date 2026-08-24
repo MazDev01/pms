@@ -39,10 +39,12 @@ export function SalesTrendChart({
     const n = range === "3m" ? 3 : range === "12m" ? 12 : 6; // slice N เดือนล่าสุด
     // แปลงจุดอยู่ในนี้เลย — เดิมแยกเป็นฟังก์ชันข้างนอกซึ่งปิดคลุม prevRatio ไว้เงียบ ๆ
     // ทำให้ต้องจำเองว่าต้องใส่ prevRatio ในรายการที่เฝ้าดูด้วย (เคยลืมมาแล้วจน prevValue ค้างค่าเก่า)
+    // ⚠️ เก็บค่าเต็มความละเอียดไว้ ปัดเฉพาะตอนแสดงผล (ยอดรวมบนหัวการ์ดคิดจากค่าพวกนี้)
+    //    ปัดทีละเดือนก่อนบวก = ยอดรวมเพี้ยนจากความจริง (ผลตรวจภายนอก HQ-07)
     return monthly.slice(-n).map(d => ({
       month: d.month,
-      value: Math.round(d.value * 10) / 10,
-      prevValue: Math.round(d.value * prevRatio * 10) / 10,
+      value: d.value,
+      prevValue: d.value * prevRatio,
     }));
   }, [range, monthly, prevRatio]);
 

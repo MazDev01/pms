@@ -15,7 +15,11 @@ export function QuotationKPICards({ agg }: { agg: QuoteAgg }) {
     { label: "ใบเสนอราคาทั้งหมด", value: `${agg.count}`, sub: "ใบ", Icon: FileText, color: "#003366", bg: "#E8F0FE" },
     { label: "มูลค่ารวม", value: fmtBaht(agg.value), sub: "ก่อน VAT", Icon: Coins, color: "#0891B2", bg: "#E6F4F9" },
     { label: "ตอบรับ", value: `${agg.accepted}`, sub: "ใบ", Icon: CheckCircle2, color: "#059669", bg: "#E6F6EF" },
-    { label: "อัตราปิดการขาย", value: `${conversionRate(agg)}%`, sub: `${agg.accepted}/${agg.sent} ใบที่ส่งแล้ว`, Icon: Percent, color: "#7C3AED", bg: "#F1EBFD" },
+    // ⚠️ ชื่อการ์ดต้องบอก "ตัวหาร" ให้ชัด (ผลตรวจภายนอก HQ-02 · 24 ส.ค. 69)
+    //    ที่นี่หารด้วย "ใบที่ส่งแล้วทั้งหมด" (รวมใบที่ลูกค้ายังไม่ตอบ) → ได้ตัวเลขต่ำกว่า
+    //    ส่วนหน้าภาพรวมยอดขายหารด้วย "ใบที่รู้ผลแล้ว" (ตอบรับ+ปฏิเสธ) → ได้ตัวเลขสูงกว่า
+    //    ทั้งสองถูกต้องในตัวเอง แต่ถ้าใช้ชื่อเดียวกันจะอ่านเหมือนระบบให้เลขขัดกัน
+    { label: "อัตราตอบรับ (จากใบที่ส่งแล้ว)", value: `${conversionRate(agg)}%`, sub: `${agg.accepted}/${agg.sent} ใบที่ส่งแล้ว`, Icon: Percent, color: "#7C3AED", bg: "#F1EBFD" },
   ];
 
   return (

@@ -672,7 +672,7 @@ function QuotationsPageInner(){
         >
           <FilterSelect caption="ทุกสถานะ" value={filterStatus} onChange={v=>setFilterStatus(v as QuotationStatus|"ALL")}
             options={STATUS_ORDER.map(s=>({v:s,l:quotationStatusLabel[s]}))} />
-          <FilterSelect caption="ทุกประเภทอาคาร" value={typeFilter} onChange={setTypeFilter}
+          <FilterSelect caption="ทุกประเภทอาคาร (จากใบเสนอราคาของสาขา)" value={typeFilter} onChange={setTypeFilter}
             options={typeOptions.map(t=>({v:t,l:t}))} minWidth={140} />
           <FilterSelect caption="ทุกผู้รับผิดชอบ" value={ownerFilter} onChange={setOwnerFilter}
             options={ownerOptions.map(o=>({v:o,l:o}))} minWidth={140} />

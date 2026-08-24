@@ -26,6 +26,7 @@ import {
   quotationStatusLabel, quotationStatusColor, mainTemplateOf, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, QUOTED_UP,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
+import { percentShare } from "@pms/shared/lib/percentShare";
 import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
@@ -160,10 +161,13 @@ export default function DealerDashboard() {
   const dealStatus = useMemo(() => {
     const m = new Map<string, number>();
     leadsIn.forEach(l => m.set(l.status, (m.get(l.status) ?? 0) + 1));
-    const total = leadsIn.length || 1;
-    return LEAD_STATUS_ORDER.filter(s => m.get(s)).map(s => ({
+    // ⚠️ ปัด % ทีละขั้นแล้วบวกกัน = รวมเกิน 100 (เจอจริง 103% · ผลตรวจภายนอก DL-08)
+    //    ใช้ percentShare ที่แจกเศษให้รวมได้ 100 พอดีเสมอ
+    const ขั้นที่มี = LEAD_STATUS_ORDER.filter(s => m.get(s));
+    const เปอร์เซ็นต์ = percentShare(ขั้นที่มี.map(s => m.get(s)!));
+    return ขั้นที่มี.map((s, i) => ({
       label: leadStatusLabel[s], value: m.get(s)!, color: leadStatusColor[s].text,
-      pct: Math.round((m.get(s)! / total) * 100),
+      pct: เปอร์เซ็นต์[i],
     }));
   }, [leadsIn]);
 
@@ -196,8 +200,13 @@ export default function DealerDashboard() {
     });
     // โชว์ 5 อันดับแรก — การ์ดนี้ตอบว่า "ใครทำได้ดี/ใครต้องช่วย" ไม่ได้ให้ไล่อ่านทุกคน
     // (รายชื่อครบอยู่ที่หน้าลูกค้าเป้าหมาย — กด "ดูทั้งหมด" ที่หัวการ์ด)
-    return [...m.entries()].map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.won - a.won || b.deals - a.deals).slice(0, 5);
+    // ⚠️ ต้องบอกด้วยว่า "ตัดมาแค่บางส่วน" ไม่งั้นผู้ใช้เอาไปบวกแล้วไม่ตรงกับยอดรวมบนการ์ดอื่น
+    //    (ผลตรวจภายนอก DL-06 · 24 ส.ค. 69: บวก 3 แถวได้ ฿19.0M ขณะยอดสะสมจริง ฿22.44M)
+    const ทั้งหมด = [...m.entries()].map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.won - a.won || b.deals - a.deals);
+    const แสดง = ทั้งหมด.slice(0, 5);
+    const ที่เหลือ = ทั้งหมด.slice(5);
+    return { แสดง, เหลือกี่คน: ที่เหลือ.length, ยอดที่เหลือ: ที่เหลือ.reduce((s, x) => s + x.won, 0) };
   }, [leadsIn, quotesIn]);
 
   // ยอดขายตามแม่แบบ = มูลค่า "ใบเสนอราคาที่ปิดการขายได้" แยกตามแม่แบบ
@@ -209,8 +218,10 @@ export default function DealerDashboard() {
     quotesIn.filter(q => q.status === "won")
       .forEach(q => { const k = q.buildingType || "อื่นๆ"; m.set(k, (m.get(k) ?? 0) + q.totalValue); });
     // 6 อันดับแรก — พอดีกับความสูงการ์ด · รายการครบอยู่ที่หน้าลูกค้า (ปุ่ม "ดูทั้งหมด")
-    return [...m.entries()].map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value).slice(0, 6);
+    // ⚠️ เหตุผลเดียวกับการ์ดผลงานผู้รับผิดชอบ: ต้องบอกว่าตัดมา ไม่งั้นบวกแล้วไม่ตรงยอดรวม
+    const ทั้งหมด = [...m.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const ที่เหลือ = ทั้งหมด.slice(6);
+    return { แสดง: ทั้งหมด.slice(0, 6), เหลือกี่รายการ: ที่เหลือ.length, ยอดที่เหลือ: ที่เหลือ.reduce((s, x) => s + x.value, 0) };
   }, [quotesIn]);
   const cmpBaht = (v: number) => v >= 1e6 ? `฿${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `฿${Math.round(v / 1e3)}K` : `฿${v}`;
 
@@ -409,11 +420,15 @@ export default function DealerDashboard() {
         {/* ผลงานผู้รับผิดชอบ */}
         <div className="card" style={card}>
           <div style={hd}><span style={title}>ผลงานผู้รับผิดชอบ</span>{more("/leads")}</div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>ยอดปิดการขายของแต่ละคน · {timeRange.subtitle}</div>
-          {teamPerf.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ไม่มีข้อมูลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
+          {/* ⚠️ ต้องบอกว่าเป็น "อันดับแรก ๆ" ไม่ใช่ทั้งหมด ไม่งั้นผู้ใช้บวกแถวแล้วไม่ตรงยอดรวม (DL-06) */}
+          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>
+            ยอดปิดการขายของแต่ละคน · {timeRange.subtitle}
+            {teamPerf.เหลือกี่คน > 0 && ` · แสดง 5 อันดับแรก (อีก ${teamPerf.เหลือกี่คน} คน รวม ${cmpBaht(teamPerf.ยอดที่เหลือ)})`}
+          </div>
+          {teamPerf.แสดง.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ไม่มีข้อมูลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <CategoryRows
-                data={teamPerf.map(t => ({ label: t.name, value: t.won, note: `${t.deals} ดีล · เสนอ ${t.quotes} ใบ` }))}
+                data={teamPerf.แสดง.map(t => ({ label: t.name, value: t.won, note: `${t.deals} ดีล · เสนอ ${t.quotes} ใบ` }))}
                 fmt={cmpBaht} icon={<User size={11} />} onSelect={() => router.push("/leads")}
                 ariaLabel="ยอดปิดการขายของผู้รับผิดชอบแต่ละคน" />
             </div>
@@ -424,17 +439,20 @@ export default function DealerDashboard() {
         <div className="card" style={card}>
           {/* ไปหน้าลูกค้า ไม่ใช่หน้าสินค้า — แม่แบบพวกนี้มาจากดีลที่ลูกค้าปิดจริง คำถามถัดไปคือ "ใครซื้อ" ไม่ใช่ "สเปกอะไร" */}
           <div style={hd}><span style={title}>ยอดขายตามแม่แบบ</span>{more("/customers")}</div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>ยอดปิดการขายแยกตามแม่แบบ · {timeRange.subtitle}</div>
-          {salesByProduct.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ยังไม่มีการปิดการขายในช่วงนี้" description="ยอดขายจะขึ้นเมื่อปิดการขายสำเร็จ" compact /> : (
+          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>
+            ยอดปิดการขายแยกตามแม่แบบ · {timeRange.subtitle}
+            {salesByProduct.เหลือกี่รายการ > 0 && ` · แสดง 6 อันดับแรก (อีก ${salesByProduct.เหลือกี่รายการ} แม่แบบ รวม ${cmpBaht(salesByProduct.ยอดที่เหลือ)})`}
+          </div>
+          {salesByProduct.แสดง.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ยังไม่มีการปิดการขายในช่วงนี้" description="ยอดขายจะขึ้นเมื่อปิดการขายสำเร็จ" compact /> : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               {/* กดแถวไหน = ไปหน้าลูกค้าพร้อมกรองแม่แบบนั้นไว้ให้เลย
                   ตัวกรองของหน้าลูกค้าเทียบด้วย "แม่แบบหลัก" → ต้องแปลงก่อนส่ง ไม่งั้นแถวที่เป็นแม่แบบย่อย
                   (เช่น "โรงงานอาหาร" ซึ่งอยู่ใต้ "โรงงาน") จะกรองไม่เจอสักราย */}
               <CategoryRows
-                data={salesByProduct.map(p => ({ label: p.name, value: p.value }))}
+                data={salesByProduct.แสดง.map(p => ({ label: p.name, value: p.value }))}
                 fmt={cmpBaht} icon={<Building2 size={11} />}
                 onSelect={i => {
-                  const name = salesByProduct[i]?.name ?? "";
+                  const name = salesByProduct.แสดง[i]?.name ?? "";
                   const main = mainTemplateOf(name) || name;
                   router.push(`/customers?template=${encodeURIComponent(main)}`);
                 }}
@@ -446,6 +464,12 @@ export default function DealerDashboard() {
         {/* ขั้นตอนการขาย (โดนัท) */}
         <div className="card" style={card}>
           <div style={hd}><span style={title}>ขั้นตอนการขาย</span>{more("/leads")}</div>
+          {/* ⚠️ การ์ดนี้นับ "ลูกค้าเป้าหมาย" ตามขั้น ส่วนการ์ด KPI ด้านบนนับ "ใบเสนอราคาที่ปิดได้"
+              เลขจึงต่างกันได้โดยชอบธรรม — ต้องเขียนบอกไว้ ไม่งั้นอ่านเหมือนสองที่ขัดกัน
+              (ผลตรวจภายนอก DL-04 · 24 ส.ค. 69: การ์ดบนขึ้น 19 ดีล ส่วนขั้น "ปิดการขายสำเร็จ" ขึ้น 2) */}
+          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>
+            นับเป็นลูกค้าเป้าหมาย (ไม่ใช่จำนวนใบเสนอราคา) · {timeRange.subtitle}
+          </div>
           {dealStatus.length === 0 ? <EmptyState icon={<Target size={26} />} title="ไม่มีดีลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
               <Donut segments={dealStatus} centerLabel="ดีลทั้งหมด" centerValue={`${leadsIn.length}`} size={118} />

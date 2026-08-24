@@ -12,10 +12,11 @@ test("[ux·hq] KPI 4 ตัว คำนวณสอดคล้องกัน 
   await assertHealthyPage(page, "ใบเสนอราคาทั้งเครือ");
   const tiles = page.locator(".hq-kpi4 > div");
   await expect(tiles).toHaveCount(4);
-  for (const label of ["ใบเสนอราคาทั้งหมด", "มูลค่ารวม", "ตอบรับ", "อัตราปิดการขาย"]) {
+  // ชื่อการ์ดที่ 4 บอกตัวหารไว้ในชื่อเลย (24 ส.ค. 69) เพราะหน้าภาพรวมยอดขายใช้ตัวหารคนละตัว
+  for (const label of ["ใบเสนอราคาทั้งหมด", "มูลค่ารวม", "ตอบรับ", "อัตราตอบรับ (จากใบที่ส่งแล้ว)"]) {
     await expect(page.locator(".hq-kpi4").getByText(label, { exact: true })).toBeVisible();
   }
-  // อัตราปิดการขาย = ตอบรับ ÷ ใบที่ส่งแล้ว → ต้องกำกับตัวหารไว้ให้ตรวจสอบได้
+  // อัตราตอบรับ = ตอบรับ ÷ ใบที่ส่งแล้ว → ต้องกำกับตัวหารไว้ให้ตรวจสอบได้
   await expect(page.locator(".hq-kpi4").getByText(/\d+\/\d+ ใบที่ส่งแล้ว/)).toBeVisible();
 });
 

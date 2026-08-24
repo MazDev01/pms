@@ -397,7 +397,8 @@ export default function SalesAnalyticsPage() {
   const kpiCards = [
     { label: "ยอดขายจริง (ในช่วง)", value: fmtBaht(kpi.wonVal), sub: `${kpi.wonCount} ดีล · จากใบเสนอราคาที่ปิดได้`, Icon: Trophy, color: "#059669", bg: "#E6F6EF" },
     { label: "มูลค่าใบเสนอราคา", value: fmtBaht(kpi.quoteVal), sub: `${kpi.quotes} ใบ · ในช่วงที่เลือก`, Icon: FileText, color: "#0891B2", bg: "#E6F4F9" },
-    { label: "อัตราปิดการขาย", value: kpi.conv === null ? "—" : `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
+    // ⚠️ หารด้วย "ใบที่รู้ผลแล้ว" เท่านั้น — คนละตัวหารกับการ์ดชื่อคล้ายกันที่หน้าใบเสนอราคาทั้งเครือ
+    { label: "อัตราปิดการขาย (จากใบที่รู้ผลแล้ว)", value: kpi.conv === null ? "—" : `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
     { label: "เป้าหมายทั้งปี", value: dealerPerf.ready ? `${kpi.tpct}%` : "—", sub: `ยอดสะสม ${money(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
   ];
 
@@ -459,7 +460,7 @@ export default function SalesAnalyticsPage() {
           {sel(dealerSel, setDealerSel, "ทุกตัวแทน", allDealers.map(d => ({ v: d.code, l: `${d.code} – ${d.name}` })))}
           {sel(regionSel, setRegionSel, "ทุกภูมิภาค", regionOpts.map(r => ({ v: r, l: regionDisplay(r) })))}
           {sel(provSel, setProvSel, "ทุกจังหวัด", provOpts.map(p => ({ v: p, l: p })))}
-          {sel(btSel, setBtSel, "ทุกประเภทอาคาร", btOpts.map(b => ({ v: b, l: b })))}
+          {sel(btSel, setBtSel, "ทุกประเภทอาคาร (จากใบเสนอราคาทั้งเครือ)", btOpts.map(b => ({ v: b, l: b })))}
           {sel(salesSel, setSalesSel, "ทุกช่วงยอดขาย", SALES_BANDS.map(b => ({ v: b.v, l: b.l })))}
           {anyFilter && (
             <button onClick={() => { setQ(""); setDealerSel(ALL); setRegionSel(ALL); setProvSel(ALL); setBtSel(ALL); setSalesSel(ALL); }}

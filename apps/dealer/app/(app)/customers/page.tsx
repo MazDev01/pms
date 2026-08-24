@@ -233,7 +233,7 @@ function purchasedGroupsFor(customerId:number, qs:QuotationMock[]): PurchasedGro
   const won = qs.filter(q=>q.customerId===customerId && q.status==="won");
   const m = new Map<string, QuotationMock[]>();
   won.forEach(q=>{
-    const key = mainTemplateOf(q.buildingType) || q.buildingType || "ไม่ระบุแม่แบบ";
+    const key = mainTemplateOf(q.buildingType) || q.buildingType || "ไม่ระบุประเภทอาคาร";
     const arr = m.get(key); if(arr) arr.push(q); else m.set(key,[q]);
   });
   return [...m.entries()]

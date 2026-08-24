@@ -1578,10 +1578,14 @@ export default function LeadsPage() {
   );
   const noFilter = filterStatus === "ALL" && followUpDays === 0;
   const leadKpis = [
-    { label:"ลูกค้าเป้าหมายทั้งหมด", value:`${ฐานสรุป.length}`,   sub:"รายการ",       Icon:Users,      color:"#2563EB", bg:"#E8F0FE", on: noFilter,                 onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
+    /* ⚠️ นับจากชุดเดียวกับตาราง ซึ่ง "ไม่รวมรายที่ปิดการขายแล้ว" — ต้องเขียนบอก ไม่งั้นเทียบกับหน้าสำนักงานใหญ่
+       (ที่รวมทุกสถานะ) แล้วเห็นเลขต่างกันโดยไม่รู้สาเหตุ (ผลตรวจภายนอก DL-11 · 24 ส.ค. 69: 14 vs 16) */
+    { label:"ลูกค้าเป้าหมายทั้งหมด", value:`${ฐานสรุป.length}`,   sub:"ไม่รวมรายที่ปิดแล้ว",       Icon:Users,      color:"#2563EB", bg:"#E8F0FE", on: noFilter,                 onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
     { label:"โอกาสการขาย",          value:fmtCompact(openValue),    sub:"มูลค่าที่เปิดอยู่", Icon:TrendingUp, color:"#16A34A", bg:"#E6F7EE", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
     { label:`เกิน ${followUpAlertDays} วัน`, value:`${overdue7}`,     sub:"รายการ",       Icon:AlarmClock, color:"#EA580C", bg:"#FEF0E6", on: followUpDays === followUpAlertDays, onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(followUpDays === followUpAlertDays ? 0 : followUpAlertDays); } },
-    { label:"อัตราปิดการขาย",       value:`${convRate}%`,           sub:"ปิดได้/ปิดทั้งหมด", Icon:Percent,   color:"#0D9488", bg:"#E6F7F5", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
+    /* ⚠️ การ์ดนี้นับ "ดีล" (ลูกค้าเป้าหมายที่ปิดแล้ว) ส่วนแดชบอร์ดนับ "ใบเสนอราคา" — คนละหน่วย เลขจึงต่างกันได้
+       ถ้าใช้ชื่อเดียวกันทั้งสองที่ ผู้ใช้จะเห็นเลขขัดกันในแอปเดียว (ผลตรวจภายนอก DL-03 · 24 ส.ค. 69) */
+    { label:"อัตราปิดดีล",       value:`${convRate}%`,           sub:"ปิดได้ ÷ ดีลที่ปิดแล้วทั้งหมด", Icon:Percent,   color:"#0D9488", bg:"#E6F7F5", on: false,                   onClick:()=>{ setFilterStatus("ALL"); setFollowUpDays(0); } },
   ];
 
   // แนวโน้ม 12 เดือน — ลูกค้าเป้าหมายใหม่ เทียบ ปิดการขาย · ปีปัจจุบันเท่านั้น

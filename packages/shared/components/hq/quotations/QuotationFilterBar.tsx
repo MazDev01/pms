@@ -71,7 +71,7 @@ export function QuotationFilterBar({
       </select>
 
       <select aria-label="กรองตามแม่แบบ" value={filters.product} onChange={e => set("product", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
-        <option value="all">ทุกประเภทอาคาร</option>
+        <option value="all">ทุกประเภทอาคาร (จากใบเสนอราคา)</option>
         {products.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
 

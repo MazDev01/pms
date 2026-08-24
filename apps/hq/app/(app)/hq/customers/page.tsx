@@ -255,7 +255,7 @@ export default function HQCustomersPage() {
         </select>
 
         <select aria-label="กรองตามประเภทอาคาร" value={typeSel} onChange={e => setTypeSel(e.target.value)} className="form-select" style={selectStyle}>
-          <option value="all">ทุกประเภทอาคาร</option>
+          <option value="all">ทุกประเภทอาคาร (จากอาคารที่ซื้อแล้ว)</option>
           {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
 

@@ -266,7 +266,10 @@ export default function HQDashboard() {
     const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), 1);
     const end = new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), 1);
     while (cur <= end) {
-      pts.push({ month: TH_ABBR[cur.getMonth()], value: Math.round((byKey.get(`${cur.getFullYear()}-${cur.getMonth()}`) ?? 0) / 1e6 * 10) / 10 });
+      // ⚠️ ห้ามปัดเศษตรงนี้ — ตัวเลขรวมบนหัวการ์ดคิดจากผลบวกของค่ารายเดือน
+      //    ถ้าปัดทีละเดือนก่อน ผลบวกจะเพี้ยนจากยอดจริง (เจอจริง 24 ส.ค. 69: หัวการ์ดขึ้น ฿81.8M แต่ยอดจริง ฿81.6M)
+      //    ปัดได้เฉพาะตอน "แสดงผล" เท่านั้น
+      pts.push({ month: TH_ABBR[cur.getMonth()], value: (byKey.get(`${cur.getFullYear()}-${cur.getMonth()}`) ?? 0) / 1e6 });
       cur.setMonth(cur.getMonth() + 1);
     }
     return pts.length ? pts : [{ month: TH_ABBR[timeRange.end.getMonth()], value: 0 }];
@@ -433,9 +436,13 @@ export default function HQDashboard() {
   const annualWonTotal = useMemo(() => { let s = 0; annualWonByDealer.forEach(v => (s += v)); return s; }, [annualWonByDealer]);
 
   // ประเภทอาคาร + จำนวนโครงการ
+  // ⚠️ การ์ดโชว์แค่ 5 อันดับแรก ต้องบอกส่วนที่เหลือด้วย ไม่งั้นผู้ใช้บวกแถวแล้วไม่ตรงยอดขายรวมของหน้า
+  //    (ผลตรวจภายนอก HQ-03 · ตรวจกับข้อมูลจริงแล้วไม่ได้นับซ้ำ — ที่ต่างคือการ์ดตัดมาแสดงบางส่วน)
   const buildingPerf = useMemo(() => {
     const max = Math.max(...productArr.map(a => a.value), 1);
-    return productArr.slice(0, 5).map((p, i) => ({ product: p.product, value: p.value, projects: p.projects, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
+    const แสดง = productArr.slice(0, 5).map((p, i) => ({ product: p.product, value: p.value, projects: p.projects, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
+    const ที่เหลือ = productArr.slice(5);
+    return { แสดง, เหลือกี่ประเภท: ที่เหลือ.length, ยอดที่เหลือ: ที่เหลือ.reduce((s, p) => s + p.value, 0) };
   }, [productArr]);
 
   // ── กราฟแท่ง "ลูกค้าเป้าหมาย · ใบเสนอราคา · ปิดการขาย (รายเดือน)" — ปุ่มช่วงย้อนหลังของตัวเอง ──
@@ -495,7 +502,20 @@ export default function HQDashboard() {
         label: e.action,
         text: `${e.user} · ${e.target}`,
         time: e.at,
-      }));
+      }))
+      // ⚠️ ยุบรายการที่ "เหมือนกันทุกอย่าง" ให้เหลือบรรทัดเดียว แล้วบอกจำนวนครั้งแทน
+      //    (ผลตรวจภายนอก HQ-13 · 24 ส.ค. 69: การ์ดขึ้น "เข้าสู่ระบบ · เวลาเดียวกัน · คนเดียวกัน" ซ้ำสองบรรทัด
+      //     อ่านแล้วนึกว่าระบบบันทึกเบิ้ล) · ไม่ได้ลบบันทึกจริง — หน้าบันทึกการใช้งานยังเก็บครบทุกแถว
+      .reduce<ActivityTimelineItem[]>((รายการ, e) => {
+        const ก่อนหน้า = รายการ[รายการ.length - 1];
+        const ซ้ำกัน = ก่อนหน้า && ก่อนหน้า.label === e.label && ก่อนหน้า.time === e.time
+          && String(ก่อนหน้า.text).replace(/ \(×\d+\)$/, "") === e.text;
+        if (!ซ้ำกัน) return [...รายการ, e];
+        const เดิม = String(ก่อนหน้า.text);
+        const จำนวน = Number(/ \(×(\d+)\)$/.exec(เดิม)?.[1] ?? 1) + 1;
+        ก่อนหน้า.text = `${เดิม.replace(/ \(×\d+\)$/, "")} (×${จำนวน})`;
+        return รายการ;
+      }, []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auditEntries, timeRange]);
 
@@ -783,11 +803,13 @@ export default function HQDashboard() {
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ยอดขายตามประเภทอาคาร</div>
-            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
+            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+              หน่วย: ล้านบาท{buildingPerf.เหลือกี่ประเภท > 0 ? ` · แสดง 5 อันดับแรก (อีก ${buildingPerf.เหลือกี่ประเภท} ประเภท รวม ${fmtBaht(buildingPerf.ยอดที่เหลือ)})` : ""}
+            </span></div>
           {/* ใบนี้เป็นต้นแบบของ CategoryRows — แดชบอร์ดตัวแทนใช้คอมโพเนนต์ตัวเดียวกัน (ห้ามแยกมาร์กอัป) */}
           <div className="card-body" style={{ paddingTop: 4 }}>
             <CategoryRows
-              data={buildingPerf.map(p => ({ label: p.product, value: p.value, note: `${p.projects} โครงการ` }))}
+              data={buildingPerf.แสดง.map(p => ({ label: p.product, value: p.value, note: `${p.projects} โครงการ` }))}
               fmt={fmtBaht} icon={<Building2 size={11} />}
               ariaLabel="ยอดขายแยกตามประเภทอาคาร" />
           </div>
