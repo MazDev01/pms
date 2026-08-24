@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CalendarDays, ChevronDown, Check, X } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useDealerOptions, useProductOptions, useProvinceOptions, usePersonOptions } from "@pms/shared/lib/useFilterOptions";
@@ -90,12 +90,16 @@ function MenuItem({ selected, label, onClick }: { selected: boolean; label: stri
 
 /* ── Time Range ── */
 function TimeRangePicker() {
-  const { timeRange, setPreset, setCustomRange } = useFilters();
+  const { timeRange, customStart, customEnd, setPreset, setCustomRange } = useFilters();
   const [open, setOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
-  const [cs, setCs] = useState("");
-  const [ce, setCe] = useState("");
+  const [cs, setCs] = useState(customStart);
+  const [ce, setCe] = useState(customEnd);
   const ref = useClickOutside(() => { setOpen(false); setShowCustom(false); });
+
+  // ⚠️ ช่องวันที่เป็น state ของตัวเอง ถ้าไม่ผูกกับค่าที่ใช้อยู่จริงจะเพี้ยนสองทาง:
+  //    เปิดมาเห็นช่องว่างทั้งที่กำลังกรองด้วยช่วงที่กำหนดเองอยู่ · กด "ล้างตัวกรอง" แล้ววันเก่ายังค้างในช่อง
+  useEffect(() => { setCs(customStart); setCe(customEnd); }, [customStart, customEnd]);
 
   function applyCustom() {
     if (cs && ce) { setCustomRange(cs, ce); setOpen(false); setShowCustom(false); }

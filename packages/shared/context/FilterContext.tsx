@@ -133,6 +133,9 @@ type Ctx = {
   product: string;
   status: string;
   person: string;
+  /** วันเริ่ม/วันสิ้นสุดของช่วงที่กำหนดเอง (ISO) — ให้ช่องกรอกวันที่สะท้อนค่าที่ใช้อยู่จริง */
+  customStart: string;
+  customEnd: string;
   setPreset: (p: TimePreset) => void;
   setCustomRange: (start: string, end: string) => void;
   setDealer: (v: string) => void;
@@ -184,8 +187,12 @@ export function FilterProvider({ children, storageKey = STORAGE_KEY }: { childre
   const setStatus = useCallback((v: string) => setState(s => ({ ...s, status: v })), []);
   const setPerson = useCallback((v: string) => setState(s => ({ ...s, person: v })), []);
   const setDim = useCallback((dim: FilterDim, v: string) => setState(s => ({ ...s, [dim]: v })), []);
-  // ล้างเฉพาะตัวกรอง dimension — คงช่วงเวลาเดิมไว้ (time ไม่ถูกนับใน activeCount)
-  const reset = useCallback(() => setState(s => ({ ...s, dealer: ALL, province: ALL, product: ALL, status: ALL, person: ALL })), []);
+  // ── "ล้างตัวกรอง" ต้องล้างช่วงเวลาด้วย (บอสแจ้ง 24 ส.ค. 69: "ทำไมมันยังไม่ล้าง") ──
+  //
+  // เดิมตั้งใจไม่แตะช่วงเวลา แต่ผู้ใช้มองว่าช่วงเวลาก็คือตัวกรองใบหนึ่ง (มันอยู่บนแถบเดียวกัน)
+  // กดล้างแล้วช่วงที่กำหนดเองยังค้างอยู่ = ตัวเลขบนจอยังแคบตามช่วงเดิม ทั้งที่เห็นว่าล้างไปแล้ว
+  // ตอนนี้กลับไปเป็นค่าตั้งต้นทั้งแถบ (ช่วงเวลา + ทุก dimension) ให้ตรงกับคำว่า "ล้าง"
+  const reset = useCallback(() => setState(() => ({ ...DEFAULTS })), []);
 
   const inRange = useCallback((date?: string | null) => {
     if (date === undefined || date === null || date === "") return true;
@@ -211,7 +218,10 @@ export function FilterProvider({ children, storageKey = STORAGE_KEY }: { childre
     return true;
   }, [inRange, state.dealer, state.province, state.product, state.status, state.person]);
 
+  // ⚠️ ช่วงเวลาที่ไม่ใช่ค่าตั้งต้น ต้องนับเป็นตัวกรองที่ "เปิดอยู่" ด้วย
+  //    ไม่งั้นเลือกช่วงเองแล้วปุ่มล้างไม่โผล่ = ไม่มีทางกลับไปค่าตั้งต้นได้เลยนอกจากไล่กดเอง
   const activeCount =
+    (state.preset !== DEFAULTS.preset ? 1 : 0) +
     (state.dealer !== ALL ? 1 : 0) + (state.province !== ALL ? 1 : 0) +
     (state.product !== ALL ? 1 : 0) + (state.status !== ALL ? 1 : 0) +
     (state.person !== ALL ? 1 : 0);
@@ -220,12 +230,14 @@ export function FilterProvider({ children, storageKey = STORAGE_KEY }: { childre
   // เรนเดอร์ใหม่ แม้ตัวกรองที่ตัวเองอ่านจะไม่เปลี่ยน (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
   const value: Ctx = useMemo(() => ({
     timeRange,
+    customStart: state.customStart, customEnd: state.customEnd,
     dealer: state.dealer, province: state.province, product: state.product, status: state.status,
     person: state.person,
     setPreset, setCustomRange, setDealer, setProvince, setProduct, setStatus, setPerson, setDim, reset,
     activeCount, passes, inRange,
   }), [
-    timeRange, state.dealer, state.province, state.product, state.status, state.person,
+    timeRange, state.customStart, state.customEnd,
+    state.dealer, state.province, state.product, state.status, state.person,
     setPreset, setCustomRange, setDealer, setProvince, setProduct, setStatus, setPerson, setDim, reset,
     activeCount, passes, inRange,
   ]);
