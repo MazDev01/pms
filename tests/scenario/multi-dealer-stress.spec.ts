@@ -117,7 +117,7 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
     { timeout: 45_000, message: `${code}: เบอร์โทรต้องอัปเดต` }).toBe("089-999-9999");
   mark("customer_edited");
 
-  // 4) สร้างดีลใหม่ (เพิ่มงานขายใหม่ → สร้างโครงการ) — เปิด redirect ไปหน้าลูกค้าเป้าหมายพร้อม detail
+  // 4) สร้างดีลใหม่ (เพิ่มงานขายใหม่ → เพิ่มงานขาย) — เปิด redirect ไปหน้าลูกค้าเป้าหมายพร้อม detail
   //    ต้องเลือกแม่แบบ + กรอกมูลค่าคาดการณ์ ไม่งั้น BOQ auto-seed จะว่าง (qty คำนวณจาก มูลค่า÷ราคากลาง)
   //    แล้วปุ่ม "สร้างใบเสนอราคา" ในขั้นถัดไปจะ disable ค้าง (เจอจริงระหว่างพัฒนาเทสต์นี้)
   await page.getByRole("button", { name: "เพิ่มงานขายใหม่" }).first().click();
@@ -126,7 +126,7 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   await newDealBtn.click();
   await pickTemplate(page, "แม่แบบ");
   await page.locator('input[placeholder="เช่น ฿1.2M"]').fill("1200000");
-  const createDealBtn = page.getByRole("button", { name: "สร้างโครงการ" });
+  const createDealBtn = page.getByRole("button", { name: "เพิ่มงานขาย", exact: true });
   await expect(createDealBtn).toBeEnabled({ timeout: 30_000 });
   await createDealBtn.click();
   await page.waitForURL(/\/leads\?open=/, { timeout: 60_000 });

@@ -187,12 +187,12 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
   const newDealBtn = page.getByRole("button", { name: "เพิ่มงานขายใหม่", exact: true }).last();
   await expect(newDealBtn, "ต้องมีปุ่มสร้างดีลใหม่ในหน้ารายละเอียดลูกค้า").toBeVisible({ timeout: 10_000 });
   await newDealBtn.click();
-  await expect(page.getByRole("button", { name: "สร้างโครงการ" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "เพิ่มงานขาย", exact: true })).toBeVisible({ timeout: 10_000 });
   // dealForm.product เริ่มที่ "" เสมอ (ไม่ได้ดึงจาก category ของลูกค้าอัตโนมัติแบบที่คอมเมนต์เดิมเข้าใจผิด
   // ไว้ — select ที่ไม่มี option ตรงค่า "" แค่ "โชว์" ตัวเลือกแรกตามพฤติกรรม browser เฉยๆ ไม่ได้เซ็ตค่าจริง
   // ทำให้ลูกค้าเป้าหมายดีลใหม่ได้ product="" แล้ว BOQ ว่าง → ปุ่มสร้างใบถูก disable แบบสุ่ม/แล้วแต่จังหวะโหลดแคตตาล็อก)
-  await pickTemplate(page, "แม่แบบ"); // ต้องเลือกแม่แบบจริง ไม่งั้นปุ่มสร้างโครงการถูกปิด
-  await page.getByRole("button", { name: "สร้างโครงการ" }).click();
+  await pickTemplate(page, "แม่แบบ"); // ต้องเลือกแม่แบบจริง ไม่งั้นปุ่มเพิ่มงานขายถูกปิด
+  await page.getByRole("button", { name: "เพิ่มงานขาย", exact: true }).click();
 
   // ดีลใหม่ = ลูกค้าเป้าหมายใหม่ผูก customerId — หาในหน้าลูกค้าเป้าหมาย แล้วออกใบ + ปิดให้ผ่านฟลว์เดียวกัน
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });

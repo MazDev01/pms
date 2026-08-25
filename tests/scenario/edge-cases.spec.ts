@@ -199,7 +199,7 @@ test("[edge] พื้นที่ (ตร.ม.) ติดลบผ่าน fil
   expect(row.area ?? 0, `ค่าพื้นที่ที่บันทึกจริงใน DB: ${row.area}`).toBeGreaterThanOrEqual(0);
 });
 
-test("[edge] กดปุ่ม 'สร้างโครงการ' (ดีลใหม่จากลูกค้าเดิม) ซ้ำเร็ว ๆ → สร้างดีลแค่ 1 ใบ ไม่ซ้ำ", async ({ page }) => {
+test("[edge] กดปุ่ม 'เพิ่มงานขาย' (ดีลใหม่จากลูกค้าเดิม) ซ้ำเร็ว ๆ → สร้างดีลแค่ 1 ใบ ไม่ซ้ำ", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(RYG);
   const COMPANY = tg("ดีลกดซ้ำ");
@@ -228,7 +228,7 @@ test("[edge] กดปุ่ม 'สร้างโครงการ' (ดี�
   await expect(newDealBtn).toBeVisible({ timeout: 10_000 });
   await newDealBtn.click();
 
-  const saveBtn = page.getByRole("button", { name: "สร้างโครงการ" });
+  const saveBtn = page.getByRole("button", { name: "เพิ่มงานขาย", exact: true });
   await expect(saveBtn).toBeEnabled({ timeout: 10_000 }); // แม่แบบ default ต้อง populate ก่อนปุ่มไม่ disabled
   const btnHandle = await saveBtn.elementHandle();
   await page.evaluate((el) => {
@@ -237,7 +237,7 @@ test("[edge] กดปุ่ม 'สร้างโครงการ' (ดี�
 
   await page.waitForURL(/\/leads\?open=/, { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(2500); // เผื่อเวลาให้คำขอซ้ำ (ถ้ามี) ไปถึง DB ก่อนนับ
-  assertNoErrors(errs, "กดสร้างโครงการซ้ำเร็ว ๆ");
+  assertNoErrors(errs, "กดเพิ่มงานขายซ้ำเร็ว ๆ");
   const { data: leadsFound, error: lErr } = await sb.from("leads").select("id").eq("dealer_code", "RYG").eq("company", COMPANY);
   if (lErr) throw new Error(lErr.message);
   expect(leadsFound?.length, `จำนวนดีล(ลูกค้าเป้าหมาย)ที่สร้างจริงจากลูกค้า ${COMPANY}`).toBe(1);

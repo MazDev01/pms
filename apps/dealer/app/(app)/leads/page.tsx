@@ -27,6 +27,7 @@ import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { parseBaht, formatPhone } from "@pms/shared/lib/format";
+import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
 import { useEscapeKey } from "@pms/shared/lib/useModalA11y";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
@@ -129,14 +130,9 @@ function fmtM(n: number) {
 //   เดิมพิมพ์อะไรที่อ่านไม่ออกลงไป พอคลิกออกจากช่อง ข้อความจะถูกเขียนทับเป็น "฿0" ทันที
 //   ผู้ใช้เห็นเป็นศูนย์แล้วนึกว่าระบบคิดให้ ทั้งที่จริงคือของที่พิมพ์หายไปแล้ว
 //   คงข้อความเดิมไว้ให้เห็นว่า "ยังผิดอยู่นะ" แล้วให้ตอนกดบันทึกเป็นคนฟ้อง
-// ── เพดานมูลค่าลูกค้าเป้าหมาย — ค่ากลางของทั้งไฟล์ ────────────────────────────────────────────
-//
-// ⚠️ ต้องประกาศที่เดียว ห้ามแยกไว้ในฟังก์ชันใดฟังก์ชันหนึ่ง (บทเรียน 10 ส.ค. 69)
-//   เดิมประกาศไว้ในฟอร์มเพิ่มลูกค้าเป้าหมายเท่านั้น แผงแก้ไขในหน้ารายละเอียดจึงไม่มีเพดาน
-//   ผู้ใช้กรอก 2,500 ล้านผ่านฟอร์มไม่ได้ แต่แก้ทีหลังในแผงกลับได้ = กฎเดียวกันบังคับไม่เท่ากัน
-//
-// ตั้งที่หนึ่งแสนล้านบาท: สูงกว่างานจริงที่ใหญ่ที่สุดหลายเท่า แต่กันเลขหลุดโลกได้
-const MAX_LEAD_VALUE = 100_000_000_000;
+// ── เพดาน/การตรวจมูลค่า ย้ายไปไว้ที่ leadValue.ts แล้ว (25 ส.ค. 69) ──────────────────────
+// เพราะฟอร์ม "เพิ่มงานขายใหม่" ที่หน้าลูกค้าเป็นคนละไฟล์ และไม่มีกฎนี้เลย — กรอกอะไรก็บันทึกผ่าน
+// ทุกฟอร์มต้องเรียก ตรวจมูลค่าลูกค้าเป้าหมาย() ตัวเดียวกัน ห้ามเขียนกฎเอง
 
 function fmtVal(v: string) { const n = parseValue(v); return n > 0 ? fmtM(n) : v; }
 
@@ -360,15 +356,8 @@ function OverviewEditor({ lead, persons, onSave }: {
   //   ผลที่เอเจนต์ยืนยัน: พิมพ์ "abcxyz" แล้วบันทึก → ตารางลูกค้าเป้าหมายและหน้าสำนักงานใหญ่โชว์ "abcxyz" ดิบ ๆ
   //   บทเรียน: แก้ตัวช่วยกลางแล้วต้องไล่ดูผู้เรียกทุกทาง ไม่ใช่แค่ทางที่กำลังแก้อยู่
   function save() {
-    const v = f.value.trim();
-    if (v && !(parseBaht(v) > 0)) {
-      setValueErr("มูลค่าอ่านไม่ออก — กรอกเป็นตัวเลขบวก เช่น 1400000 หรือ 1.4M (เว้นว่างได้ถ้ายังไม่รู้)");
-      return;
-    }
-    if (v && parseBaht(v) > MAX_LEAD_VALUE) {
-      setValueErr(`มูลค่าสูงเกินจริง — กรอกได้ไม่เกิน ${(MAX_LEAD_VALUE / 1e9).toLocaleString("th-TH")} พันล้านบาท`);
-      return;
-    }
+    const ผิดตรงไหน = ตรวจมูลค่าลูกค้าเป้าหมาย(f.value);
+    if (ผิดตรงไหน) { setValueErr(ผิดตรงไหน); return; }
     setValueErr("");
     onSave({
       // value: เก็บตามที่พิมพ์ ไม่ย่อเป็น ฿1.2M ตอนบันทึก (จะปัดเงินหายเหมือนฟอร์มเพิ่ม)
@@ -663,14 +652,8 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     //   ช่องนี้รับข้อความอิสระ (เขียน "1.4M" หรือ "฿1,400,000" ก็ได้) ตัวแปลงค่าจึงคืน 0
     //   เมื่ออ่านไม่ออก · เดิมกรอก "abcxyz" หรือ "-5000000" แล้วบันทึกผ่านเป็น ฿0 เงียบ ๆ
     //   เซลส์ไม่รู้ว่ามูลค่าหาย แล้วลูกค้าเป้าหมายนั้นก็ไปโผล่ในรายงานยอดขายเป็นศูนย์
-    if (form.value.trim() && parseBaht(form.value) > MAX_LEAD_VALUE) {
-      setSubmitError("มูลค่าสูงเกินจริง — กรอกได้ไม่เกิน 100,000 ล้านบาท");
-      return;
-    }
-    if (form.value.trim() && !(parseBaht(form.value) > 0)) {
-      setSubmitError('มูลค่าอ่านไม่ออก — กรอกเป็นตัวเลขบวก เช่น 1400000 หรือ 1.4M (เว้นว่างได้ถ้ายังไม่รู้)');
-      return;
-    }
+    const มูลค่าผิด = ตรวจมูลค่าลูกค้าเป้าหมาย(form.value);
+    if (มูลค่าผิด) { setSubmitError(มูลค่าผิด); return; }
     savingRef.current = true;
     setSubmitError("");
     const base = {

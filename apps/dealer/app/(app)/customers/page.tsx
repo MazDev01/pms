@@ -9,13 +9,14 @@ import {
   quotationStatusLabel, quotationStatusColor, noteCategoryColor, fmtISOToThai, mainTemplateOf, customerCode,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, apptTypeLabel,
   type QuotationMock, type QuoteLineItem, type LeadRow,
-  type CustomerRow, type DealerFile,
+  type CustomerRow, type DealerFile, type LeadStatus,
   type AppointmentMock,
   type LeadActivity,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
+import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
 
 // กันข้อมูลหายถ้าผู้ใช้รีเฟรช/ปิดแท็บระหว่างกำลังบันทึก (พบจริงจากทดสอบโหลด: รีเฟรชทันทีหลังกดบันทึก
 // ทำให้คำขอที่กำลังส่งถูกตัดตอนกลางทาง ข้อมูลไม่ถูกสร้างเลยโดยผู้ใช้ไม่รู้ตัว) — เตือนผู้ใช้ก่อนออกจากหน้า
@@ -126,15 +127,6 @@ const THAI_MO=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","ม
 // ใช้ new Date() = ดีลใหม่ได้วันที่ล่วงหน้าจากยุคของข้อมูล แล้วหลุดนอกช่วงตัวกรองทุกพรีเซ็ต (ทุกพรีเซ็ตจบที่ APP_NOW)
 function thaiToday(){ const d=APP_NOW; return `${d.getDate()} ${THAI_MO[d.getMonth()]} ${d.getFullYear()+543}`; }
 // จัดรูปแบบมูลค่า (Expected Revenue) จากสตริงดิบ → "฿1.2M" / "฿480K" · ว่าง = ""
-function fmtDealValue(v:string):string{
-  const s=v.replace(/[฿,\s]/gi,"");
-  const n=/m$/i.test(s)?parseFloat(s)*1e6:/k$/i.test(s)?parseFloat(s)*1e3:/b$/i.test(s)?parseFloat(s)*1e9:parseFloat(s);
-  if(!n||isNaN(n)) return "";
-  if(n>=1e9) return "฿"+(n/1e9).toFixed(1)+"B";
-  if(n>=1e6) return "฿"+(n/1e6).toFixed(1)+"M";
-  if(n>=1e3) return "฿"+Math.round(n/1e3)+"K";
-  return "฿"+n.toLocaleString();
-}
 function fmtDate(d:string){
   if(!d||d==="—") return "—";
   const [y,m,day]=d.split("-");
@@ -526,7 +518,9 @@ export default function CustomersPage(){
   // สร้างดีลใหม่ (ลูกค้าเดิมซื้อโครงการใหม่) — Deal = ลูกค้าเป้าหมายที่ผูก customerId
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [dealCustomer, setDealCustomer] = useState<CustomerRow|null>(null);
-  const [dealForm, setDealForm] = useState({project:"",product:"",value:"",assigned:"",note:""});
+  const [dealForm, setDealForm] = useState({project:"",product:"",value:"",area:"",status:"WAITING" as LeadStatus,assigned:"",note:""});
+  // ข้อความฟ้องตอนกดบันทึก — ต้องมีเหมือนฟอร์มเพิ่มลูกค้าเป้าหมาย ไม่ใช่กดแล้วเงียบ
+  const [dealErr, setDealErr] = useState("");
   // นำเข้าลูกค้าเดิม (ตัวแทน) — ลูกค้าก่อนมีระบบ / ไม่ได้ผ่าน Lead→Won · CSV + คีย์มือ
   const [showImport, setShowImport]   = useState(false);
   const [importRows, setImportRows]   = useState<ImportRow[]>([]);
@@ -760,7 +754,7 @@ export default function CustomersPage(){
   // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
   function openNewDeal(c: CustomerRow){
     setDealCustomer(c);
-    setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",assigned:c.owner,note:""});
+    setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",area:"",status:"WAITING",assigned:c.owner,note:""}); setDealErr("");
     setShowNewDeal(true);
   }
   // กันกดสร้างดีลซ้ำ (H8 · guard synchronous) — เดิมไม่มี guard: กดรัว ๆ ระหว่างรอ newLeadNumId() (async)
@@ -771,6 +765,11 @@ export default function CustomersPage(){
   async function createDeal(){
     if(creatingDealRef.current) return;
     const c=dealCustomer; if(!c||!dealForm.product) return;
+    // กฎเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมายทุกประการ (leadValue.ts) — เดิมที่นี่ไม่ตรวจอะไรเลย
+    // กรอก "abcxyz" แล้วบันทึกผ่านเป็นงานมูลค่า ฿0 เงียบ ๆ แล้วไปโผล่ในรายงานเป็นศูนย์
+    const มูลค่าผิด = ตรวจมูลค่าลูกค้าเป้าหมาย(dealForm.value);
+    if (มูลค่าผิด) { setDealErr(มูลค่าผิด); return; }
+    setDealErr("");
     creatingDealRef.current = true;
     try {
       const nid = await newLeadNumId(); // num_id atomic ต่อสาขา (M7) — เลิก Math.max+1 ที่ชนได้
@@ -781,10 +780,14 @@ export default function CustomersPage(){
         contact:c.name, phone:c.phone, email:c.email, province:c.province, address:c.address,
         assigned:dealForm.assigned||c.owner, logo:c.logo, customerId:c.id,
         product, category:mainTemplateOf(product),                     // ── รายละเอียดดีล ──
-        value:fmtDealValue(dealForm.value),
+        // เก็บตามที่พิมพ์ เหมือนฟอร์มลูกค้าเป้าหมาย — เดิมย่อผ่าน fmtDealValue เป็น "฿1.2M"
+        // ทำให้ 1,234,567 กลายเป็น 1.2M = เงินหายไปสามหมื่นกว่าบาทตั้งแต่ตอนบันทึก
+        value:dealForm.value.trim(),
+        // เว้นว่าง = ไม่มีข้อมูลพื้นที่ (undefined) ห้ามเก็บ 0 เพราะ 0 แปลว่า "พื้นที่ศูนย์" ซึ่งไม่จริง
+        area:dealForm.area.trim() && Number(dealForm.area) > 0 ? Number(dealForm.area) : undefined,
         project:dealForm.project||undefined,
         note:dealForm.note||undefined,
-        status:"WAITING",                                              // ดีลใหม่เริ่มที่ต้น pipeline
+        status:dealForm.status,                                        // เลือกขั้นเริ่มต้นได้เหมือนฟอร์มเพิ่มลูกค้าเป้าหมาย
         source:"ลูกค้าเดิม (ดีลใหม่)",
         createdAt:thaiToday(),
         tasks:buildLeadTasks(taskTpl),                                 // Checklist ตามที่ HQ ตั้งไว้ (ยังไม่ติ๊ก)
@@ -1246,7 +1249,7 @@ export default function CustomersPage(){
                     <button onClick={()=>openNewDeal(selected)} className="btn btn-primary btn-sm"><Plus size={13}/> เพิ่มงานขายใหม่</button>
                   </div>
                   {projectCount===0?(
-                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีโครงการ — กด &ldquo;เพิ่มงานขายใหม่&rdquo; เพื่อเริ่มโครงการแรก</div>
+                    <div style={{fontSize:"0.8rem",color:MUTED,textAlign:"center",padding:"24px 0"}}>ยังไม่มีงานขาย — กด &ldquo;เพิ่มงานขายใหม่&rdquo; เพื่อเริ่มงานขายแรก</div>
                   ):(
                     <div style={{display:"flex",flexDirection:"column",gap:8}}>
                       {/* ── ประวัติการปิดการขาย (ใบเสนอราคาที่ปิดการขาย) ── */}
@@ -1746,7 +1749,7 @@ export default function CustomersPage(){
             <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:"0.92rem",fontWeight:800}}>เพิ่มงานขายใหม่</div>
-                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>โครงการใหม่ของลูกค้าเดิม · ข้อมูลลูกค้าคงเดิม</div>
+                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>งานขายใหม่ของลูกค้าเดิม · ข้อมูลลูกค้าคงเดิม</div>
               </div>
               <button onClick={()=>setShowNewDeal(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
             </div>
@@ -1760,18 +1763,36 @@ export default function CustomersPage(){
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div><label className="form-label">แม่แบบ</label>
                   <TemplateSelect value={dealForm.product} onChange={v=>setDealForm(f=>({...f,product:v}))} className="form-select" ariaLabel="แม่แบบ" /></div>
-                <div><label className="form-label">มูลค่าคาดการณ์</label>
-                  <input className="form-input" value={dealForm.value} onChange={e=>setDealForm(f=>({...f,value:e.target.value}))} placeholder="เช่น ฿1.2M" /></div>
+                {/* ป้ายและตัวอย่างต้องเหมือนฟอร์มเพิ่มลูกค้าเป้าหมาย — ช่องเดียวกันห้ามเรียกคนละชื่อ
+                    เดิมที่นี่เขียน "มูลค่าคาดการณ์ · เช่น ฿1.2M" ทำให้ผู้ใช้พิมพ์แบบย่อ แล้วเงินปัดหาย */}
+                <div><label className="form-label">พื้นที่ (ตร.ม.)</label>
+                  <input className="form-input" value={dealForm.area} onChange={e=>setDealForm(f=>({...f,area:e.target.value}))} placeholder="เช่น 1200" /></div>
               </div>
+              <div><label className="form-label">ประเมินราคา</label>
+                <input className="form-input" aria-label="ประเมินราคา" value={dealForm.value}
+                  onChange={e=>{setDealForm(f=>({...f,value:e.target.value})); if(dealErr) setDealErr("");}}
+                  placeholder="เช่น 1200000 หรือ ฿1.2M" /></div>
+              {/* ขั้นตอน — ชุดตัวเลือกเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมาย: เลือกได้เฉพาะขั้นก่อน "เสนอราคา"
+                  เพราะขั้นเสนอราคาขึ้นไปเลื่อนเองเมื่อมีใบเสนอราคาจริง (ห้ามให้ตั้งเองแล้วขัดกับใบที่มี) */}
+              <div><label className="form-label">ขั้นตอน</label>
+                <select aria-label="ขั้นตอน" className="form-select" value={dealForm.status}
+                  onChange={e=>setDealForm(f=>({...f,status:e.target.value as LeadStatus}))}>
+                  {(["WAITING","BULLET"] as LeadStatus[]).map(st=><option key={st} value={st}>{leadStatusLabel[st]}</option>)}
+                </select></div>
               <div><label className="form-label">ผู้รับผิดชอบ</label>
                 <PersonPicker value={dealForm.assigned} onChange={v=>setDealForm(f=>({...f,assigned:v}))} multiple /></div>
               <div><label className="form-label">หมายเหตุ</label>
                 <textarea className="form-input" rows={2} style={{resize:"vertical"}} value={dealForm.note} onChange={e=>setDealForm(f=>({...f,note:e.target.value}))} placeholder="รายละเอียดเพิ่มเติม..." /></div>
-              <div style={{fontSize:"0.65rem",color:"#9ca3af"}}>โครงการใหม่เริ่มที่สเตจ &ldquo;ติดต่อแล้ว&rdquo; ในบอร์ด pipeline · นับรวมใน Dashboard/รายงานทันที · เปิดรายละเอียดให้เลย</div>
+              {dealErr && (
+                <div role="alert" style={{fontSize:"0.72rem",color:"#B91C1C",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,padding:"8px 10px"}}>{dealErr}</div>
+              )}
+              {/* คำอธิบายต้องเป็นภาษาไทยทั้งบรรทัด — เดิมปน "pipeline" กับ "Dashboard" ทั้งที่หน้าจอเรียกว่า
+                  "บอร์ดงานขาย" และ "แดชบอร์ด" อยู่แล้ว (มาตรฐานคำไทยของระบบ) */}
+              <div style={{fontSize:"0.65rem",color:"#9ca3af"}}>งานขายใหม่จะไปอยู่ในบอร์ดงานขายตามขั้นที่เลือก · นับรวมในแดชบอร์ดและรายงานทันที · เปิดหน้ารายละเอียดให้เลย</div>
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowNewDeal(false)}>ยกเลิก</button>
-              <button className="btn btn-primary btn-md" onClick={()=>void createDeal()} disabled={!dealForm.product}><Plus size={14}/> สร้างโครงการ</button>
+              <button className="btn btn-primary btn-md" onClick={()=>void createDeal()} disabled={!dealForm.product}><Plus size={14}/> เพิ่มงานขาย</button>
             </div>
           </div>
         </div>
