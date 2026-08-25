@@ -10,6 +10,16 @@ export function parseBaht(v: string | number): number {
   return n;
 }
 
+
+// ── มูลค่าที่เซลส์ประเมินไว้กับลูกค้าเป้าหมาย — แสดงผลที่เดียวทั้งระบบ ──────────
+// ช่องนี้เก็บ "ตามที่ผู้ใช้พิมพ์" (1400000 · 1.4M · ฿1,400,000) เพื่อไม่ให้เงินหายตอนบันทึก
+// เวลาเอาไปโชว์จึงต้องจัดรูปแบบทุกครั้ง ไม่งั้นหน้าจอขึ้นเลขติดกันอ่านไม่ออก เช่น 5270000
+// ไม่มีค่า/อ่านไม่ออก = "—" (ยังไม่รู้มูลค่า) ห้ามโชว์ ฿0 เพราะ 0 แปลว่า "ไม่มีมูลค่า" ซึ่งไม่จริง
+export function fmtLeadValue(v: string | number | null | undefined): string {
+  const n = parseBaht(typeof v === "number" ? v : String(v ?? ""));
+  return n > 0 ? `฿${Math.round(n).toLocaleString("th-TH")}` : "—";
+}
+
 export function fmtBaht(v: number): string {
   if (!isFinite(v) || v <= 0) return "฿0";
   if (v >= 1_000_000_000_000) return `฿${(v / 1_000_000_000_000).toFixed(1)}T`;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { fmtLeadValue } from "@pms/shared/lib/format";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useRouter, usePathname } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
@@ -95,7 +96,7 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     push({
       iconEl: <MessageSquare size={14} />, iconBg: "#eef2f7", iconColor: "#475569",
       title: "ลูกค้าเป้าหมายรอดำเนินการ",
-      body: `${l.company} — ${l.contact} · ${l.province} · ${l.value}`,
+      body: `${l.company} — ${l.contact} · ${l.province} · ${fmtLeadValue(l.value)}`,
       time: `${l.source ?? "ช่องทางออนไลน์"} · ผู้รับผิดชอบ ${l.assigned}`,
       href: `/leads?open=${l.numId}`,
       sortDate: MOCK_TODAY,
@@ -107,7 +108,7 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     push({
       iconEl: <CalendarClock size={14} />, iconBg: "#fff3cd", iconColor: "#d97706",
       title: "เตือนติดตาม",
-      body: `${l.company} — ${l.product} · ${l.value}`,
+      body: `${l.company} — ${l.product} · ${fmtLeadValue(l.value)}`,
       time: `ผู้รับผิดชอบ ${l.assigned}`,
       href: `/leads?open=${l.numId}`,
       sortDate: MOCK_TODAY,
@@ -448,7 +449,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
             ? `${l.contact} · ${l.phone ?? ""}`
             : has(l.assigned)
             ? `${l.contact} · ผู้รับผิดชอบ ${l.assigned}`
-            : `${l.contact} · ${l.province} · ${l.value}`;
+            : `${l.contact} · ${l.province} · ${fmtLeadValue(l.value)}`;
           return { type: "ลูกค้าเป้าหมาย", label: l.company, sub, href: `/leads?open=${l.numId}` };
         }),
       // ลูกค้า — match company/name/province/phone/ผู้รับผิดชอบ (ผ่านลูกค้าเป้าหมายที่ผูกกัน)

@@ -295,6 +295,7 @@ export default function HQCustomersPage() {
           {provinceOptions.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
 
+        {/* ตัวเลือกแรกคือทั้งหมด — BOUGHT_OPTIONS ตัวแรกคือ "ทุกช่วงเวลาที่ซื้อ" */}
         <select aria-label="กรองตามช่วงเวลาที่ซื้อล่าสุด" value={boughtSel} onChange={e => setBoughtSel(e.target.value as BoughtKey)} className="form-select" style={selectStyle}>
           {BOUGHT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>

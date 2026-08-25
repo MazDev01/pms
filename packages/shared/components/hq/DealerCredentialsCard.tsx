@@ -216,8 +216,10 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
               </label>
               <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280" }}>
                 รหัสผ่านใหม่
+                {/* ห้ามมีเว้นวรรคในรหัสผ่าน (บอสสั่ง 25 ส.ค. 69) — หน้าเข้าสู่ระบบตัดช่องว่างทิ้ง
+                    ถ้าตั้งรหัสที่มีเว้นวรรคไว้ เจ้าของบัญชีจะพิมพ์รหัสตัวเองไม่ได้เลย */}
                 <input type="text" aria-label="รหัสผ่านใหม่" value={แก้บัญชี.password}
-                  onChange={e => setแก้บัญชี(v => v && ({ ...v, password: e.target.value }))}
+                  onChange={e => setแก้บัญชี(v => v && ({ ...v, password: e.target.value.replace(/\s/g, "") }))}
                   placeholder="เว้นไว้ = ใช้รหัสเดิม (อย่างน้อย 8 ตัว)" style={ช่องกรอก} />
                 <span style={{ display: "block", fontWeight: 600, color: "#8a929c", marginTop: 4 }}>
                   ไม่ต้องการเปลี่ยนรหัส ปล่อยว่างไว้ได้ — รหัสเดิมของสาขาจะยังใช้ได้ตามปกติ

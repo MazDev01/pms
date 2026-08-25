@@ -232,8 +232,9 @@ export default function ProfilePage() {
                   <label style={lbl}>{f.label}</label>
                   <div style={{ position: "relative" }}>
                     <Lock size={15} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: MUTED }} />
+                    {/* ห้ามเว้นวรรค — หน้าเข้าสู่ระบบตัดช่องว่างทิ้ง ตั้งไว้แล้วจะพิมพ์เข้าไม่ได้ */}
                     <input style={inp} type="password" value={pw[f.k]} placeholder={f.ph}
-                      onChange={e => { setPw(p => ({ ...p, [f.k]: e.target.value })); setPwMsg(null); }} />
+                      onChange={e => { setPw(p => ({ ...p, [f.k]: e.target.value.replace(/\s/g, "") })); setPwMsg(null); }} />
                   </div>
                 </div>
               ))}

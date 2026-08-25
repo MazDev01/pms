@@ -103,8 +103,9 @@ export default function ResetPasswordPage() {
               ].map((f, i) => (
                 <div key={i} style={{ position: "relative", marginBottom: 12 }}>
                   <Lock size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+                  {/* ห้ามเว้นวรรค — หน้าเข้าสู่ระบบตัดช่องว่างทิ้ง ตั้งไว้แล้วจะพิมพ์เข้าไม่ได้ */}
                   <input type="password" style={inp} value={f.v} placeholder={f.ph}
-                    onChange={e => { f.set(e.target.value); setErr(""); }}
+                    onChange={e => { f.set(e.target.value.replace(/\s/g, "")); setErr(""); }}
                     onKeyDown={e => { if (e.key === "Enter") void submit(); }} />
                 </div>
               ))}

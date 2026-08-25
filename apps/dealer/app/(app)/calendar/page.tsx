@@ -411,9 +411,10 @@ function ApptDetailModal({ a, onClose, onEdit, onDelete, router }: { a: Appointm
   const statusLabel = a.status === "upcoming" ? "กำลังจะถึง" : a.status === "done" ? "เสร็จสิ้น" : "ยกเลิก";
   const rows: [ReactNode, string][] = [
     [<Building2 key="b" size={13} />, a.project],
-    [<User key="u" size={13} />, a.contact],
-    [<Phone key="p" size={13} />, a.phone],
-    [<MapPin key="mp" size={13} />, a.province],
+    // ไม่มีข้อมูล = ขึ้น "—" ตรงนี้ (ชั้นแสดงผล) ไม่ใช่ไปเก็บขีดลงฐาน
+    [<User key="u" size={13} />, a.contact || "—"],
+    [<Phone key="p" size={13} />, a.phone || "—"],
+    [<MapPin key="mp" size={13} />, a.province || "—"],
     [<Clock key="c" size={13} />, `${fmtISOToThai(a.date)} · ${a.time} น.`],
     [<User key="a" size={13} />, `ผู้รับผิดชอบ: ${a.assigned}`],
   ];
@@ -480,8 +481,11 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
   );
   const [leadId, setLeadId] = useState<number | undefined>(initial?.leadId);
   const [company, setCompany] = useState(initial?.company ?? "");
-  const [contact, setContact] = useState(initial?.contact ?? "—");
-  const [phone, setPhone] = useState(initial?.phone ?? "—");
+  // ⚠️ ว่าง = ยังไม่มีข้อมูล ห้ามตั้งต้นเป็น "—" (แก้ 25 ส.ค. 69)
+  //    ขีดเป็นวิธี "แสดงผล" ตอนไม่มีข้อมูล ไม่ใช่ตัวข้อมูล — เดิมนัดที่ไม่กรอกผู้ติดต่อ
+  //    ถูกบันทึกลงฐานว่าผู้ติดต่อชื่อ "—" จริง ๆ แล้วค้นหา/รายงานก็เจอขีดเป็นชื่อคน
+  const [contact, setContact] = useState(initial?.contact ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
   const [date, setDate] = useState(initial?.date ?? defaultDate);
   const [time, setTime] = useState(initial?.time ?? "09:00");
   const [type, setType] = useState<ApptType | "">(initial?.type ?? "");  // ยังไม่เลือก = ว่าง (ห้ามยัด "นัดพบลูกค้า" ให้เอง)
@@ -501,7 +505,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
     if (!L) return;
     setLeadId(L.numId);
     setCompany(L.company);
-    setContact(L.contact || "—"); setPhone(L.phone || "—"); setProvince(L.province || "");
+    setContact(L.contact ?? ""); setPhone(L.phone ?? ""); setProvince(L.province || "");
   }
 
   async function save() {

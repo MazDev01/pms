@@ -38,8 +38,14 @@ export function QuotationFilterBar({
   const dirty = filters.search !== "" || filters.dealer !== "all" || filters.region !== "all"
     || filters.province !== "all" || filters.product !== "all" || filters.status !== "all";
 
+  // ขนาดเดียวกับแถบกรองหน้าลูกค้าทั้งเครือ — ย่อตัวได้เมื่อจอแคบ ไม่ตกบรรทัด
+  const ช่องเลือก = { width: "auto", flex: "0 1 auto", minWidth: 0, maxWidth: 168, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer" } as const;
+
   return (
-    <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: "1.25rem", padding: "10px 14px" }}>
+    // ตัวกรองทั้งแถบต้องอยู่บรรทัดเดียว (บอสสั่ง 25 ส.ค. 69) — เดิม flexWrap:"wrap" ทำให้ "ทุกสถานะ" ตกไปบรรทัดสอง
+    // nowrap + minWidth:0 + maxWidth ที่ช่องเลือก = พอจอแคบลงช่องจะย่อตัวเอง แทนที่จะตกบรรทัด
+    // (กติกาเดียวกับแถบกรองหน้าลูกค้าทั้งเครือ ซึ่งอยู่แถวเดียวอยู่แล้ว)
+    <div className="card hq-sticky-filter" style={{ display: "flex", gap: 10, flexWrap: "nowrap", alignItems: "center", marginBottom: "1.25rem", padding: "10px 14px" }}>
       {/* ใช้ .search-bar ตัวมาตรฐาน (280px) ให้เท่ากับทุกหน้า — เดิมหน้านี้ประกอบเองกว้าง 300 */}
       <div className="search-bar">
         <Search size={14} color={MUTED} strokeWidth={2} />
@@ -54,28 +60,28 @@ export function QuotationFilterBar({
       <div style={{ flex: 1 }} />
 
 
-      <select aria-label="กรองตามตัวแทน" value={filters.dealer} onChange={e => set("dealer", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามตัวแทน" value={filters.dealer} onChange={e => set("dealer", e.target.value)} className="form-select" style={ช่องเลือก}>
         <option value="all">ทุกตัวแทน</option>
         {dealers.map(d => <option key={d.code} value={d.code}>{d.code} – {d.name}</option>)}
       </select>
 
-      <select aria-label="กรองตามภูมิภาค" value={filters.region} onChange={e => set("region", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามภูมิภาค" value={filters.region} onChange={e => set("region", e.target.value)} className="form-select" style={ช่องเลือก}>
         <option value="all">ทุกภูมิภาค</option>
         {regions.map(r => <option key={r} value={r}>{regionDisplay(r)}</option>)}
       </select>
 
       {/* ป้ายเขียน "จังหวัดตัวแทน" ชัด ๆ — กันเข้าใจผิดว่าเป็นจังหวัดของลูกค้า */}
-      <select value={filters.province} onChange={e => set("province", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }} aria-label="จังหวัดตัวแทน">
+      <select value={filters.province} onChange={e => set("province", e.target.value)} className="form-select" style={ช่องเลือก} aria-label="จังหวัดตัวแทน">
         <option value="all">ทุกจังหวัด (ตัวแทน)</option>
         {provinces.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
 
-      <select aria-label="กรองตามแม่แบบ" value={filters.product} onChange={e => set("product", e.target.value)} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามแม่แบบ" value={filters.product} onChange={e => set("product", e.target.value)} className="form-select" style={ช่องเลือก}>
         <option value="all">ทุกประเภทอาคาร (จากใบเสนอราคา)</option>
         {products.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
 
-      <select aria-label="กรองตามสถานะใบเสนอราคา" value={filters.status} onChange={e => set("status", e.target.value as QuotationFilters["status"])} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+      <select aria-label="กรองตามสถานะใบเสนอราคา" value={filters.status} onChange={e => set("status", e.target.value as QuotationFilters["status"])} className="form-select" style={ช่องเลือก}>
         <option value="all">ทุกสถานะ</option>
         {(Object.keys(quotationStatusLabel) as QuotationStatus[]).map(s => (
           <option key={s} value={s}>{quotationStatusLabel[s]}</option>

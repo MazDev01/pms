@@ -28,6 +28,7 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
 import { parseBaht, formatPhone } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
+import { fmtLeadValue } from "@pms/shared/lib/format";
 import { useEscapeKey } from "@pms/shared/lib/useModalA11y";
 import { useRole } from "@pms/shared/context/RoleContext";
 import {
@@ -403,6 +404,7 @@ function OverviewEditor({ lead, persons, onSave }: {
               ผู้ใช้ที่ไปหาในกลุ่มเดียวกับ แม่แบบ/พื้นที่ จึงหาไม่เจอ นึกว่าแก้ไม่ได้ */}
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
             {/* สถานะลอยเดี่ยวนอกแถว — คงกรอบบางไว้ให้รู้ว่ากดได้ (กรอบที่ถอดคือกรอบซ้อนในแถวข้อมูล) */}
+            {/* ต้องมีค่าเสมอ — ทุกรายต้องอยู่ขั้นใดขั้นหนึ่งบนบอร์ด ว่างไม่ได้ */}
             <select aria-label="สถานะลูกค้าเป้าหมาย" value={f.status} onChange={e=>set("status",e.target.value)} style={{ ...inp, width:"auto", height:"auto", padding:"5px 8px", fontSize:"0.72rem", fontWeight:700, border:"1px solid #eef1f5", background:"#fafbfc" }}>
               {(Object.keys(leadStatusLabel) as LeadStatus[]).map(k => <option key={k} value={k}>{leadStatusLabel[k]}</option>)}
             </select>
@@ -829,6 +831,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
                 <label style={labelStyle}>ขั้นตอน</label>
                 {/* เลือกได้เฉพาะขั้นก่อน "เสนอราคา" — ขั้นเสนอราคาขึ้นไปเลื่อนอัตโนมัติเมื่อมีใบเสนอราคา
                     aria-label: ชื่อเดียวกับ label — กันสับสนกับ dropdown "ทุกสถานะ" บนแถบเครื่องมือที่มีครบทุกขั้น */}
+                {/* ต้องมีค่าเสมอ — งานขายต้องเริ่มที่ขั้นใดขั้นหนึ่งเสมอ */}
                 <select aria-label="ขั้นตอน" value={form.status} onChange={e=>set("status",e.target.value as LeadStatus)} style={inputStyle}>
                   {(isEdit ? ALL_STATUSES : (["WAITING","BULLET"] as LeadStatus[])).map(s=><option key={s} value={s}>{leadStatusLabel[s]}</option>)}
                 </select>
@@ -1168,9 +1171,12 @@ export default function LeadsPage() {
   const rightApptRef = useRef<HTMLDivElement>(null);
   // ฟอร์มนัดหมายในแท็บนัดหมายของลูกค้าเป้าหมาย (นัดก่อนปิดการขาย)
   const [apptAdding, setApptAdding] = useState(false);
-  const [apptForm, setApptForm] = useState<{ type: ApptType; date: string; time: string; title: string; note: string }>({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
+  // ⚠️ ประเภทนัดเริ่มที่ "ยังไม่ระบุ" ("") — ห้ามยัด "เข้าพบลูกค้า" ให้เอง (บอสสั่ง 25 ส.ค. 69)
+  //    ฟอร์มนัดหมายที่หน้าปฏิทินทำแบบนี้อยู่แล้ว สองที่ต้องเหมือนกัน
+  const [apptForm, setApptForm] = useState<{ type: ApptType | ""; date: string; time: string; title: string; note: string }>({ type: "", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
   const apptSavingRef = useRef(false); // กันกดบันทึกนัดซ้ำระหว่างรอเลขนัดจาก DB (H8 · guard synchronous)
   const [apptSaving, setApptSaving] = useState(false); // ไว้ disable ปุ่ม (visual)
+  const [apptErr, setApptErr] = useState("");  // ฟ้องเมื่อยังไม่เลือกประเภทนัด — ห้ามกดแล้วเงียบ
   const [draft, setDraft] = useState<LeadRow|null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -1324,7 +1330,7 @@ export default function LeadsPage() {
   const current = draft ?? selectedLead;
   const lid = current?.id ?? "";
 
-  function resetApptForm() { setApptAdding(false); setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" }); }
+  function resetApptForm() { setApptAdding(false); setApptForm({ type: "", date: APP_NOW_ISO, time: "10:00", title: "", note: "" }); }
   // ใบเสนอราคาใบนี้เป็นของลูกค้าเป้าหมายนี้ไหม — กติกาเดียวกับที่แท็บใบเสนอราคาใช้กรองรายการ
   // (ใบใหม่ผูกด้วย dealId · ใบเก่าก่อนมี dealId ผูกด้วยรหัสลูกค้า/ชื่อบริษัท)
   function quoteBelongsToLead(q: QuotationMock, l: LeadRow): boolean {
@@ -2317,18 +2323,20 @@ export default function LeadsPage() {
           .slice().sort((a, b) => (a.date + a.time) < (b.date + b.time) ? 1 : -1);
         const saveAppt = async () => {
           if (apptSavingRef.current) return; // กันกดซ้ำระหว่างรอเลขนัดจาก DB (H8)
+          if (!apptForm.type) { setApptErr("เลือกประเภทนัดหมายก่อนบันทึก"); return; }
+          setApptErr("");
           apptSavingRef.current = true; setApptSaving(true);
           try {
           addAppointment({
             id: await newAppointmentId(), // เลขจาก DB แบบ atomic — เดิมใช้ max+1 ของชุดที่โหลดมา
             leadId: c.numId,
             company: c.company, contact: c.contact ?? "", phone: c.phone ?? "", province: c.province ?? "",
-            project: apptForm.title.trim() || apptTypeLabel[apptForm.type],
+            project: apptForm.title.trim() || apptTypeLabel[apptForm.type as ApptType],
             buildingType: c.product ?? "",
             // ⚠️ เดิมใส่ 0 ตายตัว ทั้งที่ช่องอื่นคัดลอกจากลูกค้าเป้าหมายหมด (แก้ 10 ส.ค. 69)
             //   นัดหมายจึงบันทึกพื้นที่เป็น 0 เสมอ แม้ลูกค้าเป้าหมายจะระบุไว้ 800 ตร.ม. ก็ตาม
             area: c.area ?? 0,
-            date: apptForm.date, time: apptForm.time, type: apptForm.type,
+            date: apptForm.date, time: apptForm.time, type: apptForm.type as ApptType,
             assigned: c.assigned || session.name, status: "upcoming", note: apptForm.note.trim(),
           });
           setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
@@ -2366,7 +2374,8 @@ export default function LeadsPage() {
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   <div className="col-full">
                     <label style={aLbl}>ประเภทนัดหมาย</label>
-                    <select value={apptForm.type} onChange={e => setApptForm(f => ({ ...f, type: e.target.value as ApptType }))} style={aInp}>
+                    <select aria-label="ประเภทนัดหมาย" value={apptForm.type} onChange={e => setApptForm(f => ({ ...f, type: e.target.value as ApptType | "" }))} style={aInp}>
+                      <option value="">— ยังไม่ระบุ —</option>
                       {(Object.keys(apptTypeLabel) as ApptType[]).map(t => <option key={t} value={t}>{apptTypeLabel[t]}</option>)}
                     </select>
                   </div>
@@ -2375,10 +2384,11 @@ export default function LeadsPage() {
                   <div><label style={aLbl}>เวลา</label>
                     <input type="time" value={apptForm.time} onChange={e => setApptForm(f => ({ ...f, time: e.target.value }))} style={aInp} /></div>
                   <div className="col-full"><label style={aLbl}>หัวข้อ</label>
-                    <input value={apptForm.title} onChange={e => setApptForm(f => ({ ...f, title: e.target.value }))} placeholder={apptTypeLabel[apptForm.type]} style={aInp} /></div>
+                    <input value={apptForm.title} onChange={e => setApptForm(f => ({ ...f, title: e.target.value }))} placeholder={apptForm.type ? apptTypeLabel[apptForm.type] : "หัวข้อนัดหมาย"} style={aInp} /></div>
                   <div className="col-full"><label style={aLbl}>รายละเอียด</label>
                     <input value={apptForm.note} onChange={e => setApptForm(f => ({ ...f, note: e.target.value }))} placeholder="บันทึกเพิ่มเติม" style={aInp} /></div>
                 </div>
+                {apptErr && <div role="alert" style={{ fontSize:"0.72rem", color:"#B91C1C", marginTop:8 }}>{apptErr}</div>}
                 <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
                   <button onClick={() => setApptAdding(false)} className="btn btn-secondary btn-sm">ยกเลิก</button>
                   <button onClick={saveAppt} disabled={apptSaving} className="btn btn-primary btn-sm" style={apptSaving ? { opacity: .6, cursor: "not-allowed" } : undefined}><Check size={13} /> บันทึกนัดหมาย</button>
@@ -2418,7 +2428,12 @@ export default function LeadsPage() {
             onRequestAppointment={() => {
               const มีนัดแล้ว = appointments.some(a => a.leadId === c.numId && a.status !== "cancelled");
               if (มีนัดแล้ว) return false;   // มีนัดจริงแล้ว → ติ๊กได้ตามปกติ
-              setDTab("timeline"); setApptAdding(true);
+              // ⚠️ ต้องสลับทั้งสองแท็บ (แก้ 25 ส.ค. 69) — เดิมสั่งแค่ setDTab
+              //    ผู้ใช้จึงกดติ๊กแล้ว "ไม่มีอะไรเกิดขึ้น" เพราะฟอร์มไปเปิดอยู่ในแท็บที่ยังไม่ได้เปิดดู
+              //    (ทางที่ถูกอยู่ในฟังก์ชัน พาไปทำงาน() อยู่แล้ว — ตรงนี้ลอกมาไม่ครบ)
+              setActiveTab("appts"); setDTab("timeline"); setApptAdding(true);
+              // เลื่อนจอไปที่ฟอร์มให้เห็นเลย ไม่ต้องหาเอง
+              setTimeout(() => rightApptRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
               setToast("ติ๊กงานนี้เองไม่ได้ — ลงนัดหมายจริงก่อน แล้วระบบจะติ๊กให้เอง");
               return true;
             }}
@@ -2582,7 +2597,7 @@ export default function LeadsPage() {
                   <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0, flexWrap:"wrap" }}>
                     {/* หัว = การกระทำด่วนเท่านั้น · Won/Lost/ใบเสนอราคา อยู่แถบล่าง (ไม่ซ้ำ)
                         ปุ่ม "โทร" (tel: ลิงก์) ถูกเอาออก (บอสสั่ง 17 ก.ค. 69) — เบอร์โทรยังอยู่ในการ์ดข้อมูลลูกค้า แท็บภาพรวม */}
-                    <button title="สร้างนัดหมาย" onClick={()=>{ setDTab("timeline"); setApptAdding(true); }} style={qa}><CalendarClock size={13} /> นัดหมาย</button>
+                    <button title="สร้างนัดหมาย" onClick={()=>{ setActiveTab("appts"); setDTab("timeline"); setApptAdding(true); setTimeout(() => rightApptRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60); }} style={qa}><CalendarClock size={13} /> นัดหมาย</button>
                     {isCustomer && (
                       <button title="ดูโปรไฟล์ลูกค้า" onClick={()=>{ closePanel(); router.push(c.customerId ? `/customers?open=${c.customerId}` : "/customers"); }} style={qa}><CheckCircle2 size={13} /> ลูกค้า</button>
                     )}
@@ -2594,7 +2609,7 @@ export default function LeadsPage() {
                 <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginTop:12 }}>
                   <span style={{ padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:sc.bg, color:sc.text }}>{leadStatusLabel[c.status]}</span>
                   <span style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:700, background:"rgba(255,255,255,.18)", color:"#fff" }}><Package size={11} /> {c.product}</span>
-                  <span style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:800, background:"#fff", color:"#003366" }}><Coins size={11} /> {c.value}</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:99, fontSize:"0.65rem", fontWeight:800, background:"#fff", color:"#003366" }}><Coins size={11} /> {fmtLeadValue(c.value)}</span>
                 </div>
               </div>
 

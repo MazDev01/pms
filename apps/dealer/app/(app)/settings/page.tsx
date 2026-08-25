@@ -10,6 +10,7 @@ import {
   Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
 import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, QUOTE_PREFIX, quoteNoPrefix, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
+import { formatPhone } from "@pms/shared/lib/format";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
@@ -184,7 +185,9 @@ function CompanyTab() {
           </div>
           <div>
             <label className="form-label">โทรศัพท์บริษัท</label>
-            <input className="form-input" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="02-000-0000" />
+            {/* เติมขีดให้เองระหว่างพิมพ์ — เดิมพิมพ์ 222555205 แล้วเก็บติดกันแบบนั้น
+                หน้าอื่นที่แสดงเบอร์ทั้งระบบใช้รูปแบบมีขีด สองแบบปนกันแล้วอ่านยากและค้นไม่เจอ */}
+            <input className="form-input" inputMode="tel" value={form.phone} onChange={e => set("phone", formatPhone(e.target.value))} placeholder="02-000-0000" />
           </div>
           <div style={{ gridColumn: "1/-1" }}>
             <label className="form-label">เว็บไซต์</label>
@@ -613,7 +616,7 @@ function PersonsTab() {
                     </div>
                     <div>
                       <label className="form-label">โทรศัพท์</label>
-                      <input className="form-input" value={phone} onChange={e => setPhone(e.target.value)}
+                      <input className="form-input" inputMode="tel" value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
                         placeholder="08x-xxx-xxxx" onKeyDown={onEnter} />
                     </div>
                     <div style={{ gridColumn: "1/-1" }}>

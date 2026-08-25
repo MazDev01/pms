@@ -17,6 +17,7 @@ import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
+import { fmtLeadValue } from "@pms/shared/lib/format";
 
 // กันข้อมูลหายถ้าผู้ใช้รีเฟรช/ปิดแท็บระหว่างกำลังบันทึก (พบจริงจากทดสอบโหลด: รีเฟรชทันทีหลังกดบันทึก
 // ทำให้คำขอที่กำลังส่งถูกตัดตอนกลางทาง ข้อมูลไม่ถูกสร้างเลยโดยผู้ใช้ไม่รู้ตัว) — เตือนผู้ใช้ก่อนออกจากหน้า
@@ -251,7 +252,7 @@ function activityItemsFor(customerId:number, joinDate:string, qs:QuotationMock[]
   });
   // จากดีล = ลูกค้าเป้าหมายที่ผูกกับลูกค้ารายนี้ (แหล่งเดียว ไม่มีกระดาน pipeline แยกอีกแล้ว)
   ls.filter(l=>l.customerId===customerId).forEach(l=>{
-    items.push({ id:`d-${l.id}`, type:"status", text:`โอกาสการขาย: ${l.project || l.company} · ${l.value}`, time:l.createdAt ?? "—" });
+    items.push({ id:`d-${l.id}`, type:"status", text:`โอกาสการขาย: ${l.project || l.company} · ${fmtLeadValue(l.value)}`, time:l.createdAt ?? "—" });
   });
   // จุดเริ่มต้น: วันที่เพิ่มลูกค้า
   items.push({ id:"joined", type:"note", text:"เพิ่มลูกค้าเข้าระบบ", time:fmtDate(joinDate) });
@@ -754,7 +755,10 @@ export default function CustomersPage(){
   // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
   function openNewDeal(c: CustomerRow){
     setDealCustomer(c);
-    setDealForm({project:"",product:c.category||catalog[0]?.name||"",value:"",area:"",status:"WAITING",assigned:c.owner,note:""}); setDealErr("");
+    // ⚠️ ห้าม prefill แม่แบบ (บอสสั่ง 25 ส.ค. 69) — เดิมเติมแม่แบบของงานเดิมหรือตัวแรกในแคตตาล็อกให้
+    //    ผู้ใช้เห็นช่องมีค่าอยู่แล้วก็กดผ่านไป ได้งานขายที่แม่แบบไม่ตรงกับที่ลูกค้าจะซื้อจริง
+    //    ต้องเริ่มที่ "ยังไม่ระบุแม่แบบ" แล้วให้คนเลือกเอง เหมือนฟอร์มเพิ่มลูกค้าเป้าหมาย
+    setDealForm({project:"",product:"",value:"",area:"",status:"WAITING",assigned:c.owner,note:""}); setDealErr("");
     setShowNewDeal(true);
   }
   // กันกดสร้างดีลซ้ำ (H8 · guard synchronous) — เดิมไม่มี guard: กดรัว ๆ ระหว่างรอ newLeadNumId() (async)
@@ -764,7 +768,7 @@ export default function CustomersPage(){
   // สร้างดีล = ลูกค้าเป้าหมายใหม่ผูก customerId · status WAITING · tasks = default checklist · activities/report ว่าง → เปิด Deal Detail ทันที
   async function createDeal(){
     if(creatingDealRef.current) return;
-    const c=dealCustomer; if(!c||!dealForm.product) return;
+    const c=dealCustomer; if(!c) return;
     // กฎเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมายทุกประการ (leadValue.ts) — เดิมที่นี่ไม่ตรวจอะไรเลย
     // กรอก "abcxyz" แล้วบันทึกผ่านเป็นงานมูลค่า ฿0 เงียบ ๆ แล้วไปโผล่ในรายงานเป็นศูนย์
     const มูลค่าผิด = ตรวจมูลค่าลูกค้าเป้าหมาย(dealForm.value);
@@ -1284,7 +1288,7 @@ export default function CustomersPage(){
                             </div>
                             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:"0.65rem",color:MUTED}}>
                               <span>{d.product}</span>
-                              {d.value&&<span style={{color:PRIMARY,fontWeight:700}}>{d.value}</span>}
+                              {d.value&&<span style={{color:PRIMARY,fontWeight:700}}>{fmtLeadValue(d.value)}</span>}
                               <span>ใบเสนอราคา: {quoteLabel}</span>
                               <span>ผู้รับผิดชอบ: {d.assigned}</span>
                               {d.createdAt&&<span>สร้าง: {d.createdAt}</span>}
@@ -1775,6 +1779,7 @@ export default function CustomersPage(){
               {/* ขั้นตอน — ชุดตัวเลือกเดียวกับฟอร์มเพิ่มลูกค้าเป้าหมาย: เลือกได้เฉพาะขั้นก่อน "เสนอราคา"
                   เพราะขั้นเสนอราคาขึ้นไปเลื่อนเองเมื่อมีใบเสนอราคาจริง (ห้ามให้ตั้งเองแล้วขัดกับใบที่มี) */}
               <div><label className="form-label">ขั้นตอน</label>
+                {/* ต้องมีค่าเสมอ — งานขายต้องเริ่มที่ขั้นใดขั้นหนึ่งเสมอ */}
                 <select aria-label="ขั้นตอน" className="form-select" value={dealForm.status}
                   onChange={e=>setDealForm(f=>({...f,status:e.target.value as LeadStatus}))}>
                   {(["WAITING","BULLET"] as LeadStatus[]).map(st=><option key={st} value={st}>{leadStatusLabel[st]}</option>)}
@@ -1792,7 +1797,7 @@ export default function CustomersPage(){
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowNewDeal(false)}>ยกเลิก</button>
-              <button className="btn btn-primary btn-md" onClick={()=>void createDeal()} disabled={!dealForm.product}><Plus size={14}/> เพิ่มงานขาย</button>
+              <button className="btn btn-primary btn-md" onClick={()=>void createDeal()}><Plus size={14}/> เพิ่มงานขาย</button>
             </div>
           </div>
         </div>

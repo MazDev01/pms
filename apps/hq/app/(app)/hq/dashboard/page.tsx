@@ -436,13 +436,11 @@ export default function HQDashboard() {
   const annualWonTotal = useMemo(() => { let s = 0; annualWonByDealer.forEach(v => (s += v)); return s; }, [annualWonByDealer]);
 
   // ประเภทอาคาร + จำนวนโครงการ
-  // ⚠️ การ์ดโชว์แค่ 5 อันดับแรก ต้องบอกส่วนที่เหลือด้วย ไม่งั้นผู้ใช้บวกแถวแล้วไม่ตรงยอดขายรวมของหน้า
-  //    (ผลตรวจภายนอก HQ-03 · ตรวจกับข้อมูลจริงแล้วไม่ได้นับซ้ำ — ที่ต่างคือการ์ดตัดมาแสดงบางส่วน)
+  // การ์ดโชว์ 5 อันดับแรก · ข้อความบอกส่วนที่เหลือถูกลบทั้งหมดตามที่บอสสั่ง (25 ส.ค. 69)
+  //    รายการครบดูได้ที่หน้าใบเสนอราคาทั้งเครือ — การ์ดนี้ไว้ดูอันดับอย่างเดียว
   const buildingPerf = useMemo(() => {
     const max = Math.max(...productArr.map(a => a.value), 1);
-    const แสดง = productArr.slice(0, 5).map((p, i) => ({ product: p.product, value: p.value, projects: p.projects, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
-    const ที่เหลือ = productArr.slice(5);
-    return { แสดง, เหลือกี่ประเภท: ที่เหลือ.length, ยอดที่เหลือ: ที่เหลือ.reduce((s, p) => s + p.value, 0) };
+    return productArr.slice(0, 5).map((p, i) => ({ product: p.product, value: p.value, projects: p.projects, pct: Math.round(p.value / max * 100), color: RAMP[i % RAMP.length] }));
   }, [productArr]);
 
   // ── กราฟแท่ง "ลูกค้าเป้าหมาย · ใบเสนอราคา · ปิดการขาย (รายเดือน)" — ปุ่มช่วงย้อนหลังของตัวเอง ──
@@ -804,12 +802,12 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ยอดขายตามประเภทอาคาร</div>
             <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
-              หน่วย: ล้านบาท{buildingPerf.เหลือกี่ประเภท > 0 ? ` · แสดง 5 อันดับแรก (อีก ${buildingPerf.เหลือกี่ประเภท} ประเภท รวม ${fmtBaht(buildingPerf.ยอดที่เหลือ)})` : ""}
+              หน่วย: ล้านบาท
             </span></div>
           {/* ใบนี้เป็นต้นแบบของ CategoryRows — แดชบอร์ดตัวแทนใช้คอมโพเนนต์ตัวเดียวกัน (ห้ามแยกมาร์กอัป) */}
           <div className="card-body" style={{ paddingTop: 4 }}>
             <CategoryRows
-              data={buildingPerf.แสดง.map(p => ({ label: p.product, value: p.value, note: `${p.projects} โครงการ` }))}
+              data={buildingPerf.map(p => ({ label: p.product, value: p.value, note: `${p.projects} โครงการ` }))}
               fmt={fmtBaht} icon={<Building2 size={11} />}
               ariaLabel="ยอดขายแยกตามประเภทอาคาร" />
           </div>

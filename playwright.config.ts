@@ -67,6 +67,19 @@ export default defineConfig({
       testIgnore: /multi-dealer-stress\.spec\.ts/,
     },
     {
+      // ── Safari (WebKit) — สำหรับผู้ใช้ iPhone / iPad / Mac ──────────────────────
+      // ไม่รันทั้งชุด (ช้าและซ้ำกับ Chrome) — เอาเฉพาะ "หน้าหลักเปิดได้ไหม" กับ "จอมือถือไม่ล้น"
+      // ซึ่งเป็นจุดที่เอนจินต่างกันจริง (ฟอนต์ · flex/grid · position:sticky · วันที่)
+      // สั่งเฉพาะชุดนี้: npx playwright test --project=safari
+      name: "safari",
+      use: { ...devices["Desktop Safari"] },
+      // เอาเฉพาะชุดจอมือถือ — ชุด user/ui ล็อกอินถี่มาก พอรันต่อจาก chromium จะโดน Supabase
+      // กันชั่วคราว ("Request rate limit reached") แล้วขึ้นแดงทั้งที่ระบบไม่ได้พัง (เจอจริง 25 ส.ค. 69)
+      // อยากรันครบบน Safari ให้สั่งเองตอนต้องการ: npx playwright test --project=safari tests/scenario/ui.spec.ts
+      testMatch: /mobile-viewport\.spec\.ts/,
+      dependencies: ["chromium"],
+    },
+    {
       name: "stress",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /multi-dealer-stress\.spec\.ts/,

@@ -87,7 +87,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setError(null);
     setLoading(true);
     // signIn เป็น async แล้ว — โหมด supabase รอ signInWithPassword จริง · โหมด local เร็วทันที
-    const r = await signIn(email.trim(), password);
+    const r = await signIn(email.trim(), password.trim());
     if (r.ok) enter(r.session.scopeAll);
     else { setError(r.error); setLoading(false); }
   }
@@ -158,21 +158,28 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
           <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4" noValidate>
             {/* Email */}
             <div>
+              {/* ⚠️ ตัดช่องว่างทิ้งตั้งแต่ตอนพิมพ์ (ผู้ใช้แจ้ง 25 ส.ค. 69) — เดิมตัดตอนกดเข้าระบบเท่านั้น
+                  ผู้ใช้เห็นช่องว่างนำหน้าค้างอยู่ในช่อง เลยไม่แน่ใจว่าที่เข้าไม่ได้เพราะอะไร
+                  อีเมลไม่มีช่องว่างอยู่แล้วโดยธรรมชาติ ตัดทิ้งได้เลยไม่ต้องถาม */}
               <label htmlFor="login-email" className="mb-1 block text-[0.78rem] font-bold text-[#0e2a5c]">อีเมล / Email</label>
               <div className={inputWrap}>
                 <IconMail />
                 <input id="login-email" type="text" inputMode="email" autoComplete="username" value={email}
-                  onChange={(e) => setEmail(e.target.value)} placeholder={isHQ ? "name@benjamin.com" : "dealer@example.com"} required className={inputEl} style={noOutline} />
+                  onChange={(e) => setEmail(e.target.value.replace(/\s/g, ""))} placeholder={isHQ ? "name@benjamin.com" : "dealer@example.com"} required className={inputEl} style={noOutline} />
               </div>
             </div>
 
             {/* Password */}
             <div>
+              {/* ตัดช่องว่างเหมือนช่องอีเมล (บอสสั่ง 25 ส.ค. 69) — ใช้กับทั้งสำนักงานใหญ่และตัวแทน
+                  เพราะไฟล์นี้เป็นหน้าเข้าสู่ระบบตัวเดียวกันของทั้งสองแอป (variant hq/dealer)
+                  ⚠️ ผลข้างเคียงที่ต้องรู้: ถ้าวันหนึ่งมีรหัสผ่านที่ตั้งใจให้มีเว้นวรรคจริง จะพิมพ์ไม่ได้
+                  ตอนนี้ไม่มีบัญชีแบบนั้น และช่องว่างติดมากับการ copy-paste เป็นปัญหาที่เจอจริงมากกว่า */}
               <label htmlFor="login-password" className="mb-1 block text-[0.78rem] font-bold text-[#0e2a5c]">รหัสผ่าน / Password</label>
               <div className={inputWrap}>
                 <IconLock />
                 <input id="login-password" type={showPass ? "text" : "password"} autoComplete="current-password" value={password}
-                  onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className={inputEl} style={noOutline} />
+                  onChange={(e) => setPassword(e.target.value.replace(/\s/g, ""))} placeholder="••••••••" required className={inputEl} style={noOutline} />
                 <button type="button" onClick={() => setShowPass((v) => !v)}
                   aria-label={showPass ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} aria-pressed={showPass}
                   className="shrink-0 rounded-md p-1 text-slate-400 transition hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40">

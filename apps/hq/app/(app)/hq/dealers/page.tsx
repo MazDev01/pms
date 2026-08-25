@@ -418,9 +418,11 @@ function HQDealersPageInner() {
           <input value={q} onChange={e => { setQ(e.target.value); setPage(0); }} placeholder="ค้นหาตัวแทน..." />
         </div>
         <div style={{ flex: 1 }} />
+        {/* ตัวเลือกแรกคือทั้งหมด — สร้างจากรายการ ["ทั้งหมด", ...REGIONS] */}
         <select aria-label="กรองตามภูมิภาค" value={regionFilter} onChange={e => { setRegionFilter(e.target.value); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {["ทั้งหมด", ...REGIONS].map(r => <option key={r} value={r}>{r}</option>)}
         </select>
+        {/* ตัวเลือกแรกคือทั้งหมด — สร้างจากรายการเช่นเดียวกับตัวกรองภูมิภาค */}
         <select aria-label="กรองตามสถานะตัวแทน" value={statusFilter} onChange={e => { setStatusFilter(e.target.value as DealerStatus | "all"); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {STATUS_PILLS.map(p => <option key={p.value} value={p.value}>{p.value === "all" ? "ทุกสถานะ" : p.label}</option>)}
         </select>
@@ -598,7 +600,7 @@ function HQDealersPageInner() {
                     </div>
                   </InputField>
                   <InputField label="รหัสผ่าน">
-                    <input type="text" value={บัญชีใหม่.password} onChange={e => setบัญชีใหม่(v => ({ ...v, password: e.target.value }))}
+                    <input type="text" value={บัญชีใหม่.password} onChange={e => setบัญชีใหม่(v => ({ ...v, password: e.target.value.replace(/\s/g, "") }))}
                       aria-label="รหัสผ่าน" placeholder="เว้นว่าง = ระบบสุ่มให้" style={INPUT_STYLE} />
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
                       อย่างน้อย 8 ตัวอักษร · แสดงเป็นตัวอักษรปกติโดยตั้งใจ — HQ ต้องคัดลอกไปแจ้งสาขา
@@ -619,6 +621,7 @@ function HQDealersPageInner() {
                   )}
                 </InputField>
                 <InputField label="สถานะ">
+                  {/* ต้องมีค่าเสมอ — ตัวแทนต้องเป็นเปิดหรือปิดใช้งานอย่างใดอย่างหนึ่ง ว่างไม่ได้ */}
                   <select aria-label="สถานะตัวแทน" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as DealerStatus }))} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                     <option value="active">{dealerStatusLabel.active}</option>
                     <option value="inactive">{dealerStatusLabel.inactive}</option>

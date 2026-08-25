@@ -146,7 +146,7 @@ function suggestProject(c?:CustomerRow):string{
 }
 function buildBlank(customers:CustomerRow[], validityDays:number): QForm {
   const c=customers[0];
-  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||"โกดังสำเร็จรูป", area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(validityDays), owner:c?.owner??"" };
+  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||""   /* ห้ามเดาแม่แบบให้ — เดิมยัด "โกดังสำเร็จรูป" ทั้งที่ยังไม่มีใครเลือก */, area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(validityDays), owner:c?.owner??"" };
 }
 
 function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:{
@@ -178,7 +178,9 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
     : "";
   function pickCustomer(id:number){
     const c=customers.find(c=>c.id===id);
-    if(!c) return;
+    // เลือก "ยังไม่ระบุลูกค้า" กลับมา ต้องล้างของเดิมออกจริง — เดิม return เฉย ๆ ค่าเก่าจึงค้างอยู่
+    // ช่องโชว์ "ยังไม่ระบุ" แต่ในระบบยังผูกกับลูกค้ารายก่อนหน้า = ใบไปออกให้ผิดคนโดยไม่มีใครเห็น
+    if(!c){ setForm(p=>({...p,customerId:0,customer:""})); return; }
     // prefill ทุกช่องที่ดึงจากลูกค้าได้: จังหวัด · แม่แบบ (จาก category) · ชื่อโครงการ (แนะนำ แก้ได้)
     // ผู้รับผิดชอบตามลูกค้าที่เลือก (ดึงมาโชว์ให้ตรงกับตาราง — แก้ต่อได้)
     setForm(p=>({...p,customerId:c.id,customer:c.company,province:c.province||p.province,buildingType:c.category||p.buildingType,project:suggestProject(c),owner:c.owner??""}));
@@ -214,9 +216,12 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
             {/* Customer */}
             <div className="col-full">
               <label style={LBL}>ลูกค้า *</label>
-              <select value={form.customerId} onChange={e=>pickCustomer(Number(e.target.value))} style={INP}>
+              {/* ตัวเลือก "ยังไม่ระบุ" ต้องอยู่บนสุดเสมอ — เดิมอยู่ล่างสุด ช่องจึงโชว์ลูกค้ารายแรกในทะเบียน
+                  ทั้งที่ยังไม่มีใครเลือก เผลอกดผ่านแล้วใบเสนอราคาไปผูกกับลูกค้าผิดคน */}
+              {/* ตัวเลือกแรกคือทั้งหมด — value={0} คือ "ยังไม่ระบุลูกค้า (พิมพ์เอง)" */}
+              <select aria-label="ลูกค้า" value={form.customerId} onChange={e=>pickCustomer(Number(e.target.value))} style={INP}>
+                <option value={0}>— ยังไม่ระบุลูกค้า (พิมพ์เอง) —</option>
                 {customers.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
-                <option value={0}>— อื่นๆ (พิมพ์เอง) —</option>
               </select>
               {form.customerId===0&&<input value={form.customer} onChange={e=>set("customer",e.target.value)} placeholder="ชื่อบริษัท..." style={{...INP,marginTop:6}}/>}
             </div>
@@ -271,6 +276,7 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
                     เพราะขั้นตอนนั้นสร้าง/ผูกลูกค้าให้ก่อนเสมอ · ฟอร์มนี้เขียนแค่ฟิลด์ตรงๆ ไม่ผ่านขั้นตอนนั้น
                     (พบจากผลตรวจสอบตรรกะระบบ 31 ก.ค. 69 — เดิมตั้ง won ที่นี่ได้ โหมดออฟไลน์จะได้ใบ
                     "ปิดการขายสำเร็จ" ที่ไม่มีลูกค้าผูกอยู่จริงแบบเงียบๆ) */}
+                {/* ต้องมีค่าเสมอ — ทุกใบต้องมีสถานะ (ร่าง/ส่งแล้ว/…) ว่างไม่ได้ */}
                 <select aria-label="สถานะใบเสนอราคา" value={form.status} onChange={e=>set("status",e.target.value as QuotationStatus)} style={INP}>
                   {STATUS_ORDER.filter(s=>s!=="won"||form.status==="won").map(s=><option key={s} value={s}>{quotationStatusLabel[s]}</option>)}
                 </select>
