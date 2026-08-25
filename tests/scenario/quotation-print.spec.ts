@@ -1,0 +1,79 @@
+import { test, expect } from "@playwright/test";
+import { open } from "./helpers";
+
+// ─── ปุ่มพิมพ์ใบเสนอราคา (E2E) ────────────────────────────────────────────────
+// เอกสารนี้คือกระดาษแผ่นเดียวที่หลุดออกไปถึงมือลูกค้า แต่เดิมไม่มีเทสต์เลยสักข้อ
+// (ช่องว่างที่ผลตรวจภายนอกชุดที่ 3 ทักไว้ 24 ส.ค. 69)
+//
+// ตรรกะของตัวเอกสาร (ยอดเงิน/วันยืนราคา/เงื่อนไข) อยู่ที่ tests/unit/quotationPrint.test.ts
+// ไฟล์นี้วัดคนละเรื่อง: กดปุ่มบนหน้าจอจริงแล้วได้เอกสารออกมาไหม และด่านกันพิมพ์ทำงานไหม
+
+test("[func·dealer] ยังไม่ตั้งชื่อบริษัท → ห้ามพิมพ์ ต้องบอกเหตุผลและพาไปหน้าตั้งค่า", async ({ page, context }) => {
+  await context.addInitScript(() => { window.print = () => {}; });
+  let ข้อความเตือน = "";
+  page.on("dialog", async d => { ข้อความเตือน = d.message(); await d.dismiss(); });
+
+  await open(page, "dealer", "/settings");
+  const ชื่อบริษัท = page.getByLabel("ชื่อบริษัท").or(page.locator('input[placeholder="บริษัท ตัวอย่าง จำกัด"]')).first();
+  const เดิม = (await ชื่อบริษัท.inputValue()).trim();
+  test.skip(!!เดิม, "สาขานี้ตั้งชื่อบริษัทไว้แล้ว — ด่านนี้ทดสอบไม่ได้โดยไม่ลบข้อมูลจริง");
+
+  await open(page, "dealer", "/quotations");
+  await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  await page.getByRole("button", { name: "พิมพ์ PDF", exact: true }).click();
+
+  // ต้องไม่มีเอกสารเปิดออกมา — เอกสารที่ไม่มีชื่อผู้เสนอราคาส่งให้ลูกค้าไม่ได้
+  await expect.poll(() => context.pages().length, { timeout: 3000 }).toBe(1);
+  expect(ข้อความเตือน, "ต้องบอกด้วยว่าติดที่อะไร ไม่ใช่กดแล้วเงียบ").toContain("ชื่อบริษัท");
+  await expect(page).toHaveURL(/\/settings/);
+});
+
+test("[func·dealer] ตั้งชื่อบริษัทแล้ว → กดพิมพ์ได้เอกสารที่มีเลขที่ใบและยอดเงินจริง", async ({ page, context }) => {
+  await context.addInitScript(() => { window.print = () => {}; });
+  page.on("dialog", async d => { await d.dismiss(); });
+
+  const ชื่อทดสอบ = "ZZTEST บริษัทพิมพ์เอกสาร จำกัด";
+  await open(page, "dealer", "/settings");
+  const ชื่อบริษัท = page.getByLabel("ชื่อบริษัท").or(page.locator('input[placeholder="บริษัท ตัวอย่าง จำกัด"]')).first();
+  const เดิม = await ชื่อบริษัท.inputValue();
+
+  try {
+    if (เดิม.trim() !== ชื่อทดสอบ) {
+      await ชื่อบริษัท.fill(ชื่อทดสอบ);
+      await page.getByRole("button", { name: /^บันทึก/ }).first().click();
+      await expect.poll(async () => (await ชื่อบริษัท.inputValue()).trim(), { timeout: 8000 }).toBe(ชื่อทดสอบ);
+    }
+
+    await open(page, "dealer", "/quotations");
+    await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+    const เลขที่ใบ = (await page.getByText(/^Q-[A-Z0-9]+-\d+/).first().innerText()).trim();
+
+    const [เอกสาร] = await Promise.all([
+      context.waitForEvent("page"),
+      page.getByRole("button", { name: "พิมพ์ PDF", exact: true }).click(),
+    ]);
+    await เอกสาร.waitForLoadState("domcontentloaded");
+    const html = await เอกสาร.content();
+
+    expect(html).toContain("ใบเสนอราคา");
+    expect(html, `ต้องเป็นใบเดียวกับที่เปิดอยู่ (${เลขที่ใบ})`).toContain(เลขที่ใบ);
+    expect(html, "ต้องแยกยอดก่อน VAT / ภาษี / รวมสุทธิ ให้ลูกค้าเห็น").toContain("มูลค่างาน (ก่อน VAT)");
+    expect(html).toContain("ภาษีมูลค่าเพิ่ม");
+    expect(html).toContain("รวมสุทธิ");
+    // เอกสารออกในนามตัวแทน ห้ามมีชื่อ Benjamin (ข้อบังคับเรื่องแบรนด์)
+    expect(html.toLowerCase()).not.toContain("benjamin");
+    // หัวกระดาษต้องไม่เขียนอายุใบตายตัว ต้องเป็นวันจริงของใบนั้น (แก้ 24 ส.ค. 69)
+    expect(html).not.toMatch(/ยืนราคา\s*30\s*วัน/);
+
+    await เอกสาร.close();
+  } finally {
+    // คืนค่าเดิมเสมอ — เทสต์ห้ามทิ้งชื่อบริษัทปลอมไว้ในข้อมูลจริง
+    await open(page, "dealer", "/settings");
+    const ช่อง = page.getByLabel("ชื่อบริษัท").or(page.locator('input[placeholder="บริษัท ตัวอย่าง จำกัด"]')).first();
+    if ((await ช่อง.inputValue()) !== เดิม) {
+      await ช่อง.fill(เดิม);
+      await page.getByRole("button", { name: /^บันทึก/ }).first().click();
+      await page.waitForTimeout(1200);
+    }
+  }
+});

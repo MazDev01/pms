@@ -117,7 +117,10 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
     <div class="doc-title">
       <h1>ใบเสนอราคา</h1>
       <div class="sub">QUOTATION</div>
-      <div class="doc-meta">เลขที่ <b>${esc(q.id)}</b><br/>วันที่ ${esc(fmtDate(q.date))}<br/>ยืนราคา 30 วัน</div>
+      ${/* ⚠️ เดิมบรรทัดนี้เขียนตายว่า "ยืนราคา 30 วัน" — ตัวแทนตั้งอายุใบเป็น 45 วัน หัวกระดาษก็ยังพิมพ์ 30
+             แล้วขัดกับบรรทัดเงื่อนไขด้านล่างที่คำนวณวันจริง = เอกสารเถียงกันเองต่อหน้าลูกค้า
+             (เจอตอนเขียนเทสต์ชุดแรกของเอกสารพิมพ์ 24 ส.ค. 69) ตอนนี้ใช้วันจริงใบเดียวกับเงื่อนไข */""}
+      <div class="doc-meta">เลขที่ <b>${esc(q.id)}</b><br/>วันที่ ${esc(fmtDate(q.date))}${validUntil ? `<br/>ยืนราคาถึง ${esc(fmtDate(validUntil))}` : ""}</div>
     </div>
   </div>
   <div class="parties">
