@@ -47,7 +47,6 @@ export function LeadsVsQuotationsChart({ dealerAgg, leadsByDealer }: { dealerAgg
           {/* ⚠️ การ์ดนี้นับ "ทุกราย" รวมรายที่ปิดการขายได้แล้ว ส่วนการ์ดชื่อคล้ายกันที่หน้าภาพรวมยอดขาย
               ตัดรายที่เป็นลูกค้าแล้วออก (บอสสั่ง 21 ส.ค. 69) → เลขสองหน้าต่างกันโดยชอบธรรม
               ต้องเขียนบอก ไม่งั้นอ่านเหมือนระบบให้เลขขัดกัน (ผลตรวจภายนอก HQ-10 · 24 ส.ค. 69) */}
-          <div className="card-desc">นับลูกค้าเป้าหมายทุกราย รวมรายที่ปิดการขายได้แล้ว — หน้าภาพรวมยอดขายตัดรายที่เป็นลูกค้าแล้วออก เลขจึงน้อยกว่า</div>
         </div>
         <span style={{ display: "flex", gap: 10, fontSize: "0.62rem", color: "var(--muted-foreground)", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>

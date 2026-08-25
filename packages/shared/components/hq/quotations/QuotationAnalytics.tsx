@@ -150,11 +150,13 @@ function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
   );
 }
 
-export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, leadsByDealer, lostReasons, unspecifiedLost, totalLost }: {
+export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, หน่วยเวลา, leadsByDealer, lostReasons, unspecifiedLost, totalLost }: {
   dealerAgg: DealerAgg[];
   productTypes: { type: string; count: number; value: number }[];
   aging: { key: AgingBucket; count: number; value: number }[];
   trend: { months: string[]; bar: number[]; line: number[] };
+  /** ป้ายหน่วยเวลาของกราฟแนวโน้ม — ต้องตรงกับช่องที่หน้าเรียกตัดมา */
+  หน่วยเวลา?: string;
   leadsByDealer: Record<string, { leads: number; quoted: number }>;
   lostReasons: { reason: string; count: number; value: number }[];
   unspecifiedLost: number;
@@ -164,7 +166,7 @@ export function QuotationAnalytics({ dealerAgg, productTypes, aging, trend, lead
     <>
       {/* แนวโน้ม 12 เดือน มาก่อน — ให้เห็นภาพรวมว่าทั้งเครือกำลังไปทางไหน แล้วค่อยแยกย่อยรายตัวแทน/ภาค/แม่แบบ
           กินเต็มแถว: กราฟ 12 จุดอ่านง่ายกว่าตอนกว้าง (และไม่มีใบไหนคู่ควรจับคู่ด้วย) */}
-      <QuotationTrendChart trend={trend} />
+      <QuotationTrendChart trend={trend} หน่วยเวลา={หน่วยเวลา} />
 
       <div className="hq-dealer-charts">
         <LeadsVsQuotationsChart dealerAgg={dealerAgg} leadsByDealer={leadsByDealer} />

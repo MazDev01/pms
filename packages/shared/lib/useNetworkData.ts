@@ -298,7 +298,7 @@ export function useNetworkQuotations(): HQQuotation[] {
         id: `LIVE-${q.id}`, quoteNo: q.id,
         dealerCode: dl.code, dealerName: dl.name,
         customer: q.customer, valueNum: q.totalValue,
-        status: q.status, createdAt: fmtISOToThai(q.date),
+        status: q.status, createdAt: fmtISOToThai(q.date), savedAt: q.savedAt,
         salesperson: lead?.assigned ?? `ตัวแทน ${dl.code}`,
         productLine: q.buildingType || q.project,
         // รายละเอียดราคาจริงของใบที่ดีลเลอร์สร้าง → HQ เจาะดูรายการสินค้าได้

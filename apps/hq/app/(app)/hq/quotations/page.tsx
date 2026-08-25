@@ -4,6 +4,7 @@
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
 // จึงมีแค่ ดู / วิเคราะห์ / เปรียบเทียบ / ส่งออก — ไม่มีปุ่มสร้าง แก้ไข ลบ อนุมัติ
 import { useState, useMemo, useEffect } from "react";
+import { ความละเอียดของช่วง, ช่องเวลาในช่วง, คีย์ช่อง, type ความละเอียด } from "@pms/shared/lib/trendBuckets";
 import { quotationStatusLabel, mainTemplateOf, fmtISOToThai, DEFAULT_DEALER_CODE, QUOTED_UP, type HQQuotation } from "@pms/shared/lib/mock";
 import type { QuotationMock } from "@pms/shared/lib/data/types";
 import { useQuoteValidityDays } from "@pms/shared/lib/useHQConfig";
@@ -205,7 +206,21 @@ export default function NetworkQuotationPage() {
     return [...m.entries()].map(([key, x]) => ({ key, ...x }));
   }, [summary, rows]);
 
+  // ⚠️ เดินตามแถบกรองด้านบนแล้ว (บอสสั่ง 25 ส.ค. 69 "เอาทุกกราฟใน hq")
+  //    ช่วงสั้นนับจากแถวจริงฝั่งเครื่อง (trendRows) เพราะสรุปจากฐานข้อมูลมีแค่ระดับเดือน
+  const ละเอียดแท่ง: ความละเอียด = ความละเอียดของช่วง(timeRange.start, timeRange.end) === "month" ? "month" : "day";
   const trend = useMemo(() => {
+    if (ละเอียดแท่ง !== "month") {
+      const ช่อง = ช่องเวลาในช่วง(timeRange.start, timeRange.end, ละเอียดแท่ง);
+      const barM = new Map<string, number>(), lineM = new Map<string, number>();
+      trendRows.forEach(r => {
+        const d = r.createdDate; if (!d || d < timeRange.start || d > timeRange.end) return;
+        const k = คีย์ช่อง(d, ละเอียดแท่ง);
+        barM.set(k, (barM.get(k) ?? 0) + 1);
+        if (r.status === "won") lineM.set(k, (lineM.get(k) ?? 0) + 1);
+      });
+      return { months: ช่อง.map(b => b.label), bar: ช่อง.map(b => barM.get(b.key) ?? 0), line: ช่อง.map(b => lineM.get(b.key) ?? 0) };
+    }
     const slots: { label: string; y: number; m: number }[] = [];
     for (let i = 11; i >= 0; i--) { const d = new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() - i, 1); slots.push({ label: TH_ABBR[d.getMonth()], y: d.getFullYear(), m: d.getMonth() }); }
     const bar = Array(12).fill(0), line = Array(12).fill(0);
@@ -219,7 +234,7 @@ export default function NetworkQuotationPage() {
       });
     }
     return { months: slots.map(s => s.label), bar, line };
-  }, [trendSummary, trendRows]);
+  }, [trendSummary, trendRows, ละเอียดแท่ง, timeRange.start, timeRange.end]);
 
   // ตาราง: supabase = แบ่งหน้าที่ DB (listPage) · local/ยังไม่กลับ = tableRows (client, ทั้งชุด)
   const [tablePage, setTablePage] = useState(0);
@@ -297,7 +312,7 @@ export default function NetworkQuotationPage() {
         products={products}
       />
 
-      <QuotationAnalytics dealerAgg={dealerAgg} productTypes={productTypes} aging={aging} trend={trend} leadsByDealer={leadsByDealer} lostReasons={lostReasons} unspecifiedLost={unspecifiedLost} totalLost={totalLost} />
+      <QuotationAnalytics dealerAgg={dealerAgg} productTypes={productTypes} aging={aging} trend={trend} หน่วยเวลา={ละเอียดแท่ง === "month" ? "รายเดือน" : "รายวัน"} leadsByDealer={leadsByDealer} lostReasons={lostReasons} unspecifiedLost={unspecifiedLost} totalLost={totalLost} />
 
       {/* ตารางเต็มอยู่ท้ายหน้าตามเดิม (ตามที่บอสสั่ง — ไม่แยกแท็บ)
           ความยาวหน้าคุมด้วยกฎอื่นแทน: การ์ดกราฟตรึงความสูง S/M/L + กราฟรายการโชว์ Top N

@@ -641,12 +641,15 @@ export const SupabaseAdapter: DataAdapter = {
     dashboardQuoteSummary: async (start, end, dealer) => {
       const { data, error } = await sb().rpc("dashboard_quote_summary", { p_start: start, p_end: end, p_dealer: dealer ?? null });
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
-      const d = (data ?? {}) as { byMonth?: Row[]; byStatus?: Row[]; byProduct?: Row[] };
+      const d = (data ?? {}) as { byMonth?: Row[]; byDay?: Row[]; byHour?: Row[]; byStatus?: Row[]; byProduct?: Row[] };
       return {
         byMonth: (d.byMonth ?? []).map(r => ({
           y: Number(r.y), m: Number(r.m), quotes: Number(r.quotes),
           won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val),
         })),
+        // รายวัน/รายชั่วโมง (ใบ 0160) — กราฟช่วงสั้นใช้ชุดนี้ ไม่ต้องโหลดใบทั้งเครือมาไว้ในเครื่อง
+        byDay: (d.byDay ?? []).map(r => ({ d: String(r.d), quotes: Number(r.quotes), won: Number(r.won), lost: Number(r.lost), wonVal: Number(r.won_val) })),
+        byHour: (d.byHour ?? []).map(r => ({ h: Number(r.h), quotes: Number(r.quotes), won: Number(r.won), wonVal: Number(r.won_val) })),
         byStatus: (d.byStatus ?? []).map(r => ({ status: String(r.status), count: Number(r.count), value: Number(r.value) })),
         // won_value/won_projects = เฉพาะใบที่ปิดการขายได้ (migration 0132) — การ์ด "ยอดขาย" ใช้ตัวนี้
         byProduct: (d.byProduct ?? []).map(r => ({

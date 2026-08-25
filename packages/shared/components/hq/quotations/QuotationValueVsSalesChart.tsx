@@ -23,7 +23,6 @@ export function QuotationValueVsSalesChart({ dealerAgg }: { dealerAgg: DealerAgg
       <div className="card-header">
         <div>
           <div className="card-title">มูลค่าใบเสนอราคา เทียบ ยอดขายจริง</div>
-          <div className="card-desc">ยอดขายจริง = มูลค่าใบที่ปิดการขายได้</div>
         </div>
         <span style={{ display: "flex", gap: 10, fontSize: "0.62rem", color: "var(--muted-foreground)", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>

@@ -1080,6 +1080,10 @@ export type QuotationMock = {
   // ⚠️ อ่านอย่างเดียว: แอปไม่ส่งค่านี้กลับไปเขียน (quoteToRow ตัดทิ้ง) ไม่งั้นสำเนาเก่าจะทับประวัติจริง
   priceHistory?: PriceChange[];
   dealerCode?: string; // สาขาเจ้าของ (multi-tenant) — undefined = สาขา CNX (สมุดงานเดิม)
+  /** เวลาที่ "ระบบบันทึกแถวนี้" (ฐานข้อมูลใส่ให้เอง) — ไม่ใช่วันที่ปิดการขาย
+   *  ใช้ทำกราฟรายชั่วโมงของวันนี้เท่านั้น (บอสเลือกทาง ก · 25 ส.ค. 69)
+   *  ⚠️ อ่านอย่างเดียว ห้ามส่งกลับไปเขียน — ฐานข้อมูลเป็นเจ้าของ */
+  savedAt?: string;
 };
 
 // สถานะใบเสนอราคาตามสเปก: Draft / Sent / Viewed / Accepted / Rejected / Expired
@@ -1621,6 +1625,8 @@ export type HQQuotation = {
   valueNum: number;
   status: QuotationStatus;
   createdAt: string;
+  /** เวลาที่ระบบบันทึกใบนี้ (มีเฉพาะโหมดต่อฐานข้อมูลจริง) — ดู QuotationMock.savedAt */
+  savedAt?: string;
   salesperson: string;
   productLine: string;
   // ── รายละเอียดราคา: มีเฉพาะใบที่ดีลเลอร์สร้างจริง (สาขา CNX) — ใบ seed ของสาขาอื่นไม่มี ──

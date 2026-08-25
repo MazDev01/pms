@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import {
   Target, TrendingUp, PhoneCall, Activity, Building2, User,
   CalendarClock, FileText, Trophy, AlarmClock, ChevronRight,
-  UserPlus, CheckCircle2, Mail, Info,
+  UserPlus, CheckCircle2, Mail,
 } from "lucide-react";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { fmtLeadValue } from "@pms/shared/lib/format";
@@ -306,12 +306,10 @@ export default function DealerDashboard() {
     // ชื่อการ์ดต้องตรงกับหน่วยของตัวเลขที่โชว์ — "ปิดการขายได้" คู่กับ "50%" จะอ่านว่าปิดได้ 50 ดีล
     { label: "ปิดการขายได้", tip: `จำนวนใบเสนอราคาที่ปิดการขายได้ (won) · อัตราปิดการขาย = ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้) = ${wonCount} ÷ ${wonCount + lostCount} · นิยามเดียวกับที่สำนักงานใหญ่เห็น`, Icon: Activity, color: "#0D9488", bg: "#E6F7F5", href: "/quotations", value: `${wonCount} ดีล`, sub1: wonCount + lostCount ? `อัตราปิดการขาย ${winRate}%` : "ยังไม่มีดีลที่ปิด" },
   ];
-  const KpiLabel = ({ label, tip }: { label: string; tip: string }) => (
+  // ไอคอน (i) ท้ายชื่อการ์ดถูกเอาออกตามที่บอสสั่ง (25 ส.ค. 69) — เหตุผลเดียวกับแดชบอร์ดสำนักงานใหญ่
+  const KpiLabel = ({ label }: { label: string; tip?: string }) => (
     <span style={{ ...sub, display: "inline-flex", alignItems: "center", gap: 4 }}>
       {label}
-      <span title={tip} aria-label={tip} style={{ display: "inline-flex", cursor: "help" }}>
-        <Info size={12} color="#94A3B8" />
-      </span>
     </span>
   );
   // ข้อความชวนกดท้ายการ์ด KPI — ทั้งใบเป็นปุ่มแล้ว จึงเป็นแค่ป้าย ไม่ใช่ปุ่มซ้อนปุ่ม

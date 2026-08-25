@@ -1,12 +1,17 @@
 "use client";
 
-// ─── #5 แนวโน้มใบเสนอราคารายเดือน (ย้อนหลัง 12 เดือน) ─────────────────────────
-// ไม่ขึ้นกับตัวกรองช่วงเวลา — ถ้าอิงตัวกรอง (เช่น "เดือนนี้") กราฟ 12 เดือนจะว่าง 11 ช่อง
-// ยังอิงตัวกรองอื่น (ตัวแทน/ภูมิภาค/ประเภทอาคาร/สถานะ) ตามปกติ
+// ─── #5 แนวโน้มใบเสนอราคา ─────────────────────────────────────────────────────
+// เดินตามแถบกรองช่วงเวลาแล้ว (บอสสั่ง 25 ส.ค. 69 "เอาทุกกราฟใน hq")
+//   ช่วงยาว (ปีนี้) → รายเดือน · ช่วงสั้น (วันนี้/7 วัน/เดือนนี้) → รายวัน
+// ผู้เรียกเป็นคนตัดช่องมาให้แล้ว การ์ดนี้แค่วาด — ป้ายหน่วยจึงรับมาเป็น prop
 import { GroupedBarChart } from "@pms/shared/components/ui/Charts";
 
 // trend = 12 ช่องย้อนหลัง (bar=ใบทั้งหมด · line=ตอบรับ) คำนวณมาแล้ว (DB byMonth หรือ client) — M9 Phase 2
-export function QuotationTrendChart({ trend }: { trend: { months: string[]; bar: number[]; line: number[] } }) {
+export function QuotationTrendChart({ trend, หน่วยเวลา = "รายเดือน" }: {
+  trend: { months: string[]; bar: number[]; line: number[] };
+  /** "รายเดือน" หรือ "รายวัน" — ต้องตรงกับช่องที่ผู้เรียกตัดมา ไม่งั้นหัวการ์ดโกหก */
+  หน่วยเวลา?: string;
+}) {
   return (
     // ไม่ตรึงความสูงด้วย .chart-* — การ์ดนี้เป็น SVG ที่ยืดตามความกว้าง
     // ถ้าตรึงแล้วให้เลื่อน = กราฟเส้นโดนตัดครึ่ง (อ่านไม่ได้) ต้องคุมที่สัดส่วน viewBox แทน
@@ -17,8 +22,7 @@ export function QuotationTrendChart({ trend }: { trend: { months: string[]; bar:
     <div className="card" style={{ marginBottom: 24 }}>
       <div className="card-header">
         <div>
-          <div className="card-title">แนวโน้มใบเสนอราคารายเดือน</div>
-          <div className="card-desc">ย้อนหลัง 12 เดือน — ไม่ขึ้นกับตัวกรองช่วงเวลา</div>
+          <div className="card-title">แนวโน้มใบเสนอราคา{หน่วยเวลา}</div>
         </div>
         <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ใบ</span>
       </div>

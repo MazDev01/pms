@@ -361,6 +361,11 @@ export const LocalAdapter: DataAdapter = {
       const monthM = new Map<string, { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number }>();
       const statusM = new Map<string, { count: number; value: number }>();
       const prodM = new Map<string | null, { value: number; projects: number }>();
+      // รายวัน/รายชั่วโมง — parity กับฐานข้อมูลจริง (ใบ 0160)
+      // ⚠️ รายชั่วโมงใช้ savedAt (เวลาที่ระบบบันทึกใบ) ใบเก่าที่ไม่มีค่านี้จะไม่เข้าช่องไหนเลย
+      //    ไม่เดาเวลาให้ — กราฟรายชั่วโมงจะว่างแทนที่จะโชว์ตัวเลขที่ไม่มีอยู่จริง
+      const dayM = new Map<string, { quotes: number; won: number; lost: number; wonVal: number }>();
+      const hourM = new Map<number, { quotes: number; won: number; wonVal: number }>();
       for (const q of qs) {
         const md = /^(\d{4})-(\d{2})-(\d{2})/.exec(q.date || "");
         if (!md) continue;
@@ -384,9 +389,26 @@ export const LocalAdapter: DataAdapter = {
         let pm = prodM.get(product);
         if (!pm) { pm = { value: 0, projects: 0 }; prodM.set(product, pm); }
         pm.value += v; pm.projects += 1;
+        let dm = dayM.get(dstr);
+        if (!dm) { dm = { quotes: 0, won: 0, lost: 0, wonVal: 0 }; dayM.set(dstr, dm); }
+        dm.quotes += 1;
+        if (q.status === "won") { dm.won += 1; dm.wonVal += v; }
+        if (q.status === "lost") dm.lost += 1;
+        if (q.savedAt) {
+          const ts = new Date(q.savedAt);
+          if (!isNaN(ts.getTime())) {
+            const h = ts.getHours();
+            let hm = hourM.get(h);
+            if (!hm) { hm = { quotes: 0, won: 0, wonVal: 0 }; hourM.set(h, hm); }
+            hm.quotes += 1;
+            if (q.status === "won") { hm.won += 1; hm.wonVal += v; }
+          }
+        }
       }
       return ok({
         byMonth: [...monthM.values()],
+        byDay: [...dayM.entries()].map(([d, x]) => ({ d, ...x })).sort((a, b) => a.d.localeCompare(b.d)),
+        byHour: [...hourM.entries()].map(([h, x]) => ({ h, ...x })).sort((a, b) => a.h - b.h),
         byStatus: [...statusM.entries()].map(([status, x]) => ({ status, ...x })),
         byProduct: [...prodM.entries()].map(([product, x]) => ({ product, ...x })).sort((a, b) => b.value - a.value),
       });
@@ -704,8 +726,12 @@ export const LocalAdapter: DataAdapter = {
     },
     create: (row) => {
       const list = readKey<QuotationMock[]>(SALES.quotations, quoteSeed);
-      writeKey(SALES.quotations, [row, ...list]);
-      return ok(row);
+      // ประทับ "เวลาที่ระบบบันทึก" ให้เองเหมือนที่ฐานข้อมูลจริงทำ (บอสสั่ง 25 ส.ค. 69)
+      // ตัวแทนไม่ต้องกรอกเวลาเอง — ระบบจับเวลาให้ แล้วสำนักงานใหญ่เอาไปทำกราฟรายชั่วโมงได้
+      // ⚠️ ตั้งเฉพาะตอนสร้างใหม่ ห้ามทับของเดิมตอนแก้ไข (ไม่งั้นเวลาบันทึกจะขยับทุกครั้งที่แก้)
+      const พร้อมเวลา: QuotationMock = { ...row, savedAt: row.savedAt ?? new Date().toISOString() };
+      writeKey(SALES.quotations, [พร้อมเวลา, ...list]);
+      return ok(พร้อมเวลา);
     },
     // เซฟตี้เน็ตชั้นที่ 2 (mirror quotations_won_requires_customer, 0069/0071) — โหมด local ไม่มี DB
     // constraint คุมให้ ถ้าไม่เช็คตรงนี้ ฟอร์มแก้ไขทั่วไป (ที่ตอนนี้ตัดตัวเลือก "won" ออกแล้วก็จริง)

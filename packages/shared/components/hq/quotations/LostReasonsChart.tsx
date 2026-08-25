@@ -35,7 +35,6 @@ export function LostReasonsChart({ reasons, unspecified, totalLost }: {
       <div className="card-header">
         <div>
           <div className="card-title">เหตุผลที่เสียโอกาสการขาย</div>
-          <div className="card-desc">นับจากลูกค้าเป้าหมายที่ปิดไม่สำเร็จ ({lost.length} ราย) — ระบบไม่ได้เก็บเหตุผลรายใบเสนอราคา</div>
         </div>
       </div>
       {/* โดนัท: เหตุผลรวมกัน = ลูกค้าเป้าหมายที่เสียโอกาสทั้งหมดพอดี → เป็นสัดส่วนของก้อนเดียว

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Trophy, Building2,
   FileText, ChevronRight, Users2,
-  Target, Info,
+  Target,
 } from "lucide-react";
 import { PlanVsActualBars, GroupedBarChart, Donut, ProgressRing, CategoryRows } from "@pms/shared/components/ui/Charts";
 import { ActivityTimeline, type ActivityTimelineItem } from "@pms/shared/components/ui/ActivityTimeline";
@@ -25,6 +25,7 @@ import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/li
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { FilterBar, SelectFilter } from "@pms/shared/components/filters/FilterBar";
 import { SalesTrendChart } from "@pms/shared/components/ui/SalesTrendChart";
+import { ความละเอียดของช่วง, ยอดรายชั่วโมง, ช่องเวลาในช่วง, คีย์ช่อง, type ความละเอียด } from "@pms/shared/lib/trendBuckets";
 import { useNetworkQuotations, useNetworkCustomers, useNetworkLeads, useNetworkQuoteRange, useDashboardQuoteSummary, useLeadSummary, useNetworkCustomerSummary } from "@pms/shared/lib/useNetworkData";
 import { useDealerPerformance } from "@pms/shared/lib/useDealerPerformance";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
@@ -274,23 +275,81 @@ export default function HQDashboard() {
     }
     return pts.length ? pts : [{ month: TH_ABBR[timeRange.end.getMonth()], value: 0 }];
   }, [monthAgg, timeRange.start, timeRange.end]);
-  const trendTitle = selDealer ? `ยอดขาย ${selDealer.name.replace("Benjamin ", "")} รายเดือน` : "ยอดขายรวมทั้งเครือ รายเดือน";
-  const trendDesc = selDealer ? `เฉพาะตัวแทน ${selDealer.code} (ล้านบาท)` : "มูลค่าที่ปิดได้ทุกตัวแทนรวมกัน (ล้านบาท)";
+  // ── กราฟแนวโน้ม: ผูกกับแถบกรองเวลาด้านบน และแยกจุดตามความยาวช่วง (บอสสั่ง 25 ส.ค. 69) ──
+  //   ช่วงสั้น (ไม่เกิน 62 วัน เช่น วันนี้ / 7 วันล่าสุด / เดือนนี้) → จุดละ "วัน"
+  //   ช่วงยาว (ปีนี้ / กำหนดเองยาว ๆ)                              → จุดละ "เดือน" เหมือนเดิม
+  // ⚠️ ละเอียดกว่า "วัน" ไม่ได้ — ระบบเก็บวันที่ปิดการขายเป็น "วัน" ไม่มีเวลานาฬิกา
+  //    ถ้าทำเป็นรายชั่วโมงจะต้องปั้นตัวเลขขึ้นเอง ซึ่งไม่ใช่ข้อมูลจริง
+  // ตรรกะแบ่งช่วงอยู่ที่ trendBuckets.ts (มีเทสต์คุม) — หน้านี้แค่เรียกใช้
+  const ละเอียด = ความละเอียดของช่วง(timeRange.start, timeRange.end);
+  const แยกรายชั่วโมง = ละเอียด === "hour";
+  const แยกรายวัน = ละเอียด === "day";
 
-  // ผลงานรายภาค — count = จำนวนตัวแทน (โดนัท) · revenue = ยอดขาย "ทั้งปีจริง" (annualWonByDealer)
-  // ต้องใช้ยอดทั้งปี ไม่ใช่ revenueW (ในช่วงตัวกรอง) เพราะการ์ดนี้กำกับ "ไม่ขึ้นกับตัวกรองช่วงเวลา"
-  // และแถบข้างล่างติดป้าย "ยอดสะสมทั้งปี" — ถ้าใช้ revenueW จะหดตามตัวกรอง ขัดกับป้ายตัวเอง
+  // ── ช่วง "วันนี้" → แบ่ง 24 ชั่วโมง (บอสเลือกทาง ก · 25 ส.ค. 69) ────────────────
+  // ⚠️ ใช้ "เวลาที่ระบบบันทึกใบ" (savedAt) ไม่ใช่ "เวลาที่ปิดการขาย" — ระบบไม่เก็บเวลาปิดการขาย
+  //    ถ้าเซลส์ปิดดีลตอนบ่ายแล้วมากรอกตอนเย็น กราฟจะขึ้นตอนเย็น · เขียนกำกับไว้ใต้หัวกราฟแล้ว
+  // ⚠️ โหมดข้อมูลตัวอย่าง (ไม่ต่อฐานข้อมูล) ไม่มีเวลานี้ → ตกไปเป็นรายวันแทน ไม่เดาเวลาให้
+  // ⚠️ ต้องอ่านจากสรุปของฐานข้อมูล (ใบ 0160) ไม่ใช่รายการใบฝั่งเครื่อง
+  //    หน้า HQ ไม่ได้โหลดใบทั้งเครือมาไว้ในเครื่อง (ตั้งใจ — ที่สเกลจริงหลายพันใบ)
+  //    เคยทำจาก winQuotes แล้วกราฟขึ้น ฿0 ทั้งที่ในฐานมีข้อมูล (เจอ 25 ส.ค. 69)
+  const trendHourly = useMemo(() => {
+    if (!แยกรายชั่วโมง) return null;
+    if (quoteSummary) {
+      if (!quoteSummary.byHour.length) return null;   // ไม่มีเวลาบันทึก = ทำรายชั่วโมงไม่ได้
+      const byH = new Map(quoteSummary.byHour.map(r => [r.h, r.wonVal]));
+      return Array.from({ length: 24 }, (_, h) => ({ month: `${String(h).padStart(2, "0")}:00`, value: (byH.get(h) ?? 0) / 1e6 }));
+    }
+    return ยอดรายชั่วโมง(winQuotes.filter(q => q.status === "won"));
+  }, [แยกรายชั่วโมง, quoteSummary, winQuotes]);
+  const trendDaily = useMemo(() => {
+    if (!แยกรายวัน && !แยกรายชั่วโมง) return [];
+    const byDay = new Map<string, number>();
+    if (quoteSummary) {
+      // byDay จากฐานข้อมูล: คีย์เป็น "YYYY-MM-DD" → แปลงเป็นคีย์เดียวกับที่วนสร้างช่อง
+      for (const r of quoteSummary.byDay) {
+        const [y, m, dd] = r.d.split("-").map(Number);
+        byDay.set(`${y}-${m - 1}-${dd}`, (byDay.get(`${y}-${m - 1}-${dd}`) ?? 0) + r.wonVal);
+      }
+    } else winQuotes.filter(q => q.status === "won").forEach(q => {
+      const d = parseThaiDate(q.createdAt); if (!d) return;
+      const k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      byDay.set(k, (byDay.get(k) ?? 0) + q.valueNum);
+    });
+    const pts: { month: string; value: number }[] = [];
+    const cur = new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), timeRange.start.getDate());
+    const end = new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), timeRange.end.getDate());
+    while (cur <= end) {
+      const k = `${cur.getFullYear()}-${cur.getMonth()}-${cur.getDate()}`;
+      // ห้ามปัดตรงนี้ — เหตุผลเดียวกับรายเดือน (ยอดรวมหัวการ์ดคิดจากค่าพวกนี้)
+      pts.push({ month: `${cur.getDate()} ${TH_ABBR[cur.getMonth()]}`, value: (byDay.get(k) ?? 0) / 1e6 });
+      cur.setDate(cur.getDate() + 1);
+    }
+    return pts;
+  }, [แยกรายวัน, แยกรายชั่วโมง, quoteSummary, winQuotes, timeRange.start, timeRange.end]);
+
+  const trendSeries = trendHourly ?? (แยกรายวัน || แยกรายชั่วโมง ? trendDaily : trendMonthly);
+  const หน่วยเวลา = trendHourly ? "รายชั่วโมง" : (แยกรายวัน || แยกรายชั่วโมง) ? "รายวัน" : "รายเดือน";
+  const trendTitle = selDealer ? `ยอดขาย ${selDealer.name.replace("Benjamin ", "")} ${หน่วยเวลา}` : `ยอดขายรวมทั้งเครือ ${หน่วยเวลา}`;
+  const trendDesc = (selDealer ? `เฉพาะตัวแทน ${selDealer.code} (ล้านบาท)` : "มูลค่าที่ปิดได้ทุกตัวแทนรวมกัน (ล้านบาท)")
+    // ต้องบอกให้ชัดว่าเวลาที่เห็นคือเวลาอะไร ไม่งั้นอ่านเป็น "ปิดการขายตอนกี่โมง" ซึ่งระบบไม่ได้เก็บ
+    + (trendHourly ? " · เวลาตามที่บันทึกใบเข้าระบบ" : "");
+
+  // ผลงานรายภาค — count = จำนวนตัวแทน (โดนัท) · revenue = ยอดขายในช่วงที่เลือก
+  // ⚠️ เปลี่ยนจาก "ยอดทั้งปี" มาเป็น "ยอดในช่วงตัวกรอง" ตามที่บอสสั่ง 25 ส.ค. 69
+  //    (ทุกอย่างบนหน้านี้ต้องเดินตามแถบกรองด้านบน) — ป้ายใต้แถบถูกแก้ให้ตรงกันแล้ว
+  //    revenueW = ยอด won ในช่วง (มาจาก dealerStats ซึ่งกรองด้วย timeRange อยู่แล้ว)
   const regions = useMemo(() => {
     const m = new Map<string, { revenue: number; count: number }>();
-    rankedWin.forEach(d => {
+    // นับเฉพาะสาขาที่มียอดขายในช่วง — ไม่มีผลงานในช่วงก็ไม่นับ (ป้ายการ์ดเขียนบอกไว้แล้ว)
+    rankedWin.filter(d => d.revenueW > 0).forEach(d => {
       const r = m.get(d.region) ?? { revenue: 0, count: 0 };
-      r.revenue += annualWonByDealer.get(d.code) ?? 0; r.count += 1;
+      r.revenue += d.revenueW; r.count += 1;
       m.set(d.region, r);
     });
     const arr = [...m.entries()].map(([region, v]) => ({ region, ...v })).sort((a, b) => b.revenue - a.revenue);
     const max = Math.max(...arr.map(a => a.revenue), 1);
     return arr.map(a => ({ ...a, pct: Math.round((a.revenue / max) * 100) }));
-  }, [rankedWin, annualWonByDealer]);
+  }, [rankedWin]);
 
   // สัดส่วนมูลค่าตามแม่แบบ (มูลค่าใบเสนอราคาในช่วง แยกตาม productLine)
   const productAgg = useMemo(
@@ -434,6 +493,17 @@ export default function HQDashboard() {
   // ยอดปิดได้สะสม "ทั้งปีนี้" (ไม่ขึ้นกับตัวกรองเวลา) — ใช้กับการ์ดเป้าหมายทั้งปี/วงแหวน % เป้า
   // กฎระบบ: เป้าเป็นรายปี ห้ามเทียบกับยอดแค่ในช่วงตัวกรอง (ตารางอันดับตัวแทนใช้หลักเดียวกัน — annualWonByDealer)
   const annualWonTotal = useMemo(() => { let s = 0; annualWonByDealer.forEach(v => (s += v)); return s; }, [annualWonByDealer]);
+  // ── การ์ดเป้าหมาย: เทียบตามช่วงที่เลือก (บอสสั่ง 25 ส.ค. 69 "แก้ทุกอันทุกหน้า") ──────
+  // ⚠️ ทับกฎเดิมที่บอสเคยวางไว้ว่า "เป้าเป็นรายปี ห้ามเทียบกับยอดในช่วงตัวกรอง"
+  //    เพื่อไม่ให้ตัวเลขโกหก: เป้าถูกเฉลี่ยตามจำนวนวันของช่วงด้วย (ไม่ใช่เอายอด 1 วันไปหารเป้าทั้งปี)
+  //    เลือก "ปีนี้" ยังได้ผลเท่าเดิมทุกประการ — ป้ายใต้ตัวเลขบอกช่วงที่กำลังเทียบเสมอ
+  const เป้าตามช่วง = Math.round(targets.annualTarget * periodDays / 365);
+  const ยอดตามช่วง = useMemo(() => {
+    let s = 0; dealerStats.forEach(v => (s += v.revenue)); return s;
+  }, [dealerStats]);
+  const เต็มปี = periodDays >= 360;
+  const เป้าที่ใช้ = เต็มปี ? targets.annualTarget : เป้าตามช่วง;
+  const ยอดที่ใช้ = เต็มปี ? annualWonTotal : ยอดตามช่วง;
 
   // ประเภทอาคาร + จำนวนโครงการ
   // การ์ดโชว์ 5 อันดับแรก · ข้อความบอกส่วนที่เหลือถูกลบทั้งหมดตามที่บอสสั่ง (25 ส.ค. 69)
@@ -451,8 +521,36 @@ export default function HQDashboard() {
   const barSummary = useDashboardQuoteSummary(
     new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() - (barRange - 1), 1),
     new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() + 1, 0), selDealer?.code);
+  // ⚠️ เปลี่ยนมาเดินตามแถบกรองด้านบน (บอสสั่ง 25 ส.ค. 69 "เอาทุกกราฟใน hq")
+  //    ช่วงสั้นใช้ข้อมูลดิบฝั่งเครื่อง (scopedQuotes/allNetLeads) เพราะสรุปจากฐานข้อมูลมีแค่ระดับเดือน
+  //    ระดับชั่วโมงทำไม่ได้กับกราฟใบนี้ — ลูกค้าเป้าหมายเก็บแค่ "วัน" ไม่มีเวลา → ตกเป็นรายวัน
+  // ⚠️ กราฟแท่ง 2 ใบ (ลูกค้าเป้าหมาย/ใบ/ปิดการขาย · เป้าหมายเทียบยอดขายจริง) คงเป็น "รายเดือน" เสมอ
+  //    เคยลองทำเป็นรายวันตามตัวกรองแล้ว — 25 แท่งเรียงกันจนอ่านไม่ออก แท่งเตี้ยติดเส้นศูนย์
+  //    (บอสเห็นของจริงแล้วสั่งกลับ 25 ส.ค. 69) กราฟแท่งเหมาะกับช่องน้อย ๆ ไม่ใช่ไล่ทีละวัน
+  //    ช่วงของสองใบนี้จึงใช้ปุ่ม 3/6/12 เดือนของตัวเองต่อไป
+  const ละเอียดแท่ง: ความละเอียด = "month";
   const barTrend = useMemo(() => {
-    const buckets = lastNMonths(barRange, APP_NOW);
+    const ตามตัวกรอง = ละเอียดแท่ง !== "month";
+    const buckets = ตามตัวกรอง
+      ? ช่องเวลาในช่วง(timeRange.start, timeRange.end, ละเอียดแท่ง)
+      : lastNMonths(barRange, APP_NOW);
+    if (ตามตัวกรอง) {
+      const leadsM = new Map<string, number>(), quotesM = new Map<string, number>(), wonM = new Map<string, number>();
+      const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+      const ในช่วง = (d: Date) => d >= timeRange.start && d <= timeRange.end;
+      scopedQuotes.forEach(q => {
+        const d = parseThaiDate(q.createdAt); if (!d || !ในช่วง(d)) return;
+        const k = คีย์ช่อง(d, ละเอียดแท่ง); bump(quotesM, k); if (q.status === "won") bump(wonM, k);
+      });
+      allNetLeads.filter(l => !selDealer || (l.dealerCode ?? DEFAULT_DEALER_CODE) === selDealer.code)
+        .forEach(l => { const d = parseThaiDate(l.createdAt ?? ""); if (d && ในช่วง(d)) bump(leadsM, คีย์ช่อง(d, ละเอียดแท่ง)); });
+      return {
+        months: buckets.map(b => b.label),
+        leads: buckets.map(b => leadsM.get(b.key) ?? 0),
+        quotes: buckets.map(b => quotesM.get(b.key) ?? 0),
+        won: buckets.map(b => wonM.get(b.key) ?? 0),
+      };
+    }
     const leadsM = new Map<string, number>(), quotesM = new Map<string, number>(), wonM = new Map<string, number>();
     const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
     if (barSummary) { for (const r of barSummary.byMonth) { const k = monthKey(r.y, r.m); quotesM.set(k, r.quotes); wonM.set(k, r.won); } }
@@ -468,7 +566,7 @@ export default function HQDashboard() {
       quotes: buckets.map(b => quotesM.get(b.key) ?? 0),
       won: buckets.map(b => wonM.get(b.key) ?? 0),
     };
-  }, [barRange, barSummary, dashLeadSum, scopedQuotes, allNetLeads, selDealer]);
+  }, [barRange, barSummary, dashLeadSum, scopedQuotes, allNetLeads, selDealer, ละเอียดแท่ง, timeRange.start, timeRange.end]);
 
   // ── กิจกรรมล่าสุด = "บันทึกการใช้งาน" (Audit Log) แหล่งเดียวกับหน้า /hq/audit ──
   // เดิมการ์ดนี้อ่านจากใบเสนอราคา (ความเคลื่อนไหวการขาย) — บอสสั่งให้ใช้บันทึกการใช้งานแทน 17 ก.ค. 69
@@ -528,9 +626,28 @@ export default function HQDashboard() {
   const tgtSummary = useDashboardQuoteSummary(
     new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() - (tgtRange - 1), 1),
     new Date(APP_NOW.getFullYear(), APP_NOW.getMonth() + 1, 0), selDealer?.code);
+  // ⚠️ เดินตามแถบกรองด้านบนแล้ว (บอสสั่ง 25 ส.ค. 69) — ช่วงสั้นใช้ข้อมูลดิบฝั่งเครื่อง
+  //    เป้าต่อช่อง = เป้าทั้งปี ÷ จำนวนช่องในหนึ่งปี (เดือน = ÷12 · วัน = ÷365) เพื่อให้เทียบกันได้จริง
+  const ละเอียดเป้า: ความละเอียด = "month";   // เหตุผลเดียวกับ ละเอียดแท่ง ด้านบน
   const targetVsActual = useMemo(() => {
-    const planM = Math.round(targets.annualTarget / 12 / 1e6 * 10) / 10;
+    const ตามตัวกรอง = ละเอียดเป้า !== "month";
+    const planM = ตามตัวกรอง
+      ? Math.round(targets.annualTarget / 365 / 1e6 * 100) / 100
+      : Math.round(targets.annualTarget / 12 / 1e6 * 10) / 10;
     const actM = new Map<string, number>();
+    if (ตามตัวกรอง) {
+      scopedQuotes.forEach(q => {
+        if (q.status !== "won") return;
+        const d = parseThaiDate(q.createdAt); if (!d || d < timeRange.start || d > timeRange.end) return;
+        const k = คีย์ช่อง(d, ละเอียดเป้า);
+        actM.set(k, (actM.get(k) ?? 0) + q.valueNum);
+      });
+      return ช่องเวลาในช่วง(timeRange.start, timeRange.end, ละเอียดเป้า).map(b => ({
+        label: b.label,
+        actual: Math.round((actM.get(b.key) ?? 0) / 1e6 * 100) / 100,
+        plan: planM,
+      }));
+    }
     if (tgtSummary) { for (const r of tgtSummary.byMonth) actM.set(monthKey(r.y, r.m), r.wonVal); }
     else scopedQuotes.forEach(q => {
       if (q.status !== "won") return;
@@ -542,7 +659,7 @@ export default function HQDashboard() {
       actual: Math.round((actM.get(b.key) ?? 0) / 1e6 * 10) / 10,
       plan: planM,
     }));
-  }, [scopedQuotes, tgtSummary, targets, tgtRange]);
+  }, [scopedQuotes, tgtSummary, targets, tgtRange, ละเอียดเป้า, timeRange.start, timeRange.end]);
 
   // lostReasons ถูกลบพร้อมการ์ด — ไม่มีใครอ่านผลแล้ว
 
@@ -584,10 +701,13 @@ export default function HQDashboard() {
       <Icon size={20} color={color} strokeWidth={2.1} />
     </span>
   );
-  const KLabel = ({ label, tip }: { label: string; tip: string }) => (
+  // ⚠️ ไอคอน (i) ท้ายชื่อการ์ดถูกเอาออกตามที่บอสสั่ง (25 ส.ค. 69)
+  //    มันใช้ title ของเบราว์เซอร์ ซึ่งบนมือถือ/แท็บเล็ตไม่ทำงานเลย และบนคอมต้องชี้ค้าง 1-2 วิถึงจะโผล่
+  //    ชื่อการ์ดบอกสิ่งที่นับตรง ๆ อยู่แล้ว (แก้ไปหลายรอบตลอดสัปดาห์) จึงไม่ต้องมีคำอธิบายซ้อนอีกชั้น
+  //    tip ยังรับไว้เป็นพารามิเตอร์ เพราะทุกที่ที่เรียกส่งมาอยู่แล้ว — ไม่ได้เอาไปแสดง
+  const KLabel = ({ label }: { label: string; tip?: string }) => (
     <span style={{ ...kSub, display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-      <span title={tip} aria-label={tip} style={{ display: "inline-flex", cursor: "help", flexShrink: 0 }}><Info size={12} color="#94A3B8" /></span>
     </span>
   );
 
@@ -626,14 +746,14 @@ export default function HQDashboard() {
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                   <div style={{ minWidth: 0 }}>
                     <KLabel label={k.label} tip={k.tip} />
-                    <div style={{ ...kNum, marginTop: 6 }}>{fmtBaht(targets.annualTarget)}</div>
-                    <div style={{ ...kSub, marginTop: 2 }}>เป้าหมายทั้งปี</div>
+                    <div style={{ ...kNum, marginTop: 6 }}>{fmtBaht(เป้าที่ใช้)}</div>
+                    <div style={{ ...kSub, marginTop: 2 }}>{เต็มปี ? "เป้าหมายทั้งปี" : `เป้าเฉลี่ยของช่วงที่เลือก (${periodDays} วัน)`}</div>
                   </div>
-                  <ProgressRing pct={Math.round(annualWonTotal / (targets.annualTarget || 1) * 100)} size={50} />
+                  <ProgressRing pct={Math.round(ยอดที่ใช้ / (เป้าที่ใช้ || 1) * 100)} size={50} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(annualWonTotal)}</div>
-                  <div style={kSub}>ยอดขายสะสมทั้งปีนี้</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtBaht(ยอดที่ใช้)}</div>
+                  <div style={kSub}>{เต็มปี ? "ยอดขายสะสมทั้งปีนี้" : "ยอดขายในช่วงที่เลือก"}</div>
                 </div>
                 {kDetail(k.href)}
               </>
@@ -662,7 +782,7 @@ export default function HQDashboard() {
           <div className="card-body" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-start", paddingTop: "1.15rem" }}>
             {/* height = ความสูงจริงของกราฟเป็น px (หลัง LineTrendChart วัดความกว้างการ์ดเอง)
                 395 = ที่ว่างในการ์ดหลังหักหัวข้อ/ปุ่มช่วงเวลา — พอดีกับการ์ด "สัดส่วนตัวแทนจำหน่าย" ที่อยู่คู่กัน */}
-            <SalesTrendChart title={trendTitle} desc={trendDesc} monthly={trendMonthly} height={395} />
+            <SalesTrendChart title={trendTitle} desc={trendDesc} monthly={trendSeries} granularity={trendHourly ? "hour" : (แยกรายวัน || แยกรายชั่วโมง) ? "day" : "month"} height={395} />
           </div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
@@ -671,7 +791,8 @@ export default function HQDashboard() {
               <div className="card-title">สัดส่วนตัวแทนจำหน่าย</div>
               {/* การ์ดนี้ไม่ขึ้นกับตัวกรองเวลา — จำนวนตัวแทนไม่มีวันที่ให้กรอง และยอดขายใช้ยอดสะสมทั้งปี
                   (ค่าเดียวกับ revenueActual ที่หน้า /hq/dealers ใช้) · ต้องกำกับไว้ ไม่งั้นขัดกับคำโปรยบนหัวหน้า */}
-              <div className="card-desc">จำนวนตัวแทนแยกตามภาค — ไม่ขึ้นกับตัวกรองช่วงเวลา</div>
+              {/* เดินตามตัวกรองแล้ว (บอสสั่ง 25 ส.ค. 69 "แก้ทุกอันทุกหน้า") — นับเฉพาะสาขาที่มียอดขายในช่วง
+                  ⚠️ ความหมายเปลี่ยนจาก "ทะเบียนสาขาทั้งหมด" เป็น "สาขาที่มีผลงานในช่วง" ป้ายจึงต้องเปลี่ยนตาม */}
             </div>
             <Link href="/hq/dealers" className="btn btn-secondary btn-sm">จัดการ →</Link>
           </div>
@@ -706,7 +827,7 @@ export default function HQDashboard() {
                   {/* ยอดขายตามภูมิภาค (bars ใต้โดนัท เหมือน "รายได้ตาม Plan")
                       แสดงครบทุกภาค — เดิม slice(0,3) ตัดทิ้ง 3 ภาคโดยไม่บอก (ขัดกฎ "ห้ามตัดเงียบ" ของโปรเจกต์) */}
                   <div style={{ borderTop: "1px solid #f0f4f8", marginTop: 16, paddingTop: 13 }}>
-                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 11 }}>ยอดขายตามภูมิภาค <span style={{ fontWeight: 400 }}>(ยอดสะสมทั้งปี · ทุกภาค)</span></div>
+                    <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 11 }}>ยอดขายตามภูมิภาค <span style={{ fontWeight: 400 }}>(ตามช่วงเวลาที่เลือก · ทุกภาค)</span></div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
                       {byRev.map(s => (
                         <div key={s.label}>
@@ -733,11 +854,8 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header">
             <div className="card-title">ลูกค้าเป้าหมาย · ใบเสนอราคา · ปิดการขาย (รายเดือน)</div>
-            <MonthRangeToggle value={barRange} onChange={setBarRange} label="ช่วงเวลากราฟลูกค้าเป้าหมาย·ใบเสนอราคา·ปิดการขาย" />
-          </div>
-          {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
-          <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
-            จำนวนรายการต่อเดือน · {monthRangeSubtitle(barRange, APP_NOW)}
+            {/* ช่วงสั้นให้แถบกรองด้านบนคุมอย่างเดียว — มีตัวคุมเวลา 2 ตัวบนหน้าเดียวแล้วผู้ใช้ไม่รู้ว่าอันไหนคุมอยู่ */}
+            {<MonthRangeToggle value={barRange} onChange={setBarRange} label="ช่วงเวลากราฟลูกค้าเป้าหมาย·ใบเสนอราคา·ปิดการขาย" />}
           </div>
           <div className="card-body" style={{ paddingTop: 4, flex: 1 }}>
             {/* แท่งกลุ่ม ไม่ใช่แท่งซ้อน — ลูกค้าเป้าหมาย/ใบเสนอราคา/ปิดการขาย เป็นขั้นของดีลเดียวกัน บวกกันแล้วยอดรวมไม่มีความหมาย */}
@@ -752,11 +870,7 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header">
             <div className="card-title">เป้าหมาย เทียบ ยอดขายจริง</div>
-            <MonthRangeToggle value={tgtRange} onChange={setTgtRange} label="ช่วงเวลากราฟเป้าหมายเทียบยอดขายจริง" />
-          </div>
-          {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
-          <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
-            หน่วย: ล้านบาท · {monthRangeSubtitle(tgtRange, APP_NOW)} · เป้ารายเดือน = เป้าทั้งปี ÷ 12
+            {<MonthRangeToggle value={tgtRange} onChange={setTgtRange} label="ช่วงเวลากราฟเป้าหมายเทียบยอดขายจริง" />}
           </div>
           {/* ป้ายต้องตรงกับหัวการ์ด — ค่าเริ่มต้นของกราฟคือ "จริง"/"แผน" ซึ่งไม่ใช่คำที่หน้านี้ใช้ */}
           <div className="card-body" style={{ paddingTop: 8 }}>
@@ -817,7 +931,6 @@ export default function HQDashboard() {
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header">
             <div className="card-title">กิจกรรมล่าสุด</div>
-            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>จากบันทึกการใช้งาน · ตามตัวกรองด้านบน</span>
           </div>
           {/* กล่องเลื่อน: ตัวเนื้อเป็น absolute → ความสูงของรายการ "ไม่ถูกนับ" เป็นความสูงการ์ด
               จำเป็น เพราะแถวนี้เป็น grid + align-items: stretch ซึ่งคิดความสูงแถวจากการ์ดที่เนื้อสูงสุด

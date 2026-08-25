@@ -145,12 +145,19 @@ export interface QuoteRangeRow {
 }
 /** สรุปใบเสนอราคาของ /hq/dashboard ในช่วง — 3 ชุด ป้อนได้หลายการ์ดในรอบเดียว */
 export interface QuoteMonthRow { y: number; m: number; quotes: number; won: number; lost: number; wonVal: number; }
+/** สรุปรายวันในช่วง — ใช้กับกราฟ วันนี้ / 7 วันล่าสุด / เดือนนี้ (migration 0160) */
+export interface QuoteDayRow { d: string; quotes: number; won: number; lost: number; wonVal: number; }
+/** สรุปรายชั่วโมงตาม "เวลาที่บันทึกใบเข้าระบบ" (created_at · โซนไทย) — ใช้กับช่วง 1 วัน
+ *  ⚠️ ไม่ใช่เวลาที่ปิดการขาย ระบบไม่ได้เก็บเวลานั้น */
+export interface QuoteHourRow { h: number; quotes: number; won: number; wonVal: number; }
 export interface QuoteStatusRow { status: string; count: number; value: number; }
 // wonValue/wonProjects = เฉพาะใบที่ปิดการขายได้ — การ์ด "ยอดขาย" ต้องใช้ตัวนี้เท่านั้น
 // (value/projects = ทุกใบรวมร่าง ใช้กับการ์ดที่พูดถึง "ใบเสนอราคา" ไม่ใช่ "ยอดขาย")
 export interface QuoteProductRow { product: string | null; value: number; projects: number; wonValue?: number; wonProjects?: number; }
 export interface DashboardQuoteSummary {
   byMonth: QuoteMonthRow[];
+  byDay: QuoteDayRow[];
+  byHour: QuoteHourRow[];
   byStatus: QuoteStatusRow[];
   byProduct: QuoteProductRow[];
 }

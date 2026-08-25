@@ -53,6 +53,8 @@ export function quoteToRow(q: QuotationMock): Row {
   // ประวัติการต่อรองราคา (0148) ฐานข้อมูลดูแลเอง — ส่งสำเนาจากหน้าจอกลับไปจะทับของจริง
   // (หน้าจอที่เปิดค้างไว้นาน ๆ ถือประวัติเวอร์ชันเก่า พอกดบันทึกก็ลบรอบที่คนอื่นเพิ่งบันทึกทิ้ง)
   delete r.price_history;
+  // savedAt เป็นค่าที่อ่านมาจาก created_at ของฐานข้อมูล — ไม่มีคอลัมน์นี้จริง ส่งไปจะถูกปฏิเสธทั้งคำสั่ง
+  delete r.saved_at;
   if (r.area != null) r.area = String(r.area);
   // customer_id: แอปใช้ 0 = "ยังไม่มีลูกค้า" (ออกใบให้ลูกค้าเป้าหมาย) → เก็บเป็น NULL ที่ DB (M6)
   // เพื่อให้ใส่ FK (dealer_code, customer_id) → customers ได้ · 0 ไม่ใช่ id ลูกค้าจริง (เริ่มที่ 1)
@@ -67,6 +69,8 @@ export function rowToQuote(row: Row): QuotationMock {
   if (q.customerId == null) q.customerId = 0;
   q.customer = str(q.customer); q.project = str(q.project); q.total = str(q.total);
   q.province = str(q.province); q.buildingType = str(q.buildingType); q.date = str(q.date);
+  // เวลาที่ฐานข้อมูลบันทึกแถวนี้ — ใช้ทำกราฟรายชั่วโมง (คนละความหมายกับ date = วันปิดการขาย)
+  if (row.created_at) q.savedAt = String(row.created_at);
   return q as unknown as QuotationMock;
 }
 

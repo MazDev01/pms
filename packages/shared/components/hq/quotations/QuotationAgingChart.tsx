@@ -20,7 +20,6 @@ export function QuotationAgingChart({ aging }: { aging: { key: AgingBucket; coun
       <div className="card-header">
         <div>
           <div className="card-title">อายุใบเสนอราคาที่ค้างอยู่</div>
-          <div className="card-desc">เฉพาะใบที่ส่งแล้วแต่ลูกค้ายังไม่ตอบรับ/ปฏิเสธ ({pendingLen} ใบ)</div>
         </div>
       </div>
       {/* ข้อมูลแค่ 4 ช่วง → โดนัทอ่านง่ายกว่าแท่ง (สีเดิมของแต่ละช่วง: เขียว→เหลือง→ส้ม→แดง ตามความเร่งด่วน) */}

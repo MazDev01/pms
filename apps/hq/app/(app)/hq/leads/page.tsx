@@ -26,6 +26,7 @@ import { files as filesRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
+import { ความละเอียดของช่วง, ช่องเวลาในช่วง, คีย์ช่อง, type ความละเอียด } from "@pms/shared/lib/trendBuckets";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { GroupedBarChart, Donut } from "@pms/shared/components/ui/Charts";
 import {
@@ -74,6 +75,7 @@ const TREND_QUOTE_END = new Date(2999, 11, 31);
 export default function HQLeadsPage() {
   const router = useRouter();
   const { timeRange } = useFilters();
+  const ละเอียดของหน้า = ความละเอียดของช่วง(timeRange.start, timeRange.end);
   const leads = useNetworkLeads();
   // เกณฑ์เป็นของแต่ละสาขา (ตัวแทนตั้งเองที่ ตั้งค่า › การแจ้งเตือน) → ถามเป็นรายใบด้วย dealerCode
   const rulesOf = useLeadRulesOf();
@@ -321,7 +323,27 @@ export default function HQLeadsPage() {
   const [trendRange, setTrendRange] = useState<MonthRange>(6);
   // ใบเสนอราคารายเดือนทั้งเครือ (คนละ entity กับลูกค้าเป้าหมาย ไม่ผูกตัวกรองลูกค้าเป้าหมาย) — supabase: byMonth ที่ DB · local: netQuotes
   const quoteTrendSum = useDashboardQuoteSummary(TREND_QUOTE_START, TREND_QUOTE_END, undefined);
+  // ⚠️ เดินตามแถบกรองด้านบนแล้ว (บอสสั่ง 25 ส.ค. 69 "เอาทุกกราฟใน hq")
+  //    ช่วงสั้นใช้ข้อมูลดิบฝั่งเครื่อง เพราะสรุปจากฐานข้อมูลมีแค่ระดับเดือน
+  const ละเอียดกราฟ: ความละเอียด = ละเอียดของหน้า === "hour" ? "day" : ละเอียดของหน้า;
   const trend = useMemo(() => {
+    if (ละเอียดกราฟ !== "month") {
+      const ช่อง = ช่องเวลาในช่วง(timeRange.start, timeRange.end, ละเอียดกราฟ);
+      const newM = new Map<string, number>(), wonM = new Map<string, number>(),
+        lostM = new Map<string, number>(), quoteM = new Map<string, number>();
+      const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+      const ในช่วง = (d: Date) => d >= timeRange.start && d <= timeRange.end;
+      netQuotes.forEach(q => { const d = parseThaiDate(q.createdAt ?? ""); if (d && ในช่วง(d)) bump(quoteM, คีย์ช่อง(d, ละเอียดกราฟ)); });
+      filtered.forEach(l => {
+        const d = parseThaiDate(l.createdAt ?? ""); if (!d || !ในช่วง(d)) return;
+        const k = คีย์ช่อง(d, ละเอียดกราฟ);
+        bump(newM, k);
+        if (l.status === "PAID") bump(wonM, k);
+        if (l.status === "CANCELLED") bump(lostM, k);
+      });
+      const เท = (m: Map<string, number>) => ช่อง.map(b => m.get(b.key) ?? 0);
+      return { months: ช่อง.map(b => b.label), newM: เท(newM), wonM: เท(wonM), lostM: เท(lostM), quoteM: เท(quoteM) };
+    }
     const buckets = lastNMonths(trendRange, APP_NOW);
     const newM = new Map<string, number>(), wonM = new Map<string, number>(),
       lostM = new Map<string, number>(), quoteM = new Map<string, number>();
@@ -342,7 +364,7 @@ export default function HQLeadsPage() {
     }
     const pick = (m: Map<string, number>) => buckets.map(b => m.get(b.key) ?? 0);
     return { months: buckets.map(b => b.label), newM: pick(newM), wonM: pick(wonM), lostM: pick(lostM), quoteM: pick(quoteM) };
-  }, [chartSummary, filtered, quoteTrendSum, netQuotes, trendRange]);
+  }, [chartSummary, filtered, quoteTrendSum, netQuotes, trendRange, ละเอียดกราฟ, timeRange.start, timeRange.end]);
 
   // ลูกค้าเป้าหมายตามแหล่งที่มา + ตามสถานะ (แท่งแนวนอน)
   const sources = useMemo(() => {
@@ -513,12 +535,11 @@ export default function HQLeadsPage() {
             การ์ดถูกยืดให้สูงเท่าเพื่อนในแถว จึงเหลือที่ว่างท้ายการ์ด ~190px → จัดกึ่งกลางแนวตั้งแทน */}
         <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-header">
-            <div className="card-title">แนวโน้มลูกค้าเป้าหมายรายเดือน</div>
-            <MonthRangeToggle value={trendRange} onChange={setTrendRange} label="ช่วงเวลากราฟแนวโน้มลูกค้าเป้าหมาย" />
+            <div className="card-title">แนวโน้มลูกค้าเป้าหมาย{ละเอียดกราฟ === "month" ? "รายเดือน" : "รายวัน"}</div>
+            {ละเอียดกราฟ === "month" && <MonthRangeToggle value={trendRange} onChange={setTrendRange} label="ช่วงเวลากราฟแนวโน้มลูกค้าเป้าหมาย" />}
           </div>
-          {/* ปุ่มช่วงคุมกราฟใบนี้ใบเดียว ไม่ขึ้นกับตัวกรองเวลาบนแถบบน → ต้องบอกช่วงที่ครอบไว้ตรงนี้ */}
           <div style={{ fontSize: "0.62rem", color: "var(--muted-foreground)", padding: "0 1.15rem 2px" }}>
-            {monthRangeSubtitle(trendRange, APP_NOW)}
+            {ละเอียดกราฟ === "month" ? monthRangeSubtitle(trendRange, APP_NOW) : `ตามช่วงที่เลือกด้านบน (${trend.months.length} วัน)`}
           </div>
           <div className="card-body" style={{ paddingTop: 4, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             {/* vw = ความกว้าง viewBox ต้องใกล้ความกว้างการ์ดจริง (~480px) ไม่งั้น SVG ถูกย่อตามสัดส่วน

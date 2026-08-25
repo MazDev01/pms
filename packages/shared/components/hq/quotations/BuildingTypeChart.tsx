@@ -17,7 +17,6 @@ export function BuildingTypeChart({ types }: { types: { type: string; count: num
       <div className="card-header">
         <div>
           <div className="card-title">ประเภทอาคาร</div>
-          <div className="card-desc">ใบเสนอราคาแยกตามประเภทอาคาร</div>
         </div>
         <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>จำนวนใบ · มูลค่า</span>
       </div>
