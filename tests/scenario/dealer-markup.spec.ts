@@ -84,7 +84,8 @@ test("[func] ใบเสนอราคาใหม่ตั้งต้นด�
   await expect(page.getByText("สร้างใบเสนอราคาใหม่")).toBeVisible({ timeout: 20_000 });
 
   await expect(page.getByLabel("ราคาต่อหน่วย").first(), "ราคาต่อหน่วยตั้งต้นต้องเป็นราคาขายของสาขา (ราคากลาง +20%)")
-    .toHaveValue(String(ราคาขายที่คาด), { timeout: 20_000 });
+    // ช่องเงินโชว์ลูกน้ำแล้ว (26 ส.ค. 69) — ค่าที่เห็นจึงเป็น "1,234" ไม่ใช่ "1234"
+    .toHaveValue(ราคาขายที่คาด.toLocaleString("en-US"), { timeout: 20_000 });
 
   // เก็บกวาดลูกค้าเป้าหมายที่สร้างไว้
   await sb.from("leads").delete().eq("dealer_code", "RYG").eq("company", COMPANY);

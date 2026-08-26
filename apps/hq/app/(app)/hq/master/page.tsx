@@ -13,7 +13,7 @@ import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 // เริ่มด้วยรายการว่าง — เดิมตั้งต้นด้วยชุดตัวอย่าง ทำให้เห็นแม่แบบปลอมกะพริบก่อนของจริงมา
 import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
-import { fmtFull as fmtBaht } from "@pms/shared/lib/format";
+import { fmtFull as fmtBaht, formatMoneyInput } from "@pms/shared/lib/format";
 import { catalogRate } from "@pms/shared/lib/boq";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
@@ -116,10 +116,10 @@ function SubtypeEditor({ value, images, prices, mainPrice, onChange, onImagesCha
             {/* ราคากลางของแม่แบบย่อยนี้ — ว่างไว้ = ใช้ราคาแม่แบบหลัก (placeholder บอกว่าจะได้เท่าไหร่) */}
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               <span style={{ fontSize: "0.82rem", color: MUTED }}>฿</span>
-              <input type="number" min="0" step="0.01" aria-label={`ราคากลางของ ${s}`}
-                value={prices[s] != null ? String(prices[s]) : ""}
-                onChange={e => setPrice(s, e.target.value)}
-                placeholder={mainPrice > 0 ? String(mainPrice) : "ราคาหลัก"}
+              <input type="text" inputMode="decimal" aria-label={`ราคากลางของ ${s}`}
+                value={prices[s] != null ? formatMoneyInput(String(prices[s])) : ""}
+                onChange={e => setPrice(s, e.target.value.replace(/,/g, ""))}
+                placeholder={mainPrice > 0 ? formatMoneyInput(String(mainPrice)) : "ราคาหลัก"}
                 title={prices[s] != null ? "ราคาเฉพาะของแม่แบบย่อยนี้" : "ยังไม่ตั้ง — ใช้ราคาของแม่แบบหลัก"}
                 style={{ ...subInp, width: 108, padding: "7px 9px", fontSize: "0.86rem", textAlign: "right",
                   fontWeight: prices[s] != null ? 700 : 400, color: prices[s] != null ? PRIMARY : STEEL }} />
@@ -526,7 +526,7 @@ function HQMasterPageInner() {
               <div className="col-full"><label style={lbl}>รายละเอียด/สเปก</label><textarea style={{ ...inp, resize: "vertical" }} rows={3} value={addForm.spec} onChange={e => setAddForm(f => ({ ...f, spec: e.target.value }))} /></div>
 
               <div className="form-section">ราคากลาง</div>
-              <div><label style={lbl}>ราคากลาง (บาท) *</label><input style={inp} type="number" min="0" step="0.01" value={addForm.price} onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="5100" /></div>
+              <div><label style={lbl}>ราคากลาง (บาท) *</label><input style={inp} type="text" inputMode="decimal" aria-label="ราคากลาง (บาท)" value={formatMoneyInput(addForm.price)} onChange={e => setAddForm(f => ({ ...f, price: e.target.value.replace(/,/g, "") }))} placeholder="5,100" /></div>
               <div><label style={lbl}>หน่วย</label><input style={inp} value={addForm.unit} onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))} /></div>
 
               {/* แม่แบบย่อย — ใส่/แก้/ลบ ได้ตั้งแต่ตอนสร้าง */}
@@ -592,7 +592,7 @@ function HQMasterPageInner() {
               <div style={{ fontSize: "0.8rem", color: MUTED }}>ราคาปัจจุบัน <b style={{ color: STEEL }}>{fmtBaht(reprice.price)}/{reprice.unit}</b> (มีผล {reprice.effectiveDate})</div>
               {/* ป้ายชื่อกับช่องกรอกไม่ได้ผูกกันในโค้ด (ไม่มี htmlFor และป้ายไม่ได้ครอบช่อง)
                   → โปรแกรมอ่านหน้าจอไม่รู้ว่าช่องนี้คือช่องอะไร · ใส่ aria-label กำกับไว้ */}
-              <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input aria-label="ราคากลางใหม่ (บาท)" style={inp} type="number" min="0" step="0.01" value={rpPrice} autoFocus onChange={e => setRpPrice(e.target.value)} /></div>
+              <div><label style={lbl}>ราคากลางใหม่ (บาท) *</label><input aria-label="ราคากลางใหม่ (บาท)" style={inp} type="text" inputMode="decimal" value={formatMoneyInput(rpPrice)} autoFocus onChange={e => setRpPrice(e.target.value.replace(/,/g, ""))} /></div>
               <div><label style={lbl}>หมายเหตุ</label><input style={inp} value={rpNote} onChange={e => setRpNote(e.target.value)} placeholder="เช่น ปรับตามราคาเหล็ก" /></div>
               {/* แม่แบบย่อยที่ตั้งราคาเฉพาะไว้ — เดิมกดปรับราคาแล้วขยับแค่ราคาหลัก ย่อยค้างราคาเก่าตลอดไป
                   ใบเสนอราคาที่ออกจากแม่แบบย่อยจึงยังคิดราคาเดิมทั้งที่ผู้ดูแลเชื่อว่าปรับทั้งกลุ่มแล้ว (บอสแจ้ง 19 ส.ค. 69) */}
@@ -617,10 +617,10 @@ function HQMasterPageInner() {
                           {changed && <span style={{ fontSize: "0.7rem", color: "#9ca3af", textDecoration: "line-through", flexShrink: 0 }}>{fmtBaht(parseFloat(val))}</span>}
                           {/* ช่องว่าง = แม่แบบย่อยนี้ใช้ราคาของแม่แบบหลัก จึงขยับตามอยู่แล้ว — บอกไว้ให้เห็นชัด */}
                           {!val.trim() && <span style={{ fontSize: "0.68rem", color: "#9ca3af", flexShrink: 0 }}>ตามแม่แบบหลัก</span>}
-                          <input aria-label={`ราคากลางของ ${name}`} type="number" min="0" step="0.01"
-                            placeholder={rpPrice || "—"}
-                            value={changed ? String(next) : val}
-                            onChange={e => { setRpScale(false); setRpSubs(prev => ({ ...prev, [name]: e.target.value })); }}
+                          <input aria-label={`ราคากลางของ ${name}`} type="text" inputMode="decimal"
+                            placeholder={rpPrice ? formatMoneyInput(rpPrice) : "—"}
+                            value={formatMoneyInput(changed ? String(next) : val)}
+                            onChange={e => { setRpScale(false); setRpSubs(prev => ({ ...prev, [name]: e.target.value.replace(/,/g, "") })); }}
                             style={{ width: 108, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 9px", fontSize: "0.8rem", color: STEEL, outline: "none", fontFamily: "inherit", flexShrink: 0 }} />
                         </div>
                       );

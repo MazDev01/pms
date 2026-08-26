@@ -20,6 +20,35 @@ export function fmtLeadValue(v: string | number | null | undefined): string {
   return n > 0 ? `฿${Math.round(n).toLocaleString("th-TH")}` : "—";
 }
 
+
+// ── เลขประจำตัวผู้เสียภาษี 13 หลัก — ใส่ขีดให้ตามรูปแบบราชการ X-XXXX-XXXXX-XX-X ──
+// เติมให้ระหว่างพิมพ์เหมือนช่องเบอร์โทร (บอสสั่ง 25 ส.ค. 69) — เอกสารที่ออกให้ลูกค้าจะได้อ่านง่าย
+// รับเฉพาะตัวเลข ตัดอย่างอื่นทิ้ง และตัดที่ 13 หลัก (ยาวกว่านั้นคือพิมพ์เกิน)
+export function formatTaxId(v: string): string {
+  const เลข = String(v ?? "").replace(/\D/g, "").slice(0, 13);
+  if (!เลข) return "";
+  const ท่อน = [เลข.slice(0, 1), เลข.slice(1, 5), เลข.slice(5, 10), เลข.slice(10, 12), เลข.slice(12, 13)];
+  return ท่อน.filter(Boolean).join("-");
+}
+
+
+// ── ช่องกรอกจำนวนเงิน — ใส่ลูกน้ำให้เห็นระหว่างพิมพ์ (บอสสั่ง 26 ส.ค. 69) ──────────
+// ⚠️ ช่อง <input type="number"> ใส่ลูกน้ำไม่ได้ (เบราว์เซอร์ถือว่าไม่ใช่ตัวเลข) จึงต้องเป็น text
+//    แล้วเก็บค่าจริงเป็นตัวเลขด้วย เลขล้วนอ่านยากมากตอนหลักล้าน: 42000000 vs 42,000,000
+export function formatMoneyInput(v: string): string {
+  const raw = String(v ?? "").replace(/[^\d.]/g, "");
+  if (!raw) return "";
+  const [i, ...rest] = raw.split(".");
+  const หัว = (i || "0").replace(/^0+(?=\d)/, "");
+  const ท้าย = rest.length ? "." + rest.join("").slice(0, 2) : "";
+  return Number(หัว).toLocaleString("en-US") + ท้าย;
+}
+/** อ่านค่าจริงจากช่องที่ใส่ลูกน้ำแล้ว — ว่าง/อ่านไม่ออก = 0 */
+export function parseMoneyInput(v: string): number {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return isFinite(n) && n > 0 ? n : 0;
+}
+
 export function fmtBaht(v: number): string {
   if (!isFinite(v) || v <= 0) return "฿0";
   if (v >= 1_000_000_000_000) return `฿${(v / 1_000_000_000_000).toFixed(1)}T`;

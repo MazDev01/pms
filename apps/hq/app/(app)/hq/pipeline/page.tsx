@@ -119,10 +119,6 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
 export default function SalesAnalyticsPage() {
   const router = useRouter();
   const { timeRange, inRange } = useFilters();
-  // จำนวนวันของช่วงที่เลือก — ใช้เฉลี่ยเป้าให้เทียบกับยอดในช่วงได้อย่างเป็นธรรม
-  const ช่วงกี่วัน = Math.max(1, Math.round((new Date(timeRange.end.getFullYear(), timeRange.end.getMonth(), timeRange.end.getDate()).getTime()
-    - new Date(timeRange.start.getFullYear(), timeRange.start.getMonth(), timeRange.start.getDate()).getTime()) / 86_400_000) + 1);
-  const เต็มปี = ช่วงกี่วัน >= 360;
   const allDealers = useRepoValue<DealerRow[]>(() => dealersRepo.list(), []);
   // ยอดขายจริงรายสาขา — จากใบที่ปิดการขายได้ ไม่ใช่คอลัมน์ revenue_actual ที่ seed ไว้
   const dealerPerf = useDealerPerformance();
@@ -247,10 +243,11 @@ export default function SalesAnalyticsPage() {
       lostCount,   // ปฏิเสธจริงเท่านั้น — ไม่ใช่ "ใบทั้งหมด − ปิดได้"
       wonVal,
       conv: closed ? Math.round(wonCount / closed * 100) : null,
-      // ⚠️ ใช้ยอด "ในช่วงที่เลือก" (wonVal) ไม่ใช่ยอดสะสมทั้งปี (บอสสั่ง 25 ส.ค. 69 ให้ทุกอย่างตามตัวกรอง)
-      //    เป้าก็ต้องเฉลี่ยตามช่วงด้วย ไม่งั้นเอายอดไม่กี่วันไปหารเป้าทั้งปีแล้วได้ % ที่อ่านผิด
-      revenueActual: wonVal,
-      tpct: d.revenueTarget > 0 ? Math.round(wonVal / (d.revenueTarget * ช่วงกี่วัน / 365) * 100) : 0,
+      // ⚠️ ยอดสะสม/เป้า = ตัวเลข "ทั้งปี" ไม่ขึ้นกับตัวกรอง (บอสสั่งกลับ 26 ส.ค. 69)
+      //    เป้าที่ HQ ตั้งให้ตัวแทนเป็นรายปี — ถ้าหดตามช่วง เลือก "วันนี้" จะได้ 0% ทุกสาขา
+      //    ส่วนคอลัมน์ลูกค้าเป้าหมาย/ใบเสนอราคา/มูลค่า ยังเดินตามตัวกรองตามเดิม
+      revenueActual: perfOf(d.code).revenue,
+      tpct: d.revenueTarget > 0 ? Math.round(perfOf(d.code).revenue / d.revenueTarget * 100) : 0,
       latest: latestStr,
     };
   }).sort((a, b) => b.revenueActual - a.revenueActual), [dealers, quotes, leads, byDealer, leadByDealer]);
@@ -260,8 +257,7 @@ export default function SalesAnalyticsPage() {
     // รวมจาก perf (มาจาก byDealer ที่ DB เมื่อพร้อม · client เมื่อ fallback) — ชุดเดียวกับตาราง/กราฟ
     const wonCount = perf.reduce((s, d) => s + d.wonCount, 0), lostCount = perf.reduce((s, d) => s + d.lostCount, 0);
     const closed = wonCount + lostCount;
-    // ยอดที่เอาไปเทียบเป้า = ยอดในช่วงที่เลือก (ชุดเดียวกับตาราง/กราฟของหน้านี้)
-    const actual = perf.reduce((s, d) => s + d.wonVal, 0);
+    const actual = dealers.reduce((s, d) => s + perfOf(d.code).revenue, 0);   // ยอดสะสมทั้งปี
     // เป้าทั้งเครือใช้ค่าที่ HQ ตั้งไว้ · แต่ถ้ากรองเหลือบางตัวแทน ต้องรวมเป้าเฉพาะรายนั้น ไม่งั้น % ผิด
     const filtered = dealers.length !== allDealers.length;
     const target = filtered ? dealers.reduce((s, d) => s + d.revenueTarget, 0) : targets.annualTarget;
@@ -269,9 +265,7 @@ export default function SalesAnalyticsPage() {
       wonVal: perf.reduce((s, d) => s + d.wonVal, 0), wonCount,
       quotes: perf.reduce((s, d) => s + d.quotes, 0), quoteVal: perf.reduce((s, d) => s + d.quoteVal, 0),
       conv: closed ? Math.round(wonCount / closed * 100) : null,
-      actual, target,
-      // เป้าเฉลี่ยตามช่วง — เลือก "ปีนี้" ได้ผลเท่าเดิม
-      tpct: target > 0 ? Math.round(actual / (target * ช่วงกี่วัน / 365) * 100) : 0, filtered,
+      actual, target, tpct: target > 0 ? Math.round(actual / target * 100) : 0, filtered,
     };
   }, [perf, dealers, allDealers.length, targets.annualTarget]);
 
@@ -375,8 +369,7 @@ export default function SalesAnalyticsPage() {
     dealers.forEach(d => {
       const k = keyOf(d);
       const r = m.get(k) ?? { a: 0, b: 0 };
-      r.a += perf.find(p => p.code === d.code)?.wonVal ?? 0;
-      r.b += เต็มปี ? d.revenueTarget : Math.round(d.revenueTarget * ช่วงกี่วัน / 365);
+      r.a += perfOf(d.code).revenue; r.b += d.revenueTarget;
       m.set(k, r);
     });
     return [...m.entries()].map(([k, v]) => ({
@@ -385,7 +378,7 @@ export default function SalesAnalyticsPage() {
       note: v.b ? `${Math.round(v.a / v.b * 100)}% ของเป้า` : undefined,
       onClick: tgView === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
     })).sort((x, y) => y.a - x.a);
-  }, [tgView, dealers, DEALER_META, router, perf, เต็มปี, ช่วงกี่วัน]);
+  }, [tgView, dealers, DEALER_META, router]);
 
   // เดิมมี regional / lostReasons / trend สำหรับกราฟ 4 ใบที่ถูกตัดออก (ข้อมูลซ้ำกับหน้าอื่น) — ลบทิ้งพร้อมกัน
 
@@ -409,9 +402,7 @@ export default function SalesAnalyticsPage() {
     { label: "มูลค่าใบเสนอราคา", value: fmtBaht(kpi.quoteVal), sub: `${kpi.quotes} ใบ · ในช่วงที่เลือก`, Icon: FileText, color: "#0891B2", bg: "#E6F4F9" },
     // ⚠️ หารด้วย "ใบที่รู้ผลแล้ว" เท่านั้น — คนละตัวหารกับการ์ดชื่อคล้ายกันที่หน้าใบเสนอราคาทั้งเครือ
     { label: "อัตราปิดการขาย (จากใบที่รู้ผลแล้ว)", value: kpi.conv === null ? "—" : `${kpi.conv}%`, sub: "ตอบรับ ÷ (ตอบรับ + ปฏิเสธ)", Icon: Percent, color: "#7C3AED", bg: "#F0EBFB" },
-    { label: เต็มปี ? "เป้าหมายทั้งปี" : "เป้าหมาย (ตามช่วงที่เลือก)", value: dealerPerf.ready ? `${kpi.tpct}%` : "—",
-      sub: เต็มปี ? `ยอดสะสม ${money(kpi.actual)} จาก ${fmtBaht(kpi.target)}` : `ยอดในช่วง ${money(kpi.actual)} จากเป้าเฉลี่ย ${fmtBaht(Math.round(kpi.target * ช่วงกี่วัน / 365))}`,
-      Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
+    { label: "เป้าหมายทั้งปี", value: dealerPerf.ready ? `${kpi.tpct}%` : "—", sub: `ยอดสะสม ${money(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
   ];
 
   const sel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
@@ -439,7 +430,7 @@ export default function SalesAnalyticsPage() {
           <FilterBar dims={[]} />
           {/* ส่งออก = ตารางผลงานที่เห็นบนจอ (ผ่านตัวกรองทุกตัวแล้ว) */}
           <ExportMenu filename="hq-sales-analytics" title="ภาพรวมยอดขายทั้งเครือ"
-            headers={["รหัสตัวแทน", "ตัวแทนจำหน่าย", "ภูมิภาค", "จังหวัด", "ลูกค้าเป้าหมาย", "ใบเสนอราคา", "มูลค่าใบเสนอราคา", "ยอดขายในช่วง", "อัตราปิดการขาย", "เป้าหมายทั้งปี", "% ของเป้า (ตามช่วง)", "ใบเสนอราคาล่าสุด"]}
+            headers={["รหัสตัวแทน", "ตัวแทนจำหน่าย", "ภูมิภาค", "จังหวัด", "ลูกค้าเป้าหมาย", "ใบเสนอราคา", "มูลค่าใบเสนอราคา", "ยอดขายสะสมทั้งปี", "อัตราปิดการขาย", "เป้าหมายทั้งปี", "% ของเป้า", "ใบเสนอราคาล่าสุด"]}
             rows={perf.map(d => [
               d.code, d.name, regionDisplay(d.region), d.province, d.leads, d.quotes, d.quoteVal,
               d.revenueActual, d.conv === null ? "—" : `${d.conv}%`, d.revenueTarget, `${d.tpct}%`, d.latest,
@@ -520,13 +511,13 @@ export default function SalesAnalyticsPage() {
           ยืดเองด้วย flex column แทน แล้วปล่อยให้ .chart-scroll ข้างในกินที่ที่เหลือ */}
       <div className="card" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
         <div className="card-header">
-          <div className="card-title">{เต็มปี ? "เป้าหมายทั้งปี เทียบ ยอดขายจริง" : "เป้าหมาย เทียบ ยอดขายจริง (ตามช่วงที่เลือก)"}</div>
+          <div className="card-title">เป้าหมายทั้งปี เทียบ ยอดขายจริง</div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             {([["dealer", "ตัวแทน"], ["region", "ภูมิภาค"], ["province", "จังหวัด"]] as const)
               .map(([v, l]) => viewTab(tgView, v, l, () => setTgView(v)))}
           </div>
         </div>
-        <HBars rows={targetVsActual} aLabel={เต็มปี ? "ยอดขายสะสมทั้งปี" : "ยอดขายในช่วง"} bLabel={เต็มปี ? "เป้าหมายทั้งปี" : "เป้าเฉลี่ยของช่วง"} fmt={fmtBaht} />
+        <HBars rows={targetVsActual} aLabel="ยอดขายสะสมทั้งปี" bLabel="เป้าหมายทั้งปี" fmt={fmtBaht} />
       </div>
       </div>
 
@@ -700,7 +691,7 @@ function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, file
 
           <div style={head}><Coins size={11} /> สรุปยอดขาย</div>
           <div style={{ fontSize: "0.66rem", color: MUTED, marginBottom: 4 }}>ยอดสะสม/เป้า = ตัวเลขทางการของตัวแทน · ไม่ใช่ผลรวมใบเสนอราคาด้านบน</div>
-          {row("ยอดขายในช่วงที่เลือก", fmtBaht(d.revenueActual))}
+          {row("ยอดขายสะสมทั้งปี", fmtBaht(d.revenueActual))}
           {row("เป้าหมายทั้งปี", fmtBaht(d.revenueTarget))}
           {row("% ของเป้า", <span style={{ color: d.tpct >= 100 ? "#059669" : PRIMARY }}>{d.tpct}%</span>)}
 

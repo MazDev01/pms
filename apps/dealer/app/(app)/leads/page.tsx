@@ -26,7 +26,7 @@ import { useLeadRules } from "@pms/shared/lib/useHQRules";
 import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { TemplateSelect } from "@pms/shared/components/ui/TemplateSelect";
-import { parseBaht, formatPhone } from "@pms/shared/lib/format";
+import { parseBaht, formatPhone , formatMoneyInput } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
 import { fmtLeadValue } from "@pms/shared/lib/format";
 import { useEscapeKey } from "@pms/shared/lib/useModalA11y";
@@ -1857,8 +1857,8 @@ export default function LeadsPage() {
                           <td className="num" style={{ fontSize:"0.8rem", fontWeight:700, color:"#2D2D2D" }}
                             onClick={e => { e.stopPropagation(); setEditValueId(l.id); setValueDraft(String(parseValue(l.value) || "")); }}>
                             {editValueId === l.id ? (
-                              <input autoFocus aria-label="ประเมินราคา" type="number" value={valueDraft}
-                                onChange={e => setValueDraft(e.target.value)}
+                              <input autoFocus aria-label="ประเมินราคา" type="text" inputMode="numeric" value={formatMoneyInput(valueDraft)}
+                                onChange={e => setValueDraft(e.target.value.replace(/,/g, ""))}
                                 onClick={e => e.stopPropagation()}
                                 onBlur={() => commitValue(l)}
                                 onKeyDown={e => { if (e.key === "Enter") commitValue(l); if (e.key === "Escape") setEditValueId(null); }}

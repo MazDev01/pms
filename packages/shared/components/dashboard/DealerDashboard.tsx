@@ -14,12 +14,13 @@ import {
 import { useSales } from "@pms/shared/context/SalesContext";
 import { fmtLeadValue } from "@pms/shared/lib/format";
 import { useFilters, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import { ความละเอียดของช่วง, ช่องเวลาในช่วง, คีย์ช่อง, ยอดรายชั่วโมง } from "@pms/shared/lib/trendBuckets";
 import { FilterBar } from "@pms/shared/components/filters/FilterBar";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { PlanVsActualBars, SalesLineChart, CategoryRows, Donut, ProgressRing } from "@pms/shared/components/ui/Charts";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import {
-  MonthRangeToggle, lastNMonths, monthRangeSubtitle, monthKey,
+  MonthRangeToggle, lastNMonths, monthKey,
   type MonthRange,
 } from "@pms/shared/components/ui/MonthRangeToggle";
 import {
@@ -113,7 +114,10 @@ export default function DealerDashboard() {
     [wonByKey],
   );
   const achievePct = annualTarget > 0 ? Math.round((ytdSales / annualTarget) * 100) : 0;
-  const openLeads = useMemo(() => leadsIn.filter(isLeadOpen), [leadsIn]);
+  // ⚠️ "งานที่ยังเปิดอยู่" คือสถานะ ณ ตอนนี้ ไม่ใช่ตัวเลขที่เกิดในช่วงเวลา (บอสสั่ง 26 ส.ค. 69
+  //    ให้ตัวกรองคุมแค่บางส่วน · กติกาเดียวกับฝั่งสำนักงานใหญ่)
+  //    เดิมกรองด้วยช่วงเวลาด้วย → เลือก "วันนี้" แล้วโอกาสการขายเหลือ ฿0 ทั้งที่งานยังค้างอยู่จริงหลายสิบดีล
+  const openLeads = useMemo(() => myLeads.filter(isLeadOpen), [myLeads]);
   const openValue = useMemo(() => openLeads.reduce((s, l) => s + parseValue(l.value), 0), [openLeads]);
   const followUpToday = useMemo(() => appointments.filter(a => a.date === TODAY_ISO && a.status !== "cancelled").length, [appointments]);
   // ปิดการขายได้ = จำนวนใบเสนอราคาที่ปิดได้ (won) · อัตราปิดการขาย = won / (won + lost)
@@ -129,14 +133,32 @@ export default function DealerDashboard() {
   // ── กราฟใหญ่ 2 ใบ ── แต่ละใบมีปุ่มช่วงย้อนหลังของตัวเอง (3/6/12 เดือน) เป็นอิสระจากกัน
   // ไม่ผูกกับตัวกรองช่วงเวลาบนแถบบน — เป็นกราฟแนวโน้ม ต้องเห็นย้อนหลังเสมอ
   const [lqRange, setLqRange] = useState<MonthRange>(6);
-  // กราฟยอดขายรายเดือนตรึงที่ 6 เดือน — ปุ่ม 3/6/12 ถูกถอดออกตามคำสั่ง (17 ก.ค. 69) เฉพาะใบนี้
-  const SALES_RANGE: MonthRange = 6;
-
-  // ยอดขายรายเดือน (ล้านบาท): กราฟเส้น + เส้นประเป้าพาดผ่าน — จุดเขียว = เดือนที่ถึงเป้า
-  const salesData = useMemo(
-    () => lastNMonths(SALES_RANGE, MOCK_TODAY).map(b => ({ label: b.label, value: Math.round(((wonByKey.get(b.key) ?? 0) / 1e6) * 10) / 10 })),
-    [wonByKey],
-  );
+  // ── กราฟยอดขาย: เดินตามแถบกรองด้านบน เหมือนฝั่งสำนักงานใหญ่ (บอสสั่ง 25 ส.ค. 69) ──
+  //   วันนี้ → รายชั่วโมง (ตามเวลาที่ระบบบันทึกใบ) · ไม่เกิน 62 วัน → รายวัน · ยาวกว่านั้น → รายเดือน
+  //   ⚠️ เดิมตรึงไว้ 6 เดือนเสมอ ไม่ว่าจะเลือกช่วงไหนบนแถบก็ไม่ขยับ
+  // q.date เก็บเป็น "YYYY-MM-DD" — แปลงเป็นวันที่แบบไม่ผ่าน timezone (new Date("2026-08-01") ได้ UTC แล้วเพี้ยนวัน)
+  const parseISO = (v: string): Date | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v ?? "");
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  };
+  const ละเอียดยอดขาย = ความละเอียดของช่วง(timeRange.start, timeRange.end);
+  const salesData = useMemo(() => {
+    const won = quotations.filter(q => q.status === "won");
+    if (ละเอียดยอดขาย === "hour") {
+      const ของวันนั้น = won.filter(q => { const d = parseISO(q.date); return !!d && d >= timeRange.start && d <= timeRange.end; });
+      const pts = ยอดรายชั่วโมง(ของวันนั้น.map(q => ({ savedAt: q.savedAt, valueNum: q.totalValue })));
+      if (pts) return pts.map(p => ({ label: p.month, value: Math.round(p.value * 10) / 10 }));
+      // ไม่มีเวลาบันทึก = ทำรายชั่วโมงไม่ได้ → ตกไปเป็นรายวัน ไม่เดาเวลาให้
+    }
+    const ช่อง = ช่องเวลาในช่วง(timeRange.start, timeRange.end, ละเอียดยอดขาย === "hour" ? "day" : ละเอียดยอดขาย);
+    const ยอด = new Map<string, number>();
+    won.forEach(q => {
+      const d = parseISO(q.date); if (!d || d < timeRange.start || d > timeRange.end) return;
+      const k = คีย์ช่อง(d, ละเอียดยอดขาย === "hour" ? "day" : ละเอียดยอดขาย);
+      ยอด.set(k, (ยอด.get(k) ?? 0) + q.totalValue);
+    });
+    return ช่อง.map(b => ({ label: b.label, value: Math.round(((ยอด.get(b.key) ?? 0) / 1e6) * 10) / 10 }));
+  }, [quotations, ละเอียดยอดขาย, timeRange.start, timeRange.end]);
   const monthTargetM = Math.round((monthTarget / 1e6) * 10) / 10;
   // ── ลูกค้าเป้าหมาย เทียบ ที่ออกใบเสนอราคาแล้ว: แท่งคู่รายเดือน หน่วย "ราย" ทั้งคู่ ──
   //
@@ -224,11 +246,13 @@ export default function DealerDashboard() {
   // เรียงจากวันน้อยไปมาก (บอสสั่ง 21 ส.ค. 69) — รายที่เพิ่งเลยกำหนดอยู่บนสุด
   //   เหตุผล: รายที่เงียบไป 2-3 เดือนมักเย็นไปแล้ว ส่วนรายที่เพิ่งเลยกำหนดไม่กี่วันคือรายที่โทรกลับแล้วได้ผลจริง
   //   ⚠️ ตัดเหลือ 4 รายการ "หลังเรียง" เสมอ — สลับลำดับแล้วรายการที่โชว์จะเปลี่ยนชุดไปด้วย
+  // ⚠️ "ค้างติดต่อ" คือสถานะ ณ ตอนนี้ เหมือน "งานที่ยังเปิดอยู่" — ไม่กรองด้วยช่วงเวลา
+  //    เดิมเลือก "วันนี้" แล้วรายการนี้ว่างเปล่า ทั้งที่ยังมีงานค้างจริง (บอสสั่ง 26 ส.ค. 69)
   const urgentLeads = useMemo(
-    () => leadsIn.filter(l => needsFollowUp(l, followUpAlertDays))
+    () => myLeads.filter(l => needsFollowUp(l, followUpAlertDays))
       .sort((a, b) => (daysSinceContact(a) ?? 0) - (daysSinceContact(b) ?? 0))
       .slice(0, 4),
-    [leadsIn, followUpAlertDays]);
+    [myLeads, followUpAlertDays]);
   const todayTasks = useMemo(() => appointments.filter(a => a.date === TODAY_ISO && a.status !== "cancelled").sort((a, b) => a.time.localeCompare(b.time)).slice(0, 4), [appointments]);
   const latestQuotes = useMemo(() => [...quotesIn].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4), [quotesIn]);
 
@@ -380,7 +404,6 @@ export default function DealerDashboard() {
               {more("/leads")}
             </span>
           </div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>จำนวนราย (ไม่ใช่จำนวนใบ) ต่อเดือน · {monthRangeSubtitle(lqRange, MOCK_TODAY)} · ยิ่งสองแท่งใกล้กัน = เสนอราคาได้มากเทียบกับที่รับเข้ามา</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             {/* คำอธิบายสีอยู่ใน PlanVsActualBars แล้ว — เดิมเขียนมือซ้ำไว้ใต้การ์ดนี้ใบเดียว
                 (อีก 2 การ์ดที่ใช้กราฟตัวเดียวกันเลยไม่มีคำอธิบายสีมาตลอด) */}
@@ -389,18 +412,17 @@ export default function DealerDashboard() {
           </div>
         </div>
 
-        {/* ยอดขายรายเดือน — กราฟเส้น + เส้นประเป้าหมาย */}
+        {/* ยอดขาย — กราฟเส้น + เส้นประเป้าหมาย · ช่วง/ความละเอียดมาจากแถบกรองด้านบน */}
         <div className="card" style={card}>
           <div style={hd}>
-            <span style={title}>ยอดขายรายเดือน</span>
+            <span style={title}>ยอดขาย{ละเอียดยอดขาย === "month" ? "รายเดือน" : ละเอียดยอดขาย === "day" ? "รายวัน" : "รายชั่วโมง"}</span>
             {more("/quotations")}
           </div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 10 }}>ยอดปิดการขายแต่ละเดือน · {monthRangeSubtitle(SALES_RANGE, MOCK_TODAY)} · เส้นประ = เป้าหมายรายเดือน · ชี้ที่เดือนเพื่อดูตัวเลข</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <SalesLineChart data={salesData} target={monthTargetM} height={260}
               fmt={v => `฿${v.toFixed(1)}M`} targetLabel="เป้า/เดือน" />
           </div>
-          <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: "0.8rem", color: SUB, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 16, justifyContent: "flex-start", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, fontSize: "0.8rem", color: SUB, flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 2, background: NAVY }} /> ยอดขาย</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: SUCCESS }} /> เดือนที่ถึงเป้า</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 2, background: "#EA580C" }} /> เป้าหมายรายเดือน {baht(monthTarget)}</span>
@@ -413,10 +435,6 @@ export default function DealerDashboard() {
         {/* ผลงานผู้รับผิดชอบ */}
         <div className="card" style={card}>
           <div style={hd}><span style={title}>ผลงานผู้รับผิดชอบ</span>{more("/leads")}</div>
-          {/* ⚠️ ต้องบอกว่าเป็น "อันดับแรก ๆ" ไม่ใช่ทั้งหมด ไม่งั้นผู้ใช้บวกแถวแล้วไม่ตรงยอดรวม (DL-06) */}
-          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>
-            ยอดปิดการขายของแต่ละคน · {timeRange.subtitle}
-          </div>
           {teamPerf.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ไม่มีข้อมูลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <CategoryRows
@@ -431,9 +449,6 @@ export default function DealerDashboard() {
         <div className="card" style={card}>
           {/* ไปหน้าลูกค้า ไม่ใช่หน้าสินค้า — แม่แบบพวกนี้มาจากดีลที่ลูกค้าปิดจริง คำถามถัดไปคือ "ใครซื้อ" ไม่ใช่ "สเปกอะไร" */}
           <div style={hd}><span style={title}>ยอดขายตามแม่แบบ</span>{more("/customers")}</div>
-          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>
-            ยอดปิดการขายแยกตามแม่แบบ · {timeRange.subtitle}
-          </div>
           {salesByProduct.length === 0 ? <EmptyState icon={<Trophy size={26} />} title="ยังไม่มีการปิดการขายในช่วงนี้" description="ยอดขายจะขึ้นเมื่อปิดการขายสำเร็จ" compact /> : (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               {/* กดแถวไหน = ไปหน้าลูกค้าพร้อมกรองแม่แบบนั้นไว้ให้เลย
@@ -455,12 +470,6 @@ export default function DealerDashboard() {
         {/* ขั้นตอนการขาย (โดนัท) */}
         <div className="card" style={card}>
           <div style={hd}><span style={title}>ขั้นตอนการขาย</span>{more("/leads")}</div>
-          {/* ⚠️ การ์ดนี้นับ "ลูกค้าเป้าหมาย" ตามขั้น ส่วนการ์ด KPI ด้านบนนับ "ใบเสนอราคาที่ปิดได้"
-              เลขจึงต่างกันได้โดยชอบธรรม — ต้องเขียนบอกไว้ ไม่งั้นอ่านเหมือนสองที่ขัดกัน
-              (ผลตรวจภายนอก DL-04 · 24 ส.ค. 69: การ์ดบนขึ้น 19 ดีล ส่วนขั้น "ปิดการขายสำเร็จ" ขึ้น 2) */}
-          <div style={{ ...sub, marginTop: -10, marginBottom: 6 }}>
-            นับเป็นลูกค้าเป้าหมาย (ไม่ใช่จำนวนใบเสนอราคา) · {timeRange.subtitle}
-          </div>
           {dealStatus.length === 0 ? <EmptyState icon={<Target size={26} />} title="ไม่มีดีลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
               <Donut segments={dealStatus} centerLabel="ดีลทั้งหมด" centerValue={`${leadsIn.length}`} size={118} />

@@ -295,11 +295,18 @@ export default function HQDashboard() {
   const trendHourly = useMemo(() => {
     if (!แยกรายชั่วโมง) return null;
     if (quoteSummary) {
-      if (!quoteSummary.byHour.length) return null;   // ไม่มีเวลาบันทึก = ทำรายชั่วโมงไม่ได้
+      // ⚠️ เลือก "วันนี้" ต้องเห็นแกน 24 ชั่วโมงเสมอ แม้ยังไม่มียอดขายเลย (บอสทัก 26 ส.ค. 69)
+      //    เดิมตกกลับไปเป็นรายวัน แล้วได้จุดเดียวโดด ๆ ซึ่งอ่านไม่ได้ความอะไร
+      //    ยกเว้นกรณีเดียว: วันนั้น "มียอดขายจริง แต่ใบไม่มีเวลาบันทึก" → ต้องกลับไปรายวัน
+      //    ไม่งั้นเงินที่ขายได้จะหายไปจากกราฟทั้งก้อน (ซ่อนของจริง = ห้ามเด็ดขาด)
+      const ยอดวันนั้น = quoteSummary.byDay.reduce((s, r) => s + r.wonVal, 0);
+      if (!quoteSummary.byHour.length && ยอดวันนั้น > 0) return null;
       const byH = new Map(quoteSummary.byHour.map(r => [r.h, r.wonVal]));
       return Array.from({ length: 24 }, (_, h) => ({ month: `${String(h).padStart(2, "0")}:00`, value: (byH.get(h) ?? 0) / 1e6 }));
     }
-    return ยอดรายชั่วโมง(winQuotes.filter(q => q.status === "won"));
+    const won = winQuotes.filter(q => q.status === "won");
+    // เหตุผลเดียวกับด้านบน — ไม่มียอดเลยก็ยังโชว์แกน 24 ชั่วโมง
+    return ยอดรายชั่วโมง(won) ?? (won.length ? null : Array.from({ length: 24 }, (_, h) => ({ month: `${String(h).padStart(2, "0")}:00`, value: 0 })));
   }, [แยกรายชั่วโมง, quoteSummary, winQuotes]);
   const trendDaily = useMemo(() => {
     if (!แยกรายวัน && !แยกรายชั่วโมง) return [];
@@ -340,8 +347,10 @@ export default function HQDashboard() {
   //    revenueW = ยอด won ในช่วง (มาจาก dealerStats ซึ่งกรองด้วย timeRange อยู่แล้ว)
   const regions = useMemo(() => {
     const m = new Map<string, { revenue: number; count: number }>();
-    // นับเฉพาะสาขาที่มียอดขายในช่วง — ไม่มีผลงานในช่วงก็ไม่นับ (ป้ายการ์ดเขียนบอกไว้แล้ว)
-    rankedWin.filter(d => d.revenueW > 0).forEach(d => {
+    // จำนวนตัวแทน = ทะเบียนสาขา ไม่ขึ้นกับช่วงเวลา (บอสสั่งกลับ 26 ส.ค. 69)
+    //   เลือก "วันนี้" แล้วโดนัทเหลือ 0 สาขา อ่านเหมือนไม่มีตัวแทนอยู่เลย
+    //   ส่วนแถบยอดขายใต้โดนัทยังเดินตามตัวกรองตามเดิม (เป็นยอดขาย ไม่ใช่ทะเบียน)
+    rankedWin.forEach(d => {
       const r = m.get(d.region) ?? { revenue: 0, count: 0 };
       r.revenue += d.revenueW; r.count += 1;
       m.set(d.region, r);
@@ -501,9 +510,14 @@ export default function HQDashboard() {
   const ยอดตามช่วง = useMemo(() => {
     let s = 0; dealerStats.forEach(v => (s += v.revenue)); return s;
   }, [dealerStats]);
-  const เต็มปี = periodDays >= 360;
-  const เป้าที่ใช้ = เต็มปี ? targets.annualTarget : เป้าตามช่วง;
-  const ยอดที่ใช้ = เต็มปี ? annualWonTotal : ยอดตามช่วง;
+  // ⚠️ กลับมาเป็น "ทั้งปี" เสมอ ไม่ขึ้นกับตัวกรอง (บอสสั่ง 26 ส.ค. 69 — ให้ตัวกรองคุมแค่บางอัน)
+  //    เหตุผลที่เห็นกับตา: เลือก "วันนี้" แล้วการ์ดขึ้น ฿712K / 0% ซึ่งอ่านเหมือนทั้งเครือทำงานไม่ได้เลย
+  //    เป้าที่ผู้บริหารตั้งเป็นรายปี การเทียบจึงต้องเป็น "สะสมทั้งปี เทียบ เป้าทั้งปี" เท่านั้น
+  //    (ตรงกับกฎเดิมของระบบ · เก็บตัวแปรตามช่วงไว้เผื่อใช้ที่อื่น)
+  void เป้าตามช่วง; void ยอดตามช่วง;
+  const เต็มปี = true;
+  const เป้าที่ใช้ = targets.annualTarget;
+  const ยอดที่ใช้ = annualWonTotal;
 
   // ประเภทอาคาร + จำนวนโครงการ
   // การ์ดโชว์ 5 อันดับแรก · ข้อความบอกส่วนที่เหลือถูกลบทั้งหมดตามที่บอสสั่ง (25 ส.ค. 69)

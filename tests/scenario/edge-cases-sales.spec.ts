@@ -209,7 +209,8 @@ async function openQuoteForm(page: import("@playwright/test").Page, company: str
   // ช่องจำนวน/ราคาต่อหน่วยแยกกันด้วยเพดานของตัวเอง (max) — ชี้ตรงตัวได้โดยไม่ต้องพึ่งลำดับคอลัมน์
   return {
     qty: page.locator('input[type="number"][max="100000"]').first(),
-    unitPrice: page.locator('input[type="number"][max="100000000"]').first(),
+    // ราคาต่อหน่วยเป็นช่อง text แล้ว (26 ส.ค. 69 ใส่ลูกน้ำระหว่างพิมพ์) — ชี้ด้วยป้ายกำกับแทน max
+    unitPrice: page.getByLabel("ราคาต่อหน่วย").first(),
   };
 }
 
@@ -223,7 +224,7 @@ test("[edge] กรอกจำนวน/ราคาติดลบในใบ
   await page.waitForTimeout(500);
 
   expect(Number(await qty.inputValue() || 0), "จำนวนติดลบต้องถูกปรับเป็น 0").toBeGreaterThanOrEqual(0);
-  expect(Number(await unitPrice.inputValue() || 0), "ราคาติดลบต้องถูกปรับเป็น 0").toBeGreaterThanOrEqual(0);
+  expect(Number((await unitPrice.inputValue()).replace(/,/g, "") || 0), "ราคาติดลบต้องถูกปรับเป็น 0").toBeGreaterThanOrEqual(0);
 
   const panel = await page.locator("body").innerText();
   expect(/-\s*฿|฿\s*-/.test(panel), "ต้องไม่มียอดติดลบโผล่บนหน้าจอเลย").toBe(false);
@@ -239,7 +240,7 @@ test("[edge] กรอกจำนวนมหาศาล → ต้องถ�
   await page.waitForTimeout(500);
 
   expect(Number(await qty.inputValue() || 0), "จำนวนต้องไม่เกินเพดาน 100,000").toBeLessThanOrEqual(100_000);
-  expect(Number(await unitPrice.inputValue() || 0), "ราคาต่อหน่วยต้องไม่เกินเพดาน 100 ล้าน").toBeLessThanOrEqual(100_000_000);
+  expect(Number((await unitPrice.inputValue()).replace(/,/g, "") || 0), "ราคาต่อหน่วยต้องไม่เกินเพดาน 100 ล้าน").toBeLessThanOrEqual(100_000_000);
 });
 
 test("[edge] VAT ต้องคำนวณจากยอดก่อน VAT ให้ตรง ไม่ปัดเศษเพี้ยน", async ({ page }) => {

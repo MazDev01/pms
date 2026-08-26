@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
 import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
@@ -612,7 +613,11 @@ function HQDealersPageInner() {
                   {/* เป้ายอดขายติดลบไม่มีอยู่จริงในทางธุรกิจ และทำให้ตัวเลขอื่นเพี้ยนตามเป็นทอด ๆ:
                       เปอร์เซ็นต์ความสำเร็จของสาขา · เป้ารวมทั้งเครือบนหัวตาราง · กราฟเทียบเป้า
                       เดิมรับค่าติดลบตรง ๆ (พิมพ์ -5000000 แล้วบันทึกลงระบบได้จริง · พบ 6 ส.ค. 69) */}
-                  <input type="number" min={0} value={form.revenueTarget || ""} onChange={e => { setTargetTouched(true); setForm(f => ({ ...f, revenueTarget: Math.max(0, Number(e.target.value) || 0) })); }} placeholder="0" style={INPUT_STYLE} />
+                  {/* ช่องเงินใช้ text + ใส่ลูกน้ำเอง — type="number" ใส่ลูกน้ำไม่ได้ และหลักล้านอ่านยากมาก (บอสสั่ง 26 ส.ค. 69) */}
+                  <input type="text" inputMode="numeric" aria-label="เป้ายอดขายทั้งปี"
+                    value={form.revenueTarget ? formatMoneyInput(String(form.revenueTarget)) : ""}
+                    onChange={e => { setTargetTouched(true); setForm(f => ({ ...f, revenueTarget: parseMoneyInput(e.target.value) })); }}
+                    placeholder="0" style={INPUT_STYLE} />
                   {/* ยังไม่เลือกภาค = ยังแนะนำค่าไม่ได้ — ห้ามขึ้นเลขลอย ๆ ที่ไม่รู้ว่ามาจากไหน */}
                   {!editTarget && !targetTouched && form.region && (
                     <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>

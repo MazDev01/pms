@@ -66,7 +66,9 @@ test("[edge·hq] ตั้งเป้ายอดขายติดลบ → �
   await row.getByRole("button", { name: "แก้ไข" }).first().click();
 
   // fill() พิมพ์ค่าลงช่องตรง ๆ — จำลองการพิมพ์เครื่องหมายลบโดยไม่ตั้งใจ (หรือจงใจ)
-  const target = page.locator('input[type="number"]').first();
+  // ช่องเป้าเป็น text แล้ว (26 ส.ค. 69 ใส่ลูกน้ำระหว่างพิมพ์) — ตัวช่องเองก็กรองเครื่องหมายลบทิ้ง
+  // แต่ยังต้องยืนยันปลายทางว่าฐานข้อมูลไม่รับค่าติดลบ (กันคนยิงตรงข้าม API)
+  const target = page.getByLabel("เป้ายอดขายทั้งปี").first();
   await target.fill("-5000000");
   await page.getByRole("button", { name: /บันทึก/ }).last().click();
   await page.waitForTimeout(2_500);

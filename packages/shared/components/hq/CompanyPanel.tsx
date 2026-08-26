@@ -1,5 +1,5 @@
 "use client";
-import { formatPhone } from "@pms/shared/lib/format";
+import { formatPhone, formatTaxId } from "@pms/shared/lib/format";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -138,7 +138,7 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
             </div>
             <div className="col-full">
               <label className="form-label">เลขประจำตัวผู้เสียภาษี</label>
-              <input className="form-input" value={form.taxId} onChange={e => set("taxId", e.target.value)} placeholder="0105XXXXXXXXX" />
+              <input className="form-input" inputMode="numeric" value={form.taxId} onChange={e => set("taxId", formatTaxId(e.target.value))} placeholder="0-1055-XXXXX-XX-X" />
             </div>
 
             <div className="form-section">ช่องทางติดต่อ</div>

@@ -10,17 +10,15 @@ import { openAs, settle } from "./helpers";
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(300_000);
 
-test("การ์ดที่ตัดมาแสดงบางส่วน ต้องบอกส่วนที่เหลือ", async ({ page }) => {
+// ⚠️ เดิมล็อกว่าการ์ดบนแดชบอร์ดตัวแทนต้องมีคำบรรยายบอกกติกาการนับใต้หัวข้อ
+//    บอสสั่งเอาคำบรรยายเล็กใต้หัวการ์ดออกทั้งหมด 25 ส.ค. 69 (ทั้ง HQ และตัวแทน)
+//    จึงเหลือล็อกแค่ "การ์ดยังอยู่และวาดข้อมูลได้"
+test("แดชบอร์ดตัวแทน: การ์ดผลงาน/แม่แบบ/ขั้นตอน ยังแสดงผลได้", async ({ page }) => {
   await openAs(page, RYG, "dealer", "/dashboard");
   await settle(page); await page.waitForTimeout(2500);
-  const t = await page.locator("body").innerText();
-  const ผลงาน = t.split("\n").find(x => x.includes("ยอดปิดการขายของแต่ละคน")) ?? "";
-  const แม่แบบ = t.split("\n").find(x => x.includes("ยอดปิดการขายแยกตามแม่แบบ")) ?? "";
-  const ขั้นตอน = t.split("\n").find(x => x.includes("นับเป็นลูกค้าเป้าหมาย")) ?? "";
-  console.log("ผลงานผู้รับผิดชอบ:", ผลงาน.trim().slice(0, 120));
-  console.log("ยอดขายตามแม่แบบ:", แม่แบบ.trim().slice(0, 120));
-  console.log("ขั้นตอนการขาย:", ขั้นตอน.trim().slice(0, 120));
-  expect(ขั้นตอน, "การ์ดขั้นตอนต้องบอกว่านับเป็นลูกค้าเป้าหมาย").toContain("ไม่ใช่จำนวนใบเสนอราคา");
+  for (const ชื่อ of ["ผลงานผู้รับผิดชอบ", "ยอดขายตามแม่แบบ", "ขั้นตอนการขาย"]) {
+    await expect(page.getByText(ชื่อ).first(), `ต้องมีการ์ด "${ชื่อ}"`).toBeVisible();
+  }
 });
 
 test("หน้า HQ: การ์ดประเภทอาคารบอกส่วนที่เหลือ · ดรอปดาวน์บอกที่มา", async ({ page }) => {

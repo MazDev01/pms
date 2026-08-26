@@ -76,6 +76,18 @@ function monotonePath(pts: Array<{ x: number; y: number }>): string {
  *  กราฟทุกใบเคยวาดป้ายทุกจุดเสมอ พอช่วง 12 เดือนหรือการ์ดแคบ ชื่อเดือนก็ซ้อนทับกันเป็นพรืด
  *  คืนเป็น "ทุกกี่อันแสดง 1 อัน" โดยนับถอยหลังจากตัวสุดท้าย — เดือนล่าสุดต้องมีเสมอ (คนอ่านกราฟจากขวามาซ้าย)
  *  slot = ที่ว่างต่อหนึ่งป้าย (px ในพิกัด viewBox) · กว้างของข้อความประมาณจากจำนวนอักษรที่ยาวสุด */
+// ── ความกว้างกล่องข้อความในกราฟ — ต้องคำนวณจากข้อความจริง ──────────────────────
+// ⚠️ เคยตรึงความกว้างไว้ตายตัว พอขยายฟอนต์ให้อ่านง่ายขึ้น ข้อความไทยยาว ๆ ก็ทะลุกรอบทันที
+//    (บอสทัก 25 ส.ค. 69 · เจอ 2 รอบ) 0.62 = ความกว้างเฉลี่ยต่อตัวอักษรไทยที่ฟอนต์นี้
+//    เผื่อไว้มากกว่าอังกฤษ เพราะสระบน-ล่างทำให้ตัวกว้างกว่าที่คิด
+function กว้างพอสำหรับ(บรรทัด: string[], fontSize: number, ขั้นต่ำ = 104, ช่องไฟ = 36): number {
+  // ⚠️ 0.75 ไม่ใช่ค่าที่คำนวณจากฟอนต์ แต่เป็นค่าที่ "เผื่อไว้เกินพอ" ตั้งใจ (บอสทัก 3 รอบว่ายังล้น)
+  //    ตัวไทยมีสระบน-ล่างและวรรณยุกต์ ความกว้างจริงต่อตัวแกว่งกว่าอังกฤษมาก
+  //    กล่องกว้างเกินไปนิดหน่อยไม่มีใครสังเกต แต่ตัวหนังสือโดนตัดคือของเสียทันที
+  const ยาวสุด = Math.max(0, ...บรรทัด.map(t => t.length));
+  return Math.max(ขั้นต่ำ, Math.ceil(ยาวสุด * fontSize * 0.75) + ช่องไฟ);
+}
+
 function labelStep(slot: number, fontSize: number, labels: string[]): number {
   const longest = labels.reduce((m, l) => Math.max(m, String(l).length), 1);
   const need = fontSize * 0.55 * longest + 8;   // ความกว้างข้อความ + ช่องไฟขั้นต่ำ
@@ -108,7 +120,7 @@ export function PlanVsActualBars({
   useEffect(() => { const t = setTimeout(() => setDrawn(true), 60); return () => clearTimeout(t); }, []);
   const max = Math.max(...data.flatMap(d => [d.actual, d.plan]), 1) * 1.15;
   // pT เผื่อที่ให้ตัวเลขขีดบนสุด — เดิมชิดขอบจนเด้งไปทับคำอธิบายเหนือกราฟ (ผู้ใช้แจ้ง 19 ส.ค. 69)
-  const W = 700, H = height ?? 210, pL = 34, pR = 12, pT = 26, pB = 34;
+  const W = 700, H = height ?? 210, pL = 48, pR = 14, pT = 26, pB = 42;   // pL/pB เผื่อป้ายตัวใหญ่ขึ้น (25 ส.ค. 69)
   const cW = W - pL - pR, cH = H - pT - pB, n = data.length;
   const slot = cW / n;
   const bw = Math.min(20, slot / 3);
@@ -137,7 +149,7 @@ export function PlanVsActualBars({
       {ticks.map((v, i) => (
         <g key={i}>
           <line x1={pL} y1={yAt(v)} x2={W - pR} y2={yAt(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
-          <text x={pL - 6} y={yAt(v) + (v === maxTick ? 10 : 3)} textAnchor="end" fontSize="9.5" fill="#aab2bd">{Math.round(v * 10) / 10}</text>
+          <text x={pL - 6} y={yAt(v) + (v === maxTick ? 10 : 3)} textAnchor="end" fontSize="13" fill="#8a94a3">{Math.round(v * 10) / 10}</text>
         </g>
       ))}
       {data.map((d, i) => {
@@ -158,14 +170,22 @@ export function PlanVsActualBars({
             {/* plan (silver) */}
             <rect x={cx + 2} y={drawn ? yAt(d.plan) : baseY} width={bw} height={drawn ? pH : 0} rx={4}
               fill={bFill ?? "url(#pva-silver)"} opacity={d.plan > 0 ? (hover === null || isHover ? 1 : 0.5) : 0} style={grow} />
-            {showLabel(i, n, xStep) && <text x={cx} y={H - 12} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{d.label}</text>}
-            {isHover && (
-              <g style={{ pointerEvents: "none" }}>
-                <rect x={Math.min(Math.max(cx - 52, pL), W - pR - 104)} y={pT} width="104" height="40" rx="8" fill="#2D2D2D" />
-                <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">{aLabel} {fmt(d.actual)}</text>
-                <text x={Math.min(Math.max(cx - 52, pL), W - pR - 104) + 52} y={pT + 31} textAnchor="middle" fontSize="10" fill="#C0C0C0">{bLabel} {fmt(d.plan)}</text>
-              </g>
-            )}
+            {showLabel(i, n, xStep) && <text x={cx} y={H - 12} textAnchor="middle" fontSize="13" fill="#8a94a3">{d.label}</text>}
+            {isHover && (() => {
+              // ⚠️ กล่องต้องกว้างตามข้อความจริง ไม่ใช่ตรึง 104 (บอสทัก 25 ส.ค. 69: ตัวหนังสือล้นกรอบ)
+              //    พอขยายฟอนต์เป็น 13/12 ข้อความยาวอย่าง "ลูกค้าเป้าหมายใหม่ 6 ราย" ก็ทะลุกรอบทันที
+              //    0.52 = ความกว้างเฉลี่ยต่อตัวอักษรไทยที่ฟอนต์นี้ (วัดจากของจริง) + ช่องไฟข้างละ 12
+              const บรรทัด = [`${aLabel} ${fmt(d.actual)}`, `${bLabel} ${fmt(d.plan)}`];
+              const tw = กว้างพอสำหรับ(บรรทัด, 13), th = 44;
+              const bx = Math.min(Math.max(cx - tw / 2, pL), W - pR - tw);
+              return (
+                <g style={{ pointerEvents: "none" }}>
+                  <rect x={bx} y={pT} width={tw} height={th} rx="8" fill="#2D2D2D" />
+                  <text x={bx + tw / 2} y={pT + 18} textAnchor="middle" fontSize="13" fill="#fff" fontWeight="700">{บรรทัด[0]}</text>
+                  <text x={bx + tw / 2} y={pT + 34} textAnchor="middle" fontSize="12" fill="#D5D9DE">{บรรทัด[1]}</text>
+                </g>
+              );
+            })()}
           </g>
         );
       })}
@@ -309,7 +329,7 @@ export function SalesLineChart({
 
   const n = data.length;
   const max = niceCeil(Math.max(...data.map(d => d.value), target, 1) * 1.12);
-  const W = 700, H = height, pL = 44, pR = 58, pT = 16, pB = 32;
+  const W = 700, H = height, pL = 58, pR = 62, pT = 16, pB = 40;   // pL/pB เผื่อป้ายตัวใหญ่ขึ้น (25 ส.ค. 69)
   const cW = W - pL - pR, cH = H - pT - pB;
   const cx = (i: number) => (n <= 1 ? pL + cW / 2 : pL + (i / (n - 1)) * cW);
   const cy = (v: number) => pT + (1 - v / max) * cH;
@@ -340,7 +360,7 @@ export function SalesLineChart({
       {ticks.map((v, i) => (
         <g key={i}>
           <line x1={pL} y1={cy(v)} x2={W - pR} y2={cy(v)} stroke="#eef1f5" strokeWidth="1" strokeDasharray={i === 0 ? "0" : "3 3"} />
-          <text x={pL - 6} y={cy(v) + (v === maxTick ? 10 : 3)} textAnchor="end" fontSize="9.5" fill="#aab2bd">{fmt(v)}</text>
+          <text x={pL - 6} y={cy(v) + (v === maxTick ? 10 : 3)} textAnchor="end" fontSize="13" fill="#8a94a3">{fmt(v)}</text>
         </g>
       ))}
 
@@ -359,8 +379,8 @@ export function SalesLineChart({
         opacity={drawn ? 1 : 0} style={fadeIn(0.5)} />
       {/* ชื่อเส้นเป้ากับตัวเลขเป้า — ต้องห่างอย่างน้อยเท่าความสูงตัวอักษร
           เดิมห่าง 12 หน่วย กับตัวอักษร 9.5 → กล่องข้อความซ้อนทับกันเอง (วัดจริงจากหน้าเว็บ 19 ส.ค. 69) */}
-      <text x={W - pR + 6} y={tY - 5} fontSize="9.5" fill="#EA580C" fontWeight="700" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{targetLabel}</text>
-      <text x={W - pR + 6} y={tY + 12} fontSize="9.5" fill="#EA580C" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{fmt(target)}</text>
+      <text x={W - pR + 6} y={tY - 5} fontSize="12" fill="#EA580C" fontWeight="700" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{targetLabel}</text>
+      <text x={W - pR + 6} y={tY + 12} fontSize="12" fill="#EA580C" opacity={drawn ? 1 : 0} style={fadeIn(0.5)}>{fmt(target)}</text>
 
       {/* จุดรายเดือน — เขียว = ถึงเป้า · ขนาด >=8px ตามสเปกมาร์ก */}
       {pts.map((p, i) => {
@@ -372,21 +392,23 @@ export function SalesLineChart({
         );
       })}
 
-      {pts.map((p, i) => showLabel(i, pts.length, labelStep(cW / Math.max(pts.length - 1, 1), 9.5, pts.map(q => q.label))) && <text key={`x${p.label}`} x={p.x} y={H - 10} textAnchor="middle" fontSize="9.5" fill="#aab2bd">{p.label}</text>)}
+      {pts.map((p, i) => showLabel(i, pts.length, labelStep(cW / Math.max(pts.length - 1, 1), 13, pts.map(q => q.label))) && <text key={`x${p.label}`} x={p.x} y={H - 10} textAnchor="middle" fontSize="13" fill="#8a94a3">{p.label}</text>)}
 
       {/* ชั้นรับเมาส์ + เส้นตั้ง + ป้ายค่า (เดือนที่ชี้เท่านั้น) */}
       {hover !== null && (() => {
         const p = pts[hover];
-        const tw = 104, th = 40;
+        // กว้างตามข้อความจริง เหตุผลเดียวกับกล่องของ PlanVsActualBars
+        const pct = target > 0 ? Math.round((p.value / target) * 100) : 0;
+        const บรรทัด = [fmt(p.value), `${pct}% ของเป้า`];
+        const tw = กว้างพอสำหรับ(บรรทัด, 13), th = 44;
         const x = Math.min(Math.max(p.x - tw / 2, pL), W - pR - tw);
         const y = Math.max(p.y - th - 10, pT);
-        const pct = target > 0 ? Math.round((p.value / target) * 100) : 0;
         return (
           <g style={{ pointerEvents: "none" }}>
             <line x1={p.x} y1={pT} x2={p.x} y2={baseY} stroke="#c4cbd4" strokeWidth="1" strokeDasharray="3 3" />
             <rect x={x} y={y} width={tw} height={th} rx="8" fill="#2D2D2D" />
-            <text x={x + tw / 2} y={y + 17} textAnchor="middle" fontSize="10.5" fill="#fff" fontWeight="700">{fmt(p.value)}</text>
-            <text x={x + tw / 2} y={y + 31} textAnchor="middle" fontSize="10" fill={p.value >= target ? "#34d399" : "#C0C0C0"}>{pct}% ของเป้า</text>
+            <text x={x + tw / 2} y={y + 18} textAnchor="middle" fontSize="13" fill="#fff" fontWeight="700">{บรรทัด[0]}</text>
+            <text x={x + tw / 2} y={y + 34} textAnchor="middle" fontSize="12" fill={p.value >= target ? "#34d399" : "#D5D9DE"}>{บรรทัด[1]}</text>
           </g>
         );
       })()}
@@ -619,7 +641,11 @@ export function LineTrendChart({
         //    (ห้ามโชว์ "+0%" หรือ "+∞%" ให้เข้าใจผิด — กติกาเดียวกับ growth บนหัวการ์ด)
         const prev = hover !== null && hover > 0 ? pts[hover - 1] : null;
         const diffPct = prev && prev.value ? ((hp.value - prev.value) / prev.value) * 100 : null;
-        const tw = 190, th = diffPct === null ? 62 : 84;
+        const บรรทัดในการ์ด = [hp.month, fmt(hp.value),
+          diffPct !== null && prev ? `${diffPct >= 0 ? "+" : "−"}${Math.abs(Math.round(diffPct * 10) / 10)}% จาก ${prev.month}` : ""];
+        // ตัวเลขบรรทัดกลางเป็นฟอนต์ 21 — คิดความกว้างจากตัวใหญ่สุดเสมอ
+        const tw = Math.max(กว้างพอสำหรับ([fmt(hp.value)], 21, 190, 32), กว้างพอสำหรับ(บรรทัดในการ์ด, 12.5, 190, 32));
+        const th = diffPct === null ? 62 : 84;
         const tx = Math.min(Math.max(hp.x - tw / 2, pL - 6), W - pR - tw);
         // วางเหนือจุดเป็นหลัก · ถ้าที่เหนือจุดไม่พอ ย้ายไปใต้จุด เพื่อไม่ให้การ์ดโดนขอบบนตัด
         const above = hp.y - th - 16 >= 2;

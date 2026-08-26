@@ -10,7 +10,7 @@ import {
   Camera, Mail, KeyRound, Scale,
 } from "lucide-react";
 import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, QUOTE_PREFIX, quoteNoPrefix, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
-import { formatPhone } from "@pms/shared/lib/format";
+import { formatPhone, formatTaxId } from "@pms/shared/lib/format";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
@@ -177,7 +177,7 @@ function CompanyTab() {
             {/* ⚠️ ตัวอย่างเลขต้องมี X (แก้ 10 ส.ค. 69) — เดิมเป็น "0105555000000" ซึ่งเป็นตัวเลข 13 หลัก
                 ครบรูปแบบ อ่านผ่าน ๆ แล้วแยกไม่ออกว่าเป็นค่าตัวอย่างหรือเลขที่กรอกไว้แล้ว
                 และต้องเขียนเหมือนฝั่งสำนักงานใหญ่ (CompanyPanel) — ช่องเดียวกันห้ามมี 2 รูปแบบ */}
-            <input className="form-input" value={form.taxId} onChange={e => set("taxId", e.target.value)} placeholder="0105XXXXXXXXX" />
+            <input className="form-input" inputMode="numeric" value={form.taxId} onChange={e => set("taxId", formatTaxId(e.target.value))} placeholder="0-1055-XXXXX-XX-X" />
           </div>
           <div>
             <label className="form-label">อีเมลบริษัท</label>

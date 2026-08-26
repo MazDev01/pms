@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { sellRate } from "@pms/shared/lib/boq";
+import { formatMoneyInput } from "@pms/shared/lib/format";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import type { QuoteLineItem } from "@pms/shared/lib/mock";
 
@@ -156,7 +157,8 @@ export function LineItemsEditor({ items, onChange, defaultQty, showCatalog = tru
                     {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </td>
-                <td style={{ padding: "5px 6px" }}><input type="number" aria-label="ราคาต่อหน่วย" min={0} max={MAX_UNIT_PRICE} style={{ ...inp, textAlign: "right" }} value={it.unitPrice || ""} onChange={e => set(i, { unitPrice: clamp(Number(e.target.value), MAX_UNIT_PRICE) })} /></td>
+                {/* ราคาต่อหน่วยเป็นช่อง text เพื่อโชว์ลูกน้ำระหว่างพิมพ์ (บอสสั่ง 26 ส.ค. 69) — type="number" ใส่ลูกน้ำไม่ได้ */}
+                <td style={{ padding: "5px 6px" }}><input type="text" inputMode="decimal" aria-label="ราคาต่อหน่วย" style={{ ...inp, textAlign: "right" }} value={it.unitPrice ? formatMoneyInput(String(it.unitPrice)) : ""} onChange={e => set(i, { unitPrice: clamp(Number(e.target.value.replace(/,/g, "")), MAX_UNIT_PRICE) })} /></td>
                 <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 800, color: PRIMARY, whiteSpace: "nowrap" }}>฿{fmt(it.qty * it.unitPrice)}</td>
                 <td style={{ padding: "5px 4px", textAlign: "center" }}>{showCatalog && <button type="button" onClick={() => del(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", display: "flex", padding: 3 }}><Trash2 size={13} /></button>}</td>
               </tr>

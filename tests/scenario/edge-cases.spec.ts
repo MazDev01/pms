@@ -292,8 +292,9 @@ test("[edge] แก้ 'มูลค่า' ลูกค้าเป้าหม
       rowA.locator("td.num").last().click(),
       rowB.locator("td.num").last().click(),
     ]);
-    const inputA = pageA.locator("input[type=number]").first();
-    const inputB = pageB.locator("input[type=number]").first();
+    // ช่องมูลค่าเป็น text แล้ว (26 ส.ค. 69 ใส่ลูกน้ำระหว่างพิมพ์) — ชี้ด้วยป้ายกำกับแทนชนิดช่อง
+    const inputA = pageA.getByLabel("ประเมินราคา").first();
+    const inputB = pageB.getByLabel("ประเมินราคา").first();
     await Promise.all([inputA.fill("2000000"), inputB.fill("3000000")]);
     await Promise.all([inputA.press("Enter"), inputB.press("Enter")]);
     await pageA.waitForTimeout(2500); // เผื่อเวลาให้ทั้งสองคำขอ propagate ถึง DB
