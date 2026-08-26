@@ -299,9 +299,14 @@ export default function HQDashboard() {
       //    เดิมตกกลับไปเป็นรายวัน แล้วได้จุดเดียวโดด ๆ ซึ่งอ่านไม่ได้ความอะไร
       //    ยกเว้นกรณีเดียว: วันนั้น "มียอดขายจริง แต่ใบไม่มีเวลาบันทึก" → ต้องกลับไปรายวัน
       //    ไม่งั้นเงินที่ขายได้จะหายไปจากกราฟทั้งก้อน (ซ่อนของจริง = ห้ามเด็ดขาด)
-      const ยอดวันนั้น = quoteSummary.byDay.reduce((s, r) => s + r.wonVal, 0);
-      if (!quoteSummary.byHour.length && ยอดวันนั้น > 0) return null;
-      const byH = new Map(quoteSummary.byHour.map(r => [r.h, r.wonVal]));
+      // ⚠️ ต้องกัน undefined ไว้ด้วย — ถ้าเซิร์ฟเวอร์เป็นคนละรุ่นกับหน้าจอ (เพิ่งขึ้นเวอร์ชันใหม่
+      //    หรือแคชค้าง) ช่องนี้อาจไม่มีมาเลย · เดิมเรียก .reduce ตรง ๆ แล้วแดชบอร์ดพังทั้งหน้า
+      //    ข้อมูลขาดควรทำให้ "กราฟว่าง" ไม่ใช่ "ทั้งหน้าใช้ไม่ได้" (เจอจริงบนเว็บจริง 26 ส.ค. 69)
+      const รายวัน = quoteSummary.byDay ?? [];
+      const รายชั่วโมง = quoteSummary.byHour ?? [];
+      const ยอดวันนั้น = รายวัน.reduce((s, r) => s + r.wonVal, 0);
+      if (!รายชั่วโมง.length && ยอดวันนั้น > 0) return null;
+      const byH = new Map(รายชั่วโมง.map(r => [r.h, r.wonVal]));
       return Array.from({ length: 24 }, (_, h) => ({ month: `${String(h).padStart(2, "0")}:00`, value: (byH.get(h) ?? 0) / 1e6 }));
     }
     const won = winQuotes.filter(q => q.status === "won");
@@ -313,7 +318,7 @@ export default function HQDashboard() {
     const byDay = new Map<string, number>();
     if (quoteSummary) {
       // byDay จากฐานข้อมูล: คีย์เป็น "YYYY-MM-DD" → แปลงเป็นคีย์เดียวกับที่วนสร้างช่อง
-      for (const r of quoteSummary.byDay) {
+      for (const r of quoteSummary.byDay ?? []) {
         const [y, m, dd] = r.d.split("-").map(Number);
         byDay.set(`${y}-${m - 1}-${dd}`, (byDay.get(`${y}-${m - 1}-${dd}`) ?? 0) + r.wonVal);
       }

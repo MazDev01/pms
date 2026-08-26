@@ -16,7 +16,8 @@ const N = (v: unknown) => Number(v ?? 0);
 const S = (v: unknown) => String(v ?? "");
 
 /** ชื่อ RPC + วิธีจัดรูปผลลัพธ์ ของแต่ละตัวสรุป — คัดมาจาก SupabaseAdapter.metrics ตรง ๆ */
-const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape: (d: unknown) => unknown }> = {
+// export ไว้ให้เทสต์ย่อยเรียกตรวจรูปแบบข้อมูลได้ โดยไม่ต้องยกเซิร์ฟเวอร์ทั้งตัว
+export const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape: (d: unknown) => unknown }> = {
   dealerRollup: {
     rpc: "dealer_rollup",
     args: a => ({ p_year: a.year, p_as_of: a.asOf, p_default_days: a.defaultDays, p_follow_up_days: a.perDealer ?? null }),
@@ -60,6 +61,13 @@ const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape: (d: u
       const x = (d ?? {}) as Record<string, Row[] | undefined>;
       return {
         byMonth: (x.byMonth ?? []).map(r => ({ y: N(r.y), m: N(r.m), quotes: N(r.quotes), won: N(r.won), lost: N(r.lost), wonVal: N(r.won_val) })),
+        // ⚠️ byDay/byHour ต้องส่งต่อด้วย (ใบ 0160) — ห้ามลืมเหมือนรอบแรก
+        //   เส้นทาง api เป็นทางที่ "เว็บใช้งานจริง" ใช้ (NEXT_PUBLIC_DATA_SOURCE=api)
+        //   ตอนเพิ่มกราฟรายวัน/รายชั่วโมง 25 ส.ค. 69 แก้ครบทั้งฐานข้อมูลและเส้นทาง supabase
+        //   แต่ลืมเส้นทางนี้ → หน้าจอได้ undefined แล้วแดชบอร์ดพังทั้งหน้าเมื่อเลือก "วันนี้"
+        //   (บนเครื่องนักพัฒนาไม่เจอ เพราะ dev ใช้เส้นทาง supabase ตรง — เจอจริงบนเว็บจริง 26 ส.ค. 69)
+        byDay: (x.byDay ?? []).map(r => ({ d: S(r.d), quotes: N(r.quotes), won: N(r.won), lost: N(r.lost), wonVal: N(r.won_val) })),
+        byHour: (x.byHour ?? []).map(r => ({ h: N(r.h), quotes: N(r.quotes), won: N(r.won), wonVal: N(r.won_val) })),
         byStatus: (x.byStatus ?? []).map(r => ({ status: S(r.status), count: N(r.count), value: N(r.value) })),
         // won_value/won_projects = เฉพาะใบที่ปิดการขายได้ (0132) — การ์ด "ยอดขาย" ใช้ตัวนี้
         byProduct: (x.byProduct ?? []).map(r => ({
