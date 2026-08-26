@@ -85,6 +85,20 @@ export async function caAdoptFromUrl(): Promise<MockSession | null> {
   return s ? toSession(s) : null;
 }
 
+/** แลกใบผ่านที่ได้มาแล้ว (ไม่ได้อยู่ใน URL) เป็น cookie httpOnly
+ *
+ *  ใช้กับหน้า "เข้าระบบแทนตัวแทน" ที่ตรวจใบผ่านกับ Supabase เองแล้วได้ token มาถือไว้
+ *  โหมด api หน้าเว็บถือ session เองไม่ได้ — ต้องส่งให้เซิร์ฟเวอร์ตั้ง cookie เท่านั้น
+ *  ⚠️ เซิร์ฟเวอร์ยังยืนยันใบผ่านกับ Supabase อีกชั้นเสมอ (op=adopt) ห้ามเชื่อฝั่งเบราว์เซอร์
+ */
+export async function caAdoptTokens(access_token: string, refresh_token?: string): Promise<MockSession | null> {
+  const s = await call("/api/v1/auth?op=adopt", {
+    method: "POST",
+    body: JSON.stringify({ access_token, refresh_token }),
+  }).catch(() => null);
+  return s ? toSession(s) : null;
+}
+
 /** ฟื้น session ตอนเปิดหน้าใหม่ — ถ้าใบผ่านหมดอายุ ลองต่ออายุให้หนึ่งครั้งก่อนยอมแพ้
  *
  *  ⚠️ 204 = ไม่มีใบผ่านติดมาเลย (ยังไม่เคยล็อกอิน) — ต้องเลิกตรงนี้ ห้ามไปลองต่ออายุต่อ

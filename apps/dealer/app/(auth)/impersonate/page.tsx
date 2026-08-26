@@ -17,7 +17,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@pms/shared/lib/data/supabase/client";
-import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND, DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { caAdoptTokens } from "@pms/shared/lib/cookieAuth";
 
 export default function ImpersonatePage() {
   const router = useRouter();
@@ -63,12 +64,26 @@ export default function ImpersonatePage() {
 
     let alive = true;
     getSupabase().auth.verifyOtp({ token_hash: token, type: "magiclink" })
-      .then(({ error }) => {
+      .then(async ({ data, error }) => {
         if (!alive) return;
         if (error) {
           // ใบผ่านใช้ได้ครั้งเดียวและมีอายุสั้น — หมดอายุ/ถูกใช้ไปแล้วเป็นกรณีที่เจอบ่อยสุด
           setผิดพลาด(`เข้าระบบแทนไม่สำเร็จ — ${error.message}`);
           return;
+        }
+        // ── โหมด api: หน้าเว็บถือ session เองไม่ได้ ต้องส่งให้เซิร์ฟเวอร์ตั้ง cookie ก่อน ──
+        //
+        // ⚠️ บั๊กจริงบนเว็บใช้งานจริง (พบ 26 ส.ค. 69): เดิมทำแค่ตรวจใบผ่านแล้วสั่งไปหน้าแดชบอร์ด
+        //    ซึ่งพอในโหมด supabase (ตัว supabase-js เก็บ session ให้เอง) แต่เว็บจริงรันโหมด api
+        //    ที่ session อยู่ใน cookie ของเซิร์ฟเวอร์เท่านั้น → ไม่มีใครตั้ง cookie ให้
+        //    ผลคือกด "เข้าระบบแทนตัวแทน" แล้วเด้งไปหน้าเข้าสู่ระบบของตัวแทนทุกครั้ง
+        //    บนเครื่องนักพัฒนาไม่มีทางเจอ เพราะ dev รันโหมด supabase
+        if (DATA_SOURCE === "api") {
+          const at = data?.session?.access_token ?? "";
+          const rt = data?.session?.refresh_token;
+          const ok = at ? await caAdoptTokens(at, rt) : null;
+          if (!alive) return;
+          if (!ok) { setผิดพลาด("เข้าระบบแทนไม่สำเร็จ — เก็บใบผ่านไม่ได้ ลองกดใหม่อีกครั้ง"); return; }
         }
         // ล้าง token ออกจากแถบที่อยู่ก่อนไปต่อ (กันติดไปกับประวัติเบราว์เซอร์)
         window.history.replaceState(null, "", window.location.pathname);
