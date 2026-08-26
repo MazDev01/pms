@@ -4,6 +4,7 @@
 // ภาพรวมลูกค้าเป้าหมายของทุกตัวแทน · กรอง (ค้นหา/สถานะ/จังหวัด/ช่วงเวลา) · KPI · กราฟ · ตาราง drill-down
 // ใช้ข้อมูลจริงจาก SalesContext (leads) — HQ ดูอย่างเดียว (Sales CRM เท่านั้น)
 import { useMemo, useState, useEffect, useRef } from "react";
+import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/components/ui/stickyActionCol";
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { TablePagination, pageSlice, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { useRouter } from "next/navigation";
@@ -738,7 +739,8 @@ export default function HQLeadsPage() {
               <th>จังหวัด</th><th>ประเภทอาคาร</th><th>แหล่งที่มา</th>
               {/* หัวคอลัมน์ต้องสั้นพอไม่ให้ถูกตัด (th ตั้ง white-space: nowrap ทั้งระบบ) — ไฟล์ส่งออกยังใช้ชื่อเต็ม */}
               <th className="num">มูลค่า</th><th>เสนอราคา</th><th>ติดต่อล่าสุด</th>
-              <th>ต้องติดตาม</th><th>สถานะ</th><th></th>
+              {/* คอลัมน์ปุ่มตรึงไว้ขวาสุด — ตารางกว้างเกินจอ 1280 (26 ส.ค. 69) */}
+              <th>ต้องติดตาม</th><th>สถานะ</th><th style={ตรึงคอลัมน์ปุ่ม(true)}></th>
             </tr></thead>
             <tbody>
               {displayLeads.length === 0 ? (
@@ -797,7 +799,7 @@ export default function HQLeadsPage() {
                         </span>
                       )}
                     </td>
-                    <td onClick={e => e.stopPropagation()}>
+                    <td onClick={e => e.stopPropagation()} style={ตรึงคอลัมน์ปุ่ม()}>
                       {/* ปุ่มไอคอนล้วน — ข้อความ "ดู" ซ้ำกับที่ไอคอนสื่ออยู่แล้ว · title/aria-label คงไว้ให้ screen reader */}
                       <button onClick={() => setViewLead(l)} title="ดูรายละเอียด" aria-label="ดูรายละเอียด" className="btn btn-secondary btn-sm"
                         style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
+import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/components/ui/stickyActionCol";
 import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
@@ -137,6 +138,7 @@ function genResetPassword(code: string, nonce: number): string {
 // ── Main page ───────────────────────────────────────────────────
 
 // จัดการตัวแทน (แก้ไข/รีเซ็ตรหัส/ลบ) = ต้องมีสิทธิ์ dealers:manage — HQ_STAFF เข้าไม่ได้
+
 export default function HQDealersPage() {
   return <AdminGate perm="dealers:manage"><HQDealersPageInner /></AdminGate>;
 }
@@ -465,8 +467,12 @@ function HQDealersPageInner() {
               <tr>
                 {/* หัวคอลัมน์ต้องสั้นพอที่จะไม่ถูกตัด (th ตั้ง white-space: nowrap ไว้ทั้งระบบ)
                     "โอกาสการขาย"/"ติดตามตรงเวลา" ยาวเกินความกว้างที่คอลัมน์นั้นต้องใช้จริง จึงย่อเหลือคำที่สื่อเท่ากัน */}
-                {["#", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ยอด / เป้า", "โอกาสขาย", "ตรงเวลา", "สถานะ", ""].map((h, i) => (
-                  <th key={i}>{h}</th>
+                {/* ⚠️ คอลัมน์ปุ่มถูก "ตรึงไว้ขวาสุด" (sticky) — บอสทัก 26 ส.ค. 69 ว่าปุ่มดูเหมือนโดนตัด
+                    ที่จอ 1280 ตารางกว้าง 1120 แต่พื้นที่มีแค่ ~968 จึงต้องเลื่อนแนวนอน
+                    เดิมปุ่มเลยหลุดออกนอกกรอบ ต้องเลื่อนก่อนถึงจะกดได้ (คนเห็นแล้วคิดว่าระบบพัง)
+                    ตรึงไว้แบบนี้ ปุ่มอยู่ให้กดตลอดทุกความกว้างจอ โดยไม่ต้องตัดคอลัมน์ไหนทิ้ง */}
+                {["#", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ยอด / เป้า", "โอกาสขาย", "ตรงเวลา", "สถานะ", ""].map((h, i, arr) => (
+                  <th key={i} style={i === arr.length - 1 ? ตรึงคอลัมน์ปุ่ม(true) : undefined}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -499,7 +505,7 @@ function HQDealersPageInner() {
                   <td>
                     <StatusBadge status={dealerStatus(d)} />
                   </td>
-                  <td style={{ overflow: "visible" }}>
+                  <td style={{ overflow: "visible", ...ตรึงคอลัมน์ปุ่ม() }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", justifyContent: "flex-end" }}>
                       {canImpersonate && (
                         <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id} title="เข้าระบบแทนตัวแทน"

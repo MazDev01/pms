@@ -4,6 +4,7 @@
 // อ่านอย่างเดียว — มีปุ่ม "ดู" เท่านั้น ไม่มีสร้าง/แก้ไข/ลบ/อนุมัติ (HQ เป็นเจ้าของข้อมูล แต่ไม่ออกใบเอง)
 // คอลัมน์เกี่ยวกับการเปิดอ่าน ถูกลบทั้งหมดพร้อมสถานะ "เปิดอ่านแล้ว"
 import { Eye } from "lucide-react";
+import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/components/ui/stickyActionCol";
 import { quotationStatusLabel, quotationStatusColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 import type { QuoteRow } from "@pms/shared/lib/hqQuotations";
@@ -57,7 +58,8 @@ export function QuotationTable({ rows, onView, pagination }: {
               <th>สถานะ</th>
               <th>วันที่สร้าง</th>
               <th>ใช้ได้ถึง</th>
-              <th>ดู</th>
+              {/* คอลัมน์ปุ่มตรึงไว้ขวาสุด — ตารางกว้างเกินจอ 1280 (26 ส.ค. 69) */}
+              <th style={ตรึงคอลัมน์ปุ่ม(true)}>ดู</th>
             </tr>
           </thead>
           <tbody>
@@ -85,7 +87,7 @@ export function QuotationTable({ rows, onView, pagination }: {
                   {/* คอลัมน์ "เปิดอ่าน" ถูกลบพร้อมสถานะเปิดอ่านแล้ว */}
                   <td style={{ color: MUTED, fontSize: "0.78rem", whiteSpace: "nowrap" }}>{q.createdAt}</td>
                   <td style={{ color: MUTED, fontSize: "0.78rem", whiteSpace: "nowrap" }}>{q.validUntil ?? "—"}</td>
-                  <td>
+                  <td style={ตรึงคอลัมน์ปุ่ม()}>
                     {/* ปุ่มไอคอนล้วน — ข้อความ "ดู" ซ้ำกับที่ไอคอนสื่ออยู่แล้ว · title/aria-label คงไว้ให้ screen reader */}
                     <button
                       onClick={e => { e.stopPropagation(); onView(q); }}

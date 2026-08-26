@@ -11,10 +11,11 @@
 #   เว็บตัวอย่างตั้งใจไม่ต่อฐานข้อมูล จุดเช็กสุขภาพจึงตอบว่า "ไม่ไหว" เป็นปกติ
 #   ใส่ไปจะเตือนผิดทุก 10 นาทีจนไม่มีใครอ่านอีกเลย
 #
-# วิธีเปิดใช้: ตั้งค่าตัวแปรของ repo (Settings › Secrets and variables › Actions › Variables)
-#   HQ_HEALTH_URL     = https://<เว็บสำนักงานใหญ่จริง>/api/health
-#   DEALER_HEALTH_URL = https://<เว็บตัวแทนจริง>/api/health
-# ถ้ายังไม่ได้ตั้ง งานนี้จะข้ามไปเฉย ๆ ไม่ตก (ยังไม่มีเว็บจริงให้เฝ้า)
+# เฝ้าเว็บใช้งานจริง 2 ตัว (ตั้งค่าเริ่มต้นไว้ในไฟล์นี้แล้ว ไม่ต้องตั้งอะไรเพิ่ม)
+#   สำนักงานใหญ่ : https://benjamin-hq.vercel.app
+#   ตัวแทน       : https://benjamin-dealer.vercel.app
+# ย้ายโดเมนเมื่อไหร่ ตั้งตัวแปรของ repo ทับได้ (Settings › Secrets and variables › Actions › Variables)
+#   HQ_HEALTH_URL / DEALER_HEALTH_URL
 name: เฝ้าระวังเว็บ
 
 on:
@@ -30,8 +31,10 @@ jobs:
     steps:
       - name: ยิงถามจุดเช็กสุขภาพ
         env:
-          HQ: ${{ vars.HQ_HEALTH_URL }}
-          DEALER: ${{ vars.DEALER_HEALTH_URL }}
+          # ที่อยู่เว็บใช้งานจริง — ตั้งเป็นค่าเริ่มต้นไว้เลย จะได้เฝ้าได้ทันทีโดยไม่ต้องตั้งค่าอะไรก่อน
+          # ถ้าย้ายโดเมน ให้ตั้งตัวแปรของ repo ทับ (Settings › Variables) ไม่ต้องแก้ไฟล์นี้
+          HQ: ${{ vars.HQ_HEALTH_URL || 'https://benjamin-hq.vercel.app/api/health' }}
+          DEALER: ${{ vars.DEALER_HEALTH_URL || 'https://benjamin-dealer.vercel.app/api/health' }}
         run: |
           set -u
           # ⚠️ ชื่อตัวแปรต้องเป็นอังกฤษ — bash ใช้ชื่อตัวแปรภาษาไทยไม่ได้ (เจอจริง 26 ส.ค. 69)

@@ -4,6 +4,7 @@
 // HQ ดูอย่างเดียว — มีแต่ปุ่ม "ดู" ไม่มี เพิ่ม/แก้ไข/ลบ
 // ช่องที่ไม่มีข้อมูลจริง (ลูกค้าที่ยังไม่มีใบปิดการขาย) ขึ้น "—" ไม่เดาแทน
 import { Eye } from "lucide-react";
+import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/components/ui/stickyActionCol";
 import { customerCode, fmtISOToThai } from "@pms/shared/lib/mock";
 import { regionOf } from "@pms/shared/lib/customerDb";
 import type { HQCustomerPageRow } from "@pms/shared/lib/data/ports";
@@ -69,7 +70,8 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
             <th>แม่แบบ</th>
             <th className="num">ยอดซื้อรวม</th>
             <th>ซื้อล่าสุด</th>
-            <th></th>{/* ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ */}
+            {/* คอลัมน์ปุ่มตรึงไว้ขวาสุด — ตารางกว้างเกินจอ 1280 ปุ่มเคยหลุดออกนอกกรอบ (26 ส.ค. 69) */}
+            <th style={ตรึงคอลัมน์ปุ่ม(true)}></th>{/* ปุ่มดู — ไม่ต้องมีหัวคอลัมน์ */}
           </tr>
         </thead>
         <tbody>
@@ -98,7 +100,7 @@ export function CustomerTable({ rows, onView, pagination, loading }: {
                   {c.totalValue > 0 ? fmtM(c.totalValue) : DASH}
                 </td>
                 <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{c.lastPurchaseAt ? fmtISOToThai(c.lastPurchaseAt) : DASH}</td>
-                <td onClick={e => e.stopPropagation()}>
+                <td onClick={e => e.stopPropagation()} style={ตรึงคอลัมน์ปุ่ม()}>
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button title="ดูรายละเอียด" onClick={() => onView(c)}
                       style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #dbe3ec", background: "#fff", color: PRIMARY, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
