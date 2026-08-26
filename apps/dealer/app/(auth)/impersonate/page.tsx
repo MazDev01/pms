@@ -87,6 +87,15 @@ export default function ImpersonatePage() {
         }
         // ล้าง token ออกจากแถบที่อยู่ก่อนไปต่อ (กันติดไปกับประวัติเบราว์เซอร์)
         window.history.replaceState(null, "", window.location.pathname);
+        if (DATA_SOURCE === "api") {
+          // ⚠️ ต้องโหลดหน้าใหม่ทั้งหน้า ห้ามเปลี่ยนหน้าแบบภายในแอป (พบบนเว็บจริง 26 ส.ค. 69)
+          //    ตอนหน้านี้เริ่มทำงาน แอปเพิ่งถามไปแล้วว่า "ตอนนี้เป็นใคร" และได้คำตอบว่า "ยังไม่ได้เข้าระบบ"
+          //    (ตอนนั้น cookie ยังไม่ถูกตั้ง) การเปลี่ยนหน้าแบบภายในแอปจึงยังใช้คำตอบเก่าอยู่
+          //    ตัวกันหน้าเลยเตะไปหน้าเข้าสู่ระบบทันที ทั้งที่ cookie ตั้งสำเร็จแล้ว
+          //    โหลดใหม่ทั้งหน้า = แอปถามใหม่ด้วย cookie ที่มีอยู่จริง แล้วเข้าแดชบอร์ดได้
+          window.location.replace("/dashboard?impersonated=1");
+          return;
+        }
         router.replace("/dashboard?impersonated=1");
       })
       .catch((e: unknown) => { if (alive) setผิดพลาด(`เข้าระบบแทนไม่สำเร็จ — ${String(e)}`); });
