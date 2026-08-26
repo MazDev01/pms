@@ -72,7 +72,8 @@ function MiniBarChart({ data }: { data: { month: string; value: number }[] }) {
       </div>
       <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
         {delta === null ? (
-          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#9ca3af" }}>— เทียบเดือนก่อน</span>
+          // เดือนก่อนหน้ายังไม่มียอด → คิดเปอร์เซ็นต์ไม่ได้ ต้องเขียนให้อ่านออก ไม่ใช่ขีดเปล่า (บอสสั่ง 26 ส.ค. 69)
+          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#9ca3af" }} title="เดือนก่อนหน้ายังไม่มียอด จึงคิดเป็นเปอร์เซ็นต์ไม่ได้">เทียบเดือนก่อนไม่ได้</span>
         ) : (
           <>
             {delta >= 0

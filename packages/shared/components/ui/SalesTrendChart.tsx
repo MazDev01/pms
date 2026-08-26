@@ -79,8 +79,9 @@ export function SalesTrendChart({
             <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#003366", lineHeight: 1 }}>฿{(total).toFixed(1)}M</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "0.72rem", fontWeight: 800,
               color: growth === null ? "#8a94a3" : growth >= 0 ? "#059669" : "#dc2626" }}
-              title={growth === null ? "เดือนตั้งต้นเป็น 0 — คิดเป็นเปอร์เซ็นต์ไม่ได้" : undefined}>
-              {growth === null ? "—" : <>{growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%</>}
+              title={growth === null ? "ช่วงตั้งต้นยังไม่มียอด จึงคิดเป็นเปอร์เซ็นต์ไม่ได้" : undefined}>
+              {/* ขีดเปล่า ๆ ผู้ใช้แยกไม่ออกว่า "ไม่มีข้อมูล" หรือ "จอเพี้ยน" — เขียนเป็นคำไปเลย (บอสสั่ง 26 ส.ค. 69) */}
+              {growth === null ? "เทียบไม่ได้" : <>{growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%</>}
             </span>
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
