@@ -49,9 +49,15 @@ test("[auth] รหัสตัวแทนใช้ที่หน้าเข�
   await tryLogin(page, HQ_ORIGIN, "/hq/login", RYG);
 
   expect(new URL(page.url()).pathname, "ต้องยังอยู่ที่หน้าเข้าสู่ระบบ").toContain("/login");
-  await expect(page.getByText(/เป็นของตัวแทนจำหน่าย/).first(),
-    "ต้องบอกว่าบัญชีนี้ใช้ที่นี่ไม่ได้",
-  ).toBeVisible({ timeout: 15_000 });
+  // ⚠️ ลองล็อกอินซ้ำหนึ่งครั้งถ้าข้อความยังไม่ขึ้น (แก้ 26 ส.ค. 69)
+  //   ตอนรันทั้งชุด มีการล็อกอินผ่านหน้าจอถี่มาก บริการยืนยันตัวตนจะหน่วงคำขอเป็นครั้งคราว
+  //   คำขอที่ถูกหน่วงไม่ได้แปลว่าระบบยอมให้เข้า — แค่ตอบช้าจนเลยเวลารอ
+  const ข้อความ = page.getByText(/เป็นของตัวแทนจำหน่าย/).first();
+  if (!(await ข้อความ.isVisible().catch(() => false))) {
+    await page.waitForTimeout(2000);
+    await tryLogin(page, HQ_ORIGIN, "/hq/login", RYG);
+  }
+  await expect(ข้อความ, "ต้องบอกว่าบัญชีนี้ใช้ที่นี่ไม่ได้").toBeVisible({ timeout: 20_000 });
 
   await page.goto(`${HQ_ORIGIN}/hq/dashboard`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(5000);

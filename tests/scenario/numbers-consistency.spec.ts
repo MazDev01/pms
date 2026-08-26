@@ -13,18 +13,29 @@ test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน")
 test.setTimeout(240_000);
 
 test("ยอดรวมบนหัวการ์ดกราฟ ต้องตรงกับผลบวกจริง (ไม่ใช่ผลบวกของค่าที่ปัดแล้ว)", async ({ page }) => {
+  const ผลบวก = async () => {
+    const { data: q } = await db.from("quotations").select("total_value,date,status").eq("status", "won");
+    const เริ่ม = new Date(); เริ่ม.setMonth(เริ่ม.getMonth() - 5); เริ่ม.setDate(1);
+    const isoเริ่ม = เริ่ม.toISOString().slice(0, 10);
+    const รวม = (q ?? []).filter(x => String(x.date).slice(0, 10) >= isoเริ่ม).reduce((s, x) => s + Number(x.total_value || 0), 0);
+    return `฿${(รวม / 1e6).toFixed(1)}M`;
+  };
+  const ผลบวกก่อนเปิดหน้า = await ผลบวก();
   await openAs(page, ADMIN, "hq", "/hq/dashboard");
   await settle(page); await page.waitForTimeout(2500);
   const card = page.locator(".card").filter({ hasText: "ยอดขายรวมทั้งเครือ" }).first();
   const t = (await card.innerText()).split("\n").filter(Boolean);
   const หัวการ์ด = t.find(x => /^฿[\d.]+M$/.test(x.trim())) ?? "";
   // อ่านค่ารายเดือนจากป้ายบนกราฟไม่ได้ตรง ๆ → เทียบกับผลรวมจากฐานข้อมูลในช่วง 6 เดือนล่าสุดแทน
-  const { data: q } = await db.from("quotations").select("total_value,date,status").eq("status", "won");
-  const เริ่ม = new Date(); เริ่ม.setMonth(เริ่ม.getMonth() - 5); เริ่ม.setDate(1);
-  const isoเริ่ม = เริ่ม.toISOString().slice(0, 10);
-  const รวม = (q ?? []).filter(x => String(x.date).slice(0, 10) >= isoเริ่ม).reduce((s, x) => s + Number(x.total_value || 0), 0);
-  console.log("หัวการ์ด:", หัวการ์ด, "· ผลบวกจริง 6 เดือน:", `฿${(รวม / 1e6).toFixed(1)}M`);
-  expect(หัวการ์ด).toBe(`฿${(รวม / 1e6).toFixed(1)}M`);
+  // ⚠️ ตอนรันทั้งชุดพร้อมกัน ชุดอื่นสร้าง/ปิดใบเสนอราคาของตัวเองอยู่ตลอด ผลบวกในฐานข้อมูล
+  //   จึงขยับได้ระหว่าง "หน้าจอวาดตัวเลข" กับ "เทสต์ไปบวกเลขมาเทียบ" (เจอจริง 26 ส.ค. 69:
+  //   ฿182.3M vs ฿181.8M = ใบของอีกชุดหนึ่งที่เกิดขึ้นคั่นกลางพอดี)
+  //   จึงบวกสองครั้ง คร่อมเวลาที่อ่านหน้าจอ แล้วยอมรับถ้าตรงกับครั้งใดครั้งหนึ่ง
+  //   ถ้าไม่มีใครเขียนแทรก สองค่านี้เท่ากัน = เข้มงวดเท่าเดิมทุกประการ
+  const ก่อน = ผลบวกก่อนเปิดหน้า;
+  const หลัง = await ผลบวก();
+  console.log("หัวการ์ด:", หัวการ์ด, "· ผลบวกจริง 6 เดือน ก่อน/หลัง:", ก่อน, "/", หลัง);
+  expect([ก่อน, หลัง], `หัวการ์ด ${หัวการ์ด} ต้องตรงกับผลบวกจริง (ก่อน ${ก่อน} · หลัง ${หลัง})`).toContain(หัวการ์ด);
 });
 
 test("ชื่อการ์ดอัตราปิดการขายต้องบอกตัวหาร และไม่ซ้ำกันข้ามหน้า", async ({ page }) => {

@@ -213,6 +213,39 @@ export default async function globalSetup() {
   if (quoteErr) throw new Error(`[global-setup] insert quotations ล้มเหลว: ${quoteErr.message}`);
 
   console.log(`[global-setup] seed สำเร็จ: ${leadRows.length} leads, ${quoteRows.length} quotations, ${custRows.length} customers`);
+  await อุ่นเครื่องทุกหน้า();
+}
+
+// ── อุ่นเครื่อง: เปิดทุกหน้าให้เซิร์ฟเวอร์คอมไพล์ไว้ก่อนเริ่มทดสอบ ──────────────────
+//
+// ทำไมต้องมี: เซิร์ฟเวอร์โหมดพัฒนาคอมไพล์แต่ละหน้า "ตอนมีคนเปิดครั้งแรก" เท่านั้น
+//   เทสต์รัน 3 ไฟล์พร้อมกัน ตัวที่ดันไปแตะหน้าที่ยังไม่เคยถูกเปิดจึงต้องรอคอมไพล์
+//   บางครั้งนานเกิน 20 วินาที แล้วล้มด้วยข้อความ "page.goto: Timeout" ทั้งที่ระบบไม่ได้พัง
+//   (อาการนี้คือที่มาของเทสต์ "ผ่านแต่ต้องลองซ้ำ" ที่เห็นทุกรอบ — วินิจฉัยไว้ในหัว playwright.config.ts)
+//
+// เปิดทีละหน้าแบบเรียงกัน ไม่ยิงพร้อมกัน — ยิงพร้อมกันคือการสร้างปัญหาเดิมซ้ำตั้งแต่ตอนอุ่นเครื่อง
+// ⚠️ ล้มเหลวตรงนี้ต้องไม่ทำให้ทั้งชุดล้ม — นี่เป็นแค่การอุ่นเครื่อง ไม่ใช่การตรวจ
+async function อุ่นเครื่องทุกหน้า() {
+  const หน้า = [
+    ["http://localhost:3002", ["/hq/login", "/hq/dashboard", "/hq/dealers", "/hq/pipeline", "/hq/leads",
+      "/hq/quotations", "/hq/customers", "/hq/master", "/hq/audit", "/hq/settings"]],
+    ["http://localhost:3001", ["/login", "/dashboard", "/leads", "/quotations", "/customers",
+      "/products", "/calendar", "/files", "/settings"]],
+  ] as const;
+  const เริ่ม = Date.now();
+  let สำเร็จ = 0;
+  for (const [origin, paths] of หน้า) {
+    for (const path of paths) {
+      try {
+        const res = await fetch(origin + path, { signal: AbortSignal.timeout(120_000) });
+        await res.text();          // ต้องอ่านจนจบ ไม่งั้นนับว่ายังคอมไพล์ไม่เสร็จ
+        สำเร็จ++;
+      } catch {
+        console.warn(`[global-setup] อุ่นเครื่อง ${path} ไม่สำเร็จ — ข้ามไป`);
+      }
+    }
+  }
+  console.log(`[global-setup] อุ่นเครื่อง ${สำเร็จ} หน้า ใช้เวลา ${((Date.now() - เริ่ม) / 1000).toFixed(1)} วินาที`);
 }
 
 /** คืนค่า hq_notif_rules.alerts เดิมจาก snapshot ถ้ามีไฟล์ค้างอยู่ (เรียกทั้งต้น setup กันรันค้าง และท้าย teardown) */
