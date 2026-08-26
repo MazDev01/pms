@@ -148,7 +148,15 @@ export default function DealerDashboard() {
       const ของวันนั้น = won.filter(q => { const d = parseISO(q.date); return !!d && d >= timeRange.start && d <= timeRange.end; });
       const pts = ยอดรายชั่วโมง(ของวันนั้น.map(q => ({ savedAt: q.savedAt, valueNum: q.totalValue })));
       if (pts) return pts.map(p => ({ label: p.month, value: Math.round(p.value * 10) / 10 }));
-      // ไม่มีเวลาบันทึก = ทำรายชั่วโมงไม่ได้ → ตกไปเป็นรายวัน ไม่เดาเวลาให้
+      // ⚠️ เลือก "วันนี้" ต้องเห็นแกน 24 ชั่วโมงเสมอ แม้ยังไม่มียอดขายเลย (บอสทัก 26 ส.ค. 69)
+      //    เดิมตกกลับไปเป็นรายวัน แล้วได้จุดเดียวโดด ๆ ใต้หัวข้อที่เขียนว่า "รายชั่วโมง"
+      //    กติกาเดียวกับแดชบอร์ดสำนักงานใหญ่ · ยกเว้นกรณีเดียว: วันนั้นมียอดขายจริงแต่ใบไม่มีเวลาบันทึก
+      //    → ต้องกลับไปรายวัน ไม่งั้นเงินที่ขายได้จะหายไปจากกราฟทั้งก้อน (ซ่อนของจริง = ห้ามเด็ดขาด)
+      const ยอดวันนั้น = ของวันนั้น.reduce((s, q) => s + q.totalValue, 0);
+      if (ยอดวันนั้น <= 0) {
+        return Array.from({ length: 24 }, (_, h) => ({ label: `${String(h).padStart(2, "0")}:00`, value: 0 }));
+      }
+      // ไม่มีเวลาบันทึก แต่มียอดจริง = ทำรายชั่วโมงไม่ได้ → ตกไปเป็นรายวัน ไม่เดาเวลาให้
     }
     const ช่อง = ช่องเวลาในช่วง(timeRange.start, timeRange.end, ละเอียดยอดขาย === "hour" ? "day" : ละเอียดยอดขาย);
     const ยอด = new Map<string, number>();
@@ -159,6 +167,9 @@ export default function DealerDashboard() {
     });
     return ช่อง.map(b => ({ label: b.label, value: Math.round(((ยอด.get(b.key) ?? 0) / 1e6) * 10) / 10 }));
   }, [quotations, ละเอียดยอดขาย, timeRange.start, timeRange.end]);
+  // ความละเอียดที่ "แสดงจริง" อาจไม่เท่าที่ช่วงเวลาสั่ง (ดูกรณีตกกลับไปรายวันข้างบน)
+  const ละเอียดที่แสดงจริง = ละเอียดยอดขาย === "hour" && !salesData[0]?.label?.includes(":")
+    ? "day" : ละเอียดยอดขาย;
   const monthTargetM = Math.round((monthTarget / 1e6) * 10) / 10;
   // ── ลูกค้าเป้าหมาย เทียบ ที่ออกใบเสนอราคาแล้ว: แท่งคู่รายเดือน หน่วย "ราย" ทั้งคู่ ──
   //
@@ -415,7 +426,9 @@ export default function DealerDashboard() {
         {/* ยอดขาย — กราฟเส้น + เส้นประเป้าหมาย · ช่วง/ความละเอียดมาจากแถบกรองด้านบน */}
         <div className="card" style={card}>
           <div style={hd}>
-            <span style={title}>ยอดขาย{ละเอียดยอดขาย === "month" ? "รายเดือน" : ละเอียดยอดขาย === "day" ? "รายวัน" : "รายชั่วโมง"}</span>
+            {/* ⚠️ หัวข้อต้องตรงกับสิ่งที่กราฟแสดงจริง — เลือก "วันนี้" แต่ใบไม่มีเวลาบันทึก
+                กราฟจะตกไปเป็นรายวัน หัวข้อจึงห้ามยืนยันว่า "รายชั่วโมง" (บอสทัก 26 ส.ค. 69) */}
+            <span style={title}>ยอดขาย{ละเอียดที่แสดงจริง === "month" ? "รายเดือน" : ละเอียดที่แสดงจริง === "day" ? "รายวัน" : "รายชั่วโมง"}</span>
             {more("/quotations")}
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
