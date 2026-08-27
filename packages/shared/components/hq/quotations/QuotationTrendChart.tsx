@@ -24,7 +24,7 @@ export function QuotationTrendChart({ trend, หน่วยเวลา = "ร�
         <div>
           <div className="card-title">แนวโน้มใบเสนอราคา{หน่วยเวลา}</div>
         </div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>หน่วย: ใบ</span>
+        {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
       </div>
       <div className="card-body" style={{ paddingTop: 6 }}>
         {/* vw ต้องใกล้ความกว้างการ์ดจริง ไม่งั้น SVG ถูกสเกลทั้งใบ (ตัวอักษร/เส้นใหญ่ผิดส่วน และการ์ดสูงเกิน)

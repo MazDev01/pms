@@ -84,7 +84,7 @@ export function SalesTrendChart({
               {growth === null ? "เทียบไม่ได้" : <>{growth >= 0 ? "▲" : "▼"} {Math.abs(growth)}%</>}
             </span>
           </div>
-          <div style={{ fontSize: "0.72rem", color: "var(--sub, #8a94a3)" }}>{desc ? `${desc} · ${rangeDesc}` : rangeDesc}</div>
+          {/* คำอธิบายใต้หัวข้อกราฟถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) — เหลือเฉพาะหัวข้อกับตัวเลข */}
         </div>
       </div>
 

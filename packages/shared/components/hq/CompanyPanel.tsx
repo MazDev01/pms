@@ -103,7 +103,7 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
             <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Building2 size={16} style={{ color: "var(--primary)" }} /> ข้อมูลบริษัท
             </div>
-            <div className="card-desc">ข้อมูลองค์กรของเบนจามิน HQ สำหรับใช้อ้างอิงในเอกสารและระบบ</div>
+            {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
           </div>
         </div>
         <div className="card-body">

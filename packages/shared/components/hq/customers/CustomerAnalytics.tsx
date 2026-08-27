@@ -115,7 +115,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
     <div className="card chart-m" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">{title}</div>
-        {hint ? <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>{hint}</span> : null}
+        {/* คำอธิบายกำกับการ์ดถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
       </div>
       <div className="card-body" style={{ paddingTop: 12 }}>{children}</div>
     </div>
@@ -165,7 +165,7 @@ export function CustomerAnalytics({ charts }: { charts: HQCustomersCharts }) {
         <HBar rows={byType} fmt={cnt} empty="ยังไม่มีลูกค้าที่ปิดการขายในผลกรองนี้" unit="ประเภท" />
       </Card>
 
-      <Card title="ลูกค้า ตามตัวแทน" hint="สัดส่วนลูกค้าในฐานข้อมูล">
+      <Card title="ลูกค้า ตามตัวแทน">
         {!dealerTotal ? (
           <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
         ) : (
@@ -174,7 +174,7 @@ export function CustomerAnalytics({ charts }: { charts: HQCustomersCharts }) {
         )}
       </Card>
 
-      <Card title="ยอดซื้อ ตามตัวแทน" hint="ยอดซื้อสะสม · หน่วย: ล้านบาท · ชี้ที่แท่งเพื่อดูตัวเลข">
+      <Card title="ยอดซื้อ ตามตัวแทน">
         {!revenueByDealer.length ? (
           <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)" }}>—</div>
         ) : (
@@ -187,11 +187,11 @@ export function CustomerAnalytics({ charts }: { charts: HQCustomersCharts }) {
         )}
       </Card>
 
-      <Card title="ลูกค้า ตามจังหวัด" hint="10 อันดับแรก">
+      <Card title="ลูกค้า ตามจังหวัด">
         <HBar rows={byProvince} fmt={cnt} color="#6366F1" unit="จังหวัด" />
       </Card>
 
-      <Card title="ลูกค้า ตามแม่แบบย่อย" hint="เฉพาะใบที่ระบุแม่แบบย่อย">
+      <Card title="ลูกค้า ตามแม่แบบย่อย">
         <HBar rows={bySubtype} fmt={cnt} color="#7C3AED" empty="ไม่มีใบที่ระบุแม่แบบย่อยในผลกรองนี้" unit="แม่แบบ" />
       </Card>
 

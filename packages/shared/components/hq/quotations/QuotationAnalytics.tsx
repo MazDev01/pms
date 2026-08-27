@@ -37,7 +37,7 @@ function RegionalComparison({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
     <div className="card chart-m" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">เทียบรายภูมิภาค</div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>มูลค่า · จำนวนใบ</span>
+        {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
       </div>
       <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column" }}>
         {!regions.length ? (
@@ -82,7 +82,7 @@ function TopDealerRanking({ dealerAgg }: { dealerAgg: DealerAgg[] }) {
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">อันดับตัวแทนจำหน่าย</div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>10 อันดับแรก · เรียงตามมูลค่าใบเสนอราคา</span>
+        {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
       </div>
       <div className="table-wrap">
         <table>

@@ -424,7 +424,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       <div className="card" style={{ marginBottom: 18 }}>
         <div className="card-header" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <Users size={18} color={PRIMARY} />
-          <div style={{ flex: 1, minWidth: 120 }}><div className="card-title">ผู้ใช้งานสำนักงานใหญ่</div><div className="card-desc">เฉพาะผู้ใช้งานสำนักงานใหญ่</div></div>
+          <div style={{ flex: 1, minWidth: 120 }}><div className="card-title">ผู้ใช้งานสำนักงานใหญ่</div>{/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}</div>
           <button onClick={() => setAddOpen(true)} className="btn btn-primary btn-md" style={{ flexShrink: 0 }}><Plus size={15} /> เพิ่มผู้ใช้งาน HQ</button>
         </div>
 
@@ -495,7 +495,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
 
       {/* Permission matrix */}
       <div className="card">
-        <div className="card-header"><div><div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}><Shield size={17} color={PRIMARY} /> สิทธิ์ตามบทบาท (Permission Matrix)</div><div className="card-desc">เลือกบทบาทเพื่อดูสิทธิ์แต่ละโมดูล</div></div></div>
+        <div className="card-header"><div><div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}><Shield size={17} color={PRIMARY} /> สิทธิ์ตามบทบาท (Permission Matrix)</div>{/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}</div></div>
         <div className="card-body">
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
             {ROLES.map(r => <button key={r.key} onClick={() => setMatrixRole(r.key)} className="badge" style={{ border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, background: matrixRole === r.key ? r.tone : r.tone + "14", color: matrixRole === r.key ? "#fff" : r.tone }}>{r.th}</button>)}

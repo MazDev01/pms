@@ -342,9 +342,6 @@ export default function HQDashboard() {
   const trendSeries = trendHourly ?? (แยกรายวัน || แยกรายชั่วโมง ? trendDaily : trendMonthly);
   const หน่วยเวลา = trendHourly ? "รายชั่วโมง" : (แยกรายวัน || แยกรายชั่วโมง) ? "รายวัน" : "รายเดือน";
   const trendTitle = selDealer ? `ยอดขาย ${selDealer.name.replace("Benjamin ", "")} ${หน่วยเวลา}` : `ยอดขายรวมทั้งเครือ ${หน่วยเวลา}`;
-  const trendDesc = (selDealer ? `เฉพาะตัวแทน ${selDealer.code} (ล้านบาท)` : "มูลค่าที่ปิดได้ทุกตัวแทนรวมกัน (ล้านบาท)")
-    // ต้องบอกให้ชัดว่าเวลาที่เห็นคือเวลาอะไร ไม่งั้นอ่านเป็น "ปิดการขายตอนกี่โมง" ซึ่งระบบไม่ได้เก็บ
-    + (trendHourly ? " · เวลาตามที่บันทึกใบเข้าระบบ" : "");
 
   // ผลงานรายภาค — count = จำนวนตัวแทน (โดนัท) · revenue = ยอดขายในช่วงที่เลือก
   // ⚠️ เปลี่ยนจาก "ยอดทั้งปี" มาเป็น "ยอดในช่วงตัวกรอง" ตามที่บอสสั่ง 25 ส.ค. 69
@@ -801,7 +798,7 @@ export default function HQDashboard() {
           <div className="card-body" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-start", paddingTop: "1.15rem" }}>
             {/* height = ความสูงจริงของกราฟเป็น px (หลัง LineTrendChart วัดความกว้างการ์ดเอง)
                 395 = ที่ว่างในการ์ดหลังหักหัวข้อ/ปุ่มช่วงเวลา — พอดีกับการ์ด "สัดส่วนตัวแทนจำหน่าย" ที่อยู่คู่กัน */}
-            <SalesTrendChart title={trendTitle} desc={trendDesc} monthly={trendSeries} granularity={trendHourly ? "hour" : (แยกรายวัน || แยกรายชั่วโมง) ? "day" : "month"} height={395} />
+            <SalesTrendChart title={trendTitle} monthly={trendSeries} granularity={trendHourly ? "hour" : (แยกรายวัน || แยกรายชั่วโมง) ? "day" : "month"} height={395} />
           </div>
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
@@ -907,7 +904,7 @@ export default function HQDashboard() {
       <div className="hq-row3c" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: "1.25rem", alignItems: "stretch", marginBottom: "1.25rem", minHeight: 340 }}>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ผลงานตัวแทนจำหน่าย 10 อันดับแรก</div>
-            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>หน่วย: ล้านบาท</span></div>
+            {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}</div>
           <div className="card-body" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 9 }}>
             <div style={{ display: "flex", fontSize: "0.68rem", color: "var(--muted-foreground)", paddingLeft: 26, gap: 8 }}>
               <span style={{ flex: 1 }} /><span style={{ flex: "0 0 44px", textAlign: "right" }}>ยอดขาย</span><span style={{ flex: "0 0 34px", textAlign: "right" }}>% เป้า</span><span style={{ flex: "0 0 44px", textAlign: "right" }}>อัตราปิด</span>
@@ -934,9 +931,7 @@ export default function HQDashboard() {
         </div>
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">ยอดขายตามประเภทอาคาร</div>
-            <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
-              หน่วย: ล้านบาท
-            </span></div>
+            {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}</div>
           {/* ใบนี้เป็นต้นแบบของ CategoryRows — แดชบอร์ดตัวแทนใช้คอมโพเนนต์ตัวเดียวกัน (ห้ามแยกมาร์กอัป) */}
           <div className="card-body" style={{ paddingTop: 4 }}>
             <CategoryRows

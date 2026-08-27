@@ -18,7 +18,7 @@ export function BuildingTypeChart({ types }: { types: { type: string; count: num
         <div>
           <div className="card-title">ประเภทอาคาร</div>
         </div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>จำนวนใบ · มูลค่า</span>
+        {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
       </div>
       <div className="card-body" style={{ paddingTop: 6, display: "flex", flexDirection: "column", gap: 13 }}>
         {!types.length ? (

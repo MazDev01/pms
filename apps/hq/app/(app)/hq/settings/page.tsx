@@ -98,7 +98,7 @@ function SectionCard({ icon, title, desc, children, action }: { icon?: ReactNode
           <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {icon && <span style={{ color: "var(--primary)", display: "flex" }}>{icon}</span>}{title}
           </div>
-          {desc && <div className="card-desc">{desc}</div>}
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
         {action}
       </div>
@@ -302,7 +302,7 @@ function JourneyTab() {
 // เป้ารายตัวแทน = DealerRow.revenueTarget (ตั้งที่หน้า “ตัวแทน”) · ความคืบหน้า = ยอดจริงเทียบเป้า
 // ไม่มี "คาดการณ์" (Forecast) — ระบบไม่มีข้อมูลคาดการณ์ (ไม่มีวันคาดปิดการขาย / ค่าความน่าจะเป็น)
 function RollupTable({ title, hint, rows, countryTarget, ready = true }: {
-  title: string; hint: string;
+  title: string; hint?: string;
   rows: { key: string; target: number; actual: number; dealers: number }[];
   countryTarget?: number;
   /** ตัวเลข "ทำได้จริง" มาถึงหรือยัง — ยังไม่มา ต้องขึ้น "—" ไม่ใช่ ฿0
@@ -314,7 +314,7 @@ function RollupTable({ title, hint, rows, countryTarget, ready = true }: {
   const cur = Math.min(page, pageCountOf(sorted.length) - 1);
   const shown = pageSlice(sorted, cur);
   return (
-    <SectionCard icon={<Target size={19} />} title={title} desc={hint}>
+    <SectionCard icon={<Target size={19} />} title={title}>
       <div className="table-wrap" style={{ marginTop: 6 }}>
         <table>
           <colgroup>
@@ -462,8 +462,8 @@ function TargetsTab() {
         </div>
       </SectionCard>
 
-      <RollupTable title="เป้าหมายรายภูมิภาค" hint="รวมจากเป้าของตัวแทนในภาคนั้น — ตั้งเป้ารายตัวแทนที่หน้า “ตัวแทน”" rows={byRegion} countryTarget={draft.annualTarget} ready={perf.ready} />
-      <RollupTable title="เป้าหมายรายตัวแทน" hint="ตั้งค่าได้ที่หน้า “ตัวแทน” → แก้ไขตัวแทน" rows={byDealer} ready={perf.ready} />
+      <RollupTable title="เป้าหมายรายภูมิภาค" rows={byRegion} countryTarget={draft.annualTarget} ready={perf.ready} />
+      <RollupTable title="เป้าหมายรายตัวแทน" rows={byDealer} ready={perf.ready} />
     </>
   );
 }

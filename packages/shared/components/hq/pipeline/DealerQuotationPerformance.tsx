@@ -76,9 +76,7 @@ export function DealerQuotationPerformance({ rows }: {
       <div className="card-header">
         <div>
           <div className="card-title">วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน</div>
-          <div className="card-desc">
-            ออกใบเสนอราคากี่ใบ · ปิดได้กี่ใบ · เรียงจากออกใบมาก→น้อย · ชี้ที่แท่งเพื่อดูตัวเลขเต็ม
-          </div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
         <span style={{ display: "flex", gap: 12, flexShrink: 0, fontSize: "0.62rem", color: MUTED }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -179,10 +177,7 @@ export function DealerQuotationTable({ rows, avgConv }: {
       <div className="card-header">
         <div>
           <div className="card-title">ตัวเลขการปิดการขาย รายตัวแทน</div>
-          <div className="card-desc">
-            ตัวเลขชุดเดียวกับกราฟ “วิเคราะห์ประสิทธิภาพการปิดการขายของตัวแทน” · อัตราปิด = ปิดได้ ÷ (ปิดได้ + ปิดไม่ได้)
-            {avgConv !== null && <> · เฉลี่ยทั้งเครือ {avgConv}% — ตัวแทนที่ต่ำกว่านี้ขึ้นสีแดง</>}
-          </div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
       </div>
       <div className="table-wrap">

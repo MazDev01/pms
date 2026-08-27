@@ -131,7 +131,7 @@ function CompanyTab() {
       <div className="card-header">
         <div>
           <div className="card-title">บัญชีดีลเลอร์</div>
-          <div className="card-desc">ข้อมูลผู้ใช้และบริษัทของตัวแทน — บัญชีเดียว · ใช้ออกใบเสนอราคาและเอกสาร</div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
       </div>
       <div className="card-body">
@@ -340,7 +340,7 @@ function DocumentsTab() {
       <div className="card-header">
         <div>
           <div className="card-title">ตั้งค่าใบเสนอราคา</div>
-          <div className="card-desc">เลขที่ · อายุใบ · ภาษีมูลค่าเพิ่ม · หัว/ท้าย เงื่อนไข ตราประทับ และลายเซ็น</div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
       </div>
       <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -534,7 +534,7 @@ function PersonsTab() {
       <div className="card-header">
         <div>
           <div className="card-title">ผู้รับผิดชอบ</div>
-          <div className="card-desc">รายชื่อพนักงานขายที่ใช้กำกับลูกค้าเป้าหมาย ลูกค้า และรายงาน · ไม่ใช่ผู้ใช้ระบบ</div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> เพิ่ม</button>
       </div>
@@ -808,7 +808,7 @@ function NotificationsTab() {
           <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: "var(--primary)", display: "flex" }}><Bell size={19} /></span>การแจ้งเตือนของตัวแทน
           </div>
-          <div className="card-desc">6 เรื่องที่ระบบเฝ้าให้ — คำนวณจากงานขายของตัวแทน แล้วขึ้นที่กระดิ่ง</div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
       </div>
       <div className="card-body">
@@ -865,7 +865,7 @@ function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRu
           <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: "var(--primary)", display: "flex" }}><Scale size={19} /></span>กฎการดูแลลูกค้าเป้าหมาย
           </div>
-          <div className="card-desc">เกณฑ์ของสาขา {currentDealer.name} ({currentDealer.code}) — สาขาอื่นตั้งของตัวเองแยกกัน</div>
+          {/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}
         </div>
       </div>
       <div className="card-body">
