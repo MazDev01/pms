@@ -308,6 +308,11 @@ export interface LeadListOpts {
   dateEnd?: string;
   overdue?: boolean;           // เฉพาะลูกค้าเป้าหมายเปิดที่เงียบเกินเกณฑ์
   asOf?: string; defaultDays?: number; perDealer?: Record<string, number>;
+  /** จำนวนรวมที่ผู้เรียก "รู้อยู่แล้ว" จากการนับครั้งก่อน (ตัวกรองชุดเดียวกัน)
+   *  ส่งมา = ข้ามการนับยอดรวมที่ฐานข้อมูล แล้วคืนตัวเลขนี้กลับไปเลย
+   *  ทำไม: วัดจริงที่ข้อมูล 20,000 แถว — การนับแบบเป๊ะกินเวลา ~2 วินาที ส่วนการอ่าน 20 แถวใช้ ~0.2 วินาที
+   *  (ตัวกรองเท่าเดิม จำนวนรวมย่อมเท่าเดิม การนับซ้ำทุกครั้งที่กดเปลี่ยนหน้าจึงเป็นงานเปล่า) */
+  knownTotal?: number;
 }
 export interface LeadListResult { rows: LeadRow[]; total: number; }
 export interface LeadsRepo {
@@ -340,6 +345,11 @@ export interface QuoteListOpts {
   searchDealers?: string[];     // รหัสตัวแทนที่ชื่อ/รหัส match คำค้น — OR เข้ากับ search (ค้นชื่อตัวแทน)
   dateStart?: string;           // ISO YYYY-MM-DD (inclusive) บนคอลัมน์ date
   dateEnd?: string;
+  /** จำนวนรวมที่ผู้เรียก "รู้อยู่แล้ว" จากการนับครั้งก่อน (ตัวกรองชุดเดียวกัน)
+   *  ส่งมา = ข้ามการนับยอดรวมที่ฐานข้อมูล แล้วคืนตัวเลขนี้กลับไปเลย
+   *  ทำไม: วัดจริงที่ข้อมูล 20,000 แถว — การนับแบบเป๊ะกินเวลา ~2 วินาที ส่วนการอ่าน 20 แถวใช้ ~0.2 วินาที
+   *  (ตัวกรองเท่าเดิม จำนวนรวมย่อมเท่าเดิม การนับซ้ำทุกครั้งที่กดเปลี่ยนหน้าจึงเป็นงานเปล่า) */
+  knownTotal?: number;
 }
 export interface QuoteListResult { rows: QuotationMock[]; total: number; }
 export interface QuotationsRepo {

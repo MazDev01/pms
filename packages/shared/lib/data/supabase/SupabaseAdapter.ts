@@ -104,6 +104,9 @@ async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult
 // แถวแรกเงียบ ๆ โดยไม่มี error ให้รู้เลย (ยืนยันจริงจากทดสอบข้อมูลปริมาณ 5,500 แถว 30 ก.ค. 69)
 // ไม่กระทบ listPage ที่ใช้ทำ UI-pagination จริง (limit เล็ก เช่น 6/24/50) — เข้าเงื่อนไข loop แค่รอบเดียวเหมือนเดิม
 // buildQuery ต้องคืน query "ใหม่" ทุกครั้งที่เรียก (มี .range ของหน้านั้นในตัว) — ใช้ query เดิมซ้ำหลัง await ไม่ได้
+// ฐานข้อมูลรองรับสวิตช์ "ข้ามการนับ" (migration 0161) หรือยัง — ตรวจครั้งเดียวจากผลจริง
+let ฐานข้อมูลข้ามการนับได้ = true;
+
 async function rangedFetch<T extends Row>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null; count?: number | null }>,
   limit: number, offset: number,
@@ -788,7 +791,7 @@ export const SupabaseAdapter: DataAdapter = {
       return data ? rowToLead(data as Row) : null;
     },
     listPage: async (scope, opts) => {
-      const { data, error } = await sb().rpc("leads_page", {
+      const args: Record<string, unknown> = {
         p_limit: opts.limit, p_offset: opts.offset,
         p_status: opts.status ?? null,
         p_dealer_codes: opts.dealerCodes ?? (scope && !scope.isHQ && scope.dealerCode ? [scope.dealerCode] : null),
@@ -797,10 +800,19 @@ export const SupabaseAdapter: DataAdapter = {
         p_date_start: opts.dateStart ?? null, p_date_end: opts.dateEnd ?? null,
         p_overdue: opts.overdue ?? false, p_as_of: opts.asOf ?? APP_NOW_ISO,
         p_default_days: opts.defaultDays ?? DEFAULT_LEAD_RULES.followUpAlertDays, p_follow_up_days: opts.perDealer ?? null,
-      });
+      };
+      // ผู้เรียกรู้จำนวนรวมแล้ว = ไม่ต้องให้ฐานข้อมูลนับใหม่ (ดูเหตุผลที่ ports.ts · knownTotal)
+      // ⚠️ ฐานข้อมูลที่ยังไม่ได้ลง migration 0161 ไม่รู้จักพารามิเตอร์นี้ — ลองใหม่แบบเดิมครั้งเดียวแล้วจำไว้
+      const ข้ามนับ = opts.knownTotal != null && opts.knownTotal >= 0 && ฐานข้อมูลข้ามการนับได้;
+      let { data, error } = await sb().rpc("leads_page", ข้ามนับ ? { ...args, p_skip_count: true } : args);
+      if (error && ข้ามนับ && /p_skip_count|Could not find the function/i.test(error.message)) {
+        ฐานข้อมูลข้ามการนับได้ = false;
+        ({ data, error } = await sb().rpc("leads_page", args));
+      }
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
       const d = (data ?? {}) as { total?: number; rows?: Row[] };
-      return { rows: (d.rows ?? []).map(rowToLead), total: Number(d.total ?? 0) };
+      const นับได้ = Number(d.total ?? 0);
+      return { rows: (d.rows ?? []).map(rowToLead), total: นับได้ < 0 ? (opts.knownTotal ?? 0) : นับได้ };
     },
     nextNumId: (dealerCode) => nextEntityId(dealerCode, "leads"),
     create: (row) => withNetworkRetry(async () => {
@@ -829,7 +841,9 @@ export const SupabaseAdapter: DataAdapter = {
     listPage: async (scope, opts) => {
       const s = (opts.search ?? "").trim().replace(/[,()%*\\]/g, " ").trim(); // กันตัวอักษรที่ทำ or() พัง
       const buildQuery = (from: number, to: number) => {
-        let q = sb().from("quotations").select("*", { count: "exact" });
+        let q = opts.knownTotal != null && opts.knownTotal >= 0
+          ? sb().from("quotations").select("*")                       // รู้จำนวนแล้ว — ข้ามการนับ
+          : sb().from("quotations").select("*", { count: "exact" });
         if (scope && !scope.isHQ && scope.dealerCode) q = q.eq("dealer_code", scope.dealerCode);
         if (opts.status) q = q.eq("status", opts.status);
         if (opts.dealerCodes?.length) q = q.in("dealer_code", opts.dealerCodes);
@@ -846,7 +860,7 @@ export const SupabaseAdapter: DataAdapter = {
           .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
       };
       const { rows, total } = await rangedFetch(buildQuery, opts.limit, opts.offset);
-      return { rows: rows.map(rowToQuote), total };
+      return { rows: rows.map(rowToQuote), total: opts.knownTotal != null && opts.knownTotal >= 0 ? opts.knownTotal : total };
     },
     create: async (row) => {
       const { data, error } = await sb().from("quotations").insert(quoteToRow(row)).select().single();

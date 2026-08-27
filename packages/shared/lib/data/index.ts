@@ -17,7 +17,7 @@ import { dedupeRead, ttlCacheRead, invalidateCache } from "./dedupe";
 // TTL ของแคชข้อมูลอ้างอิง (ทะเบียนตัวแทน/แคตตาล็อก/กฎธุรกิจ/ผู้รับผิดชอบ) — สั้นพอที่ผู้ใช้จะไม่รู้สึกว่า
 // ข้อมูลค้าง (แก้เองก็ invalidate ทันทีอยู่แล้ว) ยาวพอที่จะตัดคำขอซ้ำตอนสลับหน้าไปมาเร็ว ๆ
 const REF_TTL_MS = 30_000;
-import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo, ProfileRepo } from "./ports";
+import type { DataAdapter, DealersRepo, CatalogRepo, SettingsRepo, MetricsRepo, PersonsRepo, DealerSettingsRepo, AuditRepo, ProfileRepo, LeadsRepo, QuotationsRepo, CustomersRepo } from "./ports";
 
 // "api" = คุยผ่าน backend ของเราเอง (ครบทุกพอร์ตแล้ว · ดู http/HttpAdapter.ts และ docs/BACKEND-MIGRATION.md)
 const adapter: DataAdapter =
@@ -113,9 +113,62 @@ export const metrics: MetricsRepo = {
   hqCustomersPage: (opts) => dedupeRead(`metrics.hqCustomersPage:${JSON.stringify(opts)}`, () => _metrics.hqCustomersPage(opts)),
   hqCustomersFilterOptions: () => dedupeRead("metrics.hqCustomersFilterOptions", () => _metrics.hqCustomersFilterOptions()),
 };
-export const leads = adapter.leads;
-export const quotations = adapter.quotations;
-export const customers = adapter.customers;
+// ── นับยอดรวมของตารางแบ่งหน้า "ครั้งเดียวต่อชุดตัวกรอง" แล้วใช้ซ้ำตอนกดเปลี่ยนหน้า ──
+//
+// วัดจริง 27 ส.ค. 69 ที่ข้อมูล 20,000 ลูกค้าเป้าหมาย:
+//   อ่านข้อมูล 20 แถวที่จะแสดง ~0.2 วินาที · นับยอดรวมแบบเป๊ะ ~2 วินาที
+//   เพราะการนับต้องไล่ตรวจสิทธิ์ครบทุกแถวในตาราง ส่วนการอ่านแตะแค่ 20 แถว
+// ตัวกรองเท่าเดิม จำนวนรวมย่อมเท่าเดิม — การนับใหม่ทุกครั้งที่กดหน้าถัดไปจึงเป็นงานเปล่า
+//
+// ⚠️ ต้องล้างทันทีที่มีการเขียน ไม่งั้นสร้าง/ลบแล้วเลขรวมค้างของเก่า (เห็นชัดตอนสร้างรายการแรกของตัวกรอง)
+// ⚠️ อายุสั้น (60 วินาที) — คนอื่นเพิ่มข้อมูลระหว่างนั้น เลขรวมอาจคลาดไปชั่วคราวแล้วถูกต้องเองรอบถัดไป
+const TOTAL_TTL_MS = 60_000;
+const ยอดรวมที่นับไว้ = new Map<string, { total: number; at: number }>();
+const ล้างยอดรวม = (prefix: string) => {
+  for (const k of [...ยอดรวมที่นับไว้.keys()]) if (k.startsWith(prefix)) ยอดรวมที่นับไว้.delete(k);
+};
+type มีจำนวนรวม = { total: number };
+type ตัวเลือกหน้า = { limit: number; offset: number; knownTotal?: number };
+function จำยอดรวม<S, O extends ตัวเลือกหน้า, R extends มีจำนวนรวม>(
+  ชื่อ: string, เดิม: (scope: S, opts: O) => Promise<R>,
+): (scope: S, opts: O) => Promise<R> {
+  return async (scope, opts) => {
+    const { limit: _l, offset: _o, knownTotal: _k, ...ตัวกรอง } = opts;
+    const key = `${ชื่อ}:${JSON.stringify(scope ?? {})}:${JSON.stringify(ตัวกรอง)}`;
+    const เก่า = ยอดรวมที่นับไว้.get(key);
+    const ใช้ได้ = เก่า && Date.now() - เก่า.at < TOTAL_TTL_MS;
+    const res = await เดิม(scope, ใช้ได้ ? { ...opts, knownTotal: เก่า.total } : opts);
+    if (!ใช้ได้) ยอดรวมที่นับไว้.set(key, { total: res.total, at: Date.now() });
+    return res;
+  };
+}
+const _leads = adapter.leads, _quotations = adapter.quotations, _customers = adapter.customers;
+const ล้างเมื่อเขียน = <T extends unknown[], R>(prefix: string, fn: (...a: T) => Promise<R>) =>
+  async (...a: T): Promise<R> => { const r = await fn(...a); ล้างยอดรวม(prefix); return r; };
+
+export const leads: LeadsRepo = {
+  ..._leads,
+  listPage: จำยอดรวม("leads.page", _leads.listPage.bind(_leads)),
+  create: ล้างเมื่อเขียน("leads.page", _leads.create.bind(_leads)),
+  update: ล้างเมื่อเขียน("leads.page", _leads.update.bind(_leads)),
+  remove: ล้างเมื่อเขียน("leads.page", _leads.remove.bind(_leads)),
+  setStatus: ล้างเมื่อเขียน("leads.page", _leads.setStatus.bind(_leads)),
+};
+export const quotations: QuotationsRepo = {
+  ..._quotations,
+  listPage: จำยอดรวม("quotations.page", _quotations.listPage.bind(_quotations)),
+  create: ล้างเมื่อเขียน("quotations.page", _quotations.create.bind(_quotations)),
+  update: ล้างเมื่อเขียน("quotations.page", _quotations.update.bind(_quotations)),
+  remove: ล้างเมื่อเขียน("quotations.page", _quotations.remove.bind(_quotations)),
+  setStatus: ล้างเมื่อเขียน("quotations.page", _quotations.setStatus.bind(_quotations)),
+};
+export const customers: CustomersRepo = {
+  ..._customers,
+  listPage: จำยอดรวม("customers.page", _customers.listPage.bind(_customers)),
+  create: ล้างเมื่อเขียน("customers.page", _customers.create.bind(_customers)),
+  update: ล้างเมื่อเขียน("customers.page", _customers.update.bind(_customers)),
+  remove: ล้างเมื่อเขียน("customers.page", _customers.remove.bind(_customers)),
+};
 export const appointments = adapter.appointments;
 
 export type {

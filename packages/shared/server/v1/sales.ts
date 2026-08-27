@@ -67,6 +67,8 @@ const LEAD_PAGE_SHAPE = {
   asOf:        isoDate({ optional: true }),
   defaultDays: num({ int: true, min: 0, max: 3650, optional: true }),
   perDealer:   mapOfNum({ optional: true, max: 100 }),
+  // -1 = ไม่ได้ส่งมา (ผู้เรียกยังไม่รู้จำนวนรวม) · >= 0 = รู้แล้ว ให้ข้ามการนับที่ฐานข้อมูล
+  knownTotal:  num({ int: true, min: -1, max: 100_000_000, def: -1 }),
 } as const;
 
 /** ตัวกรอง + แบ่งหน้า + เรียงของรายการใบเสนอราคา */
@@ -80,19 +82,32 @@ const QUOTE_PAGE_SHAPE = {
   search:         str({ max: 200, optional: true }),
   dateStart:      isoDate({ optional: true }),
   dateEnd:        isoDate({ optional: true }),
+  knownTotal:     num({ int: true, min: -1, max: 100_000_000, def: -1 }),
 } as const;
 
 /** ค่าที่ใช้แทน "ไม่ระบุ" ตอนส่งให้ RPC — ตัวตรวจคืนข้อความว่าง/NaN/null แล้วแต่ชนิด */
+// ฐานข้อมูลรองรับสวิตช์ "ข้ามการนับ" (migration 0161) หรือยัง — ตรวจครั้งเดียวจากผลจริง
+let ฐานข้อมูลข้ามการนับได้ = true;
+
 const orNull = (v: string | number | null) =>
   v === "" || v === null || (typeof v === "number" && Number.isNaN(v)) ? null : v;
 
+// ── เพดานของ "ดึงทั้งเครือทีเดียว" (วัดจริง 27 ส.ค. 69) ─────────────────────────
+// ที่ข้อมูล 20,000 ลูกค้าเป้าหมาย เส้นทางนี้ใช้เวลา 29 วินาที และส่งกลับ 12MB ในคำขอเดียว
+// หน้าเว็บไม่ได้ใช้เส้นทางนี้แล้ว (HQ อ่านผ่านตารางแบ่งหน้า/รายงานที่ฐานข้อมูล) แต่ยังเรียกได้อยู่
+//   = ทั้งจุดที่ทำให้เซิร์ฟเวอร์ค้าง และช่องดูดข้อมูลทั้งเครือออกไปในคำขอเดียว
+// จึงจำกัดไว้ที่ 5,000 แถวสำหรับ scope ทั้งเครือ แล้วติดธง partial กลับไปให้ผู้เรียกรู้ว่าไม่ครบ
+//   (ยังไม่ตัดทิ้ง เผื่อมีผู้เรียกเก่าที่เครือข่ายยังเล็ก — แต่จะไม่มีวันดึง 12MB อีก)
+const HQ_LIST_CAP = 5_000;
+
 /** ไล่ดึงทั้งตารางของ scope นั้น (เรียงเสถียร) — คืนธง partial ให้ฝั่งแอปเตือนเมื่อชนเพดาน */
 function listAll(sb: SupabaseClient, table: string, dealer: string, isHQ: boolean) {
+  const ทั้งเครือ = isHQ || !dealer;
   return pageAll((from, to) => {
     const base = sb.from(table).select("*")
       .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
     return !isHQ && dealer ? base.eq("dealer_code", dealer) : base;
-  });
+  }, ทั้งเครือ ? HQ_LIST_CAP : undefined);
 }
 
 // ── ลูกค้าเป้าหมาย ──────────────────────────────────────────────────────────────
@@ -121,17 +136,30 @@ export const leadsPOST = handler("leads.write", async (req, sb) => {
   if (o === "page") {
     // ทั้งชุดคิดที่ DB ผ่าน RPC leads_page — ตัวกรอง overdue ต้องใช้เกณฑ์รายสาขา คิดฝั่งแอปไม่ได้
     const f = parse(LEAD_PAGE_SHAPE, await body<unknown>(req));
-    const { data, error } = await sb.rpc("leads_page", {
+    const รู้จำนวนแล้ว = f.knownTotal >= 0;
+    const args: Record<string, unknown> = {
       p_limit: f.limit, p_offset: f.offset,
       p_status: orNull(f.status), p_dealer_codes: f.dealerCodes,
       p_province: orNull(f.province), p_product: orNull(f.product), p_source: orNull(f.source),
       p_search: orNull(f.search), p_date_start: f.dateStart, p_date_end: f.dateEnd,
       p_overdue: f.overdue, p_as_of: f.asOf,
       p_default_days: orNull(f.defaultDays), p_follow_up_days: f.perDealer,
-    });
+    };
+    // ⚠️ ฐานข้อมูลที่ยังไม่ได้ลง migration 0161 จะไม่รู้จักพารามิเตอร์นี้ และปฏิเสธทั้งคำขอ
+    //    จึงลองแบบใหม่ก่อน แล้วตกกลับไปแบบเดิมครั้งเดียว (จำไว้ ไม่ต้องลองซ้ำทุกคำขอ)
+    let { data, error } = รู้จำนวนแล้ว && ฐานข้อมูลข้ามการนับได้
+      ? await sb.rpc("leads_page", { ...args, p_skip_count: true })
+      : await sb.rpc("leads_page", args);
+    if (error && รู้จำนวนแล้ว && ฐานข้อมูลข้ามการนับได้ && /p_skip_count|Could not find the function/i.test(error.message)) {
+      ฐานข้อมูลข้ามการนับได้ = false;
+      console.warn("[api/v1/leads.listPage] ฐานข้อมูลยังไม่มี migration 0161 — กลับไปนับทุกครั้งตามเดิม");
+      ({ data, error } = await sb.rpc("leads_page", args));
+    }
     if (error) return dbFail("leads.listPage", error);
     const d = (data ?? {}) as { total?: number; rows?: Row[] };
-    return ok({ rows: (d.rows ?? []).map(rowToLead), total: Number(d.total ?? 0) });
+    // ฐานข้อมูลคืน -1 เมื่อ "ไม่ได้นับ" — ใช้จำนวนที่ผู้เรียกรู้อยู่แล้วแทน (ห้ามคืน -1 ให้หน้าจอ)
+    const นับได้ = Number(d.total ?? 0);
+    return ok({ rows: (d.rows ?? []).map(rowToLead), total: นับได้ < 0 ? f.knownTotal : นับได้ });
   }
   const row = await body<LeadRow>(req);
   if (!row) return fail(400, "ข้อมูลลูกค้าเป้าหมายไม่ถูกต้อง");
@@ -238,8 +266,11 @@ export const quotesPOST = handler("quotations.write", async (req, sb) => {
     const sortAsc = oneOf(["asc", "desc"] as const, { optional: true })(sortRaw.dir, "sort.dir") === "asc";
     const { dealer, isHQ } = scopeOf(req);
     const s = f.search.replace(/[,()%*\\]/g, " ").trim();   // กันตัวอักษรที่ทำ or() พัง
+    // ผู้เรียกรู้จำนวนรวมอยู่แล้ว (กดเปลี่ยนหน้าโดยตัวกรองเท่าเดิม) = ไม่ต้องให้ฐานข้อมูลนับใหม่
+    //   วัดจริงที่ 10,000 ใบ: การนับแบบเป๊ะคือส่วนที่กินเวลาเกือบทั้งหมดของคำขอ
+    const นับด้วย = f.knownTotal >= 0 ? undefined : ("exact" as const);
     const build = (from: number, to: number) => {
-      let q = sb.from("quotations").select("*", { count: "exact" });
+      let q = นับด้วย ? sb.from("quotations").select("*", { count: นับด้วย }) : sb.from("quotations").select("*");
       if (!isHQ && dealer) q = q.eq("dealer_code", dealer);
       if (f.status) q = q.eq("status", f.status);
       if (f.dealerCodes?.length) q = q.in("dealer_code", f.dealerCodes);
@@ -255,7 +286,8 @@ export const quotesPOST = handler("quotations.write", async (req, sb) => {
         .order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
     };
     const { rows, total } = await rangedFetch<Row>(build, f.limit, f.offset);
-    return ok({ rows: rows.map(rowToQuote), total });
+    const จำนวนรวม = f.knownTotal >= 0 ? f.knownTotal : total;
+    return ok({ rows: rows.map(rowToQuote), total: จำนวนรวม });
   }
   if (o === "numbered") {
     // ออกเลข + insert รวดเดียว (RPC 0034) — insert ล้ม = ตัวนับ rollback ไม่เดิน
@@ -346,11 +378,12 @@ export const customersPOST = handler("customers.write", async (req, sb) => {
       offset:      num({ int: true, min: 0, max: 1_000_000, def: 0 }),
       search:      str({ max: 200, optional: true }),
       dealerCodes: arrOf(str({ max: 20 }), { optional: true, max: 100 }),
+      knownTotal:  num({ int: true, min: -1, max: 100_000_000, def: -1 }),
     }, await body<unknown>(req));
     const { dealer, isHQ } = scopeOf(req);
     const s = f.search.replace(/[,()%*\\]/g, " ").trim();
     const build = (from: number, to: number) => {
-      let q = sb.from("customers").select("*", { count: "exact" });
+      let q = f.knownTotal >= 0 ? sb.from("customers").select("*") : sb.from("customers").select("*", { count: "exact" });
       if (!isHQ && dealer) q = q.eq("dealer_code", dealer);
       const codes = f.dealerCodes ?? undefined;
       if (codes?.length) q = q.in("dealer_code", codes);
@@ -358,7 +391,8 @@ export const customersPOST = handler("customers.write", async (req, sb) => {
       return q.order("id", { ascending: true }).order(TIEBREAK_COL, { ascending: true }).range(from, to);
     };
     const { rows, total } = await rangedFetch<Row>(build, f.limit, f.offset);
-    return ok({ rows: rows.map(r => normalizeCustomer(toCamel<CustomerRow>(r))), total });
+    const จำนวนรวม = f.knownTotal >= 0 ? f.knownTotal : total;
+    return ok({ rows: rows.map(r => normalizeCustomer(toCamel<CustomerRow>(r))), total: จำนวนรวม });
   }
   if (o === "upsert-company" || o === "close-won") {
     const b = await body<Record<string, unknown>>(req);

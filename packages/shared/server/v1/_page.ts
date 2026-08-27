@@ -18,7 +18,11 @@ type RowsResult = { data: unknown[] | null; error: { message: string; code?: str
 /** ผลของการไล่ดึงทั้งตาราง — partial = ชนเพดาน ข้อมูลไม่ครบ (ฝั่งแอปต้องเตือนผู้ใช้) */
 export type PagedRows = { rows: Row[]; partial: boolean };
 
-export async function pageAll(run: (from: number, to: number) => PromiseLike<RowsResult>): Promise<PagedRows> {
+export async function pageAll(
+  run: (from: number, to: number) => PromiseLike<RowsResult>,
+  /** เพดานเฉพาะครั้งนี้ (เช่น scope ทั้งเครือ) — ไม่ส่งมา = ใช้เพดานสูงสุดของระบบ */
+  cap = PAGE_HARD_CAP,
+): Promise<PagedRows> {
   const out: Row[] = [];
   for (let from = 0; ; from += PAGE_ROWS) {
     const { data, error } = await run(from, from + PAGE_ROWS - 1);
@@ -26,9 +30,9 @@ export async function pageAll(run: (from: number, to: number) => PromiseLike<Row
     const rows = (data ?? []) as Row[];
     out.push(...rows);
     if (rows.length < PAGE_ROWS) break;
-    if (out.length >= PAGE_HARD_CAP) return { rows: out, partial: true };
+    if (out.length >= cap) return { rows: out.slice(0, cap), partial: true };
   }
-  return { rows: out, partial: false };
+  return { rows: out, partial: out.length > cap };
 }
 
 /** ผู้เรียกขอก้อนใหญ่ (limit > 1,000) — ต้องไล่ทีละหน้าเหมือนกัน ไม่งั้นได้แค่ 1,000 แถวแรกเงียบ ๆ */
