@@ -181,9 +181,11 @@ export const POST = async (req: NextRequest): Promise<Response> => {
   }
 
   // op = login
-  const body = (await req.json().catch(() => null)) as { email?: string; password?: string } | null;
-  const email = (body?.email ?? "").trim().toLowerCase();
-  const password = body?.password ?? "";
+  const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null;
+  // ⚠️ ต้องเช็กชนิดก่อนเรียก .trim() (ตรวจพบ 27 ส.ค. 69) — ส่ง email เป็นตัวเลขหรือ password เป็นอาร์เรย์
+  //    ทำให้โยน TypeError ออกมาแล้วกลายเป็น 500 "ระบบขัดข้อง" ทั้งที่เป็นข้อมูลขาเข้าผิดรูป (ต้องเป็น 400)
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const password = typeof body?.password === "string" ? body.password : "";
   if (!email || !password) return fail(400, "กรุณากรอกอีเมลและรหัสผ่าน");
   if (!URL_ || !ANON) return fail(503, "ระบบยังไม่ได้ตั้งค่าเชื่อมต่อฐานข้อมูล");
 

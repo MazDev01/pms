@@ -4,6 +4,9 @@ import { securityHeaderRules } from "../../packages/shared/lib/securityHeaders.m
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@pms/shared"],
+  // ไม่ประกาศชนิดเซิร์ฟเวอร์ให้คนภายนอกรู้ (ตรวจพบ 27 ส.ค. 69) — ลดข้อมูลตั้งต้นให้คนที่ไล่หาช่องโหว่
+  poweredByHeader: false,
+
   eslint: { ignoreDuringBuilds: true },
   async headers() {
     return securityHeaderRules();

@@ -140,24 +140,65 @@ export const leadsPOST = handler("leads.write", async (req, sb) => {
   return ok(rowToLead(data as Row));
 });
 
+// -- กฎการปิดดีล ต้องบังคับที่หลังบ้านด้วย ไม่ใช่แค่ปุ่มบนหน้าจอ (ตรวจพบ 27 ส.ค. 69) --
+// ยิง API ตรง ๆ จากคอนโซลเบราว์เซอร์ด้วยบัญชีตัวแทนของตัวเอง เคยตั้งลีดใหม่เอี่ยมเป็น PAID ได้ทันที
+// ทั้งที่ไม่มีใบเสนอราคาสักใบ และตั้ง CANCELLED ได้โดยไม่ใส่เหตุผล
+// ผลคือฐานข้อมูลมีลูกค้ายอด 0 กับดีลที่แพ้แบบไม่มีเหตุผล -> อัตราปิดการขาย/รายงานเพี้ยนโดยไม่มีใครรู้
+// (กติกาเดียวกับด่าน "ยอดต้องตรงกับ BOQ" ซึ่งบังคับที่ฐานข้อมูลอยู่แล้ว)
+async function ตรวจกฎการปิดดีล(
+  sb: SupabaseClient, id: string, status: string, lostReason?: unknown,
+): Promise<string> {
+  if (status === "PAID") {
+    const { data: lead } = await sb.from("leads").select("num_id,company").eq("id", id).maybeSingle();
+    const l = lead as { num_id?: number; company?: string } | null;
+    if (!l) return "";   // ไม่มีลีดนี้ให้ตรวจ -- ปล่อยให้ขั้นตอนถัดไปจัดการตามปกติ
+    const { data: qs } = await sb.from("quotations").select("status,deal_id,customer")
+      .or(`deal_id.eq.${l.num_id ?? -1},customer.eq.${l.company ?? ""}`);
+    const ใบที่ส่งแล้ว = ((qs ?? []) as { status?: string }[]).filter(q => q.status && q.status !== "draft");
+    if (!ใบที่ส่งแล้ว.length)
+      return "ปิดการขายสำเร็จไม่ได้ — ต้องมีใบเสนอราคาที่ส่งให้ลูกค้าแล้วอย่างน้อยหนึ่งใบ";
+  }
+  if (status === "CANCELLED") {
+    const มีเหตุผล = typeof lostReason === "string" && lostReason.trim() !== "";
+    if (!มีเหตุผล) {
+      const { data: lead } = await sb.from("leads").select("lost_reason").eq("id", id).maybeSingle();
+      const เดิม = (lead as { lost_reason?: string } | null)?.lost_reason ?? "";
+      if (!เดิม.trim()) return "ปิดการขายไม่สำเร็จต้องระบุเหตุผลเสมอ";
+    }
+  }
+  return "";
+}
+
 export const leadsPUT = handler("leads.update", async (req, sb) => {
   if (op(req) === "status") {
     const b = parse({ id: str({ max: 40 }), status: oneOf(LEAD_STATUS) }, await body<unknown>(req));
+    const ห้าม = await ตรวจกฎการปิดดีล(sb, b.id, b.status);
+    if (ห้าม) return fail(422, ห้าม);
     const { error } = await sb.from("leads").update({ status: b.status }).eq("id", b.id);
     if (error) return dbFail("leads.setStatus", error);
     return ok({ ok: true });
   }
   const row = await body<LeadRow>(req);
   if (!row?.id) return fail(400, "ไม่ได้ระบุลูกค้าเป้าหมายที่จะแก้");
+  if (row.status === "PAID" || row.status === "CANCELLED") {
+    const ห้าม = await ตรวจกฎการปิดดีล(sb, row.id, row.status, (row as { lostReason?: unknown }).lostReason);
+    if (ห้าม) return fail(422, ห้าม);
+  }
   const { data, error } = await sb.from("leads").update(leadToRow(row)).eq("id", row.id).select().single();
   if (error) return dbFail("leads.update", error);
   return ok(rowToLead(data as Row));
 });
 
+// -- ลบแล้วต้องรู้ว่าลบได้จริงไหม (ตรวจพบ 27 ส.ค. 69 จากการยิง API จริง) --
+// เดิม delete() ไม่ขอผลกลับ -> ฐานข้อมูลกันไว้ (กฎความปลอดภัยข้ามสาขา) หรือไม่มีแถวนั้นอยู่จริง
+// ก็ยัง "ไม่มี error" แล้วเราตอบ {ok:true} -> หน้าจอขึ้นว่า "ลบแล้ว" ทั้งที่ข้อมูลยังอยู่ครบ
+// หลักฐาน: ตัวแทน RYG สั่งลบลีดของสาขา CNX -> 200 ok แต่ลีดยังอยู่
+// ขอ .select() กลับมาเสมอ แล้วนับแถวที่หายจริง -- 0 แถว = 404 ไม่ใช่ความสำเร็จ
 export const leadsDELETE = handler("leads.remove", async (req, sb) => {
   const id = str({ max: 40 })(qp(req, "id"), "id");
-  const { error } = await sb.from("leads").delete().eq("id", id);
+  const { data, error } = await sb.from("leads").delete().eq("id", id).select("id");
   if (error) return dbFail("leads.remove", error);
+  if (!data?.length) return fail(404, "ลบลูกค้าเป้าหมายไม่สำเร็จ — ไม่พบรายการนี้ หรือไม่มีสิทธิ์ลบ");
   return ok({ ok: true });
 });
 
@@ -278,8 +319,9 @@ export const quotesPUT = handler("quotations.update", async (req, sb) => {
 
 export const quotesDELETE = handler("quotations.remove", async (req, sb) => {
   const id = str({ max: 40 })(qp(req, "id"), "id");
-  const { error } = await sb.from("quotations").delete().eq("id", id);
+  const { data, error } = await sb.from("quotations").delete().eq("id", id).select("id");
   if (error) return dbFail("quotations.remove", error);
+  if (!data?.length) return fail(404, "ลบใบเสนอราคาไม่สำเร็จ — ไม่พบรายการนี้ หรือไม่มีสิทธิ์ลบ");
   return ok({ ok: true });
 });
 
@@ -368,8 +410,9 @@ export const customersPUT = handler("customers.update", async (req, sb) => {
 
 export const customersDELETE = handler("customers.remove", async (req, sb) => {
   const id = num({ int: true, min: 0 })(qp(req, "id"), "id");
-  const { error } = await sb.from("customers").delete().eq("id", id);
+  const { data, error } = await sb.from("customers").delete().eq("id", id).select("id");
   if (error) return dbFail("customers.remove", error);
+  if (!data?.length) return fail(404, "ลบลูกค้าไม่สำเร็จ — ไม่พบรายการนี้ หรือไม่มีสิทธิ์ลบ");
   return ok({ ok: true });
 });
 
@@ -420,7 +463,8 @@ export const apptPUT = handler("appointments.update", async (req, sb) => {
 export const apptDELETE = handler("appointments.remove", async (req, sb) => {
   const id = Number(qp(req, "id"));
   if (!Number.isFinite(id)) return fail(400, "ไม่ได้ระบุนัดหมายที่จะลบ");
-  const { error } = await sb.from("appointments").delete().eq("id", id);
+  const { data, error } = await sb.from("appointments").delete().eq("id", id).select("id");
   if (error) return dbFail("appointments.remove", error);
+  if (!data?.length) return fail(404, "ลบนัดหมายไม่สำเร็จ — ไม่พบรายการนี้ หรือไม่มีสิทธิ์ลบ");
   return ok({ ok: true });
 });
