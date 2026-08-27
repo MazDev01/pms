@@ -70,6 +70,14 @@ export type SalesContextType = {
 
   // Quotations (lifted — one shared list app-wide)
   quotations: QuotationMock[];
+  /** โหลดรายการใบเสนอราคาเสร็จแล้วหรือยัง — "ยังไม่เสร็จ" ไม่เท่ากับ "ไม่มีใบ"
+   *  ⚠️ ด่านที่ตัดสินจาก quotations.length ต้องเช็กค่านี้ก่อนเสมอ (เจอจริง 27 ส.ค. 69)
+   *     โหมด api ข้อมูลเดินทางไกลกว่า ใบมาถึงช้ากว่าลูกค้าเป้าหมายเสมอ — กดปิดการขาย
+   *     ระหว่างนั้นแล้วระบบตอบว่า "ต้องออกใบก่อน" ทั้งที่ใบมีอยู่จริง (แล้วไม่เกิดอะไรขึ้นเลย) */
+  quotationsReady: boolean;
+  /** รายการใบเสนอราคาที่ "โหลดเสร็จแน่นอนแล้ว" — โหลดเสร็จอยู่แล้วคืนทันที ยังไม่เสร็จก็รอให้เสร็จก่อน
+   *  ใช้กับด่านที่ตัดสินใจจากจำนวนใบ (ปิดการขาย/เลื่อนขั้น) — ตัดสินจาก array ที่ยังโหลดไม่เสร็จ = ตัดสินผิด */
+  ensureQuotations: () => Promise<QuotationMock[]>;
   /** สร้างใบใหม่ = ออกเลข + insert แบบ atomic (H8) · รับ draft ที่ยังไม่มี id · คืนใบที่บันทึกจริง */
   createQuotation: (draft: Omit<QuotationMock, "id">) => Promise<QuotationMock>;
   /** แก้ใบเสนอราคา · opts.แนบแม่แบบ = ผู้ใช้ยืนยันว่าส่งแม่แบบไปกับใบด้วย (ติ๊กงาน "ส่งแม่แบบให้ลูกค้า" ให้)
@@ -143,6 +151,9 @@ export function SalesProvider({
   const [leads, setLeads] = useState<LeadRow[]>(USE_SUPABASE ? [] : initialLeads);
   // ref อ่านค่า leads ล่าสุดใน callback โดยไม่พึ่ง closure (ใช้ใน updateLeadStatus / completeLeadQuoteTasks)
   const leadsRef = useRef(leads);
+  // โหลดลูกค้าเป้าหมายเสร็จแล้วหรือยัง + คำขอโหลดรอบล่าสุด — ใช้โดย ensureLeads (ดูเหตุผลที่ ensureQuotations)
+  const leadsReadyRef = useRef(!USE_SUPABASE);
+  const leadsLoadRef = useRef<Promise<LeadRow[]> | null>(null);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
 
   // ── กัน "ผลการโหลดที่มาช้า" ทับสิ่งที่ผู้ใช้เพิ่งทำ (พบจากทดสอบโหลด 10 สาขา · 6 ส.ค. 69) ──
@@ -176,7 +187,9 @@ export function SalesProvider({
   useEffect(() => {
     if (!ready || gateHQ) return; // HQ/supabase: ไม่โหลดลูกค้าเป้าหมายทั้งเครือ (อ่านผ่าน RPC แทน)
     let alive = true;
-    void loadFresh(() => leadsRepo.list({ dealerCode, isHQ }), setLeads, () => alive, "leads.list");
+    const กำลังโหลดลีด = leadsRepo.list({ dealerCode, isHQ });
+    leadsLoadRef.current = กำลังโหลดลีด;
+    void loadFresh(() => กำลังโหลดลีด, rows => { setLeads(rows); leadsReadyRef.current = true; }, () => alive, "leads.list");
     return () => { alive = false; };
   }, [ready, dealerCode, isHQ, gateHQ, loadFresh]);
 
@@ -219,6 +232,24 @@ export function SalesProvider({
   // ── Quotations (Phase 3) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา · setStatus→won ให้แอปสร้างลูกค้าเอง (ดู setQuotationStatus · trigger ถูกลบ 0033)
   const [quotations, setQuotations] = useState<QuotationMock[]>(USE_SUPABASE ? [] : seedQuotationsStamped);
+  // โหมด local มีข้อมูลตั้งต้นอยู่ในเครื่องแล้ว = พร้อมทันที · โหมดของจริงต้องรอโหลดก่อน
+  const [quotationsReady, setQuotationsReady] = useState(!USE_SUPABASE);
+  const quotationsReadyRef = useRef(quotationsReady);
+  useEffect(() => { quotationsReadyRef.current = quotationsReady; }, [quotationsReady]);
+  // คำขอโหลดรอบล่าสุด — ให้ ensureQuotations รอใบชุดเดียวกับที่หน้าจอกำลังรออยู่ ไม่ยิงซ้ำ
+  const quotationsLoadRef = useRef<Promise<QuotationMock[]> | null>(null);
+  const ensureLeads = useCallback(async (): Promise<LeadRow[]> => {
+    if (leadsReadyRef.current) return leadsRef.current;
+    const p = leadsLoadRef.current;
+    if (p) { try { return await p; } catch { /* ใช้เท่าที่มี */ } }
+    return leadsRef.current;
+  }, []);
+  const ensureQuotations = useCallback(async (): Promise<QuotationMock[]> => {
+    if (quotationsReadyRef.current) return quotationsRef.current;
+    const p = quotationsLoadRef.current;
+    if (p) { try { return await p; } catch { /* ใช้เท่าที่มี */ } }
+    return quotationsRef.current;
+  }, []);
   const quotationsRef = useRef(quotations);
   useEffect(() => { quotationsRef.current = quotations; }, [quotations]);
   useEffect(() => {
@@ -239,9 +270,11 @@ export function SalesProvider({
     const prepare = skipExpire
       ? Promise.resolve(0)
       : quotationsRepo.expireOverdue(APP_NOW_ISO, scope, quoteValidityDays).catch(() => { expiredThisSession.delete(myDealerCode); return 0; });
+    const กำลังโหลด = prepare.then(() => quotationsRepo.list(scope));
+    quotationsLoadRef.current = กำลังโหลด;
     void loadFresh(
-      () => prepare.then(() => quotationsRepo.list(scope)),
-      setQuotations, () => alive, "quotations.list",
+      () => กำลังโหลด,
+      rows => { setQuotations(rows); setQuotationsReady(true); }, () => alive, "quotations.list",
     );
     return () => { alive = false; };
   }, [ready, dealerCode, myDealerCode, isHQ, isLoggedIn, gateHQ, quoteValidityDays, loadFresh]);
@@ -780,12 +813,34 @@ export function SalesProvider({
     //   ถ้าสร้างลูกค้าไม่ลง DB → ไม่ mark won + ย้อนสถานะใบใน UI (กัน "won ค้างโดยไม่มีลูกค้า")
     //   เดิมยิง setStatus(won) ทันทีแบบ fire-and-forget แล้วค่อยสร้างลูกค้าใน setTimeout แยก —
     //   พลาดกลางทาง = ใบเป็น won แต่ไม่มีลูกค้า (หรือกลับกัน) เงียบ ๆ
-    const linkable = status === "won" && !(target.customerId && target.customerId > 0);
-    const lead = linkable
-      ? leadsRef.current.find(l => (target.dealId != null && l.numId === target.dealId) || l.company === target.customer)
-      : undefined;
-    if (lead && lead.customerId == null) {
+    // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลูกค้าเป้าหมายต้นทาง) — mark สถานะตามปกติ
+    const ทำสถานะตามปกติ = () => {
+      // R6/H2: ใบที่ผูกลูกค้าเดิมอยู่แล้ว เปลี่ยนเป็น won (ดีลที่ 2+) หรือย้อน won ออก (→ lost/expired/sent)
+      //   → รวมยอดลูกค้าใหม่หลังเปลี่ยนสถานะ · เดิมคิดเฉพาะขา won → ย้อน won ออกแล้วยอดไม่ลด
+      const needsReconcile = target.customerId && target.customerId > 0 && (status === "won" || prevStatus === "won");
+      if (!needsReconcile) { persistQuote.setStatus(id, status); return; }
+      // เปลี่ยนสถานะ + รวมยอดลูกค้าใหม่ในทรานแซกชันเดียว (0102) — เดิมเรียก setStatus แล้วค่อย reconcile
+      // แยก 2 คำขอ ภายใต้โหลดสูงเจอช่องว่างจังหวะเวลาที่ reconcile คำนวณได้ 0 ทั้งที่สถานะเปลี่ยนไปแล้วจริง
       void (async () => {
+        try {
+          const { quotation, customer } = await quotationsRepo.setStatusReconciled(id, status);
+          setQuotations(prev => prev.map(q => q.id !== id ? q : quotation));
+          if (customer) setCustomers(prev => prev.map(c => c.id === customer.id ? customer : c));
+        } catch (e) {
+          onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")(e);
+          setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? q.status }));
+        }
+      })();
+    };
+    const linkable = status === "won" && !(target.customerId && target.customerId > 0);
+    if (linkable) {
+      void (async () => {
+        // ⚠️ ต้องรอให้ "ลูกค้าเป้าหมายโหลดเสร็จ" ก่อนตัดสินว่าใบนี้มีลูกค้าเป้าหมายต้นทางไหม
+        //    (เจอจริง 27 ส.ค. 69 บนโหมดเดียวกับเว็บจริง) — ตัดสินจากอาร์เรย์ที่ยังโหลดไม่เสร็จ
+        //    = "ไม่มีลูกค้าเป้าหมายต้นทาง" → ใบกลายเป็น won เงียบ ๆ โดยไม่มีลูกค้าเกิดขึ้นเลย
+        const รายชื่อลีด = await ensureLeads();
+        const lead = รายชื่อลีด.find(l => (target.dealId != null && l.numId === target.dealId) || l.company === target.customer);
+        if (!lead || lead.customerId != null) { ทำสถานะตามปกติ(); return; }
         try {
           // ทั้งก้อน (หา/สร้างลูกค้า + relink ใบกำพร้า + บังคับใบนี้เป็น won + รวมยอด) เป็น RPC เดียว
           // atomic ที่ DB แล้ว (Phase 4, 0094/0095) — ส่ง id ใบที่กำลังกดเป็น targetQuoteId ตรงๆ
@@ -798,28 +853,8 @@ export function SalesProvider({
       })();
       return;
     }
-    // กรณีอื่น (sent/lost/expired · won ที่ผูกลูกค้าแล้ว/ไม่มีลูกค้าเป้าหมายต้นทาง) — mark สถานะตามปกติ
-    // R6/H2: ใบที่ผูกลูกค้าเดิมอยู่แล้ว เปลี่ยนเป็น won (ดีลที่ 2+) หรือย้อน won ออก (→ lost/expired/sent)
-    //   → รวมยอดลูกค้าใหม่หลังเปลี่ยนสถานะ (finish() ครอบเฉพาะครั้งแรกผ่านลูกค้าเป้าหมาย)
-    //   เดิมคิดเฉพาะขา won → ย้อน won ออกแล้วยอดไม่ลด = ยอดค้างเกินจริง
-    const needsReconcile = target.customerId && target.customerId > 0 && (status === "won" || prevStatus === "won");
-    if (!needsReconcile) {
-      persistQuote.setStatus(id, status);
-      return;
-    }
-    // เปลี่ยนสถานะ + รวมยอดลูกค้าใหม่ในทรานแซกชันเดียว (0102) — เดิมเรียก setStatus แล้วค่อย reconcile
-    // แยก 2 คำขอ ภายใต้โหลดสูงเจอช่องว่างจังหวะเวลาที่ reconcile คำนวณได้ 0 ทั้งที่สถานะเปลี่ยนไปแล้วจริง
-    void (async () => {
-      try {
-        const { quotation, customer } = await quotationsRepo.setStatusReconciled(id, status);
-        setQuotations(prev => prev.map(q => q.id !== id ? q : quotation));
-        if (customer) setCustomers(prev => prev.map(c => c.id === customer.id ? customer : c));
-      } catch (e) {
-        onFail("quotations", "เปลี่ยนสถานะใบเสนอราคา")(e);
-        setQuotations(prev => prev.map(q => q.id !== id ? q : { ...q, status: prevStatus ?? q.status }));
-      }
-    })();
-  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote]);
+    ทำสถานะตามปกติ();
+  }, [completeLeadQuoteTasks, convertLeadToCustomer, persistQuote, ensureLeads]);
 
   // เลขที่ใบเสนอราคาถัดไป — ผ่าน repo (supabase: RPC next_quote_no atomic · local: max+1)
   // คำนำหน้าเป็นค่าคงที่ของระบบ (QUOTE_PREFIX) — รูปแบบเต็ม Q-{รหัสสาขา}-{ปีปัจจุบัน}-{เลขรัน}
@@ -867,10 +902,12 @@ export function SalesProvider({
   // ค่า context ถูกใช้แทบทุกหน้าในทั้งสองแอป — ถ้าไม่ memo ทุก consumer จะเรนเดอร์ซ้ำทุกครั้งที่
   // provider นี้เรนเดอร์ใหม่ แม้ส่วนที่ตัวเองอ่านจะไม่ได้เปลี่ยนเลย (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
   const clearSyncError = useCallback(() => setSyncError(null), []);
+  // โหลดเสร็จแล้ว = คืนของในมือทันที · ยังไม่เสร็จ = รอคำขอรอบล่าสุดให้จบก่อนค่อยตอบ
+  // (ล้มเหลว = คืนเท่าที่มี ดีกว่าค้างรอตลอดกาล — ผู้เรียกจะเห็นว่าไม่มีใบแล้วบอกผู้ใช้ตามจริง)
   const value = useMemo(() => ({
     leads, updateLeadStatus, newLeadNumId, addLead, updateLead, deleteLead,
     customers, addCustomer, updateCustomer, deleteCustomer,
-    quotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
+    quotations, quotationsReady, ensureQuotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
     newAppointmentId,
     appointments, addAppointment, updateAppointment, deleteAppointment,
     convertLeadToCustomer,
@@ -879,7 +916,7 @@ export function SalesProvider({
   }), [
     leads, updateLeadStatus, newLeadNumId, addLead, updateLead, deleteLead,
     customers, addCustomer, updateCustomer, deleteCustomer,
-    quotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
+    quotations, quotationsReady, ensureQuotations, createQuotation, updateQuotation, deleteQuotation, setQuotationStatus,
     newAppointmentId,
     appointments, addAppointment, updateAppointment, deleteAppointment,
     convertLeadToCustomer,

@@ -140,6 +140,9 @@ export const dsPUT = handler("dealerSettings.save", async (req: NextRequest, sb)
   if (patch.document) row.document = patch.document;
   if (patch.logo !== undefined) row.logo = patch.logo;
   if (patch.notifPrefs) row.notif_prefs = patch.notifPrefs;
+  // ⚠️ ส่วนบวกเพิ่มจากราคากลางของสาขา — ลืมส่งต่อตั้งแต่แรก (แก้ 27 ส.ค. 69)
+  //    ผลคือตัวแทนตั้ง % แล้วหน้าจอขึ้นว่าบันทึกแล้ว แต่ปิดหน้าไปค่าหายทุกครั้ง (เฉพาะโหมดที่เว็บจริงใช้)
+  if (patch.pricing) row.pricing = patch.pricing;
   const { error } = await sb.from("dealer_settings").upsert(row);
   if (error) return dbFail("dealerSettings.save", error);
   return ok({ ok: true });

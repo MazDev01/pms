@@ -890,7 +890,7 @@ export default function LeadsPage() {
   // List state
   const {
     leads: allLeads, addLead, updateLead, deleteLead: removeLead, updateLeadStatus, newLeadNumId,
-    appointments, addAppointment, newAppointmentId, quotations,
+    appointments, addAppointment, newAppointmentId, quotations, quotationsReady, ensureQuotations,
   } = useSales();
   // ปิดการขายสำเร็จ = เป็น "ลูกค้า" แล้ว → ไม่แสดงในหน้าลูกค้าเป้าหมาย (ไปอยู่ที่ /customers)
   // สมุดงานของ "ตัวแทนที่ล็อกอิน" เท่านั้น — กรองด้วย dealerCode
@@ -972,7 +972,7 @@ export default function LeadsPage() {
     openLeadTasks(l);
   }
 
-  function requestStatusChange(id: string, status: LeadStatus) {
+  async function requestStatusChange(id: string, status: LeadStatus) {
     if (status === "CANCELLED") { setPendingLostId(id); setPendingLostReason(""); return; }
 
     // ── ย้ายขั้นบนกระดาน: ข้ามงานไม่ได้ · ถอยหลังต้องยืนยัน (บอสสั่ง 21 ส.ค. 69) ────────
@@ -1017,9 +1017,14 @@ export default function LeadsPage() {
     // ── ขั้น "เสนอราคา" ต้องมีใบเสนอราคาจริง (บอสสั่ง 14 ส.ค. 69) ──
     // ลาก/เลือกสถานะไปขั้นนี้ทั้งที่ยังไม่เคยออกใบ = ขั้นขยับแต่ไม่มีเอกสารถึงลูกค้า
     // → พาไปออกใบแทน · พอบันทึกใบเสร็จ ระบบติ๊กงาน "จัดทำใบเสนอราคา" แล้วเลื่อนขั้นให้เอง
+    // ⚠️ "ยังโหลดใบไม่เสร็จ" ไม่เท่ากับ "ไม่มีใบ" — ตัดสินตอนนี้คือกล่าวหาผิด แล้วผู้ใช้กดไม่ติดโดยไม่รู้สาเหตุ
+    //    (เจอจริง 27 ส.ค. 69 บนโหมดเดียวกับเว็บจริง: ใบเสนอราคาเดินทางมาถึงช้ากว่าลูกค้าเป้าหมายเสมอ
+    //     กดปิดการขายในจังหวะนั้นแล้วระบบตอบว่า "ต้องออกใบก่อน" ทั้งที่ใบมีอยู่จริง แล้วเงียบไปเฉย ๆ)
+    //    จึงรอให้ใบมาถึงก่อนแล้วค่อยตัดสิน — ไม่ใช่ไล่ให้ผู้ใช้กดใหม่
+    const ใบทั้งหมด = await ensureQuotations();
     if (status === "QUOTED") {
       const target = allLeads.find(l => l.id === id);
-      if (target && !quotations.some(q => quoteBelongsToLead(q, target))) {
+      if (target && !ใบทั้งหมด.some(q => quoteBelongsToLead(q, target))) {
         openQuotationForm(target);
         setToast("ขั้นเสนอราคาต้องมีใบเสนอราคา — ออกใบให้ลูกค้าก่อน แล้วขั้นจะเลื่อนให้เอง");
         return;
@@ -1032,7 +1037,7 @@ export default function LeadsPage() {
       if (!target) return;
       // ด่านเดียวกับปุ่ม "ได้งาน" ในแท็บงาน — ปิดการขายสำเร็จต้องมีใบที่ส่งถึงลูกค้าแล้ว
       //   ปิดได้โดยไม่มีใบ = ได้ลูกค้ายอดสะสม ฿0 ปนในฐาน ยอดขาย/อัตราปิดการขายเพี้ยน (พบจากทดสอบหาบั๊ก 19 ส.ค. 69)
-      const ของลูกค้าเป้าหมาย = quotations.filter(q => quoteBelongsToLead(q, target));
+      const ของลูกค้าเป้าหมาย = ใบทั้งหมด.filter(q => quoteBelongsToLead(q, target));
       if (!ของลูกค้าเป้าหมาย.length) {
         openQuotationForm(target);
         setToast("ปิดการขายสำเร็จต้องมีใบเสนอราคา — ออกใบแล้วส่งให้ลูกค้าก่อน");
@@ -1822,7 +1827,7 @@ export default function LeadsPage() {
                                   const c = leadStatusColor[s];
                                   return (
                                     <button key={s}
-                                      onClick={e => { e.stopPropagation(); requestStatusChange(l.id, s); setStatusMenu(null); }}
+                                      onClick={e => { e.stopPropagation(); void requestStatusChange(l.id, s); setStatusMenu(null); }}
                                       style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 14px",
                                         border:"none", background:s===l.status?"#f0f4f8":"transparent",
                                         cursor:"pointer", textAlign:"left" }}>
@@ -1963,7 +1968,7 @@ export default function LeadsPage() {
               <div key={status}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOver !== status) setDragOver(status); }}
                 onDragLeave={() => setDragOver(o => o === status ? null : o)}
-                onDrop={() => { หยุดเลื่อนกระดาน(); if (dragId) { requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
+                onDrop={() => { หยุดเลื่อนกระดาน(); if (dragId) { void requestStatusChange(dragId, status); setDragId(null); } setDragOver(null); }}
                 style={{ minWidth:w, width:w, flexShrink:0, display:"flex", flexDirection:"column",
                   // คอลัมน์ยาวลงมาเต็มพื้นที่จอเสมอ ไม่หดตามจำนวนการ์ด — คอลัมน์ว่างจึงยังเป็นเป้าให้ลากมาวางได้ชัด ๆ
                   // (เดิม alignSelf:"flex-start" ทำให้สูงพอดีเนื้อหา คอลัมน์ที่ยังไม่มีลูกค้าเป้าหมายเลยเหลือแค่แถบเตี้ย ๆ)
@@ -2438,6 +2443,7 @@ export default function LeadsPage() {
               return true;
             }}
             onRequestQuotation={taskKey => {
+              if (!quotationsReady) { setToast("กำลังโหลดใบเสนอราคาอยู่ — รอสักครู่แล้วกดใหม่อีกครั้ง"); return true; }
               const mine = quotations.filter(q => quoteBelongsToLead(q, c));
               // ยังไม่มีใบเลย → พาไปออกใบ (ทั้งงาน "จัดทำ" และ "ส่ง" ต้องมีใบก่อนทั้งคู่)
               if (!mine.length) {
@@ -2457,6 +2463,7 @@ export default function LeadsPage() {
             //   เดิมกดได้งานได้ตั้งแต่ขั้นแรก → ได้ลูกค้ายอดสะสม ฿0 ปนในฐาน อัตราปิดการขายก็เพี้ยน
             //   กติกาเดียวกับด่านของขั้น "เสนอราคา" ที่บังคับว่าต้องมีใบจริงก่อน
             whyCannotWin={() => {
+              if (!quotationsReady) return "กำลังโหลดใบเสนอราคา — รอสักครู่";
               const mine = quotations.filter(q => quoteBelongsToLead(q, c));
               if (!mine.length) return "ยังปิดการขายไม่ได้ — ต้องออกใบเสนอราคาและส่งให้ลูกค้าก่อน";
               if (mine.every(q => q.status === "draft")) return "ยังปิดการขายไม่ได้ — ใบเสนอราคายังเป็นร่าง กดส่งให้ลูกค้าก่อน";

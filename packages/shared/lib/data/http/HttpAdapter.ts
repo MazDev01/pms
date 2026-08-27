@@ -290,7 +290,11 @@ const metrics: MetricsRepo = {
     new Map(await metric<[string, QuoteRangeRow][]>("networkQuoteRange", { start, end, dealer: dealer ?? null })),
   leadSummary: (f) => metric("leadSummary", { ...f, search: trimmed(f.search) }),
   dashboardQuoteSummary: (start, end, dealer) => metric("dashboardQuoteSummary", { start, end, dealer: dealer ?? null }),
-  networkCustomerSummary: () => metric("networkCustomerSummary"),
+  // ⚠️ ต้องส่งตัวกรองไปด้วยทุกตัว (แก้ 27 ส.ค. 69) — เดิมส่งก้อนว่าง ทำให้การ์ด "ลูกค้าใหม่ทั้งเครือ"
+  //    บนแดชบอร์ดนับลูกค้าทั้งฐานเสมอ ไม่ว่าจะเลือกช่วงเวลาหรือสาขาไหน (เห็นเลข 53 ทั้งที่ปีนี้มี 13)
+  networkCustomerSummary: (f) => metric("networkCustomerSummary", {
+    dealerCode: f?.dealerCode ?? null, dateStart: f?.dateStart ?? null, dateEnd: f?.dateEnd ?? null,
+  }),
   unassignedLeads: (f) => metric("unassignedLeads", {
     ...f, search: trimmed(f.search),
     asOf: f.asOf ?? APP_NOW_ISO, defaultHours: f.defaultHours ?? DEFAULT_LEAD_RULES.unassignedAlertHours,

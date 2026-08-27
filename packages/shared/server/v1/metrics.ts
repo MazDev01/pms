@@ -79,7 +79,13 @@ export const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape
   },
   networkCustomerSummary: {
     rpc: "network_customer_summary",
-    args: () => ({}),
+    // ⚠️ ต้องส่งตัวกรองต่อให้ฐานข้อมูล ให้ตรงกับ SupabaseAdapter (แก้ 27 ส.ค. 69)
+    //    เดิมส่งก้อนว่าง = การ์ดลูกค้าบนแดชบอร์ดไม่เดินตามช่วงเวลา/สาขาที่เลือกเลย
+    args: a => ({
+      p_dealer_code: a.dealerCode ?? null,
+      p_date_start: a.dateStart ?? null,
+      p_date_end: a.dateEnd ?? null,
+    }),
     shape: (d) => {
       const x = (d ?? {}) as { total?: number; byProvince?: Row[] };
       return { total: N(x.total), byProvince: (x.byProvince ?? []).map(r => ({ province: S(r.province), revenue: N(r.revenue), count: N(r.count) })) };
