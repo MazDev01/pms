@@ -19,6 +19,8 @@
     "audit:race": "node scripts/race-audit.mjs",
     "audit:storage": "node scripts/storage-audit.mjs",
     "audit:admin": "node scripts/admin-audit.mjs",
+    "seed:volume": "node scripts/seed-volume.mjs",
+    "audit:perf": "node scripts/perf-audit.mjs && node scripts/perf-ui2.mjs",
     "audit:logic": "node scripts/logic-audit.mjs",
     "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit",
     "preflight": "node scripts/preflight.mjs",
