@@ -140,6 +140,25 @@ export function dbFail(name: string, error: { message: string; code?: string }) 
   }
   const m = แปลงรหัส[code];
   if (m) return fail(m.status, m.message ?? msg, code);
+
+  // ── ที่เก็บไฟล์ (Storage) ส่ง error คนละรูปแบบ — ไม่มีช่อง code ให้ ────────────
+  // รหัสจริงถูกยัดอยู่ในข้อความ ("database error, code: 23514") หรือบอกเป็นคำ
+  // ("new row violates row-level security policy" · "Object not found")
+  // ถ้าไม่แกะ จะกลายเป็น 503 "ระบบขัดข้อง" ทั้งที่เป็นเรื่องสิทธิ์/ชนิดไฟล์ที่ผู้ใช้แก้เองได้
+  const รหัสในข้อความ = msg.match(/code:\s*([0-9A-Z]{5})/)?.[1] ?? "";
+  const m2 = แปลงรหัส[รหัสในข้อความ];
+  if (m2) {
+    const ชนิดไฟล์ = รหัสในข้อความ === "23514";
+    return fail(m2.status, ชนิดไฟล์ ? "ชนิดไฟล์นี้ไม่รองรับ — รับเฉพาะ PDF/Word/Excel/PowerPoint/DWG/DXF/รูปภาพ" : (m2.message ?? msg), รหัสในข้อความ);
+  }
+  if (/row-level security|permission denied|not authorized/i.test(msg))
+    return fail(403, "ไม่มีสิทธิ์ทำรายการนี้", "42501");
+  // ⚠️ จับเฉพาะ "ไม่พบตัวไฟล์/แถวที่ขอ" เท่านั้น — ห้ามรวม "does not exist" (relation/column ไม่มีอยู่)
+  //    เพราะนั่นคือระบบเราเองพัง ต้องเป็น 503 ให้ตัวเฝ้าระวังเห็น ไม่ใช่ 404 ที่ดูเหมือนเรื่องปกติ
+  if (/not found/i.test(msg))
+    return fail(404, "ไม่พบข้อมูลที่ต้องการ — อาจถูกลบหรือย้ายไปแล้ว");
+  if (/jwt|token/i.test(msg))
+    return fail(401, "เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่");
   // ไม่รู้จัก = ถือว่าระบบมีปัญหาจริง · ห้ามส่งข้อความดิบของฐานข้อมูลออกไป
   return fail(503, "ระบบขัดข้องชั่วคราว — ลองใหม่อีกครั้ง", code || undefined);
 }

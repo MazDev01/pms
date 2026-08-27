@@ -56,3 +56,22 @@ describe("แปลงข้อผิดพลาดของฐานข้อ�
     expect(body.code, "รหัสยังต้องส่งไป เพื่อให้หน้าเว็บแยกเคสได้").toBe("42P01");
   });
 });
+
+describe("ข้อผิดพลาดจากที่เก็บไฟล์ (ไม่มีช่องรหัสมาให้)", () => {
+  it("กฎความปลอดภัยกัน → 403", async () => {
+    const { status, body } = await อ่าน(dbFail("s", { message: "new row violates row-level security policy" }));
+    expect(status).toBe(403);
+    expect(body.code).toBe("42501");
+  });
+  it("ไม่พบไฟล์ → 404", async () => {
+    expect((await อ่าน(dbFail("s", { message: "Object not found" }))).status).toBe(404);
+  });
+  it("ชนิดไฟล์ไม่รองรับ (รหัสซ่อนอยู่ในข้อความ) → 400 พร้อมบอกชนิดที่รับ", async () => {
+    const { status, body } = await อ่าน(dbFail("s", { message: "database error, code: 23514" }));
+    expect(status).toBe(400);
+    expect(body.error).toContain("PDF");
+  });
+  it("ตารางหาย = ระบบเราพังเอง ต้องเป็น 503 ไม่ใช่ 404", async () => {
+    expect((await อ่าน(dbFail("s", { message: 'relation "x" does not exist', code: "42P01" }))).status).toBe(503);
+  });
+});

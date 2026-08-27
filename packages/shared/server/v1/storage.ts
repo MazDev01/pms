@@ -37,7 +37,11 @@ export const GET = handler("storage.signedUrl", async (req: NextRequest, sb) => 
 export const DELETE = handler("storage.remove", async (req: NextRequest, sb) => {
   const path = new URL(req.url).searchParams.get("path") ?? "";
   if (!path) return fail(400, "ไม่ได้ระบุไฟล์");
-  const { error } = await sb.storage.from(BUCKET).remove([path]);
+  // ⚠️ ที่เก็บไฟล์ "ไม่ฟ้อง error" เมื่อกฎความปลอดภัยกันไว้ — คืนรายการที่ลบได้จริงเป็นอาร์เรย์ว่างแทน
+  //    เดิมตอบ {ok:true} ทุกครั้ง → สาขาอื่นสั่งลบไฟล์ของเราแล้วหน้าจอขึ้นว่า "ลบแล้ว" ทั้งที่ไฟล์ยังอยู่
+  //    (ยิงจริงยืนยัน 27 ส.ค. 69: CNX สั่งลบไฟล์ของ RYG ได้ 200 แต่ไฟล์ยังดาวน์โหลดได้อยู่)
+  const { data, error } = await sb.storage.from(BUCKET).remove([path]);
   if (error) return dbFail("storage.remove", error as { message: string; code?: string });
+  if (!data?.length) return fail(404, "ลบไฟล์ไม่สำเร็จ — ไม่พบไฟล์นี้ หรือไม่มีสิทธิ์ลบ");
   return ok({ ok: true });
 });
