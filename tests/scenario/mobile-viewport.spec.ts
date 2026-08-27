@@ -19,19 +19,27 @@ const PAGES: [("hq" | "dealer"), string, string][] = [
   ["hq", "/hq/dealers", "ตัวแทน"],
 ];
 
+// iPad ต้องวัดที่ "จอ iPad จริง" ไม่ใช่บีบเป็น 390px
+//   เดิมบังคับ 390 ทุกโปรเจกต์ → ชุด ipad กลายเป็นสำเนาของชุด iPhone ที่ไม่ได้ตรวจอะไรเพิ่มเลย
+//   ปัญหาของแท็บเล็ตคนละแบบกับมือถือ (ตารางกว้าง · เมนูค้างหรือหลบ · การ์ดสองคอลัมน์)
+const เป็นไอแพด = (ชื่อโปรเจกต์: string) => ชื่อโปรเจกต์.includes("ipad");
+
 for (const [role, path, label] of PAGES) {
-  test(`[ui·mobile] ${label} ที่ 390px ต้องไม่ล้นออกนอกจอ`, async ({ page }) => {
-    await page.setViewportSize(MOBILE);
+  test(`[ui·mobile] ${label} ต้องไม่ล้นออกนอกจอ`, async ({ page }, info) => {
+    if (!เป็นไอแพด(info.project.name)) await page.setViewportSize(MOBILE);
     await open(page, role, path);
     await expect(page.locator("h1, h2, h3").first()).toBeVisible();
     const เกิน = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(เกิน, `${label}@390: ล้นออกนอกจอ ${เกิน}px`).toBeLessThanOrEqual(3);
+    const กว้าง = page.viewportSize()?.width ?? 0;
+    expect(เกิน, `${label}@${กว้าง}px: ล้นออกนอกจอ ${เกิน}px`).toBeLessThanOrEqual(3);
   });
 }
 
 // เมนูซ้ายบนมือถือถูกเลื่อนออกนอกจอ (left:-248) แล้วมีปุ่มเปิด — ต้องเปิดได้จริงและกดไปหน้าอื่นได้
 // ไม่งั้นผู้ใช้บนมือถือจะติดอยู่หน้าเดียวตลอด (เดสก์ท็อปไม่เจอเพราะเมนูค้างอยู่เสมอ)
-test("[ui·mobile] เมนูบนมือถือ ต้องเปิดได้และกดไปหน้าอื่นได้", async ({ page }) => {
+test("[ui·mobile] เมนูบนมือถือ ต้องเปิดได้และกดไปหน้าอื่นได้", async ({ page }, info) => {
+  // เมนูหลบออกนอกจอเฉพาะจอแคบ — iPad กว้างพอที่เมนูค้างอยู่ตลอด จึงไม่ใช่กติกาเดียวกัน
+  test.skip(เป็นไอแพด(info.project.name), "จอ iPad กว้างพอให้เมนูค้างอยู่ — คนละกติกากับมือถือ");
   await page.setViewportSize(MOBILE);
   await open(page, "dealer", "/dashboard");
 

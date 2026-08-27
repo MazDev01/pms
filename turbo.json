@@ -7,7 +7,12 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      // ── ให้สั่งสลับ "โหมดข้อมูล" จากบรรทัดคำสั่งได้ (npm run dev:api) ──────────────
+      // turbo 2 กรอง env ทิ้งทุกตัวที่ไม่ประกาศไว้ (envMode ค่าตั้งต้น = strict)
+      // ไม่ประกาศ = สั่ง NEXT_PUBLIC_DATA_SOURCE=api แล้วเซิร์ฟเวอร์ยังอ่านค่าจาก .env.local เหมือนเดิม
+      // → เทสต์ที่ตั้งใจวัดโหมด api จะวัดโหมด supabase แทน โดยไม่มีอะไรเตือน
+      "passThroughEnv": ["NEXT_PUBLIC_DATA_SOURCE"]
     },
     "typecheck": {},
     "lint": {}

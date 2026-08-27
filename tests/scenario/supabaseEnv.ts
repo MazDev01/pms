@@ -26,9 +26,12 @@ const ROOT = path.join(__dirname, "../..");
 const appVars  = readEnvFile(path.join(ROOT, "apps/dealer/.env.local"));
 const testVars = readEnvFile(path.join(ROOT, "tests/.env.test"));
 
-/** ค่าที่แอปตัวแทนใช้จริง (เป็นตัวกำหนดว่าหน้าเว็บดึงข้อมูลจากไหน) */
+/** ค่าที่แอปตัวแทนใช้จริง (เป็นตัวกำหนดว่าหน้าเว็บดึงข้อมูลจากไหน)
+ *  ⚠️ ต้องอ่าน process.env ก่อนไฟล์เสมอ — Next.js ก็ทำแบบเดียวกัน (ค่าที่สั่งจากบรรทัดคำสั่งชนะ .env.local)
+ *  ถ้าอ่านไฟล์อย่างเดียว: สั่ง NEXT_PUBLIC_DATA_SOURCE=api แล้วแอปเป็นโหมด api จริง
+ *  แต่เทสต์ยังเข้าใจว่าเป็นโหมด supabase → ข้ามชุด api ทิ้ง แล้วรายงานเขียวทั้งที่ไม่ได้ตรวจ */
 export function appEnv(key: string): string {
-  return appVars.get(key) ?? "";
+  return process.env[key] ?? appVars.get(key) ?? "";
 }
 
 function testEnv(key: string): string {

@@ -1,0 +1,42 @@
+# ── ตรวจเว็บใช้งานจริงอัตโนมัติทุกครั้งที่อัปโค้ดขึ้น ────────────────────────────
+#
+# ทำไมต้องมี: "เฝ้าระวังเว็บ" (uptime.yml) ถามแค่ว่าเว็บยังตอบไหม
+#   แต่ 26 ส.ค. 69 แดชบอร์ด HQ ขึ้นจอแดงให้ผู้ใช้เห็น ทั้งที่เว็บตอบ 200 ทุกครั้ง
+#   → ต้องมีตัวที่ "เปิดหน้าเหมือนผู้ใช้" ไม่ใช่แค่เคาะประตู
+#
+# ทำงานเมื่อไหร่: Vercel อัปโค้ดขึ้นเสร็จแล้วแจ้ง GitHub (deployment_status)
+#   ชุดนี้จะเด้งทำงานทันที → รู้ว่าพังภายในไม่กี่นาที ไม่ใช่รอผู้ใช้ทัก
+#   สั่งตรวจเองก็ได้ที่แท็บ Actions (workflow_dispatch)
+#
+# ต้องตั้งค่าก่อนใช้ (Settings › Secrets and variables › Actions › Secrets):
+#   PROD_ADMIN_EMAIL / PROD_ADMIN_PASSWORD    บัญชีผู้ดูแลสำนักงานใหญ่ (ใช้ "อ่านอย่างเดียว")
+#   PROD_DEALER_EMAIL / PROD_DEALER_PASSWORD  บัญชีตัวแทนหนึ่งราย
+# ยังไม่ตั้ง = ชุดนี้ข้ามตัวเองพร้อมบอกเหตุผล ไม่ทำให้ CI แดง
+name: ตรวจเว็บจริงหลังอัปโค้ด
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: เปิดทุกหน้าบนเว็บจริง
+    # เฉพาะตอนอัปขึ้นสำเร็จเท่านั้น (deployment_status ยิงทุกสถานะ รวม pending/failure)
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm install --no-save @playwright/test@^1.61.1
+      - run: npx playwright install --with-deps chromium
+      - name: ตรวจเว็บจริง
+        env:
+          PROD_HQ_URL: ${{ vars.PROD_HQ_URL || 'https://benjamin-hq.vercel.app' }}
+          PROD_DEALER_URL: ${{ vars.PROD_DEALER_URL || 'https://benjamin-dealer.vercel.app' }}
+          PROD_ADMIN_EMAIL: ${{ secrets.PROD_ADMIN_EMAIL }}
+          PROD_ADMIN_PASSWORD: ${{ secrets.PROD_ADMIN_PASSWORD }}
+          PROD_DEALER_EMAIL: ${{ secrets.PROD_DEALER_EMAIL }}
+          PROD_DEALER_PASSWORD: ${{ secrets.PROD_DEALER_PASSWORD }}
+        run: npx playwright test -c playwright.prod.config.ts
