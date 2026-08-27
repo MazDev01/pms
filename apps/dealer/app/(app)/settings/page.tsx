@@ -32,7 +32,8 @@ type SettingTab = "company" | "documents" | "persons" | "notifications";
 
 // ── shared save bus — แท็บที่มีฟอร์มรายงาน {dirty,save,reset} ให้ปุ่มบันทึกกลางบนหัว
 // (แนวเดียวกับหน้าตั้งค่า HQ · แท็บที่บันทึกทันที เช่น ผู้รับผิดชอบ ไม่ต้องรายงาน)
-type SectionApi = { dirty: boolean; save: () => void; reset: () => void };
+// save คืน Promise ได้ — หน้าแม่จะได้ "รอให้บันทึกเสร็จจริง" ก่อนบอกผู้ใช้ว่าบันทึกแล้ว
+type SectionApi = { dirty: boolean; save: () => void | Promise<void>; reset: () => void };
 const SettingsBus = createContext<{ report: (a: SectionApi | null) => void; toast: (m: string) => void }>({ report: () => {}, toast: () => {} });
 function useReport(api: SectionApi) {
   const { report } = useContext(SettingsBus);
@@ -85,15 +86,17 @@ function CompanyTab() {
   function set<K extends keyof CompanyProfile>(k: K, v: CompanyProfile[K]) {
     setForm(p => ({ ...p, [k]: v }));
   }
-  const save = useCallback(() => {
+  const save = useCallback(async () => {
     const cleanProf: UserProfile = { name: prof.name.trim() || session.name, email: prof.email.trim() || defaultProfileEmail(session.dealerCode), phone: prof.phone.trim(), avatar: prof.avatar };
-    void userProfile.save(cleanProf)
+    // รอให้เขียนเสร็จจริงทั้งคู่ — ไม่ยิงทิ้งแบบเดิม (ผู้ใช้กดเมนูอื่นต่อแล้วคำขอถูกยกเลิกกลางทาง)
+    const งานโปรไฟล์ = userProfile.save(cleanProf)
       .catch(() => alert("บันทึกโปรไฟล์ไม่สำเร็จ — รูปอาจมีขนาดใหญ่เกินไป"));
     // ข้อมูลบริษัท/โลโก้ = ของสาขา เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่เงียบแล้วจอขึ้นว่าบันทึกแล้ว
-    void dealerCfg.save({ issuer: form, logo })
+    const งานบริษัท = dealerCfg.save({ issuer: form, logo })
       .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
     // (สัญญาณ "bpms-company-updated" ถูกเอาออก 11 ส.ค. 69 — ไม่เคยมีใครรับฟังเลยทั้งโปรเจกต์
     //  ส่งไปก็ไม่เกิดอะไรขึ้น · PROFILE_UPDATED_EVENT ข้างล่างมีคนฟังจริง จึงเก็บไว้)
+    await Promise.all([งานโปรไฟล์, งานบริษัท]);
     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
     setBaseline(JSON.stringify({ form, logo, prof }));
   }, [form, logo, prof, session.dealerCode, session.name]);
@@ -894,7 +897,23 @@ export default function SettingsPage() {
     if (dirty && !confirm("ส่วนนี้ยังไม่บันทึก · ทิ้งที่แก้ไว้ไหม?")) return;
     setActiveTab(next);
   }
-  function saveAll() { if (dirty && api) { api.save(); showToast("บันทึกการตั้งค่าแล้ว"); } }
+  // ── ต้องรอให้บันทึกเสร็จจริงก่อนบอกว่า "บันทึกแล้ว" (แก้ 27 ส.ค. 69) ──────────────
+  // เดิมสั่งบันทึกแบบไม่รอผล แล้วขึ้นข้อความสำเร็จทันที — ผู้ใช้กดบันทึกเสร็จแล้วกดเมนูอื่นต่อ
+  // ทันที คำขอที่ยังไม่จบจะถูกยกเลิกกลางทาง (ยืนยันจากการยิงจริง: net::ERR_ABORTED)
+  // ผลคือ "ข้อมูลบริษัทที่เพิ่งตั้งหายไปเงียบ ๆ" แล้วไปโผล่ตอนพิมพ์ใบเสนอราคาไม่ได้
+  const [กำลังบันทึก, setกำลังบันทึก] = useState(false);
+  async function saveAll() {
+    if (!dirty || !api || กำลังบันทึก) return;
+    setกำลังบันทึก(true);
+    try {
+      await api.save();
+      showToast("บันทึกการตั้งค่าแล้ว");
+    } catch (e) {
+      showToast("บันทึกไม่สำเร็จ: " + friendlyError(e));
+    } finally {
+      setกำลังบันทึก(false);
+    }
+  }
   function resetAll() { if (dirty && api) api.reset(); }
 
   return (
@@ -904,7 +923,9 @@ export default function SettingsPage() {
         <TopbarActions>
           {dirty && <span style={{ fontSize: "0.72rem", color: "#d97706", fontWeight: 600 }}>ยังไม่บันทึก</span>}
           <button className="btn btn-secondary btn-sm" onClick={resetAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><RotateCcw size={14} /> รีเซ็ต</button>
-          <button className="btn btn-primary btn-sm" onClick={saveAll} disabled={!dirty} style={!dirty ? { opacity: .5, cursor: "not-allowed" } : undefined}><Save size={14} /> บันทึก</button>
+          <button className="btn btn-primary btn-sm" onClick={() => void saveAll()} disabled={!dirty || กำลังบันทึก}
+            style={!dirty || กำลังบันทึก ? { opacity: .5, cursor: กำลังบันทึก ? "wait" : "not-allowed" } : undefined}>
+            <Save size={14} /> {กำลังบันทึก ? "กำลังบันทึก…" : "บันทึก"}</button>
         </TopbarActions>
         {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
 

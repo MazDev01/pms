@@ -568,6 +568,10 @@ function QuotationsPageInner(){
 
   // พิมพ์ใบเสนอราคาเป็นเอกสาร A4 (ต้องตั้งชื่อบริษัทผู้ออกก่อน)
   function printQuotation(q:QuotationMock){
+    // ⚠️ "ยังโหลดข้อมูลบริษัทไม่เสร็จ" ไม่เท่ากับ "ยังไม่ได้ตั้งชื่อบริษัท" (เจอจริง 27 ส.ค. 69)
+    //    เปิดหน้าแล้วกดพิมพ์เร็ว ๆ จะขึ้นว่า "กรุณาตั้งชื่อบริษัท" ทั้งที่ตั้งไว้เรียบร้อยแล้ว
+    //    แล้วเอกสารก็ไม่ออก ผู้ใช้ไม่รู้ว่าต้องทำอะไร (กติกาเดียวกับด่านปิดการขายที่แก้ไปแล้ว)
+    if(!dealerCfg.loaded){ alert("กำลังโหลดข้อมูลบริษัท — รอสักครู่แล้วกดพิมพ์อีกครั้ง"); return; }
     if(!issuer.company.trim()){ alert("กรุณาตั้งชื่อบริษัทที่ ตั้งค่า → โปรไฟล์บริษัท ก่อนพิมพ์ใบเสนอราคา"); router.push("/settings"); return; }
     const cust=customers.find(c=>c.id===q.customerId);
     const w=window.open("","_blank","width=880,height=1040");
@@ -932,7 +936,11 @@ function QuotationsPageInner(){
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0,flexWrap:"wrap"}}>
-                  <button title="พิมพ์ / ดาวน์โหลด PDF" onClick={()=>printQuotation(selected)} style={qa}><Printer size={13}/> พิมพ์ PDF</button>
+                  {/* ปิดปุ่มไว้จนกว่าข้อมูลบริษัทจะโหลดเสร็จ — กันไม่ให้กดแล้วได้คำเตือนที่ผิด
+                      ("กรุณาตั้งชื่อบริษัท" ทั้งที่ตั้งไว้แล้ว) · ดูเหตุผลเต็มที่ printQuotation */}
+                  <button title={dealerCfg.loaded ? "พิมพ์ / ดาวน์โหลด PDF" : "กำลังโหลดข้อมูลบริษัท…"}
+                    disabled={!dealerCfg.loaded} onClick={()=>printQuotation(selected)}
+                    style={{...qa, ...(dealerCfg.loaded ? {} : { opacity: .55, cursor: "wait" })}}><Printer size={13}/> พิมพ์ PDF</button>
                   <button title="แก้ไข" onClick={()=>openEdit(selected)} style={qa}><Edit2 size={13}/> แก้ไข</button>
                   {selected.status==="sent_to_client" && <button title="ส่งอีกครั้ง" onClick={()=>sendAgain(selected)} style={qa}><Send size={13}/> ส่งอีกครั้ง</button>}
                   {selected.customerId ? <button title="ดูลูกค้า" onClick={()=>router.push(`/customers?open=${selected.customerId}`)} style={qa}><ExternalLink size={13}/> ลูกค้า</button> : null}

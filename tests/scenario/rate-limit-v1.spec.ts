@@ -14,7 +14,7 @@ test.setTimeout(180_000);
 
 const DEALER = "http://localhost:3001";
 const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY);
-const WRITE_QUOTA = 120;   // ต้องตรงกับ LIMIT_WRITE ใน packages/shared/server/v1/_ctx.ts
+const WRITE_QUOTA = 300;   // ต้องตรงกับ LIMIT_WRITE ใน packages/shared/server/v1/_ctx.ts (ขยับ 27 ส.ค. 69)
 
 async function ยิง(token: string, method: "GET" | "POST") {
   const r = await fetch(`${DEALER}/api/v1/leads?dealerCode=RYG`, {

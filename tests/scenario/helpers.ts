@@ -40,6 +40,42 @@ const COOKIE_AUTH = appEnv("NEXT_PUBLIC_DATA_SOURCE") === "api";
 // branch-isolation.spec.ts) ใช้ openAs() แทน
 const ROLE_ACCOUNT: Record<"hq" | "dealer", Account> = { hq: ADMIN, dealer: RYG };
 
+
+// ── ล็อกอินครั้งเดียวต่อบัญชี แล้วเอา cookie ไปใช้ซ้ำทุกเทสต์ (โหมด api) ────────
+//
+// ปัญหาที่แก้ (วัดจริง 27 ส.ค. 69): โหมด api เดิมล็อกอินใหม่ "ทุกเทสต์"
+//   ชุดเต็มมีจุดเรียกกว่า 200 ครั้ง × 3 ช่องทางพร้อมกัน — ทั้งระบบยืนยันตัวตนของ Supabase
+//   และด่านจำกัดคำขอของเราเองถูกถล่มจนตอบช้า/ปฏิเสธ (เห็น 429 จริงในบันทึกการรัน)
+//   อาการที่โผล่คือ "ล็อกอินไม่เสร็จใน 8 วินาที" กระจายทั่วชุด ดูเหมือนบั๊กสุ่ม
+// โหมด supabase ไม่เจอปัญหานี้เพราะ getSession() แคชไว้อยู่แล้ว — โหมด api ต้องมีของเทียบเท่า
+//
+// เก็บ cookie ที่ได้จากการล็อกอินไว้ในหน่วยความจำของ worker แล้วยัดใส่ context ถัดไปแทน
+//   cookie หมดอายุ/ถูกปฏิเสธ = ล็อกอินใหม่ให้อัตโนมัติ (ตรวจจากการถูกเด้งไปหน้าเข้าสู่ระบบ)
+type คุกกี้ = Awaited<ReturnType<import("@playwright/test").BrowserContext["cookies"]>>;
+const คุกกี้ที่เก็บไว้ = new Map<string, คุกกี้>();
+
+export async function เข้าระบบด้วยคุกกี้(page: Page, origin: string, who: Account): Promise<void> {
+  const key = `${origin}|${who.email}`;
+  const เก่า = คุกกี้ที่เก็บไว้.get(key);
+  if (เก่า?.length) {
+    await page.context().addCookies(เก่า);
+    return;
+  }
+  const res = await page.context().request.post(`${origin}/api/v1/auth?op=login`, {
+    data: { email: who.email, password: who.password },
+  });
+  if (!res.ok()) throw new Error(`ล็อกอิน ${who.email} ผ่าน backend ไม่ผ่าน: ${res.status()} ${await res.text()}`);
+  const ทั้งหมด = await page.context().cookies();
+  คุกกี้ที่เก็บไว้.set(key, ทั้งหมด.filter(c => c.name === "pms_at" || c.name === "pms_rt"));
+}
+
+/** cookie ที่เก็บไว้ใช้ไม่ได้แล้ว (ถูกเด้งออก) — ทิ้งแล้วล็อกอินใหม่ */
+export async function ล็อกอินใหม่(page: Page, origin: string, who: Account): Promise<void> {
+  คุกกี้ที่เก็บไว้.delete(`${origin}|${who.email}`);
+  await page.context().clearCookies();
+  await เข้าระบบด้วยคุกกี้(page, origin, who);
+}
+
 /** เปิดหน้าแบบล็อกอินจริง (โหมด supabase) หรือจำลอง role (โหมด local) ตามที่แอปตั้งค่าไว้ */
 export async function open(page: Page, role: "hq" | "dealer", path: string) {
   if (REAL_BACKEND) return openAs(page, ROLE_ACCOUNT[role], role, path);
@@ -52,10 +88,8 @@ export async function openAs(page: Page, who: Account, appRole: "hq" | "dealer",
   if (COOKIE_AUTH) {
     // ระยะ 4: ใบผ่านอยู่ใน cookie httpOnly แล้ว — ยัด session ลง localStorage ไม่มีผลอีกต่อไป
     // ต้องล็อกอินผ่าน backend จริงเพื่อให้ได้ cookie มาอยู่ในเบราว์เซอร์ของเทสต์
-    const res = await page.context().request.post(`${APP_ORIGIN[appRole]}/api/v1/auth?op=login`, {
-      data: { email: who.email, password: who.password },
-    });
-    if (!res.ok()) throw new Error(`ล็อกอิน ${who.email} ผ่าน backend ไม่ผ่าน: ${res.status()} ${await res.text()}`);
+    // (ใช้ cookie เดิมซ้ำถ้ามี — ดูเหตุผลที่ เข้าระบบด้วยคุกกี้)
+    await เข้าระบบด้วยคุกกี้(page, APP_ORIGIN[appRole], who);
   } else {
     const session = await getSession(who);
     await page.addInitScript(({ key, session }) => {
@@ -64,6 +98,12 @@ export async function openAs(page: Page, who: Account, appRole: "hq" | "dealer",
   }
   await page.goto(APP_ORIGIN[appRole] + path, { waitUntil: "domcontentloaded" });
   await settle(page);
+  // cookie ที่ใช้ซ้ำหมดอายุ/ถูกปฏิเสธ → เด้งไปหน้าเข้าสู่ระบบ · ล็อกอินใหม่แล้วเปิดซ้ำครั้งเดียว
+  if (COOKIE_AUTH && page.url().includes("/login")) {
+    await ล็อกอินใหม่(page, APP_ORIGIN[appRole], who);
+    await page.goto(APP_ORIGIN[appRole] + path, { waitUntil: "domcontentloaded" });
+    await settle(page);
+  }
 }
 
 /** รอจน "ไม่มีคำขอข้อมูลค้างแล้ว" — เวอร์ชันที่ไม่นับสายอัปเดตสด

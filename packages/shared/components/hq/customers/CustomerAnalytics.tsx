@@ -109,12 +109,13 @@ function HBar({ rows, fmt, color = PRIMARY, empty = "— ยังไม่ม�
 // chart-m = ความสูงมาตรฐาน 340px ของการ์ดกราฟคู่ (ดู globals.css)
 // การ์ดพวกนี้เคยสูง 479–519px และโตตามจำนวนแถว → หน้ายาว 5 จอ
 // ตรึงความสูงแล้วให้แถวที่เกินเลื่อนเอาในการ์ด — ทุกใบสูงเท่ากันเป็นชุด อ่านเป็น "แถว" ได้ทันที
-function Card({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+// hint ไม่บังคับแล้ว — การ์ดที่ไม่ต้องการคำอธิบายกำกับ ส่งแค่ title ได้ (บอสสั่ง 27 ส.ค. 69)
+function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="card chart-m" style={{ marginBottom: 0 }}>
       <div className="card-header">
         <div className="card-title">{title}</div>
-        <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>{hint}</span>
+        {hint ? <span style={{ fontSize: "0.62rem", color: "var(--muted-foreground)" }}>{hint}</span> : null}
       </div>
       <div className="card-body" style={{ paddingTop: 12 }}>{children}</div>
     </div>
@@ -160,7 +161,7 @@ export function CustomerAnalytics({ charts }: { charts: HQCustomersCharts }) {
       {/* ⚠️ ลูกค้าหนึ่งรายที่ซื้อหลายประเภท จะถูกนับในทุกประเภทที่ซื้อ → ผลรวมของกราฟ "มากกว่า" จำนวนลูกค้าได้
           (ผลตรวจภายนอก HQ-04 · 24 ส.ค. 69: กราฟรวม 36 แต่ลูกค้าที่ซื้อแล้วมี 32 ราย)
           ไม่ได้ผิด แต่ถ้าไม่บอกไว้ ผู้อ่านจะเอาไปบวกแล้วสรุปว่าจำนวนลูกค้าไม่ตรงกัน */}
-      <Card title="ลูกค้า ตามประเภทอาคาร" hint="แม่แบบหลัก · นับจากอาคารที่ซื้อแล้ว — รายที่ซื้อหลายประเภทถูกนับในทุกประเภท ผลรวมจึงมากกว่าจำนวนลูกค้าได้ · รายที่ยังไม่มีการซื้อไม่อยู่ในกราฟนี้">
+      <Card title="ลูกค้า ตามประเภทอาคาร">
         <HBar rows={byType} fmt={cnt} empty="ยังไม่มีลูกค้าที่ปิดการขายในผลกรองนี้" unit="ประเภท" />
       </Card>
 

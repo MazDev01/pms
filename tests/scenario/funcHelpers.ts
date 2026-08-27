@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON, type Account, appEnv } from "./supabaseEnv";
-import { SESSION_KEY, getSession, settle } from "./helpers";
+import { SESSION_KEY, getSession, settle, เข้าระบบด้วยคุกกี้, ล็อกอินใหม่ } from "./helpers";
 
 export const DEALER_ORIGIN = "http://localhost:3001";
 export const HQ_ORIGIN = "http://localhost:3002";
@@ -45,12 +45,16 @@ export async function loginUI(page: Page, origin: string, path: string, who: Acc
   // ระยะ 4: โหมด api เก็บใบผ่านใน cookie httpOnly — ยัด session ลง localStorage ไม่มีผลอีกต่อไป
   // ต้องล็อกอินผ่าน backend จริงเหมือนผู้ใช้ (เหตุผลเดียวกับ openAs ใน helpers.ts)
   if (COOKIE_AUTH) {
-    const res = await page.context().request.post(`${origin}/api/v1/auth?op=login`, {
-      data: { email: who.email, password: who.password },
-    });
-    if (!res.ok()) throw new Error(`ล็อกอิน ${who.email} ผ่าน backend ไม่ผ่าน: ${res.status()} ${await res.text()}`);
+    // ใช้ cookie ที่ล็อกอินไว้แล้วซ้ำ — ล็อกอินใหม่ทุกเทสต์ทำให้ทั้งชุดถล่มด่านจำกัดคำขอ
+    // (เหตุผลเต็มอยู่ที่ helpers.ts · เข้าระบบด้วยคุกกี้)
+    await เข้าระบบด้วยคุกกี้(page, origin, who);
     await page.goto(`${origin}${HOME_AFTER_LOGIN[path] ?? path}`, { waitUntil: "domcontentloaded" });
     await settle(page);
+    if (page.url().includes("/login")) {          // cookie เดิมใช้ไม่ได้แล้ว → ล็อกอินใหม่ครั้งเดียว
+      await ล็อกอินใหม่(page, origin, who);
+      await page.goto(`${origin}${HOME_AFTER_LOGIN[path] ?? path}`, { waitUntil: "domcontentloaded" });
+      await settle(page);
+    }
     return;
   }
   try {
