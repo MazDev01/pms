@@ -266,23 +266,34 @@ export function RightDrawer({
 
 /** Labeled block used to group rows/content inside a drawer tab. */
 export function DrawerSection({ title, children }: { title: string; children: ReactNode }): JSX.Element {
+  // หัวข้ออยู่นอกการ์ด · เนื้อหาอยู่ในการ์ดขอบมน — มาตรฐานเดียวกับแผงรายละเอียดฝั่ง HQ
+  // (เดิมเป็นหัวข้อขีดเส้นใต้แล้วเนื้อหาลอยบนพื้นหลัง อ่านแล้วแยกกลุ่มไม่ออกเวลามีหลายหัวข้อ)
   return (
-    <section style={{ marginBottom: 20 }}>
+    <section style={{ marginBottom: 16 }}>
       <div
         style={{
-          fontSize: "0.65rem",
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          fontSize: "0.62rem",
           fontWeight: 800,
           letterSpacing: ".06em",
           textTransform: "uppercase",
-          color: PRIMARY,
+          color: "#64748B",
           marginBottom: 8,
-          paddingBottom: 6,
-          borderBottom: `1px solid ${SILVER}44`,
         }}
       >
         {title}
       </div>
-      <div>{children}</div>
+      <div style={{
+        background: "#fff",
+        border: "1px solid #E7EDF4",
+        borderRadius: 14,
+        padding: "4px 14px",
+        boxShadow: "0 1px 2px rgba(15,23,42,.04)",
+      }}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -296,12 +307,17 @@ export function DrawerRow({ label, value }: { label: string; value: ReactNode })
         alignItems: "baseline",
         justifyContent: "space-between",
         gap: 14,
-        padding: "7px 0",
-        borderBottom: "1px solid #f0f2f5",
+        padding: "9px 0",
+        borderBottom: "1px solid #F1F5F9",
       }}
     >
-      <span style={{ fontSize: "0.8rem", color: "#6b7280", flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: "0.86rem", fontWeight: 600, color: STEEL, textAlign: "right", minWidth: 0 }}>
+      <span style={{ fontSize: "0.76rem", color: "#64748B", flexShrink: 0 }}>{label}</span>
+      {/* ไม่มีข้อมูล = "—" สีจาง (ห้ามเดาค่าแทน) · มีข้อมูล = ตัวหนาสีเข้ม อ่านคู่ป้ายกำกับได้ทันที */}
+      <span style={{
+        fontSize: "0.8rem", fontWeight: 700,
+        color: value == null || value === "" ? "#94A3B8" : STEEL,
+        textAlign: "right", minWidth: 0,
+      }}>
         {value == null || value === "" ? "—" : value}
       </span>
     </div>

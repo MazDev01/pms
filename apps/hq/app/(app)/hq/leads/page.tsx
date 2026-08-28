@@ -879,8 +879,9 @@ export default function HQLeadsPage() {
         return (
           <>
             <div onClick={() => setViewLead(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 240 }} />
-            <div className="side-drawer" style={{ position: "fixed", top: 0, right: 0, height: "100vh", width: 420, maxWidth: "100vw", zIndex: 241,
-              background: "#F8FAFC", boxShadow: "-16px 0 60px rgba(0,0,0,.2)", borderRadius: "18px 0 0 18px", display: "flex", flexDirection: "column" }}>
+            {/* แผงลอยจากขอบจอเล็กน้อยแล้วมนทุกมุม (บอสสั่ง 28 ส.ค. 69) — เดิมชนขอบขวาและมนแค่สองมุมซ้าย */}
+            <div className="side-drawer" style={{ position: "fixed", top: 12, right: 12, bottom: 12, width: 420, maxWidth: "calc(100vw - 24px)", zIndex: 241,
+              background: "#F8FAFC", boxShadow: "0 24px 70px rgba(0,0,0,.24)", borderRadius: 18, overflow: "hidden", display: "flex", flexDirection: "column" }}>
 
               {/* หัวแผง — ชื่อบริษัทเด่น + วงกลมย่อชื่อ · ป้ายสถานะและมูลค่าอยู่บรรทัดเดียวกัน */}
               <div style={{ background: "linear-gradient(135deg,#003366 0%,#00284F 60%,#001B36 100%)", padding: "18px 20px 16px",

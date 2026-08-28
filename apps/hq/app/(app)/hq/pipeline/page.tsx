@@ -636,19 +636,24 @@ function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, file
   })();
   const maxM = Math.max(...monthly.map(x => x.value), 1);
 
-  const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 };
+  const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 7, fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 14, marginBottom: 8 };
+  // เนื้อหาแต่ละหัวข้ออยู่ในการ์ดขอบมน — มาตรฐานเดียวกับแผงลูกค้าเป้าหมายฝั่ง HQ
+  const กล่อง = (children: React.ReactNode) => (
+    <div style={{ background: "#fff", border: "1px solid #E7EDF4", borderRadius: 14, padding: "6px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>{children}</div>
+  );
   const row = (l: string, v: React.ReactNode) => (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", fontSize: "0.76rem" }}>
-      <span style={{ color: MUTED }}>{l}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", fontSize: "0.76rem", borderBottom: "1px solid #F1F5F9" }}>
+      <span style={{ color: "#64748B" }}>{l}</span>
       <span style={{ fontWeight: 700, color: STEEL, textAlign: "right" }}>{v}</span>
     </div>
   );
-  const empty = (t: string) => <div style={{ fontSize: "0.78rem", color: MUTED }}>— {t}</div>;
+  const empty = (t: string) => <div style={{ fontSize: "0.76rem", color: "#94A3B8", padding: "8px 0" }}>— {t}</div>;
 
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.35)", zIndex: 300 }} />
-      <div className="side-drawer" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "94vw", background: "#f8fafc", zIndex: 310, display: "flex", flexDirection: "column", boxShadow: "-18px 0 60px rgba(0,51,102,.18)" }}>
+      {/* แผงลอยจากขอบจอแล้วมนทุกมุม เหมือนแผงรายละเอียดหน้าอื่น (บอสสั่ง 28 ส.ค. 69) */}
+      <div className="side-drawer" style={{ position: "fixed", top: 12, right: 12, bottom: 12, width: 460, maxWidth: "calc(100vw - 24px)", background: "#f8fafc", zIndex: 310, display: "flex", flexDirection: "column", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 70px rgba(0,51,102,.22)" }}>
         {/* Dealer Profile */}
         <div style={{ background: PRIMARY, padding: "18px 20px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
@@ -662,42 +667,50 @@ function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, file
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 20px 20px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px 18px" }}>
           <div style={head}><Users size={11} /> สรุปลูกค้าเป้าหมาย</div>
-          {row("ลูกค้าเป้าหมายทั้งหมด", `${d.leads} ราย`)}
-          {row("เสนอราคาแล้ว", `${d.quoted} ราย`)}
-          {row("อัตราแปลงเป็นใบเสนอราคา", d.leads ? `${Math.round(d.quoted / d.leads * 100)}%` : "—")}
+          {กล่อง(<>
+            {row("ลูกค้าเป้าหมายทั้งหมด", `${d.leads} ราย`)}
+            {row("เสนอราคาแล้ว", `${d.quoted} ราย`)}
+            {row("อัตราแปลงเป็นใบเสนอราคา", d.leads ? `${Math.round(d.quoted / d.leads * 100)}%` : "—")}
+          </>)}
 
           <div style={head}><FileText size={11} /> สรุปใบเสนอราคา</div>
-          {row("ใบเสนอราคา (ในช่วง)", `${d.quotes} ใบ`)}
-          {row("มูลค่ารวม", fmtBaht(d.quoteVal))}
-          {row("ปิดได้", `${d.wonCount} ใบ · ${fmtBaht(d.wonVal)}`)}
-          {row("อัตราปิดการขาย", d.conv === null ? "—" : `${d.conv}%`)}
-          {row("ใบเสนอราคาล่าสุด", d.latest)}
+          {กล่อง(<>
+            {row("ใบเสนอราคา (ในช่วง)", `${d.quotes} ใบ`)}
+            {row("มูลค่ารวม", fmtBaht(d.quoteVal))}
+            {row("ปิดได้", `${d.wonCount} ใบ · ${fmtBaht(d.wonVal)}`)}
+            {row("อัตราปิดการขาย", d.conv === null ? "—" : `${d.conv}%`)}
+            {row("ใบเสนอราคาล่าสุด", d.latest)}
+          </>)}
 
           <div style={head}><Building2 size={11} /> สรุปลูกค้า</div>
-          {row("ลูกค้าทั้งหมด", `${customers.length} ราย`)}
-          {row("มูลค่ารวมจากลูกค้า", fmtBaht(customers.reduce((s, c) => s + c.totalRevenue, 0)))}
-          {!customers.length ? empty("ยังไม่มีลูกค้า") : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
-              {[...customers].sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 5).map(c => (
-                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "7px 10px", fontSize: "0.74rem" }}>
-                  <span style={{ flex: 1, minWidth: 0, fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                  <span style={{ color: MUTED, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(c.totalRevenue)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {กล่อง(<>
+            {row("ลูกค้าทั้งหมด", `${customers.length} ราย`)}
+            {row("มูลค่ารวมจากลูกค้า", fmtBaht(customers.reduce((s, c) => s + c.totalRevenue, 0)))}
+            {!customers.length ? empty("ยังไม่มีลูกค้า") : (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {[...customers].sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 5).map((c, i, ทั้งหมด) => (
+                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", fontSize: "0.74rem", borderBottom: i === ทั้งหมด.length - 1 ? "none" : "1px solid #F1F5F9" }}>
+                    <span style={{ flex: 1, minWidth: 0, fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                    <span style={{ color: "#64748B", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmtBaht(c.totalRevenue)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>)}
 
           <div style={head}><Coins size={11} /> สรุปยอดขาย</div>
-          <div style={{ fontSize: "0.66rem", color: MUTED, marginBottom: 4 }}>ยอดสะสม/เป้า = ตัวเลขทางการของตัวแทน · ไม่ใช่ผลรวมใบเสนอราคาด้านบน</div>
-          {row("ยอดขายสะสมทั้งปี", fmtBaht(d.revenueActual))}
-          {row("เป้าหมายทั้งปี", fmtBaht(d.revenueTarget))}
-          {row("% ของเป้า", <span style={{ color: d.tpct >= 100 ? "#059669" : PRIMARY }}>{d.tpct}%</span>)}
+          <div style={{ fontSize: "0.66rem", color: "#94A3B8", marginBottom: 6 }}>ยอดสะสม/เป้า = ตัวเลขทางการของตัวแทน · ไม่ใช่ผลรวมใบเสนอราคาด้านบน</div>
+          {กล่อง(<>
+            {row("ยอดขายสะสมทั้งปี", fmtBaht(d.revenueActual))}
+            {row("เป้าหมายทั้งปี", fmtBaht(d.revenueTarget))}
+            {row("% ของเป้า", <span style={{ color: d.tpct >= 100 ? "#059669" : PRIMARY }}>{d.tpct}%</span>)}
+          </>)}
 
           <div style={head}>ยอดขายรายเดือน · จากใบเสนอราคาที่ปิดได้</div>
-          {!monthly.length ? empty("ยังไม่มียอดปิดการขาย") : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          {!monthly.length ? กล่อง(empty("ยังไม่มียอดปิดการขาย")) : กล่อง(
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "8px 0" }}>
               {monthly.map(m => (
                 <div key={m.month} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ width: 34, fontSize: "0.66rem", color: MUTED, fontWeight: 700, flexShrink: 0 }}>{m.month}</span>
@@ -711,28 +724,28 @@ function DealerDrawer({ d, onClose, customers, leads, quotes, appointments, file
           )}
 
           <div style={head}><CalendarDays size={11} /> ไทม์ไลน์นัดหมาย</div>
-          {!appts.length ? empty("ไม่มีนัดหมายที่ผูกกับลูกค้าเป้าหมายของตัวแทนรายนี้") : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {appts.map(a => (
-                <div key={a.id} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "8px 10px" }}>
+          {กล่อง(!appts.length ? empty("ไม่มีนัดหมายที่ผูกกับลูกค้าเป้าหมายของตัวแทนรายนี้") : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {appts.map((a, i) => (
+                <div key={a.id} style={{ padding: "9px 0", borderBottom: i === appts.length - 1 ? "none" : "1px solid #F1F5F9" }}>
                   <div style={{ fontSize: "0.75rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project || a.company}</div>
-                  <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 2 }}>{fmtISOToThai(a.date)} · {a.time} · {a.assigned}</div>
+                  <div style={{ fontSize: "0.65rem", color: "#64748B", marginTop: 3 }}>{fmtISOToThai(a.date)} · {a.time} · {a.assigned}</div>
                 </div>
               ))}
             </div>
-          )}
+          ))}
 
           <div style={head}><FolderOpen size={11} /> เอกสาร</div>
-          {!docs.length ? empty("ไม่มีเอกสารที่ผูกกับลูกค้าเป้าหมายของตัวแทนรายนี้") : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {docs.map(f => (
-                <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "7px 10px" }}>
+          {กล่อง(!docs.length ? empty("ไม่มีเอกสารที่ผูกกับลูกค้าเป้าหมายของตัวแทนรายนี้") : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {docs.map((f, i) => (
+                <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderBottom: i === docs.length - 1 ? "none" : "1px solid #F1F5F9" }}>
                   <span style={{ flex: 1, minWidth: 0, fontSize: "0.74rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-                  <span style={{ fontSize: "0.65rem", color: MUTED, flexShrink: 0 }}>{f.size}</span>
+                  <span style={{ fontSize: "0.65rem", color: "#94A3B8", flexShrink: 0 }}>{f.size}</span>
                 </div>
               ))}
             </div>
-          )}
+          ))}
         </div>
 
         <div style={{ borderTop: "1px solid #e6ebf2", background: "#fff", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
