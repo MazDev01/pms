@@ -14,6 +14,7 @@ import { useAuditLogger, useAuditEntries } from "@pms/shared/lib/useAudit";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { fmtISOToThai } from "@pms/shared/lib/mock";
 import { RightDrawer } from "@pms/shared/components/ui/RightDrawer";
+import { PanelSection, PanelRow } from "@pms/shared/components/ui/DetailPanel";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { resetHQUserPassword } from "@pms/shared/lib/adminApi";
@@ -27,7 +28,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import type { UserRole } from "@pms/shared/lib/mock";
 import {
   Users, Shield, Check, X, Plus, Search, KeyRound, Copy, MoreHorizontal,
-  Eye, EyeOff, Pencil, Power, Clock, UserPlus, Phone, ImagePlus, Trash2, AlertTriangle,
+  Eye, EyeOff, Pencil, Power, Clock, UserPlus, Phone, ImagePlus, Trash2, AlertTriangle, Mail, Building2,
 } from "lucide-react";
 
 const PRIMARY = "#003366";
@@ -117,9 +118,6 @@ function RoleBadge({ role }: { role: RoleKey }) {
 function StatusDot({ status }: { status: UserStatus }) {
   const a = status === "active";
   return <span className="badge" style={{ background: a ? "#e5faf0" : "#f0f0f5", color: a ? "#059669" : "#9ca3af" }}><span style={{ width: 7, height: 7, borderRadius: "50%", display: "inline-block", background: a ? "#059669" : "#C0C0C0" }} />{a ? "ใช้งาน" : "ปิดใช้งาน"}</span>;
-}
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div style={{ marginBottom: 12 }}><div style={{ fontSize: "0.68rem", color: MUTED, fontWeight: 600, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div><div style={{ fontSize: "0.86rem", color: STEEL, fontWeight: 600 }}>{value}</div></div>;
 }
 
 // ── Add/Edit Dialog (modal กลาง) ─────────────────────────────────────────────────
@@ -806,16 +804,22 @@ function UserDetailDrawer({ user, onClose, onEdit }: { user: AppUser; onClose: (
   ];
 
   const info = (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+    // แผงข้อมูลผู้ใช้ใช้ชิ้นส่วนกลางชุดเดียวกับแผงรายละเอียดหน้าอื่น (บอสสั่ง 28 ส.ค. 69)
+    <div style={{ padding: "6px 18px 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0 4px" }}>
         <Avatar name={user.name} role={user.role} size={52} avatar={user.avatar} />
         <div><div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL }}>{user.name}</div><div style={{ marginTop: 3 }}><RoleBadge role={user.role} /></div></div>
       </div>
-      <Field label="อีเมล" value={user.email} />
-      <Field label="เบอร์โทร" value={<span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Phone size={12} color={MUTED} />{formatPhone(user.phone) || "—"}</span>} />
-      <Field label="แผนก" value={user.department} />
-      <Field label="สถานะ" value={<StatusDot status={user.status} />} />
-      <Field label="วันที่สร้างบัญชี" value={user.createdAt} />
+      <PanelSection icon={Mail} title="ข้อมูลติดต่อ">
+        <PanelRow icon={Mail} label="อีเมล" value={user.email} />
+        <PanelRow icon={Phone} label="เบอร์โทร" value={formatPhone(user.phone)} />
+      </PanelSection>
+      <PanelSection icon={Shield} title="ข้อมูลบัญชี">
+        <PanelRow icon={Building2} label="แผนก" value={user.department} />
+        <PanelRow icon={Power} label="สถานะ" value={<StatusDot status={user.status} />} />
+        {/* เดิมโชว์ค่าดิบจากฐานข้อมูล (2026-08-04T08:20:57.774166+00:00) อ่านไม่ออก — ตัดเหลือวันที่ไทย */}
+        <PanelRow icon={Clock} label="วันที่สร้างบัญชี" value={fmtISOToThai(String(user.createdAt).slice(0, 10))} />
+      </PanelSection>
     </div>
   );
   const perms = (

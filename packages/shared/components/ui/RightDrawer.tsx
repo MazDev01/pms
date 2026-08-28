@@ -3,6 +3,7 @@
 import { useEffect, useState, type JSX, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { PRIMARY, STEEL, SILVER } from "@pms/shared/lib/theme";
+import { ย่อชื่อ } from "@pms/shared/components/ui/DetailPanel";
 
 export type DrawerTab = { key: string; label: string; content: ReactNode };
 
@@ -123,7 +124,7 @@ export function RightDrawer({
             position: "sticky",
             top: 0,
             zIndex: 2,
-            background: PRIMARY,
+            background: "linear-gradient(135deg,#003366 0%,#00284F 60%,#001B36 100%)",
             color: "#fff",
             padding: "16px 18px",
             display: "flex",
@@ -131,6 +132,12 @@ export function RightDrawer({
             gap: 12,
           }}
         >
+          {/* วงกลมย่อชื่อ — มาตรฐานเดียวกับแผงลูกค้าเป้าหมายทั้งเครือ */}
+          <span style={{
+            width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.14)",
+            border: "1px solid rgba(255,255,255,.2)", color: "#fff", fontWeight: 800, fontSize: "0.9rem",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>{ย่อชื่อ(title)}</span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{

@@ -3,7 +3,8 @@
 // ─── แผงรายละเอียดลูกค้า (HQ ดูอย่างเดียว) ──────────────────────────────────────
 // แท็บทั้งหมดอ่านจากข้อมูลจริง: ใบที่ปิดการขายได้ + รูปแม่แบบจาก Master Catalog
 // ไม่มีแท็บสัญญา / ใบส่งมอบ / แบบก่อสร้าง — ระบบไม่มีที่เก็บข้อมูลเหล่านั้น
-import { Building2, Truck } from "lucide-react";
+import { Building2, IdCard, MapPin, Compass, Store, Repeat, CalendarDays, Wallet, StickyNote, History, Activity } from "lucide-react";
+import { PanelSection, PanelRow, PanelStats, PanelStat } from "@pms/shared/components/ui/DetailPanel";
 import { RightDrawer, type DrawerTab } from "@pms/shared/components/ui/RightDrawer";
 import { customerCode, noteCategoryColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
@@ -17,20 +18,6 @@ const noteColorOf = (cat: string) =>
   (noteCategoryColor as Record<string, { bg: string; text: string; dot: string }>)[cat] ?? noteCategoryColor["ทั่วไป"];
 
 const PRIMARY = "#003366";
-const DASH = <span style={{ color: "#9ca3af" }}>—</span>;
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={{ background: "#f8f9fb", borderRadius: 10, padding: "10px 12px" }}>
-      <div style={{ fontSize: "0.65rem", color: "#6b7280", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#2D2D2D" }}>{value}</div>
-    </div>
-  );
-}
-
-const Grid = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>{children}</div>
-);
 
 const Empty = ({ text }: { text: string }) => (
   <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)", padding: "8px 2px" }}>{text}</div>
@@ -82,23 +69,36 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
       key: "profile",
       label: "โปรไฟล์",
       content: (
-        <Grid>
-          <Field label="รหัสลูกค้า" value={customerCode(row.dealerCode, row.localId ?? row.id)} />
-          <Field label="จังหวัด" value={row.province || DASH} />
-          <Field label="ภาค" value={row.region ?? DASH} />
-          <Field label="ตัวแทนที่ดูแล" value={`${row.dealerCode} · ${row.dealerName}`} />
-          <Field label="อาคารที่ซื้อแล้ว" value={row.buildings.length ? `${row.buildings.length} อาคาร` : DASH} />
-          <Field label="ลูกค้าซื้อซ้ำ" value={row.isRepeat ? "ใช่" : "ไม่ใช่"} />
-          <Field label="ยอดซื้อรวม" value={row.totalRevenue > 0 ? fmtBaht(row.totalRevenue) : DASH} />
-          <Field label="ซื้อล่าสุด" value={row.lastPurchase ?? DASH} />
-        </Grid>
+        <>
+          {/* ตัวเลขสำคัญอยู่บนสุด — เห็นก่อนเลื่อนจอ (มาตรฐานเดียวกับแผงลูกค้าเป้าหมายทั้งเครือ) */}
+          <PanelStats>
+            <PanelStat label="ยอดซื้อรวม" value={row.totalRevenue > 0 ? fmtBaht(row.totalRevenue) : "—"} />
+            <PanelStat label="อาคารที่ซื้อแล้ว" value={row.buildings.length ? `${row.buildings.length} อาคาร` : "—"}
+              sub={row.lastPurchase ? `ซื้อล่าสุด ${row.lastPurchase}` : undefined} />
+          </PanelStats>
+          <PanelSection icon={IdCard} title="ข้อมูลลูกค้า" style={{ marginTop: 14 }}>
+            <PanelRow icon={IdCard} label="รหัสลูกค้า" value={customerCode(row.dealerCode, row.localId ?? row.id)} />
+            <PanelRow icon={MapPin} label="จังหวัด" value={row.province} />
+            <PanelRow icon={Compass} label="ภาค" value={row.region} />
+            <PanelRow icon={Repeat} label="ลูกค้าซื้อซ้ำ" value={row.isRepeat ? "ใช่" : "ไม่ใช่"} />
+          </PanelSection>
+          <PanelSection icon={Store} title="ตัวแทนที่ดูแล">
+            <PanelRow icon={IdCard} label="รหัสตัวแทน" value={row.dealerCode} />
+            <PanelRow icon={Store} label="ตัวแทน" value={row.dealerName} />
+          </PanelSection>
+          <PanelSection icon={Wallet} title="สรุปการซื้อ">
+            <PanelRow icon={Wallet} label="ยอดซื้อรวม" value={row.totalRevenue > 0 ? fmtBaht(row.totalRevenue) : undefined} strong />
+            <PanelRow icon={Building2} label="อาคารที่ซื้อแล้ว" value={row.buildings.length ? `${row.buildings.length} อาคาร` : undefined} />
+            <PanelRow icon={CalendarDays} label="ซื้อล่าสุด" value={row.lastPurchase} />
+          </PanelSection>
+        </>
       ),
     },
     {
       key: "notes",
       label: `บันทึก (${customerNotes.length})`,
       content: customerNotes.length ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <PanelSection icon={StickyNote} title="บันทึกของลูกค้า" style={{ marginTop: 0 }} bodyStyle={{ padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
           {customerNotes.map(n => {
             const c = noteColorOf(n.category);
             return (
@@ -113,23 +113,23 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
               </div>
             );
           })}
-        </div>
+        </PanelSection>
       ) : <Empty text="ยังไม่มีบันทึกของลูกค้ารายนี้ (ดูอย่างเดียว — แก้ไขได้ที่หน้าลูกค้าฝั่งตัวแทน)" />,
     },
     {
       key: "buildings",
       label: `อาคารที่ซื้อ (${row.buildings.length})`,
       content: row.buildings.length ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <PanelSection icon={Building2} title="อาคารที่ซื้อแล้ว" style={{ marginTop: 0 }} bodyStyle={{ padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
           {row.buildings.map(b => <BuildingCard key={b.quoteNo} b={b} />)}
-        </div>
+        </PanelSection>
       ) : <Empty text="ยังไม่มีอาคารที่ปิดการขายในระบบสำหรับลูกค้ารายนี้" />,
     },
     {
       key: "history",
       label: "ประวัติการซื้อ",
       content: row.buildings.length ? (
-        <>
+        <PanelSection icon={History} title="ประวัติการซื้อ" style={{ marginTop: 0 }} bodyStyle={{ padding: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[...row.buildings].reverse().map(b => (
               <div key={b.quoteNo} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "9px 11px", border: "1px solid #e9edf2", borderRadius: 9 }}>
@@ -141,10 +141,10 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", fontSize: "0.76rem", fontWeight: 800, color: PRIMARY }}>
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", fontSize: "0.76rem", fontWeight: 800, color: PRIMARY }}>
             <span>รวมจากใบที่ปิดการขาย</span><span>{fmtBaht(totalBought)}</span>
           </div>
-        </>
+        </PanelSection>
       ) : <Empty text="ไม่มีใบเสนอราคาที่ปิดการขายได้ผูกกับลูกค้ารายนี้" />,
     },
     // ⚠️ เคยมีแท็บ "การส่งมอบ" ตรงนี้ — ลบทั้งแท็บแล้ว (บอสสั่ง 20 ส.ค. 69)
@@ -154,7 +154,7 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
       key: "timeline",
       label: "ไทม์ไลน์",
       content: row.buildings.length ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        <PanelSection icon={Activity} title="ไทม์ไลน์" style={{ marginTop: 0 }} bodyStyle={{ padding: "12px 14px" }}>
           {row.buildings.flatMap(b => [
             { at: b.wonAt, label: `ปิดการขาย ${b.quoteNo}`, sub: `${b.template ?? b.buildingType} · ${fmtBaht(b.value)}`, color: PRIMARY },
           ])
@@ -174,7 +174,7 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
                 </div>
               </div>
             ))}
-        </div>
+        </PanelSection>
       ) : <Empty text="ยังไม่มีเหตุการณ์ — ไทม์ไลน์เริ่มจากใบที่ปิดการขายได้" />,
     },
   ];

@@ -20,6 +20,8 @@ import { useLeadRulesOf } from "@pms/shared/lib/useHQRules";
 import { unassignedLeads } from "@pms/shared/lib/hqAlerts";
 import { lastContactLabel, needsFollowUp } from "@pms/shared/lib/leadMetrics";
 import { fmtISOToThai, type LeadRow } from "@pms/shared/lib/mock";
+// ชิ้นส่วนกลางของแผงรายละเอียด — หน้าตาเดียวกันทุกหน้า (ห้ามประกาศสไตล์เองซ้ำ)
+import { PanelSection, PanelRow, PanelStats, PanelStat, ย่อชื่อ } from "@pms/shared/components/ui/DetailPanel";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { dealers as dealersRepo, leads as leadsRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
@@ -77,52 +79,6 @@ const TREND_QUOTE_END = new Date(2999, 11, 31);
 //    แต่ป้ายเขียนว่า ">7 วัน" → ตัวเลขไม่ตรงกับคำ และไม่ตรงกับที่ตัวแทนเห็นบนหน้าตัวเอง
 //    เกณฑ์วันเป็นของแต่ละสาขา (ตัวแทนตั้งเอง) → ต้องถามด้วย dealerCode ของลูกค้าเป้าหมายใบนั้นเสมอ
 
-
-/* ── ชิ้นส่วนของแผงรายละเอียดลูกค้าเป้าหมาย (HQ ดูอย่างเดียว) ──────────────────
-   ประกาศไว้ระดับไฟล์ ไม่ประกาศซ้อนในคอมโพเนนต์ — ประกาศซ้อนทำให้ React สร้างชนิดใหม่
-   ทุกครั้งที่เรนเดอร์ แล้ว remount ทั้งก้อน (กับดักเดิมของหน้าที่มีช่องกรอก) */
-const ฉลากส่วน: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 7, fontSize: "0.62rem", fontWeight: 800,
-  color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8,
-};
-
-/** ตัวอักษรย่อสำหรับวงกลมหัวแผง — ตัดคำนำหน้านิติบุคคลออกก่อน ไม่งั้นได้ "บจ" ทุกราย */
-function ย่อชื่อบริษัท(ชื่อ: string): string {
-  return (ชื่อ || "?").replace(/บจ\.|บมจ\.|หจก\.|บริษัท|จำกัด/g, "").trim().slice(0, 2) || "?";
-}
-
-function ส่วนแผง({ ไอคอน: Ico, หัวข้อ, children, style }: {
-  ไอคอน: React.ComponentType<{ size?: number; color?: string }>;
-  หัวข้อ: string; children: React.ReactNode; style?: React.CSSProperties;
-}) {
-  return (
-    <section style={{ marginTop: 14, ...style }}>
-      <div style={ฉลากส่วน}><Ico size={13} color="#94A3B8" /> {หัวข้อ}</div>
-      <div style={{ background: "#fff", border: "1px solid #E7EDF4", borderRadius: 14, padding: "4px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
-/** แถวป้ายกำกับ: ไอคอน + หัวข้อ ทางซ้าย · ค่าทางขวา (ไม่มีข้อมูล = "—" ไม่เดาแทน) */
-function แถวข้อมูล({ ไอคอน: Ico, หัวข้อ, ค่า, เด่น }: {
-  ไอคอน: React.ComponentType<{ size?: number; color?: string }>;
-  หัวข้อ: string; ค่า?: React.ReactNode; เด่น?: boolean;
-}) {
-  const ว่าง = ค่า === undefined || ค่า === null || ค่า === "" || ค่า === "—";
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: "1px solid #F1F5F9", fontSize: "0.76rem" }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B", flexShrink: 0 }}>
-        <Ico size={13} color="#94A3B8" /> {หัวข้อ}
-      </span>
-      <span style={{ fontWeight: เด่น ? 800 : 700, color: ว่าง ? "#94A3B8" : (เด่น ? "#003366" : "#1F2937"),
-        fontSize: เด่น ? "0.86rem" : undefined, textAlign: "right", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-        {ว่าง ? "—" : ค่า}
-      </span>
-    </div>
-  );
-}
 
 export default function HQLeadsPage() {
   const router = useRouter();
@@ -889,7 +845,7 @@ export default function HQLeadsPage() {
                 <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
                   <span style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.2)",
                     color: "#fff", fontWeight: 800, fontSize: "0.92rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {ย่อชื่อบริษัท(l.company)}
+                    {ย่อชื่อ(l.company)}
                   </span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</div>
@@ -906,38 +862,32 @@ export default function HQLeadsPage() {
 
               <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px 20px" }}>
                 {/* แถบสรุปบนสุด — มูลค่าที่ประเมินไว้ กับสถานะใบเสนอราคา อ่านได้ตั้งแต่ยังไม่เลื่อนจอ */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div style={{ background: "#fff", border: "1px solid #E7EDF4", borderRadius: 14, padding: "12px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
-                    <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>ประเมินราคา</div>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366", marginTop: 4 }}>{มูลค่าอ่านง่าย(l.value)}</div>
-                  </div>
-                  <div style={{ background: quoted ? "#ECFDF5" : "#fff", border: "1px solid " + (quoted ? "#A7F3D0" : "#E7EDF4"), borderRadius: 14, padding: "12px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
-                    <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>ใบเสนอราคา</div>
-                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: quoted ? "#059669" : "#94A3B8", marginTop: 6, lineHeight: 1.35 }}>
-                      {quoted ? "เสนอราคาแล้ว" : "ยังไม่ได้เสนอราคา"}
-                    </div>
-                    {quoted && <div style={{ fontSize: "0.62rem", color: "#64748B", marginTop: 2 }}>ดูใบได้ที่ ใบเสนอราคาทั้งเครือ</div>}
-                  </div>
-                </div>
+                {/* แถบสรุปบนสุด — มูลค่าที่ประเมินไว้ กับสถานะใบเสนอราคา อ่านได้ตั้งแต่ยังไม่เลื่อนจอ */}
+                <PanelStats>
+                  <PanelStat label="ประเมินราคา" value={มูลค่าอ่านง่าย(l.value)} />
+                  <PanelStat label="ใบเสนอราคา" tone={quoted ? "good" : "plain"}
+                    value={quoted ? "เสนอราคาแล้ว" : "ยังไม่ได้เสนอราคา"}
+                    sub={quoted ? "ดูใบได้ที่ ใบเสนอราคาทั้งเครือ" : undefined} />
+                </PanelStats>
 
-                <ส่วนแผง ไอคอน={User} หัวข้อ="ข้อมูลลูกค้า">
-                  <แถวข้อมูล ไอคอน={User} หัวข้อ="ผู้ติดต่อ" ค่า={l.contact} />
-                  <แถวข้อมูล ไอคอน={Phone} หัวข้อ="โทรศัพท์" ค่า={เบอร์อ่านง่าย(l.phone)} />
-                  <แถวข้อมูล ไอคอน={Mail} หัวข้อ="อีเมล" ค่า={l.email} />
-                  <แถวข้อมูล ไอคอน={MapPin} หัวข้อ="จังหวัด" ค่า={l.province} />
-                  <แถวข้อมูล ไอคอน={Building2} หัวข้อ="ประเภทอาคารที่สนใจ" ค่า={l.product} />
-                  <แถวข้อมูล ไอคอน={Compass} หัวข้อ="แหล่งที่มา" ค่า={l.source} />
-                  <แถวข้อมูล ไอคอน={Wallet} หัวข้อ="ประเมินราคา" ค่า={มูลค่าอ่านง่าย(l.value)} เด่น />
-                  <แถวข้อมูล ไอคอน={CalendarDays} หัวข้อ="สร้างเมื่อ" ค่า={l.createdAt} />
-                </ส่วนแผง>
+                <PanelSection icon={User} title="ข้อมูลลูกค้า">
+                  <PanelRow icon={User} label="ผู้ติดต่อ" value={l.contact} />
+                  <PanelRow icon={Phone} label="โทรศัพท์" value={เบอร์อ่านง่าย(l.phone)} />
+                  <PanelRow icon={Mail} label="อีเมล" value={l.email} />
+                  <PanelRow icon={MapPin} label="จังหวัด" value={l.province} />
+                  <PanelRow icon={Building2} label="ประเภทอาคารที่สนใจ" value={l.product} />
+                  <PanelRow icon={Compass} label="แหล่งที่มา" value={l.source} />
+                  <PanelRow icon={Wallet} label="ประเมินราคา" value={มูลค่าอ่านง่าย(l.value)} strong />
+                  <PanelRow icon={CalendarDays} label="สร้างเมื่อ" value={l.createdAt} />
+                </PanelSection>
 
-                <ส่วนแผง ไอคอน={Store} หัวข้อ="ข้อมูลตัวแทนจำหน่าย">
-                  <แถวข้อมูล ไอคอน={IdCard} หัวข้อ="รหัสตัวแทน" ค่า={l.dealerCode} />
-                  <แถวข้อมูล ไอคอน={Store} หัวข้อ="ตัวแทน" ค่า={DEALER_NAME.get(l.dealerCode ?? "")} />
-                  <แถวข้อมูล ไอคอน={UserCheck} หัวข้อ="ผู้รับผิดชอบ" ค่า={l.assigned} />
-                </ส่วนแผง>
+                <PanelSection icon={Store} title="ข้อมูลตัวแทนจำหน่าย">
+                  <PanelRow icon={IdCard} label="รหัสตัวแทน" value={l.dealerCode} />
+                  <PanelRow icon={Store} label="ตัวแทน" value={DEALER_NAME.get(l.dealerCode ?? "")} />
+                  <PanelRow icon={UserCheck} label="ผู้รับผิดชอบ" value={l.assigned} />
+                </PanelSection>
 
-                <ส่วนแผง ไอคอน={Activity} หัวข้อ="กิจกรรม / ไทม์ไลน์">
+                <PanelSection icon={Activity} title="กิจกรรม / ไทม์ไลน์">
                   {!l.activities?.length ? (
                     <div style={{ fontSize: "0.76rem", color: "#94A3B8", padding: "10px 0" }}>— ไม่มีบันทึกกิจกรรม</div>
                   ) : (
@@ -957,9 +907,9 @@ export default function HQLeadsPage() {
                       ))}
                     </div>
                   )}
-                </ส่วนแผง>
+                </PanelSection>
 
-                <ส่วนแผง ไอคอน={CalendarClock} หัวข้อ="ประวัตินัดหมาย">
+                <PanelSection icon={CalendarClock} title="ประวัตินัดหมาย">
                   {(() => {
                     const appts = drawerAppts ?? appointments.filter(a => a.leadId === l.numId);
                     return !appts.length ? (
@@ -975,9 +925,9 @@ export default function HQLeadsPage() {
                       </div>
                     );
                   })()}
-                </ส่วนแผง>
+                </PanelSection>
 
-                <ส่วนแผง ไอคอน={Paperclip} หัวข้อ="ไฟล์แนบ">
+                <PanelSection icon={Paperclip} title="ไฟล์แนบ">
                   {(() => {
                     const files = dealerFiles.filter(f => f.source === "lead" && f.recordId === l.numId);
                     return !files.length ? (
@@ -994,15 +944,15 @@ export default function HQLeadsPage() {
                       </div>
                     );
                   })()}
-                </ส่วนแผง>
+                </PanelSection>
 
-                <ส่วนแผง ไอคอน={StickyNote} หัวข้อ="หมายเหตุ">
+                <PanelSection icon={StickyNote} title="หมายเหตุ">
                   <div style={{ fontSize: "0.78rem", color: l.note ? "#374151" : "#94A3B8", lineHeight: 1.65, padding: "10px 0" }}>{l.note || "— ไม่มีหมายเหตุ"}</div>
-                </ส่วนแผง>
+                </PanelSection>
 
                 {l.status === "CANCELLED" && (
                   <section style={{ marginTop: 14 }}>
-                    <div style={ฉลากส่วน}><AlertTriangle size={13} color="#F87171" /> เหตุผลที่ปิดการขายไม่สำเร็จ</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}><AlertTriangle size={13} color="#F87171" /> เหตุผลที่ปิดการขายไม่สำเร็จ</div>
                     <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 14, padding: "12px 14px",
                       fontSize: "0.8rem", fontWeight: 700, color: "#DC2626" }}>
                       {l.lostReason || "— ไม่ได้ระบุเหตุผล"}
