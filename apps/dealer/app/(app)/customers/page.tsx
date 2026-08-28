@@ -1769,8 +1769,8 @@ export default function CustomersPage(){
           <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:560,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
             <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
+                {/* รายชื่อคอลัมน์บนหัวหน้าต่างเอาออกแล้ว (บอสสั่ง 28 ส.ค. 69) — ซ้ำกับที่บอกในขั้นที่ 2 อยู่แล้ว */}
                 <div style={{fontSize:"0.92rem",fontWeight:800}}>นำเข้าลูกค้าเดิม</div>
-                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>คอลัมน์: {CSV_HEADERS.join(" · ")}</div>
               </div>
               <button onClick={()=>setShowImport(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
             </div>
@@ -1794,8 +1794,10 @@ export default function CustomersPage(){
                         <button className="btn btn-primary btn-sm" onClick={downloadXlsxTemplate}>
                           <Download size={13}/> ดาวน์โหลดเทมเพลต (Excel)
                         </button>
-                        <button onClick={downloadCsvTemplate} style={{background:"none",border:"none",padding:0,fontSize:"0.68rem",
-                          color:MUTED,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit"}}>หรือแบบ CSV</button>
+                        {/* เป็นปุ่มเหมือนกัน (บอสสั่ง 28 ส.ค. 69) — ของเดิมเป็นข้อความขีดเส้นใต้ ดูไม่ออกว่ากดได้ */}
+                        <button className="btn btn-secondary btn-sm" onClick={downloadCsvTemplate}>
+                          <Download size={13}/> แบบ CSV
+                        </button>
                       </div>
                     )}
                     {ข.ที่===3 && (
@@ -1835,7 +1837,11 @@ export default function CustomersPage(){
               )}
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
-              <button onClick={()=>{setShowImport(false);setShowManual(true);}} style={{background:"none",border:"none",padding:0,marginRight:"auto",fontSize:"0.7rem",color:MUTED,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit"}}>มีไม่กี่ราย — คีย์เองทีละราย</button>
+              {/* เป็นปุ่มเหมือนกัน (บอสสั่ง 28 ส.ค. 69) — ของเดิมเป็นข้อความขีดเส้นใต้ ดูไม่ออกว่ากดได้ */}
+              <button className="btn btn-secondary btn-md" style={{marginRight:"auto"}}
+                onClick={()=>{setShowImport(false);setShowManual(true);}}>
+                <Plus size={13}/> คีย์เองทีละราย
+              </button>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowImport(false)}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={commitImport} disabled={!importRows.length}><Check size={14}/> นำเข้า {importRows.length>0?`${importRows.length} ราย`:""}</button>
             </div>
