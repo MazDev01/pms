@@ -8,7 +8,11 @@ import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/compo
 import { TopNRows } from "@pms/shared/components/hq/TopNRows";
 import { TablePagination, pageSlice, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { useRouter } from "next/navigation";
-import { Users, PhoneCall, AlarmClock, Percent, X, GitBranch, Eye } from "lucide-react";
+import {
+  Users, PhoneCall, AlarmClock, Percent, X, GitBranch, Eye,
+  User, Phone, Mail, MapPin, Building2, Compass, Wallet, CalendarDays,
+  Store, IdCard, UserCheck, FileText, Activity, CalendarClock, Paperclip, StickyNote, Lock, AlertTriangle,
+} from "lucide-react";
 import { useNetworkLeads, useNetworkQuotations, useLeadSummary, useLeadsPage, useNetworkQuoteRange, useUnassignedLeads, useDashboardQuoteSummary, useLeadAppointments } from "@pms/shared/lib/useNetworkData";
 import type { LeadSummaryFilters, LeadListOpts } from "@pms/shared/lib/data/ports";
 import { DEFAULT_LEAD_RULES } from "@pms/shared/lib/mock";
@@ -72,6 +76,53 @@ const TREND_QUOTE_END = new Date(2999, 11, 31);
 // ⚠️ ห้ามกลับไปใช้รายการสถานะ: เดิมเป็น ["WAITING","FOLLOWUP"] ซึ่งไม่ได้นับวันเลย
 //    แต่ป้ายเขียนว่า ">7 วัน" → ตัวเลขไม่ตรงกับคำ และไม่ตรงกับที่ตัวแทนเห็นบนหน้าตัวเอง
 //    เกณฑ์วันเป็นของแต่ละสาขา (ตัวแทนตั้งเอง) → ต้องถามด้วย dealerCode ของลูกค้าเป้าหมายใบนั้นเสมอ
+
+
+/* ── ชิ้นส่วนของแผงรายละเอียดลูกค้าเป้าหมาย (HQ ดูอย่างเดียว) ──────────────────
+   ประกาศไว้ระดับไฟล์ ไม่ประกาศซ้อนในคอมโพเนนต์ — ประกาศซ้อนทำให้ React สร้างชนิดใหม่
+   ทุกครั้งที่เรนเดอร์ แล้ว remount ทั้งก้อน (กับดักเดิมของหน้าที่มีช่องกรอก) */
+const ฉลากส่วน: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 7, fontSize: "0.62rem", fontWeight: 800,
+  color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8,
+};
+
+/** ตัวอักษรย่อสำหรับวงกลมหัวแผง — ตัดคำนำหน้านิติบุคคลออกก่อน ไม่งั้นได้ "บจ" ทุกราย */
+function ย่อชื่อบริษัท(ชื่อ: string): string {
+  return (ชื่อ || "?").replace(/บจ\.|บมจ\.|หจก\.|บริษัท|จำกัด/g, "").trim().slice(0, 2) || "?";
+}
+
+function ส่วนแผง({ ไอคอน: Ico, หัวข้อ, children, style }: {
+  ไอคอน: React.ComponentType<{ size?: number; color?: string }>;
+  หัวข้อ: string; children: React.ReactNode; style?: React.CSSProperties;
+}) {
+  return (
+    <section style={{ marginTop: 14, ...style }}>
+      <div style={ฉลากส่วน}><Ico size={13} color="#94A3B8" /> {หัวข้อ}</div>
+      <div style={{ background: "#fff", border: "1px solid #E7EDF4", borderRadius: 14, padding: "4px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** แถวป้ายกำกับ: ไอคอน + หัวข้อ ทางซ้าย · ค่าทางขวา (ไม่มีข้อมูล = "—" ไม่เดาแทน) */
+function แถวข้อมูล({ ไอคอน: Ico, หัวข้อ, ค่า, เด่น }: {
+  ไอคอน: React.ComponentType<{ size?: number; color?: string }>;
+  หัวข้อ: string; ค่า?: React.ReactNode; เด่น?: boolean;
+}) {
+  const ว่าง = ค่า === undefined || ค่า === null || ค่า === "" || ค่า === "—";
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: "1px solid #F1F5F9", fontSize: "0.76rem" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B", flexShrink: 0 }}>
+        <Ico size={13} color="#94A3B8" /> {หัวข้อ}
+      </span>
+      <span style={{ fontWeight: เด่น ? 800 : 700, color: ว่าง ? "#94A3B8" : (เด่น ? "#003366" : "#1F2937"),
+        fontSize: เด่น ? "0.86rem" : undefined, textAlign: "right", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {ว่าง ? "—" : ค่า}
+      </span>
+    </div>
+  );
+}
 
 export default function HQLeadsPage() {
   const router = useRouter();
@@ -831,146 +882,138 @@ export default function HQLeadsPage() {
             <div className="side-drawer" style={{ position: "fixed", top: 0, right: 0, height: "100vh", width: 420, maxWidth: "100vw", zIndex: 241,
               background: "#F8FAFC", boxShadow: "-16px 0 60px rgba(0,0,0,.2)", borderRadius: "18px 0 0 18px", display: "flex", flexDirection: "column" }}>
 
-              <div style={{ background: "#003366", padding: "16px 20px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</div>
-                  <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,.75)", marginTop: 3 }}>{l.id} · {l.contact}</div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                    <span className="badge" style={{ background: c.bg, color: c.text }}>{leadStatusLabel[l.status]}</span>
-                    <span className="badge" style={{ background: "rgba(255,255,255,.15)", color: "#fff" }}>{มูลค่าอ่านง่าย(l.value)}</span>
+              {/* หัวแผง — ชื่อบริษัทเด่น + วงกลมย่อชื่อ · ป้ายสถานะและมูลค่าอยู่บรรทัดเดียวกัน */}
+              <div style={{ background: "linear-gradient(135deg,#003366 0%,#00284F 60%,#001B36 100%)", padding: "18px 20px 16px",
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
+                  <span style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.2)",
+                    color: "#fff", fontWeight: 800, fontSize: "0.92rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {ย่อชื่อบริษัท(l.company)}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.company}</div>
+                    <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,.7)", marginTop: 3 }}>{l.id} · {l.contact}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 9, flexWrap: "wrap" }}>
+                      <span className="badge" style={{ background: c.bg, color: c.text }}>{leadStatusLabel[l.status]}</span>
+                      <span className="badge" style={{ background: "rgba(255,255,255,.15)", color: "#fff" }}>{มูลค่าอ่านง่าย(l.value)}</span>
+                    </div>
                   </div>
                 </div>
                 <button onClick={() => setViewLead(null)} title="ปิด" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid rgba(255,255,255,.2)",
                   background: "rgba(255,255,255,.12)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={14} /></button>
               </div>
 
-              <div style={{ flex: 1, overflowY: "auto", padding: "4px 20px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            ข้อมูลลูกค้า
-          </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>ผู้ติดต่อ</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.contact || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>โทรศัพท์</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{เบอร์อ่านง่าย(l.phone)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>อีเมล</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.email || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>จังหวัด</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.province || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>ประเภทอาคารที่สนใจ</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.product || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>แหล่งที่มา</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.source || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>ประเมินราคา</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{มูลค่าอ่านง่าย(l.value)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>สร้างเมื่อ</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.createdAt || "—"}</span>
-            </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            ข้อมูลตัวแทนจำหน่าย
-          </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>รหัสตัวแทน</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.dealerCode || "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>ตัวแทน</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{DEALER_NAME.get(l.dealerCode ?? "") ?? "—"}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f0f4f8", fontSize: "0.76rem" }}>
-              <span style={{ color: "#8a929c", flexShrink: 0 }}>ผู้รับผิดชอบ</span>
-              <span style={{ fontWeight: 700, color: "#2D2D2D", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>{l.assigned || "—"}</span>
-            </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            ใบเสนอราคา
-          </div>
-            <div style={{ fontSize: "0.78rem", color: quoted ? "#059669" : "var(--muted-foreground)", fontWeight: quoted ? 700 : 400 }}>
-              {quoted ? "เสนอราคาแล้ว (ดูใบได้ที่ ใบเสนอราคาทั้งเครือ)" : "— ยังไม่ได้เสนอราคา"}
-            </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            กิจกรรม / ไทม์ไลน์
-          </div>
-            {!l.activities?.length ? (
-              <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)" }}>— ไม่มีบันทึกกิจกรรม</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {l.activities.map(a => (
-                  <div key={a.id} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#003366", marginTop: 6, flexShrink: 0 }} />
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: "0.76rem", color: "#2D2D2D" }}>{a.text}</span>
-                      <span style={{ display: "block", fontSize: "0.66rem", color: "var(--muted-foreground)", marginTop: 1 }}>{a.date}</span>
-                    </span>
+              <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px 20px" }}>
+                {/* แถบสรุปบนสุด — มูลค่าที่ประเมินไว้ กับสถานะใบเสนอราคา อ่านได้ตั้งแต่ยังไม่เลื่อนจอ */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ background: "#fff", border: "1px solid #E7EDF4", borderRadius: 14, padding: "12px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+                    <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>ประเมินราคา</div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366", marginTop: 4 }}>{มูลค่าอ่านง่าย(l.value)}</div>
                   </div>
-                ))}
-              </div>
-            )}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            ประวัตินัดหมาย
-          </div>
-            {(() => {
-              const appts = drawerAppts ?? appointments.filter(a => a.leadId === l.numId);
-              return !appts.length ? (
-                <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)" }}>— ไม่มีนัดหมาย</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {appts.map(a => (
-                    <div key={a.id} style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "8px 10px" }}>
-                      <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project || a.company}</div>
-                      <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", marginTop: 2 }}>{fmtISOToThai(a.date)} · {a.time} · {a.assigned}</div>
+                  <div style={{ background: quoted ? "#ECFDF5" : "#fff", border: "1px solid " + (quoted ? "#A7F3D0" : "#E7EDF4"), borderRadius: 14, padding: "12px 14px", boxShadow: "0 1px 2px rgba(15,23,42,.04)" }}>
+                    <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>ใบเสนอราคา</div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: quoted ? "#059669" : "#94A3B8", marginTop: 6, lineHeight: 1.35 }}>
+                      {quoted ? "เสนอราคาแล้ว" : "ยังไม่ได้เสนอราคา"}
                     </div>
-                  ))}
+                    {quoted && <div style={{ fontSize: "0.62rem", color: "#64748B", marginTop: 2 }}>ดูใบได้ที่ ใบเสนอราคาทั้งเครือ</div>}
+                  </div>
                 </div>
-              );
-            })()}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            ไฟล์แนบ
-          </div>
-            {(() => {
-              const files = dealerFiles.filter(f => f.source === "lead" && f.recordId === l.numId);
-              return !files.length ? (
-                <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)" }}>— ไม่มีไฟล์แนบ</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {files.map(f => (
-                    <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 9, padding: "7px 10px" }}>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: "0.74rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-                      <span style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", flexShrink: 0 }}>{f.size}</span>
+
+                <ส่วนแผง ไอคอน={User} หัวข้อ="ข้อมูลลูกค้า">
+                  <แถวข้อมูล ไอคอน={User} หัวข้อ="ผู้ติดต่อ" ค่า={l.contact} />
+                  <แถวข้อมูล ไอคอน={Phone} หัวข้อ="โทรศัพท์" ค่า={เบอร์อ่านง่าย(l.phone)} />
+                  <แถวข้อมูล ไอคอน={Mail} หัวข้อ="อีเมล" ค่า={l.email} />
+                  <แถวข้อมูล ไอคอน={MapPin} หัวข้อ="จังหวัด" ค่า={l.province} />
+                  <แถวข้อมูล ไอคอน={Building2} หัวข้อ="ประเภทอาคารที่สนใจ" ค่า={l.product} />
+                  <แถวข้อมูล ไอคอน={Compass} หัวข้อ="แหล่งที่มา" ค่า={l.source} />
+                  <แถวข้อมูล ไอคอน={Wallet} หัวข้อ="ประเมินราคา" ค่า={มูลค่าอ่านง่าย(l.value)} เด่น />
+                  <แถวข้อมูล ไอคอน={CalendarDays} หัวข้อ="สร้างเมื่อ" ค่า={l.createdAt} />
+                </ส่วนแผง>
+
+                <ส่วนแผง ไอคอน={Store} หัวข้อ="ข้อมูลตัวแทนจำหน่าย">
+                  <แถวข้อมูล ไอคอน={IdCard} หัวข้อ="รหัสตัวแทน" ค่า={l.dealerCode} />
+                  <แถวข้อมูล ไอคอน={Store} หัวข้อ="ตัวแทน" ค่า={DEALER_NAME.get(l.dealerCode ?? "")} />
+                  <แถวข้อมูล ไอคอน={UserCheck} หัวข้อ="ผู้รับผิดชอบ" ค่า={l.assigned} />
+                </ส่วนแผง>
+
+                <ส่วนแผง ไอคอน={Activity} หัวข้อ="กิจกรรม / ไทม์ไลน์">
+                  {!l.activities?.length ? (
+                    <div style={{ fontSize: "0.76rem", color: "#94A3B8", padding: "10px 0" }}>— ไม่มีบันทึกกิจกรรม</div>
+                  ) : (
+                    <div style={{ padding: "10px 0 4px" }}>
+                      {l.activities.map((a, i, ทั้งหมด) => (
+                        <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", position: "relative", paddingBottom: i === ทั้งหมด.length - 1 ? 8 : 14 }}>
+                          {/* เส้นไทม์ไลน์ลากจากจุดนี้ไปจุดถัดไป — จุดสุดท้ายไม่ต้องมีเส้นห้อย */}
+                          {i !== ทั้งหมด.length - 1 && (
+                            <span style={{ position: "absolute", left: 4, top: 14, bottom: 0, width: 1, background: "#E2E8F0" }} />
+                          )}
+                          <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff", border: "2px solid #003366", marginTop: 4, flexShrink: 0, zIndex: 1 }} />
+                          <span style={{ minWidth: 0 }}>
+                            <span style={{ display: "block", fontSize: "0.76rem", color: "#1F2937", lineHeight: 1.5 }}>{a.text}</span>
+                            <span style={{ display: "block", fontSize: "0.66rem", color: "#94A3B8", marginTop: 2 }}>{a.date}</span>
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              );
-            })()}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            หมายเหตุ
-          </div>
-            <div style={{ fontSize: "0.78rem", color: l.note ? "#374151" : "var(--muted-foreground)", lineHeight: 1.6 }}>{l.note || "— ไม่มีหมายเหตุ"}</div>
-            {l.status === "CANCELLED" && (
-              <>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.62rem", fontWeight: 800, color: "#8a929c", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 18, marginBottom: 8 }}>
-            เหตุผลที่ปิดการขายไม่สำเร็จ
-          </div>
-                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#dc2626" }}>{l.lostReason || "— ไม่ได้ระบุเหตุผล"}</div>
-              </>
-            )}
+                  )}
+                </ส่วนแผง>
+
+                <ส่วนแผง ไอคอน={CalendarClock} หัวข้อ="ประวัตินัดหมาย">
+                  {(() => {
+                    const appts = drawerAppts ?? appointments.filter(a => a.leadId === l.numId);
+                    return !appts.length ? (
+                      <div style={{ fontSize: "0.76rem", color: "#94A3B8", padding: "10px 0" }}>— ไม่มีนัดหมาย</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", padding: "4px 0" }}>
+                        {appts.map((a, i) => (
+                          <div key={a.id} style={{ padding: "9px 0", borderBottom: i === appts.length - 1 ? "none" : "1px solid #F1F5F9" }}>
+                            <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.project || a.company}</div>
+                            <div style={{ fontSize: "0.66rem", color: "#64748B", marginTop: 3 }}>{fmtISOToThai(a.date)} · {a.time} · {a.assigned}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </ส่วนแผง>
+
+                <ส่วนแผง ไอคอน={Paperclip} หัวข้อ="ไฟล์แนบ">
+                  {(() => {
+                    const files = dealerFiles.filter(f => f.source === "lead" && f.recordId === l.numId);
+                    return !files.length ? (
+                      <div style={{ fontSize: "0.76rem", color: "#94A3B8", padding: "10px 0" }}>— ไม่มีไฟล์แนบ</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", padding: "4px 0" }}>
+                        {files.map((f, i) => (
+                          <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderBottom: i === files.length - 1 ? "none" : "1px solid #F1F5F9" }}>
+                            <FileText size={14} color="#94A3B8" />
+                            <span style={{ flex: 1, minWidth: 0, fontSize: "0.74rem", fontWeight: 700, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                            <span style={{ fontSize: "0.65rem", color: "#94A3B8", flexShrink: 0 }}>{f.size}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </ส่วนแผง>
+
+                <ส่วนแผง ไอคอน={StickyNote} หัวข้อ="หมายเหตุ">
+                  <div style={{ fontSize: "0.78rem", color: l.note ? "#374151" : "#94A3B8", lineHeight: 1.65, padding: "10px 0" }}>{l.note || "— ไม่มีหมายเหตุ"}</div>
+                </ส่วนแผง>
+
+                {l.status === "CANCELLED" && (
+                  <section style={{ marginTop: 14 }}>
+                    <div style={ฉลากส่วน}><AlertTriangle size={13} color="#F87171" /> เหตุผลที่ปิดการขายไม่สำเร็จ</div>
+                    <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 14, padding: "12px 14px",
+                      fontSize: "0.8rem", fontWeight: 700, color: "#DC2626" }}>
+                      {l.lostReason || "— ไม่ได้ระบุเหตุผล"}
+                    </div>
+                  </section>
+                )}
               </div>
 
               <div style={{ padding: "12px 20px", borderTop: "1px solid #E5E7EB", background: "#fff", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", flex: 1 }}>สำนักงานใหญ่ดูอย่างเดียว — แก้ไขได้ที่ตัวแทนเจ้าของรายการ</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.66rem", color: "#64748B", flex: 1 }}>
+                  <Lock size={12} color="#94A3B8" /> สำนักงานใหญ่ดูอย่างเดียว — แก้ไขได้ที่ตัวแทนเจ้าของรายการ
+                </span>
                 <button onClick={() => setViewLead(null)} className="btn btn-secondary btn-md" style={{ color: "#374151" }}>ปิด</button>
               </div>
             </div>
