@@ -175,8 +175,15 @@ export const นามสกุลที่รับได้ = [".csv", ".xlsx"
 
 export async function อ่านตารางจากไฟล์(file: File): Promise<ตารางที่อ่านได้> {
   const ชื่อ = file.name.toLowerCase();
-  if (ชื่อ.endsWith(".xlsx")) return แยกตารางจากXlsx(await file.arrayBuffer());
-  const text = await file.text();
+  const ไบต์ = await file.arrayBuffer();
+  // ดูจาก "เนื้อไฟล์" ก่อนนามสกุล — ไฟล์ Excel ขึ้นต้นด้วย PK เสมอ (xlsx = ซอง zip)
+  // เคยพลาดเพราะเชื่อนามสกุลอย่างเดียว: ไฟล์ที่ถูกบันทึกมาโดยไม่มีนามสกุล (หรือถูกเปลี่ยนชื่อ)
+  // จะตกไปเส้นทางอ่านเป็นข้อความ แล้วได้ตารางว่างพร้อมข้อความ "ไม่พบข้อมูลในไฟล์"
+  // ซึ่งชี้ไปผิดทางหมด (ผู้ใช้เข้าใจว่าไฟล์ตัวเองผิด ทั้งที่ระบบอ่านผิดวิธี)
+  const หัวไฟล์ = new Uint8Array(ไบต์.slice(0, 4));
+  const เป็นZip = หัวไฟล์[0] === 0x50 && หัวไฟล์[1] === 0x4b && (หัวไฟล์[2] === 3 || หัวไฟล์[2] === 5 || หัวไฟล์[2] === 7);
+  if (ชื่อ.endsWith(".xlsx") || เป็นZip) return แยกตารางจากXlsx(ไบต์);
+  const text = new TextDecoder("utf-8").decode(ไบต์).replace(/^﻿/, "");
   // .xls/.html ของหลายระบบ (รวมถึงตัวส่งออกของเราเอง) แท้จริงคือตาราง HTML — ดูจากเนื้อไฟล์ ไม่ใช่นามสกุล
   if (/^\s*(<!doctype html|<html|<table)/i.test(text)) {
     const จากHtml = แยกตารางจากHtml(text);
