@@ -12,6 +12,7 @@
     "test": "playwright test",
     "test:api": "node scripts/test-api.mjs",
     "smoke:prod": "node scripts/smoke-prod.mjs",
+    "test:prodbuild": "node scripts/test-prodbuild.mjs",
     "test:mobile": "playwright test -c playwright.mobile.config.ts",
     "test:unit": "vitest run",
     "audit:api": "node scripts/api-audit.mjs",
