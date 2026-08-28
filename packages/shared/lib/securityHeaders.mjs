@@ -46,6 +46,10 @@ const CSP = [
   "img-src 'self' data: blob: https:",                  // โลโก้/รูปโปรไฟล์เก็บเป็น data URL
   "font-src 'self' data: https://fonts.gstatic.com",    // ไฟล์ฟอนต์จริงของเอกสารที่พิมพ์
   connectSrc,
+  // กรอบแสดงตัวอย่างไฟล์ในหน้าไฟล์ (PDF) — ไฟล์ตัวอย่างในเว็บเราเอง ('self'),
+  // ไฟล์ที่ผู้ใช้อัปโหลดในโหมดสาธิต (blob:) และไฟล์จริงจาก Supabase Storage
+  // ⚠️ ไม่ใส่ = เบราว์เซอร์บล็อกกรอบเงียบ ๆ ผู้ใช้เห็นแค่กรอบว่าง แยกไม่ออกจากไฟล์เสีย
+  "frame-src 'self' blob: https://*.supabase.co",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -70,6 +74,10 @@ export function cspWithNonce(nonce) {
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     connectSrc,
+    // กรอบแสดงตัวอย่างไฟล์ในหน้าไฟล์ (PDF) — ไฟล์ตัวอย่างในเว็บเราเอง ('self'),
+    // ไฟล์ที่ผู้ใช้อัปโหลดในโหมดสาธิต (blob:) และไฟล์จริงจาก Supabase Storage
+    // ⚠️ ไม่ใส่ = เบราว์เซอร์บล็อกกรอบเงียบ ๆ ผู้ใช้เห็นแค่กรอบว่าง แยกไม่ออกจากไฟล์เสีย
+    "frame-src 'self' blob: https://*.supabase.co",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

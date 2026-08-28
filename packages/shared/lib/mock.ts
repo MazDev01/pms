@@ -491,18 +491,20 @@ export const DEALER_FILES_KEY = "dealer_files_v1";
 export const DEALER_FILES_EVENT = "bpms-files-updated";
 
 // ไฟล์ตั้งต้น = ไฟล์ที่ "แนบไว้กับลูกค้า/ลูกค้าเป้าหมายจริง" (source บอกว่ามาจากหน้าไหน)
+// นามสกุลของชุดตัวอย่างจำกัดไว้เฉพาะชนิดที่มี "ไฟล์ตัวอย่างจริง" วางไว้ในเว็บแล้ว (pdf/xlsx/jpg)
+// เพื่อให้ทุกแถวกดเปิดอ่าน/ดาวน์โหลดได้จริง — ดู DEMO_SAMPLE ในหน้าไฟล์ และ scripts/gen-demo-files.mjs
 // หน้าไฟล์กลางเพียงดึงไฟล์เหล่านี้มารวมกัน — ไม่มีการสร้างไฟล์ใหม่จากใบเสนอราคา
 export const DEFAULT_DEALER_FILES: DealerFile[] = [
   { id: 1,  name: "ใบเสนอราคา_โกดังสำเร็จรูป_ไทยสตีล_v2.pdf", size: "1.4 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "วิภา",     uploadedAt: "2026-06-20", source: "customer", recordId: 1, customerId: 1 },
   { id: 2,  name: "สัญญาขาย_ไทยสตีล.pdf",                   size: "2.1 MB", ext: "pdf",  category: "สัญญา",      project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "สมชาย",   uploadedAt: "2026-06-18", source: "customer", recordId: 1, customerId: 1 },
   { id: 3,  name: "ผังพื้นที่ลูกค้า_โรงงาน.pdf",             size: "8.3 MB", ext: "pdf",  category: "แบบแปลน",    project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-06-15", source: "customer", recordId: 2, customerId: 2 },
-  { id: 4,  name: "presentation_VCS_Asia.pptx",             size: "5.7 MB", ext: "pptx", category: "นำเสนอ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-12", source: "customer", recordId: 5, customerId: 5 },
+  { id: 4,  name: "เอกสารนำเสนอ_VCS_Asia.pdf",              size: "5.7 MB", ext: "pdf",  category: "นำเสนอ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-12", source: "customer", recordId: 5, customerId: 5 },
   { id: 5,  name: "สรุปราคา_คลังสินค้า_บจ.ซีซีเอส.xlsx",       size: "340 KB", ext: "xlsx", category: "ใบเสนอราคา", project: "คลังสินค้า CCS",           uploadedBy: "สมชาย",   uploadedAt: "2026-06-10", source: "customer", recordId: 2, customerId: 2 },
   { id: 6,  name: "รูปถ่ายพื้นที่_พิษณุโลกฟาร์ม.jpg",         size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "โกดังเก็บข้าว บจ. พิษณุโลกฟาร์ม", uploadedBy: "สมชาย", uploadedAt: "2026-06-08", source: "lead", recordId: 8 },
   { id: 7,  name: "ใบเสนอราคา_Q-2026-0101_พิษณุโลกฟาร์ม.pdf", size: "1.1 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังเก็บข้าว บจ. พิษณุโลกฟาร์ม", uploadedBy: "สมชาย", uploadedAt: "2026-06-05", source: "lead", recordId: 8 },
   { id: 8,  name: "ใบเสนอราคา_Q-2026-0102_ลำพูนอิเล็กทรอนิกส์.pdf", size: "1.3 MB", ext: "pdf", category: "ใบเสนอราคา", project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา", uploadedAt: "2026-06-03", source: "lead", recordId: 10 },
   { id: 9,  name: "รายละเอียดสินค้า_โกดังสำเร็จรูป.xlsx",         size: "512 KB", ext: "xlsx", category: "แบบแปลน",    project: "โรงงานสำเร็จรูป เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", source: "customer", recordId: 2, customerId: 2 },
-  { id: 10, name: "presentation_ลำพูนอิเล็กทรอนิกส์.pptx",     size: "12.4 MB",ext: "pptx", category: "นำเสนอ",     project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา",   uploadedAt: "2026-05-20", source: "lead", recordId: 10 },
+  { id: 10, name: "เอกสารนำเสนอ_ลำพูนอิเล็กทรอนิกส์.pdf",       size: "12.4 MB",ext: "pdf",  category: "นำเสนอ",     project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา",   uploadedAt: "2026-05-20", source: "lead", recordId: 10 },
   { id: 11, name: "รูปถ่ายพื้นที่_VCS_Asia.jpg",              size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-05", source: "customer", recordId: 5, customerId: 5 },
 ];
 
@@ -1073,6 +1075,17 @@ export type QuotationMock = {
   lostReason?: string;  // เหตุผลที่ลูกค้าปฏิเสธ (เมื่อ status = lost) — ตัวเลือกมาจาก HQ (getLostReasons ร่วมกับลูกค้าเป้าหมาย)
   // สแนปช็อต % VAT ณ ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ ไม่ใช้ VAT ปัจจุบันของ HQ (ใบเก่าที่ไม่มีค่านี้ = fallback ไปใช้ hqPolicy.vat)
   vatPercent?: number;
+  /** จำนวนเงิน VAT (บาท) — สแนปช็อตคู่กับอัตราข้างบน */
+  vatAmount?: number;
+  /** อัตราภาษีหัก ณ ที่จ่าย (%) — 0 หรือไม่ระบุ = ไม่หัก (บอสสั่ง 28 ส.ค. 69) */
+  whtRate?: number;
+  /** จำนวนเงินภาษีหัก ณ ที่จ่าย (บาท) — คิดจากยอดก่อน VAT ตามหลักสรรพากร */
+  whtAmount?: number;
+  /** ยอดรวมเป็นเงิน = ยอดก่อน VAT + VAT */
+  totalAmount?: number;
+  /** ยอดชำระสุทธิ = ยอดรวม − หัก ณ ที่จ่าย
+   *  ⚠️ เก็บไว้ทำรายงานภายหลัง — ยังไม่ใช้แทน totalValue (ยอดขายของรายงาน/เป้ายังเป็นยอดก่อน VAT) */
+  netPayable?: number;
   // paymentTerms / deliveryTime ถูกลบตามที่บอสสั่ง — มีที่เก็บแต่ไม่มีช่องกรอก ขึ้น "—" ทุกใบ
   // (HQCustomer.deliveryTime เป็นคนละตัว ฝั่ง HQ ยังใช้คิดวันส่งมอบอยู่ ไม่แตะ)
   issuer?: IssuerProfile; // สแนปช็อตโปรไฟล์บริษัทผู้ออก ณ ตอนสร้าง — ใบเก่าคงชื่อเดิมแม้เปลี่ยนโปรไฟล์
