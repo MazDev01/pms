@@ -17,8 +17,9 @@ import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
   FileText, FileSpreadsheet, Image as ImageIcon, Plus,
-  FileSignature, PenTool, Presentation, Files, Eye, Pencil,
+  FileSignature, PenTool, Presentation, Files, Eye, Pencil, Download, ExternalLink,
 } from "lucide-react";
+import { FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { Skeleton } from "@pms/shared/components/ui/Skeleton";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -107,7 +108,41 @@ function guessExt(name: string): FileExt {
   return "other";
 }
 
-// ดาวน์โหลดเอกสาร (ระบบ frontend/mock) — สร้างไฟล์สรุปข้อมูลให้ดาวน์โหลดจริง
+// ที่มาของไฟล์ = "ไฟล์นี้ของใคร" — แนบไว้กับลูกค้า/ลูกค้าเป้าหมายรายไหน หรือผู้ใช้อัปโหลดเข้าคลังเอง
+const SOURCE_LABEL: Record<DealerFile["source"], string> = {
+  customer: "แนบจากลูกค้า",
+  lead:     "แนบจากลูกค้าเป้าหมาย",
+  upload:   "อัปโหลดเข้าคลัง",
+};
+
+// เปิดอ่าน/ดาวน์โหลด "ไฟล์จริง" — ทำได้เฉพาะไฟล์ที่มีไบต์เก็บไว้จริง (storagePath)
+//   โหมด local  → blob: URL จาก IndexedDB ในเครื่องผู้ใช้ (blobStore.ts)
+//   โหมด supabase/api → signed URL อายุสั้นจาก Storage
+// ⚠️ ไฟล์ชุดตัวอย่างไม่มีไบต์จริง → ไม่มี storagePath → ต้องไม่มีปุ่มพวกนี้ ห้ามสร้างเนื้อไฟล์ปลอมแทน
+async function openStoredFile(f: FileMock, mode: "open" | "download") {
+  if (!f.storagePath) return;
+  try {
+    const url = await fileStorage.signedUrl(f.storagePath);
+    // ล้มเหลวเงียบ = กดแล้วไม่มีอะไรเกิดขึ้น แยกไม่ออกจากปุ่มเสีย → ต้องดังเป็นแถบเตือน
+    if (!url) throw new Error("ไม่พบไฟล์จริงในระบบจัดเก็บ (อาจถูกลบไปแล้ว)");
+    if (mode === "open") {
+      window.open(url, "_blank", "noopener");
+    } else {
+      // blob: URL ใช้ attribute download ได้ตรง ๆ · signed URL ข้ามโดเมนต้องขอผ่านพารามิเตอร์ download
+      const href = url.startsWith("blob:")
+        ? url
+        : `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(f.name)}`;
+      const a = document.createElement("a");
+      a.href = href; a.download = f.name; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    // blob: URL ค้างไว้กินหน่วยความจำ — ปล่อยคืนหลังเบราว์เซอร์เปิด/บันทึกเสร็จ (เร็วกว่านี้ไฟล์จะเปิดไม่ขึ้น)
+    if (url.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    reportRepoSaveError(e);
+  }
+}
+
 
 function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File | null) => void; onClose: () => void }) {
   const [name, setName]     = useState("");
@@ -440,7 +475,7 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
-                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)}{file.size ? ` · ${file.size}` : ""}</div>
+                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)}{file.size ? ` · ${file.size}` : ""} · {SOURCE_LABEL[file.source]}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={13} /></button>
@@ -451,14 +486,20 @@ function PreviewModal({ file, onClose }: { file: FileMock; onClose: () => void }
           </div>
           {/* Footer */}
           <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
-            {/* มีไฟล์จริงใน Storage เท่านั้นจึงโหลดได้ (โหมด local เก็บแค่ metadata → ไม่ขึ้นปุ่มนี้) */}
-            {file.storagePath && (
-              <button className="btn btn-secondary btn-md" onClick={() => {
-                // ผู้ใช้กดปุ่มแล้วต้องเกิดอะไรสักอย่าง — ล้มเหลวเงียบ = กดแล้วไม่มีอะไรเกิดขึ้น แยกไม่ออกจากปุ่มเสีย
-                void fileStorage.signedUrl(file.storagePath!)
-                  .then(url => { if (url) window.open(url, "_blank", "noopener"); })
-                  .catch(e => logRepoRead("storage.signedUrl", e));
-              }}>ดาวน์โหลดไฟล์จริง</button>
+            {/* มีไบต์จริงเก็บไว้เท่านั้นจึงเปิด/ดาวน์โหลดได้ — ไฟล์ชุดตัวอย่างมีแต่ข้อมูลกำกับ ไม่มีตัวไฟล์ */}
+            {file.storagePath ? (
+              <>
+                <button className="btn btn-secondary btn-md" onClick={() => void openStoredFile(file, "open")}>
+                  <ExternalLink size={13} /> เปิดอ่าน
+                </button>
+                <button className="btn btn-secondary btn-md" onClick={() => void openStoredFile(file, "download")}>
+                  <Download size={13} /> ดาวน์โหลด
+                </button>
+              </>
+            ) : (
+              <span style={{ fontSize: "0.7rem", color: MUTED, marginRight: "auto" }}>
+                ไฟล์ตัวอย่าง — ไม่มีตัวไฟล์จริงให้เปิดอ่านหรือดาวน์โหลด
+              </span>
             )}
             <button onClick={onClose} className="btn btn-primary btn-md">ปิด</button>
           </div>
@@ -496,6 +537,10 @@ export default function FilesPage() {
   }, [currentDealer.code]);
   const [query,   setQuery]   = useState("");
   const [catFilter, setCat]   = useState<FileCategory | "ALL">("ALL");
+  // "ไฟล์นี้ของใคร" — กรองตามผู้อัปโหลด · ที่มา (ลูกค้า/ลูกค้าเป้าหมาย/อัปโหลดเอง) · โอกาสการขายที่ผูกอยู่
+  const [ownerFilter,  setOwner]  = useState<string>("ALL");
+  const [sourceFilter, setSource] = useState<string>("ALL");
+  const [projFilter,   setProj]   = useState<string>("ALL");
   // extFilter ถูกลบพร้อมชิปสรุป + select "ทุกประเภท" — ไม่เหลือ UI ที่ตั้งค่าได้ จึงเป็นโค้ดตาย
   const [view,    setView]    = useState<"grid" | "list">("list");
   const [upload,  setUpload]  = useState(false);
@@ -513,12 +558,26 @@ export default function FilesPage() {
     return files.filter(f => {
       const matchQ = !q || f.name.toLowerCase().includes(q) || f.project.toLowerCase().includes(q) || f.uploadedBy.toLowerCase().includes(q);
       const matchC = catFilter === "ALL" || f.category === catFilter;
-      return matchQ && matchC;
+      const matchO = ownerFilter === "ALL" || f.uploadedBy === ownerFilter;
+      const matchS = sourceFilter === "ALL" || f.source === sourceFilter;
+      const matchP = projFilter === "ALL" || f.project === projFilter;
+      return matchQ && matchC && matchO && matchS && matchP;
     });
-  }, [files, query, catFilter]);
+  }, [files, query, catFilter, ownerFilter, sourceFilter, projFilter]);
+
+  // ตัวเลือกในแถบกรองสร้างจากไฟล์จริงที่มีอยู่เท่านั้น (ไม่ hardcode รายชื่อคน/โครงการ)
+  const ownerOptions = useMemo(
+    () => Array.from(new Set(files.map(f => f.uploadedBy).filter(Boolean))).sort((a, b) => a.localeCompare(b, "th")),
+    [files]);
+  const projOptions = useMemo(
+    () => Array.from(new Set(files.map(f => f.project).filter(p => p && p !== "—"))).sort((a, b) => a.localeCompare(b, "th")),
+    [files]);
+  const sourceOptions = useMemo(
+    () => (["customer", "lead", "upload"] as const).filter(sv => files.some(f => f.source === sv)),
+    [files]);
 
   // เปลี่ยนตัวกรอง/ค้นหา/มุมมอง → กลับไปหน้าแรก
-  useEffect(() => { setPage(1); }, [query, catFilter, view]);
+  useEffect(() => { setPage(1); }, [query, catFilter, ownerFilter, sourceFilter, projFilter, view]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // กันหน้าเกินเมื่อจำนวนรายการลดลง (เช่น ลบไฟล์)
@@ -632,6 +691,17 @@ export default function FilesPage() {
           {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 0 }}><X size={11} /></button>}
         </div>
         {/* ตัวเลือก "ทุกประเภท" เอาออกตามที่บอสสั่ง */}
+        {/* แถบแยก "ไฟล์นี้ของใคร" — ผู้อัปโหลด · ที่มา · โอกาสการขาย (มาตรฐาน FilterSelect เดียวกับหน้าอื่น) */}
+        <FilterSelect caption="ทุกผู้อัปโหลด" value={ownerFilter} onChange={setOwner}
+          options={ownerOptions.map(o => ({ v: o, l: o }))} minWidth={130} />
+        <FilterSelect caption="ทุกที่มา" value={sourceFilter} onChange={setSource}
+          options={sourceOptions.map(sv => ({ v: sv, l: SOURCE_LABEL[sv] }))} minWidth={150} />
+        <FilterSelect caption="ทุกโอกาสการขาย" value={projFilter} onChange={setProj}
+          options={projOptions.map(pj => ({ v: pj, l: pj }))} minWidth={150} />
+        {(ownerFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" || catFilter !== "ALL" || !!query) && (
+          <button onClick={() => { setQuery(""); setCat("ALL"); setOwner("ALL"); setSource("ALL"); setProj("ALL"); }}
+            className="btn btn-secondary btn-sm">ล้างตัวกรอง</button>
+        )}
         <div style={{ display: "flex", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden", marginLeft: "auto", height: 36, boxSizing: "border-box" }}>
           {(["list","grid"] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
@@ -648,13 +718,15 @@ export default function FilesPage() {
           <div className="table-wrap" style={{ borderTop: "none" }}>
             <table>
               <colgroup>
-                <col style={{ width: "25%" }} />
-                {showCol("category")   && <col style={{ width: "11%" }} />}
-                {showCol("project")    && <col style={{ width: "21%" }} />}
-                {showCol("size")       && <col style={{ width: "9%" }} />}
-                {showCol("uploadedBy") && <col style={{ width: "11%" }} />}
-                {showCol("uploadedAt") && <col style={{ width: "11%" }} />}
-                <col style={{ width: "12%" }} />
+                {/* ⚠️ ตาราง table-layout:fixed — ความกว้างแก้ที่ <col> เท่านั้น (ใส่ที่ <th> ไม่มีผล)
+                    ช่องปุ่มขวาสุดกว้าง 18% เพราะมีได้ถึง 5 ปุ่ม (เปิดอ่าน/ดาวน์โหลดโผล่เฉพาะไฟล์ที่มีตัวไฟล์จริง) */}
+                <col style={{ width: "22%" }} />
+                {showCol("category")   && <col style={{ width: "10%" }} />}
+                {showCol("project")    && <col style={{ width: "18%" }} />}
+                {showCol("size")       && <col style={{ width: "8%" }} />}
+                {showCol("uploadedBy") && <col style={{ width: "12%" }} />}
+                {showCol("uploadedAt") && <col style={{ width: "12%" }} />}
+                <col style={{ width: "18%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -677,7 +749,7 @@ export default function FilesPage() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ padding: 0 }}>
                     <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
-                      description={query || catFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
+                      description={query || catFilter !== "ALL" || ownerFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
                   </td></tr>
                 ) : null}
                 {paged.map(f => (
@@ -714,7 +786,13 @@ export default function FilesPage() {
                       </td>
                     )}
                     {showCol("size")       && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.size}</td>}
-                    {showCol("uploadedBy") && <td style={{ fontSize: "0.72rem", color: STEEL }}>{f.uploadedBy}</td>}
+                    {showCol("uploadedBy") && (
+                      <td style={{ fontSize: "0.72rem", color: STEEL }}>
+                        <div>{f.uploadedBy}</div>
+                        {/* ที่มา = ไฟล์นี้ผูกอยู่กับใคร (ลูกค้า/ลูกค้าเป้าหมาย) หรืออัปโหลดเข้าคลังตรง ๆ */}
+                        <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 2 }}>{SOURCE_LABEL[f.source]}</div>
+                      </td>
+                    )}
                     {showCol("uploadedAt") && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.uploadedAt}</td>}
                     <td className="ovf-visible">
                       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
@@ -722,6 +800,19 @@ export default function FilesPage() {
                           style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                           <Eye size={12} />
                         </button>
+                        {/* เปิดอ่าน/ดาวน์โหลดตัวไฟล์จริง — ขึ้นเฉพาะไฟล์ที่มีไบต์เก็บไว้ (ไฟล์ตัวอย่างไม่มี) */}
+                        {f.storagePath && (
+                          <>
+                            <button title="เปิดอ่านไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "open"); }}
+                              style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                              <ExternalLink size={12} />
+                            </button>
+                            <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "download"); }}
+                              style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                              <Download size={12} />
+                            </button>
+                          </>
+                        )}
                         <button title="แก้ไข" onClick={e => { e.stopPropagation(); setEditId(f.id); }}
                           style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                           <Pencil size={12} />
@@ -757,7 +848,7 @@ export default function FilesPage() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
-              description={query || catFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
+              description={query || catFilter !== "ALL" || ownerFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {paged.map(f => (
@@ -768,6 +859,11 @@ export default function FilesPage() {
                       <button title="ดูตัวอย่าง" onClick={e => { e.stopPropagation(); setPreviewId(f.id); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                         <Eye size={11} />
                       </button>
+                      {f.storagePath && (
+                        <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "download"); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                          <Download size={11} />
+                        </button>
+                      )}
                       <button title="แก้ไข" onClick={e => { e.stopPropagation(); setEditId(f.id); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                         <Pencil size={11} />
                       </button>
@@ -779,6 +875,9 @@ export default function FilesPage() {
                   <div>
                     <div style={{ fontSize: "0.72rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.name}>{f.name}</div>
                     <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 3 }}>{f.size} · {f.uploadedAt}</div>
+                    <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${f.uploadedBy} · ${SOURCE_LABEL[f.source]}`}>
+                      {f.uploadedBy} · {SOURCE_LABEL[f.source]}
+                    </div>
                   </div>
                   <span className="badge" style={{ background: CAT_COLORS[f.category].bg, color: CAT_COLORS[f.category].text, alignSelf: "flex-start" }}>{f.category}</span>
                 </div>

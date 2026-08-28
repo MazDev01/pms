@@ -36,6 +36,7 @@ function currentDealerCode(): string {
 function fireProfile() {
   try { window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)); } catch {}
 }
+import { putLocalBlob, localBlobUrl, removeLocalBlob } from "./blobStore";
 import type { DataAdapter } from "../ports";
 import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser } from "../types";
 
@@ -97,11 +98,14 @@ function effectiveExpiryOf(q: { expiry?: string; date: string }, validityDays: n
 }
 
 export const LocalAdapter: DataAdapter = {
-  // โหมด local ไม่มี Storage — เก็บแค่ metadata (คืน null ให้หน้าจอรู้ว่าไม่มีไฟล์จริงให้โหลด)
+  // โหมด local เก็บไบต์จริงไว้ใน IndexedDB ของเบราว์เซอร์ผู้ใช้เอง (ดู blobStore.ts)
+  //   → ไฟล์ที่ "ผู้ใช้อัปโหลดเอง" เปิดอ่าน/ดาวน์โหลดได้จริงแม้ไม่ต่อฐานข้อมูล
+  //   → ไฟล์ชุดตัวอย่างไม่มีไบต์จริง จึงไม่มี storagePath และไม่มีปุ่มเปิด/ดาวน์โหลด (ไม่ปลอมเนื้อไฟล์)
+  // เบราว์เซอร์ที่ใช้ IndexedDB ไม่ได้ → คืน null เหมือนเดิม (เก็บแค่ metadata)
   storage: {
-    upload: () => ok(null),
-    signedUrl: () => ok(null),
-    remove: () => done(),
+    upload: (dealerCode, file) => putLocalBlob(dealerCode, file),
+    signedUrl: (path) => localBlobUrl(path),
+    remove: (path) => removeLocalBlob(path),
   },
   // โหมด local ไม่มี Realtime — ข้อมูลอยู่ในเครื่องเดียว (ข้ามแท็บใช้ event bus/storage event เหมือนเดิม)
   // (หน้าจอฝั่ง local ใช้ event/storage ของ origin ตัวเองแทน — ดู useMasterCatalog)
