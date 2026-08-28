@@ -16,6 +16,7 @@ import {
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { อ่านตารางจากไฟล์, จับคู่ตามหัวตาราง, แปลงวันที่นำเข้า, นามสกุลที่รับได้ } from "@pms/shared/lib/importSheet";
 import { สร้างไฟล์Xlsx } from "@pms/shared/lib/makeXlsx";
+import { toast } from "sonner";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
@@ -440,7 +441,7 @@ export default function CustomersPage(){
   const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allLeadsRaw, currentDealer.code]);
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
   const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ดีลใหม่ต้องได้ checklist ชุดเดียวกับลูกค้าเป้าหมายอื่น
-  const { passes, timeRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
+  const { passes, timeRange, inRange, setPreset, setCustomRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
   const [query, setQuery]             = useState("");
   const [catFilter, setCatFilter]     = useState("ALL");
@@ -765,7 +766,28 @@ export default function CustomersPage(){
         const base=Math.max(0,...data.map(c=>c.id));
         for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
       });
+      // ── กดนำเข้าแล้ว "เหมือนไม่มีอะไรเกิดขึ้น" (บอสแจ้ง 28 ส.ค. 69) ────────────────
+      // ต้นเหตุ: ตารางกรองด้วยช่วงเวลาของหน้า (ค่าเริ่มต้น = ปีนี้) โดยดูจากกิจกรรมล่าสุด
+      //   ลูกค้าเดิมที่นำเข้ายังไม่มีใบเสนอราคา → กิจกรรมล่าสุด = วันที่เป็นลูกค้า
+      //   ไฟล์ลูกค้าเดิมส่วนใหญ่เป็นวันที่ปีก่อน ๆ จึงถูกกรองออกทันทีที่บันทึกเสร็จ
+      //   ผู้ใช้เห็นจำนวนเท่าเดิม แยกไม่ออกเลยว่า "นำเข้าไม่สำเร็จ" หรือ "สำเร็จแต่ถูกซ่อน"
+      // แก้: ถ้ามีรายการที่ตกนอกช่วง ให้ขยายช่วงเวลาครอบไปถึงวันที่เก่าสุด/ใหม่สุดที่เพิ่งนำเข้า
+      //   แล้วบอกผู้ใช้ตรง ๆ ว่านำเข้ากี่รายและช่วงเวลาถูกขยายให้แล้ว
+      const วันที่นำเข้า = importRows.map(r => r.joinDate || APP_NOW_ISO).sort();
+      const นอกช่วง = วันที่นำเข้า.filter(d => !inRange(d));
+      const จำนวน = importRows.length;
+      if (นอกช่วง.length) {
+        const เริ่ม = วันที่นำเข้า[0] < timeRange.start.toISOString().slice(0,10) ? วันที่นำเข้า[0] : timeRange.start.toISOString().slice(0,10);
+        const จบ  = วันที่นำเข้า[วันที่นำเข้า.length-1] > APP_NOW_ISO ? วันที่นำเข้า[วันที่นำเข้า.length-1] : APP_NOW_ISO;
+        setPreset("custom"); setCustomRange(เริ่ม, จบ);
+      }
+      setQuery("");   // คำค้นเดิมค้างอยู่ก็ซ่อนรายการที่เพิ่งนำเข้าได้เหมือนกัน
       setShowImport(false); setImportRows([]); setImportErr("");
+      toast.success(`นำเข้าลูกค้า ${จำนวน} ราย`, {
+        description: นอกช่วง.length
+          ? `${นอกช่วง.length} ราย เป็นลูกค้าตั้งแต่นอกช่วงเวลาที่กรองอยู่ — ขยายช่วงเวลาให้เห็นแล้ว`
+          : undefined,
+      });
     } catch(e){ alert("นำเข้าลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
     finally { savingImportRef.current = false; }
   }
