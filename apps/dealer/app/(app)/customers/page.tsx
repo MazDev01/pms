@@ -14,6 +14,8 @@ import {
   type LeadActivity,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
+import { อ่านตารางจากไฟล์, จับคู่ตามหัวตาราง, แปลงวันที่นำเข้า, นามสกุลที่รับได้ } from "@pms/shared/lib/importSheet";
+import { สร้างไฟล์Xlsx } from "@pms/shared/lib/makeXlsx";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
@@ -106,22 +108,44 @@ function useMyProvinces(): string[] {
 
 function initials(name:string){ return name.replace(/บจ\.|หจก\./g,"").trim().slice(0,2); }
 // ── นำเข้าลูกค้าเดิม (CSV) ──────────────────────────────────
-type ImportRow = { company:string; name:string; phone:string; email:string; province:string; category:string };
-const CSV_HEADERS = ["บริษัท","ผู้ติดต่อ","โทรศัพท์","อีเมล","จังหวัด","แม่แบบ"];
-function parseCsv(text:string):ImportRow[]{
-  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  const rows=lines.map(l=>l.split(",").map(s=>s.trim().replace(/^"|"$/g,"")));
-  const start=rows[0]&&rows[0][0]==="บริษัท"?1:0; // ข้าม header ถ้ามี
-  return rows.slice(start).map(c=>({
-    company:c[0]||"", name:c[1]||"", phone:c[2]||"", email:c[3]||"",
-    province:c[4]||"กรุงเทพฯ", category:c[5]||"",
-  })).filter(r=>r.company);
+// ช่องที่นำเข้าได้ = ช่องเดียวกับที่การ์ดข้อมูลลูกค้าแสดง (บอสสั่ง 28 ส.ค. 69)
+//   ที่อยู่ · เป็นลูกค้าเมื่อ · ผู้รับผิดชอบ เดิมไม่มีในเทมเพลต ทำให้ลูกค้าที่นำเข้ามาช่องพวกนี้ว่าง
+//   แล้วต้องมาไล่พิมพ์เองทีละราย (รหัสลูกค้าไม่มีในเทมเพลต — ระบบออกให้เองตอนบันทึก)
+type ImportRow = { company:string; name:string; phone:string; email:string; address:string;
+  province:string; category:string; joinDate:string; owner:string };
+const CSV_HEADERS = ["บริษัท","ผู้ติดต่อ","โทรศัพท์","อีเมล","ที่อยู่","จังหวัด","แม่แบบ","เป็นลูกค้าเมื่อ","ผู้รับผิดชอบ"];
+// ชื่อคอลัมน์ที่ยอมรับได้ — ระบบเก่าบางที่ส่งออกเป็นภาษาอังกฤษ จับคู่ให้อัตโนมัติ
+const ชื่อคอลัมน์:Record<keyof ImportRow,string[]> = {
+  company:["บริษัท","ชื่อบริษัท","company"],
+  name:["ผู้ติดต่อ","ชื่อผู้ติดต่อ","ชื่อ-สกุล","contact","name"],
+  phone:["โทรศัพท์","เบอร์โทร","โทร","phone","tel"],
+  email:["อีเมล","email","e-mail"],
+  address:["ที่อยู่","ที่อยู่เต็ม","address"],
+  province:["จังหวัด","province"],
+  category:["แม่แบบ","ประเภท","category","type"],
+  joinDate:["เป็นลูกค้าเมื่อ","วันที่เป็นลูกค้า","วันที่เข้าร่วม","joindate","join date","since"],
+  owner:["ผู้รับผิดชอบ","ผู้ดูแล","เจ้าของ","owner","sales"],
+};
+function จับคู่คอลัมน์(rows:string[][]):ImportRow[]{
+  return จับคู่ตามหัวตาราง(rows, ชื่อคอลัมน์)
+    .map(r=>({ ...r, province:r.province||"กรุงเทพฯ", joinDate:แปลงวันที่นำเข้า(r.joinDate) }))
+    .filter(r=>r.company);
 }
-function downloadCsvTemplate(){
-  const csv=CSV_HEADERS.join(",")+"\nบจ. ตัวอย่างสตีล,คุณสมชาย ใจดี,081-234-5678,contact@example.com,เชียงใหม่,บริษัท,โกดังสำเร็จรูป";
-  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+// แถวตัวอย่าง 1 แถว — ให้เห็นรูปแบบที่ควรกรอก แล้วพิมพ์ทับได้เลย
+const ตัวอย่างเทมเพลต = ["บจ. ตัวอย่างสตีล","คุณสมชาย ใจดี","081-234-5678","contact@example.com",
+  "26 หมู่ 3 ต.หนองบัว อ.เมือง จ.เชียงใหม่ 50000","เชียงใหม่","โกดังสำเร็จรูป","05/10/2025","สมชาย เชียงใหม่"];
+function บันทึกไฟล์(blob:Blob, ชื่อ:string){
   const url=URL.createObjectURL(blob); const a=document.createElement("a");
-  a.href=url; a.download="customer-import-template.csv"; a.click(); URL.revokeObjectURL(url);
+  a.href=url; a.download=ชื่อ; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+// เทมเพลตหลัก = ไฟล์ Excel เปิดแล้วเป็นตารางพร้อมพิมพ์ (บอสแจ้ง 28 ส.ค. 69 ว่าไฟล์ CSV เปิดมาเป็นข้อความ กรอกต่อไม่ได้)
+function downloadXlsxTemplate(){
+  บันทึกไฟล์(สร้างไฟล์Xlsx(CSV_HEADERS, [ตัวอย่างเทมเพลต], "ลูกค้าเดิม"), "เทมเพลตลูกค้าเดิม.xlsx");
+}
+// เผื่อใครถนัด CSV หรือใช้ Google ชีต
+function downloadCsvTemplate(){
+  const csv=CSV_HEADERS.join(",")+"\n"+ตัวอย่างเทมเพลต.join(",");
+  บันทึกไฟล์(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}), "เทมเพลตลูกค้าเดิม.csv");
 }
 const THAI_MO=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // "วันนี้" ต้องเป็นวันของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง
@@ -526,8 +550,9 @@ export default function CustomersPage(){
   const [showImport, setShowImport]   = useState(false);
   const [importRows, setImportRows]   = useState<ImportRow[]>([]);
   const [importErr, setImportErr]     = useState("");
+  const [importFile, setImportFile]   = useState("");   // ชื่อไฟล์ที่เลือก — ให้ผู้ใช้เห็นว่ากำลังดูไฟล์ไหน
   const [showManual, setShowManual]   = useState(false);
-  const [legacyForm, setLegacyForm]   = useState({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
+  const [legacyForm, setLegacyForm]   = useState({company:"",name:"",phone:"",email:"",address:"",province:"กรุงเทพฯ",category:"",joinDate:"",owner:"สมชาย เชียงใหม่"});
   const csvInputRef = useRef<HTMLInputElement>(null);
   // กันกดบันทึกซ้ำ (H8 · guard synchronous) — เดิม createLegacy() ไม่มี guard เลย กดรัว ๆ เร็วกว่า React
   // จะปิดโมดัล/re-render ทัน สร้างลูกค้าซ้ำหลายแถวได้จริง (แพทเทิร์นเดียวกับที่พบในฟอร์มเพิ่มลูกค้าเป้าหมาย — Edge Case, 3 ส.ค. 69)
@@ -714,15 +739,21 @@ export default function CustomersPage(){
   // ── นำเข้าลูกค้าเดิม (ตัวแทน) — เพิ่มเข้า SalesContext เดียว · flag imported=true ──
   function makeImported(r: ImportRow, id: number): CustomerRow {
     return { id, name:r.name||r.company, company:r.company, email:r.email, phone:r.phone,
+      address:r.address||undefined,
       province:r.province||"กรุงเทพฯ", category:r.category, status:"active", projects:0,
-      joinDate:APP_NOW_ISO, owner:legacyForm.owner||"สมชาย เชียงใหม่",
+      // วันที่/ผู้รับผิดชอบจากไฟล์ก่อนเสมอ — ไม่มีค่อยใช้ค่าตั้งต้น (วันนี้ / ผู้รับผิดชอบที่เลือกในฟอร์ม)
+      joinDate:r.joinDate||APP_NOW_ISO, owner:r.owner||legacyForm.owner||"สมชาย เชียงใหม่",
       initials:initials(r.company), color:PALETTE[id%PALETTE.length], totalValue:0, imported:true };
   }
-  function onCsvFile(e: React.ChangeEvent<HTMLInputElement>){
+  // รับได้ทั้ง CSV · Excel (.xlsx) · .xls/HTML ที่ระบบเก่าส่งออก — ตัวอ่านอยู่ที่ lib/importSheet
+  async function onCsvFile(e: React.ChangeEvent<HTMLInputElement>){
     const f=e.target.files?.[0]; if(e.target)e.target.value=""; if(!f) return;
-    const reader=new FileReader();
-    reader.onload=()=>{ try{ const rows=parseCsv(String(reader.result)); setImportRows(rows); setImportErr(rows.length?"":"ไม่พบข้อมูลในไฟล์"); }catch{ setImportErr("อ่านไฟล์ไม่สำเร็จ — ตรวจรูปแบบ CSV"); } };
-    reader.readAsText(f,"utf-8");
+    setImportFile(f.name); setImportRows([]); setImportErr("");
+    try{
+      const rows=จับคู่คอลัมน์(await อ่านตารางจากไฟล์(f));
+      setImportRows(rows);
+      setImportErr(rows.length?"":'ไม่พบข้อมูลในไฟล์ — ต้องมีคอลัมน์ "บริษัท" และมีอย่างน้อย 1 แถว');
+    }catch(err){ setImportErr(friendlyError(err)); }
   }
   async function commitImport(){
     if(savingImportRef.current) return; // กันกดนำเข้าซ้ำ (H8) — เดิมไม่มี guard กดรัวจะนำเข้าซ้ำทั้งชุด
@@ -745,10 +776,12 @@ export default function CustomersPage(){
     try {
       const base=Math.max(0,...data.map(c=>c.id)); // seed สีเท่านั้น — id จริงจาก counter
       await warnBeforeUnloadDuring(() =>
-        ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,email:legacyForm.email,province:legacyForm.province,category:legacyForm.category}, base+1))
+        ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,
+          email:legacyForm.email,address:legacyForm.address.trim(),province:legacyForm.province,category:legacyForm.category,
+          joinDate:legacyForm.joinDate,owner:legacyForm.owner}, base+1))
       );
       setShowManual(false);
-      setLegacyForm({company:"",name:"",phone:"",email:"",province:"กรุงเทพฯ",category:"",owner:"สมชาย เชียงใหม่"});
+      setLegacyForm({company:"",name:"",phone:"",email:"",address:"",province:"กรุงเทพฯ",category:"",joinDate:"",owner:"สมชาย เชียงใหม่"});
     } catch(e){ alert("เพิ่มลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
     finally { savingLegacyRef.current = false; }
   }
@@ -856,7 +889,7 @@ export default function CustomersPage(){
               return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),bought.length?bought.join(", "):"—"];
             })} />
           {/* นำเข้าลูกค้าเดิม (คีย์มือ/CSV) — ลูกค้าใหม่ยังเกิดจาก Lead→Won เท่านั้น */}
-          <button className="btn btn-primary btn-sm" onClick={()=>{setImportRows([]);setImportErr("");setShowImport(true);}}>
+          <button className="btn btn-primary btn-sm" onClick={()=>{setImportRows([]);setImportErr("");setImportFile("");setShowImport(true);}}>
             <Upload size={14}/> นำเข้าลูกค้าเดิม
           </button>
         </TopbarActions>
@@ -1170,7 +1203,7 @@ export default function CustomersPage(){
                 {purchasedRows.length>0 && <div style={cardStyle}>{purchasedTable}</div>}
                 <div style={cardStyle}>
                   <div style={{...secLabel, justifyContent:"space-between"}}>
-                    <span style={{display:"flex",alignItems:"center",gap:6}}><StickyNote size={13} color={PRIMARY}/> โน้ต / รายงานติดตาม</span>
+                    <span style={{display:"flex",alignItems:"center",gap:6}}><StickyNote size={13} color={PRIMARY}/> โน้ต</span>
                     <button type="button" onClick={()=>setAddingNote(true)} className="btn btn-secondary btn-sm" style={{color:PRIMARY}}>
                       <Plus size={12}/> เพิ่มโน้ต
                     </button>
@@ -1337,9 +1370,8 @@ export default function CustomersPage(){
                       ))}
                     </div>
                   )}
-                  <button onClick={()=>fileInputRef.current?.click()}
-                    style={{fontSize:"0.72rem",color:"#003366",background:"none",border:"none",cursor:"pointer",padding:0,marginTop:10}}>
-                    + เพิ่มไฟล์แนบ
+                  <button onClick={()=>fileInputRef.current?.click()} className="btn btn-primary btn-sm" style={{ marginTop:12 }}>
+                    <Plus size={13} /> เพิ่มไฟล์แนบ
                   </button>
                 </div>
               </div>
@@ -1546,9 +1578,9 @@ export default function CustomersPage(){
                           <div style={{fontSize:"0.78rem",color:MUTED}}>— ใบนี้ไม่ได้ผูกกับดีลในระบบ จึงยังไม่มีที่เก็บรายงาน</div></>}
                   </div>
 
-                  {/* โน้ต / รายงานติดตาม ของลูกค้ารายนี้ */}
+                  {/* โน้ต ของลูกค้ารายนี้ */}
                   <div style={cardS}>
-                    <div style={secL}><StickyNote size={13} color={PRIMARY}/> โน้ต / รายงานติดตาม</div>
+                    <div style={secL}><StickyNote size={13} color={PRIMARY}/> โน้ต</div>
                     {projNotes.length===0 ? (
                       <div style={{fontSize:"0.78rem",color:MUTED}}>— ยังไม่มีโน้ต</div>
                     ) : projNotes.map(n=>(
@@ -1656,7 +1688,7 @@ export default function CustomersPage(){
 
       {/* input ไฟล์ (ซ่อน) — ใช้ร่วมกับแท็บไฟล์ของโมดัลลูกค้า */}
       <input ref={fileInputRef} type="file" aria-label="แนบไฟล์เข้าลูกค้า" accept={UPLOAD_ACCEPTED_EXT.join(",")} style={{display:"none"}} onChange={handleFileSelect} />
-      <input ref={csvInputRef} type="file" aria-label="นำเข้าลูกค้าจากไฟล์ CSV" accept=".csv,text/csv" style={{display:"none"}} onChange={onCsvFile} />
+      <input ref={csvInputRef} type="file" aria-label="นำเข้าลูกค้าจากไฟล์" accept={นามสกุลที่รับได้.join(",")} style={{display:"none"}} onChange={onCsvFile} />
 
       {/* คีย์ลูกค้าเดิมทีละราย (legacy manual) */}
       {showManual && (
@@ -1678,6 +1710,18 @@ export default function CustomersPage(){
                   <input className="form-input" value={legacyForm.province} onChange={e=>setLegacyForm(f=>({...f,province:e.target.value}))} /></div>
                 <div><label className="form-label">แม่แบบ</label>
                   <TemplateSelect value={legacyForm.category} onChange={v=>setLegacyForm(f=>({...f,category:v}))} className="form-select" /></div>
+                {/* ช่องเดียวกับการ์ดข้อมูลลูกค้า — ที่อยู่ / เป็นลูกค้าเมื่อ / ผู้รับผิดชอบ (บอสสั่ง 28 ส.ค. 69)
+                    เดิมไม่มีให้กรอก ลูกค้าที่คีย์เข้ามาจึงมีช่องว่างค้างไว้ ต้องไปแก้ทีหลังทุกราย */}
+                <div className="col-full"><label className="form-label">ที่อยู่</label>
+                  <textarea className="form-input" rows={2} value={legacyForm.address}
+                    onChange={e=>setLegacyForm(f=>({...f,address:e.target.value}))}
+                    placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" /></div>
+                <div><label className="form-label">เป็นลูกค้าเมื่อ</label>
+                  {/* ไม่กรอก = ระบบลงวันที่วันนี้ให้ (ลูกค้าเดิมส่วนใหญ่เข้าระบบมาก่อน ควรใส่วันที่จริง) */}
+                  <input type="date" className="form-input" value={legacyForm.joinDate}
+                    onChange={e=>setLegacyForm(f=>({...f,joinDate:e.target.value}))} /></div>
+                <div><label className="form-label">ผู้รับผิดชอบ</label>
+                  <PersonPicker value={legacyForm.owner} onChange={v=>setLegacyForm(f=>({...f,owner:v}))} /></div>
 
                 <div className="form-section">ผู้ติดต่อ</div>
                 <div><label className="form-label">ผู้ติดต่อ</label>
@@ -1703,24 +1747,51 @@ export default function CustomersPage(){
           <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:560,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
             <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
-                <div style={{fontSize:"0.92rem",fontWeight:800}}>นำเข้าลูกค้าเดิมจาก CSV</div>
+                <div style={{fontSize:"0.92rem",fontWeight:800}}>นำเข้าลูกค้าเดิม</div>
                 <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>คอลัมน์: {CSV_HEADERS.join(" · ")}</div>
               </div>
               <button onClick={()=>setShowImport(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
             </div>
-            <div style={{padding:20,display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                <button className="btn btn-secondary btn-sm" onClick={downloadCsvTemplate}><Download size={13}/> ดาวน์โหลดเทมเพลต</button>
-                <button className="btn btn-secondary btn-sm" onClick={()=>csvInputRef.current?.click()}><Upload size={13}/> เลือกไฟล์ CSV</button>
-                <button className="btn btn-secondary btn-sm" onClick={()=>{setShowImport(false);setShowManual(true);}} style={{marginLeft:"auto"}}><Plus size={13}/> เพิ่มทีละราย</button>
-              </div>
+            <div style={{padding:20,display:"flex",flexDirection:"column",gap:14}}>
+              {/* ย้ายลูกค้าเดิมจากระบบเก่า = ทางเดียวคือเทมเพลต (บอสสั่ง 28 ส.ค. 69)
+                  ตัวแทนดึงรายชื่อลูกค้าของตัวเองจากระบบเก่า กรอกลงเทมเพลต แล้วอัปกลับเข้ามา
+                  ทำเป็น 3 ขั้นชัด ๆ เพราะของเดิมเป็นปุ่มเรียงกัน ผู้ใช้ไม่รู้ว่าต้องเริ่มตรงไหน */}
+              {[
+                { ที่: 1, หัว: "ดาวน์โหลดเทมเพลต", รอง: "เปิดด้วย Excel หรือ Google ชีต แล้วพิมพ์ต่อได้เลย — มีหัวคอลัมน์และแถวตัวอย่างให้พิมพ์ทับ" },
+                { ที่: 2, หัว: "กรอกลูกค้าเดิมจากระบบเก่า", รอง: `ใส่ทีละแถว · ช่อง "บริษัท" ต้องมี ช่องอื่นเว้นว่างได้ · คอลัมน์: ${CSV_HEADERS.join(" · ")}` },
+                { ที่: 3, หัว: "อัปโหลดไฟล์กลับเข้ามา", รอง: `รับไฟล์ ${นามสกุลที่รับได้.map(n=>n.replace(".","")).join(" · ")} · ระบบจะให้ตรวจรายชื่อก่อน แล้วค่อยกดนำเข้า` },
+              ].map(ข => (
+                <div key={ข.ที่} style={{display:"flex",gap:11,alignItems:"flex-start"}}>
+                  <span style={{flex:"0 0 22px",height:22,borderRadius:"50%",background:"#f0f4fa",color:PRIMARY,
+                    fontSize:"0.68rem",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{ข.ที่}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:"0.78rem",fontWeight:700,color:STEEL}}>{ข.หัว}</div>
+                    <div style={{fontSize:"0.68rem",color:MUTED,marginTop:2,lineHeight:1.55}}>{ข.รอง}</div>
+                    {ข.ที่===1 && (
+                      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
+                        <button className="btn btn-primary btn-sm" onClick={downloadXlsxTemplate}>
+                          <Download size={13}/> ดาวน์โหลดเทมเพลต (Excel)
+                        </button>
+                        <button onClick={downloadCsvTemplate} style={{background:"none",border:"none",padding:0,fontSize:"0.68rem",
+                          color:MUTED,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit"}}>หรือแบบ CSV</button>
+                      </div>
+                    )}
+                    {ข.ที่===3 && (
+                      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
+                        <button className="btn btn-secondary btn-sm" onClick={()=>csvInputRef.current?.click()}><Upload size={13}/> เลือกไฟล์</button>
+                        {importFile && <span style={{fontSize:"0.68rem",color:MUTED,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:240}}>{importFile}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
               {importErr && <div style={{fontSize:"0.72rem",color:"#dc2626"}}>{importErr}</div>}
               {importRows.length>0 ? (
                 <>
                   <div style={{fontSize:"0.72rem",color:MUTED,fontWeight:600}}>พบ {importRows.length} รายการ — ตรวจก่อนยืนยัน</div>
                   <div style={{maxHeight:280,overflowY:"auto",border:`1px solid ${BORDER}`,borderRadius:10}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.72rem"}}>
-                      <thead><tr style={{background:"#f8f9fb"}}>{["บริษัท","ผู้ติดต่อ","จังหวัด","แม่แบบ"].map(h=><th key={h} style={{textAlign:"left",padding:"7px 10px",color:MUTED,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                      <thead><tr style={{background:"#f8f9fb"}}>{["บริษัท","ผู้ติดต่อ","จังหวัด","แม่แบบ","เป็นลูกค้าเมื่อ","ผู้รับผิดชอบ"].map(h=><th key={h} style={{textAlign:"left",padding:"7px 10px",color:MUTED,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>
                         {importRows.map((r,i)=>(
                           <tr key={i} style={{borderTop:`1px solid ${BORDER}`}}>
@@ -1728,6 +1799,9 @@ export default function CustomersPage(){
                             <td style={{padding:"7px 10px",color:MUTED}}>{r.name||"—"}</td>
                             <td style={{padding:"7px 10px",color:MUTED}}>{r.province}</td>
                             <td style={{padding:"7px 10px",color:MUTED}}>{r.category||"—"}</td>
+                            {/* ไม่ได้กรอกมา = ขึ้น "—" แล้วระบบจะลงค่าตั้งต้นให้ตอนบันทึก (วันนี้ / ผู้รับผิดชอบตั้งต้น) */}
+                            <td style={{padding:"7px 10px",color:MUTED,whiteSpace:"nowrap"}}>{r.joinDate?fmtDate(r.joinDate):"—"}</td>
+                            <td style={{padding:"7px 10px",color:MUTED}}>{r.owner||"—"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1735,10 +1809,11 @@ export default function CustomersPage(){
                   </div>
                 </>
               ) : (
-                <div style={{fontSize:"0.72rem",color:"#9ca3af",padding:"18px 0",textAlign:"center"}}>ยังไม่ได้เลือกไฟล์ — ดาวน์โหลดเทมเพลต กรอกข้อมูล แล้วเลือกไฟล์ CSV</div>
+                <div style={{fontSize:"0.7rem",color:"#9ca3af",padding:"14px 0",textAlign:"center",borderTop:`1px dashed ${BORDER}`}}>รายชื่อจะขึ้นให้ตรวจตรงนี้หลังเลือกไฟล์</div>
               )}
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button onClick={()=>{setShowImport(false);setShowManual(true);}} style={{background:"none",border:"none",padding:0,marginRight:"auto",fontSize:"0.7rem",color:MUTED,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit"}}>มีไม่กี่ราย — คีย์เองทีละราย</button>
               <button className="btn btn-secondary btn-md" onClick={()=>setShowImport(false)}>ยกเลิก</button>
               <button className="btn btn-primary btn-md" onClick={commitImport} disabled={!importRows.length}><Check size={14}/> นำเข้า {importRows.length>0?`${importRows.length} ราย`:""}</button>
             </div>
