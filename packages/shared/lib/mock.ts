@@ -470,7 +470,18 @@ export function notifCategoryOf(title: string): NotifCategory | null {
 // ─── Global: คลังไฟล์ของตัวแทน (แหล่งเดียว) ──────────────────────────
 // ไฟล์แนบทั้งหมดรวมศูนย์ที่นี่ — แนบจากหน้าลูกค้า/ลูกค้าเป้าหมาย แล้วปรากฏในหน้าไฟล์กลางอัตโนมัติ
 export type DealerFileExt = "pdf" | "docx" | "xlsx" | "dwg" | "pptx" | "jpg" | "png" | "other";
-export type DealerFileCategory = "ใบเสนอราคา" | "แบบแปลน" | "รูปภาพ" | "นำเสนอ" | "สัญญา" | "อื่นๆ";
+// ⚠️ ชื่อโฟลเดอร์ "แบบแปลน" เปลี่ยนเป็น "แม่แบบ" (บอสสั่ง 28 ส.ค. 69)
+//    ข้อมูลเก่าในฐานข้อมูล/เครื่องผู้ใช้ยังเก็บคำเดิมอยู่ — อ่านมาแล้วต้องผ่าน normalizeFileCategory()
+//    ก่อนเสมอ ไม่งั้นแถวเก่าจะตกไปอยู่โฟลเดอร์ที่ไม่มีในรายการ (ป้ายสี/ตัวนับหาไม่เจอ)
+export type DealerFileCategory = "ใบเสนอราคา" | "แม่แบบ" | "รูปภาพ" | "นำเสนอ" | "สัญญา" | "อื่นๆ";
+const FILE_CATEGORIES: readonly DealerFileCategory[] = ["ใบเสนอราคา", "แม่แบบ", "รูปภาพ", "นำเสนอ", "สัญญา", "อื่นๆ"];
+const LEGACY_FILE_CATEGORY: Record<string, DealerFileCategory> = { "แบบแปลน": "แม่แบบ" };
+/** แปลงชื่อโฟลเดอร์เก่าให้เป็นชื่อปัจจุบัน · ค่าที่ไม่รู้จักถือเป็น "อื่นๆ" (ไม่ทิ้งแถวหาย) */
+export function normalizeFileCategory(c: string | undefined | null): DealerFileCategory {
+  const ชื่อ = (c ?? "").trim();
+  const แปลงแล้ว = LEGACY_FILE_CATEGORY[ชื่อ] ?? ชื่อ;
+  return FILE_CATEGORIES.includes(แปลงแล้ว as DealerFileCategory) ? (แปลงแล้ว as DealerFileCategory) : "อื่นๆ";
+}
 export type DealerFileSource = "lead" | "customer" | "upload";
 export type DealerFile = {
   id: number;
@@ -497,13 +508,13 @@ export const DEALER_FILES_EVENT = "bpms-files-updated";
 export const DEFAULT_DEALER_FILES: DealerFile[] = [
   { id: 1,  name: "ใบเสนอราคา_โกดังสำเร็จรูป_ไทยสตีล_v2.pdf", size: "1.4 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "วิภา",     uploadedAt: "2026-06-20", source: "customer", recordId: 1, customerId: 1 },
   { id: 2,  name: "สัญญาขาย_ไทยสตีล.pdf",                   size: "2.1 MB", ext: "pdf",  category: "สัญญา",      project: "โกดังสำเร็จรูป บจ. ไทยสตีล", uploadedBy: "สมชาย",   uploadedAt: "2026-06-18", source: "customer", recordId: 1, customerId: 1 },
-  { id: 3,  name: "ผังพื้นที่ลูกค้า_โรงงาน.pdf",             size: "8.3 MB", ext: "pdf",  category: "แบบแปลน",    project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-06-15", source: "customer", recordId: 2, customerId: 2 },
+  { id: 3,  name: "ผังพื้นที่ลูกค้า_โรงงาน.pdf",             size: "8.3 MB", ext: "pdf",  category: "แม่แบบ",      project: "โรงงาน PEB เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-06-15", source: "customer", recordId: 2, customerId: 2 },
   { id: 4,  name: "เอกสารนำเสนอ_VCS_Asia.pdf",              size: "5.7 MB", ext: "pdf",  category: "นำเสนอ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-12", source: "customer", recordId: 5, customerId: 5 },
   { id: 5,  name: "สรุปราคา_คลังสินค้า_บจ.ซีซีเอส.xlsx",       size: "340 KB", ext: "xlsx", category: "ใบเสนอราคา", project: "คลังสินค้า CCS",           uploadedBy: "สมชาย",   uploadedAt: "2026-06-10", source: "customer", recordId: 2, customerId: 2 },
   { id: 6,  name: "รูปถ่ายพื้นที่_พิษณุโลกฟาร์ม.jpg",         size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "โกดังเก็บข้าว บจ. พิษณุโลกฟาร์ม", uploadedBy: "สมชาย", uploadedAt: "2026-06-08", source: "lead", recordId: 8 },
   { id: 7,  name: "ใบเสนอราคา_Q-2026-0101_พิษณุโลกฟาร์ม.pdf", size: "1.1 MB", ext: "pdf",  category: "ใบเสนอราคา", project: "โกดังเก็บข้าว บจ. พิษณุโลกฟาร์ม", uploadedBy: "สมชาย", uploadedAt: "2026-06-05", source: "lead", recordId: 8 },
   { id: 8,  name: "ใบเสนอราคา_Q-2026-0102_ลำพูนอิเล็กทรอนิกส์.pdf", size: "1.3 MB", ext: "pdf", category: "ใบเสนอราคา", project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา", uploadedAt: "2026-06-03", source: "lead", recordId: 10 },
-  { id: 9,  name: "รายละเอียดสินค้า_โกดังสำเร็จรูป.xlsx",         size: "512 KB", ext: "xlsx", category: "แบบแปลน",    project: "โรงงานสำเร็จรูป เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", source: "customer", recordId: 2, customerId: 2 },
+  { id: 9,  name: "รายละเอียดสินค้า_โกดังสำเร็จรูป.xlsx",         size: "512 KB", ext: "xlsx", category: "แม่แบบ",      project: "โรงงานสำเร็จรูป เชียงใหม่",     uploadedBy: "วิชัย",   uploadedAt: "2026-05-30", source: "customer", recordId: 2, customerId: 2 },
   { id: 10, name: "เอกสารนำเสนอ_ลำพูนอิเล็กทรอนิกส์.pdf",       size: "12.4 MB",ext: "pdf",  category: "นำเสนอ",     project: "โรงงานอิเล็กทรอนิกส์ ลำพูน", uploadedBy: "วิภา",   uploadedAt: "2026-05-20", source: "lead", recordId: 10 },
   { id: 11, name: "รูปถ่ายพื้นที่_VCS_Asia.jpg",              size: "3.2 MB", ext: "jpg",  category: "รูปภาพ",     project: "VCS Asia Expansion",       uploadedBy: "กาญจนา", uploadedAt: "2026-06-05", source: "customer", recordId: 5, customerId: 5 },
 ];
@@ -524,7 +535,7 @@ export function guessFileCategory(name: string): DealerFileCategory {
   const n = name.toLowerCase();
   if (name.includes("ใบเสนอราคา") || n.includes("quotation") || n.includes("quote") || name.includes("เสนอราคา")) return "ใบเสนอราคา";
   if (name.includes("สัญญา") || n.includes("contract")) return "สัญญา";
-  if (name.includes("แบบ") || name.includes("ผัง") || n.includes("plan") || n.endsWith(".dwg")) return "แบบแปลน";
+  if (name.includes("แบบ") || name.includes("ผัง") || n.includes("plan") || n.endsWith(".dwg")) return "แม่แบบ";
   if (name.includes("นำเสนอ") || n.includes("present") || n.endsWith(".pptx") || n.endsWith(".ppt")) return "นำเสนอ";
   if (name.includes("รูป") || name.includes("ภาพ") || /\.(jpg|jpeg|png)$/.test(n)) return "รูปภาพ";
   return "อื่นๆ";
