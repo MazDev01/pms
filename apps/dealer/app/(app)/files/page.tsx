@@ -16,7 +16,7 @@ import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
   FileText, FileSpreadsheet, Image as ImageIcon, Plus,
-  Pencil, Download,
+  Pencil, Download, ExternalLink,
 } from "lucide-react";
 import { FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
@@ -134,23 +134,29 @@ function hasOpenable(f: FileMock): boolean {
   return !!f.storagePath || !!sampleOf(f);
 }
 
-// ดาวน์โหลดไฟล์ (เหลือทางเดียว — ปุ่มเปิดอ่าน/หน้าต่างพรีวิวถูกเอาออกแล้ว 28 ส.ค. 69)
+// เปิดอ่าน / ดาวน์โหลดไฟล์
+//   เปิดอ่าน = เปิดตัวไฟล์ในแท็บใหม่ด้วยตัวอ่านของเบราว์เซอร์เอง (ไม่มีหน้าต่างพรีวิวในระบบแล้ว
+//   — บอสสั่งเอาออก 28 ส.ค. 69 · ของที่เอาออกคือหน้าต่างจำลอง ไม่ใช่ความสามารถในการเปิดอ่าน)
 //   มี storagePath → ไฟล์จริงของผู้ใช้ (local = blob จาก IndexedDB · supabase/api = signed URL)
 //   ไม่มี          → เอกสารตัวอย่างของระบบตามนามสกุล (ดู DEMO_SAMPLE)
-async function openStoredFile(f: FileMock) {
+async function openStoredFile(f: FileMock, mode: "open" | "download") {
   try {
     const url = f.storagePath ? await fileStorage.signedUrl(f.storagePath) : sampleOf(f);
     // ล้มเหลวเงียบ = กดแล้วไม่มีอะไรเกิดขึ้น แยกไม่ออกจากปุ่มเสีย → ต้องดังเป็นแถบเตือน
     if (!url) throw new Error("ไม่พบไฟล์จริงในระบบจัดเก็บ (อาจถูกลบไปแล้ว)");
-    // blob:/ไฟล์ในเว็บเดียวกัน ใช้ attribute download ได้ตรง ๆ · signed URL ข้ามโดเมนต้องขอผ่านพารามิเตอร์
-    const ข้ามโดเมน = /^https?:\/\//.test(url) && !url.startsWith(window.location.origin);
-    const href = ข้ามโดเมน
-      ? `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(downloadNameOf(f))}`
-      : url;
-    const a = document.createElement("a");
-    a.href = href; a.download = downloadNameOf(f); a.rel = "noopener";
-    document.body.appendChild(a); a.click(); a.remove();
-    // blob: URL ค้างไว้กินหน่วยความจำ — ปล่อยคืนหลังเบราว์เซอร์บันทึกเสร็จ (เร็วกว่านี้ไฟล์จะโหลดไม่ครบ)
+    if (mode === "open") {
+      window.open(url, "_blank", "noopener");
+    } else {
+      // blob:/ไฟล์ในเว็บเดียวกัน ใช้ attribute download ได้ตรง ๆ · signed URL ข้ามโดเมนต้องขอผ่านพารามิเตอร์
+      const ข้ามโดเมน = /^https?:\/\//.test(url) && !url.startsWith(window.location.origin);
+      const href = ข้ามโดเมน
+        ? `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(downloadNameOf(f))}`
+        : url;
+      const a = document.createElement("a");
+      a.href = href; a.download = downloadNameOf(f); a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    // blob: URL ค้างไว้กินหน่วยความจำ — ปล่อยคืนหลังเบราว์เซอร์เปิด/บันทึกเสร็จ (เร็วกว่านี้ไฟล์จะไม่ขึ้น)
     if (url.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (e) {
     reportRepoSaveError(e);
@@ -523,14 +529,14 @@ export default function FilesPage() {
             <table>
               <colgroup>
                 {/* ⚠️ ตาราง table-layout:fixed — ความกว้างแก้ที่ <col> เท่านั้น (ใส่ที่ <th> ไม่มีผล)
-                    ช่องปุ่มขวาสุด: ดาวน์โหลด (เฉพาะไฟล์ที่มีตัวไฟล์จริง) / แก้ไข / ลบ */}
+                    ช่องปุ่มขวาสุด: เปิดอ่าน/ดาวน์โหลด (เฉพาะไฟล์ที่มีตัวไฟล์จริง) / แก้ไข / ลบ */}
                 <col style={{ width: "22%" }} />
                 {showCol("category")   && <col style={{ width: "10%" }} />}
-                {showCol("project")    && <col style={{ width: "21%" }} />}
+                {showCol("project")    && <col style={{ width: "20%" }} />}
                 {showCol("size")       && <col style={{ width: "8%" }} />}
                 {showCol("uploadedBy") && <col style={{ width: "12%" }} />}
-                {showCol("uploadedAt") && <col style={{ width: "13%" }} />}
-                <col style={{ width: "13%" }} />
+                {showCol("uploadedAt") && <col style={{ width: "12%" }} />}
+                <col style={{ width: "15%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -602,13 +608,19 @@ export default function FilesPage() {
                     {showCol("uploadedAt") && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.uploadedAt}</td>}
                     <td className="ovf-visible">
                       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
-                        {/* ดูตัวอย่าง/เปิดอ่านในแท็บใหม่ เอาออกแล้วทั้งคู่ (บอสสั่ง 28 ส.ค. 69)
-                            เหลือ "ดาวน์โหลด" อย่างเดียว — ขึ้นเฉพาะไฟล์ที่มีตัวไฟล์จริงให้โหลด */}
+                        {/* ไม่มีหน้าต่างพรีวิวในระบบแล้ว — "เปิดอ่าน" เปิดตัวไฟล์จริงในแท็บใหม่
+                            ให้เบราว์เซอร์เป็นคนแสดง · ทั้งคู่ขึ้นเฉพาะไฟล์ที่มีตัวไฟล์ให้เปิดจริง */}
                         {hasOpenable(f) && (
-                          <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f); }}
-                            style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                            <Download size={12} />
-                          </button>
+                          <>
+                            <button title="เปิดอ่านไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "open"); }}
+                              style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                              <ExternalLink size={12} />
+                            </button>
+                            <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "download"); }}
+                              style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                              <Download size={12} />
+                            </button>
+                          </>
                         )}
                         <button title="แก้ไข" onClick={e => { e.stopPropagation(); setEditId(f.id); }}
                           style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
@@ -653,9 +665,14 @@ export default function FilesPage() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ background: extBg(f.ext), borderRadius: 9, padding: 9, display: "flex" }}>{extIcon(f.ext)}</div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      {/* ไม่มีปุ่มดูตัวอย่าง/เปิดอ่านแล้ว — เหลือดาวน์โหลด/แก้ไข/ลบ เหมือนมุมมองรายการ */}
+                      {/* เปิดอ่าน = เปิดไฟล์ในแท็บใหม่ (ไม่มีหน้าต่างพรีวิวในระบบ) เหมือนมุมมองรายการ */}
                       {hasOpenable(f) && (
-                        <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                        <button title="เปิดอ่านไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "open"); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                          <ExternalLink size={11} />
+                        </button>
+                      )}
+                      {hasOpenable(f) && (
+                        <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "download"); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                           <Download size={11} />
                         </button>
                       )}
