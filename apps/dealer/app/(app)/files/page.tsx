@@ -400,6 +400,8 @@ export default function FilesPage() {
   // ⚠️ ไม่มีตัวกรอง "ผู้อัปโหลด" (บอสสั่ง 28 ส.ค. 69) — ตัวแทนหนึ่งรายใช้บัญชีเดียว
   //    ชื่อในคอลัมน์อัปโหลดโดยคือชื่อผู้รับผิดชอบ ไม่ใช่ผู้ใช้คนละคน กรองด้วยจึงไม่มีความหมาย
   const [sourceFilter, setSource] = useState<string>("ALL");
+  // ไฟล์นี้เป็นของลูกค้ารายไหน — ผูกผ่าน customerId ของไฟล์ (ไฟล์ที่ยังไม่ผูกลูกค้าจะไม่เข้าเงื่อนไขนี้)
+  const [custFilter,   setCust]   = useState<string>("ALL");
   const [projFilter,   setProj]   = useState<string>("ALL");
   // extFilter ถูกลบพร้อมชิปสรุป + select "ทุกประเภท" — ไม่เหลือ UI ที่ตั้งค่าได้ จึงเป็นโค้ดตาย
   const [view,    setView]    = useState<"grid" | "list">("list");
@@ -418,21 +420,29 @@ export default function FilesPage() {
       const matchQ = !q || f.name.toLowerCase().includes(q) || f.project.toLowerCase().includes(q) || f.uploadedBy.toLowerCase().includes(q);
       const matchC = catFilter === "ALL" || f.category === catFilter;
       const matchS = sourceFilter === "ALL" || f.source === sourceFilter;
+      const matchCust = custFilter === "ALL" || String(f.customerId ?? "") === custFilter;
       const matchP = projFilter === "ALL" || f.project === projFilter;
-      return matchQ && matchC && matchS && matchP;
+      return matchQ && matchC && matchS && matchP && matchCust;
     });
-  }, [files, query, catFilter, sourceFilter, projFilter]);
+  }, [files, query, catFilter, sourceFilter, projFilter, custFilter]);
 
   // ตัวเลือกในแถบกรองสร้างจากไฟล์จริงที่มีอยู่เท่านั้น (ไม่ hardcode รายชื่อคน/โครงการ)
   const projOptions = useMemo(
     () => Array.from(new Set(files.map(f => f.project).filter(p => p && p !== "—"))).sort((a, b) => a.localeCompare(b, "th")),
     [files]);
+  // ตัวเลือก "ลูกค้า" = ลูกค้าที่มีไฟล์ผูกอยู่จริงเท่านั้น · ชื่อมาจากทะเบียนลูกค้า (ไม่ใช่ชื่อในไฟล์)
+  const custOptions = useMemo(() => {
+    const ไอดี = Array.from(new Set(files.map(f => f.customerId).filter((id): id is number => !!id)));
+    return ไอดี
+      .map(id => ({ v: String(id), l: customers.find(c => c.id === id)?.company ?? `ลูกค้า #${id}` }))
+      .sort((a, b) => a.l.localeCompare(b.l, "th"));
+  }, [files, customers]);
   const sourceOptions = useMemo(
     () => (["customer", "lead", "upload"] as const).filter(sv => files.some(f => f.source === sv)),
     [files]);
 
   // เปลี่ยนตัวกรอง/ค้นหา/มุมมอง → กลับไปหน้าแรก
-  useEffect(() => { setPage(1); }, [query, catFilter, sourceFilter, projFilter, view]);
+  useEffect(() => { setPage(1); }, [query, catFilter, sourceFilter, projFilter, custFilter, view]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // กันหน้าเกินเมื่อจำนวนรายการลดลง (เช่น ลบไฟล์)
@@ -506,10 +516,13 @@ export default function FilesPage() {
           options={ALL_CATS.filter(c => catCounts[c] > 0).map(c => ({ v: c, l: `${c} (${catCounts[c]})` }))} minWidth={0} />
         <FilterSelect caption="ทุกที่มา" value={sourceFilter} onChange={setSource}
           options={sourceOptions.map(sv => ({ v: sv, l: SOURCE_LABEL[sv] }))} minWidth={0} />
+        {/* ชื่อบริษัทยาวกว่าช่องอื่นมาก — จำกัดความกว้างไว้ ไม่งั้นแถบเครื่องมือตกบรรทัดที่จอ 1440 */}
+        <FilterSelect caption="ทุกลูกค้า" value={custFilter} onChange={setCust}
+          options={custOptions} minWidth={0} maxWidth={150} />
         <FilterSelect caption="ทุกโอกาสการขาย" value={projFilter} onChange={setProj}
-          options={projOptions.map(pj => ({ v: pj, l: pj }))} minWidth={0} />
-        {(sourceFilter !== "ALL" || projFilter !== "ALL" || catFilter !== "ALL" || !!query) && (
-          <button onClick={() => { setQuery(""); setCat("ALL"); setSource("ALL"); setProj("ALL"); }}
+          options={projOptions.map(pj => ({ v: pj, l: pj }))} minWidth={0} maxWidth={150} />
+        {(sourceFilter !== "ALL" || projFilter !== "ALL" || catFilter !== "ALL" || custFilter !== "ALL" || !!query) && (
+          <button onClick={() => { setQuery(""); setCat("ALL"); setSource("ALL"); setProj("ALL"); setCust("ALL"); }}
             className="btn btn-secondary btn-sm">ล้างตัวกรอง</button>
         )}
         <div style={{ display: "flex", border: `1px solid ${BORDER}`, borderRadius: 9, overflow: "hidden", marginLeft: "auto", height: 36, boxSizing: "border-box" }}>
@@ -559,7 +572,7 @@ export default function FilesPage() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={2 + COLS.filter(c => showCol(c.key)).length} style={{ padding: 0 }}>
                     <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
-                      description={query || catFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
+                      description={query || catFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" || custFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
                   </td></tr>
                 ) : null}
                 {/* แถวไม่กดเปิดหน้าต่างพรีวิวแล้ว (บอสสั่ง 28 ส.ค. 69) — ใช้ปุ่มด้านขวาแทน
@@ -657,7 +670,7 @@ export default function FilesPage() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState icon={<FolderOpen size={28} />} title="ไม่พบไฟล์"
-              description={query || catFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
+              description={query || catFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" || custFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {paged.map(f => (

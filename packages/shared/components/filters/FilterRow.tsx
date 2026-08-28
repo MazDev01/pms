@@ -17,7 +17,7 @@ export type FilterOption = { v: string; l: string };
 
 /** dropdown ตัวกรองหนึ่งตัว — ค่าว่าง (all) แสดง caption เช่น "ทุกสถานะ" */
 export function FilterSelect({
-  value, onChange, caption, options, all = "ALL", minWidth = 112,
+  value, onChange, caption, options, all = "ALL", minWidth = 112, maxWidth,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -25,6 +25,8 @@ export function FilterSelect({
   options: FilterOption[];
   all?: string;
   minWidth?: number;
+  /** จำกัดความกว้างเมื่อค่าที่เลือกเป็นข้อความยาว (เช่น ชื่อบริษัท) — กันแถบตกบรรทัด */
+  maxWidth?: number;
 }) {
   return (
     <select
@@ -34,7 +36,7 @@ export function FilterSelect({
       className="form-input"
       // กระชับ (padding 8 · font 0.72) — หน้าลูกค้าเป้าหมายมีตัวกรอง 6 ตัว + ค้นหา + ปุ่มมุมมอง
       // ถ้าใหญ่กว่านี้จะตกบรรทัดที่จอ 1440
-      style={{ width: "auto", minWidth, padding: "7px 8px", fontSize: "0.72rem", fontWeight: 600, cursor: "pointer" }}
+      style={{ width: "auto", minWidth, maxWidth, padding: "7px 8px", fontSize: "0.72rem", fontWeight: 600, cursor: "pointer" }}
     >
       <option value={all}>{caption}</option>
       {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
