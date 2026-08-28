@@ -11,13 +11,12 @@ import {
 import { useSales } from "@pms/shared/context/SalesContext";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
-import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   FolderOpen, Search, X, Upload, Trash2, File,
   FileText, FileSpreadsheet, Image as ImageIcon, Plus,
-  Eye, Pencil, Download, ExternalLink,
+  Pencil, Download,
 } from "lucide-react";
 import { FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
@@ -135,28 +134,23 @@ function hasOpenable(f: FileMock): boolean {
   return !!f.storagePath || !!sampleOf(f);
 }
 
-// เปิดอ่าน/ดาวน์โหลดไฟล์
+// ดาวน์โหลดไฟล์ (เหลือทางเดียว — ปุ่มเปิดอ่าน/หน้าต่างพรีวิวถูกเอาออกแล้ว 28 ส.ค. 69)
 //   มี storagePath → ไฟล์จริงของผู้ใช้ (local = blob จาก IndexedDB · supabase/api = signed URL)
-//   ไม่มี          → เอกสารตัวอย่างของระบบตามนามสกุล (นามสกุลที่ไม่มีตัวอย่าง เช่น CAD จะไม่มีปุ่มให้กด)
-async function openStoredFile(f: FileMock, mode: "open" | "download") {
+//   ไม่มี          → เอกสารตัวอย่างของระบบตามนามสกุล (ดู DEMO_SAMPLE)
+async function openStoredFile(f: FileMock) {
   try {
-    const sample = sampleOf(f);
-    const url = f.storagePath ? await fileStorage.signedUrl(f.storagePath) : sample;
+    const url = f.storagePath ? await fileStorage.signedUrl(f.storagePath) : sampleOf(f);
     // ล้มเหลวเงียบ = กดแล้วไม่มีอะไรเกิดขึ้น แยกไม่ออกจากปุ่มเสีย → ต้องดังเป็นแถบเตือน
     if (!url) throw new Error("ไม่พบไฟล์จริงในระบบจัดเก็บ (อาจถูกลบไปแล้ว)");
-    if (mode === "open") {
-      window.open(url, "_blank", "noopener");
-    } else {
-      // blob:/ไฟล์ในเว็บเดียวกัน ใช้ attribute download ได้ตรง ๆ · signed URL ข้ามโดเมนต้องขอผ่านพารามิเตอร์
-      const ข้ามโดเมน = /^https?:\/\//.test(url) && !url.startsWith(window.location.origin);
-      const href = ข้ามโดเมน
-        ? `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(downloadNameOf(f))}`
-        : url;
-      const a = document.createElement("a");
-      a.href = href; a.download = downloadNameOf(f); a.rel = "noopener";
-      document.body.appendChild(a); a.click(); a.remove();
-    }
-    // blob: URL ค้างไว้กินหน่วยความจำ — ปล่อยคืนหลังเบราว์เซอร์เปิด/บันทึกเสร็จ (เร็วกว่านี้ไฟล์จะเปิดไม่ขึ้น)
+    // blob:/ไฟล์ในเว็บเดียวกัน ใช้ attribute download ได้ตรง ๆ · signed URL ข้ามโดเมนต้องขอผ่านพารามิเตอร์
+    const ข้ามโดเมน = /^https?:\/\//.test(url) && !url.startsWith(window.location.origin);
+    const href = ข้ามโดเมน
+      ? `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(downloadNameOf(f))}`
+      : url;
+    const a = document.createElement("a");
+    a.href = href; a.download = downloadNameOf(f); a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    // blob: URL ค้างไว้กินหน่วยความจำ — ปล่อยคืนหลังเบราว์เซอร์บันทึกเสร็จ (เร็วกว่านี้ไฟล์จะโหลดไม่ครบ)
     if (url.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (e) {
     reportRepoSaveError(e);
@@ -367,220 +361,6 @@ function PaginationBar({
   );
 }
 
-// ตัวอย่างเอกสาร (mock preview) — ไม่โหลดไฟล์จริง เรนเดอร์จาก metadata เท่านั้น
-function PreviewBody({ f }: { f: FileMock }) {
-  // PDF — จำลองหน้ากระดาษ A4 พร้อมลายน้ำ
-  if (f.ext === "pdf") {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", padding: 24, background: "#eceef0" }}>
-        <div style={{
-          position: "relative", width: "100%", maxWidth: 440, aspectRatio: "1 / 1.414",
-          background: "#fff", borderRadius: 4, boxShadow: "0 6px 24px rgba(0,0,0,.14)",
-          padding: "40px 36px", overflow: "hidden",
-        }}>
-          {/* ลายน้ำ */}
-          <div style={{
-            position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "5rem", fontWeight: 900, color: "rgba(220,38,38,.06)", transform: "rotate(-24deg)",
-            letterSpacing: 6, pointerEvents: "none", userSelect: "none",
-          }}>PDF</div>
-          <div style={{ position: "relative" }}>
-            <div style={{ fontSize: "0.65rem", fontWeight: 800, color: PRIMARY, letterSpacing: 1, textTransform: "uppercase" }}>เอกสารบริษัท</div>
-            <div style={{ fontSize: "1rem", fontWeight: 800, color: STEEL, marginTop: 10, lineHeight: 1.4, wordBreak: "break-word" }}>{f.name}</div>
-            <div style={{ height: 3, width: 54, background: PRIMARY, borderRadius: 3, margin: "12px 0 20px" }} />
-            {[92, 100, 78, 96, 64].map((w, i) => (
-              <div key={i} style={{ height: 8, width: `${w}%`, background: "#e5e7eb", borderRadius: 4, marginBottom: 11 }} />
-            ))}
-            <div style={{ height: 8, width: "42%", background: "#eef0f3", borderRadius: 4, margin: "22px 0 11px" }} />
-            {[88, 97, 71].map((w, i) => (
-              <div key={i} style={{ height: 8, width: `${w}%`, background: "#e5e7eb", borderRadius: 4, marginBottom: 11 }} />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // รูปภาพ — กรอบภาพ + gradient + ไอคอนรูปภาพ
-  if (f.ext === "jpg" || f.ext === "png") {
-    return (
-      <div style={{ padding: 24, background: "#eceef0", display: "flex", justifyContent: "center" }}>
-        <div style={{
-          width: "100%", maxWidth: 520, aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden",
-          border: "6px solid #fff", boxShadow: "0 8px 30px rgba(0,0,0,.16)",
-          background: "#003366",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
-        }}>
-          <ImageIcon size={56} color="rgba(255,255,255,.9)" />
-          <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fff", textAlign: "center", padding: "0 20px", wordBreak: "break-word" }}>{f.name}</div>
-          <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)" }}>{f.size ? `${f.size} · ` : ""}{extLabel(f.ext)}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // PowerPoint — สไลด์ 16:9 พร้อมหัวข้อ + bullet
-  if (f.ext === "pptx") {
-    return (
-      <div style={{ padding: 24, background: "#eceef0", display: "flex", justifyContent: "center" }}>
-        <div style={{
-          width: "100%", maxWidth: 560, aspectRatio: "16 / 9", background: "#fff", borderRadius: 8,
-          boxShadow: "0 8px 30px rgba(0,0,0,.16)", overflow: "hidden", display: "flex", flexDirection: "column",
-        }}>
-          <div style={{ background: PRIMARY, padding: "18px 24px" }}>
-            <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: 1 }}>สไลด์นำเสนอ</div>
-            <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", marginTop: 4, lineHeight: 1.3, wordBreak: "break-word" }}>{f.name}</div>
-          </div>
-          <div style={{ flex: 1, padding: "20px 28px", display: "flex", flexDirection: "column", gap: 14, justifyContent: "center" }}>
-            {[86, 72, 90].map((w, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 999, background: PRIMARY, flexShrink: 0 }} />
-                <div style={{ height: 9, width: `${w}%`, background: "#e5e7eb", borderRadius: 4 }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // อื่นๆ (xlsx / docx / dwg / other) — การ์ดข้อมูลไฟล์แบบทั่วไป
-  return (
-    <div style={{ padding: 28, background: "#eceef0", display: "flex", justifyContent: "center" }}>
-      <div style={{
-        width: "100%", maxWidth: 460, background: "#fff", borderRadius: 12,
-        boxShadow: "0 8px 30px rgba(0,0,0,.12)", padding: "28px 26px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-      }}>
-        <div style={{ background: extBg(f.ext), borderRadius: 16, padding: 20, display: "flex" }}>
-          {React.cloneElement(extIcon(f.ext) as React.ReactElement<{ size?: number }>, { size: 48 })}
-        </div>
-        <div style={{ fontSize: "0.92rem", fontWeight: 800, color: STEEL, textAlign: "center", wordBreak: "break-word" }}>{f.name}</div>
-        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 1, borderTop: `1px solid ${BORDER}` }}>
-          {[
-            ["ประเภท", extLabel(f.ext)],
-            ["ขนาด", f.size || "—"],
-            ["โฟลเดอร์", f.category],
-            ["โอกาสการขาย", f.project],
-            ["อัปโหลดโดย", f.uploadedBy],
-            ["วันที่", f.uploadedAt],
-          ].map(([k, v], i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: `1px solid ${BORDER}` }}>
-              <span style={{ fontSize: "0.72rem", color: MUTED, flexShrink: 0 }}>{k}</span>
-              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: STEEL, textAlign: "right", wordBreak: "break-word" }}>{v}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PreviewModal({ file, customerName, onOpenOwner, onClose }: {
-  file: FileMock; customerName?: string; onOpenOwner?: () => void; onClose: () => void;
-}) {
-  // ที่อยู่ของ "ตัวไฟล์จริง" สำหรับเอามาแสดงในหน้าต่างนี้เลย (PDF/รูป) — ไม่ใช่ภาพจำลอง
-  //   ผู้ใช้อัปโหลดเอง → ไฟล์ของผู้ใช้ · ไฟล์ชุดตัวอย่าง → เอกสารตัวอย่างของระบบตามนามสกุล
-  const [srcUrl, setSrcUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let ยังอยู่ = true;
-    let blobUrl: string | null = null;
-    if (file.storagePath) {
-      fileStorage.signedUrl(file.storagePath)
-        .then(u => { if (!ยังอยู่) return; setSrcUrl(u); if (u?.startsWith("blob:")) blobUrl = u; })
-        .catch(e => logRepoRead("storage.signedUrl", e));
-    } else {
-      setSrcUrl(sampleOf(file));
-    }
-    // ปล่อยคืน blob: URL ตอนปิดหน้าต่าง — ปล่อยก่อนหน้านั้นภาพในกรอบจะหายทันที
-    return () => { ยังอยู่ = false; if (blobUrl) URL.revokeObjectURL(blobUrl); };
-  }, [file]);
-
-  return (
-    <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 200 }} />
-      <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        {/* ⚠️ ป้ายกำกับนี้คือสิ่งที่โปรแกรมอ่านหน้าจอประกาศตอนหน้าต่างเปิด — เดิมเขียนว่า
-            "ยืนยันการลบไฟล์" (ก๊อปมาจากกล่องลบแล้วลืมแก้) ผู้ใช้ที่ใช้โปรแกรมอ่านหน้าจอจึงได้ยินว่า
-            กำลังจะลบไฟล์ ทั้งที่แค่เปิดดูตัวอย่าง — คนละความหมายกันคนละเรื่อง (พบ 14 ส.ค. 69) */}
-        <ModalCard onClose={onClose} label="ดูตัวอย่างไฟล์" className="card"
-          style={{ width: "100%", maxWidth: 640, maxHeight: "90vh", pointerEvents: "auto", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,51,102,.28)" }}>
-          {/* Header */}
-          <div style={{ background: PRIMARY, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <div style={{ background: "rgba(255,255,255,.15)", borderRadius: 8, padding: 7, display: "flex", flexShrink: 0 }}>
-                <Eye size={15} color="#fff" />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
-                {/* บอกให้ชัดว่าไฟล์นี้เป็นของใคร — ชื่อลูกค้า/โอกาสการขายที่ผูกอยู่ ไม่ใช่แค่ชนิดกับขนาด */}
-                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,.72)", marginTop: 2 }}>{extLabel(file.ext)}{file.size ? ` · ${file.size}` : ""} · {SOURCE_LABEL[file.source]}</div>
-              </div>
-            </div>
-            <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={13} /></button>
-          </div>
-          {/* แถบ "ไฟล์นี้ของใคร" — ลูกค้า/โอกาสการขาย + คนที่อัปโหลดและวันที่ */}
-          <div style={{ padding: "10px 20px", background: "#f7f9fc", borderBottom: `1px solid ${BORDER}`, display: "flex", gap: 18, flexWrap: "wrap" }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "0.62rem", color: MUTED, fontWeight: 700 }}>ลูกค้า</div>
-              {/* กดชื่อลูกค้า = เปิดไปที่งานต้นทางของไฟล์นี้ (ไม่มีลูกค้าผูกไว้ก็ขึ้น "—" ไม่เดาแทน) */}
-              {customerName && onOpenOwner ? (
-                <button onClick={onOpenOwner}
-                  style={{ fontSize: "0.75rem", fontWeight: 700, color: PRIMARY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
-                  {customerName} →
-                </button>
-              ) : (
-                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: STEEL }}>{customerName || "—"}</div>
-              )}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "0.62rem", color: MUTED, fontWeight: 700 }}>โอกาสการขาย</div>
-              <div style={{ fontSize: "0.75rem", fontWeight: 700, color: STEEL }}>{file.project}</div>
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "0.62rem", color: MUTED, fontWeight: 700 }}>อัปโหลดโดย</div>
-              <div style={{ fontSize: "0.75rem", fontWeight: 700, color: STEEL }}>{file.uploadedBy} · {file.uploadedAt}</div>
-            </div>
-          </div>
-          {/* Body — แสดงตัวไฟล์จริงถ้าเปิดในเบราว์เซอร์ได้ (PDF/รูป) · ชนิดอื่นแสดงการ์ดข้อมูลไฟล์ */}
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {srcUrl && file.ext === "pdf" ? (
-              <iframe src={srcUrl} title={`ตัวอย่างไฟล์ ${file.name}`}
-                style={{ width: "100%", height: "62vh", border: "none", background: "#eceef0", display: "block" }} />
-            ) : srcUrl && (file.ext === "jpg" || file.ext === "png") ? (
-              <div style={{ padding: 20, background: "#eceef0", display: "flex", justifyContent: "center" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={srcUrl} alt={file.name} style={{ maxWidth: "100%", borderRadius: 8, boxShadow: "0 8px 30px rgba(0,0,0,.16)" }} />
-              </div>
-            ) : (
-              <PreviewBody f={file} />
-            )}
-          </div>
-          {/* Footer */}
-          <div style={{ padding: "13px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8, justifyContent: "flex-end", background: "#fafafa" }}>
-            {/* มีไบต์จริงเก็บไว้เท่านั้นจึงเปิด/ดาวน์โหลดได้ — ไฟล์ชุดตัวอย่างมีแต่ข้อมูลกำกับ ไม่มีตัวไฟล์ */}
-            {hasOpenable(file) ? (
-              <>
-                <button className="btn btn-secondary btn-md" onClick={() => void openStoredFile(file, "open")}>
-                  <ExternalLink size={13} /> เปิดอ่าน
-                </button>
-                <button className="btn btn-secondary btn-md" onClick={() => void openStoredFile(file, "download")}>
-                  <Download size={13} /> ดาวน์โหลด
-                </button>
-              </>
-            ) : (
-              <span style={{ fontSize: "0.7rem", color: MUTED, marginRight: "auto" }}>
-                ยังไม่มีตัวไฟล์สำหรับชนิดนี้ให้เปิดอ่านหรือดาวน์โหลด
-              </span>
-            )}
-            <button onClick={onClose} className="btn btn-primary btn-md">ปิด</button>
-          </div>
-        </ModalCard>
-      </div>
-    </>
-  );
-}
-
 export default function FilesPage() {
   const router = useRouter();
   // คลังไฟล์รวม — ดึงไฟล์ที่แนบไว้กับลูกค้า/ลูกค้าเป้าหมายมารวมกัน (ไม่สร้างใหม่)
@@ -620,7 +400,6 @@ export default function FilesPage() {
   const [upload,  setUpload]  = useState(false);
   const [delId,   setDelId]   = useState<number | null>(null);
   const [editId,  setEditId]  = useState<number | null>(null);
-  const [previewId, setPreviewId] = useState<number | null>(null);
   const [page,    setPage]    = useState(1);
   const PAGE_SIZE = 10;
 
@@ -707,7 +486,8 @@ export default function FilesPage() {
           ในแถบเครื่องมือแถวเดียวกับตัวกรองอื่น จะได้เห็นตัวกรองทั้งหมดพร้อมกันโดยไม่กินพื้นที่หน้าจอ */}
 
       {/* Toolbar */}
-      <div className="card" style={{ borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", borderBottom: "none", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      {/* แถบเครื่องมือเป็นการ์ดของตัวเอง แยกจากตาราง (บอสสั่ง 28 ส.ค. 69) — เดิมเชื่อมติดกันเป็นใบเดียว */}
+      <div className="card" style={{ padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div className="search-bar">
           <Search size={13} color={MUTED} />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="ค้นหาไฟล์ / โอกาสการขาย..." />
@@ -738,19 +518,19 @@ export default function FilesPage() {
 
       {/* Content */}
       {view === "list" ? (
-        <div className="card" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-xl) var(--radius-xl)", overflow: "hidden" }}>
-          <div className="table-wrap" style={{ borderTop: "none" }}>
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div className="table-wrap">
             <table>
               <colgroup>
                 {/* ⚠️ ตาราง table-layout:fixed — ความกว้างแก้ที่ <col> เท่านั้น (ใส่ที่ <th> ไม่มีผล)
-                    ช่องปุ่มขวาสุดกว้าง 18% เพราะมีได้ถึง 5 ปุ่ม (เปิดอ่าน/ดาวน์โหลดโผล่เฉพาะไฟล์ที่มีตัวไฟล์จริง) */}
+                    ช่องปุ่มขวาสุด: ดาวน์โหลด (เฉพาะไฟล์ที่มีตัวไฟล์จริง) / แก้ไข / ลบ */}
                 <col style={{ width: "22%" }} />
                 {showCol("category")   && <col style={{ width: "10%" }} />}
-                {showCol("project")    && <col style={{ width: "18%" }} />}
+                {showCol("project")    && <col style={{ width: "21%" }} />}
                 {showCol("size")       && <col style={{ width: "8%" }} />}
                 {showCol("uploadedBy") && <col style={{ width: "12%" }} />}
-                {showCol("uploadedAt") && <col style={{ width: "12%" }} />}
-                <col style={{ width: "18%" }} />
+                {showCol("uploadedAt") && <col style={{ width: "13%" }} />}
+                <col style={{ width: "13%" }} />
               </colgroup>
               <thead>
                 <tr>
@@ -776,8 +556,10 @@ export default function FilesPage() {
                       description={query || catFilter !== "ALL" || sourceFilter !== "ALL" || projFilter !== "ALL" ? "ลองปรับคำค้นหรือล้างตัวกรอง" : "ไฟล์จะปรากฏเมื่อแนบกับลูกค้าเป้าหมายหรือลูกค้า"} />
                   </td></tr>
                 ) : null}
+                {/* แถวไม่กดเปิดหน้าต่างพรีวิวแล้ว (บอสสั่ง 28 ส.ค. 69) — ใช้ปุ่มด้านขวาแทน
+                    ดาวน์โหลดไฟล์จริง / แก้ไขข้อมูลไฟล์ / ลบ */}
                 {paged.map(f => (
-                  <ClickableRow key={f.id} onActivate={() => setPreviewId(f.id)} label={`เปิดรายละเอียดไฟล์ ${f.name}`}>
+                  <tr key={f.id}>
                     <td style={{ maxWidth: 260 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ background: extBg(f.ext), borderRadius: 8, padding: 7, display: "flex", flexShrink: 0 }}>{extIcon(f.ext)}</div>
@@ -820,22 +602,13 @@ export default function FilesPage() {
                     {showCol("uploadedAt") && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.uploadedAt}</td>}
                     <td className="ovf-visible">
                       <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
-                        <button title="ดูตัวอย่าง" onClick={e => { e.stopPropagation(); setPreviewId(f.id); }}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                          <Eye size={12} />
-                        </button>
-                        {/* เปิดอ่าน/ดาวน์โหลดตัวไฟล์จริง — ขึ้นเฉพาะไฟล์ที่มีไบต์เก็บไว้ (ไฟล์ตัวอย่างไม่มี) */}
+                        {/* ดูตัวอย่าง/เปิดอ่านในแท็บใหม่ เอาออกแล้วทั้งคู่ (บอสสั่ง 28 ส.ค. 69)
+                            เหลือ "ดาวน์โหลด" อย่างเดียว — ขึ้นเฉพาะไฟล์ที่มีตัวไฟล์จริงให้โหลด */}
                         {hasOpenable(f) && (
-                          <>
-                            <button title="เปิดอ่านไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "open"); }}
-                              style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                              <ExternalLink size={12} />
-                            </button>
-                            <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "download"); }}
-                              style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                              <Download size={12} />
-                            </button>
-                          </>
+                          <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f); }}
+                            style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                            <Download size={12} />
+                          </button>
                         )}
                         <button title="แก้ไข" onClick={e => { e.stopPropagation(); setEditId(f.id); }}
                           style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
@@ -847,7 +620,7 @@ export default function FilesPage() {
                         </button>
                       </div>
                     </td>
-                  </ClickableRow>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -861,7 +634,7 @@ export default function FilesPage() {
         </div>
       ) : (
         /* Grid view */
-        <div className="card" style={{ borderTop: "none", borderRadius: "0 0 var(--radius-xl) var(--radius-xl)", padding: 16 }}>
+        <div className="card" style={{ padding: 16 }}>
           {!loaded ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {Array.from({ length: 8 }).map((_, i) => (
@@ -876,15 +649,13 @@ export default function FilesPage() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
               {paged.map(f => (
-                <div key={f.id} onClick={() => setPreviewId(f.id)} style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, background: "#fafbfc", display: "flex", flexDirection: "column", gap: 10, cursor: "pointer" }}>
+                <div key={f.id} style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, background: "#fafbfc", display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ background: extBg(f.ext), borderRadius: 9, padding: 9, display: "flex" }}>{extIcon(f.ext)}</div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button title="ดูตัวอย่าง" onClick={e => { e.stopPropagation(); setPreviewId(f.id); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
-                        <Eye size={11} />
-                      </button>
+                      {/* ไม่มีปุ่มดูตัวอย่าง/เปิดอ่านแล้ว — เหลือดาวน์โหลด/แก้ไข/ลบ เหมือนมุมมองรายการ */}
                       {hasOpenable(f) && (
-                        <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f, "download"); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
+                        <button title="ดาวน์โหลดไฟล์" onClick={e => { e.stopPropagation(); void openStoredFile(f); }} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>
                           <Download size={11} />
                         </button>
                       )}
@@ -949,18 +720,6 @@ export default function FilesPage() {
       {editId !== null && (() => {
         const ef = files.find(f => f.id === editId);
         return ef ? <EditFileModal file={ef} onSave={updateFile} onClose={() => setEditId(null)} /> : null;
-      })()}
-
-      {/* Preview modal */}
-      {previewId !== null && (() => {
-        const pf = files.find(f => f.id === previewId);
-        // ชื่อลูกค้าดึงจากข้อมูลจริง (customerId ที่ผูกไว้) — ไม่มีผูกไว้ก็ปล่อยว่าง ไม่เดาแทน
-        const cust = pf?.customerId ? customers.find(c => c.id === pf.customerId)?.company : undefined;
-        return pf ? (
-          <PreviewModal file={pf} customerName={cust}
-            onOpenOwner={pf.customerId ? () => router.push(`/customers?open=${pf.customerId}`) : undefined}
-            onClose={() => setPreviewId(null)} />
-        ) : null;
       })()}
 
       {/* Delete confirm */}
