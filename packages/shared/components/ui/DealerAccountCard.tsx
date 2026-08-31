@@ -93,7 +93,9 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
             <span style={{ display: "block", fontSize: "0.66rem", color: "#64748B", marginTop: 1 }}>ตรวจสอบบัญชีและจัดการการเข้าสู่ระบบ</span>
           </span>
         </div>
-        <div style={{ padding: 14, background: "#fff" }}>
+        {/* อีเมลกับปุ่มอยู่บรรทัดเดียวกัน (บอสสั่ง 28 ส.ค. 69) — จอแคบค่อยตกลงมาซ้อนกันเอง */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: 12, alignItems: "center", padding: 14, background: "#fff" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
             <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Mail size={15} color="#003366" />
@@ -104,9 +106,8 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email || "—"}</span>
             </span>
           </div>
-          {/* ปุ่มเดียวต่อจากอีเมลเลย (บอสสั่ง 28 ส.ค. 69) — ทางเข้าอยู่ติดกับสิ่งที่จะไปแก้
-              (แยกเป็นสองปุ่มไม่ได้ช่วยอะไร เพราะกดอันไหนก็ไปหน้าเดียวกัน) */}
-          <div style={{ marginTop: 12 }}>
+          {/* ปุ่มเดียว — ทางเข้าอยู่ติดกับสิ่งที่จะไปแก้ (แยกสองปุ่มไม่ช่วย เพราะกดแล้วไปหน้าเดียวกัน) */}
+          <div>
         <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนอีเมล / รหัสผ่าน"
           รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติจากสำนักงานใหญ่"
             : เหลือ == null ? "อัปเดตบัญชีเข้าสู่ระบบเพื่อความปลอดภัย"
