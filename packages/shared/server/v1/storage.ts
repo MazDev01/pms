@@ -11,17 +11,26 @@ import type { NextRequest } from "next/server";
 import { handler, ok, dbFail, fail } from "./_ctx";
 
 const BUCKET = "dealer-files";
+// ── ถังของแคตตาล็อก (แบบแปลนแม่แบบ) — ของกลางทั้งเครือ ──────────────────────────
+//   ⚠️ สิทธิ์ยังคุมที่ Storage RLS เหมือนเดิม (0010: เขียนได้เฉพาะ HQ) เส้นทางนี้ไม่ได้ปลดอะไร
+//      ผู้เรียกเลือกได้แค่ "ถังไหน" ไม่ได้เลือกว่า "จะเป็นใคร" — คำสั่งยังเดินในนามผู้ใช้คนนั้น
+const CATALOG_BUCKET = "catalog-plans";
+/** ผู้เรียกขอถังไหน — รับเฉพาะ "catalog" เท่านั้น ค่าอื่นตกไปที่ถังของตัวแทนเสมอ */
+const bucketOf = (v: unknown) => (String(v ?? "") === "catalog" ? CATALOG_BUCKET : BUCKET);
 export { runtime } from "./_ctx";
 
 export const POST = handler("storage.upload", async (req: NextRequest, sb) => {
   const form = await req.formData().catch(() => null);
+  const bucket = bucketOf(form?.get("bucket"));
   const dealer = String(form?.get("dealerCode") ?? "").trim();
   const file = form?.get("file");
-  if (!dealer || !(file instanceof File)) return fail(400, "ต้องระบุสาขาและไฟล์");
+  // ถังของแคตตาล็อกไม่ได้แยกตามสาขา — ไม่ต้องมีรหัสสาขา (และบัญชี HQ ก็ไม่มีให้ส่ง)
+  if (!(file instanceof File)) return fail(400, "ต้องระบุไฟล์");
+  if (bucket === BUCKET && !dealer) return fail(400, "ต้องระบุสาขาและไฟล์");
   const stamp = Number(form?.get("stamp")) || Date.now();
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_") || "file";
-  const path = `${dealer}/${stamp}-${safe}`;
-  const { error } = await sb.storage.from(BUCKET).upload(path, file, { upsert: false });
+  const path = bucket === CATALOG_BUCKET ? `plans/${stamp}-${safe}` : `${dealer}/${stamp}-${safe}`;
+  const { error } = await sb.storage.from(bucket).upload(path, file, { upsert: false });
   if (error) return dbFail("storage.upload", error as { message: string; code?: string });
   return ok(path);
 });
@@ -40,7 +49,7 @@ export const DELETE = handler("storage.remove", async (req: NextRequest, sb) => 
   // ⚠️ ที่เก็บไฟล์ "ไม่ฟ้อง error" เมื่อกฎความปลอดภัยกันไว้ — คืนรายการที่ลบได้จริงเป็นอาร์เรย์ว่างแทน
   //    เดิมตอบ {ok:true} ทุกครั้ง → สาขาอื่นสั่งลบไฟล์ของเราแล้วหน้าจอขึ้นว่า "ลบแล้ว" ทั้งที่ไฟล์ยังอยู่
   //    (ยิงจริงยืนยัน 27 ส.ค. 69: CNX สั่งลบไฟล์ของ RYG ได้ 200 แต่ไฟล์ยังดาวน์โหลดได้อยู่)
-  const { data, error } = await sb.storage.from(BUCKET).remove([path]);
+  const { data, error } = await sb.storage.from(bucketOf(new URL(req.url).searchParams.get("bucket"))).remove([path]);
   if (error) return dbFail("storage.remove", error as { message: string; code?: string });
   if (!data?.length) return fail(404, "ลบไฟล์ไม่สำเร็จ — ไม่พบไฟล์นี้ หรือไม่มีสิทธิ์ลบ");
   return ok({ ok: true });

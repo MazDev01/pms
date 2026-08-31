@@ -112,3 +112,8 @@ export function formatPhone(v: string): string {
   if (เลข.length <= 6) return `${เลข.slice(0, 3)}-${เลข.slice(3)}`;
   return `${เลข.slice(0, 3)}-${เลข.slice(3, 6)}-${เลข.slice(6, 10)}`;
 }
+
+/** ขนาดไฟล์แบบที่คนอ่านรู้เรื่อง — ต่ำกว่า 1 MB บอกเป็น KB (ปัดขึ้นอย่างน้อย 1 KB ไม่ให้ขึ้น "0 KB") */
+export function ขนาดไฟล์อ่านง่าย(bytes: number): string {
+  return bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}

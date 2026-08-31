@@ -4,9 +4,11 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useState, useMemo } from "react";
 import {
-  Package, FileText, Download, Search, Lock, X, History, CalendarClock,
+  Package, FileText, Download, Search, Lock, X, History, CalendarClock, Building2, ChevronRight,
 } from "lucide-react";
 import { useEffect } from "react";
+import { storage as fileStorage } from "@pms/shared/lib/data";
+import { ขนาดไฟล์อ่านง่าย as ขนาดอ่านง่าย } from "@pms/shared/lib/format";
 import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { catalogRate, markupPctOf, withMarkup } from "@pms/shared/lib/boq";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
@@ -27,6 +29,8 @@ export default function DealerProductsPage() {
   const [viewP, setViewP] = useState<Product | null>(null);
   const [historyP, setHistoryP] = useState<Product | null>(null);
   const [subView, setSubView] = useState<{ parent: Product; sub: string } | null>(null); // ดูรายละเอียดแม่แบบย่อย
+  // ค้นหา/มุมมองของรายการแม่แบบย่อยในกล่องรายละเอียด (ชุดเดียวกับฝั่งสำนักงานใหญ่ 28 ส.ค. 69)
+  const [subQ, setSubQ] = useState("");
 
   // ── ส่วนบวกเพิ่มจากราคากลาง — ตัวแทนตั้งเอง (บอสสั่ง 20 ส.ค. 69) ───────────────
   // เก็บที่ตั้งค่าของสาขา (dealer_settings.pricing) → ตามไปทุกเครื่อง/ทุกเบราว์เซอร์ของสาขานั้น
@@ -155,14 +159,14 @@ export default function DealerProductsPage() {
               className="card tpl-card"
               role="button"
               tabIndex={0}
-              onClick={() => setViewP(p)}
-              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewP(p); } }}
+              onClick={() => { setSubQ(""); setViewP(p); }}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSubQ(""); setViewP(p); } }}
               style={{ display: "flex", flexDirection: "column", overflow: "hidden", cursor: "pointer" }}
             >
               {/* ── Hero: ไทล์โลโก้ + ป้ายจำนวนแม่แบบย่อย ── */}
               <div
                 style={{
-                  position: "relative", height: 132,
+                  position: "relative", aspectRatio: "16 / 9",
                   background: "#f0f4f9",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   borderBottom: `1px solid ${BORDER}`, overflow: "hidden",
@@ -171,7 +175,7 @@ export default function DealerProductsPage() {
                 {p.image ? (
                   /* รูปแม่แบบที่ HQ อัปโหลด — เต็มพื้นที่ Hero */
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={p.image} alt={p.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={p.image} alt={p.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
                 ) : (
                   /* ไม่มีรูปจริง → ภาพประกอบ SVG ตามประเภทอาคาร */
                   <TemplateHero name={p.name} />
@@ -253,7 +257,7 @@ export default function DealerProductsPage() {
 
                 {/* ปุ่ม */}
                 <div style={{ display: "flex", gap: 7, marginTop: 4 }}>
-                  <button onClick={e => { e.stopPropagation(); setViewP(p); }} className="btn btn-secondary btn-sm" style={{ flex: 1, color: STEEL }}>
+                  <button onClick={e => { e.stopPropagation(); setSubQ(""); setViewP(p); }} className="btn btn-secondary btn-sm" style={{ flex: 1, color: STEEL }}>
                     <FileText size={13} /> รายละเอียด
                   </button>
                   <button onClick={e => { e.stopPropagation(); setHistoryP(p); }} className="btn btn-secondary btn-sm" title="ประวัติราคา" style={{ width: 40, padding: 0, color: STEEL }}>
@@ -269,59 +273,132 @@ export default function DealerProductsPage() {
       {/* ── รายละเอียดแม่แบบ modal ── */}
       {viewP && (
         <div onClick={() => setViewP(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <ModalCard onClose={() => setViewP(null)} label="รายละเอียดแม่แบบ" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
-            <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontSize: "1rem", fontWeight: 800 }}>{viewP.name}</div>
-                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>แม่แบบอาคาร · กำหนดโดยสำนักงานใหญ่</div>
+          <ModalCard onClose={() => setViewP(null)} label="รายละเอียดแม่แบบ" className="modal-pop-flex"
+            style={{ position: "static", width: "100%", maxWidth: 1100, maxHeight: "92vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.24)" }}>
+
+            {/* ── หัวกล่อง: ชื่อแม่แบบ + ค้นหาแม่แบบย่อย + ปิด (ชุดเดียวกับฝั่งสำนักงานใหญ่) ── */}
+            <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: STEEL, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{viewP.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                {(viewP.subtypes?.length ?? 0) > 0 && (
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <Search size={14} color="#9ca3af" style={{ position: "absolute", left: 11, pointerEvents: "none" }} />
+                    <input value={subQ} onChange={e => setSubQ(e.target.value)} aria-label="ค้นหาแม่แบบย่อย" placeholder="ค้นหาแม่แบบย่อย..."
+                      style={{ width: 240, maxWidth: "40vw", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "9px 12px 9px 32px", fontSize: "0.84rem", color: STEEL, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+                  </div>
+                )}
+                <button onClick={() => setViewP(null)} aria-label="ปิด"
+                  style={{ width: 34, height: 34, borderRadius: 10, background: "#f4f6f9", color: STEEL, border: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={16} /></button>
               </div>
-              <button onClick={() => setViewP(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
             </div>
-            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>รายละเอียด</div>
-                <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{viewP.spec}</div>
+
+            <div style={{ padding: 24, overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* ── รูปใหญ่ + การ์ดลอยทับมุมล่างซ้าย ─────────────────────────────────── */}
+              {/* ⚠️ flexShrink: 0 ห้ามเอาออก — กรอบนี้เป็นลูกของกล่องแนวตั้งที่เลื่อนได้
+                   ความสูงมาจาก aspect-ratio ซึ่ง flexbox ถือว่า "ย่อได้" พอมีแม่แบบย่อยเยอะ
+                   รูปจะถูกบีบจนเหลือ 2px แล้วการ์ดข้อมูลล้นออกไปโดนตัดหัว (บอสเจอเอง 28 ส.ค. 69)
+                   วัดจริงตอนพัง: สูง 2px ทั้งที่ควรเป็น 446px */}
+              <div style={{ position: "relative", aspectRatio: "21 / 9", flexShrink: 0, borderRadius: 14, overflow: "hidden", background: "#f0f4f9", border: `1px solid ${BORDER}` }}>
+                {viewP.image
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  ? <img src={viewP.image} alt={viewP.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <div style={{ position: "absolute", inset: 0 }}><TemplateHero name={viewP.name} /></div>}
+                {/* ⚠️ รูปแถบนี้ใช้ cover ต่างจากที่อื่น — เป็นภาพพื้นหลังที่มีการ์ดวางทับ
+                     ถ้าใช้ contain จะมีขอบว่างแล้วการ์ดลอยอยู่บนพื้นเปล่า ไม่ใช่บนรูปตามแบบ */}
+                <div style={{ position: "absolute", left: 20, bottom: 20, maxWidth: "min(420px, 70%)", background: "rgba(255,255,255,.93)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,.7)", borderRadius: 14, padding: "16px 18px", boxShadow: "0 10px 30px rgba(0,51,102,.18)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7 }}>
+                    <span style={{ width: 30, height: 30, borderRadius: 9, background: "#dce5f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Building2 size={16} style={{ color: PRIMARY }} /></span>
+                    <span style={{ fontSize: "0.95rem", fontWeight: 800, color: STEEL, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{viewP.name}</span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", lineHeight: 1.6, color: "#4b5563" }}>{viewP.spec || "—"}</div>
+                  {/* ⚠️ ตัวแทนต้องเห็น "ราคาขายของเรา" เป็นตัวเด่น — ราคากลางของสำนักงานใหญ่เป็นต้นทุน
+                       ไม่ใช่ตัวเลขที่เอาไปคุยกับลูกค้า (กติกาเดิมของหน้านี้ ห้ามสลับที่กัน) */}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}` }}>
+                    <span style={{ fontSize: "1.1rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(withMarkup(viewP.price, markupPctOf(pricing, viewP.id)))}</span>
+                    <span style={{ fontSize: "0.72rem", color: MUTED }}>/{viewP.unit}</span>
+                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontSize: "0.68rem", color: "#9ca3af", whiteSpace: "nowrap" }}><CalendarClock size={11} /> {viewP.effectiveDate}</span>
+                  </div>
+                </div>
               </div>
-              {/* แม่แบบย่อย พร้อมรูป */}
-              {viewP.subtypes && viewP.subtypes.length > 0 && (
+
+
+              {/* ── แบบแปลนของแม่แบบนี้ — ตัวแทนเปิดดู/ดาวน์โหลดได้ (บอสสั่ง 28 ส.ค. 69) ──── */}
+              {(viewP.plans?.length ?? 0) > 0 && (
                 <div>
-                  <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 8 }}>แม่แบบย่อย ({viewP.subtypes.length})</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                    {viewP.subtypes.map(s => (
-                      <button key={s} onClick={() => setSubView({ parent: viewP, sub: s })} title={`ดูรายละเอียด ${s}`}
-                        style={{ border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", background: "#fafafa", cursor: "pointer", padding: 0, textAlign: "center", fontFamily: "inherit" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 14px rgba(0,51,102,.14)"; (e.currentTarget as HTMLElement).style.borderColor = "#cdd8e6"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "none"; (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}>
-                        <div style={{ position: "relative", height: 66, background: "#f0f4f9", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                          {(viewP.subtypeImages?.[s] ?? viewP.image)
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            ? <img src={viewP.subtypeImages?.[s] ?? viewP.image} alt={s} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            : <TemplateHero name={`${viewP.name} ${s}`} />}
-                        </div>
-                        <div style={{ padding: "6px 8px 7px", textAlign: "center", lineHeight: 1.3 }}>
-                          <div style={{ fontSize: "0.7rem", fontWeight: 600, color: STEEL }}>{s}</div>
-                          {/* โชว์ "ราคาขายของสาขา" ให้ตรงกับที่จะไปโผล่ในใบเสนอราคา ไม่ใช่ราคากลางดิบ */}
-                          <div style={{ fontSize: "0.64rem", marginTop: 2, fontWeight: 700, color: PRIMARY }}>{fmtMoney(withMarkup(catalogRate(viewP, s), markupPctOf(pricing, viewP.id)))}</div>
-                        </div>
-                      </button>
+                  <div style={{ fontSize: "1.02rem", fontWeight: 800, color: STEEL, marginBottom: 10 }}>แบบแปลน</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
+                    {(viewP.plans ?? []).map(f => (
+                      <a key={f.path} href={fileStorage.catalogUrl(f.path)} target="_blank" rel="noreferrer"
+                        style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "11px 13px", textDecoration: "none", background: "#fff" }}>
+                        <span style={{ width: 34, height: 34, borderRadius: 10, background: "#dce5f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><FileText size={16} style={{ color: PRIMARY }} /></span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ display: "block", fontSize: "0.84rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                          <span style={{ display: "block", fontSize: "0.7rem", color: "#9ca3af" }}>{ขนาดอ่านง่าย(f.size)}</span>
+                        </span>
+                        <Download size={15} color="#9ca3af" style={{ flexShrink: 0 }} />
+                      </a>
                     ))}
                   </div>
                 </div>
               )}
-              <div>
-                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคากลาง (สำนักงานใหญ่กำหนด)</div>
-                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(viewP.price)}</span>
-                <span style={{ fontSize: "0.72rem", color: MUTED }}> / {viewP.unit}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
-                  <CalendarClock size={12} style={{ color: MUTED }} />
-                  <span style={{ fontSize: "0.72rem", color: MUTED }}>มีผล {viewP.effectiveDate}</span>
-                </div>
-              </div>
+              {/* ── รายการแม่แบบย่อย + สลับมุมมอง ────────────────────────────────────── */}
+              {(viewP.subtypes?.length ?? 0) > 0 && (() => {
+                const ทั้งหมด = viewP.subtypes ?? [];
+                const รายการ = subQ.trim() ? ทั้งหมด.filter(s => s.toLowerCase().includes(subQ.trim().toLowerCase())) : ทั้งหมด;
+                const รูปของ = (s: string) => viewP.subtypeImages?.[s] ?? viewP.image;
+                const ราคาขายของ = (s: string) => fmtMoney(withMarkup(catalogRate(viewP, s), markupPctOf(pricing, viewP.id)));
+                return (
+                  <div>
+                    <div style={{ fontSize: "1.02rem", fontWeight: 800, color: STEEL, marginBottom: 12 }}>แม่แบบย่อยทั้งหมด</div>
+
+                    {รายการ.length === 0 && (
+                      <div style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontSize: "0.8rem", border: `1px dashed ${BORDER}`, borderRadius: 12 }}>ไม่พบแม่แบบย่อยที่ค้นหา</div>
+                    )}
+
+                    {รายการ.length > 0 && (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
+                        {รายการ.map(s => (
+                          <button key={s} onClick={() => setSubView({ parent: viewP, sub: s })} title={`ดูรายละเอียด ${s}`}
+                            style={{ border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden", background: "#fff", cursor: "pointer", padding: 0, textAlign: "left", fontFamily: "inherit", display: "flex", flexDirection: "column", transition: "box-shadow .15s, border-color .15s" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 22px rgba(0,51,102,.14)"; (e.currentTarget as HTMLElement).style.borderColor = "#cdd8e6"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "none"; (e.currentTarget as HTMLElement).style.borderColor = BORDER; }}>
+                            <div style={{ position: "relative", aspectRatio: "16 / 9", background: "#f0f4f9", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                              {รูปของ(s)
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                ? <img src={รูปของ(s)} alt={s} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+                                : <TemplateHero name={`${viewP.name} ${s}`} />}
+                            </div>
+                            <div style={{ padding: "11px 13px", display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                              <span style={{ width: 32, height: 32, borderRadius: 10, background: "#dce5f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Building2 size={15} style={{ color: PRIMARY }} /></span>
+                              <span style={{ minWidth: 0 }}>
+                                <span style={{ display: "block", fontSize: "0.84rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s}</span>
+                                {/* แบบที่บอสส่งมาเป็น "จังหวัด" แต่แม่แบบย่อยไม่มีข้อมูลจังหวัด — ใช้ราคาขายของสาขาแทน */}
+                                <span style={{ display: "block", fontSize: "0.74rem", marginTop: 1, fontWeight: 700, color: PRIMARY }}>
+                                  {ราคาขายของ(s)}<span style={{ fontWeight: 500, color: "#9ca3af" }}>/{viewP.unit}</span>
+                                </span>
+                              </span>
+                            </div>
+                            <div style={{ marginTop: "auto", borderTop: `1px solid ${BORDER}`, padding: "9px 13px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.76rem", fontWeight: 700, color: PRIMARY }}>
+                              ดูรายละเอียด <ChevronRight size={14} />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* ── ท้ายกล่อง ─────────────────────────────────────────────────────────── */}
+            <div style={{ padding: "14px 24px", borderTop: `1px solid ${BORDER}`, background: "#fafbfc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexShrink: 0, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.8rem", color: MUTED, fontWeight: 600 }}>ทั้งหมด {viewP.subtypes?.length ?? 0} แม่แบบย่อย</span>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { const p = viewP; setViewP(null); setHistoryP(p); }} className="btn btn-secondary btn-md" style={{ flex: 1, justifyContent: "center", color: STEEL }}>
+                <button onClick={() => { const p = viewP; setViewP(null); setHistoryP(p); }} className="btn btn-secondary btn-md" style={{ color: STEEL }}>
                   <History size={14} /> ดูประวัติราคา
                 </button>
-                <button onClick={() => downloadSpec(viewP)} className="btn btn-secondary btn-md" style={{ flex: 1, justifyContent: "center", color: STEEL }}>
+                <button onClick={() => downloadSpec(viewP)} className="btn btn-secondary btn-md" style={{ color: STEEL }}>
                   <Download size={14} /> ดาวน์โหลด
                 </button>
               </div>
@@ -333,39 +410,149 @@ export default function DealerProductsPage() {
       {/* ── รายละเอียดแม่แบบย่อย modal ── */}
       {subView && (
         <div onClick={() => setSubView(null)} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.5)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <ModalCard onClose={() => setSubView(null)} label="รายละเอียดประเภทย่อย" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,.25)" }}>
-            <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontSize: "1rem", fontWeight: 800 }}>{subView.sub}</div>
-                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>แม่แบบย่อยของ {subView.parent.name}</div>
-              </div>
-              <button onClick={() => setSubView(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
+          <ModalCard onClose={() => setSubView(null)} label="รายละเอียดแม่แบบย่อย"
+            style={{ width: "100%", maxWidth: 760, maxHeight: "92vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.24)" }}>
+            <div style={{ padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: STEEL, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subView.sub}</div>
+              <button onClick={() => setSubView(null)} aria-label="ปิด"
+                style={{ width: 34, height: 34, borderRadius: 10, background: "#f4f6f9", color: STEEL, border: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><X size={16} /></button>
             </div>
-            <div style={{ position: "relative", height: 150, background: "#f0f4f9", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", borderBottom: `1px solid ${BORDER}` }}>
-              {(subView.parent.subtypeImages?.[subView.sub] ?? subView.parent.image)
-                /* eslint-disable-next-line @next/next/no-img-element */
-                ? <img src={subView.parent.subtypeImages?.[subView.sub] ?? subView.parent.image} alt={subView.sub} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <TemplateHero name={`${subView.parent.name} ${subView.sub}`} big />}
-            </div>
-            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>รายละเอียด</div>
-                <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.6, color: STEEL }}>{subView.parent.spec}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: "0.65rem", color: MUTED, marginBottom: 4 }}>ราคาขายของสาขา</div>
-                <span style={{ fontSize: "1.15rem", fontWeight: 800, color: PRIMARY }}>{fmtMoney(withMarkup(catalogRate(subView.parent, subView.sub), markupPctOf(pricing, subView.parent.id)))}</span>
-                <span style={{ fontSize: "0.72rem", color: MUTED }}> / {subView.parent.unit}</span>
-                <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 4 }}>
-                  ราคากลาง {fmtMoney(catalogRate(subView.parent, subView.sub))}
-                  {markupPctOf(pricing, subView.parent.id) !== 0 && ` · บวกเพิ่ม ${markupPctOf(pricing, subView.parent.id)}%`}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6 }}>
-                  <CalendarClock size={12} style={{ color: MUTED }} />
-                  <span style={{ fontSize: "0.72rem", color: MUTED }}>มีผล {subView.parent.effectiveDate}</span>
-                </div>
-              </div>
-            </div>
+
+            {(() => {
+              const แม่ = subView.parent, ย่อย = subView.sub;
+              const pct = markupPctOf(pricing, แม่.id);
+              const ราคากลางย่อย = catalogRate(แม่, ย่อย);
+              const ราคาขายย่อย = withMarkup(ราคากลางย่อย, pct);
+              const ตั้งเฉพาะ = แม่.subtypePrices?.[ย่อย] != null;
+              const รูป = แม่.subtypeImages?.[ย่อย] ?? แม่.image;
+              const ใช้รูปแม่ = !แม่.subtypeImages?.[ย่อย] && !!แม่.image;
+              const พี่น้อง = (แม่.subtypes ?? []).filter(x => x !== ย่อย);
+              return (
+                <>
+                  <div style={{ padding: 24, overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 18 }}>
+                    {/* ⚠️ flexShrink: 0 — กันกรอบรูปถูก flexbox บีบจนแบน (บั๊กจริง 28 ส.ค. 69) */}
+                    <div style={{ position: "relative", aspectRatio: "21 / 9", flexShrink: 0, borderRadius: 14, overflow: "hidden", background: "#f0f4f9", border: `1px solid ${BORDER}` }}>
+                      {รูป
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        ? <img src={รูป} alt={ย่อย} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+                        : <div style={{ position: "absolute", inset: 0 }}><TemplateHero name={`${แม่.name} ${ย่อย}`} /></div>}
+                      {ใช้รูปแม่ && (
+                        <span style={{ position: "absolute", left: 12, bottom: 12, fontSize: "0.66rem", fontWeight: 700, color: MUTED, background: "rgba(255,255,255,.9)", border: `1px solid ${BORDER}`, borderRadius: 999, padding: "3px 10px" }}>ใช้รูปของแม่แบบหลัก</span>
+                      )}
+                    </div>
+
+                    {/* ── ราคาขายของเรา (ตัวเด่น) · ราคากลางจากสำนักงานใหญ่ (ต้นทุน) ────── */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                      <div style={{ padding: "14px 16px", borderRadius: 12, background: "#dce5f0" }}>
+                        <div style={{ fontSize: "0.66rem", color: MUTED, fontWeight: 700, marginBottom: 3 }}>ราคาขายของเรา</div>
+                        <span style={{ fontSize: "1.35rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(ราคาขายย่อย)}</span>
+                        <span style={{ fontSize: "0.74rem", color: MUTED }}> /{แม่.unit}</span>
+                        {pct !== 0 && <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 3 }}>บวกจากราคากลาง {pct}%</div>}
+                      </div>
+                      <div style={{ padding: "14px 16px", borderRadius: 12, background: "#f6f8fa", border: `1px solid ${BORDER}` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.66rem", color: MUTED, fontWeight: 700, marginBottom: 3 }}>
+                          ราคากลาง (สำนักงานใหญ่กำหนด)
+                          <span style={{ fontSize: "0.6rem", fontWeight: 700, color: ตั้งเฉพาะ ? PRIMARY : "#9ca3af", background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 999, padding: "1px 8px" }}>
+                            {ตั้งเฉพาะ ? "ตั้งเฉพาะ" : "ตามแม่แบบหลัก"}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "1.1rem", fontWeight: 800, color: STEEL, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(ราคากลางย่อย)}</span>
+                        <span style={{ fontSize: "0.74rem", color: MUTED }}> /{แม่.unit}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 4 }}>
+                          <CalendarClock size={11} style={{ color: MUTED }} />
+                          <span style={{ fontSize: "0.7rem", color: MUTED }}>มีผล {แม่.effectiveDate}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: "0.66rem", color: MUTED, fontWeight: 700, marginBottom: 5 }}>รายละเอียด (ของแม่แบบหลัก)</div>
+                      <div style={{ fontSize: "0.86rem", fontWeight: 600, lineHeight: 1.65, color: STEEL }}>{แม่.spec || "—"}</div>
+                    </div>
+
+                    {/* ── ประวัติราคาของแม่แบบย่อยนี้ ─────────────────────────────────────
+                         ⚠️ รอบที่บันทึกก่อน 28 ส.ค. 69 ไม่ได้เก็บราคาย่อยไว้ — บอกตามตรงว่าไม่มีข้อมูล
+                         ห้ามเอาราคาแม่แบบหลักมาแสดงแทนเหมือนเป็นราคาย่อย */}
+                    <div>
+                      <div style={{ fontSize: "0.66rem", color: MUTED, fontWeight: 700, marginBottom: 6 }}>ประวัติราคากลางของแม่แบบย่อยนี้</div>
+                      <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#dce5f0" }}>
+                          <span style={{ fontSize: "0.78rem", fontWeight: 700, color: PRIMARY }}>ปัจจุบัน · {แม่.effectiveDate}</span>
+                          <span style={{ fontSize: "0.84rem", fontWeight: 800, color: PRIMARY, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(ราคากลางย่อย)}</span>
+                        </div>
+                        {แม่.priceHistory.map((h, i2) => {
+                          const เคยบันทึกย่อย = h.subtypePrices != null;
+                          const ราคาตอนนั้น = h.subtypePrices?.[ย่อย];
+                          return (
+                            <div key={i2} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "9px 14px", borderTop: `1px solid ${BORDER}` }}>
+                              <span style={{ minWidth: 0 }}>
+                                <span style={{ display: "block", fontSize: "0.74rem", color: STEEL, fontWeight: 600 }}>{h.effectiveDate}</span>
+                                {h.note && <span style={{ display: "block", fontSize: "0.66rem", color: MUTED }}>{h.note}</span>}
+                              </span>
+                              <span style={{ flexShrink: 0, textAlign: "right" }}>
+                                {!เคยบันทึกย่อย
+                                  ? <span style={{ fontSize: "0.7rem", color: "#9ca3af" }}>ไม่ได้บันทึกราคาแม่แบบย่อยไว้</span>
+                                  : ราคาตอนนั้น != null
+                                    ? <span style={{ fontSize: "0.8rem", fontWeight: 700, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(ราคาตอนนั้น)}</span>
+                                    : <span style={{ fontSize: "0.72rem", color: "#9ca3af" }}>ตามแม่แบบหลัก {fmtMoney(h.price)}</span>}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {แม่.priceHistory.length === 0 && (
+                          <div style={{ fontSize: "0.74rem", color: "#9ca3af", textAlign: "center", padding: "14px 0", borderTop: `1px solid ${BORDER}` }}>ยังไม่มีประวัติการปรับราคา</div>
+                        )}
+                      </div>
+                    </div>
+
+
+                    {/* ── แบบแปลน — ของแม่แบบย่อยเองก่อน ไม่มีค่อยใช้ของแม่แบบหลัก ────────
+                         ⚠️ ต้องบอกให้รู้ว่าอันไหนเป็นของแม่แบบหลัก ไม่งั้นเข้าใจว่าเป็นแบบแปลนเฉพาะตัวนี้ */}
+                    {(() => {
+                      const ของย่อย = แม่.subtypePlans?.[ย่อย] ?? [];
+                      const ใช้ของแม่ = ของย่อย.length === 0;
+                      const รายการแปลน = ใช้ของแม่ ? (แม่.plans ?? []) : ของย่อย;
+                      if (รายการแปลน.length === 0) return null;
+                      return (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.66rem", color: MUTED, fontWeight: 700, marginBottom: 6 }}>
+                            แบบแปลน
+                            {ใช้ของแม่ && <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#9ca3af", background: "#f4f6f9", border: `1px solid ${BORDER}`, borderRadius: 999, padding: "1px 8px" }}>ของแม่แบบหลัก</span>}
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {รายการแปลน.map(f => (
+                              <a key={f.path} href={fileStorage.catalogUrl(f.path)} target="_blank" rel="noreferrer"
+                                style={{ display: "flex", alignItems: "center", gap: 9, border: `1px solid ${BORDER}`, borderRadius: 10, padding: "9px 12px", textDecoration: "none", background: "#fff" }}>
+                                <FileText size={15} style={{ color: PRIMARY, flexShrink: 0 }} />
+                                <span style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", fontWeight: 600, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                                <span style={{ fontSize: "0.7rem", color: "#9ca3af", flexShrink: 0 }}>{ขนาดอ่านง่าย(f.size)}</span>
+                                <Download size={14} color="#9ca3af" style={{ flexShrink: 0 }} />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {พี่น้อง.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: "0.66rem", color: MUTED, fontWeight: 700, marginBottom: 6 }}>แม่แบบย่อยอื่นของ {แม่.name}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                          {พี่น้อง.map(x => (
+                            <button key={x} onClick={() => setSubView({ parent: แม่, sub: x })}
+                              style={{ fontSize: "0.74rem", fontWeight: 600, color: PRIMARY, background: "#eef3f8", border: `1px solid #dce5f0`, borderRadius: 999, padding: "5px 12px", cursor: "pointer", fontFamily: "inherit" }}>{x}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ padding: "14px 24px", borderTop: `1px solid ${BORDER}`, background: "#fafbfc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexShrink: 0 }}>
+                    <span style={{ fontSize: "0.8rem", color: MUTED, fontWeight: 600 }}>แม่แบบย่อยของ {แม่.name}</span>
+                    <button className="btn btn-secondary btn-md" style={{ color: STEEL }} onClick={() => { setSubView(null); setHistoryP(แม่); }}><History size={13} /> ประวัติราคาแม่แบบหลัก</button>
+                  </div>
+                </>
+              );
+            })()}
           </ModalCard>
         </div>
       )}
@@ -376,8 +563,7 @@ export default function DealerProductsPage() {
           <ModalCard onClose={() => setHistoryP(null)} label="ประวัติราคา" style={{ width: "100%", maxWidth: 480, maxHeight: "84vh", overflowY: "auto", background: "#fff", borderRadius: 16, boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
             <div style={{ background: PRIMARY, color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontSize: "1rem", fontWeight: 800 }}>ประวัติราคา</div>
-                <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,.7)", marginTop: 2 }}>{historyP.name}</div>
+                <div style={{ fontSize: "1rem", fontWeight: 800 }}>ประวัติราคา — {historyP.name}</div>
               </div>
               <button onClick={() => setHistoryP(null)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={15} /></button>
             </div>

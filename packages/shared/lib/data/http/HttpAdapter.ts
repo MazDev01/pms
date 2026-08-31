@@ -414,6 +414,27 @@ const storage: StoragePort = {
   },
   signedUrl: (path) => apiFetch<string | null>(`/storage?path=${encodeURIComponent(path)}`),
   remove: async (path) => { await apiFetch(`/storage?path=${encodeURIComponent(path)}`, { method: "DELETE" }); },
+  // ── แบบแปลนแม่แบบ → ถังของแคตตาล็อก (ส่ง bucket=catalog ให้เซิร์ฟเวอร์เลือกถังให้) ──
+  uploadCatalog: async (file) => {
+    const form = new FormData();
+    form.append("bucket", "catalog");
+    form.append("file", file);
+    form.append("stamp", String(Date.now()));
+    const token = await tokenReady();
+    const res = await fetch(`${API_BASE}/storage`, {
+      method: "POST", body: form,
+      headers: token ? { authorization: `Bearer ${token}` } : undefined,
+    });
+    const b = (await res.json().catch(() => null)) as { error?: string; code?: string } | string | null;
+    if (!res.ok) {
+      const e = b && typeof b === "object" ? b : null;
+      throw new DbError(e?.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}`, e?.code);
+    }
+    return typeof b === "string" ? b : null;
+  },
+  // ถังของแคตตาล็อกอ่านสาธารณะ — ประกอบลิงก์ตรงได้ ไม่ต้องขอเซิร์ฟเวอร์ทีละครั้ง
+  catalogUrl: (path) => `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/storage/v1/object/public/catalog-plans/${path}`,
+  removeCatalog: async (path) => { await apiFetch(`/storage?bucket=catalog&path=${encodeURIComponent(path)}`, { method: "DELETE" }); },
 };
 // ── อัปเดตสด (ระยะ 3) — สายเดียวจาก backend ของเราเอง แล้วแยกแจกตามช่อง ──────────
 // เบราว์เซอร์ไม่ต่อ WebSocket ไปหาฐานข้อมูลเองอีกต่อไป · เซิร์ฟเวอร์ต่อแทนในนามผู้ใช้

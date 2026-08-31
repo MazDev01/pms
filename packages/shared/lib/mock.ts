@@ -949,7 +949,21 @@ export const initialCustomers: CustomerRow[] = [
 
 // ─── แม่แบบอาคาร (Building Templates — กำหนดโดย HQ, ดีลเลอร์ดูอย่างเดียว) ───
 // แหล่งข้อมูลกลาง: ใช้ทั้งหน้า "แม่แบบ" (/products) และ dropdown "แม่แบบ" ในฟอร์มลูกค้าเป้าหมาย
-export type SolutionPriceHistory = { price: number; effectiveDate: string; note?: string };
+// ── ประวัติราคาแม่แบบ — เก็บ "ราคาที่เคยใช้" ทั้งระดับหลักและระดับย่อย ─────────────
+//   subtypePrices = ราคาย่อยที่ใช้อยู่ ณ ตอนนั้น (ไม่มีคีย์ = ย่อยตัวนั้นใช้ราคาหลัก)
+//   เดิมเก็บแค่ราคาหลัก — ราคาย่อยคือตัวที่ไหลไปเป็น BOQ ตั้งต้นของใบเสนอราคาจริง
+//   เปลี่ยนแล้วสืบย้อนไม่ได้เลยว่าใครเปลี่ยนเมื่อไหร่ (บอสสั่งให้เก็บ 28 ส.ค. 69)
+export type SolutionPriceHistory = { price: number; effectiveDate: string; note?: string; subtypePrices?: Record<string, number> };
+// ── แบบแปลนของแม่แบบ (บอสสั่ง 28 ส.ค. 69) ────────────────────────────────────────
+//   ⚠️ เก็บแค่ "รายการอ้างอิง" ไฟล์จริงอยู่ใน Storage (bucket catalog-images)
+//      ต่างจากรูปแม่แบบที่เก็บเป็น data URL ในคอลัมน์ — เพราะแบบแปลนเป็น PDF/DWG หลัก MB
+//      ยัดลงคอลัมน์ = ทุกหน้าที่อ่านแคตตาล็อกจะลากไฟล์ทั้งก้อนมาด้วย (ดู migration 0166)
+export type CatalogPlan = {
+  name: string;   // ชื่อไฟล์ที่คนอ่านรู้เรื่อง (ภาษาไทยได้ — คนละตัวกับ path ที่ต้องเป็น ASCII)
+  path: string;   // พาธในที่เก็บไฟล์
+  size: number;   // ไบต์ — ไว้บอกผู้ใช้ก่อนกดดาวน์โหลด
+};
+
 export type SolutionProduct = {
   id: string; name: string; spec: string;
   price: number; unit: string; effectiveDate: string; priceHistory: SolutionPriceHistory[];
@@ -963,6 +977,8 @@ export type SolutionProduct = {
   //   • data URL = รูปที่ HQ อัปโหลดเอง (ย่อขนาดแล้ว) — อัปทับเมื่อไรก็แทนที่ภาพลายเส้นทันที
   image?: string;
   subtypeImages?: Record<string, string>; // รูปรายแม่แบบย่อย (คีย์ = ชื่อแม่แบบย่อย) · HQ ใส่ได้รายอัน · fallback = image หลัก
+  plans?: CatalogPlan[];                      // แบบแปลนของแม่แบบหลัก
+  subtypePlans?: Record<string, CatalogPlan[]>; // แบบแปลนรายแม่แบบย่อย · ไม่มีคีย์ = ใช้ของแม่แบบหลัก
 };
 
 // ─── Master Catalog (แหล่งเดียว) ─────────────────────────────────

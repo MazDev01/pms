@@ -107,6 +107,11 @@ export const LocalAdapter: DataAdapter = {
     upload: (dealerCode, file) => putLocalBlob(dealerCode, file),
     signedUrl: (path) => localBlobUrl(path),
     remove: (path) => removeLocalBlob(path),
+    // แบบแปลนแม่แบบ — โหมดเดโมเก็บลงที่เดียวกับไฟล์อื่น (คนละ "โฟลเดอร์" เท่านั้น)
+    //   ไม่มีถังแยกเหมือนของจริง แต่ต้องทำงานได้ ไม่ใช่พังตอนกดอัปโหลด
+    uploadCatalog: (file) => putLocalBlob("catalog", file),
+    catalogUrl: (path) => path,   // โหมดเดโมพาธคือ URL อยู่แล้ว (blob ในเครื่อง)
+    removeCatalog: (path) => removeLocalBlob(path),
   },
   // โหมด local ไม่มี Realtime — ข้อมูลอยู่ในเครื่องเดียว (ข้ามแท็บใช้ event bus/storage event เหมือนเดิม)
   // (หน้าจอฝั่ง local ใช้ event/storage ของ origin ตัวเองแทน — ดู useMasterCatalog)

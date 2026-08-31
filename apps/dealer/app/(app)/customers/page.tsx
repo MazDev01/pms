@@ -1425,7 +1425,7 @@ export default function CustomersPage(){
                 <span style={{minWidth:0}}>
                   <span style={{display:"block",fontSize:"0.92rem",fontWeight:800,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pickGroup.template}</span>
                   <span style={{display:"block",fontSize:"0.68rem",color:"rgba(255,255,255,.75)",marginTop:2}}>
-                    {pickGroup.projects.length} งาน · รวม {fmtMoney(pickGroup.total)} — เลือกงานที่ต้องการดู
+                    {pickGroup.projects.length} งาน · รวม {fmtMoney(pickGroup.total)}
                   </span>
                 </span>
                 <button onClick={()=>setPickGroup(null)} title="ปิด"
@@ -1718,8 +1718,8 @@ export default function CustomersPage(){
           <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
             <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
+                {/* ⚠️ ห้ามใส่คำอธิบายกำกับใต้หัวข้อ (บอสสั่ง 28 ส.ค. 69 · แนวเดียวกับที่เอาออกจากการ์ดทุกหน้า) */}
                 <div style={{fontSize:"0.92rem",fontWeight:800}}>เพิ่มลูกค้าเดิม</div>
-                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>ลูกค้าก่อนมีระบบ / ไม่ได้ผ่านลูกค้าเป้าหมาย</div>
               </div>
               <button onClick={()=>setShowManual(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
             </div>
@@ -1856,7 +1856,6 @@ export default function CustomersPage(){
             <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:"0.92rem",fontWeight:800}}>เพิ่มงานขายใหม่</div>
-                <div style={{fontSize:"0.72rem",color:"rgba(255,255,255,.7)",marginTop:2}}>งานขายใหม่ของลูกค้าเดิม · ข้อมูลลูกค้าคงเดิม</div>
               </div>
               <button onClick={()=>setShowNewDeal(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
             </div>

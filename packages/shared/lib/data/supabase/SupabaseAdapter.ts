@@ -197,6 +197,7 @@ async function nextEntityId(dealerCode: string, entity: "customers" | "appointme
 }
 
 const FILES_BUCKET = "dealer-files";
+const CATALOG_BUCKET = "catalog-plans";   // แบบแปลนแม่แบบ · อ่านสาธารณะ · เขียนเฉพาะ HQ (0167)
 
 // ชื่อช่อง Realtime ต้องไม่ซ้ำกันต่อการ subscribe หนึ่งครั้ง
 // ถ้าใช้ชื่อตายตัว: หลายคอมโพเนนต์ที่ subscribe พร้อมกัน (เช่น useHQPolicy + useQuoteValidityDays
@@ -281,6 +282,20 @@ export const SupabaseAdapter: DataAdapter = {
     },
     remove: async (path) => {
       const { error } = await sb().storage.from(FILES_BUCKET).remove([path]);
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
+    },
+    // ── แบบแปลนแม่แบบ → ถัง catalog-images (สิทธิ์เขียน = สำนักงานใหญ่เท่านั้น ตั้งไว้ที่ 0010) ──
+    uploadCatalog: async (file) => {
+      // ชื่อไฟล์ที่เป็น key ต้องเป็น ASCII ล้วน (ไทย/ช่องว่าง → "Invalid key") — ชื่อจริงเก็บใน plans[].name
+      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_") || "file";
+      const path = `plans/${Date.now()}-${safe}`;
+      const { error } = await sb().storage.from(CATALOG_BUCKET).upload(path, file, { upsert: false });
+      if (error) throw new DbError(error.message, (error as { code?: string }).code);
+      return path;
+    },
+    catalogUrl: (path) => sb().storage.from(CATALOG_BUCKET).getPublicUrl(path).data.publicUrl,
+    removeCatalog: async (path) => {
+      const { error } = await sb().storage.from(CATALOG_BUCKET).remove([path]);
       if (error) throw new DbError(error.message, (error as { code?: string }).code);
     },
   },

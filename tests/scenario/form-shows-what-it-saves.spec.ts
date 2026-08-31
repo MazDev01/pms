@@ -40,7 +40,8 @@ test("[func] ฟอร์มลูกค้าเป้าหมาย: แม�
   // ⚠️ จงใจกดเปิดฟอร์ม "ทันที" ไม่รอให้แคตตาล็อกโหลดเสร็จ — นี่คือจังหวะที่บั๊กเกิด
   //   ถ้ารอจนทุกอย่างนิ่งก่อน จะไม่มีวันเจอ (และนี่คือเหตุผลที่มันรอดมาถึงตอนนี้)
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
-  await expect(page.getByText("กรอกข้อมูลลูกค้าเป้าหมาย")).toBeVisible();
+  // บรรทัดคำอธิบายใต้หัวข้อถูกเอาออกแล้ว (28 ส.ค. 69) — ยึดกล่องแทน ชี้ชัดกว่าข้อความในกล่องอยู่แล้ว
+  await expect(page.getByRole("dialog", { name: "เพิ่มลูกค้าเป้าหมาย" })).toBeVisible();
 
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(COMPANY);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
@@ -81,7 +82,8 @@ test("[func] ฟอร์มลูกค้าเป้าหมาย: มู�
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
   await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
-  await expect(page.getByText("กรอกข้อมูลลูกค้าเป้าหมาย")).toBeVisible();
+  // บรรทัดคำอธิบายใต้หัวข้อถูกเอาออกแล้ว (28 ส.ค. 69) — ยึดกล่องแทน ชี้ชัดกว่าข้อความในกล่องอยู่แล้ว
+  await expect(page.getByRole("dialog", { name: "เพิ่มลูกค้าเป้าหมาย" })).toBeVisible();
 
   await page.getByPlaceholder("เช่น บริษัท ตัวอย่าง จำกัด").fill(C2);
   await page.getByPlaceholder("ชื่อผู้ติดต่อ").fill("คุณทดสอบ");
@@ -98,31 +100,32 @@ test("[func] ฟอร์มลูกค้าเป้าหมาย: มู�
   expect(data?.length ?? 0, "กรอกมูลค่าผิดแล้วต้องไม่บันทึกลงฐานข้อมูล").toBe(0);
 });
 
-// ── สำนักงานใหญ่: ปรับราคากลางด้วยค่าที่ใช้ไม่ได้ ต้องฟ้อง ห้ามปิดกล่องเงียบ ──────────
+// ── สำนักงานใหญ่: ตั้งราคากลางด้วยค่าที่ใช้ไม่ได้ ต้องฟ้อง ห้ามปิดกล่องเงียบ ──────────
 //
 // บั๊กจริง (เอเจนต์สวมบทผู้ดูแล HQ เจอเอง 10 ส.ค. 69):
-//   กรอกราคาเป็น 0 หรือติดลบ แล้วกด "ปรับราคา" → กล่องปิดลงเหมือนบันทึกสำเร็จ
+//   กรอกราคาเป็น 0 หรือติดลบ แล้วกดบันทึก → กล่องปิดลงเหมือนบันทึกสำเร็จ
 //   แต่ราคาไม่เปลี่ยนเลย ไม่มีข้อความ ไม่มีบันทึกการใช้งาน ไม่มีข้อผิดพลาด
 //   ผู้ดูแลเชื่อว่าปรับราคากลางทั้งเครือแล้ว แต่ตัวแทนทุกสาขายังเห็นราคาเดิม
 //
+// ⚠️ 28 ส.ค. 69 ปุ่ม "ปรับราคา" ถูกยุบรวมเข้ากับ "แก้ไข" (บอสสั่ง — สองปุ่มทับกัน)
+//    ด่านนี้ต้องยังอยู่ที่เดิมของมัน แค่ย้ายมาอยู่ในกล่องแก้ไขแทน
+//
 // เทสต์นี้ทดสอบเฉพาะ "ทางที่ต้องถูกปฏิเสธ" จึงไม่แตะราคาจริงของแคตตาล็อกเลย
-test("[func·hq] ปรับราคากลางเป็น 0 ต้องขึ้นเหตุผล และกล่องต้องไม่ปิด", async ({ page }) => {
+test("[func·hq] ตั้งราคากลางเป็น 0 ต้องขึ้นเหตุผล และกล่องต้องไม่ปิด", async ({ page }) => {
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
   await page.goto(`${HQ_ORIGIN}/hq/master`, { waitUntil: "domcontentloaded" });
 
-  // รอให้แคตตาล็อกขึ้นก่อน — ปุ่มปรับราคาอยู่ในการ์ดของแต่ละแม่แบบ ยังไม่มีการ์ดก็ยังไม่มีปุ่ม
-  //
-  // ⚠️ ต้องใส่ exact — การ์ดทั้งใบก็เป็นปุ่ม และมีคำว่า "ปรับราคา" อยู่ในเนื้อหาการ์ดด้วย
-  //   ถ้าไม่ระบุให้ตรงเป๊ะ จะไปกดโดนการ์ด (366×409) แทนปุ่มจริง (118×36) แล้วกล่องไม่เปิด
-  const repriceBtn = page.getByRole("button", { name: "ปรับราคา", exact: true }).first();
-  await expect(repriceBtn).toBeVisible({ timeout: 20_000 });
-  await repriceBtn.click();
+  // รอให้แคตตาล็อกขึ้นก่อน — ปุ่มแก้ไขอยู่ในการ์ดของแต่ละแม่แบบ ยังไม่มีการ์ดก็ยังไม่มีปุ่ม
+  // ⚠️ ต้องใส่ exact — การ์ดทั้งใบก็เป็นปุ่ม ถ้าไม่ระบุให้ตรงเป๊ะจะไปกดโดนการ์ดแทนปุ่มจริง
+  const editBtn = page.getByRole("button", { name: "แก้ไข", exact: true }).first();
+  await expect(editBtn).toBeVisible({ timeout: 20_000 });
+  await editBtn.click();
 
   // ช่องกรอกราคาโผล่ = กล่องเปิดแล้วจริง (ใช้ตัวนี้แทนการจับข้อความหัวกล่อง ซึ่งเปลี่ยนตามชื่อแม่แบบ)
-  const priceInput = page.getByLabel("ราคากลางใหม่ (บาท)");
+  const priceInput = page.getByLabel("ราคากลาง (บาท)");
   await expect(priceInput).toBeVisible({ timeout: 15_000 });
   await priceInput.fill("0");
-  await page.getByRole("button", { name: "ปรับราคา", exact: true }).last().click();
+  await page.getByRole("button", { name: "บันทึก", exact: true }).last().click();
 
   await expect(page.getByText("ราคากลางต้องมากกว่า 0 บาท")).toBeVisible({ timeout: 10_000 });
   await expect(priceInput, "กล่องต้องยังเปิดอยู่ ไม่ใช่ปิดไปเหมือนสำเร็จ").toBeVisible();

@@ -12,7 +12,8 @@ const EXISTING = EXISTING_CUSTOMER_NAME;
 async function openAddLeadForm(page: import("@playwright/test").Page) {
   await open(page, "dealer", "/leads");
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
-  await expect(page.getByText("กรอกข้อมูลลูกค้าเป้าหมาย")).toBeVisible();
+  // บรรทัดคำอธิบายใต้หัวข้อถูกเอาออกแล้ว (28 ส.ค. 69) — ยึดกล่องแทน ชี้ชัดกว่าข้อความในกล่องอยู่แล้ว
+  await expect(page.getByRole("dialog", { name: "เพิ่มลูกค้าเป้าหมาย" })).toBeVisible();
 }
 
 test("[dealer] ชื่อบริษัทตรงกับลูกค้าเดิม → ฟอร์มเตือนว่าจะผูกเข้ากับรายเดิม", async ({ page }) => {

@@ -55,6 +55,10 @@ export function friendlyError(e: unknown, fallback = "เกิดข้อผ�
   if (/violates foreign key constraint/i.test(msg)) return "ทำรายการไม่ได้ — ยังมีข้อมูลอื่นผูกอยู่กับรายการนี้";
   if (/violates row-level security policy|permission denied/i.test(msg)) return "ไม่มีสิทธิ์ทำรายการนี้";
   if (/violates check constraint/i.test(msg)) return "ข้อมูลไม่ผ่านเงื่อนไขที่ระบบกำหนด — กรุณาตรวจสอบค่าที่กรอก";
+  // ── ที่เก็บไฟล์ตอบคนละรูปแบบกับฐานข้อมูล (ไม่มีช่อง code) — ต้องแกะจากข้อความ ──
+  //   ไม่แปลจะกลายเป็น "เกิดข้อผิดพลาด" ลอย ๆ ทั้งที่เป็นเรื่องที่ผู้ใช้แก้เองได้
+  if (/mime type .* is not supported|InvalidMimeType/i.test(msg)) return "ชนิดไฟล์นี้ไม่รองรับ";
+  if (/exceeded the maximum allowed size|Payload too large|EntityTooLarge/i.test(msg)) return "ไฟล์ใหญ่เกินที่ระบบรับได้";
   if (/JWT expired|invalid.*token|refresh_token/i.test(msg)) return "เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่";
   if (/new password should be different/i.test(msg)) return "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม";
   if (/password.*should be at least|password.*too short/i.test(msg)) return "รหัสผ่านสั้นเกินไป — ต้องยาวอย่างน้อย 8 ตัวอักษร";
