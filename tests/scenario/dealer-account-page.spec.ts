@@ -11,10 +11,14 @@ test("[dealer] บัญชีเข้าระบบ: หน้าตั้ง
   await expect(page.getByRole("button", { name: /ดูรหัส/ })).toHaveCount(0);
   await expect(page.getByLabel("รหัสผ่านปัจจุบัน")).toHaveCount(0);
   await expect(page.getByLabel("รหัสผ่านใหม่")).toHaveCount(0);
+  // ทางเข้ามีแค่ 2 อันตามที่บอสสั่ง (ไม่มีออกจากระบบ/เคล็ดลับ/ไทล์ซ้ำในกล่องบัญชี)
+  await expect(page.getByRole("button", { name: /เปลี่ยนรหัสผ่าน/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /เปลี่ยนอีเมลเข้าสู่ระบบ/ })).toHaveCount(1);
+  await expect(page.getByText("เคล็ดลับความปลอดภัย")).toHaveCount(0);
   await page.screenshot({ path: `${OUT}/acct-summary.png` });
 
   // กดปุ่มแล้วต้องไปหน้าบัญชีแยก
-  await page.getByRole("button", { name: /เปลี่ยนอีเมล \/ รหัสผ่าน/ }).click();
+  await page.getByRole("button", { name: /เปลี่ยนรหัสผ่าน/ }).click();
   await page.waitForURL(/\/settings\/account/, { timeout: 20_000 });
   await expect(page.getByText("บัญชีเข้าสู่ระบบ").first()).toBeVisible();
   await expect(page.getByLabel("รหัสผ่านปัจจุบัน")).toBeVisible();

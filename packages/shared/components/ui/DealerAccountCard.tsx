@@ -13,7 +13,7 @@
 //    ระหว่างแก้ข้อมูลบริษัท และหน้าจอที่เปิดค้างไว้จะไม่มีช่องรหัสผ่านทิ้งไว้ให้ใครมากรอก
 
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight, LogOut } from "lucide-react";
+import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight } from "lucide-react";
 import { account } from "@pms/shared/lib/data";
 import type { AccountState } from "@pms/shared/lib/data/ports";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -64,8 +64,8 @@ function ไทล์({ ไอคอน: Ico, หัวข้อ, รอง, onC
   );
 }
 
-export function DealerAccountSummary({ dealerCode, currentEmail, onOpen, onLogout }: {
-  dealerCode: string; currentEmail: string; onOpen: () => void; onLogout?: () => void;
+export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
+  dealerCode: string; currentEmail: string; onOpen: () => void;
 }) {
   const { state, โหลดพลาด, email } = useAccountState(dealerCode, currentEmail);
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
@@ -93,7 +93,8 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen, onLogou
             <span style={{ display: "block", fontSize: "0.66rem", color: "#64748B", marginTop: 1 }}>ตรวจสอบบัญชีและจัดการการเข้าสู่ระบบ</span>
           </span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, padding: 14, background: "#fff" }}>
+        <div style={{ padding: 14, background: "#fff" }}>
+          {/* กล่องนี้ "แสดงอย่างเดียว" — ทางเข้าไปเปลี่ยนอยู่ที่การ์ดด้านล่าง 2 ใบ (บอสสั่งให้เหลือ 2 อัน) */}
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
             <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Mail size={15} color="#003366" />
@@ -104,7 +105,6 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen, onLogou
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email || "—"}</span>
             </span>
           </div>
-          <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนอีเมล / รหัสผ่าน" รอง="อัปเดตบัญชีเข้าสู่ระบบเพื่อความปลอดภัย" onClick={onOpen} />
         </div>
       </div>
 
@@ -135,21 +135,6 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen, onLogou
           onClick={onOpen} />
         <ไทล์ ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ"
           รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" onClick={onOpen} />
-        {onLogout && (
-          <ไทล์ ไอคอน={LogOut} หัวข้อ="ออกจากระบบ" รอง="ออกจากระบบบนอุปกรณ์นี้" onClick={onLogout} />
-        )}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: "#F8FAFC", border: "1px solid #E7EDF4",
-          borderRadius: 12, padding: "13px 14px" }}>
-          <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Lock size={15} color="#003366" />
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F2937" }}>เคล็ดลับความปลอดภัย</span>
-            <span style={{ display: "block", fontSize: "0.68rem", color: "#64748B", marginTop: 2, lineHeight: 1.55 }}>
-              ใช้รหัสผ่านที่แข็งแรง ประกอบด้วยตัวอักษร ตัวเลข และสัญลักษณ์ และไม่ใช้รหัสผ่านซ้ำกับเว็บไซต์อื่น
-            </span>
-          </span>
-        </div>
       </div>
     </>
   );

@@ -68,7 +68,7 @@ const COMPANY_DEFAULT: CompanyProfile = {
 // บัญชีดีลเลอร์ = โปรไฟล์ผู้ใช้ (รูป/ชื่อ) + ข้อมูลบริษัท + ข้อมูลบัญชี (อีเมลล็อกอิน/รหัสผ่าน) รวมเป็นบัญชีเดียว
 function CompanyTab() {
   const router = useRouter();
-  const { session, logout } = useRole();
+  const { session } = useRole();
   const [form, setForm] = useState<CompanyProfile>(COMPANY_DEFAULT);
   const [logo, setLogo] = useState<string>("");
   const [prof, setProf] = useState<UserProfile>({ name: session.name, email: defaultProfileEmail(session.dealerCode), phone: "" });
@@ -212,7 +212,7 @@ function CompanyTab() {
              และถูกบังคับจริงที่เซิร์ฟเวอร์ (ไม่ใช่แค่ซ่อนปุ่ม) */}
         {/* หน้าตั้งค่าโชว์แค่ "บัญชีที่ใช้อยู่" (อีเมลเท่านั้น) — การแก้ไปทำที่หน้าบัญชีแยก */}
         <DealerAccountSummary dealerCode={session.dealerCode} currentEmail={prof.email}
-          onOpen={() => router.push("/settings/account")} onLogout={logout} />
+          onOpen={() => router.push("/settings/account")} />
       </div>
     </>
   );
