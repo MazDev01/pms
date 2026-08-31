@@ -13,7 +13,7 @@
 //    ระหว่างแก้ข้อมูลบริษัท และหน้าจอที่เปิดค้างไว้จะไม่มีช่องรหัสผ่านทิ้งไว้ให้ใครมากรอก
 
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight } from "lucide-react";
+import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight, LogOut } from "lucide-react";
 import { account } from "@pms/shared/lib/data";
 import type { AccountState } from "@pms/shared/lib/data/ports";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -37,51 +37,119 @@ function useAccountState(dealerCode: string, currentEmail: string) {
   return { state, โหลดพลาด, โหลด, email: state?.email || currentEmail };
 }
 
-/* ── 1) หน้าตั้งค่า: สรุปบัญชี + ปุ่มเข้าไปหน้าจัดการ ───────────────────────── */
-export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
-  dealerCode: string; currentEmail: string; onOpen: () => void;
+/* ── 1) หน้าตั้งค่า: สรุปบัญชี + ทางเข้าไปจัดการ (หน้าตาตามตัวอย่างที่บอสส่งมา 28 ส.ค. 69) ──
+   ⚠️ ใส่เฉพาะเรื่องที่ระบบทำได้จริง — ในตัวอย่างมีการ์ด "ยืนยันตัวตนสองขั้นตอน (2FA)" ·
+      "อุปกรณ์ที่เชื่อมต่อ" · "ประวัติการเข้าสู่ระบบ" ซึ่งระบบนี้ยังไม่มีของจริงรองรับ
+      ถ้าวางไว้ให้ครบตามภาพจะได้ปุ่มที่กดแล้วไม่มีอะไรเกิดขึ้น (หรือแย่กว่า: ผู้ใช้เชื่อว่าเปิด 2FA แล้ว
+      ทั้งที่ไม่มี) จึงใส่เท่าที่มีจริงไว้ก่อน แล้วค่อยเติมเมื่อทำของจริงเสร็จ */
+function ไทล์({ ไอคอน: Ico, หัวข้อ, รอง, onClick }: {
+  ไอคอน: React.ComponentType<{ size?: number; color?: string }>;
+  หัวข้อ: string; รอง: string; onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick}
+      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+        background: "#fff", border: "1px solid #E7EDF4", borderRadius: 12, padding: "13px 14px",
+        cursor: "pointer", fontFamily: "inherit" }}>
+      <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex",
+        alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Ico size={15} color="#003366" />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F2937" }}>{หัวข้อ}</span>
+        <span style={{ display: "block", fontSize: "0.68rem", color: "#64748B", marginTop: 2 }}>{รอง}</span>
+      </span>
+      <ChevronRight size={15} color="#94A3B8" />
+    </button>
+  );
+}
+
+export function DealerAccountSummary({ dealerCode, currentEmail, onOpen, onLogout }: {
+  dealerCode: string; currentEmail: string; onOpen: () => void; onLogout?: () => void;
 }) {
   const { state, โหลดพลาด, email } = useAccountState(dealerCode, currentEmail);
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
+  const เตือน = !!โหลดพลาด || !!state?.pending;
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 800, color: "#003366",
-        borderTop: "1px solid #f1f5f9", paddingTop: 18, marginBottom: 10 }}>
-        <KeyRound size={14} /> ข้อมูลบัญชี
-      </div>
-
-      <div style={กล่อง}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", fontSize: "0.78rem" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}>
-            <Mail size={14} color="#94A3B8" /> อีเมลเข้าสู่ระบบ
-          </span>
-          <span style={{ fontWeight: 700, color: email ? "#1F2937" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {email || "—"}
-          </span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", fontSize: "0.78rem",
-          borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}>
-            <Lock size={14} color="#94A3B8" /> รหัสผ่าน
-          </span>
-          {/* ไม่มีที่ไหนในระบบให้ตัวแทนอ่านรหัสของตัวเอง — เปลี่ยนได้อย่างเดียว */}
-          <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#94A3B8", letterSpacing: 2 }}>••••••••</span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-secondary btn-md" onClick={onOpen} style={{ color: "#003366" }}>
-          <ShieldCheck size={14} /> จัดการบัญชีเข้าระบบ <ChevronRight size={13} />
-        </button>
-        <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.68rem", color: โหลดพลาด ? "#b45309" : "#64748B" }}>
-          <Lock size={11} />
-          {โหลดพลาด ? โหลดพลาด
-            : state == null ? "กำลังอ่านสถานะบัญชี…"
-            : state.pending ? "มีคำขอรอสำนักงานใหญ่อนุมัติอยู่"
-            : เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติ"
-            : `แก้อีเมล/รหัสผ่านเองได้อีก ${เหลือ} ครั้ง`}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid #f1f5f9", paddingTop: 18, marginBottom: 12 }}>
+        <span style={{ width: 34, height: 34, borderRadius: 10, background: "#003366", display: "flex",
+          alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <ShieldCheck size={16} color="#fff" />
         </span>
+        <span>
+          <span style={{ display: "block", fontSize: "0.88rem", fontWeight: 800, color: "#1F2937" }}>ข้อมูลบัญชี</span>
+          <span style={{ display: "block", fontSize: "0.68rem", color: "#64748B", marginTop: 1 }}>จัดการข้อมูลบัญชีและการเข้าสู่ระบบของคุณ</span>
+        </span>
+      </div>
+
+      {/* บัญชีที่ใช้งานอยู่ — อีเมลอย่างเดียว (รหัสผ่านดูไม่ได้) + ทางเข้าไปเปลี่ยน */}
+      <div style={{ ...กล่อง, padding: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid #E7EDF4" }}>
+          <Lock size={14} color="#64748B" />
+          <span>
+            <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 800, color: "#1F2937" }}>บัญชีที่ใช้งานอยู่ตอนนี้</span>
+            <span style={{ display: "block", fontSize: "0.66rem", color: "#64748B", marginTop: 1 }}>ตรวจสอบบัญชีและจัดการการเข้าสู่ระบบ</span>
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, padding: 14, background: "#fff" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
+            <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Mail size={15} color="#003366" />
+            </span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: "0.66rem", color: "#64748B" }}>อีเมลเข้าสู่ระบบ</span>
+              <span style={{ display: "block", fontSize: "0.84rem", fontWeight: 800, color: email ? "#1F2937" : "#94A3B8",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email || "—"}</span>
+            </span>
+          </div>
+          <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนอีเมล / รหัสผ่าน" รอง="อัปเดตบัญชีเข้าสู่ระบบเพื่อความปลอดภัย" onClick={onOpen} />
+        </div>
+      </div>
+
+      {/* แถบสถานะบัญชี — เขียวเมื่อปกติ · เหลืองเมื่อมีคำขอค้างหรือตรวจสอบสถานะไม่ได้ */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 12, borderRadius: 12, padding: "11px 13px",
+        background: เตือน ? "#FFFBEB" : "#ECFDF5", border: `1px solid ${เตือน ? "#FDE68A" : "#A7F3D0"}` }}>
+        <ShieldCheck size={15} color={เตือน ? "#B45309" : "#059669"} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: "0.76rem", fontWeight: 800, color: เตือน ? "#92400E" : "#047857" }}>
+            {โหลดพลาด ? "ตรวจสอบสถานะบัญชีไม่ได้"
+              : state?.pending ? "มีคำขอเปลี่ยนบัญชีรอสำนักงานใหญ่อนุมัติ"
+              : "บัญชีของคุณปลอดภัย"}
+          </span>
+          <span style={{ display: "block", fontSize: "0.68rem", color: "#475569", marginTop: 2 }}>
+            {โหลดพลาด ? โหลดพลาด
+              : state?.pending ? "การเปลี่ยนจะมีผลเมื่อได้รับอนุมัติ — ระหว่างนี้ใช้อีเมล/รหัสเดิมเข้าระบบได้ตามปกติ"
+              : "อย่าเปิดเผยรหัสผ่านให้ผู้อื่น และเปลี่ยนรหัสผ่านสม่ำเสมอ"}
+          </span>
+        </span>
+      </div>
+
+      {/* ทางเข้าที่ใช้ได้จริงในระบบนี้ */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginTop: 12 }}>
+        <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนรหัสผ่าน"
+          รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติ"
+            : เหลือ == null ? "ตั้งรหัสผ่านใหม่เพื่อเพิ่มความปลอดภัย"
+            : `ตั้งรหัสผ่านใหม่ · แก้เองได้อีก ${เหลือ} ครั้ง`}
+          onClick={onOpen} />
+        <ไทล์ ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ"
+          รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" onClick={onOpen} />
+        {onLogout && (
+          <ไทล์ ไอคอน={LogOut} หัวข้อ="ออกจากระบบ" รอง="ออกจากระบบบนอุปกรณ์นี้" onClick={onLogout} />
+        )}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, background: "#F8FAFC", border: "1px solid #E7EDF4",
+          borderRadius: 12, padding: "13px 14px" }}>
+          <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Lock size={15} color="#003366" />
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F2937" }}>เคล็ดลับความปลอดภัย</span>
+            <span style={{ display: "block", fontSize: "0.68rem", color: "#64748B", marginTop: 2, lineHeight: 1.55 }}>
+              ใช้รหัสผ่านที่แข็งแรง ประกอบด้วยตัวอักษร ตัวเลข และสัญลักษณ์ และไม่ใช้รหัสผ่านซ้ำกับเว็บไซต์อื่น
+            </span>
+          </span>
+        </div>
       </div>
     </>
   );
