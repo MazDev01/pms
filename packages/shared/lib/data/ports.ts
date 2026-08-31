@@ -146,9 +146,15 @@ export type AccountState = {
 /** ผลของการกดบันทึก — applied = มีผลทันที · pending = ส่งคำขอรออนุมัติแล้ว */
 export type AccountChangeResult = { applied: boolean; pending: boolean; message: string };
 
+/** รหัสผ่าน "ล่าสุดที่ระบบบันทึกไว้" ของสาขา — ไม่ใช่การอ่านจากระบบยืนยันตัวตน (ที่นั่นเก็บเป็น hash)
+ *  ถ้ารหัสถูกเปลี่ยนนอกระบบนี้ ค่าที่บันทึกไว้จะเก่า — จึงต้องบอกวันที่กำกับเสมอ ห้ามโชว์ลอย ๆ */
+export type AccountSecret = { password: string | null; updatedAt?: string; note?: string };
+
 export interface AccountRepo {
   /** สถานะบัญชีของสาขา (อีเมลปัจจุบัน · โควตาที่เหลือ · คำขอที่ค้าง) */
   state(dealerCode: string): Promise<AccountState>;
+  /** เปิดดูรหัสผ่านล่าสุดที่บันทึกไว้ของสาขาตัวเอง (บันทึกร่องรอยทุกครั้งที่เปิดดู) */
+  reveal(dealerCode: string): Promise<AccountSecret>;
   /** ตัวแทนขอเปลี่ยนอีเมล/รหัสผ่านของตัวเอง — ต้องยืนยันรหัสผ่านปัจจุบันเสมอ */
   change(input: {
     dealerCode: string;

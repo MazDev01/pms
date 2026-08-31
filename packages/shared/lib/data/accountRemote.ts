@@ -8,7 +8,7 @@
 // การยืนยันตัวตน: ส่งใบผ่านของ "ตัวแทนคนที่กำลังใช้งาน" ไปกับคำขอ (Bearer)
 //   ฝั่งเซิร์ฟเวอร์ตรวจว่าใบผ่านนี้เป็นของสาขานั้นจริงก่อนทำอะไร — ไม่เชื่อรหัสสาขาที่ส่งมา
 
-import type { AccountChangeResult, AccountRepo, AccountRequest, AccountState } from "./ports";
+import type { AccountChangeResult, AccountRepo, AccountRequest, AccountSecret, AccountState } from "./ports";
 import { getAccessToken } from "./supabase/client";
 
 /** ที่อยู่แอปสำนักงานใหญ่ — ตั้งใน .env (NEXT_PUBLIC_HQ_ORIGIN) · แอป HQ เองเรียกที่ตัวเอง */
@@ -42,6 +42,9 @@ async function ยิง<T>(path: string, init?: RequestInit): Promise<T> {
 export const accountRemote: AccountRepo = {
   state: (dealerCode) =>
     ยิง<AccountState>(`/api/account?code=${encodeURIComponent(dealerCode)}`),
+
+  reveal: (dealerCode) =>
+    ยิง<AccountSecret>(`/api/account?code=${encodeURIComponent(dealerCode)}&reveal=1`),
 
   change: (input) =>
     ยิง<AccountChangeResult>("/api/account", { method: "POST", body: JSON.stringify(input) }),

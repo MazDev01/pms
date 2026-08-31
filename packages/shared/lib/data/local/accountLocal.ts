@@ -7,7 +7,7 @@
 // ⚠️ ที่นี่เก็บรหัสไว้ในเครื่องของผู้ใช้เอง (localStorage) เพราะเดโมไม่มีเซิร์ฟเวอร์
 //    โหมดจริง (supabase/api) จะยิงไปที่ API ของสำนักงานใหญ่แทน — ดู accountRemote.ts
 
-import type { AccountChangeResult, AccountRequest, AccountState } from "../ports";
+import type { AccountChangeResult, AccountRequest, AccountSecret, AccountState } from "../ports";
 
 const CHANGES_KEY = "dealer_account_changes_v1";
 const REQUESTS_KEY = "dealer_account_requests_v1";
@@ -64,6 +64,11 @@ export const accountLocal = {
       selfChangesLimit: SELF_CHANGE_LIMIT,
       pending: ค้าง,
     };
+  },
+
+  async reveal(dealerCode: string): Promise<AccountSecret> {
+    // โหมดเดโมเก็บรหัสไว้ในเครื่องอยู่แล้ว — คืนค่าที่ใช้จริงตอนนี้ (ไม่มีของเก่าค้างให้เข้าใจผิด)
+    return { password: localDealerPassword(dealerCode), note: "โหมดสาธิต — รหัสเก็บอยู่ในเครื่องนี้เท่านั้น" };
   },
 
   async change(input: { dealerCode: string; currentPassword: string; email?: string; password?: string }): Promise<AccountChangeResult> {

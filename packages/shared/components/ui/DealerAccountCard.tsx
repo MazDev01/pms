@@ -10,7 +10,7 @@
 // ⚠️ ต้องกรอกรหัสผ่านปัจจุบันทุกครั้ง — กันคนที่มานั่งหน้าจอที่เปิดค้างไว้เปลี่ยนบัญชีของสาขา
 
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Mail, Lock, ShieldCheck, Clock } from "lucide-react";
+import { KeyRound, Mail, Lock, ShieldCheck, Clock, Eye, EyeOff } from "lucide-react";
 import { account } from "@pms/shared/lib/data";
 import type { AccountState } from "@pms/shared/lib/data/ports";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -25,15 +25,19 @@ export function DealerAccountCard({ dealerCode, currentEmail }: { dealerCode: st
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [โหลดพลาด, setโหลดพลาด] = useState("");
+  // รหัสล่าสุดที่ระบบบันทึกไว้ — ดึงตอนกดดูเท่านั้น (ไม่ส่งมากับหน้าโดยที่ผู้ใช้ไม่ได้ขอ)
+  const [รหัสเดิม, setรหัสเดิม] = useState<{ password: string | null; updatedAt?: string; note?: string } | null>(null);
+  const [กำลังดู, setกำลังดู] = useState(false);
 
   const โหลด = useCallback(() => {
     account.state(dealerCode)
       .then(s => { setState(s); setEmail(s.email || currentEmail); setโหลดพลาด(""); })
       // อ่านสถานะไม่ได้ = ยังบอกไม่ได้ว่าเหลือสิทธิ์กี่ครั้ง → บอกเหตุผลตรงนั้น ไม่ใช่ค้างที่ "กำลังอ่าน…"
-      .catch(e => setโหลดพลาด(friendlyError(e)));
+      .catch(e => { setโหลดพลาด(friendlyError(e)); setEmail(p => p || currentEmail); });
   }, [dealerCode, currentEmail]);
   useEffect(โหลด, [โหลด]);
 
+  const อีเมลปัจจุบัน = state?.email || currentEmail;
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
   const ต้องขออนุมัติ = เหลือ === 0;
   const มีคำขอค้าง = !!state?.pending;
@@ -60,6 +64,42 @@ export function DealerAccountCard({ dealerCode, currentEmail }: { dealerCode: st
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 800, color: "#003366",
         borderTop: "1px solid #f1f5f9", paddingTop: 18, marginBottom: 6 }}>
         <KeyRound size={14} /> ข้อมูลบัญชี
+      </div>
+
+      {/* บัญชีที่ใช้อยู่ตอนนี้ — ให้เห็นของเดิมก่อนแก้ (บอสสั่ง 28 ส.ค. 69) */}
+      <div style={{ background: "#F8FAFC", border: "1px solid #E7EDF4", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+        <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+          บัญชีที่ใช้อยู่ตอนนี้
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: "1px solid #F1F5F9", fontSize: "0.76rem" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 7, color: "#64748B" }}><Mail size={13} color="#94A3B8" /> อีเมลเข้าสู่ระบบ</span>
+          <span style={{ fontWeight: 700, color: อีเมลปัจจุบัน ? "#1F2937" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {อีเมลปัจจุบัน || "—"}
+          </span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", fontSize: "0.76rem", alignItems: "center" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 7, color: "#64748B" }}><KeyRound size={13} color="#94A3B8" /> รหัสผ่านล่าสุดที่บันทึกไว้</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span style={{ fontFamily: "monospace", fontWeight: 700, color: รหัสเดิม?.password ? "#1F2937" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {รหัสเดิม ? (รหัสเดิม.password ?? "—") : "••••••••"}
+            </span>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={กำลังดู}
+              onClick={async () => {
+                if (รหัสเดิม) { setรหัสเดิม(null); return; }   // กดซ้ำ = ซ่อนกลับ
+                setกำลังดู(true);
+                try { setรหัสเดิม(await account.reveal(dealerCode)); }
+                catch (e) { setMsg({ ok: false, text: friendlyError(e) }); }
+                finally { setกำลังดู(false); }
+              }}>
+              {รหัสเดิม ? <><EyeOff size={12} /> ซ่อน</> : <><Eye size={12} /> ดูรหัส</>}
+            </button>
+          </span>
+        </div>
+        {รหัสเดิม?.note && (
+          <div style={{ fontSize: "0.62rem", color: "#94A3B8", marginTop: 4 }}>
+            {รหัสเดิม.note}{รหัสเดิม.updatedAt ? ` · อัปเดต ${fmtISOToThai(String(รหัสเดิม.updatedAt).slice(0, 10))}` : ""}
+          </div>
+        )}
       </div>
 
       {/* สิทธิ์ที่เหลือ — บอกก่อนกรอก ไม่ใช่ไปเจอตอนกดบันทึก */}
