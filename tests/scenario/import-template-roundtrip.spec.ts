@@ -6,7 +6,7 @@ import { open, settle } from "./helpers";
 // ทำไมต้องมีเทสต์นี้: ตัวเขียนไฟล์ .xlsx กับตัวอ่านไฟล์ .xlsx เป็นคนละไฟล์กัน (makeXlsx / importSheet)
 //   ทั้งคู่เขียนเองไม่ได้พึ่งไลบรารีภายนอก — แก้ข้างหนึ่งแล้วอีกข้างพังได้เงียบ ๆ
 //   และอาการที่ผู้ใช้เห็นคือ "โหลดเทมเพลตมากรอกแล้วอัปกลับ ระบบบอกว่าไม่พบข้อมูล"
-for (const [ชื่อ, ปุ่ม] of [["Excel", "ดาวน์โหลดเทมเพลต (Excel)"], ["CSV", "หรือแบบ CSV"]] as const) {
+for (const [ชื่อ, ปุ่ม] of [["Excel", "ดาวน์โหลดเทมเพลต (Excel)"], ["CSV", "แบบ CSV"]] as const) {
   test(`[func·dealer] เทมเพลต ${ชื่อ} → อัปโหลดกลับเข้ามาอ่านได้`, async ({ page }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: 1440, height: 950 });
