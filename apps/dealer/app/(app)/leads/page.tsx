@@ -4,6 +4,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
+import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import {
   leadStatusLabel, leadStatusColor,
   buildLeadReport, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
@@ -593,9 +594,13 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
   //   ตอนเพิ่มลูกค้าเป้าหมายใหม่ initial เป็น undefined แต่ฟอร์มมีค่าตั้งต้นไม่ว่าง (จังหวัด/แหล่งที่มา/ขั้นตอน/แม่แบบ)
   //   เทียบแบบเดิมจึงถือว่า "แก้แล้ว" ตั้งแต่วินาทีที่เปิด → เด้งถามทุกครั้งแม้ยังไม่ได้พิมพ์อะไร
   //   คำเตือนที่เด้งทุกครั้งจะถูกกดผ่านโดยไม่อ่าน แล้ววันที่กรอกจริงก็จะเสียของ
-  function closeGuarded() {
+  async function closeGuarded() {
     const touched = JSON.stringify(form) !== openedSnapshot.current;
-    if (touched && !window.confirm("ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก — ปิดแล้วข้อมูลจะหาย ยืนยันปิดหรือไม่")) return;
+    if (touched && !(await ยืนยัน({
+      หัวข้อ: "ยังมีข้อมูลที่กรอกไว้แต่ยังไม่ได้บันทึก",
+      รายละเอียด: "ปิดแล้วข้อมูลที่กรอกจะหาย",
+      ปุ่มตกลง: "ปิดโดยไม่บันทึก", ปุ่มยกเลิก: "กรอกต่อ", อันตราย: true,
+    }))) return;
     onClose();
   }
 
@@ -988,14 +993,12 @@ export default function LeadsPage() {
 
       // ถอยกลับ = ต้องยืนยันเสมอ (ความคืบหน้าที่บันทึกไว้จะดูขัดกับขั้นที่ถอยไป)
       if (ขั้นใหม่ < ขั้นเดิม && เป้าหมาย.status !== "CANCELLED") {
-        const ตกลง = confirm(
-          `ย้อนขั้นของ "${เป้าหมาย.company || เป้าหมาย.name}"
-` +
-          `จาก "${leadStatusLabel[เป้าหมาย.status]}" กลับไป "${leadStatusLabel[status]}" ?
-
-` +
-          "งานที่ติ๊กไว้แล้วจะไม่ถูกล้าง — ขั้นกับงานจะไม่ตรงกันชั่วคราว",
-        );
+        const ตกลง = await ยืนยัน({
+          หัวข้อ: `ย้อนขั้นของ "${เป้าหมาย.company || เป้าหมาย.name}" ?`,
+          รายละเอียด: `จาก "${leadStatusLabel[เป้าหมาย.status]}" กลับไป "${leadStatusLabel[status]}"\n`
+            + "งานที่ติ๊กไว้แล้วจะไม่ถูกล้าง — ขั้นกับงานจะไม่ตรงกันชั่วคราว",
+          ปุ่มตกลง: "ย้อนขั้น",
+        });
         if (!ตกลง) return;
       }
 
@@ -1048,7 +1051,11 @@ export default function LeadsPage() {
         setToast("ใบเสนอราคายังเป็นร่าง — กดส่งให้ลูกค้าก่อน จึงจะปิดการขายสำเร็จได้");
         return;
       }
-      if (!confirm(`ปิดการขายสำเร็จสำหรับ "${target.company || target.name}"?\nระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
+      if (!(await ยืนยัน({
+        หัวข้อ: `ปิดการขายสำเร็จสำหรับ "${target.company || target.name}" ?`,
+        รายละเอียด: "ระบบจะสร้างลูกค้าใหม่ให้อัตโนมัติทันที — ย้อนกลับไม่ได้",
+        ปุ่มตกลง: "ปิดการขายสำเร็จ", อันตราย: true,
+      }))) return;
       updateLeadStatus(id, status);
       setToast("ปิดการขายสำเร็จ — ระบบสร้างลูกค้าให้อัตโนมัติ");
       setJustWonCompany(target.company || target.name);
@@ -1894,7 +1901,10 @@ export default function LeadsPage() {
                               style={{ width:28, height:28, borderRadius:7, border:"1px solid #dbe3ec", background:"#fff", color:"#003366", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <Eye size={13} />
                             </button>
-                            <button title="ลบลูกค้าเป้าหมาย" onClick={()=>{ if (window.confirm(`ลบ "${l.company}" ใช่หรือไม่?`)) { removeLead(l.id); setToast("ลบลูกค้าเป้าหมายแล้ว"); } }}
+                            <button title="ลบลูกค้าเป้าหมาย" onClick={async ()=>{
+                              if (!(await ยืนยัน({ หัวข้อ: `ลบลูกค้าเป้าหมาย "${l.company}" ?`, รายละเอียด: "ย้อนกลับไม่ได้", ปุ่มตกลง: "ลบ", อันตราย: true }))) return;
+                              removeLead(l.id); setToast("ลบลูกค้าเป้าหมายแล้ว");
+                            }}
                               style={{ width:28, height:28, borderRadius:7, border:"1px solid #fecaca", background:"#fff", color:"#dc2626", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                               <Trash2 size={13} />
                             </button>
@@ -2553,9 +2563,8 @@ export default function LeadsPage() {
                 ))}
               </div>
             )}
-            <button onClick={()=>fileInputRef.current?.click()}
-              style={{ fontSize:"0.72rem", color:"#003366", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:10 }}>
-              + เพิ่มไฟล์แนบ
+            <button onClick={()=>fileInputRef.current?.click()} className="btn btn-primary btn-sm" style={{ marginTop:12 }}>
+              <Plus size={13} /> เพิ่มไฟล์แนบ
             </button>
           </DrawerSection>
         );
@@ -2660,7 +2669,7 @@ export default function LeadsPage() {
                   <div style={cardStyle}>{tabActivities}</div>
                   <div ref={rightApptRef} style={cardStyle}>{tabAppts}</div>
                   <div style={cardStyle}>{tabFiles}</div>
-                  <div style={cardStyle}><div style={secLabel}><StickyNote size={13} color="#003366" /> โน้ต / รายงานติดตาม</div>{tabReport}</div>
+                  <div style={cardStyle}><div style={secLabel}><StickyNote size={13} color="#003366" /> โน้ต</div>{tabReport}</div>
                 </div>
               </div>
 

@@ -344,6 +344,13 @@ export const quotesPUT = handler("quotations.update", async (req, sb) => {
   }
   const row = await body<QuotationMock>(req);
   if (!row?.id) return fail(400, "ไม่ได้ระบุใบที่จะแก้");
+
+  // ⚠️ เลขฉบับ (V1→V2) ไม่ได้ตัดสินที่นี่ — อยู่ที่ SalesContext.updateQuotation ที่เดียว
+  //    (ดู lib/quoteRevision.ts) เพราะกติกาต้องเหมือนกันทั้งสามโหมด ไม่ใช่มีเฉพาะโหมด api
+  //    เคยลองย้ายมาไว้ตรงนี้ (27 ส.ค. 69) แล้วพบสองปัญหา จึงถอยกลับ:
+  //      • โหมดที่ใช้จริงคือ supabase (หน้าเว็บยิงเข้าฐานข้อมูลตรง) — โค้ดตรงนี้ไม่เคยถูกเรียก
+  //      • ที่นี่แยกไม่ออกว่า "แก้เนื้อหาใบ" หรือ "แค่เปลี่ยนสถานะ" — กดปฏิเสธ/ส่งอีกครั้ง
+  //        ก็ขึ้นฉบับใหม่ไปด้วย ทั้งที่ไม่มีใครแก้อะไรบนกระดาษเลย (ยิงพิสูจน์แล้ว V1 → V2)
   const { data, error } = await sb.from("quotations").update(quoteToRow(row)).eq("id", row.id).select().single();
   if (error) return dbFail("quotations.update", error);
   return ok(rowToQuote(data as Row));

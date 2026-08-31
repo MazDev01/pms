@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { กดตกลงในกล่องยืนยัน, มีกล่องยืนยัน } from "./helpers";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, HQ_ORIGIN, loginUI, watchErrors, assertNoErrors,
@@ -39,9 +40,7 @@ test.afterAll(async () => { await cleanup(await db(RYG), "RYG", NS); });
 //    เทสต์จึงเปลี่ยนเป็น 2 ท่อน: (ก) ลัดคิวต้องถูกกัน (ข) พอส่งใบแล้ว ยอดต้องสอดคล้องกันตามเดิม
 test("[audit] ปิดการขายลัดคิวต้องถูกกัน · พอส่งใบแล้วยอดลูกค้าต้องตรงกับใบเสนอราคา", async ({ page }) => {
   const errs = watchErrors(page);
-  // ปิดการขายถาม confirm() ทุกครั้ง · เทสต์นี้กดสองรอบ (รอบแรกถูกกัน รอบสองผ่าน)
-  //   ใช้ตัวจัดการเดียวตลอดเทสต์ — ถ้าใช้ once ต่อรอบ ตัวที่ยังไม่ถูกใช้จะค้างแล้วชนกับตัวถัดไป
-  page.on("dialog", d => { void d.accept().catch(() => {}); });
+  // ปิดการขายถามกล่องยืนยันทุกครั้ง · เทสต์นี้กดสองรอบ (รอบแรกถูกกันตั้งแต่ก่อนถาม รอบสองถึงจะถาม)
   const sb = await db(RYG);
   const COMPANY = tg("ปิดลัดคิว");
 
@@ -87,6 +86,7 @@ test("[audit] ปิดการขายลัดคิวต้องถูก
 
   // (ก) ด่านต้องกันไว้ — ใบยังเป็นร่าง ยังไม่เคยส่งถึงลูกค้า จึงต้องยังไม่มีลูกค้าเกิดขึ้น
   await new Promise(r => setTimeout(r, 4000));
+  expect(await มีกล่องยืนยัน(page), "ถูกกันตั้งแต่ก่อนถาม — ต้องไม่มีกล่องยืนยันขึ้นมาเลย").toBe(false);
   const { data: ลัดคิว } = await sb.from("customers").select("id").eq("company", COMPANY);
   expect(ลัดคิว?.length ?? 0, "ยังไม่ส่งใบให้ลูกค้า = ปิดการขายไม่ได้ ต้องไม่มีลูกค้าถูกสร้าง").toBe(0);
 
@@ -99,6 +99,7 @@ test("[audit] ปิดการขายลัดคิวต้องถูก
   await expect(row3).toBeVisible({ timeout: 15_000 });
   await row3.getByRole("button", { name: /▾/ }).first().click();
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
+  await กดตกลงในกล่องยืนยัน(page);
 
   const cust = await waitRow<{ id: number; total_value: number; company: string }>(sb, "customers", { company: COMPANY }, 20_000);
   console.log(`[audit] ลูกค้า id=${cust.id} total_value=${cust.total_value}`);
@@ -159,8 +160,8 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
       (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
       { timeout: 25_000 }).toBe("sent_to_client");
     await qrow.click();
-    page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
     await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
+    await กดตกลงในกล่องยืนยัน(page); // ปิดการขาย = ถามยืนยันก่อนเสมอ (/scenario 31 ก.ค. 69)
     await expect.poll(async () =>
       (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
       { timeout: 25_000, message: "ใบต้องเป็น won" }).toBe("won");
@@ -218,8 +219,8 @@ test("[audit] ดีลที่สองของลูกค้าเดิม
     (await sb.from("quotations").select("status").eq("id", q2.id)).data?.[0]?.status,
     { timeout: 25_000 }).toBe("sent_to_client");
   await qrow2.click();
-  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
+  await กดตกลงในกล่องยืนยัน(page); // ปิดการขาย = ถามยืนยันก่อนเสมอ (/scenario 31 ก.ค. 69)
   await expect.poll(async () =>
     (await sb.from("quotations").select("status").eq("id", q2.id)).data?.[0]?.status,
     { timeout: 25_000, message: "ใบดีล 2 ต้องเป็น won" }).toBe("won");
@@ -271,8 +272,8 @@ test("[audit] ลบใบเสนอราคาที่ won แล้ว —
     (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 25_000 }).toBe("sent_to_client");
   await qrow.click();
-  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
+  await กดตกลงในกล่องยืนยัน(page); // ปิดการขาย = ถามยืนยันก่อนเสมอ (/scenario 31 ก.ค. 69)
 
   await waitRow<{ id: number }>(sb, "customers", { company: COMPANY }, 20_000);
   // แถวลูกค้าเกิดก่อน total_value ถึงค่าจริงเสมอ — reconcile ยิง RPC แยกหลัง setStatus commit (0078, กัน race
@@ -392,8 +393,8 @@ test("[audit] cross-role: ตัวแทนปิดการขาย → HQ �
     (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 25_000 }).toBe("sent_to_client");
   await qrow.click();
-  page.once("dialog", d => d.accept()); // ปิดการขาย = confirm() ก่อนเสมอ (/scenario 31 ก.ค. 69)
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
+  await กดตกลงในกล่องยืนยัน(page); // ปิดการขาย = ถามยืนยันก่อนเสมอ (/scenario 31 ก.ค. 69)
   await expect.poll(async () =>
     (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 25_000, message: "ใบต้องเป็น won" }).toBe("won");

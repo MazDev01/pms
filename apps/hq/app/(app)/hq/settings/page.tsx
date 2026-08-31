@@ -20,6 +20,7 @@ import {
   type ReactNode, type Dispatch, type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
+import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
@@ -642,7 +643,11 @@ function BackupCard() {
   }
 
   async function restoreDefaults() {
-    if (!confirm("คืนค่าเริ่มต้นของนโยบาย เป้าหมาย กฎแจ้งเตือน และเหตุผลปิดการขาย?\n\nทะเบียนตัวแทนและแคตตาล็อกจะไม่ถูกแตะ")) return;
+    if (!(await ยืนยัน({
+      หัวข้อ: "คืนค่าเริ่มต้นของนโยบาย เป้าหมาย กฎแจ้งเตือน และเหตุผลปิดการขาย ?",
+      รายละเอียด: "ทะเบียนตัวแทนและแคตตาล็อกจะไม่ถูกแตะ",
+      ปุ่มตกลง: "คืนค่าเริ่มต้น", อันตราย: true,
+    }))) return;
     try {
       // all-or-nothing (RPC, 0093 — Phase 4 transaction) — เดิมยิงแยก 4 คำขอ
       await settingsRepo.restoreSettings({
@@ -705,9 +710,13 @@ function HQSettingsPageInner() {
   // เตือนตอนออกจากหน้า/ปิดแท็บด้วย — switchTab ข้างล่างเตือนแค่ตอนสลับแท็บในหน้าเดียวกัน
   useUnsavedGuard(dirty);
 
-  function switchTab(next: TabKey) {
+  async function switchTab(next: TabKey) {
     if (next === tab) return;
-    if (dirty && !confirm("ส่วนนี้ยังไม่บันทึก · ทิ้งที่แก้ไว้ไหม?")) return;
+    if (dirty && !(await ยืนยัน({
+      หัวข้อ: "ส่วนนี้ยังไม่บันทึก",
+      รายละเอียด: "เปลี่ยนหัวข้อแล้วสิ่งที่แก้ไว้จะหาย",
+      ปุ่มตกลง: "ทิ้งที่แก้ไว้", ปุ่มยกเลิก: "อยู่หัวข้อเดิม", อันตราย: true,
+    }))) return;
     setTab(next);
   }
   const active = TABS.find(t => t.key === tab)!;

@@ -84,3 +84,12 @@ export function useDealerVat(): number {
   const v = settings.document?.vatPercent;
   return typeof v === "number" && v >= 0 ? v : DEFAULT_DOC.vatPercent;
 }
+
+/** อัตราภาษีหัก ณ ที่จ่ายตั้งต้นของสาขา (%) — ตั้งที่ ตั้งค่า › ใบเสนอราคา (บอสสั่ง 28 ส.ค. 69)
+ *  ใช้เป็น "ค่าเริ่มต้น" ตอนเปิดฟอร์มออกใบเท่านั้น — ตอนออกใบยังติ๊กเปิด/ปิดและแก้อัตราได้
+ *  ⚠️ ใบที่ออกไปแล้วไม่กระทบ เพราะทุกใบตรึงอัตราไว้กับตัวเองตั้งแต่วันที่ออก */
+export function useDealerWht(): number {
+  const { settings } = useDealerSettings();
+  const v = (settings.document as { whtPercent?: number } | undefined)?.whtPercent;
+  return typeof v === "number" && v >= 0 ? v : 3;
+}

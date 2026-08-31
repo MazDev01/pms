@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { ถ้ามีกล่องยืนยันให้กดตกลง } from "./helpers";
 import { open } from "./helpers";
 import { EXISTING_CUSTOMER_NAME } from "./global-setup";
 
@@ -57,8 +58,9 @@ test("[dealer] ปิดการขายลูกค้าเป้าหม�
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: /▾/ }).first().click();
   // ปิดการขาย = ย้อนกลับไม่ได้ → แอปขึ้น confirm() ก่อนเสมอ (เพิ่มหลังผลตรวจสอบ /scenario 31 ก.ค. 69)
-  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
+  // อาจไม่ถามก็ได้ — ถ้ายังไม่มีใบที่ส่งให้ลูกค้า ด่านจะกันไว้ตั้งแต่ก่อนถาม (เทียบเท่าตัวดักเดิม)
+  await ถ้ามีกล่องยืนยันให้กดตกลง(page);
 
   // สมุดลูกค้าต้องยังมีรายนี้เท่าเดิม (ผูกเข้ากับรายเดิม ไม่สร้างใหม่)
   await open(page, "dealer", "/customers");

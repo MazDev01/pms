@@ -5,6 +5,7 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { useState, useMemo, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import { apptTypeLabel, fmtISOToThai, DEFAULT_DEALER_CODE, type AppointmentMock, type ApptType } from "@pms/shared/lib/mock";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
@@ -391,7 +392,10 @@ export default function CalendarPage() {
           a={detail}
           onClose={() => setDetail(null)}
           onEdit={() => { const a = detail; setDetail(null); setEditAppt(a); }}
-          onDelete={() => { if (window.confirm(`ต้องการลบกิจกรรม "${detail.company}" ใช่หรือไม่?`)) deleteAppointment(detail.id); }}
+          onDelete={async () => {
+            if (!(await ยืนยัน({ หัวข้อ: `ลบกิจกรรม "${detail.company}" ?`, ปุ่มตกลง: "ลบกิจกรรม", อันตราย: true }))) return;
+            deleteAppointment(detail.id);
+          }}
           router={router}
         />
       )}

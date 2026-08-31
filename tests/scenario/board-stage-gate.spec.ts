@@ -3,6 +3,7 @@
 // ทำไมต้องมี: ลากการ์ดข้ามไปขั้นท้าย ๆ ได้เลย = ขั้นของดีลบอกว่าทำถึงตรงนั้นแล้ว
 // ทั้งที่งานจริงยังไม่ได้ทำ → รายงานของสำนักงานใหญ่อ่านผิดทั้งชุด
 import { test, expect } from "@playwright/test";
+import { กดยกเลิกในกล่องยืนยัน } from "./helpers";
 import { RYG, skipReason } from "./supabaseEnv";
 import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag } from "./funcHelpers";
 import { settle } from "./helpers";
@@ -85,10 +86,9 @@ test("[func] ถอยขั้นกลับ → ต้องถามยื�
   await sb.from("leads").update({ status: "NEGO" }).eq("company", COMPANY);
   await loginUI(page, DEALER_ORIGIN, "/login", RYG);
 
-  let ถาม = "";
-  page.on("dialog", d => { ถาม = d.message(); void d.dismiss(); });   // กด "ยกเลิก"
   await เปิดเมนูขั้น(page);
   await page.locator('[data-menu="stage"]').getByText("ติดต่อแล้ว", { exact: true }).click();
+  const ถาม = await กดยกเลิกในกล่องยืนยัน(page);   // กล่องยืนยันของระบบ (sonner) ไม่ใช่กล่องเบราว์เซอร์แล้ว
   await page.waitForTimeout(1500);
 
   expect(ถาม, "ถอยขั้นต้องมีกล่องยืนยันเสมอ").toMatch(/ย้อนขั้น/);

@@ -12,11 +12,13 @@ import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { boqLineItems, boqSubtotal, seedLineItems } from "@pms/shared/lib/boq";
 import { printQuotation } from "@pms/shared/lib/quotationPrint";
+import { ฉบับถัดไป, จะขึ้นฉบับใหม่ } from "@pms/shared/lib/quoteRevision";
 import { parseBaht, fmtBaht, fmtFull } from "@pms/shared/lib/format";
+import { คิดภาษีใบเสนอราคา, ช่องภาษีสำหรับบันทึก } from "@pms/shared/lib/quoteTax";
 import { useMasterCatalogState } from "@pms/shared/lib/useMasterCatalog";
 import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useQuoteValidity } from "@pms/shared/lib/useQuoteValidity";
-import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
+import { useDealerSettings, useDealerVat, useDealerWht } from "@pms/shared/lib/useDealerSettings";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 
 // "วันนี้ของระบบ" (ISO) — โหมด supabase = วันจริง · โหมด local = 30 มิ.ย. 2569 (ดู APP_NOW ใน FilterContext)
@@ -32,7 +34,10 @@ function วันหมดอายุจาก(วันออกใบ: strin
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string; lineItems: QuoteLineItem[] };
+// vatOn/whtOn = "ใบนี้คิดภาษีตัวนั้นไหม" · vatPct/whtPct = อัตราที่ตัวแทนแก้เองได้ในฟอร์ม
+// ค่าตั้งต้น (บอสสั่ง 28 ส.ค. 69): VAT ติ๊กไว้ · หัก ณ ที่จ่าย ไม่ติ๊ก
+type FormState = { project: string; buildingType: string; items: string; price: string; expiry: string; note: string;
+  lineItems: QuoteLineItem[]; vatOn: boolean; vatPct: string; whtOn: boolean; whtPct: string };
 
 // ต้องส่งมาอย่างใดอย่างหนึ่งเท่านั้น (lead หรือ customer) — เดิม prop เป็น optional ทั้งคู่แยกกัน
 //   TS ไม่บังคับ จึงต้องใช้ customer! เดาเอาว่ามาแน่ ๆ ตอนไม่มี lead (พังถ้ามีคนเรียกผิดในอนาคต)
@@ -62,7 +67,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตราประทับ/VAT ของสาขา (ผ่าน repo)
   // ส่วนบวกเพิ่มจากราคากลางที่สาขาตั้งไว้เองที่หน้าแม่แบบ — ใช้ตั้งต้นราคาต่อหน่วยใน BOQ
   const pricing = dealerCfg.settings.pricing;
-  const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ใช้ตอนออกใบใหม่และเป็นค่าสำรองของใบเก่า
+  const dealerVat = useDealerVat();
+  const dealerWht = useDealerWht();   // อัตราหัก ณ ที่จ่ายตั้งต้นของสาขา (ตั้งค่า › ใบเสนอราคา)      // % VAT ที่สาขาตั้งเอง — ใช้ตอนออกใบใหม่และเป็นค่าสำรองของใบเก่า
   const printCfg = { issuer: dealerCfg.settings.issuer, doc: dealerCfg.settings.document };
 
   // subject รวม — รองรับทั้ง "ลูกค้าเป้าหมาย" (lead) และ "ลูกค้า" (customer)
@@ -98,6 +104,7 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
       project: defProject(), buildingType: subj.product,
       items: String(seed.length), price: total > 0 ? String(total) : "",
       expiry: "", note: "", lineItems: seed,
+      vatOn: true, vatPct: String(dealerVat ?? 7), whtOn: false, whtPct: String(dealerWht ?? 3),
     };
   };
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -114,7 +121,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     setForm(p => ({ ...p, lineItems: seed, items: String(seed.length), price: String(total) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog, mode, form.lineItems.length, subj.product, subj.value, subj.area]);
-  const set = <K extends keyof FormState>(k: K, v: string) => setForm(p => ({ ...p, [k]: v }));
+  // รับได้ทั้งข้อความและติ๊กถูก (ช่องภาษีเป็น boolean — เพิ่ม 28 ส.ค. 69)
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm(p => ({ ...p, [k]: v }));
 
   // ใบเสนอราคาที่เกี่ยวข้อง — ลูกค้า: ผูกด้วย customerId · ลูกค้าเป้าหมาย: ผูกด้วย dealId (legacy ใช้ customerId/ชื่อบริษัท)
   const related = quotations
@@ -168,7 +176,10 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     setEditing(q);
     const lineItems: QuoteLineItem[] = boqLineItems(q);
     setForm({ project: q.project, buildingType: q.buildingType, items: String(lineItems.length),
-      price: String(q.materialCost || q.totalValue), expiry: q.expiry ?? "", note: q.note ?? "", lineItems });
+      price: String(q.materialCost || q.totalValue), expiry: q.expiry ?? "", note: q.note ?? "", lineItems,
+      // อัตราที่ตรึงไว้กับใบเป็นตัวจริงเสมอ — ใบเก่าที่ไม่มีค่า ให้ตกไปใช้ค่าที่สาขาตั้งไว้
+      vatOn: (q.vatPercent ?? dealerVat ?? 0) > 0, vatPct: String(q.vatPercent ?? dealerVat ?? 7),
+      whtOn: (q.whtRate ?? 0) > 0, whtPct: String(q.whtRate ?? dealerWht ?? 3) });
     setMode("edit");
   }
 
@@ -177,16 +188,24 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     savingRef.current = true; setSaving(true);
     try {
     const net = netTotal(form);
+    // สแนปช็อตภาษี ณ วันที่ออก/แก้เอกสาร — ตรึงติดใบไว้ ไม่คำนวณใหม่ทีหลัง (บอสสั่ง 28 ส.ค. 69)
+    const ภาษีที่บันทึก = ช่องภาษีสำหรับบันทึก(net, {
+      vatPercent: form.vatOn ? Number(form.vatPct) : 0,
+      whtPercent: form.whtOn ? Number(form.whtPct) : 0,
+    });
     if (mode === "edit" && editing) {
-      // ── ใบที่ส่งให้ลูกค้าไปแล้ว แก้ทีไร = ขึ้นเวอร์ชันใหม่ V1 → V2 → V3 (บอสสั่ง 21 ส.ค. 69) ──
-      //   ทำไมนับเฉพาะใบที่ส่งแล้ว: ใบร่างยังไม่ถึงมือลูกค้า แก้กี่รอบก็ยังเป็นฉบับเดิม
-      //   ส่วนใบที่ส่งไปแล้ว ลูกค้าถือฉบับเก่าอยู่ในมือ — ต้องมีเลขเวอร์ชันให้อ้างอิงตรงกันเวลาคุยกัน
-      const เวอร์ชันเดิม = Number(String(editing.revision ?? "V1").replace(/\D/g, "")) || 1;
-      const ขึ้นเวอร์ชัน = editing.status !== "draft";
-      const เวอร์ชันใหม่ = `V${ขึ้นเวอร์ชัน ? เวอร์ชันเดิม + 1 : เวอร์ชันเดิม}`;
-      updateQuotation({ ...editing, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
+      // ── ใบที่ส่งให้ลูกค้าไปแล้ว แก้เนื้อหาทีไร = ขึ้นฉบับใหม่ V1 → V2 → V3 (บอสสั่ง 21 ส.ค. 69) ──
+      //   กติกาตัวจริงอยู่ที่ SalesContext.updateQuotation ที่เดียว (ดู lib/quoteRevision.ts)
+      //   ที่นี่แค่ "ถามล่วงหน้า" ว่าจะขึ้นฉบับใหม่ไหม เพื่อเลือกข้อความแจ้งผู้ใช้ให้ตรง
+      // ⚠️ ต้องเทียบกับ "ใบล่าสุดในระบบ" ไม่ใช่สำเนาที่ค้างอยู่ในฟอร์ม (แก้ 27 ส.ค. 69)
+      //    ผู้ใช้กดส่งใบ แล้วกดแก้ไขต่อทันที — สำเนาในฟอร์มอาจยังเป็น "ร่าง" อยู่
+      const ใบล่าสุด = quotations.find(q => q.id === editing.id) ?? editing;
+      const ใบหลังแก้ = { ...ใบล่าสุด, project: form.project, buildingType: form.buildingType, items: form.lineItems.length,
         lineItems: form.lineItems, materialCost: parseBaht(form.price), totalValue: net, total: "฿" + net.toLocaleString("th-TH"),
-        expiry: วันหมดอายุ, note: form.note || undefined, revision: เวอร์ชันใหม่ });
+        expiry: วันหมดอายุ, note: form.note || undefined, ...ภาษีที่บันทึก };
+      const เวอร์ชันใหม่ = ฉบับถัดไป(ใบล่าสุด, ใบหลังแก้);
+      const ขึ้นเวอร์ชัน = จะขึ้นฉบับใหม่(ใบล่าสุด, ใบหลังแก้);
+      updateQuotation(ใบหลังแก้);
       onToast?.(ขึ้นเวอร์ชัน
         ? `บันทึกเป็นฉบับแก้ไข ${เวอร์ชันใหม่} แล้ว — ส่งให้ลูกค้าอีกครั้งเพื่อให้ได้ฉบับล่าสุด`
         : "บันทึกใบเสนอราคาแล้ว");
@@ -201,7 +220,8 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
         status: "draft", date: MOCK_TODAY, items: form.lineItems.length, lineItems: form.lineItems,
         customerId: subj.customerId ?? 0, projectId: 0, dealId: subj.dealId, revision: "V1", expiry: วันหมดอายุ,
         note: form.note || undefined,
-        vatPercent: dealerVat, // สแนปช็อต VAT ตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ (ไม่ใช้ค่าที่สาขาแก้ทีหลัง)
+        // สแนปช็อตภาษีตอนสร้างใบ — พิมพ์ซ้ำทีหลังใช้ค่านี้เสมอ (ไม่ใช้อัตราที่แก้ทีหลัง)
+        ...ภาษีที่บันทึก,
       });
       onToast?.("สร้างใบเสนอราคาเรียบร้อย");
     }
@@ -265,10 +285,13 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
     //   ถ้างานขายไม่มีแม่แบบ ตารางจะว่างเปล่า แล้วข้อความเดิมบอกแค่ "ต้องมีรายการสินค้า"
     //   ซึ่งชี้ผิดที่ — ผู้ใช้ไปนั่งหาปุ่มเพิ่มรายการ ทั้งที่ต้องกลับไปเลือกแม่แบบก่อน
     const งานขายยังไม่มีแม่แบบ = !แม่แบบว่าง && !hasItems && !subj.product;
-    // ฟอร์มออกใบ: ใช้ VAT ที่สาขาตั้งไว้ (ตั้งค่า › ใบเสนอราคา) — ต้องเป็นค่าเดียวกับที่จะตรึงลงใบตอนบันทึก
-    const vatPct = dealerVat;
-    const vatAmt = Math.round(net * vatPct / 100);
-    const grand = net + vatAmt;                        // ยอดรวมสุทธิ (รวม VAT)
+    // ── ภาษีของใบนี้ — คิดสดตามที่ติ๊กไว้ในฟอร์ม (บอสสั่ง 28 ส.ค. 69) ─────────────
+    //   สูตรอยู่ที่ lib/quoteTax.ts ที่เดียว ใช้ร่วมกับเอกสารที่พิมพ์และค่าที่บันทึกลงฐานข้อมูล
+    //   ⚠️ ไม่แตะ net (มูลค่างานก่อน VAT = ผลรวม BOQ) ซึ่งเป็นยอดขายที่รายงาน/เป้าใช้อยู่
+    const ภาษี = คิดภาษีใบเสนอราคา(net, {
+      vatPercent: form.vatOn ? Number(form.vatPct) : 0,
+      whtPercent: form.whtOn ? Number(form.whtPct) : 0,
+    });
     return (
       <div>
         {/* Header */}
@@ -336,18 +359,74 @@ export function LeadQuotationsPanel({ lead, customer, onToast, openCreateSignal 
         <div style={{ marginTop: 12 }}><label style={lbl}>หมายเหตุ</label>
           <textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2} placeholder="รายละเอียดเพิ่มเติม…" style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} /></div>
 
-        {/* ยอดเงิน — ก่อน VAT (บันทึก) · VAT · รวม VAT (ตรงกับ wizard/เอกสารพิมพ์) */}
-        <div style={{ marginTop: 14, background: "#003366", borderRadius: 12, padding: 14, color: "#fff" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.72rem", color: "rgba(255,255,255,.8)" }}><span>มูลค่า BOQ</span><span>{fmtFull(net)}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid rgba(255,255,255,.2)", marginTop: 7, paddingTop: 9 }}>
-            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,.85)", display: "flex", alignItems: "center", gap: 4 }}><Coins size={12} /> มูลค่างาน (ก่อน VAT)</span>
-            <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>{fmtFull(net)}</span>
-          </div>
-          <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,.6)", marginTop: 2 }}>= ยอดที่บันทึกในใบเสนอราคา</div>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,.15)", marginTop: 9, paddingTop: 7 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.7)" }}><span>VAT {vatPct}%</span><span>{fmtFull(vatAmt)}</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "0.7rem", color: "rgba(255,255,255,.9)", fontWeight: 800 }}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtFull(grand)}</span></div>
-          </div>
+        {/* ── ภาษีของใบนี้ + ยอดสรุปสด (บอสสั่ง 28 ส.ค. 69) ────────────────────────
+             ติ๊กเปิด/ปิดได้ทั้ง VAT และหัก ณ ที่จ่าย · แก้อัตราเองได้ · ตัวเลขขยับทันที
+             ⚠️ "มูลค่างาน (ก่อน VAT)" คือยอดที่บันทึกเป็นยอดขาย — ภาษีไม่ไปแตะตัวนี้ */}
+        <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {([
+            { on: "vatOn", pct: "vatPct", ป้าย: "ภาษีมูลค่าเพิ่ม (VAT)", ท้าย: "คิดจากมูลค่างาน" },
+            { on: "whtOn", pct: "whtPct", ป้าย: "ภาษีหัก ณ ที่จ่าย", ท้าย: "คิดจากมูลค่างานก่อน VAT" },
+          ] as const).map(t => {
+            const เปิด = form[t.on] as boolean;
+            return (
+              <label key={t.on} style={{ flex: "1 1 240px", display: "flex", alignItems: "center", gap: 9, padding: "10px 12px",
+                border: `1px solid ${เปิด ? "#003366" : "#e5e7eb"}`, borderRadius: 10, background: เปิด ? "#f4f8fc" : "#fff", cursor: "pointer" }}>
+                <input type="checkbox" checked={เปิด} onChange={e => set(t.on, e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#2D2D2D" }}>{t.ป้าย}</span>
+                  <span style={{ display: "block", fontSize: "0.62rem", color: "#8a929c" }}>{t.ท้าย}</span>
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  <input type="text" inputMode="decimal" aria-label={`อัตรา${t.ป้าย}`} disabled={!เปิด}
+                    value={form[t.pct] as string}
+                    onChange={e => set(t.pct, e.target.value.replace(/[^0-9.]/g, ""))}
+                    onClick={e => e.stopPropagation()}
+                    style={{ width: 52, textAlign: "right", padding: "5px 7px", borderRadius: 8, border: "1px solid #e5e7eb",
+                      fontFamily: "inherit", fontSize: "0.8rem", fontWeight: 700, color: เปิด ? "#2D2D2D" : "#b7bec7", background: เปิด ? "#fff" : "#f8fafc" }} />
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#8a929c" }}>%</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        {/* ── ยอดเงิน — ทุกบรรทัดตรงกับเอกสารที่พิมพ์ ────────────────────────────
+             จัดเป็นตาราง 3 คอลัมน์: ป้าย | เครื่องหมาย | จำนวนเงิน
+             เครื่องหมาย +/− อยู่คนละช่องกับตัวเลข และใช้ตัวเลขความกว้างเท่ากัน (tabular-nums)
+             หลักหน่วย-สิบ-ร้อยจึงตรงกันทุกแถว — ไม่งั้นบรรทัดที่มี + หรือ − จะเยื้องออกไป
+             (ผู้ใช้แจ้ง 28 ส.ค. 69 ว่า "เรียงมั่ว" — สาเหตุคือเครื่องหมายไปเบียดตัวเลข) */}
+        <div style={{ marginTop: 12, background: "#003366", borderRadius: 12, padding: "14px 16px", color: "#fff" }}>
+          {(() => {
+            const เงิน = (v: number) => fmtFull(v);
+            const แถว = (ป้าย: React.ReactNode, ค่า: string, o?: { sign?: "+" | "−"; เด่น?: boolean; จาง?: boolean; สี?: string }) => (
+              <>
+                <span style={{ fontSize: o?.เด่น ? "0.78rem" : "0.72rem", fontWeight: o?.เด่น ? 800 : 600,
+                  color: o?.สี ?? (o?.จาง ? "rgba(255,255,255,.7)" : "#fff"), whiteSpace: "nowrap" }}>{ป้าย}</span>
+                <span style={{ textAlign: "right", fontSize: o?.เด่น ? "0.78rem" : "0.72rem", fontWeight: 700,
+                  color: o?.สี ?? "rgba(255,255,255,.75)" }}>{o?.sign ?? ""}</span>
+                <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums",
+                  fontSize: o?.เด่น ? "1.05rem" : "0.8rem", fontWeight: o?.เด่น ? 800 : 700,
+                  color: o?.สี ?? "#fff" }}>{ค่า}</span>
+              </>
+            );
+            const เส้น = (หนา?: boolean) => (
+              <span style={{ gridColumn: "1 / -1", height: 1, background: `rgba(255,255,255,${หนา ? ".28" : ".15"})`, margin: หนา ? "7px 0 3px" : "5px 0" }} />
+            );
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 12px auto", alignItems: "baseline", columnGap: 6, rowGap: 5 }}>
+                {แถว(<span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Coins size={12} /> มูลค่างาน (ก่อน VAT)</span>, เงิน(ภาษี.subtotal), { เด่น: true })}
+                <span style={{ gridColumn: "1 / -1", fontSize: "0.58rem", color: "rgba(255,255,255,.55)", marginTop: -2 }}>
+                  = ยอดที่บันทึกเป็นยอดขาย (ภาษีไม่กระทบตัวนี้)
+                </span>
+                {เส้น()}
+                {form.vatOn && แถว(`ภาษีมูลค่าเพิ่ม ${ภาษี.vatRate}%`, เงิน(ภาษี.vatAmount), { sign: "+", จาง: true })}
+                {แถว("รวมเป็นเงิน", เงิน(ภาษี.totalAmount))}
+                {form.whtOn && แถว(`หัก ณ ที่จ่าย ${ภาษี.whtRate}%`, เงิน(ภาษี.whtAmount), { sign: "−", สี: "#ffd7d7" })}
+                {เส้น(true)}
+                {แถว("ยอดชำระสุทธิ", เงิน(ภาษี.netPayable), { เด่น: true })}
+              </div>
+            );
+          })()}
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 16 }}>

@@ -33,7 +33,12 @@ export async function getSession(who: Account): Promise<Session> {
 }
 
 // โมโนเรโป: แอปตัวแทน (dealer) รันที่ :3001 · แอปสำนักงานใหญ่ (hq) รันที่ :3002
-const APP_ORIGIN = { hq: "http://localhost:3002", dealer: "http://localhost:3001" } as const;
+// ⚠️ ตั้งทับด้วย PMS_HQ_ORIGIN / PMS_DEALER_ORIGIN ได้ — ใช้ตอนต้องรันเซิร์ฟเวอร์คนละพอร์ต
+//    (เช่น มีอีกหน้าต่างใช้ 3001/3002 อยู่) ค่าตั้งต้นเหมือนเดิมทุกประการ
+const APP_ORIGIN = {
+  hq: process.env.PMS_HQ_ORIGIN ?? "http://localhost:3002",
+  dealer: process.env.PMS_DEALER_ORIGIN ?? "http://localhost:3001",
+} as const;
 // โหมด api เก็บใบผ่านใน cookie httpOnly (ระยะ 4) — เทสต์ต้องล็อกอินผ่าน backend ไม่ใช่ยัด localStorage
 const COOKIE_AUTH = appEnv("NEXT_PUBLIC_DATA_SOURCE") === "api";
 // role ทั่วไปแมปกับบัญชีจริงบัญชีเดียว (RYG/ADMIN) — เทสต์ที่ต้องเจาะจงบัญชีอื่น (เช่น CNX สำหรับ
@@ -66,7 +71,7 @@ export async function เข้าระบบด้วยคุกกี้(pag
   });
   if (!res.ok()) throw new Error(`ล็อกอิน ${who.email} ผ่าน backend ไม่ผ่าน: ${res.status()} ${await res.text()}`);
   const ทั้งหมด = await page.context().cookies();
-  คุกกี้ที่เก็บไว้.set(key, ทั้งหมด.filter(c => c.name === "pms_at" || c.name === "pms_rt"));
+  คุกกี้ที่เก็บไว้.set(key, ทั้งหมด.filter(c => c.name.startsWith("pms_at") || c.name.startsWith("pms_rt")));
 }
 
 /** cookie ที่เก็บไว้ใช้ไม่ได้แล้ว (ถูกเด้งออก) — ทิ้งแล้วล็อกอินใหม่ */
@@ -199,4 +204,54 @@ export async function assertHealthyPage(page: Page, label: string) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, `${label} ไม่ควรมี horizontal scroll (เกิน ${overflow}px)`).toBeLessThanOrEqual(3);
   expect(errors, `${label} ไม่ควรมี JS error`).toEqual([]);
+}
+
+// ── กล่องยืนยันของระบบ (sonner) — แทน confirm() ของเบราว์เซอร์ (บอสสั่ง 28 ส.ค. 69) ──
+//
+// ⚠️ เดิมเทสต์ดักด้วย page.on("dialog") ซึ่งเป็นกลไกของ "กล่องเบราว์เซอร์" เท่านั้น
+//    ตอนนี้กล่องยืนยันเป็น HTML ในหน้าเว็บ — ตัวดักนั้นจะไม่ทำงานอีกต่อไป
+//    และร้ายกว่านั้นคือมัน "ไม่ล้ม" แค่ไม่มีอะไรเกิดขึ้น เทสต์จึงเขียวแบบหลอกได้
+//    ทุกจุดที่เคยดัก dialog ต้องเปลี่ยนมาใช้สองตัวนี้แทน
+const กล่องยืนยัน = (page: Page) => page.locator(".pms-confirm");
+
+/** รอกล่องยืนยันแล้วกด "ตกลง" — คืนข้อความในกล่อง (ไว้ตรวจว่าถามถูกเรื่อง) */
+export async function กดตกลงในกล่องยืนยัน(page: Page): Promise<string> {
+  const box = กล่องยืนยัน(page);
+  await expect(box, "ต้องมีกล่องยืนยันขึ้นมาก่อน").toBeVisible({ timeout: 15_000 });
+  const ข้อความ = (await box.innerText()).trim();
+  await box.locator(".pms-confirm-actions button").last().click();
+  await expect(box).toBeHidden({ timeout: 10_000 });
+  return ข้อความ;
+}
+
+/** รอกล่องยืนยันแล้วกด "ยกเลิก" — คืนข้อความในกล่อง */
+export async function กดยกเลิกในกล่องยืนยัน(page: Page): Promise<string> {
+  const box = กล่องยืนยัน(page);
+  await expect(box, "ต้องมีกล่องยืนยันขึ้นมาก่อน").toBeVisible({ timeout: 15_000 });
+  const ข้อความ = (await box.innerText()).trim();
+  await box.locator(".pms-confirm-actions button").first().click();
+  await expect(box).toBeHidden({ timeout: 10_000 });
+  return ข้อความ;
+}
+
+/** มีกล่องยืนยันค้างอยู่ไหม (ไม่รอ) — ใช้ตรวจว่า "ต้องไม่ถาม" */
+export async function มีกล่องยืนยัน(page: Page): Promise<boolean> {
+  return (await กล่องยืนยัน(page).count()) > 0;
+}
+
+/** กด "ตกลง" ถ้ามีกล่องยืนยันขึ้นมา — ไม่ขึ้นก็ผ่านไป
+ *
+ *  ⚠️ ใช้เฉพาะจุดที่ "อาจถามหรือไม่ถามก็ได้" เท่านั้น เช่น ปิดการขายที่อาจถูกด่านกันไว้
+ *     ตั้งแต่ก่อนถาม (ยังไม่มีใบที่ส่งให้ลูกค้า) — เทียบเท่ากับ page.once("dialog", accept) เดิม
+ *     จุดที่ "ต้องถามแน่ ๆ" ให้ใช้ กดตกลงในกล่องยืนยัน เพื่อไม่ให้เทสต์เขียวแบบหลอก */
+export async function ถ้ามีกล่องยืนยันให้กดตกลง(page: Page): Promise<boolean> {
+  const box = กล่องยืนยัน(page);
+  try {
+    await box.waitFor({ state: "visible", timeout: 5_000 });
+  } catch {
+    return false;   // ไม่ถาม = ถูกกันไว้ก่อนแล้ว หรือไม่ต้องยืนยัน
+  }
+  await box.locator(".pms-confirm-actions button").last().click();
+  await expect(box).toBeHidden({ timeout: 10_000 });
+  return true;
 }

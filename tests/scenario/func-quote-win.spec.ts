@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { กดตกลงในกล่องยืนยัน } from "./helpers";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
@@ -81,8 +82,8 @@ test("[func] ปิดการขายสำเร็จ → ลูกค้�
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole("button", { name: /▾/ }).first().click();
   // ปิดการขาย = ย้อนกลับไม่ได้ → แอปขึ้น confirm() ก่อนเสมอ (เพิ่มหลังผลตรวจสอบ /scenario 31 ก.ค. 69)
-  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first().click();
+  await กดตกลงในกล่องยืนยัน(page);
 
   // ลูกค้าต้องถูกสร้างจากลูกค้าเป้าหมาย — นี่คือจุดที่ระบบ "แปลงลูกค้าเป้าหมายเป็นลูกค้า"
   const cust = await waitRow<{ company: string; dealer_code: string; id: number }>(
@@ -162,8 +163,8 @@ test("[func] ปิดการขายจากหน้าใบเสนอ�
   // 3) เปิดลิ้นชักใบ → กด "ลูกค้าตอบรับ ✓"
   await qrow.click();
   // ปิดการขาย = ย้อนกลับไม่ได้ → แอปขึ้น confirm() ก่อนเสมอ (เพิ่มหลังผลตรวจสอบ /scenario 31 ก.ค. 69)
-  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: /ลูกค้าตอบรับ/ }).first().click();
+  await กดตกลงในกล่องยืนยัน(page);
 
   // 4) ลูกค้าต้องถูกสร้างด้วย id จริง (> 0) ไม่ใช่ 0 — และไม่มีลูกค้าผี id=0 โผล่
   const cust = await waitRow<{ company: string; id: number; name: string | null }>(

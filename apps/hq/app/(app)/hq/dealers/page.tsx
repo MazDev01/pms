@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
+import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/components/ui/stickyActionCol";
 import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
@@ -293,8 +294,12 @@ function HQDealersPageInner() {
     setCredsModal({ name: form.name.trim(), creds, mode: "created" });
   }
 
-  function remove(d: DealerRow) {
-    if (!confirm(`ลบ "${d.name}" ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
+  async function remove(d: DealerRow) {
+    if (!(await ยืนยัน({
+      หัวข้อ: `ลบ "${d.name}" ออกจากระบบ ?`,
+      รายละเอียด: "การกระทำนี้ไม่สามารถย้อนกลับได้",
+      ปุ่มตกลง: "ลบตัวแทน", อันตราย: true,
+    }))) return;
     // โหมดจริง (supabase): ลบผ่าน route เซิร์ฟเวอร์ (service_role) → ลบบัญชี auth ของสาขาด้วย
     //   ไม่ทิ้งบัญชีกำพร้า · เดิม dealersRepo.remove ลบได้แค่แถว dealers (RLS) บัญชียังค้าง
     if (REAL_BACKEND) {

@@ -64,9 +64,10 @@ test("[a11y] ฟอร์มข้อมูลตัวแทน (HQ) — Esc �
 
 test("[a11y] หน้าต่างดูตัวอย่างไฟล์ (ตัวแทน) — Esc ปิดได้", async ({ page }) => {
   await open(page, "dealer", "/files");
-  const preview = page.getByRole("button", { name: /ดูตัวอย่าง|ดูไฟล์|เปิดดู/ }).first();
-  test.skip(await preview.count() === 0, "ยังไม่มีไฟล์ในระบบให้เปิดดู");
-  await preview.click();
+  // ปุ่มรูปตาถูกเอาออกแล้ว (28 ส.ค. 69) — เปิดตัวอย่างด้วยการกดที่แถวไฟล์แทน
+  const row = page.locator('tr[aria-label^="เปิดรายละเอียดไฟล์"]').first();
+  await expect(row, "หน้าไฟล์ต้องมีไฟล์ให้เปิดดูอย่างน้อย 1 รายการ").toBeVisible({ timeout: 15_000 });
+  await row.click();
 
   const dialog = page.getByRole("dialog", { name: "ดูตัวอย่างไฟล์" });
   await expect(dialog).toBeVisible({ timeout: 15_000 });

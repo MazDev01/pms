@@ -1360,3 +1360,31 @@ textarea:focus-visible {
   [class*="animate-[auth-"] { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
 
+
+/* ── กล่องยืนยัน (sonner) — แทน confirm() ของเบราว์เซอร์ (บอสสั่ง 28 ส.ค. 69) ──────
+   sonner ถูกตั้ง unstyled ไว้ หน้าตาทั้งหมดจึงมาจากที่นี่ที่เดียว = เข้าชุดกับ CI เหมือนการ์ดอื่น
+   ⚠️ สไตล์ของ sonner ถูกฝังเป็น <style> ตอนรัน — CSP ของระบบเปิด style-src 'unsafe-inline' ไว้แล้ว
+      (ดู securityHeaders.mjs) ถ้าวันหนึ่งปิด 'unsafe-inline' กล่องนี้จะหน้าตาพังบนเว็บจริงเท่านั้น */
+.pms-confirm-toast { width: min(420px, calc(100vw - 32px)); }
+
+.pms-confirm {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  padding: 16px 18px 14px;
+  font-family: inherit;
+}
+.pms-confirm-head { display: flex; align-items: flex-start; gap: 8px; }
+.pms-confirm-icon { color: #dc2626; flex: none; margin-top: 2px; }
+.pms-confirm-title { font-size: 0.88rem; font-weight: 800; color: #2D2D2D; line-height: 1.5; }
+/* white-space: pre-line — ข้อความยืนยันหลายบรรทัดเดิมใช้ \n คั่น ต้องยังขึ้นบรรทัดเหมือนเดิม */
+.pms-confirm-detail {
+  margin-top: 6px; font-size: 0.78rem; color: #6b7280; line-height: 1.65; white-space: pre-line;
+}
+.pms-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* ปุ่มตกลงของงานที่ย้อนกลับไม่ได้ — แดงทึบ (ต่างจาก .btn-danger ซึ่งเป็นปุ่มรองพื้นขาว)
+   ต้องเด่นกว่าปุ่มยกเลิก เพราะเป็นสิ่งที่ผู้ใช้ตั้งใจมากด แต่สีบอกว่า "คิดก่อน" */
+.pms-confirm-danger { background: #dc2626; color: #fff; border: none; }
+.pms-confirm-danger:hover { background: #b91c1c; }

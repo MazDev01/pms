@@ -6,6 +6,8 @@ import { DEFAULT_ISSUER, ISSUER_KEY, loadHQPolicy, fmtISOToThai, type IssuerProf
 // การตั้งค่าเอกสาร (จาก Settings → ตั้งค่าใบเสนอราคา) — คนละคีย์กับโปรไฟล์บริษัท
 // termsAndConditions / validityDays มาจากหน้าตั้งค่าตัวแทน (คีย์ dealer_document_settings เดียวกัน)
 // เดิมไม่ได้ประกาศไว้ → เอกสารพิมพ์เงื่อนไขที่เขียนตายในโค้ด ตัวแทนแก้ที่หน้าตั้งค่าไปก็ไม่มีผล
+import { คิดภาษีใบเสนอราคา } from "./quoteTax";
+
 export type DocProfile = { stamp: string; signature: string; vatPercent: number; quotePrefix: string; runningNumber: number; termsAndConditions?: string; validityDays?: number };
 // quotePrefix เป็นแค่ป้ายนำหน้า — รหัสสาขา+ปี+เลขรันต่อท้ายเสมอที่ฝั่งสร้างใบ (ดู DEFAULT_QUOTE_NUMBERING)
 export const DEFAULT_DOC: DocProfile = { stamp: "", signature: "", vatPercent: 7, quotePrefix: "Q-", runningNumber: 1001, termsAndConditions: "", validityDays: 30 };
@@ -61,9 +63,16 @@ export function buildQuotationHTML(q: QuotationMock, issuer: IssuerProfile, cust
     : "";
   const n = (v: number) => Number(v || 0).toLocaleString("th-TH");
   const subtotal = q.totalValue;
-  const vatPct = typeof doc.vatPercent === "number" ? doc.vatPercent : 7;
-  const vat = Math.round(subtotal * vatPct / 100);
-  const grand = subtotal + vat;
+  // ── ยอดภาษีบนเอกสาร — ใช้ "สแนปช็อตที่ตรึงไว้กับใบ" เสมอ (บอสสั่ง 28 ส.ค. 69) ──
+  //   ใบเก่าที่ยังไม่มีค่าเหล่านี้ ค่อยตกไปใช้อัตราที่ส่งมาจากหน้าจอ (พฤติกรรมเดิม)
+  //   สูตรอยู่ที่ lib/quoteTax.ts ที่เดียว — ตัวเลขบนกระดาษจึงตรงกับที่เห็นในฟอร์มเป๊ะ
+  const ภาษี = คิดภาษีใบเสนอราคา(subtotal, {
+    vatPercent: typeof q.vatPercent === "number" ? q.vatPercent : (typeof doc.vatPercent === "number" ? doc.vatPercent : 7),
+    whtPercent: q.whtRate,
+  });
+  const vatPct = ภาษี.vatRate;
+  const vat = ภาษี.vatAmount;
+  const grand = ภาษี.totalAmount;
   // ตารางรายการ — ใช้ lineItems จริงถ้ามี · ใบเก่าที่ไม่มี → แถวเดียว (ทั้งโปรเจกต์)
   const itemRows = (q.lineItems && q.lineItems.length)
     ? q.lineItems.map((it, i) => `<tr><td>${i + 1}</td><td><b>${esc(it.name)}</b></td><td class="r">${n(it.qty)} ${esc(it.unit)}</td><td class="r">${n(it.unitPrice)}</td><td class="r">${n(it.qty * it.unitPrice)}</td></tr>`).join("")
@@ -96,6 +105,8 @@ table.items th.r,table.items td.r{text-align:right}
 table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical-align:top}
 .sum{margin-top:12px;margin-left:auto;width:290px}
 .sum .line{display:flex;justify-content:space-between;padding:5px 2px;font-size:12px}
+.sum .total{border-top:1px solid #c9d4e2;margin-top:3px;padding-top:5px;font-weight:700}
+.sum .wht{color:#b45309}
 .sum .grand{border-top:2px solid #003366;margin-top:4px;padding-top:8px;font-size:15px;font-weight:800;color:#003366}
 .terms{margin-top:22px;font-size:11px;color:#555}
 .terms .h{font-weight:700;color:#003366;margin-bottom:4px}
@@ -144,9 +155,13 @@ table.items td{padding:10px;border-bottom:1px solid #eee;font-size:12px;vertical
     <tbody>${itemRows}</tbody>
   </table>
   <div class="sum">
-    <div class="line"><span>มูลค่างาน (ก่อน VAT)</span><span>${n(subtotal)}</span></div>
+    <div class="line"><span>มูลค่างาน</span><span>${n(subtotal)}</span></div>
+    <!-- แสดงบรรทัด VAT เสมอ แม้อัตราเป็น 0 — ผู้รับเอกสารต้องเห็นชัดว่า "ใบนี้ไม่คิด VAT"
+         ไม่ใช่หายไปเฉย ๆ จนต้องเดา (มีเทสต์ล็อกไว้ตั้งแต่ตอนแก้บั๊ก VAT 0% ถูกคิดเป็น 7%) -->
     <div class="line"><span>ภาษีมูลค่าเพิ่ม ${vatPct}%</span><span>${n(vat)}</span></div>
-    <div class="line grand"><span>รวมสุทธิ</span><span>฿${n(grand)}</span></div>
+    <div class="line total"><span>รวมเป็นเงิน</span><span>${n(grand)}</span></div>
+    ${ภาษี.whtRate > 0 ? `<div class="line wht"><span>หัก ณ ที่จ่าย ${ภาษี.whtRate}%</span><span>-${n(ภาษี.whtAmount)}</span></div>` : ""}
+    <div class="line grand"><span>ยอดชำระสุทธิ</span><span>฿${n(ภาษี.netPayable)}</span></div>
   </div>
   ${termsHTML}
   <div class="signs">

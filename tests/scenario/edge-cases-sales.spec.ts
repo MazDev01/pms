@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { กดตกลงในกล่องยืนยัน } from "./helpers";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag, pickTemplate, markQuotationSent
@@ -98,10 +99,12 @@ test("[edge] กด 'ปิดการขายสำเร็จ' รัว �
   await expect(row2).toBeVisible({ timeout: 30_000 });
   await row2.getByRole("button", { name: /▾/ }).first().click();
 
-  // ปิดการขายมี confirm() ทุกครั้ง — ตอบตกลงให้หมดทุกครั้งที่ถาม (จำลองคนกดรัวจริง ๆ)
-  page.on("dialog", d => d.accept().catch(() => {}));
+  // ปิดการขายมีกล่องยืนยันทุกครั้ง — กดรัว 3 ที แล้วตอบ "ตกลง" ที่ใบที่ค้างอยู่
+  //   กล่องยืนยันของระบบเปิดได้ทีละใบ (ใบใหม่มาปิดใบเก่าแล้วถือว่ายกเลิก) — เจตนาของเทสต์
+  //   ยังเหมือนเดิม: กดรัวแล้วต้องได้ลูกค้ารายเดียว ยอดไม่บวกซ้ำ
   const winBtn = page.getByRole("button", { name: "ปิดการขายสำเร็จ", exact: true }).first();
   await Promise.all([0, 1, 2].map(() => winBtn.click({ force: true, timeout: 5_000 }).catch(() => {})));
+  await กดตกลงในกล่องยืนยัน(page);
 
   const cust = await waitRow<{ id: number }>(sb, "customers", { company }, 60_000);
   await page.waitForTimeout(6_000); // เผื่อรายการซ้ำ/ยอดบวกซ้ำตามมาทีหลัง
@@ -303,8 +306,8 @@ test("[edge] ปิดการขายสำเร็จแล้ว — ย�
   await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 45_000, message: "ใบต้องเป็น 'ส่งแล้ว'" }).toBe("sent_to_client");
 
-  page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "ลูกค้าตอบรับ", exact: false }).click();
+  await กดตกลงในกล่องยืนยัน(page);
   await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", q.id)).data?.[0]?.status,
     { timeout: 60_000, message: "ใบต้องเป็น 'ชนะ'" }).toBe("won");
 

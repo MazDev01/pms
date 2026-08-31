@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { กดยกเลิกในกล่องยืนยัน } from "./helpers";
 import { open, openLeadQuotationForm } from "./helpers";
 
 // ─── Persona: UX Expert ───────────────────────────────────────────────────────
@@ -26,10 +27,8 @@ test("[ux·hq] เตือน unsaved เมื่อออกจากหั�
   await page.locator(HQ_SETTINGS_NAV).getByRole("button", { name: /เป้าหมายยอดขาย/ }).click();
   const num = page.locator('input[type="number"]').first();
   await num.fill("999000000");
-  let dialogMsg = "";
-  page.once("dialog", (d) => { dialogMsg = d.message(); d.dismiss(); });
   await page.locator(HQ_SETTINGS_NAV).getByRole("button", { name: /บริษัท/ }).click();
-  await expect.poll(() => dialogMsg).toContain("ยังไม่บันทึก");
+  expect(await กดยกเลิกในกล่องยืนยัน(page)).toContain("ยังไม่บันทึก");
 });
 
 // บัญชีดีลเลอร์ = รวมโปรไฟล์ผู้ใช้ (รูป/ชื่อ/ตำแหน่ง) + ข้อมูลบริษัท + ข้อมูลบัญชี ไว้แท็บเดียว
@@ -128,10 +127,8 @@ test("[ux·dealer] ตั้งค่าใช้ปุ่มบันทึก�
   // ตัวบ่งชี้ยังไม่บันทึก + ปุ่มบันทึกกลางบนหัวต้องกดได้
   await expect(page.getByText("ยังไม่บันทึก")).toBeVisible();
   await expect(page.getByRole("button", { name: "บันทึก", exact: true })).toBeEnabled();
-  let dialogMsg = "";
-  page.once("dialog", (d) => { dialogMsg = d.message(); d.dismiss(); });
   await page.getByRole("button", { name: "ผู้รับผิดชอบ" }).click();
-  await expect.poll(() => dialogMsg).toContain("ยังไม่บันทึก");
+  expect(await กดยกเลิกในกล่องยืนยัน(page)).toContain("ยังไม่บันทึก");
 });
 
 // ผู้ใช้ HQ: หน้า Users เฉพาะ HQ (ไม่มี dealer) + stat/matrix · action dropdown → รีเซ็ตรหัสผ่าน

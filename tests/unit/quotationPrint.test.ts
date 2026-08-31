@@ -100,3 +100,30 @@ describe("ความปลอดภัยของเอกสาร", () => {
     expect(html.toLowerCase()).not.toContain("benjamin");
   });
 });
+
+describe("ภาษีหัก ณ ที่จ่ายบนเอกสาร (บอสสั่ง 28 ส.ค. 69)", () => {
+  it("ใบที่ตั้งหัก ณ ที่จ่าย 3% → เอกสารต้องมีบรรทัดหักและยอดชำระสุทธิที่ถูกต้อง", () => {
+    const html = buildQuotationHTML(ใบ({ totalValue: 1_000_000, vatPercent: 7, whtRate: 3 }), ผู้ออก, undefined, DEFAULT_DOC);
+    expect(html).toContain("ภาษีมูลค่าเพิ่ม 7%");
+    expect(html).toContain("รวมเป็นเงิน");
+    expect(html).toContain("หัก ณ ที่จ่าย 3%");
+    expect(html).toContain("ยอดชำระสุทธิ");
+    expect(html).toContain("1,070,000");   // รวมเป็นเงิน
+    expect(html).toContain("30,000");      // หัก ณ ที่จ่าย (คิดจากยอดก่อน VAT)
+    expect(html).toContain("1,040,000");   // ยอดชำระสุทธิ
+  });
+
+  it("ใบที่ไม่ได้ตั้งหัก ณ ที่จ่าย → ต้องไม่มีบรรทัดหัก และยอดชำระสุทธิเท่ายอดรวม", () => {
+    const html = buildQuotationHTML(ใบ({ totalValue: 500_000, vatPercent: 7 }), ผู้ออก, undefined, DEFAULT_DOC);
+    expect(html).not.toContain("หัก ณ ที่จ่าย");
+    expect(html).toContain("535,000");
+  });
+
+  it("อัตราที่ตรึงไว้กับใบต้องชนะค่าที่ส่งมาจากหน้าจอ (ใบเก่าพิมพ์ซ้ำแล้วต้องได้ตัวเลขเดิม)", () => {
+    const html = buildQuotationHTML(ใบ({ totalValue: 100_000, vatPercent: 0, whtRate: 5 }), ผู้ออก, undefined,
+      { ...DEFAULT_DOC, vatPercent: 7 });
+    expect(html).toContain("ภาษีมูลค่าเพิ่ม 0%");
+    expect(html).toContain("หัก ณ ที่จ่าย 5%");
+    expect(html).toContain("95,000");      // 100,000 − 5,000
+  });
+});

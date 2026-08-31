@@ -20,6 +20,7 @@ import {
 import { parseBaht } from "@pms/shared/lib/format";
 import { customerPayloadFromLead } from "@pms/shared/lib/leadToCustomer";
 import { shouldCloseWon } from "@pms/shared/lib/closeWon";
+import { ฉบับถัดไป } from "@pms/shared/lib/quoteRevision";
 import { customerDeletionImpact, blockReason } from "@pms/shared/lib/customerDeletion";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { toThaiDate } from "@pms/shared/lib/thaiDate";
@@ -208,10 +209,33 @@ export function SalesProvider({
 
   // เขียนทะลุถึง repo — optimistic: อัปเดต UI ก่อน แล้ว persist เบื้องหลัง
   // bumpWrite() ทุกครั้ง = บอก loadFresh ว่า "หน้าจอใหม่กว่าภาพที่กำลังโหลดอยู่แล้ว อย่าเอามาทับ"
+  // ── คำสั่งเขียน "ลูกค้าเป้าหมายแถวเดียวกัน" ต้องเรียงคิว ห้ามยิงคาบเกี่ยว (บั๊กจริง 28 ส.ค. 69) ──
+  //
+  // อาการ: ตัวแทนกดส่งใบเสนอราคา แล้วบรรทัด "ส่งใบเสนอราคา … ให้ลูกค้า พร้อมแม่แบบ" หายจากไทม์ไลน์
+  //   (ยิงพิสูจน์แล้ว: 3 วินาทีหลังกดส่ง ในฐานข้อมูลมีแต่ "ออกใบเสนอราคา" — ส่วนงานที่ติ๊กให้ครบ)
+  //
+  // สาเหตุ: การกดส่งหนึ่งครั้งเขียนแถวลูกค้าเป้าหมาย "สองคำสั่ง" ติด ๆ กัน
+  //   1) ติ๊กงาน (ส่งใบ/ส่งแม่แบบ) + เลื่อนขั้น — ยังไม่มีบรรทัดกิจกรรมใหม่
+  //   2) ต่อบรรทัดกิจกรรมลงไทม์ไลน์ — มีทั้งงานที่ติ๊กและบรรทัดใหม่ (ครอบข้อ 1 ทั้งหมด)
+  //   ทั้งคู่เขียน "ทั้งแถว" แบบไม่รอกัน · คำสั่งไหนถึงฐานข้อมูลทีหลังก็ทับ — ถ้าเป็นข้อ 1
+  //   บรรทัดกิจกรรมหายเงียบ ๆ (ผู้ใช้ไม่มีทางรู้ว่าร่องรอยหาย) และหายถาวร เพราะการเขียนครั้งถัดไป
+  //   ประกอบจากแถวที่ไม่มีบรรทัดนั้นแล้ว
+  //
+  // แก้ที่นี่จุดเดียวแทนการไล่แก้ทุกผู้เรียก: ต่อคิวตาม id ของแถว → คำสั่งหลังเริ่มเมื่อคำสั่งก่อนจบ
+  //   ผู้เรียกประกอบแถวจาก leadsRef ที่อัปเดตทันทีอยู่แล้ว คำสั่งหลังจึงเป็น "ของครบกว่า" เสมอ
+  //   (คิวรายแถว ไม่ใช่คิวรวม — คนละลูกค้าเป้าหมายยังเขียนพร้อมกันได้เหมือนเดิม ไม่ช้าลง)
+  const leadWrites = useRef(new Map<string, Promise<unknown>>()).current;
+  const เข้าคิวเขียนลีด = (id: string, ทำ: () => Promise<unknown>): void => {
+    const ก่อนหน้า = leadWrites.get(id) ?? Promise.resolve();
+    // .catch ก่อน then — คำสั่งก่อนล้มเหลวต้องไม่ทำให้คำสั่งถัดไปไม่ได้ยิง (ตัวมันเองรายงาน error เองแล้ว)
+    const คิวนี้ = ก่อนหน้า.catch(() => {}).then(ทำ);
+    leadWrites.set(id, คิวนี้);
+    void คิวนี้.finally(() => { if (leadWrites.get(id) === คิวนี้) leadWrites.delete(id); });
+  };
   const persistLead = useRef({
-    create: (l: LeadRow) => { bumpWrite(); void leadsRepo.create(l).catch(onFail("leads", "สร้างลูกค้าเป้าหมาย")); },
-    update: (l: LeadRow) => { bumpWrite(); void leadsRepo.update(l).catch(onFail("leads", "แก้ไขลูกค้าเป้าหมาย")); },
-    remove: (id: string) => { bumpWrite(); void leadsRepo.remove(id).catch(onFail("leads", "ลบลูกค้าเป้าหมาย")); },
+    create: (l: LeadRow) => { bumpWrite(); เข้าคิวเขียนลีด(l.id, () => leadsRepo.create(l).catch(onFail("leads", "สร้างลูกค้าเป้าหมาย"))); },
+    update: (l: LeadRow) => { bumpWrite(); เข้าคิวเขียนลีด(l.id, () => leadsRepo.update(l).catch(onFail("leads", "แก้ไขลูกค้าเป้าหมาย"))); },
+    remove: (id: string) => { bumpWrite(); เข้าคิวเขียนลีด(id, () => leadsRepo.remove(id).catch(onFail("leads", "ลบลูกค้าเป้าหมาย"))); },
   }).current;
   // ── Customers (Phase 2) — โหลดผ่าน repository (async) + เขียนทะลุถึง repo ──
   // supabase: RLS แยกสาขา (HQ = ทั้งเครือ) · local: LocalAdapter กรอง + เก็บ localStorage
@@ -733,10 +757,15 @@ export function SalesProvider({
     if (before) logLeadActivity(after.dealId, `แก้ไขรายละเอียดใบเสนอราคา ${after.id}`, "doc");
   }, [logLeadActivity]);
 
-  const updateQuotation = useCallback((quotation: QuotationMock, opts?: { แนบแม่แบบ?: boolean }) => {
+  const updateQuotation = useCallback((ที่แก้มา: QuotationMock, opts?: { แนบแม่แบบ?: boolean }) => {
     // งานที่ระบบติ๊กให้เมื่อใบถูกส่งจริง — "ส่งแม่แบบให้ลูกค้า" ติ๊กเฉพาะเมื่อผู้ใช้ยืนยันว่าแนบไปด้วย
     const งานที่ติ๊ก = opts?.แนบแม่แบบ ? ["makeQuote", "sendQuote", "catalog"] : ["makeQuote", "sendQuote"];
-    const before = quotationsRef.current.find(q => q.id === quotation.id);
+    const before = quotationsRef.current.find(q => q.id === ที่แก้มา.id);
+    // ── เลขฉบับ (V1→V2) ตัดสินที่นี่ที่เดียว ──────────────────────────────────────
+    // ทางผ่านทางเดียวของทุกหน้า → หน้า /quotations กับแผงในหน้าลูกค้าเป้าหมายได้กติกาเดียวกัน
+    // และเทียบกับ "ใบล่าสุดในระบบ" (quotationsRef) ไม่ใช่สำเนาที่ค้างอยู่ในฟอร์ม
+    // เหตุผลเต็มและกับดักที่เคยเจอ: ดู lib/quoteRevision.ts
+    const quotation: QuotationMock = { ...ที่แก้มา, revision: ฉบับถัดไป(before, ที่แก้มา) };
     setQuotations(prev => prev.map(q => q.id !== quotation.id ? q : quotation));
     // แก้ใบที่ won (หรือเคย won) ที่ผูกลูกค้า → ยอดลูกค้าต้องตาม (แก้ totalValue/สถานะ) · H2
     const needsReconcile = quotation.customerId && quotation.customerId > 0 && (quotation.status === "won" || before?.status === "won");

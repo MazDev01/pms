@@ -129,6 +129,17 @@ async function once(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
+
+// ── พาไปหน้าเข้าสู่ระบบเมื่อเซสชันจบจริง (เรียกซ้ำได้ ทำงานครั้งเดียว) ────────
+// ⚠️ ห้ามเรียกจากฝั่งเซิร์ฟเวอร์ · ห้ามยิงซ้ำหลายรอบตอนหลายคำขอพัง 401 พร้อมกัน
+let กำลังพาไปล็อกอิน = false;
+function พาไปเข้าสู่ระบบใหม่(): void {
+  if (กำลังพาไปล็อกอิน) return;
+  กำลังพาไปล็อกอิน = true;
+  const หน้าเข้าสู่ระบบ = process.env.NEXT_PUBLIC_LOGIN_PATH || "/login";
+  if (window.location.pathname !== หน้าเข้าสู่ระบบ) window.location.replace(หน้าเข้าสู่ระบบ);
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let res = await once(path, init);
   // ใบผ่านหมดอายุระหว่างใช้งาน — ต่ออายุที่เซิร์ฟเวอร์แล้วลองใหม่ครั้งเดียว
@@ -136,6 +147,16 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (res.status === 401 && COOKIE_AUTH) {
     const { caRefresh } = await import("@pms/shared/lib/cookieAuth");
     if (await caRefresh()) res = await once(path, init);
+    // ── ต่ออายุไม่ได้แล้ว = เซสชันจบจริง ต้องพาไปเข้าสู่ระบบ (แก้ 28 ส.ค. 69) ──────
+    //
+    // อาการที่ผู้ใช้เจอ: หน้าจอค้างอยู่หน้าเดิมแล้วขึ้น error กองใหญ่ซ้ำ ๆ
+    //   "ยังไม่ได้เข้าสู่ระบบ" ทุกคำขอ · สายอัปเดตสดพยายามต่อใหม่ไม่หยุด
+    //   ผู้ใช้ไม่รู้ว่าต้องทำอะไร เพราะหน้าจอยังดูเหมือนใช้งานได้อยู่
+    // (เจอตอนใบผ่านหมดอายุ และตอนเปลี่ยนชื่อ cookie ในรอบพัฒนา)
+    //
+    // เงื่อนไข: ต้องเป็น 401 ซ้ำหลังพยายามต่ออายุแล้วเท่านั้น — ไม่ใช่ 401 ครั้งแรก
+    //   (401 ครั้งแรกเป็นเรื่องปกติของใบผ่านหมดอายุตามรอบ ต่ออายุแล้วไปต่อได้)
+    else if (res.status === 401 && typeof window !== "undefined") พาไปเข้าสู่ระบบใหม่();
   }
   // อ่าน body ก่อนเช็ค ok — ข้อความอธิบายเหตุผลอยู่ใน body ไม่ใช่ status
   const body = (await res.json().catch(() => null)) as { error?: string; code?: string } | T | null;

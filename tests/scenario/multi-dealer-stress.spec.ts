@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason, appEnv } from "./supabaseEnv";
 import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate } from "./funcHelpers";
 import { settle } from "./helpers";
+import { กดตกลงในกล่องยืนยัน } from "./helpers";
 
 // ── Multi-Dealer Load / Stress Test ──────────────────────────────────────────
 // จำลอง 10 ตัวแทนใช้งานพร้อมกันจริง (บัญชี auth จริง ไม่ใช่ mock) + HQ ติดตามแบบเรียลไทม์
@@ -164,8 +165,8 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
   mark("quotation_sent");
 
   if (willWin) {
-    page.once("dialog", d => d.accept());
     await page.getByRole("button", { name: "ลูกค้าตอบรับ", exact: false }).click();
+    await กดตกลงในกล่องยืนยัน(page);
     await expect.poll(async () => (await sb.from("quotations").select("status").eq("id", quoteId)).data?.[0]?.status,
       { timeout: 60_000, message: `${code}: ใบต้องเป็น 'won'` }).toBe("won");
     mark("closed_won");

@@ -377,8 +377,22 @@ export const SupabaseAdapter: DataAdapter = {
     list: () => selectScoped<SolutionProduct>("master_catalog", undefined, "dealer_code", "id", null),
     save: async (all) => {
       // เหตุผลเดียวกับ dealers.save — created_at เป็นของ DB (ดูคำอธิบายด้านบน)
-      const rows = toSnakeList(all as unknown as Row[]).map(r => { const c = { ...r }; delete c.created_at; return c; });
-      await must(sb().from("master_catalog").upsert(rows));
+      const rows = toSnakeList(all as unknown as Row[]).map(r => {
+        const c = { ...r };
+        delete c.created_at;
+        for (const k of Object.keys(c)) if (c[k] === undefined) delete c[k];
+        return c;
+      });
+      // ⚠️ ต้องแบ่งกลุ่มตาม "ชุดคอลัมน์" ก่อนบันทึก — เหตุผลเต็มอยู่ที่ server/v1/catalog.ts
+      //    ส่งหลายแถวที่คอลัมน์ไม่เท่ากันในคำสั่งเดียว ตัวเชื่อมจะเติม NULL ให้แถวที่ขาด
+      //    แล้วคอลัมน์ที่ห้ามว่าง (subtype_prices) จะทำให้ทั้งชุดถูกปฏิเสธ (ผู้ใช้แจ้ง 28 ส.ค. 69)
+      const กลุ่ม = new Map<string, Row[]>();
+      for (const r of rows) {
+        const คีย์ = Object.keys(r).sort().join("|");
+        const ก = กลุ่ม.get(คีย์);
+        if (ก) ก.push(r); else กลุ่ม.set(คีย์, [r]);
+      }
+      for (const ชุด of กลุ่ม.values()) await must(sb().from("master_catalog").upsert(ชุด));
     },
     remove: (id) => must(sb().from("master_catalog").delete().eq("id", id)),
   },

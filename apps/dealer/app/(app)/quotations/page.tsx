@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { SortableTh } from "@pms/shared/components/ui/SortableTh";
 import { useRouter } from "next/navigation";
+import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import {
   quotationStatusLabel, quotationStatusColor,
   DEFAULT_ISSUER, DEFAULT_DEALER_CODE,
@@ -12,9 +13,10 @@ import {
 import { LineItemsEditor } from "@pms/shared/components/ui/LineItemsEditor";
 import { useMasterCatalogState } from "@pms/shared/lib/useMasterCatalog";
 import { boqLineItems, boqSubtotal } from "@pms/shared/lib/boq";
+import { คิดภาษีใบเสนอราคา, ช่องภาษีสำหรับบันทึก } from "@pms/shared/lib/quoteTax";
 import { AssigneeAvatars, PersonPicker } from "@pms/shared/components/ui/PersonPicker";
 import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/lib/quotationPrint";
-import { useDealerSettings, useDealerVat } from "@pms/shared/lib/useDealerSettings";
+import { useDealerSettings, useDealerVat, useDealerWht } from "@pms/shared/lib/useDealerSettings";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { useHQPolicy, useLostReasons } from "@pms/shared/lib/useHQConfig";
@@ -93,6 +95,8 @@ type QForm = {
   status:QuotationStatus; date:string; items:number;
   lineItems:QuoteLineItem[];
   revision:string; expiry:string;
+  // ภาษีของใบนี้ (บอสสั่ง 28 ส.ค. 69) — ติ๊กเปิด/ปิดและแก้อัตราได้ · เก็บเป็นสแนปช็อตติดใบ
+  vatOn:boolean; vatPct:string; whtOn:boolean; whtPct:string;
   // ผู้รับผิดชอบ — ไม่ใช่ฟิลด์ของใบเสนอราคา (QuotationMock ไม่มี) เป็นของลูกค้าที่ผูกอยู่
   // บอสสั่งให้แก้ในหน้านี้ได้ → ตอนบันทึกจะเขียนกลับไปที่ตัวลูกค้า (updateCustomer) ไม่ได้เก็บลงใบ
   owner:string;
@@ -145,8 +149,9 @@ function suggestProject(c?:CustomerRow):string{
   return c.category ? `${c.category} — ${c.company}` : c.company;
 }
 function buildBlank(customers:CustomerRow[], validityDays:number): QForm {
+  // ค่าตั้งต้น: VAT ติ๊กไว้ 7% · หัก ณ ที่จ่าย ไม่ติ๊ก (3% เมื่อเปิด)
   const c=customers[0];
-  return { customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||""   /* ห้ามเดาแม่แบบให้ — เดิมยัด "โกดังสำเร็จรูป" ทั้งที่ยังไม่มีใครเลือก */, area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(validityDays), owner:c?.owner??"" };
+  return { vatOn:true, vatPct:"7", whtOn:false, whtPct:"3", customerId:c?.id??0, customer:c?.company??"", project:suggestProject(c), projectId:0, province:c?.province??"", buildingType:c?.category||""   /* ห้ามเดาแม่แบบให้ — เดิมยัด "โกดังสำเร็จรูป" ทั้งที่ยังไม่มีใครเลือก */, area:0, materialCost:0, status:"draft", date:TODAY, items:0, lineItems:[], revision:"V1", expiry:defaultExpiry(validityDays), owner:c?.owner??"" };
 }
 
 function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:{
@@ -263,11 +268,55 @@ function QuotationModal({ initial, title, onSave, onClose, customers, quoteId }:
             <div className="form-section">รายการสินค้า</div>
             <div className="col-full"><LineItemsEditor items={form.lineItems} defaultQty={form.area}
               onChange={li=>setForm(p=>({...p,lineItems:li,buildingType:li.length?li[0].name.split(" · ")[0]:p.buildingType}))} /></div>
-            {/* Total preview */}
-            {total>0&&<div className="col-full" style={{padding:"10px 14px",background:"#dce5f0",borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:"0.72rem",fontWeight:700,color:MUTED}}>มูลค่ารวม (คำนวณ)</span>
-              <span style={{fontSize:"1rem",fontWeight:800,color:PRIMARY}}>{fmtMoney(total)}</span>
-            </div>}
+            {/* ── ภาษีของใบนี้ + ยอดสรุปสด (บอสสั่ง 28 ส.ค. 69) ────────────────────
+                 ⚠️ "มูลค่างาน" คือยอดที่บันทึกเป็นยอดขาย — ภาษีไม่ไปแตะตัวนี้ */}
+            <div className="col-full" style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {([
+                {on:"vatOn",pct:"vatPct",ป้าย:"ภาษีมูลค่าเพิ่ม (VAT)"},
+                {on:"whtOn",pct:"whtPct",ป้าย:"ภาษีหัก ณ ที่จ่าย"},
+              ] as const).map(t=>{
+                const เปิด=form[t.on] as boolean;
+                return (
+                  <label key={t.on} style={{flex:"1 1 220px",display:"flex",alignItems:"center",gap:9,padding:"9px 11px",
+                    border:`1px solid ${เปิด?PRIMARY:"#e5e7eb"}`,borderRadius:10,background:เปิด?"#f4f8fc":"#fff",cursor:"pointer"}}>
+                    <input type="checkbox" checked={เปิด} onChange={e=>set(t.on,e.target.checked)} style={{width:16,height:16,cursor:"pointer"}}/>
+                    <span style={{flex:1,fontSize:"0.78rem",fontWeight:700,color:"#2D2D2D"}}>{t.ป้าย}</span>
+                    <input type="text" inputMode="decimal" aria-label={`อัตรา${t.ป้าย}`} disabled={!เปิด}
+                      value={form[t.pct] as string} onClick={e=>e.stopPropagation()}
+                      onChange={e=>set(t.pct,e.target.value.replace(/[^0-9.]/g,""))}
+                      style={{width:50,textAlign:"right",padding:"5px 7px",borderRadius:8,border:"1px solid #e5e7eb",
+                        fontFamily:"inherit",fontSize:"0.8rem",fontWeight:700,color:เปิด?"#2D2D2D":"#b7bec7",background:เปิด?"#fff":"#f8fafc"}}/>
+                    <span style={{fontSize:"0.78rem",fontWeight:700,color:MUTED}}>%</span>
+                  </label>
+                );
+              })}
+            </div>
+            {/* Total preview — จัดเป็นตาราง ป้าย | เครื่องหมาย | จำนวนเงิน
+                 ตัวเลขใช้ความกว้างเท่ากันทุกหลัก (tabular-nums) และเครื่องหมาย +/− อยู่คนละช่อง
+                 หลักตัวเลขจึงตรงกันทุกแถว (ผู้ใช้แจ้ง 28 ส.ค. 69 ว่าเรียงไม่ตรง) */}
+            {total>0&&(()=>{
+              const ภ=คิดภาษีใบเสนอราคา(total,{vatPercent:form.vatOn?Number(form.vatPct):0,whtPercent:form.whtOn?Number(form.whtPct):0});
+              const แถว=(ป้าย:string,ค่า:number,o?:{sign?:string;เด่น?:boolean;สี?:string})=>(
+                <>
+                  <span style={{fontSize:o?.เด่น?"0.82rem":"0.74rem",fontWeight:o?.เด่น?800:600,color:o?.สี??(o?.เด่น?PRIMARY:MUTED),whiteSpace:"nowrap"}}>{ป้าย}</span>
+                  <span style={{textAlign:"right",fontSize:"0.74rem",fontWeight:700,color:o?.สี??MUTED}}>{o?.sign??""}</span>
+                  <span style={{textAlign:"right",fontVariantNumeric:"tabular-nums",fontSize:o?.เด่น?"0.92rem":"0.78rem",fontWeight:o?.เด่น?800:700,color:o?.สี??PRIMARY}}>{fmtMoney(ค่า)}</span>
+                </>
+              );
+              const เส้น=(หนา?:boolean)=>(<span style={{gridColumn:"1 / -1",height:1,background:หนา?"#b9c7d9":"#c9d4e2",margin:หนา?"6px 0 2px":"4px 0"}}/>);
+              return (
+                <div className="col-full" style={{padding:"12px 14px",background:"#dce5f0",borderRadius:10,
+                  display:"grid",gridTemplateColumns:"1fr 12px auto",alignItems:"baseline",columnGap:6,rowGap:4}}>
+                  {แถว("มูลค่างาน (ยอดที่บันทึกเป็นยอดขาย)",ภ.subtotal)}
+                  {เส้น()}
+                  {form.vatOn&&แถว(`ภาษีมูลค่าเพิ่ม ${ภ.vatRate}%`,ภ.vatAmount,{sign:"+"})}
+                  {แถว("รวมเป็นเงิน",ภ.totalAmount)}
+                  {form.whtOn&&แถว(`หัก ณ ที่จ่าย ${ภ.whtRate}%`,ภ.whtAmount,{sign:"−",สี:"#b45309"})}
+                  {เส้น(true)}
+                  {แถว("ยอดชำระสุทธิ",ภ.netPayable,{เด่น:true})}
+                </div>
+              );
+            })()}
 
             <div className="form-section">สถานะและกำหนดเวลา</div>
               <div className="col-full">
@@ -352,7 +401,8 @@ function QuotationsPageInner(){
   // ค่าคุมจาก HQ (อ่านผ่าน repo · อัปเดตตามเมื่อ HQ แก้) — อายุใบมีผลกับการคิดวันหมดอายุ
   const lostReasons = useLostReasons(); // เหตุผลปิดไม่สำเร็จที่ HQ กำหนด (ชุดเดียวกับที่ลูกค้าเป้าหมายใช้)
   const dealerCfg = useDealerSettings(); // หัวกระดาษ/ตั้งค่าเอกสารของสาขา (ผ่าน repo)
-  const dealerVat = useDealerVat();      // % VAT ที่สาขาตั้งเอง — ค่าสำรองของใบที่ไม่มีสแนปช็อต
+  const dealerVat = useDealerVat();
+  const dealerWht = useDealerWht();   // อัตราหัก ณ ที่จ่ายตั้งต้นของสาขา      // % VAT ที่สาขาตั้งเอง — ค่าสำรองของใบที่ไม่มีสแนปช็อต
   // อายุใบของ "สาขา" มาก่อนนโยบายเครือ (บอสสั่ง 20 ส.ค. 69) — สาขาตั้งไว้เท่าไรต้องใช้ค่านั้นจริง
   const validityDays = useQuoteValidity();
   const {
@@ -486,16 +536,22 @@ function QuotationsPageInner(){
     savingQRef.current = true;
     try {
     // owner ไม่ใช่ฟิลด์ของใบเสนอราคา — แยกออกก่อน ไม่งั้นจะติดไปกับ QuotationMock เป็นฟิลด์ขยะ
-    const { owner, ...qf } = form;
+    // owner / ช่องติ๊กภาษี ไม่ใช่ฟิลด์ของใบเสนอราคา — แยกออกก่อน ไม่งั้นจะติดไปลงฐานข้อมูล
+    const { owner, vatOn, vatPct, whtOn, whtPct, ...qf } = form;
     const tv=qf.materialCost;
     const total=fmtMoney(tv);
+    // สแนปช็อตภาษี ณ ตอนบันทึก — สูตรเดียวกับฟอร์มออกใบและเอกสารที่พิมพ์ (lib/quoteTax.ts)
+    const ภาษีที่บันทึก = ช่องภาษีสำหรับบันทึก(tv, {
+      vatPercent: vatOn ? Number(vatPct) : 0,
+      whtPercent: whtOn ? Number(whtPct) : 0,
+    });
     if(editingQ){
-      const updated:QuotationMock={...editingQ,...qf,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv};
+      const updated:QuotationMock={...editingQ,...qf,...ภาษีที่บันทึก,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv};
       updateQuotation(updated);
       setSelected(p=>p?.id===editingQ.id?updated:p);
     } else {
       // ออกเลข + insert แบบ atomic (H8) — draft ไม่มี id · DB เป็นคนออกเลขให้ในทรานแซกชันเดียว
-      await createQuotation({...qf,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv});
+      await createQuotation({...qf,...ภาษีที่บันทึก,revision:qf.revision,expiry:qf.expiry,total,totalValue:tv});
     }
     // ผู้รับผิดชอบ → เขียนกลับที่ "ต้นทาง" ตามที่บอสสั่ง (ใบเสนอราคาไม่มีฟิลด์นี้)
     // ปิดการขายแล้ว → เขียนที่ลูกค้า · ยังเป็นลูกค้าเป้าหมาย → เขียนที่ลูกค้าเป้าหมาย
@@ -517,12 +573,16 @@ function QuotationsPageInner(){
     }
     } finally { savingQRef.current = false; }
   }
-  function changeStatus(id:string,s:QuotationStatus){
+  async function changeStatus(id:string,s:QuotationStatus){
     // "won" (ลูกค้าตอบรับ) = สร้าง/ผูกลูกค้าอัตโนมัติทันที ย้อนกลับไม่ได้ — ต้องยืนยันก่อนเสมอ
     // (ยืนยันจาก scenario test 31 ก.ค. 69: เดิมกดครั้งเดียวจบ เงียบสนิทไม่มี feedback เลย)
     if (s === "won") {
       const target = allQuotationsRaw.find(q => q.id === id);
-      if (!confirm(`ปิดการขายสำเร็จสำหรับใบเสนอราคา "${id}"${target ? ` (${target.customer})` : ""}?\nระบบจะสร้าง/ผูกลูกค้าให้อัตโนมัติทันที — ย้อนกลับไม่ได้`)) return;
+      if (!(await ยืนยัน({
+        หัวข้อ: `ปิดการขายสำเร็จสำหรับใบเสนอราคา "${id}"${target ? ` (${target.customer})` : ""} ?`,
+        รายละเอียด: "ระบบจะสร้าง/ผูกลูกค้าให้อัตโนมัติทันที — ย้อนกลับไม่ได้",
+        ปุ่มตกลง: "ปิดการขายสำเร็จ", อันตราย: true,
+      }))) return;
       setQuotationStatus(id,s);
       setSelected(p=>p?.id===id?{...p,status:s}:p);
       showToast("ปิดการขายสำเร็จ — ระบบสร้าง/ผูกลูกค้าให้อัตโนมัติ");
@@ -591,7 +651,7 @@ function QuotationsPageInner(){
     const owner = ownerOf(q);
     // ใบเก่าที่ไม่มี lineItems → สังเคราะห์เป็น 1 รายการจาก แม่แบบ/พื้นที่/มูลค่า (แก้ต่อได้)
     const lineItems:QuoteLineItem[] = boqLineItems(q);
-    return {customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,lineItems,revision:q.revision??"V1",expiry:q.expiry??"",owner};
+    return {vatOn:(q.vatPercent ?? 0)>0, vatPct:String(q.vatPercent ?? 7), whtOn:(q.whtRate ?? 0)>0, whtPct:String(q.whtRate ?? dealerWht ?? 3), customerId:q.customerId,customer:q.customer,project:q.project,projectId:q.projectId??0,province:q.province,buildingType:q.buildingType,area:q.area,materialCost:q.materialCost,status:q.status,date:q.date,items:q.items,lineItems,revision:q.revision??"V1",expiry:q.expiry??"",owner};
   }
 
   return (
@@ -901,9 +961,9 @@ function QuotationsPageInner(){
         const lineItems: QuoteLineItem[] = boqLineItems(selected);
         const subtotal = boqSubtotal(lineItems);
         const net = subtotal;                            // = totalValue (มูลค่างาน ก่อน VAT) — ไม่มีส่วนลด
-        const vatPct = selected.vatPercent ?? dealerVat; // สแนปช็อตตอนสร้าง — ใบเก่าไม่มีค่านี้ค่อย fallback ไปใช้ค่าที่สาขาตั้งไว้
-        const vatAmt = Math.round(net*vatPct/100);
-        const grand = net + vatAmt;                      // ยอดรวมสุทธิ (รวม VAT) — ตรงกับเอกสารพิมพ์
+        // ใช้สูตรกลางเดียวกับฟอร์มและเอกสารที่พิมพ์ (lib/quoteTax.ts) — ตัวเลขต้องตรงกันทุกที่
+        const ภาษี = คิดภาษีใบเสนอราคา(net, { vatPercent: selected.vatPercent ?? dealerVat, whtPercent: selected.whtRate });
+        const vatPct = ภาษี.vatRate;
         const sc = quotationStatusColor[selected.status];
 
         return (
@@ -1014,8 +1074,12 @@ function QuotationsPageInner(){
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.78rem"}}><span style={{color:"#8a929c"}}>ยอดรวมย่อย</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(subtotal)}</span></div>
                     {/* แถบ "มูลค่างาน (ก่อน VAT)" เอาออกตามที่บอสสั่ง — ซ้ำกับ "ยอดรวมย่อย" เป๊ะ
                         (พอไม่มีส่วนลดในระบบ ยอดก่อน VAT = ผลรวม BOQ เสมอ) */}
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.76rem",marginTop:2}}><span style={{color:"#8a929c"}}>VAT {vatPct}%</span><span style={{fontWeight:700,color:STEEL}}>{fmtBaht(vatAmt)}</span></div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.8rem",fontWeight:800,color:STEEL,borderTop:"1px solid #e6eaf0",paddingTop:7}}><span>ยอดรวมสุทธิ (รวม VAT)</span><span>{fmtBaht(grand)}</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.76rem",marginTop:2}}><span style={{color:"#8a929c"}}>ภาษีมูลค่าเพิ่ม {vatPct}%</span><span style={{fontWeight:700,color:STEEL}}>{fmtMoney(ภาษี.vatAmount)}</span></div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.78rem",fontWeight:700,color:STEEL,borderTop:"1px solid #e6eaf0",paddingTop:6}}><span>รวมเป็นเงิน</span><span>{fmtMoney(ภาษี.totalAmount)}</span></div>
+                    {ภาษี.whtRate > 0 && (
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.76rem"}}><span style={{color:"#b45309"}}>หัก ณ ที่จ่าย {ภาษี.whtRate}%</span><span style={{fontWeight:700,color:"#b45309"}}>−{fmtMoney(ภาษี.whtAmount)}</span></div>
+                    )}
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.82rem",fontWeight:800,color:STEEL,borderTop:"2px solid #e6eaf0",paddingTop:7}}><span>ยอดชำระสุทธิ</span><span>{fmtMoney(ภาษี.netPayable)}</span></div>
                   </div>
                   {selected.note && (
                     <div style={{marginTop:12,padding:"10px 12px",background:"#fafbfc",border:"1px solid #f0f4f8",borderRadius:10,fontSize:"0.75rem",color:"#4b5563",lineHeight:1.6}}>
@@ -1105,7 +1169,7 @@ function QuotationsPageInner(){
 
             {/* Floating action bar */}
             <div style={{flexShrink:0,borderTop:"1px solid #e6eaf0",background:"#fafbfc",padding:"11px 20px",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:"0.68rem",color:"#8a929c",display:"flex",alignItems:"center",gap:5}}><Coins size={13} color={PRIMARY}/> มูลค่างาน (ก่อน VAT) {fmtBaht(net)} · รวม VAT {fmtBaht(grand)}</span>
+              <span style={{fontSize:"0.68rem",color:"#8a929c",display:"flex",alignItems:"center",gap:5}}><Coins size={13} color={PRIMARY}/> มูลค่างาน (ก่อน VAT) {fmtBaht(net)} · ยอดชำระสุทธิ {fmtBaht(ภาษี.netPayable)}</span>
               {/* ปุ่ม "แก้ไข" + "พิมพ์ / ดาวน์โหลด PDF" ที่แถบล่าง ลบตามที่บอสสั่ง
                   ซ้ำกับปุ่มบนหัวแผงสีน้ำเงินอยู่แล้ว (พิมพ์ PDF · แก้ไข) */}
             </div>

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { กดตกลงในกล่องยืนยัน } from "./helpers";
 import { RYG, skipReason } from "./supabaseEnv";
 import { settle } from "./helpers";
 import {
@@ -115,8 +116,8 @@ test("[func] ลบลูกค้าเป้าหมายผ่านหน�
   const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
   await expect(row).toBeVisible({ timeout: 15_000 });
 
-  page.once("dialog", d => d.accept()); // ยืนยันการลบ
   await row.getByTitle("ลบลูกค้าเป้าหมาย").first().click();
+  await กดตกลงในกล่องยืนยัน(page); // ยืนยันการลบ
 
   await waitGone(sb, "leads", { company: COMPANY });
   assertNoErrors(errs, "ลบลูกค้าเป้าหมาย");

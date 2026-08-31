@@ -14,7 +14,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { ACCESS_COOKIE, REFRESH_COOKIE, accessCookie, refreshCookie, clearCookie, callerToken } from "./_cookie";
+import { ACCESS_COOKIE, REFRESH_COOKIE, LEGACY_COOKIES, accessCookie, refreshCookie, clearCookie, callerToken } from "./_cookie";
 
 export const runtime = "nodejs";
 
@@ -90,6 +90,8 @@ function evict(error: string) {
   const res = NextResponse.json({ error }, { status: 401, headers: { "cache-control": "no-store" } });
   res.cookies.set(clearCookie(ACCESS_COOKIE));
   res.cookies.set(clearCookie(REFRESH_COOKIE));
+  // ลบชื่อเดิมก่อนแยกรายแอปด้วย — ไม่งั้นของเก่าค้างในเครื่องผู้ใช้แล้วสับสนภายหลัง
+  for (const เดิม of LEGACY_COOKIES) res.cookies.set(clearCookie(เดิม));
   return res;
 }
 

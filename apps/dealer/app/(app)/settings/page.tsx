@@ -3,6 +3,7 @@
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
+import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from "react";
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save, RotateCcw,
@@ -235,6 +236,9 @@ type DocumentSettings = {
   autoYear: boolean;   // ออกปีในเลขที่อัตโนมัติ (Q-{ปีปัจจุบัน}-) แทนการพิมพ์เอง
   runningNumber: number;
   vatPercent: number;
+  /** อัตราภาษีหัก ณ ที่จ่ายตั้งต้นของสาขา (%) — ใช้เป็นค่าเริ่มต้นตอนออกใบ
+   *  ตัวแทนยังเปิด/ปิดและแก้อัตรารายใบได้เสมอ (บอสสั่ง 28 ส.ค. 69) */
+  whtPercent: number;
   validityDays: number;    // อายุใบเสนอราคา (วัน) → วันหมดอายุเริ่มต้น
   termsAndConditions: string;
   header: string;
@@ -247,6 +251,7 @@ const DOC_DEFAULT: DocumentSettings = {
   autoYear:            true,
   runningNumber:       1101,
   vatPercent:          7,
+  whtPercent:          3,
   validityDays:        30,
   termsAndConditions:
     "ราคานี้มีผลภายใน 30 วัน นับจากวันที่ออกใบเสนอราคา\n" +
@@ -350,7 +355,7 @@ function DocumentsTab() {
           <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 10, textTransform: "uppercase" }}>
             เลขที่ใบเสนอราคา
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(120px, 160px) minmax(90px, 120px) minmax(0, 1fr)", gap: 12, alignItems: "end" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(110px, 150px) minmax(84px, 104px) minmax(84px, 104px) minmax(0, 1fr)", gap: 12, alignItems: "end" }}>
             <div>
               <label className="form-label" style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 คำนำหน้าเลขที่ <Lock size={11} style={{ color: "#9ca3af" }} />
@@ -377,13 +382,23 @@ function DocumentsTab() {
                 onChange={e => set("vatPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
                 style={{ fontFamily: "monospace" }} />
             </div>
+            <div>
+              {/* ภาษีหัก ณ ที่จ่าย — ค่าตั้งต้นของสาขาเท่านั้น (บอสสั่ง 28 ส.ค. 69)
+                  ตอนออกใบยังติ๊กเปิด/ปิดและแก้อัตรารายใบได้ · ใบที่ออกไปแล้วไม่กระทบ
+                  เพราะทุกใบตรึงอัตราไว้กับตัวเองตั้งแต่วันที่ออก */}
+              <label className="form-label">ภาษีหัก ณ ที่จ่าย %</label>
+              <input className="form-input" aria-label="ภาษีหัก ณ ที่จ่าย %" type="number" min={0} max={100} step={0.5}
+                value={doc.whtPercent}
+                onChange={e => set("whtPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                style={{ fontFamily: "monospace" }} />
+            </div>
             <div style={{ padding: "10px 14px", background: "#f0f4fa", borderRadius: 10, border: "1px solid #dce5f0" }}>
               <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginBottom: 3 }}>ตัวอย่างเลขที่ถัดไป</div>
               <div style={{ fontFamily: "monospace", fontWeight: 800, color: "#003366", fontSize: "1rem" }}>{previewNo}</div>
             </div>
           </div>
           {/* ค่าเริ่มต้น: อายุใบเสนอราคา (ตัวแทนตั้งได้เอง) */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 200px) minmax(150px, 200px)", gap: 12, marginTop: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 200px)", gap: 12, marginTop: 14 }}>
             <div>
               <label className="form-label">อายุใบเสนอราคา (วัน)</label>
               <input className="form-input" type="number" min={1} value={doc.validityDays}
@@ -892,9 +907,13 @@ export default function SettingsPage() {
   useUnsavedGuard(dirty);
 
   // เตือนก่อนออกจากแท็บถ้ายังไม่บันทึก (แนวเดียวกับหน้าตั้งค่า HQ)
-  function switchTab(next: SettingTab) {
+  async function switchTab(next: SettingTab) {
     if (next === activeTab) return;
-    if (dirty && !confirm("ส่วนนี้ยังไม่บันทึก · ทิ้งที่แก้ไว้ไหม?")) return;
+    if (dirty && !(await ยืนยัน({
+      หัวข้อ: "ส่วนนี้ยังไม่บันทึก",
+      รายละเอียด: "เปลี่ยนหัวข้อแล้วสิ่งที่แก้ไว้จะหาย",
+      ปุ่มตกลง: "ทิ้งที่แก้ไว้", ปุ่มยกเลิก: "อยู่หัวข้อเดิม", อันตราย: true,
+    }))) return;
     setActiveTab(next);
   }
   // ── ต้องรอให้บันทึกเสร็จจริงก่อนบอกว่า "บันทึกแล้ว" (แก้ 27 ส.ค. 69) ──────────────

@@ -26,9 +26,36 @@ export const PUT = handler("catalog.save", async (req: NextRequest, sb) => {
   const body = (await req.json().catch(() => null)) as SolutionProduct[] | null;
   if (!Array.isArray(body)) return fail(400, "ต้องส่งรายการแม่แบบมาเป็น array");
   // created_at เป็นของฐานข้อมูล — ส่งกลับไปจะทับเวลาสร้างเดิม (เหตุผลเดียวกับ dealers.save)
-  const rows = toSnakeList(body as unknown as Row[]).map(r => { const c = { ...r }; delete c.created_at; return c; });
-  const { error } = await sb.from("master_catalog").upsert(rows);
-  if (error) return dbFail("catalog.save", error);
+  const rows = toSnakeList(body as unknown as Row[]).map(r => {
+    const c = { ...r };
+    delete c.created_at;
+    // ช่องที่ผู้เรียกไม่ได้ส่งมา = "ไม่ได้แก้" ไม่ใช่ "ให้ล้างเป็นค่าว่าง" — ตัดทิ้งไปเลย
+    for (const k of Object.keys(c)) if (c[k] === undefined) delete c[k];
+    return c;
+  });
+
+  // ── ต้องแบ่งกลุ่มตาม "ชุดคอลัมน์ที่ส่งมา" ก่อนบันทึก (แก้ 28 ส.ค. 69) ──────────
+  //
+  // อาการที่ผู้ใช้เจอ: กด "เพิ่มแม่แบบ" แล้วขึ้น
+  //   "บันทึกไม่สำเร็จ: ข้อมูลไม่ครบ — มีช่องที่จำเป็นถูกเว้นว่าง" ทั้งที่กรอกครบ
+  //
+  // สาเหตุ: ส่งหลายแถวพร้อมกันในคำสั่งเดียว ตัวเชื่อมฐานข้อมูลจะทำให้ทุกแถว
+  //   "มีคอลัมน์เท่ากัน" โดยเติม NULL ให้แถวที่ขาดคอลัมน์นั้น
+  //   แม่แบบที่ยังไม่มีราคารายแม่แบบย่อยจึงถูกเติม subtype_prices = NULL
+  //   ซึ่งคอลัมน์นั้นห้ามว่าง → ฐานข้อมูลปฏิเสธทั้งชุด (23502)
+  //
+  // แก้: จัดกลุ่มแถวที่มีชุดคอลัมน์เหมือนกัน แล้วส่งทีละกลุ่ม
+  //   ไม่มีการเติม NULL ให้ใคร และคอลัมน์ที่ไม่ได้ส่งมาก็คงค่าเดิมไว้ตามเจตนาของ upsert
+  const กลุ่ม = new Map<string, Row[]>();
+  for (const r of rows) {
+    const คีย์ = Object.keys(r).sort().join("|");
+    const ก = กลุ่ม.get(คีย์);
+    if (ก) ก.push(r); else กลุ่ม.set(คีย์, [r]);
+  }
+  for (const ชุด of กลุ่ม.values()) {
+    const { error } = await sb.from("master_catalog").upsert(ชุด);
+    if (error) return dbFail("catalog.save", error);
+  }
   return ok({ ok: true });
 });
 

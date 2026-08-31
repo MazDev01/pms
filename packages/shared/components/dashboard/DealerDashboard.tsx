@@ -482,7 +482,7 @@ export default function DealerDashboard() {
 
         {/* ขั้นตอนการขาย (โดนัท) */}
         <div className="card" style={card}>
-          <div style={hd}><span style={title}>ขั้นตอนการขาย</span>{more("/leads")}</div>
+          <div style={hd}><span style={title}>สัดส่วนตามขั้นตอนการขาย</span>{more("/leads")}</div>
           {dealStatus.length === 0 ? <EmptyState icon={<Target size={26} />} title="ไม่มีดีลในช่วงนี้" description="ลองขยายช่วงเวลาด้านบน" compact /> : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
               <Donut segments={dealStatus} centerLabel="ดีลทั้งหมด" centerValue={`${leadsIn.length}`} size={118} />

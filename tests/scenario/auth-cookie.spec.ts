@@ -28,10 +28,10 @@ test("[auth] เข้าระบบผ่าน backend → ได้ cookie �
 
   // 2) cookie ต้องเป็น httpOnly จริง ๆ — จุดสำคัญที่สุดของทั้งระยะนี้
   const cookies = await ctx.storageState().then(s => s.cookies);
-  const at = cookies.find(c => c.name === "pms_at");
+  const at = cookies.find(c => c.name.startsWith("pms_at"));
   expect(at, "ต้องมี cookie ใบผ่าน").toBeTruthy();
   expect(at!.httpOnly, "cookie ใบผ่านต้องเป็น httpOnly ไม่งั้น JavaScript อ่านไปใช้เองได้").toBe(true);
-  const rt = cookies.find(c => c.name === "pms_rt");
+  const rt = cookies.find(c => c.name.startsWith("pms_rt"));
   expect(rt?.httpOnly, "cookie ต่ออายุต้องเป็น httpOnly เช่นกัน").toBe(true);
 
   // 3) ข้อมูล "เป็นใคร" ต้องมาครบพอให้หน้าจอใช้งานได้
@@ -86,6 +86,6 @@ test("[auth] รหัสผ่านผิด → ต้องไม่บอ�
   expect(await wrongPass.text(), "ข้อความต้องไม่แยกแยะว่าอีเมลมีอยู่จริงไหม").toBe(await noSuchUser.text());
 
   const cookies = (await ctx.storageState()).cookies;
-  expect(cookies.find(c => c.name === "pms_at"), "ล็อกอินไม่ผ่านต้องไม่ได้ cookie").toBeFalsy();
+  expect(cookies.find(c => c.name.startsWith("pms_at")), "ล็อกอินไม่ผ่านต้องไม่ได้ cookie").toBeFalsy();
   await ctx.dispose();
 });

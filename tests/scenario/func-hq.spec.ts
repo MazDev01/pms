@@ -1,6 +1,7 @@
 import { statuses, ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { createClient } from "@supabase/supabase-js";
 import { test, expect } from "@playwright/test";
+import { กดตกลงในกล่องยืนยัน } from "./helpers";
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
 import {
   HQ_ORIGIN, DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
@@ -135,10 +136,11 @@ test("[func·hq] ลบตัวแทนผ่านหน้าจอ → ห�
   const row = page.locator("tbody tr").filter({ hasText: DEALER_NAME }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });
 
-  // รับทุกกล่องโต้ตอบ — ทั้งกล่องยืนยัน และกล่องแจ้ง error ถ้าลบไม่ผ่าน (จะได้เห็นสาเหตุ)
+  // กล่องแจ้ง error (alert) ยังเป็นกล่องของเบราว์เซอร์ — เก็บไว้ดูสาเหตุถ้าลบไม่ผ่าน
   const dialogs: string[] = [];
   page.on("dialog", d => { dialogs.push(d.message().slice(0, 120)); void d.accept(); });
   await row.getByTitle("ลบ").first().click();
+  dialogs.push(await กดตกลงในกล่องยืนยัน(page));   // กล่องยืนยันของระบบ (sonner)
   await page.waitForTimeout(2500);
   console.log("กล่องโต้ตอบ:", JSON.stringify(dialogs));
 

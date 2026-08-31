@@ -3,7 +3,7 @@
 // ─── ตัวแก้รายงานติดตามของลูกค้าเป้าหมาย — แหล่งเดียวของทั้งแอป ──────────────────
 // เดิมเขียนฝังอยู่ในหน้า /leads หน้าเดียว · ย้ายออกมาเพื่อให้แผงงานขายในหน้า /customers ใช้ซ้ำได้
 // รายงานเก็บที่ LeadRow.report = ผูกกับ "ดีล" ไม่ใช่ลูกค้า → 1 ลูกค้ามีหลายดีล แต่ละดีลมีรายงานของตัวเอง
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { buildLeadReport, type LeadRow } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { leads as leadsRepo } from "@pms/shared/lib/data";
@@ -21,7 +21,6 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
   const [text, setText] = useState("");
   const [พร้อม, setพร้อม] = useState(false);   // รู้เนื้อหาจริงของรายนี้แล้วหรือยัง
   const [เดิม, setเดิม] = useState("");             // ข้อความที่บันทึกไว้จริง (ใช้เทียบว่ามีการแก้หรือยัง)
-  const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -42,33 +41,13 @@ export function ReportEditor({ lead, onSave }: { lead: LeadRow; onSave: (l: Lead
 
   const dirty = พร้อม && text !== เดิม;
 
-  // แทรก bullet บรรทัดใหม่ที่ตำแหน่งเคอร์เซอร์
-  function insertBullet() {
-    const el = ref.current; if (!el) return;
-    const pos = el.selectionStart ?? text.length;
-    const before = text.slice(0, pos), after = text.slice(pos);
-    const needNL = before && !before.endsWith("\n");
-    const insert = `${needNL ? "\n" : ""}- `;
-    setText(before + insert + after);
-    requestAnimationFrame(() => { el.focus(); const c = (before + insert).length; el.setSelectionRange(c, c); });
-  }
-  function resetTemplate() { setText(buildLeadReport(lead, todayStr())); }
-
-  const lbl: React.CSSProperties = { display: "block", fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", marginBottom: 6 };
+  // ป้ายชื่อช่องให้หนาเข้มเท่ากับหัวข้ออื่นในการ์ด (บอสสั่ง 28 ส.ค. 69) — เดิมเป็นสีเทาจาง อ่านแล้วเหมือนคำอธิบาย ไม่ใช่หัวข้อ
+  const lbl: React.CSSProperties = { display: "block", fontSize: "0.72rem", fontWeight: 800, color: "#2D2D2D", marginBottom: 8 };
 
   return (
     <div>
-      <div style={{ fontSize: "0.65rem", fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "#003366", marginBottom: 10 }}>
-        รายงานการติดตาม · แก้ไขได้ทั้งหมด
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-        <label style={lbl}>เนื้อหารายงาน</label>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" onClick={insertBullet} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "4px 10px" }}>+ หัวข้อย่อย</button>
-          <button type="button" onClick={resetTemplate} className="btn btn-secondary btn-sm" style={{ color: "#374151", padding: "4px 10px" }}>รีเซ็ตเทมเพลต</button>
-        </div>
-      </div>
-      <textarea ref={ref} aria-label="เนื้อหารายงาน" value={พร้อม ? text : "กำลังโหลดรายงาน…"} onChange={e => setText(e.target.value)}
+      <label style={lbl}>เนื้อหารายงาน</label>
+      <textarea aria-label="เนื้อหารายงาน" value={พร้อม ? text : "กำลังโหลดรายงาน…"} onChange={e => setText(e.target.value)}
         readOnly={!พร้อม} spellCheck={false}
         style={{ width: "100%", minHeight: 320, padding: "12px 14px", borderRadius: 10, border: "1px solid #e5e7eb",
           fontSize: "0.8rem", lineHeight: 1.7, fontFamily: "inherit", color: "#2D2D2D", background: "#fff", resize: "vertical", whiteSpace: "pre-wrap" }} />

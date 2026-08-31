@@ -27,9 +27,9 @@ async function loginCookie(page: Page, origin: string, who: { email: string; pas
 /** ทิ้งใบผ่านทิ้งไป เหลือไว้แต่ใบต่ออายุ = จำลอง "ใบผ่านหมดอายุระหว่างใช้งาน" */
 async function dropAccessCookie(page: Page) {
   const all = await page.context().cookies();
-  const rest = all.filter(c => c.name !== "pms_at");
-  expect(all.some(c => c.name === "pms_at"), "ก่อนทดสอบต้องมีใบผ่านอยู่ก่อน").toBe(true);
-  expect(rest.some(c => c.name === "pms_rt"), "ต้องมีใบต่ออายุเหลืออยู่").toBe(true);
+  const rest = all.filter(c => !c.name.startsWith("pms_at"));
+  expect(all.some(c => c.name.startsWith("pms_at")), "ก่อนทดสอบต้องมีใบผ่านอยู่ก่อน").toBe(true);
+  expect(rest.some(c => c.name.startsWith("pms_rt")), "ต้องมีใบต่ออายุเหลืออยู่").toBe(true);
   await page.context().clearCookies();
   await page.context().addCookies(rest);
 }
@@ -56,7 +56,7 @@ test("[session] ใบผ่านหมดอายุกลางคัน →
   const failed = refreshCalls.filter(s => s >= 400);
   expect(failed, `ต่ออายุใบผ่านต้องไม่มีสายไหนล้ม (ได้ ${JSON.stringify(refreshCalls)})`).toEqual([]);
 
-  const at = (await page.context().cookies()).find(c => c.name === "pms_at");
+  const at = (await page.context().cookies()).find(c => c.name.startsWith("pms_at"));
   expect(at, "ต้องได้ใบผ่านใบใหม่กลับมา").toBeTruthy();
   expect(at!.httpOnly, "ใบใหม่ต้องเป็น httpOnly เหมือนเดิม").toBe(true);
 });
@@ -97,7 +97,7 @@ test("[impersonate] ใบผ่านที่มาทาง URL ต้อง�
   expect(page.url(), "ห้ามมีใบต่ออายุค้างใน URL").not.toContain("refresh_token");
 
   // 3) ใบผ่านต้องย้ายไปอยู่ใน cookie ที่ JavaScript อ่านไม่ได้
-  const at = (await page.context().cookies()).find(c => c.name === "pms_at");
+  const at = (await page.context().cookies()).find(c => c.name.startsWith("pms_at"));
   expect(at, "ต้องแลกใบผ่านเข้า cookie สำเร็จ").toBeTruthy();
   expect(at!.httpOnly, "ต้องเป็น httpOnly").toBe(true);
   const ls = await page.evaluate(() => Object.keys(localStorage));

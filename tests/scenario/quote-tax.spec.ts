@@ -1,0 +1,128 @@
+import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import { RYG, skipReason } from "./supabaseEnv";
+import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag, pickTemplate } from "./funcHelpers";
+import { settle } from "./helpers";
+
+// ── ภาษีมูลค่าเพิ่ม + ภาษีหัก ณ ที่จ่าย บนใบเสนอราคา (บอสสั่ง 28 ส.ค. 69) ──────
+//
+// สิ่งที่ต้องจริง:
+//   1. ติ๊กเปิด/ปิดได้ทั้งสองตัว และแก้อัตราเองได้
+//   2. ยอดบนจอขยับสดตามที่ติ๊ก
+//   3. ค่าที่บันทึกลงฐานข้อมูลเป็นสแนปช็อต (อัตรา + จำนวนเงิน + ยอดชำระสุทธิ)
+//   4. ⚠️ ยอดขาย (total_value) ต้องเท่ากับผลรวม BOQ เหมือนเดิม — ภาษีห้ามไปแตะ
+//      เพราะรายงาน/เป้า/อัตราปิดการขาย ใช้ตัวนี้อยู่ทั้งระบบ
+const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const NS = specNS("QTAX");
+const tg = nsTag(NS);
+const COMPANY = tg("ภาษีใบเสนอราคา");
+
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
+test.setTimeout(240_000);
+test.describe.configure({ mode: "serial" });
+
+async function ล้าง() {
+  await admin.from("quotations").delete().like("customer", `${NS}%`);
+  await admin.from("leads").delete().like("company", `${NS}%`);
+}
+test.beforeAll(async () => {
+  await cleanup(await db(RYG), "RYG", NS);
+  await ล้าง();
+  const numId = 971_000 + (Date.now() % 900);
+  const { error } = await admin.from("leads").insert({
+    id: `#L-${numId}`, dealer_code: "RYG", num_id: numId, name: COMPANY, company: COMPANY,
+    contact: "คุณทดสอบภาษี", phone: "081-000-0009", province: "ระยอง", product: "โรงงาน",
+    status: "QUOTED", value: "500000", area: "100", assigned: "ทดสอบระบบ",
+  });
+  if (error) throw new Error(`สร้างลูกค้าเป้าหมายไม่ได้: ${error.message}`);
+});
+test.afterAll(ล้าง);
+
+/** เปิดฟอร์มออกใบของลูกค้าเป้าหมายนี้ */
+async function เปิดฟอร์มออกใบ(page: import("@playwright/test").Page) {
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/leads`, { waitUntil: "domcontentloaded" });
+  await settle(page);
+  await page.getByRole("button", { name: "ตาราง" }).click();
+  await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(COMPANY);
+  const row = page.locator("tbody tr").filter({ hasText: COMPANY }).first();
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+  await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+  await page.getByRole("button", { name: /(สร้าง|เพิ่มรายการใน)ใบเสนอราคา/ }).first().click();
+  if (await page.getByLabel("ราคาต่อหน่วย").count() === 0) {
+    await page.getByRole("button", { name: /เลือกจากแคตตาล็อก/ }).click();
+    await page.locator("button").filter({ hasText: /฿[\d,]+\/\S+/ }).first().click();
+  }
+}
+
+test("[tax] ฟอร์มออกใบ: ติ๊ก VAT + หัก ณ ที่จ่าย แล้วยอดบนจอต้องขยับตามสูตร", async ({ page }) => {
+  await เปิดฟอร์มออกใบ(page);
+
+  // ค่าตั้งต้นตามที่บอสสั่ง: VAT ติ๊กไว้ · หัก ณ ที่จ่าย ไม่ติ๊ก
+  const ช่องVAT = page.getByLabel("อัตราภาษีมูลค่าเพิ่ม (VAT)");
+  const ช่องหัก = page.getByLabel("อัตราภาษีหัก ณ ที่จ่าย");
+  await expect(ช่องVAT).toHaveValue(/\d/);
+  await expect(ช่องหัก).toBeDisabled();
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible();
+
+  // เปิดหัก ณ ที่จ่าย → ต้องมีบรรทัดหักโผล่มา
+  await page.getByRole("checkbox").filter({ hasText: "" }).nth(1).check();
+  await expect(page.getByText(/หัก ณ ที่จ่าย \d/).first()).toBeVisible();
+
+  // ปิด VAT → บรรทัด VAT ต้องหายจากสรุป (ยังเหลือยอดชำระสุทธิ)
+  await page.getByRole("checkbox").first().uncheck();
+  await expect(page.getByText(/ภาษีมูลค่าเพิ่ม \d+%/)).toHaveCount(0);
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible();
+});
+
+test("[tax] บันทึกใบ → ฐานข้อมูลเก็บสแนปช็อตภาษีครบ และยอดขายยังเท่าผลรวม BOQ", async ({ page }) => {
+  await เปิดฟอร์มออกใบ(page);
+  await page.getByRole("checkbox").first().check();          // VAT เปิด
+  await page.getByLabel("อัตราภาษีมูลค่าเพิ่ม (VAT)").fill("7");
+  await page.getByRole("checkbox").nth(1).check();            // หัก ณ ที่จ่าย เปิด
+  await page.getByLabel("อัตราภาษีหัก ณ ที่จ่าย").fill("3");
+  await page.getByRole("button", { name: /^(สร้างใบเสนอราคา|บันทึก)$/ }).last().click();
+
+  const แถว = await expect.poll(async () =>
+    (await admin.from("quotations").select("*").eq("customer", COMPANY).limit(1).maybeSingle()).data,
+    { timeout: 30_000, message: "ใบต้องลงฐานข้อมูล" }).not.toBeNull().then(async () =>
+    (await admin.from("quotations").select("*").eq("customer", COMPANY).limit(1).single()).data!);
+
+  const รายการ = (แถว.line_items ?? []) as { qty: number; unitPrice: number }[];
+  const ผลรวมBOQ = Math.round(รายการ.reduce((s, it) => s + it.qty * it.unitPrice, 0) * 100) / 100;
+
+  // 1) ยอดขายต้องเท่าผลรวม BOQ เป๊ะ — ภาษีห้ามแตะ (รายงาน/เป้าใช้ตัวนี้)
+  expect(Number(แถว.total_value), "ยอดขายต้องเท่าผลรวมรายการ BOQ").toBe(ผลรวมBOQ);
+
+  // 2) สแนปช็อตภาษีต้องครบและคิดถูกตามสูตร
+  const vat = Math.round(ผลรวมBOQ * 7) / 100;
+  const wht = Math.round(ผลรวมBOQ * 3) / 100;
+  expect(Number(แถว.vat_percent)).toBe(7);
+  expect(Number(แถว.vat_amount)).toBeCloseTo(vat, 2);
+  expect(Number(แถว.wht_rate)).toBe(3);
+  expect(Number(แถว.wht_amount)).toBeCloseTo(wht, 2);
+  expect(Number(แถว.total_amount)).toBeCloseTo(ผลรวมBOQ + vat, 2);
+  expect(Number(แถว.net_payable)).toBeCloseTo(ผลรวมBOQ + vat - wht, 2);
+});
+
+test("[tax] ใบเก่าที่ยังไม่มีข้อมูลภาษี ต้องเปิดดู/พิมพ์ได้ตามปกติ (ไม่พัง)", async ({ page }) => {
+  const เก่า = `${NS}-ใบเก่าไม่มีภาษี`;
+  await admin.from("quotations").insert({
+    id: `${NS}-OLD`, dealer_code: "RYG", customer: เก่า, project: เก่า, date: "2026-08-20",
+    province: "ระยอง", building_type: "โกดังสำเร็จรูป", area: "1", total: "400000",
+    total_value: 400_000, material_cost: 400_000, items: 1, status: "sent_to_client",
+    line_items: [{ name: "งาน", qty: 1, unit: "งาน", unitPrice: 400_000 }],
+  });
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/quotations`, { waitUntil: "domcontentloaded" });
+  await settle(page);
+  await page.getByPlaceholder(/ค้นหา/).first().fill(เก่า);
+  const แถว = page.locator("tbody tr").filter({ hasText: เก่า }).first();
+  await expect(แถว).toBeVisible({ timeout: 20_000 });
+  await แถว.click();
+  // ลิ้นชักต้องเปิดได้และมียอดชำระสุทธิ (ใบไม่มีภาษี = เท่ากับยอดรวม)
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible({ timeout: 15_000 });
+  await admin.from("quotations").delete().eq("id", `${NS}-OLD`);
+});

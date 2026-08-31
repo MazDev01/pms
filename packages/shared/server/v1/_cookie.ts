@@ -17,8 +17,24 @@
 import type { NextRequest } from "next/server";
 
 /** ชื่อ cookie — ขึ้นต้น __Host- ไม่ได้เพราะตอนพัฒนาใช้ http (ข้อกำหนดของเบราว์เซอร์บังคับ https) */
-export const ACCESS_COOKIE = "pms_at";
-export const REFRESH_COOKIE = "pms_rt";
+// ── ชื่อ cookie ต้องแยกกัน "คนละแอป" ─────────────────────────────────────────
+//
+// เบราว์เซอร์แยก cookie ด้วย "ชื่อโฮสต์" เท่านั้น — ไม่สนพอร์ต
+// ตอนพัฒนาเราเปิดสองแอปที่ localhost:3002 (สำนักงานใหญ่) และ localhost:3001 (ตัวแทน)
+// เบราว์เซอร์ถือว่าเป็นโฮสต์เดียวกันคือ localhost จึงใช้ cookie ถังเดียวกัน
+//
+// อาการที่ผู้ใช้เจอจริง (28 ส.ค. 69):
+//   เปิดหน้าตัวแทน localhost:3001 แล้วขึ้นสิทธิ์ของสำนักงานใหญ่
+//   และพอเข้าสู่ระบบฝั่งหนึ่ง ใบผ่านจะทับของอีกฝั่ง — หน้า HQ กดจัดการตัวแทนแล้วขึ้น
+//   "ไม่มีสิทธิ์จัดการตัวแทน" ทั้งที่ล็อกอินเป็นผู้ดูแลอยู่ (ตอนนั้นถือใบผ่านของตัวแทน)
+//
+// บนเว็บจริงไม่เจอเพราะคนละโดเมนจริง ๆ — แต่ตอนพัฒนา/ทดสอบทำให้หลงทางได้มาก
+// แก้โดยใส่ชื่อแอปต่อท้าย (PMS_APP ตั้งที่ next.config.ts ของแต่ละแอป)
+const APP = (process.env.PMS_APP ?? "").trim() || "app";
+export const ACCESS_COOKIE = `pms_at_${APP}`;
+export const REFRESH_COOKIE = `pms_rt_${APP}`;
+/** ชื่อเดิมก่อนแยกรายแอป — เก็บไว้เพื่อลบทิ้งตอนออกจากระบบเท่านั้น */
+export const LEGACY_COOKIES = ["pms_at", "pms_rt"] as const;
 
 const isHttps = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "").startsWith("https")
   || process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";

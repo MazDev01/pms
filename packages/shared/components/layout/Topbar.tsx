@@ -487,15 +487,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
   // ทุกทางที่พาออกจากหน้าปัจจุบันต้องผ่าน confirmDiscard() ก่อน — หน้าที่มีฟอร์มค้าง (ตั้งค่า)
   // จะได้เตือนครบทุกทาง ไม่ใช่เตือนเฉพาะตอนสลับแท็บ (ดู @pms/shared/lib/useUnsavedGuard)
-  function handleLogout() {
-    if (!confirmDiscard()) return;
+  async function handleLogout() {
+    if (!(await confirmDiscard())) return;
     setShowUser(false);
     logout();
     router.push("/login");
   }
 
-  function goTo(href: string) {
-    if (!confirmDiscard()) return;
+  async function goTo(href: string) {
+    if (!(await confirmDiscard())) return;
     setShowSearch(false);
     setSearchQ("");
     router.push(href);
@@ -671,7 +671,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                           <div style={{ marginLeft:34, marginTop:3, display:"flex", flexDirection:"column" }}>
                             {shown.map((a, i) => (
                               <button key={`${a.href}-${i}`}
-                                onClick={() => { if (!confirmDiscard()) return; setShowNotifs(false); router.push(a.href); }}
+                                onClick={async () => { if (!(await confirmDiscard())) return; setShowNotifs(false); router.push(a.href); }}
                                 style={{ display:"block", width:"100%", padding:"3px 0", border:"none", background:"none", cursor:"pointer", textAlign:"left",
                                   fontSize:"0.68rem", color:"#6b7280", lineHeight:1.45 }}>
                                 {a.body}
@@ -705,7 +705,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       </div>
                     )}
                     <button
-                      onClick={() => { if (!confirmDiscard()) return; markOne(n); setShowNotifs(false); router.push(n.href); }}
+                      onClick={async () => { if (!(await confirmDiscard())) return; markOne(n); setShowNotifs(false); router.push(n.href); }}
                       style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"11px 16px", border:"none",
                         borderBottom:`1px solid ${BG}`, background:อ่านแล้ว ? "#fff" : "#f6f9ff",
                         cursor:"pointer", textAlign:"left" }}
@@ -728,7 +728,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
               {notifs.length > 8 && (
                 <div style={{ padding:"10px 16px", borderTop:`1px solid ${BORDER}` }}>
                   {isHQ ? (
-                    <button onClick={() => { if (!confirmDiscard()) return; setShowNotifs(false); router.push("/hq/audit"); }}
+                    <button onClick={async () => { if (!(await confirmDiscard())) return; setShowNotifs(false); router.push("/hq/audit"); }}
                       style={{ width:"100%", padding:"7px", border:`1px solid ${BORDER}`, borderRadius:9, background:"#fff", color:PRIMARY, fontSize:"0.72rem", fontWeight:700, cursor:"pointer" }}>
                       ดูบันทึกการใช้งานทั้งหมด →
                     </button>
@@ -785,7 +785,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                   ...(isHQ ? [{ Icon: UserCircle, label: "โปรไฟล์", href: "/profile" }] : []),
                   { Icon: Settings,    label:"ตั้งค่า",  href: isHQ ? "/hq/settings" : "/settings" },
                 ].map(item => (
-                  <button key={item.label} onClick={() => { if (!confirmDiscard()) return; setShowUser(false); router.push(item.href); }}
+                  <button key={item.label} onClick={async () => { if (!(await confirmDiscard())) return; setShowUser(false); router.push(item.href); }}
                     style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"9px 16px", border:"none", background:"none", cursor:"pointer", color:STEEL, fontSize:"0.8rem", fontWeight:600, textAlign:"left" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = BG; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; }}>
