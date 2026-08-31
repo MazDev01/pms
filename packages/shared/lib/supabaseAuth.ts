@@ -236,7 +236,19 @@ export async function sbSendPasswordReset(email: string): Promise<ResetResult> {
     const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined;
     const { error } = await getSupabase().auth.resetPasswordForEmail(e, { redirectTo });
     // Supabase ตอบสำเร็จเสมอแม้ไม่พบอีเมล (กัน user enumeration) — ถือว่าส่งแล้ว
-    if (error) return { ok: false, error: friendlyError(error) };
+    if (error) {
+      // ⚠️ สองกรณีนี้ต้องบอกสาเหตุจริง ไม่ใช่ "เกิดข้อผิดพลาด ลองใหม่" (ลองใหม่กี่ครั้งก็ไม่หาย)
+      //    เจอจริงตอนต่อฟีเจอร์ลืมรหัสผ่านฝั่งตัวแทน: บัญชีเดโมใช้โดเมนที่ไม่มีจริง
+      //    ระบบอีเมลจึงปฏิเสธ แล้วหน้าจอขึ้นข้อความกลาง ๆ จนไล่สาเหตุไม่ถูก
+      const msg = String(error.message ?? "");
+      if (/invalid/i.test(msg) && /email/i.test(msg)) {
+        return { ok: false, error: `ส่งลิงก์ไปที่ ${e} ไม่ได้ — อีเมลนี้ใช้ส่งจริงไม่ได้ (โดเมนไม่มีอยู่จริง) กรุณาแจ้งสำนักงานใหญ่ให้แก้อีเมลเข้าระบบของสาขา` };
+      }
+      if (/rate|too many|429/i.test(msg)) {
+        return { ok: false, error: "ขอลิงก์ถี่เกินไป — รอสัก 1 นาทีแล้วลองใหม่" };
+      }
+      return { ok: false, error: friendlyError(error) };
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: friendlyError(err) };
