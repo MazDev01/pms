@@ -94,7 +94,6 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
           </span>
         </div>
         <div style={{ padding: 14, background: "#fff" }}>
-          {/* กล่องนี้ "แสดงอย่างเดียว" — ทางเข้าไปเปลี่ยนอยู่ที่การ์ดด้านล่าง 2 ใบ (บอสสั่งให้เหลือ 2 อัน) */}
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
             <span style={{ width: 34, height: 34, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Mail size={15} color="#003366" />
@@ -104,6 +103,15 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
               <span style={{ display: "block", fontSize: "0.84rem", fontWeight: 800, color: email ? "#1F2937" : "#94A3B8",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email || "—"}</span>
             </span>
+          </div>
+          {/* ปุ่มเดียวต่อจากอีเมลเลย (บอสสั่ง 28 ส.ค. 69) — ทางเข้าอยู่ติดกับสิ่งที่จะไปแก้
+              (แยกเป็นสองปุ่มไม่ได้ช่วยอะไร เพราะกดอันไหนก็ไปหน้าเดียวกัน) */}
+          <div style={{ marginTop: 12 }}>
+        <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนอีเมล / รหัสผ่าน"
+          รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติจากสำนักงานใหญ่"
+            : เหลือ == null ? "อัปเดตบัญชีเข้าสู่ระบบเพื่อความปลอดภัย"
+            : `อัปเดตบัญชีเข้าสู่ระบบ · แก้เองได้อีก ${เหลือ} ครั้ง`}
+          onClick={onOpen} />
           </div>
         </div>
       </div>
@@ -124,16 +132,6 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
               : "อย่าเปิดเผยรหัสผ่านให้ผู้อื่น และเปลี่ยนรหัสผ่านสม่ำเสมอ"}
           </span>
         </span>
-      </div>
-
-      {/* ปุ่มเดียว — ทั้งสองเรื่องอยู่หน้าเดียวกันอยู่แล้ว (บอสสั่ง 28 ส.ค. 69)
-          แยกเป็นสองปุ่มที่พาไปที่เดิมทำให้ดูเหมือนมีสองปลายทาง ทั้งที่กดอันไหนก็หน้าเดียวกัน */}
-      <div style={{ marginTop: 12 }}>
-        <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนอีเมล / รหัสผ่าน"
-          รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติจากสำนักงานใหญ่"
-            : เหลือ == null ? "อัปเดตบัญชีเข้าสู่ระบบเพื่อความปลอดภัย"
-            : `อัปเดตบัญชีเข้าสู่ระบบ · แก้เองได้อีก ${เหลือ} ครั้ง`}
-          onClick={onOpen} />
       </div>
     </>
   );
