@@ -20,6 +20,25 @@ export function reportRepoSaveError(e: unknown): void {
   try { window.dispatchEvent(new CustomEvent(REPO_SAVE_ERROR_EVENT, { detail: msg })); } catch {}
 }
 
+// ── กันข้อมูลหายเมื่อรีเฟรช/ปิดแท็บ "ระหว่างที่คำขอบันทึกยังไม่จบ" ──────────────────
+//
+// เจอจริง (ตรวจหน้าแม่แบบ 31 ส.ค. 69): กด "บันทึก" แล้วรีเฟรชทันที → คำขอถูกตัดกลางทาง
+//   แม่แบบไม่ถูกสร้างเลย และไม่มีข้อความผิดพลาดใด ๆ เพราะหน้าถูกทิ้งไปก่อนที่ error จะกลับมา
+//   ผู้ใช้เห็นแถวขึ้นบนจอตอนกด (state เปลี่ยนแล้ว) จึงเชื่อว่าบันทึกแล้ว — ของหายเงียบ
+// ที่นี่นับจำนวนคำขอที่ค้างอยู่ทั้งแอป แล้วให้เบราว์เซอร์ถามก่อนออกจากหน้าถ้ายังมีค้าง
+let กำลังบันทึก = 0;
+const เตือนก่อนออก = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+function เริ่มบันทึก() {
+  if (typeof window === "undefined") return;
+  if (กำลังบันทึก === 0) window.addEventListener("beforeunload", เตือนก่อนออก);
+  กำลังบันทึก += 1;
+}
+function จบบันทึก() {
+  if (typeof window === "undefined") return;
+  กำลังบันทึก = Math.max(0, กำลังบันทึก - 1);
+  if (กำลังบันทึก === 0) window.removeEventListener("beforeunload", เตือนก่อนออก);
+}
+
 export function useRepoState<T>(
   load: () => Promise<T>,
   save: (value: T) => void,
@@ -29,13 +48,15 @@ export function useRepoState<T>(
   // ⚠️ ต้องมี เพราะ "ยังโหลดไม่เสร็จ" กับ "ไม่มีข้อมูล" หน้าตาเหมือนกันหมด (ทั้งคู่เป็นอาร์เรย์ว่าง)
   //   ถ้าแยกไม่ออก หน้าจะประกาศว่า "ตัวแทนทั้งหมด 0 · ไม่พบข้อมูล" ระหว่างรอโหลด
   //   ซึ่งเป็นข้อมูลผิด ไม่ใช่แค่ว่างเปล่า — ผู้ใช้เน็ตช้าจะเชื่อว่าระบบไม่มีข้อมูลจริง ๆ (พบ 10 ส.ค. 69)
-): [T, Dispatch<SetStateAction<T>>, boolean] {
+  // ตัวที่ 4 = "กำลังบันทึกอยู่ไหม" — หน้าที่มีฟอร์มใช้ปิดกล่องหลังบันทึกจริงเสร็จ ไม่ใช่ปิดทันทีที่กด
+): [T, Dispatch<SetStateAction<T>>, boolean, boolean] {
   const [state, setState] = useState<T>(initial);
   // "โหลดสำเร็จแล้ว" เท่านั้นจึงจะเขียนกลับได้ — โหลดล้มเหลวไม่นับ
   // เดิมใช้ hydrated ตัวเดียวและตั้งเป็น true ใน .catch ด้วย → query ล้ม (เน็ตหลุด/RLS ปฏิเสธ)
   // แล้ว effect ข้างล่างยิง save(state) ทันทีโดยที่ state ยังเป็นค่า initial
   // = เอาค่าตั้งต้น (ซึ่งบางหน้าเป็นชุด mock) upsert ทับของจริงใน DB
   const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
   // กันเขียนซ้ำโดยไม่มีใครสั่ง: หลังโหลดเสร็จ state เปลี่ยนค่าเพราะ "ผลลัพธ์การโหลด" ไม่ใช่การแก้ของผู้ใช้
   // ถ้า save ทุกครั้งที่ state เปลี่ยน จะ upsert ทั้งตารางกลับไปทุกครั้งที่เปิดหน้า
   const dirtyRef = useRef(false);
@@ -76,13 +97,17 @@ export function useRepoState<T>(
     try {
       const r = save(state) as unknown;
       if (r && typeof (r as Promise<void>).then === "function") {
-        void (r as Promise<void>).catch(e => reportRepoSaveError(e));
+        setSaving(true);
+        เริ่มบันทึก();
+        void (r as Promise<void>)
+          .catch(e => reportRepoSaveError(e))
+          .finally(() => { จบบันทึก(); setSaving(false); });
       }
     } catch (e) { reportRepoSaveError(e); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, loaded]);
 
-  return [state, setAndMark, loaded];
+  return [state, setAndMark, loaded, saving];
 }
 
 // อ่านอย่างเดียว (ไม่เขียนกลับ) — สำหรับหน้าที่แค่แสดงผลข้อมูลระดับเครือ
@@ -97,6 +122,7 @@ export function useRepoValue<T>(load: () => Promise<T>, initial: T): T {
 export function useRepoValueLoaded<T>(load: () => Promise<T>, initial: T): { value: T; loaded: boolean } {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
   const ready = useAuthReady();
   useEffect(() => {
     if (!ready) return;
