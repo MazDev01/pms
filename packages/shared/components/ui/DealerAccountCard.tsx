@@ -65,9 +65,7 @@ function ไทล์({ ไอคอน: Ico, หัวข้อ, รอง, onC
 }
 
 export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
-  dealerCode: string; currentEmail: string;
-  /** เปิดหน้าจัดการบัญชี — บอกด้วยว่ามาจากปุ่มไหน จะได้เน้นก้อนนั้นให้ */
-  onOpen: (focus: "password" | "email") => void;
+  dealerCode: string; currentEmail: string; onOpen: () => void;
 }) {
   const { state, โหลดพลาด, email } = useAccountState(dealerCode, currentEmail);
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
@@ -128,15 +126,14 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
         </span>
       </div>
 
-      {/* ทางเข้าที่ใช้ได้จริงในระบบนี้ */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginTop: 12 }}>
-        <ไทล์ ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ"
-          รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" onClick={() => onOpen("email")} />
-        <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนรหัสผ่าน"
-          รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติ"
-            : เหลือ == null ? "ตั้งรหัสผ่านใหม่เพื่อเพิ่มความปลอดภัย"
-            : `ตั้งรหัสผ่านใหม่ · แก้เองได้อีก ${เหลือ} ครั้ง`}
-          onClick={() => onOpen("password")} />
+      {/* ปุ่มเดียว — ทั้งสองเรื่องอยู่หน้าเดียวกันอยู่แล้ว (บอสสั่ง 28 ส.ค. 69)
+          แยกเป็นสองปุ่มที่พาไปที่เดิมทำให้ดูเหมือนมีสองปลายทาง ทั้งที่กดอันไหนก็หน้าเดียวกัน */}
+      <div style={{ marginTop: 12 }}>
+        <ไทล์ ไอคอน={KeyRound} หัวข้อ="เปลี่ยนอีเมล / รหัสผ่าน"
+          รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติจากสำนักงานใหญ่"
+            : เหลือ == null ? "อัปเดตบัญชีเข้าสู่ระบบเพื่อความปลอดภัย"
+            : `อัปเดตบัญชีเข้าสู่ระบบ · แก้เองได้อีก ${เหลือ} ครั้ง`}
+          onClick={onOpen} />
       </div>
     </>
   );
@@ -236,12 +233,12 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
           บัญชีที่ใช้อยู่ตอนนี้
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Lock size={14} color="#94A3B8" /> รหัสผ่าน</span>
-          <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>ดูไม่ได้ด้วยเหตุผลด้านความปลอดภัย — ตั้งใหม่ได้ด้านล่าง</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem", borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Mail size={14} color="#94A3B8" /> อีเมลเข้าสู่ระบบ</span>
           <span style={{ fontWeight: 700, color: อีเมลปัจจุบัน ? "#1F2937" : "#94A3B8" }}>{อีเมลปัจจุบัน || "—"}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem", borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Lock size={14} color="#94A3B8" /> รหัสผ่าน</span>
+          <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>ดูไม่ได้ด้วยเหตุผลด้านความปลอดภัย — ตั้งใหม่ได้ด้านล่าง</span>
         </div>
       </div>
 
@@ -267,7 +264,29 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
         </div>
       )}
 
-      {/* รหัสผ่านมาก่อน (บอสสั่งสลับตำแหน่ง) */}
+      {/* อีเมลอยู่บน แล้วค่อยรหัสผ่าน (บอสสั่ง 28 ส.ค. 69) */}
+      <ก้อน ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ" รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" เน้น={focus === "email"}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+          <div>
+            <label className="form-label">อีเมลเข้าสู่ระบบใหม่</label>
+            <input className="form-input" value={email} disabled={ล็อก}
+              onChange={e => { setพิมพ์อีเมลเอง(true); setEmail(e.target.value.replace(/\s/g, "")); }}
+              aria-label="อีเมลเข้าสู่ระบบ" placeholder="name@company.co.th" />
+          </div>
+          <div>
+            <label className="form-label">รหัสผ่านปัจจุบัน *</label>
+            <input className="form-input" type="password" value={emailCurrent} disabled={ล็อก}
+              onChange={e => setEmailCurrent(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านปัจจุบัน (ยืนยันการเปลี่ยนอีเมล)"
+              placeholder="ยืนยันตัวตนก่อนเปลี่ยน" autoComplete="current-password" />
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-primary btn-md" disabled={ล็อก} onClick={เปลี่ยนอีเมล}>
+            <Mail size={13} /> {ปุ่ม}อีเมลใหม่
+          </button>
+          {msgEmail && <span style={{ fontSize: "0.74rem", fontWeight: 600, color: msgEmail.ok ? "#059669" : "#dc2626" }}>{msgEmail.text}</span>}
+        </div>
+      </ก้อน>
       <ก้อน ไอคอน={KeyRound} หัวข้อ="เปลี่ยนรหัสผ่าน" รอง="ตั้งรหัสผ่านใหม่ — ต้องยืนยันด้วยรหัสผ่านปัจจุบัน" เน้น={focus === "password"}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
           <div>
@@ -297,28 +316,6 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
         </div>
       </ก้อน>
 
-      <ก้อน ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ" รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" เน้น={focus === "email"}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-          <div>
-            <label className="form-label">อีเมลเข้าสู่ระบบใหม่</label>
-            <input className="form-input" value={email} disabled={ล็อก}
-              onChange={e => { setพิมพ์อีเมลเอง(true); setEmail(e.target.value.replace(/\s/g, "")); }}
-              aria-label="อีเมลเข้าสู่ระบบ" placeholder="name@company.co.th" />
-          </div>
-          <div>
-            <label className="form-label">รหัสผ่านปัจจุบัน *</label>
-            <input className="form-input" type="password" value={emailCurrent} disabled={ล็อก}
-              onChange={e => setEmailCurrent(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านปัจจุบัน (ยืนยันการเปลี่ยนอีเมล)"
-              placeholder="ยืนยันตัวตนก่อนเปลี่ยน" autoComplete="current-password" />
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-primary btn-md" disabled={ล็อก} onClick={เปลี่ยนอีเมล}>
-            <Mail size={13} /> {ปุ่ม}อีเมลใหม่
-          </button>
-          {msgEmail && <span style={{ fontSize: "0.74rem", fontWeight: 600, color: msgEmail.ok ? "#059669" : "#dc2626" }}>{msgEmail.text}</span>}
-        </div>
-      </ก้อน>
     </>
   );
 }
