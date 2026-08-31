@@ -212,7 +212,7 @@ function CompanyTab() {
              และถูกบังคับจริงที่เซิร์ฟเวอร์ (ไม่ใช่แค่ซ่อนปุ่ม) */}
         {/* หน้าตั้งค่าโชว์แค่ "บัญชีที่ใช้อยู่" (อีเมลเท่านั้น) — การแก้ไปทำที่หน้าบัญชีแยก */}
         <DealerAccountSummary dealerCode={session.dealerCode} currentEmail={prof.email}
-          onOpen={() => router.push("/settings/account")} />
+          onOpen={f => router.push(`/settings/account?focus=${f}`)} />
       </div>
     </>
   );

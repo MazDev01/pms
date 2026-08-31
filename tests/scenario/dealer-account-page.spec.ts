@@ -21,7 +21,10 @@ test("[dealer] บัญชีเข้าระบบ: หน้าตั้ง
   await page.getByRole("button", { name: /เปลี่ยนรหัสผ่าน/ }).click();
   await page.waitForURL(/\/settings\/account/, { timeout: 20_000 });
   await expect(page.getByText("บัญชีเข้าสู่ระบบ").first()).toBeVisible();
-  await expect(page.getByLabel("รหัสผ่านปัจจุบัน")).toBeVisible();
+  // หน้านี้แยกเป็นสองก้อน: เปลี่ยนรหัสผ่าน (มาก่อน) และเปลี่ยนอีเมล — แต่ละก้อนมีช่องยืนยันของตัวเอง
+  await expect(page.getByLabel("รหัสผ่านปัจจุบัน", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /บันทึกรหัสผ่านใหม่/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /บันทึกอีเมลใหม่/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /ดูรหัส/ })).toHaveCount(0);
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${OUT}/acct-page.png` });

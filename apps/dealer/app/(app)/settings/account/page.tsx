@@ -23,6 +23,13 @@ const กติกา = [
 
 export default function DealerAccountPage() {
   const router = useRouter();
+  // มาจากปุ่มไหนในหน้าตั้งค่า (?focus=password|email) — ใช้เน้นก้อนที่ผู้ใช้ตั้งใจจะแก้
+  // อ่านจาก window.location แทน useSearchParams เพื่อไม่ต้องครอบ <Suspense> ทั้งหน้า (แพทเทิร์นเดียวกับหน้าอื่น)
+  const [focus, setFocus] = useState<"password" | "email" | undefined>();
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get("focus");
+    if (f === "password" || f === "email") setFocus(f);
+  }, []);
   const { session } = useRole();
   // เริ่มว่างไว้ก่อน แล้วเติมจากบัญชีจริง — ห้ามเดาอีเมลตั้งต้นมาโชว์ (เคยโชว์ ryg@dealer.com ทั้งที่บัญชีจริงคนละอัน)
   const [email, setEmail] = useState("");
@@ -69,7 +76,7 @@ export default function DealerAccountPage() {
             ))}
           </div>
 
-          <DealerAccountForm dealerCode={session.dealerCode} currentEmail={email} />
+          <DealerAccountForm dealerCode={session.dealerCode} currentEmail={email} focus={focus} />
         </div>
       </div>
     </div>

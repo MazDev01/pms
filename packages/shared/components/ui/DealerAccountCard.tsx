@@ -65,7 +65,9 @@ function ไทล์({ ไอคอน: Ico, หัวข้อ, รอง, onC
 }
 
 export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
-  dealerCode: string; currentEmail: string; onOpen: () => void;
+  dealerCode: string; currentEmail: string;
+  /** เปิดหน้าจัดการบัญชี — บอกด้วยว่ามาจากปุ่มไหน จะได้เน้นก้อนนั้นให้ */
+  onOpen: (focus: "password" | "email") => void;
 }) {
   const { state, โหลดพลาด, email } = useAccountState(dealerCode, currentEmail);
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
@@ -132,49 +134,98 @@ export function DealerAccountSummary({ dealerCode, currentEmail, onOpen }: {
           รอง={เหลือ === 0 ? "ใช้สิทธิ์แก้เองครบแล้ว — ครั้งต่อไปต้องขออนุมัติ"
             : เหลือ == null ? "ตั้งรหัสผ่านใหม่เพื่อเพิ่มความปลอดภัย"
             : `ตั้งรหัสผ่านใหม่ · แก้เองได้อีก ${เหลือ} ครั้ง`}
-          onClick={onOpen} />
+          onClick={() => onOpen("password")} />
         <ไทล์ ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ"
-          รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" onClick={onOpen} />
+          รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" onClick={() => onOpen("email")} />
       </div>
     </>
   );
 }
 
-/* ── 2) หน้าจัดการบัญชี (หน้าแยก) — ที่เดียวที่แก้อีเมล/รหัสผ่านได้ ────────────── */
-export function DealerAccountForm({ dealerCode, currentEmail }: { dealerCode: string; currentEmail: string }) {
+/* ── 2) หน้าจัดการบัญชี — แยกเป็น "เปลี่ยนรหัสผ่าน" กับ "เปลี่ยนอีเมล" คนละก้อน ──────
+   บอสสั่ง 28 ส.ค. 69: แยกสองเรื่องออกจากกัน และให้รหัสผ่านมาก่อนอีเมล
+   เหตุผลเชิงใช้งาน: ฟอร์มเดียวที่มีทั้งสองอย่างทำให้ต้องอ่านก่อนว่าช่องไหนบังคับ
+   และเผลอส่งอีเมลใหม่ไปพร้อมกับรหัสโดยไม่ตั้งใจได้ · แยกแล้วแต่ละปุ่มทำเรื่องเดียวชัด ๆ */
+
+/** กล่องหัวข้อของแต่ละเรื่อง (รหัสผ่าน / อีเมล) */
+function ก้อน({ ไอคอน: Ico, หัวข้อ, รอง, children, เน้น }: {
+  ไอคอน: React.ComponentType<{ size?: number; color?: string }>;
+  หัวข้อ: string; รอง: string; children: React.ReactNode; เน้น?: boolean;
+}) {
+  return (
+    <section style={{ border: `1px solid ${เน้น ? "#BFD4EA" : "#E7EDF4"}`, borderRadius: 14, overflow: "hidden",
+      marginBottom: 14, boxShadow: เน้น ? "0 0 0 3px rgba(0,51,102,.06)" : undefined }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#F8FAFC", borderBottom: "1px solid #E7EDF4" }}>
+        <span style={{ width: 32, height: 32, borderRadius: 10, background: "#EEF4FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Ico size={15} color="#003366" />
+        </span>
+        <span>
+          <span style={{ display: "block", fontSize: "0.82rem", fontWeight: 800, color: "#1F2937" }}>{หัวข้อ}</span>
+          <span style={{ display: "block", fontSize: "0.67rem", color: "#64748B", marginTop: 1 }}>{รอง}</span>
+        </span>
+      </div>
+      <div style={{ padding: 14 }}>{children}</div>
+    </section>
+  );
+}
+
+export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
+  dealerCode: string; currentEmail: string;
+  /** มาจากปุ่มไหนในหน้าตั้งค่า — ใช้เน้นก้อนที่ผู้ใช้ตั้งใจจะแก้ */
+  focus?: "password" | "email";
+}) {
   const { state, โหลดพลาด, โหลด, email: อีเมลปัจจุบัน } = useAccountState(dealerCode, currentEmail);
-  const [email, setEmail] = useState("");
+
+  // แต่ละก้อนถือรหัสผ่านปัจจุบันของตัวเอง — กรอกที่ก้อนไหนใช้กับก้อนนั้น ไม่ข้ามกัน
+  const [pwCurrent, setPwCurrent] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
-  const [current, setCurrent] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [พิมพ์เอง, setพิมพ์เอง] = useState(false);
+  const [emailCurrent, setEmailCurrent] = useState("");
+  const [email, setEmail] = useState("");
+  const [พิมพ์อีเมลเอง, setพิมพ์อีเมลเอง] = useState(false);
+  const [busy, setBusy] = useState<"" | "password" | "email">("");
+  const [msgPw, setMsgPw] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msgEmail, setMsgEmail] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // ช่องอีเมลตามค่าปัจจุบันจนกว่าผู้ใช้จะพิมพ์เอง — อีเมลจริงมาถึงช้ากว่าเรนเดอร์แรก
-  // ถ้าเติมแค่ตอนช่องว่าง จะค้างค่าที่มาก่อน (เคยโชว์อีเมลคนละอันกับบัญชีจริง)
-  useEffect(() => { if (!พิมพ์เอง) setEmail(อีเมลปัจจุบัน); }, [อีเมลปัจจุบัน, พิมพ์เอง]);
+  // ช่องอีเมลตามค่าปัจจุบันจนกว่าผู้ใช้จะพิมพ์เอง (อีเมลจริงมาถึงช้ากว่าเรนเดอร์แรก)
+  useEffect(() => { if (!พิมพ์อีเมลเอง) setEmail(อีเมลปัจจุบัน); }, [อีเมลปัจจุบัน, พิมพ์อีเมลเอง]);
 
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
   const ต้องขออนุมัติ = เหลือ === 0;
   const มีคำขอค้าง = !!state?.pending;
-  const ล็อกฟอร์ม = busy || มีคำขอค้าง || !!โหลดพลาด;
+  const ล็อก = !!busy || มีคำขอค้าง || !!โหลดพลาด;
+  const ปุ่ม = ต้องขออนุมัติ ? "ส่งคำขอ" : "บันทึก";
 
-  async function บันทึก() {
-    setMsg(null);
-    const อีเมลใหม่ = email.trim().toLowerCase() !== อีเมลปัจจุบัน.toLowerCase() ? email.trim() : "";
-    if (!อีเมลใหม่ && !pw) { setMsg({ ok: false, text: "ยังไม่ได้เปลี่ยนอะไร — แก้อีเมลหรือกรอกรหัสผ่านใหม่ก่อน" }); return; }
-    if (pw && pw !== pw2) { setMsg({ ok: false, text: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน" }); return; }
-    if (!current) { setMsg({ ok: false, text: "ต้องกรอกรหัสผ่านปัจจุบันเพื่อยืนยันตัวตน" }); return; }
-    setBusy(true);
+  async function เปลี่ยนรหัสผ่าน() {
+    setMsgPw(null);
+    if (!pw) { setMsgPw({ ok: false, text: "ยังไม่ได้กรอกรหัสผ่านใหม่" }); return; }
+    if (pw !== pw2) { setMsgPw({ ok: false, text: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน" }); return; }
+    if (!pwCurrent) { setMsgPw({ ok: false, text: "ต้องกรอกรหัสผ่านปัจจุบันเพื่อยืนยันตัวตน" }); return; }
+    setBusy("password");
     try {
-      const r = await account.change({ dealerCode, currentPassword: current, email: อีเมลใหม่ || undefined, password: pw || undefined });
-      setMsg({ ok: true, text: r.message });
-      setPw(""); setPw2(""); setCurrent("");
+      const r = await account.change({ dealerCode, currentPassword: pwCurrent, password: pw });
+      setMsgPw({ ok: true, text: r.message });
+      setPw(""); setPw2(""); setPwCurrent("");
       โหลด();
-    } catch (e) {
-      setMsg({ ok: false, text: friendlyError(e) });
-    } finally { setBusy(false); }
+    } catch (e) { setMsgPw({ ok: false, text: friendlyError(e) }); }
+    finally { setBusy(""); }
+  }
+
+  async function เปลี่ยนอีเมล() {
+    setMsgEmail(null);
+    const ใหม่ = email.trim();
+    if (!ใหม่ || ใหม่.toLowerCase() === อีเมลปัจจุบัน.toLowerCase()) {
+      setMsgEmail({ ok: false, text: "ยังไม่ได้เปลี่ยนอีเมล — กรอกอีเมลใหม่ก่อน" }); return;
+    }
+    if (!emailCurrent) { setMsgEmail({ ok: false, text: "ต้องกรอกรหัสผ่านปัจจุบันเพื่อยืนยันตัวตน" }); return; }
+    setBusy("email");
+    try {
+      const r = await account.change({ dealerCode, currentPassword: emailCurrent, email: ใหม่ });
+      setMsgEmail({ ok: true, text: r.message });
+      setEmailCurrent(""); setพิมพ์อีเมลเอง(false);
+      โหลด();
+    } catch (e) { setMsgEmail({ ok: false, text: friendlyError(e) }); }
+    finally { setBusy(""); }
   }
 
   return (
@@ -185,16 +236,16 @@ export function DealerAccountForm({ dealerCode, currentEmail }: { dealerCode: st
           บัญชีที่ใช้อยู่ตอนนี้
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Mail size={14} color="#94A3B8" /> อีเมลเข้าสู่ระบบ</span>
-          <span style={{ fontWeight: 700, color: อีเมลปัจจุบัน ? "#1F2937" : "#94A3B8" }}>{อีเมลปัจจุบัน || "—"}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem", borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Lock size={14} color="#94A3B8" /> รหัสผ่าน</span>
           <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>ดูไม่ได้ด้วยเหตุผลด้านความปลอดภัย — ตั้งใหม่ได้ด้านล่าง</span>
         </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem", borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Mail size={14} color="#94A3B8" /> อีเมลเข้าสู่ระบบ</span>
+          <span style={{ fontWeight: 700, color: อีเมลปัจจุบัน ? "#1F2937" : "#94A3B8" }}>{อีเมลปัจจุบัน || "—"}</span>
+        </div>
       </div>
 
-      {/* สิทธิ์ที่เหลือ — บอกก่อนกรอก ไม่ใช่ไปเจอตอนกดบันทึก */}
+      {/* สิทธิ์ที่เหลือ — ใช้ร่วมกันทั้งสองก้อน (โควตานับรวมกัน) */}
       <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: "0.7rem", marginBottom: 14,
         color: โหลดพลาด || ต้องขออนุมัติ ? "#b45309" : "#64748B" }}>
         {โหลดพลาด || ต้องขออนุมัติ ? <ShieldCheck size={12} /> : <Lock size={12} />}
@@ -202,7 +253,7 @@ export function DealerAccountForm({ dealerCode, currentEmail }: { dealerCode: st
           : state == null ? "กำลังอ่านสถานะบัญชี…"
           : ต้องขออนุมัติ
             ? "ใช้สิทธิ์แก้เองครบแล้ว — การเปลี่ยนครั้งต่อไปต้องรอสำนักงานใหญ่อนุมัติก่อนจึงมีผล"
-            : `แก้อีเมล/รหัสผ่านเองได้อีก ${เหลือ} ครั้ง · ครบแล้วต้องขออนุมัติจากสำนักงานใหญ่ · ทุกครั้งที่เปลี่ยน สำนักงานใหญ่จะเห็น`}
+            : `แก้อีเมล/รหัสผ่านเองได้อีก ${เหลือ} ครั้ง (นับรวมกันทั้งสองอย่าง) · ทุกครั้งที่เปลี่ยน สำนักงานใหญ่จะเห็น`}
       </div>
 
       {มีคำขอค้าง && (
@@ -216,39 +267,58 @@ export function DealerAccountForm({ dealerCode, currentEmail }: { dealerCode: st
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
-        <div>
-          <label className="form-label">อีเมลเข้าสู่ระบบใหม่</label>
-          <input className="form-input" value={email} disabled={ล็อกฟอร์ม}
-            onChange={e => { setพิมพ์เอง(true); setEmail(e.target.value.replace(/\s/g, "")); }}
-            aria-label="อีเมลเข้าสู่ระบบ" placeholder="name@company.co.th" />
+      {/* รหัสผ่านมาก่อน (บอสสั่งสลับตำแหน่ง) */}
+      <ก้อน ไอคอน={KeyRound} หัวข้อ="เปลี่ยนรหัสผ่าน" รอง="ตั้งรหัสผ่านใหม่ — ต้องยืนยันด้วยรหัสผ่านปัจจุบัน" เน้น={focus === "password"}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+          <div>
+            <label className="form-label">รหัสผ่านปัจจุบัน *</label>
+            <input className="form-input" type="password" value={pwCurrent} disabled={ล็อก}
+              onChange={e => setPwCurrent(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านปัจจุบัน"
+              placeholder="ยืนยันตัวตนก่อนเปลี่ยน" autoComplete="current-password" />
+          </div>
+          <div>
+            <label className="form-label">รหัสผ่านใหม่</label>
+            <input className="form-input" type="password" value={pw} disabled={ล็อก}
+              onChange={e => setPw(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านใหม่"
+              placeholder="อย่างน้อย 8 ตัวอักษร" autoComplete="new-password" />
+          </div>
+          <div>
+            <label className="form-label">ยืนยันรหัสผ่านใหม่</label>
+            <input className="form-input" type="password" value={pw2} disabled={ล็อก}
+              onChange={e => setPw2(e.target.value.replace(/\s/g, ""))} aria-label="ยืนยันรหัสผ่านใหม่"
+              placeholder="พิมพ์รหัสใหม่อีกครั้ง" autoComplete="new-password" />
+          </div>
         </div>
-        <div>
-          <label className="form-label">รหัสผ่านปัจจุบัน *</label>
-          <input className="form-input" type="password" value={current} disabled={ล็อกฟอร์ม}
-            onChange={e => setCurrent(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านปัจจุบัน"
-            placeholder="ยืนยันตัวตนก่อนเปลี่ยน" autoComplete="current-password" />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-primary btn-md" disabled={ล็อก} onClick={เปลี่ยนรหัสผ่าน}>
+            <KeyRound size={13} /> {ปุ่ม}รหัสผ่านใหม่
+          </button>
+          {msgPw && <span style={{ fontSize: "0.74rem", fontWeight: 600, color: msgPw.ok ? "#059669" : "#dc2626" }}>{msgPw.text}</span>}
         </div>
-        <div>
-          <label className="form-label">รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label>
-          <input className="form-input" type="password" value={pw} disabled={ล็อกฟอร์ม}
-            onChange={e => setPw(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านใหม่"
-            placeholder="อย่างน้อย 8 ตัวอักษร" autoComplete="new-password" />
-        </div>
-        <div>
-          <label className="form-label">ยืนยันรหัสผ่านใหม่</label>
-          <input className="form-input" type="password" value={pw2} disabled={ล็อกฟอร์ม}
-            onChange={e => setPw2(e.target.value.replace(/\s/g, ""))} aria-label="ยืนยันรหัสผ่านใหม่"
-            placeholder="พิมพ์รหัสใหม่อีกครั้ง" autoComplete="new-password" />
-        </div>
-      </div>
+      </ก้อน>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-primary btn-md" disabled={ล็อกฟอร์ม} onClick={บันทึก}>
-          <KeyRound size={13} /> {ต้องขออนุมัติ ? "ส่งคำขอเปลี่ยนบัญชี" : "บันทึกบัญชีเข้าระบบ"}
-        </button>
-        {msg && <span style={{ fontSize: "0.74rem", fontWeight: 600, color: msg.ok ? "#059669" : "#dc2626" }}>{msg.text}</span>}
-      </div>
+      <ก้อน ไอคอน={Mail} หัวข้อ="เปลี่ยนอีเมลเข้าสู่ระบบ" รอง="อีเมลนี้ใช้เข้าระบบและรับการติดต่อจากสำนักงานใหญ่" เน้น={focus === "email"}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+          <div>
+            <label className="form-label">อีเมลเข้าสู่ระบบใหม่</label>
+            <input className="form-input" value={email} disabled={ล็อก}
+              onChange={e => { setพิมพ์อีเมลเอง(true); setEmail(e.target.value.replace(/\s/g, "")); }}
+              aria-label="อีเมลเข้าสู่ระบบ" placeholder="name@company.co.th" />
+          </div>
+          <div>
+            <label className="form-label">รหัสผ่านปัจจุบัน *</label>
+            <input className="form-input" type="password" value={emailCurrent} disabled={ล็อก}
+              onChange={e => setEmailCurrent(e.target.value.replace(/\s/g, ""))} aria-label="รหัสผ่านปัจจุบัน (ยืนยันการเปลี่ยนอีเมล)"
+              placeholder="ยืนยันตัวตนก่อนเปลี่ยน" autoComplete="current-password" />
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-primary btn-md" disabled={ล็อก} onClick={เปลี่ยนอีเมล}>
+            <Mail size={13} /> {ปุ่ม}อีเมลใหม่
+          </button>
+          {msgEmail && <span style={{ fontSize: "0.74rem", fontWeight: 600, color: msgEmail.ok ? "#059669" : "#dc2626" }}>{msgEmail.text}</span>}
+        </div>
+      </ก้อน>
     </>
   );
 }
