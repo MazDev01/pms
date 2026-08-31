@@ -146,15 +146,11 @@ export type AccountState = {
 /** ผลของการกดบันทึก — applied = มีผลทันที · pending = ส่งคำขอรออนุมัติแล้ว */
 export type AccountChangeResult = { applied: boolean; pending: boolean; message: string };
 
-/** รหัสผ่าน "ล่าสุดที่ระบบบันทึกไว้" ของสาขา — ไม่ใช่การอ่านจากระบบยืนยันตัวตน (ที่นั่นเก็บเป็น hash)
- *  ถ้ารหัสถูกเปลี่ยนนอกระบบนี้ ค่าที่บันทึกไว้จะเก่า — จึงต้องบอกวันที่กำกับเสมอ ห้ามโชว์ลอย ๆ */
-export type AccountSecret = { password: string | null; updatedAt?: string; note?: string };
-
+// ⚠️ ตัวแทน "ดูรหัสผ่านของตัวเองไม่ได้" (บอสสั่ง 28 ส.ค. 69) — ดูได้แค่อีเมลเข้าระบบ
+//    รหัสผ่านเปลี่ยนได้อย่างเดียว (ต้องยืนยันด้วยรหัสปัจจุบัน) · การเปิดดูสำเนารหัสเป็นสิทธิ์ของ HQ เท่านั้น
 export interface AccountRepo {
   /** สถานะบัญชีของสาขา (อีเมลปัจจุบัน · โควตาที่เหลือ · คำขอที่ค้าง) */
   state(dealerCode: string): Promise<AccountState>;
-  /** เปิดดูรหัสผ่านล่าสุดที่บันทึกไว้ของสาขาตัวเอง (บันทึกร่องรอยทุกครั้งที่เปิดดู) */
-  reveal(dealerCode: string): Promise<AccountSecret>;
   /** ตัวแทนขอเปลี่ยนอีเมล/รหัสผ่านของตัวเอง — ต้องยืนยันรหัสผ่านปัจจุบันเสมอ */
   change(input: {
     dealerCode: string;
@@ -500,6 +496,12 @@ export interface StoragePort {
   upload(dealerCode: string, file: File): Promise<string | null>; // คืน storagePath
   signedUrl(path: string): Promise<string | null>;                // ลิงก์ดาวน์โหลดชั่วคราว
   remove(path: string): Promise<void>;
+  // ── ไฟล์ของแคตตาล็อก (แบบแปลนแม่แบบ) — คนละถังกับไฟล์ของตัวแทน ──────────────────
+  //   ถังของตัวแทนคุมสิทธิ์ด้วย "โฟลเดอร์ชั้นแรก = รหัสสาขา" ซึ่งบัญชีสำนักงานใหญ่ไม่มี
+  //   จึงเขียนลงถังนั้นไม่ได้เลย · แบบแปลนเป็นของกลางทั้งเครือ ใช้ถัง catalog-images (0010)
+  uploadCatalog(file: File): Promise<string | null>;
+  catalogUrl(path: string): string;   // ถังนี้อ่านสาธารณะ — ได้ลิงก์ตรงไม่ต้องขอทีละครั้ง
+  removeCatalog(path: string): Promise<void>;
 }
 
 // ── Realtime — ฟังการเปลี่ยนแปลงของตารางงานขายข้ามเครื่อง (supabase) ──

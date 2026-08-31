@@ -16,7 +16,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import { auditLog, withErrors } from "@pms/shared/lib/adminRoute";
-import { encryptSecret, decryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
+import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 export const runtime = "nodejs";
 
@@ -119,33 +119,11 @@ async function สรุปสถานะ(admin: SupabaseClient, dealerCode: st
 export const GET = withErrors("dealer-account-state", async (req: NextRequest) => {
   const who = await ตัวแทนที่เรียก(req);
   if (!who.ok) return who.res;
-  const { admin, dealerCode, email, name } = who.who;
+  const { admin, dealerCode, email } = who.who;
 
-  if (new URL(req.url).searchParams.get("reveal") === "1") {
-    // เปิดดูรหัสของตัวเอง — จำกัดความถี่และบันทึกร่องรอยเหมือนตอนสำนักงานใหญ่เปิดดู
-    if (!(await checkRateLimit(admin, `dealer-account-reveal:${who.who.userId}`, 10, 60))) {
-      return json(req, { error: "เปิดดูรหัสถี่เกินไป — รอสักครู่แล้วลองใหม่" }, 429);
-    }
-    if (!dealerSecretReady()) {
-      return json(req, { password: null, note: "เซิร์ฟเวอร์ยังไม่ได้ตั้งกุญแจถอดรหัส — เปิดดูรหัสที่บันทึกไว้ไม่ได้" });
-    }
-    const { data, error } = await admin.from("dealer_login_secrets")
-      .select("secret, updated_at").eq("dealer_code", dealerCode).maybeSingle();
-    if (error) {
-      console.error(`[account] อ่านสำเนารหัสของ ${dealerCode} ไม่สำเร็จ`, error);
-      return json(req, { error: "อ่านรหัสที่บันทึกไว้ไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง" }, 503);
-    }
-    if (!data) {
-      // ไม่ใช่ข้อผิดพลาด — แค่ยังไม่มีสำเนา (รหัสถูกตั้งไว้ก่อนเปิดฟีเจอร์เก็บสำเนา)
-      return json(req, { password: null, note: "ยังไม่มีรหัสที่ระบบบันทึกไว้ — เปลี่ยนรหัสหนึ่งครั้งแล้วจะเห็นที่นี่" });
-    }
-    await auditLog(admin, { name, role: "DEALER" }, "ตัวแทนเปิดดูรหัสผ่านของตัวเอง", dealerCode);
-    return json(req, {
-      password: decryptSecret(String(data.secret)),
-      updatedAt: String(data.updated_at ?? ""),
-      note: "รหัสล่าสุดที่ระบบบันทึกไว้ — ถ้าเปลี่ยนรหัสจากช่องทางอื่น ค่านี้อาจไม่ตรงกับที่ใช้อยู่",
-    });
-  }
+  // ⚠️ ไม่มีทางให้ตัวแทน "เปิดดูรหัสผ่าน" ที่นี่ (บอสสั่ง 28 ส.ค. 69) — ดูได้แค่อีเมล
+  //    สำเนารหัสที่เก็บไว้เป็นของสำนักงานใหญ่เท่านั้น (ดู /api/admin/dealers/secret)
+
   try {
     return json(req, await สรุปสถานะ(admin, dealerCode, email));
   } catch (e) {

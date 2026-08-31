@@ -17,7 +17,8 @@ import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { NumberInput } from "@pms/shared/components/ui/NumberInput";
-import { DealerAccountCard } from "@pms/shared/components/ui/DealerAccountCard";
+import { useRouter } from "next/navigation";
+import { DealerAccountSummary } from "@pms/shared/components/ui/DealerAccountCard";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useOverlayClose } from "@pms/shared/lib/useOverlayClose";
@@ -66,6 +67,7 @@ const COMPANY_DEFAULT: CompanyProfile = {
 
 // บัญชีดีลเลอร์ = โปรไฟล์ผู้ใช้ (รูป/ชื่อ) + ข้อมูลบริษัท + ข้อมูลบัญชี (อีเมลล็อกอิน/รหัสผ่าน) รวมเป็นบัญชีเดียว
 function CompanyTab() {
+  const router = useRouter();
   const { session } = useRole();
   const [form, setForm] = useState<CompanyProfile>(COMPANY_DEFAULT);
   const [logo, setLogo] = useState<string>("");
@@ -208,7 +210,9 @@ function CompanyTab() {
         {/* ── ข้อมูลบัญชี — ตัวแทนแก้อีเมล/รหัสผ่านเองได้ (บอสสั่ง 28 ส.ค. 69) ──
              เดิมล็อกไว้ให้สำนักงานใหญ่จัดการอย่างเดียว · กติกาโควตา/การขออนุมัติอยู่ใน DealerAccountCard
              และถูกบังคับจริงที่เซิร์ฟเวอร์ (ไม่ใช่แค่ซ่อนปุ่ม) */}
-        <DealerAccountCard dealerCode={session.dealerCode} currentEmail={prof.email} />
+        {/* หน้าตั้งค่าโชว์แค่ "บัญชีที่ใช้อยู่" (อีเมลเท่านั้น) — การแก้ไปทำที่หน้าบัญชีแยก */}
+        <DealerAccountSummary dealerCode={session.dealerCode} currentEmail={prof.email}
+          onOpen={() => router.push("/settings/account")} />
       </div>
     </>
   );
