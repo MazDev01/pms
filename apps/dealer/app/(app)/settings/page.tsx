@@ -16,6 +16,7 @@ import { useHQPolicy } from "@pms/shared/lib/useHQConfig";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
+import { NumberInput } from "@pms/shared/components/ui/NumberInput";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useOverlayClose } from "@pms/shared/lib/useOverlayClose";
@@ -368,9 +369,8 @@ function DocumentsTab() {
             </div>
             <div>
               <label className="form-label">เลขลำดับถัดไป</label>
-              <input className="form-input" type="number" min={1} value={doc.runningNumber}
-                onChange={e => set("runningNumber", Math.max(1, Number(e.target.value) || 1))}
-                style={{ fontFamily: "monospace" }} />
+              <NumberInput min={1} value={doc.runningNumber} onChange={n => set("runningNumber", n)}
+                ariaLabel="เลขลำดับถัดไป" style={{ fontFamily: "monospace" }} />
             </div>
             <div>
               {/* เดิมล็อกไว้ให้สำนักงานใหญ่กำหนดทั้งเครือ · บอสสั่งเปิดให้ตัวแทนตั้งเอง (7 ส.ค. 69)
@@ -378,8 +378,8 @@ function DocumentsTab() {
               <label className="form-label">ภาษีมูลค่าเพิ่ม %</label>
               {/* ผูกชื่อช่องไว้ด้วย — โปรแกรมอ่านหน้าจอต้องบอกได้ว่าช่องตัวเลขนี้คืออะไร
                   (ป้ายข้างบนไม่ได้ผูกกับช่องด้วย htmlFor จึงต้องระบุที่ตัวช่องเอง) */}
-              <input className="form-input" aria-label="ภาษีมูลค่าเพิ่ม %" type="number" min={0} max={100} step="0.01" value={doc.vatPercent}
-                onChange={e => set("vatPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+              <NumberInput ariaLabel="ภาษีมูลค่าเพิ่ม %" min={0} max={100} step="0.01"
+                value={doc.vatPercent} onChange={n => set("vatPercent", n)}
                 style={{ fontFamily: "monospace" }} />
             </div>
             <div>
@@ -387,9 +387,8 @@ function DocumentsTab() {
                   ตอนออกใบยังติ๊กเปิด/ปิดและแก้อัตรารายใบได้ · ใบที่ออกไปแล้วไม่กระทบ
                   เพราะทุกใบตรึงอัตราไว้กับตัวเองตั้งแต่วันที่ออก */}
               <label className="form-label">ภาษีหัก ณ ที่จ่าย %</label>
-              <input className="form-input" aria-label="ภาษีหัก ณ ที่จ่าย %" type="number" min={0} max={100} step={0.5}
-                value={doc.whtPercent}
-                onChange={e => set("whtPercent", Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+              <NumberInput ariaLabel="ภาษีหัก ณ ที่จ่าย %" min={0} max={100} step={0.5}
+                value={doc.whtPercent} onChange={n => set("whtPercent", n)}
                 style={{ fontFamily: "monospace" }} />
             </div>
             <div style={{ padding: "10px 14px", background: "#f0f4fa", borderRadius: 10, border: "1px solid #dce5f0" }}>
@@ -401,8 +400,8 @@ function DocumentsTab() {
           <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 200px)", gap: 12, marginTop: 14 }}>
             <div>
               <label className="form-label">อายุใบเสนอราคา (วัน)</label>
-              <input className="form-input" type="number" min={1} value={doc.validityDays}
-                onChange={e => set("validityDays", Math.max(1, Number(e.target.value) || 1))}
+              <NumberInput ariaLabel="อายุใบเสนอราคา (วัน)" min={1} value={doc.validityDays}
+                onChange={n => set("validityDays", n)}
                 style={{ fontFamily: "monospace" }} />
             </div>
           </div>
@@ -858,8 +857,8 @@ function LeadRulesCard({ draft, set }: { draft: LeadRules; set: (k: keyof LeadRu
   const currentDealer = useCurrentDealer(); // ชื่อ/รหัสสาขาที่ล็อกอิน (แสดงบนหัวการ์ด)
   const num = (value: number, on: (n: number) => void, unit: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <input type="number" min={1} aria-label="จำนวนวัน" className="form-input" style={{ textAlign: "right", fontWeight: 700 }}
-        value={value} onChange={e => on(Math.max(1, Number(e.target.value)))} />
+      <NumberInput min={1} ariaLabel="จำนวนวัน" style={{ textAlign: "right", fontWeight: 700 }}
+        value={value} onChange={on} />
       <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
     </div>
   );

@@ -20,6 +20,7 @@ import {
   type ReactNode, type Dispatch, type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
+import { NumberInput } from "@pms/shared/components/ui/NumberInput";
 import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
 import { useRepoState } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -131,7 +132,8 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
 }
 const numInput = (value: number, onChange: (n: number) => void, unit: string, step?: number) => (
   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <input type="number" step={step} aria-label={unit} className="form-input" style={{ textAlign: "right", fontWeight: 700 }} value={value} onChange={e => onChange(Number(e.target.value))} />
+    {/* ลบทั้งช่องระหว่างพิมพ์ได้ (ไม่เด้งเป็น 0 แล้วพิมพ์ต่อได้ "09") — ดู NumberInput */}
+    <NumberInput step={step} ariaLabel={unit} min={0} style={{ textAlign: "right", fontWeight: 700 }} value={value} onChange={onChange} />
     <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>{unit}</span>
   </div>
 );
