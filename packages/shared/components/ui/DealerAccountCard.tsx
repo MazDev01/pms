@@ -177,14 +177,12 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [emailCurrent, setEmailCurrent] = useState("");
+  // ช่อง "อีเมลใหม่" ต้องว่างเสมอ (บอสสั่ง 28 ส.ค. 69) — อีเมลปัจจุบันแสดงอยู่ในกล่องด้านบนแล้ว
+  // เติมค่าเดิมมาให้ = ผู้ใช้ต้องมาลบทิ้งก่อนพิมพ์ และดูไม่ออกว่านี่คือ "ของใหม่" หรือ "ของเดิม"
   const [email, setEmail] = useState("");
-  const [พิมพ์อีเมลเอง, setพิมพ์อีเมลเอง] = useState(false);
   const [busy, setBusy] = useState<"" | "password" | "email">("");
   const [msgPw, setMsgPw] = useState<{ ok: boolean; text: string } | null>(null);
   const [msgEmail, setMsgEmail] = useState<{ ok: boolean; text: string } | null>(null);
-
-  // ช่องอีเมลตามค่าปัจจุบันจนกว่าผู้ใช้จะพิมพ์เอง (อีเมลจริงมาถึงช้ากว่าเรนเดอร์แรก)
-  useEffect(() => { if (!พิมพ์อีเมลเอง) setEmail(อีเมลปัจจุบัน); }, [อีเมลปัจจุบัน, พิมพ์อีเมลเอง]);
 
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
   const ต้องขออนุมัติ = เหลือ === 0;
@@ -211,14 +209,14 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
     setMsgEmail(null);
     const ใหม่ = email.trim();
     if (!ใหม่ || ใหม่.toLowerCase() === อีเมลปัจจุบัน.toLowerCase()) {
-      setMsgEmail({ ok: false, text: "ยังไม่ได้เปลี่ยนอีเมล — กรอกอีเมลใหม่ก่อน" }); return;
+      setMsgEmail({ ok: false, text: ใหม่ ? "อีเมลนี้เป็นอีเมลเดิมอยู่แล้ว" : "ยังไม่ได้กรอกอีเมลใหม่" }); return;
     }
     if (!emailCurrent) { setMsgEmail({ ok: false, text: "ต้องกรอกรหัสผ่านปัจจุบันเพื่อยืนยันตัวตน" }); return; }
     setBusy("email");
     try {
       const r = await account.change({ dealerCode, currentPassword: emailCurrent, email: ใหม่ });
       setMsgEmail({ ok: true, text: r.message });
-      setEmailCurrent(""); setพิมพ์อีเมลเอง(false);
+      setEmail(""); setEmailCurrent("");
       โหลด();
     } catch (e) { setMsgEmail({ ok: false, text: friendlyError(e) }); }
     finally { setBusy(""); }
@@ -269,8 +267,8 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
           <div>
             <label className="form-label">อีเมลเข้าสู่ระบบใหม่</label>
             <input className="form-input" value={email} disabled={ล็อก}
-              onChange={e => { setพิมพ์อีเมลเอง(true); setEmail(e.target.value.replace(/\s/g, "")); }}
-              aria-label="อีเมลเข้าสู่ระบบ" placeholder="name@company.co.th" />
+              onChange={e => setEmail(e.target.value.replace(/\s/g, ""))}
+              aria-label="อีเมลเข้าสู่ระบบ" placeholder={อีเมลปัจจุบัน ? `เช่น ${อีเมลปัจจุบัน}` : "name@company.co.th"} />
           </div>
           <div>
             <label className="form-label">รหัสผ่านปัจจุบัน *</label>
