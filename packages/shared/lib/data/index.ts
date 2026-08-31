@@ -90,6 +90,8 @@ export const profile: ProfileRepo = {
 export const hqCompany = adapter.hqCompany;
 export const notes = adapter.notes;
 export const users = adapter.users;
+// บัญชีเข้าระบบของตัวแทน (แก้อีเมล/รหัสผ่านเอง · โควตา 2 ครั้ง · เกินนั้นขออนุมัติ)
+export const account = adapter.account;
 export const audit: AuditRepo = {
   ..._audit,
   list: (limit) => dedupeRead(`audit.list:${limit ?? ""}`, () => _audit.list(limit)),

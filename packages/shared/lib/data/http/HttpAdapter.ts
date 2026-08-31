@@ -12,6 +12,7 @@
 // ⚠️ ระยะนี้ backend ทำงาน "ในนามผู้ใช้" (ส่งใบผ่านของเขาต่อให้ DB) ไม่ได้ใช้ service_role
 //    RLS ทั้ง 72 กฎจึงยังบังคับเหมือนเดิม — ต่างแค่คำขอเดินผ่านเซิร์ฟเวอร์ของเราอีกทอด
 // ⚠️ ก่อนเปิดโหมดนี้บนของจริง ดูข้อจำกัดอายุสายอัปเดตสดใน server/v1/events.ts ก่อน
+import { accountRemote } from "../accountRemote";
 import type {
   DataAdapter, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo, SettingsRepo,
   DealerSettingsRepo, ProfileRepo, HQCompanyRepo, NotesRepo, UsersRepo, AuditRepo,
@@ -428,4 +429,6 @@ const realtime: RealtimePort = {
 export const HttpAdapter: DataAdapter = {
   storage, realtime, dealers, catalog, files, persons, settings, dealerSettings,
   profile, hqCompany, notes, users, audit, metrics, leads, quotations, customers, appointments,
+  // บัญชีเข้าระบบของตัวแทน — เปลี่ยนผ่าน API ของสำนักงานใหญ่ (คีย์ผู้ดูแลอยู่ที่นั่นที่เดียว)
+  account: accountRemote,
 };

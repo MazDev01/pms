@@ -3,6 +3,7 @@
 // SupabaseAdapter — เชื่อม repository ทุกตัวเข้ากับตาราง Supabase (เฟส B)
 // map ตาราง ↔ type ตาม BACKEND-DESIGN.md · ขอบเขตข้อมูล (dealer_code) บังคับด้วย RLS ที่ DB
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
+import { accountRemote } from "../accountRemote";
 import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
 import { normalizeCustomer, normalizeDealer, leadToRow, rowToLead, quoteToRow, rowToQuote, apptToRow, rowToAppt } from "./rowMappers";
@@ -581,6 +582,8 @@ export const SupabaseAdapter: DataAdapter = {
     // สร้าง/ลบบัญชีต้องใช้ service_role — ห้ามอยู่ฝั่ง client เด็ดขาด
     canCreate: () => false,
   },
+  // บัญชีเข้าระบบของตัวแทน — เปลี่ยนผ่าน API ของสำนักงานใหญ่ (คีย์ผู้ดูแลอยู่ที่นั่นที่เดียว)
+  account: accountRemote,
   audit: {
     // อ่านล่าสุดสูงสุด limit รายการ (id desc) + แปลง at (timestamptz) → สตริงไทยที่ /hq/audit (parseDate) เข้าใจ
     // audit_log เป็นตาราง append-only ที่โตไม่จำกัด (ทุก action ของ HQ ตลอดกาล) — เดิม pageAll ดึงทั้งหมด

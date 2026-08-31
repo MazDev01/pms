@@ -36,7 +36,16 @@ function sentryOrigin() {
   if (!dsn) return "";
   try { return " " + new URL(dsn).origin; } catch { return ""; }   // DSN เพี้ยน = ไม่เปิดทางมั่ว
 }
-const connectSrc = `connect-src 'self' https://*.supabase.co wss://*.supabase.co${sentryOrigin()}`;
+// แอปตัวแทนต้องยิงคำขอ "เปลี่ยนบัญชีเข้าระบบ" ข้ามไปที่แอปสำนักงานใหญ่ (คีย์ผู้ดูแลอยู่ที่นั่นที่เดียว)
+// ⚠️ คิดจาก env เหมือน Sentry — ไม่พิมพ์ที่อยู่ไว้ตรง ๆ และไม่ปล่อยให้เป็นขั้นตอนที่คนต้องจำ
+//    ลืมเติมที่อยู่นี้ = เบราว์เซอร์บล็อกคำขอเงียบ ๆ หน้าจอค้างที่ "กำลังอ่านสถานะบัญชี…" ตลอดกาล
+//    (เจอจริงตอนต่อฟีเจอร์นี้ 28 ส.ค. 69) · ไม่ได้ตั้ง env = ไม่เปิดทางให้ใครทั้งนั้น
+function hqOrigin() {
+  const o = process.env.NEXT_PUBLIC_HQ_ORIGIN;
+  if (!o) return "";
+  try { return " " + new URL(o).origin; } catch { return ""; }
+}
+const connectSrc = `connect-src 'self' https://*.supabase.co wss://*.supabase.co${sentryOrigin()}${hqOrigin()}`;
 
 const CSP = [
   "default-src 'self'",

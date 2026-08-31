@@ -8,7 +8,7 @@ import { useState, useRef, useEffect, createContext, useContext, useCallback, us
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save, RotateCcw,
   Upload, UserCheck, FileText, ShieldCheck, Lock, ImagePlus, Bell,
-  Camera, Mail, KeyRound, Scale,
+  Camera, Scale,
 } from "lucide-react";
 import { RP_STORAGE_KEY, NOTIF_META, NOTIF_PREFS_KEY, NOTIF_PREFS_EVENT, DEFAULT_NOTIF_PREFS, defaultProfileEmail, PROFILE_UPDATED_EVENT, loadDealerLeadRulesMap, leadRulesOf, saveDealerLeadRules, DEFAULT_LEAD_RULES, QUOTE_PREFIX, quoteNoPrefix, type UserProfile, type HQPolicy, type NotifPrefs, type ResponsiblePerson, type LeadRules } from "@pms/shared/lib/mock";
 import { formatPhone, formatTaxId } from "@pms/shared/lib/format";
@@ -17,6 +17,7 @@ import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { NumberInput } from "@pms/shared/components/ui/NumberInput";
+import { DealerAccountCard } from "@pms/shared/components/ui/DealerAccountCard";
 import { settings as settingsRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { useOverlayClose } from "@pms/shared/lib/useOverlayClose";
@@ -69,7 +70,6 @@ function CompanyTab() {
   const [form, setForm] = useState<CompanyProfile>(COMPANY_DEFAULT);
   const [logo, setLogo] = useState<string>("");
   const [prof, setProf] = useState<UserProfile>({ name: session.name, email: defaultProfileEmail(session.dealerCode), phone: "" });
-  const [pwNote, setPwNote] = useState(false);
   const [baseline, setBaseline] = useState("");
   const avatarRef = useRef<HTMLInputElement>(null);
   const dealerCfg = useDealerSettings(); // ข้อมูลบริษัท/โลโก้/เอกสารของสาขา (ผ่าน repo)
@@ -126,7 +126,6 @@ function CompanyTab() {
   const accountName = form.company.trim() || session.dealerName || session.dealerCode;
   const initial = accountName.charAt(0).toUpperCase();
   const sec: React.CSSProperties = { display: "flex", alignItems: "center", gap: 7, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em", marginBottom: 14, textTransform: "uppercase" };
-  const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: "1px solid #e5e7eb", background: "#f7f8fa", borderRadius: 8, padding: "9px 12px", fontSize: "0.86rem", color: "#2D2D2D" };
 
   return (
     <>
@@ -206,23 +205,10 @@ function CompanyTab() {
             placeholder="ที่อยู่เต็ม รวมจังหวัดและรหัสไปรษณีย์" style={{ resize: "vertical" }} />
         </div>
 
-        {/* ── ข้อมูลบัญชี: อีเมลล็อกอิน (ล็อก) + จัดการรหัสผ่าน ── */}
-        <div style={{ ...sec, borderTop: "1px solid #f1f5f9", paddingTop: 18, marginBottom: 14 }}><KeyRound size={14} /> ข้อมูลบัญชี</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
-          <div>
-            <label className="form-label" style={{ display: "flex", alignItems: "center", gap: 5 }}>อีเมลเข้าสู่ระบบ <Lock size={11} style={{ color: "#9ca3af" }} /></label>
-            <div style={roBox}><Mail size={14} color="#6b7280" /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prof.email}</span> <Lock size={12} color="#9ca3af" style={{ marginLeft: "auto", flexShrink: 0 }} /></div>
-          </div>
-          <div>
-            <label className="form-label">รหัสผ่าน</label>
-            <button type="button" onClick={() => setPwNote(v => !v)} className="btn btn-secondary btn-md" style={{ width: "100%", justifyContent: "center", color: "#003366" }}>
-              <KeyRound size={14} /> จัดการรหัสผ่าน
-            </button>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.65rem", color: pwNote ? "#b45309" : "#9ca3af", marginTop: 8 }}>
-          <Lock size={11} /> {pwNote ? "รหัสผ่านและอีเมลเข้าสู่ระบบจัดการโดยสำนักงานใหญ่ — หากต้องรีเซ็ต กรุณาติดต่อผู้ดูแลระบบ" : "อีเมลเข้าสู่ระบบ · รหัสผ่าน กำหนดโดยสำนักงานใหญ่"}
-        </div>
+        {/* ── ข้อมูลบัญชี — ตัวแทนแก้อีเมล/รหัสผ่านเองได้ (บอสสั่ง 28 ส.ค. 69) ──
+             เดิมล็อกไว้ให้สำนักงานใหญ่จัดการอย่างเดียว · กติกาโควตา/การขออนุมัติอยู่ใน DealerAccountCard
+             และถูกบังคับจริงที่เซิร์ฟเวอร์ (ไม่ใช่แค่ซ่อนปุ่ม) */}
+        <DealerAccountCard dealerCode={session.dealerCode} currentEmail={prof.email} />
       </div>
     </>
   );

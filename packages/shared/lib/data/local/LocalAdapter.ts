@@ -37,6 +37,7 @@ function fireProfile() {
   try { window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)); } catch {}
 }
 import { putLocalBlob, localBlobUrl, removeLocalBlob } from "./blobStore";
+import { accountLocal } from "./accountLocal";
 import type { DataAdapter } from "../ports";
 import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser } from "../types";
 
@@ -252,6 +253,8 @@ export const LocalAdapter: DataAdapter = {
     },
     canCreate: () => true,
   },
+  // บัญชีเข้าระบบของตัวแทน (แก้เอง 2 ครั้ง · ครั้งที่ 3 ขอ HQ อนุมัติ) — จำลองครบในเครื่อง
+  account: accountLocal,
   audit: {
     // local: loadAudit เพดาน MAX=300 อยู่แล้ว · เคารพ limit เพื่อพฤติกรรมตรงกับ supabase (M8)
     list: (limit) => ok(limit ? loadAudit().slice(0, limit) : loadAudit()),

@@ -111,6 +111,57 @@ export interface UsersRepo {
   canCreate(): boolean;
 }
 
+// ── บัญชีเข้าระบบของตัวแทน (ตัวแทนแก้อีเมล/รหัสผ่านเองได้) ─────────────────────
+//
+// กติกา (บอสสั่ง 28 ส.ค. 69):
+//   • ตัวแทนแก้เองได้ 2 ครั้ง "ตลอดอายุบัญชี" (นับรวมตั้งแต่ HQ สร้างบัญชีให้)
+//   • ครั้งที่ 3 เป็นต้นไป ต้องส่งคำขอให้สำนักงานใหญ่อนุมัติก่อน จึงจะมีผล
+//   • ทุกครั้งที่เปลี่ยน สำนักงานใหญ่ต้องรู้ (แจ้งเตือน + บันทึกการใช้งาน)
+//     และเปิดดูรหัสที่ตัวแทนตั้งเองได้เหมือนรหัสที่ HQ ตั้งให้
+export type AccountChangeKind = "email" | "password" | "both";
+
+export type AccountRequest = {
+  id: string;
+  dealerCode: string;
+  dealerName?: string;
+  kind: AccountChangeKind;
+  /** อีเมลใหม่ที่ขอเปลี่ยน (ถ้าขอเปลี่ยนอีเมล) — รหัสผ่านไม่ส่งมาที่หน้าจอ */
+  newEmail?: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  reason?: string;
+};
+
+export type AccountState = {
+  email: string;
+  /** ใช้สิทธิ์แก้เองไปกี่ครั้งแล้ว · เพดานกี่ครั้ง (ปกติ 2) */
+  selfChangesUsed: number;
+  selfChangesLimit: number;
+  /** คำขอที่ยังรอสำนักงานใหญ่อนุมัติ (มีได้ทีละใบ) */
+  pending: AccountRequest | null;
+};
+
+/** ผลของการกดบันทึก — applied = มีผลทันที · pending = ส่งคำขอรออนุมัติแล้ว */
+export type AccountChangeResult = { applied: boolean; pending: boolean; message: string };
+
+export interface AccountRepo {
+  /** สถานะบัญชีของสาขา (อีเมลปัจจุบัน · โควตาที่เหลือ · คำขอที่ค้าง) */
+  state(dealerCode: string): Promise<AccountState>;
+  /** ตัวแทนขอเปลี่ยนอีเมล/รหัสผ่านของตัวเอง — ต้องยืนยันรหัสผ่านปัจจุบันเสมอ */
+  change(input: {
+    dealerCode: string;
+    currentPassword: string;
+    email?: string;
+    password?: string;
+  }): Promise<AccountChangeResult>;
+  /** ฝั่งสำนักงานใหญ่: รายการคำขอ (ใหม่→เก่า) */
+  listRequests(): Promise<AccountRequest[]>;
+  /** ฝั่งสำนักงานใหญ่: อนุมัติ/ปฏิเสธคำขอ — อนุมัติแล้วระบบเปลี่ยนให้ทันที */
+  decide(id: string, action: "approve" | "reject", reason?: string): Promise<void>;
+}
+
 export interface AuditRepo {
   /** อ่านบันทึกล่าสุดสูงสุด `limit` รายการ (ใหม่→เก่า) — audit_log โตไม่จำกัด จึงมีเพดานอ่านเสมอ (M8)
    *  ไม่ส่ง limit = ใช้ค่า default ของ adapter · หน้า /hq/audit แจ้งเมื่อชนเพดาน (ไม่ตัดเงียบ) */
@@ -489,6 +540,7 @@ export interface DataAdapter {
   notes: NotesRepo;
   users: UsersRepo;
   audit: AuditRepo;
+  account: AccountRepo;
   metrics: MetricsRepo;
   leads: LeadsRepo;
   quotations: QuotationsRepo;
