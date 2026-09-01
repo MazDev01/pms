@@ -171,3 +171,33 @@ export async function findDealerAccount(
   }
   return { ok: true, id: String(data[0].id) };
 }
+
+// ── อีเมลนี้มีคนใช้อยู่แล้วไหม (ถามระบบยืนยันตัวตนตรง ๆ) ─────────────────────────
+//
+// ทำไมต้องถามก่อน แทนที่จะยิงเปลี่ยนแล้วค่อยอ่าน error:
+//   ตอนอีเมลซ้ำ ระบบยืนยันตัวตนตอบกลับมาเป็น 500 พร้อมเนื้อความว่าง "{}" (วัดจริง 1 ก.ย. 69)
+//   โค้ดเดิมจับคำว่า already/registered/exists จากข้อความ จึงจับไม่ได้เลย แล้วตกไปทาง
+//   "ไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง" ซึ่งผิดความจริง: ลองอีกกี่ครั้งก็ไม่มีวันสำเร็จ
+//   ผู้ใช้ไม่มีทางรู้ว่าต้องเปลี่ยนไปใช้อีเมลอื่น
+//
+// ใช้ปลายทาง /auth/v1/admin/users?filter= ซึ่งค้นด้วยอีเมลได้ตรง ๆ (ต้องใช้ service_role)
+// คืน null = ตรวจไม่ได้ (เน็ต/สิทธิ์มีปัญหา) → ผู้เรียกควรเดินหน้าต่อตามเดิม ไม่ใช่บล็อกงาน
+export async function อีเมลถูกใช้แล้ว(
+  url: string, serviceKey: string, email: string, ยกเว้นบัญชี?: string,
+): Promise<boolean | null> {
+  const e = email.trim().toLowerCase();
+  if (!url || !serviceKey || !e) return null;
+  try {
+    const res = await fetch(`${url}/auth/v1/admin/users?page=1&per_page=50&filter=${encodeURIComponent(e)}`, {
+      headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}` },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { users?: { id?: string; email?: string }[] };
+    if (!Array.isArray(body.users)) return null;
+    // filter เป็นการค้นแบบ "มีคำนี้อยู่" → ต้องเทียบอีเมลเต็มเองอีกชั้น ไม่งั้นชื่อที่คล้ายกันจะถูกนับว่าซ้ำ
+    return body.users.some(u => String(u.email ?? "").toLowerCase() === e && u.id !== ยกเว้นบัญชี);
+  } catch (err) {
+    console.warn("[adminRoute] ตรวจอีเมลซ้ำไม่สำเร็จ — ปล่อยผ่าน", err);
+    return null;
+  }
+}

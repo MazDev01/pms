@@ -512,14 +512,14 @@ export default function FilesPage() {
         {/* ตัวเลือก "ทุกประเภท" เอาออกตามที่บอสสั่ง */}
         {/* โฟลเดอร์ + แถบแยก "ไฟล์นี้ของใคร" (ผู้อัปโหลด · ที่มา · โอกาสการขาย) — FilterSelect มาตรฐานเดียวกับหน้าอื่น */}
         {/* ความกว้าง = พอดีข้อความในช่อง (minWidth 0) — ก่อนหน้านี้ตั้ง 130–150 ทำให้ช่องยาวเกินคำว่างเป็นแถบ */}
-        <FilterSelect caption="ทุกโฟลเดอร์" value={catFilter} onChange={v => setCat(v as FileCategory | "ALL")}
+        <FilterSelect caption="ทุกโฟลเดอร์" label="กรองตามโฟลเดอร์" value={catFilter} onChange={v => setCat(v as FileCategory | "ALL")}
           options={ALL_CATS.filter(c => catCounts[c] > 0).map(c => ({ v: c, l: `${c} (${catCounts[c]})` }))} minWidth={0} />
-        <FilterSelect caption="ทุกที่มา" value={sourceFilter} onChange={setSource}
+        <FilterSelect caption="ทุกที่มา" label="กรองตามที่มาของไฟล์" value={sourceFilter} onChange={setSource}
           options={sourceOptions.map(sv => ({ v: sv, l: SOURCE_LABEL[sv] }))} minWidth={0} />
         {/* ชื่อบริษัทยาวกว่าช่องอื่นมาก — จำกัดความกว้างไว้ ไม่งั้นแถบเครื่องมือตกบรรทัดที่จอ 1440 */}
-        <FilterSelect caption="ทุกลูกค้า" value={custFilter} onChange={setCust}
+        <FilterSelect caption="ทุกลูกค้า" label="กรองตามลูกค้า" value={custFilter} onChange={setCust}
           options={custOptions} minWidth={0} maxWidth={150} />
-        <FilterSelect caption="ทุกโอกาสการขาย" value={projFilter} onChange={setProj}
+        <FilterSelect caption="ทุกโอกาสการขาย" label="กรองตามโอกาสการขาย" value={projFilter} onChange={setProj}
           options={projOptions.map(pj => ({ v: pj, l: pj }))} minWidth={0} maxWidth={150} />
         {(sourceFilter !== "ALL" || projFilter !== "ALL" || catFilter !== "ALL" || custFilter !== "ALL" || !!query) && (
           <button onClick={() => { setQuery(""); setCat("ALL"); setSource("ALL"); setProj("ALL"); setCust("ALL"); }}

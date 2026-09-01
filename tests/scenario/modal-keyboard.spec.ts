@@ -62,17 +62,21 @@ test("[a11y] ฟอร์มข้อมูลตัวแทน (HQ) — Esc �
   await expect(dialog, "กด Escape ต้องปิดฟอร์มได้").toBeHidden({ timeout: 10_000 });
 });
 
-test("[a11y] หน้าต่างดูตัวอย่างไฟล์ (ตัวแทน) — Esc ปิดได้", async ({ page }) => {
+// ⚠️ ของที่ตรวจเปลี่ยนไปแล้ว (บอสสั่ง 28 ส.ค. 69): หน้าต่าง "ดูตัวอย่างไฟล์" ถูกเอาออกทั้งอัน
+//    ตอนนี้กดปุ่ม "เปิดอ่าน" แล้วไฟล์เปิดในแท็บใหม่ด้วยตัวอ่านของเบราว์เซอร์เอง — ไม่มีหน้าต่างในระบบให้ปิด
+//    กติกาที่ต้องกันไว้เหมือนเดิมคือ "หน้าต่างของหน้าไฟล์ต้องปิดด้วย Esc ได้" จึงย้ายมาตรวจที่หน้าต่างแก้ไขไฟล์
+//    (เทสต์เปลี่ยนตามข้อกำหนดใหม่ ไม่ใช่แก้เพื่อให้ผ่าน)
+test("[a11y] หน้าต่างแก้ไขไฟล์ (ตัวแทน) — Esc ปิดได้", async ({ page }) => {
   await open(page, "dealer", "/files");
-  // ปุ่มรูปตาถูกเอาออกแล้ว (28 ส.ค. 69) — เปิดตัวอย่างด้วยการกดที่แถวไฟล์แทน
-  const row = page.locator('tr[aria-label^="เปิดรายละเอียดไฟล์"]').first();
-  await expect(row, "หน้าไฟล์ต้องมีไฟล์ให้เปิดดูอย่างน้อย 1 รายการ").toBeVisible({ timeout: 15_000 });
-  await row.click();
+  const editBtn = page.getByRole("button", { name: "แก้ไข" }).first();
+  await expect(editBtn, "หน้าไฟล์ต้องมีไฟล์อย่างน้อย 1 รายการ").toBeVisible({ timeout: 15_000 });
+  await editBtn.click();
 
-  const dialog = page.getByRole("dialog", { name: "ดูตัวอย่างไฟล์" });
+  const dialog = page.getByRole("dialog", { name: "แก้ไขข้อมูลไฟล์" });
   await expect(dialog).toBeVisible({ timeout: 15_000 });
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
   await page.keyboard.press("Escape");
-  await expect(dialog, "กด Escape ต้องปิดหน้าต่างดูไฟล์ได้").toBeHidden({ timeout: 10_000 });
+  await expect(dialog, "กด Escape ต้องปิดหน้าต่างแก้ไขไฟล์ได้").toBeHidden({ timeout: 10_000 });
 });
 
 test("[a11y] หัวคอลัมน์เรียงลำดับ — กดด้วยคีย์บอร์ดได้ และบอกทิศทางการเรียง", async ({ page }) => {

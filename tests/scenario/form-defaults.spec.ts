@@ -28,7 +28,9 @@ test("[ui·dealer] ฟอร์มอัปโหลดไฟล์: โฟล�
   await openAs(page, RYG, "dealer", "/files");
   await settle(page);
   await page.getByRole("button", { name: "อัปโหลดไฟล์" }).first().click();
-  const ช่อง = page.getByLabel("โฟลเดอร์").first();
+  // ต้องเจาะจงในหน้าต่างอัปโหลด — แถบเครื่องมือของหน้ามีตัวกรอง "กรองตามโฟลเดอร์" อยู่ด้วย
+  // (ชื่อมีคำว่า "โฟลเดอร์" เหมือนกัน) ถ้าไม่เจาะจง จะไปจับตัวกรองแล้วอ่านค่าได้ "ALL"
+  const ช่อง = page.getByRole("dialog", { name: "อัปโหลดไฟล์" }).getByLabel("โฟลเดอร์").first();
   await expect(ช่อง).toBeVisible({ timeout: 20_000 });
   await expect(ช่อง, 'ต้องขึ้น "— ยังไม่ระบุ —" ไม่ใช่เลือก "อื่นๆ" ไว้ให้แล้ว').toHaveValue("");
 });

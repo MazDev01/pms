@@ -8,10 +8,14 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
-import { bad, authorizeAdmin, auditLog, withErrors, findDealerAccount } from "@pms/shared/lib/adminRoute";
+import { bad, authorizeAdmin, auditLog, withErrors, findDealerAccount, อีเมลถูกใช้แล้ว } from "@pms/shared/lib/adminRoute";
 import { decryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 export const runtime = "nodejs";
+
+// ใช้ตรวจ "อีเมลซ้ำ" กับระบบยืนยันตัวตนโดยตรง (ดู อีเมลถูกใช้แล้ว ใน adminRoute.ts)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 const DENY = "ไม่มีสิทธิ์จัดการคำขอเปลี่ยนบัญชีของตัวแทน";
 const NOT_CONFIGURED = "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์ (SUPABASE_SERVICE_ROLE_KEY) — จัดการคำขอจากที่นี่ยังไม่ได้";
@@ -95,6 +99,10 @@ export const PATCH = withErrors("decide-account-request", async (req: NextReques
       if (!รหัสใหม่) return bad(500, "ถอดรหัสคำขอไม่สำเร็จ — ให้ตัวแทนส่งคำขอใหม่");
     }
 
+    // อีเมลซ้ำ = คำขอนี้อนุมัติไม่ได้ ต้องบอกให้ชัด (ระบบยืนยันตัวตนตอบ 500 เนื้อความว่าง จับจากข้อความไม่ได้)
+    if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, found.id)) === true) {
+      return bad(400, `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบ — ให้ตัวแทนส่งคำขอใหม่ด้วยอีเมลอื่น`);
+    }
     const { error: upErr } = await admin.auth.admin.updateUserById(found.id, {
       ...(รหัสใหม่ ? { password: รหัสใหม่ } : {}),
       ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),

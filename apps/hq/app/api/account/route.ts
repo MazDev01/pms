@@ -15,7 +15,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
-import { auditLog, withErrors } from "@pms/shared/lib/adminRoute";
+import { auditLog, withErrors, อีเมลถูกใช้แล้ว } from "@pms/shared/lib/adminRoute";
 import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 export const runtime = "nodejs";
@@ -188,6 +188,11 @@ export const POST = withErrors("dealer-account-change", async (req: NextRequest)
   }
 
   // ── ยังมีโควตา → เปลี่ยนให้ทันที ──
+  // ถามก่อนว่าอีเมลใหม่มีคนใช้อยู่ไหม — ระบบยืนยันตัวตนตอบกรณีนี้เป็น 500 เนื้อความว่าง
+  // ถ้าไม่ถามก่อน ผู้ใช้จะได้ข้อความ "ลองใหม่อีกครั้ง" ซึ่งลองกี่ครั้งก็ไม่สำเร็จ (ดู adminRoute.ts)
+  if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, userId)) === true) {
+    return json(req, { error: `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบ — กรุณาใช้อีเมลอื่น` }, 400);
+  }
   const { error: upErr } = await admin.auth.admin.updateUserById(userId, {
     ...(รหัสใหม่ ? { password: รหัสใหม่ } : {}),
     ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),

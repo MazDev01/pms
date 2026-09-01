@@ -17,11 +17,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import {
   bad, authorizeAdmin, auditLog, withErrors, strongPassword, findDealerAccount, deleteAuthUserLoud,
+  อีเมลถูกใช้แล้ว,
 } from "@pms/shared/lib/adminRoute";
 import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
+
+// ใช้ตรวจ "อีเมลซ้ำ" กับระบบยืนยันตัวตนโดยตรง (ดู อีเมลถูกใช้แล้ว ใน adminRoute.ts)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 const DEALER_EMAIL_DOMAIN = "partner-agent.co.th";
 
@@ -196,6 +201,10 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   const แก้อีเมลอย่างเดียว = !!อีเมลใหม่ && !รหัสที่กรอก;
   const password = แก้อีเมลอย่างเดียว ? "" : (รหัสที่กรอก || strongPassword("PEB-"));
 
+  // ถามระบบยืนยันตัวตนก่อนว่าอีเมลใหม่ว่างไหม — กรณีซ้ำมันตอบ 500 เนื้อความว่าง จับจากข้อความไม่ได้
+  if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, found.id)) === true) {
+    return bad(400, `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบยืนยันตัวตน — ใช้อีเมลอื่น`);
+  }
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, {
     ...(password ? { password } : {}),
     ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),

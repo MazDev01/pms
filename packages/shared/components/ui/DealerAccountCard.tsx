@@ -17,6 +17,8 @@ import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight } from "lucide-r
 import { account } from "@pms/shared/lib/data";
 import type { AccountState } from "@pms/shared/lib/data/ports";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { sbSignOutLocal } from "@pms/shared/lib/supabaseAuth";
 import { fmtISOToThai } from "@pms/shared/lib/mock";
 
 const กล่อง: React.CSSProperties = {
@@ -198,8 +200,35 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
     setBusy("password");
     try {
       const r = await account.change({ dealerCode, currentPassword: pwCurrent, password: pw });
-      setMsgPw({ ok: true, text: r.message });
       setPw(""); setPw2(""); setPwCurrent("");
+      // ── เปลี่ยนรหัสผ่านสำเร็จ = ใบผ่านเดิมถูกยกเลิกทันที (ระบบยืนยันตัวตนทำให้เอง) ──
+      //
+      // ถ้าอยู่หน้าเดิมต่อ จะกลายเป็น "ล็อกอินค้างแบบผี": หน้าจอยังเหมือนเข้าระบบอยู่
+      //   เดินไปหน้าอื่นได้ แต่ทุกคำขอข้อมูลถูกปฏิเสธ 401 เงียบ ๆ ตารางจึงว่างโดยไม่มีคำอธิบาย
+      //   (พิสูจน์ด้วยเบราว์เซอร์จริง 1 ก.ย. 69 — กดบันทึกแล้วหน้าขึ้น 401 ทันทีในคอนโซล)
+      // จึงต้องพาไปเข้าสู่ระบบใหม่ด้วยรหัสใหม่ · เฉพาะตอนที่ "มีผลแล้วจริง"
+      //   ถ้าเป็นแค่คำขอรออนุมัติ (ครั้งที่ 3 เป็นต้นไป) รหัสยังไม่เปลี่ยน ใบผ่านเดิมยังใช้ได้ตามปกติ
+      // (โหมดข้อมูลตัวอย่างไม่มีระบบยืนยันตัวตนจริง จึงไม่ต้องเด้งออก)
+      if (r.applied && REAL_BACKEND) {
+        setMsgPw({ ok: true, text: `${r.message} — กำลังพาไปเข้าสู่ระบบใหม่ด้วยรหัสผ่านใหม่` });
+        setTimeout(() => {
+          // ต้องเป็น "ล้างในเครื่อง" — ใบผ่านถูกยกเลิกไปแล้ว สั่งออกที่เซิร์ฟเวอร์จะได้ 403
+          //   แล้วของในเครื่องไม่ถูกล้าง ผู้ใช้กดย้อนกลับเข้าหน้าเดิมได้ทั้งที่ใช้งานจริงไม่ได้
+          // แล้วลบใบผ่านที่ค้างในเครื่องด้วยมืออีกชั้น: วัดจริงแล้วพบว่าหลังเปลี่ยนรหัส
+          //   ตัวต่ออายุใบผ่านอัตโนมัติของไลบรารียังทำงานอยู่และเขียนคีย์กลับลงมาใหม่
+          //   ถ้าเหลือคีย์ไว้ หน้าถัดไปจะเข้าใจว่ายังล็อกอินอยู่ แล้วกลายเป็นล็อกอินค้างแบบผีเหมือนเดิม
+          void sbSignOutLocal().finally(() => {
+            try {
+              Object.keys(localStorage)
+                .filter(k => k.startsWith("sb-") && k.endsWith("-auth-token"))
+                .forEach(k => localStorage.removeItem(k));
+            } catch { /* เบราว์เซอร์ปิด storage — ยังไงก็ต้องพาไปหน้าเข้าสู่ระบบ */ }
+            window.location.href = "/login";
+          });
+        }, 1800);
+        return;
+      }
+      setMsgPw({ ok: true, text: r.message });
       โหลด();
     } catch (e) { setMsgPw({ ok: false, text: friendlyError(e) }); }
     finally { setBusy(""); }
