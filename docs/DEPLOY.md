@@ -143,3 +143,49 @@ curl https://<ที่อยู่ตัวแทน>/api/health
   ยังไม่ตั้ง = ระบบล่มแล้วจะรู้ตัวก็ต่อเมื่อผู้ใช้โทรมาแจ้ง (`npm run preflight` เตือนข้อนี้ให้)
 - ~~แผนสำรองข้อมูล/ทดลองกู้คืน~~ — **ทำแล้ว** ดู [BACKUP.md](BACKUP.md)
   (สำรองอัตโนมัติตามเวลา และเก็บไฟล์ไว้นอกเครื่อง ยังต้องตัดสินใจ)
+
+---
+
+## เว็บจริงตอนนี้อัปขึ้นอย่างไร (ปรับปรุง 1 ก.ย. 69)
+
+| ที่อยู่ | โปรเจกต์บน Vercel | โฟลเดอร์ที่ build |
+|---|---|---|
+| https://benjamin-hq.vercel.app | `benjamin-hq` | `apps/hq` |
+| https://benjamin-dealer.vercel.app | `benjamin-dealer` | `apps/dealer` |
+
+**`git push` ไม่ได้ทำให้เว็บจริงเปลี่ยน** — สองเส้นทางนี้แยกกัน:
+
+```
+เครื่องพัฒนา ──push──────────> GitHub (MazDev01/pms · branch monorepo)   ← เก็บโค้ด/ประวัติ
+            └──vercel deploy──> Vercel ──> เว็บจริง                       ← ตัวที่ทำให้เว็บเปลี่ยน
+```
+
+คำสั่งอัปขึ้นเว็บจริง (ทำทีละแอป · สั่งจาก **รากโปรเจกต์** เท่านั้น ไม่ใช่ในโฟลเดอร์แอป):
+
+```bash
+npx vercel link --project benjamin-hq --yes && rm -f .env.local
+npx vercel deploy --prod --yes
+
+npx vercel link --project benjamin-dealer --yes && rm -f .env.local
+npx vercel deploy --prod --yes
+```
+
+⚠️ `vercel link` จะสร้าง `.env.local` ที่รากโปรเจกต์ทิ้งไว้ — ลบทุกครั้ง ไม่งั้นค่าที่ดึงมาจะไปทับ
+ค่าของแอปตอนรันในเครื่อง
+
+**ค่าที่ต้องมีบนเว็บจริง** (ตั้งที่ Vercel → Project → Settings → Environment Variables):
+
+| แอป | ตัวแปร | ค่า | ไม่ตั้งแล้วเกิดอะไร |
+|---|---|---|---|
+| ตัวแทน | `NEXT_PUBLIC_HQ_ORIGIN` | ที่อยู่แอปสำนักงานใหญ่ | หน้าบัญชีขึ้น "ยังไม่ได้ตั้งค่า…" เปลี่ยนอีเมล/รหัสผ่านไม่ได้ |
+| สำนักงานใหญ่ | `DEALER_APP_ORIGIN` | ที่อยู่แอปตัวแทน | คำขอจากแอปตัวแทนถูกปฏิเสธข้ามต้นทาง (CORS) |
+
+**ถ้าอยากให้ push แล้วขึ้นเว็บเอง** ต้องเชื่อมโปรเจกต์กับ GitHub ก่อน (ทำทีละโปรเจกต์):
+
+```bash
+npx vercel link --project benjamin-hq --yes
+npx vercel git connect https://github.com/MazDev01/pms
+```
+
+เชื่อมแล้วต้องตั้ง **Production Branch = `monorepo`** ที่ Settings → Git ด้วย
+(ค่าเริ่มต้นคือ `main` ซึ่งเราไม่ได้ใช้ — ถ้าไม่ตั้ง จะได้แค่ Preview ไม่ขึ้นเว็บจริง)
