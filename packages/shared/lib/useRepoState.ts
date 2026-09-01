@@ -122,7 +122,6 @@ export function useRepoValue<T>(load: () => Promise<T>, initial: T): T {
 export function useRepoValueLoaded<T>(load: () => Promise<T>, initial: T): { value: T; loaded: boolean } {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
   const ready = useAuthReady();
   useEffect(() => {
     if (!ready) return;
