@@ -9,8 +9,8 @@
 //        exit 0 = ข้าม ไม่ต้อง build     exit 1 = build ต่อได้
 //
 // ด่านนี้ตั้งใจให้ "ทำงานได้แม้ยังไม่ได้ติดตั้ง dependency" เพราะ Vercel อาจเรียกก่อน install
-//   จึงใช้เฉพาะสคริปต์ตรวจของเราเองที่เขียนด้วย Node ล้วน (npm run checks) ไม่พึ่งไลบรารีใด
-//   ถ้าบังเอิญมี node_modules อยู่แล้ว จะตรวจชนิดข้อมูล (typecheck) เพิ่มให้อีกชั้น
+//   บนเซิร์ฟเวอร์จึงตรวจแค่สองอย่างที่ตรวจได้จริง: ป้ายกำกับในข้อความคอมมิต และไฟล์ที่เปลี่ยน
+//   ส่วนคุณภาพโค้ด (typecheck/เทสต์/ชุดกันพลาด) มี GitHub Actions ตรวจทุก push อยู่แล้ว
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -30,23 +30,38 @@ if (/\[(skip deploy|wip|ยังไม่เสร็จ)\]/i.test(ข้อค
   ข้าม("คอมมิตนี้ระบุว่ายังไม่พร้อมขึ้นเว็บจริง ([skip deploy] / [wip])");
 }
 
-// 2) ชุดกันพลาดของเราเอง (npm run checks) — กฎที่เคยพลาดจริงมาแล้วทั้งนั้น
-//    เช่น ตารางเรียงลำดับไม่คงที่ · ช่องเลือกไม่เริ่มที่ "ยังไม่ระบุ" · ช่องรหัสผ่านไม่กันช่องว่าง
+// 2) เปลี่ยนแค่เอกสาร/ชุดทดสอบ = ไม่มีอะไรบนเว็บเปลี่ยน ไม่ต้อง build ให้เปลืองเวลา
 try {
-  execSync("npm run checks", { cwd: ราก, stdio: "inherit" });
-} catch {
-  ข้าม("ชุดกันพลาด (npm run checks) ไม่ผ่าน — แก้ให้ผ่านก่อนแล้ว push ใหม่");
-}
+  const ไฟล์ที่เปลี่ยน = execSync("git diff --name-only HEAD^ HEAD", { cwd: ราก, encoding: "utf8" })
+    .split(/?
+/).map(x => x.trim()).filter(Boolean);
+  if (ไฟล์ที่เปลี่ยน.length && ไฟล์ที่เปลี่ยน.every(f => /^(docs\/|tests\/|README|\.github\/)/.test(f))) {
+    ข้าม(`คอมมิตนี้แตะแต่เอกสาร/ชุดทดสอบ (${ไฟล์ที่เปลี่ยน.length} ไฟล์) เว็บจริงไม่มีอะไรเปลี่ยน`);
+  }
+} catch { /* ดูประวัติไม่ได้ (clone ตื้น) — ไม่ถือว่าไม่ผ่าน */ }
 
-// 3) ถ้ามี dependency อยู่แล้ว ตรวจชนิดข้อมูลเพิ่ม (ไม่มีก็ข้ามขั้นนี้ ไม่ถือว่าไม่ผ่าน)
-if (existsSync(path.join(ราก, "node_modules", "typescript"))) {
+// 3) ชุดกันพลาดของเราเอง — รันได้เฉพาะบนเครื่องที่มีโปรเจกต์ครบ
+//    ⚠️ บนเซิร์ฟเวอร์ Vercel ไฟล์ tests/ กับ docs/ ถูกกันไม่ให้อัพขึ้นไป (ดู .vercelignore)
+//       ตัวตรวจบางตัวอ่านโฟลเดอร์พวกนั้น ถ้าฝืนรันจะล้มเพราะ "ไม่มีไฟล์" แล้วบล็อกทุก deploy
+//       (เจอจริง 1 ก.ย. 69 — ทุก push ถูกข้ามหมดโดยไม่มีอะไรผิดจริง)
+//    คุณภาพของโค้ดถูกตรวจครบอยู่แล้วที่ GitHub Actions (.github/workflows/ci.yml):
+//       typecheck + เทสต์ย่อย + ชุดกันพลาด ทุก push
+//    และถ้าโค้ดคอมไพล์ไม่ผ่าน Vercel เองจะ build ไม่สำเร็จ ของเก่าบนเว็บจริงยังอยู่เหมือนเดิม
+if (existsSync(path.join(ราก, "tests", "scenario"))) {
   try {
-    execSync("npm run typecheck", { cwd: ราก, stdio: "inherit" });
+    execSync("npm run checks", { cwd: ราก, stdio: "inherit" });
   } catch {
-    ข้าม("typecheck ไม่ผ่าน — โค้ดยังมีที่ผิดชนิดข้อมูล");
+    ข้าม("ชุดกันพลาด (npm run checks) ไม่ผ่าน — แก้ให้ผ่านก่อนแล้ว push ใหม่");
+  }
+  if (existsSync(path.join(ราก, "node_modules", "typescript"))) {
+    try {
+      execSync("npm run typecheck", { cwd: ราก, stdio: "inherit" });
+    } catch {
+      ข้าม("typecheck ไม่ผ่าน — โค้ดยังมีที่ผิดชนิดข้อมูล");
+    }
   }
 } else {
-  console.log("(ยังไม่ได้ติดตั้ง dependency ตอนนี้ — ข้ามการตรวจชนิดข้อมูล ตรวจเฉพาะชุดกันพลาด)");
+  console.log("(ไม่มีโฟลเดอร์ tests/ ที่นี่ = กำลังรันบนเซิร์ฟเวอร์ build — ข้ามชุดกันพลาด ให้ GitHub Actions ตรวจแทน)");
 }
 
 ไปต่อ("ผ่านด่านตรวจครบ");
