@@ -33,8 +33,7 @@ if (/\[(skip deploy|wip|ยังไม่เสร็จ)\]/i.test(ข้อค
 // 2) เปลี่ยนแค่เอกสาร/ชุดทดสอบ = ไม่มีอะไรบนเว็บเปลี่ยน ไม่ต้อง build ให้เปลืองเวลา
 try {
   const ไฟล์ที่เปลี่ยน = execSync("git diff --name-only HEAD^ HEAD", { cwd: ราก, encoding: "utf8" })
-    .split(/?
-/).map(x => x.trim()).filter(Boolean);
+    .split(String.fromCharCode(10)).map(x => x.trim()).filter(Boolean);
   if (ไฟล์ที่เปลี่ยน.length && ไฟล์ที่เปลี่ยน.every(f => /^(docs\/|tests\/|README|\.github\/)/.test(f))) {
     ข้าม(`คอมมิตนี้แตะแต่เอกสาร/ชุดทดสอบ (${ไฟล์ที่เปลี่ยน.length} ไฟล์) เว็บจริงไม่มีอะไรเปลี่ยน`);
   }
