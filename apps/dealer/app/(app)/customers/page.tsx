@@ -11,7 +11,7 @@ import {
   type QuotationMock, type QuoteLineItem, type LeadRow,
   type CustomerRow, type DealerFile, type LeadStatus,
   type AppointmentMock,
-  type LeadActivity,
+  type LeadActivity, type CustomerStatus,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { อ่านตารางจากไฟล์, จับคู่ตามหัวตาราง, แปลงวันที่นำเข้า, นามสกุลที่รับได้ } from "@pms/shared/lib/importSheet";
@@ -553,7 +553,12 @@ export default function CustomersPage(){
   const [importErr, setImportErr]     = useState("");
   const [importFile, setImportFile]   = useState("");   // ชื่อไฟล์ที่เลือก — ให้ผู้ใช้เห็นว่ากำลังดูไฟล์ไหน
   const [showManual, setShowManual]   = useState(false);
-  const [legacyForm, setLegacyForm]   = useState({company:"",name:"",phone:"",email:"",address:"",province:"กรุงเทพฯ",category:"",joinDate:"",owner:"สมชาย เชียงใหม่"});
+  // ⚠️ ช่องในฟอร์มนี้ต้องครบเท่ากับ "ข้อมูลที่ลูกค้าหนึ่งรายมี" (บอสสั่ง 1 ก.ย. 69)
+  //    ที่เหลือของ CustomerRow เป็นค่าที่ระบบคิดเอง: จำนวนงานขาย/มูลค่ารวมมาจากดีลจริง
+  //    ตัวย่อ/สีการ์ดมาจากชื่อบริษัท — กรอกเองไม่ได้และไม่ควรให้กรอก
+  const legacyเปล่า = {company:"",name:"",phone:"",email:"",address:"",province:"กรุงเทพฯ",category:"",joinDate:"",owner:"สมชาย เชียงใหม่",status:"" as CustomerStatus | "",logo:""};
+  const [legacyForm, setLegacyForm]   = useState(legacyเปล่า);
+  const legacyLogoRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
   // กันกดบันทึกซ้ำ (H8 · guard synchronous) — เดิม createLegacy() ไม่มี guard เลย กดรัว ๆ เร็วกว่า React
   // จะปิดโมดัล/re-render ทัน สร้างลูกค้าซ้ำหลายแถวได้จริง (แพทเทิร์นเดียวกับที่พบในฟอร์มเพิ่มลูกค้าเป้าหมาย — Edge Case, 3 ส.ค. 69)
@@ -798,12 +803,14 @@ export default function CustomersPage(){
     try {
       const base=Math.max(0,...data.map(c=>c.id)); // seed สีเท่านั้น — id จริงจาก counter
       await warnBeforeUnloadDuring(() =>
-        ctxAddCustomer(makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,
+        ctxAddCustomer({...makeImported({company:legacyForm.company.trim(),name:legacyForm.name.trim(),phone:legacyForm.phone,
           email:legacyForm.email,address:legacyForm.address.trim(),province:legacyForm.province,category:legacyForm.category,
-          joinDate:legacyForm.joinDate,owner:legacyForm.owner}, base+1))
+          joinDate:legacyForm.joinDate,owner:legacyForm.owner}, base+1),
+          // สองช่องนี้มีเฉพาะตอนคีย์เอง (ไฟล์นำเข้าไม่มีคอลัมน์รูป/สถานะ)
+          status:legacyForm.status || "active", ...(legacyForm.logo ? {logo:legacyForm.logo} : {})})
       );
       setShowManual(false);
-      setLegacyForm({company:"",name:"",phone:"",email:"",address:"",province:"กรุงเทพฯ",category:"",joinDate:"",owner:"สมชาย เชียงใหม่"});
+      setLegacyForm(legacyเปล่า);
     } catch(e){ alert("เพิ่มลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
     finally { savingLegacyRef.current = false; }
   }
@@ -1744,6 +1751,39 @@ export default function CustomersPage(){
                     onChange={e=>setLegacyForm(f=>({...f,joinDate:e.target.value}))} /></div>
                 <div><label className="form-label">ผู้รับผิดชอบ</label>
                   <PersonPicker value={legacyForm.owner} onChange={v=>setLegacyForm(f=>({...f,owner:v}))} /></div>
+                {/* สถานะ + โลโก้ = อีกสองช่องที่การ์ดลูกค้ามี (บอสสั่ง 1 ก.ย. 69 ให้กรอกได้ครบตั้งแต่ตอนคีย์)
+                    เดิมคีย์เองแล้วได้ "ใช้งาน" เสมอและไม่มีรูป ต้องไปแก้ทีหลังทุกราย */}
+                <div><label className="form-label">สถานะ</label>
+                  {/* ต้องเริ่มที่ "ยังไม่ระบุ" เหมือนช่องเลือกอื่นทั้งระบบ — ไม่งั้นหน้าจอโชว์คำตอบให้แล้ว
+                      ทั้งที่ผู้ใช้ยังไม่ได้เลือก · ไม่เลือก = ลงเป็น "ใช้งาน" ตอนบันทึก (ลูกค้าที่เพิ่งคีย์เข้ามา) */}
+                  <select aria-label="สถานะ" className="form-select" value={legacyForm.status}
+                    onChange={e=>setLegacyForm(f=>({...f,status:e.target.value as CustomerStatus | ""}))}>
+                    <option value="">— ยังไม่ระบุ —</option>
+                    <option value="active">ใช้งาน</option>
+                    <option value="inactive">พักงาน</option>
+                  </select></div>
+                <div><label className="form-label">โลโก้ / รูปลูกค้า</label>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:30,height:30,borderRadius:8,flexShrink:0,overflow:"hidden",background:legacyForm.logo?"#fff":"#f8fafc",
+                      border:`1px ${legacyForm.logo?"solid":"dashed"} ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      {legacyForm.logo
+                        ? <img src={legacyForm.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                        : <User size={13} color="#9ca3af" />}
+                    </span>
+                    <input ref={legacyLogoRef} type="file" accept="image/*" aria-label="อัปโหลดโลโก้ลูกค้า" style={{display:"none"}}
+                      onChange={async e=>{
+                        const file=e.target.files?.[0]; e.target.value="";
+                        if(!file) return;
+                        try{
+                          const รูป=await fileToResizedDataURL(file,256);  // ย่อก่อนเก็บ กัน quota เต็ม
+                          setLegacyForm(f=>({...f,logo:รูป}));
+                        } catch(err){ alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
+                      }} />
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>legacyLogoRef.current?.click()}>เลือกรูป</button>
+                    {legacyForm.logo && (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setLegacyForm(f=>({...f,logo:""}))}>ลบรูป</button>
+                    )}
+                  </div></div>
 
                 <div className="form-section">ผู้ติดต่อ</div>
                 <div><label className="form-label">ผู้ติดต่อ</label>

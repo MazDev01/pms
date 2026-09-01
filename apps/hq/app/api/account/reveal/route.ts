@@ -73,15 +73,33 @@ export const POST = withErrors("dealer-reveal-password", async (req: NextRequest
 
   // ── 2) ยืนยันเลข แล้วคืนรหัสผ่าน ──
   if (op === "verify") {
-    const code = String(body?.code ?? "").replace(/\D/g, "");
-    if (code.length < 6) return dealerJson(req, { error: "กรอกเลขยืนยัน 6 หลักที่ได้จากอีเมล" }, 400);
+    const ที่กรอก = String(body?.code ?? "").trim();
+    const เลข = ที่กรอก.replace(/\D/g, "");
+    // ── รับได้ทั้ง "เลข 6 หลัก" และ "ลิงก์ที่ก๊อปมาจากอีเมล" ────────────────────────
+    //
+    // อีเมลของผู้ให้บริการ (แม่แบบ Magic Link มาตรฐาน) มีแต่ลิงก์ ไม่มีเลข 6 หลัก
+    //   จนกว่าจะแก้แม่แบบให้ใส่ {{ .Token }} เข้าไป (ทำที่หน้าจัดการโปรเจกต์)
+    // ถ้ารับแต่เลข = ผู้ใช้เปิดอีเมลแล้วไม่เจอเลข แล้วไปต่อไม่ได้เลย (บอสเจอจริง 1 ก.ย. 69)
+    //   จึงรับลิงก์ด้วย — ดึงค่า token ในลิงก์มาใช้ยืนยันแทน ได้ผลเหมือนกัน
+    const ลิงก์ = /^https?:\/\//i.test(ที่กรอก) || ที่กรอก.includes("token=");
+    if (!ลิงก์ && เลข.length < 6) {
+      return dealerJson(req, { error: "กรอกเลขยืนยัน 6 หลัก หรือวางลิงก์ที่ได้จากอีเมล" }, 400);
+    }
     // กันเดาเลขทีละหลาย ๆ ครั้ง (6 หลัก = เดาได้ถ้าปล่อยให้ยิงไม่จำกัด)
     if (!(await checkRateLimit(admin, `reveal-verify:${userId}`, 5, 900))) {
       return dealerJson(req, { error: "กรอกเลขผิดหลายครั้งเกินไป — รอสัก 15 นาทีแล้วขอเลขใหม่" }, 429);
     }
-    const { data, error } = await sb.auth.verifyOtp({ email, token: code, type: "email" });
+    let token_hash = "";
+    if (ลิงก์) {
+      try { token_hash = new URL(ที่กรอก).searchParams.get("token") ?? ""; }
+      catch { token_hash = (ที่กรอก.split("token=")[1] ?? "").split("&")[0]; }
+      if (!token_hash) return dealerJson(req, { error: "ลิงก์ไม่ถูกต้อง — ก๊อปลิงก์จากอีเมลมาทั้งอัน" }, 400);
+    }
+    const { data, error } = ลิงก์
+      ? await sb.auth.verifyOtp({ token_hash, type: "magiclink" })
+      : await sb.auth.verifyOtp({ email, token: เลข, type: "email" });
     if (error || !data.user) {
-      return dealerJson(req, { error: "เลขยืนยันไม่ถูกต้องหรือหมดอายุแล้ว — ขอเลขใหม่แล้วลองอีกครั้ง" }, 400);
+      return dealerJson(req, { error: "เลขยืนยัน/ลิงก์ไม่ถูกต้องหรือหมดอายุแล้ว — ขอใหม่แล้วลองอีกครั้ง" }, 400);
     }
     // ใบผ่านที่เพิ่งได้จากการยืนยันต้องเป็นของคนเดียวกันเท่านั้น (กันสลับอีเมลกลางทาง)
     if (data.user.id !== userId) return dealerJson(req, { error: "เลขยืนยันไม่ตรงกับบัญชีที่กำลังใช้งาน" }, 403);

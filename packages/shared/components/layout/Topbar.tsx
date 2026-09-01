@@ -478,11 +478,21 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
     ];
   }, [q, dealers, liveLeads, liveCustomers, liveQuotations, isHQ, hqSearch]);
 
-  // งานค้างของเครือนับเข้าตัวเลขบนกระดิ่งด้วย — "อ่านแล้ว" กดปิดไม่ได้ เพราะงานยังไม่ได้ถูกจัดการจริง
-  const alertCount = alertGroups.reduce((s, g) => s + g.items.length, 0);
+  // ── งานค้างของเครือ ("ต้องดูด่วน") กด "อ่านทั้งหมด" แล้วต้องหายด้วย ───────────────
+  //
+  // เดิมตั้งใจให้กดปิดไม่ได้ ด้วยเหตุผลว่า "งานยังไม่ได้ถูกจัดการจริง"
+  // แต่ของจริงคือกระดิ่งขึ้นเลขแดงค้างตลอดจนไม่มีใครอ่านมันอีกเลย (บอสแจ้ง 1 ก.ย. 69)
+  //
+  // กติกาใหม่: กดอ่านแล้ว = "รับทราบจำนวนนี้แล้ว" → ซ่อนกลุ่มนั้นและหยุดนับ
+  //   กุญแจของการอ่านผูกกับ "จำนวนในกลุ่ม" ด้วย — พอจำนวนเปลี่ยน (มีของใหม่โผล่/แก้ไปบางส่วน)
+  //   เรื่องจะกลับมาเตือนใหม่เอง ข้อมูลจึงไม่หายไปเงียบ ๆ แค่ไม่ตะโกนซ้ำเรื่องเดิม
+  const alertKey = (g: { key: HQAlertKey; items: unknown[] }) => `alert:${g.key}:${g.items.length}`;
+  const alertGroupsUnread = alertGroups.filter(g => !isRead(alertKey(g)));
+  const alertCount = alertGroupsUnread.reduce((s, g) => s + g.items.length, 0);
   const unreadCount = notifs.filter(n => !isRead(notifKey(n))).length + alertCount;
+  const ซ่อนไปแล้ว = alertGroups.length - alertGroupsUnread.length;
 
-  function markAll() { markRead(notifs.map(notifKey)); }
+  function markAll() { markRead([...notifs.map(notifKey), ...alertGroups.map(alertKey)]); }
   function markOne(n: Notif) { markRead([notifKey(n)]); }
 
   // ทุกทางที่พาออกจากหน้าปัจจุบันต้องผ่าน confirmDiscard() ก่อน — หน้าที่มีฟอร์มค้าง (ตั้งค่า)
@@ -650,13 +660,13 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                 {/* ── ต้องดูด่วน — กฎแจ้งเตือนของ HQ จัดกลุ่มตามเรื่อง ──
                     สถานะปัจจุบันของเครือ ไม่ใช่เหตุการณ์ในอดีต จึงไม่มีจุด "อ่านแล้ว" และไม่เข้าบัคเก็ตวันนี้/เมื่อวาน
                     (เรื่องจะหายเองเมื่อตัวแทนไปจัดการจริง — กด "อ่านแล้ว" ไม่ได้ทำให้งานเสร็จ) */}
-                {alertGroups.length > 0 && (
+                {alertGroupsUnread.length > 0 && (
                   <div style={{ borderBottom:`1px solid ${BORDER}` }}>
                     <div style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 16px 5px", background:"#fafafa", borderBottom:`1px solid ${BG}` }}>
                       <span style={{ fontSize:"0.65rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em" }}>ต้องดูด่วน</span>
                       <span style={{ fontSize:"0.6rem", fontWeight:800, color:"#dc2626", background:"#fdecec", borderRadius:99, padding:"1px 6px", fontVariantNumeric:"tabular-nums" }}>{alertCount}</span>
                     </div>
-                    {alertGroups.map(g => {
+                    {alertGroupsUnread.map(g => {
                       const ic = HQ_ALERT_ICON[g.key];
                       const expanded = openGroup === g.key;
                       const shown = expanded ? g.items : g.items.slice(0, ALERT_PREVIEW);
@@ -689,9 +699,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                     })}
                   </div>
                 )}
-                {notifs.length === 0 && alertGroups.length === 0 && (
+                {notifs.length === 0 && alertGroupsUnread.length === 0 && (
                   <div style={{ padding:"28px 16px", textAlign:"center", fontSize:"0.8rem", color:"#9ca3af" }}>
                     ไม่มีการแจ้งเตือน
+                    {/* บอกให้รู้ว่างานค้างยังอยู่ แค่รับทราบไปแล้ว — ไม่ใช่หายไปเฉย ๆ */}
+                    {ซ่อนไปแล้ว > 0 && (
+                      <div style={{ marginTop:6, fontSize:"0.7rem", color:"#9ca3af" }}>
+                        (รับทราบงานค้าง {ซ่อนไปแล้ว} เรื่องไปแล้ว — จะเตือนอีกครั้งเมื่อจำนวนเปลี่ยน)
+                      </div>
+                    )}
                   </div>
                 )}
                 {(showAllNotifs ? notifs : notifs.slice(0, 8)).map((n, i, shown) => {

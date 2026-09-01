@@ -56,6 +56,10 @@ export function AccountRequestsCard({ onChanged }: { onChanged?: () => void }) {
       await account.decide(r.id, action);
       โหลด();
       onChanged?.();
+      // เปลี่ยนบัญชีของตัวแทนแล้ว = ข้อมูลบนหน้านี้ (ทะเบียนสาขา/อีเมล) เก่าไปทันที
+      // บอสสั่ง 1 ก.ย. 69: ให้รีหน้าตัวเองอัตโนมัติ "หนึ่งครั้ง" หลังเปลี่ยนอะไรก็ตาม
+      // หน่วงสั้น ๆ ให้ผู้ใช้เห็นว่ากดสำเร็จก่อน แล้วค่อยโหลดใหม่ (ครั้งเดียว ไม่วนซ้ำ)
+      setTimeout(() => { try { window.location.reload(); } catch { /* SSR */ } }, 900);
     } catch (e) {
       setErr(friendlyError(e));
     } finally { setBusy(null); }

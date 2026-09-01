@@ -24,7 +24,16 @@ test("[dealer] บัญชีเข้าระบบ: หน้าตั้ง
   await expect(page.getByLabel("รหัสผ่านปัจจุบัน", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /บันทึกรหัสผ่านใหม่/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /บันทึกอีเมลใหม่/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /ดูรหัส/ })).toHaveCount(0);
+
+  // ⚠️ กติกาเปลี่ยนแล้ว (บอสสั่ง 1 ก.ย. 69): หน้านี้ต้องมีปุ่ม "ดูรหัสผ่าน"
+  //    เดิม (28 ส.ค. 69) ห้ามมีเด็ดขาด · ตอนนี้ดูได้แต่ต้องยืนยันด้วยเลขที่ส่งไปทางอีเมลก่อน
+  //    (กติกาที่ยังเหมือนเดิมคือ "หน้าตั้งค่ารวมต้องไม่มีปุ่มนี้" — ตรวจไว้ด้านบนแล้ว)
+  const ปุ่มดูรหัส = page.getByRole("button", { name: "ดูรหัสผ่าน" });
+  await expect(ปุ่มดูรหัส).toHaveCount(1);
+  // กดแล้วต้องยังไม่เห็นรหัส — ต้องผ่านขั้นกรอกเลขจากอีเมลก่อนเสมอ
+  await ปุ่มดูรหัส.click();
+  await expect(page.getByLabel("เลขยืนยันจากอีเมล").or(page.getByText(/ส่งเลขยืนยันไปที่|ไม่มีสำเนารหัสผ่าน|ส่งเลขยืนยัน/)).first())
+    .toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${OUT}/acct-page.png` });
 });

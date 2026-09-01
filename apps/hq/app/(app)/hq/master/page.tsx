@@ -993,8 +993,9 @@ function HQMasterPageInner() {
 
                   <div style={{ padding: "14px 24px", borderTop: `1px solid ${BORDER}`, background: "#fafbfc", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexShrink: 0 }}>
                     <span style={{ fontSize: "0.8rem", color: MUTED, fontWeight: 600 }}>แม่แบบย่อยของ {แม่.name}</span>
+                    {/* ปุ่ม "แก้ไขแม่แบบทั้งก้อน" ถูกเอาออก (บอสสั่ง 1 ก.ย. 69) — กล่องนี้คือรายละเอียด
+                        ของแม่แบบย่อยตัวเดียว ปุ่มที่พาไปแก้ทั้งก้อนจึงชวนกดพลาดไปแก้ของตัวอื่น */}
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button className="btn btn-secondary btn-md" onClick={() => { setSubView(null); setViewing(null); openEdit(แม่); }}><Pencil size={13} /> แก้ไขแม่แบบทั้งก้อน</button>
                       <button className="btn btn-primary btn-md" onClick={() => openEditSub(แม่, ย่อย)}><Pencil size={13} /> แก้ไขแม่แบบย่อยนี้</button>
                     </div>
                   </div>

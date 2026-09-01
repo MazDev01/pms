@@ -213,7 +213,10 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
 
   async function ยืนยันเลขแล้วดูรหัส() {
     setMsgReveal(null);
-    if (เลขยืนยัน.replace(/\D/g, "").length < 6) { setMsgReveal({ ok: false, text: "กรอกเลขยืนยัน 6 หลักที่ได้จากอีเมล" }); return; }
+    const เป็นลิงก์ = /^https?:\/\//i.test(เลขยืนยัน.trim()) || เลขยืนยัน.includes("token=");
+    if (!เป็นลิงก์ && เลขยืนยัน.replace(/\D/g, "").length < 6) {
+      setMsgReveal({ ok: false, text: "กรอกเลขยืนยัน 6 หลัก หรือวางลิงก์ที่ได้จากอีเมล" }); return;
+    }
     setกำลังดู(true);
     try {
       const r = await account.reveal(dealerCode, เลขยืนยัน);
@@ -283,6 +286,10 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
       setMsgEmail({ ok: true, text: r.message });
       setEmail(""); setEmailCurrent("");
       โหลด();
+      // อีเมลเข้าระบบเปลี่ยนแล้ว = ชื่อบัญชีที่โชว์อยู่ทั้งหน้า (หัวจอ/เมนู) ยังเป็นของเก่า
+      // บอสสั่ง 1 ก.ย. 69: ให้รีหน้าตัวเองอัตโนมัติหนึ่งครั้งหลังเปลี่ยนอะไรก็ตาม
+      // (เปลี่ยนรหัสผ่านไม่ต้องรีที่นี่ — ทางนั้นพาไปหน้าเข้าสู่ระบบใหม่อยู่แล้ว)
+      if (r.applied) setTimeout(() => { try { window.location.reload(); } catch { /* SSR */ } }, 1400);
     } catch (e) { setMsgEmail({ ok: false, text: friendlyError(e) }); }
     finally { setBusy(""); }
   }
@@ -309,9 +316,15 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
             </span>
           ) : ขั้นดูรหัส === "กรอกเลข" ? (
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input value={เลขยืนยัน} onChange={e => setเลขยืนยัน(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                inputMode="numeric" autoComplete="one-time-code" aria-label="เลขยืนยันจากอีเมล"
-                placeholder="เลข 6 หลัก" className="form-input" style={{ width: 118, textAlign: "center", letterSpacing: "0.18em" }} />
+              {/* รับทั้งเลข 6 หลักและลิงก์ที่ก๊อปจากอีเมล — อีเมลมาตรฐานของผู้ให้บริการมีแต่ลิงก์
+                  จนกว่าจะแก้แม่แบบอีเมลให้ใส่เลขเข้าไป (ดู /api/account/reveal) */}
+              <input value={เลขยืนยัน} onChange={e => {
+                  const v = e.target.value;
+                  setเลขยืนยัน(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 6));
+                }}
+                autoComplete="one-time-code" aria-label="เลขยืนยันจากอีเมล"
+                placeholder="เลข 6 หลัก หรือวางลิงก์จากอีเมล" className="form-input"
+                style={{ width: 210, textAlign: "center", letterSpacing: "0.04em" }} />
               <button onClick={() => void ยืนยันเลขแล้วดูรหัส()} disabled={กำลังดู} className="btn btn-primary btn-sm">
                 {กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}
               </button>
