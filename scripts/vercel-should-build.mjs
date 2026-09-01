@@ -46,7 +46,9 @@ try {
 //    คุณภาพของโค้ดถูกตรวจครบอยู่แล้วที่ GitHub Actions (.github/workflows/ci.yml):
 //       typecheck + เทสต์ย่อย + ชุดกันพลาด ทุก push
 //    และถ้าโค้ดคอมไพล์ไม่ผ่าน Vercel เองจะ build ไม่สำเร็จ ของเก่าบนเว็บจริงยังอยู่เหมือนเดิม
-if (existsSync(path.join(ราก, "tests", "scenario"))) {
+// ⚠️ ต้องเช็ก "ไฟล์ตัวตรวจ" ไม่ใช่โฟลเดอร์ tests/ — .vercelignore ลบไฟล์ออกแต่ยังเหลือโฟลเดอร์ว่างไว้
+//    เช็กโฟลเดอร์จึงเข้าใจผิดว่าอยู่บนเครื่องพัฒนา แล้วสั่งรันตัวตรวจที่ไม่มีอยู่ → ข้าม deploy ทุกครั้ง
+if (existsSync(path.join(ราก, "scripts", "check-stable-order.mjs"))) {
   try {
     execSync("npm run checks", { cwd: ราก, stdio: "inherit" });
   } catch {
