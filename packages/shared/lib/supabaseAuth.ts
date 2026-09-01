@@ -257,6 +257,49 @@ export async function sbSendPasswordReset(email: string): Promise<ResetResult> {
   }
 }
 
+// ── ลืมรหัสผ่านแบบ "กรอกเลขยืนยัน" (บอสสั่ง 1 ก.ย. 69) ───────────────────────────
+//
+// ทางเดิมคือกดลิงก์ในอีเมล ซึ่งต้องไปตั้ง "ที่อยู่ปลายทางที่อนุญาต" ที่หน้าจัดการโปรเจกต์ก่อน
+//   ไม่ตั้ง = กดลิงก์แล้วไปโผล่หน้าเปล่า (บอสเจอจริง) และเป็นขั้นตอนที่คนต้องจำไปตั้งเอง
+//
+// ทางนี้ใช้ "เลขยืนยันที่ส่งไปกับอีเมลฉบับเดียวกัน" แล้วกรอกกลับมาที่หน้าเข้าสู่ระบบ
+//   • ไม่ต้องพึ่งการเด้งข้ามเว็บเลย → ไม่เกี่ยวกับที่อยู่ปลายทางที่อนุญาตอีกต่อไป
+//   • เป็นวิธีเดียวกับ "ดูรหัสผ่านของตัวเอง" ผู้ใช้จึงเจอขั้นตอนแบบเดียวกันทั้งสองเรื่อง
+//
+// รับได้ทั้งเลข 6 หลักและลิงก์ที่ก๊อปมาทั้งอัน — เพราะแม่แบบอีเมลมาตรฐานของผู้ให้บริการ
+// มีแต่ลิงก์จนกว่าจะแก้แม่แบบให้ใส่ {{ .Token }} (ทำได้เมื่อตั้งระบบส่งอีเมลของตัวเองแล้ว)
+export async function sbResetPasswordWithCode(
+  email: string, codeOrLink: string, newPassword: string,
+): Promise<ResetResult> {
+  const e = email.trim().toLowerCase();
+  const ที่กรอก = String(codeOrLink).trim();
+  if (newPassword.length < 8) return { ok: false, error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" };
+  const เป็นลิงก์ = /^https?:\/\//i.test(ที่กรอก) || ที่กรอก.includes("token=");
+  const เลข = ที่กรอก.replace(/\D/g, "");
+  if (!เป็นลิงก์ && เลข.length < 6) return { ok: false, error: "กรอกเลขยืนยัน 6 หลักที่ได้จากอีเมล หรือวางลิงก์จากอีเมล" };
+  try {
+    const sb = getSupabase();
+    let token_hash = "";
+    if (เป็นลิงก์) {
+      try { token_hash = new URL(ที่กรอก).searchParams.get("token") ?? ""; }
+      catch { token_hash = (ที่กรอก.split("token=")[1] ?? "").split("&")[0]; }
+      if (!token_hash) return { ok: false, error: "ลิงก์ไม่ถูกต้อง — ก๊อปลิงก์จากอีเมลมาทั้งอัน" };
+    }
+    // ยืนยันตัวตนด้วยเลข/ลิงก์ก่อน → ได้ใบผ่านชั่วคราวสำหรับตั้งรหัสใหม่
+    const { data, error } = เป็นลิงก์
+      ? await sb.auth.verifyOtp({ token_hash, type: "recovery" })
+      : await sb.auth.verifyOtp({ email: e, token: เลข, type: "recovery" });
+    if (error || !data.session) {
+      return { ok: false, error: "เลขยืนยันไม่ถูกต้องหรือหมดอายุแล้ว — กด \"ลืมรหัสผ่าน?\" ใหม่อีกครั้ง" };
+    }
+    const { error: upErr } = await sb.auth.updateUser({ password: newPassword });
+    if (upErr) return { ok: false, error: friendlyError(upErr) };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: friendlyError(err) };
+  }
+}
+
 /** ตั้งรหัสผ่านใหม่ของ "ผู้ใช้ปัจจุบัน" — ใช้ในหน้า /reset-password หลังกดลิงก์ (มี recovery session แล้ว) */
 export async function sbUpdatePassword(newPassword: string): Promise<ResetResult> {
   if (newPassword.length < 8) return { ok: false, error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" };

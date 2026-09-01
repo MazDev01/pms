@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { DEMO_PASSWORD, DEMO_LOGINS } from "@pms/shared/lib/auth";
-import { sbSendPasswordReset } from "@pms/shared/lib/supabaseAuth";
+import { sbSendPasswordReset, sbResetPasswordWithCode } from "@pms/shared/lib/supabaseAuth";
 
 // ── ทางเข้าเดโมของอีกฝั่ง (ตั้งที่ Vercel ของโปรเจกต์เดโมเท่านั้น) ──
 // ว่าง = ไม่มีปุ่ม · ระบบจริงไม่ตั้งค่านี้
@@ -53,6 +53,13 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   //   โหมด local (เดโม) ไม่มีระบบยืนยันตัวตนจริงให้ส่งอีเมล → คงข้อความ "ติดต่อ HQ" เดิมไว้
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotMsg, setForgotMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // ── ขั้นตอน "กรอกเลขยืนยันแล้วตั้งรหัสใหม่ที่หน้านี้เลย" (บอสสั่ง 1 ก.ย. 69) ──────
+  //    วิธีเดียวกับตอนดูรหัสผ่านของตัวเอง: ระบบส่งเลขไปที่อีเมลเข้าระบบ → เอาเลขมากรอก
+  //    ไม่ต้องกดลิงก์ข้ามเว็บ จึงไม่ต้องพึ่งการตั้งค่าที่อยู่ปลายทางที่หน้าจัดการโปรเจกต์
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [resetPw, setResetPw] = useState("");
+  const [resetPw2, setResetPw2] = useState("");
 
   const busy = loading;
 
@@ -136,9 +143,29 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setForgotMsg(null);
     const r = await sbSendPasswordReset(e);
     setForgotBusy(false);
-    setForgotMsg(r.ok
-      ? { ok: true, text: `ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${e} แล้ว — เปิดอีเมลเพื่อตั้งรหัสใหม่` }
-      : { ok: false, text: r.error });
+    if (r.ok) {
+      setResetOpen(true); setResetCode(""); setResetPw(""); setResetPw2("");
+      setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${e} แล้ว — เปิดอีเมลแล้วเอาเลข 6 หลักมากรอกด้านล่าง` });
+    } else {
+      setForgotMsg({ ok: false, text: r.error });
+    }
+  }
+
+  /** เอาเลขจากอีเมลมากรอก แล้วตั้งรหัสใหม่ตรงนี้เลย — ไม่ต้องเปลี่ยนหน้า */
+  async function handleResetWithCode() {
+    const e = email.trim();
+    if (!resetCode.trim()) { setForgotMsg({ ok: false, text: "กรอกเลขยืนยันที่ได้จากอีเมลก่อน" }); return; }
+    if (resetPw !== resetPw2) { setForgotMsg({ ok: false, text: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน" }); return; }
+    setForgotBusy(true);
+    const r = await sbResetPasswordWithCode(e, resetCode, resetPw);
+    setForgotBusy(false);
+    if (r.ok) {
+      setResetOpen(false); setResetCode(""); setResetPw(""); setResetPw2("");
+      setPassword("");
+      setForgotMsg({ ok: true, text: "ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว — เข้าสู่ระบบด้วยรหัสใหม่ได้เลย" });
+    } else {
+      setForgotMsg({ ok: false, text: r.error });
+    }
   }
 
   const inputWrap =
@@ -205,6 +232,40 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
               <p role="alert" className={`rounded-xl border px-3.5 py-2.5 text-sm font-medium ${forgotMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-600"}`}>
                 {forgotMsg.text}
               </p>
+            )}
+
+            {/* ตั้งรหัสใหม่ด้วยเลขยืนยัน — โผล่หลังกด "ลืมรหัสผ่าน?" สำเร็จ */}
+            {resetOpen && (
+              <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                <div className="text-[0.8rem] font-bold text-slate-700">ตั้งรหัสผ่านใหม่</div>
+                <input value={resetCode} aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code"
+                  onChange={ev => {
+                    const v = ev.target.value;
+                    // รับได้ทั้งเลข 6 หลักและลิงก์ที่ก๊อปมาจากอีเมล (แม่แบบอีเมลมาตรฐานมีแต่ลิงก์)
+                    setResetCode(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 6));
+                  }}
+                  placeholder="เลข 6 หลักจากอีเมล (หรือวางลิงก์)"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
+                <input type="password" value={resetPw} aria-label="รหัสผ่านใหม่" autoComplete="new-password"
+                  onChange={ev => setResetPw(ev.target.value.replace(/\s/g, ""))}
+                  placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
+                <input type="password" value={resetPw2} aria-label="ยืนยันรหัสผ่านใหม่" autoComplete="new-password"
+                  onChange={ev => setResetPw2(ev.target.value.replace(/\s/g, ""))}
+                  onKeyDown={ev => { if (ev.key === "Enter") { ev.preventDefault(); void handleResetWithCode(); } }}
+                  placeholder="พิมพ์รหัสใหม่อีกครั้ง"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => void handleResetWithCode()} disabled={forgotBusy}
+                    className="h-9 flex-1 rounded-lg bg-[#1d4ed8] text-[0.85rem] font-bold text-white disabled:opacity-60">
+                    {forgotBusy ? "กำลังตั้งรหัสใหม่…" : "ยืนยันและตั้งรหัสใหม่"}
+                  </button>
+                  <button type="button" onClick={() => { setResetOpen(false); setForgotMsg(null); }}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[0.85rem] font-semibold text-slate-600">
+                    ยกเลิก
+                  </button>
+                </div>
+              </div>
             )}
 
             {error && (
