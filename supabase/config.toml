@@ -161,11 +161,21 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# ── ที่อยู่ของแอปเรา (ใช้กับลิงก์ในอีเมล: ลืมรหัสผ่าน · ยืนยันตัวตน) ─────────────
+# ค่าที่นี่ใช้กับ Supabase "ในเครื่อง" เท่านั้น — ของเว็บจริงตั้งที่หน้าจัดการโปรเจกต์
+#   (Authentication → URL Configuration) ให้ตรงกับรายการข้างล่างนี้
+# ⚠️ เดิมเป็น 127.0.0.1:3000 ซึ่งไม่มีอะไรรันอยู่ → กดลิงก์ในอีเมลแล้วไปโผล่หน้าเปล่า
+#    (พิสูจน์แล้วด้วยกล่องจดหมายทดสอบ 1 ก.ย. 69)
+site_url = "http://localhost:3001"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = [
+  "http://localhost:3001/**",                  # แอปตัวแทน (ในเครื่อง)
+  "http://localhost:3002/**",                  # แอปสำนักงานใหญ่ (ในเครื่อง)
+  "https://benjamin-dealer.vercel.app/**",     # แอปตัวแทน (เว็บจริง)
+  "https://benjamin-hq.vercel.app/**",         # แอปสำนักงานใหญ่ (เว็บจริง)
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 #
 # ── 600 = 10 นาที (ลดจาก 3600) ────────────────────────────────────────────────
@@ -211,7 +221,10 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# ── ในเครื่องตั้งสูงได้ (บอสตัดสินย้ายมาทดสอบในเครื่อง 1 ก.ย. 69) ────────────────
+# ค่า 2 คือเพดานของผู้ให้บริการบนคลาวด์ ซึ่งทำให้ชุดทดสอบอีเมลรันได้แค่รอบเดียวต่อชั่วโมง
+# ที่นี่อีเมลไม่ได้ส่งออกจริง — เข้ากล่องจดหมายทดสอบในเครื่อง (http://127.0.0.1:54324)
+email_sent = 200
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.

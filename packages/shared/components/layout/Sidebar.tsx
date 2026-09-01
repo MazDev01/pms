@@ -118,9 +118,10 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
         </div>
         {/* ชื่อแบรนด์ ไม่ใช่หัวข้อหลักของหน้า — h1 จริงอยู่ที่ Topbar (เปลี่ยนตามหน้า)
             เดิมเป็น h1 ทั้งคู่ → ทุกหน้ามี h1 ซ้ำ 2 อัน screen reader/SEO สับสนว่าอันไหนคือหัวข้อจริง */}
+        {/* เหลือแค่ชื่อแบรนด์ — คำบรรยายใต้ชื่อ ("PRE-ENGINEERED BUILDING" / "EASYBUILD")
+            ถูกเอาออกทั้งสองแอป (บอสสั่ง 1 ก.ย. 69) */}
         <div className="brand-text">
           <div className="brand-name">BENJAMIN</div>
-          <span>{isHQ ? "PRE-ENGINEERED BUILDING" : "EASYBUILD"}</span>
         </div>
       </div>
 
