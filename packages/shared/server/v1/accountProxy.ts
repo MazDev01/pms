@@ -22,7 +22,7 @@ function hqOrigin(): string {
   return (process.env.NEXT_PUBLIC_HQ_ORIGIN ?? "").replace(/\/$/, "");
 }
 
-async function ส่งต่อ(req: NextRequest, method: "GET" | "POST"): Promise<NextResponse> {
+async function ส่งต่อ(req: NextRequest, method: "GET" | "POST", ปลายทาง = "/api/account"): Promise<NextResponse> {
   const origin = hqOrigin();
   if (!origin) {
     return NextResponse.json(
@@ -36,7 +36,7 @@ async function ส่งต่อ(req: NextRequest, method: "GET" | "POST"): Pro
   const url = new URL(req.url);
   const body = method === "POST" ? await req.text() : undefined;
   try {
-    const res = await fetch(`${origin}/api/account${url.search}`, {
+    const res = await fetch(`${origin}${ปลายทาง}${url.search}`, {
       method,
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body,
@@ -57,3 +57,6 @@ async function ส่งต่อ(req: NextRequest, method: "GET" | "POST"): Pro
 
 export const GET = (req: NextRequest) => ส่งต่อ(req, "GET");
 export const POST = (req: NextRequest) => ส่งต่อ(req, "POST");
+
+/** ทางผ่านของเส้นทางย่อย เช่น /api/account/reveal (ขอเลขยืนยัน + ดูรหัสผ่านของตัวเอง) */
+export const revealPOST = (req: NextRequest) => ส่งต่อ(req, "POST", "/api/account/reveal");

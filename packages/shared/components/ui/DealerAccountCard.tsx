@@ -13,7 +13,7 @@
 //    ระหว่างแก้ข้อมูลบริษัท และหน้าจอที่เปิดค้างไว้จะไม่มีช่องรหัสผ่านทิ้งไว้ให้ใครมากรอก
 
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight } from "lucide-react";
+import { KeyRound, Mail, Lock, ShieldCheck, Clock, ChevronRight, Eye } from "lucide-react";
 import { account } from "@pms/shared/lib/data";
 import type { AccountState } from "@pms/shared/lib/data/ports";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -186,6 +186,42 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
   const [msgPw, setMsgPw] = useState<{ ok: boolean; text: string } | null>(null);
   const [msgEmail, setMsgEmail] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // ── ดูรหัสผ่านของตัวเอง: ต้องเอาเลขที่ส่งไปทางอีเมลมากรอกก่อน (บอสสั่ง 1 ก.ย. 69) ──
+  // ขั้นตอน: ปิดอยู่ → กดขอเลข (ส่งอีเมล) → กรอกเลข → เห็นรหัส (ปิดเองใน 60 วินาที)
+  const [ขั้นดูรหัส, setขั้นดูรหัส] = useState<"ปิด" | "กรอกเลข" | "เห็นแล้ว">("ปิด");
+  const [เลขยืนยัน, setเลขยืนยัน] = useState("");
+  const [ส่งไปที่, setส่งไปที่] = useState("");
+  const [รหัสที่เห็น, setรหัสที่เห็น] = useState("");
+  const [msgReveal, setMsgReveal] = useState<{ ok: boolean; text: string } | null>(null);
+  const [กำลังดู, setกำลังดู] = useState(false);
+
+  // รหัสที่โชว์บนจอต้องไม่ค้างไว้ตลอด — ปิดเองหลัง 60 วินาที (จอที่เปิดค้างไว้ในออฟฟิศ)
+  useEffect(() => {
+    if (ขั้นดูรหัส !== "เห็นแล้ว") return;
+    const t = setTimeout(() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); setMsgReveal(null); }, 60_000);
+    return () => clearTimeout(t);
+  }, [ขั้นดูรหัส]);
+
+  async function ขอเลขทางอีเมล() {
+    setMsgReveal(null); setกำลังดู(true);
+    try {
+      const r = await account.sendRevealCode(dealerCode);
+      setส่งไปที่(r.sentTo); setขั้นดูรหัส("กรอกเลข"); setเลขยืนยัน("");
+    } catch (e) { setMsgReveal({ ok: false, text: friendlyError(e) }); }
+    finally { setกำลังดู(false); }
+  }
+
+  async function ยืนยันเลขแล้วดูรหัส() {
+    setMsgReveal(null);
+    if (เลขยืนยัน.replace(/\D/g, "").length < 6) { setMsgReveal({ ok: false, text: "กรอกเลขยืนยัน 6 หลักที่ได้จากอีเมล" }); return; }
+    setกำลังดู(true);
+    try {
+      const r = await account.reveal(dealerCode, เลขยืนยัน);
+      setรหัสที่เห็น(r.password); setขั้นดูรหัส("เห็นแล้ว"); setเลขยืนยัน("");
+    } catch (e) { setMsgReveal({ ok: false, text: friendlyError(e) }); }
+    finally { setกำลังดู(false); }
+  }
+
   const เหลือ = state ? Math.max(0, state.selfChangesLimit - state.selfChangesUsed) : null;
   const ต้องขออนุมัติ = เหลือ === 0;
   const มีคำขอค้าง = !!state?.pending;
@@ -262,10 +298,48 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
           <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Mail size={14} color="#94A3B8" /> อีเมลเข้าสู่ระบบ</span>
           <span style={{ fontWeight: 700, color: อีเมลปัจจุบัน ? "#1F2937" : "#94A3B8" }}>{อีเมลปัจจุบัน || "—"}</span>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.78rem", borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, fontSize: "0.78rem", borderTop: "1px solid #F1F5F9", marginTop: 8, paddingTop: 10 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748B" }}><Lock size={14} color="#94A3B8" /> รหัสผ่าน</span>
-          <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>ดูไม่ได้ด้วยเหตุผลด้านความปลอดภัย — ตั้งใหม่ได้ด้านล่าง</span>
+          {ขั้นดูรหัส === "เห็นแล้ว" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <code style={{ fontWeight: 800, color: "#1F2937", fontSize: "0.82rem", letterSpacing: "0.02em" }}>{รหัสที่เห็น}</code>
+              <button onClick={() => { void navigator.clipboard?.writeText(รหัสที่เห็น).catch(() => {}); }}
+                className="btn btn-secondary btn-sm">คัดลอก</button>
+              <button onClick={() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); }} className="btn btn-secondary btn-sm">ซ่อน</button>
+            </span>
+          ) : ขั้นดูรหัส === "กรอกเลข" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input value={เลขยืนยัน} onChange={e => setเลขยืนยัน(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric" autoComplete="one-time-code" aria-label="เลขยืนยันจากอีเมล"
+                placeholder="เลข 6 หลัก" className="form-input" style={{ width: 118, textAlign: "center", letterSpacing: "0.18em" }} />
+              <button onClick={() => void ยืนยันเลขแล้วดูรหัส()} disabled={กำลังดู} className="btn btn-primary btn-sm">
+                {กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}
+              </button>
+              <button onClick={() => { setขั้นดูรหัส("ปิด"); setMsgReveal(null); }} className="btn btn-secondary btn-sm">ยกเลิก</button>
+            </span>
+          ) : (
+            <button onClick={() => void ขอเลขทางอีเมล()} disabled={กำลังดู} className="btn btn-secondary btn-sm"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Eye size={13} /> {กำลังดู ? "กำลังส่งเลข…" : "ดูรหัสผ่าน"}
+            </button>
+          )}
         </div>
+        {/* บอกให้ชัดว่าเลขไปที่ไหน และทำไมต้องมีขั้นตอนนี้ */}
+        {ขั้นดูรหัส === "กรอกเลข" && !msgReveal && (
+          <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: 8 }}>
+            ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลข 6 หลักมากรอก (เลขมีอายุจำกัด)
+          </div>
+        )}
+        {ขั้นดูรหัส === "เห็นแล้ว" && (
+          <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: 8 }}>
+            รหัสนี้จะถูกซ่อนอัตโนมัติใน 1 นาที · สำนักงานใหญ่เห็นในบันทึกการใช้งานว่ามีการเปิดดู
+          </div>
+        )}
+        {msgReveal && (
+          <div style={{ fontSize: "0.72rem", fontWeight: 600, marginTop: 8, color: msgReveal.ok ? "#047857" : "#b91c1c" }}>
+            {msgReveal.text}
+          </div>
+        )}
       </div>
 
       {/* สิทธิ์ที่เหลือ — ใช้ร่วมกันทั้งสองก้อน (โควตานับรวมกัน) */}

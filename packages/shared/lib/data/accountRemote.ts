@@ -72,4 +72,11 @@ export const accountRemote: AccountRepo = {
       method: "PATCH",
       body: JSON.stringify({ id, action, reason }),
     }).then(() => undefined),
+
+  // ดูรหัสผ่านของตัวเอง: ขอเลขทางอีเมลก่อน แล้วเอาเลขนั้นมายืนยัน (บอสสั่ง 1 ก.ย. 69)
+  sendRevealCode: () =>
+    ยิง<{ sentTo: string }>("/api/account/reveal", { method: "POST", body: JSON.stringify({ op: "send" }) }),
+
+  reveal: (_dealerCode, code) =>
+    ยิง<{ password: string }>("/api/account/reveal", { method: "POST", body: JSON.stringify({ op: "verify", code }) }),
 };

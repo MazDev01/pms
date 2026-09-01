@@ -13,6 +13,7 @@ const CHANGES_KEY = "dealer_account_changes_v1";
 const REQUESTS_KEY = "dealer_account_requests_v1";
 const SECRETS_KEY = "dealer_account_secrets_v1";
 const EMAILS_KEY = "dealer_account_emails_v1";
+const REVEAL_KEY = "dealer_account_reveal_codes_v1";
 export const ACCOUNT_EVENT = "bpms-account-updated";
 
 /** เพดานจำนวนครั้งที่ตัวแทนแก้เองได้ — เกินนี้ต้องขออนุมัติทุกครั้ง */
@@ -105,6 +106,27 @@ export const accountLocal = {
 
   async listRequests(): Promise<AccountRequest[]> {
     return requests();
+  },
+
+  // ── ดูรหัสผ่านของตัวเอง (ฉบับโหมดตัวอย่าง) ────────────────────────────────────
+  // โหมดนี้ไม่มีระบบอีเมลจริง จึงสุ่มเลขแล้วเก็บไว้ในเครื่อง + บอกเลขบนหน้าจอตรง ๆ
+  // ว่าเป็นโหมดตัวอย่าง — คนลองเล่นจะได้เดินครบขั้นตอนเหมือนของจริงโดยไม่ต้องมีอีเมล
+  // ⚠️ ห้ามทำแบบนี้ในโหมดจริงเด็ดขาด (โหมดจริงส่งเลขทางอีเมลเท่านั้น · ดู accountRemote.ts)
+  async sendRevealCode(dealerCode: string): Promise<{ sentTo: string }> {
+    const เลข = String(Math.floor(100000 + Math.random() * 900000));
+    write(REVEAL_KEY, { ...read<Record<string, string>>(REVEAL_KEY, {}), [dealerCode]: เลข });
+    return { sentTo: `โหมดตัวอย่าง — ใช้เลข ${เลข}` };
+  },
+
+  async reveal(dealerCode: string, code: string): Promise<{ password: string }> {
+    const เก็บไว้ = read<Record<string, string>>(REVEAL_KEY, {})[dealerCode];
+    if (!เก็บไว้) throw new Error("ยังไม่ได้ขอเลขยืนยัน — กดขอเลขก่อน");
+    if (String(code).replace(/\D/g, "") !== เก็บไว้) throw new Error("เลขยืนยันไม่ถูกต้อง — ลองใหม่อีกครั้ง");
+    // ใช้ได้ครั้งเดียว เหมือนของจริง
+    const ทั้งหมด = read<Record<string, string>>(REVEAL_KEY, {});
+    delete ทั้งหมด[dealerCode];
+    write(REVEAL_KEY, ทั้งหมด);
+    return { password: localDealerPassword(dealerCode) };
   },
 
   async decide(id: string, action: "approve" | "reject", reason?: string): Promise<void> {
