@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import { open } from "./helpers";
+import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 
 // ── โมดัลต้องใช้คีย์บอร์ดได้จริง ────────────────────────────────────────────────
 //
@@ -67,6 +69,18 @@ test("[a11y] ฟอร์มข้อมูลตัวแทน (HQ) — Esc �
 //    กติกาที่ต้องกันไว้เหมือนเดิมคือ "หน้าต่างของหน้าไฟล์ต้องปิดด้วย Esc ได้" จึงย้ายมาตรวจที่หน้าต่างแก้ไขไฟล์
 //    (เทสต์เปลี่ยนตามข้อกำหนดใหม่ ไม่ใช่แก้เพื่อให้ผ่าน)
 test("[a11y] หน้าต่างแก้ไขไฟล์ (ตัวแทน) — Esc ปิดได้", async ({ page }) => {
+  // เทสต์สร้างไฟล์ของตัวเอง — เดิมยืมไฟล์จากข้อมูลตั้งต้น พอฐานไม่มีไฟล์ก็ตกทั้งที่ระบบไม่ได้พัง
+  // (เจอตอนย้ายมารันฐานในเครื่อง 1 ก.ย. 69 ซึ่งข้อมูลตั้งต้นไม่มีทะเบียนไฟล์)
+  const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const ชื่อไฟล์ = "ZZTEST-a11y-ไฟล์ทดสอบ.pdf";
+  await admin.from("files").delete().eq("name", ชื่อไฟล์);
+  const { error: fileErr } = await admin.from("files").insert({
+    dealer_code: "RYG", name: ชื่อไฟล์, size: "12 KB", ext: "pdf", category: "อื่นๆ",
+    project: "—", uploaded_by: "ทดสอบระบบ", uploaded_at: new Date().toISOString().slice(0, 10), source: "upload",
+  });
+  expect(fileErr, `สร้างไฟล์สำหรับทดสอบไม่สำเร็จ: ${fileErr?.message ?? ""}`).toBeNull();
+
+  try {
   await open(page, "dealer", "/files");
   const editBtn = page.getByRole("button", { name: "แก้ไข" }).first();
   await expect(editBtn, "หน้าไฟล์ต้องมีไฟล์อย่างน้อย 1 รายการ").toBeVisible({ timeout: 15_000 });
@@ -77,6 +91,9 @@ test("[a11y] หน้าต่างแก้ไขไฟล์ (ตัวแ�
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await page.keyboard.press("Escape");
   await expect(dialog, "กด Escape ต้องปิดหน้าต่างแก้ไขไฟล์ได้").toBeHidden({ timeout: 10_000 });
+  } finally {
+    await admin.from("files").delete().eq("name", ชื่อไฟล์);
+  }
 });
 
 test("[a11y] หัวคอลัมน์เรียงลำดับ — กดด้วยคีย์บอร์ดได้ และบอกทิศทางการเรียง", async ({ page }) => {

@@ -52,7 +52,7 @@ test("เพิ่มลูกค้าระหว่างรายการ�
 
   // เพิ่มลูกค้า "ระหว่างที่รายการยังโหลดค้างอยู่" — นี่คือหัวใจของเทสต์
   await page.getByRole("button", { name: "นำเข้าลูกค้าเดิม" }).click();
-  await page.getByRole("button", { name: "เพิ่มทีละราย" }).click();
+  await page.getByRole("button", { name: "คีย์เองทีละราย" }).click();
   await page.locator('input[placeholder="ชื่อบริษัท / ชื่อลูกค้า"]').fill(company);
   await page.locator('input[placeholder="ชื่อผู้ติดต่อ"]').fill("คุณทดสอบ");
   await page.locator('input[placeholder="0XX-XXX-XXXX"]').first().fill("0800000000");

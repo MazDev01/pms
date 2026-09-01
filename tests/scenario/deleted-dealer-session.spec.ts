@@ -30,7 +30,9 @@ test.describe.configure({ mode: "serial" });
 //   โหมด api: การถามว่า "ตอนนี้เป็นใคร" ถูกตอบ 401 — นั่นแหละคือกลไกที่ทำให้เด้งออกได้
 //             (เบราว์เซอร์รายงาน 401 เป็น error เสมอ ห้ามใช้เป็นหลักฐานว่าแอปพัง)
 //   ทั้งสองแบบจบเหมือนกัน: ใบผ่านถูกล้าง ผู้ใช้ถูกพากลับหน้าเข้าสู่ระบบ — ซึ่งเทสต์ยืนยันไว้ข้างบนแล้ว
-const INHERENT = /auth\/v1\/logout|status of 403|\/api\/v1\/auth|status of 401/;
+// [http 401] /api/account = หน้าตั้งค่าถามสถานะบัญชีของสาขา (ฟีเจอร์ใหม่ 28 ส.ค. 69)
+//   สาขาถูกลบไปแล้ว ใบผ่านจึงใช้ไม่ได้ — คำตอบ 401 ตรงนี้คือ "กลไกที่ทำให้เด้งออก" ไม่ใช่ความพัง
+const INHERENT = /auth\/v1\/logout|status of 403|\/api\/v1\/auth|status of 401|\[http 401\].*\/api\/account/;
 
 const CODE = "ZTG"; // รหัสสาขาทดสอบเฉพาะไฟล์นี้ — ไม่ชนกับ CNX/RYG/UBN ของจริง
 const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });

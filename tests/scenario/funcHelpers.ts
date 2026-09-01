@@ -114,13 +114,35 @@ export async function waitRow<T = Record<string, unknown>>(
 ): Promise<T> {
   const started = Date.now();
   let last: unknown = null;
+  // ── ค่ายาวมากต้องหั่นก่อนค้น ──────────────────────────────────────────────────
+  //
+  // ตัวกรองของ PostgREST เดินทางไปกับ "ที่อยู่เว็บ" (query string) ไม่ใช่เนื้อคำขอ
+  // เทสต์ขอบเขต (ชื่อบริษัท 2,000 ตัวอักษร) จึงสร้างที่อยู่ยาวเกินที่เกตเวย์รับไหว
+  //   → ตอบ "URI too long" แล้วเทสต์แปลผลว่า "หาแถวไม่เจอ" ทั้งที่แถวมีอยู่จริง
+  //   (เจอตอนย้ายมารันฐานในเครื่อง 1 ก.ย. 69 — เกตเวย์ในเครื่องเพดานต่ำกว่าคลาวด์)
+  // แก้โดยค้นด้วย "ต้นข้อความ" แทนค่าเต็ม แล้วค่อยเทียบค่าเต็มในเครื่องเราเอง
+  const ยาวเกิน = 300;
+  const เงื่อนไขสั้น: Record<string, unknown> = {};
+  const ต้องเทียบเต็ม: [string, string][] = [];
+  for (const [k, v] of Object.entries(match)) {
+    if (typeof v === "string" && v.length > ยาวเกิน) ต้องเทียบเต็ม.push([k, v]);
+    else เงื่อนไขสั้น[k] = v;
+  }
   while (Date.now() - started < timeoutMs) {
-    const { data, error } = await sb.from(table).select("*").match(match).limit(1);
+    let q = sb.from(table).select("*").match(เงื่อนไขสั้น);
+    for (const [k, v] of ต้องเทียบเต็ม) q = q.like(k, `${v.slice(0, 80)}%`);
+    const { data, error } = await q.limit(20).then(r => ({
+      ...r,
+      data: (r.data ?? []).filter(row => ต้องเทียบเต็ม.every(([k, v]) => String((row as Record<string, unknown>)[k] ?? "") === v)),
+    }));
     if (error) last = error;
     if (data && data.length) return data[0] as T;
     await new Promise(r => setTimeout(r, 500));
   }
-  throw new Error(`ไม่พบแถวใน ${table} ที่ ${JSON.stringify(match)} ภายใน ${timeoutMs}ms · ${JSON.stringify(last)}`);
+  // ตัดค่ายาว ๆ ออกจากข้อความ error — ไม่งั้นบันทึกการรันเต็มไปด้วยตัวอักษรซ้ำ 2,000 ตัว อ่านไม่รู้เรื่อง
+  const ย่อ = Object.fromEntries(Object.entries(match).map(([k, v]) =>
+    [k, typeof v === "string" && v.length > 60 ? `${v.slice(0, 60)}…(${v.length} ตัวอักษร)` : v]));
+  throw new Error(`ไม่พบแถวใน ${table} ที่ ${JSON.stringify(ย่อ)} ภายใน ${timeoutMs}ms · ${JSON.stringify(last)}`);
 }
 
 /** รอจนแถวหายจาก DB (ใช้ตอนทดสอบการลบ) */
