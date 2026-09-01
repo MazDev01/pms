@@ -45,7 +45,25 @@ function hqOrigin() {
   if (!o) return "";
   try { return " " + new URL(o).origin; } catch { return ""; }
 }
-const connectSrc = `connect-src 'self' https://*.supabase.co wss://*.supabase.co${sentryOrigin()}${hqOrigin()}`;
+// ── ฐานข้อมูลที่แอปนี้ใช้จริง ─────────────────────────────────────────────────────
+//
+// ปกติเป็น *.supabase.co (คลาวด์) ซึ่งอนุญาตไว้แล้วด้วยเครื่องหมายดอกจัน
+// แต่ตอนรัน Supabase "ในเครื่อง" (Docker) ที่อยู่จะเป็น http://127.0.0.1:54321
+//   ซึ่งไม่เข้าเงื่อนไขนั้นเลย → เบราว์เซอร์บล็อกทุกคำขอข้อมูลเงียบ ๆ
+//   หน้าจอเปิดได้ เมนูครบ แต่ทุกตารางว่างเปล่าโดยไม่มีข้อความบอกสาเหตุ
+//   (เจอจริง 1 ก.ย. 69 ตอนย้ายชุดทดสอบจากคลาวด์มารันในเครื่องเพื่อลดโควตา)
+// จึงอ่านที่อยู่จริงจาก env มาเปิดทางให้ทั้ง http และ websocket (realtime)
+function supabaseOrigin() {
+  const o = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!o) return "";
+  try {
+    const { origin, host, protocol } = new URL(o);
+    if (/\.supabase\.co$/i.test(host)) return "";                 // คลาวด์ — ครอบด้วยดอกจันอยู่แล้ว
+    const ws = protocol === "https:" ? `wss://${host}` : `ws://${host}`;
+    return ` ${origin} ${ws}`;
+  } catch { return ""; }
+}
+const connectSrc = `connect-src 'self' https://*.supabase.co wss://*.supabase.co${supabaseOrigin()}${sentryOrigin()}${hqOrigin()}`;
 
 const CSP = [
   "default-src 'self'",
@@ -58,7 +76,7 @@ const CSP = [
   // กรอบแสดงตัวอย่างไฟล์ในหน้าไฟล์ (PDF) — ไฟล์ตัวอย่างในเว็บเราเอง ('self'),
   // ไฟล์ที่ผู้ใช้อัปโหลดในโหมดสาธิต (blob:) และไฟล์จริงจาก Supabase Storage
   // ⚠️ ไม่ใส่ = เบราว์เซอร์บล็อกกรอบเงียบ ๆ ผู้ใช้เห็นแค่กรอบว่าง แยกไม่ออกจากไฟล์เสีย
-  "frame-src 'self' blob: https://*.supabase.co",
+  `frame-src 'self' blob: https://*.supabase.co${supabaseOrigin()}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -86,7 +104,7 @@ export function cspWithNonce(nonce) {
     // กรอบแสดงตัวอย่างไฟล์ในหน้าไฟล์ (PDF) — ไฟล์ตัวอย่างในเว็บเราเอง ('self'),
     // ไฟล์ที่ผู้ใช้อัปโหลดในโหมดสาธิต (blob:) และไฟล์จริงจาก Supabase Storage
     // ⚠️ ไม่ใส่ = เบราว์เซอร์บล็อกกรอบเงียบ ๆ ผู้ใช้เห็นแค่กรอบว่าง แยกไม่ออกจากไฟล์เสีย
-    "frame-src 'self' blob: https://*.supabase.co",
+    `frame-src 'self' blob: https://*.supabase.co${supabaseOrigin()}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
