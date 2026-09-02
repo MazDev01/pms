@@ -20,7 +20,7 @@ import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
-  UserCircle, Mail, Phone, Camera, Check, ShieldCheck, Building2, Lock, KeyRound, Trash2,
+  UserCircle, Mail, Phone, Camera, Check, ShieldCheck, Building2, Lock, KeyRound, Trash2, Eye, EyeOff,
 } from "lucide-react";
 import { แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
 
@@ -51,6 +51,8 @@ export default function ProfilePage() {
   useEffect(() => { if (userProfile.loaded) setForm(userProfile.profile); }, [userProfile.loaded, userProfile.profile]);
   const [saved, setSaved] = useState(false);
   const [pw, setPw] = useState({ cur: "", next: "", confirm: "" });
+  // ช่องที่กำลัง "เปิดดู" อยู่ (ปุ่มลูกตา · บอสสั่ง 2 ก.ย. 69) — แยกทีละช่อง
+  const [เปิดดูรหัส, setเปิดดูรหัส] = useState({ cur: false, next: false, confirm: false });
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -105,6 +107,8 @@ export default function ProfilePage() {
 
   const inp: React.CSSProperties = { width: "100%", border: `1px solid ${BORDER}`, borderRadius: 9, padding: "9px 12px 9px 36px", fontSize: "0.86rem", color: STEEL, outline: "none", boxSizing: "border-box", fontFamily: "inherit", background: "#fff" };
   const lbl: React.CSSProperties = { display: "block", fontSize: "0.72rem", fontWeight: 700, color: MUTED, marginBottom: 6 };
+  // ปุ่มลูกตาเปิดดูรหัสที่พิมพ์ (บอสสั่ง 2 ก.ย. 69) — แยกทีละช่อง ไม่ใช่เปิดพร้อมกันทั้งสามช่อง
+  //   ช่อง "ยืนยันรหัสผ่านใหม่" มีไว้กันพิมพ์ผิด ถ้าเปิดดูพร้อมกันหมดก็ไม่เหลืออะไรให้ยืนยัน
   const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "#f7f8fa", borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL };
 
   if (!isHQ) return null; // ฝั่งตัวแทน redirect ไป /settings (บัญชีดีลเลอร์) แล้ว — ไม่เรนเดอร์โปรไฟล์เดิม
@@ -234,8 +238,19 @@ export default function ProfilePage() {
                   <div style={{ position: "relative" }}>
                     <Lock size={15} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: MUTED }} />
                     {/* ห้ามเว้นวรรค — หน้าเข้าสู่ระบบตัดช่องว่างทิ้ง ตั้งไว้แล้วจะพิมพ์เข้าไม่ได้ */}
-                    <input style={inp} type="password" value={pw[f.k]} placeholder={f.ph}
+                    <input style={{ ...inp, paddingRight: 40 }} type={เปิดดูรหัส[f.k] ? "text" : "password"}
+                      value={pw[f.k]} placeholder={f.ph}
                       onChange={e => { setPw(p => ({ ...p, [f.k]: e.target.value.replace(/\s/g, "") })); setPwMsg(null); }} />
+                    {/* ปุ่มลูกตา — กดค้างไม่ได้ ต้องกดสลับ เพราะบางคนใช้เมาส์อย่างเดียว
+                        aria-label เปลี่ยนตามสถานะ เครื่องอ่านหน้าจอจะได้บอกถูกว่ากดแล้วเกิดอะไร */}
+                    <button type="button" tabIndex={-1}
+                      aria-label={เปิดดูรหัส[f.k] ? `ซ่อน${f.label}` : `แสดง${f.label}`}
+                      onClick={() => setเปิดดูรหัส(v => ({ ...v, [f.k]: !v[f.k] }))}
+                      style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+                        width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "none", border: "none", borderRadius: 8, cursor: "pointer", color: MUTED, padding: 0 }}>
+                      {เปิดดูรหัส[f.k] ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </div>
                 </div>
               ))}
