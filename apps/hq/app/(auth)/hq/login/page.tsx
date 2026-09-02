@@ -11,8 +11,8 @@ export const metadata: Metadata = {
 // (variant="hq": แบรนด์/หัวข้อ/ฟีเจอร์เชิงบริหารทั้งเครือ · บัญชีทดลองเฉพาะ HQ)
 export default function HQLoginPage() {
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-slate-200 p-4 sm:p-6">
-      <div className="grid w-full max-w-[1008px] grid-cols-1 overflow-hidden rounded-[26px] bg-white shadow-[0_30px_70px_-25px_rgba(14,42,92,0.35)] ring-1 ring-slate-200 lg:min-h-[600px] lg:grid-cols-[46%_54%]">
+    <main className="flex min-h-screen w-full items-center justify-center bg-slate-200 p-0 sm:p-6">
+      <div className="grid w-full max-w-[1008px] grid-cols-1 overflow-hidden rounded-none bg-white shadow-none ring-0 sm:rounded-[26px] sm:shadow-[0_30px_70px_-25px_rgba(14,42,92,0.35)] sm:ring-1 sm:ring-slate-200 lg:min-h-[600px] lg:grid-cols-[46%_54%]">
         <HeroSection variant="hq" />
         <LoginCard variant="hq" />
       </div>
