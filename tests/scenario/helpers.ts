@@ -150,6 +150,28 @@ export async function settle(page: Page, quietMs = 500, timeoutMs = 15_000) {
 
 export { RYG, CNX, ADMIN };
 
+// สร้างลูกค้าเป้าหมายของสาขา RYG ที่ "ยังไม่มีใบเสนอราคา" ไว้ให้เทสต์ออกใบใหม่ได้แน่นอน
+//   ใช้เมื่อไล่หาในตารางแล้วไม่เจอ (ฐานทดสอบมีของสะสมจากรอบก่อน ๆ จนทุกรายมีใบครบ)
+const ชื่อลูกค้าเป้าหมายว่าง = "ZZTEST-NEWQ";
+async function สร้างลูกค้าเป้าหมายว่างสำหรับออกใบ(): Promise<string> {
+  const session = await getSession(RYG);
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+  });
+  // เก็บกวาดของรอบก่อนก่อนเสมอ — ไม่งั้นฐานทดสอบพอกขึ้นทุกครั้งที่รัน
+  await sb.from("leads").delete().like("company", `${ชื่อลูกค้าเป้าหมายว่าง}%`);
+  const numId = 993_000 + (Date.now() % 900);
+  const ชื่อ = `${ชื่อลูกค้าเป้าหมายว่าง}-${numId}`;
+  const { error } = await sb.from("leads").insert({
+    id: `#L-${numId}`, dealer_code: "RYG", num_id: numId, name: ชื่อ, company: ชื่อ,
+    contact: "คุณทดสอบออกใบ", phone: "081-000-0007", province: "ระยอง", product: "โรงงาน",
+    status: "QUOTED", value: "500000", area: "100", assigned: "ทดสอบระบบ",
+  });
+  if (error) throw new Error(`[helpers] สร้างลูกค้าเป้าหมายสำหรับออกใบใหม่ไม่ได้: ${error.message}`);
+  return ชื่อ;
+}
+
 // เปิดฟอร์ม "สร้างใบเสนอราคาใหม่" — ตอนนี้อยู่ในแผงรายละเอียดลูกค้าเป้าหมาย (แท็บใบเสนอราคา)
 // wizard เดิมบนหน้า /quotations ถูกลบทั้งฟีเจอร์ → ตัวแทนออกใบจากลูกค้าเป้าหมายเท่านั้น
 export async function openLeadQuotationForm(page: Page, opts?: { ใบใหม่เท่านั้น?: boolean }) {
@@ -173,7 +195,17 @@ export async function openLeadQuotationForm(page: Page, opts?: { ใบใหม
       await page.keyboard.press("Escape");   // ปิดแผงแล้วลองแถวถัดไป
       await page.waitForTimeout(200);
     }
-    if (!เจอ) throw new Error("หาลูกค้าเป้าหมายที่ยังไม่มีใบเสนอราคาไม่เจอใน 10 แถวแรก");
+    // ⚠️ ไม่เจอ = ลูกค้าเป้าหมาย 10 แถวแรกมีใบครบแล้ว (ฐานทดสอบสะสมของจากรอบก่อน ๆ · เจอจริง 2 ก.ย. 69)
+    //    เดิมโยน error ทิ้ง ทั้งที่ไม่ใช่บั๊กของระบบ — ตอนนี้สร้างลูกค้าเป้าหมายใหม่ของเทสต์เองแทน
+    //    (ลบตัวที่ค้างจากรอบก่อนทิ้งก่อน จะได้ไม่พอกขึ้นเรื่อย ๆ)
+    if (!เจอ) {
+      const ชื่อ = await สร้างลูกค้าเป้าหมายว่างสำหรับออกใบ();
+      await page.getByPlaceholder("ค้นหาบริษัท ผู้ติดต่อ...").fill(ชื่อ);
+      const แถว = page.locator("tbody tr").filter({ hasText: ชื่อ }).first();
+      await expect(แถว).toBeVisible({ timeout: 20_000 });
+      await แถว.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
+      await page.getByRole("button", { name: "ใบเสนอราคา", exact: true }).first().click();
+    }
   } else {
     await เปิดแถว(0);
   }

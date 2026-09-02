@@ -21,9 +21,17 @@ test("การ์ดลูกค้าบนแดชบอร์ด ต้อ�
   expect(t).toContain("ลูกค้าใหม่ทั้งเครือ");
   // ค่าที่ขึ้นต้องเท่ากับจำนวนลูกค้าที่ join ในปีนี้จริง
   // ⚠️ อย่าฝังเลขปีไว้ — ค่าตั้งต้นของตัวกรองคือ "ปีนี้" ซึ่งเลื่อนไปเองทุกปี
-  const ปีปัจจุบัน = String(new Date().getFullYear());
+  // ช่วง "ปีนี้" ของตัวกรอง = 1 ม.ค. ถึง "วันนี้" (FilterContext: start = 1 ม.ค. · end = now)
+  //   ไม่ใช่ทั้งปีปฏิทิน — ลูกค้าที่ลงวันที่เป็นลูกค้าไว้ล่วงหน้า (เดือนหน้า) จึงยังไม่ถูกนับ ถูกต้องแล้ว
+  //   เดิมเทสต์นับ "ทุกแถวที่ขึ้นต้นด้วยปีนี้" เลยมากกว่าการ์ดตอนฐานมีวันที่ล่วงหน้าค้างอยู่
+  const วันนี้ = new Date();
+  const ต้นปี = `${วันนี้.getFullYear()}-01-01`;
+  const ถึงวันนี้ = `${วันนี้.getFullYear()}-${String(วันนี้.getMonth() + 1).padStart(2, "0")}-${String(วันนี้.getDate()).padStart(2, "0")}`;
   const { data: c } = await db.from("customers").select("join_date");
-  const ปีนี้ = (c ?? []).filter(x => String(x.join_date ?? "").startsWith(ปีปัจจุบัน)).length;
+  const ปีนี้ = (c ?? []).filter(x => {
+    const d = String(x.join_date ?? "").slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= ต้นปี && d <= ถึงวันนี้;
+  }).length;
   const การ์ด = page.locator("[class*=kpi]").filter({ hasText: "ลูกค้าใหม่ทั้งเครือ" }).first();
   const เลข = (await การ์ด.innerText()).match(/(\d+)\s*\n?\s*ราย/)?.[1];
   console.log(`ค่าบนการ์ด ${เลข} · ลูกค้าที่เริ่มปีนี้จริง ${ปีนี้}`);

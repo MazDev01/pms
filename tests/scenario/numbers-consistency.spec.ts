@@ -15,9 +15,11 @@ test.setTimeout(240_000);
 test("ยอดรวมบนหัวการ์ดกราฟ ต้องตรงกับผลบวกจริง (ไม่ใช่ผลบวกของค่าที่ปัดแล้ว)", async ({ page }) => {
   const ผลบวก = async () => {
     const { data: q } = await db.from("quotations").select("total_value,date,status").eq("status", "won");
-    const เริ่ม = new Date(); เริ่ม.setMonth(เริ่ม.getMonth() - 5); เริ่ม.setDate(1);
-    const isoเริ่ม = เริ่ม.toISOString().slice(0, 10);
-    const รวม = (q ?? []).filter(x => String(x.date).slice(0, 10) >= isoเริ่ม).reduce((s, x) => s + Number(x.total_value || 0), 0);
+    // ⚠️ ต้องใช้ "ช่วงเดียวกับตัวกรองบนหน้าจอ" ซึ่งค่าตั้งต้นคือ "ปีนี้" (FilterContext · DEFAULTS.preset)
+    //    เดิมบวกย้อนหลัง 6 เดือน — ตรงกันโดยบังเอิญตอนฐานทดสอบมีแต่ข้อมูลใหม่ ๆ เท่านั้น
+    //    พอฐานมีใบที่ปิดการขายช่วงต้นปีด้วย หัวการ์ด (นับทั้งปี) ย่อมมากกว่าผลบวก 6 เดือน แล้วฟ้องผิด
+    const ต้นปี = `${new Date().getFullYear()}-01-01`;
+    const รวม = (q ?? []).filter(x => String(x.date).slice(0, 10) >= ต้นปี).reduce((s, x) => s + Number(x.total_value || 0), 0);
     return `฿${(รวม / 1e6).toFixed(1)}M`;
   };
   const ผลบวกก่อนเปิดหน้า = await ผลบวก();

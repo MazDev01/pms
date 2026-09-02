@@ -1,7 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason, appEnv } from "./supabaseEnv";
-import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate } from "./funcHelpers";
+import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate, นำเข้าลูกค้าหนึ่งราย } from "./funcHelpers";
 import { settle } from "./helpers";
 import { กดตกลงในกล่องยืนยัน } from "./helpers";
 
@@ -73,13 +73,9 @@ async function runDealerFlow(page: Page, sb: SupabaseClient, code: string, willW
 
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
 
-  // 1) เพิ่มลูกค้าใหม่ (นำเข้าลูกค้าเดิม → เพิ่มทีละราย → กรอกเอง)
-  await page.getByRole("button", { name: "นำเข้าลูกค้าเดิม" }).click();
-  await page.getByRole("button", { name: "เพิ่มทีละราย" }).click();
-  await page.locator('input[placeholder="ชื่อบริษัท / ชื่อลูกค้า"]').fill(COMPANY);
-  await page.locator('input[placeholder="ชื่อผู้ติดต่อ"]').fill(`คุณ${code}`);
-  await page.locator('input[placeholder="0XX-XXX-XXXX"]').first().fill("0800000000");
-  await page.getByRole("button", { name: "เพิ่มลูกค้า" }).click();
+  // 1) เพิ่มลูกค้าใหม่ (นำเข้าลูกค้าเดิมจากไฟล์)
+  //    ปุ่ม "คีย์เองทีละราย" ถูกเอาออกตามที่บอสสั่ง 2 ก.ย. 69 — ทางเดียวคือนำเข้าไฟล์
+  await นำเข้าลูกค้าหนึ่งราย(page, COMPANY, { ผู้ติดต่อ: `คุณ${code}` });
   await expect.poll(async () => (await sb.from("customers").select("id").eq("company", COMPANY)).data?.length ?? 0,
     { timeout: 60_000, message: `${code}: ลูกค้าต้องถูกสร้าง` }).toBe(1);
   mark("customer_created");

@@ -116,9 +116,9 @@ test("[ux·dealer] ฟอร์มใบเสนอราคาหน้าเ�
   await expect(page.getByText("แม่แบบที่เสนอ")).toHaveCount(0);
   // หัวข้อ "รายการสินค้า (BOQ)" ต้องมีที่เดียว (LineItemsEditor ในตัว — ไม่ใส่ label ซ้ำ)
   await expect(page.getByText("รายการสินค้า (BOQ)")).toHaveCount(1);
-  // ยอดสรุปโผล่ที่เดียว แยก ก่อน/รวม VAT
+  // ยอดสรุปโผล่ที่เดียว แยก ก่อนภาษี / ยอดชำระสุทธิ (คำเปลี่ยนตอนเพิ่มหัก ณ ที่จ่าย 28 ส.ค. 69)
   await expect(page.getByText("มูลค่างาน (ก่อน VAT)")).toHaveCount(1);
-  await expect(page.getByText("ยอดรวมสุทธิ (รวม VAT)")).toHaveCount(1);
+  await expect(page.getByText("ยอดชำระสุทธิ")).toHaveCount(1);
 });
 
 // กันพลาด (ฝั่งตัวแทน): ตั้งค่า Dealer ใช้ปุ่มบันทึกกลางเดียวบนหัวเหมือน HQ + เตือน unsaved

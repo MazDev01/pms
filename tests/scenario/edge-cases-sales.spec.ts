@@ -256,18 +256,21 @@ test("[edge] VAT ต้องคำนวณจากยอดก่อน VAT �
   await page.waitForTimeout(800);
 
   const text = await page.locator("body").innerText();
-  const vatPct = Number(text.match(/VAT\s+(\d+(?:\.\d+)?)%/)?.[1] ?? "0");
-  expect(vatPct, "ต้องอ่านอัตรา VAT ที่ระบบใช้อยู่ได้").toBeGreaterThan(0);
+  // คำบนจอเปลี่ยนตอนเพิ่มภาษีหัก ณ ที่จ่าย (28 ส.ค. 69): "VAT 7%" → "ภาษีมูลค่าเพิ่ม 7%"
+  //   และ "ยอดรวมสุทธิ (รวม VAT)" → "รวมเป็นเงิน" (แล้วหัก ณ ที่จ่ายค่อยลบต่อเป็น "ยอดชำระสุทธิ")
+  const vatPct = Number(text.match(/ภาษีมูลค่าเพิ่ม\s+(\d+(?:\.\d+)?)%/)?.[1] ?? "0");
+  expect(vatPct, "ต้องอ่านอัตราภาษีมูลค่าเพิ่มที่ระบบใช้อยู่ได้").toBeGreaterThan(0);
 
   const net = 3 * 333;
-  const expectedVat = Math.round(net * vatPct / 100);
-  const expectedGrand = net + expectedVat;
+  // ปัดเป็นสตางค์ทีละบรรทัดเหมือนสูตรจริง (quoteTax.ts) — 999 × 7% = 69.93 ไม่ใช่ 70
+  const expectedVat = Math.round(net * vatPct) / 100;
+  const expectedGrand = Math.round((net + expectedVat) * 100) / 100;
 
-  // ยอดรวมสุทธิที่โชว์ต้องเท่ากับ ยอดก่อน VAT + VAT ที่ปัดแล้ว
-  const shown = text.match(/ยอดรวมสุทธิ \(รวม VAT\)\s*฿?([\d,]+)/)?.[1]?.replace(/,/g, "");
+  // ยอดรวมเป็นเงินที่โชว์ต้องเท่ากับ ยอดก่อน VAT + VAT ที่ปัดสตางค์แล้ว
+  const shown = text.match(/รวมเป็นเงิน\s*\+?\s*฿?([\d,]+(?:\.\d+)?)/)?.[1]?.replace(/,/g, "");
   expect(Number(shown ?? -1),
-    `ยอดรวมสุทธิต้องเป็น ${expectedGrand} (ก่อน VAT ${net} + VAT ${vatPct}% = ${expectedVat})`,
-  ).toBe(expectedGrand);
+    `ยอดรวมเป็นเงินต้องเป็น ${expectedGrand} (ก่อน VAT ${net} + VAT ${vatPct}% = ${expectedVat})`,
+  ).toBeCloseTo(expectedGrand, 2);
 });
 
 test("[edge] ใบเสนอราคายอด 0 บาท ต้องออกไม่ได้", async ({ page }) => {

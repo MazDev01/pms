@@ -18,9 +18,10 @@ test("[ui·dealer] Drawer ใบเสนอราคา (BOQ + สรุป + �
   // เอกสาร + BOQ + ยอดสรุป + เปลี่ยนสถานะ
   await expect(page.getByText("รายการสินค้า (BOQ)")).toBeVisible();
   await expect(page.getByText("รายละเอียดเอกสาร")).toBeVisible();
-  // สรุปยอด = ยอดรวมสุทธิท้าย BOQ (หัวข้อ "สรุปใบเสนอราคา" ถูกยุบไปเป็นป้ายบนหัวแผงแล้ว)
+  // สรุปยอด = ยอดชำระสุทธิท้าย BOQ (หัวข้อ "สรุปใบเสนอราคา" ถูกยุบไปเป็นป้ายบนหัวแผงแล้ว)
   // (ไม่เช็ค "เปลี่ยนสถานะ" — โผล่เฉพาะใบที่ลูกค้ายังไม่ตอบ ส่วนแถวแรกเป็นใบที่ตอบรับแล้ว)
-  await expect(page.getByText("ยอดรวมสุทธิ (รวม VAT)")).toBeVisible();
+  // คำบนจอเปลี่ยนตอนเพิ่มภาษีหัก ณ ที่จ่าย (28 ส.ค. 69): "ยอดรวมสุทธิ (รวม VAT)" → "รวมเป็นเงิน" + "ยอดชำระสุทธิ"
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "พิมพ์ PDF" })).toBeVisible();
   // โมดัลใหญ่ต้องไม่ทำให้หน้าเลื่อนแนวนอน
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -48,17 +49,20 @@ test("[ui·dealer] โมดัลลูกค้าแบบแท็บ (ข�
 test("[ux·dealer] ฟอร์มใบเสนอราคาแยก 'ก่อน VAT' (ยอดที่บันทึก) กับ 'รวม VAT' ชัดเจน", async ({ page }) => {
   await openLeadQuotationForm(page);
   await expect(page.getByText("มูลค่างาน (ก่อน VAT)")).toBeVisible();
-  await expect(page.getByText("= ยอดที่บันทึกในใบเสนอราคา")).toBeVisible();
-  await expect(page.getByText("ยอดรวมสุทธิ (รวม VAT)")).toBeVisible();
+  // ข้อความกำกับใต้ยอด เปลี่ยนคำตอนเพิ่มภาษีหัก ณ ที่จ่าย (28 ส.ค. 69) — ความหมายเดิม
+  await expect(page.getByText("= ยอดที่บันทึกเป็นยอดขาย (ภาษีไม่กระทบตัวนี้)")).toBeVisible();
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible();
   await expect(page.getByText(/Grand Total/), "เลิกใช้คำกำกวม Grand Total").toHaveCount(0);
 });
 
-test("[ux·dealer] โมดัลดูใบเสนอราคาแสดง VAT ครบ (ก่อน VAT + VAT% + รวม VAT)", async ({ page }) => {
+test("[ux·dealer] โมดัลดูใบเสนอราคาแสดง VAT ครบ (ก่อนภาษี + VAT% + ยอดชำระสุทธิ)", async ({ page }) => {
   await open(page, "dealer", "/quotations");
   await page.locator("tbody tr").first().click();
-  await expect(page.getByText("มูลค่างาน (ก่อน VAT)").first()).toBeVisible();
-  await expect(page.getByText(/^VAT \d+%$/).first()).toBeVisible();
-  await expect(page.getByText("ยอดรวมสุทธิ (รวม VAT)")).toBeVisible();
+  // ลำดับยอดในแผง: ยอดรวมย่อย → ภาษีมูลค่าเพิ่ม X% → รวมเป็นเงิน → (หัก ณ ที่จ่าย) → ยอดชำระสุทธิ
+  await expect(page.getByText("ยอดรวมย่อย").first()).toBeVisible();
+  await expect(page.getByText(/^ภาษีมูลค่าเพิ่ม \d+(\.\d+)?%$/).first()).toBeVisible();
+  await expect(page.getByText("รวมเป็นเงิน").first()).toBeVisible();
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible();
 });
 
 // ใบเสนอราคาที่สร้างใหม่ต้องเก็บ total เป็นเลขเต็ม (฿5,100,000) เหมือน seed ไม่ย่อ M/K
@@ -104,9 +108,9 @@ test("[ui·dealer] ฟอร์มใบเสนอราคา inline ใน�
   await expect(page.getByText("ชื่อโครงการ / เอกสาร")).toBeVisible();
   await expect(page.getByText("แม่แบบที่เสนอ"), "ช่องแม่แบบซ้ำถูกตัดออกแล้ว").toHaveCount(0);
   await expect(page.getByText("รายการสินค้า (BOQ)").first()).toBeVisible();
-  // ยอดเงินโชว์แบบเดียวกับ wizard: ก่อน VAT (ยอดที่บันทึก) + รวม VAT
+  // ยอดเงินโชว์แบบเดียวกับ wizard: ก่อน VAT (ยอดที่บันทึก) + ยอดชำระสุทธิ
   await expect(page.getByText("มูลค่างาน (ก่อน VAT)")).toBeVisible();
-  await expect(page.getByText("ยอดรวมสุทธิ (รวม VAT)")).toBeVisible();
+  await expect(page.getByText("ยอดชำระสุทธิ").first()).toBeVisible();
   await expect(page.getByText("ยอดสุทธิ (คำนวณ)"), "ฟิลด์แบบเก่าถูกแทนแล้ว").toHaveCount(0);
 });
 

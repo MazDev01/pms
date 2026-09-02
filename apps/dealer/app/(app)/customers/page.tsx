@@ -553,6 +553,9 @@ export default function CustomersPage(){
   const [importErr, setImportErr]     = useState("");
   const [importFile, setImportFile]   = useState("");   // ชื่อไฟล์ที่เลือก — ให้ผู้ใช้เห็นว่ากำลังดูไฟล์ไหน
   const [showManual, setShowManual]   = useState(false);
+  // ชื่อซ้ำตอนนำเข้า (บอสสั่ง 2 ก.ย. 69) — ห้ามเงียบ ๆ สร้างลูกค้าชื่อเดียวกันซ้อนอีกราย
+  //   ต้องถามก่อนว่าจะ "อัปเดตข้อมูล" (เติมเฉพาะช่องที่ว่างอยู่) หรือ "แทนที่" (เอาของในไฟล์ทับ)
+  const [ซ้ำที่ต้องถาม, setซ้ำที่ต้องถาม] = useState<{ row: ImportRow; เดิม: CustomerRow }[] | null>(null);
   // ⚠️ ช่องในฟอร์มนี้ต้องครบเท่ากับ "ข้อมูลที่ลูกค้าหนึ่งรายมี" (บอสสั่ง 1 ก.ย. 69)
   //    ที่เหลือของ CustomerRow เป็นค่าที่ระบบคิดเอง: จำนวนงานขาย/มูลค่ารวมมาจากดีลจริง
   //    ตัวย่อ/สีการ์ดมาจากชื่อบริษัท — กรอกเองไม่ได้และไม่ควรให้กรอก
@@ -751,6 +754,23 @@ export default function CustomersPage(){
       joinDate:r.joinDate||APP_NOW_ISO, owner:r.owner||legacyForm.owner||"สมชาย เชียงใหม่",
       initials:initials(r.company), color:PALETTE[id%PALETTE.length], totalValue:0, imported:true };
   }
+  /** รวมข้อมูลจากไฟล์เข้ากับลูกค้าที่มีอยู่แล้ว (ชื่อซ้ำ)
+   *  ⚠️ ห้ามแตะค่าที่ระบบคิดเองจากงานขายจริง — จำนวนงานขาย/มูลค่ารวม/รหัส/สีการ์ด
+   *     ถึงจะเลือก "แทนที่" ก็ทับได้แค่ข้อมูลติดต่อที่คนกรอก ไม่ใช่ตัวเลขยอดขาย */
+  function รวมลูกค้า(เดิม: CustomerRow, r: ImportRow, ทับ: boolean): CustomerRow {
+    const เอา = (ใหม่: string|undefined, ของเดิม: string|undefined) =>
+      ทับ ? (ใหม่?.trim() || ของเดิม) : (ของเดิม?.trim() || ใหม่);
+    return { ...เดิม,
+      name: เอา(r.name, เดิม.name) || เดิม.name,
+      company: เดิม.company,                      // ชื่อบริษัทคือตัวที่ใช้จับคู่ ไม่เปลี่ยน
+      email: เอา(r.email, เดิม.email) || เดิม.email,
+      phone: เอา(r.phone, เดิม.phone) || เดิม.phone,
+      address: เอา(r.address, เดิม.address),
+      province: เอา(r.province, เดิม.province) || เดิม.province,
+      category: เอา(r.category, เดิม.category) || เดิม.category,
+      joinDate: เอา(r.joinDate, เดิม.joinDate) || เดิม.joinDate,
+      owner: เอา(r.owner, เดิม.owner) || เดิม.owner };
+  }
   // รับได้ทั้ง CSV · Excel (.xlsx) · .xls/HTML ที่ระบบเก่าส่งออก — ตัวอ่านอยู่ที่ lib/importSheet
   async function onCsvFile(e: React.ChangeEvent<HTMLInputElement>){
     const f=e.target.files?.[0]; if(e.target)e.target.value=""; if(!f) return;
@@ -761,15 +781,31 @@ export default function CustomersPage(){
       setImportErr(rows.length?"":'ไม่พบข้อมูลในไฟล์ — ต้องมีคอลัมน์ "บริษัท" และมีอย่างน้อย 1 แถว');
     }catch(err){ setImportErr(friendlyError(err)); }
   }
-  async function commitImport(){
+  // เทียบชื่อบริษัทแบบ "คนอ่านแล้วถือว่าเป็นรายเดียวกัน" — ตัดช่องว่างหัวท้าย/ช่องว่างซ้ำ + ไม่สนตัวพิมพ์
+  const ชื่อเทียบ = (s: string) => s.trim().replace(/\s+/g," ").toLowerCase();
+  /** นำเข้าไฟล์ลูกค้าเดิม · โหมดซ้ำ = สิ่งที่ผู้ใช้เลือกในป๊อปอัพเตือนชื่อซ้ำ (บอสสั่ง 2 ก.ย. 69)
+   *    update  = เติมเฉพาะช่องที่ลูกค้าเดิมยังว่างอยู่ (ของเดิมที่กรอกไว้แล้วไม่หาย)
+   *    replace = เอาข้อมูลในไฟล์ทับของเดิม (ยกเว้นตัวเลขที่ระบบคิดเอง เช่น จำนวนงานขาย/มูลค่ารวม) */
+  async function commitImport(โหมดซ้ำ?: "update" | "replace"){
     if(savingImportRef.current) return; // กันกดนำเข้าซ้ำ (H8) — เดิมไม่มี guard กดรัวจะนำเข้าซ้ำทั้งชุด
+    // ── ชื่อซ้ำต้องถามก่อนเสมอ ────────────────────────────────────────────────
+    // เดิมนำเข้าไฟล์ที่มีลูกค้ารายเดิมอยู่แล้ว จะได้ลูกค้าชื่อเดียวกันสองแถวโดยไม่มีใครรู้
+    const ซ้ำ = importRows
+      .map(r => ({ row: r, เดิม: data.find(c => ชื่อเทียบ(c.company) === ชื่อเทียบ(r.company)) }))
+      .filter((x): x is { row: ImportRow; เดิม: CustomerRow } => !!x.เดิม);
+    if (ซ้ำ.length && !โหมดซ้ำ) { setซ้ำที่ต้องถาม(ซ้ำ); return; }
     savingImportRef.current = true;
     try {
       await warnBeforeUnloadDuring(async () => {
         // id จริงออกจาก counter อะตอมมิกใน addCustomer · base ที่ส่งไปใช้แค่ seed สีให้ต่างกัน
         // await ทีละรายการ กัน nextId อ่านค่าซ้ำก่อนสร้างเสร็จ (โหมด local)
         const base=Math.max(0,...data.map(c=>c.id));
-        for(let i=0;i<importRows.length;i++) await ctxAddCustomer(makeImported(importRows[i], base+i+1));
+        for(let i=0;i<importRows.length;i++){
+          const r = importRows[i];
+          const เดิม = data.find(c => ชื่อเทียบ(c.company) === ชื่อเทียบ(r.company));
+          if (เดิม) { ctxUpdateCustomer(รวมลูกค้า(เดิม, r, โหมดซ้ำ === "replace")); continue; }
+          await ctxAddCustomer(makeImported(r, base+i+1));
+        }
       });
       // ── กดนำเข้าแล้ว "เหมือนไม่มีอะไรเกิดขึ้น" (บอสแจ้ง 28 ส.ค. 69) ────────────────
       // ต้นเหตุ: ตารางกรองด้วยช่วงเวลาของหน้า (ค่าเริ่มต้น = ปีนี้) โดยดูจากกิจกรรมล่าสุด
@@ -787,12 +823,18 @@ export default function CustomersPage(){
         setPreset("custom"); setCustomRange(เริ่ม, จบ);
       }
       setQuery("");   // คำค้นเดิมค้างอยู่ก็ซ่อนรายการที่เพิ่งนำเข้าได้เหมือนกัน
-      setShowImport(false); setImportRows([]); setImportErr("");
-      toast.success(`นำเข้าลูกค้า ${จำนวน} ราย`, {
-        description: นอกช่วง.length
-          ? `${นอกช่วง.length} ราย เป็นลูกค้าตั้งแต่นอกช่วงเวลาที่กรองอยู่ — ขยายช่วงเวลาให้เห็นแล้ว`
-          : undefined,
-      });
+      setShowImport(false); setImportRows([]); setImportErr(""); setซ้ำที่ต้องถาม(null);
+      // บอกให้ครบว่า "เพิ่มใหม่กี่ราย ทับ/เติมของเดิมกี่ราย" — ไม่งั้นผู้ใช้ไม่รู้ว่าเกิดอะไรกับรายที่ซ้ำ
+      const เพิ่มใหม่ = จำนวน - ซ้ำ.length;
+      toast.success(
+        ซ้ำ.length
+          ? `นำเข้าลูกค้า ${จำนวน} ราย — เพิ่มใหม่ ${เพิ่มใหม่} ราย · ${โหมดซ้ำ === "replace" ? "แทนที่" : "อัปเดต"}ของเดิม ${ซ้ำ.length} ราย`
+          : `นำเข้าลูกค้า ${จำนวน} ราย`,
+        {
+          description: นอกช่วง.length
+            ? `${นอกช่วง.length} ราย เป็นลูกค้าตั้งแต่นอกช่วงเวลาที่กรองอยู่ — ขยายช่วงเวลาให้เห็นแล้ว`
+            : undefined,
+        });
     } catch(e){ alert("นำเข้าลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
     finally { savingImportRef.current = false; }
   }
@@ -1877,13 +1919,52 @@ export default function CustomersPage(){
               )}
             </div>
             <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
-              {/* เป็นปุ่มเหมือนกัน (บอสสั่ง 28 ส.ค. 69) — ของเดิมเป็นข้อความขีดเส้นใต้ ดูไม่ออกว่ากดได้ */}
-              <button className="btn btn-secondary btn-md" style={{marginRight:"auto"}}
-                onClick={()=>{setShowImport(false);setShowManual(true);}}>
-                <Plus size={13}/> คีย์เองทีละราย
-              </button>
+              {/* ปุ่ม "คีย์เองทีละราย" เอาออกตามที่บอสสั่ง 2 ก.ย. 69 — นำเข้าลูกค้าเดิมใช้ไฟล์อย่างเดียว */}
               <button className="btn btn-secondary btn-md" onClick={()=>setShowImport(false)}>ยกเลิก</button>
-              <button className="btn btn-primary btn-md" onClick={commitImport} disabled={!importRows.length}><Check size={14}/> นำเข้า {importRows.length>0?`${importRows.length} ราย`:""}</button>
+              {/* ⚠️ ต้องห่อด้วย arrow — ส่ง onClick ตรง ๆ จะยัด event เข้าไปเป็น "โหมดซ้ำ" แล้วข้ามป๊อปอัพเตือน */}
+              <button className="btn btn-primary btn-md" onClick={()=>commitImport()} disabled={!importRows.length}><Check size={14}/> นำเข้า {importRows.length>0?`${importRows.length} ราย`:""}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── เตือนชื่อซ้ำก่อนนำเข้า (บอสสั่ง 2 ก.ย. 69) ─────────────────────────────
+          ไฟล์ลูกค้าเดิมมักมีรายที่อยู่ในระบบแล้วปนมาด้วย ถ้าเพิ่มดื้อ ๆ จะได้ลูกค้าชื่อเดียวกันสองแถว
+          แยกไม่ออกว่าอันไหนของจริง — จึงต้องให้คนตัดสินก่อนว่าจะเติมของที่ขาด หรือเอาของใหม่ทับ */}
+      {ซ้ำที่ต้องถาม && (
+        <div onClick={()=>setซ้ำที่ต้องถาม(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:260,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div role="dialog" aria-label="พบชื่อลูกค้าซ้ำ" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
+            <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:"0.92rem",fontWeight:800}}>พบชื่อลูกค้าซ้ำ {ซ้ำที่ต้องถาม.length} ราย</div>
+              <button aria-label="ปิด" onClick={()=>setซ้ำที่ต้องถาม(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
+            </div>
+            <div style={{padding:20,display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{fontSize:"0.78rem",color:STEEL,lineHeight:1.7}}>
+                ลูกค้าเหล่านี้มีอยู่ในระบบแล้ว จะให้ทำอย่างไรกับข้อมูลในไฟล์
+              </div>
+              <div style={{maxHeight:200,overflowY:"auto",border:`1px solid ${BORDER}`,borderRadius:10}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.72rem"}}>
+                  <thead><tr style={{background:"#f8f9fb"}}>{["บริษัท","ในระบบตอนนี้","ในไฟล์"].map(h=><th key={h} style={{textAlign:"left",padding:"7px 10px",color:MUTED,fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {ซ้ำที่ต้องถาม.map(({row,เดิม},i)=>(
+                      <tr key={i} style={{borderTop:`1px solid ${BORDER}`}}>
+                        <td style={{padding:"7px 10px",fontWeight:700,color:STEEL}}>{เดิม.company}</td>
+                        <td style={{padding:"7px 10px",color:MUTED}}>{[เดิม.name,เดิม.phone].filter(Boolean).join(" · ")||"—"}</td>
+                        <td style={{padding:"7px 10px",color:MUTED}}>{[row.name,row.phone].filter(Boolean).join(" · ")||"—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{fontSize:"0.7rem",color:MUTED,lineHeight:1.7}}>
+                <b>อัปเดตข้อมูล</b> = เติมเฉพาะช่องที่ยังว่างอยู่ ของเดิมที่กรอกไว้แล้วไม่หาย<br/>
+                <b>แทนที่</b> = เอาข้อมูลในไฟล์ทับของเดิม (จำนวนงานขายและมูลค่ารวมยังคิดจากงานจริงเหมือนเดิม)
+              </div>
+            </div>
+            <div style={{padding:"14px 20px",borderTop:`1px solid ${BORDER}`,background:"#fafafa",display:"flex",justifyContent:"flex-end",gap:8}}>
+              <button className="btn btn-secondary btn-md" onClick={()=>setซ้ำที่ต้องถาม(null)}>ยกเลิก</button>
+              <button className="btn btn-secondary btn-md" onClick={()=>{setซ้ำที่ต้องถาม(null); void commitImport("replace");}}>แทนที่</button>
+              <button className="btn btn-primary btn-md" onClick={()=>{setซ้ำที่ต้องถาม(null); void commitImport("update");}}><Check size={14}/> อัปเดตข้อมูล</button>
             </div>
           </div>
         </div>

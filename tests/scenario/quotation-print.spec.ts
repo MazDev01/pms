@@ -52,7 +52,11 @@ test("[func·dealer] ตั้งชื่อบริษัทแล้ว → 
 
     await open(page, "dealer", "/quotations");
     await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
-    const เลขที่ใบ = (await page.getByText(/^Q-[A-Z0-9]+-\d+/).first().innerText()).trim();
+    // ⚠️ ต้องอ่านเลขที่ใบ "จากในแผงที่เปิดอยู่" เท่านั้น (แก้ 2 ก.ย. 69)
+    //    เดิมอ่านจากทั้งหน้า → ไปเจอเลขของแถวแรกในตารางที่ยังอยู่หลังแผง ซึ่งคนละใบกับที่เปิด
+    //    แล้วฟ้องว่า "เอกสารพิมพ์ผิดใบ" ทั้งที่แอปพิมพ์ถูก (ฐานข้อมูลมีใบมากกว่าใบเดียวเมื่อไหร่ก็พลาด)
+    const แผง = page.locator(".modal-pop").first();
+    const เลขที่ใบ = (await แผง.getByText(/Q-[A-Z0-9]+-\d+/).first().innerText()).trim();
 
     const [เอกสาร] = await Promise.all([
       context.waitForEvent("page"),
@@ -63,9 +67,12 @@ test("[func·dealer] ตั้งชื่อบริษัทแล้ว → 
 
     expect(html).toContain("ใบเสนอราคา");
     expect(html, `ต้องเป็นใบเดียวกับที่เปิดอยู่ (${เลขที่ใบ})`).toContain(เลขที่ใบ);
-    expect(html, "ต้องแยกยอดก่อน VAT / ภาษี / รวมสุทธิ ให้ลูกค้าเห็น").toContain("มูลค่างาน (ก่อน VAT)");
+    // คำที่ใช้บนกระดาษเปลี่ยนตอนทำภาษีหัก ณ ที่จ่าย (28 ส.ค. 69) — ยึดตามเอกสารจริง
+    //   มูลค่างาน → ภาษีมูลค่าเพิ่ม → รวมเป็นเงิน → (หัก ณ ที่จ่าย) → ยอดชำระสุทธิ
+    expect(html, "ต้องแยกยอดก่อนภาษี / ภาษี / ยอดชำระสุทธิ ให้ลูกค้าเห็น").toContain("มูลค่างาน");
     expect(html).toContain("ภาษีมูลค่าเพิ่ม");
-    expect(html).toContain("รวมสุทธิ");
+    expect(html).toContain("รวมเป็นเงิน");
+    expect(html).toContain("ยอดชำระสุทธิ");
     // เอกสารออกในนามตัวแทน ห้ามมีชื่อ Benjamin (ข้อบังคับเรื่องแบรนด์)
     expect(html.toLowerCase()).not.toContain("benjamin");
     // หัวกระดาษต้องไม่เขียนอายุใบตายตัว ต้องเป็นวันจริงของใบนั้น (แก้ 24 ส.ค. 69)

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
-import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag, waitRow } from "./funcHelpers";
+import { DEALER_ORIGIN, loginUI, db, cleanup, specNS, nsTag, waitRow, นำเข้าลูกค้าหนึ่งราย } from "./funcHelpers";
 
 // ── ข้อมูลที่เพิ่งเพิ่ม ต้องไม่ถูก "ผลการโหลดที่มาช้า" ลบหายไปจากหน้าจอ ──
 //
@@ -51,12 +51,8 @@ test("เพิ่มลูกค้าระหว่างรายการ�
   await page.goto(`${DEALER_ORIGIN}/customers`, { waitUntil: "domcontentloaded" });
 
   // เพิ่มลูกค้า "ระหว่างที่รายการยังโหลดค้างอยู่" — นี่คือหัวใจของเทสต์
-  await page.getByRole("button", { name: "นำเข้าลูกค้าเดิม" }).click();
-  await page.getByRole("button", { name: "คีย์เองทีละราย" }).click();
-  await page.locator('input[placeholder="ชื่อบริษัท / ชื่อลูกค้า"]').fill(company);
-  await page.locator('input[placeholder="ชื่อผู้ติดต่อ"]').fill("คุณทดสอบ");
-  await page.locator('input[placeholder="0XX-XXX-XXXX"]').first().fill("0800000000");
-  await page.getByRole("button", { name: "เพิ่มลูกค้า" }).click();
+  // ปุ่มคีย์เองทีละรายถูกเอาออกแล้ว (บอสสั่ง 2 ก.ย. 69) → เพิ่มลูกค้าด้วยการนำเข้าไฟล์แทน
+  await นำเข้าลูกค้าหนึ่งราย(page, company);
 
   // ยืนยันก่อนว่า "บันทึกลงฐานข้อมูลสำเร็จจริง" — ถ้าตรงนี้ไม่ผ่านแปลว่าคนละปัญหา (บันทึกไม่ลง ไม่ใช่จอทับ)
   const sb = await db(RYG);
