@@ -287,3 +287,30 @@ export async function ถ้ามีกล่องยืนยันให้�
   await expect(box).toBeHidden({ timeout: 10_000 });
   return true;
 }
+
+// ── ข้อความแจ้งเตือนของระบบ (sonner) — แทน alert() ของเบราว์เซอร์ (บอสสั่ง 2 ก.ย. 69) ──
+//
+// ⚠️ เหตุผลเดียวกับกล่องยืนยัน: page.on("dialog") ใช้ไม่ได้อีกแล้ว เพราะไม่ใช่กล่องเบราว์เซอร์
+//    และมันจะไม่ล้ม แค่ไม่มีอะไรถูกดัก → เทสต์เขียวแบบหลอก
+//    ตัวนี้เก็บข้อความแจ้งเตือน "ทุกใบที่เคยขึ้น" ระหว่างเทสต์ (ใบเก่าหายไปเองตามเวลา)
+export function ดักข้อความแจ้งเตือน(page: Page): () => string[] {
+  const เก็บ: string[] = [];
+  const อ่าน = async () => {
+    for (const t of await page.locator(".pms-confirm[role='status']").allInnerTexts().catch(() => [])) {
+      const ข้อความ = t.replace(/\s+/g, " ").trim();
+      if (ข้อความ && !เก็บ.includes(ข้อความ)) เก็บ.push(ข้อความ);
+    }
+  };
+  const จับเวลา = setInterval(() => { void อ่าน(); }, 250);
+  page.once("close", () => clearInterval(จับเวลา));
+  return () => เก็บ;
+}
+
+/** รอข้อความแจ้งเตือนที่ตรงกับที่คาด แล้วคืนข้อความนั้น (ว่าง = ไม่ขึ้นเลยจนหมดเวลา) */
+export async function รอข้อความแจ้งเตือน(page: Page, ตรงกับ: RegExp, timeout = 15_000): Promise<string> {
+  const ใบ = page.locator(".pms-confirm[role='status']").filter({ hasText: ตรงกับ }).first();
+  try {
+    await ใบ.waitFor({ state: "visible", timeout });
+    return (await ใบ.innerText()).replace(/\s+/g, " ").trim();
+  } catch { return ""; }
+}

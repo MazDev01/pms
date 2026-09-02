@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { RYG, skipReason } from "./supabaseEnv";
 import { DEALER_ORIGIN, HQ_ORIGIN, loginUI, db, specNS, nsTag, cleanup, waitRow } from "./funcHelpers";
-import { open } from "./helpers";
+import { open, ดักข้อความแจ้งเตือน } from "./helpers";
 
 // ── ความปลอดภัยรอง: ไฟล์รูปที่รับเข้าระบบ + การสร้างข้อมูลซ้ำ (ตรวจสอบระบบ 5 ส.ค. 69) ──
 //
@@ -33,9 +33,8 @@ const REAL_PNG = {
 
 /** ดักกล่องข้อความเตือน (alert) แล้วคืนฟังก์ชันอ่านข้อความที่ขึ้นมา */
 function catchAlerts(page: Page): () => string[] {
-  const msgs: string[] = [];
-  page.on("dialog", d => { msgs.push(d.message()); void d.dismiss().catch(() => {}); });
-  return () => msgs;
+  // เป็นข้อความของระบบ (sonner) ไม่ใช่กล่องเบราว์เซอร์แล้ว (บอสสั่ง 2 ก.ย. 69)
+  return ดักข้อความแจ้งเตือน(page);
 }
 
 /** เปิดหน้าโปรไฟล์แล้วรอจนช่องเลือกไฟล์พร้อมจริง

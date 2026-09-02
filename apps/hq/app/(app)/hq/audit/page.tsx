@@ -12,6 +12,7 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { clearAuditLog } from "@pms/shared/lib/adminApi";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 const PRIMARY = "#003366";
 // ⚠️ ห้ามกลับไปใช้ hqAuditCategory ของกระดิ่งแจ้งเตือน (บั๊กจริง 10 ส.ค. 69)
@@ -221,7 +222,7 @@ export default function HQAuditPage() {
                   //   กรองค้างไว้จะได้ตารางว่างทั้งที่มีรายการ "การล้างบันทึก" ที่ระบบเพิ่งเขียนไว้
                   setPage(0); setQ(""); setUserFilter("all"); setModuleFilter("all");
                   try { window.dispatchEvent(new Event(AUDIT_EVENT)); } catch { /* เบราว์เซอร์เก่า — ผู้ใช้กดโหลดใหม่เองได้ */ }
-                  alert(`ล้างบันทึกแล้ว ${res.removed.toLocaleString()} รายการ`);
+                  แจ้งสำเร็จ(`ล้างบันทึกแล้ว ${res.removed.toLocaleString()} รายการ`);
                 }}>
                 <Trash2 size={14} /> {clearing ? "กำลังล้าง…" : "ล้างบันทึกทั้งหมด"}
               </button>

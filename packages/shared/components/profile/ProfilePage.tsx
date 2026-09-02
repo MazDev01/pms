@@ -22,6 +22,7 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
   UserCircle, Mail, Phone, Camera, Check, ShieldCheck, Building2, Lock, KeyRound, Trash2,
 } from "lucide-react";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 const MUTED = "#6b7280";
 const BORDER = "#e5e7eb";
@@ -63,7 +64,7 @@ export default function ProfilePage() {
     if (!file) return;
     // ไฟล์ที่ไม่ผ่านการตรวจต้องบอกเหตุผล ไม่ใช่เงียบแล้วไม่มีอะไรเกิดขึ้น (ผู้ใช้จะนึกว่าปุ่มเสีย)
     try { set("avatar", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
-    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
   }
 
   function save() {
@@ -75,7 +76,7 @@ export default function ProfilePage() {
     };
     // เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่กลืน error แล้วขึ้นว่าบันทึกแล้ว
     void userProfile.save(clean)
-      .catch(e => alert("บันทึกโปรไฟล์ไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("บันทึกโปรไฟล์ไม่สำเร็จ: " + friendlyError(e)));
     setForm(clean);
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);

@@ -3,7 +3,7 @@
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
-import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
+import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 import { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from "react";
 import {
   Building2, Plus, Pencil, Trash2, X, Check, Save, RotateCcw,
@@ -94,10 +94,10 @@ function CompanyTab() {
     const cleanProf: UserProfile = { name: prof.name.trim() || session.name, email: prof.email.trim() || defaultProfileEmail(session.dealerCode), phone: prof.phone.trim(), avatar: prof.avatar };
     // รอให้เขียนเสร็จจริงทั้งคู่ — ไม่ยิงทิ้งแบบเดิม (ผู้ใช้กดเมนูอื่นต่อแล้วคำขอถูกยกเลิกกลางทาง)
     const งานโปรไฟล์ = userProfile.save(cleanProf)
-      .catch(() => alert("บันทึกโปรไฟล์ไม่สำเร็จ — รูปอาจมีขนาดใหญ่เกินไป"));
+      .catch(() => แจ้งพลาด("บันทึกโปรไฟล์ไม่สำเร็จ — รูปอาจมีขนาดใหญ่เกินไป"));
     // ข้อมูลบริษัท/โลโก้ = ของสาขา เขียนผ่าน repo · ล้มเหลวต้องบอก ไม่ใช่เงียบแล้วจอขึ้นว่าบันทึกแล้ว
     const งานบริษัท = dealerCfg.save({ issuer: form, logo })
-      .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
     // (สัญญาณ "bpms-company-updated" ถูกเอาออก 11 ส.ค. 69 — ไม่เคยมีใครรับฟังเลยทั้งโปรเจกต์
     //  ส่งไปก็ไม่เกิดอะไรขึ้น · PROFILE_UPDATED_EVENT ข้างล่างมีคนฟังจริง จึงเก็บไว้)
     await Promise.all([งานโปรไฟล์, งานบริษัท]);
@@ -111,7 +111,7 @@ function CompanyTab() {
     try {
       const url = await fileToResizedDataURL(file, 256);
       setProf(p => ({ ...p, avatar: url }));
-    } catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
+    } catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
   }
   const dirty = baseline !== "" && JSON.stringify({ form, logo, prof }) !== baseline;
   const reset = useCallback(() => {
@@ -263,7 +263,7 @@ function ImageUploadBox({
     e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
     try { onChange(await fileToResizedDataURL(file, 320)); } // ย่อก่อนเก็บ กัน quota เต็ม
-    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
   }
   return (
     <div>
@@ -313,7 +313,7 @@ function DocumentsTab() {
 
   const save = useCallback(() => {
     void dealerCfg.save({ document: doc })
-      .catch(e => alert("บันทึกตั้งค่าเอกสารไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("บันทึกตั้งค่าเอกสารไม่สำเร็จ: " + friendlyError(e)));
     setBaseline(JSON.stringify(doc));
     // dep ต้องเป็น dealerCfg.save (useCallback ที่เสถียร) ไม่ใช่ dealerCfg ทั้งก้อน
     // เพราะ hook คืน object ใหม่ทุกเรนเดอร์ → save ใหม่ทุกเรนเดอร์ → useMemo/useReport ยิงซ้ำ = เรนเดอร์วนไม่จบ
@@ -488,7 +488,7 @@ function PersonsTab() {
   async function readAvatar(file: File | undefined, cb: (url: string) => void) {
     if (!file) return;
     try { cb(await fileToResizedDataURL(file, 128)); }
-    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
   }
 
   useEffect(() => {
@@ -781,7 +781,7 @@ function NotificationsTab() {
   const save = useCallback(() => {
     const next = draftRef.current;
     void notifCfg.save({ notifPrefs: next })
-      .catch(e => alert("บันทึกการแจ้งเตือนไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("บันทึกการแจ้งเตือนไม่สำเร็จ: " + friendlyError(e)));
     window.dispatchEvent(new Event(NOTIF_PREFS_EVENT)); // ให้กระดิ่งบน Topbar อัปเดตทันที
     const nextRules = rulesDraftRef.current;
     void settingsRepo.saveLeadRules(currentDealer.code, nextRules); // local: ยิง event ให้หน้าอื่นอัปเดตทันที · supabase: RLS dealer-own

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
-import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
+import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 import { ตรึงคอลัมน์ปุ่ม } from "@pms/shared/components/ui/stickyActionCol";
 import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
@@ -310,13 +310,13 @@ function HQDealersPageInner() {
           // แล้วผู้ดูแลไม่มีทางไปต่อ นอกจากลบข้อมูลลูกค้าจริงทิ้ง ซึ่งไม่มีใครกล้าทำ
           // → เสนอทางที่สาม: ยกงานทั้งหมดให้สาขาที่รับช่วงต่อ แล้วค่อยลบสาขาที่ว่างแล้ว
           if (/ยังมีข้อมูล/.test(res.error)) { setMoveFrom(d); return; }
-          alert("ลบตัวแทนไม่สำเร็จ: " + res.error); return;
+          แจ้งพลาด("ลบตัวแทนไม่สำเร็จ: " + res.error); return;
         }
         // ลบสำเร็จ (หรือสำเร็จบางส่วน) = ทะเบียนสาขาหายไปจากระบบจริงแล้ว ต้องเอาออกจากหน้าจอเสมอ
         //   เดิมกรณี "สำเร็จบางส่วน" ถูกตีความเป็นล้มเหลว แล้วคงสาขาไว้บนจอ ทั้งที่ในระบบไม่มีแล้ว
         //   ผู้ดูแลจึงเห็นเหมือนสาขาฟื้นกลับมา และไม่รู้ว่ายังมีบัญชีค้างต้องเคลียร์
         setDealers(prev => prev.filter(x => x.id !== d.id));
-        if (res.warning) alert(res.warning);
+        if (res.warning) แจ้งพลาด(res.warning);
         // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
       });
       return;
@@ -325,7 +325,7 @@ function HQDealersPageInner() {
     // การเดาแบบนั้นทำให้ "โหลดยังไม่เสร็จแล้วผู้ใช้แก้" กลายเป็นคำสั่งลบทั้งตาราง
     void dealersRepo.remove(d.code)
       .then(() => setDealers(prev => prev.filter(x => x.id !== d.id)))
-      .catch(e => alert("ลบตัวแทนไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("ลบตัวแทนไม่สำเร็จ: " + friendlyError(e)));
     logAudit("ลบตัวแทน", `${d.code} · ${d.name}`);
   }
 
@@ -366,7 +366,7 @@ function HQDealersPageInner() {
     setEntering(d.id);
     const res = await impersonateDealer(d.code);
     setEntering(null);
-    if (!res.ok) { แท็บ?.close(); alert(`เข้าระบบแทน "${d.name}" ไม่สำเร็จ: ${res.error}`); return; }
+    if (!res.ok) { แท็บ?.close(); แจ้งพลาด(`เข้าระบบแทน "${d.name}" ไม่สำเร็จ: ${res.error}`); return; }
     if (แท็บ) แท็บ.location.href = res.link;
     else window.location.href = res.link;
     // ⚠️ ห้ามบันทึกซ้ำจากตรงนี้ (แก้ 10 ส.ค. 69) — ฝั่งเซิร์ฟเวอร์บันทึกให้แล้วตอนออกลิงก์
@@ -706,7 +706,7 @@ function HQDealersPageInner() {
                   setMoving(false);
                   if (!res.ok) { setMoveErr(res.error); return; }
                   setMoveFrom(null); setMoveTo("");
-                  alert(`ย้ายข้อมูล ${res.total} รายการจาก "${moveFrom.code}" ไป "${moveTo}" เรียบร้อย — ลบสาขา "${moveFrom.code}" ได้แล้ว`);
+                  แจ้งสำเร็จ(`ย้ายข้อมูล ${res.total} รายการจาก "${moveFrom.code}" ไป "${moveTo}" เรียบร้อย — ลบสาขา "${moveFrom.code}" ได้แล้ว`);
                 }}>
                 {moving ? "กำลังย้าย…" : "ย้ายข้อมูล"}
               </button>

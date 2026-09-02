@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { กดตกลงในกล่องยืนยัน } from "./helpers";
+import { กดตกลงในกล่องยืนยัน, ดักข้อความแจ้งเตือน } from "./helpers";
 import { RYG, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, loginUI, db, waitRow, cleanup, specNS, nsTag, pickTemplate, markQuotationSent
@@ -129,8 +129,8 @@ test("[edge] แนบไฟล์ที่ลูกค้าเป้าหม�
   const company = tg("แนบไฟล์");
   const { sb, row } = await newLeadOpened(page, company);
 
-  const alerts: string[] = [];
-  page.on("dialog", d => { alerts.push(d.message()); void d.dismiss().catch(() => {}); });
+  // ข้อความเตือนเป็นของระบบ (sonner) แล้ว ไม่ใช่กล่องเบราว์เซอร์ (บอสสั่ง 2 ก.ย. 69)
+  const แจ้งเตือน = ดักข้อความแจ้งเตือน(page);
 
   await row.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
   const fileInput = page.locator('input[type="file"]:not([accept*="image"])').first();
@@ -141,7 +141,7 @@ test("[edge] แนบไฟล์ที่ลูกค้าเป้าหม�
     name: tg("โปรแกรม") + ".exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ\x90\x00"),
   });
   // รอแบบ poll — ห้ามรอเป็นเวลาตายตัว ตอนเครื่องรับงานหนักกล่องข้อความขึ้นช้ากว่านั้นได้
-  await expect.poll(() => alerts.join(" | "),
+  await expect.poll(() => แจ้งเตือน().join(" | "),
     { timeout: 20_000, message: "ไฟล์ .exe ต้องถูกปฏิเสธพร้อมบอกว่ารับชนิดไหนบ้าง" }).toMatch(/ไม่รองรับ/);
 
   // 2) เพดานขนาดไฟล์ — ตรวจที่ตัวกฎโดยตรง ไม่ยิงไฟล์ 26 MB ผ่านเบราว์เซอร์

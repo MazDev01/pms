@@ -30,6 +30,7 @@ import {
   Users, Shield, Check, X, Plus, Search, KeyRound, Copy, MoreHorizontal,
   Eye, EyeOff, Pencil, Power, Clock, UserPlus, Phone, ImagePlus, Trash2, AlertTriangle, Mail, Building2,
 } from "lucide-react";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 const PRIMARY = "#003366";
 const STEEL = "#2D2D2D";
@@ -137,7 +138,7 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
     try {
       const url = await fileToResizedDataURL(file, 160);
       setF(p => ({ ...p, avatar: url }));
-    } catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
+    } catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปโปรไฟล์ไม่ได้"); }
   }
   // ⚠️ ดาว * ต้องตรงกับที่ตรวจตรงนี้เสมอ — บทบาท/แผนก มีตัวเลือก "ยังไม่ระบุ" แล้ว (17 ส.ค. 69)
   //    ถ้าไม่บังคับ จะได้ผู้ใช้ที่ไม่มีบทบาท = เข้าระบบมาแล้วไม่รู้ว่าเห็นอะไรได้บ้าง
@@ -283,7 +284,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [detailUser, setDetailUser] = useState<AppUser | null>(null);
 
   // toast มาตรฐานของหน้านี้เอง — ใช้ได้ทั้งตอน standalone (/hq/users) และ embedded ใน /hq/settings
-  // (BusCtx toast ของหน้าตั้งค่าใช้ไม่ได้ตอน standalone เพราะไม่มี provider ครอบ) แทน alert() เดิม
+  // (BusCtx toast ของหน้าตั้งค่าใช้ไม่ได้ตอน standalone เพราะไม่มี provider ครอบ) แทน แจ้งพลาด() เดิม
   // ที่บล็อกทั้งหน้าจอและดูไม่ตรงกับ pattern ของแอป (พบจาก /scenario 31 ก.ค. 69)
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const notify = useCallback((m: string) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2800); }, []);

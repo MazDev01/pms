@@ -19,6 +19,7 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { Search, Plus, Pencil, History, X, Check, Trash2, Building2, CalendarClock, ImagePlus, Layers, Tag, ChevronRight, FileText, Upload, Download, Paperclip } from "lucide-react";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -175,7 +176,7 @@ function SubtypeEditor({ value, images, prices, plans, mainPrice, onChange, onIm
   /** เลือกรูปให้แถวที่ "ยังไม่ได้กดเพิ่ม" — พักไว้ก่อน ผูกกับชื่อตอนกดเพิ่ม */
   async function pickDraftImg(file: File) {
     try { setDraftImg(await fileToResizedDataURL(file, 512, 0.85)); }
-    catch (err) { alert(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
   }
   function removeAt(i: number) {
     const name = value[i];
@@ -210,7 +211,7 @@ function SubtypeEditor({ value, images, prices, plans, mainPrice, onChange, onIm
   async function pickImg(name: string, file: File) {
     // ข้อความจาก imageResize บอกเหตุผลชัด (ชนิดไฟล์/ขนาด/ไฟล์เสีย) — ส่งต่อให้ผู้ใช้ตรง ๆ ดีกว่าข้อความกลาง ๆ
     try { onImagesChange({ ...images, [name]: await fileToResizedDataURL(file, 512, 0.85) }); }
-    catch (err) { alert(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
   }
   function clearImg(name: string) { const n = { ...images }; delete n[name]; onImagesChange(n); }
 
@@ -318,7 +319,7 @@ function ImageUpload({ value, onChange }: { value: string; onChange: (v: string)
     if (!file) return;
     setBusy(true);
     try { onChange(await fileToResizedDataURL(file, 512, 0.85)); }
-    catch (err) { alert(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง"); }
     finally { setBusy(false); }
   }
   return (
@@ -588,7 +589,7 @@ function HQMasterPageInner() {
     const target = delTarget;
     void catalogRepo.remove(target.id)
       .then(() => setCatalog(prev => prev.filter(p => p.id !== target.id)))
-      .catch(e => alert("ลบแม่แบบไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("ลบแม่แบบไม่สำเร็จ: " + friendlyError(e)));
     setDelTarget(null);
   }
 

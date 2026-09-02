@@ -4,7 +4,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
-import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
+import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 import {
   leadStatusLabel, leadStatusColor,
   buildLeadReport, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
@@ -336,7 +336,7 @@ function OverviewEditor({ lead, persons, onSave }: {
     e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
     try { set("logo", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
-    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
   }
 
   const dirty =
@@ -641,7 +641,7 @@ function LeadFormModal({ onClose, onSave, persons, initial }: {
     e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if (!file) return;
     try { set("logo", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
-    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
   }
   function submit() {
     if (savingRef.current) return;
@@ -1464,7 +1464,7 @@ export default function LeadsPage() {
     // ก้อนเดียวกับหน้าไฟล์/แผงลูกค้าซึ่งตรวจอยู่แล้ว (พบ 6 ส.ค. 69) · ใช้กฎกลางตัวเดียวกัน
     const problem = validateUpload(f);
     if (problem) {
-      alert(problem);
+      แจ้งพลาด(problem);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }

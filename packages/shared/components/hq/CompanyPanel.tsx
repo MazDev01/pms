@@ -8,6 +8,7 @@ import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
 import { Building2, Check, Save, Image as ImageIcon } from "lucide-react";
 import { useReportSection } from "@pms/shared/lib/settingsBus";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 // โลโก้ Benjamin เป็นแบรนด์มาตรฐานเดียว (ไฟล์ static) — ไม่มีคีย์เก็บโลโก้ที่อัปโหลดอีกแล้ว
 // ตัดทิ้งตามสเปก Enterprise: การ์ด "สินทรัพย์แบรนด์" (โลโก้ดาวน์โหลด / สี CI / ฟอนต์)
@@ -63,7 +64,7 @@ export function CompanyPanel({ embedded }: { embedded?: boolean } = {}) {
   }
   const save = useCallback(() => {
     void hqCompanyRepo.save(form)
-      .catch(e => alert("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
+      .catch(e => แจ้งพลาด("บันทึกข้อมูลบริษัทไม่สำเร็จ: " + friendlyError(e)));
     // ⚠️ ต้องบันทึกไว้ในประวัติการใช้งานด้วย (แก้ 10 ส.ค. 69)
     //   เดิมแก้ข้อมูลบริษัทจากหน้า /hq/company แล้ว "ไม่มีร่องรอยเลยสักแถว"
     //   ทั้งที่ทำแบบเดียวกันผ่านหน้าตั้งค่า → แท็บบริษัท มีบันทึกปกติ

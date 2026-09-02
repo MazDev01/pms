@@ -17,6 +17,7 @@ import { viewDealerPassword, resetDealerPassword, listDealerLoginEmails } from "
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { fmtISOToThai, type DealerRow } from "@pms/shared/lib/mock";
 import { useRole } from "@pms/shared/context/RoleContext";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 /** ช่องคัดลอกค่า (ปิดบังได้) — ใช้ทั้งที่นี่และตอนสร้างตัวแทนใหม่ */
 export function CopyField({ label, value, secret = false, defaultShown = false }: {
@@ -155,7 +156,7 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
     setแก้บัญชี(null);
     // รหัสผ่านจะโชว์ให้คัดลอกเฉพาะตอนที่ "มีรหัสใหม่จริง" — แก้อีเมลอย่างเดียวไม่ต้องโชว์
     if (res.password) setNewCreds({ email: res.email, password: res.password });
-    else alert(`เปลี่ยนอีเมลเข้าระบบของ "${dealer.name}" เป็น ${res.email} แล้ว — รหัสผ่านเดิมยังใช้ได้`);
+    else แจ้งสำเร็จ(`เปลี่ยนอีเมลเข้าระบบของ "${dealer.name}" เป็น ${res.email} แล้ว — รหัสผ่านเดิมยังใช้ได้`);
   }
 
   return (

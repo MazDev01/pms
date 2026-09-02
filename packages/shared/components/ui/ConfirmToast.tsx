@@ -76,6 +76,30 @@ export function ยืนยัน(o: ตัวเลือกยืนยัน
   });
 }
 
+// ── ข้อความแจ้งเตือนของระบบ (แทน alert ของเบราว์เซอร์ · บอสสั่ง 2 ก.ย. 69) ──────────
+//
+// ต่างจาก ยืนยัน() ตรงที่ "ไม่ต้องได้คำตอบ" — แค่บอกผลแล้วหายไปเอง
+// ใช้หน้าตาชุดเดียวกับกล่องยืนยัน จึงเป็นของระบบเราทั้งหมด ไม่ใช่กล่องของ Chrome/Windows
+// (กล่องเบราว์เซอร์ขึ้นหัวว่า "benjamin-dealer.vercel.app บอกว่า" ซึ่งอ่านเหมือนเว็บหลอกลวง)
+const ขึ้นบรรทัดใหม่ = String.fromCharCode(10);
+function แจ้ง(ข้อความ: string, o: { ผิดพลาด?: boolean; วินาที?: number } = {}) {
+  const [หัว, ...ที่เหลือ] = ข้อความ.split(ขึ้นบรรทัดใหม่);
+  toast.custom(() => (
+    <div className="pms-confirm" role="status">
+      <div className="pms-confirm-head">
+        {o.ผิดพลาด && <AlertTriangle size={16} className="pms-confirm-icon" aria-hidden />}
+        <div className="pms-confirm-title">{หัว}</div>
+      </div>
+      {ที่เหลือ.length > 0 && <div className="pms-confirm-detail">{ที่เหลือ.join(ขึ้นบรรทัดใหม่)}</div>}
+    </div>
+  ), { duration: (o.วินาที ?? (o.ผิดพลาด ? 7 : 4)) * 1000, className: "pms-confirm-toast" });
+}
+
+/** บอกว่า "ทำไม่สำเร็จ / ทำไม่ได้" — ค้างนานกว่าปกติ เพราะผู้ใช้ต้องอ่านเหตุผล */
+export function แจ้งพลาด(ข้อความ: string): void { แจ้ง(ข้อความ, { ผิดพลาด: true }); }
+/** บอกว่า "ทำสำเร็จแล้ว" */
+export function แจ้งสำเร็จ(ข้อความ: string): void { แจ้ง(ข้อความ); }
+
 /** ปิดใบที่ค้างอยู่แล้วตอบว่า "ยกเลิก" — ใช้ตอนออกจากหน้า/เปลี่ยนบริบทกลางคัน */
 export function ปิดคำถามที่ค้าง(): void {
   if (!ใบที่ค้าง) return;

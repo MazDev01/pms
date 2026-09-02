@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { open } from "./helpers";
+import { open, ดักข้อความแจ้งเตือน, รอข้อความแจ้งเตือน } from "./helpers";
 
 // ─── ปุ่มพิมพ์ใบเสนอราคา (E2E) ────────────────────────────────────────────────
 // เอกสารนี้คือกระดาษแผ่นเดียวที่หลุดออกไปถึงมือลูกค้า แต่เดิมไม่มีเทสต์เลยสักข้อ
@@ -10,8 +10,8 @@ import { open } from "./helpers";
 
 test("[func·dealer] ยังไม่ตั้งชื่อบริษัท → ห้ามพิมพ์ ต้องบอกเหตุผลและพาไปหน้าตั้งค่า", async ({ page, context }) => {
   await context.addInitScript(() => { window.print = () => {}; });
-  let ข้อความเตือน = "";
-  page.on("dialog", async d => { ข้อความเตือน = d.message(); await d.dismiss(); });
+  // คำเตือนเป็นข้อความของระบบ (sonner) แล้ว — กล่องเบราว์เซอร์ไม่ขึ้นอีก (บอสสั่ง 2 ก.ย. 69)
+  const แจ้งเตือน = ดักข้อความแจ้งเตือน(page);
 
   await open(page, "dealer", "/settings");
   const ชื่อบริษัท = page.getByLabel("ชื่อบริษัท").or(page.locator('input[placeholder="บริษัท ตัวอย่าง จำกัด"]')).first();
@@ -24,7 +24,8 @@ test("[func·dealer] ยังไม่ตั้งชื่อบริษั�
 
   // ต้องไม่มีเอกสารเปิดออกมา — เอกสารที่ไม่มีชื่อผู้เสนอราคาส่งให้ลูกค้าไม่ได้
   await expect.poll(() => context.pages().length, { timeout: 3000 }).toBe(1);
-  expect(ข้อความเตือน, "ต้องบอกด้วยว่าติดที่อะไร ไม่ใช่กดแล้วเงียบ").toContain("ชื่อบริษัท");
+  expect(await รอข้อความแจ้งเตือน(page, /ชื่อบริษัท/),
+    `ต้องบอกด้วยว่าติดที่อะไร ไม่ใช่กดแล้วเงียบ (ข้อความที่ขึ้น: ${JSON.stringify(แจ้งเตือน())})`).toContain("ชื่อบริษัท");
   await expect(page).toHaveURL(/\/settings/);
 });
 

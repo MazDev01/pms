@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { SortableTh } from "@pms/shared/components/ui/SortableTh";
 import { useRouter } from "next/navigation";
-import { ยืนยัน } from "@pms/shared/components/ui/ConfirmToast";
+import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 import {
   quotationStatusLabel, quotationStatusColor,
   DEFAULT_ISSUER, DEFAULT_DEALER_CODE,
@@ -631,11 +631,11 @@ function QuotationsPageInner(){
     // ⚠️ "ยังโหลดข้อมูลบริษัทไม่เสร็จ" ไม่เท่ากับ "ยังไม่ได้ตั้งชื่อบริษัท" (เจอจริง 27 ส.ค. 69)
     //    เปิดหน้าแล้วกดพิมพ์เร็ว ๆ จะขึ้นว่า "กรุณาตั้งชื่อบริษัท" ทั้งที่ตั้งไว้เรียบร้อยแล้ว
     //    แล้วเอกสารก็ไม่ออก ผู้ใช้ไม่รู้ว่าต้องทำอะไร (กติกาเดียวกับด่านปิดการขายที่แก้ไปแล้ว)
-    if(!dealerCfg.loaded){ alert("กำลังโหลดข้อมูลบริษัท — รอสักครู่แล้วกดพิมพ์อีกครั้ง"); return; }
-    if(!issuer.company.trim()){ alert("กรุณาตั้งชื่อบริษัทที่ ตั้งค่า → โปรไฟล์บริษัท ก่อนพิมพ์ใบเสนอราคา"); router.push("/settings"); return; }
+    if(!dealerCfg.loaded){ แจ้งสำเร็จ("กำลังโหลดข้อมูลบริษัท — รอสักครู่แล้วกดพิมพ์อีกครั้ง"); return; }
+    if(!issuer.company.trim()){ แจ้งพลาด("กรุณาตั้งชื่อบริษัทที่ ตั้งค่า → โปรไฟล์บริษัท ก่อนพิมพ์ใบเสนอราคา"); router.push("/settings"); return; }
     const cust=customers.find(c=>c.id===q.customerId);
     const w=window.open("","_blank","width=880,height=1040");
-    if(!w){ alert("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
+    if(!w){ แจ้งพลาด("เบราว์เซอร์บล็อกป็อปอัป — กรุณาอนุญาตป็อปอัปเพื่อพิมพ์ใบเสนอราคา"); return; }
     // ใบเก่าใช้สแนปช็อตผู้ออกที่ตรึงไว้ (คงชื่อเดิม); ใบที่ยังไม่มีค่อยใช้โปรไฟล์ปัจจุบัน
     // VAT: ใช้สแนปช็อตที่ตรึงไว้กับใบตอนสร้าง (q.vatPercent) เสมอถ้ามี
     //   ใบเก่าที่ไม่มีค่อย fallback ไปใช้ค่าที่สาขาตั้งไว้ปัจจุบัน (ตัวแทนตั้ง VAT เองได้แล้ว · 7 ส.ค. 69)

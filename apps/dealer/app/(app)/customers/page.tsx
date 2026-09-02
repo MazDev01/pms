@@ -16,7 +16,6 @@ import {
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
 import { อ่านตารางจากไฟล์, จับคู่ตามหัวตาราง, แปลงวันที่นำเข้า, นามสกุลที่รับได้ } from "@pms/shared/lib/importSheet";
 import { สร้างไฟล์Xlsx } from "@pms/shared/lib/makeXlsx";
-import { toast } from "sonner";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
@@ -76,6 +75,7 @@ import {
 } from "lucide-react";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
 import { customerDeletionImpact } from "@pms/shared/lib/customerDeletion";
+import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 // ── Design tokens ────────────────────────────────────────────
 const PRIMARY = "#003366";
@@ -345,7 +345,7 @@ function CustomerOverviewEditor({ customer, code, onSave }:{
     e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
     if(!file) return;
     try { set("logo", await fileToResizedDataURL(file, 256)); } // ย่อก่อนเก็บ กัน quota เต็ม
-    catch (err) { alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
   }
   const dirty = (Object.keys(f) as (keyof CustomerForm)[]).some(k => (f[k] ?? "") !== ((customer as unknown as CustomerForm)[k] ?? ""));
 
@@ -598,7 +598,7 @@ export default function CustomersPage(){
     const ext = ("." + (f.name.split(".").pop() ?? "")).toLowerCase();
     const problem = validateUpload(f);
     if (problem) {
-      alert(problem);
+      แจ้งพลาด(problem);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -826,16 +826,15 @@ export default function CustomersPage(){
       setShowImport(false); setImportRows([]); setImportErr(""); setซ้ำที่ต้องถาม(null);
       // บอกให้ครบว่า "เพิ่มใหม่กี่ราย ทับ/เติมของเดิมกี่ราย" — ไม่งั้นผู้ใช้ไม่รู้ว่าเกิดอะไรกับรายที่ซ้ำ
       const เพิ่มใหม่ = จำนวน - ซ้ำ.length;
-      toast.success(
+      แจ้งสำเร็จ([
         ซ้ำ.length
           ? `นำเข้าลูกค้า ${จำนวน} ราย — เพิ่มใหม่ ${เพิ่มใหม่} ราย · ${โหมดซ้ำ === "replace" ? "แทนที่" : "อัปเดต"}ของเดิม ${ซ้ำ.length} ราย`
           : `นำเข้าลูกค้า ${จำนวน} ราย`,
-        {
-          description: นอกช่วง.length
-            ? `${นอกช่วง.length} ราย เป็นลูกค้าตั้งแต่นอกช่วงเวลาที่กรองอยู่ — ขยายช่วงเวลาให้เห็นแล้ว`
-            : undefined,
-        });
-    } catch(e){ alert("นำเข้าลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
+        ...(นอกช่วง.length
+          ? [`${นอกช่วง.length} ราย เป็นลูกค้าตั้งแต่นอกช่วงเวลาที่กรองอยู่ — ขยายช่วงเวลาให้เห็นแล้ว`]
+          : []),
+      ].join(String.fromCharCode(10)));
+    } catch(e){ แจ้งพลาด("นำเข้าลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
     finally { savingImportRef.current = false; }
   }
   async function createLegacy(){
@@ -853,7 +852,7 @@ export default function CustomersPage(){
       );
       setShowManual(false);
       setLegacyForm(legacyเปล่า);
-    } catch(e){ alert("เพิ่มลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
+    } catch(e){ แจ้งพลาด("เพิ่มลูกค้าไม่สำเร็จ: " + friendlyError(e)); }
     finally { savingLegacyRef.current = false; }
   }
   // เปิด dialog สร้างดีลใหม่ — prefill แม่แบบ/ผู้รับผิดชอบจากลูกค้า (เรียกจากการ์ด/หัวโมดัล/แท็บดีล)
@@ -1294,7 +1293,7 @@ export default function CustomersPage(){
                             try {
                               await customerNotes.add({ title:noteTitle.trim(), content:noteBody.trim(), category:"ลูกค้า", color:"#003366", customerId:selected.id });
                               setAddingNote(false); setNoteTitle(""); setNoteBody("");
-                            } catch(e){ alert("บันทึกโน้ตไม่สำเร็จ: " + friendlyError(e)); }
+                            } catch(e){ แจ้งพลาด("บันทึกโน้ตไม่สำเร็จ: " + friendlyError(e)); }
                           }}>บันทึกโน้ต</button>
                       </div>
                     </div>
@@ -1819,7 +1818,7 @@ export default function CustomersPage(){
                         try{
                           const รูป=await fileToResizedDataURL(file,256);  // ย่อก่อนเก็บ กัน quota เต็ม
                           setLegacyForm(f=>({...f,logo:รูป}));
-                        } catch(err){ alert(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
+                        } catch(err){ แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นโลโก้ไม่ได้"); }
                       }} />
                     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>legacyLogoRef.current?.click()}>เลือกรูป</button>
                     {legacyForm.logo && (
