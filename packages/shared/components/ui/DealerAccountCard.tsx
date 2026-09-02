@@ -194,6 +194,46 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
   const [รหัสที่เห็น, setรหัสที่เห็น] = useState("");
   const [msgReveal, setMsgReveal] = useState<{ ok: boolean; text: string } | null>(null);
   const [กำลังดู, setกำลังดู] = useState(false);
+  const [หมดอายุเมื่อ, setหมดอายุเมื่อ] = useState(0);   // เวลาที่เลขยืนยันหมดอายุ (ms)
+  const [เหลือวินาที, setเหลือวินาที] = useState(0);
+
+  // ── กดรีเฟรชแล้วต้องกรอกเลขเดิมต่อได้ จนกว่าเลขจะหมดอายุ (บอสสั่ง 2 ก.ย. 69) ──────
+  // เดิมพอรีเฟรช ช่องกรอกหายไปหมด ต้องกดขอเลขใหม่ซึ่งติดด่านกันขอถี่ (3 ครั้ง/15 นาที)
+  // แล้วกลายเป็นเข้าไม่ได้เลยทั้งที่เลขในอีเมลยังใช้ได้อยู่ — จำสถานะไว้ในเครื่องผู้ใช้เอง
+  // (เก็บแค่ "ส่งไปที่อีเมลไหน" กับ "หมดอายุกี่โมง" — ไม่มีตัวเลขยืนยันหรือรหัสผ่านใด ๆ)
+  const คีย์จำ = `pms_reveal_${dealerCode}`;
+  const OTP_อายุ = 60 * 60 * 1000;   // เลขจากอีเมลมีอายุ 1 ชั่วโมง (ค่ามาตรฐานของ Supabase)
+  useEffect(() => {
+    try {
+      const เก็บไว้ = JSON.parse(localStorage.getItem(คีย์จำ) || "null") as { sentTo: string; exp: number } | null;
+      if (เก็บไว้ && เก็บไว้.exp > Date.now()) {
+        setส่งไปที่(เก็บไว้.sentTo); setหมดอายุเมื่อ(เก็บไว้.exp); setขั้นดูรหัส("กรอกเลข");
+      } else if (เก็บไว้) localStorage.removeItem(คีย์จำ);
+    } catch { /* อ่านไม่ได้ = เริ่มใหม่ตามปกติ */ }
+  }, [คีย์จำ]);
+
+  // นับถอยหลังให้เห็นว่าเลขในอีเมลยังใช้ได้อีกนานแค่ไหน · หมดแล้วปิดช่องกรอกเอง
+  useEffect(() => {
+    if (ขั้นดูรหัส !== "กรอกเลข" || !หมดอายุเมื่อ) { setเหลือวินาที(0); return; }
+    const นับ = () => {
+      const เหลือ = Math.max(0, Math.round((หมดอายุเมื่อ - Date.now()) / 1000));
+      setเหลือวินาที(เหลือ);
+      if (เหลือ === 0) {
+        ลืมเลขที่ขอไว้();
+        setขั้นดูรหัส("ปิด");
+        setMsgReveal({ ok: false, text: "เลขยืนยันหมดอายุแล้ว — กดขอเลขใหม่อีกครั้ง" });
+      }
+    };
+    นับ();
+    const t = setInterval(นับ, 1000);
+    return () => clearInterval(t);
+  }, [ขั้นดูรหัส, หมดอายุเมื่อ]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  function ลืมเลขที่ขอไว้() {
+    setหมดอายุเมื่อ(0);
+    try { localStorage.removeItem(คีย์จำ); } catch { /* ไม่มีที่เก็บ = ไม่ต้องล้าง */ }
+  }
+  const นาทีวินาที = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   // รหัสที่โชว์บนจอต้องไม่ค้างไว้ตลอด — ปิดเองหลัง 60 วินาที (จอที่เปิดค้างไว้ในออฟฟิศ)
   useEffect(() => {
@@ -206,7 +246,9 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
     setMsgReveal(null); setกำลังดู(true);
     try {
       const r = await account.sendRevealCode(dealerCode);
-      setส่งไปที่(r.sentTo); setขั้นดูรหัส("กรอกเลข"); setเลขยืนยัน("");
+      const exp = Date.now() + OTP_อายุ;
+      setส่งไปที่(r.sentTo); setขั้นดูรหัส("กรอกเลข"); setเลขยืนยัน(""); setหมดอายุเมื่อ(exp);
+      try { localStorage.setItem(คีย์จำ, JSON.stringify({ sentTo: r.sentTo, exp })); } catch { /* ไม่มีที่เก็บ = รีเฟรชแล้วต้องขอใหม่ */ }
     } catch (e) { setMsgReveal({ ok: false, text: friendlyError(e) }); }
     finally { setกำลังดู(false); }
   }
@@ -220,7 +262,7 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
     setกำลังดู(true);
     try {
       const r = await account.reveal(dealerCode, เลขยืนยัน);
-      setรหัสที่เห็น(r.password); setขั้นดูรหัส("เห็นแล้ว"); setเลขยืนยัน("");
+      setรหัสที่เห็น(r.password); setขั้นดูรหัส("เห็นแล้ว"); setเลขยืนยัน(""); ลืมเลขที่ขอไว้();
     } catch (e) { setMsgReveal({ ok: false, text: friendlyError(e) }); }
     finally { setกำลังดู(false); }
   }
@@ -328,7 +370,7 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
               <button onClick={() => void ยืนยันเลขแล้วดูรหัส()} disabled={กำลังดู} className="btn btn-primary btn-sm">
                 {กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}
               </button>
-              <button onClick={() => { setขั้นดูรหัส("ปิด"); setMsgReveal(null); }} className="btn btn-secondary btn-sm">ยกเลิก</button>
+              <button onClick={() => { setขั้นดูรหัส("ปิด"); setMsgReveal(null); ลืมเลขที่ขอไว้(); }} className="btn btn-secondary btn-sm">ยกเลิก</button>
             </span>
           ) : (
             <button onClick={() => void ขอเลขทางอีเมล()} disabled={กำลังดู} className="btn btn-secondary btn-sm"
@@ -340,7 +382,8 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
         {/* บอกให้ชัดว่าเลขไปที่ไหน และทำไมต้องมีขั้นตอนนี้ */}
         {ขั้นดูรหัส === "กรอกเลข" && !msgReveal && (
           <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: 8 }}>
-            ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอก (เลขมีอายุจำกัด)
+            ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอก
+            {เหลือวินาที > 0 && <> · ใช้ได้อีก <b>{นาทีวินาที(เหลือวินาที)}</b> นาที (ปิดหน้านี้แล้วกลับมากรอกต่อได้)</>}
           </div>
         )}
         {ขั้นดูรหัส === "เห็นแล้ว" && (

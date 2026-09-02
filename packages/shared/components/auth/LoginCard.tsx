@@ -60,6 +60,46 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   const [resetCode, setResetCode] = useState("");
   const [resetPw, setResetPw] = useState("");
   const [resetPw2, setResetPw2] = useState("");
+  const [resetExp, setResetExp] = useState(0);     // เลขยืนยันหมดอายุกี่โมง (ms)
+  const [resetLeft, setResetLeft] = useState(0);   // เหลืออีกกี่วินาที (ไว้โชว์บนจอ)
+
+  // ── กดรีเฟรช/ปิดหน้าไปแล้วกลับมา ต้องกรอกเลขเดิมต่อได้จนกว่าจะหมดอายุ (บอสสั่ง 2 ก.ย. 69) ──
+  //    เดิมพอรีเฟรช ช่องกรอกหายหมด ต้องกดขอเลขใหม่ ซึ่งติดด่านกันขอถี่ (3 ครั้ง/15 นาที)
+  //    → กลายเป็นตั้งรหัสใหม่ไม่ได้เลยทั้งที่เลขในอีเมลยังใช้ได้
+  //    เก็บแค่ "อีเมลที่ขอไว้" กับ "เวลาหมดอายุ" ในเครื่องผู้ใช้ — ไม่มีเลขยืนยัน/รหัสผ่านใด ๆ
+  const RESET_KEY = "pms_reset_otp";
+  const OTP_อายุ = 60 * 60 * 1000;   // เลขจากอีเมลมีอายุ 1 ชั่วโมง
+  useEffect(() => {
+    try {
+      const เก็บไว้ = JSON.parse(localStorage.getItem(RESET_KEY) || "null") as { email: string; exp: number } | null;
+      if (เก็บไว้ && เก็บไว้.exp > Date.now()) {
+        setEmail(e => e || เก็บไว้.email);
+        setResetExp(เก็บไว้.exp); setResetOpen(true);
+        setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${เก็บไว้.email} แล้ว — เอาเลขจากอีเมลมากรอกด้านล่าง` });
+      } else if (เก็บไว้) localStorage.removeItem(RESET_KEY);
+    } catch { /* อ่านไม่ได้ = เริ่มใหม่ตามปกติ */ }
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!resetOpen || !resetExp) { setResetLeft(0); return; }
+    const นับ = () => {
+      const เหลือ = Math.max(0, Math.round((resetExp - Date.now()) / 1000));
+      setResetLeft(เหลือ);
+      if (เหลือ === 0) {
+        ลืมเลขที่ขอไว้(); setResetOpen(false);
+        setForgotMsg({ ok: false, text: "เลขยืนยันหมดอายุแล้ว — กด \"ลืมรหัสผ่าน?\" เพื่อขอเลขใหม่" });
+      }
+    };
+    นับ();
+    const t = setInterval(นับ, 1000);
+    return () => clearInterval(t);
+  }, [resetOpen, resetExp]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  function ลืมเลขที่ขอไว้() {
+    setResetExp(0);
+    try { localStorage.removeItem(RESET_KEY); } catch { /* ไม่มีที่เก็บ = ไม่ต้องล้าง */ }
+  }
+  const นาทีวินาที = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   const busy = loading;
 
@@ -144,7 +184,9 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     const r = await sbSendPasswordReset(e);
     setForgotBusy(false);
     if (r.ok) {
-      setResetOpen(true); setResetCode(""); setResetPw(""); setResetPw2("");
+      const exp = Date.now() + OTP_อายุ;
+      setResetOpen(true); setResetCode(""); setResetPw(""); setResetPw2(""); setResetExp(exp);
+      try { localStorage.setItem(RESET_KEY, JSON.stringify({ email: e, exp })); } catch { /* ไม่มีที่เก็บ = รีเฟรชแล้วต้องขอใหม่ */ }
       setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${e} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอกด้านล่าง` });
     } else {
       setForgotMsg({ ok: false, text: r.error });
@@ -160,7 +202,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     const r = await sbResetPasswordWithCode(e, resetCode, resetPw);
     setForgotBusy(false);
     if (r.ok) {
-      setResetOpen(false); setResetCode(""); setResetPw(""); setResetPw2("");
+      setResetOpen(false); setResetCode(""); setResetPw(""); setResetPw2(""); ลืมเลขที่ขอไว้();
       setPassword("");
       setForgotMsg({ ok: true, text: "ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว — เข้าสู่ระบบด้วยรหัสใหม่ได้เลย" });
     } else {
@@ -237,7 +279,12 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
             {/* ตั้งรหัสใหม่ด้วยเลขยืนยัน — โผล่หลังกด "ลืมรหัสผ่าน?" สำเร็จ */}
             {resetOpen && (
               <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-                <div className="text-[0.8rem] font-bold text-slate-700">ตั้งรหัสผ่านใหม่</div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[0.8rem] font-bold text-slate-700">ตั้งรหัสผ่านใหม่</span>
+                  {resetLeft > 0 && (
+                    <span className="text-[0.7rem] text-slate-500">เลขใช้ได้อีก <b>{นาทีวินาที(resetLeft)}</b> นาที</span>
+                  )}
+                </div>
                 <input value={resetCode} aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code"
                   onChange={ev => {
                     const v = ev.target.value;
@@ -260,7 +307,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                     className="h-9 flex-1 rounded-lg bg-[#1d4ed8] text-[0.85rem] font-bold text-white disabled:opacity-60">
                     {forgotBusy ? "กำลังตั้งรหัสใหม่…" : "ยืนยันและตั้งรหัสใหม่"}
                   </button>
-                  <button type="button" onClick={() => { setResetOpen(false); setForgotMsg(null); }}
+                  <button type="button" onClick={() => { setResetOpen(false); setForgotMsg(null); ลืมเลขที่ขอไว้(); }}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[0.85rem] font-semibold text-slate-600">
                     ยกเลิก
                   </button>
