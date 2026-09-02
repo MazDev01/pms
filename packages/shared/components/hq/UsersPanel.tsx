@@ -837,24 +837,59 @@ function UserDetailDrawer({ user, onClose, onEdit }: { user: AppUser; onClose: (
       </div>
     </div>
   );
+  // ── แท็บกิจกรรม — ออกแบบใหม่ (บอสสั่ง 2 ก.ย. 69: "แสดงแบบนี้มันไม่สวย") ────────────
+  //   ปัญหาของเดิม: วันที่บางรายการเป็นค่าดิบจากฐานข้อมูล (2026-08-04T08:20:57.774166+00:00)
+  //   · ไทม์ไลน์ลอยกลางความว่าง ไม่มีอะไรยึดสายตา · ไม่มีสรุปว่าบัญชีนี้เข้าใช้งานล่าสุดเมื่อไหร่
+  //   ที่แก้: สรุปสองการ์ดไว้บนสุด → ไทม์ไลน์เป็นการ์ดมีพื้น อ่านเป็นบรรทัดต่อบรรทัด
+  //   · ทุกวันที่ผ่านตัวจัดรูปแบบเดียวกัน (วันไทย + เวลา) ไม่มีค่าดิบหลุดออกจอ
+  const เวลาไทย = (v: string): string => {
+    const t = String(v ?? "").trim();
+    if (!t) return "—";
+    // ค่าที่จัดรูปแบบมาแล้วจากบันทึกการใช้งาน (เช่น "2 ก.ย. 2569 · 08:34") ปล่อยผ่านตามเดิม
+    if (!/^\d{4}-\d{2}-\d{2}/.test(t)) return t;
+    const วัน = fmtISOToThai(t.slice(0, 10));
+    const เวลา = /T(\d{2}:\d{2})/.exec(t)?.[1];
+    return เวลา ? `${วัน} · ${เวลา} น.` : วัน;
+  };
+  const เข้าล่าสุด = timeline.find(t => /เข้าสู่ระบบ/.test(t.label))?.at;
+  const สรุป: { label: string; value: string }[] = [
+    { label: "เข้าใช้งานล่าสุด", value: เข้าล่าสุด ? เวลาไทย(เข้าล่าสุด) : "ยังไม่เคยเข้าใช้งาน" },
+    { label: "สร้างบัญชีเมื่อ", value: เวลาไทย(String(user.createdAt)) },
+  ];
   const activity = (
-    <div style={{ padding: 20 }}>
-      <div style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>Timeline กิจกรรม</div>
-      <div style={{ position: "relative" }}>
-        {timeline.map((t, i) => (
-          <div key={i} style={{ display: "flex", gap: 12, paddingBottom: i < timeline.length - 1 ? 16 : 0 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <span style={{ width: 28, height: 28, borderRadius: "50%", background: t.color + "1a", color: t.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{t.icon}</span>
-              {i < timeline.length - 1 && <span style={{ width: 2, flex: 1, background: "#eef2f7", marginTop: 2 }} />}
-            </div>
-            <div style={{ paddingTop: 3 }}><div style={{ fontSize: "0.82rem", fontWeight: 700, color: STEEL }}>{t.label}</div><div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 1 }}>{t.at}</div></div>
+    <div style={{ padding: 18 }}>
+      {/* สรุปสั้น ๆ ก่อน — คำถามที่คนเปิดแท็บนี้อยากรู้ที่สุดคือ "เข้าใช้งานล่าสุดเมื่อไหร่" */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
+        {สรุป.map(k => (
+          <div key={k.label} style={{ background: "#f8fafc", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "11px 13px" }}>
+            <div style={{ fontSize: "0.66rem", color: MUTED, fontWeight: 700 }}>{k.label}</div>
+            <div style={{ fontSize: "0.82rem", fontWeight: 800, color: STEEL, marginTop: 3, lineHeight: 1.35 }}>{k.value}</div>
           </div>
         ))}
       </div>
+
+      <div style={{ fontSize: "0.72rem", color: MUTED, fontWeight: 700, marginBottom: 10 }}>ประวัติการใช้งาน</div>
+      {timeline.length === 0 ? (
+        <div style={{ fontSize: "0.8rem", color: MUTED, textAlign: "center", padding: "26px 0" }}>ยังไม่มีกิจกรรมของบัญชีนี้</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {timeline.map((t, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "11px 13px",
+              background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 12 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 10, background: t.color + "1a", color: t.color,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{t.icon}</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: STEEL, lineHeight: 1.4 }}>{t.label}</div>
+                <div style={{ fontSize: "0.7rem", color: MUTED, marginTop: 2 }}>{เวลาไทย(t.at)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
   return (
-    <RightDrawer open onClose={onClose} title={user.name} avatar={user.avatar} subtitle={`${ROLE_BY_KEY[user.role].th} · ${user.department}`}
+    <RightDrawer open onClose={onClose} title={user.name} avatar={user.avatar} subtitle={[ROLE_BY_KEY[user.role].th, user.department].filter(Boolean).join(" · ")}
       headerRight={<button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={13} /> แก้ไข</button>}
       tabs={[{ key: "info", label: "ข้อมูล", content: info }, { key: "perms", label: "สิทธิ์", content: perms }, { key: "activity", label: "กิจกรรม", content: activity }]} width={440} />
   );

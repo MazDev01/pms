@@ -225,7 +225,8 @@ export function RightDrawer({
               padding: "0 14px",
               background: "#fff",
               borderBottom: `1px solid ${SILVER}55`,
-              overflowX: "auto",
+              // แท็บมีไม่กี่อัน ไม่เคยล้น — auto ทำให้บางเบราว์เซอร์กันที่ไว้ให้แถบเลื่อนจนเห็นเป็นช่องว่าง
+              overflowX: "hidden",
             }}
           >
             {tabs.map((t) => {
@@ -238,30 +239,23 @@ export function RightDrawer({
                   style={{
                     position: "relative",
                     border: "none",
+                    // ⚠️ ขีดใต้แท็บต้อง "ทับเส้นคั่น" ไม่ใช่ลอยอยู่ใต้เส้น (บอสแจ้ง 2 ก.ย. 69 ว่ามีช่องว่างขาวคั่น)
+                    //    เดิมใช้ <span> วางแบบ absolute ที่ bottom:-1 ซึ่งไปตกใต้เส้นคั่นของแถบแท็บ
+                    //    เห็นเป็นแถบน้ำเงินลอยห่างจากตัวหนังสือ · ใช้ borderBottom ของปุ่มเองแล้วดึงขึ้นมา 1px แทน
+                    borderBottom: `3px solid ${on ? PRIMARY : "transparent"}`,
+                    marginBottom: -1,
                     background: "transparent",
                     cursor: "pointer",
-                    padding: "13px 14px 12px",
+                    padding: "13px 14px 10px",
                     fontFamily: "inherit",
                     fontSize: "0.8rem",
                     fontWeight: on ? 800 : 600,
                     color: on ? PRIMARY : "#6b7280",
                     whiteSpace: "nowrap",
-                    transition: "color .15s",
+                    transition: "color .15s, border-color .15s",
                   }}
                 >
                   {t.label}
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: 8,
-                      right: 8,
-                      bottom: -1,
-                      height: 3,
-                      borderRadius: "3px 3px 0 0",
-                      background: on ? PRIMARY : "transparent",
-                      transition: "background .15s",
-                    }}
-                  />
                 </button>
               );
             })}
