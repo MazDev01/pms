@@ -16,7 +16,18 @@ import {
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { sbChangeOwnPassword } from "@pms/shared/lib/supabaseAuth";
-import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { REAL_BACKEND, DATA_SOURCE } from "@pms/shared/lib/data/config";
+import { getSupabase } from "@pms/shared/lib/data/supabase/client";
+
+/** ใบผ่านของผู้ใช้ที่กำลังล็อกอิน — โหมด api เก็บใน cookie httpOnly หน้าเว็บอ่านไม่ได้ (และไม่ต้อง)
+ *  คืนค่าว่างในโหมดนั้น แล้วให้ fetch ส่ง cookie ไปเอง (credentials: same-origin) */
+async function ใบผ่านของฉัน(): Promise<string> {
+  if (DATA_SOURCE === "api") return "";
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    return data.session?.access_token ?? "";
+  } catch { return ""; }
+}
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
@@ -55,6 +66,65 @@ export default function ProfilePage() {
   const [เปิดดูรหัส, setเปิดดูรหัส] = useState({ cur: false, next: false, confirm: false });
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── ดูรหัสผ่านของตัวเอง: ต้องเอาเลขที่ส่งไปทางอีเมลมากรอกก่อน (บอสสั่ง 2 ก.ย. 69) ──
+  // ขั้นตอน: ปิดอยู่ → กดขอเลข (ส่งอีเมล) → กรอกเลข → เห็นรหัส (กดซ่อนแล้วกดดูซ้ำได้)
+  const [ขั้นดูรหัส, setขั้นดูรหัส] = useState<"ปิด" | "กรอกเลข" | "เห็นแล้ว" | "ซ่อนอยู่">("ปิด");
+  const [เลขยืนยัน, setเลขยืนยัน] = useState("");
+  const [ส่งไปที่, setส่งไปที่] = useState("");
+  const [รหัสที่เห็น, setรหัสที่เห็น] = useState("");
+  const [msgReveal, setMsgReveal] = useState<{ ok: boolean; text: string } | null>(null);
+  const [กำลังดู, setกำลังดู] = useState(false);
+
+  /** ยิงคำสั่งไปที่เส้นทางของผู้ดูแล — โหมด cookie ไม่ต้องแนบใบผ่าน (เหมือน adminApi) */
+  async function เรียกเส้นทางรหัสผ่าน(payload: Record<string, unknown>): Promise<{ ok: boolean; data: Record<string, unknown> }> {
+    const token = await ใบผ่านของฉัน();
+    const res = await fetch("/api/account/hq-secret", {
+      method: "POST", credentials: "same-origin",
+      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return { ok: res.ok, data };
+  }
+
+  /** เก็บสำเนารหัสใหม่ไว้ให้ดูย้อนหลัง — คืน false ถ้าเก็บไม่สำเร็จ (ไม่ถือว่าเปลี่ยนรหัสล้มเหลว) */
+  async function เก็บสำเนารหัสผ่าน(password: string): Promise<boolean> {
+    try {
+      const { ok } = await เรียกเส้นทางรหัสผ่าน({ op: "save", password });
+      return ok;
+    } catch { return false; }
+  }
+
+  async function ขอเลขทางอีเมล() {
+    setMsgReveal(null); setกำลังดู(true);
+    try {
+      const { ok, data } = await เรียกเส้นทางรหัสผ่าน({ op: "send" });
+      if (!ok) { setMsgReveal({ ok: false, text: String(data.error ?? "ส่งเลขยืนยันไม่สำเร็จ") }); return; }
+      setส่งไปที่(String(data.sentTo ?? "")); setขั้นดูรหัส("กรอกเลข"); setเลขยืนยัน("");
+    } finally { setกำลังดู(false); }
+  }
+
+  async function ยืนยันเลขแล้วดูรหัส() {
+    setMsgReveal(null);
+    const เป็นลิงก์ = /^https?:\/\//i.test(เลขยืนยัน.trim()) || เลขยืนยัน.includes("token=");
+    if (!เป็นลิงก์ && เลขยืนยัน.replace(/\D/g, "").length < 6) {
+      setMsgReveal({ ok: false, text: "กรอกเลขยืนยันจากอีเมล หรือวางลิงก์ที่ได้จากอีเมล" }); return;
+    }
+    setกำลังดู(true);
+    try {
+      const { ok, data } = await เรียกเส้นทางรหัสผ่าน({ op: "verify", code: เลขยืนยัน });
+      if (!ok) { setMsgReveal({ ok: false, text: String(data.error ?? "ยืนยันไม่สำเร็จ") }); return; }
+      setรหัสที่เห็น(String(data.password ?? "")); setขั้นดูรหัส("เห็นแล้ว"); setเลขยืนยัน("");
+    } finally { setกำลังดู(false); }
+  }
+
+  // รหัสที่โชว์บนจอต้องไม่ค้างไว้ตลอด — ปิดตาเองหลัง 60 วินาที (ยังกดดูซ้ำได้ ไม่ต้องขอเลขใหม่)
+  useEffect(() => {
+    if (ขั้นดูรหัส !== "เห็นแล้ว") return;
+    const t = setTimeout(() => setขั้นดูรหัส("ซ่อนอยู่"), 60_000);
+    return () => clearTimeout(t);
+  }, [ขั้นดูรหัส]);
 
   const roleLabel = ROLE_LABEL[session.role] ?? "สมาชิก";
   const initial = (form.name || session.name).charAt(0).toUpperCase();
@@ -100,8 +170,13 @@ export default function ProfilePage() {
     const r = await sbChangeOwnPassword(pw.cur, pw.next);
     setPwBusy(false);
     if (!r.ok) { setPwMsg({ ok: false, text: r.error }); return; }
+    // เก็บสำเนา (เข้ารหัส) ไว้ให้เจ้าของบัญชีเปิดดูย้อนหลังได้ (บอสสั่ง 2 ก.ย. 69)
+    //   ระบบเห็นรหัสได้เฉพาะจังหวะนี้เท่านั้น — Supabase เก็บเป็น hash อ่านกลับไม่ได้
+    //   เก็บไม่สำเร็จก็ไม่ถือว่าเปลี่ยนรหัสล้มเหลว (รหัสใหม่ใช้ได้แล้ว) แค่บอกว่าดูย้อนหลังไม่ได้
+    const เก็บ = await เก็บสำเนารหัสผ่าน(pw.next);
     setPw({ cur: "", next: "", confirm: "" });
-    setPwMsg({ ok: true, text: "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว" });
+    setMsgReveal(null);
+    setPwMsg({ ok: true, text: เก็บ ? "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว" : "เปลี่ยนรหัสผ่านแล้ว — แต่เก็บสำเนาไว้ดูย้อนหลังไม่สำเร็จ" });
     setTimeout(() => setPwMsg(null), 2600);
   }
 
@@ -260,8 +335,66 @@ export default function ProfilePage() {
                 </div>
               )}
               <button className="btn btn-secondary btn-md" onClick={() => void changePassword()} disabled={pwBusy} style={{ color: STEEL, ...(pwBusy ? { opacity: .6, cursor: "not-allowed" } : {}) }}><KeyRound size={14} /> {pwBusy ? "กำลังเปลี่ยน…" : "เปลี่ยนรหัสผ่าน"}</button>
+              {/* ── ดูรหัสผ่านของตัวเอง (บอสสั่ง 2 ก.ย. 69) ────────────────────────────────
+                  ต้องขอเลขทางอีเมลมากรอกก่อนทุกครั้ง — จอที่เปิดค้างไว้จึงเปิดดูไม่ได้
+                  รหัสที่เห็นคือ "สำเนาที่ระบบเก็บไว้ตอนเปลี่ยนรหัสครั้งล่าสุดผ่านหน้านี้"
+                  บัญชีที่ยังไม่เคยเปลี่ยนผ่านหน้านี้จะยังไม่มีสำเนา (Supabase เก็บเป็น hash อ่านกลับไม่ได้) */}
+              <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 16 }}>
+                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: STEEL, marginBottom: 4 }}>รหัสผ่านปัจจุบันของฉัน</div>
+                <div style={{ fontSize: "0.7rem", color: MUTED, marginBottom: 10 }}>
+                  ดูได้เมื่อยืนยันด้วยเลขที่ส่งไปทางอีเมลของบัญชีนี้ · ทุกครั้งที่เปิดดูจะถูกบันทึกไว้ในระบบ
+                </div>
+
+                {ขั้นดูรหัส === "เห็นแล้ว" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <code style={{ fontWeight: 800, color: STEEL, fontSize: "0.85rem", background: "#f7f8fa",
+                      border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 12px" }}>{รหัสที่เห็น}</code>
+                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+                      onClick={() => { void navigator.clipboard?.writeText(รหัสที่เห็น).catch(() => {}); }}>คัดลอก</button>
+                    {/* กดซ่อนแล้วยังกดดูซ้ำได้ ไม่ต้องขอเลขใหม่ (แพตเทิร์นเดียวกับหน้าบัญชีของตัวแทน) */}
+                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+                      onClick={() => setขั้นดูรหัส("ซ่อนอยู่")}>ซ่อน</button>
+                  </div>
+                ) : ขั้นดูรหัส === "ซ่อนอยู่" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+                      onClick={() => setขั้นดูรหัส("เห็นแล้ว")}><Eye size={13} /> ดูอีกครั้ง</button>
+                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+                      onClick={() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); setMsgReveal(null); }}>เสร็จสิ้น</button>
+                  </div>
+                ) : ขั้นดูรหัส === "กรอกเลข" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <input aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code" value={เลขยืนยัน}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setเลขยืนยัน(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 12));
+                      }}
+                      placeholder="เลขยืนยันจากอีเมล หรือวางลิงก์"
+                      style={{ ...inp, paddingLeft: 12, width: 240, textAlign: "center" }} />
+                    <button className="btn btn-primary btn-sm" disabled={กำลังดู}
+                      onClick={() => void ยืนยันเลขแล้วดูรหัส()}>{กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}</button>
+                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+                      onClick={() => { setขั้นดูรหัส("ปิด"); setMsgReveal(null); }}>ยกเลิก</button>
+                  </div>
+                ) : (
+                  <button className="btn btn-secondary btn-md" style={{ color: STEEL }} disabled={กำลังดู}
+                    onClick={() => void ขอเลขทางอีเมล()}><Eye size={14} /> {กำลังดู ? "กำลังส่งเลข…" : "ดูรหัสผ่าน"}</button>
+                )}
+
+                {ขั้นดูรหัส === "กรอกเลข" && !msgReveal && (
+                  <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 8 }}>
+                    ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลขมากรอก
+                  </div>
+                )}
+                {msgReveal && (
+                  <div style={{ fontSize: "0.7rem", fontWeight: 600, marginTop: 8, color: msgReveal.ok ? "#059669" : "#dc2626" }}>
+                    {msgReveal.text}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.65rem", color: "#9ca3af" }}>
-                <ShieldCheck size={11} /> รหัสผ่านถูกเข้ารหัสและไม่ถูกจัดเก็บเป็นข้อความธรรมดา
+                <ShieldCheck size={11} /> สำเนารหัสผ่านถูกเข้ารหัสไว้ที่เซิร์ฟเวอร์ ไม่ได้เก็บเป็นข้อความธรรมดา
               </div>
             </>
           ) : (
