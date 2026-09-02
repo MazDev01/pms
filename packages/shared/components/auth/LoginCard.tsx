@@ -14,8 +14,6 @@ import { sbSendPasswordReset, sbResetPasswordWithCode } from "@pms/shared/lib/su
 //    และผูกชื่อปุ่มกับฝั่งที่เปิดอยู่ — ชื่อกับปลายทางจึงสลับกันไม่ได้
 const OTHER_DEMO_URL = process.env.NEXT_PUBLIC_DEMO_OTHER_URL ?? "";
 
-const FORGOT_MSG = "กรุณาติดต่อผู้ดูแลระบบ (HQ) เพื่อรีเซ็ตรหัสผ่าน\nอีเมล: support@benjamin.co.th";
-
 // ── inline SVG (feather/lucide style) — ไม่พึ่ง icon library ──
 const IconMail = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -171,9 +169,14 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   //   เดิมฝั่งตัวแทนกดแล้วขึ้นแค่ "ติดต่อ HQ" เพราะกติกาเก่าคือ HQ คุมรหัสผ่านทั้งหมด
   //   ตอนนี้ตัวแทนเปลี่ยนรหัสเองได้อยู่แล้ว การลืมรหัสจึงต้องกู้เองได้ด้วย ไม่ต้องรอคนอื่น
   //   ปลายทางลิงก์ = /reset-password ของแอปที่กดมา (แต่ละแอปมีหน้าของตัวเอง)
-  //   ⚠️ โหมดเดโมไม่มีระบบยืนยันตัวตนจริง จึงยังขึ้นข้อความให้ติดต่อ HQ เหมือนเดิม
+  //   ⚠️ โหมดเดโมไม่มีระบบยืนยันตัวตนจริง จึงบอกในหน้าว่าเป็นข้อมูลตัวอย่าง ไม่มีการส่งอีเมล
   async function handleForgot() {
-    if (!REAL_BACKEND) { alert(FORGOT_MSG); return; } // โหมดเดโม — ไม่มีอีเมลจริงให้ส่ง
+    // โหมดตัวอย่าง (เว็บเดโม) — ไม่มีระบบอีเมลจริงให้ส่ง บอกในหน้าตรง ๆ
+    // ห้ามเด้งกล่องที่มีอีเมลติดต่อซึ่งไม่มีอยู่จริง (บอสสั่งเอาออก 2 ก.ย. 69)
+    if (!REAL_BACKEND) {
+      setForgotMsg({ ok: false, text: "หน้านี้เป็นข้อมูลตัวอย่าง จึงไม่มีการส่งอีเมลจริง" });
+      return;
+    }
     const e = email.trim();
     if (!/^\S+@\S+\.\S+$/.test(e)) {
       setForgotMsg({ ok: false, text: "กรอกอีเมลในช่องด้านบนก่อน แล้วกด \"ลืมรหัสผ่าน?\" อีกครั้ง" });
@@ -357,14 +360,6 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
             </div>
           )}
 
-          {/* Helper */}
-          <p className="mt-4 text-center text-[0.8rem] text-slate-500">
-            ยังไม่มีบัญชี?{" "}
-            <button type="button" onClick={() => alert(FORGOT_MSG)}
-              className="font-bold text-[#1d4ed8] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/40 rounded">
-              ติดต่อผู้ดูแลระบบ
-            </button>
-          </p>
         </div>
       </div>
 

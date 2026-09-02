@@ -188,7 +188,7 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
 
   // ── ดูรหัสผ่านของตัวเอง: ต้องเอาเลขที่ส่งไปทางอีเมลมากรอกก่อน (บอสสั่ง 1 ก.ย. 69) ──
   // ขั้นตอน: ปิดอยู่ → กดขอเลข (ส่งอีเมล) → กรอกเลข → เห็นรหัส (ปิดเองใน 60 วินาที)
-  const [ขั้นดูรหัส, setขั้นดูรหัส] = useState<"ปิด" | "กรอกเลข" | "เห็นแล้ว">("ปิด");
+  const [ขั้นดูรหัส, setขั้นดูรหัส] = useState<"ปิด" | "กรอกเลข" | "เห็นแล้ว" | "ซ่อนอยู่">("ปิด");
   const [เลขยืนยัน, setเลขยืนยัน] = useState("");
   const [ส่งไปที่, setส่งไปที่] = useState("");
   const [รหัสที่เห็น, setรหัสที่เห็น] = useState("");
@@ -238,7 +238,8 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
   // รหัสที่โชว์บนจอต้องไม่ค้างไว้ตลอด — ปิดเองหลัง 60 วินาที (จอที่เปิดค้างไว้ในออฟฟิศ)
   useEffect(() => {
     if (ขั้นดูรหัส !== "เห็นแล้ว") return;
-    const t = setTimeout(() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); setMsgReveal(null); }, 60_000);
+    // หมดเวลาแล้วแค่ "ปิดตา" — ยังกดดูซ้ำได้โดยไม่ต้องขอเลขใหม่ (บอสสั่ง 2 ก.ย. 69)
+    const t = setTimeout(() => { setขั้นดูรหัส("ซ่อนอยู่"); setMsgReveal(null); }, 60_000);
     return () => clearTimeout(t);
   }, [ขั้นดูรหัส]);
 
@@ -354,7 +355,16 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
               <code style={{ fontWeight: 800, color: "#1F2937", fontSize: "0.82rem", letterSpacing: "0.02em" }}>{รหัสที่เห็น}</code>
               <button onClick={() => { void navigator.clipboard?.writeText(รหัสที่เห็น).catch(() => {}); }}
                 className="btn btn-secondary btn-sm">คัดลอก</button>
-              <button onClick={() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); }} className="btn btn-secondary btn-sm">ซ่อน</button>
+              {/* กดซ่อนแล้วยังกดดูซ้ำได้ ไม่ต้องขอเลขใหม่ (บอสสั่ง 2 ก.ย. 69) */}
+              <button onClick={() => { setขั้นดูรหัส("ซ่อนอยู่"); }} className="btn btn-secondary btn-sm">ซ่อน</button>
+            </span>
+          ) : ขั้นดูรหัส === "ซ่อนอยู่" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => { setขั้นดูรหัส("เห็นแล้ว"); }} className="btn btn-secondary btn-sm"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Eye size={13} /> ดูอีกครั้ง
+              </button>
+              <button onClick={() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); setMsgReveal(null); }} className="btn btn-secondary btn-sm">เสร็จสิ้น</button>
             </span>
           ) : ขั้นดูรหัส === "กรอกเลข" ? (
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -388,7 +398,12 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
         )}
         {ขั้นดูรหัส === "เห็นแล้ว" && (
           <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: 8 }}>
-            รหัสนี้จะถูกซ่อนอัตโนมัติใน 1 นาที · สำนักงานใหญ่เห็นในบันทึกการใช้งานว่ามีการเปิดดู
+            รหัสนี้จะถูกซ่อนอัตโนมัติใน 1 นาที (กดดูซ้ำได้ ไม่ต้องขอเลขใหม่) · สำนักงานใหญ่เห็นในบันทึกการใช้งานว่ามีการเปิดดู
+          </div>
+        )}
+        {ขั้นดูรหัส === "ซ่อนอยู่" && (
+          <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: 8 }}>
+            ซ่อนไว้แล้ว — กด “ดูอีกครั้ง” ได้เลยโดยไม่ต้องขอเลขใหม่ · กด “เสร็จสิ้น” เมื่อดูเสร็จแล้ว (หรือออกจากหน้านี้)
           </div>
         )}
         {msgReveal && (

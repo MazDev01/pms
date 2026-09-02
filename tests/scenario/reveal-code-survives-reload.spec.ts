@@ -47,3 +47,34 @@ test("[func·dealer] เลขที่หมดอายุแล้ว ต้�
   await expect(page.getByRole("button", { name: "ดูรหัสผ่าน" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByLabel("เลขยืนยันจากอีเมล")).toHaveCount(0);
 });
+
+test("[func·dealer] กดซ่อนแล้วต้องกดดูซ้ำได้ โดยไม่ต้องขอเลขใหม่", async ({ page }) => {
+  // บอสสั่ง 2 ก.ย. 69: เดิมกดซ่อนแล้วกลับไปเริ่มต้น ต้องขอเลขใหม่ทั้งที่เพิ่งยืนยันไป
+  //   แล้วการขอถูกจำกัด 3 ครั้ง/15 นาที — เผลอกดซ่อนครั้งเดียวก็ติดทางตัน
+  await loginUI(page, DEALER_ORIGIN, "/login", RYG);
+  await page.goto(`${DEALER_ORIGIN}/settings/account`, { waitUntil: "domcontentloaded" });
+
+  // จำลองสถานะ "ยืนยันเลขผ่านแล้ว กำลังเห็นรหัสอยู่" โดยดักคำตอบของเซิร์ฟเวอร์
+  //   (ยิงขอเลขจริงจะกินโควตาส่งอีเมลของบัญชีจริง — สิ่งที่วัดคือพฤติกรรมของปุ่มซ่อน/ดูอีกครั้ง)
+  await page.route("**/api/account/reveal", async route => {
+    const body = JSON.parse(route.request().postData() || "{}");
+    if (body.op === "send") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sentTo: "ry••••@example.com" }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ password: "ZZTEST-รหัสทดสอบ" }) });
+  });
+
+  await page.getByRole("button", { name: "ดูรหัสผ่าน" }).click();
+  await page.getByLabel("เลขยืนยันจากอีเมล").fill("12345678");
+  await page.getByRole("button", { name: "ยืนยัน" }).click();
+  await expect(page.getByText("ZZTEST-รหัสทดสอบ")).toBeVisible({ timeout: 20_000 });
+
+  // กดซ่อน → รหัสหายจากจอ แต่ต้องมีปุ่มให้กดดูซ้ำได้ทันที
+  await page.getByRole("button", { name: "ซ่อน" }).click();
+  await expect(page.getByText("ZZTEST-รหัสทดสอบ")).toHaveCount(0);
+  await page.getByRole("button", { name: "ดูอีกครั้ง" }).click();
+  await expect(page.getByText("ZZTEST-รหัสทดสอบ"), "กดดูอีกครั้งต้องเห็นเลย ไม่ต้องขอเลขใหม่").toBeVisible();
+
+  // กด "เสร็จสิ้น" = จบจริง กลับไปเป็นปุ่มขอเลขตามเดิม
+  await page.getByRole("button", { name: "ซ่อน" }).click();
+  await page.getByRole("button", { name: "เสร็จสิ้น" }).click();
+  await expect(page.getByRole("button", { name: "ดูรหัสผ่าน" })).toBeVisible();
+});
