@@ -14,6 +14,9 @@ export type RightDrawerProps = {
   subtitle?: string;
   /** optional action buttons rendered on the right of the header */
   headerRight?: ReactNode;
+  /** รูปประจำตัว (โลโก้/รูปโปรไฟล์) — ไม่ส่งมา = ใช้ตัวย่อของชื่อเหมือนเดิม
+   *  บอสแจ้ง 2 ก.ย. 69: อัปโหลดรูปแล้วในเนื้อแผงเห็นรูป แต่หัวแผงยังขึ้นตัวย่อ "ad" อยู่ */
+  avatar?: string;
   tabs: DrawerTab[];
   initialTab?: string;
   /** panel width in px (default ~460) */
@@ -30,6 +33,7 @@ export function RightDrawer({
   title,
   subtitle,
   headerRight,
+  avatar,
   tabs,
   initialTab,
   width = 460,
@@ -132,12 +136,20 @@ export function RightDrawer({
             gap: 12,
           }}
         >
-          {/* วงกลมย่อชื่อ — มาตรฐานเดียวกับแผงลูกค้าเป้าหมายทั้งเครือ */}
-          <span style={{
-            width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.14)",
-            border: "1px solid rgba(255,255,255,.2)", color: "#fff", fontWeight: 800, fontSize: "0.9rem",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>{ย่อชื่อ(title)}</span>
+          {/* มีรูปก็โชว์รูป · ไม่มีค่อยใช้ตัวย่อชื่อ — มาตรฐานเดียวกับแผงลูกค้าเป้าหมายทั้งเครือ */}
+          {avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatar} alt="" style={{
+              width: 40, height: 40, borderRadius: 12, objectFit: "cover", flexShrink: 0,
+              border: "1px solid rgba(255,255,255,.28)", background: "rgba(255,255,255,.14)",
+            }} />
+          ) : (
+            <span style={{
+              width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,.14)",
+              border: "1px solid rgba(255,255,255,.2)", color: "#fff", fontWeight: 800, fontSize: "0.9rem",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>{ย่อชื่อ(title)}</span>
+          )}
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{

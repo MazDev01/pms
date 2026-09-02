@@ -854,7 +854,7 @@ function UserDetailDrawer({ user, onClose, onEdit }: { user: AppUser; onClose: (
     </div>
   );
   return (
-    <RightDrawer open onClose={onClose} title={user.name} subtitle={`${ROLE_BY_KEY[user.role].th} · ${user.department}`}
+    <RightDrawer open onClose={onClose} title={user.name} avatar={user.avatar} subtitle={`${ROLE_BY_KEY[user.role].th} · ${user.department}`}
       headerRight={<button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={13} /> แก้ไข</button>}
       tabs={[{ key: "info", label: "ข้อมูล", content: info }, { key: "perms", label: "สิทธิ์", content: perms }, { key: "activity", label: "กิจกรรม", content: activity }]} width={440} />
   );
