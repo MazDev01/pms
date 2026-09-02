@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { DEMO_PASSWORD, DEMO_LOGINS } from "@pms/shared/lib/auth";
-import { sbSendPasswordReset, sbResetPasswordWithCode } from "@pms/shared/lib/supabaseAuth";
+import { sbSendPasswordReset, sbLoginWithCode, sbRestore, sbSignOut } from "@pms/shared/lib/supabaseAuth";
 
 // ── ทางเข้าเดโมของอีกฝั่ง (ตั้งที่ Vercel ของโปรเจกต์เดโมเท่านั้น) ──
 // ว่าง = ไม่มีปุ่ม · ระบบจริงไม่ตั้งค่านี้
@@ -56,8 +56,6 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
   //    ไม่ต้องกดลิงก์ข้ามเว็บ จึงไม่ต้องพึ่งการตั้งค่าที่อยู่ปลายทางที่หน้าจัดการโปรเจกต์
   const [resetOpen, setResetOpen] = useState(false);
   const [resetCode, setResetCode] = useState("");
-  const [resetPw, setResetPw] = useState("");
-  const [resetPw2, setResetPw2] = useState("");
   const [resetExp, setResetExp] = useState(0);     // เลขยืนยันหมดอายุกี่โมง (ms)
   const [resetLeft, setResetLeft] = useState(0);   // เหลืออีกกี่วินาที (ไว้โชว์บนจอ)
 
@@ -73,7 +71,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
       if (เก็บไว้ && เก็บไว้.exp > Date.now()) {
         setEmail(e => e || เก็บไว้.email);
         setResetExp(เก็บไว้.exp); setResetOpen(true);
-        setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${เก็บไว้.email} แล้ว — เอาเลขจากอีเมลมากรอกด้านล่าง` });
+        setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${เก็บไว้.email} แล้ว — เอาเลขจากอีเมลมากรอกด้านล่างแล้วเข้าระบบได้เลย` });
       } else if (เก็บไว้) localStorage.removeItem(RESET_KEY);
     } catch { /* อ่านไม่ได้ = เริ่มใหม่ตามปกติ */ }
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,29 +186,40 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setForgotBusy(false);
     if (r.ok) {
       const exp = Date.now() + OTP_อายุ;
-      setResetOpen(true); setResetCode(""); setResetPw(""); setResetPw2(""); setResetExp(exp);
+      setResetOpen(true); setResetCode(""); setResetExp(exp);
       try { localStorage.setItem(RESET_KEY, JSON.stringify({ email: e, exp })); } catch { /* ไม่มีที่เก็บ = รีเฟรชแล้วต้องขอใหม่ */ }
-      setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${e} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอกด้านล่าง` });
+      setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${e} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอกด้านล่างแล้วเข้าระบบได้เลย` });
     } else {
       setForgotMsg({ ok: false, text: r.error });
     }
   }
 
-  /** เอาเลขจากอีเมลมากรอก แล้วตั้งรหัสใหม่ตรงนี้เลย — ไม่ต้องเปลี่ยนหน้า */
-  async function handleResetWithCode() {
+  /** เอาเลขจากอีเมลมากรอก แล้ว "เข้าสู่ระบบได้เลย" — ไม่ต้องตั้งรหัสใหม่ (บอสสั่ง 2 ก.ย. 69)
+   *  คนที่ลืมรหัสส่วนใหญ่แค่อยากเข้าไปทำงานต่อ ไม่ได้อยากคิดรหัสใหม่ตอนนั้น
+   *  อยากเปลี่ยนรหัสค่อยไปเปลี่ยนที่หน้าบัญชีของตัวเองทีหลังได้ */
+  async function handleLoginWithCode() {
     const e = email.trim();
     if (!resetCode.trim()) { setForgotMsg({ ok: false, text: "กรอกเลขยืนยันที่ได้จากอีเมลก่อน" }); return; }
-    if (resetPw !== resetPw2) { setForgotMsg({ ok: false, text: "รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน" }); return; }
     setForgotBusy(true);
-    const r = await sbResetPasswordWithCode(e, resetCode, resetPw);
-    setForgotBusy(false);
-    if (r.ok) {
-      setResetOpen(false); setResetCode(""); setResetPw(""); setResetPw2(""); ลืมเลขที่ขอไว้();
-      setPassword("");
-      setForgotMsg({ ok: true, text: "ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว — เข้าสู่ระบบด้วยรหัสใหม่ได้เลย" });
-    } else {
-      setForgotMsg({ ok: false, text: r.error });
+    const r = await sbLoginWithCode(e, resetCode);
+    if (!r.ok) { setForgotBusy(false); setForgotMsg({ ok: false, text: r.error }); return; }
+
+    // ยืนยันผ่านแล้ว = ถือใบผ่านจริงอยู่ในมือ · เช็กก่อนว่าบัญชีนี้เป็นของแอปที่ยืนอยู่จริงไหม
+    //   (กติกาเดียวกับล็อกอินด้วยรหัสผ่าน — บัญชีสำนักงานใหญ่ห้ามเข้าที่หน้าตัวแทน และกลับกัน)
+    const me = await sbRestore();
+    if (!me) { setForgotBusy(false); setForgotMsg({ ok: false, text: "เข้าสู่ระบบไม่สำเร็จ — ลองใหม่อีกครั้ง" }); return; }
+    if (me.scopeAll !== isHQ) {
+      await sbSignOut();
+      setForgotBusy(false);
+      setForgotMsg({ ok: false, text: WRONG_APP });
+      return;
     }
+    ลืมเลขที่ขอไว้();
+    setResetOpen(false); setResetCode("");
+    setForgotMsg({ ok: true, text: "ยืนยันแล้ว — กำลังพาเข้าระบบ" });
+    // เปลี่ยนหน้าแบบเต็ม ไม่ใช่ router.push — ให้ตัวจัดการสิทธิ์เริ่มใหม่แล้วอ่านใบผ่านที่เพิ่งได้
+    // (router.push อยู่ในหน้าเดิม ตัวจัดการสิทธิ์ยังจำสถานะ "ยังไม่ล็อกอิน" ค้างอยู่)
+    window.location.href = isHQ ? "/hq/dashboard" : "/dashboard";
   }
 
   const inputWrap =
@@ -279,41 +288,38 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
               </p>
             )}
 
-            {/* ตั้งรหัสใหม่ด้วยเลขยืนยัน — โผล่หลังกด "ลืมรหัสผ่าน?" สำเร็จ */}
+            {/* เข้าระบบด้วยเลขยืนยัน — โผล่หลังกด "ลืมรหัสผ่าน?" สำเร็จ
+                บอสสั่ง 2 ก.ย. 69: ไม่ต้องตั้งรหัสใหม่ เอาเลขจากอีเมลมากรอกแล้วเข้าได้เลย
+                (อยากเปลี่ยนรหัสค่อยไปเปลี่ยนที่หน้าบัญชีของตัวเองทีหลัง) */}
             {resetOpen && (
               <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[0.8rem] font-bold text-slate-700">ตั้งรหัสผ่านใหม่</span>
+                  <span className="text-[0.8rem] font-bold text-slate-700">เข้าสู่ระบบด้วยเลขยืนยัน</span>
                   {resetLeft > 0 && (
                     <span className="text-[0.7rem] text-slate-500">เลขใช้ได้อีก <b>{นาทีวินาที(resetLeft)}</b> นาที</span>
                   )}
                 </div>
-                <input value={resetCode} aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code"
+                <input value={resetCode} aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code" autoFocus
                   onChange={ev => {
                     const v = ev.target.value;
-                    // รับได้ทั้งเลข 6 หลักและลิงก์ที่ก๊อปมาจากอีเมล (แม่แบบอีเมลมาตรฐานมีแต่ลิงก์)
+                    // รับได้ทั้งเลขและลิงก์ที่ก๊อปมาจากอีเมล (แม่แบบอีเมลมาตรฐานมีแต่ลิงก์)
                     setResetCode(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 12));
                   }}
+                  onKeyDown={ev => { if (ev.key === "Enter") { ev.preventDefault(); void handleLoginWithCode(); } }}
                   placeholder="เลขยืนยันจากอีเมล (หรือวางลิงก์)"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
-                <input type="password" value={resetPw} aria-label="รหัสผ่านใหม่" autoComplete="new-password"
-                  onChange={ev => setResetPw(ev.target.value.replace(/\s/g, ""))}
-                  placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
-                <input type="password" value={resetPw2} aria-label="ยืนยันรหัสผ่านใหม่" autoComplete="new-password"
-                  onChange={ev => setResetPw2(ev.target.value.replace(/\s/g, ""))}
-                  onKeyDown={ev => { if (ev.key === "Enter") { ev.preventDefault(); void handleResetWithCode(); } }}
-                  placeholder="พิมพ์รหัสใหม่อีกครั้ง"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-center text-[0.95rem] tracking-[0.12em] text-slate-800 outline-none" />
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => void handleResetWithCode()} disabled={forgotBusy}
+                  <button type="button" onClick={() => void handleLoginWithCode()} disabled={forgotBusy}
                     className="h-9 flex-1 rounded-lg bg-[#1d4ed8] text-[0.85rem] font-bold text-white disabled:opacity-60">
-                    {forgotBusy ? "กำลังตั้งรหัสใหม่…" : "ยืนยันและตั้งรหัสใหม่"}
+                    {forgotBusy ? "กำลังตรวจเลข…" : "เข้าสู่ระบบ"}
                   </button>
                   <button type="button" onClick={() => { setResetOpen(false); setForgotMsg(null); ลืมเลขที่ขอไว้(); }}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[0.85rem] font-semibold text-slate-600">
                     ยกเลิก
                   </button>
+                </div>
+                <div className="text-[0.68rem] leading-relaxed text-slate-500">
+                  เข้าได้แล้วอยากเปลี่ยนรหัสผ่าน ไปที่ ตั้งค่า › บัญชีของฉัน ได้ตลอด
                 </div>
               </div>
             )}

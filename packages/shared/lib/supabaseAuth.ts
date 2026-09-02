@@ -11,6 +11,8 @@ import { friendlyError } from "./friendlyError";
 import type { MockSession, UserRole } from "./mock";
 import { HQ_ROLES } from "./permissions";
 import { logRepoRead } from "./repoLog";
+import { DATA_SOURCE } from "./data/config";
+import { caAdoptTokens } from "./cookieAuth";
 
 const isHQRole = (r: UserRole): boolean => HQ_ROLES.includes(r);
 
@@ -294,6 +296,47 @@ export async function sbResetPasswordWithCode(
     }
     const { error: upErr } = await sb.auth.updateUser({ password: newPassword });
     if (upErr) return { ok: false, error: friendlyError(upErr) };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: friendlyError(err) };
+  }
+}
+
+// ── เข้าสู่ระบบด้วย "เลขยืนยันจากอีเมล" โดยไม่ต้องตั้งรหัสใหม่ (บอสสั่ง 2 ก.ย. 69) ────
+//
+// เดิม: ลืมรหัสผ่าน → กรอกเลข → บังคับตั้งรหัสใหม่สองช่องก่อนถึงจะเข้าได้
+//   บอสสั่งตัดขั้นตอนนั้นออก — เอาเลขจากอีเมลมากรอกแล้วเข้าระบบได้เลย
+//   (คนที่ลืมรหัสส่วนใหญ่แค่อยากเข้าไปทำงาน ไม่ได้อยากคิดรหัสใหม่ตอนนั้น
+//    ถ้าอยากเปลี่ยนค่อยไปเปลี่ยนที่หน้าบัญชีของตัวเองทีหลัง)
+//
+// เลขที่ส่งมาเป็นของ resetPasswordForEmail จึงต้องยืนยันแบบ recovery
+//   ยืนยันผ่าน = ได้ session จริงเลย (Supabase ออกใบผ่านให้ตั้งแต่ขั้นยืนยัน) — ไม่ต้องเรียก signIn ซ้ำ
+//   โหมด api (ใบผ่านอยู่ใน cookie httpOnly) ต้องส่งใบผ่านให้เซิร์ฟเวอร์แลกเป็น cookie ต่อ
+export async function sbLoginWithCode(email: string, codeOrLink: string): Promise<ResetResult> {
+  const e = email.trim().toLowerCase();
+  const ที่กรอก = String(codeOrLink).trim();
+  const เป็นลิงก์ = /^https?:\/\//i.test(ที่กรอก) || ที่กรอก.includes("token=");
+  const เลข = ที่กรอก.replace(/\D/g, "");
+  if (!เป็นลิงก์ && เลข.length < 6) return { ok: false, error: "กรอกเลขยืนยันที่ได้จากอีเมล หรือวางลิงก์จากอีเมล" };
+  try {
+    const sb = getSupabase();
+    let token_hash = "";
+    if (เป็นลิงก์) {
+      try { token_hash = new URL(ที่กรอก).searchParams.get("token") ?? ""; }
+      catch { token_hash = (ที่กรอก.split("token=")[1] ?? "").split("&")[0]; }
+      if (!token_hash) return { ok: false, error: "ลิงก์ไม่ถูกต้อง — ก๊อปลิงก์จากอีเมลมาทั้งอัน" };
+    }
+    const { data, error } = เป็นลิงก์
+      ? await sb.auth.verifyOtp({ token_hash, type: "recovery" })
+      : await sb.auth.verifyOtp({ email: e, token: เลข, type: "recovery" });
+    if (error || !data.session) {
+      return { ok: false, error: "เลขยืนยันไม่ถูกต้องหรือหมดอายุแล้ว — กด \"ลืมรหัสผ่าน?\" ใหม่อีกครั้ง" };
+    }
+    if (DATA_SOURCE === "api") {
+      // หน้าเว็บถือ session เองไม่ได้ในโหมดนี้ — ต้องให้เซิร์ฟเวอร์ตั้ง cookie ให้
+      const ok = await caAdoptTokens(data.session.access_token, data.session.refresh_token);
+      if (!ok) return { ok: false, error: "เข้าสู่ระบบไม่สำเร็จ — ลองใหม่อีกครั้ง" };
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: friendlyError(err) };
