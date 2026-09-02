@@ -67,6 +67,10 @@ export default function ProfilePage() {
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── ฟอร์มเปลี่ยนรหัสกางเมื่อกดปุ่มเท่านั้น (บอสสั่ง 2 ก.ย. 69) ──────────────────
+  //   คนเข้าหน้าโปรไฟล์ส่วนใหญ่มาแก้ชื่อ/รูป ไม่ได้มาเปลี่ยนรหัส · กางค้างไว้ตลอดจึงเป็น
+  //   ช่องรหัสผ่านเปล่า 3 ช่องที่กินพื้นที่ครึ่งการ์ดโดยไม่มีใครใช้
+  const [เปิดฟอร์มรหัส, setเปิดฟอร์มรหัส] = useState(false);
   // ── ดูรหัสผ่านของตัวเอง: ต้องเอาเลขที่ส่งไปทางอีเมลมากรอกก่อน (บอสสั่ง 2 ก.ย. 69) ──
   // ขั้นตอน: ปิดอยู่ → กดขอเลข (ส่งอีเมล) → กรอกเลข → เห็นรหัส (กดซ่อนแล้วกดดูซ้ำได้)
   const [ขั้นดูรหัส, setขั้นดูรหัส] = useState<"ปิด" | "กรอกเลข" | "เห็นแล้ว" | "ซ่อนอยู่">("ปิด");
@@ -186,6 +190,47 @@ export default function ProfilePage() {
   //   ช่อง "ยืนยันรหัสผ่านใหม่" มีไว้กันพิมพ์ผิด ถ้าเปิดดูพร้อมกันหมดก็ไม่เหลืออะไรให้ยืนยัน
   const roBox: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, border: `1px solid ${BORDER}`, background: "#f7f8fa", borderRadius: 9, padding: "9px 12px", fontSize: "0.86rem", color: STEEL };
 
+  /* ── แผง "ดูรหัสผ่านของฉัน" (บอสสั่ง 2 ก.ย. 69) ────────────────────────────────
+       ต้องขอเลขทางอีเมลมากรอกก่อนทุกครั้ง — จอที่เปิดค้างไว้จึงเปิดดูไม่ได้
+       รหัสที่เห็นคือ "สำเนาที่ระบบเก็บไว้ตอนเปลี่ยนรหัสครั้งล่าสุดผ่านหน้านี้"
+       บัญชีที่ยังไม่เคยเปลี่ยนผ่านหน้านี้จะยังไม่มีสำเนา (Supabase เก็บเป็น hash อ่านกลับไม่ได้)
+       แยกออกมาเป็นตัวแปรเพราะต้องไปวางรวมแถวเดียวกับปุ่มเปลี่ยนรหัส แต่ตัวมันมีหลายสถานะ */
+  const PANEL_ดูรหัส = ขั้นดูรหัส === "เห็นแล้ว" ? (
+    <>
+      <code style={{ fontWeight: 800, color: STEEL, fontSize: "0.85rem", background: "#f7f8fa",
+        border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 12px" }}>{รหัสที่เห็น}</code>
+      <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+        onClick={() => { void navigator.clipboard?.writeText(รหัสที่เห็น).catch(() => {}); }}>คัดลอก</button>
+      {/* กดซ่อนแล้วยังกดดูซ้ำได้ ไม่ต้องขอเลขใหม่ (แพตเทิร์นเดียวกับหน้าบัญชีของตัวแทน) */}
+      <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+        onClick={() => setขั้นดูรหัส("ซ่อนอยู่")}>ซ่อน</button>
+    </>
+  ) : ขั้นดูรหัส === "ซ่อนอยู่" ? (
+    <>
+      <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+        onClick={() => setขั้นดูรหัส("เห็นแล้ว")}><Eye size={13} /> ดูอีกครั้ง</button>
+      <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+        onClick={() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); setMsgReveal(null); }}>เสร็จสิ้น</button>
+    </>
+  ) : ขั้นดูรหัส === "กรอกเลข" ? (
+    <>
+      <input aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code" value={เลขยืนยัน}
+        onChange={e => {
+          const v = e.target.value;
+          setเลขยืนยัน(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 12));
+        }}
+        placeholder="เลขยืนยันจากอีเมล หรือวางลิงก์"
+        style={{ ...inp, paddingLeft: 12, width: 240, textAlign: "center" }} />
+      <button className="btn btn-primary btn-sm" disabled={กำลังดู}
+        onClick={() => void ยืนยันเลขแล้วดูรหัส()}>{กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}</button>
+      <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
+        onClick={() => { setขั้นดูรหัส("ปิด"); setMsgReveal(null); }}>ยกเลิก</button>
+    </>
+  ) : (
+    <button className="btn btn-secondary btn-md" style={{ color: STEEL }} disabled={กำลังดู}
+      onClick={() => void ขอเลขทางอีเมล()}><Eye size={14} /> {กำลังดู ? "กำลังส่งเลข…" : "ดูรหัสผ่าน"}</button>
+  );
+
   if (!isHQ) return null; // ฝั่งตัวแทน redirect ไป /settings (บัญชีดีลเลอร์) แล้ว — ไม่เรนเดอร์โปรไฟล์เดิม
 
   return (
@@ -196,7 +241,10 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(340px,100%), 1fr))", gap: 18, alignItems: "start" }}>
+      {/* ── การ์ดเดียวจบ (บอสสั่ง 2 ก.ย. 69) ────────────────────────────────────────
+          เดิมแยกเป็นสองการ์ดซ้าย–ขวา · พอฟอร์มเปลี่ยนรหัสยุบเหลือปุ่ม การ์ดขวาก็เหลือ
+          ปุ่มสองใบลอยอยู่กลางพื้นที่ว่างครึ่งจอ — รวมมาไว้ทางซ้ายการ์ดเดียวจึงอ่านเป็นเรื่องเดียวกัน */}
+      <div style={{ maxWidth: 760 }}>
 
         {/* ── การ์ดข้อมูลส่วนตัว ── */}
         <div className="card" style={{ padding: 22 }}>
@@ -261,6 +309,27 @@ export default function ProfilePage() {
                 </div>
               </>
             )}
+            {/* ── ปุ่มดูรหัสผ่านอยู่ใต้ช่องอีเมล (บอสสั่ง 2 ก.ย. 69) ──────────────────────
+                เลขยืนยันถูกส่งไปที่อีเมลช่องนี้ — วางไว้ติดกันแล้วเห็นทันทีว่าจะไปโผล่ที่ไหน
+                ไม่ต้องเลื่อนลงไปหาว่า "แล้วเลขส่งไปที่อีเมลไหน" */}
+            {isHQ && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>{PANEL_ดูรหัส}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: "0.65rem", color: "#9ca3af" }}>
+                  <ShieldCheck size={11} /> สำเนารหัสผ่านถูกเข้ารหัสไว้ที่เซิร์ฟเวอร์ ไม่ได้เก็บเป็นข้อความธรรมดา
+                </div>
+                {ขั้นดูรหัส === "กรอกเลข" && !msgReveal && (
+                  <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 8 }}>
+                    ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลขมากรอก
+                  </div>
+                )}
+                {msgReveal && (
+                  <div style={{ fontSize: "0.7rem", fontWeight: 600, marginTop: 8, color: msgReveal.ok ? "#059669" : "#dc2626" }}>
+                    {msgReveal.text}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* เบอร์โทร */}
@@ -291,29 +360,39 @@ export default function ProfilePage() {
           <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, fontSize: "0.65rem", color: "#9ca3af" }}>
             <Lock size={11} /> ตำแหน่งและหน่วยงานกำหนดโดยผู้ดูแลระบบ — แก้ไขที่นี่ไม่ได้
           </div>
-        </div>
 
-        {/* ── การ์ดความปลอดภัย ── HQ เปลี่ยนรหัสผ่านเองได้ · ตัวแทนจัดการโดยสำนักงานใหญ่ */}
-        <div className="card" style={{ padding: 22 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+          {/* ── ส่วนความปลอดภัย ── HQ เปลี่ยนรหัสผ่านเองได้ · ตัวแทนจัดการโดยสำนักงานใหญ่ */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, marginTop: 22, paddingTop: 20, borderTop: `1px solid ${BORDER}` }}>
             <KeyRound size={18} color={PRIMARY} />
             <span style={{ fontSize: "0.92rem", fontWeight: 800, color: STEEL }}>ความปลอดภัย</span>
           </div>
 
           {isHQ ? (
             <>
-              <div style={{ fontSize: "0.8rem", color: MUTED, marginBottom: 16 }}>เปลี่ยนรหัสผ่านสำหรับเข้าสู่ระบบ</div>
+              {/* ปุ่มเปิดฟอร์มเปลี่ยนรหัส — ส่วน "ดูรหัสผ่าน" ย้ายไปอยู่ใต้ช่องอีเมลข้างบนแล้ว */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button className="btn btn-secondary btn-md" aria-expanded={เปิดฟอร์มรหัส} style={{ color: STEEL }}
+                  onClick={() => {
+                    // ปิดฟอร์ม = ล้างสิ่งที่พิมพ์ค้างไว้ ไม่เก็บรหัสไว้ในหน่วยความจำหน้าจอโดยไม่จำเป็น
+                    setเปิดฟอร์มรหัส(v => { if (v) { setPw({ cur: "", next: "", confirm: "" }); setเปิดดูรหัส({ cur: false, next: false, confirm: false }); } return !v; });
+                    setPwMsg(null);
+                  }}>
+                  <KeyRound size={14} /> {เปิดฟอร์มรหัส ? "ยกเลิกการเปลี่ยนรหัสผ่าน" : "เปลี่ยนรหัสผ่าน"}
+                </button>
+              </div>
+
+              {เปิดฟอร์มรหัส && (<div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 16, paddingTop: 16 }}>
               {[
                 { k: "cur" as const, label: "รหัสผ่านปัจจุบัน", ph: "••••••••" },
                 { k: "next" as const, label: "รหัสผ่านใหม่", ph: "อย่างน้อย 6 ตัวอักษร" },
                 { k: "confirm" as const, label: "ยืนยันรหัสผ่านใหม่", ph: "พิมพ์รหัสผ่านใหม่อีกครั้ง" },
               ].map(f => (
                 <div key={f.k} style={{ marginBottom: 14 }}>
-                  <label style={lbl}>{f.label}</label>
+                  <label htmlFor={`pw-${f.k}`} style={lbl}>{f.label}</label>
                   <div style={{ position: "relative" }}>
                     <Lock size={15} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: MUTED }} />
                     {/* ห้ามเว้นวรรค — หน้าเข้าสู่ระบบตัดช่องว่างทิ้ง ตั้งไว้แล้วจะพิมพ์เข้าไม่ได้ */}
-                    <input style={{ ...inp, paddingRight: 40 }} type={เปิดดูรหัส[f.k] ? "text" : "password"}
+                    <input id={`pw-${f.k}`} style={{ ...inp, paddingRight: 40 }} type={เปิดดูรหัส[f.k] ? "text" : "password"}
                       value={pw[f.k]} placeholder={f.ph}
                       onChange={e => { setPw(p => ({ ...p, [f.k]: e.target.value.replace(/\s/g, "") })); setPwMsg(null); }} />
                     {/* ปุ่มลูกตา — กดค้างไม่ได้ ต้องกดสลับ เพราะบางคนใช้เมาส์อย่างเดียว
@@ -334,68 +413,9 @@ export default function ProfilePage() {
                   {pwMsg.text}
                 </div>
               )}
-              <button className="btn btn-secondary btn-md" onClick={() => void changePassword()} disabled={pwBusy} style={{ color: STEEL, ...(pwBusy ? { opacity: .6, cursor: "not-allowed" } : {}) }}><KeyRound size={14} /> {pwBusy ? "กำลังเปลี่ยน…" : "เปลี่ยนรหัสผ่าน"}</button>
-              {/* ── ดูรหัสผ่านของตัวเอง (บอสสั่ง 2 ก.ย. 69) ────────────────────────────────
-                  ต้องขอเลขทางอีเมลมากรอกก่อนทุกครั้ง — จอที่เปิดค้างไว้จึงเปิดดูไม่ได้
-                  รหัสที่เห็นคือ "สำเนาที่ระบบเก็บไว้ตอนเปลี่ยนรหัสครั้งล่าสุดผ่านหน้านี้"
-                  บัญชีที่ยังไม่เคยเปลี่ยนผ่านหน้านี้จะยังไม่มีสำเนา (Supabase เก็บเป็น hash อ่านกลับไม่ได้) */}
-              <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 16 }}>
-                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: STEEL, marginBottom: 4 }}>รหัสผ่านปัจจุบันของฉัน</div>
-                <div style={{ fontSize: "0.7rem", color: MUTED, marginBottom: 10 }}>
-                  ดูได้เมื่อยืนยันด้วยเลขที่ส่งไปทางอีเมลของบัญชีนี้ · ทุกครั้งที่เปิดดูจะถูกบันทึกไว้ในระบบ
-                </div>
-
-                {ขั้นดูรหัส === "เห็นแล้ว" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <code style={{ fontWeight: 800, color: STEEL, fontSize: "0.85rem", background: "#f7f8fa",
-                      border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 12px" }}>{รหัสที่เห็น}</code>
-                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
-                      onClick={() => { void navigator.clipboard?.writeText(รหัสที่เห็น).catch(() => {}); }}>คัดลอก</button>
-                    {/* กดซ่อนแล้วยังกดดูซ้ำได้ ไม่ต้องขอเลขใหม่ (แพตเทิร์นเดียวกับหน้าบัญชีของตัวแทน) */}
-                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
-                      onClick={() => setขั้นดูรหัส("ซ่อนอยู่")}>ซ่อน</button>
-                  </div>
-                ) : ขั้นดูรหัส === "ซ่อนอยู่" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
-                      onClick={() => setขั้นดูรหัส("เห็นแล้ว")}><Eye size={13} /> ดูอีกครั้ง</button>
-                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
-                      onClick={() => { setขั้นดูรหัส("ปิด"); setรหัสที่เห็น(""); setMsgReveal(null); }}>เสร็จสิ้น</button>
-                  </div>
-                ) : ขั้นดูรหัส === "กรอกเลข" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <input aria-label="เลขยืนยันจากอีเมล" autoComplete="one-time-code" value={เลขยืนยัน}
-                      onChange={e => {
-                        const v = e.target.value;
-                        setเลขยืนยัน(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 12));
-                      }}
-                      placeholder="เลขยืนยันจากอีเมล หรือวางลิงก์"
-                      style={{ ...inp, paddingLeft: 12, width: 240, textAlign: "center" }} />
-                    <button className="btn btn-primary btn-sm" disabled={กำลังดู}
-                      onClick={() => void ยืนยันเลขแล้วดูรหัส()}>{กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}</button>
-                    <button className="btn btn-secondary btn-sm" style={{ color: STEEL }}
-                      onClick={() => { setขั้นดูรหัส("ปิด"); setMsgReveal(null); }}>ยกเลิก</button>
-                  </div>
-                ) : (
-                  <button className="btn btn-secondary btn-md" style={{ color: STEEL }} disabled={กำลังดู}
-                    onClick={() => void ขอเลขทางอีเมล()}><Eye size={14} /> {กำลังดู ? "กำลังส่งเลข…" : "ดูรหัสผ่าน"}</button>
-                )}
-
-                {ขั้นดูรหัส === "กรอกเลข" && !msgReveal && (
-                  <div style={{ fontSize: "0.68rem", color: MUTED, marginTop: 8 }}>
-                    ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลขมากรอก
-                  </div>
-                )}
-                {msgReveal && (
-                  <div style={{ fontSize: "0.7rem", fontWeight: 600, marginTop: 8, color: msgReveal.ok ? "#059669" : "#dc2626" }}>
-                    {msgReveal.text}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.65rem", color: "#9ca3af" }}>
-                <ShieldCheck size={11} /> สำเนารหัสผ่านถูกเข้ารหัสไว้ที่เซิร์ฟเวอร์ ไม่ได้เก็บเป็นข้อความธรรมดา
-              </div>
+              {/* ชื่อปุ่มต้องไม่ซ้ำกับปุ่มที่ใช้เปิดฟอร์ม — ซ้ำแล้วทั้งคนและเทสต์แยกไม่ออกว่ากดใบไหน */}
+              <button className="btn btn-primary btn-md" onClick={() => void changePassword()} disabled={pwBusy} style={pwBusy ? { opacity: .6, cursor: "not-allowed" } : undefined}><KeyRound size={14} /> {pwBusy ? "กำลังเปลี่ยน…" : "บันทึกรหัสผ่านใหม่"}</button>
+              </div>)}
             </>
           ) : (
             // ตัวแทน: รหัสผ่านออกและจัดการโดยสำนักงานใหญ่ — แก้เองไม่ได้
