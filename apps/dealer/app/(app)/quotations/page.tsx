@@ -19,7 +19,7 @@ import { buildQuotationHTML, DEFAULT_DOC, type DocProfile } from "@pms/shared/li
 import { useDealerSettings, useDealerVat, useDealerWht } from "@pms/shared/lib/useDealerSettings";
 import { useSales } from "@pms/shared/context/SalesContext";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
-import { useHQPolicy, useLostReasons } from "@pms/shared/lib/useHQConfig";
+import { useLostReasons } from "@pms/shared/lib/useHQConfig";
 import { useQuoteValidity } from "@pms/shared/lib/useQuoteValidity";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { useFilters, FilterProvider, APP_NOW_ISO } from "@pms/shared/context/FilterContext";

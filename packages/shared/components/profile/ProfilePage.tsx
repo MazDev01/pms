@@ -22,7 +22,7 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import {
   UserCircle, Mail, Phone, Camera, Check, ShieldCheck, Building2, Lock, KeyRound, Trash2,
 } from "lucide-react";
-import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
 
 const MUTED = "#6b7280";
 const BORDER = "#e5e7eb";

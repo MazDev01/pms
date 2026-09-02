@@ -19,7 +19,7 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { Search, Plus, Pencil, History, X, Check, Trash2, Building2, CalendarClock, ImagePlus, Layers, Tag, ChevronRight, FileText, Upload, Download, Paperclip } from "lucide-react";
-import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";

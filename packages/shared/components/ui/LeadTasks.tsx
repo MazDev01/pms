@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Check, Trophy, XCircle, RotateCcw, Lock } from "lucide-react";
 import {
-  buildLeadTasks, applyTaskTemplate, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
+  applyTaskTemplate, taskProgress, stageFromTasks, leadStatusLabel, leadStatusColor,
   QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY, findAppointmentTask, OTHER_LOST_REASON, OTHER_REASON_OPTION,
   type LeadRow, type LeadTask, type LeadStatus,
 } from "@pms/shared/lib/mock";

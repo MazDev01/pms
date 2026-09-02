@@ -12,7 +12,7 @@ import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { clearAuditLog } from "@pms/shared/lib/adminApi";
 import { useRole } from "@pms/shared/context/RoleContext";
-import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 const PRIMARY = "#003366";
 // ⚠️ ห้ามกลับไปใช้ hqAuditCategory ของกระดิ่งแจ้งเตือน (บั๊กจริง 10 ส.ค. 69)

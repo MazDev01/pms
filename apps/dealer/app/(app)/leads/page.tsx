@@ -4,14 +4,14 @@ import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { validateUpload, humanFileSize } from "@pms/shared/lib/uploadLimits";
 import { useRouter } from "next/navigation";
-import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { ยืนยัน, แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
 import {
   leadStatusLabel, leadStatusColor,
-  buildLeadReport, buildLeadTasks, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
+  buildLeadReport, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
   seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
-  DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES, CLOSE_TASK_KEY, APPOINTMENT_TASK_KEY, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
+  DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES, CLOSE_TASK_KEY, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
   OTHER_LOST_REASON, OTHER_REASON_OPTION,
-  type LeadStatus, type LeadRow, type ResponsiblePerson, type ApptType, type DealerFile, type LeadTaskDef,
+  type LeadStatus, type LeadRow, type ApptType, type DealerFile, type LeadTaskDef,
 } from "@pms/shared/lib/mock";
 import type { QuotationMock } from "@pms/shared/lib/data/types";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
@@ -35,7 +35,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import {
   Plus, X,
   CheckCircle2, User, Building2,
-  MessageSquare, Paperclip, Trash2, Eye, Trophy, XCircle, Coins, Target, TrendingUp, Percent, Package,
+  MessageSquare, Paperclip, Trash2, Eye, XCircle, Coins, Target, TrendingUp, Percent, Package,
   Phone, Mail, Users, FileText, StickyNote, CalendarClock, MapPin, CheckSquare, Calendar,
   Check, ChevronDown,
   ArrowUpDown, ArrowUp, ArrowDown,

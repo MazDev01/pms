@@ -71,7 +71,7 @@ import {
   Trash2,
   Calendar, FileText, StickyNote, Check, User, Paperclip, Eye, Printer,
   MapPin, Mail, Coins, Layers, TrendingUp, CalendarClock,
-  Users, UserPlus, Package, ChevronRight, History as HistoryIcon,
+  Users, ChevronRight,
 } from "lucide-react";
 import { FilePreviewModal } from "@pms/shared/components/ui/FilePreviewModal";
 import { customerDeletionImpact } from "@pms/shared/lib/customerDeletion";

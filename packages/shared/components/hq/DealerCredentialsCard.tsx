@@ -17,7 +17,7 @@ import { viewDealerPassword, resetDealerPassword, listDealerLoginEmails } from "
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { fmtISOToThai, type DealerRow } from "@pms/shared/lib/mock";
 import { useRole } from "@pms/shared/context/RoleContext";
-import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 /** ช่องคัดลอกค่า (ปิดบังได้) — ใช้ทั้งที่นี่และตอนสร้างตัวแทนใหม่ */
 export function CopyField({ label, value, secret = false, defaultShown = false }: {

@@ -8,7 +8,7 @@ import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/sha
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
-  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor, fmtISOToThai,
+  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
   type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -25,7 +25,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
-import { Plus, Search, X, Copy, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase } from "lucide-react";
+import { Plus, Search, X, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase } from "lucide-react";
 import { AccountRequestsCard } from "@pms/shared/components/hq/AccountRequestsCard";
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };

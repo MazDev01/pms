@@ -8,7 +8,7 @@ import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
 import { Building2, Check, Save, Image as ImageIcon } from "lucide-react";
 import { useReportSection } from "@pms/shared/lib/settingsBus";
-import { แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
 
 // โลโก้ Benjamin เป็นแบรนด์มาตรฐานเดียว (ไฟล์ static) — ไม่มีคีย์เก็บโลโก้ที่อัปโหลดอีกแล้ว
 // ตัดทิ้งตามสเปก Enterprise: การ์ด "สินทรัพย์แบรนด์" (โลโก้ดาวน์โหลด / สี CI / ฟอนต์)

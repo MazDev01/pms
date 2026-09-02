@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { ถ้ามีกล่องยืนยันให้กดตกลง } from "./helpers";
 import { open } from "./helpers";
 import { EXISTING_CUSTOMER_NAME } from "./global-setup";
+import { db } from "./funcHelpers";
+import { RYG } from "./supabaseEnv";
 
 // ลูกค้าซ้ำ (M3) — ลูกค้าเกิดได้ทางเดียวคือลูกค้าเป้าหมายที่ปิดการขายได้
 // ถ้าตัวแทนเปิดลูกค้าเป้าหมายใหม่ให้บริษัทที่เป็นลูกค้าอยู่แล้ว พอปิดการขายต้องไม่แตกเป็นลูกค้าคนที่สอง
@@ -36,13 +38,15 @@ test("[dealer] ชื่อบริษัทใหม่จริง ๆ → �
 });
 
 test("[dealer] ปิดการขายลูกค้าเป้าหมายที่ชื่อตรงกับลูกค้าเดิม → ไม่เกิดลูกค้าซ้ำ", async ({ page }) => {
-  // นับจำนวนลูกค้าชื่อนี้ก่อน (ต้องมี 1)
-  await open(page, "dealer", "/customers");
-  // ต้อง "รอให้โผล่" ไม่ใช่ "นับทันทีที่เปิดหน้า" — รายชื่อลูกค้ามาแบบไม่พร้อมหน้า
-  // นับเลยจะได้ 0 เพราะข้อมูลยังมาไม่ถึง แล้วสรุปผิดว่าไม่มีลูกค้ารายนี้ในระบบ
-  const existing = page.getByText(EXISTING, { exact: true });
-  await expect(existing.first(), "สมุดตั้งต้นต้องมีลูกค้ารายนี้อยู่แล้ว").toBeVisible({ timeout: 20_000 });
-  const before = await existing.count();
+  // ⚙ นับจาก "ฐานข้อมูล" ไม่ใช่จากหน้าจอ (แก้ 2 ก.ย. 69)
+  //    สิ่งที่เทสต์นี้วัดคือ "ปิดการขายแล้วต้องไม่เกิดลูกค้ารายที่สอง" ซึ่งเป็นเรื่องของข้อมูลล้วน ๆ
+  //    การนับแถวบนจอขึ้นกับตัวกรองช่วงเวลา/การแบ่งหน้า และชุดอื่นที่รันขนานกันก็เพิ่ม/ลบลูกค้าคั่นกลางได้
+  //    → เคยตกแบบ "คาด 2 ได้ 0" ทั้งที่ระบบทำถูก (เจอจริงตอนรันชุดเต็ม 2 ก.ย. 69)
+  const sb = await db(RYG);
+  const นับในฐาน = async () => (await sb.from("customers").select("id", { count: "exact", head: true })
+    .eq("dealer_code", "RYG").eq("company", EXISTING)).count ?? 0;
+  const before = await นับในฐาน();
+  expect(before, "สมุดตั้งต้นต้องมีลูกค้ารายนี้อยู่แล้ว").toBeGreaterThan(0);
 
   // เปิดลูกค้าเป้าหมายใหม่ชื่อเดียวกัน
   await openAddLeadForm(page);
@@ -64,6 +68,8 @@ test("[dealer] ปิดการขายลูกค้าเป้าหม�
   await ถ้ามีกล่องยืนยันให้กดตกลง(page);
 
   // สมุดลูกค้าต้องยังมีรายนี้เท่าเดิม (ผูกเข้ากับรายเดิม ไม่สร้างใหม่)
+  await expect.poll(นับในฐาน,
+    { timeout: 30_000, message: "ปิดการขายแล้วต้องผูกเข้าลูกค้ารายเดิม ห้ามเกิดรายที่สอง" }).toBe(before);
   await open(page, "dealer", "/customers");
   // เช็คที่ตัวเก็บข้อมูลเป็นหลัก — จำนวนบนจอเชื่อทันทีไม่ได้ เฟรมแรกยังเป็นชุด seed ก่อนโหลดจาก store
   // (ยังไม่มีคีย์ = ไม่เคยมีการสร้างลูกค้าเลย = ผ่าน)
@@ -73,8 +79,8 @@ test("[dealer] ปิดการขายลูกค้าเป้าหม�
     return (JSON.parse(raw) as { company: string }[]).filter(c => c.company === "บจ. ไทยสตีล").length;
   });
   expect(stored, "ต้องไม่มีลูกค้าชื่อซ้ำถูกบันทึกเพิ่ม").toBeLessThanOrEqual(1);
-  // แล้วค่อยยืนยันบนจอหลังข้อมูลจริงโหลดเสร็จ
-  await page.waitForTimeout(800);
-  await expect(page.getByText(EXISTING, { exact: true }),
-    "ต้องไม่มีลูกค้าชื่อซ้ำโผล่บนหน้าจอ").toHaveCount(before);
+  // และบนหน้าจอต้องยังมองเห็นลูกค้ารายนี้อยู่ (ไม่นับจำนวนแถว — ตารางแบ่งหน้า/กรองช่วงเวลาได้)
+  await page.getByPlaceholder("ค้นหาลูกค้า, เบอร์โทร, อีเมล...").fill(EXISTING);
+  await expect(page.locator("tbody tr").filter({ hasText: EXISTING }).first(),
+    "ลูกค้ารายเดิมต้องยังอยู่บนหน้าจอ").toBeVisible({ timeout: 20_000 });
 });
