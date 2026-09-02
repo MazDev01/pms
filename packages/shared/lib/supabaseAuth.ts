@@ -276,7 +276,7 @@ export async function sbResetPasswordWithCode(
   if (newPassword.length < 8) return { ok: false, error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" };
   const เป็นลิงก์ = /^https?:\/\//i.test(ที่กรอก) || ที่กรอก.includes("token=");
   const เลข = ที่กรอก.replace(/\D/g, "");
-  if (!เป็นลิงก์ && เลข.length < 6) return { ok: false, error: "กรอกเลขยืนยัน 6 หลักที่ได้จากอีเมล หรือวางลิงก์จากอีเมล" };
+  if (!เป็นลิงก์ && เลข.length < 6) return { ok: false, error: "กรอกเลขยืนยันที่ได้จากอีเมล หรือวางลิงก์จากอีเมล" };
   try {
     const sb = getSupabase();
     let token_hash = "";

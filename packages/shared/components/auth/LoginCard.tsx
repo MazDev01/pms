@@ -145,7 +145,7 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
     setForgotBusy(false);
     if (r.ok) {
       setResetOpen(true); setResetCode(""); setResetPw(""); setResetPw2("");
-      setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${e} แล้ว — เปิดอีเมลแล้วเอาเลข 6 หลักมากรอกด้านล่าง` });
+      setForgotMsg({ ok: true, text: `ส่งเลขยืนยันไปที่ ${e} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอกด้านล่าง` });
     } else {
       setForgotMsg({ ok: false, text: r.error });
     }
@@ -242,9 +242,9 @@ export default function LoginCard({ variant = "dealer" }: { variant?: "dealer" |
                   onChange={ev => {
                     const v = ev.target.value;
                     // รับได้ทั้งเลข 6 หลักและลิงก์ที่ก๊อปมาจากอีเมล (แม่แบบอีเมลมาตรฐานมีแต่ลิงก์)
-                    setResetCode(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 6));
+                    setResetCode(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 12));
                   }}
-                  placeholder="เลข 6 หลักจากอีเมล (หรือวางลิงก์)"
+                  placeholder="เลขยืนยันจากอีเมล (หรือวางลิงก์)"
                   className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[0.9rem] text-slate-800 outline-none" />
                 <input type="password" value={resetPw} aria-label="รหัสผ่านใหม่" autoComplete="new-password"
                   onChange={ev => setResetPw(ev.target.value.replace(/\s/g, ""))}

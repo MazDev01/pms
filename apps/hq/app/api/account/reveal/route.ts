@@ -83,7 +83,7 @@ export const POST = withErrors("dealer-reveal-password", async (req: NextRequest
     //   จึงรับลิงก์ด้วย — ดึงค่า token ในลิงก์มาใช้ยืนยันแทน ได้ผลเหมือนกัน
     const ลิงก์ = /^https?:\/\//i.test(ที่กรอก) || ที่กรอก.includes("token=");
     if (!ลิงก์ && เลข.length < 6) {
-      return dealerJson(req, { error: "กรอกเลขยืนยัน 6 หลัก หรือวางลิงก์ที่ได้จากอีเมล" }, 400);
+      return dealerJson(req, { error: "กรอกเลขยืนยันจากอีเมล หรือวางลิงก์ที่ได้จากอีเมล" }, 400);
     }
     // กันเดาเลขทีละหลาย ๆ ครั้ง (6 หลัก = เดาได้ถ้าปล่อยให้ยิงไม่จำกัด)
     if (!(await checkRateLimit(admin, `reveal-verify:${userId}`, 5, 900))) {

@@ -215,7 +215,7 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
     setMsgReveal(null);
     const เป็นลิงก์ = /^https?:\/\//i.test(เลขยืนยัน.trim()) || เลขยืนยัน.includes("token=");
     if (!เป็นลิงก์ && เลขยืนยัน.replace(/\D/g, "").length < 6) {
-      setMsgReveal({ ok: false, text: "กรอกเลขยืนยัน 6 หลัก หรือวางลิงก์ที่ได้จากอีเมล" }); return;
+      setMsgReveal({ ok: false, text: "กรอกเลขยืนยันจากอีเมล หรือวางลิงก์ที่ได้จากอีเมล" }); return;
     }
     setกำลังดู(true);
     try {
@@ -320,10 +320,10 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
                   จนกว่าจะแก้แม่แบบอีเมลให้ใส่เลขเข้าไป (ดู /api/account/reveal) */}
               <input value={เลขยืนยัน} onChange={e => {
                   const v = e.target.value;
-                  setเลขยืนยัน(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 6));
+                  setเลขยืนยัน(/^https?:\/\//i.test(v.trim()) || v.includes("token=") ? v.trim() : v.replace(/\D/g, "").slice(0, 12));
                 }}
                 autoComplete="one-time-code" aria-label="เลขยืนยันจากอีเมล"
-                placeholder="เลข 6 หลัก หรือวางลิงก์จากอีเมล" className="form-input"
+                placeholder="เลขยืนยันจากอีเมล หรือวางลิงก์" className="form-input"
                 style={{ width: 210, textAlign: "center", letterSpacing: "0.04em" }} />
               <button onClick={() => void ยืนยันเลขแล้วดูรหัส()} disabled={กำลังดู} className="btn btn-primary btn-sm">
                 {กำลังดู ? "กำลังตรวจ…" : "ยืนยัน"}
@@ -340,7 +340,7 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
         {/* บอกให้ชัดว่าเลขไปที่ไหน และทำไมต้องมีขั้นตอนนี้ */}
         {ขั้นดูรหัส === "กรอกเลข" && !msgReveal && (
           <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: 8 }}>
-            ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลข 6 หลักมากรอก (เลขมีอายุจำกัด)
+            ส่งเลขยืนยันไปที่ {ส่งไปที่} แล้ว — เปิดอีเมลแล้วเอาเลขยืนยันมากรอก (เลขมีอายุจำกัด)
           </div>
         )}
         {ขั้นดูรหัส === "เห็นแล้ว" && (
