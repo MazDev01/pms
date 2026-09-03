@@ -1282,6 +1282,43 @@ textarea:focus-visible {
 .modal-pop-flex { animation: modal-pop-flex .16s ease-out; }
 @media (prefers-reduced-motion: reduce) { .modal-pop-flex { animation: none; } }
 
+
+/* ─── กล่องโมดัลต้อง "พอดีจอ" เสมอ (บอสแจ้ง 3 ก.ย. 69) ───────────────────────
+   อาการที่เจอ: ฟอร์มเพิ่มผู้ใช้ HQ บนโน้ตบุ๊กจอเตี้ย — หัวกล่องโดนตัดข้างบน
+   ปุ่ม "บันทึก/ยกเลิก" โดนตัดข้างล่าง กดไม่ได้ และเลื่อนก็ไม่ได้เพราะกล่องไม่มีที่เลื่อน
+   สาเหตุ: กล่องไม่ได้จำกัดความสูง พอเนื้อหายาวกว่าจอก็ล้นออกไปทั้งบนและล่าง
+   (ฉากหลังจัดกึ่งกลางด้วย flex → ส่วนที่ล้นหายไปเท่า ๆ กันทั้งสองด้าน)
+
+   วิธีใช้: ใส่ .modal-fit ที่ "กล่อง" · .modal-fit-body ที่ส่วนเนื้อหาที่ให้เลื่อนได้
+   หัวกล่องกับแถบปุ่มไม่ต้องใส่อะไร — จะถูกตรึงไว้เองเพราะ body เป็นตัวยืด/หด
+   ⚠️ ต้องมี min-height:0 ที่ body ไม่งั้น flex จะไม่ยอมให้หดแล้วยังล้นเหมือนเดิม */
+.modal-fit {
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+.modal-fit-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;   /* เลื่อนสุดแล้วไม่ไปดันหน้าข้างหลังให้เลื่อนตาม */
+}
+/* จอเตี้ยมาก (โน้ตบุ๊ก 13 นิ้วที่เปิดแถบเครื่องมือหลายชั้น) — ขอพื้นที่คืนจากขอบ */
+@media (max-height: 700px) {
+  .modal-fit { max-height: calc(100dvh - 16px); }
+}
+
+
+/* .modal-fit-auto = แบบง่ายสำหรับกล่องที่ไม่ได้แยกหัว/เนื้อ/ปุ่มเป็นชั้น ๆ
+   ทั้งกล่องเลื่อนเองเมื่อเนื้อหายาวเกินจอ (หัวกล่องเลื่อนหายไปด้วย ซึ่งยอมรับได้
+   สำหรับกล่องสั้น ๆ ที่ยาวเกินเฉพาะตอนข้อมูลเยอะผิดปกติ เช่น ประวัติราคาหลายสิบรายการ) */
+.modal-fit-auto {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-height: 700px) { .modal-fit-auto { max-height: calc(100dvh - 16px); } }
+
 /* Vertical bar grow (กราฟแท่งแนวตั้ง — โตจากฐานขึ้นบน) */
 @keyframes vbar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .vbar-grow { transform-origin: bottom; animation: vbar-grow .7s cubic-bezier(.34,1.06,.64,1) both; }

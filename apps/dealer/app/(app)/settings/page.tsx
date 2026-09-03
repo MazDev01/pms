@@ -565,7 +565,7 @@ function PersonsTab() {
             <ModalPortal>
             <div {...overlayProps} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(45,45,45,.45)",
               display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-              <ModalCard onClose={close} label="ฟอร์มผู้รับผิดชอบ" style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
+              <ModalCard onClose={close} label="ฟอร์มผู้รับผิดชอบ" className="modal-fit-auto" style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 18,
                 overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
                 {/* header */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", background: "#003366" }}>

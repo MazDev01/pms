@@ -554,12 +554,12 @@ function HQDealersPageInner() {
       {/* ── Add / Edit Modal ── */}
       {showForm && (
         <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <ModalCard onClose={() => setShowForm(false)} label="ฟอร์มข้อมูลตัวแทน" style={{ ...CARD, width: 460, maxWidth: '100%' }}>
+          <ModalCard onClose={() => setShowForm(false)} label="ฟอร์มข้อมูลตัวแทน" className="modal-fit" style={{ ...CARD, width: 460, maxWidth: '100%' }}>
             <div style={{ padding: "18px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>{editTarget ? "แก้ไขข้อมูลตัวแทน" : "เพิ่มตัวแทนใหม่"}</h2>
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
             </div>
-            <div style={{ padding: "18px 20px" }}>
+            <div className="modal-fit-body" style={{ padding: "18px 20px" }}>
               {formErr && <div style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.8rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
 
               {!editTarget && (

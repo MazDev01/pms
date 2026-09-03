@@ -125,7 +125,9 @@ function StatusDot({ status }: { status: UserStatus }) {
 type UserForm = { firstName: string; lastName: string; email: string; phone: string; role: RoleKey; department: string; tempPassword: string; status: UserStatus; avatar?: string };
 function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">) => void; onClose: () => void; canEditPrivileges?: boolean }) {
   // ล็อกบทบาท/สถานะตอน "แก้ไข" ถ้าไม่มีสิทธิ์ (HQ_MANAGEMENT) — RLS/trigger จะปฏิเสธการเปลี่ยนอยู่แล้ว
-  const lockPriv = !!initial && !canEditPrivileges;
+  // บทบาท/สถานะ = เรื่องสิทธิ์ ต้องเป็นผู้ดูแลระบบเท่านั้นถึงแต่งตั้งได้ ทั้งตอนเพิ่มและตอนแก้
+  // (ฐานข้อมูลปฏิเสธอยู่แล้ว 0026/0064 — แต่หน้าจอต้องไม่หลอกให้กรอกแล้วค่อยไปเจอ error)
+  const lockPriv = !canEditPrivileges;
   const [f, setF] = useState<UserForm>(() => {
     if (initial) { const [fn, ...ln] = initial.name.split(" "); return { firstName: fn, lastName: ln.join(" "), email: initial.email, phone: initial.phone, role: initial.role, department: initial.department, tempPassword: "", status: initial.status, avatar: initial.avatar }; }
     // ผู้ใช้ใหม่: บทบาท/แผนก เริ่มที่ "ยังไม่ระบุ" — ห้ามตั้งสิทธิ์ให้เองโดยที่คนเพิ่มไม่ได้เลือก
@@ -148,12 +150,12 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
   const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ฟอร์มผู้ใช้ HQ" onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ฟอร์มผู้ใช้ HQ" onClick={e => e.stopPropagation()} className="modal-fit" style={{ width: "100%", maxWidth: 520, background: "#fff", borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
         <div style={{ background: PRIMARY, color: "#fff", padding: "16px 22px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 800 }}>{initial ? <Pencil size={16} /> : <UserPlus size={17} />} {initial ? "แก้ไขผู้ใช้ HQ" : "เพิ่มผู้ใช้งาน HQ"}</div>
-          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer" }}><X size={15} /></button>
+          <button onClick={onClose} aria-label="ปิด" title="ปิด" style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.15)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0, lineHeight: 0 }}><X size={15} /></button>
         </div>
-        <div className="form-grid" style={{ padding: 22 }}>
+        <div className="form-grid modal-fit-body" style={{ padding: 22 }}>
           {/* รูปโปรไฟล์ — คลิกเพื่ออัปโหลด/เปลี่ยน */}
           <div className="col-full" style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
             <label title="อัปโหลด/เปลี่ยนรูปโปรไฟล์" style={{ cursor: "pointer", position: "relative", display: "inline-block" }}>
@@ -174,13 +176,13 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
           <div><label className="form-label">ชื่อ *</label><input style={inp} value={f.firstName} autoFocus onChange={e => setF({ ...f, firstName: e.target.value })} placeholder="ชื่อ" /></div>
           <div><label className="form-label">นามสกุล</label><input style={inp} value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} placeholder="นามสกุล" /></div>
           <div className="col-full"><label className="form-label">อีเมล (ใช้เข้าระบบ) *</label><input style={inp} value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="name@benjamin.co.th" /></div>
+          {!initial && <><div className="col-full"><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value.replace(/\s/g, "") })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ใช้เข้าระบบครั้งแรก ผู้ใช้ต้องเปลี่ยนเองหลังเข้าระบบ</div></div></>}
           <div><label className="form-label">เบอร์โทร</label><input style={inp} inputMode="tel" value={f.phone} onChange={e => setF({ ...f, phone: formatPhone(e.target.value) })} placeholder="08x-xxx-xxxx" /></div>
           <div className="form-section">สิทธิ์การใช้งาน</div>
-          <div><label className="form-label">แผนก *</label><select aria-label="แผนก" style={inp} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}><option value="">— ยังไม่ระบุ —</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
           <div><label className="form-label">บทบาท (Role) *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} aria-label="บทบาท" disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}><option value="">— ยังไม่ระบุ —</option>{ROLES.filter(r => r.key !== "SUPER_ADMIN" || canEditPrivileges).map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
+          <div><label className="form-label">แผนก *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select aria-label="แผนก" disabled={lockPriv} style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}><option value="">— ยังไม่ระบุ —</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
           {/* ต้องมีค่าเสมอ — ผู้ใช้ต้องเป็นเปิดหรือปิดใช้งานอย่างใดอย่างหนึ่ง ว่างไม่ได้ */}
           <div><label className="form-label">สถานะ{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} disabled={lockPriv} value={f.status} onChange={e => setF({ ...f, status: e.target.value as UserStatus })}><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select></div>
-          {!initial && <><div className="form-section">การเข้าระบบครั้งแรก</div><div className="col-full"><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value.replace(/\s/g, "") })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ผู้ใช้ต้องเปลี่ยนเองหลังเข้าระบบครั้งแรก</div></div></>}
         </div>
         <div style={{ padding: "14px 22px", borderTop: `1px solid ${BORDER}`, background: "#fafafa", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button className="btn btn-secondary btn-md" onClick={onClose}>ยกเลิก</button>
@@ -424,7 +426,9 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
         <div className="card-header" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <Users size={18} color={PRIMARY} />
           <div style={{ flex: 1, minWidth: 120 }}><div className="card-title">ผู้ใช้งานสำนักงานใหญ่</div>{/* คำอธิบายกำกับใต้หัวข้อถูกเอาออกทั้งระบบ (บอสสั่ง 27 ส.ค. 69) */}</div>
-          <button onClick={() => setAddOpen(true)} className="btn btn-primary btn-md" style={{ flexShrink: 0 }}><Plus size={15} /> เพิ่มผู้ใช้งาน HQ</button>
+          {/* สร้างผู้ใช้ = ต้องกำหนดบทบาทให้เขาด้วย ซึ่งเป็นสิทธิ์ของผู้ดูแลระบบเท่านั้น
+              บทบาทอื่นจึงไม่เห็นปุ่มนี้ — ดีกว่าให้กดแล้วกรอกจนจบค่อยไปเจอว่าบันทึกไม่ได้ */}
+          {canEditPrivileges && <button onClick={() => setAddOpen(true)} className="btn btn-primary btn-md" style={{ flexShrink: 0 }}><Plus size={15} /> เพิ่มผู้ใช้งาน HQ</button>}
         </div>
 
         {/* Filters */}
@@ -542,7 +546,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       {detailUser && <UserDetailDrawer user={detailUser} onClose={() => setDetailUser(null)} onEdit={() => { setDialogUser(detailUser); setDetailUser(null); }} />}
-      {addOpen && <UserDialog onSave={data => saveUser(null, data)} onClose={() => setAddOpen(false)} />}
+      {addOpen && <UserDialog canEditPrivileges={canEditPrivileges} onSave={data => saveUser(null, data)} onClose={() => setAddOpen(false)} />}
       {dialogUser && <UserDialog initial={dialogUser} canEditPrivileges={canEditPrivileges} onSave={data => saveUser(dialogUser.id, data)} onClose={() => setDialogUser(null)} />}
 
       {/* ตั้งรหัสผ่านให้ตรง ๆ — ผู้ดูแลพิมพ์เองก็ได้ หรือให้ระบบสุ่มให้ (ไม่พึ่งอีเมลเลย) */}

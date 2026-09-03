@@ -549,7 +549,7 @@ function AddApptModal({ initial, defaultDate, onSave, onClose }: { initial?: App
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 200 }} />
       <div style={{ position: "fixed", inset: 0, zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, pointerEvents: "none" }}>
-        <ModalCard onClose={onClose} label="เพิ่ม/แก้ไขนัดหมาย" className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
+        <ModalCard onClose={onClose} label="เพิ่ม/แก้ไขนัดหมาย" className="modal-fit-auto" className="card" style={{ width: "100%", maxWidth: 460, pointerEvents: "auto", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,51,102,.24)" }}>
           <div style={{ background: PRIMARY, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem" }}>{isEdit ? "แก้ไขกิจกรรม" : "เพิ่มกิจกรรม"}</span>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>

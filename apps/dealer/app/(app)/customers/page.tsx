@@ -1932,7 +1932,7 @@ export default function CustomersPage(){
           แยกไม่ออกว่าอันไหนของจริง — จึงต้องให้คนตัดสินก่อนว่าจะเติมของที่ขาด หรือเอาของใหม่ทับ */}
       {ซ้ำที่ต้องถาม && (
         <div onClick={()=>setซ้ำที่ต้องถาม(null)} style={{position:"fixed",inset:0,background:"rgba(45,45,45,.5)",zIndex:260,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div role="dialog" aria-label="พบชื่อลูกค้าซ้ำ" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
+          <div role="dialog" aria-label="พบชื่อลูกค้าซ้ำ" className="modal-fit-auto" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
             <div style={{background:PRIMARY,color:"#fff",padding:"15px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:"0.92rem",fontWeight:800}}>พบชื่อลูกค้าซ้ำ {ซ้ำที่ต้องถาม.length} ราย</div>
               <button aria-label="ปิด" onClick={()=>setซ้ำที่ต้องถาม(null)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,width:28,height:28,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={14}/></button>
