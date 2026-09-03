@@ -142,7 +142,17 @@ export async function resetDealerPassword(
 /** อีเมลเข้าระบบจริงของแต่ละสาขา (รหัสสาขา → อีเมล) — สาขาที่ไม่มีบัญชีจะไม่มีคีย์
  *  ต้องถามเซิร์ฟเวอร์ ห้ามคำนวณเอาเองจากรหัสสาขา (อีเมลจริงของแต่ละสาขาไม่ได้เป็นสูตรเดียวกัน) */
 export async function listDealerLoginEmails(): Promise<Record<string, string>> {
-  if (!REAL_BACKEND) return {};
+  // โหมดตัวอย่าง (เว็บ demo) ไม่มีเซิร์ฟเวอร์ให้ถาม — แต่ชุดข้อมูลตัวอย่างมีอีเมลของแต่ละสาขาอยู่แล้ว
+  // เดิมคืนค่าว่างเสมอ หน้าจอจึงขึ้น "—" คู่กับรหัสผ่านที่ดูได้ คนดูเข้าใจว่าระบบเก็บอีเมลไม่ได้
+  // (บอสทักท้วง 3 ก.ย. 69) · ไม่ใช่การเดาอีเมล — เป็นค่าที่อยู่ในชุดตัวอย่างจริง ๆ
+  if (!REAL_BACKEND) {
+    const { loadHQDealers } = await import("./mock");
+    return Object.fromEntries(
+      loadHQDealers()
+        .filter(d => d.credentials?.email)
+        .map(d => [d.code, d.credentials!.email]),
+    );
+  }
   const token = await callerToken();
   if (!token) return {};
   try {
