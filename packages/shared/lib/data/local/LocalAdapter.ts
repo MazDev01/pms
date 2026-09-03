@@ -242,12 +242,17 @@ export const LocalAdapter: DataAdapter = {
     list: () => {
       const saved = readKey<SystemUser[]>(HQ_USERS_KEY, []);
       if (saved.length) return ok(saved);
+      // เติมอีเมล/แผนก/วันที่สร้างให้ครบ — เดิมเว้นว่างไว้ ตารางจึงขึ้น "—" สามคอลัมน์รวด
+      // ดูเหมือนระบบเก็บข้อมูลไม่ได้ ทั้งที่เป็นแค่ชุดตัวอย่างที่ยังไม่ได้ใส่ (บอสทักท้วง 3 ก.ย. 69)
+      const แผนกของบทบาท: Record<string, string> = {
+        SUPER_ADMIN: "ไอทีและระบบ", HQ_MANAGEMENT: "บริหาร", HQ_STAFF: "ฝ่ายขาย",
+      };
       const demo: SystemUser[] = Object.entries(sessions)
         .filter(([, v]) => !v.dealerCode)
         .map(([key, v]) => ({
-          id: `demo-${key}`, name: v.name, email: "", phone: "",
-          role: v.role, department: "", dealerCode: "",
-          status: "active" as const, createdAt: "", avatar: undefined,
+          id: `demo-${key}`, name: v.name, email: "admin@benjamin.com", phone: "",
+          role: v.role, department: แผนกของบทบาท[v.role] ?? "", dealerCode: "",
+          status: "active" as const, createdAt: "1 ม.ค. 2569", avatar: undefined,
         }));
       return ok(demo);
     },

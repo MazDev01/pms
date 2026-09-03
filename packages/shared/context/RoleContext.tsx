@@ -139,7 +139,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       if (loggedIn && saved) {
         const s = JSON.parse(saved) as MockSession;
         if (s && s.role && typeof s.scopeAll === "boolean") {
-          setSession(s); setIsLoggedIn(true); setHydrated(true); return;
+          // ⚠️ บัญชีของชุดสาธิตถูกกำหนดไว้ในโค้ด ไม่ใช่ของที่ผู้ใช้ตั้งเอง
+          //    ที่เก็บไว้ในเครื่องเป็นแค่สำเนาตอนกดเข้าใช้งานครั้งแรก
+          //    ถ้าเราปรับบทบาทของบัญชีสาธิตทีหลัง คนที่เคยเข้ามาแล้วจะยังถือบทบาทเก่าตลอดไป
+          //    จนกว่าจะล้างข้อมูลเว็บ (เจอจริง 3 ก.ย. 69 — เมนูที่สงวนไว้หายไปทั้งที่แก้แล้ว)
+          //    → คนเดิมของชุดสาธิต ให้ยึดบทบาทจากโค้ดปัจจุบันเสมอ · ผู้ใช้ที่สร้างเองในโหมดสาธิตไม่แตะ
+          const ชุดสาธิต = s.scopeAll ? sessions.hq : sessions.dealer;
+          const ฟื้น = s.name === ชุดสาธิต.name ? { ...s, role: ชุดสาธิต.role } : s;
+          setSession(ฟื้น); setIsLoggedIn(true); setHydrated(true); return;
         }
       }
       // 2) fallback: pms_session_key = "hq"|"dealer" (เดโมเข้าด่วน / role switcher / test harness)
