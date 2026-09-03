@@ -24,3 +24,28 @@ export function captureError(error: unknown, context?: ErrorContext): void {
   console.error(context ? `[${context}]` : "[error]", error);
   try { sink?.(error, context); } catch { /* observability ต้องไม่ทำให้งานหลักพัง */ }
 }
+
+/** ตรวจว่าที่อยู่ปลายทางแจ้งเตือน (Sentry DSN) เขียนถูกรูปแบบไหม
+ *
+ *  ทำไมต้องมี: ถ้า DSN เพี้ยนแม้ตัวเดียว Sentry จะ "ปิดตัวเองเงียบ ๆ" ไม่มี error ไม่มี log
+ *  = ระบบพังจริงแล้วไม่มีใครได้รับแจ้ง ซึ่งแย่กว่าไม่ได้ตั้งไว้เลย เพราะทุกคนคิดว่ามีคนเฝ้าอยู่
+ *  (เจอตอนซ้อมแจ้งเตือน 3 ก.ย. 69 — ใส่ DSN ผิดรูปแบบแล้วไม่มีอะไรเกิดขึ้นเลยสักอย่าง)
+ *
+ *  รูปแบบที่ถูก: https://<กุญแจ>@<โฮสต์>/<หมายเลขโครงการ>
+ */
+export function dsnใช้ได้(dsn: string | undefined): boolean {
+  if (!dsn) return false;
+  try {
+    const u = new URL(dsn);
+    return /^https?:$/.test(u.protocol) && /^[A-Za-z0-9]+$/.test(u.username)
+      && !!u.hostname && /^\/\d+$/.test(u.pathname);
+  } catch { return false; }
+}
+
+/** เตือนดัง ๆ เมื่อ "ตั้ง DSN ไว้แต่เขียนผิด" — เงียบไว้เมื่อไม่ได้ตั้ง (ตั้งใจไม่เปิด) */
+export function เตือนถ้าDsnเพี้ยน(dsn: string | undefined, ที่: string): boolean {
+  if (!dsn) return false;
+  if (dsnใช้ได้(dsn)) return true;
+  console.error(`[observability] ที่อยู่แจ้งเตือน (SENTRY DSN) ของ ${ที่} เขียนผิดรูปแบบ — ระบบจะไม่ส่งแจ้งเตือนเลย ตรวจค่า NEXT_PUBLIC_SENTRY_DSN`);
+  return false;
+}

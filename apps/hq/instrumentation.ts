@@ -8,11 +8,12 @@
 //   ซึ่งไม่มีใครเปิดดู → รู้ตัวก็ต่อเมื่อผู้ใช้โทรมาบอกว่า "กดแล้วไม่ขึ้น"
 //
 // onRequestError = จุดที่ Next.js ส่งข้อผิดพลาดฝั่งเซิร์ฟเวอร์ทุกตัวมาให้ (หน้าเว็บ + API)
-import { captureError } from "@pms/shared/lib/observability";
+import { captureError, เตือนถ้าDsnเพี้ยน, dsnใช้ได้ } from "@pms/shared/lib/observability";
 
 export async function register() {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
-  if (!dsn || process.env.NEXT_RUNTIME !== "nodejs") return;
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  if (!เตือนถ้าDsnเพี้ยน(dsn, "เซิร์ฟเวอร์")) return;
   const Sentry = await import("@sentry/nextjs");
   Sentry.init({ dsn, tracesSampleRate: 0 });
 }
@@ -21,7 +22,7 @@ export async function onRequestError(err: unknown, request: { path?: string }) {
   // ลง console เสมอ — ต่อให้ไม่ได้เปิด Sentry ก็ยังต้องมีร่องรอยไว้ตามหาสาเหตุ
   captureError(err, `server:${request?.path ?? "unknown"}`);
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
-  if (!dsn || process.env.NEXT_RUNTIME !== "nodejs") return;
+  if (!dsnใช้ได้(dsn) || process.env.NEXT_RUNTIME !== "nodejs") return;
   try {
     const Sentry = await import("@sentry/nextjs");
     Sentry.captureException(err);

@@ -1,10 +1,11 @@
 // Sentry (ฝั่ง client) — เปิดอัตโนมัติเมื่อตั้ง NEXT_PUBLIC_SENTRY_DSN เท่านั้น
 // ไม่ตั้ง DSN = ไม่โหลด Sentry เลย (dynamic import → tree-shaken ตอน build) · error ยังลง console ผ่าน captureError
 // ต่อเข้ากับศูนย์รวม observability (setErrorSink) → repo เขียนล้มเหลว/realtime หลุด ไหลเข้า Sentry
-import { setErrorSink } from "@pms/shared/lib/observability";
+import { setErrorSink, เตือนถ้าDsnเพี้ยน } from "@pms/shared/lib/observability";
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
-if (dsn) {
+// DSN เพี้ยน = Sentry ปิดตัวเองเงียบ ๆ · ต้องเตือนให้เห็น ไม่ใช่ปล่อยผ่าน
+if (เตือนถ้าDsnเพี้ยน(dsn, "หน้าเว็บ")) {
   void import("@sentry/nextjs")
     .then((Sentry) => {
       Sentry.init({ dsn, tracesSampleRate: 0 });
