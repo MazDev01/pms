@@ -90,7 +90,7 @@ export default function HQAuditPage() {
           headers={["ผู้ใช้", "บทบาท", "โมดูล", "การกระทำ", "รายละเอียด", "เวลา"]}
           rows={filtered.map(e => [
             e.user,
-            ROLE_LABEL[e.role]?.label ?? e.role,
+            ROLE_LABEL[e.role]?.label ?? e.role ?? "",
             MODULE_LABEL[hqAuditModule(e.action)] ?? hqAuditModule(e.action),
             e.action, e.target, e.at,
           ])}
@@ -159,7 +159,11 @@ export default function HQAuditPage() {
                 </td></tr>
               )}
               {pageSlice(filtered, Math.min(page, pageCountOf(filtered.length) - 1)).map(e => {
-                const rm = ROLE_LABEL[e.role] ?? { label: e.role, bg: "#f0f0f5", color: "#6b7280" };
+                // แถวที่ "ฐานข้อมูลเขียนเอง" (trigger) ไม่มีบทบาทติดมาด้วย — เดิมขึ้นเป็นป้ายเปล่า ๆ
+                // อ่านแล้วไม่ได้ความหมายอะไรเลย · บอกไปตรง ๆ ว่าเป็นระบบเขียน ดีกว่าปล่อยว่าง
+                const rm = ROLE_LABEL[e.role]
+                  ?? (e.role ? { label: e.role, bg: "#f0f0f5", color: "#6b7280" }
+                             : { label: e.user === "system" ? "ระบบบันทึกเอง" : "—", bg: "#f3f4f6", color: "#9ca3af" });
                 return (
                   <tr key={e.id}>
                     <td>

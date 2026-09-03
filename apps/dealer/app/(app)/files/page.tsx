@@ -610,7 +610,8 @@ export default function FilesPage() {
                         )}
                       </td>
                     )}
-                    {showCol("size")       && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.size}</td>}
+                    {/* เอกสารที่ระบบสร้างให้ตอนพิมพ์ (เช่นใบเสนอราคา) ไม่ได้เก็บไฟล์ไว้จริง จึงไม่มีขนาด — ขึ้น "—" ไม่ใช่ช่องว่าง */}
+                    {showCol("size")       && <td style={{ fontSize: "0.72rem", color: MUTED, whiteSpace: "nowrap" }}>{f.size || "—"}</td>}
                     {showCol("uploadedBy") && (
                       <td style={{ fontSize: "0.72rem", color: STEEL }}>
                         <div>{f.uploadedBy}</div>
@@ -699,7 +700,7 @@ export default function FilesPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: "0.72rem", fontWeight: 700, color: STEEL, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={f.name}>{f.name}</div>
-                    <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 3 }}>{f.size} · {f.uploadedAt}</div>
+                    <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 3 }}>{f.size || "—"} · {f.uploadedAt}</div>
                     <div style={{ fontSize: "0.65rem", color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${f.uploadedBy} · ${SOURCE_LABEL[f.source]}`}>
                       {f.uploadedBy} · {SOURCE_LABEL[f.source]}
                     </div>
