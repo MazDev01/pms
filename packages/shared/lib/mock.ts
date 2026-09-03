@@ -17,9 +17,12 @@ export type MockSession = {
 };
 
 export const sessions: Record<string, MockSession> = {
+  // ⚠️ บัญชีของโหมดตัวอย่าง (เว็บ demo) ต้องเป็น "ผู้ดูแลระบบ" — เว็บนี้มีไว้ให้คนดูของ
+  //    ถ้าเป็นบทบาทที่ต่ำกว่า เมนู/ปุ่มที่สงวนไว้ให้ผู้ดูแลจะหายไปทั้งหมด แล้วคนดูเข้าใจว่าระบบไม่มี
+  //    (เจอจริง 3 ก.ย. 69: หลังจำกัดสิทธิ์แต่งตั้งบทบาท ปุ่ม "เพิ่มผู้ใช้งาน HQ" หายจาก demo)
   hq: {
     name: "วิชัย ประสิทธิ์",
-    role: "HQ_MANAGEMENT",
+    role: "SUPER_ADMIN",
     dealerName: "Benjamin HQ",
     dealerCode: "",
     scopeAll: true,
