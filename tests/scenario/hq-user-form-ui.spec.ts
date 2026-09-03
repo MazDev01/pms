@@ -50,7 +50,7 @@ test.describe("[ui·hq] ฟอร์มเพิ่มผู้ใช้งา�
     const ป้าย = (await กล่อง.locator(".form-label").allInnerTexts()).map(t => t.trim().replace(/ ·.*/s, "").toLowerCase());
     expect(ป้าย).toEqual([
       "ชื่อ *", "นามสกุล", "อีเมล (ใช้เข้าระบบ) *", "รหัสผ่านชั่วคราว", "เบอร์โทร",
-      "บทบาท (role) *", "แผนก *", "สถานะ",
+      "บทบาท (role) *", "แผนก", "สถานะ",
     ].map(t => t.toLowerCase()));
 
     const ปุ่มปิด = กล่อง.getByRole("button", { name: "ปิด" });
@@ -59,6 +59,28 @@ test.describe("[ui·hq] ฟอร์มเพิ่มผู้ใช้งา�
       return s.display === "flex" && s.alignItems === "center" && s.justifyContent === "center";
     });
     expect(จัดกลาง, "ไอคอนกากบาทต้องอยู่กึ่งกลางปุ่ม").toBe(true);
+  });
+
+  test("แผนกต้องมาตามบทบาท แก้เองไม่ได้", async ({ page }) => {
+    await page.setViewportSize({ width: 1512, height: 900 });
+    await เปิดฟอร์ม(page);
+    const กล่อง = page.getByRole("dialog", { name: "ฟอร์มผู้ใช้ HQ" });
+    const แผนก = กล่อง.locator('[aria-label="แผนก"]');
+
+    // ยังไม่เลือกบทบาท = ยังไม่มีแผนก และต้องบอกให้เลือกบทบาทก่อน
+    await expect(แผนก).toHaveText(/เลือกบทบาทก่อน/);
+    // ต้องไม่ใช่ช่องที่พิมพ์/เลือกเองได้
+    expect(await แผนก.evaluate(el => el.tagName)).not.toBe("SELECT");
+    expect(await แผนก.evaluate(el => el.tagName)).not.toBe("INPUT");
+
+    for (const [บทบาท, แผนกที่ต้องได้] of [
+      ["ผู้ดูแลระบบ", "ไอทีและระบบ"],
+      ["ผู้บริหารสำนักงานใหญ่", "บริหาร"],
+      ["เจ้าหน้าที่สำนักงานใหญ่", "ฝ่ายขาย"],
+    ] as const) {
+      await กล่อง.getByLabel("บทบาท").selectOption({ label: บทบาท });
+      await expect(แผนก).toHaveText(แผนกที่ต้องได้);
+    }
   });
 });
 

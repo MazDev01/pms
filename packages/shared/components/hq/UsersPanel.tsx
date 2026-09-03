@@ -50,7 +50,9 @@ const ROLES: { key: RoleKey; en: string; th: string; tone: string }[] = [
   { key: "HQ_STAFF",      en: "HQ Staff",      th: "เจ้าหน้าที่สำนักงานใหญ่", tone: "#0891b2" },
 ];
 const ROLE_BY_KEY = Object.fromEntries(ROLES.map(r => [r.key, r])) as Record<RoleKey, typeof ROLES[number]>;
-const DEPARTMENTS = ["บริหาร", "ฝ่ายขาย", "ปฏิบัติการ", "ไอทีและระบบ", "การเงิน"];
+// แผนกไม่ใช่ช่องที่กรอกเอง — เป็นผลของบทบาท (ดู defaultDept) จึงมีได้เท่าที่บทบาทกำหนด
+// ⚠️ เดิมเป็นรายการตายตัว 5 แผนก แต่ "ปฏิบัติการ" กับ "การเงิน" ไม่มีทางเกิดขึ้นได้เลย
+//    ตัวกรองจึงมีตัวเลือกที่เลือกแล้วไม่เจอใครสักคน (หัวข้อผี · บอสสั่งกวาดออก 3 ก.ย. 69)
 const defaultDept = (role: RoleKey): string =>
   role === "HQ_MANAGEMENT" ? "บริหาร" : role === "HQ_STAFF" ? "ฝ่ายขาย" : "ไอทีและระบบ";
 
@@ -130,9 +132,12 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
   }
   // ⚠️ ดาว * ต้องตรงกับที่ตรวจตรงนี้เสมอ — บทบาท/แผนก มีตัวเลือก "ยังไม่ระบุ" แล้ว (17 ส.ค. 69)
   //    ถ้าไม่บังคับ จะได้ผู้ใช้ที่ไม่มีบทบาท = เข้าระบบมาแล้วไม่รู้ว่าเห็นอะไรได้บ้าง
-  const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email) && !!f.role && !!f.department;
+  // แผนกผูกกับบทบาทเสมอ — เลือกบทบาทแล้วแผนกมาเอง ไม่ต้องกรอกซ้ำและไม่มีทางตั้งขัดกัน
+  // (เดิมเป็นช่องอิสระ เลือกบทบาทแล้วแผนกยังค้างเป็น "ยังไม่ระบุ" ได้ · บอสสั่งฟิก 3 ก.ย. 69)
+  const แผนกตามบทบาท = f.role ? defaultDept(f.role) : "";
+  const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email) && !!f.role && !!แผนกตามบทบาท;
   const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: `1px solid ${BORDER}`, fontSize: "0.84rem", color: STEEL, background: "#fff", outline: "none", boxSizing: "border-box" };
-  const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: f.department, status: f.status, avatar: f.avatar }); onClose(); };
+  const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: แผนกตามบทบาท, status: f.status, avatar: f.avatar }); onClose(); };
   const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -166,7 +171,13 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
           <div><label className="form-label">เบอร์โทร</label><input style={inp} inputMode="tel" value={f.phone} onChange={e => setF({ ...f, phone: formatPhone(e.target.value) })} placeholder="08x-xxx-xxxx" /></div>
           <div className="form-section">สิทธิ์การใช้งาน</div>
           <div><label className="form-label">บทบาท (Role) *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} aria-label="บทบาท" disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}><option value="">— ยังไม่ระบุ —</option>{ROLES.filter(r => r.key !== "SUPER_ADMIN" || canEditPrivileges).map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
-          <div><label className="form-label">แผนก *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select aria-label="แผนก" disabled={lockPriv} style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} value={f.department} onChange={e => setF({ ...f, department: e.target.value })}><option value="">— ยังไม่ระบุ —</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+          <div>
+            <label className="form-label">แผนก <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}>· ตามบทบาทที่เลือก</span></label>
+            {/* แสดงอย่างเดียว แก้ไม่ได้ — ค่าจริงที่บันทึกคือ แผนกตามบทบาท */}
+            <div aria-label="แผนก" style={{ ...inp, background: "#f3f4f6", color: แผนกตามบทบาท ? STEEL : MUTED, display: "flex", alignItems: "center" }}>
+              {แผนกตามบทบาท || "เลือกบทบาทก่อน"}
+            </div>
+          </div>
           {/* ต้องมีค่าเสมอ — ผู้ใช้ต้องเป็นเปิดหรือปิดใช้งานอย่างใดอย่างหนึ่ง ว่างไม่ได้ */}
           <div><label className="form-label">สถานะ{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} disabled={lockPriv} value={f.status} onChange={e => setF({ ...f, status: e.target.value as UserStatus })}><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select></div>
         </div>
@@ -282,6 +293,10 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [creds, setCreds] = useState<{ name: string; email: string; password: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
 
+  // แผนกที่เลือกกรองได้ = แผนกของคนที่มีอยู่จริง (เรียงตามตัวอักษร)
+  const แผนกที่มีจริง = useMemo(
+    () => [...new Set(users.map(u => u.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th")),
+    [users]);
   const stats = useMemo(() => ({
     total: users.length,
     active: users.filter(u => u.status === "active").length,
@@ -423,7 +438,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
             <Search size={14} color={MUTED} /><input value={q} onChange={e => { setQ(e.target.value); setPage(1); }} placeholder="ค้นหาชื่อ หรือ อีเมล…" style={{ border: "none", outline: "none", flex: 1, fontSize: "0.82rem", color: STEEL, background: "transparent" }} />
           </div>
           <select aria-label="กรองตามบทบาท" style={selCls} value={roleF} onChange={e => { setRoleF(e.target.value as RoleKey | "all"); setPage(1); }}><option value="all">ทุกบทบาท</option>{ROLES.map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select>
-          <select aria-label="กรองตามแผนก" style={selCls} value={deptF} onChange={e => { setDeptF(e.target.value); setPage(1); }}><option value="all">ทุกแผนก</option>{DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select>
+          <select aria-label="กรองตามแผนก" style={selCls} value={deptF} onChange={e => { setDeptF(e.target.value); setPage(1); }}><option value="all">ทุกแผนก</option>{แผนกที่มีจริง.map(d => <option key={d} value={d}>{d}</option>)}</select>
           <div style={{ display: "flex", gap: 2, background: "#f1f5f9", borderRadius: 9, padding: 3 }}>
             {([["all", "ทั้งหมด"], ["active", "ใช้งาน"], ["inactive", "ปิด"]] as const).map(([v, l]) => (
               <button key={v} onClick={() => { setStatusF(v); setPage(1); }} style={{ border: "none", cursor: "pointer", borderRadius: 7, padding: "6px 12px", fontSize: "0.76rem", fontWeight: 700, fontFamily: "inherit", background: statusF === v ? "#fff" : "transparent", color: statusF === v ? PRIMARY : MUTED, boxShadow: statusF === v ? "0 1px 3px rgba(16,40,80,.12)" : "none" }}>{l}</button>
