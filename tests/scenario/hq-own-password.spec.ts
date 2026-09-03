@@ -70,6 +70,6 @@ test("[auth·hq] เก็บสำเนาได้เฉพาะรหัส
 
 test("[ux·hq] หน้าโปรไฟล์มีปุ่มดูรหัสผ่านของตัวเอง", async ({ page }) => {
   await open(page, "hq", "/profile");
-  await expect(page.getByText("รหัสผ่านปัจจุบันของฉัน")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "ดูรหัสผ่าน" })).toBeVisible();
+  // ปุ่มดูรหัสผ่านย้ายไปอยู่ใต้ช่องอีเมล (หน้าโปรไฟล์จัดใหม่ 2 ก.ย. 69) — ยึดที่ตัวปุ่ม ไม่ใช่หัวข้อ
+  await expect(page.getByRole("button", { name: "ดูรหัสผ่าน" })).toBeVisible({ timeout: 20_000 });
 });

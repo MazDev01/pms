@@ -52,13 +52,17 @@ async function openProfileUpload(page: Page) {
 test("ไฟล์ที่ไม่ใช่รูปจริง (แต่ตั้งชนิดเป็น image/png) ต้องถูกปฏิเสธพร้อมบอกเหตุผล", async ({ page }) => {
   const alerts = catchAlerts(page);
   const input = await openProfileUpload(page);
+  // ⚠️ ต้องเทียบ "รูปเดิมเปลี่ยนไหม" ไม่ใช่ "หน้ามีรูปฝังอยู่กี่รูป" (แก้ 2 ก.ย. 69)
+  //    หน้าโปรไฟล์ถูกจัดใหม่แล้วมีรูปที่ฝังเป็นข้อมูลอยู่ก่อนหลายจุด (รูปโปรไฟล์เดิม/ไอคอน)
+  //    การนับให้ได้ 0 จึงฟ้องผิดทั้งที่ระบบปฏิเสธไฟล์ถูกต้อง — สิ่งที่ต้องกันคือ
+  //    "ไฟล์ที่ถูกปฏิเสธถูกเอามาเป็นรูปโปรไฟล์แทนของเดิม"
+  const รูปเดิม = await page.locator('img[src^="data:"]').first().getAttribute("src").catch(() => null);
   await input.setInputFiles(FAKE_IMAGE);
   await page.waitForTimeout(2500);
 
   expect(alerts().join(" | "), "ต้องเตือนว่าเปิดเป็นรูปไม่ได้").toMatch(/เปิดเป็นรูปไม่ได้|เสียหาย|ไม่ใช่ไฟล์รูป/);
-  // ต้องไม่มีรูปที่เป็นไฟล์ดิบถูกใส่ลงฟอร์ม (เดิม fallback คืนไฟล์ดิบมาเก็บ)
-  const imgs = await page.locator('img[src^="data:"]').count();
-  expect(imgs, "ไฟล์ที่ถูกปฏิเสธต้องไม่ถูกนำมาแสดงเป็นรูปโปรไฟล์").toBe(0);
+  const รูปหลัง = await page.locator('img[src^="data:"]').first().getAttribute("src").catch(() => null);
+  expect(รูปหลัง, "ไฟล์ที่ถูกปฏิเสธต้องไม่ถูกนำมาแสดงเป็นรูปโปรไฟล์").toBe(รูปเดิม);
 });
 
 test("ไฟล์ชนิดที่ไม่รับ (.exe) ต้องถูกปฏิเสธพร้อมบอกชนิดที่รับได้", async ({ page }) => {

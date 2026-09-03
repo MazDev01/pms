@@ -13,6 +13,9 @@ test.setTimeout(120_000);
 test("[ux·hq] ช่องรหัสผ่านในหน้าโปรไฟล์ มีปุ่มลูกตาเปิดดูได้ทีละช่อง", async ({ page }) => {
   await open(page, "hq", "/profile");
 
+  // ฟอร์มเปลี่ยนรหัสถูกยุบไว้ ต้องกดปุ่มกางก่อน (หน้าโปรไฟล์จัดใหม่ 2 ก.ย. 69)
+  await page.getByRole("button", { name: "เปลี่ยนรหัสผ่าน" }).first().click();
+
   const รหัสใหม่ = page.getByPlaceholder("อย่างน้อย 6 ตัวอักษร");
   const ยืนยัน = page.getByPlaceholder("พิมพ์รหัสผ่านใหม่อีกครั้ง");
   await expect(รหัสใหม่).toBeVisible({ timeout: 20_000 });
