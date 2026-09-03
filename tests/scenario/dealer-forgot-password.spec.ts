@@ -8,8 +8,15 @@ test("[dealer] ลืมรหัสผ่าน → ส่งลิงก์ท
   await expect(page.getByRole("button", { name: "ลืมรหัสผ่าน?" })).toBeVisible({ timeout: 20_000 });
 
   // ยังไม่กรอกอีเมล = ต้องบอกให้กรอกก่อน (ไม่ใช่เงียบ)
-  await page.getByRole("button", { name: "ลืมรหัสผ่าน?" }).click();
-  await expect(page.getByText(/กรอกอีเมลในช่องด้านบนก่อน/)).toBeVisible({ timeout: 15_000 });
+  //
+  // ⚠️ กดซ้ำจนกว่าข้อความจะขึ้น ไม่ใช่กดครั้งเดียวแล้วรอ:
+  //    ตอนรันทั้งชุดพร้อมกัน เครื่องช้าลง ปุ่มโผล่บนจอแล้วแต่หน้าเว็บยังต่อปุ่มเข้ากับคำสั่งไม่เสร็จ
+  //    คลิกแรกจึงตกหาย (ไม่มีอะไรเกิดขึ้น) แล้วเทสต์รอจนหมดเวลาทั้งที่ระบบไม่ได้พัง
+  //    เจอจริงตอนตรวจทั้งระบบ 3 ก.ย. 69 — รันเดี่ยวผ่าน รันรวมตก
+  await expect(async () => {
+    await page.getByRole("button", { name: "ลืมรหัสผ่าน?" }).click();
+    await expect(page.getByText(/กรอกอีเมลในช่องด้านบนก่อน/)).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 
   // กรอกอีเมลแล้วกดใหม่ = ต้องขึ้นว่าส่งลิงก์แล้ว
   await page.getByPlaceholder("dealer@example.com").fill("sales@rayongsteel.co.th");
