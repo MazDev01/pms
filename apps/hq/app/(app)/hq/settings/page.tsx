@@ -524,8 +524,9 @@ function NotificationsTab() {
     <>
       <SectionCard icon={<Bell size={19} />} title="การแจ้งเตือนของสำนักงานใหญ่"
         desc="6 เรื่องที่ระบบเฝ้าให้ — คำนวณจากข้อมูลจริงของเครือ แล้วขึ้นที่กระดิ่ง">
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 28, padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
-          {CHANNELS.map(c => <span key={c.k} style={{ width: 60, textAlign: "center" }}>{c.label}</span>)}
+        {/* สวิตช์เดียว "เปิด" (บอสสั่ง 3 ก.ย. 69) — เดิมมีช่อง "ในระบบ" แยกไว้เลือกช่องทาง
+            แต่พอเหลือช่องทางเดียว (กระดิ่ง) สองสวิตช์ให้ผลเหมือนกันทุกกรณี = ซ้ำซ้อนและชวนสับสน */}
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
           <span style={{ width: 42, textAlign: "center" }}>เปิด</span>
         </div>
         <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden" }}>
@@ -546,13 +547,11 @@ function NotificationsTab() {
                     <div key={t.field}>{numInput(rules.draft[t.field], n => rules.set(p => ({ ...p, [t.field]: n })), t.unit)}</div>
                   ))}
                 </div>
-                {CHANNELS.map(c => (
-                  <div key={c.k} style={{ width: 60, display: "flex", justifyContent: "center", opacity: pref.on ? 1 : .4, pointerEvents: pref.on ? "auto" : "none" }}>
-                    <Toggle on={pref[c.k]} onChange={() => setAlert(a.key, { [c.k]: !pref[c.k] })} />
-                  </div>
-                ))}
+                {/* กดทีเดียวตั้งทั้งสองค่า — ตัวคำนวณเตือน (hqAlerts) เช็ก on && inapp
+                    ถ้าตั้งแค่ on ค่าเก่าที่เคยปิด inapp ไว้จะทำให้กดเปิดแล้วไม่เตือน โดยไม่มีอะไรบอก */}
                 <div style={{ width: 42, display: "flex", justifyContent: "center" }}>
-                  <Toggle on={pref.on} onChange={() => setAlert(a.key, { on: !pref.on })} />
+                  <Toggle on={pref.on && pref.inapp !== false}
+                    onChange={() => { const เปิดอยู่ = pref.on && pref.inapp !== false; setAlert(a.key, { on: !เปิดอยู่, inapp: !เปิดอยู่ }); }} />
                 </div>
               </div>
             );
@@ -562,8 +561,8 @@ function NotificationsTab() {
 
       <SectionCard icon={<ShieldCheck size={19} />} title="บันทึกการใช้งานที่อยากรู้"
         desc="เรื่องที่สำนักงานใหญ่อยากเห็นจากบันทึกการใช้งาน · ปิด “ในระบบ” เพื่อซ่อนจากกระดิ่ง">
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 28, padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
-          {CHANNELS.map(c => <span key={c.k} style={{ width: 60, textAlign: "center" }}>{c.label}</span>)}
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
+          {CHANNELS.map(c => <span key={c.k} style={{ width: 42, textAlign: "center" }}>เปิด</span>)}
         </div>
         <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden" }}>
           {HQ_NOTIF_EVENTS.map((ev, i) => (
@@ -573,7 +572,7 @@ function NotificationsTab() {
                 <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 1 }}>{ev.desc}</div>
               </div>
               {CHANNELS.map(c => (
-                <div key={c.k} style={{ width: 60, display: "flex", justifyContent: "center" }}>
+                <div key={c.k} style={{ width: 42, display: "flex", justifyContent: "center" }}>
                   <Toggle on={chDraft[ev.key]?.[c.k] ?? false}
                     onChange={() => setCh(ev.key, { [c.k]: !chDraft[ev.key]?.[c.k] })} />
                 </div>
