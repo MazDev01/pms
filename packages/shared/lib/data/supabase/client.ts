@@ -51,7 +51,26 @@ export function getSupabase(): SupabaseClient {
       //    ไม่งั้นจะกลายเป็นวนลูปยิงซ้ำไม่รู้จบโดยไม่มีใครรู้ว่าต้นเหตุคือนาฬิกา
       global: {
         fetch: async (input, init) => {
-          const res = await fetch(input, init);
+          // ── ต่อฐานข้อมูลไม่ติดเลย ต้องบอกว่า "ต่อไม่ติด" ไม่ใช่ "Failed to fetch" ────────
+          //    เจอจริง 2 ก.ย. 69: ฐานข้อมูลในเครื่องดับ (Docker ปิด) แล้วหน้าจอขึ้นกล่องแดง
+          //    "Failed to fetch" พร้อมโค้ดของไลบรารี — อ่านแล้วไม่มีใครรู้ว่าต้องไปเปิดอะไร
+          //    ที่นี่จึงแปลงเป็นข้อความที่บอกที่อยู่ที่ต่อไม่ติด แล้วโยนต่อให้ friendlyError จัดการ
+          let res: Response;
+          try {
+            res = await fetch(input, init);
+          } catch (e) {
+            // ⚠️ ห้ามใช้ new URL() ที่นี่ — ในไฟล์นี้ชื่อ URL ถูกใช้เป็นค่าตั้งค่าไปแล้ว (ชนกัน)
+            //    แกะชื่อโฮสต์ด้วยการตัดสตริงตรง ๆ พอ ไม่ต้องพึ่งตัวแยกที่อยู่
+            const ที่อยู่ = String(typeof input === "string" ? input : (input as { url?: string })?.url ?? input);
+            const host = (ที่อยู่.split("//")[1] ?? ที่อยู่).split("/")[0];
+            const ในเครื่อง = /^(127\.0\.0\.1|localhost)/.test(host);
+            throw new Error(
+              ในเครื่อง
+                ? `เชื่อมต่อฐานข้อมูลในเครื่องไม่ได้ (${host}) — เปิดฐานข้อมูลก่อนด้วยคำสั่ง npx supabase start`
+                : `เชื่อมต่อฐานข้อมูลไม่ได้ (${host}) — ตรวจอินเทอร์เน็ตแล้วลองใหม่`,
+              { cause: e },
+            );
+          }
           if (res.status !== 401 && res.status !== 400) return res;
           const สำเนา = res.clone();
           const ข้อความ = await สำเนา.text().catch(() => "");
