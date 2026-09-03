@@ -421,7 +421,7 @@ RootLayout (apps/{hq,dealer}/app/layout.tsx) → <html lang="th"> + ฟอนต
 ### Overlay / เมนู
 - **`RightDrawer`** (+`DrawerSection`/`DrawerRow`) — แผงลอย**กลางจอ**มีแท็บ · Esc ปิด · lock scroll (reusable ทั่วระบบ)
 - **`FilePreviewModal`** — พรีวิวไฟล์จำลอง (PDF/รูป/pptx/อื่น ๆ ตามนามสกุล)
-- **`ExportMenu`** — export frontend-only 3 แบบ: **PDF** (print), **Excel** (.xls HTML blob), **CSV** (BOM UTF-8) · `extraActions` (เช่นนำเข้า CSV)
+- **`ExportMenu`** — export frontend-only 3 แบบ: **PDF** (print), **Excel** (.xlsx จริง ผ่าน `exportWorkbook.ts` · ยอดเงินเป็นตัวเลข ส่วนคอลัมน์รหัส/เลขที่คงเป็นข้อความ), **CSV** (BOM UTF-8) · `extraActions` (เช่นนำเข้า CSV)
 - **`TableTools`/`useTableLayout`** — density + hidden columns (persist `tabletools:<key>`)
 
 ### การ์ด/สถิติ

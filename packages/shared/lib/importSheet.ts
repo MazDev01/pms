@@ -71,6 +71,36 @@ export async function แยกตารางจากXlsx(buf: ArrayBuffer): P
 }
 const เลขแผ่น = (s: string) => Number(s.match(/sheet(\d+)\.xml$/)?.[1] ?? 0);
 
+/** อ่าน "ทุกแผ่นงาน" พร้อมชื่อแผ่นที่คนตั้งไว้ — ใช้กับไฟล์สำรองการตั้งค่าที่มีหลายแผ่นในเล่มเดียว
+ *  ชื่อแผ่นอยู่ใน xl/workbook.xml ส่วนไฟล์จริงของแต่ละแผ่นต้องตามผ่าน rels
+ *  (ลำดับ sheet1.xml, sheet2.xml ไม่ได้เรียงตามแท็บเสมอไป — Excel สลับได้เวลาผู้ใช้ลากแท็บ) */
+export async function แยกสมุดงานจากXlsx(buf: ArrayBuffer): Promise<Map<string, ตารางที่อ่านได้>> {
+  const ไฟล์ = await คลายZip(buf);
+  const คลัง = แกะคลังข้อความ(ไฟล์.get("xl/sharedStrings.xml") ?? "");
+  const rels = new Map<string, string>();
+  for (const m of (ไฟล์.get("xl/_rels/workbook.xml.rels") ?? "").matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = m[0].match(/Id="([^"]+)"/)?.[1];
+    const target = m[0].match(/Target="([^"]+)"/)?.[1];
+    if (id && target) rels.set(id, `xl/${target.replace(/^\.?\//, "")}`);
+  }
+  const ผล = new Map<string, ตารางที่อ่านได้>();
+  const รายชื่อ = [...(ไฟล์.get("xl/workbook.xml") ?? "").matchAll(/<sheet\b[^>]*>/g)];
+  รายชื่อ.forEach((m, i) => {
+    const ชื่อ = ถอดรหัสXml(m[0].match(/name="([^"]*)"/)?.[1] ?? `แผ่น${i + 1}`);
+    const rid = m[0].match(/r:id="([^"]+)"/)?.[1];
+    const พาธ = (rid && rels.get(rid)) || `xl/worksheets/sheet${i + 1}.xml`;
+    const xml = ไฟล์.get(พาธ);
+    if (xml != null) ผล.set(ชื่อ, เก็บกวาด(แกะแผ่นงาน(xml, คลัง)));
+  });
+  // ไฟล์จากบางโปรแกรมไม่มี workbook.xml ให้อ่าน — ถอยไปไล่ตามชื่อไฟล์แผ่นงานแทน
+  if (!ผล.size) {
+    [...ไฟล์.keys()].filter(k => /^xl\/worksheets\/sheet\d+\.xml$/.test(k))
+      .sort((a, b) => เลขแผ่น(a) - เลขแผ่น(b))
+      .forEach((k, i) => ผล.set(`แผ่น${i + 1}`, เก็บกวาด(แกะแผ่นงาน(ไฟล์.get(k) ?? "", คลัง))));
+  }
+  return ผล;
+}
+
 function แกะคลังข้อความ(xml: string): string[] {
   // แต่ละ <si> คือข้อความหนึ่งชิ้น ข้างในอาจซอยเป็นหลาย <t> (เวลาในช่องมีหลายรูปแบบตัวอักษร) — ต้องต่อกันให้ครบ
   return (xml.match(/<si>[\s\S]*?<\/si>/g) ?? []).map(si =>
@@ -144,7 +174,7 @@ async function คลายZip(buf: ArrayBuffer): Promise<Map<string, string>> {
     const ยาวชื่อจริง = dv.getUint16(หัวไฟล์ + 26, true);
     const ยาวเสริมจริง = dv.getUint16(หัวไฟล์ + 28, true);
     const เริ่ม = หัวไฟล์ + 30 + ยาวชื่อจริง + ยาวเสริมจริง;
-    if (/^xl\/(sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(ชื่อ)) {
+    if (/^(xl\/(workbook\.xml|sharedStrings\.xml|worksheets\/sheet\d+\.xml)|xl\/_rels\/workbook\.xml\.rels)$/.test(ชื่อ)) {
       const ก้อน = ข้อมูล.subarray(เริ่ม, เริ่ม + ขนาดบีบ);
       ผล.set(ชื่อ, ถอดข้อความ.decode(วิธีบีบ === 0 ? ก้อน : await คลายDeflate(ก้อน)));
     }
@@ -172,6 +202,16 @@ async function คลายDeflate(ก้อน: Uint8Array): Promise<Uint8Array
 
 /** นามสกุลไฟล์ที่รับได้ — ใช้กับ input accept และข้อความบอกผู้ใช้ให้ตรงกัน */
 export const นามสกุลที่รับได้ = [".csv", ".xlsx", ".xls", ".tsv", ".txt", ".html", ".htm"] as const;
+
+/** อ่านไฟล์เป็น "สมุดงาน" (หลายแผ่น) — ไฟล์ที่ไม่ใช่ .xlsx จะได้แผ่นเดียวชื่อว่างเปล่า
+ *  ใช้กับหน้าสำรอง/กู้คืนการตั้งค่า ที่ไฟล์เดียวมีหลายเรื่องอยู่คนละแท็บ */
+export async function อ่านสมุดงานจากไฟล์(file: File): Promise<Map<string, ตารางที่อ่านได้>> {
+  const ไบต์ = await file.arrayBuffer();
+  const หัวไฟล์ = new Uint8Array(ไบต์.slice(0, 4));
+  const เป็นZip = หัวไฟล์[0] === 0x50 && หัวไฟล์[1] === 0x4b && (หัวไฟล์[2] === 3 || หัวไฟล์[2] === 5 || หัวไฟล์[2] === 7);
+  if (file.name.toLowerCase().endsWith(".xlsx") || เป็นZip) return แยกสมุดงานจากXlsx(ไบต์);
+  return new Map([["", await อ่านตารางจากไฟล์(file)]]);
+}
 
 export async function อ่านตารางจากไฟล์(file: File): Promise<ตารางที่อ่านได้> {
   const ชื่อ = file.name.toLowerCase();

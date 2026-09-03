@@ -86,6 +86,7 @@ export default function HQAuditPage() {
         {/* HQ คือคนที่ต้องเอาบันทึกไปตอบผู้ตรวจ/ผู้บริหาร — ส่งออกได้ตามที่กรองอยู่ */}
         <ExportMenu
           filename="hq-audit-log"
+          title="บันทึกการใช้งาน"
           headers={["ผู้ใช้", "บทบาท", "โมดูล", "การกระทำ", "รายละเอียด", "เวลา"]}
           rows={filtered.map(e => [
             e.user,

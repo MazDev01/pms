@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Download, ChevronDown, FileText, FileSpreadsheet, Printer } from "lucide-react";
 // ตัวกันข้อมูลผู้ใช้ไม่ให้กลายเป็นโค้ด/สูตร — แยกเป็นโมดูลบริสุทธิ์เพื่อทดสอบตรงได้
 import { escHtml, escCsvCell } from "@pms/shared/lib/exportSafety";
+import { สร้างไฟล์Xlsx, ดาวน์โหลดไฟล์, ค่าสำหรับExcel } from "@pms/shared/lib/exportWorkbook";
 
 type Cell = string | number;
 
@@ -64,12 +65,15 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
     setOpen(false);
   }
 
+  // Excel ของจริง (.xlsx) — เดิมส่งออกเป็นตาราง HTML ที่ตั้งชื่อว่า .xls ทำให้ Excel ขึ้นคำเตือน
+  // "รูปแบบไฟล์ไม่ตรงกับนามสกุล" ทุกครั้ง และ Google Sheets/มือถือเปิดไม่ขึ้นเลย
   async function exportExcel() {
     const data = await resolveRows();
-    const thead = `<tr>${headers.map(h => `<th style="background:#003366;color:#fff;padding:6px 10px;text-align:left">${escHtml(h)}</th>`).join("")}</tr>`;
-    const tbody = data.map(r => `<tr>${r.map(c => `<td style="padding:5px 10px;border:1px solid #e5e7eb">${escHtml(c)}</td>`).join("")}</tr>`).join("");
-    const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table>${thead}${tbody}</table></body></html>`;
-    downloadBlob(new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" }), `${filename}.xls`);
+    // แปลงยอดเงินที่หน้าจอจัดรูปแบบมาแล้วกลับเป็นตัวเลข ผู้ใช้จะได้รวมยอด/เรียง/ทำกราฟต่อได้
+    // ยกเว้นคอลัมน์ที่เป็น "รหัส/เลขที่/เบอร์" — พวกนี้เป็นป้ายชื่อ ไม่ใช่จำนวน ต้องคงเป็นข้อความ
+    const เป็นรหัส = headers.map(h => /รหัส|เลขที่|เลขประจำตัว|โทร|บัตร|เลขบัญชี/.test(h));
+    const แถว = data.map(r => r.map((c, i) => (เป็นรหัส[i] ? c : ค่าสำหรับExcel(c))));
+    ดาวน์โหลดไฟล์(สร้างไฟล์Xlsx([{ ชื่อ: title ?? filename, หัวตาราง: headers, แถว }]), `${filename}.xlsx`);
     setOpen(false);
   }
 
@@ -104,8 +108,8 @@ export function ExportMenu({ filename, title, headers, rows, getRows, small, ext
 
   const OPTS = [
     { label: "PDF", desc: "พิมพ์ / บันทึกเป็น PDF", Icon: Printer, fn: run(exportPDF) },
-    { label: "Excel", desc: "ไฟล์ .xls", Icon: FileSpreadsheet, fn: run(exportExcel) },
-    { label: "CSV", desc: "ไฟล์ .csv", Icon: FileText, fn: run(exportCSV) },
+    { label: "Excel", desc: "ไฟล์ .xlsx เปิดใน Excel/Google Sheets", Icon: FileSpreadsheet, fn: run(exportExcel) },
+    { label: "CSV", desc: "ไฟล์ .csv สำหรับนำเข้าระบบอื่น", Icon: FileText, fn: run(exportCSV) },
   ];
 
   return (

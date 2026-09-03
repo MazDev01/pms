@@ -30,6 +30,9 @@ import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/
 import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { สร้างไฟล์Xlsx, ดาวน์โหลดไฟล์ } from "@pms/shared/lib/exportWorkbook";
+import { สร้างแผ่นงานสำรอง, อ่านแผ่นงานสำรอง, type ชุดการตั้งค่า } from "@pms/shared/lib/settingsBackup";
+import { อ่านสมุดงานจากไฟล์ } from "@pms/shared/lib/importSheet";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import type { HQCompany } from "@pms/shared/lib/data/types";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
@@ -602,48 +605,64 @@ function BackupCard() {
         settingsRepo.getPolicy(), settingsRepo.getTargets(), settingsRepo.getNotifRules(),
         settingsRepo.getLostReasons(), hqCompanyRepo.get(), dealersRepo.list(), catalogRepo.list(),
       ]);
-      const out = { version: 1, exportedAt: APP_NOW_ISO, policy, targets, notifRules, lostReasons, company, dealers, catalog };
-      const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = "benjamin-settings-backup.json"; a.click();
-      URL.revokeObjectURL(a.href);
-      logAudit("ส่งออกการตั้งค่า", "benjamin-settings-backup.json");
-      toast("ส่งออกการตั้งค่าแล้ว");
+      // ไฟล์ Excel เล่มเดียว แยกแท็บตามเรื่อง หัวตารางภาษาไทย — เปิดอ่าน/แก้ แล้วนำเข้ากลับได้เลย
+      // (เดิมเป็น .json ซึ่งเปิดแล้วอ่านไม่รู้เรื่อง และเอาไปทำอะไรต่อไม่ได้)
+      const แผ่นงาน = สร้างแผ่นงานสำรอง({ policy, targets, notifRules, lostReasons, company, dealers, catalog });
+      const ชื่อไฟล์ = `การตั้งค่าเบญจมิน-${APP_NOW_ISO.slice(0, 10)}.xlsx`;
+      ดาวน์โหลดไฟล์(สร้างไฟล์Xlsx(แผ่นงาน), ชื่อไฟล์);
+      logAudit("ส่งออกการตั้งค่า", ชื่อไฟล์);
+      toast(`ส่งออกแล้ว — ${แผ่นงาน.length} แท็บ · ตัวแทน ${dealers.length} ราย · แม่แบบ ${catalog.length} รายการ`);
     } catch (e) {
       toast("ส่งออกไม่สำเร็จ: " + friendlyError(e));
     }
   }
 
-  function importAll(e: React.ChangeEvent<HTMLInputElement>) {
+  // รับไฟล์ Excel ที่ส่งออกไป (แก้ใน Excel มาแล้วก็ได้) และไฟล์ .json รุ่นเก่าที่เคยสำรองไว้
+  async function importAll(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
-    const r = new FileReader();
-    r.onload = async () => {
-      let obj: Record<string, unknown>;
-      try { obj = JSON.parse(String(r.result)) as Record<string, unknown>; }
-      catch { toast("ไฟล์ไม่ถูกต้อง"); return; }
+    try {
+      let ที่จะเขียน: ชุดการตั้งค่า;
+      if (/\.json$/i.test(file.name)) {
+        const obj = JSON.parse(await file.text()) as Record<string, unknown>;
+        ที่จะเขียน = {
+          policy: obj.policy as HQPolicy | undefined,
+          targets: obj.targets as HQTargets | undefined,
+          notifRules: obj.notifRules as HQNotifRules | undefined,
+          lostReasons: Array.isArray(obj.lostReasons) ? obj.lostReasons as string[] : undefined,
+          company: obj.company as HQCompany | undefined,
+          dealers: Array.isArray(obj.dealers) ? obj.dealers as DealerRow[] : undefined,
+          catalog: Array.isArray(obj.catalog) ? obj.catalog as SolutionProduct[] : undefined,
+        };
+      } else {
+        // ต่อยอดจากค่าที่ใช้อยู่จริง — สิ่งที่ตารางใส่ไม่ได้ (รูปแม่แบบ/แบบแปลน/ประวัติราคา) จะไม่หาย
+        const [policy, targets, notifRules, lostReasons, company, dealers, catalog] = await Promise.all([
+          settingsRepo.getPolicy(), settingsRepo.getTargets(), settingsRepo.getNotifRules(),
+          settingsRepo.getLostReasons(), hqCompanyRepo.get(), dealersRepo.list(), catalogRepo.list(),
+        ]);
+        const เล่ม = await อ่านสมุดงานจากไฟล์(file);
+        ที่จะเขียน = อ่านแผ่นงานสำรอง(เล่ม, { policy, targets, notifRules, lostReasons, company, dealers, catalog });
+        if (!Object.keys(ที่จะเขียน).length) {
+          toast("ไฟล์นี้ไม่มีแท็บการตั้งค่าที่ระบบรู้จัก — ใช้ไฟล์ที่ส่งออกจากปุ่ม “ส่งออก (สำรองข้อมูล)”");
+          return;
+        }
+      }
       // ค่าตั้งเครือ 5 กลุ่ม (policy/targets/notifRules/lostReasons/company) เขียนแบบ all-or-nothing
       // ในคำสั่งเดียว (RPC, 0093 — Phase 4 transaction) — เดิมยิงแยกกัน เน็ตหลุดกลางทาง = กู้คืนได้แค่
       // บางส่วน · ทะเบียนตัวแทน/แคตตาล็อก เป็นชุดข้อมูลแยก ยังคงเขียนแยกเหมือนเดิม (คนละความเสี่ยง)
-      try {
-        await settingsRepo.restoreSettings({
-          policy:      obj.policy as HQPolicy | undefined,
-          targets:     obj.targets as HQTargets | undefined,
-          notifRules:  obj.notifRules as HQNotifRules | undefined,
-          lostReasons: Array.isArray(obj.lostReasons) ? obj.lostReasons as string[] : undefined,
-          company:     obj.company as HQCompany | undefined,
-        });
-        const jobs: Promise<unknown>[] = [];
-        if (Array.isArray(obj.dealers)) jobs.push(dealersRepo.save(obj.dealers as DealerRow[]));
-        if (Array.isArray(obj.catalog)) jobs.push(catalogRepo.save(obj.catalog as SolutionProduct[]));
-        await Promise.all(jobs);
-        logAudit("นำเข้าการตั้งค่า (กู้คืน)", file.name);
-        toast("นำเข้าสำเร็จ — กำลังโหลดใหม่");
-        setTimeout(() => location.reload(), 900);
-      } catch (err) {
-        toast("นำเข้าไม่สำเร็จ: " + friendlyError(err));
-      }
-    };
-    r.readAsText(file);
+      await settingsRepo.restoreSettings({
+        policy: ที่จะเขียน.policy, targets: ที่จะเขียน.targets, notifRules: ที่จะเขียน.notifRules,
+        lostReasons: ที่จะเขียน.lostReasons, company: ที่จะเขียน.company,
+      });
+      const jobs: Promise<unknown>[] = [];
+      if (ที่จะเขียน.dealers?.length) jobs.push(dealersRepo.save(ที่จะเขียน.dealers));
+      if (ที่จะเขียน.catalog?.length) jobs.push(catalogRepo.save(ที่จะเขียน.catalog));
+      await Promise.all(jobs);
+      logAudit("นำเข้าการตั้งค่า (กู้คืน)", file.name);
+      toast("นำเข้าสำเร็จ — กำลังโหลดใหม่");
+      setTimeout(() => location.reload(), 900);
+    } catch (err) {
+      toast("นำเข้าไม่สำเร็จ: " + friendlyError(err));
+    }
   }
 
   async function restoreDefaults() {
@@ -667,10 +686,10 @@ function BackupCard() {
   }
 
   return (
-    <SectionCard icon={<RefreshCw size={19} />} title="สำรองและกู้คืนข้อมูล" desc="ส่งออก/นำเข้าการตั้งค่าทั้งหมดของสำนักงานใหญ่">
+    <SectionCard icon={<RefreshCw size={19} />} title="สำรองและกู้คืนข้อมูล" desc="ส่งออกเป็นไฟล์ Excel เปิดอ่าน/แก้ไขได้ แล้วนำเข้ากลับเพื่อกู้คืน">
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
         <button className="btn btn-secondary btn-md" onClick={() => void exportAll()}><Download size={14} /> ส่งออก (สำรองข้อมูล)</button>
-        <label className="btn btn-secondary btn-md" style={{ cursor: "pointer" }}><Upload size={14} /> นำเข้า (กู้คืน)<input type="file" accept="application/json" style={{ display: "none" }} onChange={importAll} /></label>
+        <label className="btn btn-secondary btn-md" style={{ cursor: "pointer" }}><Upload size={14} /> นำเข้า (กู้คืน)<input type="file" accept=".xlsx,.csv,.json" style={{ display: "none" }} onChange={e => void importAll(e)} /></label>
         <button className="btn btn-md" style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }} onClick={() => void restoreDefaults()}><RotateCcw size={14} /> คืนค่าเริ่มต้น (นโยบาย/เป้า/แจ้งเตือน)</button>
       </div>
     </SectionCard>
