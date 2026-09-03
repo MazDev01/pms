@@ -5,7 +5,7 @@
 // ไม่มีแท็บสัญญา / ใบส่งมอบ / แบบก่อสร้าง — ระบบไม่มีที่เก็บข้อมูลเหล่านั้น
 import { Building2, IdCard, MapPin, Compass, Store, Repeat, CalendarDays, Wallet, StickyNote, History, Activity } from "lucide-react";
 import { PanelSection, PanelRow, PanelStats, PanelStat } from "@pms/shared/components/ui/DetailPanel";
-import { RightDrawer, type DrawerTab } from "@pms/shared/components/ui/RightDrawer";
+import { SidePanel, type แท็บแผง } from "@pms/shared/components/ui/SidePanel";
 import { customerCode, noteCategoryColor } from "@pms/shared/lib/mock";
 import { fmtBaht } from "@pms/shared/lib/format";
 import { toThaiDate } from "@pms/shared/lib/thaiDate";
@@ -64,7 +64,7 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
   const customerNotes = dealerNotes.filter(n => n.customerId === (row.localId ?? row.id));
   const totalBought = row.buildings.reduce((s, b) => s + b.value, 0);
 
-  const tabs: DrawerTab[] = [
+  const tabs: แท็บแผง[] = [
     {
       key: "profile",
       label: "โปรไฟล์",
@@ -180,13 +180,19 @@ export function CustomerDrawer({ row, onClose }: { row: CustomerDbRow | null; on
   ];
 
   return (
-    <RightDrawer
-      open={!!row}
+    <SidePanel
+      label="รายละเอียดลูกค้า"
       onClose={onClose}
       title={row.name}
       subtitle={`${row.dealerCode} · ${row.dealerName} · ${row.province}`}
+      badges={[
+        { ข้อความ: row.totalRevenue > 0 ? fmtBaht(row.totalRevenue) : "ยังไม่มียอดซื้อ" },
+        ...(row.buildings.length ? [{ ข้อความ: `${row.buildings.length} อาคาร` }] : []),
+        ...(row.isRepeat ? [{ ข้อความ: "ลูกค้าซื้อซ้ำ", พื้น: "#DCFCE7", ตัวอักษร: "#166534" }] : []),
+      ]}
       tabs={tabs}
-      width={520}
+      footerNote="สำนักงานใหญ่ดูอย่างเดียว — แก้ไขได้ที่ตัวแทนเจ้าของลูกค้า"
+      width={460}
     />
   );
 }
