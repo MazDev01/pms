@@ -63,22 +63,8 @@ const LEVEL_CAP: Record<string, Cap> = {
   view:   { v: true,  c: false, e: false, d: false, x: true  },
   none:   { v: false, c: false, e: false, d: false, x: false },
 };
-// โมดูลในตารางสิทธิ์ = 7 หัวข้อตามสเปก Enterprise (ไม่มีเมนู "ความปลอดภัย" แยก)
-const MODULE_LIST = ["แดชบอร์ด", "ตัวแทน", "ลูกค้าเป้าหมาย", "ลูกค้า", "ใบเสนอราคา", "รายงาน", "ตั้งค่า"];
-// ตารางสิทธิ์คำนวณจาก ROLE_PERMISSIONS ซึ่งเป็นชุดเดียวกับที่ RLS ที่ DB บังคับ
-//
-// เดิมตารางนี้เขียนไว้ตายตัวและ "ขัดกับของจริง" — บอกว่าผู้จัดการฝ่ายขายจัดการลูกค้าเป้าหมาย/ลูกค้า/
-// ใบเสนอราคาได้ ทั้งที่ทุกบทบาทฝั่งสำนักงานใหญ่เขียนงานขายไม่ได้เลย (ดู C3)
-// ใครอ่านตารางนี้แล้วเชื่อ จะเข้าใจสิทธิ์ของทีมตัวเองผิดทั้งหมด
-const MODULE_PERMS: Record<string, { read: Permission; create?: Permission; update?: Permission; del?: Permission }> = {
-  "แดชบอร์ด":       { read: "reports:view" },
-  "ตัวแทน":         { read: "reports:view", create: "dealers:manage", update: "dealers:manage", del: "dealers:manage" },
-  "ลูกค้าเป้าหมาย": { read: "leads:read", create: "leads:create", update: "leads:update", del: "leads:delete" },
-  "ลูกค้า":         { read: "customers:read", create: "customers:create", update: "customers:update", del: "customers:delete" },
-  "ใบเสนอราคา":     { read: "quotations:read", create: "quotations:create", update: "quotations:update", del: "quotations:delete" },
-  "รายงาน":         { read: "reports:view" },
-  "ตั้งค่า":        { read: "hq:all_data", create: "catalog:edit", update: "catalog:edit", del: "catalog:edit" },
-};
+import { MODULE_LIST, MODULE_PERMS } from "@pms/shared/lib/hqPermissionMatrix";
+
 const capOf = (role: RoleKey, module: string): Cap => {
   const m = MODULE_PERMS[module];
   if (!m) return LEVEL_CAP.none;
