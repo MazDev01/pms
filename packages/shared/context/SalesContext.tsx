@@ -10,7 +10,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import {
   quotations as seedQuotations, initialCustomers, DEFAULT_ISSUER, QUOTE_PREFIX,
   type IssuerProfile,
-  appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage,
+  appointments as seedAppointments, buildLeadTasks, stageFromTasks, syncTasksToStage, findAppointmentTask,
   quotationToFile, AUTO_FILE_BY, fmtISOToThai, DEFAULT_DEALER_CODE, leadStatusLabel,
   type LeadRow,
   type CustomerRow, type QuotationMock, type QuotationStatus,
@@ -911,14 +911,49 @@ export function SalesProvider({
   const newLeadNumId = useCallback(() => leadsRepo.nextNumId(myDealerCode), [myDealerCode]);
 
   // ── Appointment mutations (Phase 4) — เขียนทะลุถึง repo ──────────
+  /** ลงนัดจริง = งาน "นัดหมาย" ของลูกค้าเป้าหมายรายนั้นเสร็จ — ติ๊กให้เอง
+   *
+   *  ⚠️ ต้องอยู่ตรงนี้ ไม่ใช่ในหน้าจอ: ลงนัดได้จากหลายทาง (แผงลูกค้าเป้าหมาย · ปฏิทิน)
+   *     เดิมเขียนไว้ที่หน้าลูกค้าเป้าหมายทางเดียว ลงนัดจากปฏิทินจึงไม่ติ๊กอะไรเลย
+   *     ทั้งที่เป็นงานเดียวกัน (บอสสั่งแก้ 3 ก.ย. 69) · กติกาเดียวกับงานใบเสนอราคา
+   *  ลูกค้าเป้าหมายที่ปิดแล้ว (สำเร็จ/ไม่สำเร็จ) ไม่แตะ — ประวัติที่ปิดไปแล้วต้องคงที่ */
+  const completeAppointmentTask = useCallback((leadNumId: number | undefined) => {
+    const def = findAppointmentTask(taskTplRef.current);
+    // นัดที่ไม่ได้ผูกกับลูกค้าเป้าหมาย (เช่นนัดภายใน) ไม่มีงานให้ติ๊ก
+    if (!def || !leadNumId) return;
+    const RANK: Partial<Record<LeadRow["status"], number>> = { WAITING: 0, BULLET: 1, QUOTED: 2, FOLLOWUP: 3, NEGO: 4 };
+    const changed: LeadRow[] = [];
+    const nextList = leadsRef.current.map(l => {
+      if ((l.dealerCode ?? DEFAULT_DEALER_CODE) !== myDealerCode) return l;
+      if (l.numId !== leadNumId || l.status === "PAID" || l.status === "CANCELLED") return l;
+      const base = l.tasks && l.tasks.length ? l.tasks : buildLeadTasks(taskTplRef.current);
+      if (base.find(t => t.key === def.key)?.done) return l;
+      const tasks = base.map(t => t.key === def.key
+        ? { ...t, done: true, doneAt: fmtISOToThai(APP_NOW_ISO), doneBy: l.assigned || "อัปเดตอัตโนมัติ" }
+        : t);
+      const next = stageFromTasks(tasks, taskTplRef.current);
+      const status = (RANK[next] ?? 0) > (RANK[l.status] ?? 0) ? next : l.status;
+      const nl: LeadRow = { ...l, tasks, status };
+      changed.push(nl);
+      return nl;
+    });
+    if (changed.length) {
+      leadsRef.current = nextList;
+      setLeads(nextList);
+      changed.forEach(l => persistLead.update(l));
+    }
+  }, [myDealerCode, persistLead]);
+
+
   const addAppointment = useCallback((appt: AppointmentMock) => {
     // ติด dealerCode ของสาขาที่ล็อกอิน (multi-tenant) — นัดใหม่เป็นของสาขานั้น (RLS with-check ฝั่ง supabase)
     const tagged: AppointmentMock = { ...appt, dealerCode: appt.dealerCode ?? myDealerCode };
     setAppointments(prev => [...prev, tagged]);
     persistAppt.create(tagged);
+    completeAppointmentTask(tagged.leadId);   // ลงนัดแล้ว = ติ๊กงาน "นัดหมาย" ให้เอง
     // นัดหมายเป็นการกระทำกับดีลโดยตรง — ต้องอยู่ในไทม์ไลน์ด้วย (บอสสั่ง 21 ส.ค. 69)
     logLeadActivity(tagged.leadId, `นัดหมาย ${tagged.date}${tagged.time ? ` ${tagged.time} น.` : ""}${tagged.note ? ` · ${tagged.note}` : ""}`, "meeting");
-  }, [myDealerCode, persistAppt, logLeadActivity]);
+  }, [myDealerCode, persistAppt, logLeadActivity, completeAppointmentTask]);
   const updateAppointment = useCallback((appt: AppointmentMock) => {
     setAppointments(prev => prev.map(a => a.id !== appt.id ? a : appt));
     persistAppt.update(appt);

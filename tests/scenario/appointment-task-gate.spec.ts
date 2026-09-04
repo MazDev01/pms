@@ -1,7 +1,18 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { open } from "./helpers";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
+
+/** กดแท็บในลิ้นชัก แล้วรอให้เนื้อหาแท็บนั้นโผล่จริง
+ *  ลิ้นชักเรนเดอร์ใหม่ทุกครั้งที่ข้อมูลเปลี่ยน ปุ่มเดิมจึงหลุดจากหน้าได้ระหว่างกด
+ *  (เจอตอนรันชุดทดสอบ 3 ก.ย. 69 — คลิกแรกตกหาย ต้องลองซ้ำ) */
+async function กดแท็บ(page: Page, ชื่อ: string, สิ่งที่ต้องเห็น: RegExp) {
+  await expect(async () => {
+    await page.getByRole("button", { name: ชื่อ, exact: true }).first().click({ timeout: 5_000 });
+    await expect(page.getByText(สิ่งที่ต้องเห็น).first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 40_000 });
+}
+
 
 // ─── งาน "นัดหมาย" ในรายการสิ่งที่ต้องทำ ────────────────────────────────────────
 // ติ๊กเองไม่ได้ถ้ายังไม่มีนัดจริง — ต้องพาไปลงนัดก่อน แล้วระบบค่อยติ๊กให้เอง
@@ -43,7 +54,7 @@ test("[func·dealer] ติ๊กงานนัดหมายทั้งท�
     await page.getByRole("button", { name: "ดูรายละเอียด" }).first().click();
     // ⚠️ ต้องกด "ปุ่มงาน" ในรายการสิ่งที่ต้องทำ ไม่ใช่แท็บที่ชื่อ "นัดหมาย" เหมือนกันเป๊ะ
     //    (กดผิดตัวแล้วฟอร์มก็โผล่เหมือนกัน เทสต์จะผ่านทั้งที่ไม่ได้วัดอะไรเลย)
-    await page.getByRole("button", { name: "งาน", exact: true }).first().click().catch(() => {});
+    await กดแท็บ(page, "งาน", /นัดหมาย/);
     const งานนัด = page.getByRole("button", { name: "นัดหมาย", exact: true }).last();
     await expect(งานนัด, "ขั้นนี้ต้องมีงานนัดหมายในรายการสิ่งที่ต้องทำ").toBeVisible({ timeout: 20_000 });
     await งานนัด.click();
@@ -52,7 +63,7 @@ test("[func·dealer] ติ๊กงานนัดหมายทั้งท�
     //   (แถบเตือนเป็นของแถม — มันหายเองใน 2-3 วิ จึงไม่เอามาเป็นเงื่อนไขตัดสิน เคยทำให้ตกแบบสุ่ม)
     await expect(page.getByLabel("ประเภทนัดหมาย"), "ต้องพาไปที่ฟอร์มลงนัดจริง").toBeVisible({ timeout: 15_000 });
     // ช่องงานนัดหมายต้องยังไม่ถูกติ๊ก — ติ๊กได้ต่อเมื่อมีนัดจริงเท่านั้น
-    const ติ๊กแล้ว = await page.locator('input[type="checkbox"]:checked').count();
+    const ติ๊กแล้ว = await page.locator('[role="checkbox"][aria-checked="true"]').count();
     expect(ติ๊กแล้ว, "ยังไม่มีนัดจริง ห้ามติ๊กงานให้").toBe(0);
   } finally {
     await admin.from("appointments").delete().eq("lead_id", NUM);

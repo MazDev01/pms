@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ยืนยัน, แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
 import {
   leadStatusLabel, leadStatusColor,
-  buildLeadReport, applyTaskTemplate, findAppointmentTask, completeTask, stageFromTasks,
+  buildLeadReport, applyTaskTemplate, findAppointmentTask,
   seedLeadTasks, taskProgress, mainTemplateOf, apptTypeLabel, fmtISOToThai,
   DEALER_FILES_EVENT, extOfName, guessFileCategory, LEAD_STATUS_ORDER, DEFAULT_DEALER_CODE, ACTIVE_LEAD_STATUSES, CLOSE_TASK_KEY, QUOTE_TASK_KEY, SEND_QUOTE_TASK_KEY,
   OTHER_LOST_REASON, OTHER_REASON_OPTION,
@@ -2360,22 +2360,12 @@ export default function LeadsPage() {
           });
           setApptForm({ type: "visit", date: APP_NOW_ISO, time: "10:00", title: "", note: "" });
           setApptAdding(false);
-          // นัดหมายจริงแล้ว = งาน "นัดหมาย" เสร็จ — ติ๊กให้เอง (บอสสั่ง 19 ส.ค. 69)
-          //   กติกาเดียวกับงานใบเสนอราคา: งานที่มี "ของจริง" รองรับ ระบบติ๊กเอง ไม่ให้เซลส์มานั่งติ๊กซ้ำ
-          //   ลูกค้าเป้าหมายที่ปิดแล้วไม่แตะ · ขั้นเลื่อนได้อย่างเดียว ห้ามถอยหลัง
+          // ติ๊กงาน "นัดหมาย" ให้เอง — ตัวจริงอยู่ที่ SalesContext.addAppointment แล้ว
+          // (ลงนัดจากปฏิทินก็ต้องติ๊กเหมือนกัน จึงย้ายไปไว้ที่เดียว · 3 ก.ย. 69)
           const apptDef = findAppointmentTask(taskTpl);
-          let ติ๊กให้ = "";
-          if (apptDef && c.status !== "PAID" && c.status !== "CANCELLED") {
-            const base = applyTaskTemplate(c.tasks, taskTpl, c.status);
-            if (!base.find(t => t.key === apptDef.key)?.done) {
-              const tasks = completeTask(base, apptDef.key, c.assigned || session.name);
-              const next = stageFromTasks(tasks, taskTpl);
-              const rank = (st: LeadStatus) => LEAD_STATUS_ORDER.indexOf(st);
-              saveLead({ ...c, tasks, status: rank(next) > rank(c.status) ? next : c.status });
-              ติ๊กให้ = apptDef.label;
-            }
-          }
-          // saveLead มี toast ของตัวเองตอนขั้นเลื่อน — ที่นี่จึงเขียนทับทีหลัง ให้เห็นผลของสิ่งที่เพิ่งกด
+          const ติ๊กให้ = apptDef && c.status !== "PAID" && c.status !== "CANCELLED"
+            && !applyTaskTemplate(c.tasks, taskTpl, c.status).find(t => t.key === apptDef.key)?.done
+            ? apptDef.label : "";
           setToast(ติ๊กให้ ? `บันทึกนัดหมายแล้ว · ติ๊กงาน “${ติ๊กให้}” ให้อัตโนมัติ` : "บันทึกนัดหมายแล้ว");
           } finally { apptSavingRef.current = false; setApptSaving(false); }
         };

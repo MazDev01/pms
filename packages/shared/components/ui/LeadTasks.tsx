@@ -186,7 +186,10 @@ export function LeadTasks({ lead, performedBy, onSave, onRequestQuotation, onReq
           const lockedUncheck = !closed && t.done && !canUncheck(i); // ยกเลิกไม่ได้ (มีขั้นถัดไปที่เช็กแล้ว)
           const locked = lockedCheck || lockedUncheck;
           return (
-            <button key={t.key} type="button" onClick={() => toggle(t.key)} disabled={closed}
+            // ปุ่มงานคือ "ช่องติ๊ก" ในสายตาผู้ใช้ — ต้องบอกสถานะให้โปรแกรมอ่านหน้าจอ (และเทสต์) รู้ด้วย
+            // เดิมเป็นปุ่มเปล่า ๆ ที่วาดสี่เหลี่ยมเขียวเอง คนใช้เครื่องอ่านหน้าจอจึงไม่รู้ว่างานไหนเสร็จแล้ว
+            // และเทสต์ที่นับ input[type=checkbox] ก็ได้ 0 เสมอ = ผ่านทั้งที่ไม่ได้ตรวจอะไรเลย (3 ก.ย. 69)
+            <button key={t.key} type="button" role="checkbox" aria-checked={t.done} onClick={() => toggle(t.key)} disabled={closed}
               title={lockedCheck ? "ทำงานก่อนหน้าให้ครบก่อน" : lockedUncheck ? "ยกเลิกได้เฉพาะงานล่าสุด" : undefined}
               style={{
                 display: "flex", alignItems: "flex-start", gap: 11, width: "100%", textAlign: "left",
