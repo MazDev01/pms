@@ -30,6 +30,8 @@ import { AccountRequestsCard } from "@pms/shared/components/hq/AccountRequestsCa
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
+/** รหัสของ "สำนักงานใหญ่" ในทะเบียนตัวแทน — ดูแลทุกภาคทุกจังหวัด และตรึงไว้บนสุดของตารางเสมอ */
+const HQ_CODE = "HQ";
 
 // เป้ายอดขายรายปี "ค่าเริ่มต้นแนะนำ" ตามศักยภาพตลาดของแต่ละภาค — ช่วย HQ ตอนเพิ่มสาขาใหม่ (แก้ทับได้)
 const REGION_TARGET_DEFAULT: Record<string, number> = {
@@ -203,7 +205,10 @@ function HQDealersPageInner() {
     if (regionFilter !== "ทั้งหมด" && d.region !== regionFilter) return false;
     if (q && !`${d.code} ${d.name} ${d.province} ${d.region}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => perfOf(b.code).revenue - perfOf(a.code).revenue);
+    // สำนักงานใหญ่อยู่บนสุดเสมอ (บอสสั่ง 7 ก.ย. 69) — ไม่ใช่สาขาขาย จึงไม่ควรถูกยอดขายดันตกไปหน้าอื่น
+    //   ตรึงก่อนเรียงยอด ไม่งั้นพอมี 155 ราย HQ (ยอด 0) จะไปโผล่หน้าสุดท้าย
+  }).sort((a, b) => (b.code === HQ_CODE ? 1 : 0) - (a.code === HQ_CODE ? 1 : 0)
+    || perfOf(b.code).revenue - perfOf(a.code).revenue);
 
   // Stats — คำนวณจากชุดที่กรองแล้ว (ตัวเลขสะสมจริง ไม่สเกลตามช่วงเวลา)
   const active = filtered.filter(d => dealerStatus(d) === "active");
