@@ -125,6 +125,9 @@ test("[HQ] กด Enter ตอนโฟกัสอยู่ที่ปุ่�
   await page.keyboard.press("Enter");
   await page.waitForTimeout(1_500);
 
-  const dialogs = await page.getByRole("button", { name: /ปิด/ }).count();
+  // นับ "แผง" ตรง ๆ ไม่ใช่นับปุ่มที่ชื่อมีคำว่า "ปิด"
+  //   SidePanel หนึ่งแผงมีปุ่มปิดสองปุ่มโดยตั้งใจอยู่แล้ว (กากบาทมุมบน + ปุ่ม "ปิด" แถบล่าง)
+  //   ตัวนับเดิมจึงได้ 2 ทุกครั้งที่เปิดแผงตามปกติ = ล้มโดยที่ระบบไม่ได้ผิดอะไร (แก้ 7 ก.ย. 69)
+  const dialogs = await page.getByRole("dialog").count();
   expect(dialogs, "ต้องเปิดรายละเอียดชั้นเดียว ไม่ซ้อนกัน").toBeLessThanOrEqual(1);
 });

@@ -18,7 +18,10 @@
 //   • Space ต้อง preventDefault ไม่งั้นหน้าเลื่อนลงตามพฤติกรรมปกติของเบราว์เซอร์
 //   • เส้นโฟกัสมาจากกฎกลางใน globals.css ([tabindex]:focus-visible) ไม่ต้องตั้งเพิ่มที่นี่
 
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
+
+/** สิ่งที่ "กดแล้วทำงานของตัวเอง" — คลิก/กด Enter บนของพวกนี้ ห้ามให้แถวทำงานซ้ำ */
+const ตัวที่กดได้เอง = "button, a, input, select, textarea, label, [role='button'], [role='link']";
 
 export function ClickableRow({ onActivate, label, className, style, children }: {
   /** สิ่งที่เกิดขึ้นเมื่อคลิกหรือกด Enter/Space บนแถว */
@@ -37,9 +40,18 @@ export function ClickableRow({ onActivate, label, className, style, children }: 
     onActivate();
   }
 
+  // ⚠️ กด Enter บนปุ่มข้างในแถว เบราว์เซอร์จะยิง "click" ของปุ่มนั้น แล้วมันลอยขึ้นมาถึง <tr> ด้วย
+  //    ตัวดัก onKeyDown ข้างบนกันไม่ได้ (คนละ event) → ปุ่มทำงานของมัน "และ" แถวเปิดรายละเอียดซ้อนอีกชั้น
+  //    (เจอจริงจากชุดทดสอบคีย์บอร์ด 7 ก.ย. 69 · หน้าลูกค้าทั้งเครือเปิดแผงซ้อนสองชั้น)
+  //    ต้องดักที่ทางคลิกด้วย ไม่ใช่แค่ทางคีย์บอร์ด — ทั้งเมาส์และคีย์บอร์ดเดินทางนี้เหมือนกัน
+  function onClick(e: MouseEvent<HTMLTableRowElement>) {
+    if ((e.target as HTMLElement).closest(ตัวที่กดได้เอง)) return;
+    onActivate();
+  }
+
   return (
     <tr
-      onClick={onActivate}
+      onClick={onClick}
       onKeyDown={onKeyDown}
       tabIndex={0}
       aria-label={label}

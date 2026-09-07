@@ -365,9 +365,10 @@ test("[edge·hq] กดปุ่ม 'บันทึก' (เพิ่มผู�
   await page.getByRole("button", { name: "เพิ่มผู้ใช้งาน HQ" }).click();
   await page.getByPlaceholder("ชื่อ", { exact: true }).fill(NAME);
   await page.getByPlaceholder("name@benjamin.co.th").fill(EMAIL);
-  // บทบาท/แผนก = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — เริ่มที่ "ยังไม่ระบุ" จึงต้องเลือกเอง
+  // บทบาท = ช่องบังคับ (บอสสั่ง 17 ส.ค. 69) — เริ่มที่ "ยังไม่ระบุ" จึงต้องเลือกเอง
+  //   ⚠️ "แผนก" ไม่ใช่ช่องให้เลือกอีกแล้ว — ผูกกับบทบาท เลือกบทบาทแล้วแผนกมาเอง (บอสสั่งฟิก 3 ก.ย. 69)
+  //   เทสต์เดิมยังสั่ง selectOption ที่ช่องแผนกอยู่ จึงล้มตั้งแต่ก่อนถึงสิ่งที่ตั้งใจจะตรวจ (แก้ 7 ก.ย. 69)
   await page.getByRole("dialog").getByLabel("บทบาท", { exact: true }).selectOption({ index: 1 });
-  await page.getByRole("dialog").getByLabel("แผนก", { exact: true }).selectOption({ index: 1 });
 
   const saveBtn = page.getByRole("button", { name: "บันทึก" });
   await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
