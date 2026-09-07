@@ -25,7 +25,11 @@ const DEALER = "HQ";
 const { url, serviceKey } = loadTarget();
 const h = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" };
 const catalog = JSON.parse(readFileSync("scripts/data/catalog-seed.json", "utf8"));
-const leads = JSON.parse(readFileSync("scripts/data/hq-leads-seed.json", "utf8"));
+// สองแผ่นรวมกัน: "ก่อสร้าง" (229) + "Leads" ที่มาจาก LINE bot (23) — เลขต่อกันไม่ชนกัน
+const leads = [
+  ...JSON.parse(readFileSync("scripts/data/hq-leads-seed.json", "utf8")),
+  ...JSON.parse(readFileSync("scripts/data/hq-leads-bot-seed.json", "utf8")),
+];
 
 const send = async (method, path, body, prefer) => {
   const r = await fetch(`${url}${path}`, {
@@ -65,10 +69,24 @@ const cat = await send("POST", "/rest/v1/master_catalog?on_conflict=id", catalog
 console.log("แม่แบบ:", cat.ok ? `บันทึก ${catalog.length} รายการ` : `ไม่สำเร็จ ${cat.status} ${cat.text.slice(0, 200)}`);
 if (!cat.ok) process.exit(1);
 
+// ผู้รับผิดชอบของสาขา — เอาชื่อที่ไฟล์ระบุว่าเป็นคนโทร/ดูแลลีดนั้นจริง (แผ่น Leads/CallLogs)
+//   ไม่ใช่บัญชีเข้าระบบ เป็นแค่ชื่อไว้ให้เลือกตอนมอบหมายงาน (ดู responsible_persons)
+const ผู้รับผิดชอบ = [...new Set(leads.map(l => l.assigned).filter(Boolean))];
+if (ผู้รับผิดชอบ.length) {
+  const มีอยู่ = JSON.parse((await send("GET", `/rest/v1/responsible_persons?select=name&dealer_code=eq.${DEALER}`)).text);
+  const ใหม่ = ผู้รับผิดชอบ.filter(n => !มีอยู่.some(p => p.name === n));
+  if (ใหม่.length) {
+    const r = await send("POST", "/rest/v1/responsible_persons",
+      ใหม่.map(name => ({ dealer_code: DEALER, name, active: true })), "return=minimal");
+    console.log("ผู้รับผิดชอบ:", r.ok ? `เพิ่ม ${ใหม่.join(", ")}` : `ไม่สำเร็จ ${r.status} ${r.text.slice(0, 150)}`);
+  } else console.log("ผู้รับผิดชอบ: มีครบแล้ว");
+}
+
 // ใส่ทีละก้อน — ก้อนใหญ่เกินจะโดนตัดกลางทางแล้วไม่รู้ว่าค้างตรงไหน
 let ok = 0;
 for (let i = 0; i < leads.length; i += 50) {
-  const ก้อน = leads.slice(i, i + 50).map(({ called, ...l }) => ({ ...l, tasks: tasksFor({ ...l, called }), activities: [] }));
+  const ก้อน = leads.slice(i, i + 50).map(({ called, activities, ...l }) =>
+    ({ ...l, tasks: tasksFor({ ...l, called }), activities: activities ?? [] }));
   const r = await send("POST", "/rest/v1/leads?on_conflict=dealer_code,id", ก้อน, "resolution=merge-duplicates,return=minimal");
   if (!r.ok) { console.error(`  ก้อนที่ ${i / 50 + 1} ไม่สำเร็จ ${r.status}`, r.text.slice(0, 300)); process.exit(1); }
   ok += ก้อน.length;
