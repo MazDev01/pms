@@ -94,42 +94,46 @@ test("หนึ่งสาขาหนึ่งบัญชี — DB ปฏิ
 });
 
 test("route ที่ไม่มีสิทธิ์ยังถูกปฏิเสธเหมือนเดิมทุกช่องทาง (ไม่หลุดจากการ refactor)", async ({ request }) => {
+  // ⚠️ route ฝั่งผู้ดูแลบางตัวแตะระบบยืนยันตัวตนด้วย ช้ากว่า route ธรรมดา และตอนรันพร้อมกัน 3 ชุด
+  //    บน dev server ตัวเดียว เคยเกิน actionTimeout 8 วินาทีของ config เป็นครั้งคราว → ล้มแบบวูบ
+  //    ที่ตรวจคือ "ถูกปฏิเสธไหม" ไม่ใช่ "เร็วแค่ไหน" — ยืดเวลารอเฉพาะคำขอในชุดนี้ ไม่กลบบั๊กอะไร
+  const รอได้ = { timeout: 25_000 };
   const rygToken = (await (await db(RYG)).auth.getSession()).data.session?.access_token ?? "";
   const cases: Array<{ name: string; run: () => Promise<{ status(): number }> }> = [
     {
       name: "ตัวแทนขอเข้าระบบแทนตัวแทน (impersonate)",
       run: () => request.post(`${HQ_ORIGIN}/api/admin/dealers/impersonate?code=CNX`, {
-        headers: { authorization: `Bearer ${rygToken}` },
+        headers: { authorization: `Bearer ${rygToken}` }, ...รอได้,
       }),
     },
     {
       name: "ตัวแทนรีเซ็ตรหัสผ่านตัวแทน",
       run: () => request.patch(`${HQ_ORIGIN}/api/admin/dealers?code=CNX`, {
-        headers: { authorization: `Bearer ${rygToken}` },
+        headers: { authorization: `Bearer ${rygToken}` }, ...รอได้,
       }),
     },
     {
       name: "ตัวแทนลบตัวแทน",
       run: () => request.delete(`${HQ_ORIGIN}/api/admin/dealers?code=CNX`, {
-        headers: { authorization: `Bearer ${rygToken}` },
+        headers: { authorization: `Bearer ${rygToken}` }, ...รอได้,
       }),
     },
     {
       name: "ตัวแทนสร้างผู้ใช้ HQ",
       run: () => request.post(`${HQ_ORIGIN}/api/admin/users`, {
-        headers: { authorization: `Bearer ${rygToken}` },
+        headers: { authorization: `Bearer ${rygToken}` }, ...รอได้,
         data: { name: "x", email: "x@y.co", role: "SUPER_ADMIN" },
       }),
     },
     {
       name: "ตัวแทนลบผู้ใช้ HQ",
       run: () => request.delete(`${HQ_ORIGIN}/api/admin/users?id=00000000-0000-4000-8000-000000000001`, {
-        headers: { authorization: `Bearer ${rygToken}` },
+        headers: { authorization: `Bearer ${rygToken}` }, ...รอได้,
       }),
     },
     {
       name: "ไม่มี token เลย (impersonate)",
-      run: () => request.post(`${HQ_ORIGIN}/api/admin/dealers/impersonate?code=CNX`),
+      run: () => request.post(`${HQ_ORIGIN}/api/admin/dealers/impersonate?code=CNX`, รอได้),
     },
   ];
 
