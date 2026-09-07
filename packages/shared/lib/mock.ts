@@ -198,9 +198,13 @@ export function loadLeadTaskTemplate(): LeadTaskDef[] {
 }
 // ─── นโยบายการขายของ HQ (แหล่งเดียว) — บังคับใช้กับทุกตัวแทน ────────────────
 // ตั้งที่ /hq/settings → คุม VAT / อายุใบเสนอราคา ทั้งเครือ (ระบบไม่มีส่วนลดแล้ว)
-export type HQPolicy = { requireApproval: boolean; vat: number; quoteValidityDays: number };
+// ⚠️ เคยมี requireApproval ("ใบเสนอราคาต้องผ่านการอนุมัติก่อนส่ง") — ลบทิ้ง 4 ก.ย. 69
+//    ตั้ง true ค้างไว้ตั้งแต่โครงร่างแรก แต่ไม่เคยมีฟีเจอร์อนุมัติจริง:
+//    ไม่มีสถานะ "รออนุมัติ" · ไม่มีหน้าอนุมัติ · ไม่มีสวิตช์ให้ตั้ง · ไม่มีโค้ดไหนอ่านไปกั้นการส่งใบ
+//    เก็บไว้ = หลอกคนอ่านไฟล์สำรองว่าระบบมีขั้นอนุมัติ ทั้งที่ตัวแทนกดส่งได้ทันทีเสมอ
+export type HQPolicy = { vat: number; quoteValidityDays: number };
 export const HQ_POLICY_KEY = "hq_sales_policy";
-export const DEFAULT_HQ_POLICY: HQPolicy = { requireApproval: true, vat: 7, quoteValidityDays: 30 };
+export const DEFAULT_HQ_POLICY: HQPolicy = { vat: 7, quoteValidityDays: 30 };
 // HQ บันทึกนโยบาย/เป้า/กฎแจ้งเตือน → ยิง event นี้ให้หน้าที่เปิดค้างอยู่ใช้ค่าใหม่ทันที
 // (โหมด local ได้เฉพาะ origin เดียวกัน · ข้ามแอปต้องใช้ supabase + Realtime)
 export const HQ_SETTINGS_EVENT = "bpms-hq-settings-updated";

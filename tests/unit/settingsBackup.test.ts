@@ -5,7 +5,7 @@ import { แยกสมุดงานจากXlsx } from "@pms/shared/lib/imp
 import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES } from "@pms/shared/lib/mock";
 
 const ของจริง: ชุดการตั้งค่า = {
-  policy: { ...DEFAULT_HQ_POLICY, vat: 7, quoteValidityDays: 30, requireApproval: true },
+  policy: { ...DEFAULT_HQ_POLICY, vat: 7, quoteValidityDays: 30 },
   targets: { annualTarget: 260_000_000, winRateTarget: 40, onTimeTarget: 85 },
   notifRules: { ...DEFAULT_HQ_NOTIF_RULES },
   lostReasons: ["ราคาสูงกว่าคู่แข่ง", "ลูกค้าเลื่อนโครงการ"],
@@ -45,7 +45,7 @@ describe("ไฟล์สำรองการตั้งค่า (Excel)", ()
     ]);
     // ค่าเปิด/ปิด ต้องอ่านออกโดยไม่ต้องแปลศัพท์
     expect(แผ่นงาน.find(s => s.ชื่อ === แผ่น.หัวข้อเตือน)!.แถว[0][1]).toBe("เปิด");
-    expect(แผ่นงาน.find(s => s.ชื่อ === แผ่น.นโยบาย)!.แถว[0][1]).toBe("ใช่");
+    expect(แผ่นงาน.find(s => s.ชื่อ === แผ่น.นโยบาย)!.แถว[0][1]).toBe(7);   // VAT เป็นตัวเลขจริง
     // ราคาต้องเป็นตัวเลขจริง เอาไปคำนวณต่อใน Excel ได้
     expect(แผ่นงาน.find(s => s.ชื่อ === แผ่น.แม่แบบ)!.แถว[0][3]).toBe(5_500);
     expect(แผ่นงาน.find(s => s.ชื่อ === แผ่น.แม่แบบย่อย)!.แถว).toEqual([["P1", "โรงงาน", "โรงงานอาหาร", 6_200, 5_500], ["P1", "โรงงาน", "คลังสินค้า", "", 5_500]]);
@@ -67,13 +67,11 @@ describe("ไฟล์สำรองการตั้งค่า (Excel)", ()
     const ผล = await ไปกลับ(เล่ม => {
       const เป้า = เล่ม.get(แผ่น.เป้าหมาย)!;
       เป้า[1][1] = "123,000,000";                 // พิมพ์จุลภาคมาก็ต้องอ่านออก
-      เล่ม.get(แผ่น.นโยบาย)![1][1] = "ไม่ใช่";      // ใช่/ไม่ใช่
       เล่ม.get(แผ่น.หัวข้อเตือน)![1][1] = "ปิด";
       เล่ม.get(แผ่น.ตัวแทน)!.push(["LPG", "ลำปาง", "ลำปาง", "เหนือ", "3000000", "เปิดใช้งาน"]);
       เล่ม.get(แผ่น.แม่แบบ)![1][3] = "6000";
     });
     expect(ผล.targets?.annualTarget).toBe(123_000_000);
-    expect(ผล.policy?.requireApproval).toBe(false);
     expect(ผล.notifRules?.alerts.unassignedLead.on).toBe(false);
     expect(ผล.notifRules?.alerts.unassignedLead.inapp).toBe(false);
     expect(ผล.dealers?.length).toBe(3);

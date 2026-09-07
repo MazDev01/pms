@@ -28,7 +28,7 @@ describe("แบบฟอร์มกรอกข้อมูลตั้งต�
     expect(ผล.targets?.annualTarget).toBe(60_000_000);
     expect(ผล.lostReasons?.length).toBe(4);
     expect(ผล.dealers?.[0]).toMatchObject({ code: "CNX", revenueTarget: 10_000_000, status: "active" });
-    expect(ผล.policy).toMatchObject({ requireApproval: true, vat: 7, quoteValidityDays: 30 });
+    expect(ผล.policy).toMatchObject({ vat: 7, quoteValidityDays: 30 });
   });
 
   it("แท็บวิธีกรอก ไม่ถูกอ่านเป็นข้อมูล", async () => {

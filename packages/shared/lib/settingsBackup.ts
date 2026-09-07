@@ -52,7 +52,6 @@ const หัวข้อบริษัท: [keyof HQCompany, string][] = [
   ["phone", "โทรศัพท์"], ["email", "อีเมล"], ["website", "เว็บไซต์"],
 ];
 const หัวข้อนโยบาย: [keyof HQPolicy, string][] = [
-  ["requireApproval", "ใบเสนอราคาต้องผ่านการอนุมัติก่อนส่ง"],
   ["vat", "ภาษีมูลค่าเพิ่ม (%)"],
   ["quoteValidityDays", "อายุใบเสนอราคา (วัน)"],
 ];
@@ -72,7 +71,6 @@ const หัวข้อเกณฑ์: [เกณฑ์, string][] = [
 ];
 
 const เปิดปิด = (v: boolean) => (v ? "เปิด" : "ปิด");
-const ใช่ไม่ใช่ = (v: boolean) => (v ? "ใช่" : "ไม่ใช่");
 /** อ่านค่าเปิด/ปิดจากสิ่งที่คนพิมพ์ลงมาได้หลายแบบ — เปิด/ใช่/ทำ/yes/true/1 */
 export function อ่านค่าเปิดปิด(v: string, ค่าเดิม: boolean): boolean {
   const t = (v ?? "").trim().toLowerCase();
@@ -117,8 +115,8 @@ export function สร้างแผ่นงานสำรอง(d: ชุด
   }
   if (d.policy) {
     const p = d.policy;
-    out.push({ ชื่อ: แผ่น.นโยบาย, หัวตาราง: หัวคู่, แถว: หัวข้อนโยบาย.map(([k, ป้าย]) =>
-      [ป้าย, k === "requireApproval" ? ใช่ไม่ใช่(!!p.requireApproval) : Number(p[k] ?? 0)] as ช่อง[]) });
+    out.push({ ชื่อ: แผ่น.นโยบาย, หัวตาราง: หัวคู่,
+      แถว: หัวข้อนโยบาย.map(([k, ป้าย]) => [ป้าย, Number(p[k] ?? 0)] as ช่อง[]) });
   }
   if (d.targets) {
     const t = d.targets;
@@ -193,9 +191,8 @@ export function อ่านแผ่นงานสำรอง(เล่ม: M
   if (แผ่นนโยบาย) {
     const m = เป็นแผนที่(แผ่นนโยบาย);
     const p = { ...DEFAULT_HQ_POLICY, ...(เดิม.policy ?? {}) };
-    p.requireApproval = อ่านค่าเปิดปิด(ดึง(m, หัวข้อนโยบาย[0][1]), p.requireApproval);
-    p.vat = อ่านตัวเลข(ดึง(m, หัวข้อนโยบาย[1][1]), p.vat);
-    p.quoteValidityDays = อ่านตัวเลข(ดึง(m, หัวข้อนโยบาย[2][1]), p.quoteValidityDays);
+    p.vat = อ่านตัวเลข(ดึง(m, หัวข้อนโยบาย[0][1]), p.vat);
+    p.quoteValidityDays = อ่านตัวเลข(ดึง(m, หัวข้อนโยบาย[1][1]), p.quoteValidityDays);
     ผล.policy = p;
   }
 
