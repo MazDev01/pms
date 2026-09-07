@@ -16,7 +16,7 @@ import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
-import { provincesOfRegion } from "@pms/shared/lib/provinces";
+import { provincesOfRegion, ALL_REGIONS, ALL_PROVINCES } from "@pms/shared/lib/provinces";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { createDealerAccount, deleteDealerAccount, impersonateDealer, listDealerLoginEmails, moveDealerData } from "@pms/shared/lib/adminApi";
 import { CopyField, DealerPasswordField } from "@pms/shared/components/hq/DealerCredentialsCard";
@@ -232,11 +232,14 @@ function HQDealersPageInner() {
   // เปลี่ยนภาค: อัปเดตภาค + ถ้ายังไม่แก้เป้าเอง (โหมดเพิ่มใหม่) เติมค่าเริ่มต้นตามภาคให้
   //   และล้างจังหวัดทิ้งถ้ามันไม่ได้อยู่ในภาคใหม่ — กันข้อมูลขัดกันเอง (เช่น ภาค "ใต้" + จังหวัด "เชียงใหม่")
   //   ซึ่งเคยเกิดได้เพราะจังหวัดเป็นช่องพิมพ์อิสระ ไม่ผูกกับภาคเลย
+  //   เลือก "ทุกภาค" (สำนักงานใหญ่ ดูแลทั่วประเทศ) = เติมจังหวัดให้เป็น "ทุกจังหวัด" ทันที
+  //   ไม่งั้นผู้ใช้ต้องไปเลือกจังหวัดอีกช่องทั้งที่ความหมายคือ "ไม่จำกัดจังหวัด" อยู่แล้ว
   function changeRegion(region: string) {
     setForm(f => ({
       ...f,
       region,
-      province: provincesOfRegion(region).includes(f.province) ? f.province : "",
+      province: region === ALL_REGIONS ? ALL_PROVINCES
+        : provincesOfRegion(region).includes(f.province) ? f.province : "",
       revenueTarget: (!editTarget && !targetTouched) ? regionDefaultTarget(region) : f.revenueTarget,
     }));
   }
@@ -589,6 +592,8 @@ function HQDealersPageInner() {
                   <select aria-label="ภูมิภาค" value={form.region} onChange={e => changeRegion(e.target.value)} style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                     <option value="">— ยังไม่ระบุ —</option>
                     {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                    {/* สำนักงานใหญ่ดูแลทั้งประเทศ — เลือกอันนี้แล้วจังหวัดจะเป็น "ทุกจังหวัด" ให้เอง */}
+                    <option value={ALL_REGIONS}>{ALL_REGIONS} (ทั่วประเทศ)</option>
                   </select>
                 </InputField>
                 <InputField label="จังหวัดที่ตั้ง *">
@@ -597,8 +602,10 @@ function HQDealersPageInner() {
                   <select aria-label="จังหวัดที่ตั้ง" value={form.province} onChange={e => setForm(f => ({ ...f, province: e.target.value }))}
                     style={{ ...INPUT_STYLE, cursor: "pointer" }}>
                     <option value="">{form.region ? "— ยังไม่ระบุ —" : "— เลือกภาคก่อน —"}</option>
+                    {/* ภาค = ทุกภาค → เลือก "ทุกจังหวัด" ได้ และยังเจาะจงจังหวัดเดียวได้ถ้าต้องการ */}
+                    {form.region === ALL_REGIONS && <option value={ALL_PROVINCES}>{ALL_PROVINCES}</option>}
                     {provincesOfRegion(form.region).map(p => <option key={p} value={p}>{p}</option>)}
-                    {form.province && !provincesOfRegion(form.region).includes(form.province) && (
+                    {form.province && form.province !== ALL_PROVINCES && !provincesOfRegion(form.region).includes(form.province) && (
                       <option value={form.province}>{form.province} (นอกภาค {form.region})</option>
                     )}
                   </select>

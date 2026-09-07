@@ -13,7 +13,7 @@ import { useMemo } from "react";
 import { useCurrentDealer } from "./useCurrentDealer";
 import { useRepoValue } from "./useRepoState";
 import { dealers as dealersRepo } from "./data";
-import { provincesOfRegion } from "./provinces";
+import { provincesOfRegion, ALL_PROVINCES } from "./provinces";
 import type { DealerRow } from "./mock";
 
 /** รายชื่อจังหวัดสำรอง — ใช้เฉพาะตอนทะเบียนตัวแทนยังโหลดไม่เสร็จ (ยังไม่รู้ภาค) */
@@ -28,7 +28,8 @@ export function useMyProvinces(current?: string): string[] {
     const ฐาน = inRegion.length ? inRegion : [...PROVINCES_FALLBACK];
     const พ่วง: string[] = [];
     // จังหวัดที่ตั้งของสาขาต้องอยู่ในลิสต์เสมอ (บางสาขาตั้งอยู่คนละภาคกับที่รับผิดชอบ)
-    if (inRegion.length && mine?.province && !ฐาน.includes(mine.province)) พ่วง.push(mine.province);
+    //   ยกเว้น "ทุกจังหวัด" ของสำนักงานใหญ่ — เป็นคำบอกขอบเขต ไม่ใช่ชื่อจังหวัดที่เลือกลงเอกสารได้
+    if (inRegion.length && mine?.province && mine.province !== ALL_PROVINCES && !ฐาน.includes(mine.province)) พ่วง.push(mine.province);
     if (current && !ฐาน.includes(current) && !พ่วง.includes(current)) พ่วง.push(current);
     return พ่วง.length ? [...พ่วง, ...ฐาน] : ฐาน;
   }, [dealers, me.code, current]);
