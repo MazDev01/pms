@@ -1,5 +1,5 @@
 import { createClient , type SupabaseClient } from "@supabase/supabase-js";
-import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { REAL_BACKEND } from "./supabaseEnv";
@@ -129,6 +129,9 @@ export default async function globalSetup() {
   // ไม่มีทางโผล่ได้เลยไม่ว่าจะ seed ข้อมูลลูกค้าเป้าหมาย/ใบเสนอราคาแบบไหน (ui/ux/hq-quotations spec ต้องการให้โผล่)
   // snapshot ค่าเดิมไว้ก่อน แล้วเปิดครบ 6 กฎชั่วคราว — คืนค่าเดิมที่ global-teardown.ts เสมอ
   const before = await admin.from("hq_notif_rules").select("alerts").eq("id", 1).single();
+  // node_modules/.cache ยังไม่มีบนเครื่องที่เพิ่งติดตั้งใหม่ (ตัวอื่นเป็นคนสร้างให้โดยบังเอิญ)
+  //   ไม่สร้างเองก่อน = ชุดทดสอบล้มตั้งแต่ setup ด้วย ENOENT ทั้งชุด (เจอจริง 7 ก.ย. 69 หลังลง dependency ใหม่)
+  mkdirSync(path.dirname(ALERTS_SNAPSHOT_PATH), { recursive: true });
   writeFileSync(ALERTS_SNAPSHOT_PATH, JSON.stringify(before.data?.alerts ?? {}));
   const allOn = { on: true, inapp: true };
   await admin.from("hq_notif_rules").update({
