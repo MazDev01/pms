@@ -40,7 +40,7 @@ const ใบ = [
 const เงิน = (n) => n ? "฿" + n.toLocaleString("en-US") : "";
 
 // ── ล้างใบชุดเดิมที่เคยนำเข้าด้วยเลขของระบบเก่า (ถ้ามี) ──
-const เดิม = JSON.parse((await send("GET", `/rest/v1/quotations?select=id,quote_no&dealer_code=eq.${DEALER}`)).text);
+const เดิม = JSON.parse((await send("GET", `/rest/v1/quotations?select=id,quote_no,deal_id&dealer_code=eq.${DEALER}`)).text);
 const ต้องลบ = เดิม.filter(q => !q.id.startsWith(`${PREFIX}${DEALER}-`));
 // ── เลขรันถัดไปของสาขา (ตัวเดียวกับที่ระบบใช้ตอนสาขาออกใบเอง) ──
 const counter = JSON.parse((await send("GET", `/rest/v1/quote_counters?select=next_no&dealer_code=eq.${DEALER}`)).text);
@@ -53,13 +53,19 @@ console.log(`ออกเลขใหม่เริ่มที่ ${เลข�
   `${q.area ? " · " + q.area + " ตร.ม." : ""} · ลีด #${q.dealId}${q.เดิม ? ` · เลขเดิม ${q.เดิม}` : ""}`));
 if (!APPLY) { console.log("\n— โหมดดูอย่างเดียว — ใส่ --apply เพื่อลงมือจริง"); process.exit(0); }
 
+// ใบชุดนี้เข้าไปแล้วหรือยัง — ถ้ามีครบแล้วให้ข้ามการออกเลขใหม่ ไปซิงก์สถานะลีดอย่างเดียว
+//   (เผลอรันซ้ำจะได้ไม่ออกใบซ้ำเป็นชุดที่สอง — เจอจริงตอนนำเข้าลีดรอบใหม่แล้วสถานะลีดถูกเขียนทับ)
+const มีครบแล้ว = ใบ.every(q => เดิม.some(e => e.deal_id === q.dealId));
+if (มีครบแล้ว) console.log("ใบชุดนี้อยู่ในระบบครบแล้ว — ข้ามการออกเลขใหม่ ไปซิงก์สถานะลูกค้าเป้าหมายอย่างเดียว");
+
+if (!มีครบแล้ว) {
 for (const q of ต้องลบ) {
   const r = await send("DELETE", `/rest/v1/quotations?dealer_code=eq.${DEALER}&id=eq.${encodeURIComponent(q.id)}`, undefined, "return=minimal");
   console.log(`ลบใบเลขเดิม ${q.id}:`, r.ok ? "แล้ว" : `ไม่สำเร็จ ${r.status}`);
   if (!r.ok) process.exit(1);
 }
 
-const แถว = ใบ.map((q, i) => ({
+const แถว = มีครบแล้ว ? [] : ใบ.map((q, i) => ({
   id: เลขที่(i), quote_no: เลขที่(i), dealer_code: DEALER, deal_id: q.dealId,
   customer: q.customer, project: q.project,
   total: เงิน(q.value), total_value: q.value, material_cost: 0,
@@ -69,14 +75,18 @@ const แถว = ใบ.map((q, i) => ({
          q.เดิม ? `เลขที่เอกสารเดิมในระบบเก่า: ${q.เดิม}` : "",
          q.ขาด ?? "", "ไฟล์ไม่มีรายการวัสดุ (BOQ) ของใบนี้"].filter(Boolean).join(" · "),
 }));
-const ins = await send("POST", "/rest/v1/quotations", แถว, "return=minimal");
+const ins = แถว.length ? await send("POST", "/rest/v1/quotations", แถว, "return=minimal") : { ok: true };
 console.log("บันทึกใบใหม่:", ins.ok ? `${แถว.length} ใบ` : `ไม่สำเร็จ ${ins.status} ${ins.text.slice(0, 300)}`);
 if (!ins.ok) process.exit(1);
 
+} // จบบล็อก "ยังไม่เคยนำเข้า"
+
+if (!มีครบแล้ว) {
 // เลื่อนตัวนับของสาขาให้ต่อจากใบสุดท้าย — ไม่งั้นใบที่สาขาออกเองจะได้เลขซ้ำกับที่นำเข้า
 const upd = await send("POST", "/rest/v1/quote_counters?on_conflict=dealer_code",
   { dealer_code: DEALER, next_no: เริ่มที่ + แถว.length }, "resolution=merge-duplicates,return=minimal");
 console.log("ตัวนับเลขที่ใบของสาขา:", upd.ok ? `ถัดไป = ${เริ่มที่ + แถว.length}` : `ไม่สำเร็จ ${upd.status}`);
+}
 
 // ลีดที่ออกใบให้แล้ว ต้องอยู่ขั้น "เสนอราคา" และติ๊กงานจัดทำ/ส่งใบให้ตรงกัน
 const journey = JSON.parse((await send("GET", "/rest/v1/hq_sales_journey?select=tasks&id=eq.1")).text)[0].tasks;
