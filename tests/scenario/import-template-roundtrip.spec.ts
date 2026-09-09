@@ -36,9 +36,12 @@ for (const [ชื่อ, ปุ่ม] of [["Excel", "ดาวน์โหล�
     await expect(page.getByText("พบ 1 รายการ — ตรวจก่อนยืนยัน")).toBeVisible({ timeout: 20_000 });
     const แถว = page.locator("tr", { hasText: "บจ. ตัวอย่างสตีล" });
     await expect(แถว).toBeVisible();
-    await expect(แถว).toContainText("เชียงใหม่");
     await expect(แถว).toContainText("2568");            // 05/10/2025 → แสดงเป็น พ.ศ.
-    await expect(แถว).toContainText("สมชาย เชียงใหม่");
+    // ⚠️ แถวตัวอย่างในเทมเพลตใช้ "ค่าจริงจากระบบ" แล้ว (แม่แบบ/จังหวัด/ผู้รับผิดชอบ ของสาขาที่ล็อกอิน)
+    //    จึงห้ามผูกเทสต์กับค่าตายตัวเดิม ("เชียงใหม่"/"สมชาย เชียงใหม่") — ตรวจแค่ว่าไม่ว่างและอ่านกลับได้
+    //    (บอสสั่ง 9 ก.ย. 69: ฟอร์มที่โหลดไปต้องกรอกแล้วอัปกลับได้โดยไม่ติดขัด)
+    const จังหวัดในแถว = (await แถว.locator("td").nth(3).innerText()).trim();
+    expect(จังหวัดในแถว.length, "ช่องจังหวัดของแถวตัวอย่างต้องมีค่าจริงจากระบบ").toBeGreaterThan(0);
     await expect(page.getByRole("button", { name: /^นำเข้า 1 ราย$/ })).toBeEnabled();
   });
 }

@@ -14,8 +14,11 @@ import {
   type LeadActivity, type CustomerStatus,
 } from "@pms/shared/lib/mock";
 import { useCustomerNotes } from "@pms/shared/lib/useCustomerNotes";
-import { อ่านตารางจากไฟล์, จับคู่ตามหัวตาราง, แปลงวันที่นำเข้า, นามสกุลที่รับได้ } from "@pms/shared/lib/importSheet";
+import { อ่านตารางจากไฟล์, นามสกุลที่รับได้ } from "@pms/shared/lib/importSheet";
+import { CSV_HEADERS, จับคู่คอลัมน์, แถวตัวอย่าง, แผ่นค่าที่เลือกได้, เนื้อไฟล์Csv,
+  type ImportRow, type ค่าที่ระบบมี as ค่าที่เลือกได้ในระบบ } from "@pms/shared/lib/customerImportTemplate";
 import { สร้างไฟล์Xlsx } from "@pms/shared/lib/makeXlsx";
+import { สร้างไฟล์Xlsx as สร้างสมุดงานXlsx } from "@pms/shared/lib/exportWorkbook";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { fmtFull as fmtMoney, formatPhone } from "@pms/shared/lib/format";
 import { ตรวจมูลค่าลูกค้าเป้าหมาย } from "@pms/shared/lib/leadValue";
@@ -50,7 +53,7 @@ import { useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import { provincesOfRegion } from "@pms/shared/lib/provinces";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
-import { leads as leadsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
+import { leads as leadsRepo, dealers as dealersRepo, persons as personsRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { useDealerVat } from "@pms/shared/lib/useDealerSettings";
 import { files as filesRepo, storage as fileStorage } from "@pms/shared/lib/data";
@@ -108,45 +111,24 @@ function useMyProvinces(): string[] {
 }
 
 function initials(name:string){ return name.replace(/บจ\.|หจก\./g,"").trim().slice(0,2); }
-// ── นำเข้าลูกค้าเดิม (CSV) ──────────────────────────────────
-// ช่องที่นำเข้าได้ = ช่องเดียวกับที่การ์ดข้อมูลลูกค้าแสดง (บอสสั่ง 28 ส.ค. 69)
-//   ที่อยู่ · เป็นลูกค้าเมื่อ · ผู้รับผิดชอบ เดิมไม่มีในเทมเพลต ทำให้ลูกค้าที่นำเข้ามาช่องพวกนี้ว่าง
-//   แล้วต้องมาไล่พิมพ์เองทีละราย (รหัสลูกค้าไม่มีในเทมเพลต — ระบบออกให้เองตอนบันทึก)
-type ImportRow = { company:string; name:string; phone:string; email:string; address:string;
-  province:string; category:string; joinDate:string; owner:string };
-const CSV_HEADERS = ["บริษัท","ผู้ติดต่อ","โทรศัพท์","อีเมล","ที่อยู่","จังหวัด","แม่แบบ","เป็นลูกค้าเมื่อ","ผู้รับผิดชอบ"];
-// ชื่อคอลัมน์ที่ยอมรับได้ — ระบบเก่าบางที่ส่งออกเป็นภาษาอังกฤษ จับคู่ให้อัตโนมัติ
-const ชื่อคอลัมน์:Record<keyof ImportRow,string[]> = {
-  company:["บริษัท","ชื่อบริษัท","company"],
-  name:["ผู้ติดต่อ","ชื่อผู้ติดต่อ","ชื่อ-สกุล","contact","name"],
-  phone:["โทรศัพท์","เบอร์โทร","โทร","phone","tel"],
-  email:["อีเมล","email","e-mail"],
-  address:["ที่อยู่","ที่อยู่เต็ม","address"],
-  province:["จังหวัด","province"],
-  category:["แม่แบบ","ประเภท","category","type"],
-  joinDate:["เป็นลูกค้าเมื่อ","วันที่เป็นลูกค้า","วันที่เข้าร่วม","joindate","join date","since"],
-  owner:["ผู้รับผิดชอบ","ผู้ดูแล","เจ้าของ","owner","sales"],
-};
-function จับคู่คอลัมน์(rows:string[][]):ImportRow[]{
-  return จับคู่ตามหัวตาราง(rows, ชื่อคอลัมน์)
-    .map(r=>({ ...r, province:r.province||"กรุงเทพฯ", joinDate:แปลงวันที่นำเข้า(r.joinDate) }))
-    .filter(r=>r.company);
-}
-// แถวตัวอย่าง 1 แถว — ให้เห็นรูปแบบที่ควรกรอก แล้วพิมพ์ทับได้เลย
-const ตัวอย่างเทมเพลต = ["บจ. ตัวอย่างสตีล","คุณสมชาย ใจดี","081-234-5678","contact@example.com",
-  "26 หมู่ 3 ต.หนองบัว อ.เมือง จ.เชียงใหม่ 50000","เชียงใหม่","โกดังสำเร็จรูป","05/10/2025","สมชาย เชียงใหม่"];
+// ── นำเข้าลูกค้าเดิม (CSV/Excel) ────────────────────────────
+// นิยามคอลัมน์ · แถวตัวอย่าง · แผ่น "ค่าที่เลือกได้" ย้ายไปอยู่ที่ shared/lib/customerImportTemplate.ts
+//   เพราะต้องตรงกับปุ่มส่งออกและตัวอ่านไฟล์เสมอ และหน้านี้เป็น "use client" เทสต์เรียกตรง ๆ ไม่ได้
 function บันทึกไฟล์(blob:Blob, ชื่อ:string){
   const url=URL.createObjectURL(blob); const a=document.createElement("a");
   a.href=url; a.download=ชื่อ; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 // เทมเพลตหลัก = ไฟล์ Excel เปิดแล้วเป็นตารางพร้อมพิมพ์ (บอสแจ้ง 28 ส.ค. 69 ว่าไฟล์ CSV เปิดมาเป็นข้อความ กรอกต่อไม่ได้)
-function downloadXlsxTemplate(){
-  บันทึกไฟล์(สร้างไฟล์Xlsx(CSV_HEADERS, [ตัวอย่างเทมเพลต], "ลูกค้าเดิม"), "เทมเพลตลูกค้าเดิม.xlsx");
+//   สองแผ่น: "ลูกค้าเดิม" ไว้กรอก · "ค่าที่เลือกได้" ลอกค่าจริงจากระบบมาให้ดูคู่กัน จะได้กรอกแล้วนำเข้าได้เลย
+function downloadXlsxTemplate(ค่า: ค่าที่เลือกได้ในระบบ){
+  บันทึกไฟล์(สร้างสมุดงานXlsx([
+    { ชื่อ:"ลูกค้าเดิม", หัวตาราง:CSV_HEADERS, แถว:[แถวตัวอย่าง(ค่า)] },
+    แผ่นค่าที่เลือกได้(ค่า),
+  ]), "เทมเพลตลูกค้าเดิม.xlsx");
 }
-// เผื่อใครถนัด CSV หรือใช้ Google ชีต
-function downloadCsvTemplate(){
-  const csv=CSV_HEADERS.join(",")+"\n"+ตัวอย่างเทมเพลต.join(",");
-  บันทึกไฟล์(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}), "เทมเพลตลูกค้าเดิม.csv");
+// เผื่อใครถนัด CSV หรือใช้ Google ชีต — ไฟล์เดียวไม่มีแผ่นที่สอง จึงต่อค่าที่เลือกได้เป็นบรรทัดหมายเหตุท้ายไฟล์
+function downloadCsvTemplate(ค่า: ค่าที่เลือกได้ในระบบ){
+  บันทึกไฟล์(new Blob(["\ufeff"+เนื้อไฟล์Csv(ค่า)],{type:"text/csv;charset=utf-8"}), "เทมเพลตลูกค้าเดิม.csv");
 }
 const THAI_MO=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // "วันนี้" ต้องเป็นวันของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง
@@ -440,6 +422,15 @@ export default function CustomersPage(){
   const quotations = useMemo(() => allQuotations.filter(q => (q.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allQuotations, currentDealer.code]);
   const leads = useMemo(() => allLeadsRaw.filter(l => (l.dealerCode ?? DEFAULT_DEALER_CODE) === currentDealer.code), [allLeadsRaw, currentDealer.code]);
   const catalog = useMasterCatalog(); // แม่แบบจากแคตตาล็อกกลาง — ใช้เป็นตัวเลือกตัวกรอง "แม่แบบ"
+  // รายชื่อผู้รับผิดชอบของสาขา — ใช้เติมลงเทมเพลตนำเข้า ให้กรอกแล้วตรงกับที่ระบบมีจริง
+  const จังหวัดของสาขา = useMyProvinces();   // จังหวัดตามภาคของสาขาที่ล็อกอิน (กติกาเดียวกับฟอร์มกรอกมือ)
+  const persons = useRepoValue(() => personsRepo.list({ dealerCode: currentDealer.code, isHQ: false }), []);
+  // ค่าจริงในระบบที่ต้องใส่ลงเทมเพลตนำเข้า — กรอกตามนี้แล้วอัปกลับเข้ามาได้โดยไม่ติดขัด
+  const ค่าที่ระบบมี = useMemo(() => ({
+    แม่แบบ: catalog.map(c => c.name),
+    จังหวัด: จังหวัดของสาขา,
+    ผู้รับผิดชอบ: persons.filter(p => p.active !== false).map(p => p.name),
+  }), [catalog, จังหวัดของสาขา, persons]);
   const taskTpl = useLeadTaskTemplate(); // งานมาตรฐานที่ HQ ตั้ง — ดีลใหม่ต้องได้ checklist ชุดเดียวกับลูกค้าเป้าหมายอื่น
   const { passes, timeRange, inRange, setPreset, setCustomRange } = useFilters(); // ตัวกรองช่วงเวลา (กรองตามกิจกรรมล่าสุดของลูกค้า)
   // ตัวกรองช่วงเวลากลาง (วันเดือนปี) — กรองจากวันที่เข้าเป็นลูกค้า
@@ -952,11 +943,19 @@ export default function CustomersPage(){
         {/* หัวหน้า/ปุ่ม → ไปอยู่บนแถบบน (ชื่อหน้ามาจาก Topbar) */}
         <TopbarActions>
           <FilterBar dims={[]} />
+          {/* ── ไฟล์ที่ "ส่งออก" ต้องนำกลับเข้ามาได้เลย (บอสสั่ง 9 ก.ย. 69) ────────────────
+              เดิมส่งออก 9 ช่องแต่ขาด อีเมล · ที่อยู่ · แม่แบบ · เป็นลูกค้าเมื่อ ซึ่งเป็นช่องที่ "นำเข้าลูกค้าเดิม" รับ
+              ใครส่งออกไปแก้ใน Excel แล้วนำเข้ากลับ ช่องพวกนั้นจะกลายเป็นว่างทันทีโดยไม่มีอะไรเตือน
+              จึงให้คอลัมน์ชุดแรกตรงกับเทมเพลตนำเข้าเป๊ะ (CSV_HEADERS) แล้วค่อยต่อด้วยตัวเลขสรุปที่ระบบคำนวณเอง
+              ⚠️ ตัวเลขสรุปท้ายตาราง (กิจกรรมล่าสุด/จำนวนใบ/ยอดขาย/สินค้าที่ซื้อ) นำเข้ากลับไม่ได้โดยตั้งใจ —
+                 เป็นค่าที่คิดจากใบเสนอราคาจริง ถ้ารับกลับมาก็เท่ากับให้พิมพ์ยอดขายเอง
+              ⚠️ "เป็นลูกค้าเมื่อ" ส่งออกเป็น YYYY-MM-DD ซึ่ง แปลงวันที่นำเข้า() อ่านกลับได้ ห้ามเปลี่ยนเป็นวันไทย */}
           <ExportMenu filename="customers" title="รายชื่อลูกค้า"
-            headers={["บริษัท","ผู้ติดต่อ","โทรศัพท์","จังหวัด","ผู้รับผิดชอบ","กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","สินค้าที่ซื้อไป"]}
+            headers={[...CSV_HEADERS,"กิจกรรมล่าสุด","จำนวนใบเสนอราคา","ยอดขายรวม","สินค้าที่ซื้อไป"]}
             rows={filtered.map(c=>{
               const bought=purchasedItemsFor(c.id,quotations);
-              return [c.company,c.name,c.phone,c.province,c.owner,lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),bought.length?bought.join(", "):"—"];
+              return [c.company,c.name,c.phone,c.email,c.address??"",c.province,c.category,c.joinDate,c.owner,
+                lastActivityFor(c.id,c.joinDate,quotations),quotationCountFor(c.id,quotations),fmtMoney(totalSalesFor(c.id,quotations)),bought.length?bought.join(", "):"—"];
             })} />
           {/* นำเข้าลูกค้าเดิม (คีย์มือ/CSV) — ลูกค้าใหม่ยังเกิดจาก Lead→Won เท่านั้น */}
           <button className="btn btn-primary btn-sm" onClick={()=>{setImportRows([]);setImportErr("");setImportFile("");setShowImport(true);}}>
@@ -1861,7 +1860,7 @@ export default function CustomersPage(){
                   ทำเป็น 3 ขั้นชัด ๆ เพราะของเดิมเป็นปุ่มเรียงกัน ผู้ใช้ไม่รู้ว่าต้องเริ่มตรงไหน */}
               {[
                 { ที่: 1, หัว: "ดาวน์โหลดเทมเพลต", รอง: "เปิดด้วย Excel หรือ Google ชีต แล้วพิมพ์ต่อได้เลย — มีหัวคอลัมน์และแถวตัวอย่างให้พิมพ์ทับ" },
-                { ที่: 2, หัว: "กรอกลูกค้าเดิมจากระบบเก่า", รอง: `ใส่ทีละแถว · ช่อง "บริษัท" ต้องมี ช่องอื่นเว้นว่างได้ · คอลัมน์: ${CSV_HEADERS.join(" · ")}` },
+                { ที่: 2, หัว: "กรอกลูกค้าเดิมจากระบบเก่า", รอง: `ใส่ทีละแถว · ช่อง "บริษัท" ต้องมี ช่องอื่นเว้นว่างได้ · คอลัมน์: ${CSV_HEADERS.join(" · ")} · ในไฟล์มีแผ่น "ค่าที่เลือกได้" บอกแม่แบบ/จังหวัด/ผู้รับผิดชอบที่ระบบมีจริง` },
                 { ที่: 3, หัว: "อัปโหลดไฟล์กลับเข้ามา", รอง: `รับไฟล์ ${นามสกุลที่รับได้.map(n=>n.replace(".","")).join(" · ")} · ระบบจะให้ตรวจรายชื่อก่อน แล้วค่อยกดนำเข้า` },
               ].map(ข => (
                 <div key={ข.ที่} style={{display:"flex",gap:11,alignItems:"flex-start"}}>
@@ -1872,11 +1871,11 @@ export default function CustomersPage(){
                     <div style={{fontSize:"0.68rem",color:MUTED,marginTop:2,lineHeight:1.55}}>{ข.รอง}</div>
                     {ข.ที่===1 && (
                       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
-                        <button className="btn btn-primary btn-sm" onClick={downloadXlsxTemplate}>
+                        <button className="btn btn-primary btn-sm" onClick={()=>downloadXlsxTemplate(ค่าที่ระบบมี)}>
                           <Download size={13}/> ดาวน์โหลดเทมเพลต (Excel)
                         </button>
                         {/* เป็นปุ่มเหมือนกัน (บอสสั่ง 28 ส.ค. 69) — ของเดิมเป็นข้อความขีดเส้นใต้ ดูไม่ออกว่ากดได้ */}
-                        <button className="btn btn-secondary btn-sm" onClick={downloadCsvTemplate}>
+                        <button className="btn btn-secondary btn-sm" onClick={()=>downloadCsvTemplate(ค่าที่ระบบมี)}>
                           <Download size={13}/> แบบ CSV
                         </button>
                       </div>
