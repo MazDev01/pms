@@ -122,6 +122,20 @@ export const companyPUT = handler("hqCompany.save", async (req: NextRequest, sb)
 // คืน "ดิบ" ให้ฝั่งแอปเติมค่ากลางเอง — ค่ากลาง (DEFAULT_ISSUER ฯลฯ) อยู่ใน mock.ts ฝั่ง client
 // ถ้าเติมที่นี่ต้องดึง mock.ts เข้ามาที่เซิร์ฟเวอร์ด้วย ซึ่งพาไฟล์ข้อมูลตัวอย่างทั้งก้อนตามมา
 export const dsGET = handler("dealerSettings.get", async (req: NextRequest, sb) => {
+  // ?logos=1 → โลโก้ของทุกสาขาที่ตั้งไว้ (รหัสสาขา → รูป) สำหรับการ์ดหน้าตัวแทนจำหน่ายของ HQ
+  //   RLS ตัดให้เองว่าใครเห็นของสาขาไหน · ไล่ทีละหน้าเสมอ (เพดาน 1,000 แถว)
+  if (new URL(req.url).searchParams.get("logos") === "1") {
+    const map: Record<string, string> = {};
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from("dealer_settings").select("dealer_code,logo").not("logo", "is", null)
+        .order("dealer_code", { ascending: true }).range(from, from + 999);
+      if (error) return dbFail("dealerSettings.logos", error);
+      const got = (data ?? []) as Row[];
+      for (const r of got) if (typeof r.logo === "string" && r.logo) map[String(r.dealer_code)] = r.logo;
+      if (got.length < 1000) break;
+    }
+    return ok(map);
+  }
   const dealer = (new URL(req.url).searchParams.get("dealer") ?? "").trim();
   if (!dealer) return fail(400, "ไม่ได้ระบุสาขา");
   const { data, error } = await sb.from("dealer_settings")

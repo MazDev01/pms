@@ -15,7 +15,7 @@ test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน")
 test.setTimeout(180_000);
 
 test("[func] HQ กด 'เข้าระบบแทนตัวแทน' → เข้าถึงแดชบอร์ดของสาขาได้จริง", async ({ context, page }) => {
-  await openAs(page, ADMIN, "hq", "/hq/dealers");
+  await openAs(page, ADMIN, "hq", "/hq/dealers?view=table");   // หน้าเริ่มเป็นการ์ด — เทสต์นี้ใช้แถวตาราง
   await expect(page.locator("tbody tr").first()).toBeVisible({ timeout: 30_000 });
 
   const ปุ่ม = page.getByRole("button", { name: /เข้าระบบ/ }).first();

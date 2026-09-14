@@ -130,7 +130,7 @@ test("[func·hq] ลบตัวแทนผ่านหน้าจอ → ห�
   const sb = await db(ADMIN);
 
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
-  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${HQ_ORIGIN}/hq/dealers?view=table`, { waitUntil: "domcontentloaded" });   // หน้าเริ่มเป็นการ์ด — ใช้แถวตาราง
 
   const row = page.locator("tbody tr").filter({ hasText: DEALER_NAME }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });

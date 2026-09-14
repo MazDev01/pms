@@ -270,6 +270,7 @@ const dealerSettings: DealerSettingsRepo = {
   save: async (dealerCode, patch) => {
     await apiFetch("/dealer-settings", { method: "PUT", body: JSON.stringify({ dealerCode, patch }) });
   },
+  logos: () => apiFetch<Record<string, string>>("/dealer-settings?logos=1"),
 };
 const profile: ProfileRepo = {
   get: () => apiFetch<UserProfile | null>("/profile"),

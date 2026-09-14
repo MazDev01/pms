@@ -525,6 +525,13 @@ export const SupabaseAdapter: DataAdapter = {
       if (patch.pricing)                row.pricing = patch.pricing;
       await must(sb().from("dealer_settings").upsert(row, { onConflict: "dealer_code" }));
     },
+    // RLS (0024/0124): HQ อ่านได้ทั้งเครือ · ตัวแทนเห็นแค่ของตัวเอง · ไล่ทีละหน้าเสมอ (เพดาน 1,000 แถว)
+    logos: async () => {
+      const rows = await pageAll((from, to) =>
+        sb().from("dealer_settings").select("dealer_code,logo").not("logo", "is", null)
+          .order("dealer_code", { ascending: true }).range(from, to), "dealer_settings");
+      return Object.fromEntries(rows.filter(r => typeof r.logo === "string" && r.logo).map(r => [String(r.dealer_code), String(r.logo)]));
+    },
   },
   // โปรไฟล์ของผู้ใช้ที่ล็อกอิน — แถวใน profiles ที่ id ตรงกับ auth user
   // อีเมลล็อกอินอยู่ใน auth.users (แก้จากที่นี่ไม่ได้) · contact_email = อีเมลติดต่อที่ผู้ใช้ตั้งเอง

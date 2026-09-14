@@ -53,7 +53,7 @@ const HQ_PAGES = [
   { path: "/hq/customers", name: "ฐานข้อมูลลูกค้า" },
   { path: "/hq/quotations", name: "ใบเสนอราคาทั้งเครือ" },
   { path: "/hq/leads", name: "ลูกค้าเป้าหมายทั้งเครือ" },
-  { path: "/hq/dealers", name: "ตัวแทนจำหน่าย" },
+  { path: "/hq/dealers?view=table", name: "ตัวแทนจำหน่าย" },   // ตรวจแถวตาราง — หน้าเริ่มเป็นการ์ด
   { path: "/hq/pipeline", name: "ภาพรวมยอดขาย" },
 ];
 

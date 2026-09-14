@@ -67,6 +67,8 @@ export interface DealerSettingsRepo {
   get(dealerCode: string): Promise<DealerSettings>;
   /** บันทึกเฉพาะกลุ่มที่ส่งมา (patch) — ไม่ต้องส่งครบทุกกลุ่ม */
   save(dealerCode: string, patch: Partial<DealerSettings>): Promise<void>;
+  /** โลโก้ของทุกสาขาที่ตั้งไว้แล้ว (รหัสสาขา → รูป) — HQ ใช้แสดงการ์ดหน้าตัวแทนจำหน่าย · ไม่มีรูป = ไม่มีคีย์ */
+  logos(): Promise<Record<string, string>>;
 }
 
 // ── โปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่ (ชื่อ/เบอร์/อีเมลติดต่อ/รูป) ──

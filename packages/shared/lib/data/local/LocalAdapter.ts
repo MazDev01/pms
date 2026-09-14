@@ -234,6 +234,8 @@ export const LocalAdapter: DataAdapter = {
       if (patch.pricing)    writeKey(DEALER_PRICING_KEY, patch.pricing);
       return done();
     },
+    // โหมดเดโมเก็บโลโก้ชุดเดียวไม่แยกสาขา — ผูกกับสาขาไหนไม่ได้ จึงคืนว่าง (การ์ดใช้รูปจากลูกค้าเป้าหมาย/ตัวย่อแทน ไม่เดา)
+    logos: () => ok({}),
   },
   // โหมด local: คีย์เดิมต่อสาขา (พฤติกรรมเท่าเดิม ค่าที่เคยตั้งไม่หาย)
   profile: {

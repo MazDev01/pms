@@ -96,7 +96,7 @@ test("อีเมล+รหัสผ่านที่หน้าจอโช�
   //   → HQ คัดลอกไปให้ตัวแทน แล้วเข้าระบบไม่ได้ ทั้งที่ทั้งสองช่องดู "มีข้อมูลครบ"
   // เทสต์ที่ดูแค่ว่า "มีอีเมลขึ้นไหม/มีรหัสขึ้นไหม" จับบั๊กนี้ไม่ได้ — ต้องเอาไปล็อกอินจริงเท่านั้น
   const { open } = await import("./helpers");
-  await open(page, "hq", "/hq/dealers");
+  await open(page, "hq", "/hq/dealers?view=table");   // หน้าเริ่มเป็นการ์ด — เทสต์นี้ใช้แถวตาราง
 
   const row = page.locator("tbody tr").filter({ hasText: "RYG" }).first();
   await row.waitFor({ state: "visible", timeout: 30_000 });
@@ -138,7 +138,7 @@ test("รหัสผ่านต้องไม่ติดไปกับห�
   });
 
   const { open } = await import("./helpers");
-  await open(page, "hq", "/hq/dealers");
+  await open(page, "hq", "/hq/dealers?view=table");
   await page.locator("tbody tr").first().waitFor({ state: "visible", timeout: 30_000 }).catch(() => {});
   await page.waitForTimeout(2_500);
 

@@ -52,7 +52,7 @@ test("[a11y] โมดัลเพิ่มผู้ใช้ HQ — Esc ปิ�
 });
 
 test("[a11y] ฟอร์มข้อมูลตัวแทน (HQ) — Esc ปิดได้ และประกาศตัวเป็นหน้าต่างซ้อน", async ({ page }) => {
-  await open(page, "hq", "/hq/dealers");
+  await open(page, "hq", "/hq/dealers?view=table");   // หน้าเริ่มเป็นการ์ด — ปุ่มแก้ไขในแถวตาราง
   // ปุ่มเพิ่มตัวแทนตรง ๆ ถูกถอดแล้ว (บอสสั่ง 14 ก.ย. 69) — ฟอร์มนี้เหลือไว้แก้ไขตัวแทนที่มีอยู่ จึงเปิดจากปุ่มแก้ไข
   const editBtn = page.locator("tbody").getByRole("button", { name: "แก้ไข" }).first();
   await editBtn.waitFor({ state: "visible", timeout: 30_000 });

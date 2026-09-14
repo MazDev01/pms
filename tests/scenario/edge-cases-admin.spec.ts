@@ -59,7 +59,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await purge(); });
 
 test("[edge·hq] ตั้งเป้ายอดขายติดลบ → ต้องไม่ถูกบันทึกเป็นค่าติดลบ", async ({ page }) => {
-  await open(page, "hq", "/hq/dealers");
+  await open(page, "hq", "/hq/dealers?view=table");   // หน้าเริ่มเป็นการ์ด — เทสต์นี้ใช้แถวตาราง
 
   const row = page.locator("tbody tr").filter({ hasText: CODE }).first();
   await expect(row, "สาขาทดสอบต้องโผล่ในตาราง").toBeVisible({ timeout: 30_000 });

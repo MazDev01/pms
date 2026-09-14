@@ -14,7 +14,7 @@ import {
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
-import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
+import { dealers as dealersRepo, settings as settingsRepo, dealerSettings as dealerSettingsRepo, prospects as prospectsRepo } from "@pms/shared/lib/data";
 import { provincesOfRegion, ALL_REGIONS, ALL_PROVINCES } from "@pms/shared/lib/provinces";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { deleteDealerAccount, impersonateDealer, listDealerLoginEmails, moveDealerData } from "@pms/shared/lib/adminApi";
@@ -24,13 +24,17 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
-import { Search, X, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase } from "lucide-react";
+import { Search, X, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase, LayoutGrid, List } from "lucide-react";
 import { AccountRequestsCard } from "@pms/shared/components/hq/AccountRequestsCard";
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
 /** รหัสของ "สำนักงานใหญ่" ในทะเบียนตัวแทน — ดูแลทุกภาคทุกจังหวัด และตรึงไว้บนสุดของตารางเสมอ */
 const HQ_CODE = "HQ";
+/** การ์ดต่อหน้า — 12 ใบ ลงตัวทั้งแถวละ 3 และ 4 ใบ */
+const CARDS_PER_PAGE = 12;
+/** ตัวย่อชื่อบนการ์ดที่ยังไม่มีรูป — ตัดคำนำหน้าบริษัท/คุณ ออกก่อน */
+const ตัวย่อ = (d: DealerRow) => d.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || d.code.slice(0, 2);
 
 // ── Dealer status ───────────────────────────────────────────────
 // คำเรียก/สี มาจาก @pms/shared/lib/mock (แหล่งเดียว) — หน้ารายละเอียดตัวแทนใช้ชุดเดียวกัน
@@ -155,6 +159,27 @@ function HQDealersPageInner() {
   // แบ่งหน้า 10 แถวเท่ากับทุกตารางในระบบ (สั่งโดยผู้บริหาร 7 ส.ค. 69)
   // ⚠️ ทุกตัวกรองต้องพากลับหน้า 1 — ไม่งั้นกรองแล้วค้างอยู่หน้ากลางลิสต์ที่ไม่มีข้อมูลแล้ว
   const [page, setPage] = useState(0);
+  // มุมมองการ์ดมีรูป (บอสสั่ง 14 ก.ย. 69: "ให้แสดงแบบเป็นการ์ด มีรูปแสดง ทำเป็นแบบเฉย ๆ") · ตารางเดิมยังสลับดูได้
+  const [มุมมอง, setมุมมอง] = useState<"card" | "table">("card");
+  // ?view=table → เปิดเป็นตาราง (ลิงก์ตรง/เทสต์ที่ต้องใช้แถวตาราง) · ตั้งหลังเปิดหน้า ไม่ใช่ค่าเริ่มของ state
+  //   ค่าเริ่มที่อ่านจาก URL จะไม่ตรงกับหน้าที่เซิร์ฟเวอร์เรนเดอร์ไว้ (การ์ด) แล้วเบราว์เซอร์ฟ้องข้อผิดพลาด
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "table") setมุมมอง("table");
+  }, []);
+  // รูปของแต่ละสาขา — ใช้เฉพาะรูปที่มีจริง ไม่มี = ตัวย่อชื่อ (ห้ามเอารูปอื่นมาใส่แทน)
+  //   1) โลโก้ที่ตัวแทนตั้งเองในหน้าตั้งค่าของสาขา  2) รูปประจำตัวตอนเป็นลูกค้าเป้าหมาย (HQ) ของสาขานั้น
+  const [รูปสาขา, setรูปสาขา] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    void Promise.allSettled([dealerSettingsRepo.logos(), prospectsRepo.list()]).then(([โลโก้, ราย]) => {
+      if (!alive) return;
+      const map: Record<string, string> = {};
+      if (ราย.status === "fulfilled") for (const r of ราย.value) if (r.dealerCode && r.logo) map[r.dealerCode] = r.logo;
+      if (โลโก้.status === "fulfilled") Object.assign(map, โลโก้.value);   // โลโก้ที่สาขาตั้งเองมาก่อน
+      setรูปสาขา(map);
+    });
+    return () => { alive = false; };
+  }, []);
 
   // Modals
   const [showForm, setShowForm] = useState(false);
@@ -388,9 +413,74 @@ function HQDealersPageInner() {
         <select aria-label="กรองตามสถานะตัวแทน" value={statusFilter} onChange={e => { setStatusFilter(e.target.value as DealerStatus | "all"); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           {STATUS_PILLS.map(p => <option key={p.value} value={p.value}>{p.value === "all" ? "ทุกสถานะ" : p.label}</option>)}
         </select>
+        {/* สลับการ์ด/ตาราง — ขนาดหน้าต่างกัน (12 / 10) จึงกลับหน้า 1 ทุกครั้งที่สลับ */}
+        <div role="group" aria-label="รูปแบบการแสดง" style={{ display: "flex", gap: 4 }}>
+          {([["card", LayoutGrid, "แสดงแบบการ์ด"], ["table", List, "แสดงแบบตาราง"]] as const).map(([ค่า, Icon, ป้าย]) => (
+            <button key={ค่า} type="button" aria-label={ป้าย} title={ป้าย} aria-pressed={มุมมอง === ค่า}
+              onClick={() => { setมุมมอง(ค่า); setPage(0); }}
+              style={{ width: 34, height: 34, borderRadius: 8, border: `1px solid ${มุมมอง === ค่า ? "#003366" : "#e5e7eb"}`, background: มุมมอง === ค่า ? "#003366" : "#fff", color: มุมมอง === ค่า ? "#fff" : "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <Icon size={15} />
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* ── การ์ด — เรียบ ๆ แบบรายชื่อทีม: รูปวงกลม · ชื่อ · รหัส/จังหวัด · สถานะ · ปุ่มหลัก ── */}
+      {มุมมอง === "card" && (() => {
+        const หน้าการ์ด = Math.min(page, pageCountOf(filtered.length, CARDS_PER_PAGE) - 1);
+        return (
+          <div className="card" style={{ padding: 16 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>{dealersLoaded ? "ไม่พบข้อมูล" : "กำลังโหลดข้อมูล…"}</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14 }}>
+                {pageSlice(filtered, หน้าการ์ด, CARDS_PER_PAGE).map(d => {
+                  const รูป = รูปสาขา[d.code];
+                  return (
+                    <div key={d.id} role="button" tabIndex={0} aria-label={`เปิดรายละเอียดตัวแทน ${d.name}`}
+                      onClick={() => setSelectedDealer(d)}
+                      onKeyDown={ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setSelectedDealer(d); } }}
+                      style={{ background: "#fff", border: "1px solid #eef0f4", borderRadius: 12, padding: "20px 14px 14px", textAlign: "center", cursor: "pointer", position: "relative", opacity: dealerStatus(d) === "active" ? 1 : 0.55, boxShadow: "0 1px 4px rgba(15,23,42,.04)" }}>
+                      <span style={{ position: "absolute", top: 10, left: 12, fontSize: "0.68rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em" }}>{d.code}</span>
+                      <div style={{ width: 76, height: 76, borderRadius: "50%", margin: "4px auto 12px", overflow: "hidden", background: รูป ? "#fff" : "#eef3f8", border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#003366", fontWeight: 800, fontSize: "1.3rem" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- รูปเป็น data URL ที่ย่อแล้ว ไม่ผ่านตัวปรับรูปของ Next */}
+                        {รูป ? <img src={รูป} alt={`รูปของ ${d.name}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : ตัวย่อ(d)}
+                      </div>
+                      <div title={d.name} style={{ fontSize: "0.9rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div title={d.province} style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {[d.province, d.region].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                      <div style={{ marginTop: 8 }}><StatusBadge status={dealerStatus(d)} /></div>
+                      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 12 }} onClick={ev => ev.stopPropagation()}>
+                        {canImpersonate && (
+                          <button onClick={() => enterDealer(d)} disabled={entering === d.id} title="เข้าระบบแทนตัวแทน"
+                            className="btn btn-primary btn-sm" style={{ opacity: entering === d.id ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                            <LogIn size={12} /> {entering === d.id ? "..." : "เข้าระบบ"}
+                          </button>
+                        )}
+                        <button onClick={() => router.push(`/hq/dealers/${d.code}`)} title="ดูรายละเอียดตัวแทน" aria-label={`ดูรายละเอียดตัวแทน ${d.name}`}
+                          style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 7, color: "#003366", cursor: "pointer" }}>
+                          <BarChart2 size={13} />
+                        </button>
+                        <button onClick={() => openEdit(d)} title="แก้ไข" aria-label={`แก้ไขตัวแทน ${d.name}`}
+                          style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, color: "#6b7280", cursor: "pointer" }}>
+                          <Pencil size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ marginTop: 14 }}>
+              <TablePagination page={หน้าการ์ด} total={filtered.length} onPage={setPage} size={CARDS_PER_PAGE} unit="สาขา" />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Table */}
+      {มุมมอง === "table" && (
       <div className="card">
         <div className="table-wrap">
           <table>
@@ -504,6 +594,7 @@ function HQDealersPageInner() {
         </div>
         <TablePagination page={page} total={filtered.length} onPage={setPage} unit="สาขา" />
       </div>
+      )}
 
       {/* ── Add / Edit Modal ── */}
       {showForm && (
