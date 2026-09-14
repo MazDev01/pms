@@ -278,6 +278,8 @@ test("[func·hq] ออกใบเสนอแพ็กเกจ → ยัง�
   await page.getByLabel("ค้นหาลูกค้าเป้าหมาย").fill(name);
   await page.getByRole("row", { name: new RegExp(name) }).click();
   const แก้ไข = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  // ปุ่มลัดบนหัวแผงบอสสั่งเอาออก (14 ก.ย. 69) — ออกใบจากแท็บใบเสนอแพ็กเกจ
+  await แก้ไข.getByRole("tab", { name: /ใบเสนอแพ็กเกจ/ }).click();
   await แก้ไข.getByRole("button", { name: "ออกใบเสนอแพ็กเกจ" }).click();
 
   const ใบ = page.getByRole("dialog", { name: "ใบเสนอแพ็กเกจตัวแทน" });

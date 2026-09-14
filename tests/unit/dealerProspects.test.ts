@@ -7,6 +7,15 @@ import type { DealerProspect } from "../../packages/shared/lib/data/types";
 // ลูกค้าเป้าหมายของสำนักงานใหญ่ = ผู้สนใจเป็นตัวแทนจำหน่าย (บอสสั่ง 14 ก.ย. 69)
 const ราย = (x: Partial<DealerProspect>): DealerProspect => ({ id: 1, name: "คุณสมชาย", status: "new", ...x });
 
+describe("รูปประจำตัว (0175)", () => {
+  it("ว่าง = null · ต้องเป็นรูปที่อัปโหลด (data:image/) · ใหญ่เกินไม่รับ", () => {
+    expect(เตรียมบันทึก({ name: "ก", logo: "" }).logo).toBeNull();
+    expect(ตรวจผู้สนใจ(เตรียมบันทึก({ name: "ก", logo: "data:image/jpeg;base64,AAAA" }))).toBeNull();
+    expect(ตรวจผู้สนใจ(เตรียมบันทึก({ name: "ก", logo: "https://evil.example/x.png" }))).toMatch(/รูปประจำตัวไม่ถูกต้อง/);
+    expect(ตรวจผู้สนใจ(เตรียมบันทึก({ name: "ก", logo: "data:image/png;base64," + "A".repeat(400_001) }))).toMatch(/รูปใหญ่เกินไป/);
+  });
+});
+
 describe("เตรียมบันทึก", () => {
   it("ช่องว่างกลายเป็น null — ช่องวันที่ในฐานข้อมูลปฏิเสธข้อความว่างทั้งแถว", () => {
     const r = เตรียมบันทึก({ name: "  คุณสมชาย  ", phone: "   ", firstContact: "", followUp: "24.8" });

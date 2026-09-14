@@ -100,6 +100,7 @@ export type DealerProspect = {
   assigned?: string | null;      // ผู้ดูแลฝั่งสำนักงานใหญ่ (ชื่อ ไม่ใช่บัญชีเข้าระบบ)
   dealerCode?: string | null;    // ตัวแทนที่รายนี้กลายมาเป็น (ตั้งเมื่อสำเร็จ)
   convertedAt?: string | null;
+  logo?: string | null;          // รูปประจำตัว (data URL ย่อ 256px · 0175) — ว่าง = ตัวย่อชื่อ
   lastContactAt?: string | null; // ติดต่อล่าสุด — ฐานข้อมูลตั้งจากบันทึกการติดต่อเท่านั้น (0174) แอปเขียนเองไม่ได้
   createdAt?: string;
   updatedAt?: string;

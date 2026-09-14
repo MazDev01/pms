@@ -20,13 +20,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  UserPlus, Users, AlarmClock, Store, Percent, Search, X, Trash2, Copy, Check, MapPin, Phone, MessageSquarePlus, FilePlus2,
+  UserPlus, Users, AlarmClock, Store, Percent, Search, X, Trash2, Copy, Check, MapPin, Phone, User, Paperclip,
 } from "lucide-react";
 import {
   prospects as prospectsRepo, dealers as dealersRepo, proposals as proposalsRepo, prospectActivities as activitiesRepo,
+  users as usersRepo,
 } from "@pms/shared/lib/data";
 import { invalidateCache } from "@pms/shared/lib/data/dedupe";
-import type { DealerPackageProposal, DealerProspect, DealerProspectStatus, DealerRow, ProspectActivity } from "@pms/shared/lib/data/types";
+import type { DealerPackageProposal, DealerProspect, DealerProspectStatus, DealerRow, ProspectActivity, SystemUser } from "@pms/shared/lib/data/types";
 import {
   PROSPECT_STATUS_ORDER, prospectStatusLabel, prospectStatusColor, ยังติดตามอยู่,
   เตรียมบันทึก, ตรวจผู้สนใจ, ถึงกำหนดติดตาม, สรุปผู้สนใจ, ตรงกับคำค้น,
@@ -51,6 +52,7 @@ import { TablePagination, pageSlice } from "@pms/shared/components/ui/TablePagin
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 import { formatPhone } from "@pms/shared/lib/format";
+import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { fmtISOToThai } from "@pms/shared/lib/mock";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
@@ -83,6 +85,7 @@ export default function HQProspectsPage() {
   const [loaded, setLoaded] = useState(false);
   const [loadErr, setLoadErr] = useState("");
   const [dealers, setDealers] = useState<DealerRow[]>([]);
+  const [ผู้ใช้HQ, setผู้ใช้HQ] = useState<SystemUser[]>([]);
 
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<ตัวกรองสถานะ>("all");
@@ -114,6 +117,7 @@ export default function HQProspectsPage() {
   const [convBusy, setConvBusy] = useState(false);
   const [creds, setCreds] = useState<{ name: string; code: string; email: string; password: string } | null>(null);
   const [คัดลอกแล้ว, setคัดลอกแล้ว] = useState("");
+  const รูปRef = useRef<HTMLInputElement>(null);
 
   const โหลด = useCallback(async () => {
     try {
@@ -130,6 +134,15 @@ export default function HQProspectsPage() {
     dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e));
   }, []);
   useEffect(() => { void โหลด(); โหลดตัวแทน(); }, [โหลด, โหลดตัวแทน]);
+  // ผู้ดูแล = ผู้ใช้งานสำนักงานใหญ่ที่เปิดใช้งานอยู่ (บอสสั่ง 14 ก.ย. 69: "ทำเป็นดรอปดาวน์ เอาจากผู้ใช้งานสำนักงานใหญ่")
+  //   เก็บเป็นชื่อเหมือนเดิม (ช่อง assigned) — ไม่ต้องเปลี่ยนฐานข้อมูล · โหลดไม่ได้ = รายการว่าง ค่าเดิมยังแสดงอยู่
+  useEffect(() => {
+    usersRepo.list()
+      .then(rows => setผู้ใช้HQ(rows
+        .filter(u => !u.dealerCode && u.status === "active" && u.name.trim())
+        .sort((a, b) => a.name.localeCompare(b.name, "th"))))
+      .catch(e => logRepoRead("users.list", e));
+  }, []);
 
   // ── ของรายที่เปิด: ใบเสนอ + ประวัติ (งานในแท็บต้องรู้ว่ามีใบที่ส่งแล้ว/มีบันทึกการติดต่อหรือยัง) ──
   const โหลดของราย = useCallback(async (id: number) => {
@@ -234,6 +247,14 @@ export default function HQProspectsPage() {
     setเพิ่มใหม่(true); setร่าง(ร่างว่าง()); setFormErr("");
   }
   const ตั้งค่า = <K extends keyof DealerProspect>(k: K, v: DealerProspect[K]) => setร่าง(r => ({ ...r, [k]: v }));
+  // รูปประจำตัว — ย่อเหลือ 256px ก่อนเก็บ แบบเดียวกับรูปลูกค้าเป้าหมายของตัวแทน (fileToResizedDataURL)
+  async function อัปโหลดรูป(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";   // ให้เลือกไฟล์เดิมซ้ำได้หลังถูกปฏิเสธ
+    if (!file) return;
+    try { ตั้งค่า("logo", await fileToResizedDataURL(file, 256)); }
+    catch (err) { แจ้งพลาด(err instanceof Error ? err.message : "ใช้ไฟล์นี้เป็นรูปไม่ได้"); }
+  }
   // เปลี่ยนภาค → ล้างจังหวัดที่ไม่อยู่ในภาคใหม่ (กันภาค "ใต้" คู่จังหวัด "เชียงใหม่") · "ทุกภาค" = "ทุกจังหวัด" ให้เอง
   const เปลี่ยนภาคร่าง = (region: string) => setร่าง(r => ({
     ...r,
@@ -448,6 +469,23 @@ export default function HQProspectsPage() {
   // ── ช่องข้อมูลผู้ติดต่อ — ใช้ทั้งหน้าต่างเพิ่มรายใหม่ และแท็บภาพรวม ──
   const ช่องข้อมูล = (
     <fieldset disabled={ดูอย่างเดียว || saving} style={{ border: "none", margin: 0, padding: 0 }}>
+      {/* รูปประจำตัวอยู่บนสุด — แบบเดียวกับการ์ดลูกค้าเป้าหมายของตัวแทน (บอสสั่ง 14 ก.ย. 69 · "มีเพิ่มรูปตั้งแต่ในนี้") */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+        <span style={{ width: 56, height: 56, borderRadius: 14, flexShrink: 0, overflow: "hidden", background: ร่าง.logo ? "#fff" : "#f8fafc",
+          border: `1px ${ร่าง.logo ? "solid" : "dashed"} #e5e7eb`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {ร่าง.logo ? <img src={ร่าง.logo} alt="รูปประจำตัว" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={22} color="#9ca3af" />}
+        </span>
+        <input ref={รูปRef} type="file" accept="image/*" aria-label="อัปโหลดรูปลูกค้าเป้าหมาย" style={{ display: "none" }} onChange={e => void อัปโหลดรูป(e)} />
+        <button type="button" onClick={() => รูปRef.current?.click()} className="btn btn-secondary btn-sm" style={{ color: "#374151" }}>
+          <Paperclip size={12} /> {ร่าง.logo ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+        </button>
+        {ร่าง.logo && (
+          <button type="button" onClick={() => ตั้งค่า("logo", null)} className="btn btn-secondary btn-sm" style={{ color: "#dc2626" }}>
+            <X size={12} /> ลบรูป
+          </button>
+        )}
+        <span style={{ fontSize: "0.68rem", color: MUTED }}>รูปคน/โลโก้ร้าน · ระบบย่อให้เอง</span>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
         <div style={{ gridColumn: "1 / -1" }}>
           <label className="form-label" htmlFor="pr-name">ชื่อผู้ติดต่อ / ชื่อบริษัท *</label>
@@ -498,7 +536,14 @@ export default function HQProspectsPage() {
         </div>
         <div>
           <label className="form-label" htmlFor="pr-assigned">ผู้ดูแล (สำนักงานใหญ่)</label>
-          <input id="pr-assigned" className="form-input" value={ร่าง.assigned ?? ""} onChange={e => ตั้งค่า("assigned", e.target.value)} placeholder="ชื่อผู้ติดตามรายนี้" />
+          <select id="pr-assigned" className="form-select" value={ร่าง.assigned ?? ""} onChange={e => ตั้งค่า("assigned", e.target.value || null)} style={{ cursor: "pointer" }}>
+            <option value="">— ยังไม่ระบุ —</option>
+            {ผู้ใช้HQ.map(u => <option key={u.id} value={u.name}>{u.name}{u.department ? ` · ${u.department}` : ""}</option>)}
+            {/* ชื่อที่บันทึกไว้ก่อนแต่ไม่อยู่ในรายชื่อแล้ว (พิมพ์เองสมัยก่อน / ผู้ใช้ถูกปิด) ต้องยังเห็นค่าเดิม ไม่หายเงียบ */}
+            {ร่าง.assigned && !ผู้ใช้HQ.some(u => u.name === ร่าง.assigned) && (
+              <option value={ร่าง.assigned}>{ร่าง.assigned} (ตามที่บันทึกไว้)</option>
+            )}
+          </select>
         </div>
         <div>
           <label className="form-label" htmlFor="pr-first">เริ่มติดต่อ</label>
@@ -609,12 +654,19 @@ export default function HQProspectsPage() {
                   <ClickableRow key={p.id} onActivate={() => เปิดแผง(p)} label={`เปิดรายละเอียดลูกค้าเป้าหมาย ${p.name}`}
                     style={{ background: รายที่เปิด?.id === p.id ? "#f0f6ff" : undefined }}>
                     <td>
-                      <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                      {(p.businessType || (p.social && p.social !== p.name)) && (
-                        <div style={{ fontSize: "0.7rem", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {[p.businessType, p.social && p.social !== p.name ? p.social : ""].filter(Boolean).join(" · ")}
+                      <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, overflow: "hidden", background: p.logo ? "#fff" : "#eef3f8", color: PRIMARY, fontSize: "0.68rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {p.logo ? <img src={p.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (p.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || "—")}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                          {(p.businessType || (p.social && p.social !== p.name)) && (
+                            <div style={{ fontSize: "0.7rem", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {[p.businessType, p.social && p.social !== p.name ? p.social : ""].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </td>
                     <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{p.phone ? formatPhone(p.phone) || p.phone : "—"}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.province || "—"}</td>
@@ -686,8 +738,8 @@ export default function HQProspectsPage() {
               <div style={{ background: PRIMARY, padding: "14px 20px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                    <div style={{ width: 46, height: 46, borderRadius: 13, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, border: "2px solid rgba(255,255,255,.25)", flexShrink: 0 }}>
-                      {อักษรย่อ}
+                    <div style={{ width: 46, height: 46, borderRadius: 13, background: ราย.logo ? "#fff" : "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, border: "2px solid rgba(255,255,255,.25)", flexShrink: 0, overflow: "hidden" }}>
+                      {ราย.logo ? <img src={ราย.logo} alt="รูปประจำตัว" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : อักษรย่อ}
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <h2 style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{ราย.name}</h2>
@@ -699,16 +751,7 @@ export default function HQProspectsPage() {
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                    {จัดการได้ && (
-                      <button style={qa} onClick={() => { setแท็บที่เปิด("contact"); setฟอร์มติดต่อเปิด(true); }}>
-                        <MessageSquarePlus size={13} /> บันทึกการติดต่อ
-                      </button>
-                    )}
-                    {จัดการได้ && ติดตามอยู่ && (
-                      <button style={qa} onClick={() => { setแท็บที่เปิด("proposals"); setสัญญาณออกใบ(n => n + 1); }}>
-                        <FilePlus2 size={13} /> ออกใบเสนอแพ็กเกจ
-                      </button>
-                    )}
+                    {/* ปุ่มลัด "บันทึกการติดต่อ" / "ออกใบเสนอแพ็กเกจ" บนหัวแผง บอสสั่งเอาออก (14 ก.ย. 69) — ทำในแท็บของมันแทน ห้ามใส่กลับ */}
                     {จัดการได้ && ติดตามอยู่ && (
                       <button style={qa} onClick={() => เปิดตั้งตัวแทน(ราย)}><Store size={13} /> ตั้งเป็นตัวแทนจำหน่าย</button>
                     )}

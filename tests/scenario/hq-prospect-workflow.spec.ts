@@ -114,6 +114,40 @@ test("[security] ประวัติ: เพิ่มได้แค่บั�
   expect(เหลือ ?? []).toHaveLength(0);
 });
 
+// รูป PNG 2×2 จุด — ใช้ทดสอบอัปโหลด (ไม่ต้องมีไฟล์รูปในโปรเจกต์)
+const รูปทดสอบ = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMAAAA4AAf8Fh1YAAAAASUVORK5CYII=", "base64");
+
+test("[func·hq] รูปประจำตัว: อัปโหลดตั้งแต่หน้าต่างเพิ่มรายใหม่ → ขึ้นหัวแผง · ฐานข้อมูลไม่รับลิงก์ภายนอก (0175)", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(ADMIN);
+  const name = `${NS}-มีรูป`;
+
+  await loginUI(page, HQ_ORIGIN, "/hq/prospects", ADMIN);
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  const ฟอร์ม = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  await ฟอร์ม.getByLabel("อัปโหลดรูปลูกค้าเป้าหมาย").setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: รูปทดสอบ });
+  await expect(ฟอร์ม.getByRole("img", { name: "รูปประจำตัว" }), "เลือกรูปแล้วต้องเห็นตัวอย่างในฟอร์ม").toBeVisible({ timeout: 10_000 });
+  await ฟอร์ม.locator("#pr-name").fill(name);
+  // ผู้ดูแล = ดรอปดาวน์จากผู้ใช้งานสำนักงานใหญ่ (บอสสั่ง 14 ก.ย. 69) — ต้องไม่ใช่ช่องพิมพ์เองแล้ว
+  const ผู้ดูแล = ฟอร์ม.locator("select#pr-assigned");
+  await expect(ผู้ดูแล, "ผู้ดูแลต้องเป็นดรอปดาวน์").toHaveCount(1);
+  const ชื่อผู้ใช้HQ = (await ผู้ดูแล.locator("option").allInnerTexts()).slice(1);
+  expect(ชื่อผู้ใช้HQ.length, "ต้องมีรายชื่อผู้ใช้งานสำนักงานใหญ่ให้เลือก").toBeGreaterThan(0);
+  const ค่าแรก = await ผู้ดูแล.locator("option").nth(1).getAttribute("value");
+  await ผู้ดูแล.selectOption(ค่าแรก ?? "");
+  await ฟอร์ม.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).click();
+
+  const แถว = await waitRow<{ id: number; logo: string | null; assigned: string | null }>(sb, "dealer_prospects", { name });
+  expect(แถว.assigned, "ผู้ดูแลที่เลือกต้องบันทึกจริง").toBe(ค่าแรก);
+  expect(แถว.logo ?? "", "รูปต้องถูกบันทึกเป็นรูปที่ย่อแล้ว").toMatch(/^data:image\//);
+  const แผง = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  await expect(แผง.getByRole("img", { name: "รูปประจำตัว" }).first(), "หัวแผงต้องขึ้นรูปแทนตัวย่อ").toBeVisible({ timeout: 15_000 });
+
+  const ลิงก์ภายนอก = await sb.from("dealer_prospects").update({ logo: "https://evil.example/x.png" }).eq("id", แถว.id).select();
+  expect(ลิงก์ภายนอก.error, "ฐานข้อมูลต้องไม่รับลิงก์รูปภายนอก").not.toBeNull();
+  assertNoErrors(errs, "รูปประจำตัวลูกค้าเป้าหมาย (HQ)");
+});
+
 test("[func·hq] ตัวกรองไม่ได้ติดต่อ 7/14/30 วัน · ติดต่อล่าสุดในตาราง · แท็บประวัติ", async ({ page }) => {
   const errs = watchErrors(page);
   const sb = await db(ADMIN);
@@ -134,9 +168,12 @@ test("[func·hq] ตัวกรองไม่ได้ติดต่อ 7/14/
   await expect(แถว, "ยังไม่ถึง 30 วัน").toHaveCount(0);
   await page.getByLabel("กรองตามสถานะ").selectOption("all");
 
-  // บันทึกการติดต่อจากปุ่มลัดบนหัวแผง → ติดต่อล่าสุดเป็น "วันนี้" · ประวัติขึ้นในแท็บ
+  // บันทึกการติดต่อในแท็บ → ติดต่อล่าสุดเป็น "วันนี้" · ประวัติขึ้นในแท็บ
+  //   ปุ่มลัดบนหัวแผงบอสสั่งเอาออก (14 ก.ย. 69) — ต้องไม่มีปุ่มนั้นบนหัวแผงแล้ว
   await แถว.click();
   const แผง = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  await expect(แผง.getByRole("button", { name: /บันทึกการติดต่อ|ออกใบเสนอแพ็กเกจ/ }), "หัวแผงต้องไม่มีปุ่มลัดสองปุ่มนี้").toHaveCount(0);
+  await แผง.getByRole("tab", { name: "บันทึกการติดต่อ" }).click();
   await แผง.getByRole("button", { name: "บันทึกการติดต่อ" }).first().click();
   await แผง.locator("#pc-channel").selectOption("Facebook");
   await แผง.locator("#pc-body").fill("ทักกลับมาถามค่าแรกเข้า");
