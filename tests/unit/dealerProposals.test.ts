@@ -102,6 +102,21 @@ describe("พิมพ์ใบเสนอแพ็กเกจตัวแท�
   it("ทุกภาค = ทั่วประเทศ", () => {
     expect(buildDealerProposalHTML(ใบ({ region: "ทุกภาค", province: "ทุกจังหวัด" }), { name: "ก" }, hq)).toContain("ทั่วประเทศ (ทุกภาค)");
   });
+
+  it("หัวกระดาษยึดข้อมูลบริษัททุกช่อง · ช่องที่ไม่กรอกไม่ขึ้น (บอสสั่ง 14 ก.ย. 69)", () => {
+    const ครบ: HQCompany = {
+      name: "เบญจมินทร์ ( BENJAMIN )", address: "91/9 ต.อ้อมเกร็ด อ.ปากเกร็ด จ.นนทบุรี 11120",
+      taxId: "0105500000000", phone: "080-495-2929", email: "info@example.com", website: "example.com",
+    };
+    const html = buildDealerProposalHTML(ใบ({}), { name: "ก" }, ครบ);
+    for (const ค่า of [ครบ.name, ครบ.address, "โทร. 080-495-2929", "อีเมล info@example.com", "example.com", "เลขประจำตัวผู้เสียภาษี 0105500000000"]) {
+      expect(html).toContain(ค่า);
+    }
+    const บางช่อง = buildDealerProposalHTML(ใบ({}), { name: "ก" }, { ...ครบ, taxId: "", email: "", website: "" });
+    expect(บางช่อง).not.toContain("เลขประจำตัวผู้เสียภาษี");
+    expect(บางช่อง).not.toContain("อีเมล ");
+    expect(บางช่อง).toContain("โทร. 080-495-2929");
+  });
 });
 
 describe("ช่องตัวเลข 3 ช่อง (บอสสั่ง “เอา 3 ช่อง”)", () => {

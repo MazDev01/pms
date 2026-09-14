@@ -23,8 +23,12 @@ export function buildDealerProposalHTML(p: DealerPackageProposal, prospect: ผ�
     ? "ทั่วประเทศ (ทุกภาค)"
     : [p.province, p.region ? `ภาค${p.region}` : ""].filter(Boolean).join(" · ") || "—";
   const termLines = String(p.terms ?? "").split(/\r?\n/).map(t => t.trim()).filter(Boolean);
-  const hqMeta = [hq.address, hq.phone ? `โทร. ${hq.phone}` : "", hq.email, hq.taxId ? `เลขผู้เสียภาษี ${hq.taxId}` : ""]
-    .filter(Boolean).join("\n");
+  // หัวกระดาษยึดข้อมูลบริษัทที่ ตั้งค่า › บริษัท ทุกช่อง (บอสสั่ง 14 ก.ย. 69) — ช่องที่ยังไม่กรอกไม่ขึ้น ห้ามเติมค่าให้เอง
+  const hqMeta = [
+    hq.address,
+    [hq.phone ? `โทร. ${hq.phone}` : "", hq.email ? `อีเมล ${hq.email}` : "", hq.website].filter(Boolean).join(" · "),
+    hq.taxId ? `เลขประจำตัวผู้เสียภาษี ${hq.taxId}` : "",
+  ].filter(Boolean).join("\n");
   const ร่าง = p.status === "draft";
 
   return `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"/>
