@@ -36,10 +36,15 @@ const CARDS_PER_PAGE = 12;
 // แถวละ 4 ใบตายตัว (บอสสั่ง 14 ก.ย. 69: "ในแถวมีแค่ 4 การ์ด เอาใหญ่หน่อย ห้ามมีที่เหลือว่าง")
 //   เดิมใช้ auto-fill จอกว้างได้แถวละ 5 ใบ → 12 ใบเหลือแถวท้าย 2 ใบ ว่างครึ่งแถว
 const CARD_GRID_CSS = `
-.dealer-card-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.dealer-card-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.dealer-card { transition: box-shadow .15s, transform .15s; }
+.dealer-card:hover { box-shadow: 0 8px 24px rgba(0,51,102,.12); transform: translateY(-1px); }
+.dealer-card:focus-visible { outline: 2px solid #003366; outline-offset: 2px; }
 @media (max-width: 1100px) { .dealer-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px)  { .dealer-card-grid { grid-template-columns: minmax(0, 1fr); } }
 `;
+// สีจางไล่มุมล่างของการ์ด วนตามลำดับ (ตามภาพตัวอย่างที่บอสส่ง 14 ก.ย. 69) — แค่ตกแต่ง ไม่ได้สื่อความหมาย
+const สีการ์ด = ["#eaf2fd", "#e8f6ef", "#f0ecfb"];
 /** ตัวย่อชื่อบนการ์ดที่ยังไม่มีรูป — ตัดคำนำหน้าบริษัท/คุณ ออกก่อน */
 const ตัวย่อ = (d: DealerRow) => d.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || d.code.slice(0, 2);
 
@@ -442,38 +447,51 @@ function HQDealersPageInner() {
               <div style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>{dealersLoaded ? "ไม่พบข้อมูล" : "กำลังโหลดข้อมูล…"}</div>
             ) : (
               <div className="dealer-card-grid">
-                {pageSlice(filtered, หน้าการ์ด, CARDS_PER_PAGE).map(d => {
+                {pageSlice(filtered, หน้าการ์ด, CARDS_PER_PAGE).map((d, i) => {
                   const รูป = รูปสาขา[d.code];
+                  const สถานะ = dealerStatus(d);
+                  const สีสถานะ = dealerStatusColor[สถานะ];
+                  const สีจาง = สีการ์ด[i % สีการ์ด.length];
                   return (
-                    <div key={d.id} role="button" tabIndex={0} aria-label={`เปิดรายละเอียดตัวแทน ${d.name}`}
+                    // การ์ดตามภาพตัวอย่างล่าสุด (บอสสั่ง 14 ก.ย. 69 "เอาแบบนี้"):
+                    //   ป้ายรหัสมุมซ้ายบน · รูปวงกลมพื้นฟ้าจาง · ชื่อ · จังหวัด/ภาค · สถานะมีจุด · ปุ่มเข้าระบบเต็มความกว้าง + ปุ่มไอคอน 2 ปุ่ม
+                    <div key={d.id} className="dealer-card" role="button" tabIndex={0} aria-label={`เปิดรายละเอียดตัวแทน ${d.name}`}
                       onClick={() => setSelectedDealer(d)}
                       onKeyDown={ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setSelectedDealer(d); } }}
-                      style={{ background: "#fff", border: "1px solid #eef0f4", borderRadius: 14, padding: "30px 18px 18px", textAlign: "center", cursor: "pointer", position: "relative", opacity: dealerStatus(d) === "active" ? 1 : 0.55, boxShadow: "0 1px 4px rgba(15,23,42,.04)" }}>
-                      <span style={{ position: "absolute", top: 12, left: 14, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em" }}>{d.code}</span>
-                      {/* รูปสี่เหลี่ยมมุมมน ขนาดใหญ่ (บอสสั่ง 14 ก.ย. 69: "เอารูปสี่เหลี่ยม ... เอาใหญ่หน่อย") */}
-                      <div style={{ width: 132, height: 132, maxWidth: "100%", borderRadius: 18, margin: "4px auto 14px", overflow: "hidden", background: รูป ? "#fff" : "#eef3f8", border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#003366", fontWeight: 800, fontSize: "2.1rem" }}>
+                      style={{
+                        background: `linear-gradient(165deg, #ffffff 58%, ${สีจาง} 100%)`, border: "1px solid #e3ebf5", borderRadius: 16,
+                        padding: "14px 14px 14px", textAlign: "center", cursor: "pointer", position: "relative",
+                        opacity: สถานะ === "active" ? 1 : 0.55, boxShadow: "0 2px 10px rgba(0,51,102,.06)",
+                      }}>
+                      <span style={{ position: "absolute", top: 12, left: 12, fontSize: "0.62rem", fontWeight: 800, color: "#003366", background: "#eef3fa", border: "1px solid #dde7f3", borderRadius: 99, padding: "2px 8px", letterSpacing: "0.04em" }}>{d.code}</span>
+                      <div style={{ width: 84, height: 84, borderRadius: "50%", margin: "10px auto 10px", overflow: "hidden", background: รูป ? "#fff" : "#e4eefb", display: "flex", alignItems: "center", justifyContent: "center", color: "#003366", fontWeight: 800, fontSize: "1.75rem", boxShadow: "inset 0 0 0 1px rgba(0,51,102,.06)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element -- รูปเป็น data URL ที่ย่อแล้ว ไม่ผ่านตัวปรับรูปของ Next */}
                         {รูป ? <img src={รูป} alt={`รูปของ ${d.name}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : ตัวย่อ(d)}
                       </div>
-                      <div title={d.name} style={{ fontSize: "1rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div title={d.name} style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1f2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
                       <div title={d.province} style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {[d.province, d.region].filter(Boolean).join(" · ") || "—"}
                       </div>
-                      <div style={{ marginTop: 8 }}><StatusBadge status={dealerStatus(d)} /></div>
-                      <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 12 }} onClick={ev => ev.stopPropagation()}>
+                      <div style={{ marginTop: 7 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.68rem", fontWeight: 700, color: สีสถานะ.color, background: สีสถานะ.bg, borderRadius: 99, padding: "2px 9px" }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: สีสถานะ.color }} />
+                          {dealerStatusLabel[สถานะ]}
+                        </span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: canImpersonate ? "1fr auto auto" : "1fr 1fr", gap: 8, marginTop: 12 }} onClick={ev => ev.stopPropagation()}>
                         {canImpersonate && (
                           <button onClick={() => enterDealer(d)} disabled={entering === d.id} title="เข้าระบบแทนตัวแทน"
-                            className="btn btn-primary btn-sm" style={{ opacity: entering === d.id ? 0.6 : 1, whiteSpace: "nowrap" }}>
-                            <LogIn size={12} /> {entering === d.id ? "..." : "เข้าระบบ"}
+                            style={{ height: 36, borderRadius: 9, border: "none", background: "linear-gradient(180deg, #0a4a8a 0%, #003366 100%)", color: "#fff", fontSize: "0.78rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", opacity: entering === d.id ? 0.6 : 1, fontFamily: "inherit", boxShadow: "0 3px 8px rgba(0,51,102,.22)" }}>
+                            <LogIn size={13} /> {entering === d.id ? "..." : "เข้าระบบ"}
                           </button>
                         )}
                         <button onClick={() => router.push(`/hq/dealers/${d.code}`)} title="ดูรายละเอียดตัวแทน" aria-label={`ดูรายละเอียดตัวแทน ${d.name}`}
-                          style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 7, color: "#003366", cursor: "pointer" }}>
-                          <BarChart2 size={13} />
+                          style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #e3ebf5", borderRadius: 9, color: "#003366", cursor: "pointer" }}>
+                          <BarChart2 size={14} />
                         </button>
                         <button onClick={() => openEdit(d)} title="แก้ไข" aria-label={`แก้ไขตัวแทน ${d.name}`}
-                          style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, color: "#6b7280", cursor: "pointer" }}>
-                          <Pencil size={13} />
+                          style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #e3ebf5", borderRadius: 9, color: "#003366", cursor: "pointer" }}>
+                          <Pencil size={14} />
                         </button>
                       </div>
                     </div>
