@@ -7,6 +7,7 @@
 //
 // ไฟล์นี้เป็นตรรกะล้วน (ไม่แตะหน้าจอ/ฐานข้อมูล) — หน้าจอ ตัวเชื่อมข้อมูลทั้งสามแบบ และเซิร์ฟเวอร์ใช้ชุดเดียวกัน
 import type { DealerProspect, DealerProspectStatus } from "./data/types";
+import { REGIONS, ALL_REGIONS, ALL_PROVINCES, regionOf } from "./provinces";
 
 /** ขั้นตอนตามที่ทีมเบนจามินใช้จริงในไฟล์ติดตาม (โทรแล้ว → ส่ง Company Profile → นัดคุย → รอพิจารณา) */
 export const PROSPECT_STATUS_ORDER: readonly DealerProspectStatus[] =
@@ -59,6 +60,9 @@ export function เตรียมบันทึก(p: Partial<DealerProspect>)
     phone: ข้อความหรือว่าง(p.phone),
     email: ข้อความหรือว่าง(p.email)?.toLowerCase() ?? null,
     province: ข้อความหรือว่าง(p.province),
+    // ภาคว่างแต่รู้จังหวัด → เติมภาคจากจังหวัดให้ (ข้อเท็จจริงทางภูมิศาสตร์ ไม่ใช่การเดา)
+    //   จังหวัดที่ระบบไม่รู้จัก (ข้อมูลเก่าพิมพ์ย่อ เช่น "ปทุม") = ปล่อยภาคว่าง ไม่เดาให้
+    region: ข้อความหรือว่าง(p.region) ?? regionOf(String(p.province ?? "")) ?? null,
     businessType: ข้อความหรือว่าง(p.businessType),
     channel: ข้อความหรือว่าง(p.channel),
     firstContact: วันที่หรือว่าง(p.firstContact),
@@ -78,6 +82,14 @@ export function ตรวจผู้สนใจ(p: ผู้สนใจที
   if (!p.name) return "ต้องระบุชื่อลูกค้าเป้าหมาย";
   if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.email)) return "รูปแบบอีเมลไม่ถูกต้อง";
   if (p.firstContact && p.followUp && p.followUp < p.firstContact) return "วันติดตามต้องไม่ก่อนวันเริ่มติดต่อ";
+  // ภาค/จังหวัด (บอสสั่ง 14 ก.ย. 69: เลือกภาคก่อน แล้วค่อยเลือกจังหวัด · มี "ทุกภาค")
+  if (p.region && p.region !== ALL_REGIONS && !(REGIONS as readonly string[]).includes(p.region)) return "ภาคไม่ถูกต้อง";
+  if (p.province === ALL_PROVINCES && p.region !== ALL_REGIONS) return "“ทุกจังหวัด” ใช้คู่กับภาค “ทุกภาค” เท่านั้น";
+  //   เช็กเฉพาะจังหวัดที่ระบบรู้จัก — ข้อมูลเก่าที่พิมพ์ย่อต้องไม่ถูกบล็อกจนแก้อะไรไม่ได้เลย
+  const ภาคของจังหวัด = p.province ? regionOf(p.province) : null;
+  if (p.region && p.region !== ALL_REGIONS && ภาคของจังหวัด && ภาคของจังหวัด !== p.region) {
+    return `จังหวัด${p.province} ไม่ได้อยู่ในภาค${p.region}`;
+  }
   // "เป็นตัวแทนแล้ว" ต้องรู้ว่าเป็นตัวแทนรหัสไหน — ไม่งั้นกดเลือกสถานะเฉย ๆ แล้วนับเป็นความสำเร็จได้ทั้งที่ไม่มีสาขาจริง
   if (p.status === "won" && !p.dealerCode) return "สถานะ “เป็นตัวแทนแล้ว” ต้องผูกกับตัวแทนจำหน่าย — ใช้ปุ่ม “ตั้งเป็นตัวแทนจำหน่าย”";
   if (p.dealerCode && !/^[A-Z]{2,5}$/.test(p.dealerCode)) return "รหัสตัวแทนต้องเป็นตัวอักษร A–Z 2–5 ตัว";
@@ -112,6 +124,6 @@ export function ตรงกับคำค้น(p: DealerProspect, คำค�
   if (!q) return true;
   const เลขในคำค้น = q.replace(/\D/g, "");
   if (เลขในคำค้น.length >= 3 && String(p.phone ?? "").replace(/\D/g, "").includes(เลขในคำค้น)) return true;
-  return [p.name, p.social, p.province, p.businessType, p.channel, p.note, p.dealerCode, p.assigned]
+  return [p.name, p.social, p.region, p.province, p.businessType, p.channel, p.note, p.dealerCode, p.assigned]
     .some(v => String(v ?? "").toLowerCase().includes(q));
 }

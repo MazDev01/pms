@@ -9,40 +9,28 @@ import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
   DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
-  type DealerRow, type DealerCredentials, type HQTargets, type DealerStatus,
+  type DealerRow, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { provincesOfRegion, ALL_REGIONS, ALL_PROVINCES } from "@pms/shared/lib/provinces";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
-import { createDealerAccount, deleteDealerAccount, impersonateDealer, listDealerLoginEmails, moveDealerData } from "@pms/shared/lib/adminApi";
+import { deleteDealerAccount, impersonateDealer, listDealerLoginEmails, moveDealerData } from "@pms/shared/lib/adminApi";
 import { CopyField, DealerPasswordField } from "@pms/shared/components/hq/DealerCredentialsCard";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
-import { Plus, Search, X, Check, Key, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase } from "lucide-react";
+import { UserPlus, Search, X, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase } from "lucide-react";
 import { AccountRequestsCard } from "@pms/shared/components/hq/AccountRequestsCard";
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
 /** รหัสของ "สำนักงานใหญ่" ในทะเบียนตัวแทน — ดูแลทุกภาคทุกจังหวัด และตรึงไว้บนสุดของตารางเสมอ */
 const HQ_CODE = "HQ";
-
-// เป้ายอดขายรายปี "ค่าเริ่มต้นแนะนำ" ตามศักยภาพตลาดของแต่ละภาค — ช่วย HQ ตอนเพิ่มสาขาใหม่ (แก้ทับได้)
-const REGION_TARGET_DEFAULT: Record<string, number> = {
-  "ตะวันออก": 42_000_000, // อุตสาหกรรมหนาแน่น (ระยอง/ชลบุรี)
-  "เหนือ":    42_000_000,
-  "กลาง":     36_000_000,
-  "ตะวันตก":  35_000_000,
-  "อีสาน":    32_000_000,
-  "ใต้":      27_000_000, // ตลาดเล็กกว่า
-};
-const regionDefaultTarget = (region: string) => REGION_TARGET_DEFAULT[region] ?? 30_000_000;
 
 // ── Dealer status ───────────────────────────────────────────────
 // คำเรียก/สี มาจาก @pms/shared/lib/mock (แหล่งเดียว) — หน้ารายละเอียดตัวแทนใช้ชุดเดียวกัน
@@ -120,11 +108,6 @@ function InputField({ label, children }: { label: string; children: React.ReactN
 
 const INPUT_STYLE: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: "0.8rem", color: "#2D2D2D", outline: "none", background: "#fafafa", boxSizing: "border-box" };
 
-function genCredentials(code: string): DealerCredentials {
-  const digits = String(1000 + ((code.charCodeAt(0) * 37 + code.charCodeAt(1) * 17) % 9000));
-  return { email: `${code.toLowerCase()}@partner-agent.co.th`, password: `PEB-${code}-${digits}` };
-}
-
 // ⛔ ห้ามสร้างฟังก์ชัน "เดาอีเมลจากรหัสสาขา" กลับมาอีก
 //   เคยมี dealerLoginEmail(code) = `<code>@partner-agent.co.th` ซึ่งเป็นสูตรของบัญชีที่สร้างผ่านหน้าจอนี้
 //   เท่านั้น · สาขาที่มีอยู่จริงใช้อีเมลธุรกิจของตัวเอง (CNX = sales@cmsteelbuild.co.th)
@@ -133,7 +116,7 @@ function genCredentials(code: string): DealerCredentials {
 
 // รหัสผ่านใหม่ตอนรีเซ็ต — deterministic (ไม่สุ่ม) เดโมจึงทวนซ้ำได้
 // nonce = ความยาวรหัสเดิม → กดรีเซ็ตซ้ำได้รหัสใหม่เรื่อย ๆ ไม่วนกลับมาซ้ำของเดิม
-// ฟอร์แมตเดียวกับ genCredentials: PEB-{รหัส}-{4 หลัก}
+// ฟอร์แมต: PEB-{รหัส}-{4 หลัก}
 function genResetPassword(code: string, nonce: number): string {
   const sum = code.split("").reduce((s, c) => s + c.charCodeAt(0), 0) + nonce * 7;
   return `PEB-${code}-${1000 + (sum % 9000)}`;
@@ -177,15 +160,7 @@ function HQDealersPageInner() {
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<DealerRow | null>(null);
   const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" as "active" | "inactive" });
-  // บัญชีเข้าระบบของสาขาใหม่ — HQ กรอกเองได้ (บอสสั่ง 20 ส.ค. 69) · เว้นว่าง = ระบบตั้งให้
-  //   สาขาจริงใช้อีเมลธุรกิจของตัวเอง อีเมลที่ระบบประกอบจากรหัสสาขาไม่มีอยู่จริง
-  const [บัญชีใหม่, setบัญชีใหม่] = useState({ email: "", password: "" });
-  // ผู้ใช้แก้ช่องเป้าเองหรือยัง — ถ้ายัง เปลี่ยนภาคจะเติมค่าเริ่มต้นตามภาคให้ (โหมดเพิ่มใหม่เท่านั้น)
-  const [targetTouched, setTargetTouched] = useState(false);
   const [formErr, setFormErr] = useState("");
-  const [creating, setCreating] = useState(false); // กำลังสร้างบัญชีที่เซิร์ฟเวอร์ — กันกดปุ่มซ้ำระหว่างรอ
-  // โมดัลแสดงรหัสหลังสร้างตัวแทนใหม่ (กรณีรีเซ็ตรหัสย้ายไปหน้ารายละเอียดตัวแทนแล้ว)
-  const [credsModal, setCredsModal] = useState<{ name: string; creds: DealerCredentials; mode: "created" | "reset" } | null>(null);
   // สาขาที่ลบไม่ได้เพราะยังมีข้อมูล → เปิดกล่อง "ย้ายข้อมูลไปสาขาอื่น" ให้แทนที่จะจบแค่แจ้งเตือน
   const [moveFrom, setMoveFrom] = useState<DealerRow | null>(null);
   const [moveTo, setMoveTo] = useState("");
@@ -231,10 +206,9 @@ function HQDealersPageInner() {
   const avgOnTime = avgOf(c => perfOf(c).onTimePct);
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
-  function openAdd() { setEditTarget(null); setForm({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" }); setบัญชีใหม่({ email: "", password: "" }); setTargetTouched(false); setFormErr(""); setShowForm(true); }
-  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setTargetTouched(true); setFormErr(""); setShowForm(true); }
+  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setFormErr(""); setShowForm(true); }
 
-  // เปลี่ยนภาค: อัปเดตภาค + ถ้ายังไม่แก้เป้าเอง (โหมดเพิ่มใหม่) เติมค่าเริ่มต้นตามภาคให้
+  // เปลี่ยนภาค: อัปเดตภาค
   //   และล้างจังหวัดทิ้งถ้ามันไม่ได้อยู่ในภาคใหม่ — กันข้อมูลขัดกันเอง (เช่น ภาค "ใต้" + จังหวัด "เชียงใหม่")
   //   ซึ่งเคยเกิดได้เพราะจังหวัดเป็นช่องพิมพ์อิสระ ไม่ผูกกับภาคเลย
   //   เลือก "ทุกภาค" (สำนักงานใหญ่ ดูแลทั่วประเทศ) = เติมจังหวัดให้เป็น "ทุกจังหวัด" ทันที
@@ -245,11 +219,12 @@ function HQDealersPageInner() {
       region,
       province: region === ALL_REGIONS ? ALL_PROVINCES
         : provincesOfRegion(region).includes(f.province) ? f.province : "",
-      revenueTarget: (!editTarget && !targetTouched) ? regionDefaultTarget(region) : f.revenueTarget,
     }));
   }
 
   async function save() {
+    // หน้านี้แก้ไขตัวแทนที่มีอยู่ได้อย่างเดียว — สร้างตัวแทนใหม่ต้องผ่านลูกค้าเป้าหมาย (/hq/prospects)
+    if (!editTarget) return;
     const code = form.code.trim().toUpperCase();
     if (!code) { setFormErr("ต้องระบุรหัสตัวแทน"); return; }
     if (!form.name.trim()) { setFormErr("ต้องระบุชื่อตัวแทน"); return; }
@@ -265,42 +240,9 @@ function HQDealersPageInner() {
       return;
     }
 
-    // ── สร้างตัวแทนใหม่ ──
-    // โหมดจริง: ต้องสร้าง "บัญชีเข้าระบบ" ด้วย ซึ่งทำได้เฉพาะที่เซิร์ฟเวอร์ (service_role) → เรียก route (H5)
-    //   เดิมสร้างแค่แถว dealers + โชว์รหัสปลอม → ตัวแทนล็อกอินไม่ได้เลย (บั๊ก H5)
-    if (REAL_BACKEND) {
-      setCreating(true);
-      setFormErr("");
-      // ตรวจที่หน้าจอก่อนยิง เพื่อบอกผู้ใช้ทันทีตรงช่องที่ผิด — เซิร์ฟเวอร์ยังตรวจซ้ำเสมอ
-      const อีเมล = บัญชีใหม่.email.trim();
-      const รหัส = บัญชีใหม่.password;
-      if (อีเมล && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมล)) { setFormErr("รูปแบบอีเมลไม่ถูกต้อง"); return; }
-      if (รหัส && รหัส.length < 8) { setFormErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"); return; }
-      const res = await createDealerAccount({
-        code, name: form.name.trim(), province: form.province.trim(),
-        region: form.region, revenueTarget: form.revenueTarget,
-        email: อีเมล || undefined, password: รหัส || undefined,
-      });
-      setCreating(false);
-      if (!res.ok) { setFormErr(res.error); return; } // ล้มเหลวต้องบอกจริง คงฟอร์มไว้ให้แก้
-      await dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e)); // route เพิ่งเพิ่มแถวที่เซิร์ฟเวอร์ → ดึงชุดจริง
-      // อีเมลเข้าระบบของสาขาที่เพิ่งสร้าง — ต้องเติมเข้าตารางเองด้วย (ผู้ใช้แจ้ง 18 ส.ค. 69)
-      //   รายชื่ออีเมลถูกดึงครั้งเดียวตอนเปิดหน้า → สาขาที่สร้างหลังจากนั้นจึงขึ้น "—" จนกว่าจะรีโหลดหน้า
-      //   ใช้ค่าที่ route คืนมาตรง ๆ — แม่นกว่ายิงถามซ้ำ และไม่เดาสูตรอีเมลเอง
-      setLoginEmails(m => ({ ...m, [code]: res.email }));
-      // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
-      setShowForm(false);
-      // รหัสจริงจากเซิร์ฟเวอร์ (บัญชีล็อกอินได้แล้วจริง) — โชว์ให้ก๊อปไปแจ้งครั้งเดียว
-      setCredsModal({ name: form.name.trim(), creds: { email: res.email, password: res.password }, mode: "created" });
-      return;
-    }
-
-    // โหมดเดโม (local): ไม่มีบัญชีจริงให้ผูก — คงพฤติกรรมเดิมไว้เล่นได้
-    const creds = genCredentials(code);
-    setDealers(prev => [...prev, { id: code, code, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status, credentials: creds }]);
-    logAudit("สร้างตัวแทนใหม่", `${code} · ${form.name.trim()}`);
-    setShowForm(false);
-    setCredsModal({ name: form.name.trim(), creds, mode: "created" });
+    // ⛔ ไม่มีการสร้างตัวแทนตรง ๆ ที่หน้านี้แล้ว (บอสสั่ง 14 ก.ย. 69)
+    //   ตัวแทนต้องมาจากลูกค้าเป้าหมายที่สำเร็จแล้ว — /hq/prospects › ตั้งเป็นตัวแทนจำหน่าย
+    //   route สร้างตัวแทนก็ปฏิเสธคำขอที่ไม่ผูกลูกค้าเป้าหมายด้วย (กันคนยิง API ตรง)
   }
 
   async function remove(d: DealerRow) {
@@ -396,8 +338,10 @@ function HQDealersPageInner() {
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
             rows={filtered.map(d=>[d.code,d.name,d.province,d.region,loginEmailOf(d.code),perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
-          <button onClick={openAdd} className="btn btn-primary btn-md">
-            <Plus size={14} /> เพิ่มตัวแทน
+          {/* ⛔ ไม่มีปุ่มสร้างตัวแทนตรง ๆ แล้ว (บอสสั่ง 14 ก.ย. 69)
+              ตัวแทนต้องมาจาก "ลูกค้าเป้าหมาย (HQ)" ที่สำเร็จแล้วเท่านั้น — ปุ่มนี้พาไปหน้านั้น */}
+          <button onClick={() => router.push("/hq/prospects")} className="btn btn-primary btn-md">
+            <UserPlus size={14} /> เพิ่มผ่านลูกค้าเป้าหมาย
           </button>
         </div>
       </div>
@@ -568,17 +512,11 @@ function HQDealersPageInner() {
         <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <ModalCard onClose={() => setShowForm(false)} label="ฟอร์มข้อมูลตัวแทน" className="modal-fit" style={{ ...CARD, width: 460, maxWidth: '100%' }}>
             <div style={{ padding: "18px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>{editTarget ? "แก้ไขข้อมูลตัวแทน" : "เพิ่มตัวแทนใหม่"}</h2>
+              <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>แก้ไขข้อมูลตัวแทน</h2>
               <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
             </div>
             <div className="modal-fit-body" style={{ padding: "18px 20px" }}>
               {formErr && <div style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.8rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
-
-              {!editTarget && (
-                <div style={{ background: "#dce5f0", border: "1px solid #C0C0C0", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: "0.72rem", color: "#003366", fontWeight: 600 }}>
-                  ระบบจะสร้างรหัสเข้าสู่ระบบอัตโนมัติหลังบันทึก
-                </div>
-              )}
 
               <div className="form-grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
                 <div className="form-section">ข้อมูลตัวแทน</div>
@@ -619,26 +557,6 @@ function HQDealersPageInner() {
                     )}
                   </select>
                 </InputField>
-                {!editTarget && (<>
-                  {/* ── บัญชีเข้าระบบของสาขา (เฉพาะตอนสร้างใหม่) ──────────────────────
-                      แก้อีเมล/รหัสผ่านของสาขาที่มีอยู่แล้วต้องใช้ปุ่ม "รีเซ็ตรหัสผ่าน" ในตาราง
-                      ไม่ใช่ฟอร์มนี้ — ฟอร์มนี้แก้ทะเบียนสาขา ไม่ได้แตะระบบยืนยันตัวตน */}
-                  <div className="form-section">บัญชีเข้าระบบ</div>
-                  <InputField label="อีเมลเข้าระบบ">
-                    <input type="email" value={บัญชีใหม่.email} onChange={e => setบัญชีใหม่(v => ({ ...v, email: e.target.value }))}
-                      aria-label="อีเมลเข้าระบบ" placeholder={form.code ? `${form.code.toLowerCase()}@partner-agent.co.th` : "เว้นว่าง = ระบบตั้งให้"} style={INPUT_STYLE} />
-                    <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
-                      เว้นว่าง = ระบบตั้งให้จากรหัสสาขา · แนะนำให้ใส่อีเมลจริงของสาขา จะได้รับอีเมลลืมรหัสผ่านได้
-                    </div>
-                  </InputField>
-                  <InputField label="รหัสผ่าน">
-                    <input type="text" value={บัญชีใหม่.password} onChange={e => setบัญชีใหม่(v => ({ ...v, password: e.target.value.replace(/\s/g, "") }))}
-                      aria-label="รหัสผ่าน" placeholder="เว้นว่าง = ระบบสุ่มให้" style={INPUT_STYLE} />
-                    <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
-                      อย่างน้อย 8 ตัวอักษร · แสดงเป็นตัวอักษรปกติโดยตั้งใจ — HQ ต้องคัดลอกไปแจ้งสาขา
-                    </div>
-                  </InputField>
-                </>)}
                 <div className="form-section">เป้าหมายและสถานะ</div>
                 <InputField label="เป้ายอดขาย (บาท/ปี)">
                   {/* เป้ายอดขายติดลบไม่มีอยู่จริงในทางธุรกิจ และทำให้ตัวเลขอื่นเพี้ยนตามเป็นทอด ๆ:
@@ -647,14 +565,8 @@ function HQDealersPageInner() {
                   {/* ช่องเงินใช้ text + ใส่ลูกน้ำเอง — type="number" ใส่ลูกน้ำไม่ได้ และหลักล้านอ่านยากมาก (บอสสั่ง 26 ส.ค. 69) */}
                   <input type="text" inputMode="numeric" aria-label="เป้ายอดขายทั้งปี"
                     value={form.revenueTarget ? formatMoneyInput(String(form.revenueTarget)) : ""}
-                    onChange={e => { setTargetTouched(true); setForm(f => ({ ...f, revenueTarget: parseMoneyInput(e.target.value) })); }}
+                    onChange={e => setForm(f => ({ ...f, revenueTarget: parseMoneyInput(e.target.value) }))}
                     placeholder="0" style={INPUT_STYLE} />
-                  {/* ยังไม่เลือกภาค = ยังแนะนำค่าไม่ได้ — ห้ามขึ้นเลขลอย ๆ ที่ไม่รู้ว่ามาจากไหน */}
-                  {!editTarget && !targetTouched && form.region && (
-                    <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
-                      ค่าเริ่มต้นแนะนำตามภาค {form.region} · ฿{(regionDefaultTarget(form.region) / 1_000_000).toFixed(0)}M — แก้ไขได้
-                    </div>
-                  )}
                 </InputField>
                 <InputField label="สถานะ">
                   {/* ต้องมีค่าเสมอ — ตัวแทนต้องเป็นเปิดหรือปิดใช้งานอย่างใดอย่างหนึ่ง ว่างไม่ได้ */}
@@ -666,18 +578,14 @@ function HQDealersPageInner() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-                <button onClick={() => setShowForm(false)} disabled={creating} className="btn btn-secondary btn-md">ยกเลิก</button>
-                <button onClick={() => void save()} disabled={creating} className="btn btn-primary btn-md"
-                  style={creating ? { opacity: .6, cursor: "not-allowed" } : undefined}>
-                  {editTarget ? "บันทึกการแก้ไข" : creating ? "กำลังสร้างบัญชี…" : "สร้างตัวแทน"}
-                </button>
+                <button onClick={() => setShowForm(false)} className="btn btn-secondary btn-md">ยกเลิก</button>
+                <button onClick={() => void save()} className="btn btn-primary btn-md">บันทึกการแก้ไข</button>
               </div>
             </div>
           </ModalCard>
         </div>
       )}
 
-      {/* ── New Dealer Credentials Modal ── */}
       {/* ── ย้ายข้อมูลไปสาขาอื่น (ทางออกของสาขาที่ลบไม่ได้เพราะยังมีข้อมูล) ── */}
       {moveFrom && (
         <div onClick={() => !moving && setMoveFrom(null)}
@@ -728,37 +636,6 @@ function HQDealersPageInner() {
               </button>
             </div>
           </ModalCard>
-        </div>
-      )}
-
-      {credsModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.52)", zIndex: 1060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div style={{ ...CARD, width: 400, maxWidth: "100%" }}>
-            <div style={{ padding: "24px 20px 18px", textAlign: "center" }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: credsModal.mode === "reset" ? "#fef3cd" : "#e5faf0", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                {credsModal.mode === "reset" ? <Key size={22} color="#b45309" /> : <Check size={22} color="#059669" />}
-              </div>
-              <h3 style={{ margin: "0 0 4px", fontWeight: 800, color: "#2D2D2D" }}>
-                {credsModal.mode === "reset" ? "รีเซ็ตรหัสผ่านแล้ว" : "สร้างตัวแทนสำเร็จ!"}
-              </h3>
-              <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: 0 }}>{credsModal.name}</p>
-            </div>
-            <div style={{ padding: "0 20px 20px" }}>
-              <div style={{ background: "#f0f4f8", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>รหัสเข้าสู่ระบบตัวแทน</div>
-                <CopyField label="อีเมล" value={credsModal.creds.email} />
-                <CopyField label={credsModal.mode === "reset" ? "รหัสผ่านใหม่" : "รหัสผ่านเริ่มต้น"} value={credsModal.creds.password ?? "—"} />
-              </div>
-              <div style={{ background: "#fef3cd", border: "1px solid #f59e0b30", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: "0.72rem", color: "#f59e0b", fontWeight: 600 }}>
-                {credsModal.mode === "reset"
-                  ? "รหัสเดิมใช้ไม่ได้แล้ว — แจ้งรหัสใหม่ให้ตัวแทนทันที"
-                  : "แจ้งรหัสผ่านให้ตัวแทนและแนะนำให้เปลี่ยนรหัสหลังเข้าครั้งแรก"}
-              </div>
-              <button onClick={() => setCredsModal(null)} className="btn btn-primary btn-md" style={{ width: "100%", justifyContent: "center" }}>
-                รับทราบ
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

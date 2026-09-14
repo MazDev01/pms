@@ -149,3 +149,45 @@ test("[func·hq] ตั้งเป็นตัวแทนจำหน่าย
   expect(ซ้อน ?? [], "ต้องไม่มีสาขาซ้อนถูกสร้าง").toHaveLength(0);
   assertNoErrors(errs, "ตั้งเป็นตัวแทนจำหน่ายใหม่");
 });
+
+test("[api] สร้างตัวแทนโดยไม่ผูกลูกค้าเป้าหมาย ต้องถูกปฏิเสธ และไม่มีสาขาเกิดขึ้น (บอสสั่ง 14 ก.ย. 69)", async () => {
+  const token = await adminToken();
+  const res = await fetch(`${HQ_ORIGIN}/api/admin/dealers`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ code: DUP_CODE, name: `${NS}-สร้างตรง`, province: "ระยอง", region: "ตะวันออก", revenueTarget: 0 }),
+  });
+  expect(res.status, "ต้องปฏิเสธ — ตัวแทนต้องมาจากลูกค้าเป้าหมายที่สำเร็จแล้วเท่านั้น").toBe(400);
+  expect(((await res.json()) as { error?: string }).error ?? "").toMatch(/ลูกค้าเป้าหมาย/);
+  const { data } = await (await db(ADMIN)).from("dealers").select("code").eq("code", DUP_CODE);
+  expect(data ?? [], "คำขอที่ถูกปฏิเสธต้องไม่สร้างสาขา").toHaveLength(0);
+});
+
+test("[ui·hq] ฟอร์มลูกค้าเป้าหมาย: เลือกภาคก่อนแล้วค่อยเลือกจังหวัด · มีทุกภาค (บอสสั่ง 14 ก.ย. 69)", async ({ page }) => {
+  const errs = watchErrors(page);
+  await loginUI(page, HQ_ORIGIN, "/hq/prospects", ADMIN);
+  await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click();
+  const ฟอร์ม = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  const ภาค = ฟอร์ม.locator("#pr-region");
+  const จังหวัด = ฟอร์ม.locator("#pr-province");
+
+  await expect(ภาค, "ภาคต้องเริ่มที่ยังไม่ระบุ").toHaveValue("");
+  expect((await จังหวัด.locator("option").allInnerTexts()).join(" "), "ยังไม่เลือกภาค → ให้เลือกภาคก่อน").toContain("เลือกภาคก่อน");
+  expect((await ภาค.locator("option").allInnerTexts()).join(" "), "ต้องมีตัวเลือกทุกภาค").toContain("ทุกภาค");
+
+  await ภาค.selectOption("ทุกภาค");
+  await expect(จังหวัด, "ทุกภาค → จังหวัดเป็นทุกจังหวัดให้เอง").toHaveValue("ทุกจังหวัด");
+
+  await ภาค.selectOption("อีสาน");
+  const ตัวเลือก = await จังหวัด.locator("option").allInnerTexts();
+  expect(ตัวเลือก, "เลือกอีสาน → ต้องมีจังหวัดในภาคอีสาน").toContain("บุรีรัมย์");
+  expect(ตัวเลือก, "เลือกอีสาน → ต้องไม่มีจังหวัดภาคอื่นปน").not.toContain("ระยอง");
+
+  const name = `${NS}-มีภาค`;
+  await ฟอร์ม.locator("#pr-name").fill(name);
+  await จังหวัด.selectOption("บุรีรัมย์");
+  await ฟอร์ม.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).click();
+  await waitRow(await db(ADMIN), "dealer_prospects", { name, region: "อีสาน", province: "บุรีรัมย์" });
+  assertNoErrors(errs, "ฟอร์มลูกค้าเป้าหมาย: ภาค/จังหวัด");
+});
+

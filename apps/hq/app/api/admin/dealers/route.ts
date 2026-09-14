@@ -96,11 +96,17 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   }
   if (dupe) return bad(409, `รหัส "${code}" มีอยู่แล้ว`);
 
-  // ── สร้างจากลูกค้าเป้าหมายของสำนักงานใหญ่ (บอสสั่ง 14 ก.ย. 69) ──
+  // ── ตัวแทนต้องมาจากลูกค้าเป้าหมายที่สำเร็จแล้วเท่านั้น (บอสสั่ง 14 ก.ย. 69) ──
+  //   ไม่มีการเพิ่มตัวแทนตรง ๆ อีกต่อไป — บังคับที่เซิร์ฟเวอร์ ไม่ใช่แค่ถอดปุ่มออกจากหน้าจอ
+  //   (ใครยิง API ตรงก็ต้องโดนกฎเดียวกัน)
   //   ตรวจ "ก่อน" สร้างบัญชี: รายนั้นต้องมีอยู่จริง และยังไม่เคยเป็นตัวแทน
   //   ไม่งั้นกดซ้ำ (หรือสองคนกดพร้อมกัน) จะได้สาขาซ้อนสองสาขาจากคนคนเดียว
-  const prospectId = body.prospectId == null ? null : Number(body.prospectId);
-  if (prospectId !== null) {
+  //   หมายเหตุ: สคริปต์ลงทะเบียนสาขาตั้งต้น (scripts/seed-dealers.mjs) ใช้กุญแจระบบโดยตรง ไม่ผ่านเส้นทางนี้
+  if (body.prospectId == null) {
+    return bad(400, "ตัวแทนจำหน่ายต้องสร้างจากลูกค้าเป้าหมายที่สำเร็จแล้ว — เริ่มที่หน้า “ลูกค้าเป้าหมาย (HQ)”");
+  }
+  const prospectId = Number(body.prospectId);
+  {
     if (!Number.isInteger(prospectId) || prospectId <= 0) return bad(400, "ไม่พบลูกค้าเป้าหมายที่อ้างถึง");
     const { data: pr, error: prErr } = await admin.from("dealer_prospects")
       .select("id, status, dealer_code").eq("id", prospectId).maybeSingle();
@@ -181,8 +187,8 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
 
   // ผูกลูกค้าเป้าหมายเข้ากับสาขาที่เพิ่งสร้าง — ล้มตรงนี้ "ไม่ย้อน" การสร้างสาขา
   //   (บัญชีใช้งานได้แล้ว รหัสผ่านถูกตั้งแล้ว ย้อนทิ้งจะเสียหายกว่า) แต่ต้องบอกหน้าจอให้รู้ ไม่เงียบ
-  let prospectLinked: boolean | undefined;
-  if (prospectId !== null) {
+  let prospectLinked = false;
+  {
     const { error: linkErr } = await admin.from("dealer_prospects")
       .update({ status: "won", dealer_code: code, converted_at: new Date().toISOString(), lost_reason: null })
       .eq("id", prospectId);

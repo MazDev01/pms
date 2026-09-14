@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
-import { HQ_ORIGIN } from "./funcHelpers";
+import { HQ_ORIGIN, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { open } from "./helpers";
 
@@ -48,7 +48,7 @@ test.beforeAll(async () => {
   const res = await fetch(`${HQ_ORIGIN}/api/admin/dealers`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${adminTok}` },
-    body: JSON.stringify({ code: CODE, name: "ZZTEST-สาขาทดสอบผู้ดูแล", province: "ทดสอบ", region: "กลาง", revenueTarget: 1_000_000, status: "active" }),
+    body: JSON.stringify({ code: CODE, name: "ZZTEST-สาขาทดสอบผู้ดูแล", province: "ทดสอบ", region: "กลาง", revenueTarget: 1_000_000, status: "active", prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) }),
   });
   const json = await res.json().catch(() => ({} as Record<string, string>));
   // ต้องดังถ้าเตรียมข้อมูลไม่สำเร็จ — ไม่งั้นเทสต์จะ "ผ่าน" ทั้งที่ไม่ได้วัดอะไรเลย

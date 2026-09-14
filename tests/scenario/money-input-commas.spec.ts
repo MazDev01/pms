@@ -7,11 +7,14 @@ import { open, openLeadQuotationForm } from "./helpers";
 test("[ui·hq] เป้ายอดขายตัวแทน พิมพ์แล้วขึ้นลูกน้ำ", async ({ page }) => {
   await open(page, "hq", "/hq/dealers");
   const ช่อง = page.getByLabel("เป้ายอดขายทั้งปี");
-  await page.getByRole("button", { name: /เพิ่มตัวแทน/ }).first().click();
+  // ฟอร์มเพิ่มตัวแทนถูกถอดแล้ว (บอสสั่ง 14 ก.ย. 69) — ช่องเป้ายอดขายเหลืออยู่ในฟอร์มแก้ไข
+  //   พิมพ์ดูแล้วกดยกเลิก ไม่บันทึกทับเป้าของสาขาจริง
+  await page.locator("tbody").getByRole("button", { name: "แก้ไข" }).first().click();
   await expect(ช่อง).toBeVisible();
   await ช่อง.fill("");
   await ช่อง.pressSequentially("12000000", { delay: 20 });
   await expect(ช่อง).toHaveValue("12,000,000");
+  await page.getByRole("dialog", { name: "ฟอร์มข้อมูลตัวแทน" }).getByRole("button", { name: "ยกเลิก" }).click();
 });
 
 test("[ui·dealer] ราคาต่อหน่วยในใบเสนอราคา พิมพ์แล้วขึ้นลูกน้ำ", async ({ page }) => {

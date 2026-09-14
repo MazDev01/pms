@@ -53,9 +53,10 @@ test("[a11y] โมดัลเพิ่มผู้ใช้ HQ — Esc ปิ�
 
 test("[a11y] ฟอร์มข้อมูลตัวแทน (HQ) — Esc ปิดได้ และประกาศตัวเป็นหน้าต่างซ้อน", async ({ page }) => {
   await open(page, "hq", "/hq/dealers");
-  const addBtn = page.getByRole("button", { name: /เพิ่มตัวแทน/ }).first();
-  await addBtn.waitFor({ state: "visible", timeout: 30_000 });
-  await addBtn.click();
+  // ปุ่มเพิ่มตัวแทนตรง ๆ ถูกถอดแล้ว (บอสสั่ง 14 ก.ย. 69) — ฟอร์มนี้เหลือไว้แก้ไขตัวแทนที่มีอยู่ จึงเปิดจากปุ่มแก้ไข
+  const editBtn = page.locator("tbody").getByRole("button", { name: "แก้ไข" }).first();
+  await editBtn.waitFor({ state: "visible", timeout: 30_000 });
+  await editBtn.click();
 
   const dialog = page.getByRole("dialog", { name: "ฟอร์มข้อมูลตัวแทน" });
   await expect(dialog).toBeVisible({ timeout: 15_000 });

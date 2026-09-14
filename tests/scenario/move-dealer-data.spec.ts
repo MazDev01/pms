@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { HQ_ORIGIN, db } from "./funcHelpers";
+import { HQ_ORIGIN, db, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 
 // ── ย้ายข้อมูลงานขายจากสาขาหนึ่งไปอีกสาขา แล้วลบสาขาเดิมได้ ────────────────────────
 //
@@ -45,7 +45,7 @@ test("[admin] ย้ายข้อมูลไปสาขาที่รับ
   for (const [code, name] of [[FROM, "ZZTMP สาขาต้นทาง"], [TO, "ZZTMP สาขาปลายทาง"]] as const) {
     const res = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
       headers: { authorization: `Bearer ${token}` },
-      data: { code, name, province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000 },
+      data: { code, name, province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(code) },
     });
     expect(res.status(), `สร้างสาขา ${code} ต้องผ่าน (ได้ ${res.status()} · ${await res.text()})`).toBe(200);
   }

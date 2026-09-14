@@ -89,6 +89,7 @@ export type DealerProspect = {
   phone?: string | null;
   email?: string | null;
   province?: string | null;
+  region?: string | null;        // ภาค (เลือกก่อนจังหวัด) · "ทุกภาค" = ทั่วประเทศ คู่กับจังหวัด "ทุกจังหวัด"
   businessType?: string | null;  // ประเภทธุรกิจ (คอลัมน์ Type ในไฟล์ของเบนจามิน)
   channel?: string | null;       // ช่องทางที่เข้ามา
   firstContact?: string | null;  // YYYY-MM-DD

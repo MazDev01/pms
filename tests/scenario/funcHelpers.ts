@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_ANON, type Account, appEnv } from "./supabaseEnv";
+import { SUPABASE_URL, SUPABASE_ANON, ADMIN, type Account, appEnv } from "./supabaseEnv";
 import { SESSION_KEY, getSession, settle, เข้าระบบด้วยคุกกี้, ล็อกอินใหม่ } from "./helpers";
 
 export const DEALER_ORIGIN = process.env.PMS_DEALER_ORIGIN ?? "http://localhost:3001";
@@ -210,27 +210,44 @@ export async function cleanup(sb: SupabaseClient, dealerCode: string, tag: strin
   }
 }
 
-// ── กรอกฟอร์ม "เพิ่มตัวแทน" ของหน้าทะเบียนตัวแทน ──────────────────────────────────
-//
-// ⚠️ ทำไมต้องรวมไว้ที่เดียว (7 ส.ค. 69 แก้ 10 ส.ค. 69):
-//   ช่องจังหวัดเคยเป็นช่องพิมพ์อิสระ แล้วเปลี่ยนเป็น "เลือกจากรายการที่ผูกกับภาค"
-//   เพื่อกันข้อมูลขัดกันเอง (ภาค "ใต้" + จังหวัด "เชียงใหม่")
-//   แต่เทสต์ 2 ไฟล์ยังพิมพ์ใส่ช่องเดิมอยู่ → ตกทั้งคู่ และเสียเวลาไล่หาว่าโค้ดพังตรงไหน
-//   ทั้งที่โค้ดถูก เทสต์ต่างหากที่ตามไม่ทัน
-//   รวมไว้ที่เดียว = ฟอร์มเปลี่ยนอีกก็แก้จุดเดียว ไม่ต้องไล่หาว่ามีที่ไหนอีกบ้าง
-//
-// ⚠️ ต้องเลือก "ภาค" ก่อนเสมอ — รายการจังหวัดขึ้นกับภาคที่เลือกไว้
-//   เลือกจังหวัดที่ไม่ได้อยู่ในภาคนั้นจะไม่มีตัวเลือกให้เลย
-export async function fillDealerForm(
+// ── ตัวแทนต้องมาจากลูกค้าเป้าหมายที่สำเร็จแล้วเท่านั้น (บอสสั่ง 14 ก.ย. 69) ──────────────
+//   route สร้างตัวแทนปฏิเสธคำขอที่ไม่มี prospectId และหน้าทะเบียนตัวแทนไม่มีฟอร์ม "เพิ่มตัวแทน" แล้ว
+//   (ของเดิม fillDealerForm กรอกฟอร์มนั้น — ถอดทิ้งไปพร้อมฟอร์ม)
+
+/** ลูกค้าเป้าหมายรองรับการสร้างสาขาทดสอบ — คืน id ไว้ส่งเป็น prospectId
+ *  ตั้งชื่อตามรหัสสาขา และลบของชื่อเดียวกันทิ้งก่อนเสมอ → รันซ้ำกี่รอบก็ไม่กองค้างในฐานทดสอบ */
+export async function ลูกค้าเป้าหมายรองรับสาขา(code: string): Promise<number> {
+  const sb = await db(ADMIN);
+  const name = `${TAG}-ผู้สนใจ-${code}`;
+  const { error: delErr } = await sb.from("dealer_prospects").delete().eq("name", name);
+  if (delErr) throw new Error(`ล้างลูกค้าเป้าหมายทดสอบของ ${code} ไม่สำเร็จ: ${delErr.message}`);
+  const { data, error } = await sb.from("dealer_prospects").insert({ name, status: "considering" }).select("id").single();
+  if (error || !data) throw new Error(`สร้างลูกค้าเป้าหมายรองรับสาขา ${code} ไม่สำเร็จ: ${error?.message ?? "ไม่มีข้อมูลคืนมา"}`);
+  return (data as { id: number }).id;
+}
+
+/** เปิดกล่อง "ตั้งเป็นตัวแทนจำหน่าย" ของลูกค้าเป้าหมายที่สร้างให้สาขานี้ (ยังไม่กรอกอะไร) — ต้องล็อกอิน HQ ไว้ก่อน */
+export async function เปิดกล่องตั้งตัวแทน(page: Page, code: string) {
+  await ลูกค้าเป้าหมายรองรับสาขา(code);
+  await page.goto(`${HQ_ORIGIN}/hq/prospects`, { waitUntil: "domcontentloaded" });
+  // ค้นก่อนเสมอ — ตารางแบ่งหน้าละ 10 ราย เทสต์อื่นที่รันขนานกันอาจดันรายนี้ตกไปหน้าถัดไป
+  await page.getByLabel("ค้นหาลูกค้าเป้าหมาย").fill(`ผู้สนใจ-${code}`);
+  await page.getByRole("row", { name: new RegExp(`ผู้สนใจ-${code}`) }).click({ timeout: 30_000 });
+  await page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" }).getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).click();
+  return page.getByRole("dialog", { name: "ตั้งเป็นตัวแทนจำหน่าย" });
+}
+
+/** กรอกกล่องตั้งเป็นตัวแทนจำหน่ายให้ครบ (สร้างตัวแทนใหม่) — ไม่กดยืนยัน ให้เทสต์เป็นคนกดเอง */
+export async function เปิดฟอร์มตั้งตัวแทน(
   page: Page, code: string, name: string,
   province = "ระยอง", region = "ตะวันออก",
 ) {
-  await page.getByPlaceholder("เช่น BKK").fill(code);
-  await page.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill(name);
-  // ⚠️ ต้องใส่ exact — บนหน้าเดียวกันมีตัวกรอง "กรองตามภูมิภาค" อยู่ที่แถบเครื่องมือด้วย
-  //   ถ้าไม่ระบุให้ตรงเป๊ะ จะเจอสองตัวแล้วไม่ยอมทำงาน (strict mode)
-  await page.getByLabel("ภูมิภาค", { exact: true }).selectOption(region);
-  await page.getByLabel("จังหวัดที่ตั้ง", { exact: true }).selectOption(province);
+  const ตั้ง = await เปิดกล่องตั้งตัวแทน(page, code);
+  await ตั้ง.locator("#cv-code").fill(code);
+  await ตั้ง.locator("#cv-name").fill(name);
+  await ตั้ง.locator("#cv-region").selectOption(region);
+  await ตั้ง.locator("#cv-province").selectOption(province);
+  return ตั้ง;
 }
 
 /** เลือก "แม่แบบจริงตัวแรก" ในช่องแม่แบบ

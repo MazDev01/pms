@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { HQ_ORIGIN, db } from "./funcHelpers";
+import { HQ_ORIGIN, db, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.setTimeout(180_000);
@@ -37,7 +37,7 @@ test("[auth·dealer] ดูรหัสผ่านตัวเองได้ �
   const adminToken = (await (await db(ADMIN)).auth.getSession()).data.session?.access_token ?? "";
   const สร้าง = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
     headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
-    data: { code: CODE, name: "ZZTEST สาขาทดสอบดูรหัส", province: "ระยอง", region: "ตะวันออก", revenueTarget: 0, email: EMAIL, password: PASSWORD },
+    data: { code: CODE, name: "ZZTEST สาขาทดสอบดูรหัส", province: "ระยอง", region: "ตะวันออก", revenueTarget: 0, email: EMAIL, password: PASSWORD, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) },
   });
   test.skip(สร้าง.status() === 501, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
   expect(สร้าง.status(), `ต้องสร้างสาขาทดสอบได้ (${await สร้าง.text()})`).toBe(200);

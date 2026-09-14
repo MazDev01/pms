@@ -1,7 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason, appEnv } from "./supabaseEnv";
-import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate, นำเข้าลูกค้าหนึ่งราย } from "./funcHelpers";
+import { DEALER_ORIGIN, HQ_ORIGIN, cleanup, watchErrors, assertNoErrors, pickTemplate, นำเข้าลูกค้าหนึ่งราย, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 import { settle } from "./helpers";
 import { กดตกลงในกล่องยืนยัน } from "./helpers";
 
@@ -37,7 +37,7 @@ async function provisionDealer(token: string, code: string): Promise<Provisioned
   const res = await fetch(`${HQ_ORIGIN}/api/admin/dealers`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ code, name: `${TAG}-ตัวแทน-${code}`, province: "ทดสอบโหลด", region: "กลาง", revenueTarget: 0, status: "active" }),
+    body: JSON.stringify({ code, name: `${TAG}-ตัวแทน-${code}`, province: "ทดสอบโหลด", region: "กลาง", revenueTarget: 0, status: "active", prospectId: await ลูกค้าเป้าหมายรองรับสาขา(code) }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) { console.log(`[setup] สร้างตัวแทน ${code} ไม่สำเร็จ: ${JSON.stringify(json)}`); return null; }

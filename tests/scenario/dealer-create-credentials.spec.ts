@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { HQ_ORIGIN, db } from "./funcHelpers";
+import { HQ_ORIGIN, db, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 import { openAs, settle } from "./helpers";
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
@@ -46,7 +46,7 @@ test("[admin] สร้างตัวแทนด้วยอีเมล/ร�
   const res = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     data: { code: CODE, name: "ZZTEST สาขาทดสอบรหัสผ่าน", province: "ระยอง", region: "ตะวันออก",
-            revenueTarget: 1_000_000, email: EMAIL, password: PASSWORD },
+            revenueTarget: 1_000_000, email: EMAIL, password: PASSWORD, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) },
   });
   test.skip(res.status() === 501, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
   expect(res.status(), `ต้องสร้างสำเร็จ (ได้ ${res.status()} · ${await res.text()})`).toBe(200);
@@ -66,9 +66,10 @@ test("[admin] สร้างตัวแทนด้วยอีเมล/ร�
 
 test("[admin] รหัสผ่านสั้นเกินไป/อีเมลผิดรูปแบบ ต้องถูกปฏิเสธที่เซิร์ฟเวอร์", async ({ request }) => {
   const token = (await (await db(ADMIN)).auth.getSession()).data.session?.access_token ?? "";
+  const ztd = await ลูกค้าเป้าหมายรองรับสาขา("ZTD");
   const call = (extra: Record<string, unknown>) => request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    data: { code: "ZTD", name: "ZZTEST ตรวจค่าที่กรอก", province: "ระยอง", region: "ตะวันออก", revenueTarget: 0, ...extra },
+    data: { code: "ZTD", name: "ZZTEST ตรวจค่าที่กรอก", province: "ระยอง", region: "ตะวันออก", revenueTarget: 0, prospectId: ztd, ...extra },
   });
 
   const สั้น = await call({ password: "1234" });
@@ -91,7 +92,7 @@ test("[admin] HQ แก้อีเมล/รหัสผ่านของส�
   const สร้าง = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
     headers: hdr,
     data: { code: CODE2, name: "ZZTEST สาขาแก้บัญชี", province: "ระยอง", region: "ตะวันออก",
-            revenueTarget: 0, email: EMAIL2, password: PASSWORD },
+            revenueTarget: 0, email: EMAIL2, password: PASSWORD, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE2) },
   });
   test.skip(สร้าง.status() === 501, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
   expect(สร้าง.status(), await สร้าง.text()).toBe(200);
@@ -136,7 +137,7 @@ test("[ui·hq] แก้อีเมล/รหัสผ่านผ่านห�
   const สร้าง = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     data: { code: CODE3, name: "ZZTEST สาขาแก้ผ่านหน้าจอ", province: "ระยอง", region: "ตะวันออก",
-            revenueTarget: 0, email: EMAIL3, password: PASSWORD },
+            revenueTarget: 0, email: EMAIL3, password: PASSWORD, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE3) },
   });
   test.skip(สร้าง.status() === 501, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
   expect(สร้าง.status(), await สร้าง.text()).toBe(200);

@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { RYG, ADMIN, skipReason } from "./supabaseEnv";
 import {
   DEALER_ORIGIN, HQ_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, cleanup, specNS, nsTag, fillDealerForm, pickTemplate
+  db, waitRow, cleanup, specNS, nsTag, เปิดฟอร์มตั้งตัวแทน, pickTemplate
 } from "./funcHelpers";
 
 // ลบตัวแทน "พร้อมบัญชี auth" ผ่าน route (service_role) — เหมือน func-hq.spec.ts (purgeDealerAccount)
@@ -322,11 +322,10 @@ test("[edge·hq] กดปุ่ม 'สร้างตัวแทน' ซ้�
   const sb = await db(ADMIN);
 
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
-  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "เพิ่มตัวแทน" }).click();
-  await fillDealerForm(page, NEW_DEALER_CODE, tg("ตัวแทนกดซ้ำ"));
+  // ตัวแทนต้องมาจากลูกค้าเป้าหมาย (บอสสั่ง 14 ก.ย. 69) — กดรัวที่ปุ่ม "สร้างตัวแทนจำหน่าย" ของเส้นทางใหม่
+  const ตั้ง = await เปิดฟอร์มตั้งตัวแทน(page, NEW_DEALER_CODE, tg("ตัวแทนกดซ้ำ"));
 
-  const saveBtn = page.getByRole("button", { name: "สร้างตัวแทน" });
+  const saveBtn = ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" });
   await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
   const btnHandle = await saveBtn.elementHandle();
   await page.evaluate((el) => {

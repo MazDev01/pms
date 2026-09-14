@@ -28,6 +28,7 @@ import {
 } from "@pms/shared/lib/dealerProspects";
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
 import { createDealerAccount } from "@pms/shared/lib/adminApi";
+import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -45,9 +46,6 @@ import { logRepoRead } from "@pms/shared/lib/repoLog";
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
 const HQ_CODE = "HQ";
-// จังหวัดทั้งประเทศ — ข้อมูลในไฟล์ของเบนจามินพิมพ์ย่อ/สะกดต่างกัน ("ปทุม", "สุราษฏ์")
-//   ค่าเดิมที่ไม่อยู่ในรายการต้องยังเห็นในช่องเลือก ไม่ให้หายเงียบตอนเปิดมาแก้ (กติกาเดียวกับฟอร์มตัวแทน)
-const ทุกจังหวัด = provincesOfRegion(ALL_REGIONS);
 // ช่องทางที่ทีมใช้จริงในไฟล์ติดตาม — ช่องนี้พิมพ์เองได้ รายการนี้เป็นแค่ตัวช่วยเติมคำ
 const ช่องทางแนะนำ = ["Facebook", "LINE OA", "LINE ส่วนตัว", "โทรเข้ามาเอง", "แนะนำต่อ"];
 
@@ -119,9 +117,17 @@ export default function HQProspectsPage() {
     setEditing("new"); setร่าง(ร่างว่าง()); setFormErr("");
   }
   function เปิดแก้(p: DealerProspect) {
-    setEditing(p); setร่าง({ ...p }); setFormErr("");
+    // รายเก่าที่ยังไม่มีภาค แต่จังหวัดเป็นจังหวัดที่ระบบรู้จัก → เติมภาคให้ในฟอร์ม จะได้เลือกจังหวัดต่อได้ทันที
+    setEditing(p); setร่าง({ ...p, region: p.region || regionOf(p.province ?? "") }); setFormErr("");
   }
   const ตั้งค่า = <K extends keyof DealerProspect>(k: K, v: DealerProspect[K]) => setร่าง(r => ({ ...r, [k]: v }));
+  // เปลี่ยนภาค → ล้างจังหวัดที่ไม่อยู่ในภาคใหม่ (กันภาค "ใต้" คู่จังหวัด "เชียงใหม่") · "ทุกภาค" = "ทุกจังหวัด" ให้เอง
+  const เปลี่ยนภาคร่าง = (region: string) => setร่าง(r => ({
+    ...r,
+    region: region || null,
+    province: region === ALL_REGIONS ? ALL_PROVINCES
+      : region && provincesOfRegion(region).includes(r.province ?? "") ? r.province : null,
+  }));
 
   async function บันทึก() {
     if (!editing) return;
@@ -170,12 +176,16 @@ export default function HQProspectsPage() {
   // ── ตั้งเป็นตัวแทนจำหน่าย ──
   function เปิดตั้งตัวแทน(p: DealerProspect) {
     // เดาภาคจากจังหวัดที่บันทึกไว้ให้ก่อน — ถ้าจังหวัดสะกดไม่ตรงรายการ ปล่อยว่างให้เลือกเอง ไม่เดาต่อ
-    const ภาค = regionOf(p.province ?? "") ?? "";
+    const ภาค = p.region || regionOf(p.province ?? "") || "";
+    const จังหวัดเดิม = (p.province ?? "").trim();
+    const จังหวัดใช้ได้ = ภาค === ALL_REGIONS
+      ? จังหวัดเดิม === ALL_PROVINCES || provincesOfRegion(ALL_REGIONS).includes(จังหวัดเดิม)
+      : !!ภาค && provincesOfRegion(ภาค).includes(จังหวัดเดิม);
     setConverting(p);
     setโหมดตั้ง("new");
     setฟอร์ม({
       code: "", name: p.name, region: ภาค,
-      province: ภาค && provincesOfRegion(ภาค).includes((p.province ?? "").trim()) ? (p.province ?? "").trim() : "",
+      province: จังหวัดใช้ได้ ? จังหวัดเดิม : ภาค === ALL_REGIONS ? ALL_PROVINCES : "",
       email: p.email ?? "", password: "", existingCode: "",
     });
     setConvErr("");
@@ -224,6 +234,34 @@ export default function HQProspectsPage() {
     if (อีเมล && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมล)) { setConvErr("รูปแบบอีเมลไม่ถูกต้อง"); return; }
     if (ฟอร์ม.password && ฟอร์ม.password.length < 8) { setConvErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"); return; }
 
+    // โหมดเดโม (ไม่มีระบบยืนยันตัวตนจริง) — สร้างทะเบียนสาขาในเครื่องแล้วผูกรายนี้ ให้เล่นครบวงได้เหมือนของจริง
+    //   ปุ่มเพิ่มตัวแทนตรง ๆ ของหน้าทะเบียนถูกถอดแล้ว (บอสสั่ง 14 ก.ย. 69) — ถ้าไม่ทำตรงนี้ เดโมจะสร้างตัวแทนไม่ได้เลย
+    //   ⚠️ ตัวเก็บข้อมูลในเครื่อง "เขียนทับทั้งรายการ" ต้องส่งทะเบียนเดิมทั้งหมดไปด้วยเสมอ ไม่งั้นสาขาอื่นหายหมด
+    if (!REAL_BACKEND) {
+      setConvBusy(true);
+      try {
+        invalidateCache("dealers.list");
+        const ทะเบียน = await dealersRepo.list();
+        const แถวใหม่: DealerRow = {
+          id: code, code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region, revenueTarget: 0, status: "active",
+        };
+        await dealersRepo.save([...ทะเบียน, แถวใหม่]);
+        const row = เตรียมบันทึก({ ...converting, status: "won", dealerCode: code, convertedAt: new Date().toISOString(), lostReason: null });
+        const saved = await prospectsRepo.update({ ...row, id: converting.id, createdAt: converting.createdAt });
+        setList(l => l.map(x => x.id === saved.id ? saved : x));
+        invalidateCache("dealers.list");
+        โหลดตัวแทน();
+        logAudit("สร้างตัวแทน", `${code} · ${แถวใหม่.name} (จากลูกค้าเป้าหมาย #${saved.id})`);
+        แจ้งสำเร็จ(`สร้างตัวแทน ${code} แล้ว (โหมดเดโม — ไม่มีบัญชีเข้าระบบจริง)`);
+        setConverting(null); setEditing(null);
+      } catch (e) {
+        setConvErr(friendlyError(e, "สร้างตัวแทนไม่สำเร็จ"));
+      } finally {
+        setConvBusy(false);
+      }
+      return;
+    }
+
     setConvBusy(true);
     const res = await createDealerAccount({
       code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region,
@@ -266,9 +304,9 @@ export default function HQProspectsPage() {
         <ExportMenu
           filename="hq-prospects"
           title="ลูกค้าเป้าหมาย (HQ)"
-          headers={["ชื่อ", "ชื่อบนโซเชียล", "เบอร์โทร", "อีเมล", "จังหวัด", "ประเภทธุรกิจ", "ช่องทาง", "เริ่มติดต่อ", "ติดตามครั้งถัดไป", "สถานะ", "เหตุผลที่ไม่สำเร็จ", "ผู้ดูแล", "รหัสตัวแทน", "หมายเหตุ"]}
+          headers={["ชื่อ", "ชื่อบนโซเชียล", "เบอร์โทร", "อีเมล", "ภาค", "จังหวัด", "ประเภทธุรกิจ", "ช่องทาง", "เริ่มติดต่อ", "ติดตามครั้งถัดไป", "สถานะ", "เหตุผลที่ไม่สำเร็จ", "ผู้ดูแล", "รหัสตัวแทน", "หมายเหตุ"]}
           rows={filtered.map(p => [
-            p.name, p.social ?? "", p.phone ?? "", p.email ?? "", p.province ?? "", p.businessType ?? "", p.channel ?? "",
+            p.name, p.social ?? "", p.phone ?? "", p.email ?? "", p.region ?? "", p.province ?? "", p.businessType ?? "", p.channel ?? "",
             p.firstContact ?? "", p.followUp ?? "", prospectStatusLabel[p.status], p.lostReason ?? "", p.assigned ?? "",
             p.dealerCode ?? "", p.note ?? "",
           ])}
@@ -420,11 +458,30 @@ export default function HQProspectsPage() {
                     <input id="pr-email" className="form-input" type="email" value={ร่าง.email ?? ""} onChange={e => ตั้งค่า("email", e.target.value)} placeholder="name@example.com" />
                   </div>
                   <div>
-                    <label className="form-label" htmlFor="pr-province">จังหวัด</label>
-                    <select id="pr-province" className="form-select" value={ร่าง.province ?? ""} onChange={e => ตั้งค่า("province", e.target.value)} style={{ cursor: "pointer" }}>
+                    <label className="form-label" htmlFor="pr-channel">ช่องทางที่เข้ามา</label>
+                    <input id="pr-channel" className="form-input" list="pr-channel-list" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value)} placeholder="เลือกหรือพิมพ์เอง" />
+                    <datalist id="pr-channel-list">{ช่องทางแนะนำ.map(c => <option key={c} value={c} />)}</datalist>
+                  </div>
+                  {/* ภาคมาก่อนจังหวัด — จังหวัดที่เลือกได้ขึ้นกับภาคที่เลือก (บอสสั่ง 14 ก.ย. 69 · กติกาเดียวกับฟอร์มตัวแทน)
+                      "ทุกภาค" = ทั่วประเทศ → จังหวัดเป็น "ทุกจังหวัด" ให้เอง */}
+                  <div>
+                    <label className="form-label" htmlFor="pr-region">ภาค</label>
+                    <select id="pr-region" className="form-select" value={ร่าง.region ?? ""} onChange={e => เปลี่ยนภาคร่าง(e.target.value)} style={{ cursor: "pointer" }}>
                       <option value="">— ยังไม่ระบุ —</option>
-                      {ทุกจังหวัด.map(p => <option key={p} value={p}>{p}</option>)}
-                      {ร่าง.province && !ทุกจังหวัด.includes(ร่าง.province) && <option value={ร่าง.province}>{ร่าง.province} (ตามที่บันทึกไว้)</option>}
+                      {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      <option value={ALL_REGIONS}>{ALL_REGIONS} (ทั่วประเทศ)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor="pr-province">จังหวัด</label>
+                    {/* จังหวัดที่บันทึกไว้แต่ไม่อยู่ในรายการ (ข้อมูลเก่าพิมพ์ย่อ เช่น "ปทุม") ต้องยังเห็นค่าเดิม ไม่หายเงียบตอนเปิดมาแก้ */}
+                    <select id="pr-province" className="form-select" value={ร่าง.province ?? ""} onChange={e => ตั้งค่า("province", e.target.value || null)} style={{ cursor: "pointer" }}>
+                      <option value="">{ร่าง.region ? "— ยังไม่ระบุ —" : "— เลือกภาคก่อน —"}</option>
+                      {ร่าง.region === ALL_REGIONS && <option value={ALL_PROVINCES}>{ALL_PROVINCES}</option>}
+                      {provincesOfRegion(ร่าง.region ?? "").map(p => <option key={p} value={p}>{p}</option>)}
+                      {ร่าง.province && ร่าง.province !== ALL_PROVINCES && !provincesOfRegion(ร่าง.region ?? "").includes(ร่าง.province) && (
+                        <option value={ร่าง.province}>{ร่าง.province} (ตามที่บันทึกไว้)</option>
+                      )}
                     </select>
                   </div>
                   <div>
@@ -432,9 +489,8 @@ export default function HQProspectsPage() {
                     <input id="pr-type" className="form-input" value={ร่าง.businessType ?? ""} onChange={e => ตั้งค่า("businessType", e.target.value)} placeholder="เช่น ผู้รับเหมา / ขายเหล็ก / สถาปนิก" />
                   </div>
                   <div>
-                    <label className="form-label" htmlFor="pr-channel">ช่องทางที่เข้ามา</label>
-                    <input id="pr-channel" className="form-input" list="pr-channel-list" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value)} placeholder="เลือกหรือพิมพ์เอง" />
-                    <datalist id="pr-channel-list">{ช่องทางแนะนำ.map(c => <option key={c} value={c} />)}</datalist>
+                    <label className="form-label" htmlFor="pr-assigned">ผู้ดูแล (สำนักงานใหญ่)</label>
+                    <input id="pr-assigned" className="form-input" value={ร่าง.assigned ?? ""} onChange={e => ตั้งค่า("assigned", e.target.value)} placeholder="ชื่อผู้ติดตามรายนี้" />
                   </div>
                   <div>
                     <label className="form-label" htmlFor="pr-first">เริ่มติดต่อ</label>
@@ -443,10 +499,6 @@ export default function HQProspectsPage() {
                   <div>
                     <label className="form-label" htmlFor="pr-follow">ติดตามครั้งถัดไป</label>
                     <input id="pr-follow" className="form-input" type="date" value={ร่าง.followUp ?? ""} onChange={e => ตั้งค่า("followUp", e.target.value || null)} />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-assigned">ผู้ดูแล (สำนักงานใหญ่)</label>
-                    <input id="pr-assigned" className="form-input" value={ร่าง.assigned ?? ""} onChange={e => ตั้งค่า("assigned", e.target.value)} placeholder="ชื่อผู้ติดตามรายนี้" />
                   </div>
                   <div>
                     <label className="form-label" htmlFor="pr-status">สถานะ</label>
@@ -545,12 +597,15 @@ export default function HQProspectsPage() {
                     <select id="cv-region" className="form-select" value={ฟอร์ม.region} onChange={e => เปลี่ยนภาค(e.target.value)} style={{ cursor: "pointer" }}>
                       <option value="">— ยังไม่ระบุ —</option>
                       {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      {/* ทุกภาค = ทั่วประเทศ (แบบเดียวกับฟอร์มตัวแทน) → จังหวัดเป็น "ทุกจังหวัด" ให้เอง */}
+                      <option value={ALL_REGIONS}>{ALL_REGIONS} (ทั่วประเทศ)</option>
                     </select>
                   </div>
                   <div>
                     <label className="form-label" htmlFor="cv-province">จังหวัดที่ตั้ง *</label>
                     <select id="cv-province" className="form-select" value={ฟอร์ม.province} onChange={e => setฟอร์ม(f => ({ ...f, province: e.target.value }))} style={{ cursor: "pointer" }}>
                       <option value="">{ฟอร์ม.region ? "— ยังไม่ระบุ —" : "— เลือกภาคก่อน —"}</option>
+                      {ฟอร์ม.region === ALL_REGIONS && <option value={ALL_PROVINCES}>{ALL_PROVINCES}</option>}
                       {provincesOfRegion(ฟอร์ม.region).map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>

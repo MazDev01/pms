@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
-import { HQ_ORIGIN, db, TAG } from "./funcHelpers";
+import { HQ_ORIGIN, db, TAG, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, statuses } from "./adminEnv";
 
@@ -49,7 +49,7 @@ test.describe("ตรวจ input ก่อนสร้างบัญชี", (
     test(`เป้ายอดขาย${label} → ปฏิเสธ 400 และไม่สร้างอะไรทิ้งไว้`, async ({ request }) => {
       const res = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
         headers: { authorization: `Bearer ${await adminToken()}` },
-        data: { code: CODE, name: `${TAG}-เป้าผิด`, province: "ระยอง", region: "ตะวันออก", revenueTarget },
+        data: { code: CODE, name: `${TAG}-เป้าผิด`, province: "ระยอง", region: "ตะวันออก", revenueTarget, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) },
       });
       expect(res.status(), `เป้ายอดขาย${label} ต้องได้ 400 (ได้ ${res.status()})`).toBe(400);
 
@@ -64,7 +64,7 @@ test.describe("ตรวจ input ก่อนสร้างบัญชี", (
   test("เป้ายอดขายที่ถูกต้อง (0) ยังสร้างได้ตามปกติ", async ({ request }) => {
     const res = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
       headers: { authorization: `Bearer ${await adminToken()}` },
-      data: { code: CODE, name: `${TAG}-เป้าถูก`, province: "ระยอง", region: "ตะวันออก", revenueTarget: 0 },
+      data: { code: CODE, name: `${TAG}-เป้าถูก`, province: "ระยอง", region: "ตะวันออก", revenueTarget: 0, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) },
     });
     // 501 = ยังไม่ได้ตั้ง service_role ที่เครื่องนี้ (ไม่ใช่บั๊กของโค้ด)
     const body = res.status() === 200 ? null : await res.text();

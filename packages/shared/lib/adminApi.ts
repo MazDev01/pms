@@ -31,8 +31,9 @@ export type CreateDealerInput = {
   code: string; name: string; province: string; region: string; revenueTarget: number;
   /** อีเมล/รหัสผ่านที่ HQ กรอกเอง — เว้นว่าง = ให้เซิร์ฟเวอร์ตั้งให้ (บอสสั่ง 20 ส.ค. 69) */
   email?: string; password?: string;
-  /** สร้างจากลูกค้าเป้าหมายของสำนักงานใหญ่ — เซิร์ฟเวอร์ผูกรายนั้นเป็น "เป็นตัวแทนแล้ว" ให้ในคำขอเดียวกัน */
-  prospectId?: number;
+  /** บังคับ — ตัวแทนต้องมาจากลูกค้าเป้าหมายที่สำเร็จแล้ว (บอสสั่ง 14 ก.ย. 69)
+   *  เซิร์ฟเวอร์ผูกรายนั้นเป็น "เป็นตัวแทนแล้ว" ให้ในคำขอเดียวกัน */
+  prospectId: number;
 };
 export type CreateDealerResult =
   | { ok: true; email: string; password: string; prospectLinked?: boolean }

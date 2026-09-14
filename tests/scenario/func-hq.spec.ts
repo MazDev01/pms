@@ -5,7 +5,7 @@ import { กดตกลงในกล่องยืนยัน, ดักข
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
 import {
   HQ_ORIGIN, DEALER_ORIGIN, loginUI, watchErrors, assertNoErrors,
-  db, waitRow, waitGone, TAG, fillDealerForm,
+  db, waitRow, waitGone, TAG, เปิดฟอร์มตั้งตัวแทน, เปิดกล่องตั้งตัวแทน,
 } from "./funcHelpers";
 
 // ฝั่งสำนักงานใหญ่ — ข้อมูลกลางที่ทั้งเครือใช้ร่วมกัน
@@ -67,13 +67,12 @@ test("[func·hq] สร้างตัวแทน = สร้างบัญช
   await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
   await expect.poll(async () => page.evaluate(() => document.body.innerText),
     { timeout: 25_000, message: "ทะเบียนตัวแทนต้องโหลดเสร็จก่อน" }).toContain("ระยองสตีลเวิร์คส์");
-  await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
-
-  await fillDealerForm(page, NEW_CODE, NEW_NAME);
-  await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
+  // ตัวแทนต้องมาจากลูกค้าเป้าหมาย (บอสสั่ง 14 ก.ย. 69) — สร้างผ่านกล่อง "ตั้งเป็นตัวแทนจำหน่าย"
+  const ตั้ง = await เปิดฟอร์มตั้งตัวแทน(page, NEW_CODE, NEW_NAME);
+  await ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" }).click();
 
   // ผลอย่างใดอย่างหนึ่ง: โมดัลสำเร็จ (มี key) หรือ ข้อความ error ในฟอร์ม (ไม่มี key)
-  const okModal = page.getByText("สร้างตัวแทนสำเร็จ");
+  const okModal = page.getByText("สร้างตัวแทนจำหน่ายสำเร็จ");
   const errMsg = page.getByText(/service_role|ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์/i);
   await expect(okModal.or(errMsg).first(), "ต้องเห็นผลจริงอย่างใดอย่างหนึ่ง").toBeVisible({ timeout: 25_000 });
 
@@ -224,34 +223,18 @@ test("[func·hq] HQ เปิดหน้างานขายได้ แต�
   assertNoErrors(errs, "หน้าใบเสนอราคา HQ");
 });
 
-test("[func·hq] กดเพิ่มตัวแทน 'ก่อนทะเบียนโหลดเสร็จ' ต้องไม่ลบสาขาจริง", async ({ page }) => {
-  // กับดักเดิม: save เคยเป็น "แทนที่ทั้งชุด" → ถ้าผู้ใช้กดเพิ่มก่อนโหลดจบ
-  // อาร์เรย์จะมีแค่แถวใหม่แถวเดียว แล้วสั่งลบสาขาจริงที่เหลือทั้งหมด
-  // (เคยเกิดจริง เห็นเป็น DELETE ...code=not.in.("ZZT") · รอดเพราะ FK ของตารางไฟล์)
-  // — จุดประสงค์ของเทสต์นี้คือ "จำนวนสาขาต้องไม่ลด" เท่านั้น
-  //   ไม่เช็ก console error เพราะการกดสร้างจริงจะยิง route (ตั้ง key แล้ว→200 · ยังไม่ตั้ง→501)
-  //   501 ที่แอปจัดการแล้ว (ขึ้น error ในฟอร์ม) เบราว์เซอร์ยัง log "resource 501" เป็นเสียงรบกวน
-  const BCODE = "ZZB"; // รหัสอิสระ ไม่ชนกับ fixture/เทสต์อื่น
-  const sb = await db(ADMIN);
-  await purgeDealerAccount(BCODE); // ล้างของค้างรอบก่อน: บัญชี auth + แถว (กัน orphan)
-  const before = ((await sb.from("dealers").select("code")).data ?? []).length;
-  expect(before, "ต้องมีสาขาจริงอยู่ก่อน").toBeGreaterThan(1);
-
-  try {
-    await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
-    // จงใจ "ไม่รอ" ให้ทะเบียนโหลดเสร็จ แล้วรีบกดเพิ่มทันที
-    await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "เพิ่มตัวแทน" }).first().click();
-    await fillDealerForm(page, BCODE, `${TAG}-ก่อนโหลด`);
-    await page.getByRole("button", { name: "สร้างตัวแทน" }).click();
-    await page.waitForTimeout(4000);
-
-    const after = ((await sb.from("dealers").select("code")).data ?? []).map(d => d.code);
-    expect(after.length, `สาขาจริงต้องอยู่ครบ (ก่อน ${before} หลัง ${after.length})`)
-      .toBeGreaterThanOrEqual(before);
-  } finally {
-    await purgeDealerAccount(BCODE); // ลบบัญชี auth ที่การกดสร้างอาจสร้างไว้ด้วย (กัน orphan)
-  }
+// ── ตัวแทนต้องมาจากลูกค้าเป้าหมายที่สำเร็จแล้วเท่านั้น (บอสสั่ง 14 ก.ย. 69) ──
+// แทนเทสต์เดิม "กดเพิ่มตัวแทนก่อนทะเบียนโหลดเสร็จ" — ฟอร์มสร้างตัวแทนตรง ๆ ถูกถอดทั้งอันแล้ว สถานการณ์นั้นเกิดไม่ได้อีก
+// (ฝั่งเซิร์ฟเวอร์ที่ปฏิเสธการสร้างโดยไม่ผูกลูกค้าเป้าหมาย ตรวจไว้ที่ hq-prospects.spec.ts)
+test("[func·hq] หน้าตัวแทนไม่มีปุ่มสร้างตัวแทนตรง ๆ แล้ว · ปุ่มพาไปหน้าลูกค้าเป้าหมาย", async ({ page }) => {
+  await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
+  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
+  const ไปลูกค้าเป้าหมาย = page.getByRole("button", { name: "เพิ่มผ่านลูกค้าเป้าหมาย" });
+  await expect(ไปลูกค้าเป้าหมาย).toBeVisible({ timeout: 25_000 });
+  await expect(page.getByRole("button", { name: /^(เพิ่มตัวแทน|สร้างตัวแทน)$/ }),
+    "ต้องไม่มีปุ่มสร้างตัวแทนตรง ๆ เหลืออยู่").toHaveCount(0);
+  await ไปลูกค้าเป้าหมาย.click();
+  await expect(page, "ปุ่มต้องพาไปหน้าลูกค้าเป้าหมาย").toHaveURL(/\/hq\/prospects/, { timeout: 15_000 });
 });
 
 // H4 — รีเซ็ตรหัสผ่านผู้ใช้ HQ = "ส่งลิงก์ทางอีเมล" (ไม่ใช่โชว์รหัสปลอมแบบเดิม)
@@ -277,30 +260,33 @@ test("[func·hq] หน้า /reset-password เปิดตรงโดยไ�
     .toBeVisible({ timeout: 10_000 });
 });
 
-// ── ฟอร์มตัวแทน: ภาคต้องเลือกก่อนจังหวัด (ผู้ใช้แจ้ง 18 ส.ค. 69) ──
+// ── กล่องตั้งเป็นตัวแทน: ภาคต้องเลือกก่อนจังหวัด (ผู้ใช้แจ้ง 18 ส.ค. 69 · ย้ายจากฟอร์มเพิ่มตัวแทนเดิม 14 ก.ย. 69) ──
 // เดิมช่อง "ภาค" ตั้งต้นเป็น "กลาง" ให้เองทั้งที่ไม่มีใครเลือก — ตัวแทนภาคอื่นจึงถูกบันทึกเป็นภาคกลางได้ง่าย ๆ
 // และเพราะรายการจังหวัดขึ้นกับภาค ถ้ายังไม่เลือกภาคก็เลือกจังหวัดไม่ได้เลย — ต้องบอกให้รู้ ห้ามเงียบ
-test("[func·hq] ฟอร์มตัวแทน: ภาคเริ่มที่ “ยังไม่ระบุ” · ไม่เลือกภาค = เลือกจังหวัดไม่ได้ และบันทึกไม่ผ่าน", async ({ page }) => {
+// ต้องมี "ทุกภาค" ด้วย (บอสสั่ง 14 ก.ย. 69) — เลือกแล้วจังหวัดเป็น "ทุกจังหวัด" ให้เอง
+test("[func·hq] กล่องตั้งเป็นตัวแทน: ภาคเริ่มที่ “ยังไม่ระบุ” · มีทุกภาค · ไม่เลือกภาค = บันทึกไม่ผ่าน", async ({ page }) => {
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
-  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /เพิ่มตัวแทน/ }).first().click();
-  const dlg = page.getByRole("dialog");
-  const region = dlg.getByLabel("ภูมิภาค", { exact: true });
-  const prov = dlg.getByLabel("จังหวัดที่ตั้ง", { exact: true });
+  const ตั้ง = await เปิดกล่องตั้งตัวแทน(page, "ZZR");   // ลูกค้าเป้าหมายไม่มีจังหวัด → ภาคต้องว่าง
+  const region = ตั้ง.locator("#cv-region");
+  const prov = ตั้ง.locator("#cv-province");
 
   await expect(region, "ต้องไม่เลือกภาคให้เอง").toHaveValue("");
   expect((await prov.locator("option").allInnerTexts()).join(" "),
     "ยังไม่เลือกภาค → ต้องบอกว่าให้เลือกภาคก่อน").toContain("เลือกภาคก่อน");
+  expect((await region.locator("option").allInnerTexts()).join(" "), "ต้องมีตัวเลือกทุกภาค").toContain("ทุกภาค");
 
-  await dlg.getByPlaceholder("เช่น BKK").fill("ZZR");
-  await dlg.getByPlaceholder("บจ. ตัวอย่างสตีล...").fill("ZZ ทดสอบภาค");
-  await dlg.getByRole("button", { name: /สร้างตัวแทน/ }).click();
-  await expect(dlg.getByText(/ต้องเลือกภาคก่อน/),
+  await ตั้ง.locator("#cv-code").fill("ZZR");
+  await ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" }).click();
+  await expect(ตั้ง.getByText(/ต้องเลือกภาคก่อน/),
     "กดบันทึกโดยไม่เลือกภาค → ต้องฟ้อง ห้ามบันทึกผ่าน").toBeVisible();
 
-  await region.selectOption({ index: 1 });
-  expect((await prov.locator("option").count()),
-    "เลือกภาคแล้วต้องมีจังหวัดให้เลือก").toBeGreaterThan(1);
+  await region.selectOption("ทุกภาค");
+  await expect(prov, "เลือกทุกภาค → จังหวัดเป็นทุกจังหวัดให้เอง").toHaveValue("ทุกจังหวัด");
+  await region.selectOption("เหนือ");
+  expect(await prov.locator("option").count(), "เลือกภาคแล้วต้องมีจังหวัดให้เลือก").toBeGreaterThan(1);
+
+  const { error } = await (await db(ADMIN)).from("dealer_prospects").delete().eq("name", `${TAG}-ผู้สนใจ-ZZR`);
+  expect(error, "ล้างลูกค้าเป้าหมายทดสอบ").toBeNull();
 });
 
 // ── สร้างตัวแทน → ต้องตั้งชื่อบริษัทให้ด้วย (บอสสั่ง 18 ส.ค. 69) ──
@@ -319,10 +305,8 @@ test("[func·hq] สร้างตัวแทน → ชื่อบริษ�
   await wipe();
 
   await loginUI(page, HQ_ORIGIN, "/hq/login", ADMIN);
-  await page.goto(`${HQ_ORIGIN}/hq/dealers`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /เพิ่มตัวแทน/ }).first().click();
-  await fillDealerForm(page, CODE, NAME);
-  await page.getByRole("button", { name: /สร้างตัวแทน/ }).click();
+  const ตั้ง = await เปิดฟอร์มตั้งตัวแทน(page, CODE, NAME);
+  await ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" }).click();
 
   await expect.poll(async () => {
     const r = (await sb.from("dealer_settings").select("issuer").eq("dealer_code", CODE).maybeSingle()).data as { issuer?: { company?: string } } | null;

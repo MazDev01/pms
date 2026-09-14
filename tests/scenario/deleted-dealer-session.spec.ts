@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN, RYG, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors } from "./funcHelpers";
+import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 import { settle } from "./helpers";
 
 // ── ลบสาขาแล้ว บัญชีของสาขานั้นต้องใช้งานระบบต่อไม่ได้ (ผู้ใช้แจ้ง 14 ส.ค. 69) ──────
@@ -55,7 +55,7 @@ test("[auth] ลบสาขาแล้ว หน้าที่เปิดค
 
   const created = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
     headers: { authorization: `Bearer ${await adminToken()}` },
-    data: { code: CODE, name: "ZZTMP สาขาทดสอบเด้งออก", province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000 },
+    data: { code: CODE, name: "ZZTMP สาขาทดสอบเด้งออก", province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) },
   });
   expect(created.status(), `สร้างสาขาต้องผ่าน (ได้ ${created.status()} · ${await created.text()})`).toBe(200);
   const cred = await created.json() as { email: string; password: string };
@@ -98,7 +98,7 @@ test("[auth] ปิดใช้งานสาขา → ล็อกอิน�
   try {
     const created = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
       headers: { authorization: `Bearer ${await adminToken()}` },
-      data: { code: CODE2, name: "ZZTMP สาขาปิดใช้งาน", province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000 },
+      data: { code: CODE2, name: "ZZTMP สาขาปิดใช้งาน", province: "ระยอง", region: "ตะวันออก", revenueTarget: 1_000_000, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE2) },
     });
     expect(created.status(), `สร้างสาขาต้องผ่าน (${await created.text()})`).toBe(200);
     const cred = await created.json() as { email: string; password: string };
