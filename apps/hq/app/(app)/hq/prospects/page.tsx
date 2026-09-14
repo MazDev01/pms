@@ -626,21 +626,23 @@ export default function HQProspectsPage() {
             {/* เพิ่ม/ลบคอลัมน์ต้องแก้ colgroup ด้วย (table-layout: fixed — ใส่ความกว้างที่ th ไม่มีผล)
                 minWidth รวม ~900px พอดีกรอบจอคอม · จอแคบให้เลื่อนซ้ายขวา ไม่บีบจนอ่านไม่ออก
                 "ติดต่อล่าสุด" มาแทน "ช่องทาง/ประเภทธุรกิจ" (ดูได้ในแผง) — สิ่งที่ทีมต้องเห็นทุกวันคือใครไม่ได้ติดต่อนานแล้ว */}
+            {/* "ช่องทาง" กลับมาอยู่ในตาราง (บอสสั่ง 14 ก.ย. 69: "แสดง ช่องทางที่เข้ามา ด้วย") · minWidth รวม ~950px ยังพอดีกรอบจอคอม */}
             <colgroup>
-              <col style={{ width: "24%", minWidth: 190 }} />
-              <col style={{ width: "12%", minWidth: 112 }} />
-              <col style={{ width: "11%", minWidth: 96 }} />
-              <col style={{ width: "18%", minWidth: 160 }} />
-              <col style={{ width: "13%", minWidth: 116 }} />
-              <col style={{ width: "13%", minWidth: 110 }} />
-              <col style={{ width: "9%", minWidth: 72 }} />
+              <col style={{ width: "21%", minWidth: 180 }} />
+              <col style={{ width: "11%", minWidth: 108 }} />
+              <col style={{ width: "10%", minWidth: 90 }} />
+              <col style={{ width: "10%", minWidth: 96 }} />
+              <col style={{ width: "16%", minWidth: 150 }} />
+              <col style={{ width: "12%", minWidth: 108 }} />
+              <col style={{ width: "12%", minWidth: 106 }} />
+              <col style={{ width: "8%", minWidth: 66 }} />
             </colgroup>
             <thead>
-              <tr><th>ลูกค้าเป้าหมาย</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
+              <tr><th>ลูกค้าเป้าหมาย</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ช่องทาง</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
+                <tr><td colSpan={8} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
                   {!loaded ? "กำลังโหลด…" : list.length === 0 ? "ยังไม่มีลูกค้าเป้าหมาย" : "ไม่พบลูกค้าเป้าหมายตามตัวกรองที่เลือก"}
                 </td></tr>
               )}
@@ -670,6 +672,7 @@ export default function HQProspectsPage() {
                     </td>
                     <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{p.phone ? formatPhone(p.phone) || p.phone : "—"}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.province || "—"}</td>
+                    <td title={p.channel ?? undefined} style={{ fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.channel || "—"}</td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span className="badge" style={{ background: สี.bg, color: สี.text }}>{prospectStatusLabel[p.status]}</span>
