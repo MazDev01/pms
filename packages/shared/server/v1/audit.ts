@@ -16,19 +16,19 @@ import type { NextRequest } from "next/server";
 import { handler, ok, dbFail, fail } from "./_ctx";
 import { toCamel, toSnake } from "@pms/shared/lib/data/supabase/mappers";
 import type { AuditEntry } from "@pms/shared/lib/data/types";
+import { วันเวลาไทย } from "@pms/shared/lib/thaiDate";
 
 type Row = Record<string, unknown>;
 const PAGE = 1000;
 
 export { runtime } from "./_ctx";
 
-/** timestamptz → สตริงไทยแบบเดียวกับที่หน้า /hq/audit อ่านได้ (parseDate) */
+/** timestamptz → สตริงไทยแบบเดียวกับที่หน้า /hq/audit อ่านได้ (parseDate)
+ *  ⚠️ ต้องคิดเป็นเวลาไทย — ไฟล์นี้รันบนเซิร์ฟเวอร์ Vercel ซึ่งตั้งเครื่องเป็น UTC
+ *     เดิมใช้ getHours() ตรง ๆ ทุกรายการจึงช้ากว่าจริง 7 ชม. (บอสแจ้ง 14 ก.ย. 69) */
 function fmtAt(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const M = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getDate()} ${M[d.getMonth()]} ${d.getFullYear() + 543} · ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return Number.isNaN(d.getTime()) ? iso : วันเวลาไทย(d);
 }
 
 export const GET = handler("audit.list", async (req: NextRequest, sb) => {

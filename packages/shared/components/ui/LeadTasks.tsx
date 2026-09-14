@@ -9,15 +9,14 @@ import {
 } from "@pms/shared/lib/mock";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { useLostReasons, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
+import { ชั่วโมงนาทีไทย } from "@pms/shared/lib/thaiDate";
 
 const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 // วันประทับ = "วันนี้" ของระบบ (APP_NOW = 30 มิ.ย. 2569) ไม่ใช่นาฬิกาเครื่อง — กติกาเดียวกับ useAudit/ทั้งระบบ
 // เดิมใช้ new Date() → task ที่เพิ่งติ๊กได้วันจริง (เช่น 20 ก.ค. 2569) ล้ำ "วันนี้" ของระบบ + ไม่ตรงกับ doneAt
 // ที่ระบบเติมอัตโนมัติ (30 มิ.ย.) · เวลา (ชม.:นาที) ยังใช้นาฬิกาจริงได้ — ไว้เรียงเหตุการณ์ในวันเดียวกัน
 function stampNow() {
-  const t = new Date();
-  const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0");
-  return `${APP_NOW.getDate()} ${THAI_MONTHS[APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543} · ${hh}:${mm}`;
+  return `${APP_NOW.getDate()} ${THAI_MONTHS[APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543} · ${ชั่วโมงนาทีไทย()}`;
 }
 
 // Task-driven Sales Journey — เช็ก Task → บันทึกเวลา/ผู้ทำ → คำนวณ % → เลื่อน Stage อัตโนมัติ

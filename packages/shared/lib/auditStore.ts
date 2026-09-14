@@ -11,6 +11,7 @@
 //   → LocalAdapter ใช้ไฟล์นี้ได้โดยไม่สร้างวงจร · useAudit.ts เหลือแต่ hook ที่คุยกับ repository
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import type { AuditEntry } from "@pms/shared/lib/data/types";
+import { ชั่วโมงนาทีไทย } from "./thaiDate";
 
 // v2: SEED เดิม (v1) มีรายการของฟีเจอร์ที่ถูกลบแล้ว ("ตั้งเพดานส่วนลด") + คำเก่า ("ระงับตัวแทน")
 // loadAudit อ่าน localStorage ก่อน SEED → เบราว์เซอร์เก่าจะเห็นของค้างตลอดแม้ SEED ในโค้ดสะอาดแล้ว
@@ -37,9 +38,7 @@ export function loadAudit(): AuditEntry[] {
 // (ช่วงกว้างสุดจบที่ 30 มิ.ย. 2569) → HQ ทำอะไรไปก็ไม่เห็นในบันทึกของตัวเอง
 // เวลา (ชม.:นาที) ยังใช้นาฬิกาจริงได้ — ใช้เรียงลำดับเหตุการณ์ในวันเดียวกัน ไม่มีผลกับตัวกรองวันที่
 function stampNow(): string {
-  const t = new Date();
-  const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0");
-  return `${APP_NOW.getDate()} ${TH_MO[APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543} · ${hh}:${mm}`;
+  return `${APP_NOW.getDate()} ${TH_MO[APP_NOW.getMonth()]} ${APP_NOW.getFullYear() + 543} · ${ชั่วโมงนาทีไทย()}`;
 }
 
 export function appendAudit(e: { user: string; role: string; action: string; target: string }) {

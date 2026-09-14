@@ -23,7 +23,7 @@ import { shouldCloseWon } from "@pms/shared/lib/closeWon";
 import { ฉบับถัดไป } from "@pms/shared/lib/quoteRevision";
 import { customerDeletionImpact, blockReason } from "@pms/shared/lib/customerDeletion";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
-import { toThaiDate } from "@pms/shared/lib/thaiDate";
+import { toThaiDate, ชั่วโมงนาทีไทย } from "@pms/shared/lib/thaiDate";
 import { useQuoteValidityDays, useLeadTaskTemplate } from "@pms/shared/lib/useHQConfig";
 import { dealerSettings as dealerSettingsRepo, leads as leadsRepo, customers as customersRepo, quotations as quotationsRepo, appointments as appointmentsRepo, files as filesRepo, storage as fileStorage, realtime } from "@pms/shared/lib/data";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
@@ -500,10 +500,7 @@ export function SalesProvider({
   // ⚠️ ต่อท้ายเสมอ (เก่าอยู่บน ใหม่อยู่ล่าง) ให้ตรงกับลำดับที่หน้าจอแสดง
   // ⚠️ best-effort: บันทึกไม่ลงต้องไม่ทำให้การกระทำหลักล้ม (ออกใบสำเร็จแล้วแต่จดประวัติไม่ได้ = ยังดีกว่าออกใบไม่ได้)
   const logLeadActivity = useCallback((dealId: number | undefined, text: string, type = "task") => {
-    const เวลาตอนนี้ = () => {
-      const d = new Date();
-      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    };
+    const เวลาตอนนี้ = () => ชั่วโมงนาทีไทย();
     if (dealId == null) return;
     const lead = leadsRef.current.find(l => l.numId === dealId);
     if (!lead) return;
@@ -536,10 +533,7 @@ export function SalesProvider({
     //      เขียนแยก = สองคำสั่งชนกัน แล้วอันหลังทับอันแรกหาย (บั๊กจริง 21 ส.ค. 69)
     const ก่อน = leadsRef.current.find(l => l.id === lead.id);
     const เพิ่ม: { id: number; date: string; icon: string; text: string; type: string }[] = [];
-    const เวลา = () => {
-      const d = new Date();
-      return `${toThaiDate(new Date(APP_NOW_ISO))} · ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    };
+    const เวลา = () => `${toThaiDate(new Date(APP_NOW_ISO))} · ${ชั่วโมงนาทีไทย()}`;
     if (ก่อน) {
       const เดิมทำแล้ว = new Set((ก่อน.tasks ?? []).filter(t => t.done).map(t => t.key));
       for (const t of lead.tasks ?? []) {

@@ -11,6 +11,7 @@ import { storage as fileStorage } from "@pms/shared/lib/data";
 import { ขนาดไฟล์อ่านง่าย as ขนาดอ่านง่าย } from "@pms/shared/lib/format";
 import { type SolutionProduct } from "@pms/shared/lib/mock";
 import { catalogRate, markupPctOf, withMarkup } from "@pms/shared/lib/boq";
+import { ชั่วโมงนาทีไทย } from "@pms/shared/lib/thaiDate";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useMasterCatalog } from "@pms/shared/lib/useMasterCatalog";
 import { TemplateHero } from "@pms/shared/components/ui/TemplateHero";
@@ -47,7 +48,7 @@ export default function DealerProductsPage() {
     setกำลังบันทึก(true);
     try {
       await saveDealer({ pricing: { ...pricing, byTemplate } });
-      setบันทึกแล้วเมื่อ(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+      setบันทึกแล้วเมื่อ(ชั่วโมงนาทีไทย());
     } finally { setกำลังบันทึก(false); }
   };
 

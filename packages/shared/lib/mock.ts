@@ -1,5 +1,7 @@
 ﻿// Mock data สำหรับ frontend (ยังไม่เชื่อม backend)
 // ─── ROLE / SESSION ───────────────────────────────────────────
+import { วันเวลาไทย } from "./thaiDate";
+
 export type UserRole =
   | "SUPER_ADMIN"
   | "HQ_MANAGEMENT"
@@ -748,10 +750,9 @@ export function taskProgress(tasks: LeadTask[] = []): number {
 // ปรับ Checklist ให้ "ตรงกับสเตจเป๊ะ" — ไปข้างหน้าติ๊กงานถึงสเตจนั้น · ย้อนกลับเอาติ๊กที่เกินสเตจออก
 // (คง doneAt/doneBy ของงานที่ยังอยู่ในสเตจไว้) ใช้ตอนลากการ์ดเปลี่ยนสถานะบนบอร์ด
 // วันเวลาปัจจุบันแบบไทย ใช้ประทับบนงานที่เพิ่งถูกติ๊ก — ต้องเป็นเวลาจริง ห้ามฝังตายตัว
+// เวลาไทยเสมอ ไม่ขึ้นกับโซนเวลาของเครื่อง (ดู วันเวลาไทย ใน thaiDate.ts)
 export function nowStampTH(d: Date = new Date()): string {
-  const mo = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-  const hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
+  return วันเวลาไทย(d);
 }
 
 export function syncTasksToStage(tasks: LeadTask[] | undefined, status: LeadStatus, doneBy: string, tpl: LeadTaskDef[] = LEAD_TASK_TEMPLATE): LeadTask[] {

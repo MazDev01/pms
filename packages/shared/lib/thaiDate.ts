@@ -15,3 +15,26 @@ export function parseThaiDate(s?: string): Date | null {
   return new Date(+m[3] - 543, TH_MONTH[m[2]], +m[1]);
 }
 export const toThaiDate = (d: Date) => `${d.getDate()} ${TH_ABBR[d.getMonth()]} ${d.getFullYear() + 543}`;
+
+// ── เวลาไทย (บอสแจ้ง 14 ก.ย. 69: หน้าบันทึกการใช้งานโชว์ 02:03 ทั้งที่เข้าระบบตอน 09:03) ──
+//
+// ต้นเหตุ: d.getHours() อ่านเวลาตาม "เครื่องที่โค้ดรันอยู่" ไม่ใช่เวลาไทย
+//   · บนเซิร์ฟเวอร์ Vercel เครื่องตั้งเป็น UTC → ช้ากว่าไทย 7 ชม. ทุกรายการ
+//   · บนเบราว์เซอร์ถูกเฉพาะเครื่องที่ตั้งโซนเวลาไทยไว้ — เครื่องที่ตั้งผิดก็ประทับเวลาผิดลงฐานข้อมูลไปด้วย
+// ไทยไม่มีเวลาออมแสง จึงบวก 7 ชม. ตายตัวแล้วอ่านด้วย getUTC* ได้เลย ไม่ต้องพึ่งข้อมูลโซนเวลาของเครื่อง
+// ⚠️ ห้ามกลับไปใช้ getHours()/getMinutes() กับเวลาที่จะแสดงหรือบันทึก — เรียกสองตัวนี้แทน
+// (ฝั่งฐานข้อมูลทำแบบเดียวกันอยู่แล้ว: at time zone 'Asia/Bangkok' ใน migration 0106/0148/0160)
+const ห่างจากUTC = 7 * 60 * 60 * 1000;
+const สองหลัก = (n: number) => String(n).padStart(2, "0");
+
+/** เวลาตอนนั้นตามนาฬิกาไทย → "09:03" */
+export function ชั่วโมงนาทีไทย(d: Date = new Date()): string {
+  const t = new Date(d.getTime() + ห่างจากUTC);
+  return `${สองหลัก(t.getUTCHours())}:${สองหลัก(t.getUTCMinutes())}`;
+}
+
+/** วันและเวลาตามนาฬิกาไทย → "14 ก.ย. 2569 · 09:03" (รูปแบบที่ parseDate อ่านกลับได้) */
+export function วันเวลาไทย(d: Date): string {
+  const t = new Date(d.getTime() + ห่างจากUTC);
+  return `${t.getUTCDate()} ${TH_ABBR[t.getUTCMonth()]} ${t.getUTCFullYear() + 543} · ${สองหลัก(t.getUTCHours())}:${สองหลัก(t.getUTCMinutes())}`;
+}

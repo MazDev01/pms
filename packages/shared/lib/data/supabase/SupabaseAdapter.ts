@@ -18,6 +18,7 @@ import { reportPartialData } from "@pms/shared/lib/repoLog";
 import type { DataAdapter, DealerRollup, QuoteRangeRow } from "../ports";
 import type { SalesTable, SalesChange } from "../ports";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { วันเวลาไทย } from "@pms/shared/lib/thaiDate";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, DealerLeadRulesMap, LeadRules,
@@ -44,12 +45,10 @@ export function isNoSessionError(e: unknown): boolean {
 type Row = Record<string, unknown>;
 
 // at (timestamptz ISO) → "30 มิ.ย. 2569 · 09:22" (รูปแบบเดียวกับ stampNow ใน useAudit ที่ parseDate อ่านได้)
-const TH_MO_AUDIT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+// เวลาไทยเสมอ ไม่ขึ้นกับโซนเวลาของเครื่องที่เปิดดู (ดู วันเวลาไทย ใน thaiDate.ts)
 function fmtAuditAt(iso: string): string {
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${TH_MO_AUDIT[d.getMonth()]} ${d.getFullYear() + 543} · ${hh}:${mm}`;
+  return isNaN(d.getTime()) ? iso : วันเวลาไทย(d);
 }
 
 // PostgREST คืนสูงสุดต่อคำขอ (ค่าเริ่มต้น 1,000 แถว) — ถ้าไม่ไล่ทีละหน้า ข้อมูลจะถูก "ตัดเงียบ ๆ"
