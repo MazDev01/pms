@@ -244,7 +244,7 @@ export async function assertHealthyPage(page: Page, label: string) {
 //    ตอนนี้กล่องยืนยันเป็น HTML ในหน้าเว็บ — ตัวดักนั้นจะไม่ทำงานอีกต่อไป
 //    และร้ายกว่านั้นคือมัน "ไม่ล้ม" แค่ไม่มีอะไรเกิดขึ้น เทสต์จึงเขียวแบบหลอกได้
 //    ทุกจุดที่เคยดัก dialog ต้องเปลี่ยนมาใช้สองตัวนี้แทน
-const กล่องยืนยัน = (page: Page) => page.locator(".pms-confirm");
+const กล่องยืนยัน = (page: Page) => page.locator(".pms-confirm[role='alertdialog']");
 
 /** รอกล่องยืนยันแล้วกด "ตกลง" — คืนข้อความในกล่อง (ไว้ตรวจว่าถามถูกเรื่อง) */
 export async function กดตกลงในกล่องยืนยัน(page: Page): Promise<string> {

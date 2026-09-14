@@ -1,6 +1,7 @@
 // Ports — สัญญา (interface) ที่ทุก adapter ต้องมี
 // context/hook เรียกผ่าน repository เหล่านี้เท่านั้น · เบื้องหลังสลับ adapter ได้
 // ทุกเมธอดเป็น async ตั้งแต่แรก → ต่อ network (เฟส B) ไม่ต้องแก้ signature
+import type { DealerPackageProposal, DealerProposalStatus } from "./types";
 import type { DealerProspect } from "./types";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
@@ -95,6 +96,16 @@ export interface ProspectsRepo {
   list(): Promise<DealerProspect[]>;
   create(p: Omit<DealerProspect, "id">): Promise<DealerProspect>;
   update(p: DealerProspect): Promise<DealerProspect>;
+  remove(id: number): Promise<void>;
+}
+
+// ── ใบเสนอแพ็กเกจตัวแทน (ของสำนักงานใหญ่) — สิทธิ์ชุดเดียวกับลูกค้าเป้าหมาย HQ (0172) ──
+//   setStatus แยกจาก update: ใบที่ส่งแล้วถูกล็อกเนื้อหา เปลี่ยนสถานะต้องไม่ส่งทั้งแถวกลับไป
+export interface ProposalsRepo {
+  list(prospectId?: number): Promise<DealerPackageProposal[]>;
+  create(p: Omit<DealerPackageProposal, "id">): Promise<DealerPackageProposal>;
+  update(p: DealerPackageProposal): Promise<DealerPackageProposal>;
+  setStatus(id: number, status: DealerProposalStatus): Promise<DealerPackageProposal>;
   remove(id: number): Promise<void>;
 }
 
@@ -575,4 +586,5 @@ export interface DataAdapter {
   customers: CustomersRepo;
   appointments: AppointmentsRepo;
   prospects: ProspectsRepo;
+  proposals: ProposalsRepo;
 }

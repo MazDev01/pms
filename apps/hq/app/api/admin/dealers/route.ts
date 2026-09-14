@@ -106,6 +106,8 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     return bad(400, "ตัวแทนจำหน่ายต้องสร้างจากลูกค้าเป้าหมายที่สำเร็จแล้ว — เริ่มที่หน้า “ลูกค้าเป้าหมาย (HQ)”");
   }
   const prospectId = Number(body.prospectId);
+  // ใบเสนอแพ็กเกจที่จะตั้งเป็น "ตอบรับ" หลังสร้างสาขาสำเร็จ (null = มีใบที่ตอบรับอยู่แล้ว ไม่ต้องแตะ)
+  let ใบที่จะตอบรับ: number | null = null;
   {
     if (!Number.isInteger(prospectId) || prospectId <= 0) return bad(400, "ไม่พบลูกค้าเป้าหมายที่อ้างถึง");
     const { data: pr, error: prErr } = await admin.from("dealer_prospects")
@@ -116,6 +118,21 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     }
     if (!pr) return bad(404, "ไม่พบลูกค้าเป้าหมายรายนี้แล้ว — อาจถูกลบไปก่อนหน้า");
     if (pr.status === "won" && pr.dealer_code) return bad(409, `ลูกค้าเป้าหมายรายนี้เป็นตัวแทนแล้ว (รหัส ${pr.dealer_code})`);
+
+    // ── ต้องมี "ใบเสนอแพ็กเกจตัวแทน" ที่ส่งแล้วหรือตอบรับ อย่างน้อย 1 ใบ (บอสสั่ง 14 ก.ย. 69) ──
+    //   กติกาเดียวกับฝั่งตัวแทนที่ปิดการขายไม่ได้ถ้ายังไม่มีใบเสนอราคาที่ส่งแล้ว (0145)
+    //   ใบร่าง/ปฏิเสธไม่นับ · ตรวจก่อนสร้างบัญชี ไม่ทิ้งบัญชีกำพร้า
+    const { data: ใบ, error: ใบErr } = await admin.from("dealer_package_proposals")
+      .select("id, status").eq("prospect_id", prospectId).in("status", ["sent", "accepted"])
+      .order("id", { ascending: false });
+    if (ใบErr) {
+      console.error("[create-dealer] ตรวจใบเสนอแพ็กเกจไม่สำเร็จ", ใบErr);
+      return bad(503, "ตรวจใบเสนอแพ็กเกจไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+    }
+    if (!ใบ?.length) {
+      return bad(400, "ต้องส่งใบเสนอแพ็กเกจตัวแทนให้รายนี้ก่อน อย่างน้อย 1 ใบ — แล้วค่อยตั้งเป็นตัวแทนจำหน่าย");
+    }
+    ใบที่จะตอบรับ = ใบ.some(x => x.status === "accepted") ? null : Number(ใบ[0].id);
   }
 
   // ── อีเมล/รหัสผ่าน: HQ กรอกเองได้ (บอสสั่ง 20 ส.ค. 69) · ไม่กรอก = ระบบตั้งให้เหมือนเดิม ──
@@ -195,6 +212,13 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     prospectLinked = !linkErr;
     if (linkErr) console.error(`[create-dealer] ผูกลูกค้าเป้าหมาย #${prospectId} กับสาขา ${code} ไม่สำเร็จ`, linkErr);
     else await auditLog(admin, prof, "ลูกค้าเป้าหมายเป็นตัวแทนแล้ว", `#${prospectId} → ${code} · ${name}`);
+    // สาขาเกิดจากใบนี้ → ใบล่าสุดที่ส่งแล้วถือว่า "ตอบรับ" (แบบเดียวกับใบเสนอราคาที่ปิดการขายแล้วกลายเป็นตอบรับ)
+    //   ล้มตรงนี้ไม่ย้อนการสร้างสาขา แต่ต้องมีร่องรอย
+    if (ใบที่จะตอบรับ !== null) {
+      const { error: ตอบรับErr } = await admin.from("dealer_package_proposals")
+        .update({ status: "accepted" }).eq("id", ใบที่จะตอบรับ);
+      if (ตอบรับErr) console.error(`[create-dealer] ตั้งใบเสนอแพ็กเกจ #${ใบที่จะตอบรับ} เป็นตอบรับไม่สำเร็จ`, ตอบรับErr);
+    }
   }
   // คืนรหัสให้หน้าจอโชว์ให้ก๊อปไปแจ้งตัวแทน (และเก็บสำเนาเข้ารหัสไว้ให้ HQ เปิดดูภายหลังได้)
   return NextResponse.json({ ok: true, email, password, prospectLinked });

@@ -223,7 +223,12 @@ export async function ลูกค้าเป้าหมายรองรั�
   if (delErr) throw new Error(`ล้างลูกค้าเป้าหมายทดสอบของ ${code} ไม่สำเร็จ: ${delErr.message}`);
   const { data, error } = await sb.from("dealer_prospects").insert({ name, status: "considering" }).select("id").single();
   if (error || !data) throw new Error(`สร้างลูกค้าเป้าหมายรองรับสาขา ${code} ไม่สำเร็จ: ${error?.message ?? "ไม่มีข้อมูลคืนมา"}`);
-  return (data as { id: number }).id;
+  const id = (data as { id: number }).id;
+  // ต้องมีใบเสนอแพ็กเกจตัวแทนที่ส่งแล้ว ถึงจะสร้างตัวแทนได้ (บอสสั่ง 14 ก.ย. 69)
+  const { error: ใบErr } = await sb.from("dealer_package_proposals")
+    .insert({ prospect_id: id, package: "standard", status: "sent", proposed_date: new Date().toISOString().slice(0, 10) });
+  if (ใบErr) throw new Error(`สร้างใบเสนอแพ็กเกจรองรับสาขา ${code} ไม่สำเร็จ: ${ใบErr.message}`);
+  return id;
 }
 
 /** เปิดกล่อง "ตั้งเป็นตัวแทนจำหน่าย" ของลูกค้าเป้าหมายที่สร้างให้สาขานี้ (ยังไม่กรอกอะไร) — ต้องล็อกอิน HQ ไว้ก่อน */

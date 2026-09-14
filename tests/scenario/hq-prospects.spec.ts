@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ADMIN, RYG, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { HQ_ORIGIN, loginUI, watchErrors, assertNoErrors, db, waitRow, specNS } from "./funcHelpers";
+import { กดตกลงในกล่องยืนยัน } from "./helpers";
 
 // ── ลูกค้าเป้าหมายของสำนักงานใหญ่ = ผู้สนใจเป็นตัวแทนจำหน่าย (บอสสั่ง 14 ก.ย. 69) ─────────
 //   "เพิ่มโมดูลลูกค้าเป้าหมายของทางฝั่ง HQ และเมื่อสำเร็จจากลูกค้าเป้าหมายจะกลายเป็นตัวแทนจำหน่าย"
@@ -122,6 +123,10 @@ test("[func·hq] ตั้งเป็นตัวแทนจำหน่าย
     .insert({ name, province: "ระยอง", status: "meeting" }).select("id").single();
   expect(error).toBeNull();
   const id = (ins as { id: number }).id;
+  // ต้องมีใบเสนอแพ็กเกจที่ส่งแล้ว ถึงจะสร้างตัวแทนใหม่ได้ (บอสสั่ง 14 ก.ย. 69)
+  const { error: ใบErr } = await sb.from("dealer_package_proposals")
+    .insert({ prospect_id: id, package: "standard", status: "sent", proposed_date: "2026-09-14" });
+  expect(ใบErr).toBeNull();
 
   await loginUI(page, HQ_ORIGIN, "/hq/prospects", ADMIN);
   await page.getByRole("row", { name: new RegExp(name) }).click();
@@ -189,5 +194,101 @@ test("[ui·hq] ฟอร์มลูกค้าเป้าหมาย: เล
   await ฟอร์ม.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).click();
   await waitRow(await db(ADMIN), "dealer_prospects", { name, region: "อีสาน", province: "บุรีรัมย์" });
   assertNoErrors(errs, "ฟอร์มลูกค้าเป้าหมาย: ภาค/จังหวัด");
+});
+
+// ── ใบเสนอแพ็กเกจตัวแทน (บอสสั่ง 14 ก.ย. 69: "เหมือนดีลเลอร์ที่ต้องมีใบเสนอราคา แต่อันนี้ของ HQ") ──
+
+test("[api] ยังไม่มีใบเสนอแพ็กเกจที่ส่งแล้ว → สร้างตัวแทนไม่ได้ (ใบร่างไม่นับ)", async () => {
+  const sb = await db(ADMIN);
+  const name = `${NS}-ยังไม่ส่งใบ`;
+  const { data: ins, error } = await sb.from("dealer_prospects").insert({ name, status: "considering" }).select("id").single();
+  expect(error).toBeNull();
+  const id = (ins as { id: number }).id;
+  const { error: ใบErr } = await sb.from("dealer_package_proposals")
+    .insert({ prospect_id: id, package: "exclusive", status: "draft", proposed_date: "2026-09-14" });
+  expect(ใบErr).toBeNull();
+
+  const res = await fetch(`${HQ_ORIGIN}/api/admin/dealers`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${await adminToken()}`, "content-type": "application/json" },
+    body: JSON.stringify({ code: DUP_CODE, name, province: "ระยอง", region: "ตะวันออก", revenueTarget: 0, prospectId: id }),
+  });
+  expect(res.status, "มีแต่ใบร่าง ต้องสร้างตัวแทนไม่ได้").toBe(400);
+  expect(((await res.json()) as { error?: string }).error ?? "").toMatch(/ใบเสนอแพ็กเกจ/);
+  const { data } = await sb.from("dealers").select("code").eq("code", DUP_CODE);
+  expect(data ?? [], "คำขอที่ถูกปฏิเสธต้องไม่สร้างสาขา").toHaveLength(0);
+});
+
+test("[security] ใบเสนอแพ็กเกจ: ตัวแทนมองไม่เห็น · ข้ามจากร่างไปตอบรับไม่ได้ · ส่งแล้วแก้เนื้อหา/ลบไม่ได้", async () => {
+  const sb = await db(ADMIN);
+  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name: `${NS}-ตรวจกติกาใบ` }).select("id").single();
+  expect(error).toBeNull();
+  const { data: ใบ, error: ใบErr } = await sb.from("dealer_package_proposals")
+    .insert({ prospect_id: (pr as { id: number }).id, package: "standard", proposed_date: "2026-09-14", proposal_no: "ปลอม-001" })
+    .select("id, proposal_no, status").single();
+  expect(ใบErr).toBeNull();
+  const row = ใบ as { id: number; proposal_no: string; status: string };
+  expect(row.status, "ใบใหม่ต้องเริ่มที่ร่าง").toBe("draft");
+  expect(row.proposal_no, "เลขที่ใบต้องออกโดยฐานข้อมูล ผู้เรียกกำหนดเองไม่ได้").toMatch(/^DP-\d{4}-\d{4}$/);
+
+  const ข้ามขั้น = await sb.from("dealer_package_proposals").update({ status: "accepted" }).eq("id", row.id).select();
+  expect(ข้ามขั้น.error, "ร่าง → ตอบรับ ข้ามขั้นไม่ได้").not.toBeNull();
+
+  const ส่ง = await sb.from("dealer_package_proposals").update({ status: "sent" }).eq("id", row.id).select().single();
+  expect(ส่ง.error, "ร่าง → ส่งแล้ว ต้องได้").toBeNull();
+
+  const แก้ = await sb.from("dealer_package_proposals").update({ amount: 1 }).eq("id", row.id).select();
+  expect(แก้.error, "ใบที่ส่งแล้วแก้เนื้อหาไม่ได้").not.toBeNull();
+  const ลบ = await sb.from("dealer_package_proposals").delete().eq("id", row.id).select();
+  expect(ลบ.error, "ใบที่ส่งแล้วลบไม่ได้").not.toBeNull();
+
+  const dealer = await db(RYG);
+  const { data: เห็น } = await dealer.from("dealer_package_proposals").select("id").eq("id", row.id);
+  expect(เห็น ?? [], "ตัวแทนต้องไม่เห็นใบเสนอแพ็กเกจของสำนักงานใหญ่").toHaveLength(0);
+});
+
+test("[func·hq] ออกใบเสนอแพ็กเกจ → ยังเป็นร่าง สร้างตัวแทนไม่ได้ → ส่งแล้ว สร้างได้", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(ADMIN);
+  const name = `${NS}-ออกใบผ่านหน้าจอ`;
+  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name, province: "ชลบุรี", status: "meeting" }).select("id").single();
+  expect(error).toBeNull();
+  const prospectId = (pr as { id: number }).id;
+
+  await loginUI(page, HQ_ORIGIN, "/hq/prospects", ADMIN);
+  await page.getByLabel("ค้นหาลูกค้าเป้าหมาย").fill(name);
+  await page.getByRole("row", { name: new RegExp(name) }).click();
+  const แก้ไข = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  await แก้ไข.getByRole("button", { name: "ออกใบเสนอแพ็กเกจ" }).click();
+
+  const ใบ = page.getByRole("dialog", { name: "ใบเสนอแพ็กเกจตัวแทน" });
+  await ใบ.getByRole("button", { name: "บันทึกใบ" }).click();
+  await expect(ใบ.getByText(/ต้องเลือกแพ็กเกจ/), "ไม่เลือกแพ็กเกจ = บันทึกไม่ได้ (ห้ามเลือกให้เอง)").toBeVisible();
+  await ใบ.locator("#pp-package").selectOption("exclusive");
+  await expect(ใบ.locator("#pp-province"), "จังหวัดเติมจากลูกค้าเป้าหมายให้").toHaveValue("ชลบุรี");
+  await ใบ.locator("#pp-amount").fill("150000");
+  await expect(ใบ.locator("#pp-amount"), "ช่องเงินต้องขึ้นลูกน้ำ").toHaveValue("150,000");
+  await ใบ.getByRole("button", { name: "บันทึกใบ" }).click();
+
+  const แถวใบ = await waitRow<{ id: number; proposal_no: string; status: string; amount: number }>(
+    sb, "dealer_package_proposals", { prospect_id: prospectId });
+  expect(แถวใบ.status).toBe("draft");
+  expect(Number(แถวใบ.amount)).toBe(150000);
+  await expect(แก้ไข.getByText(แถวใบ.proposal_no)).toBeVisible();
+
+  // ยังเป็นร่าง → ปุ่มสร้างตัวแทนต้องกดไม่ได้ พร้อมบอกเหตุผล
+  await แก้ไข.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).click();
+  const ตั้ง = page.getByRole("dialog", { name: "ตั้งเป็นตัวแทนจำหน่าย" });
+  await expect(ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" })).toBeDisabled();
+  await expect(ตั้ง.getByText(/ต้องมี “ใบเสนอแพ็กเกจตัวแทน”/)).toBeVisible();
+  await ตั้ง.getByRole("button", { name: "ยกเลิก" }).click();
+
+  // เปลี่ยนเป็นส่งแล้ว → สร้างตัวแทนได้
+  await แก้ไข.getByLabel(`สถานะใบ ${แถวใบ.proposal_no}`).selectOption("sent");
+  await กดตกลงในกล่องยืนยัน(page);
+  await waitRow(sb, "dealer_package_proposals", { id: แถวใบ.id, status: "sent" });
+  await แก้ไข.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).click();
+  await expect(ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" }), "มีใบที่ส่งแล้ว ต้องกดได้").toBeEnabled();
+  assertNoErrors(errs, "ออกใบเสนอแพ็กเกจตัวแทน");
 });
 

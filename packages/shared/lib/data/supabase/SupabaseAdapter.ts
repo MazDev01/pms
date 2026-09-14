@@ -3,6 +3,8 @@
 // SupabaseAdapter — เชื่อม repository ทุกตัวเข้ากับตาราง Supabase (เฟส B)
 // map ตาราง ↔ type ตาม BACKEND-DESIGN.md · ขอบเขตข้อมูล (dealer_code) บังคับด้วย RLS ที่ DB
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
+import { เตรียมบันทึกใบ } from "@pms/shared/lib/dealerProposals";
+import type { DealerPackageProposal } from "@pms/shared/lib/data/types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
 import type { DealerProspect } from "@pms/shared/lib/data/types";
 import { accountRemote } from "../accountRemote";
@@ -585,6 +587,34 @@ export const SupabaseAdapter: DataAdapter = {
       return toCamel<DealerProspect>(data as Row);
     }),
     remove: (id) => must(sb().from("dealer_prospects").delete().eq("id", id)),
+  },
+  // ใบเสนอแพ็กเกจตัวแทน — RLS (0172) ชุดเดียวกับลูกค้าเป้าหมาย HQ · สถานะ/การล็อกเนื้อหา ตัวดักของฐานข้อมูลบังคับ
+  proposals: {
+    list: async (prospectId) => (await pageAll((from, to) => {
+      let q = sb().from("dealer_package_proposals").select("*");
+      if (prospectId != null) q = q.eq("prospect_id", prospectId);
+      return q.order("id", { ascending: false }).range(from, to);
+    }, "dealer_package_proposals")).map(r => toCamel<DealerPackageProposal>(r)),
+    create: (p) => withNetworkRetry(async () => {
+      const { data, error } = await sb().from("dealer_package_proposals")
+        .insert(toSnake(เตรียมบันทึกใบ(p) as unknown as Row)).select().single();
+      if (error) throw new DbError(error.message, error.code);
+      return toCamel<DealerPackageProposal>(data as Row);
+    }),
+    update: (p) => withNetworkRetry(async () => {
+      const { data, error } = await sb().from("dealer_package_proposals")
+        .update(toSnake(เตรียมบันทึกใบ(p) as unknown as Row)).eq("id", p.id).select().single();
+      if (error) throw new DbError(error.message, error.code);
+      return toCamel<DealerPackageProposal>(data as Row);
+    }),
+    // เปลี่ยนสถานะอย่างเดียว — ไม่ส่งทั้งแถว (ใบที่ส่งแล้วถูกล็อกเนื้อหา)
+    setStatus: (id, status) => withNetworkRetry(async () => {
+      const { data, error } = await sb().from("dealer_package_proposals")
+        .update({ status }).eq("id", id).select().single();
+      if (error) throw new DbError(error.message, error.code);
+      return toCamel<DealerPackageProposal>(data as Row);
+    }),
+    remove: (id) => must(sb().from("dealer_package_proposals").delete().eq("id", id)),
   },
   users: {
     list: async () => {

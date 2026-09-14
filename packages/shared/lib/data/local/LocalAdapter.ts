@@ -39,12 +39,14 @@ function fireProfile() {
 import { putLocalBlob, localBlobUrl, removeLocalBlob } from "./blobStore";
 import { accountLocal } from "./accountLocal";
 import type { DataAdapter } from "../ports";
-import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect } from "../types";
+import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect, DealerPackageProposal } from "../types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
+import { เตรียมบันทึกใบ, ใบล็อกแล้ว, สถานะที่เปลี่ยนไปได้ } from "@pms/shared/lib/dealerProposals";
 
 const HQ_COMPANY_KEY = "hq_company_profile";
 const NOTES_KEY = "customer_notes_v1";
 const PROSPECTS_KEY = "hq_dealer_prospects_v1";
+const PROPOSALS_KEY = "hq_dealer_proposals_v1";
 const HQ_USERS_KEY = "hq_users_v4";
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY, DEALER_PRICING_KEY } from "@pms/shared/lib/mock";
@@ -254,6 +256,56 @@ export const LocalAdapter: DataAdapter = {
     },
     remove: (id) => {
       writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(x => x.id !== id));
+      // ใบของรายนั้นหายตามไปด้วย — แบบเดียวกับฐานข้อมูลจริง (on delete cascade)
+      writeKey(PROPOSALS_KEY, readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []).filter(x => x.prospectId !== id));
+      return done();
+    },
+  },
+  // ใบเสนอแพ็กเกจตัวแทน (โหมดเดโม) — กติกาเดียวกับตัวดักของฐานข้อมูล 0172:
+  //   เลขที่ออกให้เอง · สถานะเดินหน้าทางเดียว · ส่งแล้วแก้เนื้อหา/ลบไม่ได้
+  proposals: {
+    list: (prospectId) => ok(readKey<DealerPackageProposal[]>(PROPOSALS_KEY, [])
+      .filter(x => prospectId == null || x.prospectId === prospectId)),
+    create: (p) => {
+      const all = readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []);
+      const ปี = new Date().getFullYear();
+      const ลำดับ = all.filter(x => String(x.proposalNo ?? "").startsWith(`DP-${ปี}-`)).length + 1;
+      const now = new Date().toISOString();
+      const row: DealerPackageProposal = {
+        ...เตรียมบันทึกใบ(p), id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1,
+        proposalNo: `DP-${ปี}-${String(ลำดับ).padStart(4, "0")}`, createdAt: now, updatedAt: now,
+      };
+      writeKey(PROPOSALS_KEY, [row, ...all]);
+      return ok(row);
+    },
+    update: (p) => {
+      const all = readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []);
+      const เดิม = all.find(x => x.id === p.id);
+      if (!เดิม) return Promise.reject(new Error("ไม่พบใบเสนอแพ็กเกจนี้แล้ว"));
+      if (ใบล็อกแล้ว(เดิม.status)) return Promise.reject(new Error("ใบที่ส่งแล้วแก้เนื้อหาไม่ได้ — เปลี่ยนได้แค่สถานะ"));
+      const row: DealerPackageProposal = {
+        ...เตรียมบันทึกใบ(p), id: เดิม.id, prospectId: เดิม.prospectId, proposalNo: เดิม.proposalNo,
+        status: เดิม.status, createdAt: เดิม.createdAt, updatedAt: new Date().toISOString(),
+      };
+      writeKey(PROPOSALS_KEY, all.map(x => x.id === row.id ? row : x));
+      return ok(row);
+    },
+    setStatus: (id, status) => {
+      const all = readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []);
+      const เดิม = all.find(x => x.id === id);
+      if (!เดิม) return Promise.reject(new Error("ไม่พบใบเสนอแพ็กเกจนี้แล้ว"));
+      if (!สถานะที่เปลี่ยนไปได้(เดิม.status).includes(status)) {
+        return Promise.reject(new Error(`เปลี่ยนสถานะใบเสนอแพ็กเกจจาก ${เดิม.status} เป็น ${status} ไม่ได้`));
+      }
+      const row = { ...เดิม, status, updatedAt: new Date().toISOString() };
+      writeKey(PROPOSALS_KEY, all.map(x => x.id === id ? row : x));
+      return ok(row);
+    },
+    remove: (id) => {
+      const all = readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []);
+      const เดิม = all.find(x => x.id === id);
+      if (เดิม && ใบล็อกแล้ว(เดิม.status)) return Promise.reject(new Error("ลบได้เฉพาะใบร่าง — ใบที่ส่งแล้วต้องเก็บไว้เป็นหลักฐาน"));
+      writeKey(PROPOSALS_KEY, all.filter(x => x.id !== id));
       return done();
     },
   },

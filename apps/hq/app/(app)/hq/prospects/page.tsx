@@ -19,9 +19,9 @@ import Link from "next/link";
 import {
   UserPlus, Users, AlarmClock, Store, Percent, Search, X, Trash2, Copy, Check,
 } from "lucide-react";
-import { prospects as prospectsRepo, dealers as dealersRepo } from "@pms/shared/lib/data";
+import { prospects as prospectsRepo, dealers as dealersRepo, proposals as proposalsRepo } from "@pms/shared/lib/data";
 import { invalidateCache } from "@pms/shared/lib/data/dedupe";
-import type { DealerProspect, DealerProspectStatus, DealerRow } from "@pms/shared/lib/data/types";
+import type { DealerPackageProposal, DealerProspect, DealerProspectStatus, DealerRow } from "@pms/shared/lib/data/types";
 import {
   PROSPECT_STATUS_ORDER, prospectStatusLabel, prospectStatusColor,
   เตรียมบันทึก, ตรวจผู้สนใจ, ถึงกำหนดติดตาม, สรุปผู้สนใจ, ตรงกับคำค้น,
@@ -29,6 +29,8 @@ import {
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
 import { createDealerAccount } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { ProspectProposalsPanel } from "@pms/shared/components/hq/ProspectProposalsPanel";
+import { มีใบเสนอที่ส่งแล้ว } from "@pms/shared/lib/dealerProposals";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -79,6 +81,8 @@ export default function HQProspectsPage() {
   const [convErr, setConvErr] = useState("");
   const [convBusy, setConvBusy] = useState(false);
   const [creds, setCreds] = useState<{ name: string; code: string; email: string; password: string } | null>(null);
+  // ใบเสนอแพ็กเกจของรายที่เปิดอยู่ (แผงใบเสนอส่งมาให้) — ใช้ตัดสินว่ากดสร้างตัวแทนใหม่ได้หรือยัง
+  const [ใบของรายที่เปิด, setใบของรายที่เปิด] = useState<DealerPackageProposal[]>([]);
   const [คัดลอกแล้ว, setคัดลอกแล้ว] = useState("");
 
   const โหลด = useCallback(async () => {
@@ -118,7 +122,7 @@ export default function HQProspectsPage() {
   }
   function เปิดแก้(p: DealerProspect) {
     // รายเก่าที่ยังไม่มีภาค แต่จังหวัดเป็นจังหวัดที่ระบบรู้จัก → เติมภาคให้ในฟอร์ม จะได้เลือกจังหวัดต่อได้ทันที
-    setEditing(p); setร่าง({ ...p, region: p.region || regionOf(p.province ?? "") }); setFormErr("");
+    setEditing(p); setร่าง({ ...p, region: p.region || regionOf(p.province ?? "") }); setFormErr(""); setใบของรายที่เปิด([]);
   }
   const ตั้งค่า = <K extends keyof DealerProspect>(k: K, v: DealerProspect[K]) => setร่าง(r => ({ ...r, [k]: v }));
   // เปลี่ยนภาค → ล้างจังหวัดที่ไม่อยู่ในภาคใหม่ (กันภาค "ใต้" คู่จังหวัด "เชียงใหม่") · "ทุกภาค" = "ทุกจังหวัด" ให้เอง
@@ -224,6 +228,7 @@ export default function HQProspectsPage() {
     }
 
     // สร้างตัวแทนใหม่ — ตรวจที่หน้าจอก่อนเพื่อบอกตรงช่องที่ผิด (เซิร์ฟเวอร์ตรวจซ้ำเสมอ)
+    if (!มีใบเสนอที่ส่งแล้ว(ใบของรายที่เปิด)) { setConvErr("ต้องส่งใบเสนอแพ็กเกจตัวแทนก่อน อย่างน้อย 1 ใบ"); return; }
     const code = ฟอร์ม.code.trim().toUpperCase();
     if (!/^[A-Z]{2,5}$/.test(code)) { setConvErr("รหัสตัวแทนต้องเป็นตัวอักษร A–Z 2–5 ตัว (ห้ามมีตัวเลข)"); return; }
     if (dealers.some(d => d.code === code)) { setConvErr(`รหัส “${code}” มีอยู่แล้ว`); return; }
@@ -251,6 +256,11 @@ export default function HQProspectsPage() {
         setList(l => l.map(x => x.id === saved.id ? saved : x));
         invalidateCache("dealers.list");
         โหลดตัวแทน();
+        // ใบล่าสุดที่ส่งแล้ว → ตอบรับ (แบบเดียวกับที่เซิร์ฟเวอร์ทำในโหมดจริง)
+        if (!ใบของรายที่เปิด.some(x => x.status === "accepted")) {
+          const ใบส่งแล้ว = ใบของรายที่เปิด.find(x => x.status === "sent");
+          if (ใบส่งแล้ว) await proposalsRepo.setStatus(ใบส่งแล้ว.id, "accepted");
+        }
         logAudit("สร้างตัวแทน", `${code} · ${แถวใหม่.name} (จากลูกค้าเป้าหมาย #${saved.id})`);
         แจ้งสำเร็จ(`สร้างตัวแทน ${code} แล้ว (โหมดเดโม — ไม่มีบัญชีเข้าระบบจริง)`);
         setConverting(null); setEditing(null);
@@ -523,6 +533,11 @@ export default function HQProspectsPage() {
                 </div>
               </fieldset>
 
+              {/* ใบเสนอแพ็กเกจตัวแทน — "เหมือนใบเสนอราคาของตัวแทน แต่ของ HQ" (บอสสั่ง 14 ก.ย. 69) */}
+              {รายที่เปิด && (
+                <ProspectProposalsPanel prospect={รายที่เปิด} editable={จัดการได้} onChange={setใบของรายที่เปิด} />
+              )}
+
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
                 {จัดการได้ && รายที่เปิด && (
                   <button className="btn btn-sm" disabled={saving} onClick={() => void ลบ(รายที่เปิด)}
@@ -570,6 +585,15 @@ export default function HQProspectsPage() {
                   ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว
                 </label>
               </div>
+
+              {/* ด่านเดียวกับที่เซิร์ฟเวอร์บังคับ — บอกก่อนกด ไม่ต้องให้ผู้ใช้กรอกครบแล้วค่อยโดนปฏิเสธ
+                  ผูกกับตัวแทนที่มีอยู่แล้วไม่ต้องมีใบ (บันทึกประวัติรายที่เป็นตัวแทนมาก่อนระบบนี้) */}
+              {โหมดตั้ง === "new" && !มีใบเสนอที่ส่งแล้ว(ใบของรายที่เปิด) && (
+                <div role="note" style={{ background: "#fff8e6", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", fontSize: "0.78rem", color: "#92400e", fontWeight: 600, lineHeight: 1.6 }}>
+                  ยังสร้างตัวแทนใหม่ไม่ได้ — ต้องมี “ใบเสนอแพ็กเกจตัวแทน” ที่ส่งแล้วหรือตอบรับอย่างน้อย 1 ใบ
+                  (ออกใบได้ในหน้าต่างรายละเอียดของรายนี้) · ถ้าเป็นตัวแทนอยู่แล้ว เลือก “ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว”
+                </div>
+              )}
 
               {โหมดตั้ง === "existing" ? (
                 <div>
@@ -629,7 +653,7 @@ export default function HQProspectsPage() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
                 <button className="btn btn-secondary btn-md" disabled={convBusy} onClick={() => setConverting(null)}>ยกเลิก</button>
-                <button className="btn btn-primary btn-md" disabled={convBusy} onClick={() => void ยืนยันตั้งตัวแทน()}
+                <button className="btn btn-primary btn-md" disabled={convBusy || (โหมดตั้ง === "new" && !มีใบเสนอที่ส่งแล้ว(ใบของรายที่เปิด))} onClick={() => void ยืนยันตั้งตัวแทน()}
                   style={convBusy ? { opacity: .6, cursor: "not-allowed" } : undefined}>
                   {convBusy ? "กำลังดำเนินการ…" : โหมดตั้ง === "new" ? "สร้างตัวแทนจำหน่าย" : "ผูกกับตัวแทนนี้"}
                 </button>

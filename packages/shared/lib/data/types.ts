@@ -104,3 +104,25 @@ export type DealerProspect = {
   updatedAt?: string;
 };
 
+// ── ใบเสนอแพ็กเกจตัวแทน (บอสสั่ง 14 ก.ย. 69) ──
+//   "เหมือนใบเสนอราคาของตัวแทน แต่ของ HQ" · คล้ายแฟรนไชส์แต่ไม่ใช่แฟรนไชส์ (บอสยืนยัน)
+//   ต้องมีใบที่ส่งแล้ว/ตอบรับ ถึงจะสร้างตัวแทนใหม่ได้ · ดู migration 0172 · lib/dealerProposals.ts
+export type DealerPackage = "standard" | "exclusive";
+export type DealerProposalStatus = "draft" | "sent" | "accepted" | "rejected";
+export type DealerPackageProposal = {
+  id: number;
+  prospectId: number;
+  proposalNo?: string | null;    // DP-ปี-NNNN ฐานข้อมูลออกให้เสมอ
+  package: DealerPackage;
+  region?: string | null;
+  province?: string | null;
+  amount?: number | null;        // มูลค่าแพ็กเกจ (บาท) — HQ กรอกเอง ไม่บังคับ
+  terms?: string | null;
+  proposedDate?: string | null;  // YYYY-MM-DD
+  validUntil?: string | null;    // YYYY-MM-DD
+  status: DealerProposalStatus;
+  note?: string | null;          // หมายเหตุภายใน ไม่พิมพ์ลงเอกสาร
+  createdAt?: string;
+  updatedAt?: string;
+};
+

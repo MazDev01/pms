@@ -77,19 +77,26 @@ export function เตรียมบันทึก(p: Partial<DealerProspect>)
   };
 }
 
+/** ตรวจคู่ภาค/จังหวัด — ใช้ทั้งลูกค้าเป้าหมายและใบเสนอแพ็กเกจตัวแทน (กติกาเดียวกัน) · คืนข้อความ หรือ null ถ้าผ่าน */
+export function ตรวจภาคกับจังหวัด(region: string | null, province: string | null): string | null {
+  if (region && region !== ALL_REGIONS && !(REGIONS as readonly string[]).includes(region)) return "ภาคไม่ถูกต้อง";
+  if (province === ALL_PROVINCES && region !== ALL_REGIONS) return "“ทุกจังหวัด” ใช้คู่กับภาค “ทุกภาค” เท่านั้น";
+  //   เช็กเฉพาะจังหวัดที่ระบบรู้จัก — ข้อมูลเก่าที่พิมพ์ย่อต้องไม่ถูกบล็อกจนแก้อะไรไม่ได้เลย
+  const ภาคของจังหวัด = province ? regionOf(province) : null;
+  if (region && region !== ALL_REGIONS && ภาคของจังหวัด && ภาคของจังหวัด !== region) {
+    return `จังหวัด${province} ไม่ได้อยู่ในภาค${region}`;
+  }
+  return null;
+}
+
 /** ตรวจความถูกต้อง — คืนข้อความที่ผู้ใช้อ่านเข้าใจ หรือ null ถ้าผ่าน */
 export function ตรวจผู้สนใจ(p: ผู้สนใจที่จะบันทึก): string | null {
   if (!p.name) return "ต้องระบุชื่อลูกค้าเป้าหมาย";
   if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.email)) return "รูปแบบอีเมลไม่ถูกต้อง";
   if (p.firstContact && p.followUp && p.followUp < p.firstContact) return "วันติดตามต้องไม่ก่อนวันเริ่มติดต่อ";
   // ภาค/จังหวัด (บอสสั่ง 14 ก.ย. 69: เลือกภาคก่อน แล้วค่อยเลือกจังหวัด · มี "ทุกภาค")
-  if (p.region && p.region !== ALL_REGIONS && !(REGIONS as readonly string[]).includes(p.region)) return "ภาคไม่ถูกต้อง";
-  if (p.province === ALL_PROVINCES && p.region !== ALL_REGIONS) return "“ทุกจังหวัด” ใช้คู่กับภาค “ทุกภาค” เท่านั้น";
-  //   เช็กเฉพาะจังหวัดที่ระบบรู้จัก — ข้อมูลเก่าที่พิมพ์ย่อต้องไม่ถูกบล็อกจนแก้อะไรไม่ได้เลย
-  const ภาคของจังหวัด = p.province ? regionOf(p.province) : null;
-  if (p.region && p.region !== ALL_REGIONS && ภาคของจังหวัด && ภาคของจังหวัด !== p.region) {
-    return `จังหวัด${p.province} ไม่ได้อยู่ในภาค${p.region}`;
-  }
+  const ผิดพื้นที่ = ตรวจภาคกับจังหวัด(p.region ?? null, p.province ?? null);
+  if (ผิดพื้นที่) return ผิดพื้นที่;
   // "เป็นตัวแทนแล้ว" ต้องรู้ว่าเป็นตัวแทนรหัสไหน — ไม่งั้นกดเลือกสถานะเฉย ๆ แล้วนับเป็นความสำเร็จได้ทั้งที่ไม่มีสาขาจริง
   if (p.status === "won" && !p.dealerCode) return "สถานะ “เป็นตัวแทนแล้ว” ต้องผูกกับตัวแทนจำหน่าย — ใช้ปุ่ม “ตั้งเป็นตัวแทนจำหน่าย”";
   if (p.dealerCode && !/^[A-Z]{2,5}$/.test(p.dealerCode)) return "รหัสตัวแทนต้องเป็นตัวอักษร A–Z 2–5 ตัว";
