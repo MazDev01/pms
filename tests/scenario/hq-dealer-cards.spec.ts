@@ -33,9 +33,12 @@ test("[func·hq] หน้าตัวแทนจำหน่าย: เปิ�
   expect(error).toBeNull();
 
   await loginUI(page, HQ_ORIGIN, "/hq/dealers", ADMIN);
+  // เปิดมาเป็นตาราง (บอสสั่ง 14 ก.ย. 69: "ให้แสดงหน้านี้เป็นหลัก") — กดสลับเป็นการ์ดเอง
+  await expect(page.locator("tbody tr").first(), "เปิดหน้ามาต้องเป็นตาราง").toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "แสดงแบบตาราง" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "แสดงแบบการ์ด" }).click();
   const การ์ด = page.getByRole("button", { name: /^เปิดรายละเอียดตัวแทน / });
-  await expect(การ์ด.first(), "เปิดหน้ามาต้องเป็นการ์ด").toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("button", { name: "แสดงแบบการ์ด" })).toHaveAttribute("aria-pressed", "true");
+  await expect(การ์ด.first(), "สลับแล้วต้องเป็นการ์ด").toBeVisible({ timeout: 15_000 });
   await expect(page.locator("tbody tr"), "มุมมองการ์ดต้องไม่มีตาราง").toHaveCount(0);
 
   await page.getByPlaceholder("ค้นหาตัวแทน...").fill("RYG");
