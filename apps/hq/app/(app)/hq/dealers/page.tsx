@@ -1,4 +1,5 @@
 "use client";
+import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 import { useEffect, useState } from "react";
 import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
@@ -370,18 +371,15 @@ function HQDealersPageInner() {
   return (
     <div className="erp">
       {/* Header */}
-      <div className="page-head">
-        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
-        <div />
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* ปุ่ม/ตัวกรองของหน้าอยู่ขวาหัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้า/ป้ายกลุ่มมาจากแถบบนแล้ว */}
+      <TopbarActions>
           <ExportMenu filename="dealers" title="ตัวแทน (ทั้งเครือ)"
             headers={["รหัส","ตัวแทน","จังหวัด","ภาค","อีเมล","รายได้จริง","เป้า","อัตราปิดการขาย %","โอกาสการขาย","สถานะ"]}
             rows={filtered.map(d=>[d.code,d.name,d.province,d.region,loginEmailOf(d.code),perfOf(d.code).revenue,d.revenueTarget,perfOf(d.code).winRate ?? "—",perfOf(d.code).openLeads,dealerStatusLabel[d.status]])} />
           {/* ⛔ ไม่มีปุ่มสร้าง/เพิ่มตัวแทนที่หน้านี้ (บอสสั่ง 14 ก.ย. 69)
               ตัวแทนต้องมาจาก "ลูกค้าเป้าหมาย (HQ)" ที่สำเร็จแล้วเท่านั้น — เข้าจากเมนูข้างได้เลย
               เคยมีปุ่ม "เพิ่มผ่านลูกค้าเป้าหมาย" ลัดไปหน้านั้น บอสสั่งเอาออก ("เอาออกเลย") — ห้ามใส่กลับ */}
-        </div>
-      </div>
+      </TopbarActions>
 
       {/* คำขอเปลี่ยนบัญชีเข้าระบบจากตัวแทน (โผล่เฉพาะเมื่อมีคำขอ) — ครั้งที่ 3 ขึ้นไปต้องอนุมัติที่นี่ */}
       <AccountRequestsCard />

@@ -586,7 +586,6 @@ export default function HQProspectsPage() {
           </button>
         )}
       </TopbarActions>
-      <div className="page-head"><div /></div>
 
       {/* สรุป — 4 ใบตามกติกากลาง (globals.css: ทุกหน้าใช้ KPI 4 ใบเท่ากัน ห้ามเพิ่มเป็น 5+) */}
       <div className="kpi-bar">

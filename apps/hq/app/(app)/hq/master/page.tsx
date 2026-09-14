@@ -1,4 +1,5 @@
 "use client";
+import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 // ─── HQ · แคตตาล็อกแม่แบบ / ราคากลาง (แหล่งเดียวทั้งเครือ) ─────────────────
 // HQ แก้ไขที่นี่ → persist ลง MASTER_CATALOG_KEY → Dealer (/products + dropdown ฟอร์ม)
@@ -600,12 +601,10 @@ function HQMasterPageInner() {
 
   return (
     <div className="erp">
-      {/* Header */}
-      <div className="page-head">
-        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
-        <div />
+      {/* ปุ่ม/ตัวกรองของหน้าอยู่ขวาหัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้า/ป้ายกลุ่มมาจากแถบบนแล้ว */}
+      <TopbarActions>
         <button className="btn btn-primary btn-md" onClick={openAdd}><Plus size={15} /> เพิ่มแม่แบบ</button>
-      </div>
+      </TopbarActions>
 
       {/* Summary — KPI มาตรฐานของ HQ (.hq-kpi4) : ป้าย → ตัวเลข → หน่วย/บริบท · ไอคอนกล่องสีจางมุมขวา
           เดิมหน้านี้ใช้ .hqx-kpi ชุดเก่า (แถบสีซ้าย + ไอคอนซ้าย + ตัวเลขขึ้นก่อนป้าย)

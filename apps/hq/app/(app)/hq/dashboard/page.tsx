@@ -1,4 +1,5 @@
 "use client";
+import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -739,19 +740,14 @@ export default function HQDashboard() {
 
   return (
     <div className="erp">
-      <div className="page-head">
-        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้าทั้ง HQ และตัวแทน (บอสสั่ง 14 ส.ค. 69)
-            ช่วงเวลาที่เลือกยังอ่านได้จากตัวกรองบนแถบเดียวกันอยู่แล้ว — ไม่ต้องเขียนซ้ำ
-            เหลือ <div> ว่างไว้เพื่อให้ปุ่ม/ตัวกรองยังชิดขวาตามเลย์เอาต์ .page-head เดิม */}
-        <div />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      {/* ปุ่ม/ตัวกรองของหน้าอยู่ขวาหัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้า/ป้ายกลุ่มมาจากแถบบนแล้ว */}
+      <TopbarActions>
           {/* เลือกดูภาพรวมทั้งเครือ หรือเจาะรายตัวแทน — ตัวเลือกเฉพาะหน้านี้ (UI เดียวกับตัวกรองเวลา) */}
           <SelectFilter caption="ทุกตัวแทน (ทั้งเครือ)" value={dealerSel}
             options={allDealers.map(d => ({ value: d.code, label: `${d.code} – ${d.name}` }))}
             onChange={setDealerSel} />
           <FilterBar dims={[]} />
-        </div>
-      </div>
+      </TopbarActions>
 
       {/* KPI 4 ใบ — ดีไซน์เดียวกับแดชบอร์ดตัวแทน (การ์ดเป้าหมาย=วงแหวน · ที่เหลือ=ไอคอน + "ดูรายละเอียด") */}
       <div className="hq-kpi4" style={{ marginBottom: "1.5rem" }}>

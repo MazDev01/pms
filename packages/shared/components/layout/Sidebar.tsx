@@ -1,78 +1,21 @@
 "use client";
 
+// ── แถบข้าง (UI รอบใหม่ 14 ก.ย. 69 · บอสสั่ง "รี ui ให้ออกแบบตามเว็บตัวอย่าง ยกเว้นสี เอาสีเดิม") ──
+//   กว้าง 256px พื้นเทาอ่อน · แดชบอร์ดเดี่ยวบนสุด · หัวกลุ่มเป็นป้ายตัวเล็ก เมนูแสดงครบตลอด
+//   ⛔ ห้ามทำหัวกลุ่มเป็นปุ่มพับ/กาง — เคยทำแล้ว บอสสั่งเอาออก ("ไม่เอาดรอปดาวน์แบบนี้ กลับไปเป็นแบบเดิม" 14 ก.ย. 69)
+//   ท้ายแถบเป็นการ์ดผู้ใช้ + ปุ่มออกจากระบบ (หรือ "กลับสู่ HQ" ตอนสวมสิทธิ์)
+//   รายการเมนู/ลำดับอยู่ที่ navConfig.tsx ที่เดียว
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard, Store, Phone, Package,
-  Settings, GitMerge, ScrollText, Users,
-  CalendarDays, FolderOpen, History, LogOut, Crown, ArrowLeft, UserPlus, FileText,
-} from "lucide-react";
+import { LogOut, ArrowLeft } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { roleLabelOf } from "@pms/shared/lib/mock";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useImpersonating, clearImpersonation } from "@pms/shared/lib/useImpersonating";
 import { useDealerDisplayName } from "@pms/shared/lib/useCurrentDealer";
 import { useAuthReady } from "@pms/shared/lib/useAuthReady";
-
-type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
-type NavGroup = { group: string; items: NavItem[] };
-
-// Dealer = ฝ่ายขายล้วน (Sales-only)
-// ตามสเปก Dealer modules: Dashboard · Leads · Customers · Sales Journey · Quotations · Product Catalog · Calendar · Files · Reports · Settings
-const DEALER_NAV: NavGroup[] = [
-  {
-    group: "เมนูหลัก",
-    items: [
-      { label: "แดชบอร์ด",        href: "/dashboard",  icon: <LayoutDashboard size={16} /> },
-      { label: "ลูกค้าเป้าหมาย",  href: "/leads",      icon: <Phone size={16} /> },
-      { label: "ใบเสนอราคา",      href: "/quotations", icon: <ScrollText size={16} /> },
-      { label: "ลูกค้า",          href: "/customers",  icon: <Users size={16} /> },
-      { label: "แม่แบบ",          href: "/products",   icon: <Package size={16} /> },
-    ],
-  },
-  {
-    group: "เครื่องมือ",
-    items: [
-      { label: "ปฏิทิน", href: "/calendar", icon: <CalendarDays size={16} /> },
-      { label: "ไฟล์",   href: "/files",    icon: <FolderOpen size={16} /> },
-    ],
-  },
-  {
-    group: "ระบบ",
-    items: [
-      { label: "ตั้งค่า", href: "/settings", icon: <Settings size={16} /> },
-    ],
-  },
-];
-
-// ตามสเปก HQ modules: Executive Dashboard · Dealer Management · Analytics · Leads (ทุก Dealer) · Product Catalog · Settings
-// ลำดับ "ภาพรวมยอดขาย" มาก่อน "ลูกค้าเป้าหมายทั้งเครือ" — บอสสั่ง 16 ก.ค. 69
-const HQ_NAV: NavGroup[] = [
-  {
-    group: "เมนูหลัก",
-    items: [
-      { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  icon: <LayoutDashboard size={16} /> },
-      // ลูกค้าเป้าหมายของสำนักงานใหญ่ = ผู้สนใจเป็นตัวแทน · วางก่อน "ตัวแทนจำหน่าย" เพราะสำเร็จแล้วไหลไปเป็นตัวแทน (บอสสั่ง 14 ก.ย. 69)
-      { label: "ลูกค้าเป้าหมาย (HQ)", href: "/hq/prospects", icon: <UserPlus size={16} /> },
-      // ใบเสนอแพ็กเกจของทุกราย รวมที่เดียว — อยู่ถัดจากลูกค้าเป้าหมาย (HQ) เพราะเป็นขั้นต่อจากกันก่อนตั้งเป็นตัวแทน (บอสสั่ง 14 ก.ย. 69)
-      { label: "ใบเสนอแพ็กเกจตัวแทน", href: "/hq/proposals", icon: <FileText size={16} /> },
-      { label: "ตัวแทนจำหน่าย",     href: "/hq/dealers",    icon: <Store size={16} /> },
-      { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
-      { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",  icon: <Phone size={16} /> },
-      { label: "ใบเสนอราคาทั้งเครือ", href: "/hq/quotations", icon: <ScrollText size={16} /> },
-      { label: "ลูกค้าทั้งเครือ",   href: "/hq/customers",  icon: <Users size={16} /> },
-      { label: "แคตตาล็อกแม่แบบ",  href: "/hq/master",     icon: <Package size={16} /> },
-    ],
-  },
-  {
-    group: "ระบบ",
-    items: [
-      { label: "บันทึกการใช้งาน", href: "/hq/audit", icon: <History size={16} /> },
-      { label: "ตั้งค่า", href: "/hq/settings", icon: <Settings size={16} /> },
-    ],
-  },
-];
+import { HQ_NAV, DEALER_NAV, isActiveHref } from "./navConfig";
 
 export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boolean; onNavigate?: () => void } = {}) {
   const pathname = usePathname();
@@ -80,105 +23,101 @@ export function Sidebar({ mobileOpen = false, onNavigate }: { mobileOpen?: boole
   const { isHQ, session, logout } = useRole();
   // แท็บนี้เปิดมาจากปุ่ม "เข้าระบบแทนตัวแทน" ของสำนักงานใหญ่หรือเปล่า
   const สวมสิทธิ์อยู่ = useImpersonating();
-  // แถบเมนูใช้แบรนด์ Benjamin มาตรฐานเดียวเสมอทุกบทบาท (ดู .sidebar-brand ด้านล่าง)
-  // — เดิมอ่านโลโก้/ชื่อแบรนด์จาก localStorage มาเก็บใน state แต่ไม่เคยเอาไปแสดง (โค้ดตาย) จึงเอาออก
-  // โปรไฟล์ผู้ใช้ (/profile) → ชื่อ/รูปในการ์ดเจ้าของท้าย sidebar อัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
-  // โปรไฟล์ผ่าน repo — เดิมอ่าน localStorage ต่อสาขา (ผู้ใช้ในสาขาเดียวกันทับกันเอง)
+  // โปรไฟล์ผ่าน repo — ชื่อ/รูปในการ์ดท้ายแถบอัปเดตทันทีเมื่อบันทึก (แหล่งเดียวกับ Topbar)
   const { profile } = useUserProfile();
   const dealerDisplayName = useDealerDisplayName(); // ชื่อบริษัทที่สาขากรอก → ทะเบียน HQ → รหัสสาขา
 
   // ── เมนูต้องรอจนรู้ว่าใครล็อกอินอยู่ก่อนเสมอ ────────────────────────────────
-  //
   // ⚠️ isHQ มาจาก session ซึ่งค่าเริ่มต้นคือ "สาขาเดโม" — ก่อนรู้ตัวตนจริง แอปสำนักงานใหญ่
-  //    จึงเรนเดอร์เมนูของ *ตัวแทน* ออกมาชั่วขณะ แล้ว Next.js ไปดึงหน้าเหล่านั้นล่วงหน้า
-  //    (/leads /quotations /customers /products /calendar /files /settings)
-  //    ซึ่งไม่มีอยู่ในแอปสำนักงานใหญ่ → 404 เจ็ดครั้งทุกครั้งที่เปิดหน้า (วัดได้จริงบนของจริง 18 ส.ค. 69)
-  //
+  //    จะเรนเดอร์เมนูของ *ตัวแทน* ชั่วขณะ แล้ว Next.js ไปดึงหน้าเหล่านั้นล่วงหน้า → 404 เจ็ดครั้งทุกครั้งที่เปิดหน้า
   // ⚠️ เดาจาก URL แทนไม่ได้ — แอปสำนักงานใหญ่มี /dashboard และ /profile ของตัวเองที่ไม่ได้ขึ้นต้นด้วย /hq
-  //
-  // รอ useAuthReady ก่อน = ตอนเรนเดอร์เมนู session เป็นของจริงเสมอ เลือกเมนูถูกตั้งแต่ครั้งแรก
-  // (ยังไม่ล็อกอิน = กำลังจะถูกพาไปหน้าเข้าสู่ระบบอยู่แล้ว ไม่มีเมนูให้ดูก็ไม่เสียหาย)
   const ready = useAuthReady();
 
-  // เดิม prefetch ทั้งสองเส้นทางไม่ว่าง role ไหน — เส้นทางของอีกแอปไม่มีจริงในแอปนี้ (dealer ไม่มี /hq/*
-  // และกลับกัน) ยิง 404 ซ้ำ ๆ ทุกครั้งที่ Sidebar โหลด (พบจริงจากทดสอบโหลด: เกือบ 300 ครั้งใน log)
+  // prefetch เฉพาะเส้นทางของแอปนี้ — เส้นทางของอีกแอปไม่มีจริง ยิง 404 ซ้ำ ๆ
   useEffect(() => {
     if (!ready) return;
     router.prefetch(isHQ ? "/hq/dashboard" : "/dashboard");
   }, [ready, router, isHQ]);
 
   const nav = ready ? (isHQ ? HQ_NAV : DEALER_NAV) : [];
-  // ชื่อในการ์ดเจ้าของ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัทของสาขา · HQ ใช้ชื่อผู้ใช้
-  // (ชื่อสาขาผ่าน useDealerDisplayName เหมือนแถบบน — ไม่งั้นเมนูซ้ายขึ้นรหัสสาขาแต่แถบบนขึ้นชื่อบริษัท)
+  // ชื่อในการ์ดท้ายแถบ = ชื่อเดียวทั้งแอป · ดีลเลอร์ใช้ชื่อบริษัทของสาขา · HQ ใช้ชื่อผู้ใช้
   const displayName = isHQ ? (profile?.name || session.name) : dealerDisplayName;
 
   return (
     <aside className={`erp-sidebar${mobileOpen ? " open" : ""}`}>
-      {/* Brand — แบรนด์ Benjamin เท่านั้นทุกบทบาท (ตัวแทนเปลี่ยนโลโก้/แบรนด์เองไม่ได้) */}
+      {/* Brand — แบรนด์ Benjamin เท่านั้นทุกบทบาท (ตัวแทนเปลี่ยนโลโก้/แบรนด์เองไม่ได้)
+          ไม่มีคำบรรยายใต้ชื่อแบรนด์ (บอสสั่ง 1 ก.ย. 69) · ชื่อหน้าจริง (h1) อยู่ที่หัวหน้าเพจ */}
       <div className="sidebar-brand">
         <div className="brand-mark">
           { }
           <img src="/benjamin-logo-white.png" alt="Benjamin" style={{ width: 26, height: 26, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
         </div>
-        {/* ชื่อแบรนด์ ไม่ใช่หัวข้อหลักของหน้า — h1 จริงอยู่ที่ Topbar (เปลี่ยนตามหน้า)
-            เดิมเป็น h1 ทั้งคู่ → ทุกหน้ามี h1 ซ้ำ 2 อัน screen reader/SEO สับสนว่าอันไหนคือหัวข้อจริง */}
-        {/* เหลือแค่ชื่อแบรนด์ — คำบรรยายใต้ชื่อ ("PRE-ENGINEERED BUILDING" / "EASYBUILD")
-            ถูกเอาออกทั้งสองแอป (บอสสั่ง 1 ก.ย. 69) */}
         <div className="brand-text">
           <div className="brand-name">BENJAMIN</div>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav style={{ paddingBottom: 16 }}>
-        {nav.map(group => (
-          <div key={group.group} className="nav-section">
-            <div className="nav-label">{group.group}</div>
-            {group.items.map(item => {
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
-                <Link key={item.href} href={item.href} onClick={onNavigate} className={`nav-item${active ? " active" : ""}`}>
-                  {item.icon}
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                  {item.badge ? <span className="badge-mini">{item.badge}</span> : null}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
+      <nav aria-label="เมนูหลัก">
+        {nav.map(g => {
+          if (g.flat) {
+            return (
+              <div key={g.key} className="nav-section">
+                {g.items.map(item => {
+                  const active = isActiveHref(pathname, item.href);
+                  return (
+                    <Link key={item.href} href={item.href} onClick={onNavigate} className={`nav-item nav-flat${active ? " active" : ""}`} aria-current={active ? "page" : undefined}>
+                      {item.icon}
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.badge ? <span className="badge-mini">{item.badge}</span> : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          }
+          return (
+            <div key={g.key} className="nav-section">
+              <div className="nav-label">{g.group}</div>
+              {g.items.map(item => {
+                const active = isActiveHref(pathname, item.href);
+                return (
+                  <Link key={item.href} href={item.href} onClick={onNavigate} className={`nav-item${active ? " active" : ""}`} aria-current={active ? "page" : undefined}>
+                    {item.icon}
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {item.badge ? <span className="badge-mini">{item.badge}</span> : null}
+                  </Link>
+                );
+              })}
+            </div>
+          );
+        })}
       </nav>
 
-      {/* Footer — Log Out + การ์ดเจ้าของ (HQ=เจ้าของแพลตฟอร์ม · ตัวแทน=เจ้าของบัญชีตัวแทน) */}
-      <div className="sidebar-footer" style={{ padding: "8px 10px 10px" }}>
-        {/* ── เข้ามาแบบสวมสิทธิ์จากสำนักงานใหญ่ = ปุ่มนี้ต้องเป็น "กลับสู่ HQ" (บอสสั่ง 20 ส.ค. 69) ──
-            ผู้ดูแลที่กดเข้ามาดูแทนตัวแทน ไม่ได้ต้องการ "ออกจากระบบ" แต่ต้องการกลับไปทำงานของตัวเอง
-            (ปุ่มนี้ล้างใบผ่านของตัวแทนในแท็บนี้ให้ด้วย — ไม่ทิ้งบัญชีคนอื่นค้างไว้บนเครื่อง) */}
-        {สวมสิทธิ์อยู่ ? (
-          <button onClick={() => clearImpersonation(logout)} className="nav-item"
-            style={{ width: "100%", color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-            <ArrowLeft size={16} /> <span style={{ flex: 1, textAlign: "left" }}>กลับสู่ HQ</span>
-          </button>
-        ) : (
-          <button onClick={logout} className="nav-item"
-            style={{ width: "100%", color: "#dc2626", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-            <LogOut size={16} /> <span style={{ flex: 1, textAlign: "left" }}>ออกจากระบบ</span>
-          </button>
-        )}
-        {/* ขนาดต้องพอดีกับแถบข้างตัวแทนที่กว้างแค่ 200px — อวตาร 46px + ฟอนต์ 0.82/0.74
-            เคยกินที่จนชื่อโดนตัดเหลือ "เชียงใหม่ส…" และป้ายบทบาทพับสองบรรทัด (บอสสั่งปรับ 17 ก.ค. 69) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 6, padding: "12px 8px 4px", borderTop: "1px solid var(--border)" }}>
+      {/* ท้ายแถบ — การ์ดผู้ใช้ + ปุ่มออก (HQ=ผู้ใช้ · ตัวแทน=บัญชีตัวแทน)
+          สวมสิทธิ์จากสำนักงานใหญ่ = ปุ่มเป็น "กลับสู่ HQ" (บอสสั่ง 20 ส.ค. 69) — ล้างใบผ่านของตัวแทนในแท็บนี้ให้ด้วย */}
+      <div className="sidebar-footer" style={{ padding: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px 10px 10px", borderRadius: 12, background: "rgba(0,51,102,.05)", border: "1px solid rgba(0,51,102,.08)" }}>
           {profile?.avatar
-             
-            ? <img src={profile.avatar} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-            : <span style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, background: "var(--primary)", color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 900 }}>
+            ? <img src={profile.avatar} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+            : <span style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, background: "var(--primary)", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 800 }}>
                 {(displayName || "?").trim().charAt(0)}
               </span>}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={displayName}>{displayName}</div>
-            <div style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", fontWeight: 600, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{roleLabelOf(session.role, isHQ)}</div>
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={displayName}>{displayName}</div>
+            <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{roleLabelOf(session.role, isHQ)}</div>
           </div>
-          <Crown size={15} color="#e11d48" fill="#e11d48" strokeWidth={1.5} style={{ flexShrink: 0 }} />
+          {สวมสิทธิ์อยู่ ? (
+            <button type="button" onClick={() => clearImpersonation(logout)} aria-label="กลับสู่ HQ" title="กลับสู่ HQ"
+              style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 9, border: "1px solid #bfdbfe", background: "#fff", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <ArrowLeft size={15} />
+            </button>
+          ) : (
+            <button type="button" onClick={logout} aria-label="ออกจากระบบ" title="ออกจากระบบ"
+              style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 9, border: "1px solid var(--border)", background: "#fff", color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <LogOut size={15} />
+            </button>
+          )}
         </div>
       </div>
     </aside>

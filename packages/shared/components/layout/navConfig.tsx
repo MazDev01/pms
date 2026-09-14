@@ -1,0 +1,85 @@
+// ── เมนูข้าง + ป้ายกลุ่มบนหัวหน้าเพจ — แหล่งเดียว ──────────────────────────────────────
+//
+// UI รอบใหม่ (บอสสั่ง 14 ก.ย. 69: "รี ui ให้ออกแบบตามเว็บตัวอย่าง ยกเว้นสี เอาสีเดิม")
+//   • เมนูจัดกลุ่ม ชื่อไทย · หัวกลุ่มเป็นป้ายธรรมดา ไม่พับ/กาง (บอสสั่งเอาปุ่มพับออก) · แดชบอร์ดอยู่เดี่ยวบนสุด
+//   • ป้ายเล็กเหนือชื่อหน้า = ชื่อกลุ่มของเมนูนั้น (Topbar อ่านจาก eyebrowOf)
+//
+// ⚠️ ลำดับเมนูภายในยังเป็นลำดับเดิมที่บอสสั่งไว้ทุกข้อ — แค่จัดเข้ากลุ่ม ห้ามสลับลำดับเอง
+//    (ลูกค้าเป้าหมาย HQ ก่อนตัวแทนจำหน่าย · ภาพรวมยอดขายก่อนลูกค้าเป้าหมายทั้งเครือ ฯลฯ)
+import {
+  LayoutDashboard, Store, Phone, Package, Settings, GitMerge, ScrollText, Users,
+  CalendarDays, FolderOpen, History, UserPlus, FileText,
+} from "lucide-react";
+
+export type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
+export type NavGroup = {
+  key: string;
+  /** ชื่อกลุ่ม — ขึ้นเป็นหัวกลุ่มในเมนู และป้ายเล็กเหนือชื่อหน้า */
+  group: string;
+  icon?: React.ReactNode;
+  /** กลุ่มเดี่ยว (แดชบอร์ด) — แสดงเป็นเมนูตรง ๆ ไม่มีป้ายหัวกลุ่ม */
+  flat?: boolean;
+  items: NavItem[];
+};
+
+// Dealer = ฝ่ายขายล้วน (Sales-only)
+export const DEALER_NAV: NavGroup[] = [
+  { key: "overview", group: "ภาพรวม", flat: true, items: [
+    { label: "แดชบอร์ด", href: "/dashboard", icon: <LayoutDashboard size={17} /> },
+  ] },
+  { key: "sales", group: "งานขาย", icon: <Phone size={15} />, items: [
+    { label: "ลูกค้าเป้าหมาย", href: "/leads",      icon: <Phone size={16} /> },
+    { label: "ใบเสนอราคา",     href: "/quotations", icon: <ScrollText size={16} /> },
+    { label: "ลูกค้า",         href: "/customers",  icon: <Users size={16} /> },
+    { label: "แม่แบบ",         href: "/products",   icon: <Package size={16} /> },
+  ] },
+  { key: "tools", group: "เครื่องมือ", icon: <FolderOpen size={15} />, items: [
+    { label: "ปฏิทิน", href: "/calendar", icon: <CalendarDays size={16} /> },
+    { label: "ไฟล์",   href: "/files",    icon: <FolderOpen size={16} /> },
+  ] },
+  { key: "system", group: "ระบบ", icon: <Settings size={15} />, items: [
+    { label: "ตั้งค่า", href: "/settings", icon: <Settings size={16} /> },
+  ] },
+];
+
+// HQ — ลำดับ "ภาพรวมยอดขาย" มาก่อน "ลูกค้าเป้าหมายทั้งเครือ" (บอสสั่ง 16 ก.ค. 69)
+//      "ลูกค้าเป้าหมาย (HQ)" + "ใบเสนอแพ็กเกจตัวแทน" มาก่อน "ตัวแทนจำหน่าย" (บอสสั่ง 14 ก.ย. 69)
+export const HQ_NAV: NavGroup[] = [
+  { key: "overview", group: "ภาพรวมทั้งเครือ", flat: true, items: [
+    { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard", icon: <LayoutDashboard size={17} /> },
+  ] },
+  { key: "recruit", group: "หาตัวแทน", icon: <UserPlus size={15} />, items: [
+    { label: "ลูกค้าเป้าหมาย (HQ)",  href: "/hq/prospects", icon: <UserPlus size={16} /> },
+    { label: "ใบเสนอแพ็กเกจตัวแทน", href: "/hq/proposals", icon: <FileText size={16} /> },
+    { label: "ตัวแทนจำหน่าย",       href: "/hq/dealers",   icon: <Store size={16} /> },
+  ] },
+  { key: "sales", group: "งานขายทั้งเครือ", icon: <GitMerge size={15} />, items: [
+    { label: "ภาพรวมยอดขาย",          href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
+    { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",      icon: <Phone size={16} /> },
+    { label: "ใบเสนอราคาทั้งเครือ",    href: "/hq/quotations", icon: <ScrollText size={16} /> },
+    { label: "ลูกค้าทั้งเครือ",        href: "/hq/customers",  icon: <Users size={16} /> },
+  ] },
+  { key: "catalog", group: "สินค้า", icon: <Package size={15} />, items: [
+    { label: "แคตตาล็อกแม่แบบ", href: "/hq/master", icon: <Package size={16} /> },
+  ] },
+  { key: "system", group: "ระบบ", icon: <Settings size={15} />, items: [
+    { label: "บันทึกการใช้งาน", href: "/hq/audit",    icon: <History size={16} /> },
+    { label: "ตั้งค่า",         href: "/hq/settings", icon: <Settings size={16} /> },
+  ] },
+];
+
+export const isActiveHref = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+
+/** ป้ายเล็กเหนือชื่อหน้า = ชื่อกลุ่มของเมนูที่ตรงกับหน้านี้ (ตรงยาวสุดชนะ) · หน้านอกเมนู = ป้ายตามหมวด หรือว่าง */
+export function eyebrowOf(pathname: string, isHQ: boolean): string {
+  let best: { len: number; group: string } | null = null;
+  for (const g of isHQ ? HQ_NAV : DEALER_NAV) {
+    for (const it of g.items) {
+      if (isActiveHref(pathname, it.href) && (!best || it.href.length > best.len)) best = { len: it.href.length, group: g.group };
+    }
+  }
+  if (best) return best.group;
+  if (pathname.startsWith("/profile")) return "บัญชีผู้ใช้";
+  if (pathname.startsWith("/hq/users")) return "ระบบ";
+  return "";
+}

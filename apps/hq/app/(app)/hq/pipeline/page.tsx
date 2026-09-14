@@ -1,4 +1,5 @@
 "use client";
+import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 // ─── HQ · ภาพรวมยอดขายทั้งเครือ (Sales Analytics) ──────────────────────────────
 // ศูนย์บัญชาการยอดขายของสำนักงานใหญ่ — อ่านอย่างเดียว ไม่มีสร้าง/แก้/ลบ (Action = ดู · วิเคราะห์ · ส่งออก)
@@ -427,10 +428,8 @@ export default function SalesAnalyticsPage() {
   return (
     <div className="erp">
       {/* ── HEADER ── */}
-      <div className="page-head">
-        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
-        <div />
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* ปุ่ม/ตัวกรองของหน้าอยู่ขวาหัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้า/ป้ายกลุ่มมาจากแถบบนแล้ว */}
+      <TopbarActions>
           <FilterBar dims={[]} />
           {/* ส่งออก = ตารางผลงานที่เห็นบนจอ (ผ่านตัวกรองทุกตัวแล้ว) */}
           <ExportMenu filename="hq-sales-analytics" title="ภาพรวมยอดขายทั้งเครือ"
@@ -439,8 +438,7 @@ export default function SalesAnalyticsPage() {
               d.code, d.name, regionDisplay(d.region), d.province, d.leads, d.quotes, d.quoteVal,
               d.revenueActual, d.conv === null ? "—" : `${d.conv}%`, d.revenueTarget, `${d.tpct}%`, d.latest,
             ])} />
-        </div>
-      </div>
+      </TopbarActions>
 
       {/* ── EXECUTIVE KPI ── */}
       <div className="hq-kpi4" style={{ marginBottom: "1.25rem" }}>

@@ -167,7 +167,6 @@ export default function HQProposalsPage() {
           </button>
         )}
       </TopbarActions>
-      <div className="page-head"><div /></div>
 
       {/* สรุป — 4 ใบตามกติกากลาง (globals.css: ทุกหน้าใช้ KPI 4 ใบเท่ากัน) */}
       <div className="kpi-bar">

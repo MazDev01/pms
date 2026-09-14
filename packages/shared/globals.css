@@ -1464,3 +1464,85 @@ textarea:focus-visible {
   .cust-kpis > .card,
   .hq-alert-row > .card { padding: 13px 14px !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UI รอบใหม่ (14 ก.ย. 69 · บอสสั่ง "รี ui ให้ออกแบบตามเว็บตัวอย่าง ยกเว้นสี เอาสีเดิม")
+   โครงหน้าตามเว็บตัวอย่าง: แถบข้าง 256px พื้นเทาอ่อน + กลุ่มเมนูพับได้ (ชื่อไทย)
+   · แถบบนติดหนึบ ช่องค้นหากว้าง · หัวหน้าเพจ = ป้ายกลุ่ม + ชื่อใหญ่ + ปุ่มขวา + เส้นคั่น
+   · การ์ด/ช่องกรอก มุมมนขึ้น เงาบางลง
+   ⚠️ สีคงเดิมทั้งหมด (กรม #003366) — ห้ามยกสีแดงของเว็บตัวอย่างมา
+   ⚠️ ไม่มีคำโปรยใต้ชื่อหน้า (บอสสั่ง 14 ส.ค. 69 · ยืนยันอีกครั้ง 14 ก.ย. 69)
+   ย้อนกลับแบบเดิม: ลบบล็อกนี้ + คืน Sidebar/Topbar จาก tag snapshot-2026-09-14
+═══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 1025px) {
+  .app, .app.app-hq { grid-template-columns: 256px 1fr; }
+}
+.app .main { background: #fbfbfc; }
+
+/* แถบข้าง */
+.erp-sidebar { background: #fafafa; }
+.erp-sidebar .sidebar-brand { height: 64px; padding: 0 1.25rem; box-sizing: border-box; }
+.erp-sidebar .brand-mark { width: 38px; height: 38px; border-radius: 10px; box-shadow: none; }
+.erp-sidebar .brand-text .brand-name { font-size: 1rem; letter-spacing: .03em; }
+.erp-sidebar > nav { padding: 14px 12px 16px; }
+.nav-section { padding: 0; }
+.nav-section + .nav-section { border-top: none; padding-top: 0; margin-top: 4px; }
+.erp-sidebar .nav-label { font-size: .7rem; font-weight: 700; letter-spacing: .04em; color: #71717a; padding: 12px 12px 6px; text-transform: none; }
+.nav-item {
+  padding: 8px 12px; border-radius: 10px; font-size: .9rem; font-weight: 500; color: #3f3f46;
+  border-left: none; margin-bottom: 2px;
+}
+.nav-item:hover { background: #f1f3f6; color: var(--primary); }
+/* เมนูที่เลือกอยู่ = พื้นกรมเข้ม ตัวขาว ทุกเมนู (บอสส่งภาพปุ่มแดชบอร์ด "ตอนคลิกให้ปุ่มเป็นแบบสี" 14 ก.ย. 69) — เดิมเมนูย่อยเป็นพื้นฟ้าจาง */
+.nav-item.active { background: var(--primary); color: #fff; font-weight: 700; border-left: none; box-shadow: 0 4px 12px rgba(0,51,102,.25); }
+.nav-item.active svg { color: #fff; opacity: 1; }
+.nav-item.active:hover { background: var(--brand-600, #002244); color: #fff; }
+.nav-item.nav-flat { font-size: .95rem; font-weight: 600; color: #27272a; margin-bottom: 6px; }
+.nav-item.nav-flat.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(0,51,102,.25); }
+.nav-item.nav-flat.active svg { color: #fff; opacity: 1; }
+
+/* แถบบน */
+.erp-topbar {
+  position: sticky; top: 0; z-index: 90; height: 64px; box-sizing: border-box; padding: 0 24px; gap: 12px;
+  background: rgba(255,255,255,.86); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-search {
+  display: flex; align-items: center; gap: 10px; flex: 0 1 448px; min-width: 0; height: 40px; padding: 0 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: #fff; color: #9ca3af;
+  font-family: inherit; font-size: .86rem; cursor: text; text-align: left; transition: border-color .15s, box-shadow .15s;
+}
+.topbar-search:hover { border-color: #cdd8e6; box-shadow: 0 0 0 3px rgba(0,51,102,.06); }
+.topbar-search span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-btn, .user-chip { box-shadow: none; }
+.user-chip { border-radius: 12px; padding: .3rem .7rem .3rem .35rem; }
+
+/* หัวหน้าเพจ */
+.page-header {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin: 0 1.75rem; padding: 26px 0 18px; border-bottom: 1px solid var(--border);
+}
+.page-header-text { min-width: 0; }
+.page-eyebrow { font-size: .74rem; font-weight: 700; letter-spacing: .06em; color: var(--primary); margin-bottom: 4px; }
+.page-title { font-size: 1.9rem; font-weight: 800; line-height: 1.25; color: #0f172a; letter-spacing: -.01em; margin: 0; }
+.page-header .topbar-slot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; padding-top: 0; }
+.page-header .topbar-slot:empty { display: none; }
+.app .content { padding-top: 1.25rem; }
+
+/* การ์ด / ช่องกรอก / ปุ่ม — มุมมนขึ้น เงาบางลง */
+:root { --r: 16px; --sh: 0 1px 2px rgba(16,24,40,.04); }
+.card { box-shadow: var(--sh); }
+.kpi { border-radius: 16px; }
+.form-input, .form-select, .form-textarea { border-radius: 12px; }
+.btn { border-radius: 10px; }
+
+@media (max-width: 1024px) {
+  .erp-topbar { height: 60px; padding: 0 14px; }
+  .hamburger { margin-right: 0; flex-shrink: 0; }
+  .page-header { margin: 0 16px; padding: 18px 0 14px; }
+  .page-title { font-size: 1.5rem; }
+}
+@media (max-width: 640px) {
+  .topbar-search { flex: 0 0 40px; padding: 0; justify-content: center; }
+  .topbar-search span { display: none; }
+}

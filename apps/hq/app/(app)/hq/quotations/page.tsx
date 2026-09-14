@@ -1,4 +1,5 @@
 "use client";
+import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 // ─── HQ · ใบเสนอราคาทั้งเครือ (Network Quotations) ────────────────────────────
 // ศูนย์กลางใบเสนอราคาของตัวแทนทุกสาขา — HQ เป็นเจ้าของข้อมูล แต่ "ไม่ออกใบเอง"
@@ -285,10 +286,8 @@ export default function NetworkQuotationPage() {
 
   return (
     <div className="erp">
-      <div className="page-head">
-        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) */}
-        <div />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      {/* ปุ่ม/ตัวกรองของหน้าอยู่ขวาหัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้า/ป้ายกลุ่มมาจากแถบบนแล้ว */}
+      <TopbarActions>
           {/* ช่วงเวลาอยู่ที่หัวหน้า — ที่เดียวกับทุกหน้า HQ (แดชบอร์ด/ภาพรวมยอดขาย/ลูกค้าเป้าหมาย) */}
           <FilterBar dims={[]} />
           <ExportMenu
@@ -298,8 +297,7 @@ export default function NetworkQuotationPage() {
             rows={tableRows.map(quoteToCells)}
             getRows={exportGetRows}
           />
-        </div>
-      </div>
+      </TopbarActions>
 
       <QuotationKPICards agg={agg} />
 

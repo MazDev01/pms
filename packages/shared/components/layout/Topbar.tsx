@@ -20,7 +20,7 @@ import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useImpersonating } from "@pms/shared/lib/useImpersonating";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Compass, History, UserX, Store, Target, TrendingDown, Tag } from "lucide-react";
+import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Search, Compass, History, UserX, Store, Target, TrendingDown, Tag } from "lucide-react";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@pms/shared/lib/useAudit";
 import { confirmDiscard } from "@pms/shared/lib/useUnsavedGuard";
@@ -31,6 +31,7 @@ import { useCurrentDealer, useDealerDisplayName } from "@pms/shared/lib/useCurre
 import { useReadNotifications } from "@pms/shared/lib/useReadNotifications";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { eyebrowOf } from "./navConfig";
 
 // ── "วันนี้ของระบบ" (APP_NOW) — supabase=จริง / local=ตรึง · จัดกลุ่มการแจ้งเตือน วันนี้/เมื่อวาน ──
 const MOCK_TODAY = APP_NOW_ISO;
@@ -606,8 +607,13 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
           <Menu size={20} />
         </button>
 
-        {/* ชื่อหน้า — แหล่งเดียวของหัวหน้า (ทุกหน้าอยู่แถวนี้ ไม่มีหัวซ้ำในเนื้อหา) */}
-        <h1 className="topbar-title">{pageTitle(pathname)}</h1>
+        {/* ช่องค้นหากว้างแบบเว็บตัวอย่าง (UI รอบใหม่ 14 ก.ย. 69) — กดแล้วเปิดหน้าต่างค้นหาทั้งระบบตัวเดิม
+            ชื่อหน้าย้ายลงไปหัวหน้าเพจใต้แถบนี้ (ป้ายกลุ่ม + ชื่อใหญ่) */}
+        <button type="button" className="topbar-search" aria-label="ค้นหา"
+          onClick={() => { setShowSearch(true); setShowNotifs(false); setShowUser(false); }}>
+          <Search size={16} />
+          <span>{isHQ ? "ค้นหาหน้า ลูกค้าเป้าหมาย ตัวแทน ใบเสนอราคา…" : "ค้นหาหน้า ลูกค้าเป้าหมาย ลูกค้า ใบเสนอราคา…"}</span>
+        </button>
 
         {/* ── ป้ายบอกว่ากำลังดูชุดข้อมูลตัวอย่าง (บอสสั่ง 24 ส.ค. 69 · ผลตรวจภายนอก DL-05/HQ-12a) ──
             โหมดตัวอย่างตรึง "วันนี้ของระบบ" ไว้ที่ยุคของข้อมูล (ดู appTime.ts) ไม่ใช่วันจริง
@@ -625,14 +631,6 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         )}
 
         <div className="topbar-right">
-
-        {/* Search icon (opens overlay) */}
-        <button className="icon-btn" aria-label="ค้นหา"
-          onClick={() => { setShowSearch(true); setShowNotifs(false); setShowUser(false); }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-        </button>
 
         {/* Bell + dropdown */}
         <div ref={notifsRef} style={{ position:"relative" }}>
@@ -835,8 +833,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         </div>{/* /topbar-right */}
       </header>
 
-      {/* แถวปุ่มเฉพาะหน้า — อยู่ใต้แถบบน ชิดขวา (ช่วงวันที่ · Export · เพิ่ม · รีเฟรช) · หน้าไหนไม่มี = ซ่อน */}
-      <div className="topbar-actionbar">
+      {/* ── หัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ป้ายกลุ่มเมนู + ชื่อหน้าตัวใหญ่ · ปุ่มเฉพาะหน้าอยู่ขวา · เส้นคั่นล่าง ──
+          ไม่มีคำโปรยใต้ชื่อหน้า (บอสสั่ง 14 ส.ค. 69 · บอสยืนยันอีกครั้งตอนเลือกแบบ)
+          คลาส topbar-title คงไว้ที่ h1 — เทสต์และตัวช่วยเดิมยังหาชื่อหน้าจากคลาสนี้ */}
+      <div className="page-header">
+        <div className="page-header-text">
+          {eyebrowOf(pathname, isHQ) && <div className="page-eyebrow">{eyebrowOf(pathname, isHQ)}</div>}
+          <h1 className="page-title topbar-title">{pageTitle(pathname)}</h1>
+        </div>
+        {/* แถวปุ่มเฉพาะหน้า (ช่วงวันที่ · ส่งออก · เพิ่ม) — TopbarActions ส่งเข้ามาที่ช่องนี้ · ว่าง = ยุบหาย */}
         <div id="topbar-slot" className="topbar-slot" />
       </div>
     </>

@@ -1,4 +1,5 @@
 "use client";
+import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 
 // ─── HQ · ฐานข้อมูลลูกค้าทั้งเครือ ───────────────────────────────────────────────
 // ฐานข้อมูลลูกค้าหลังปิดการขาย — HQ ดูอย่างเดียว (ไม่มี เพิ่ม/แก้ไข/ลบ)
@@ -237,10 +238,8 @@ export default function HQCustomersPage() {
 
   return (
     <div className="erp">
-      <div className="page-head">
-        {/* คำโปรยใต้ชื่อหน้าถูกเอาออกทุกหน้า (บอสสั่ง 14 ส.ค. 69) — <div> ว่างคงไว้ให้ปุ่มชิดขวาเหมือนเดิม */}
-        <div />
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* ปุ่ม/ตัวกรองของหน้าอยู่ขวาหัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้า/ป้ายกลุ่มมาจากแถบบนแล้ว */}
+      <TopbarActions>
           <ExportMenu
             filename="hq-customers"
             title="ลูกค้าทั้งเครือ"
@@ -253,8 +252,7 @@ export default function HQCustomersPage() {
                 }
               : undefined}
           />
-        </div>
-      </div>
+      </TopbarActions>
 
       <CustomerKPICards kpi={kpi} />
 
