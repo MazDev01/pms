@@ -6,7 +6,8 @@
 import { เตรียมบันทึกใบ } from "@pms/shared/lib/dealerProposals";
 import type { DealerPackageProposal } from "@pms/shared/lib/data/types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
-import type { DealerProspect } from "@pms/shared/lib/data/types";
+import type { DealerProspect, ProspectActivity } from "@pms/shared/lib/data/types";
+import { เตรียมบันทึกการติดต่อ } from "@pms/shared/lib/prospectJourney";
 import { accountRemote } from "../accountRemote";
 import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
@@ -615,6 +616,22 @@ export const SupabaseAdapter: DataAdapter = {
       return toCamel<DealerPackageProposal>(data as Row);
     }),
     remove: (id) => must(sb().from("dealer_package_proposals").delete().eq("id", id)),
+  },
+  // ประวัติลูกค้าเป้าหมาย HQ — RLS (0174): อ่าน = HQ · เพิ่มได้แค่บันทึกการติดต่อ · ผู้ทำ/เวลา ฐานข้อมูลตั้งเอง
+  prospectActivities: {
+    list: async (prospectId) => (await pageAll((from, to) =>
+      sb().from("dealer_prospect_activities").select("*").eq("prospect_id", prospectId)
+        .order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to), "dealer_prospect_activities"))
+      .map(r => toCamel<ProspectActivity>(r)),
+    // ไม่ลองซ้ำเมื่อเน็ตสะดุด — บันทึกนี้แก้/ลบไม่ได้ ถ้าคำขอแรกเข้าไปแล้วลองซ้ำจะได้บันทึกซ้อนที่ลบทิ้งไม่ได้
+    addContact: async (x) => {
+      const row = เตรียมบันทึกการติดต่อ(x);
+      const { data, error } = await sb().from("dealer_prospect_activities")
+        .insert({ prospect_id: row.prospectId, kind: "contact", channel: row.channel, body: row.body, next_follow_up: row.nextFollowUp })
+        .select().single();
+      if (error) throw new DbError(error.message, error.code);
+      return toCamel<ProspectActivity>(data as Row);
+    },
   },
   users: {
     list: async () => {

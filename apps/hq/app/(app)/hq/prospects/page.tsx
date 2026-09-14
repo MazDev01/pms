@@ -2,34 +2,44 @@
 
 // ─── HQ · ลูกค้าเป้าหมายของสำนักงานใหญ่ (ผู้สนใจเป็นตัวแทนจำหน่าย) ────────────────────
 //
-// บอสสั่ง 14 ก.ย. 69: "เพิ่มโมดูลลูกค้าเป้าหมายของทางฝั่ง HQ และเมื่อสำเร็จจากลูกค้าเป้าหมาย
-//   จะกลายเป็นตัวแทนจำหน่าย"
+// บอสสั่ง 14 ก.ย. 69:
+//   "เพิ่มโมดูลลูกค้าเป้าหมายของทางฝั่ง HQ และเมื่อสำเร็จจากลูกค้าเป้าหมายจะกลายเป็นตัวแทนจำหน่าย"
+//   "ทำให้ ลูกค้าเป้าหมาย ออกแบบการทำออกมาใช้งานให้เสร็จ" · "ให้มันทำงานแบบเดียวกับดีลเลอร์"
 //
-// เส้นทาง: เพิ่มผู้สนใจ → ติดตามตามขั้น → "ตั้งเป็นตัวแทนจำหน่าย"
-//   • สร้างตัวแทนใหม่พร้อมบัญชีเข้าระบบ (ใช้ route เดียวกับหน้าตัวแทนจำหน่าย · ผูกรายนี้ในคำขอเดียวกัน)
-//   • หรือผูกกับตัวแทนที่มีอยู่แล้ว (ผู้สนใจหลายรายในไฟล์ของเบนจามินถูกสร้างเป็นตัวแทนไปก่อนแล้ว)
+// ทำงานแบบเดียวกับลูกค้าเป้าหมายของตัวแทน:
+//   กดแถว → แผงกลางจอ 820px หัวน้ำเงิน + ปุ่มลัด + แท็บ
+//     ภาพรวม (แก้ข้อมูล) · งาน/ความคืบหน้า (ติ๊กงาน ขั้นเลื่อนเอง) · บันทึกการติดต่อ (+ ประวัติ) · ใบเสนอแพ็กเกจ
+//   ตารางมี "ติดต่อล่าสุด" + ตัวกรองไม่ได้ติดต่อ 7/14/30 วัน (สเปก: ตัวกรองติดตามด่วน)
+//   ปิดท้าย: ตั้งเป็นตัวแทนจำหน่าย (สร้างสาขาใหม่พร้อมบัญชี / ผูกกับตัวแทนที่มีอยู่) หรือ ไม่สำเร็จ
 //
-// ⚠️ คนละเรื่องกับ "ลูกค้าเป้าหมายทั้งเครือ" (/hq/leads = ลูกค้าที่จะซื้ออาคารของตัวแทน)
-//    ข้อมูลอยู่คนละตาราง (dealer_prospects · migration 0170) ไม่นับรวมในตัวเลขงานขายใด ๆ
+// ⚠️ ขั้นเปลี่ยนจากงานเท่านั้น — ฟอร์มไม่มีช่องเลือกสถานะแล้ว · ฐานข้อมูลบังคับทีละขั้น (0174)
+// ⚠️ คนละเรื่องกับ "ลูกค้าเป้าหมายทั้งเครือ" (/hq/leads = ลูกค้าที่จะซื้ออาคารของตัวแทน) — คนละตาราง (0170)
 //
 // สิทธิ์: ดูได้ทุกบทบาทฝั่งสำนักงานใหญ่ · เพิ่ม/แก้/ลบ/ตั้งเป็นตัวแทน = ผู้มีสิทธิ์จัดการตัวแทน (dealers:manage)
-//   RLS ของ 0170 บังคับซ้ำที่ฐานข้อมูล — การซ่อนปุ่มตรงนี้เป็นแค่ความสะดวก ไม่ใช่ด่านจริง
+//   RLS บังคับซ้ำที่ฐานข้อมูล — การซ่อนปุ่มตรงนี้เป็นแค่ความสะดวก ไม่ใช่ด่านจริง
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  UserPlus, Users, AlarmClock, Store, Percent, Search, X, Trash2, Copy, Check,
+  UserPlus, Users, AlarmClock, Store, Percent, Search, X, Trash2, Copy, Check, MapPin, Phone, MessageSquarePlus, FilePlus2,
 } from "lucide-react";
-import { prospects as prospectsRepo, dealers as dealersRepo, proposals as proposalsRepo } from "@pms/shared/lib/data";
-import { invalidateCache } from "@pms/shared/lib/data/dedupe";
-import type { DealerPackageProposal, DealerProspect, DealerProspectStatus, DealerRow } from "@pms/shared/lib/data/types";
 import {
-  PROSPECT_STATUS_ORDER, prospectStatusLabel, prospectStatusColor,
+  prospects as prospectsRepo, dealers as dealersRepo, proposals as proposalsRepo, prospectActivities as activitiesRepo,
+} from "@pms/shared/lib/data";
+import { invalidateCache } from "@pms/shared/lib/data/dedupe";
+import type { DealerPackageProposal, DealerProspect, DealerProspectStatus, DealerRow, ProspectActivity } from "@pms/shared/lib/data/types";
+import {
+  PROSPECT_STATUS_ORDER, prospectStatusLabel, prospectStatusColor, ยังติดตามอยู่,
   เตรียมบันทึก, ตรวจผู้สนใจ, ถึงกำหนดติดตาม, สรุปผู้สนใจ, ตรงกับคำค้น,
 } from "@pms/shared/lib/dealerProspects";
+import {
+  ความคืบหน้า, ขั้นก่อนไม่สำเร็จ, มีบันทึกการติดต่อ, เกณฑ์ไม่ได้ติดต่อ, ไม่ได้ติดต่อเกิน, ติดต่อล่าสุดอ่านง่าย,
+} from "@pms/shared/lib/prospectJourney";
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
 import { createDealerAccount } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { ProspectProposalsPanel } from "@pms/shared/components/hq/ProspectProposalsPanel";
+import { ProspectJourney } from "@pms/shared/components/hq/ProspectJourney";
+import { ProspectActivityPanel } from "@pms/shared/components/hq/ProspectActivityPanel";
 import { มีใบเสนอที่ส่งแล้ว, ใบหลักสำหรับตั้งตัวแทน, มูลค่าอ่านง่าย } from "@pms/shared/lib/dealerProposals";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
@@ -54,6 +64,15 @@ const ช่องทางแนะนำ = ["Facebook", "LINE OA", "LINE ส�
 const ร่างว่าง = (): Partial<DealerProspect> => ({ name: "", status: "new", firstContact: APP_NOW_ISO });
 
 type ฟอร์มตัวแทน = { code: string; name: string; region: string; province: string; email: string; password: string; existingCode: string };
+type แท็บ = "overview" | "tasks" | "contact" | "proposals";
+type ตัวกรองสถานะ = "all" | "due" | "idle7" | "idle14" | "idle30" | DealerProspectStatus;
+
+const แท็บทั้งหมด: { key: แท็บ; label: string }[] = [
+  { key: "overview",  label: "ภาพรวม" },
+  { key: "tasks",     label: "งาน/ความคืบหน้า" },
+  { key: "contact",   label: "บันทึกการติดต่อ" },
+  { key: "proposals", label: "ใบเสนอแพ็กเกจ" },
+];
 
 export default function HQProspectsPage() {
   const { can } = useRole();
@@ -66,14 +85,27 @@ export default function HQProspectsPage() {
   const [dealers, setDealers] = useState<DealerRow[]>([]);
 
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "due" | DealerProspectStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<ตัวกรองสถานะ>("all");
   const [provinceFilter, setProvinceFilter] = useState("all");
   const [page, setPage] = useState(0);
 
-  const [editing, setEditing] = useState<DealerProspect | "new" | null>(null);
+  // เพิ่มรายใหม่ (หน้าต่างเล็ก) · รายที่เปิดดู (แผงกลางจอ)
+  const [เพิ่มใหม่, setเพิ่มใหม่] = useState(false);
+  const [รายที่เปิด, setรายที่เปิด] = useState<DealerProspect | null>(null);
+  const เปิดอยู่Ref = useRef<number | null>(null);
+  const [แท็บที่เปิด, setแท็บที่เปิด] = useState<แท็บ>("overview");
   const [ร่าง, setร่าง] = useState<Partial<DealerProspect>>(ร่างว่าง());
   const [formErr, setFormErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [stageBusy, setStageBusy] = useState(false);
+
+  // ของรายที่เปิด: ใบเสนอ · ประวัติ
+  const [ใบของรายที่เปิด, setใบของรายที่เปิด] = useState<DealerPackageProposal[]>([]);
+  const [ประวัติ, setประวัติ] = useState<ProspectActivity[]>([]);
+  const [ประวัติโหลดแล้ว, setประวัติโหลดแล้ว] = useState(false);
+  const [ประวัติผิด, setประวัติผิด] = useState("");
+  const [ฟอร์มติดต่อเปิด, setฟอร์มติดต่อเปิด] = useState(false);
+  const [สัญญาณออกใบ, setสัญญาณออกใบ] = useState(0);
 
   const [converting, setConverting] = useState<DealerProspect | null>(null);
   const [โหมดตั้ง, setโหมดตั้ง] = useState<"new" | "existing">("new");
@@ -81,8 +113,6 @@ export default function HQProspectsPage() {
   const [convErr, setConvErr] = useState("");
   const [convBusy, setConvBusy] = useState(false);
   const [creds, setCreds] = useState<{ name: string; code: string; email: string; password: string } | null>(null);
-  // ใบเสนอแพ็กเกจของรายที่เปิดอยู่ (แผงใบเสนอส่งมาให้) — ใช้ตัดสินว่ากดสร้างตัวแทนใหม่ได้หรือยัง
-  const [ใบของรายที่เปิด, setใบของรายที่เปิด] = useState<DealerPackageProposal[]>([]);
   const [คัดลอกแล้ว, setคัดลอกแล้ว] = useState("");
 
   const โหลด = useCallback(async () => {
@@ -101,7 +131,70 @@ export default function HQProspectsPage() {
   }, []);
   useEffect(() => { void โหลด(); โหลดตัวแทน(); }, [โหลด, โหลดตัวแทน]);
 
-  // ?open=ID → เปิดหน้าต่างรายนั้นหลังโหลดรายการเสร็จ (ลิงก์จากหน้าใบเสนอแพ็กเกจ) · ล้างพารามิเตอร์กันเปิดซ้ำตอนรีเฟรช
+  // ── ของรายที่เปิด: ใบเสนอ + ประวัติ (งานในแท็บต้องรู้ว่ามีใบที่ส่งแล้ว/มีบันทึกการติดต่อหรือยัง) ──
+  const โหลดของราย = useCallback(async (id: number) => {
+    try {
+      const [ป, ใ] = await Promise.all([activitiesRepo.list(id), proposalsRepo.list(id)]);
+      if (เปิดอยู่Ref.current !== id) return;   // ปิด/เปลี่ยนรายไปแล้ว — ผลที่มาช้าห้ามทับของรายใหม่
+      setประวัติ(ป);
+      setใบของรายที่เปิด(ใ);
+      setประวัติผิด("");
+    } catch (e) {
+      if (เปิดอยู่Ref.current === id) setประวัติผิด(friendlyError(e, "โหลดประวัติไม่สำเร็จ"));
+    } finally {
+      if (เปิดอยู่Ref.current === id) setประวัติโหลดแล้ว(true);
+    }
+  }, []);
+
+  // ฐานข้อมูลเปลี่ยนรายนี้ให้เอง (บันทึกการติดต่อ → ติดต่อล่าสุด/นัดติดตาม/ขั้น · ส่งใบ → รอตัดสินใจ) — ดึงของจริงใหม่
+  const รีเฟรชรายที่เปิด = useCallback(async () => {
+    const id = เปิดอยู่Ref.current;
+    if (id == null) return;
+    try {
+      const ทั้งหมด = await prospectsRepo.list();
+      setList(ทั้งหมด);
+      const สด = ทั้งหมด.find(x => x.id === id);
+      if (สด && เปิดอยู่Ref.current === id) {
+        setรายที่เปิด(สด);
+        setร่าง(r => ({ ...r, followUp: สด.followUp, firstContact: สด.firstContact }));
+      }
+    } catch (e) {
+      logRepoRead("prospects.list", e);
+    }
+    void โหลดของราย(id);
+  }, [โหลดของราย]);
+
+  // แผงใบเสนอแจ้งรายการใหม่ → ดึงรายนี้ใหม่ด้วย (ส่งใบแล้วขั้นอาจเลื่อน) · ต้องคงที่ ไม่งั้นแผงโหลดวน
+  const เมื่อใบเปลี่ยน = useCallback((l: DealerPackageProposal[]) => {
+    setใบของรายที่เปิด(l);
+    void รีเฟรชรายที่เปิด();
+  }, [รีเฟรชรายที่เปิด]);
+
+  function เปิดแผง(p: DealerProspect, แท็บเริ่ม: แท็บ = "overview") {
+    เปิดอยู่Ref.current = p.id;
+    setรายที่เปิด(p);
+    setแท็บที่เปิด(แท็บเริ่ม);
+    // รายเก่าที่ยังไม่มีภาค แต่จังหวัดเป็นจังหวัดที่ระบบรู้จัก → เติมภาคให้ในฟอร์ม จะได้เลือกจังหวัดต่อได้ทันที
+    setร่าง({ ...p, region: p.region || regionOf(p.province ?? "") });
+    setFormErr("");
+    setใบของรายที่เปิด([]);
+    setประวัติ([]);
+    setประวัติโหลดแล้ว(false);
+    setประวัติผิด("");
+    setฟอร์มติดต่อเปิด(false);
+    setสัญญาณออกใบ(0);
+    void โหลดของราย(p.id);
+  }
+  function ปิดแผงทันที() {
+    เปิดอยู่Ref.current = null;
+    setรายที่เปิด(null);
+  }
+  function ปิดแผง() {
+    if (saving || stageBusy) return;
+    ปิดแผงทันที();
+  }
+
+  // ?open=ID → เปิดแผงรายนั้นหลังโหลดรายการเสร็จ (ลิงก์จากหน้าใบเสนอแพ็กเกจ) · ล้างพารามิเตอร์กันเปิดซ้ำตอนรีเฟรช
   //   ไม่พบ = บอกตรง ๆ ไม่เงียบ (รายนั้นอาจถูกลบไปแล้ว)
   const เปิดจากลิงก์แล้ว = useRef(false);
   useEffect(() => {
@@ -111,7 +204,7 @@ export default function HQProspectsPage() {
     if (!รหัส) return;
     window.history.replaceState(null, "", "/hq/prospects");
     const ราย = list.find(x => String(x.id) === รหัส);
-    if (ราย) เปิดแก้(ราย);
+    if (ราย) เปิดแผง(ราย);
     else if (!loadErr) แจ้งพลาด("ไม่พบลูกค้าเป้าหมายรายนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ทำครั้งเดียวตอนโหลดเสร็จ ไม่ต้องทำซ้ำเมื่อรายการเปลี่ยน
   }, [loaded]);
@@ -122,22 +215,23 @@ export default function HQProspectsPage() {
     [list],
   );
 
-  const filtered = useMemo(() => list.filter(p =>
-    (statusFilter === "all" || (statusFilter === "due" ? ถึงกำหนดติดตาม(p, APP_NOW_ISO) : p.status === statusFilter))
-    && (provinceFilter === "all" || (p.province ?? "").trim() === provinceFilter)
-    && ตรงกับคำค้น(p, q),
-  ), [list, statusFilter, provinceFilter, q]);
+  const filtered = useMemo(() => list.filter(p => {
+    const ผ่านสถานะ =
+      statusFilter === "all" ? true
+      : statusFilter === "due" ? ถึงกำหนดติดตาม(p, APP_NOW_ISO)
+      : statusFilter === "idle7" ? ไม่ได้ติดต่อเกิน(p, 7, APP_NOW_ISO)
+      : statusFilter === "idle14" ? ไม่ได้ติดต่อเกิน(p, 14, APP_NOW_ISO)
+      : statusFilter === "idle30" ? ไม่ได้ติดต่อเกิน(p, 30, APP_NOW_ISO)
+      : p.status === statusFilter;
+    return ผ่านสถานะ && (provinceFilter === "all" || (p.province ?? "").trim() === provinceFilter) && ตรงกับคำค้น(p, q);
+  }), [list, statusFilter, provinceFilter, q]);
 
   // การ์ดตัวเลขคิดจาก "ผลที่กรองอยู่" — ตรงกับสิ่งที่ตารางแสดง (กติกาเดียวกับทุกหน้า HQ)
   const สรุป = useMemo(() => สรุปผู้สนใจ(filtered, APP_NOW_ISO), [filtered]);
 
-  // ── เพิ่ม / แก้ไข ──
+  // ── เพิ่มรายใหม่ ──
   function เปิดเพิ่ม() {
-    setEditing("new"); setร่าง(ร่างว่าง()); setFormErr("");
-  }
-  function เปิดแก้(p: DealerProspect) {
-    // รายเก่าที่ยังไม่มีภาค แต่จังหวัดเป็นจังหวัดที่ระบบรู้จัก → เติมภาคให้ในฟอร์ม จะได้เลือกจังหวัดต่อได้ทันที
-    setEditing(p); setร่าง({ ...p, region: p.region || regionOf(p.province ?? "") }); setFormErr(""); setใบของรายที่เปิด([]);
+    setเพิ่มใหม่(true); setร่าง(ร่างว่าง()); setFormErr("");
   }
   const ตั้งค่า = <K extends keyof DealerProspect>(k: K, v: DealerProspect[K]) => setร่าง(r => ({ ...r, [k]: v }));
   // เปลี่ยนภาค → ล้างจังหวัดที่ไม่อยู่ในภาคใหม่ (กันภาค "ใต้" คู่จังหวัด "เชียงใหม่") · "ทุกภาค" = "ทุกจังหวัด" ให้เอง
@@ -149,27 +243,52 @@ export default function HQProspectsPage() {
   }));
 
   async function บันทึก() {
-    if (!editing) return;
-    const row = เตรียมบันทึก(ร่าง);
+    if (!เพิ่มใหม่ && !รายที่เปิด) return;
+    // ขั้น/เหตุผล/ตัวแทนที่ผูก มาจากของจริงล่าสุดเสมอ — ฟอร์มนี้แก้แค่ข้อมูลผู้ติดต่อ (ขั้นเปลี่ยนจากแท็บงานเท่านั้น)
+    const row = เตรียมบันทึก(รายที่เปิด && !เพิ่มใหม่
+      ? { ...ร่าง, status: รายที่เปิด.status, lostReason: รายที่เปิด.lostReason, dealerCode: รายที่เปิด.dealerCode, convertedAt: รายที่เปิด.convertedAt }
+      : { ...ร่าง, status: "new" });
     const ผิด = ตรวจผู้สนใจ(row);
     if (ผิด) { setFormErr(ผิด); return; }
     setSaving(true); setFormErr("");
     try {
-      if (editing === "new") {
+      if (เพิ่มใหม่) {
         const saved = await prospectsRepo.create(row);
         setList(l => [saved, ...l]);
         logAudit("เพิ่มลูกค้าเป้าหมาย (HQ)", saved.name);
-        แจ้งสำเร็จ(`เพิ่ม “${saved.name}” แล้ว`);
-      } else {
-        const saved = await prospectsRepo.update({ ...row, id: editing.id, createdAt: editing.createdAt });
+        แจ้งสำเร็จ(`เพิ่ม “${saved.name}” แล้ว — เริ่มจากบันทึกการติดต่อครั้งแรก`);
+        setเพิ่มใหม่(false);
+        เปิดแผง(saved, "tasks");   // เพิ่มเสร็จพาเข้างานทันที แบบเดียวกับฝั่งตัวแทน
+      } else if (รายที่เปิด) {
+        const saved = await prospectsRepo.update({ ...row, id: รายที่เปิด.id, createdAt: รายที่เปิด.createdAt });
         setList(l => l.map(x => x.id === saved.id ? saved : x));
-        logAudit("แก้ไขลูกค้าเป้าหมาย (HQ)", `${saved.name} · ${prospectStatusLabel[saved.status]}`);
+        setรายที่เปิด(saved);
+        logAudit("แก้ไขลูกค้าเป้าหมาย (HQ)", saved.name);
+        แจ้งสำเร็จ("บันทึกข้อมูลแล้ว");
       }
-      setEditing(null);
     } catch (e) {
       setFormErr(friendlyError(e, "บันทึกไม่สำเร็จ"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ── เปลี่ยนขั้นจากแท็บงาน ──
+  async function เปลี่ยนขั้น(next: DealerProspectStatus, lostReason?: string) {
+    const ราย = รายที่เปิด;
+    if (!ราย) return;
+    setStageBusy(true);
+    try {
+      const row = เตรียมบันทึก({ ...ราย, status: next, lostReason: next === "lost" ? lostReason : null });
+      const saved = await prospectsRepo.update({ ...row, id: ราย.id, createdAt: ราย.createdAt });
+      setList(l => l.map(x => x.id === saved.id ? saved : x));
+      if (เปิดอยู่Ref.current === saved.id) setรายที่เปิด(saved);
+      logAudit("เปลี่ยนขั้นลูกค้าเป้าหมาย (HQ)", `${saved.name} · ${prospectStatusLabel[ราย.status]} → ${prospectStatusLabel[saved.status]}`);
+      void โหลดของราย(saved.id);
+    } catch (e) {
+      แจ้งพลาด(friendlyError(e, "เปลี่ยนขั้นไม่สำเร็จ"));
+    } finally {
+      setStageBusy(false);
     }
   }
 
@@ -179,14 +298,14 @@ export default function HQProspectsPage() {
       // ลบรายที่เป็นตัวแทนแล้ว = ลบแค่ประวัติการติดตาม ตัวแทนและบัญชีเข้าระบบยังอยู่ครบ — ต้องบอกให้ชัด
       รายละเอียด: p.status === "won" && p.dealerCode
         ? `ตัวแทนจำหน่าย ${p.dealerCode} ที่สร้างไปแล้วจะยังอยู่ครบ — ลบเฉพาะประวัติการติดตามรายนี้ · ย้อนกลับไม่ได้`
-        : "การกระทำนี้ย้อนกลับไม่ได้",
+        : "ใบเสนอแพ็กเกจและประวัติของรายนี้จะหายไปด้วย · ย้อนกลับไม่ได้",
       ปุ่มตกลง: "ลบลูกค้าเป้าหมาย", อันตราย: true,
     }))) return;
     try {
       await prospectsRepo.remove(p.id);
       setList(l => l.filter(x => x.id !== p.id));
       logAudit("ลบลูกค้าเป้าหมาย (HQ)", p.name);
-      setEditing(null);
+      ปิดแผงทันที();
     } catch (e) {
       แจ้งพลาด(friendlyError(e, "ลบไม่สำเร็จ"));
     }
@@ -233,7 +352,7 @@ export default function HQProspectsPage() {
         setList(l => l.map(x => x.id === saved.id ? saved : x));
         logAudit("ลูกค้าเป้าหมายเป็นตัวแทนแล้ว", `#${saved.id} → ${ฟอร์ม.existingCode} · ${saved.name}`);
         แจ้งสำเร็จ(`ผูก “${saved.name}” กับตัวแทน ${ฟอร์ม.existingCode} แล้ว`);
-        setConverting(null); setEditing(null);
+        setConverting(null); ปิดแผงทันที();
       } catch (e) {
         setConvErr(friendlyError(e, "บันทึกไม่สำเร็จ"));
       } finally {
@@ -255,7 +374,6 @@ export default function HQProspectsPage() {
     if (ฟอร์ม.password && ฟอร์ม.password.length < 8) { setConvErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"); return; }
 
     // โหมดเดโม (ไม่มีระบบยืนยันตัวตนจริง) — สร้างทะเบียนสาขาในเครื่องแล้วผูกรายนี้ ให้เล่นครบวงได้เหมือนของจริง
-    //   ปุ่มเพิ่มตัวแทนตรง ๆ ของหน้าทะเบียนถูกถอดแล้ว (บอสสั่ง 14 ก.ย. 69) — ถ้าไม่ทำตรงนี้ เดโมจะสร้างตัวแทนไม่ได้เลย
     //   ⚠️ ตัวเก็บข้อมูลในเครื่อง "เขียนทับทั้งรายการ" ต้องส่งทะเบียนเดิมทั้งหมดไปด้วยเสมอ ไม่งั้นสาขาอื่นหายหมด
     if (!REAL_BACKEND) {
       setConvBusy(true);
@@ -279,7 +397,7 @@ export default function HQProspectsPage() {
         }
         logAudit("สร้างตัวแทน", `${code} · ${แถวใหม่.name} (จากลูกค้าเป้าหมาย #${saved.id})`);
         แจ้งสำเร็จ(`สร้างตัวแทน ${code} แล้ว (โหมดเดโม — ไม่มีบัญชีเข้าระบบจริง)`);
-        setConverting(null); setEditing(null);
+        setConverting(null); ปิดแผงทันที();
       } catch (e) {
         setConvErr(friendlyError(e, "สร้างตัวแทนไม่สำเร็จ"));
       } finally {
@@ -309,7 +427,7 @@ export default function HQProspectsPage() {
       แจ้งพลาด(`สร้างตัวแทน ${code} แล้ว แต่ผูกกับลูกค้าเป้าหมายรายนี้ไม่สำเร็จ — เปิดรายนี้อีกครั้ง แล้วเลือก “ผูกกับตัวแทนที่มีอยู่แล้ว” → ${code}`);
     }
     setCreds({ name: ฟอร์ม.name.trim(), code, email: res.email, password: res.password });
-    setConverting(null); setEditing(null);
+    setConverting(null); ปิดแผงทันที();
   }
 
   async function คัดลอก(ข้อความ: string, ช่อง: string) {
@@ -325,7 +443,78 @@ export default function HQProspectsPage() {
   const ดูอย่างเดียว = !จัดการได้;
   // ใบที่จะใช้ตั้งตัวแทน (ตอบรับล่าสุด หรือส่งแล้วล่าสุด) — บอกล่วงหน้าในกล่องว่าเป้ายอดขายจะตั้งตามใบไหน
   const ใบหลัก = ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด);
-  const รายที่เปิด = editing && editing !== "new" ? editing : null;
+  const มีใบส่งแล้ว = มีใบเสนอที่ส่งแล้ว(ใบของรายที่เปิด);
+
+  // ── ช่องข้อมูลผู้ติดต่อ — ใช้ทั้งหน้าต่างเพิ่มรายใหม่ และแท็บภาพรวม ──
+  const ช่องข้อมูล = (
+    <fieldset disabled={ดูอย่างเดียว || saving} style={{ border: "none", margin: 0, padding: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label className="form-label" htmlFor="pr-name">ชื่อผู้ติดต่อ / ชื่อบริษัท *</label>
+          <input id="pr-name" className="form-input" value={ร่าง.name ?? ""} onChange={e => ตั้งค่า("name", e.target.value)} placeholder="เช่น คุณสมชาย / หจก. ตัวอย่างสตีล" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-social">ชื่อบนโซเชียล</label>
+          <input id="pr-social" className="form-input" value={ร่าง.social ?? ""} onChange={e => ตั้งค่า("social", e.target.value)} placeholder="ชื่อ Facebook / LINE" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-phone">เบอร์โทร</label>
+          {/* พิมพ์ได้แต่ตัวเลข ใส่ขีดให้เอง (บอสสั่ง 14 ก.ย. 69) — ตัวจัดรูปแบบเดียวกับฟอร์มลูกค้า/ลูกค้าเป้าหมายของตัวแทน */}
+          <input id="pr-phone" className="form-input" inputMode="tel" value={ร่าง.phone ?? ""} onChange={e => ตั้งค่า("phone", formatPhone(e.target.value))} placeholder="08x-xxx-xxxx" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-email">อีเมล</label>
+          <input id="pr-email" className="form-input" type="email" value={ร่าง.email ?? ""} onChange={e => ตั้งค่า("email", e.target.value)} placeholder="name@example.com" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-channel">ช่องทางที่เข้ามา</label>
+          <input id="pr-channel" className="form-input" list="pr-channel-list" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value)} placeholder="เลือกหรือพิมพ์เอง" />
+          <datalist id="pr-channel-list">{ช่องทางแนะนำ.map(c => <option key={c} value={c} />)}</datalist>
+        </div>
+        {/* ภาคมาก่อนจังหวัด — จังหวัดที่เลือกได้ขึ้นกับภาคที่เลือก (บอสสั่ง 14 ก.ย. 69) · "ทุกภาค" = ทั่วประเทศ */}
+        <div>
+          <label className="form-label" htmlFor="pr-region">ภาค</label>
+          <select id="pr-region" className="form-select" value={ร่าง.region ?? ""} onChange={e => เปลี่ยนภาคร่าง(e.target.value)} style={{ cursor: "pointer" }}>
+            <option value="">— ยังไม่ระบุ —</option>
+            {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            <option value={ALL_REGIONS}>{ALL_REGIONS} (ทั่วประเทศ)</option>
+          </select>
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-province">จังหวัด</label>
+          {/* จังหวัดที่บันทึกไว้แต่ไม่อยู่ในรายการ (ข้อมูลเก่าพิมพ์ย่อ เช่น "ปทุม") ต้องยังเห็นค่าเดิม ไม่หายเงียบตอนเปิดมาแก้ */}
+          <select id="pr-province" className="form-select" value={ร่าง.province ?? ""} onChange={e => ตั้งค่า("province", e.target.value || null)} style={{ cursor: "pointer" }}>
+            <option value="">{ร่าง.region ? "— ยังไม่ระบุ —" : "— เลือกภาคก่อน —"}</option>
+            {ร่าง.region === ALL_REGIONS && <option value={ALL_PROVINCES}>{ALL_PROVINCES}</option>}
+            {provincesOfRegion(ร่าง.region ?? "").map(p => <option key={p} value={p}>{p}</option>)}
+            {ร่าง.province && ร่าง.province !== ALL_PROVINCES && !provincesOfRegion(ร่าง.region ?? "").includes(ร่าง.province) && (
+              <option value={ร่าง.province}>{ร่าง.province} (ตามที่บันทึกไว้)</option>
+            )}
+          </select>
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-type">ประเภทธุรกิจ</label>
+          <input id="pr-type" className="form-input" value={ร่าง.businessType ?? ""} onChange={e => ตั้งค่า("businessType", e.target.value)} placeholder="เช่น ผู้รับเหมา / ขายเหล็ก / สถาปนิก" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-assigned">ผู้ดูแล (สำนักงานใหญ่)</label>
+          <input id="pr-assigned" className="form-input" value={ร่าง.assigned ?? ""} onChange={e => ตั้งค่า("assigned", e.target.value)} placeholder="ชื่อผู้ติดตามรายนี้" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-first">เริ่มติดต่อ</label>
+          <input id="pr-first" className="form-input" type="date" value={ร่าง.firstContact ?? ""} onChange={e => ตั้งค่า("firstContact", e.target.value || null)} />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="pr-follow">ติดตามครั้งถัดไป</label>
+          <input id="pr-follow" className="form-input" type="date" value={ร่าง.followUp ?? ""} onChange={e => ตั้งค่า("followUp", e.target.value || null)} />
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label className="form-label" htmlFor="pr-note">หมายเหตุ</label>
+          <textarea id="pr-note" className="form-input" rows={3} value={ร่าง.note ?? ""} onChange={e => ตั้งค่า("note", e.target.value)} placeholder="ข้อมูลที่ควรรู้เกี่ยวกับรายนี้ (สิ่งที่คุยแต่ละครั้ง ให้บันทึกในแท็บบันทึกการติดต่อ)" style={{ resize: "vertical" }} />
+        </div>
+      </div>
+    </fieldset>
+  );
 
   return (
     <div className="erp">
@@ -348,8 +537,7 @@ export default function HQProspectsPage() {
       </TopbarActions>
       <div className="page-head"><div /></div>
 
-      {/* สรุป — 4 ใบตามกติกากลาง (globals.css: ทุกหน้าใช้ KPI 4 ใบเท่ากัน ห้ามเพิ่มเป็น 5+)
-          "กำลังติดตาม" ไม่ได้ขึ้นการ์ด เพราะหาได้จาก ทั้งหมด − เป็นตัวแทนแล้ว − ไม่สำเร็จ และกรองดูได้จากช่องสถานะ */}
+      {/* สรุป — 4 ใบตามกติกากลาง (globals.css: ทุกหน้าใช้ KPI 4 ใบเท่ากัน ห้ามเพิ่มเป็น 5+) */}
       <div className="kpi-bar">
         <div className="kpi"><div className="kpi-icon kpi-navy"><Users size={16} /></div><div><div className="kpi-val">{สรุป.ทั้งหมด.toLocaleString()}</div><div className="kpi-label">ลูกค้าเป้าหมายที่แสดงอยู่</div></div></div>
         <div className="kpi"><div className="kpi-icon kpi-navy"><AlarmClock size={16} /></div><div><div className="kpi-val">{สรุป.ถึงกำหนด.toLocaleString()}</div><div className="kpi-label">ถึงกำหนดติดตาม</div></div></div>
@@ -366,9 +554,11 @@ export default function HQProspectsPage() {
           {q && <button aria-label="ล้างคำค้น" onClick={() => { setQ(""); setPage(0); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", padding: 0 }}><X size={13} /></button>}
         </div>
         <div style={{ flex: 1 }} />
-        <select aria-label="กรองตามสถานะ" value={statusFilter} onChange={e => { setStatusFilter(e.target.value as typeof statusFilter); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
+        <select aria-label="กรองตามสถานะ" value={statusFilter} onChange={e => { setStatusFilter(e.target.value as ตัวกรองสถานะ); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           <option value="all">ทุกสถานะ</option>
           <option value="due">ถึงกำหนดติดตาม</option>
+          {/* ตัวกรองติดตามด่วน (สเปก: ไม่ได้ติดต่อ 7 / 14 / 30 วัน) — นับเฉพาะรายที่ยังติดตามอยู่ */}
+          {เกณฑ์ไม่ได้ติดต่อ.map(ว => <option key={ว} value={`idle${ว}`}>ไม่ได้ติดต่อ {ว} วันขึ้นไป</option>)}
           {PROSPECT_STATUS_ORDER.map(s => <option key={s} value={s}>{prospectStatusLabel[s]}</option>)}
         </select>
         <select aria-label="กรองตามจังหวัด" value={provinceFilter} onChange={e => { setProvinceFilter(e.target.value); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
@@ -389,51 +579,60 @@ export default function HQProspectsPage() {
         <div className="table-wrap" style={{ borderTop: "none" }}>
           <table>
             {/* เพิ่ม/ลบคอลัมน์ต้องแก้ colgroup ด้วย (table-layout: fixed — ใส่ความกว้างที่ th ไม่มีผล)
-                minWidth ทุกคอลัมน์ (แบบเดียวกับหน้าตัวแทน/ลูกค้าเป้าหมายทั้งเครือ) — จอแคบให้ตารางเลื่อนซ้ายขวา
-                ไม่ใช่บีบทุกช่องจนเหลือ "ZZT… 0… ช…" อ่านไม่ออก (เห็นจากภาพหน้าจอมือถือ 14 ก.ย. 69)
-                สถานะกว้างสุด 150 — ป้าย "ส่งข้อมูลบริษัทแล้ว" ยาวที่สุดในชุด ห้ามถูกตัด */}
+                minWidth รวม ~900px พอดีกรอบจอคอม · จอแคบให้เลื่อนซ้ายขวา ไม่บีบจนอ่านไม่ออก
+                "ติดต่อล่าสุด" มาแทน "ช่องทาง/ประเภทธุรกิจ" (ดูได้ในแผง) — สิ่งที่ทีมต้องเห็นทุกวันคือใครไม่ได้ติดต่อนานแล้ว */}
             <colgroup>
-              <col style={{ width: "21%", minWidth: 180 }} />
-              <col style={{ width: "11%", minWidth: 112 }} />
-              <col style={{ width: "10%", minWidth: 96 }} />
-              <col style={{ width: "14%", minWidth: 120 }} />
-              <col style={{ width: "9%", minWidth: 88 }} />
-              <col style={{ width: "15%", minWidth: 150 }} />
-              <col style={{ width: "12%", minWidth: 104 }} />
-              <col style={{ width: "8%", minWidth: 72 }} />
+              <col style={{ width: "24%", minWidth: 190 }} />
+              <col style={{ width: "12%", minWidth: 112 }} />
+              <col style={{ width: "11%", minWidth: 96 }} />
+              <col style={{ width: "18%", minWidth: 160 }} />
+              <col style={{ width: "13%", minWidth: 116 }} />
+              <col style={{ width: "13%", minWidth: 110 }} />
+              <col style={{ width: "9%", minWidth: 72 }} />
             </colgroup>
             <thead>
-              <tr><th>ลูกค้าเป้าหมาย</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ประเภทธุรกิจ</th><th>ช่องทาง</th><th>สถานะ</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
+              <tr><th>ลูกค้าเป้าหมาย</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
                   {!loaded ? "กำลังโหลด…" : list.length === 0 ? "ยังไม่มีลูกค้าเป้าหมาย" : "ไม่พบลูกค้าเป้าหมายตามตัวกรองที่เลือก"}
                 </td></tr>
               )}
               {pageSlice(filtered, page).map(p => {
                 const สี = prospectStatusColor[p.status];
                 const เลยกำหนด = ถึงกำหนดติดตาม(p, APP_NOW_ISO);
+                const ไม่ได้ติดต่อนาน = ไม่ได้ติดต่อเกิน(p, 7, APP_NOW_ISO);
+                const pct = ความคืบหน้า(p.status);
                 // คีย์ใช้ p.id ได้: id ไม่ซ้ำทั้งระบบ (identity เดียวทั้งตาราง · dealerCode ในแถวนี้คือตัวแทนที่รายนั้นกลายมาเป็น ไม่ใช่สาขาเจ้าของ)
                 return (
-                  <ClickableRow key={p.id} onActivate={() => เปิดแก้(p)} label={`เปิดรายละเอียดลูกค้าเป้าหมาย ${p.name}`}>
+                  <ClickableRow key={p.id} onActivate={() => เปิดแผง(p)} label={`เปิดรายละเอียดลูกค้าเป้าหมาย ${p.name}`}
+                    style={{ background: รายที่เปิด?.id === p.id ? "#f0f6ff" : undefined }}>
                     <td>
                       <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                      {p.social && p.social !== p.name && (
-                        <div style={{ fontSize: "0.7rem", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.social}</div>
+                      {(p.businessType || (p.social && p.social !== p.name)) && (
+                        <div style={{ fontSize: "0.7rem", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {[p.businessType, p.social && p.social !== p.name ? p.social : ""].filter(Boolean).join(" · ")}
+                        </div>
                       )}
                     </td>
                     <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{p.phone ? formatPhone(p.phone) || p.phone : "—"}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.province || "—"}</td>
-                    <td style={{ fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.businessType || "—"}</td>
-                    <td style={{ fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.channel || "—"}</td>
-                    <td><span className="badge" style={{ background: สี.bg, color: สี.text }}>{prospectStatusLabel[p.status]}</span></td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="badge" style={{ background: สี.bg, color: สี.text }}>{prospectStatusLabel[p.status]}</span>
+                        {ยังติดตามอยู่(p.status) && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: MUTED, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>}
+                      </div>
+                    </td>
+                    <td style={{ fontSize: "0.78rem", whiteSpace: "nowrap", color: ไม่ได้ติดต่อนาน ? "#b91c1c" : undefined, fontWeight: ไม่ได้ติดต่อนาน ? 700 : undefined }}>
+                      {ติดต่อล่าสุดอ่านง่าย(p, APP_NOW_ISO)}
+                    </td>
                     <td style={{ fontSize: "0.78rem", whiteSpace: "nowrap", color: เลยกำหนด ? "#b91c1c" : undefined, fontWeight: เลยกำหนด ? 700 : undefined }}>
                       {p.followUp ? fmtISOToThai(p.followUp) : "—"}
                     </td>
                     <td>
                       {p.dealerCode
-                        ? <Link href={`/hq/dealers/${p.dealerCode}`} title={ชื่อตัวแทน.get(p.dealerCode) ?? p.dealerCode} style={{ color: PRIMARY, fontWeight: 700 }}>{p.dealerCode}</Link>
+                        ? <Link href={`/hq/dealers/${p.dealerCode}`} onClick={e => e.stopPropagation()} title={ชื่อตัวแทน.get(p.dealerCode) ?? p.dealerCode} style={{ color: PRIMARY, fontWeight: 700 }}>{p.dealerCode}</Link>
                         : "—"}
                     </td>
                   </ClickableRow>
@@ -445,143 +644,180 @@ export default function HQProspectsPage() {
         <TablePagination page={page} total={filtered.length} onPage={setPage} unit="ราย" />
       </div>
 
-      {/* ── เพิ่ม / แก้ไข ── */}
-      {editing && (
-        <div onClick={() => !saving && setEditing(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <ModalCard onClose={() => !saving && setEditing(null)} label="ข้อมูลลูกค้าเป้าหมาย" className="modal-fit"
+      {/* ── เพิ่มลูกค้าเป้าหมาย (หน้าต่างเล็ก) — เพิ่มเสร็จเปิดแผงงานของรายนั้นให้ต่อเลย ── */}
+      {เพิ่มใหม่ && (
+        <div onClick={() => !saving && setเพิ่มใหม่(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.42)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <ModalCard onClose={() => !saving && setเพิ่มใหม่(false)} label="ข้อมูลลูกค้าเป้าหมาย" className="modal-fit"
             style={{ background: "#fff", borderRadius: 16, width: 620, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>
-                {editing === "new" ? "เพิ่มลูกค้าเป้าหมาย" : ดูอย่างเดียว ? "รายละเอียดลูกค้าเป้าหมาย" : "แก้ไขลูกค้าเป้าหมาย"}
-              </h2>
-              <button aria-label="ปิด" onClick={() => !saving && setEditing(null)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex" }}><X size={18} /></button>
+              <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#2D2D2D" }}>เพิ่มลูกค้าเป้าหมาย</h2>
+              <button aria-label="ปิด" onClick={() => !saving && setเพิ่มใหม่(false)} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex" }}><X size={18} /></button>
             </div>
             <div className="modal-fit-body" style={{ padding: "16px 20px" }}>
               {formErr && <div role="alert" style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: "0.8rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
-
-              {รายที่เปิด?.status === "won" && รายที่เปิด.dealerCode && (
-                <div style={{ background: "#dcfce7", border: "1px solid #86efac", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: "0.78rem", color: "#15803d", fontWeight: 600 }}>
-                  เป็นตัวแทนจำหน่ายแล้ว — <Link href={`/hq/dealers/${รายที่เปิด.dealerCode}`} style={{ color: "#15803d", textDecoration: "underline" }}>
-                    {รายที่เปิด.dealerCode} · {ชื่อตัวแทน.get(รายที่เปิด.dealerCode) ?? ""}
-                  </Link>
-                  {รายที่เปิด.convertedAt && ` (ตั้งเมื่อ ${fmtISOToThai(รายที่เปิด.convertedAt)})`}
-                </div>
-              )}
-
-              <fieldset disabled={ดูอย่างเดียว || saving} style={{ border: "none", margin: 0, padding: 0 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label className="form-label" htmlFor="pr-name">ชื่อผู้ติดต่อ / ชื่อบริษัท *</label>
-                    <input id="pr-name" className="form-input" value={ร่าง.name ?? ""} onChange={e => ตั้งค่า("name", e.target.value)} placeholder="เช่น คุณสมชาย / หจก. ตัวอย่างสตีล" />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-social">ชื่อบนโซเชียล</label>
-                    <input id="pr-social" className="form-input" value={ร่าง.social ?? ""} onChange={e => ตั้งค่า("social", e.target.value)} placeholder="ชื่อ Facebook / LINE" />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-phone">เบอร์โทร</label>
-                    <input id="pr-phone" className="form-input" inputMode="tel" value={ร่าง.phone ?? ""} onChange={e => ตั้งค่า("phone", e.target.value)} placeholder="08x-xxx-xxxx" />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-email">อีเมล</label>
-                    <input id="pr-email" className="form-input" type="email" value={ร่าง.email ?? ""} onChange={e => ตั้งค่า("email", e.target.value)} placeholder="name@example.com" />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-channel">ช่องทางที่เข้ามา</label>
-                    <input id="pr-channel" className="form-input" list="pr-channel-list" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value)} placeholder="เลือกหรือพิมพ์เอง" />
-                    <datalist id="pr-channel-list">{ช่องทางแนะนำ.map(c => <option key={c} value={c} />)}</datalist>
-                  </div>
-                  {/* ภาคมาก่อนจังหวัด — จังหวัดที่เลือกได้ขึ้นกับภาคที่เลือก (บอสสั่ง 14 ก.ย. 69 · กติกาเดียวกับฟอร์มตัวแทน)
-                      "ทุกภาค" = ทั่วประเทศ → จังหวัดเป็น "ทุกจังหวัด" ให้เอง */}
-                  <div>
-                    <label className="form-label" htmlFor="pr-region">ภาค</label>
-                    <select id="pr-region" className="form-select" value={ร่าง.region ?? ""} onChange={e => เปลี่ยนภาคร่าง(e.target.value)} style={{ cursor: "pointer" }}>
-                      <option value="">— ยังไม่ระบุ —</option>
-                      {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                      <option value={ALL_REGIONS}>{ALL_REGIONS} (ทั่วประเทศ)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-province">จังหวัด</label>
-                    {/* จังหวัดที่บันทึกไว้แต่ไม่อยู่ในรายการ (ข้อมูลเก่าพิมพ์ย่อ เช่น "ปทุม") ต้องยังเห็นค่าเดิม ไม่หายเงียบตอนเปิดมาแก้ */}
-                    <select id="pr-province" className="form-select" value={ร่าง.province ?? ""} onChange={e => ตั้งค่า("province", e.target.value || null)} style={{ cursor: "pointer" }}>
-                      <option value="">{ร่าง.region ? "— ยังไม่ระบุ —" : "— เลือกภาคก่อน —"}</option>
-                      {ร่าง.region === ALL_REGIONS && <option value={ALL_PROVINCES}>{ALL_PROVINCES}</option>}
-                      {provincesOfRegion(ร่าง.region ?? "").map(p => <option key={p} value={p}>{p}</option>)}
-                      {ร่าง.province && ร่าง.province !== ALL_PROVINCES && !provincesOfRegion(ร่าง.region ?? "").includes(ร่าง.province) && (
-                        <option value={ร่าง.province}>{ร่าง.province} (ตามที่บันทึกไว้)</option>
-                      )}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-type">ประเภทธุรกิจ</label>
-                    <input id="pr-type" className="form-input" value={ร่าง.businessType ?? ""} onChange={e => ตั้งค่า("businessType", e.target.value)} placeholder="เช่น ผู้รับเหมา / ขายเหล็ก / สถาปนิก" />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-assigned">ผู้ดูแล (สำนักงานใหญ่)</label>
-                    <input id="pr-assigned" className="form-input" value={ร่าง.assigned ?? ""} onChange={e => ตั้งค่า("assigned", e.target.value)} placeholder="ชื่อผู้ติดตามรายนี้" />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-first">เริ่มติดต่อ</label>
-                    <input id="pr-first" className="form-input" type="date" value={ร่าง.firstContact ?? ""} onChange={e => ตั้งค่า("firstContact", e.target.value || null)} />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-follow">ติดตามครั้งถัดไป</label>
-                    <input id="pr-follow" className="form-input" type="date" value={ร่าง.followUp ?? ""} onChange={e => ตั้งค่า("followUp", e.target.value || null)} />
-                  </div>
-                  <div>
-                    <label className="form-label" htmlFor="pr-status">สถานะ</label>
-                    {/* ต้องมีค่าเสมอ — ลูกค้าเป้าหมายทุกรายต้องอยู่ในขั้นใดขั้นหนึ่ง
-                        "เป็นตัวแทนแล้ว" เลือกตรงนี้ไม่ได้ ต้องผ่านปุ่ม "ตั้งเป็นตัวแทนจำหน่าย" เท่านั้น
-                        (กันกดเลือกเฉย ๆ แล้วนับเป็นความสำเร็จ ทั้งที่ไม่มีสาขาจริง) */}
-                    <select id="pr-status" className="form-select" value={ร่าง.status ?? "new"} disabled={ร่าง.status === "won"}
-                      onChange={e => ตั้งค่า("status", e.target.value as DealerProspectStatus)} style={{ cursor: "pointer" }}>
-                      {PROSPECT_STATUS_ORDER.filter(s => s !== "won" || ร่าง.status === "won").map(s => <option key={s} value={s}>{prospectStatusLabel[s]}</option>)}
-                    </select>
-                  </div>
-                  {ร่าง.status === "lost" && (
-                    <div style={{ gridColumn: "1 / -1" }}>
-                      <label className="form-label" htmlFor="pr-lost">เหตุผลที่ไม่สำเร็จ</label>
-                      <input id="pr-lost" className="form-input" value={ร่าง.lostReason ?? ""} onChange={e => ตั้งค่า("lostReason", e.target.value)} placeholder="เช่น ไม่มีทุน / ไม่สนใจ / ติดต่อไม่ได้" />
-                    </div>
-                  )}
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label className="form-label" htmlFor="pr-note">หมายเหตุ</label>
-                    <textarea id="pr-note" className="form-input" rows={3} value={ร่าง.note ?? ""} onChange={e => ตั้งค่า("note", e.target.value)} placeholder="สิ่งที่คุยไว้ / สิ่งที่ต้องทำต่อ" style={{ resize: "vertical" }} />
-                  </div>
-                </div>
-              </fieldset>
-
-              {/* ใบเสนอแพ็กเกจตัวแทน — "เหมือนใบเสนอราคาของตัวแทน แต่ของ HQ" (บอสสั่ง 14 ก.ย. 69) */}
-              {รายที่เปิด && (
-                <ProspectProposalsPanel prospect={รายที่เปิด} editable={จัดการได้} onChange={setใบของรายที่เปิด} />
-              )}
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-                {จัดการได้ && รายที่เปิด && (
-                  <button className="btn btn-sm" disabled={saving} onClick={() => void ลบ(รายที่เปิด)}
-                    style={{ background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>
-                    <Trash2 size={14} /> ลบ
-                  </button>
-                )}
-                <div style={{ flex: 1 }} />
-                {จัดการได้ && รายที่เปิด && รายที่เปิด.status !== "won" && (
-                  <button className="btn btn-secondary btn-md" disabled={saving} onClick={() => เปิดตั้งตัวแทน(รายที่เปิด)}>
-                    <Store size={14} /> ตั้งเป็นตัวแทนจำหน่าย
-                  </button>
-                )}
-                <button className="btn btn-secondary btn-md" disabled={saving} onClick={() => setEditing(null)}>{ดูอย่างเดียว ? "ปิด" : "ยกเลิก"}</button>
-                {จัดการได้ && (
-                  <button className="btn btn-primary btn-md" disabled={saving} onClick={() => void บันทึก()}
-                    style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}>
-                    {saving ? "กำลังบันทึก…" : editing === "new" ? "เพิ่มลูกค้าเป้าหมาย" : "บันทึก"}
-                  </button>
-                )}
+              {ช่องข้อมูล}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                <button className="btn btn-secondary btn-md" disabled={saving} onClick={() => setเพิ่มใหม่(false)}>ยกเลิก</button>
+                <button className="btn btn-primary btn-md" disabled={saving} onClick={() => void บันทึก()}
+                  style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}>
+                  {saving ? "กำลังบันทึก…" : "เพิ่มลูกค้าเป้าหมาย"}
+                </button>
               </div>
             </div>
           </ModalCard>
         </div>
       )}
+
+      {/* ══ แผงลูกค้าเป้าหมาย — กลางจอ 820px หัวน้ำเงิน + แท็บ (แบบเดียวกับลูกค้าเป้าหมายของตัวแทน) ══ */}
+      {รายที่เปิด && (() => {
+        const ราย = รายที่เปิด;
+        const sc = prospectStatusColor[ราย.status];
+        const pct = ความคืบหน้า(ราย.status);
+        const เลยกำหนด = ถึงกำหนดติดตาม(ราย, APP_NOW_ISO);
+        const ติดตามอยู่ = ยังติดตามอยู่(ราย.status);
+        const qa: React.CSSProperties = { background: "rgba(255,255,255,.15)", border: "none", borderRadius: 8, height: 30, padding: "0 11px", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap", textDecoration: "none" };
+        const ป้าย: React.CSSProperties = { display: "flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 99, fontSize: "0.65rem", fontWeight: 700, background: "rgba(255,255,255,.18)", color: "#fff" };
+        const อักษรย่อ = ราย.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || "—";
+        return (
+          <div onClick={ปิดแผง} style={{ position: "fixed", inset: 0, background: "rgba(45,45,45,.45)", zIndex: 1050, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+            <ModalCard onClose={ปิดแผง} label="ข้อมูลลูกค้าเป้าหมาย"
+              style={{ width: 820, maxWidth: "100%", height: "min(920px, calc(100vh - 24px))", background: "#fff", borderRadius: 18, boxShadow: "0 30px 90px rgba(0,0,0,.32)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              {/* หัวน้ำเงิน + ปุ่มลัด */}
+              <div style={{ background: PRIMARY, padding: "14px 20px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 13, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, border: "2px solid rgba(255,255,255,.25)", flexShrink: 0 }}>
+                      {อักษรย่อ}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <h2 style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{ราย.name}</h2>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: "0.72rem", color: "rgba(255,255,255,.72)", marginTop: 4 }}>
+                        {ราย.phone && <a href={`tel:${ราย.phone.replace(/[^\d+]/g, "")}`} style={{ color: "inherit", display: "flex", alignItems: "center", gap: 3 }}><Phone size={11} /> {formatPhone(ราย.phone) || ราย.phone}</a>}
+                        {ราย.province && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><MapPin size={11} /> {ราย.province}</span>}
+                        {ราย.assigned && <span>ผู้ดูแล {ราย.assigned}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                    {จัดการได้ && (
+                      <button style={qa} onClick={() => { setแท็บที่เปิด("contact"); setฟอร์มติดต่อเปิด(true); }}>
+                        <MessageSquarePlus size={13} /> บันทึกการติดต่อ
+                      </button>
+                    )}
+                    {จัดการได้ && ติดตามอยู่ && (
+                      <button style={qa} onClick={() => { setแท็บที่เปิด("proposals"); setสัญญาณออกใบ(n => n + 1); }}>
+                        <FilePlus2 size={13} /> ออกใบเสนอแพ็กเกจ
+                      </button>
+                    )}
+                    {จัดการได้ && ติดตามอยู่ && (
+                      <button style={qa} onClick={() => เปิดตั้งตัวแทน(ราย)}><Store size={13} /> ตั้งเป็นตัวแทนจำหน่าย</button>
+                    )}
+                    {ราย.status === "won" && ราย.dealerCode && (
+                      <Link href={`/hq/dealers/${ราย.dealerCode}`} style={qa}><Store size={13} /> ตัวแทน {ราย.dealerCode}</Link>
+                    )}
+                    {จัดการได้ && (
+                      <button onClick={() => void ลบ(ราย)} title="ลบลูกค้าเป้าหมาย" aria-label="ลบลูกค้าเป้าหมาย" style={{ ...qa, width: 30, padding: 0, justifyContent: "center", color: "#fecaca" }}><Trash2 size={14} /></button>
+                    )}
+                    <button onClick={ปิดแผง} title="ปิด" aria-label="ปิด" style={{ ...qa, width: 30, padding: 0, justifyContent: "center" }}><X size={15} /></button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+                  <span style={{ padding: "2px 10px", borderRadius: 99, fontSize: "0.65rem", fontWeight: 700, background: sc.bg, color: sc.text }}>{prospectStatusLabel[ราย.status]}</span>
+                  <span style={{ ...ป้าย, background: "#fff", color: PRIMARY, fontWeight: 800 }}>ความคืบหน้า {pct}%</span>
+                  <span style={ป้าย}>ติดต่อล่าสุด: {ติดต่อล่าสุดอ่านง่าย(ราย, APP_NOW_ISO)}</span>
+                  {ราย.followUp && ติดตามอยู่ && (
+                    <span style={{ ...ป้าย, ...(เลยกำหนด ? { background: "#fee2e2", color: "#b91c1c" } : {}) }}>
+                      นัดติดตาม {fmtISOToThai(ราย.followUp)}{เลยกำหนด ? " · ถึงกำหนดแล้ว" : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* แท็บ */}
+              <div className="tab-bar" role="tablist" aria-label="ส่วนของลูกค้าเป้าหมาย" style={{ padding: "0 12px", flexShrink: 0, background: "#fff" }}>
+                {แท็บทั้งหมด.map(t => (
+                  <button key={t.key} type="button" role="tab" aria-selected={แท็บที่เปิด === t.key}
+                    className={`tab-item${แท็บที่เปิด === t.key ? " active" : ""}`} onClick={() => setแท็บที่เปิด(t.key)}>
+                    {t.label}
+                    {t.key === "proposals" && ใบของรายที่เปิด.length > 0 && ` (${ใบของรายที่เปิด.length})`}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ flex: 1, overflowY: "auto", background: "#f5f7fa", padding: 16 }}>
+                <div style={{ background: "#fff", border: "1px solid #eef1f5", borderRadius: 14, padding: 16 }}>
+                  {แท็บที่เปิด === "overview" && (
+                    <>
+                      {ราย.status === "won" && ราย.dealerCode && (
+                        <div style={{ background: "#dcfce7", border: "1px solid #86efac", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: "0.78rem", color: "#15803d", fontWeight: 600 }}>
+                          เป็นตัวแทนจำหน่ายแล้ว — <Link href={`/hq/dealers/${ราย.dealerCode}`} style={{ color: "#15803d", textDecoration: "underline" }}>
+                            {ราย.dealerCode} · {ชื่อตัวแทน.get(ราย.dealerCode) ?? ""}
+                          </Link>
+                          {ราย.convertedAt && ` (ตั้งเมื่อ ${fmtISOToThai(ราย.convertedAt)})`}
+                        </div>
+                      )}
+                      {formErr && <div role="alert" style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: "0.8rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
+                      {ช่องข้อมูล}
+                      {จัดการได้ && (
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                          <button className="btn btn-primary btn-md" disabled={saving} onClick={() => void บันทึก()}
+                            style={saving ? { opacity: .6, cursor: "not-allowed" } : undefined}>
+                            {saving ? "กำลังบันทึก…" : "บันทึก"}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {แท็บที่เปิด === "tasks" && (
+                    <ProspectJourney
+                      prospect={ราย}
+                      ขั้นก่อนปิด={ขั้นก่อนไม่สำเร็จ(ประวัติ, มีใบส่งแล้ว)}
+                      มีบันทึกการติดต่อ={มีบันทึกการติดต่อ(ประวัติ)}
+                      มีใบส่งแล้ว={มีใบส่งแล้ว}
+                      editable={จัดการได้ && ประวัติโหลดแล้ว && !ประวัติผิด}
+                      busy={stageBusy}
+                      onStage={(next, reason) => void เปลี่ยนขั้น(next, reason)}
+                      onNeedContact={() => {
+                        setแท็บที่เปิด("contact"); setฟอร์มติดต่อเปิด(true);
+                        แจ้งสำเร็จ("ติ๊กงานนี้เองไม่ได้ — บันทึกการติดต่อจริงก่อน แล้วระบบจะติ๊กให้เอง");
+                      }}
+                      onNeedProposal={() => {
+                        setแท็บที่เปิด("proposals");
+                        if (!ใบของรายที่เปิด.length) setสัญญาณออกใบ(n => n + 1);
+                        แจ้งสำเร็จ(ใบของรายที่เปิด.length
+                          ? "ติ๊กงานนี้เองไม่ได้ — เปลี่ยนสถานะใบเป็น “ส่งแล้ว” แล้วระบบจะติ๊กให้เอง"
+                          : "ติ๊กงานนี้เองไม่ได้ — ออกใบเสนอแพ็กเกจแล้วเปลี่ยนเป็น “ส่งแล้ว” ระบบจะติ๊กให้เอง");
+                      }}
+                      onConvert={() => เปิดตั้งตัวแทน(ราย)}
+                    />
+                  )}
+
+                  {แท็บที่เปิด === "contact" && (
+                    <ProspectActivityPanel
+                      prospect={ราย}
+                      activities={ประวัติ}
+                      loaded={ประวัติโหลดแล้ว}
+                      loadErr={ประวัติผิด}
+                      editable={จัดการได้}
+                      formOpen={ฟอร์มติดต่อเปิด}
+                      setFormOpen={setฟอร์มติดต่อเปิด}
+                      onReload={() => void โหลดของราย(ราย.id)}
+                      onAdded={() => void รีเฟรชรายที่เปิด()}
+                    />
+                  )}
+
+                  {แท็บที่เปิด === "proposals" && (
+                    // key พ่วงสัญญาณ: กดปุ่มลัด "ออกใบเสนอแพ็กเกจ" ซ้ำ → แผงสร้างใหม่แล้วเปิดฟอร์มให้อีกครั้ง
+                    <ProspectProposalsPanel key={`${ราย.id}-${สัญญาณออกใบ}`} prospect={ราย} editable={จัดการได้ && ติดตามอยู่}
+                      onChange={เมื่อใบเปลี่ยน} เปิดฟอร์มทันที={สัญญาณออกใบ > 0} />
+                  )}
+                </div>
+              </div>
+            </ModalCard>
+          </div>
+        );
+      })()}
 
       {/* ── ตั้งเป็นตัวแทนจำหน่าย ── */}
       {converting && (
@@ -607,10 +843,10 @@ export default function HQProspectsPage() {
 
               {/* ด่านเดียวกับที่เซิร์ฟเวอร์บังคับ — บอกก่อนกด ไม่ต้องให้ผู้ใช้กรอกครบแล้วค่อยโดนปฏิเสธ
                   ผูกกับตัวแทนที่มีอยู่แล้วไม่ต้องมีใบ (บันทึกประวัติรายที่เป็นตัวแทนมาก่อนระบบนี้) */}
-              {โหมดตั้ง === "new" && !มีใบเสนอที่ส่งแล้ว(ใบของรายที่เปิด) && (
+              {โหมดตั้ง === "new" && !มีใบส่งแล้ว && (
                 <div role="note" style={{ background: "#fff8e6", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", fontSize: "0.78rem", color: "#92400e", fontWeight: 600, lineHeight: 1.6 }}>
                   ยังสร้างตัวแทนใหม่ไม่ได้ — ต้องมี “ใบเสนอแพ็กเกจตัวแทน” ที่ส่งแล้วหรือตอบรับอย่างน้อย 1 ใบ
-                  (ออกใบได้ในหน้าต่างรายละเอียดของรายนี้) · ถ้าเป็นตัวแทนอยู่แล้ว เลือก “ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว”
+                  (ออกใบได้ในแท็บใบเสนอแพ็กเกจของรายนี้) · ถ้าเป็นตัวแทนอยู่แล้ว เลือก “ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว”
                 </div>
               )}
 
@@ -674,7 +910,7 @@ export default function HQProspectsPage() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
                 <button className="btn btn-secondary btn-md" disabled={convBusy} onClick={() => setConverting(null)}>ยกเลิก</button>
-                <button className="btn btn-primary btn-md" disabled={convBusy || (โหมดตั้ง === "new" && !มีใบเสนอที่ส่งแล้ว(ใบของรายที่เปิด))} onClick={() => void ยืนยันตั้งตัวแทน()}
+                <button className="btn btn-primary btn-md" disabled={convBusy || (โหมดตั้ง === "new" && !มีใบส่งแล้ว)} onClick={() => void ยืนยันตั้งตัวแทน()}
                   style={convBusy ? { opacity: .6, cursor: "not-allowed" } : undefined}>
                   {convBusy ? "กำลังดำเนินการ…" : โหมดตั้ง === "new" ? "สร้างตัวแทนจำหน่าย" : "ผูกกับตัวแทนนี้"}
                 </button>
@@ -691,12 +927,12 @@ export default function HQProspectsPage() {
             style={{ background: "#fff", borderRadius: 16, width: 440, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.3)", padding: 22 }}>
             <div style={{ fontWeight: 800, fontSize: "1rem", color: "#15803d", marginBottom: 4 }}>สร้างตัวแทนจำหน่ายสำเร็จ</div>
             <div style={{ fontSize: "0.8rem", color: MUTED, marginBottom: 14 }}>{creds.code} · {creds.name} — คัดลอกบัญชีไปแจ้งตัวแทน</div>
-            {[["อีเมลเข้าระบบ", creds.email, "email"], ["รหัสผ่าน", creds.password, "password"]].map(([ป้าย, ค่า, ช่อง]) => (
+            {[["อีเมลเข้าระบบ", creds.email, "email"], ["รหัสผ่าน", creds.password, "password"]].map(([ป้ายช่อง, ค่า, ช่อง]) => (
               <div key={ช่อง} style={{ marginBottom: 10 }}>
-                <div className="form-label">{ป้าย}</div>
+                <div className="form-label">{ป้ายช่อง}</div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <code style={{ flex: 1, background: "#f3f4f6", borderRadius: 8, padding: "8px 10px", fontSize: "0.82rem", wordBreak: "break-all" }}>{ค่า}</code>
-                  <button className="btn btn-secondary btn-sm" aria-label={`คัดลอก${ป้าย}`} onClick={() => void คัดลอก(ค่า, ช่อง)}>
+                  <button className="btn btn-secondary btn-sm" aria-label={`คัดลอก${ป้ายช่อง}`} onClick={() => void คัดลอก(ค่า, ช่อง)}>
                     {คัดลอกแล้ว === ช่อง ? <Check size={14} /> : <Copy size={14} />}
                   </button>
                 </div>

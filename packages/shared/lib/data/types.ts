@@ -100,9 +100,26 @@ export type DealerProspect = {
   assigned?: string | null;      // ผู้ดูแลฝั่งสำนักงานใหญ่ (ชื่อ ไม่ใช่บัญชีเข้าระบบ)
   dealerCode?: string | null;    // ตัวแทนที่รายนี้กลายมาเป็น (ตั้งเมื่อสำเร็จ)
   convertedAt?: string | null;
+  lastContactAt?: string | null; // ติดต่อล่าสุด — ฐานข้อมูลตั้งจากบันทึกการติดต่อเท่านั้น (0174) แอปเขียนเองไม่ได้
   createdAt?: string;
   updatedAt?: string;
 };
+
+// ── ประวัติลูกค้าเป้าหมาย (HQ) — ระบบบันทึกเอง + บันทึกการติดต่อ · แก้/ลบไม่ได้ (migration 0174) ──
+export type ProspectActivityKind = "created" | "status" | "contact" | "proposal";
+export type ProspectActivity = {
+  id: number;
+  prospectId: number;
+  kind: ProspectActivityKind;
+  channel?: string | null;       // เฉพาะบันทึกการติดต่อ
+  body: string;
+  fromStatus?: DealerProspectStatus | null;
+  toStatus?: DealerProspectStatus | null;
+  nextFollowUp?: string | null;  // YYYY-MM-DD เฉพาะบันทึกการติดต่อ
+  actor: string;                 // อีเมลผู้ทำ (ฐานข้อมูลตั้งเอง) · งานเบื้องหลัง = system
+  createdAt: string;
+};
+export type ProspectContactInput = { prospectId: number; channel: string; body: string; nextFollowUp?: string | null };
 
 // ── ใบเสนอแพ็กเกจตัวแทน (บอสสั่ง 14 ก.ย. 69) ──
 //   "เหมือนใบเสนอราคาของตัวแทน แต่ของ HQ" · คล้ายแฟรนไชส์แต่ไม่ใช่แฟรนไชส์ (บอสยืนยัน)

@@ -1,0 +1,219 @@
+"use client";
+
+// ── ฟอร์มออก/แก้ "ใบเสนอแพ็กเกจตัวแทน" — ตัวเดียวใช้ทั้งหน้ารวมใบเสนอ และหน้าต่างลูกค้าเป้าหมาย ──
+//
+// บอสสั่ง 14 ก.ย. 69: "ใบเสนอแพ็กเกจตัวแทนมันไม่จบแบบหน้าเดียว ให้แบบใช้งานง่าย"
+//   → หน้ารวมใบเสนอออกใบได้เลยในฟอร์มเดียว (เลือกลูกค้าเป้าหมายในฟอร์ม) ไม่ต้องเปิดต่อหลายชั้น
+//
+// ⚠️ ห้ามแยกเขียนฟอร์มนี้ซ้ำที่อื่น — กติกา (ช่องบังคับ/ช่องเงินมีลูกน้ำ/ภาคก่อนจังหวัด) ต้องเหมือนกันทุกหน้า
+//    วางที่ body (portal) เพราะบางหน้าเปิดจากในหน้าต่างอีกชั้น — คลิกฉากหลังต้องหยุดไม่ให้หน้าต่างแม่ปิดตาม
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { proposals as proposalsRepo } from "@pms/shared/lib/data";
+import type { DealerPackage, DealerPackageProposal, DealerProspect } from "@pms/shared/lib/data/types";
+import { PACKAGE_ORDER, packageLabel, เตรียมบันทึกใบ, ตรวจใบเสนอ } from "@pms/shared/lib/dealerProposals";
+import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
+import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
+import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+import { friendlyError } from "@pms/shared/lib/friendlyError";
+import { ModalCard } from "@pms/shared/components/ui/ModalCard";
+import { แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { useAuditLogger } from "@pms/shared/lib/useAudit";
+
+const MUTED = "#6b7280";
+
+// ร่างในฟอร์ม — ช่องตัวเลขเก็บเป็นข้อความที่มีลูกน้ำระหว่างพิมพ์ (บอสสั่ง 26 ส.ค. 69: ช่องเงินต้องเห็นลูกน้ำ)
+type ร่างใบ = Partial<DealerPackageProposal> & { มูลค่าที่พิมพ์: string; ระยะที่พิมพ์: string; เป้าที่พิมพ์: string };
+
+function ร่างเริ่มต้น(editing: DealerPackageProposal | null | undefined, prospect: DealerProspect | null | undefined): ร่างใบ {
+  if (editing) {
+    return {
+      ...editing,
+      มูลค่าที่พิมพ์: editing.amount != null ? formatMoneyInput(String(editing.amount)) : "",
+      ระยะที่พิมพ์: editing.contractMonths != null ? String(editing.contractMonths) : "",
+      เป้าที่พิมพ์: editing.annualTarget != null ? formatMoneyInput(String(editing.annualTarget)) : "",
+    };
+  }
+  return {
+    prospectId: prospect?.id,
+    // พื้นที่เติมจากลูกค้าเป้าหมายให้ก่อน — แก้ได้
+    region: prospect ? prospect.region || regionOf(prospect.province ?? "") || null : null,
+    province: prospect?.province ?? null,
+    proposedDate: APP_NOW_ISO,
+    status: "draft",
+    มูลค่าที่พิมพ์: "", ระยะที่พิมพ์: "", เป้าที่พิมพ์: "",
+  };
+}
+
+export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved }: {
+  /** ออกใบให้รายนี้ (ล็อกไว้) — ไม่ส่ง = ให้เลือกในฟอร์มจาก choices */
+  prospect?: DealerProspect | null;
+  /** รายที่เลือกได้ (หน้ารวมใบเสนอ) — ควรส่งเฉพาะรายที่ยังติดตามอยู่ */
+  choices?: DealerProspect[];
+  /** แก้ใบร่างเดิม */
+  editing?: DealerPackageProposal | null;
+  onClose: () => void;
+  onSaved: (p: DealerPackageProposal, prospect: DealerProspect) => void;
+}) {
+  const logAudit = useAuditLogger();
+  const [ร่าง, setร่าง] = useState<ร่างใบ>(() => ร่างเริ่มต้น(editing, prospect));
+  const [formErr, setFormErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const เลือกในฟอร์ม = !prospect && !editing;
+  const รายของใบ = prospect ?? choices?.find(c => c.id === ร่าง.prospectId) ?? null;
+
+  const ตั้งค่า = <K extends keyof ร่างใบ>(k: K, v: ร่างใบ[K]) => setร่าง(r => ({ ...r, [k]: v }));
+  const เปลี่ยนภาค = (region: string) => setร่าง(r => ({
+    ...r,
+    region: region || null,
+    province: region === ALL_REGIONS ? ALL_PROVINCES
+      : region && provincesOfRegion(region).includes(r.province ?? "") ? r.province : null,
+  }));
+  // เลือกลูกค้าเป้าหมาย → เติมพื้นที่ของรายนั้นให้ (เฉพาะช่องที่ยังว่าง ไม่ทับที่กรอกไว้)
+  const เลือกราย = (id: string) => setร่าง(r => {
+    const ราย = choices?.find(c => String(c.id) === id);
+    return {
+      ...r,
+      prospectId: ราย?.id,
+      region: r.region ?? (ราย ? ราย.region || regionOf(ราย.province ?? "") || null : null),
+      province: r.province ?? ราย?.province ?? null,
+    };
+  });
+
+  async function บันทึก() {
+    if (!รายของใบ) { setFormErr("ต้องเลือกลูกค้าเป้าหมาย"); return; }
+    const { มูลค่าที่พิมพ์, ระยะที่พิมพ์, เป้าที่พิมพ์, ...ค่าอื่น } = ร่าง;
+    const row = เตรียมบันทึกใบ({
+      ...ค่าอื่น,
+      prospectId: รายของใบ.id,
+      amount: มูลค่าที่พิมพ์.trim() ? parseMoneyInput(มูลค่าที่พิมพ์) : null,
+      contractMonths: ระยะที่พิมพ์.trim() ? Number(ระยะที่พิมพ์) : null,
+      annualTarget: เป้าที่พิมพ์.trim() ? parseMoneyInput(เป้าที่พิมพ์) : null,
+    });
+    const ผิด = ตรวจใบเสนอ(row);
+    if (ผิด) { setFormErr(ผิด); return; }
+    setBusy(true); setFormErr("");
+    try {
+      if (ร่าง.id) {
+        const saved = await proposalsRepo.update({ ...row, id: ร่าง.id, proposalNo: ร่าง.proposalNo, createdAt: ร่าง.createdAt });
+        logAudit("แก้ไขใบเสนอแพ็กเกจตัวแทน", `${saved.proposalNo ?? ""} · ${รายของใบ.name}`);
+        แจ้งสำเร็จ(`บันทึกใบ ${saved.proposalNo ?? ""} แล้ว`);
+        onSaved(saved, รายของใบ);
+      } else {
+        const saved = await proposalsRepo.create(row);
+        logAudit("ออกใบเสนอแพ็กเกจตัวแทน", `${saved.proposalNo ?? ""} · ${รายของใบ.name} · ${packageLabel[saved.package]}`);
+        แจ้งสำเร็จ(`ออกใบ ${saved.proposalNo ?? ""} แล้ว (ร่าง)`);
+        onSaved(saved, รายของใบ);
+      }
+    } catch (e) {
+      setFormErr(friendlyError(e, "บันทึกใบเสนอแพ็กเกจไม่สำเร็จ"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div onClick={e => { e.stopPropagation(); if (!busy) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <ModalCard onClose={() => !busy && onClose()} label="ใบเสนอแพ็กเกจตัวแทน" className="modal-fit"
+        style={{ background: "#fff", borderRadius: 16, width: 560, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.3)" }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h2 style={{ margin: 0, fontSize: "0.98rem", fontWeight: 800, color: "#2D2D2D" }}>
+            {ร่าง.id ? `แก้ไขใบ ${ร่าง.proposalNo ?? ""}` : "ออกใบเสนอแพ็กเกจตัวแทน"}
+            {รายของใบ && !เลือกในฟอร์ม && <span style={{ display: "block", fontSize: "0.72rem", color: MUTED, fontWeight: 600 }}>{รายของใบ.name}</span>}
+          </h2>
+          <button aria-label="ปิด" onClick={() => !busy && onClose()} style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex" }}><X size={18} /></button>
+        </div>
+        <div className="modal-fit-body" style={{ padding: "14px 20px" }}>
+          {formErr && <div role="alert" style={{ background: "#fee2e2", border: "1px solid #dc262630", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: "0.8rem", color: "#dc2626", fontWeight: 600 }}>{formErr}</div>}
+          <fieldset disabled={busy} style={{ border: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            {เลือกในฟอร์ม && (
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="form-label" htmlFor="pp-prospect">ลูกค้าเป้าหมาย *</label>
+                <select id="pp-prospect" className="form-select" value={ร่าง.prospectId != null ? String(ร่าง.prospectId) : ""} onChange={e => เลือกราย(e.target.value)} style={{ cursor: "pointer" }}>
+                  <option value="">— ยังไม่ระบุ —</option>
+                  {(choices ?? []).map(c => <option key={c.id} value={String(c.id)}>{c.name}{c.province ? ` · ${c.province}` : ""}</option>)}
+                </select>
+                {(choices ?? []).length === 0 && (
+                  <div style={{ fontSize: "0.7rem", color: "#92400e", marginTop: 4 }}>ยังไม่มีลูกค้าเป้าหมายที่ติดตามอยู่ — เพิ่มที่หน้าลูกค้าเป้าหมาย (HQ) ก่อน</div>
+                )}
+              </div>
+            )}
+            <div>
+              <label className="form-label" htmlFor="pp-package">แพ็กเกจ *</label>
+              <select id="pp-package" className="form-select" value={ร่าง.package ?? ""} onChange={e => ตั้งค่า("package", (e.target.value || undefined) as DealerPackage | undefined)} style={{ cursor: "pointer" }}>
+                <option value="">— ยังไม่ระบุ —</option>
+                {PACKAGE_ORDER.map(k => <option key={k} value={k}>{packageLabel[k]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pp-amount">ค่าแรกเข้า (บาท · จ่ายครั้งเดียว)</label>
+              {/* ช่องเงินใช้ text + ใส่ลูกน้ำเอง (บอสสั่ง 26 ส.ค. 69) · ไม่บังคับ — ไม่กรอก = "—" ห้ามเติมตัวเลขให้ */}
+              <input id="pp-amount" className="form-input" type="text" inputMode="numeric" value={ร่าง.มูลค่าที่พิมพ์}
+                onChange={e => ตั้งค่า("มูลค่าที่พิมพ์", formatMoneyInput(e.target.value))} placeholder="เว้นว่างได้" />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pp-months">ระยะสัญญา (เดือน)</label>
+              <input id="pp-months" className="form-input" type="text" inputMode="numeric" value={ร่าง.ระยะที่พิมพ์}
+                onChange={e => ตั้งค่า("ระยะที่พิมพ์", e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="เช่น 12 · เว้นว่างได้" />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pp-target">เป้ายอดซื้อต่อปี (บาท)</label>
+              <input id="pp-target" className="form-input" type="text" inputMode="numeric" value={ร่าง.เป้าที่พิมพ์}
+                onChange={e => ตั้งค่า("เป้าที่พิมพ์", formatMoneyInput(e.target.value))} placeholder="เว้นว่างได้" />
+              <div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 3 }}>ตั้งเป็นตัวแทนแล้ว ใช้เป็นเป้ายอดขายรายปีของสาขา</div>
+            </div>
+            {/* ภาคมาก่อนจังหวัด — กติกาเดียวกับฟอร์มลูกค้าเป้าหมาย · "ทุกภาค" = ทุกจังหวัด */}
+            <div>
+              <label className="form-label" htmlFor="pp-region">ภาค (พื้นที่ที่ได้สิทธิ์)</label>
+              <select id="pp-region" className="form-select" value={ร่าง.region ?? ""} onChange={e => เปลี่ยนภาค(e.target.value)} style={{ cursor: "pointer" }}>
+                <option value="">— ยังไม่ระบุ —</option>
+                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                <option value={ALL_REGIONS}>{ALL_REGIONS} (ทั่วประเทศ)</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pp-province">จังหวัด</label>
+              <select id="pp-province" className="form-select" value={ร่าง.province ?? ""} onChange={e => ตั้งค่า("province", e.target.value || null)} style={{ cursor: "pointer" }}>
+                <option value="">{ร่าง.region ? "— ยังไม่ระบุ —" : "— ยังไม่ระบุ (เลือกภาคก่อน) —"}</option>
+                {ร่าง.region === ALL_REGIONS && <option value={ALL_PROVINCES}>{ALL_PROVINCES}</option>}
+                {provincesOfRegion(ร่าง.region ?? "").map(p => <option key={p} value={p}>{p}</option>)}
+                {ร่าง.province && ร่าง.province !== ALL_PROVINCES && !provincesOfRegion(ร่าง.region ?? "").includes(ร่าง.province) && (
+                  <option value={ร่าง.province}>{ร่าง.province} (ตามที่บันทึกไว้)</option>
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pp-date">วันที่เสนอ *</label>
+              <input id="pp-date" className="form-input" type="date" value={ร่าง.proposedDate ?? ""} onChange={e => ตั้งค่า("proposedDate", e.target.value || null)} />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pp-valid">ข้อเสนอมีผลถึง</label>
+              <input id="pp-valid" className="form-input" type="date" value={ร่าง.validUntil ?? ""} onChange={e => ตั้งค่า("validUntil", e.target.value || null)} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="form-label" htmlFor="pp-terms">เงื่อนไข</label>
+              <textarea id="pp-terms" className="form-input" rows={4} value={ร่าง.terms ?? ""} onChange={e => ตั้งค่า("terms", e.target.value)}
+                placeholder="พิมพ์ทีละบรรทัด — แต่ละบรรทัดขึ้นเป็นหนึ่งข้อในเอกสาร" style={{ resize: "vertical" }} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="form-label" htmlFor="pp-note">หมายเหตุภายใน (ไม่พิมพ์ลงเอกสาร)</label>
+              <input id="pp-note" className="form-input" value={ร่าง.note ?? ""} onChange={e => ตั้งค่า("note", e.target.value)} placeholder="เช่น คุยรายละเอียดทาง LINE แล้ว" />
+            </div>
+          </fieldset>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+            <button className="btn btn-secondary btn-md" disabled={busy} onClick={onClose}>ยกเลิก</button>
+            <button className="btn btn-primary btn-md" disabled={busy} onClick={() => void บันทึก()}
+              style={busy ? { opacity: .6, cursor: "not-allowed" } : undefined}>
+              {busy ? "กำลังบันทึก…" : "บันทึกใบ"}
+            </button>
+          </div>
+        </div>
+      </ModalCard>
+    </div>,
+    document.body,
+  );
+}

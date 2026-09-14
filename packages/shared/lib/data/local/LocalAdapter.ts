@@ -39,14 +39,19 @@ function fireProfile() {
 import { putLocalBlob, localBlobUrl, removeLocalBlob } from "./blobStore";
 import { accountLocal } from "./accountLocal";
 import type { DataAdapter } from "../ports";
-import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect, DealerPackageProposal } from "../types";
+import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect, DealerPackageProposal, ProspectActivity, DealerProspectStatus } from "../types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
-import { เตรียมบันทึกใบ, ใบล็อกแล้ว, สถานะที่เปลี่ยนไปได้ } from "@pms/shared/lib/dealerProposals";
+import { เตรียมบันทึกใบ, ใบล็อกแล้ว, สถานะที่เปลี่ยนไปได้, มีใบเสนอที่ส่งแล้ว } from "@pms/shared/lib/dealerProposals";
+import {
+  ตรวจเปลี่ยนขั้น, ข้อความเพิ่มราย, ข้อความเปลี่ยนขั้น, ข้อความใบเสนอ, ประวัติใหม่ก่อน,
+  เตรียมบันทึกการติดต่อ, ตรวจบันทึกการติดต่อ, วันไทยของเวลา,
+} from "@pms/shared/lib/prospectJourney";
 
 const HQ_COMPANY_KEY = "hq_company_profile";
 const NOTES_KEY = "customer_notes_v1";
 const PROSPECTS_KEY = "hq_dealer_prospects_v1";
 const PROPOSALS_KEY = "hq_dealer_proposals_v1";
+const PROSPECT_ACTIVITIES_KEY = "hq_dealer_prospect_activities_v1";
 const HQ_USERS_KEY = "hq_users_v4";
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY, DEALER_PRICING_KEY } from "@pms/shared/lib/mock";
@@ -57,6 +62,25 @@ const LOGO_KEY = "dealer_company_logo_v2";
 
 const ok = <T>(v: T): Promise<T> => Promise.resolve(v);
 const done = (): Promise<void> => Promise.resolve();
+
+// ── ประวัติลูกค้าเป้าหมาย HQ (โหมดเดโม) — เลียนแบบตัวดักของฐานข้อมูล 0174 ──
+function บันทึกประวัติเดโม(a: Omit<ProspectActivity, "id" | "actor" | "createdAt">): ProspectActivity {
+  const all = readKey<ProspectActivity[]>(PROSPECT_ACTIVITIES_KEY, []);
+  const row: ProspectActivity = { ...a, id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1, actor: "โหมดเดโม", createdAt: new Date().toISOString() };
+  writeKey(PROSPECT_ACTIVITIES_KEY, [row, ...all]);
+  return row;
+}
+function มีใบส่งแล้วเดโม(prospectId: number): boolean {
+  return มีใบเสนอที่ส่งแล้ว(readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []).filter(x => x.prospectId === prospectId));
+}
+// ส่งใบแล้ว: นัดคุยแล้ว → รอตัดสินใจ ให้เอง (แบบเดียวกับตัวดักของใบเสนอ)
+function เลื่อนเป็นรอตัดสินใจเดโม(prospectId: number) {
+  const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+  const ราย = all.find(x => x.id === prospectId);
+  if (!ราย || ราย.status !== "meeting") return;
+  writeKey(PROSPECTS_KEY, all.map(x => x.id === prospectId ? { ...x, status: "considering" as const, updatedAt: new Date().toISOString() } : x));
+  บันทึกประวัติเดโม({ prospectId, kind: "status", body: ข้อความเปลี่ยนขั้น("meeting", "considering", ราย), fromStatus: "meeting", toStatus: "considering" });
+}
 
 function writeKey(key: string, val: unknown) {
   if (typeof window === "undefined") return;
@@ -240,24 +264,36 @@ export const LocalAdapter: DataAdapter = {
     },
   },
   // ลูกค้าเป้าหมายของสำนักงานใหญ่ (โหมดเดโม) — จัดข้อมูลแบบเดียวกับฐานข้อมูลจริง · รายใหม่ขึ้นก่อน
+  //   กติกาเลื่อนขั้น + ประวัติ เลียนแบบตัวดักของฐานข้อมูล 0174 — เดโมต้องทำงานเหมือนของจริง
   prospects: {
     list: () => ok(readKey<DealerProspect[]>(PROSPECTS_KEY, [])),
     create: (p) => {
       const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
       const now = new Date().toISOString();
-      const row: DealerProspect = { ...เตรียมบันทึก(p), id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1, createdAt: now, updatedAt: now };
+      const row: DealerProspect = { ...เตรียมบันทึก(p), id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1, lastContactAt: null, createdAt: now, updatedAt: now };
       writeKey(PROSPECTS_KEY, [row, ...all]);
+      บันทึกประวัติเดโม({ prospectId: row.id, kind: "created", body: ข้อความเพิ่มราย(row.status), toStatus: row.status });
       return ok(row);
     },
     update: (p) => {
-      const row: DealerProspect = { ...เตรียมบันทึก(p), id: p.id, createdAt: p.createdAt, updatedAt: new Date().toISOString() };
-      writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).map(x => x.id === p.id ? row : x));
+      const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+      const เดิม = all.find(x => x.id === p.id);
+      if (!เดิม) return Promise.reject(new Error("ไม่พบลูกค้าเป้าหมายรายนี้แล้ว"));
+      // ติดต่อล่าสุดมาจากบันทึกการติดต่อทางเดียว — ห้ามทับด้วยค่าที่หน้าจอส่งกลับมา
+      const row: DealerProspect = { ...เตรียมบันทึก(p), id: เดิม.id, lastContactAt: เดิม.lastContactAt ?? null, createdAt: เดิม.createdAt, updatedAt: new Date().toISOString() };
+      const ผิด = ตรวจเปลี่ยนขั้น(เดิม.status, row.status, { มีใบส่งแล้ว: มีใบส่งแล้วเดโม(เดิม.id), dealerCode: row.dealerCode });
+      if (ผิด) return Promise.reject(new Error(ผิด));
+      writeKey(PROSPECTS_KEY, all.map(x => x.id === เดิม.id ? row : x));
+      if (row.status !== เดิม.status) {
+        บันทึกประวัติเดโม({ prospectId: row.id, kind: "status", body: ข้อความเปลี่ยนขั้น(เดิม.status, row.status, row), fromStatus: เดิม.status, toStatus: row.status });
+      }
       return ok(row);
     },
     remove: (id) => {
       writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(x => x.id !== id));
-      // ใบของรายนั้นหายตามไปด้วย — แบบเดียวกับฐานข้อมูลจริง (on delete cascade)
+      // ใบและประวัติของรายนั้นหายตามไปด้วย — แบบเดียวกับฐานข้อมูลจริง (on delete cascade)
       writeKey(PROPOSALS_KEY, readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []).filter(x => x.prospectId !== id));
+      writeKey(PROSPECT_ACTIVITIES_KEY, readKey<ProspectActivity[]>(PROSPECT_ACTIVITIES_KEY, []).filter(x => x.prospectId !== id));
       return done();
     },
   },
@@ -276,6 +312,8 @@ export const LocalAdapter: DataAdapter = {
         proposalNo: `DP-${ปี}-${String(ลำดับ).padStart(4, "0")}`, createdAt: now, updatedAt: now,
       };
       writeKey(PROPOSALS_KEY, [row, ...all]);
+      บันทึกประวัติเดโม({ prospectId: row.prospectId, kind: "proposal", body: ข้อความใบเสนอ(row.proposalNo ?? "", row.status, true) });
+      if (row.status === "sent") เลื่อนเป็นรอตัดสินใจเดโม(row.prospectId);
       return ok(row);
     },
     update: (p) => {
@@ -299,6 +337,10 @@ export const LocalAdapter: DataAdapter = {
       }
       const row = { ...เดิม, status, updatedAt: new Date().toISOString() };
       writeKey(PROPOSALS_KEY, all.map(x => x.id === id ? row : x));
+      if (status !== เดิม.status) {
+        บันทึกประวัติเดโม({ prospectId: row.prospectId, kind: "proposal", body: ข้อความใบเสนอ(row.proposalNo ?? "", status, false) });
+        if (status === "sent") เลื่อนเป็นรอตัดสินใจเดโม(row.prospectId);
+      }
       return ok(row);
     },
     remove: (id) => {
@@ -307,6 +349,29 @@ export const LocalAdapter: DataAdapter = {
       if (เดิม && ใบล็อกแล้ว(เดิม.status)) return Promise.reject(new Error("ลบได้เฉพาะใบร่าง — ใบที่ส่งแล้วต้องเก็บไว้เป็นหลักฐาน"));
       writeKey(PROPOSALS_KEY, all.filter(x => x.id !== id));
       return done();
+    },
+  },
+  // ประวัติ + บันทึกการติดต่อ (โหมดเดโม) — บันทึกแล้วตั้ง ติดต่อล่าสุด/นัดติดตาม/วันเริ่มติดต่อ/ขั้น ให้เอง แบบตัวดัก 0174
+  prospectActivities: {
+    list: (prospectId) => ok(readKey<ProspectActivity[]>(PROSPECT_ACTIVITIES_KEY, [])
+      .filter(x => x.prospectId === prospectId).sort(ประวัติใหม่ก่อน)),
+    addContact: (x) => {
+      const row = เตรียมบันทึกการติดต่อ(x);
+      const ผิด = ตรวจบันทึกการติดต่อ(row);
+      if (ผิด) return Promise.reject(new Error(ผิด));
+      const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+      const ราย = all.find(p => p.id === row.prospectId);
+      if (!ราย) return Promise.reject(new Error("ไม่พบลูกค้าเป้าหมายรายนี้แล้ว"));
+      const บันทึก = บันทึกประวัติเดโม({ prospectId: ราย.id, kind: "contact", channel: row.channel, body: row.body, nextFollowUp: row.nextFollowUp ?? null });
+      const ขั้นใหม่: DealerProspectStatus = ราย.status === "new" ? "contacted" : ราย.status;
+      writeKey(PROSPECTS_KEY, all.map(p => p.id === ราย.id ? {
+        ...p, lastContactAt: บันทึก.createdAt, followUp: row.nextFollowUp ?? p.followUp,
+        firstContact: p.firstContact ?? วันไทยของเวลา(บันทึก.createdAt), status: ขั้นใหม่, updatedAt: บันทึก.createdAt,
+      } : p));
+      if (ขั้นใหม่ !== ราย.status) {
+        บันทึกประวัติเดโม({ prospectId: ราย.id, kind: "status", body: ข้อความเปลี่ยนขั้น(ราย.status, ขั้นใหม่, ราย), fromStatus: ราย.status, toStatus: ขั้นใหม่ });
+      }
+      return ok(บันทึก);
     },
   },
   // โหมดเดโม: รายชื่ออยู่ในเครื่อง สร้าง/ลบได้ (ไม่มีระบบยืนยันตัวตนจริงให้ผูก)

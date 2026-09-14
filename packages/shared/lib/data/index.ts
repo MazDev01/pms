@@ -93,6 +93,8 @@ export const notes = adapter.notes;
 export const prospects = adapter.prospects;
 // ใบเสนอแพ็กเกจตัวแทน — ใช้ในหน้าต่างรายละเอียดลูกค้าเป้าหมาย HQ เท่านั้น ไม่ต้องแคช
 export const proposals = adapter.proposals;
+// ประวัติ + บันทึกการติดต่อ ของลูกค้าเป้าหมาย HQ — ต้องสดเสมอหลังบันทึก ไม่ต้องแคช
+export const prospectActivities = adapter.prospectActivities;
 export const users = adapter.users;
 // บัญชีเข้าระบบของตัวแทน (แก้อีเมล/รหัสผ่านเอง · โควตา 2 ครั้ง · เกินนั้นขออนุมัติ)
 export const account = adapter.account;

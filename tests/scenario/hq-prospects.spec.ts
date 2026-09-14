@@ -96,14 +96,22 @@ test("[func·hq] เพิ่มลูกค้าเป้าหมาย → �
   expect(row.status).toBe("new");
 
   const แถว = page.getByRole("row", { name: new RegExp(name) });
-  await expect(แถว).toBeVisible();
-  await แถว.click();
-  await แก้ไข.locator("#pr-status").selectOption("profile_sent");
-  await แก้ไข.getByRole("button", { name: "บันทึก", exact: true }).click();
+  // เพิ่มเสร็จ ระบบเปิดแผงของรายนั้นที่แท็บงานให้เลย (แบบเดียวกับฝั่งตัวแทน — บอสสั่ง 14 ก.ย. 69)
+  //   ขั้นเปลี่ยนจากงานเท่านั้น ฟอร์มไม่มีช่องเลือกสถานะแล้ว
+  await expect(แก้ไข.getByRole("tab", { name: "งาน/ความคืบหน้า" })).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
+  await expect(แก้ไข.locator("#pr-status"), "ห้ามมีช่องเลือกสถานะเอง").toHaveCount(0);
+  // งานแรกต้องมีบันทึกการติดต่อจริง — กดติ๊กแล้วพาไปฟอร์มบันทึกการติดต่อ ระบบติ๊กให้เอง
+  await แก้ไข.getByRole("checkbox", { name: "ติดต่อครั้งแรก" }).click();
+  await แก้ไข.locator("#pc-channel").selectOption("โทรศัพท์");
+  await แก้ไข.locator("#pc-body").fill("สนใจเป็นตัวแทน ขอข้อมูลบริษัท");
+  await แก้ไข.getByRole("button", { name: "บันทึกการติดต่อ" }).last().click();
+  await waitRow(sb, "dealer_prospects", { name, status: "contacted" });
+  await แก้ไข.getByRole("tab", { name: "งาน/ความคืบหน้า" }).click();
+  await expect(แก้ไข.getByRole("checkbox", { name: "ติดต่อครั้งแรก" })).toHaveAttribute("aria-checked", "true", { timeout: 15_000 });
+  await แก้ไข.getByRole("checkbox", { name: "ส่งข้อมูลบริษัท" }).click();
   await waitRow(sb, "dealer_prospects", { name, status: "profile_sent" });
 
-  await แถว.click();
-  await แก้ไข.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).click();
+  await แก้ไข.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).first().click();
   const ตั้ง = page.getByRole("dialog", { name: "ตั้งเป็นตัวแทนจำหน่าย" });
   await ตั้ง.getByLabel("ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว").check();
   await ตั้ง.locator("#cv-existing").selectOption("RYG");

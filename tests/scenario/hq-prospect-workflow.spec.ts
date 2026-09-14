@@ -1,0 +1,149 @@
+import { test, expect } from "@playwright/test";
+import { ADMIN, RYG, skipReason } from "./supabaseEnv";
+import { HQ_ORIGIN, loginUI, watchErrors, assertNoErrors, db, waitRow, specNS } from "./funcHelpers";
+
+// ── เส้นทางการทำงานของลูกค้าเป้าหมาย (HQ) — migration 0174 ──
+//   บอสสั่ง 14 ก.ย. 69: "ทำให้ ลูกค้าเป้าหมาย ออกแบบการทำออกมาใช้งานให้เสร็จ" · "ให้มันทำงานแบบเดียวกับดีลเลอร์"
+//
+// สิ่งที่ต้องพิสูจน์ที่ฐานข้อมูล (ด่านจริง — ใครยิงตรงก็โดน):
+//   1) เลื่อนขั้นทีละขั้น ห้ามข้าม · รอตัดสินใจต้องมีใบที่ส่งแล้ว · เป็นตัวแทนแล้วเปลี่ยนไม่ได้
+//   2) บันทึกการติดต่อ → ติดต่อล่าสุด/นัดติดตาม/รอติดต่อ→ติดต่อแล้ว ตั้งให้เอง · แอปทับติดต่อล่าสุดไม่ได้
+//   3) ประวัติ: ระบบเขียนเอง ผู้ใช้เพิ่มได้แค่บันทึกการติดต่อ · แก้/ลบ/ปลอมผู้ทำไม่ได้ · ตัวแทนไม่เห็น
+//   4) ส่งใบเสนอแล้ว นัดคุยแล้ว → รอตัดสินใจ ให้เอง
+//   5) หน้าจอ: ตัวกรองไม่ได้ติดต่อ 7/14/30 วัน
+test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
+test.setTimeout(180_000);
+test.describe.configure({ mode: "serial" });
+
+const NS = specNS("PROSPECTFLOW");
+
+async function cleanup() {
+  const { error } = await (await db(ADMIN)).from("dealer_prospects").delete().like("name", `${NS}%`);
+  if (error) console.warn("[hq-prospect-workflow] ล้างข้อมูลทดสอบไม่สำเร็จ", error.message);
+}
+test.beforeAll(cleanup);
+test.afterAll(cleanup);
+
+test("[db] กติกาเลื่อนขั้น + บันทึกการติดต่อ + ส่งใบแล้วเลื่อนเอง", async () => {
+  const sb = await db(ADMIN);
+  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name: `${NS}-กติกาขั้น` }).select("id, status").single();
+  expect(error).toBeNull();
+  const id = (pr as { id: number }).id;
+  const ขั้น = async () => ((await sb.from("dealer_prospects").select("status, last_contact_at, follow_up, first_contact").eq("id", id).single()).data as
+    { status: string; last_contact_at: string | null; follow_up: string | null; first_contact: string | null });
+
+  const ข้าม = await sb.from("dealer_prospects").update({ status: "meeting" }).eq("id", id).select();
+  expect(ข้าม.error?.message ?? "", "รอติดต่อ → นัดคุยแล้ว ข้ามขั้นไม่ได้").toMatch(/ห้ามข้ามขั้น/);
+
+  // บันทึกการติดต่อ → รอติดต่อ → ติดต่อแล้ว + ติดต่อล่าสุด + นัดติดตาม ตั้งให้เอง
+  const ติดต่อ = await sb.from("dealer_prospect_activities")
+    .insert({ prospect_id: id, kind: "contact", channel: "LINE", body: "สนใจ", next_follow_up: "2026-12-01", actor: "ปลอม", created_at: "2020-01-01T00:00:00Z" })
+    .select("id, actor, created_at").single();
+  expect(ติดต่อ.error).toBeNull();
+  const แถวติดต่อ = ติดต่อ.data as { id: number; actor: string; created_at: string };
+  expect(แถวติดต่อ.actor, "ผู้ทำต้องมาจากบัญชีที่ล็อกอิน ปลอมไม่ได้").not.toBe("ปลอม");
+  expect(แถวติดต่อ.actor).toContain("@");
+  expect(แถวติดต่อ.created_at.startsWith("2020"), "เวลาต้องเป็นเวลาจริง ปลอมย้อนหลังไม่ได้").toBe(false);
+  let ตอนนี้ = await ขั้น();
+  expect(ตอนนี้.status).toBe("contacted");
+  expect(ตอนนี้.last_contact_at).not.toBeNull();
+  expect(ตอนนี้.follow_up).toBe("2026-12-01");
+  expect(ตอนนี้.first_contact, "วันเริ่มติดต่อเติมให้เมื่อยังว่าง").not.toBeNull();
+
+  // แอปส่งทั้งแถวกลับมา (ติดต่อล่าสุดเป็นค่าว่าง) ต้องทับค่าที่ตัวดักตั้งไว้ไม่ได้
+  expect((await sb.from("dealer_prospects").update({ last_contact_at: null, note: "แก้หมายเหตุ" }).eq("id", id)).error).toBeNull();
+  expect((await ขั้น()).last_contact_at, "ติดต่อล่าสุดตั้งได้จากบันทึกการติดต่อทางเดียว").not.toBeNull();
+
+  expect((await sb.from("dealer_prospects").update({ status: "profile_sent" }).eq("id", id)).error).toBeNull();
+  expect((await sb.from("dealer_prospects").update({ status: "meeting" }).eq("id", id)).error).toBeNull();
+  const ไม่มีใบ = await sb.from("dealer_prospects").update({ status: "considering" }).eq("id", id).select();
+  expect(ไม่มีใบ.error?.message ?? "", "ยังไม่มีใบที่ส่งแล้ว เป็นรอตัดสินใจไม่ได้").toMatch(/ใบเสนอแพ็กเกจ/);
+
+  // ส่งใบแล้ว → นัดคุยแล้ว → รอตัดสินใจ ให้เอง
+  const { data: ใบ } = await sb.from("dealer_package_proposals").insert({ prospect_id: id, package: "standard", proposed_date: "2026-09-14" }).select("id").single();
+  expect((await sb.from("dealer_package_proposals").update({ status: "sent" }).eq("id", (ใบ as { id: number }).id)).error).toBeNull();
+  expect((await ขั้น()).status, "ส่งใบแล้วต้องเลื่อนเป็นรอตัดสินใจเอง").toBe("considering");
+
+  // ปิดไม่สำเร็จ → เปิดใหม่กลับขั้นเดิมได้ · เป็นตัวแทนต้องผูกรหัส · เป็นตัวแทนแล้วเปลี่ยนไม่ได้
+  expect((await sb.from("dealer_prospects").update({ status: "lost", lost_reason: "ไม่มีทุน" }).eq("id", id)).error).toBeNull();
+  expect((await sb.from("dealer_prospects").update({ status: "considering", lost_reason: null }).eq("id", id)).error).toBeNull();
+  const ไม่มีรหัส = await sb.from("dealer_prospects").update({ status: "won" }).eq("id", id).select();
+  expect(ไม่มีรหัส.error?.message ?? "").toMatch(/ผูกกับตัวแทน/);
+  expect((await sb.from("dealer_prospects").update({ status: "won", dealer_code: "RYG" }).eq("id", id)).error).toBeNull();
+  const ถอยจากตัวแทน = await sb.from("dealer_prospects").update({ status: "meeting" }).eq("id", id).select();
+  expect(ถอยจากตัวแทน.error?.message ?? "").toMatch(/เป็นตัวแทนจำหน่ายแล้ว/);
+
+  // ประวัติครบทุกชนิด เรียงใหม่ก่อน
+  const { data: ประวัติ } = await sb.from("dealer_prospect_activities").select("kind, body, from_status, to_status")
+    .eq("prospect_id", id).order("created_at", { ascending: false }).order("id", { ascending: false });
+  const ชนิด = new Set((ประวัติ ?? []).map(a => (a as { kind: string }).kind));
+  expect([...ชนิด].sort()).toEqual(["contact", "created", "proposal", "status"]);
+  const ข้อความ = (ประวัติ ?? []).map(a => (a as { body: string }).body);
+  expect(ข้อความ).toContain("รอติดต่อ → ติดต่อแล้ว");
+  expect(ข้อความ).toContain("ปิดว่าไม่สำเร็จ · เหตุผล: ไม่มีทุน");
+  expect(ข้อความ).toContain("เป็นตัวแทนจำหน่ายแล้ว · รหัส RYG");
+  expect(ข้อความ.some(t => /^ใบเสนอแพ็กเกจ DP-\d{4}-\d{4} · ส่งแล้ว$/.test(t))).toBe(true);
+});
+
+test("[security] ประวัติ: เพิ่มได้แค่บันทึกการติดต่อ · แก้/ลบไม่ได้ · ตัวแทนไม่เห็น", async () => {
+  const sb = await db(ADMIN);
+  const { data: pr } = await sb.from("dealer_prospects").insert({ name: `${NS}-ประวัติลับ` }).select("id").single();
+  const id = (pr as { id: number }).id;
+
+  const ปลอมขั้น = await sb.from("dealer_prospect_activities").insert({ prospect_id: id, kind: "status", body: "เป็นตัวแทนแล้ว (ปลอม)" }).select();
+  expect(ปลอมขั้น.error, "ผู้ใช้เขียนประวัติชนิดอื่นเองไม่ได้").not.toBeNull();
+  const ไม่มีช่องทาง = await sb.from("dealer_prospect_activities").insert({ prospect_id: id, kind: "contact", body: "คุยแล้ว" }).select();
+  expect(ไม่มีช่องทาง.error?.message ?? "").toMatch(/ช่องทาง/);
+
+  const { data: บันทึก } = await sb.from("dealer_prospect_activities").insert({ prospect_id: id, kind: "contact", channel: "โทรศัพท์", body: "ต้นฉบับ" }).select("id").single();
+  const รหัส = (บันทึก as { id: number }).id;
+  await sb.from("dealer_prospect_activities").update({ body: "แก้แล้ว" }).eq("id", รหัส);
+  await sb.from("dealer_prospect_activities").delete().eq("id", รหัส);
+  const { data: ยังอยู่ } = await sb.from("dealer_prospect_activities").select("body").eq("id", รหัส).single();
+  expect((ยังอยู่ as { body: string } | null)?.body, "บันทึกแล้วต้องแก้/ลบไม่ได้").toBe("ต้นฉบับ");
+
+  const dealer = await db(RYG);
+  const { data: เห็น } = await dealer.from("dealer_prospect_activities").select("id").eq("prospect_id", id);
+  expect(เห็น ?? [], "ตัวแทนต้องไม่เห็นประวัติของสำนักงานใหญ่").toHaveLength(0);
+  const ตัวแทนเขียน = await dealer.from("dealer_prospect_activities").insert({ prospect_id: id, kind: "contact", channel: "LINE", body: "ปลอม" }).select();
+  expect(ตัวแทนเขียน.error, "ตัวแทนเพิ่มบันทึกไม่ได้").not.toBeNull();
+
+  // ลบลูกค้าเป้าหมายทั้งราย → ประวัติหายตาม (รายที่ไม่มีโอกาสต้องลบได้)
+  expect((await sb.from("dealer_prospects").delete().eq("id", id)).error).toBeNull();
+  const { data: เหลือ } = await sb.from("dealer_prospect_activities").select("id").eq("prospect_id", id);
+  expect(เหลือ ?? []).toHaveLength(0);
+});
+
+test("[func·hq] ตัวกรองไม่ได้ติดต่อ 7/14/30 วัน · ติดต่อล่าสุดในตาราง · แท็บประวัติ", async ({ page }) => {
+  const errs = watchErrors(page);
+  const sb = await db(ADMIN);
+  const name = `${NS}-เงียบ20วัน`;
+  const ยี่สิบวันก่อน = new Date(Date.now() - 20 * 86_400_000).toISOString();
+  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name, status: "contacted", created_at: ยี่สิบวันก่อน }).select("id").single();
+  expect(error).toBeNull();
+  const id = (pr as { id: number }).id;
+
+  await loginUI(page, HQ_ORIGIN, "/hq/prospects", ADMIN);
+  await page.getByLabel("ค้นหาลูกค้าเป้าหมาย").fill(name);
+  const แถว = page.getByRole("row", { name: new RegExp(name) });
+  await expect(แถว).toContainText("ยังไม่เคยติดต่อ", { timeout: 25_000 });
+
+  await page.getByLabel("กรองตามสถานะ").selectOption("idle14");
+  await expect(แถว, "เงียบ 20 วัน ต้องติดตัวกรอง 14 วัน").toBeVisible();
+  await page.getByLabel("กรองตามสถานะ").selectOption("idle30");
+  await expect(แถว, "ยังไม่ถึง 30 วัน").toHaveCount(0);
+  await page.getByLabel("กรองตามสถานะ").selectOption("all");
+
+  // บันทึกการติดต่อจากปุ่มลัดบนหัวแผง → ติดต่อล่าสุดเป็น "วันนี้" · ประวัติขึ้นในแท็บ
+  await แถว.click();
+  const แผง = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  await แผง.getByRole("button", { name: "บันทึกการติดต่อ" }).first().click();
+  await แผง.locator("#pc-channel").selectOption("Facebook");
+  await แผง.locator("#pc-body").fill("ทักกลับมาถามค่าแรกเข้า");
+  await แผง.getByRole("button", { name: "บันทึกการติดต่อ" }).last().click();
+  await waitRow(sb, "dealer_prospect_activities", { prospect_id: id, kind: "contact" });
+  await expect(แผง.getByText("ทักกลับมาถามค่าแรกเข้า")).toBeVisible({ timeout: 15_000 });
+  await expect(แผง.getByText("ติดต่อทาง Facebook")).toBeVisible();
+  await expect(แผง.getByText("ติดต่อล่าสุด: วันนี้")).toBeVisible({ timeout: 15_000 });
+  assertNoErrors(errs, "บันทึกการติดต่อลูกค้าเป้าหมาย (HQ)");
+});

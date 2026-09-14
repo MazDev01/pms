@@ -2,7 +2,7 @@
 // context/hook เรียกผ่าน repository เหล่านี้เท่านั้น · เบื้องหลังสลับ adapter ได้
 // ทุกเมธอดเป็น async ตั้งแต่แรก → ต่อ network (เฟส B) ไม่ต้องแก้ signature
 import type { DealerPackageProposal, DealerProposalStatus } from "./types";
-import type { DealerProspect } from "./types";
+import type { DealerProspect, ProspectActivity, ProspectContactInput } from "./types";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap, LeadTaskDef,
@@ -107,6 +107,13 @@ export interface ProposalsRepo {
   update(p: DealerPackageProposal): Promise<DealerPackageProposal>;
   setStatus(id: number, status: DealerProposalStatus): Promise<DealerPackageProposal>;
   remove(id: number): Promise<void>;
+}
+
+// ── ประวัติลูกค้าเป้าหมาย (HQ) — อ่าน = HQ · เพิ่มได้แค่บันทึกการติดต่อ · ไม่มีแก้/ลบ (0174) ──
+//   บันทึกการติดต่อแล้ว ฐานข้อมูลตั้ง ติดต่อล่าสุด/นัดติดตาม/ขั้น ให้เอง → หน้าจอต้องโหลดลูกค้าเป้าหมายรายนั้นใหม่
+export interface ProspectActivitiesRepo {
+  list(prospectId: number): Promise<ProspectActivity[]>;
+  addContact(input: ProspectContactInput): Promise<ProspectActivity>;
 }
 
 // ── ผู้ใช้ในระบบ (หน้า /hq/users) ──
@@ -587,4 +594,5 @@ export interface DataAdapter {
   appointments: AppointmentsRepo;
   prospects: ProspectsRepo;
   proposals: ProposalsRepo;
+  prospectActivities: ProspectActivitiesRepo;
 }

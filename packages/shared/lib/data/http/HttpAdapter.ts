@@ -14,8 +14,8 @@
 // ⚠️ ก่อนเปิดโหมดนี้บนของจริง ดูข้อจำกัดอายุสายอัปเดตสดใน server/v1/events.ts ก่อน
 import type { ProposalsRepo } from "../ports";
 import type { DealerPackageProposal } from "../types";
-import type { ProspectsRepo } from "../ports";
-import type { DealerProspect } from "../types";
+import type { ProspectsRepo, ProspectActivitiesRepo } from "../ports";
+import type { DealerProspect, ProspectActivity } from "../types";
 import { accountRemote } from "../accountRemote";
 import type {
   DataAdapter, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo, SettingsRepo,
@@ -301,6 +301,11 @@ const proposals: ProposalsRepo = {
   setStatus: (id, status) => apiFetch<DealerPackageProposal>("/proposals", { method: "PATCH", body: JSON.stringify({ id, status }) }),
   remove: async (id) => { await apiFetch(`/proposals?id=${id}`, { method: "DELETE" }); },
 };
+// ประวัติ + บันทึกการติดต่อ ลูกค้าเป้าหมาย HQ (server/v1/prospectActivities.ts)
+const prospectActivities: ProspectActivitiesRepo = {
+  list: (prospectId) => apiFetch<ProspectActivity[]>(`/prospect-activities?prospect=${prospectId}`),
+  addContact: (x) => post<ProspectActivity>("/prospect-activities", x),
+};
 const users: UsersRepo = {
   list: () => apiFetch<SystemUser[]>("/users"),
   update: async (u) => { await apiFetch("/users", { method: "PUT", body: JSON.stringify(u) }); },
@@ -468,7 +473,7 @@ const realtime: RealtimePort = {
 
 export const HttpAdapter: DataAdapter = {
   storage, realtime, dealers, catalog, files, persons, settings, dealerSettings,
-  profile, hqCompany, notes, users, audit, metrics, leads, quotations, customers, appointments, prospects, proposals,
+  profile, hqCompany, notes, users, audit, metrics, leads, quotations, customers, appointments, prospects, proposals, prospectActivities,
   // บัญชีเข้าระบบของตัวแทน — เปลี่ยนผ่าน API ของสำนักงานใหญ่ (คีย์ผู้ดูแลอยู่ที่นั่นที่เดียว)
   account: accountRemote,
 };
