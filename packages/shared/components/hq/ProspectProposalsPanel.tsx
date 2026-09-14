@@ -14,7 +14,7 @@ import { proposals as proposalsRepo, hqCompany as hqCompanyRepo } from "@pms/sha
 import type { DealerPackage, DealerPackageProposal, DealerProposalStatus, DealerProspect } from "@pms/shared/lib/data/types";
 import {
   PACKAGE_ORDER, packageLabel, proposalStatusLabel, proposalStatusColor,
-  สถานะที่เปลี่ยนไปได้, ใบล็อกแล้ว, เตรียมบันทึกใบ, ตรวจใบเสนอ, มูลค่าอ่านง่าย, หมดอายุแล้ว,
+  สถานะที่เปลี่ยนไปได้, ใบล็อกแล้ว, เตรียมบันทึกใบ, ตรวจใบเสนอ, มูลค่าอ่านง่าย, หมดอายุแล้ว, ระยะสัญญาอ่านง่าย,
 } from "@pms/shared/lib/dealerProposals";
 import { เขียนใบเสนอลงหน้าต่าง } from "@pms/shared/lib/dealerProposalPrint";
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
@@ -30,7 +30,7 @@ const PRIMARY = "#003366";
 const MUTED = "#6b7280";
 
 // ร่างในฟอร์ม — มูลค่าเก็บเป็นข้อความที่มีลูกน้ำระหว่างพิมพ์ (บอสสั่ง 26 ส.ค. 69: ช่องเงินต้องเห็นลูกน้ำ)
-type ร่างใบ = Partial<DealerPackageProposal> & { มูลค่าที่พิมพ์: string };
+type ร่างใบ = Partial<DealerPackageProposal> & { มูลค่าที่พิมพ์: string; ระยะที่พิมพ์: string; เป้าที่พิมพ์: string };
 
 export function ProspectProposalsPanel({ prospect, editable, onChange }: {
   prospect: DealerProspect;
@@ -74,12 +74,17 @@ export function ProspectProposalsPanel({ prospect, editable, onChange }: {
       province: prospect.province ?? null,
       proposedDate: APP_NOW_ISO,
       status: "draft",
-      มูลค่าที่พิมพ์: "",
+      มูลค่าที่พิมพ์: "", ระยะที่พิมพ์: "", เป้าที่พิมพ์: "",
     });
   }
   function เปิดแก้ใบ(p: DealerPackageProposal) {
     setFormErr("");
-    setร่าง({ ...p, มูลค่าที่พิมพ์: p.amount != null ? formatMoneyInput(String(p.amount)) : "" });
+    setร่าง({
+      ...p,
+      มูลค่าที่พิมพ์: p.amount != null ? formatMoneyInput(String(p.amount)) : "",
+      ระยะที่พิมพ์: p.contractMonths != null ? String(p.contractMonths) : "",
+      เป้าที่พิมพ์: p.annualTarget != null ? formatMoneyInput(String(p.annualTarget)) : "",
+    });
   }
   const ตั้งค่า = <K extends keyof ร่างใบ>(k: K, v: ร่างใบ[K]) => setร่าง(r => (r ? { ...r, [k]: v } : r));
   const เปลี่ยนภาค = (region: string) => setร่าง(r => r ? {
@@ -91,8 +96,13 @@ export function ProspectProposalsPanel({ prospect, editable, onChange }: {
 
   async function บันทึกใบ() {
     if (!ร่าง) return;
-    const { มูลค่าที่พิมพ์, ...ค่าอื่น } = ร่าง;
-    const row = เตรียมบันทึกใบ({ ...ค่าอื่น, amount: มูลค่าที่พิมพ์.trim() ? parseMoneyInput(มูลค่าที่พิมพ์) : null });
+    const { มูลค่าที่พิมพ์, ระยะที่พิมพ์, เป้าที่พิมพ์, ...ค่าอื่น } = ร่าง;
+    const row = เตรียมบันทึกใบ({
+      ...ค่าอื่น,
+      amount: มูลค่าที่พิมพ์.trim() ? parseMoneyInput(มูลค่าที่พิมพ์) : null,
+      contractMonths: ระยะที่พิมพ์.trim() ? Number(ระยะที่พิมพ์) : null,
+      annualTarget: เป้าที่พิมพ์.trim() ? parseMoneyInput(เป้าที่พิมพ์) : null,
+    });
     const ผิด = ตรวจใบเสนอ(row);
     if (ผิด) { setFormErr(ผิด); return; }
     setBusy(true); setFormErr("");
@@ -199,8 +209,11 @@ export function ProspectProposalsPanel({ prospect, editable, onChange }: {
                     <div style={{ minWidth: 0, flex: "1 1 220px" }}>
                       <div style={{ fontWeight: 800, color: PRIMARY, fontSize: "0.82rem" }}>{p.proposalNo ?? "—"}</div>
                       <div style={{ fontSize: "0.74rem", color: "#374151" }}>
-                        {packageLabel[p.package]} · {มูลค่าอ่านง่าย(p.amount)}
+                        {packageLabel[p.package]} · ค่าแรกเข้า {มูลค่าอ่านง่าย(p.amount)}
                         {p.proposedDate ? ` · เสนอ ${fmtISOToThai(p.proposedDate)}` : ""}
+                      </div>
+                      <div style={{ fontSize: "0.7rem", color: MUTED }}>
+                        ระยะสัญญา {ระยะสัญญาอ่านง่าย(p.contractMonths)} · เป้ายอดซื้อต่อปี {มูลค่าอ่านง่าย(p.annualTarget)}
                       </div>
                       {p.validUntil && (
                         <div style={{ fontSize: "0.7rem", color: หมดอายุ ? "#b91c1c" : MUTED, fontWeight: หมดอายุ ? 700 : 400 }}>
@@ -267,10 +280,22 @@ export function ProspectProposalsPanel({ prospect, editable, onChange }: {
                   </select>
                 </div>
                 <div>
-                  <label className="form-label" htmlFor="pp-amount">มูลค่าแพ็กเกจ (บาท)</label>
+                  <label className="form-label" htmlFor="pp-amount">ค่าแรกเข้า (บาท · จ่ายครั้งเดียว)</label>
                   {/* ช่องเงินใช้ text + ใส่ลูกน้ำเอง (บอสสั่ง 26 ส.ค. 69) · ไม่บังคับ — ไม่กรอก = "—" ห้ามเติมตัวเลขให้ */}
                   <input id="pp-amount" className="form-input" type="text" inputMode="numeric" value={ร่าง.มูลค่าที่พิมพ์}
                     onChange={e => ตั้งค่า("มูลค่าที่พิมพ์", formatMoneyInput(e.target.value))} placeholder="เว้นว่างได้" />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="pp-months">ระยะสัญญา (เดือน)</label>
+                  {/* จำนวนเต็มเดือน 1–120 — กรองเหลือแค่ตัวเลขตั้งแต่ตอนพิมพ์ ตัวตรวจฟ้องถ้าเกินช่วง */}
+                  <input id="pp-months" className="form-input" type="text" inputMode="numeric" value={ร่าง.ระยะที่พิมพ์}
+                    onChange={e => ตั้งค่า("ระยะที่พิมพ์", e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="เช่น 12 · เว้นว่างได้" />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="pp-target">เป้ายอดซื้อต่อปี (บาท)</label>
+                  <input id="pp-target" className="form-input" type="text" inputMode="numeric" value={ร่าง.เป้าที่พิมพ์}
+                    onChange={e => ตั้งค่า("เป้าที่พิมพ์", formatMoneyInput(e.target.value))} placeholder="เว้นว่างได้" />
+                  <div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 3 }}>ตั้งเป็นตัวแทนแล้ว ใช้เป็นเป้ายอดขายรายปีของสาขา</div>
                 </div>
                 {/* ภาคมาก่อนจังหวัด — กติกาเดียวกับฟอร์มลูกค้าเป้าหมาย · "ทุกภาค" = ทุกจังหวัด */}
                 <div>

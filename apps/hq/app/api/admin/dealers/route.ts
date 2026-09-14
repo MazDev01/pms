@@ -79,7 +79,8 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   const name = String(body.name ?? "").trim();
   const province = String(body.province ?? "").trim();
   const region = String(body.region ?? "").trim();
-  const revenueTarget = Number(body.revenueTarget ?? 0);
+  // let: ถ้าใบเสนอแพ็กเกจระบุเป้ายอดซื้อต่อปี จะใช้ค่าจากใบแทน (ตรวจด้านล่างหลังผ่านด่านใบ)
+  let revenueTarget = Number(body.revenueTarget ?? 0);
   if (!/^[A-Z]{2,5}$/.test(code)) return bad(400, "รหัสตัวแทนต้องเป็นตัวอักษร A–Z 2–5 ตัว");
   if (!name || !province) return bad(400, "ต้องระบุชื่อและจังหวัด");
   // เป้ายอดขายต้องเป็นตัวเลขที่ใช้ได้จริง — ต้องเช็ค "ก่อน" สร้างบัญชี auth ไม่งั้นค่าเพี้ยน (NaN/ติดลบ)
@@ -123,7 +124,7 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     //   กติกาเดียวกับฝั่งตัวแทนที่ปิดการขายไม่ได้ถ้ายังไม่มีใบเสนอราคาที่ส่งแล้ว (0145)
     //   ใบร่าง/ปฏิเสธไม่นับ · ตรวจก่อนสร้างบัญชี ไม่ทิ้งบัญชีกำพร้า
     const { data: ใบ, error: ใบErr } = await admin.from("dealer_package_proposals")
-      .select("id, status").eq("prospect_id", prospectId).in("status", ["sent", "accepted"])
+      .select("id, status, annual_target").eq("prospect_id", prospectId).in("status", ["sent", "accepted"])
       .order("id", { ascending: false });
     if (ใบErr) {
       console.error("[create-dealer] ตรวจใบเสนอแพ็กเกจไม่สำเร็จ", ใบErr);
@@ -133,6 +134,12 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
       return bad(400, "ต้องส่งใบเสนอแพ็กเกจตัวแทนให้รายนี้ก่อน อย่างน้อย 1 ใบ — แล้วค่อยตั้งเป็นตัวแทนจำหน่าย");
     }
     ใบที่จะตอบรับ = ใบ.some(x => x.status === "accepted") ? null : Number(ใบ[0].id);
+    // เป้ายอดขายรายปีของสาขา = เป้ายอดซื้อต่อปีในใบหลัก (ตอบรับล่าสุด ไม่มีค่อยใช้ส่งแล้วล่าสุด)
+    //   กติกาเดียวกับหน้าจอ (ใบหลักสำหรับตั้งตัวแทน) · ใบไม่ระบุ = ใช้ค่าที่ส่งมา (หน้าจอส่ง 0)
+    const ใบหลัก = ใบ.find(x => x.status === "accepted") ?? ใบ[0];
+    if (ใบหลัก.annual_target != null && Number.isFinite(Number(ใบหลัก.annual_target)) && Number(ใบหลัก.annual_target) >= 0) {
+      revenueTarget = Number(ใบหลัก.annual_target);
+    }
   }
 
   // ── อีเมล/รหัสผ่าน: HQ กรอกเองได้ (บอสสั่ง 20 ส.ค. 69) · ไม่กรอก = ระบบตั้งให้เหมือนเดิม ──

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   เตรียมบันทึกใบ, ตรวจใบเสนอ, สถานะที่เปลี่ยนไปได้, มีใบเสนอที่ส่งแล้ว, หมดอายุแล้ว, มูลค่าอ่านง่าย, ใบล็อกแล้ว,
+  ระยะสัญญาอ่านง่าย, ใบหลักสำหรับตั้งตัวแทน,
 } from "../../packages/shared/lib/dealerProposals";
 import { buildDealerProposalHTML } from "../../packages/shared/lib/dealerProposalPrint";
 import type { DealerPackageProposal, HQCompany } from "../../packages/shared/lib/data/types";
@@ -15,7 +16,7 @@ describe("เตรียมบันทึกใบ / ตรวจใบเส�
     expect(เตรียมบันทึกใบ({ prospectId: 7, package: "standard", proposedDate: "2026-09-14", amount: "฿150,000" as unknown as number }).amount).toBe(150000);
     expect(เตรียมบันทึกใบ({ prospectId: 7, amount: "" as unknown as number }).amount).toBeNull();
     const เพี้ยน = เตรียมบันทึกใบ({ prospectId: 7, package: "standard", proposedDate: "2026-09-14", amount: "ห้าหมื่น" as unknown as number });
-    expect(ตรวจใบเสนอ(เพี้ยน)).toMatch(/มูลค่า/);
+    expect(ตรวจใบเสนอ(เพี้ยน)).toMatch(/ค่าแรกเข้า/);
   });
 
   it("ต้องเลือกแพ็กเกจเอง — ห้ามเลือกให้", () => {
@@ -102,3 +103,45 @@ describe("พิมพ์ใบเสนอแพ็กเกจตัวแท�
     expect(buildDealerProposalHTML(ใบ({ region: "ทุกภาค", province: "ทุกจังหวัด" }), { name: "ก" }, hq)).toContain("ทั่วประเทศ (ทุกภาค)");
   });
 });
+
+describe("ช่องตัวเลข 3 ช่อง (บอสสั่ง “เอา 3 ช่อง”)", () => {
+  const ฐาน = { prospectId: 7, package: "standard" as const, proposedDate: "2026-09-14" };
+
+  it("ระยะสัญญา: จำนวนเต็ม 1–120 เดือน · ว่าง = null · อ่านไม่ออก/ทศนิยม/เกินช่วง = ฟ้อง", () => {
+    expect(เตรียมบันทึกใบ({ ...ฐาน, contractMonths: "12" as unknown as number }).contractMonths).toBe(12);
+    expect(เตรียมบันทึกใบ({ ...ฐาน, contractMonths: "" as unknown as number }).contractMonths).toBeNull();
+    for (const ผิด of ["หนึ่งปี", 1.5, 0, 121]) {
+      expect(ตรวจใบเสนอ(เตรียมบันทึกใบ({ ...ฐาน, contractMonths: ผิด as unknown as number }))).toMatch(/ระยะสัญญา/);
+    }
+    expect(ตรวจใบเสนอ(เตรียมบันทึกใบ({ ...ฐาน, contractMonths: 120 }))).toBeNull();
+  });
+
+  it("เป้ายอดซื้อต่อปี: มีลูกน้ำได้ · ติดลบ/อ่านไม่ออก = ฟ้อง", () => {
+    expect(เตรียมบันทึกใบ({ ...ฐาน, annualTarget: "12,000,000" as unknown as number }).annualTarget).toBe(12_000_000);
+    expect(ตรวจใบเสนอ(เตรียมบันทึกใบ({ ...ฐาน, annualTarget: -1 }))).toMatch(/เป้ายอดซื้อต่อปี/);
+    expect(ตรวจใบเสนอ(เตรียมบันทึกใบ({ ...ฐาน, annualTarget: "สิบล้าน" as unknown as number }))).toMatch(/เป้ายอดซื้อต่อปี/);
+  });
+
+  it("ระยะสัญญาอ่านง่าย: ครบปีบอกเป็นปีด้วย · ว่าง = —", () => {
+    expect(ระยะสัญญาอ่านง่าย(12)).toBe("12 เดือน (1 ปี)");
+    expect(ระยะสัญญาอ่านง่าย(18)).toBe("18 เดือน");
+    expect(ระยะสัญญาอ่านง่าย(null)).toBe("—");
+  });
+
+  it("ใบหลักที่ใช้ตั้งตัวแทน: ตอบรับล่าสุดก่อน ไม่มีค่อยใช้ส่งแล้วล่าสุด · ร่าง/ปฏิเสธไม่นับ", () => {
+    expect(ใบหลักสำหรับตั้งตัวแทน([ใบ({ id: 1, status: "sent" }), ใบ({ id: 3, status: "sent" }), ใบ({ id: 2, status: "accepted" })])?.id).toBe(2);
+    expect(ใบหลักสำหรับตั้งตัวแทน([ใบ({ id: 1, status: "sent" }), ใบ({ id: 3, status: "sent" }), ใบ({ id: 4, status: "draft" })])?.id).toBe(3);
+    expect(ใบหลักสำหรับตั้งตัวแทน([ใบ({ id: 1, status: "draft" }), ใบ({ id: 2, status: "rejected" })])).toBeNull();
+  });
+
+  it("เอกสารพิมพ์มีครบสามบรรทัด · ไม่ได้กรอกขึ้น —", () => {
+    const hq = { name: "HQ", address: "", taxId: "", phone: "", email: "", website: "" };
+    const ครบ = buildDealerProposalHTML(ใบ({ amount: 150000, contractMonths: 12, annualTarget: 12_000_000, status: "sent" }), { name: "ก" }, hq);
+    expect(ครบ).toContain("ค่าแรกเข้า (จ่ายครั้งเดียว)");
+    expect(ครบ).toContain("12 เดือน (1 ปี)");
+    expect(ครบ).toContain("฿12,000,000");
+    const ว่าง = buildDealerProposalHTML(ใบ({}), { name: "ก" }, hq);
+    expect((ว่าง.match(/<td class="r">—<\/td>/g) ?? []).length, "ค่าแรกเข้า · ระยะสัญญา · เป้า ขึ้น — ทั้งสาม").toBe(3);
+  });
+});
+

@@ -116,7 +116,9 @@ export type DealerPackageProposal = {
   package: DealerPackage;
   region?: string | null;
   province?: string | null;
-  amount?: number | null;        // มูลค่าแพ็กเกจ (บาท) — HQ กรอกเอง ไม่บังคับ
+  amount?: number | null;        // ค่าแรกเข้า (บาท · จ่ายครั้งเดียว) — HQ กรอกเอง ไม่บังคับ
+  contractMonths?: number | null; // ระยะสัญญา (เดือน) 1–120 — ไม่บังคับ
+  annualTarget?: number | null;  // เป้ายอดซื้อต่อปี (บาท) — ตั้งเป็นตัวแทนแล้วเป็นเป้ายอดขายรายปีของสาขา
   terms?: string | null;
   proposedDate?: string | null;  // YYYY-MM-DD
   validUntil?: string | null;    // YYYY-MM-DD

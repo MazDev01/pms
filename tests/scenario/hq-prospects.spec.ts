@@ -125,7 +125,7 @@ test("[func·hq] ตั้งเป็นตัวแทนจำหน่าย
   const id = (ins as { id: number }).id;
   // ต้องมีใบเสนอแพ็กเกจที่ส่งแล้ว ถึงจะสร้างตัวแทนใหม่ได้ (บอสสั่ง 14 ก.ย. 69)
   const { error: ใบErr } = await sb.from("dealer_package_proposals")
-    .insert({ prospect_id: id, package: "standard", status: "sent", proposed_date: "2026-09-14" });
+    .insert({ prospect_id: id, package: "standard", status: "sent", proposed_date: "2026-09-14", contract_months: 12, annual_target: 12_000_000 });
   expect(ใบErr).toBeNull();
 
   await loginUI(page, HQ_ORIGIN, "/hq/prospects", ADMIN);
@@ -135,12 +135,19 @@ test("[func·hq] ตั้งเป็นตัวแทนจำหน่าย
   // ภาค/จังหวัดเติมจากที่บันทึกไว้ให้แล้ว — ไม่ต้องเลือกซ้ำ
   await expect(ตั้ง.locator("#cv-province")).toHaveValue("ระยอง");
   await expect(ตั้ง.locator("#cv-region")).not.toHaveValue("");
+  await expect(ตั้ง.getByText(/เป้ายอดขายรายปีของสาขาจะตั้งตามใบเสนอ .*฿12,000,000/), "ต้องบอกล่วงหน้าว่าเป้าจะตั้งตามใบไหน").toBeVisible();
   await ตั้ง.locator("#cv-code").fill(NEW_CODE);
   await ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" }).click();
 
   await expect(page.getByText("สร้างตัวแทนจำหน่ายสำเร็จ")).toBeVisible({ timeout: 30_000 });
   await waitRow(sb, "dealers", { code: NEW_CODE });
   await waitRow(sb, "dealer_prospects", { id, status: "won", dealer_code: NEW_CODE });
+  // เป้ายอดขายรายปีของสาขา = เป้ายอดซื้อต่อปีในใบ (บอสสั่ง "เอา 3 ช่อง") · ใบนั้นกลายเป็นตอบรับ
+  //   อ่านด้วยสิทธิ์ระบบ — ตาราง dealers ถอนสิทธิ์อ่านคอลัมน์เป้าจากผู้ใช้ทั่วไปแล้ว
+  const svc = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const { data: สาขา } = await svc.from("dealers").select("revenue_target").eq("code", NEW_CODE).single();
+  expect(Number((สาขา as { revenue_target: number } | null)?.revenue_target), "เป้าของสาขาต้องมาจากใบเสนอ").toBe(12_000_000);
+  await waitRow(sb, "dealer_package_proposals", { prospect_id: id, status: "accepted" });
 
   // ยิงซ้ำด้วยรายเดิม (เช่น กดสองครั้ง / สองคนกดพร้อมกัน) ต้องถูกปฏิเสธก่อนสร้างบัญชี
   const token = await adminToken();
@@ -239,6 +246,10 @@ test("[security] ใบเสนอแพ็กเกจ: ตัวแทนม�
 
   const แก้ = await sb.from("dealer_package_proposals").update({ amount: 1 }).eq("id", row.id).select();
   expect(แก้.error, "ใบที่ส่งแล้วแก้เนื้อหาไม่ได้").not.toBeNull();
+  const แก้ระยะ = await sb.from("dealer_package_proposals").update({ contract_months: 24 }).eq("id", row.id).select();
+  expect(แก้ระยะ.error, "ใบที่ส่งแล้วแก้ระยะสัญญาไม่ได้").not.toBeNull();
+  const แก้เป้า = await sb.from("dealer_package_proposals").update({ annual_target: 1 }).eq("id", row.id).select();
+  expect(แก้เป้า.error, "ใบที่ส่งแล้วแก้เป้ายอดซื้อต่อปีไม่ได้").not.toBeNull();
   const ลบ = await sb.from("dealer_package_proposals").delete().eq("id", row.id).select();
   expect(ลบ.error, "ใบที่ส่งแล้วลบไม่ได้").not.toBeNull();
 
@@ -268,12 +279,17 @@ test("[func·hq] ออกใบเสนอแพ็กเกจ → ยัง�
   await expect(ใบ.locator("#pp-province"), "จังหวัดเติมจากลูกค้าเป้าหมายให้").toHaveValue("ชลบุรี");
   await ใบ.locator("#pp-amount").fill("150000");
   await expect(ใบ.locator("#pp-amount"), "ช่องเงินต้องขึ้นลูกน้ำ").toHaveValue("150,000");
+  await ใบ.locator("#pp-months").fill("12");
+  await ใบ.locator("#pp-target").fill("2000000");
+  await expect(ใบ.locator("#pp-target"), "เป้ายอดซื้อต้องขึ้นลูกน้ำ").toHaveValue("2,000,000");
   await ใบ.getByRole("button", { name: "บันทึกใบ" }).click();
 
-  const แถวใบ = await waitRow<{ id: number; proposal_no: string; status: string; amount: number }>(
+  const แถวใบ = await waitRow<{ id: number; proposal_no: string; status: string; amount: number; contract_months: number; annual_target: number }>(
     sb, "dealer_package_proposals", { prospect_id: prospectId });
   expect(แถวใบ.status).toBe("draft");
   expect(Number(แถวใบ.amount)).toBe(150000);
+  expect(Number(แถวใบ.contract_months)).toBe(12);
+  expect(Number(แถวใบ.annual_target)).toBe(2_000_000);
   await expect(แก้ไข.getByText(แถวใบ.proposal_no)).toBeVisible();
 
   // ยังเป็นร่าง → ปุ่มสร้างตัวแทนต้องกดไม่ได้ พร้อมบอกเหตุผล

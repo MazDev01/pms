@@ -30,7 +30,7 @@ import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from
 import { createDealerAccount } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { ProspectProposalsPanel } from "@pms/shared/components/hq/ProspectProposalsPanel";
-import { มีใบเสนอที่ส่งแล้ว } from "@pms/shared/lib/dealerProposals";
+import { มีใบเสนอที่ส่งแล้ว, ใบหลักสำหรับตั้งตัวแทน, มูลค่าอ่านง่าย } from "@pms/shared/lib/dealerProposals";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
@@ -248,7 +248,8 @@ export default function HQProspectsPage() {
         invalidateCache("dealers.list");
         const ทะเบียน = await dealersRepo.list();
         const แถวใหม่: DealerRow = {
-          id: code, code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region, revenueTarget: 0, status: "active",
+          id: code, code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region,
+          revenueTarget: ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด)?.annualTarget ?? 0, status: "active",
         };
         await dealersRepo.save([...ทะเบียน, แถวใหม่]);
         const row = เตรียมบันทึก({ ...converting, status: "won", dealerCode: code, convertedAt: new Date().toISOString(), lostReason: null });
@@ -275,8 +276,9 @@ export default function HQProspectsPage() {
     setConvBusy(true);
     const res = await createDealerAccount({
       code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region,
-      // เป้ายอดขายยังไม่มีข้อมูลจริง — ตั้ง 0 ไว้ ให้ไปกรอกที่หน้าตัวแทนจำหน่ายเมื่อได้ตัวเลขจากเบนจามิน (ห้ามเดา)
-      revenueTarget: 0,
+      // เป้ายอดขายรายปี = เป้ายอดซื้อต่อปีในใบเสนอแพ็กเกจ (บอสสั่ง 14 ก.ย. 69) · ใบไม่ระบุ = 0 (ห้ามเดา)
+      //   เซิร์ฟเวอร์อ่านจากใบด้วยกติกาเดียวกันอีกชั้น — ค่าตรงนี้เป็นแค่ค่าสำรองของคำขอ
+      revenueTarget: ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด)?.annualTarget ?? 0,
       email: อีเมล || undefined, password: ฟอร์ม.password || undefined,
       prospectId: converting.id,
     });
@@ -306,6 +308,8 @@ export default function HQProspectsPage() {
   }
 
   const ดูอย่างเดียว = !จัดการได้;
+  // ใบที่จะใช้ตั้งตัวแทน (ตอบรับล่าสุด หรือส่งแล้วล่าสุด) — บอกล่วงหน้าในกล่องว่าเป้ายอดขายจะตั้งตามใบไหน
+  const ใบหลัก = ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด);
   const รายที่เปิด = editing && editing !== "new" ? editing : null;
 
   return (
@@ -646,7 +650,9 @@ export default function HQProspectsPage() {
                       placeholder="เว้นว่าง = ระบบสุ่มให้ (อย่างน้อย 8 ตัวอักษร)" />
                   </div>
                   <div style={{ gridColumn: "1 / -1", fontSize: "0.7rem", color: MUTED, lineHeight: 1.6 }}>
-                    เป้ายอดขายตั้งเป็น 0 ไว้ก่อน — กรอกที่หน้าตัวแทนจำหน่ายเมื่อได้ตัวเลขจริง
+                    {ใบหลัก?.annualTarget != null
+                      ? `เป้ายอดขายรายปีของสาขาจะตั้งตามใบเสนอ ${ใบหลัก.proposalNo ?? ""}: ${มูลค่าอ่านง่าย(ใบหลัก.annualTarget)}`
+                      : "ใบเสนอยังไม่ได้ระบุเป้ายอดซื้อต่อปี — เป้ายอดขายตั้งเป็น 0 ไว้ก่อน แก้ได้ที่หน้าตัวแทนจำหน่าย"}
                   </div>
                 </fieldset>
               )}

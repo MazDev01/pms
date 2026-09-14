@@ -7,7 +7,9 @@
 //   สร้างตัวแทนใหม่ได้ต่อเมื่อมีใบที่ "ส่งแล้ว" หรือ "ตอบรับ" อย่างน้อย 1 ใบ
 //   ด่านจริงที่ POST /api/admin/dealers · สถานะ/การล็อกเนื้อหาบังคับที่ฐานข้อมูล (0172)
 //
-// ช่องข้อมูลมีเท่าที่มีที่มาจริง — มูลค่าแพ็กเกจเป็นช่องให้ HQ กรอกเอง ไม่มีค่า = "—" (ห้ามเติมตัวเลขให้)
+// ช่องตัวเลข 3 ช่อง (บอสสั่ง "เอา 3 ช่อง"): ค่าแรกเข้า · ระยะสัญญา (เดือน) · เป้ายอดซื้อต่อปี
+//   ไม่บังคับทั้งหมด ไม่มีค่า = "—" (ห้ามเติมตัวเลขให้)
+//   เป้ายอดซื้อต่อปีของใบหลัก → เป้ายอดขายรายปีของสาขาตอนตั้งเป็นตัวแทน (ดู ใบหลักสำหรับตั้งตัวแทน)
 //
 // ไฟล์นี้เป็นตรรกะล้วน — หน้าจอ ตัวเชื่อมข้อมูลทั้งสามแบบ และเซิร์ฟเวอร์ใช้ชุดเดียวกัน
 import type { DealerPackage, DealerPackageProposal, DealerProposalStatus } from "./data/types";
@@ -54,6 +56,19 @@ export function หมดอายุแล้ว(p: Pick<DealerPackageProposal,
   return p.status === "sent" && !!p.validUntil && p.validUntil < วันนี้ISO;
 }
 
+/** ระยะสัญญาอ่านง่าย — ครบปีบอกเป็นปีด้วย · ไม่ได้กรอก = "—" */
+export function ระยะสัญญาอ่านง่าย(เดือน?: number | null): string {
+  if (เดือน == null || !Number.isFinite(เดือน)) return "—";
+  return เดือน % 12 === 0 ? `${เดือน} เดือน (${เดือน / 12} ปี)` : `${เดือน} เดือน`;
+}
+
+/** ใบที่ใช้ตั้งตัวแทน — ใบที่ตอบรับแล้ว (ล่าสุด) ก่อน ไม่มีค่อยใช้ใบล่าสุดที่ส่งแล้ว
+ *  เซิร์ฟเวอร์เลือกใบด้วยกติกาเดียวกัน (route สร้างตัวแทน) — หน้าจอใช้บอกล่วงหน้าว่าเป้าจะตั้งตามใบไหน */
+export function ใบหลักสำหรับตั้งตัวแทน<T extends Pick<DealerPackageProposal, "id" | "status">>(list: T[]): T | null {
+  const เรียง = [...list].sort((a, b) => b.id - a.id);
+  return เรียง.find(x => x.status === "accepted") ?? เรียง.find(x => x.status === "sent") ?? null;
+}
+
 /** มูลค่าอ่านง่าย — ไม่ได้กรอก = "—" ไม่ใช่ ฿0 */
 export function มูลค่าอ่านง่าย(amount?: number | null): string {
   return amount == null || !Number.isFinite(amount) ? "—" : `฿${amount.toLocaleString("th-TH")}`;
@@ -77,6 +92,14 @@ function มูลค่าจาก(v: unknown): number | null {
   return t === "" ? null : Number(t);
 }
 
+/** ระยะสัญญา: ว่าง = null · อ่านไม่ออก = NaN (ให้ตัวตรวจฟ้อง) */
+function เดือนจาก(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  const t = String(v).trim();
+  return t === "" ? null : Number(t);
+}
+
 /** จัดข้อมูลก่อนบันทึก · เซิร์ฟเวอร์เรียกซ้ำเสมอ — ห้ามเชื่อว่าหน้าจอจัดมาแล้ว */
 export function เตรียมบันทึกใบ(p: Partial<DealerPackageProposal>): ใบเสนอที่จะบันทึก {
   return {
@@ -86,6 +109,8 @@ export function เตรียมบันทึกใบ(p: Partial<DealerPack
     province: ข้อความหรือว่าง(p.province),
     region: ข้อความหรือว่าง(p.region) ?? regionOf(String(p.province ?? "")) ?? null,
     amount: มูลค่าจาก(p.amount),
+    contractMonths: เดือนจาก(p.contractMonths),
+    annualTarget: มูลค่าจาก(p.annualTarget),
     terms: ข้อความหรือว่าง(p.terms),
     proposedDate: วันที่หรือว่าง(p.proposedDate),
     validUntil: วันที่หรือว่าง(p.validUntil),
@@ -100,6 +125,10 @@ export function ตรวจใบเสนอ(p: ใบเสนอที่จ
   if (!เป็นแพ็กเกจ(p.package)) return "ต้องเลือกแพ็กเกจ (Standard หรือ Exclusive)";
   if (!p.proposedDate) return "ต้องระบุวันที่เสนอ";
   if (p.validUntil && p.validUntil < p.proposedDate) return "วันที่ข้อเสนอมีผลถึง ต้องไม่ก่อนวันที่เสนอ";
-  if (p.amount != null && (!Number.isFinite(p.amount) || p.amount < 0)) return "มูลค่าแพ็กเกจต้องเป็นตัวเลขไม่ติดลบ";
+  if (p.amount != null && (!Number.isFinite(p.amount) || p.amount < 0)) return "ค่าแรกเข้าต้องเป็นตัวเลขไม่ติดลบ";
+  if (p.contractMonths != null && (!Number.isInteger(p.contractMonths) || p.contractMonths < 1 || p.contractMonths > 120)) {
+    return "ระยะสัญญาต้องเป็นจำนวนเดือนเต็ม 1–120 เดือน";
+  }
+  if (p.annualTarget != null && (!Number.isFinite(p.annualTarget) || p.annualTarget < 0)) return "เป้ายอดซื้อต่อปีต้องเป็นตัวเลขไม่ติดลบ";
   return ตรวจภาคกับจังหวัด(p.region ?? null, p.province ?? null);
 }
