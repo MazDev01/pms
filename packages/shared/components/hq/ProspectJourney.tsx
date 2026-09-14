@@ -12,11 +12,15 @@ import { Check, Lock, Store, XCircle, RotateCcw, Trophy } from "lucide-react";
 import type { DealerProspect, DealerProspectStatus } from "@pms/shared/lib/data/types";
 import { prospectStatusLabel, prospectStatusColor } from "@pms/shared/lib/dealerProspects";
 import { งานมาตรฐาน, งานเสร็จแล้ว, ความคืบหน้า, ติ๊กงาน, ยกเลิกงาน, ลำดับขั้น } from "@pms/shared/lib/prospectJourney";
+import { ชื่องานที่ใช้, type HQRecruitSettings } from "@pms/shared/lib/recruitSettings";
 
 const PRIMARY = "#003366";
+const เหตุผลอื่น = "__อื่น__";
 
-export function ProspectJourney({ prospect, ขั้นก่อนปิด, มีบันทึกการติดต่อ, มีใบส่งแล้ว, editable, busy, onStage, onNeedContact, onNeedProposal, onConvert }: {
+export function ProspectJourney({ prospect, ขั้นก่อนปิด, มีบันทึกการติดต่อ, มีใบส่งแล้ว, editable, busy, onStage, onNeedContact, onNeedProposal, onConvert, ค่าตั้ง }: {
   prospect: DealerProspect;
+  /** ชื่องาน + รายการเหตุผลที่ไม่สำเร็จ ที่ตั้งไว้ (หน้าตั้งค่า › หาตัวแทน) — ไม่ส่ง = ชื่อเดิม/พิมพ์เหตุผลเอง */
+  ค่าตั้ง?: Pick<HQRecruitSettings, "taskLabels" | "lostReasons">;
   /** รายที่ไม่สำเร็จ: ขั้นก่อนปิด (ใช้แสดงงานที่ทำไปแล้ว + เปิดติดตามใหม่) */
   ขั้นก่อนปิด: DealerProspectStatus;
   มีบันทึกการติดต่อ: boolean;
@@ -31,6 +35,12 @@ export function ProspectJourney({ prospect, ขั้นก่อนปิด, �
   const [hint, setHint] = useState("");
   const [เปิดไม่สำเร็จ, setเปิดไม่สำเร็จ] = useState(false);
   const [เหตุผล, setเหตุผล] = useState("");
+  // มีรายการเหตุผลตั้งไว้ = เลือกจากรายการ (มี "อื่น ๆ" ให้พิมพ์เอง) · ไม่มี = พิมพ์เองเหมือนเดิม
+  const รายการเหตุผล = ค่าตั้ง?.lostReasons ?? [];
+  const [เลือกเหตุผล, setเลือกเหตุผล] = useState("");
+  const เหตุผลที่ใช้ = (รายการเหตุผล.length && เลือกเหตุผล !== เหตุผลอื่น ? เลือกเหตุผล : เหตุผล).trim();
+  const ปิดฟอร์มเหตุผล = () => { setเปิดไม่สำเร็จ(false); setเหตุผล(""); setเลือกเหตุผล(""); };
+  const ชื่อ = (g: (typeof งานมาตรฐาน)[number]) => (ค่าตั้ง ? ชื่องานที่ใช้(ค่าตั้ง, g.key, g.label) : g.label);
 
   const status = prospect.status;
   const จบแล้ว = status === "won" || status === "lost";
@@ -94,7 +104,7 @@ export function ProspectJourney({ prospect, ขั้นก่อนปิด, �
           const ขั้นสี = prospectStatusColor[g.ไปขั้น];
           return (
             // ปุ่มงาน = ช่องติ๊กในสายตาผู้ใช้ — บอกสถานะให้โปรแกรมอ่านหน้าจอ (และเทสต์) ด้วย role/aria-checked
-            <button key={g.key} type="button" role="checkbox" aria-checked={เสร็จ} aria-label={g.label}
+            <button key={g.key} type="button" role="checkbox" aria-checked={เสร็จ} aria-label={ชื่อ(g)}
               onClick={() => กดงาน(i)} disabled={จบแล้ว || ปิดปุ่ม}
               title={ล็อก ? "ทำงานก่อนหน้าให้ครบก่อน" : g.คำอธิบาย}
               style={{
@@ -113,7 +123,7 @@ export function ProspectJourney({ prospect, ขั้นก่อนปิด, �
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "0.86rem", fontWeight: 600, color: เสร็จ ? "#065f46" : ล็อก ? "#9aa4b0" : "#2D2D2D", textDecoration: เสร็จ ? "line-through" : "none" }}>{g.label}</span>
+                  <span style={{ fontSize: "0.86rem", fontWeight: 600, color: เสร็จ ? "#065f46" : ล็อก ? "#9aa4b0" : "#2D2D2D", textDecoration: เสร็จ ? "line-through" : "none" }}>{ชื่อ(g)}</span>
                   <span className="badge" style={{ background: ขั้นสี.bg, color: ขั้นสี.text, border: "none", opacity: ล็อก ? 0.5 : 1 }}>→ {prospectStatusLabel[g.ไปขั้น]}</span>
                 </span>
                 <span style={{ display: "block", fontSize: "0.65rem", color: "#6b7280", marginTop: 2 }}>{g.คำอธิบาย}</span>
@@ -148,12 +158,26 @@ export function ProspectJourney({ prospect, ขั้นก่อนปิด, �
         ) : เปิดไม่สำเร็จ ? (
           <div style={{ padding: "12px 14px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca" }}>
             <label htmlFor="pj-lost-reason" style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#dc2626", marginBottom: 8 }}>เหตุผลที่ไม่สำเร็จ</label>
-            <input id="pj-lost-reason" autoFocus value={เหตุผล} onChange={e => setเหตุผล(e.target.value)} placeholder="พิมพ์เหตุผล…" className="form-input" />
+            {รายการเหตุผล.length ? (
+              <>
+                <select id="pj-lost-reason" autoFocus className="form-select" value={เลือกเหตุผล} onChange={e => setเลือกเหตุผล(e.target.value)} style={{ cursor: "pointer" }}>
+                  <option value="">— ยังไม่ระบุ —</option>
+                  {รายการเหตุผล.map(r => <option key={r} value={r}>{r}</option>)}
+                  <option value={เหตุผลอื่น}>อื่น ๆ (ระบุเอง)</option>
+                </select>
+                {เลือกเหตุผล === เหตุผลอื่น && (
+                  <input id="pj-lost-reason-other" aria-label="ระบุเหตุผลเอง" autoFocus value={เหตุผล} onChange={e => setเหตุผล(e.target.value)}
+                    placeholder="พิมพ์เหตุผล…" className="form-input" style={{ marginTop: 8 }} />
+                )}
+              </>
+            ) : (
+              <input id="pj-lost-reason" autoFocus value={เหตุผล} onChange={e => setเหตุผล(e.target.value)} placeholder="พิมพ์เหตุผล…" className="form-input" />
+            )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setเปิดไม่สำเร็จ(false); setเหตุผล(""); }}>ยกเลิก</button>
-              <button type="button" className="btn btn-sm" disabled={!เหตุผล.trim() || busy}
-                style={เหตุผล.trim() ? { background: "#dc2626", color: "#fff" } : { background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" }}
-                onClick={() => { onStage("lost", เหตุผล.trim()); setเปิดไม่สำเร็จ(false); setเหตุผล(""); }}>ยืนยันไม่สำเร็จ</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={ปิดฟอร์มเหตุผล}>ยกเลิก</button>
+              <button type="button" className="btn btn-sm" disabled={!เหตุผลที่ใช้ || busy}
+                style={เหตุผลที่ใช้ ? { background: "#dc2626", color: "#fff" } : { background: "#f3f4f6", color: "#9ca3af", cursor: "not-allowed" }}
+                onClick={() => { onStage("lost", เหตุผลที่ใช้); ปิดฟอร์มเหตุผล(); }}>ยืนยันไม่สำเร็จ</button>
             </div>
           </div>
         ) : editable ? (

@@ -13,6 +13,7 @@ import {
   type HQPolicy, type HQTargets, type LeadTaskDef,
 } from "./mock";
 import { settings as settingsRepo, realtime } from "./data";
+import { DEFAULT_RECRUIT_SETTINGS, type HQRecruitSettings } from "./recruitSettings";
 import { logRepoRead } from "./repoLog";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
@@ -74,6 +75,12 @@ export function useLostReasons(): string[] {
 
 /** งานมาตรฐานของแต่ละขั้น ที่ HQ ตั้งไว้ — ตัวแทนเช็กงานชุดนี้ และเป็นตัวเลื่อนขั้นให้ลูกค้าเป้าหมาย
  *  ห้ามใช้ LEAD_TASK_TEMPLATE ตรง ๆ ในหน้าจอ: นั่นเป็นแค่ค่าเริ่มต้น ไม่ใช่ของที่ HQ ตั้งไว้จริง */
+/** ค่าตั้งงานหาตัวแทนของ HQ (ช่องทาง/ประเภทธุรกิจ/เหตุผล/ชื่องาน/ค่าตั้งต้นใบเสนอแพ็กเกจ)
+ *  ใช้ในหน้าฝั่ง HQ เท่านั้น — ตัวแทนอ่านตารางนี้ไม่ได้ (RLS) */
+export function useRecruitSettings(): HQRecruitSettings {
+  return useHQValue<HQRecruitSettings>("settings.getRecruitSettings", () => settingsRepo.getRecruitSettings(), DEFAULT_RECRUIT_SETTINGS);
+}
+
 export function useLeadTaskTemplate(): LeadTaskDef[] {
   return useHQValue<LeadTaskDef[]>("settings.getLeadTasks", () => settingsRepo.getLeadTasks(), [...LEAD_TASK_TEMPLATE]);
 }

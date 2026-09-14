@@ -8,6 +8,7 @@ import type { DealerPackageProposal } from "@pms/shared/lib/data/types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
 import type { DealerProspect, ProspectActivity } from "@pms/shared/lib/data/types";
 import { เตรียมบันทึกการติดต่อ } from "@pms/shared/lib/prospectJourney";
+import { รวมค่าตั้งหาตัวแทน } from "@pms/shared/lib/recruitSettings";
 import { accountRemote } from "../accountRemote";
 import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
@@ -341,7 +342,7 @@ export const SupabaseAdapter: DataAdapter = {
       // ต้องครบทุกตารางที่ HQ เป็นเจ้าของและตัวแทนต้องใช้ตาม
       // (0021 เปิด Realtime ให้ hq_sales_journey ไว้แล้ว แต่ฝั่ง client ลืมฟัง
       //  → เหตุผลปิดการขายที่ HQ แก้ ตัวแทนไม่เห็นจนกว่าจะรีโหลดหน้า)
-      for (const t of ["hq_policy", "hq_targets", "hq_notif_rules", "hq_sales_journey"]) {
+      for (const t of ["hq_policy", "hq_targets", "hq_notif_rules", "hq_sales_journey", "hq_recruit_settings"]) {
         ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => onChange());
       }
       return ch;
@@ -492,6 +493,13 @@ export const SupabaseAdapter: DataAdapter = {
     },
     saveLeadTasks: (tasks) =>
       must(sb().from("hq_sales_journey").upsert({ id: 1, tasks: normalizeLeadTaskTemplate(tasks) })),
+    // config เป็น jsonb ก้อนเดียว (0176) — ไม่แปลงคีย์ข้างใน · ขาด/เพี้ยน = ค่าเริ่มต้น
+    getRecruitSettings: async () => {
+      const row = await one<{ config?: unknown }>("hq_recruit_settings");
+      return รวมค่าตั้งหาตัวแทน(row?.config);
+    },
+    saveRecruitSettings: (s) =>
+      must(sb().from("hq_recruit_settings").upsert({ id: 1, config: รวมค่าตั้งหาตัวแทน(s) })),
   },
   // ตั้งค่าของสาขา — แถวเดียวต่อ dealer_code · RLS คุมว่าแก้ได้เฉพาะของตัวเอง
   // เก็บเป็น jsonb ราย "กลุ่ม" จึงไม่ต้องแปลง snake/camel ข้างใน (ปล่อยผ่านทั้งก้อน)

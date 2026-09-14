@@ -4,7 +4,8 @@
 //   ชุดเดียวใช้ทั้งหน้ารวมใบเสนอ (ปุ่มในแถว/แผงรายละเอียด) และแผงใบในหน้าต่างลูกค้าเป้าหมาย
 //   ⚠️ ห้ามเขียนซ้ำที่อื่น — ข้อความยืนยัน/การบันทึกการใช้งานต้องเหมือนกันทุกหน้า
 import { useCallback } from "react";
-import { proposals as proposalsRepo, hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
+import { proposals as proposalsRepo, hqCompany as hqCompanyRepo, settings as settingsRepo } from "@pms/shared/lib/data";
+import { logRepoRead } from "@pms/shared/lib/repoLog";
 import type { DealerPackageProposal, DealerProposalStatus, DealerProspect } from "@pms/shared/lib/data/types";
 import { proposalStatusLabel } from "@pms/shared/lib/dealerProposals";
 import { เขียนใบเสนอลงหน้าต่าง } from "@pms/shared/lib/dealerProposalPrint";
@@ -20,7 +21,13 @@ export function useProposalActions() {
     const w = window.open("", "_blank");
     if (!w) { แจ้งพลาด("เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาตป๊อปอัปของเว็บนี้แล้วลองใหม่"); return; }
     try {
-      เขียนใบเสนอลงหน้าต่าง(w, p, prospect, await hqCompanyRepo.get());
+      // ผู้ลงนามช่อง "ผู้เสนอ" จากหน้าตั้งค่า › หาตัวแทน — อ่านไม่ได้ก็ยังพิมพ์ได้ (ใช้ชื่อบริษัทแทน) แต่ต้องแจ้งไว้
+      const [hq, ค่าตั้ง] = await Promise.all([
+        hqCompanyRepo.get(),
+        settingsRepo.getRecruitSettings().catch(e => { logRepoRead("settings.getRecruitSettings(print)", e); return null; }),
+      ]);
+      เขียนใบเสนอลงหน้าต่าง(w, p, prospect, hq,
+        ค่าตั้ง ? { name: ค่าตั้ง.proposal.signerName, title: ค่าตั้ง.proposal.signerTitle } : undefined);
     } catch (e) {
       w.close();
       แจ้งพลาด(friendlyError(e, "เปิดหน้าพิมพ์ไม่สำเร็จ"));

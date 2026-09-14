@@ -26,8 +26,10 @@ const ป้ายชนิด: Record<ProspectActivity["kind"], { type: string;
   proposal: { type: "quote",  label: "ใบเสนอแพ็กเกจ" },
 };
 
-export function ProspectActivityPanel({ prospect, activities, loaded, loadErr, editable, formOpen, setFormOpen, onReload, onAdded }: {
+export function ProspectActivityPanel({ prospect, activities, loaded, loadErr, editable, formOpen, setFormOpen, onReload, onAdded, ช่องทาง = ช่องทางติดต่อ }: {
   prospect: DealerProspect;
+  /** ช่องทางที่เลือกได้ (หน้าตั้งค่า › หาตัวแทน) — ไม่ส่ง = รายการเริ่มต้น */
+  ช่องทาง?: readonly string[];
   activities: ProspectActivity[];
   loaded: boolean;
   loadErr: string;
@@ -94,7 +96,7 @@ export function ProspectActivityPanel({ prospect, activities, loaded, loadErr, e
               <label className="form-label" htmlFor="pc-channel">ช่องทาง *</label>
               <select id="pc-channel" className="form-select" value={channel} onChange={e => setChannel(e.target.value)} style={{ cursor: "pointer" }}>
                 <option value="">— ยังไม่ระบุ —</option>
-                {ช่องทางติดต่อ.map(c => <option key={c} value={c}>{c}</option>)}
+                {ช่องทาง.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>

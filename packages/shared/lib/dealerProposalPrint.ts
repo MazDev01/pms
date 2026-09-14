@@ -15,7 +15,10 @@ function esc(s: unknown) {
 
 export type ผู้รับข้อเสนอ = Pick<DealerProspect, "name" | "phone" | "email" | "province" | "social">;
 
-export function buildDealerProposalHTML(p: DealerPackageProposal, prospect: ผู้รับข้อเสนอ, hq: HQCompany): string {
+/** ผู้ลงนามช่อง "ผู้เสนอ" (หน้าตั้งค่า › หาตัวแทน) — ชื่อว่าง = ใช้ชื่อบริษัท */
+export type ผู้ลงนามข้อเสนอ = { name?: string; title?: string };
+
+export function buildDealerProposalHTML(p: DealerPackageProposal, prospect: ผู้รับข้อเสนอ, hq: HQCompany, ผู้ลงนาม?: ผู้ลงนามข้อเสนอ): string {
   const พื้นที่ = p.region === "ทุกภาค"
     ? "ทั่วประเทศ (ทุกภาค)"
     : [p.province, p.region ? `ภาค${p.region}` : ""].filter(Boolean).join(" · ") || "—";
@@ -96,7 +99,7 @@ table.items td.r,table.items th.r{text-align:right}
   </table>
   ${termLines.length ? `<div class="terms"><div class="h">เงื่อนไข</div>${termLines.map(t => `• ${esc(t)}`).join("<br/>")}</div>` : ""}
   <div class="signs">
-    <div class="sign"><div class="line">ผู้เสนอ<br/>( ${esc(hq.name || "สำนักงานใหญ่")} )</div></div>
+    <div class="sign"><div class="line">ผู้เสนอ<br/>( ${esc(ผู้ลงนาม?.name?.trim() || hq.name || "สำนักงานใหญ่")} )${ผู้ลงนาม?.name?.trim() && ผู้ลงนาม.title?.trim() ? `<br/>${esc(ผู้ลงนาม.title.trim())}` : ""}${ผู้ลงนาม?.name?.trim() && hq.name ? `<br/>${esc(hq.name)}` : ""}</div></div>
     <div class="sign"><div class="line">ผู้ตอบรับข้อเสนอ<br/>( ${esc(prospect.name)} )</div></div>
   </div>
   <div class="bar">เอกสารนี้เป็นข้อเสนอเงื่อนไขการเป็นตัวแทนจำหน่าย ไม่ใช่ใบแจ้งหนี้หรือใบเสร็จรับเงิน</div>
@@ -108,7 +111,7 @@ table.items td.r,table.items th.r{text-align:right}
 /** เขียนใบลงหน้าต่างที่เปิดไว้แล้ว
  *  ⚠️ ผู้เรียกต้องเปิดหน้าต่าง "ทันทีตอนกดปุ่ม" ก่อนไปโหลดข้อมูลบริษัท —
  *     เปิดหลัง await เบราว์เซอร์จะมองว่าไม่ได้เกิดจากการกดของผู้ใช้ แล้วบล็อกเป็นป๊อปอัป */
-export function เขียนใบเสนอลงหน้าต่าง(w: Window, p: DealerPackageProposal, prospect: ผู้รับข้อเสนอ, hq: HQCompany) {
-  w.document.write(buildDealerProposalHTML(p, prospect, hq));
+export function เขียนใบเสนอลงหน้าต่าง(w: Window, p: DealerPackageProposal, prospect: ผู้รับข้อเสนอ, hq: HQCompany, ผู้ลงนาม?: ผู้ลงนามข้อเสนอ) {
+  w.document.write(buildDealerProposalHTML(p, prospect, hq, ผู้ลงนาม));
   w.document.close();
 }

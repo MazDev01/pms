@@ -3,6 +3,7 @@
 // ทุกเมธอดเป็น async ตั้งแต่แรก → ต่อ network (เฟส B) ไม่ต้องแก้ signature
 import type { DealerPackageProposal, DealerProposalStatus } from "./types";
 import type { DealerProspect, ProspectActivity, ProspectContactInput } from "./types";
+import type { HQRecruitSettings } from "../recruitSettings";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap, LeadTaskDef,
@@ -49,6 +50,9 @@ export interface SettingsRepo {
   /** งานมาตรฐานของแต่ละขั้นในเส้นทางการขาย ที่ HQ ตั้ง — ตัวแทนเช็กงานชุดนี้ (เขียนได้เฉพาะ HQ) */
   getLeadTasks(): Promise<LeadTaskDef[]>;
   saveLeadTasks(tasks: LeadTaskDef[]): Promise<void>;
+  /** ค่าตั้งงานหาตัวแทนของ HQ (ช่องทาง/ประเภทธุรกิจ/เหตุผล/ชื่องาน/ค่าตั้งต้นใบเสนอแพ็กเกจ · 0176) — อ่าน HQ · เขียนผู้ดูแลข้อมูลกลาง */
+  getRecruitSettings(): Promise<HQRecruitSettings>;
+  saveRecruitSettings(s: HQRecruitSettings): Promise<void>;
   // เขียนนโยบายระดับเครือ (HQ เท่านั้น — RLS is_hq ฝั่ง supabase · singleton id=1)
   savePolicy(policy: HQPolicy): Promise<void>;
   saveTargets(targets: HQTargets): Promise<void>;

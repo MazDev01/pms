@@ -46,6 +46,7 @@ const PING_TABLES: { table: string; ch: string }[] = [
   { table: "hq_targets",       ch: "settings" },
   { table: "hq_notif_rules",   ch: "settings" },
   { table: "hq_sales_journey", ch: "settings" },
+  { table: "hq_recruit_settings", ch: "settings" },
   { table: "customer_notes",   ch: "notes" },
   { table: "dealer_settings",  ch: "dealerSettings" },
 ];

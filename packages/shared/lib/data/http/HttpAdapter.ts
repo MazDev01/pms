@@ -17,6 +17,7 @@ import type { DealerPackageProposal } from "../types";
 import type { ProspectsRepo, ProspectActivitiesRepo } from "../ports";
 import type { DealerProspect, ProspectActivity } from "../types";
 import { accountRemote } from "../accountRemote";
+import { รวมค่าตั้งหาตัวแทน } from "../../recruitSettings";
 import type {
   DataAdapter, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo, SettingsRepo,
   DealerSettingsRepo, ProfileRepo, HQCompanyRepo, NotesRepo, UsersRepo, AuditRepo,
@@ -244,6 +245,8 @@ const settings: SettingsRepo = {
       ? normalizeLeadTaskTemplate(row.tasks) : [...LEAD_TASK_TEMPLATE];
   },
   saveLeadTasks: (tasks) => putOne("leadTasks", { value: tasks }),
+  getRecruitSettings: async () => รวมค่าตั้งหาตัวแทน((await getOne<{ config?: unknown }>("recruit"))?.config),
+  saveRecruitSettings: (s) => putOne("recruit", { config: รวมค่าตั้งหาตัวแทน(s) }),
   savePolicy: (p) => putOne("policy", p),
   saveTargets: (t) => putOne("targets", t),
   saveNotifRules: (r) => putOne("notifRules", r),

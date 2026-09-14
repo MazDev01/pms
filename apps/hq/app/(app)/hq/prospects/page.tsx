@@ -56,12 +56,13 @@ import { fileToResizedDataURL } from "@pms/shared/lib/imageResize";
 import { fmtISOToThai } from "@pms/shared/lib/mock";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
+import { useRecruitSettings } from "@pms/shared/lib/useHQConfig";
 
 const PRIMARY = "#003366";
 const MUTED = "#6b7280";
 const HQ_CODE = "HQ";
-// ช่องทางที่ทีมใช้จริงในไฟล์ติดตาม — ช่องนี้พิมพ์เองได้ รายการนี้เป็นแค่ตัวช่วยเติมคำ
-const ช่องทางแนะนำ = ["Facebook", "LINE OA", "LINE ส่วนตัว", "โทรเข้ามาเอง", "แนะนำต่อ"];
+// ช่องทางที่เข้ามา / ประเภทธุรกิจ / ช่องทางติดต่อ / เหตุผลที่ไม่สำเร็จ / ชื่องาน มาจากหน้าตั้งค่า › หาตัวแทน (0176)
+//   เดิมเขียนตายตัวที่นี่ — ทีมเพิ่มตัวเลือกเองไม่ได้ (บอสสั่งให้ตั้งเองได้ 14 ก.ย. 69)
 
 const ร่างว่าง = (): Partial<DealerProspect> => ({ name: "", status: "new", firstContact: APP_NOW_ISO });
 
@@ -80,6 +81,9 @@ export default function HQProspectsPage() {
   const { can } = useRole();
   const จัดการได้ = can("dealers:manage");
   const logAudit = useAuditLogger();
+  const ค่าตั้ง = useRecruitSettings();
+  // "อื่น ๆ" ต่อท้ายให้เสมอ — ช่องทางที่ไม่อยู่ในรายการยังเลือกได้
+  const ตัวเลือกช่องทาง = ค่าตั้ง.channels.includes("อื่น ๆ") ? ค่าตั้ง.channels : [...ค่าตั้ง.channels, "อื่น ๆ"];
 
   const [list, setList] = useState<DealerProspect[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -509,8 +513,8 @@ export default function HQProspectsPage() {
           {/* ดรอปดาวน์ (บอสสั่ง 14 ก.ย. 69: "ทำเป็นดรอปดาวน์ด้วย") — ค่าเดิมที่ไม่อยู่ในรายการ (พิมพ์เองสมัยก่อน/นำเข้า) ต้องยังเห็น ไม่หายเงียบ */}
           <select id="pr-channel" className="form-select" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value || null)} style={{ cursor: "pointer" }}>
             <option value="">— ยังไม่ระบุ —</option>
-            {[...ช่องทางแนะนำ, "อื่น ๆ"].map(c => <option key={c} value={c}>{c}</option>)}
-            {ร่าง.channel && ![...ช่องทางแนะนำ, "อื่น ๆ"].includes(ร่าง.channel) && (
+            {ตัวเลือกช่องทาง.map(c => <option key={c} value={c}>{c}</option>)}
+            {ร่าง.channel && !ตัวเลือกช่องทาง.includes(ร่าง.channel) && (
               <option value={ร่าง.channel}>{ร่าง.channel} (ตามที่บันทึกไว้)</option>
             )}
           </select>
@@ -538,7 +542,19 @@ export default function HQProspectsPage() {
         </div>
         <div>
           <label className="form-label" htmlFor="pr-type">ประเภทธุรกิจ</label>
-          <input id="pr-type" className="form-input" value={ร่าง.businessType ?? ""} onChange={e => ตั้งค่า("businessType", e.target.value)} placeholder="เช่น ผู้รับเหมา / ขายเหล็ก / สถาปนิก" />
+          {/* ตั้งรายการไว้แล้ว = เลือกจากรายการ (นับ/กรองได้ตรงกัน) · ยังไม่ตั้ง = พิมพ์เองเหมือนเดิม
+              ค่าเดิมที่ไม่อยู่ในรายการต้องยังเห็น ไม่หายเงียบตอนเปิดมาแก้ */}
+          {ค่าตั้ง.businessTypes.length ? (
+            <select id="pr-type" className="form-select" value={ร่าง.businessType ?? ""} onChange={e => ตั้งค่า("businessType", e.target.value || null)} style={{ cursor: "pointer" }}>
+              <option value="">— ยังไม่ระบุ —</option>
+              {ค่าตั้ง.businessTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              {ร่าง.businessType && !ค่าตั้ง.businessTypes.includes(ร่าง.businessType) && (
+                <option value={ร่าง.businessType}>{ร่าง.businessType} (ตามที่บันทึกไว้)</option>
+              )}
+            </select>
+          ) : (
+            <input id="pr-type" className="form-input" value={ร่าง.businessType ?? ""} onChange={e => ตั้งค่า("businessType", e.target.value)} placeholder="เช่น ผู้รับเหมา / ขายเหล็ก / สถาปนิก" />
+          )}
         </div>
         <div>
           <label className="form-label" htmlFor="pr-assigned">ผู้ดูแล (สำนักงานใหญ่)</label>
@@ -843,6 +859,7 @@ export default function HQProspectsPage() {
                           : "ติ๊กงานนี้เองไม่ได้ — ออกใบเสนอแพ็กเกจแล้วเปลี่ยนเป็น “ส่งแล้ว” ระบบจะติ๊กให้เอง");
                       }}
                       onConvert={() => เปิดตั้งตัวแทน(ราย)}
+                      ค่าตั้ง={ค่าตั้ง}
                     />
                   )}
 
@@ -857,6 +874,7 @@ export default function HQProspectsPage() {
                       setFormOpen={setฟอร์มติดต่อเปิด}
                       onReload={() => void โหลดของราย(ราย.id)}
                       onAdded={() => void รีเฟรชรายที่เปิด()}
+                      ช่องทาง={ค่าตั้ง.contactChannels}
                     />
                   )}
 

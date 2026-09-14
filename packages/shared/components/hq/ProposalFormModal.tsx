@@ -7,7 +7,9 @@
 //
 // ⚠️ ห้ามแยกเขียนฟอร์มนี้ซ้ำที่อื่น — กติกา (ช่องบังคับ/ช่องเงินมีลูกน้ำ/ภาคก่อนจังหวัด) ต้องเหมือนกันทุกหน้า
 //    วางที่ body (portal) เพราะบางหน้าเปิดจากในหน้าต่างอีกชั้น — คลิกฉากหลังต้องหยุดไม่ให้หน้าต่างแม่ปิดตาม
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useRecruitSettings } from "@pms/shared/lib/useHQConfig";
+import { บวกวัน } from "@pms/shared/lib/recruitSettings";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { proposals as proposalsRepo } from "@pms/shared/lib/data";
@@ -60,6 +62,47 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
   const [ร่าง, setร่าง] = useState<ร่างใบ>(() => ร่างเริ่มต้น(editing, prospect));
   const [formErr, setFormErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // ── ค่าตั้งต้นจากหน้าตั้งค่า › หาตัวแทน (ข้อ 2) — ใช้กับ "ใบใหม่" เท่านั้น · ใบเดิมไม่แตะ ──
+  //   เติมเฉพาะช่องที่ยังว่าง หรือช่องที่ยังเป็นค่าที่ระบบเติมให้ (ผู้ใช้แก้แล้ว = ไม่ทับ)
+  //   ไม่ได้ตั้งไว้ = ไม่เติมอะไรเลย (ห้ามเดาตัวเลขให้)
+  const ค่าตั้งใบ = useRecruitSettings().proposal;
+  const ตัวเลขของแพ็กเกจ = (k?: DealerPackage | null) => {
+    const d = k ? ค่าตั้งใบ.packages[k] : null;
+    return {
+      มูลค่า: d?.amount != null ? formatMoneyInput(String(d.amount)) : "",
+      ระยะ: d?.contractMonths != null ? String(d.contractMonths) : "",
+      เป้า: d?.annualTarget != null ? formatMoneyInput(String(d.annualTarget)) : "",
+    };
+  };
+  const วันมีผลตามอายุใบ = (วันเสนอ?: string | null) =>
+    ค่าตั้งใบ.validityDays && วันเสนอ ? บวกวัน(วันเสนอ, ค่าตั้งใบ.validityDays) : null;
+  useEffect(() => {
+    if (editing) return;
+    setร่าง(r => ({
+      ...r,
+      terms: r.terms?.trim() ? r.terms : (ค่าตั้งใบ.terms || r.terms),
+      validUntil: r.validUntil ?? วันมีผลตามอายุใบ(r.proposedDate),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- เติมตอนค่าตั้งโหลดมาเท่านั้น
+  }, [ค่าตั้งใบ]);
+  const เลือกแพ็กเกจ = (k: DealerPackage | undefined) => setร่าง(r => {
+    if (r.id) return { ...r, package: k };
+    const เดิม = ตัวเลขของแพ็กเกจ(r.package), ใหม่ = ตัวเลขของแพ็กเกจ(k);
+    const แทน = (ตอนนี้: string, ของเดิม: string, ของใหม่: string) => (!ตอนนี้ || ตอนนี้ === ของเดิม ? ของใหม่ : ตอนนี้);
+    return {
+      ...r, package: k,
+      มูลค่าที่พิมพ์: แทน(r.มูลค่าที่พิมพ์, เดิม.มูลค่า, ใหม่.มูลค่า),
+      ระยะที่พิมพ์: แทน(r.ระยะที่พิมพ์, เดิม.ระยะ, ใหม่.ระยะ),
+      เป้าที่พิมพ์: แทน(r.เป้าที่พิมพ์, เดิม.เป้า, ใหม่.เป้า),
+    };
+  });
+  const เปลี่ยนวันเสนอ = (v: string | null) => setร่าง(r => ({
+    ...r,
+    proposedDate: v,
+    // วันมีผลยังเป็นค่าที่ระบบคิดให้ → เลื่อนตาม · ผู้ใช้ตั้งเองแล้ว → ไม่แตะ
+    validUntil: !r.id && r.validUntil === วันมีผลตามอายุใบ(r.proposedDate) ? (วันมีผลตามอายุใบ(v) ?? r.validUntil) : r.validUntil,
+  }));
 
   const เลือกในฟอร์ม = !prospect && !editing;
   const รายของใบ = prospect ?? choices?.find(c => c.id === ร่าง.prospectId) ?? null;
@@ -144,7 +187,7 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
             )}
             <div>
               <label className="form-label" htmlFor="pp-package">แพ็กเกจ *</label>
-              <select id="pp-package" className="form-select" value={ร่าง.package ?? ""} onChange={e => ตั้งค่า("package", (e.target.value || undefined) as DealerPackage | undefined)} style={{ cursor: "pointer" }}>
+              <select id="pp-package" className="form-select" value={ร่าง.package ?? ""} onChange={e => เลือกแพ็กเกจ((e.target.value || undefined) as DealerPackage | undefined)} style={{ cursor: "pointer" }}>
                 <option value="">— ยังไม่ระบุ —</option>
                 {PACKAGE_ORDER.map(k => <option key={k} value={k}>{packageLabel[k]}</option>)}
               </select>
@@ -188,7 +231,7 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
             </div>
             <div>
               <label className="form-label" htmlFor="pp-date">วันที่เสนอ *</label>
-              <input id="pp-date" className="form-input" type="date" value={ร่าง.proposedDate ?? ""} onChange={e => ตั้งค่า("proposedDate", e.target.value || null)} />
+              <input id="pp-date" className="form-input" type="date" value={ร่าง.proposedDate ?? ""} onChange={e => เปลี่ยนวันเสนอ(e.target.value || null)} />
             </div>
             <div>
               <label className="form-label" htmlFor="pp-valid">ข้อเสนอมีผลถึง</label>

@@ -41,6 +41,7 @@ import { accountLocal } from "./accountLocal";
 import type { DataAdapter } from "../ports";
 import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect, DealerPackageProposal, ProspectActivity, DealerProspectStatus } from "../types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
+import { รวมค่าตั้งหาตัวแทน } from "@pms/shared/lib/recruitSettings";
 import { เตรียมบันทึกใบ, ใบล็อกแล้ว, สถานะที่เปลี่ยนไปได้, มีใบเสนอที่ส่งแล้ว } from "@pms/shared/lib/dealerProposals";
 import {
   ตรวจเปลี่ยนขั้น, ข้อความเพิ่มราย, ข้อความเปลี่ยนขั้น, ข้อความใบเสนอ, ประวัติใหม่ก่อน,
@@ -53,6 +54,7 @@ const PROSPECTS_KEY = "hq_dealer_prospects_v1";
 const PROPOSALS_KEY = "hq_dealer_proposals_v1";
 const PROSPECT_ACTIVITIES_KEY = "hq_dealer_prospect_activities_v1";
 const HQ_USERS_KEY = "hq_users_v4";
+const RECRUIT_KEY = "hq_recruit_settings_v1";
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY, DEALER_PRICING_KEY } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC, DOC_KEY } from "@pms/shared/lib/quotationPrint";
@@ -200,6 +202,12 @@ export const LocalAdapter: DataAdapter = {
       fireSettings();
       return done();
     },
+    getRecruitSettings: () => {
+      let raw: unknown = null;
+      try { raw = JSON.parse(localStorage.getItem(RECRUIT_KEY) ?? "null"); } catch {}
+      return ok(รวมค่าตั้งหาตัวแทน(raw));
+    },
+    saveRecruitSettings: (s) => { writeKey(RECRUIT_KEY, รวมค่าตั้งหาตัวแทน(s)); fireSettings(); return done(); },
     // ยิง event หลังบันทึก → หน้าอื่น (origin เดียวกัน) ที่ใช้ค่านโยบาย/เป้า อัปเดตทันที
     savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); fireSettings(); return done(); },
     saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); fireSettings(); return done(); },

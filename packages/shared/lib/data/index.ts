@@ -58,6 +58,8 @@ export const settings: SettingsRepo = {
   saveLeadTasks:        async (tasks) => { await _settings.saveLeadTasks(tasks); invalidateCache("settings.getLeadTasks"); },
   saveLeadRules:        async (dealerCode, rules) => { await _settings.saveLeadRules(dealerCode, rules); invalidateCache("settings.getLeadRulesMap"); },
   saveLostReasons:      async (lost) => { await _settings.saveLostReasons(lost); invalidateCache("settings.getLostReasons"); },
+  getRecruitSettings:   () => ttlCacheRead("settings.getRecruitSettings", () => _settings.getRecruitSettings(), REF_TTL_MS),
+  saveRecruitSettings:  async (s) => { await _settings.saveRecruitSettings(s); invalidateCache("settings.getRecruitSettings"); },
   savePolicy:           async (policy) => { await _settings.savePolicy(policy); invalidateCache("settings.getPolicy"); },
   saveTargets:          async (targets) => { await _settings.saveTargets(targets); invalidateCache("settings.getTargets"); },
   saveNotifRules:       async (rules) => { await _settings.saveNotifRules(rules); invalidateCache("settings.getNotifRules"); },

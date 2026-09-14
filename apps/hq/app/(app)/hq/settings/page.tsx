@@ -27,14 +27,21 @@ import { friendlyError } from "@pms/shared/lib/friendlyError";
 import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
 import { regionDisplay } from "@pms/shared/lib/hqQuotations";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
-import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
+import { fmtBahtM as fmtB, formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
+import {
+  DEFAULT_RECRUIT_SETTINGS, จำนวนรายการสูงสุด, ความยาวรายการสูงสุด,
+  type HQRecruitSettings, type คีย์งานหาตัวแทน, type ค่าตั้งแพ็กเกจ,
+} from "@pms/shared/lib/recruitSettings";
+import { งานมาตรฐาน } from "@pms/shared/lib/prospectJourney";
+import { prospectStatusLabel, prospectStatusColor } from "@pms/shared/lib/dealerProspects";
+import { PACKAGE_ORDER, packageLabel } from "@pms/shared/lib/dealerProposals";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { สร้างไฟล์Xlsx, ดาวน์โหลดไฟล์ } from "@pms/shared/lib/exportWorkbook";
 import { สร้างแผ่นงานสำรอง, อ่านแผ่นงานสำรอง, type ชุดการตั้งค่า } from "@pms/shared/lib/settingsBackup";
 import { อ่านสมุดงานจากไฟล์ } from "@pms/shared/lib/importSheet";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
-import type { HQCompany } from "@pms/shared/lib/data/types";
+import type { HQCompany, DealerPackage } from "@pms/shared/lib/data/types";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
   DEFAULT_HQ_POLICY,
@@ -56,7 +63,7 @@ import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { useUnsavedGuard } from "@pms/shared/lib/useUnsavedGuard";
 import { SettingsBusCtx as BusCtx, type SectionApi } from "@pms/shared/lib/settingsBus";
 import {
-  Building2, Users, GitMerge, Target, Bell,
+  Building2, Users, GitMerge, Target, Bell, UserPlus, FileText, MessageSquare, ArrowUp, ArrowDown,
   Save, RotateCcw, Plus, Trash2, Check, X,
   Download, Upload, RefreshCw, AlertCircle,
   ShieldCheck,
@@ -302,6 +309,179 @@ function JourneyTab() {
   );
 }
 
+
+// ═══════════════════════ 4 · หาตัวแทน ═════════════════════════════════════════
+// บอสสั่ง 14 ก.ย. 69 (ข้อ 1 + ข้อ 2 ที่แนะนำ) — เก็บที่ hq_recruit_settings (0176) · กติกาอยู่ lib/recruitSettings.ts
+//   ช่องทางที่เข้ามา / ช่องทางในบันทึกการติดต่อ / ประเภทธุรกิจ / เหตุผลที่ไม่สำเร็จ / ชื่องานตามขั้น
+//   ค่าตั้งต้นใบเสนอแพ็กเกจตัวแทน (อายุใบ · เงื่อนไขมาตรฐาน · ผู้ลงนาม · ตัวเลขตั้งต้นของแต่ละแพ็กเกจ)
+// ⚠️ งานตามขั้นแก้ได้แค่ชื่อ — เพิ่ม/ลบไม่ได้ เพราะ 4 งานผูกกับขั้นที่ฐานข้อมูลบังคับ (0174)
+const ปุ่มไอคอน = (ปิด: boolean) => ({
+  background: "none", border: "none", cursor: ปิด ? "default" : "pointer",
+  color: ปิด ? "#cbd5e1" : "#64748b", display: "flex", padding: 3,
+});
+
+function ListEditor({ label, items, onChange, placeholder, emptyNote }: {
+  label: string; items: string[]; onChange: (next: string[]) => void; placeholder: string; emptyNote: string;
+}) {
+  const [text, setText] = useState("");
+  const [hint, setHint] = useState("");
+  const add = () => {
+    const t = text.trim().slice(0, ความยาวรายการสูงสุด);
+    if (!t) return;
+    if (items.includes(t)) { setHint(`“${t}” มีอยู่แล้ว`); return; }
+    if (items.length >= จำนวนรายการสูงสุด) { setHint(`ใส่ได้ไม่เกิน ${จำนวนรายการสูงสุด} รายการ`); return; }
+    onChange([...items, t]); setText(""); setHint("");
+  };
+  // ลำดับในรายการ = ลำดับในดรอปดาวน์
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= items.length) return;
+    const n = [...items]; [n[i], n[j]] = [n[j], n[i]]; onChange(n);
+  };
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+        {items.map((x, i) => (
+          <div key={x} style={{ display: "flex", alignItems: "center", gap: 4, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px 6px 12px" }}>
+            <span style={{ flex: 1, fontSize: "0.8rem", color: STEEL }}>{x}</span>
+            <button type="button" aria-label={`เลื่อน ${x} ขึ้น`} disabled={i === 0} onClick={() => move(i, -1)} style={ปุ่มไอคอน(i === 0)}><ArrowUp size={13} /></button>
+            <button type="button" aria-label={`เลื่อน ${x} ลง`} disabled={i === items.length - 1} onClick={() => move(i, 1)} style={ปุ่มไอคอน(i === items.length - 1)}><ArrowDown size={13} /></button>
+            <button type="button" aria-label={`ลบ ${x}`} onClick={() => onChange(items.filter((_, k) => k !== i))} style={{ ...ปุ่มไอคอน(false), color: "#dc2626" }}><Trash2 size={13} /></button>
+          </div>
+        ))}
+        {!items.length && (
+          <div style={{ fontSize: "0.76rem", color: "#b45309", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px" }}>{emptyNote}</div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 10, maxWidth: 420 }}>
+        <input className="form-input" aria-label={`เพิ่ม${label}`} value={text} maxLength={ความยาวรายการสูงสุด} placeholder={placeholder}
+          onChange={e => { setText(e.target.value); setHint(""); }} onKeyDown={e => { if (e.key === "Enter") add(); }} />
+        <button type="button" className="btn btn-primary btn-sm" aria-label={`เพิ่ม${label}`} style={{ flexShrink: 0 }} onClick={add}><Plus size={14} /></button>
+      </div>
+      {hint && <div style={{ fontSize: "0.7rem", color: "#b45309", marginTop: 4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+const เงินในช่อง = (n: number | null) => (n != null ? formatMoneyInput(String(n)) : "");
+const เงินจากช่อง = (s: string) => { const t = formatMoneyInput(s); return t ? parseMoneyInput(t) : null; };
+
+function RecruitTab() {
+  const toast = useToast();
+  const rc = useRepoDraft<HQRecruitSettings>(
+    () => settingsRepo.getRecruitSettings(),
+    (v) => { settingsRepo.saveRecruitSettings(v).catch(e => toast("บันทึกค่าตั้งหาตัวแทนไม่สำเร็จ: " + friendlyError(e))); },
+    DEFAULT_RECRUIT_SETTINGS,
+  );
+  useReport(useMemo(() => ({ dirty: rc.dirty, save: rc.save, reset: rc.reset }), [rc.dirty, rc.save, rc.reset]));
+  const d = rc.draft;
+  const ตั้งรายการ = (k: "channels" | "contactChannels" | "businessTypes" | "lostReasons") =>
+    (next: string[]) => rc.set(p => ({ ...p, [k]: next }));
+  const ตั้งชื่องาน = (k: คีย์งานหาตัวแทน, v: string) => rc.set(p => ({ ...p, taskLabels: { ...p.taskLabels, [k]: v } }));
+  const ตั้งใบ = (patch: Partial<HQRecruitSettings["proposal"]>) => rc.set(p => ({ ...p, proposal: { ...p.proposal, ...patch } }));
+  const ตั้งแพ็กเกจ = (k: DealerPackage, patch: Partial<ค่าตั้งแพ็กเกจ>) => rc.set(p => ({
+    ...p, proposal: { ...p.proposal, packages: { ...p.proposal.packages, [k]: { ...p.proposal.packages[k], ...patch } } },
+  }));
+  const หมายเหตุ = { fontSize: "0.7rem", color: "#8a929c", marginTop: 8 } as const;
+
+  return (
+    <>
+      <SectionCard icon={<UserPlus size={19} />} title="ช่องทางที่เข้ามา">
+        <ListEditor label="ช่องทางที่เข้ามา" items={d.channels} onChange={ตั้งรายการ("channels")} placeholder="เช่น TikTok"
+          emptyNote="ยังไม่มีช่องทาง — ถ้าบันทึกตอนว่าง ระบบใช้รายการเริ่มต้น" />
+        <div style={หมายเหตุ}>ในฟอร์มมีตัวเลือก “อื่น ๆ” ต่อท้ายให้เสมอ</div>
+      </SectionCard>
+
+      <SectionCard icon={<MessageSquare size={19} />} title="ช่องทางในบันทึกการติดต่อ">
+        <ListEditor label="ช่องทางติดต่อ" items={d.contactChannels} onChange={ตั้งรายการ("contactChannels")} placeholder="เช่น Zoom"
+          emptyNote="ยังไม่มีช่องทาง — บันทึกการติดต่อต้องเลือกช่องทาง ถ้าบันทึกตอนว่าง ระบบใช้รายการเริ่มต้น" />
+      </SectionCard>
+
+      <SectionCard icon={<Building2 size={19} />} title="ประเภทธุรกิจ">
+        <ListEditor label="ประเภทธุรกิจ" items={d.businessTypes} onChange={ตั้งรายการ("businessTypes")} placeholder="เช่น ผู้รับเหมา"
+          emptyNote="ยังไม่ได้ตั้ง — ช่องประเภทธุรกิจในฟอร์มยังพิมพ์เองได้" />
+      </SectionCard>
+
+      <SectionCard icon={<X size={19} />} title="เหตุผลที่ไม่สำเร็จ (ลูกค้าเป้าหมาย HQ)">
+        <ListEditor label="เหตุผลที่ไม่สำเร็จ" items={d.lostReasons} onChange={ตั้งรายการ("lostReasons")} placeholder="เช่น เงินทุนไม่พอ"
+          emptyNote="ยังไม่ได้ตั้ง — ตอนปิดว่าไม่สำเร็จยังพิมพ์เหตุผลเองได้" />
+        <div style={หมายเหตุ}>ตั้งรายการแล้ว ตอนปิดว่าไม่สำเร็จจะมีตัวเลือก “อื่น ๆ (ระบุเอง)” ให้พิมพ์เองได้ด้วย · คนละรายการกับเหตุผลของตัวแทน</div>
+      </SectionCard>
+
+      <SectionCard icon={<GitMerge size={19} />} title="ชื่องานตามขั้น">
+        <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden", marginTop: 6 }}>
+          {งานมาตรฐาน.map((g, i) => (
+            <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i ? "1px solid #f1f5f9" : "none", flexWrap: "wrap" }}>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#eef2f7", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
+              <input className="form-input" aria-label={`ชื่องาน ${g.label}`} value={d.taskLabels[g.key] ?? ""} placeholder={g.label} maxLength={60}
+                onChange={e => ตั้งชื่องาน(g.key, e.target.value)} style={{ flex: "1 1 220px", maxWidth: 360 }} />
+              <span className="badge" style={{ background: prospectStatusColor[g.ไปขั้น].bg, color: prospectStatusColor[g.ไปขั้น].text, border: "none" }}>→ {prospectStatusLabel[g.ไปขั้น]}</span>
+              {g.หลักฐาน && (
+                <span style={{ fontSize: "0.68rem", color: "#6b7280" }}>
+                  {g.หลักฐาน === "contact" ? "ระบบติ๊กให้เมื่อบันทึกการติดต่อ" : "ระบบติ๊กให้เมื่อใบเสนอเป็น “ส่งแล้ว”"}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={หมายเหตุ}>เว้นว่าง = ใช้ชื่อเดิม · เพิ่มหรือลบงานไม่ได้ เพราะแต่ละงานผูกกับขั้นที่ระบบบังคับ</div>
+      </SectionCard>
+
+      <SectionCard icon={<FileText size={19} />} title="ค่าตั้งต้นใบเสนอแพ็กเกจตัวแทน">
+        <Row label="อายุใบ">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input className="form-input" aria-label="อายุใบเสนอแพ็กเกจ (วัน)" inputMode="numeric" value={d.proposal.validityDays ?? ""} placeholder="เว้นว่าง = ไม่เติม"
+              onChange={e => { const t = e.target.value.replace(/\D/g, "").slice(0, 3); ตั้งใบ({ validityDays: t ? Math.min(365, Number(t)) || null : null }); }}
+              style={{ textAlign: "right", fontWeight: 700 }} />
+            <span style={{ fontSize: "0.72rem", color: "#6b7280", whiteSpace: "nowrap" }}>วัน นับจากวันที่เสนอ</span>
+          </div>
+        </Row>
+        <Row label="ผู้ลงนาม (ช่องผู้เสนอ)">
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input className="form-input" aria-label="ชื่อผู้ลงนาม" value={d.proposal.signerName} maxLength={120} placeholder="ชื่อ — เว้นว่าง = ใช้ชื่อบริษัท"
+              onChange={e => ตั้งใบ({ signerName: e.target.value })} style={{ flex: "1 1 150px" }} />
+            <input className="form-input" aria-label="ตำแหน่งผู้ลงนาม" value={d.proposal.signerTitle} maxLength={120} placeholder="ตำแหน่ง"
+              onChange={e => ตั้งใบ({ signerTitle: e.target.value })} style={{ flex: "1 1 120px" }} />
+          </div>
+        </Row>
+        <div style={{ padding: "13px 0", borderTop: "1px solid var(--border,#f1f5f9)" }}>
+          <label className="form-label" htmlFor="rc-terms">เงื่อนไขมาตรฐาน</label>
+          <textarea id="rc-terms" className="form-input" rows={4} maxLength={4000} value={d.proposal.terms}
+            onChange={e => ตั้งใบ({ terms: e.target.value })} placeholder="พิมพ์ทีละบรรทัด — เติมให้ในใบใหม่ แก้ในแต่ละใบได้" style={{ resize: "vertical" }} />
+        </div>
+        <div style={{ paddingTop: 13, borderTop: "1px solid var(--border,#f1f5f9)" }}>
+          <div style={{ fontSize: "0.84rem", fontWeight: 700, color: STEEL, marginBottom: 8 }}>ตัวเลขตั้งต้นของแต่ละแพ็กเกจ</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {PACKAGE_ORDER.map(k => {
+              const v = d.proposal.packages[k];
+              return (
+                <div key={k} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8, alignItems: "end", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ fontSize: "0.86rem", fontWeight: 800, color: NAVY, alignSelf: "center" }}>{packageLabel[k]}</div>
+                  <div>
+                    <label className="form-label" htmlFor={`rc-${k}-amount`}>ค่าแรกเข้า (บาท)</label>
+                    <input id={`rc-${k}-amount`} className="form-input" inputMode="numeric" value={เงินในช่อง(v.amount)} placeholder="เว้นว่างได้"
+                      onChange={e => ตั้งแพ็กเกจ(k, { amount: เงินจากช่อง(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor={`rc-${k}-months`}>ระยะสัญญา (เดือน)</label>
+                    <input id={`rc-${k}-months`} className="form-input" inputMode="numeric" value={v.contractMonths ?? ""} placeholder="1–120"
+                      onChange={e => { const t = e.target.value.replace(/\D/g, "").slice(0, 3); ตั้งแพ็กเกจ(k, { contractMonths: t ? Math.min(120, Number(t)) || null : null }); }} />
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor={`rc-${k}-target`}>เป้ายอดซื้อต่อปี (บาท)</label>
+                    <input id={`rc-${k}-target`} className="form-input" inputMode="numeric" value={เงินในช่อง(v.annualTarget)} placeholder="เว้นว่างได้"
+                      onChange={e => ตั้งแพ็กเกจ(k, { annualTarget: เงินจากช่อง(e.target.value) })} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={หมายเหตุ}>เลือกแพ็กเกจในใบใหม่แล้วเติมตัวเลขให้ · แก้ในแต่ละใบได้ · ใบที่ออกไปแล้วไม่เปลี่ยนตาม</div>
+        </div>
+      </SectionCard>
+    </>
+  );
+}
 
 // ═══════════════════════ 5 · เป้าหมายยอดขาย ═══════════════════════════════════
 // เป้าทั้งปี = แหล่งเดียว (แดชบอร์ด HQ/ตัวแทนอ่านค่านี้) · ไตรมาส/เดือน = แบ่งจากเป้าทั้งปี
@@ -697,11 +877,13 @@ function CompanyTab() {
 // แท็บ "ตัวแทนจำหน่าย" ถูกยุบตามคำสั่ง — ทั้งใบซ้ำกับหน้า /hq/dealers (ตารางบัญชี · สลับสถานะ · เข้าระบบแทน)
 //   "รีเซ็ตรหัสผ่าน" ย้ายไปอยู่ในโมดัล "รหัสเข้าระบบ" ของหน้า /hq/dealers แล้ว (ไม่มีที่อื่นมาก่อน)
 //   "ค่ามาตรฐานตัวแทน" (defaultQuota) ถูกลบ — ไม่มีใครอ่านค่านั้นเลย ค่าจริงตอนสร้างตัวแทนอยู่ที่ /hq/dealers
-type TabKey = "company" | "users" | "journey" | "targets" | "notifications";
+type TabKey = "company" | "users" | "journey" | "recruit" | "targets" | "notifications";
 const TABS: { key: TabKey; label: string; icon: ReactNode; render: () => ReactNode }[] = [
   { key: "company", label: "บริษัท", icon: <Building2 size={15} />, render: () => <CompanyTab /> },
   { key: "users", label: "ผู้ใช้งานและสิทธิ์", icon: <Users size={15} />, render: () => <UsersPanel embedded /> },
   { key: "journey", label: "เส้นทางการขาย", icon: <GitMerge size={15} />, render: () => <JourneyTab /> },
+  // งานหาตัวแทนของ HQ เอง (บอสสั่ง 14 ก.ย. 69) — แยกจาก "เส้นทางการขาย" ซึ่งเป็นกติกาของตัวแทน
+  { key: "recruit", label: "หาตัวแทน", icon: <UserPlus size={15} />, render: () => <RecruitTab /> },
   { key: "targets", label: "เป้าหมายยอดขาย", icon: <Target size={15} />, render: () => <TargetsTab /> },
   { key: "notifications", label: "การแจ้งเตือน", icon: <Bell size={15} />, render: () => <NotificationsTab /> },
 ];
