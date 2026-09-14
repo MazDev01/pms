@@ -88,6 +88,9 @@ test("[func·hq] ตั้งค่า › หาตัวแทน → ฟอ�
     });
 
   // ── ฟอร์มลูกค้าเป้าหมาย (HQ) ──
+  // รอคำขอที่ยังค้างหลังกดบันทึก (บันทึกการใช้งาน) ส่งจบก่อนเปลี่ยนหน้า — ไม่งั้นการเปลี่ยนหน้าตัดคำขอกลางทาง
+  // แล้วขึ้น "Failed to fetch" ในคอนโซล ทั้งที่ระบบไม่ได้พัง (เจอครั้งแรก 14 ก.ย. 69)
+  await page.waitForLoadState("networkidle");
   const name = `${NS}-ใช้รายการที่ตั้ง`;
   await page.goto(`${HQ_ORIGIN}/hq/prospects`);
   await page.getByRole("button", { name: "เพิ่มลูกค้าเป้าหมาย" }).first().click({ timeout: 25_000 });

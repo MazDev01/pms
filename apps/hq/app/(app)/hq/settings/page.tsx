@@ -102,9 +102,13 @@ function useRepoDraft<T>(load: () => Promise<T>, save: (v: T) => void, initial: 
 }
 
 // ── reusable UI ───────────────────────────────────────────────────────────────
-function SectionCard({ icon, title, desc, children, action }: { icon?: ReactNode; title: string; desc?: string; children: ReactNode; action?: ReactNode }) {
+function SectionCard({ icon, title, desc, children, action, fill }: {
+  icon?: ReactNode; title: string; desc?: string; children: ReactNode; action?: ReactNode;
+  /** การ์ดที่วางคู่กันในแถวเดียว — ยืดสูงเท่ากัน และให้เนื้อหาข้างในดันส่วนท้ายลงล่างได้ (แถวตรงกัน) */
+  fill?: boolean;
+}) {
   return (
-    <div className="card">
+    <div className="card" style={fill ? { display: "flex", flexDirection: "column" } : undefined}>
       <div className="card-header">
         <div>
           <div className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -114,7 +118,7 @@ function SectionCard({ icon, title, desc, children, action }: { icon?: ReactNode
         </div>
         {action}
       </div>
-      <div className="card-body">{children}</div>
+      <div className="card-body" style={fill ? { flex: 1, display: "flex", flexDirection: "column" } : undefined}>{children}</div>
     </div>
   );
 }
@@ -320,8 +324,10 @@ const ปุ่มไอคอน = (ปิด: boolean) => ({
   color: ปิด ? "#cbd5e1" : "#64748b", display: "flex", padding: 3,
 });
 
-function ListEditor({ label, items, onChange, placeholder, emptyNote }: {
+function ListEditor({ label, items, onChange, placeholder, emptyNote, note }: {
   label: string; items: string[]; onChange: (next: string[]) => void; placeholder: string; emptyNote: string;
+  /** บรรทัดหมายเหตุใต้ช่องเพิ่ม — ส่ง "" = เว้นบรรทัดไว้เปล่า ๆ ให้การ์ดคู่กันแถวตรงกัน · ไม่ส่ง = ไม่มีบรรทัดนี้ */
+  note?: string;
 }) {
   const [text, setText] = useState("");
   const [hint, setHint] = useState("");
@@ -339,8 +345,9 @@ function ListEditor({ label, items, onChange, placeholder, emptyNote }: {
     const n = [...items]; [n[i], n[j]] = [n[j], n[i]]; onChange(n);
   };
   return (
-    <div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+    // รายการยืดเต็มความสูงที่เหลือ → ช่องเพิ่ม + หมายเหตุ ชิดล่างการ์ดเสมอ (การ์ดคู่กันแถวตรงกันแม้จำนวนรายการไม่เท่ากัน)
+    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
         {items.map((x, i) => (
           <div key={x} style={{ display: "flex", alignItems: "center", gap: 4, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 8px 6px 12px" }}>
             <span style={{ flex: 1, fontSize: "0.8rem", color: STEEL }}>{x}</span>
@@ -359,6 +366,9 @@ function ListEditor({ label, items, onChange, placeholder, emptyNote }: {
         <button type="button" className="btn btn-primary btn-sm" aria-label={`เพิ่ม${label}`} style={{ flexShrink: 0 }} onClick={add}><Plus size={14} /></button>
       </div>
       {hint && <div style={{ fontSize: "0.7rem", color: "#b45309", marginTop: 4 }}>{hint}</div>}
+      {note != null && (
+        <div style={{ fontSize: "0.7rem", color: "#8a929c", marginTop: 8, minHeight: "1.5em" }}>{note}</div>
+      )}
     </div>
   );
 }
@@ -386,16 +396,21 @@ function RecruitTab() {
 
   return (
     <>
-      <SectionCard icon={<UserPlus size={19} />} title="ช่องทางที่เข้ามา">
-        <ListEditor label="ช่องทางที่เข้ามา" items={d.channels} onChange={ตั้งรายการ("channels")} placeholder="เช่น TikTok"
-          emptyNote="ยังไม่มีช่องทาง — ถ้าบันทึกตอนว่าง ระบบใช้รายการเริ่มต้น" />
-        <div style={หมายเหตุ}>ในฟอร์มมีตัวเลือก “อื่น ๆ” ต่อท้ายให้เสมอ</div>
-      </SectionCard>
+      {/* สองการ์ดช่องทางอยู่แถวเดียวกัน (บอสสั่ง 14 ก.ย. 69) · จอแคบซ้อนลงเป็นคอลัมน์เดียวเอง (.row-2-eq) */}
+      <div className="row-2-eq">
+        {/* fill + note เว้นบรรทัดเท่ากัน → ช่องเพิ่มของสองการ์ดอยู่ระดับเดียวกัน (บอสสั่ง "ทำให้แถวมันตรงกัน") */}
+        <SectionCard fill icon={<UserPlus size={19} />} title="ช่องทางที่เข้ามา">
+          <ListEditor label="ช่องทางที่เข้ามา" items={d.channels} onChange={ตั้งรายการ("channels")} placeholder="เช่น TikTok"
+            emptyNote="ยังไม่มีช่องทาง — ถ้าบันทึกตอนว่าง ระบบใช้รายการเริ่มต้น"
+            note="ในฟอร์มมีตัวเลือก “อื่น ๆ” ต่อท้ายให้เสมอ" />
+        </SectionCard>
 
-      <SectionCard icon={<MessageSquare size={19} />} title="ช่องทางในบันทึกการติดต่อ">
-        <ListEditor label="ช่องทางติดต่อ" items={d.contactChannels} onChange={ตั้งรายการ("contactChannels")} placeholder="เช่น Zoom"
-          emptyNote="ยังไม่มีช่องทาง — บันทึกการติดต่อต้องเลือกช่องทาง ถ้าบันทึกตอนว่าง ระบบใช้รายการเริ่มต้น" />
-      </SectionCard>
+        <SectionCard fill icon={<MessageSquare size={19} />} title="ช่องทางในบันทึกการติดต่อ">
+          <ListEditor label="ช่องทางติดต่อ" items={d.contactChannels} onChange={ตั้งรายการ("contactChannels")} placeholder="เช่น Zoom"
+            emptyNote="ยังไม่มีช่องทาง — บันทึกการติดต่อต้องเลือกช่องทาง ถ้าบันทึกตอนว่าง ระบบใช้รายการเริ่มต้น"
+            note="" />
+        </SectionCard>
+      </div>
 
       <SectionCard icon={<Building2 size={19} />} title="ประเภทธุรกิจ">
         <ListEditor label="ประเภทธุรกิจ" items={d.businessTypes} onChange={ตั้งรายการ("businessTypes")} placeholder="เช่น ผู้รับเหมา"
