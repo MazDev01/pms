@@ -59,7 +59,8 @@ describe("ไฟล์สำรองการตั้งค่า (Excel)", ()
     expect(ก.targets).toEqual(ของจริง.targets);
     expect(ก.lostReasons).toEqual(ของจริง.lostReasons);
     expect(ก.dealers).toEqual(ของจริง.dealers);
-    expect(ก.notifRules?.leadIdleDays).toBe(DEFAULT_HQ_NOTIF_RULES.leadIdleDays);
+    expect(ก.notifRules?.alerts.prospectIdle.days).toBe(DEFAULT_HQ_NOTIF_RULES.alerts.prospectIdle.days);
+    expect(ก.notifRules?.alerts.proposalAwaiting.days).toBe(DEFAULT_HQ_NOTIF_RULES.alerts.proposalAwaiting.days);
     expect(ก.catalog?.[0].price).toBe(5_500);
   });
 
@@ -68,12 +69,15 @@ describe("ไฟล์สำรองการตั้งค่า (Excel)", ()
       const เป้า = เล่ม.get(แผ่น.เป้าหมาย)!;
       เป้า[1][1] = "123,000,000";                 // พิมพ์จุลภาคมาก็ต้องอ่านออก
       เล่ม.get(แผ่น.หัวข้อเตือน)![1][1] = "ปิด";
+      เล่ม.get(แผ่น.เกณฑ์เตือน)![1][1] = "21";   // แถวแรก = ลูกค้าเป้าหมาย (HQ) ไม่ได้ติดต่อกี่วัน
       เล่ม.get(แผ่น.ตัวแทน)!.push(["LPG", "ลำปาง", "ลำปาง", "เหนือ", "3000000", "เปิดใช้งาน"]);
       เล่ม.get(แผ่น.แม่แบบ)![1][3] = "6000";
     });
     expect(ผล.targets?.annualTarget).toBe(123_000_000);
-    expect(ผล.notifRules?.alerts.unassignedLead.on).toBe(false);
-    expect(ผล.notifRules?.alerts.unassignedLead.inapp).toBe(false);
+    expect(ผล.notifRules?.alerts.prospectFollowUpDue.on).toBe(false);
+    expect(ผล.notifRules?.alerts.prospectFollowUpDue.inapp).toBe(false);
+    expect(ผล.notifRules?.alerts.prospectIdle.days).toBe(21);
+    expect(ผล.notifRules?.alerts.prospectIdle.on).toBe(true);
     expect(ผล.dealers?.length).toBe(3);
     expect(ผล.dealers?.[2]).toMatchObject({ code: "LPG", name: "ลำปาง", revenueTarget: 3_000_000, status: "active" });
     expect(ผล.catalog?.[0].price).toBe(6_000);

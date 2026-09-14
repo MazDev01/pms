@@ -1,115 +1,66 @@
 // ─── การแจ้งเตือน HQ (hook) ────────────────────────────────────────────────────
 // แหล่งเดียวของ "กฎแจ้งเตือน" ฝั่ง React — คำนวณจริงใน @pms/shared/lib/hqAlerts
-// ใช้ร่วมกันระหว่างกระดิ่ง Topbar และการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ
+// ขอบเขต = งานของสำนักงานใหญ่เอง (ลูกค้าเป้าหมาย HQ · ใบเสนอแพ็กเกจ · แคตตาล็อก) — ไม่ดึงงานขายของตัวแทนอีกแล้ว
 // (ห้าม usePersistentState: มันเขียนกลับ → ค่า seed จะทับของจริงทุกครั้งที่ mount)
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { HQ_NOTIF_UPDATED_EVENT, type HQNotifRules, type SolutionProduct } from "@pms/shared/lib/mock";
 import {
-  leadRulesOf,
-  HQ_NOTIF_UPDATED_EVENT, DEALER_LEAD_RULES_EVENT,
-  type HQNotifRules, type DealerLeadRulesMap, type DealerRow,
-} from "@pms/shared/lib/mock";
-import { settings as settingsRepo, dealers as dealersRepo, metrics as metricsRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
-import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+  settings as settingsRepo, catalog as catalogRepo,
+  prospects as prospectsRepo, proposals as proposalsRepo,
+} from "@pms/shared/lib/data";
+import type { DealerProspect, DealerPackageProposal } from "@pms/shared/lib/data/types";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
-import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerformance";
-import { useNetworkLeads, useNetworkQuotations } from "@pms/shared/lib/useNetworkData";
-import { buildHQAlerts, assembleHQAlerts, type HQAlert } from "@pms/shared/lib/hqAlerts";
-import type { SolutionProduct } from "@pms/shared/lib/mock";
-import type { HQAlertsData } from "@pms/shared/lib/data/ports";
+import { buildHQAlerts, type HQAlert } from "@pms/shared/lib/hqAlerts";
 import { useAuthReady } from "./useAuthReady";
 
-// leadRulesMap = เกณฑ์ของทุกสาขา (ตัวแทนตั้งเอง) — ไม่ใช่ค่าเดียวของ HQ อีกแล้ว
-type HQRules = { rules: HQNotifRules; leadRulesMap: DealerLeadRulesMap; validityDays: number; dealers: DealerRow[] };
+type ข้อมูลแจ้งเตือน = {
+  rules: HQNotifRules;
+  prospects?: DealerProspect[];
+  proposals?: DealerPackageProposal[];
+  catalog?: SolutionProduct[];
+};
 
-/** อ่านกฎแจ้งเตือน/เกณฑ์/รายชื่อตัวแทนหลัง mount แล้วติดตามการแก้ที่หน้าตั้งค่า */
-export function useHQRules(): HQRules | null {
+/** การแจ้งเตือนของสำนักงานใหญ่ ตามกฎที่เปิดไว้ที่ /hq/settings → การแจ้งเตือน
+ *  enabled = เฉพาะบัญชี HQ (ตัวแทนอ่านตารางลูกค้าเป้าหมาย HQ ไม่ได้ตาม RLS — ห้ามยิงคำขอเปล่า ๆ)
+ *  refreshKey = เปลี่ยนเมื่อไหร่ดึงใหม่ (Topbar ส่ง "เปิดกระดิ่ง" มา → เปิดทีไรเห็นของล่าสุด) */
+export function useHQAlerts(enabled = true, refreshKey: unknown = 0): HQAlert[] {
   const ready = useAuthReady();   // ยังไม่ล็อกอิน = ห้ามยิงคำขอ (ดู useAuthReady.ts)
-  const [hqRules, setHqRules] = useState<HQRules | null>(null);
+  const [data, setData] = useState<ข้อมูลแจ้งเตือน | null>(null);
+  const [รอบ, setรอบ] = useState(0);
+
+  // บันทึกหน้าตั้งค่า / กลับมาที่แท็บ → ดึงใหม่
   useEffect(() => {
-    if (!ready) return;
-    // อ่านผ่าน repository (local: localStorage · supabase: DB) — รวมทั้ง 4 แหล่งเป็นชุดเดียว
-    const read = () => {
-      Promise.all([
-        settingsRepo.getNotifRules(),
-        settingsRepo.getLeadRulesMap(),
-        settingsRepo.getQuoteValidityDays(),
-        dealersRepo.list(),
-      ]).then(([rules, leadRulesMap, validityDays, dealers]) =>
-        setHqRules({ rules, leadRulesMap, validityDays, dealers }),
-      // โหลดพลาด = hqRules ค้าง null → การแจ้งเตือน/เกณฑ์ทั้งหมดหายเงียบ ต้องแจ้งเสมอ
-      // (ให้ตรงกับ metrics.hqAlerts ในไฟล์เดียวกันที่ทำถูกอยู่แล้ว)
-      ).catch(e => logRepoRead("settings.hqRules", e));
-    };
-    read();
-    window.addEventListener(HQ_NOTIF_UPDATED_EVENT, read);
-    window.addEventListener(DEALER_LEAD_RULES_EVENT, read);
-    window.addEventListener("storage", read);
+    if (!enabled) return;
+    const ดึงใหม่ = () => setรอบ(n => n + 1);
+    window.addEventListener(HQ_NOTIF_UPDATED_EVENT, ดึงใหม่);
+    window.addEventListener("focus", ดึงใหม่);
     return () => {
-      window.removeEventListener(HQ_NOTIF_UPDATED_EVENT, read);
-      window.removeEventListener(DEALER_LEAD_RULES_EVENT, read);
-      window.removeEventListener("storage", read);
+      window.removeEventListener(HQ_NOTIF_UPDATED_EVENT, ดึงใหม่);
+      window.removeEventListener("focus", ดึงใหม่);
     };
-  }, [ready]);
-  return hqRules;
-}
+  }, [enabled]);
 
-// ผู้สมัครกฎแจ้งเตือนจาก DB (M9 Phase 4) — supabase เท่านั้น · local คืน null → ใช้ buildHQAlerts(array) เดิม
-// เกณฑ์ต่อสาขา (unassignedAlertHours) ส่งเป็น jsonb เหมือน leads_page/unassigned_leads
-function useHQAlertsData(hqRules: HQRules | null): HQAlertsData | null {
-  const [data, setData] = useState<HQAlertsData | null>(null);
-  const key = hqRules ? JSON.stringify({ r: hqRules.rules, m: hqRules.leadRulesMap, v: hqRules.validityDays, d: hqRules.dealers.map(d => d.code) }) : "";
   useEffect(() => {
-    if (!REAL_BACKEND || !hqRules) { setData(null); return; }
-    const perDealer: Record<string, number> = {};
-    for (const d of hqRules.dealers) perDealer[d.code] = leadRulesOf(hqRules.leadRulesMap, d.code).unassignedAlertHours;
+    if (!ready || !enabled) return;
     let alive = true;
-    metricsRepo.hqAlerts({
-      asOf: APP_NOW_ISO, unassignedPerDealer: perDealer, leadIdleDays: hqRules.rules.leadIdleDays,
-      quoteValidityDays: hqRules.validityDays, quoteExpiringDays: hqRules.rules.quoteExpiringDays,
-      dealerIdleDays: hqRules.rules.dealerIdleDays,
-    }).then(r => { if (alive) setData(r); }).catch(e => logRepoRead("metrics.hqAlerts", e));
+    // แยกกันโหลด — เรื่องไหนพลาดก็แค่เรื่องนั้นไม่ขึ้น (undefined) ไม่ทำให้เรื่องอื่นหายไปด้วย
+    const อ่าน = <T,>(ชื่อ: string, p: Promise<T>) => p.catch(e => { logRepoRead(ชื่อ, e); return undefined; });
+    Promise.all([
+      settingsRepo.getNotifRules(),
+      อ่าน("prospects.list(alerts)", prospectsRepo.list()),
+      อ่าน("proposals.list(alerts)", proposalsRepo.list()),
+      อ่าน("catalog.list(alerts)", catalogRepo.list()),
+    ]).then(([rules, prospects, proposals, catalog]) => {
+      if (alive) setData({ rules, prospects, proposals, catalog });
+    }).catch(e => logRepoRead("settings.getNotifRules(alerts)", e));
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return data;
-}
+  }, [ready, enabled, refreshKey, รอบ]);
 
-/** แคตตาล็อกแม่แบบ — ใช้เตือนว่า "ยังไม่ได้ตั้งราคา" ซึ่งทำให้ตัวแทนออกใบเสนอราคาไม่ได้
- *  คืน undefined ระหว่างที่ยังโหลดไม่เสร็จ เพื่อไม่ให้เตือนผิดว่า "ไม่มีแม่แบบ" ตอนหน้าจอเพิ่งเปิด */
-function useCatalogForAlerts(ready: boolean): SolutionProduct[] | undefined {
-  const [list, setList] = useState<SolutionProduct[] | undefined>(undefined);
-  useEffect(() => {
-    if (!ready) return;
-    let alive = true;
-    catalogRepo.list()
-      .then(r => { if (alive) setList(r); })
-      .catch(e => logRepoRead("catalog.list(alerts)", e));
-    return () => { alive = false; };
-  }, [ready]);
-  return list;
-}
-
-/** การแจ้งเตือนของทั้งเครือ ตามกฎที่เปิดไว้ที่ /hq/settings → การแจ้งเตือน */
-export function useHQAlerts(): HQAlert[] {
-  const hqRules = useHQRules();
-  const catalog = useCatalogForAlerts(!!hqRules);
-  const networkLeads = useNetworkLeads();
-  const networkQuotes = useNetworkQuotations();
-  const perf = useDealerPerformance();
-  const alertsData = useHQAlertsData(hqRules); // supabase: จาก DB · local/ยังไม่กลับ: null
-  return useMemo(() => {
-    if (!hqRules) return [];
-    const revenueOf = (code: string) => (perf.get(code) ?? EMPTY_PERF).revenue;
-    // supabase: ประกอบจากผู้สมัครที่ DB (ไม่พึ่ง array ทั้งเครือ) · local: คิดจาก array เหมือนเดิม
-    if (alertsData) return assembleHQAlerts(alertsData, { dealers: hqRules.dealers, rules: hqRules.rules, revenueOf, catalog });
-    return buildHQAlerts({
-      leads: networkLeads, quotes: networkQuotes, dealers: hqRules.dealers,
-      rules: hqRules.rules, validityDays: hqRules.validityDays,
-      rulesOf: code => leadRulesOf(hqRules.leadRulesMap, code),
-      revenueOf, catalog,
-    });
-  }, [hqRules, alertsData, networkLeads, networkQuotes, perf, catalog]);
+  return useMemo(
+    () => (enabled && data ? buildHQAlerts({ ...data, วันนี้ISO: APP_NOW_ISO }) : []),
+    [enabled, data],
+  );
 }

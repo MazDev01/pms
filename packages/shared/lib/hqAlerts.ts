@@ -1,17 +1,19 @@
 // ─── การแจ้งเตือนของสำนักงานใหญ่ (คำนวณล้วน) ──────────────────────────────────
 // แหล่งเดียวของ "กฎแจ้งเตือน" ที่ตั้งไว้ที่ /hq/settings → การแจ้งเตือน
-// ทุกข้อคำนวณจากข้อมูลจริงเท่านั้น (ลูกค้าเป้าหมาย/ใบเสนอราคา/เป้าตัวแทน) — ไม่มีตัวเลขสังเคราะห์
+// ขอบเขต = งานของสำนักงานใหญ่เองเท่านั้น (บอสสั่ง 14 ก.ย. 69) — ลูกค้าเป้าหมาย (HQ) · ใบเสนอแพ็กเกจตัวแทน · แคตตาล็อกแม่แบบ
+//   งานขายของตัวแทน (ลูกค้าเป้าหมาย/ใบเสนอราคาของสาขา) ไม่ขึ้นที่นี่อีกแล้ว — ห้ามเติมกลับ
+// ทุกข้อคำนวณจากข้อมูลจริงเท่านั้น — ไม่มีตัวเลขสังเคราะห์
 // ผลลัพธ์เป็นข้อมูลล้วน (ไม่มี JSX) → Topbar เอาไปใส่ไอคอนแล้วขึ้นกระดิ่ง
 import {
-  templatesMissingPrice,
-  type HQAlertKey, type HQNotifRules, type LeadRules,
-  type LeadRow, type DealerRow, type HQQuotation, type SolutionProduct,
+  templatesMissingPrice, เกณฑ์วันแจ้งเตือน, fmtISOToThai,
+  type HQAlertKey, type HQNotifRules, type LeadRules, type LeadRow, type SolutionProduct,
 } from "@pms/shared/lib/mock";
-import type { HQAlertsData } from "@pms/shared/lib/data/ports";
-import { parseDate, APP_NOW } from "@pms/shared/context/FilterContext";
-import { leadCreatedDate, daysSinceContact, isLeadOpen } from "@pms/shared/lib/leadMetrics";
-import { fmtBahtM as fmtB } from "@pms/shared/lib/format";
-import { dealerCodeOf } from "@pms/shared/lib/dealerCode";
+import type { DealerProspect, DealerPackageProposal } from "@pms/shared/lib/data/types";
+import { APP_NOW } from "@pms/shared/lib/appTime";
+import { leadCreatedDate, isLeadOpen } from "@pms/shared/lib/leadMetrics";
+import { ถึงกำหนดติดตาม, ยังติดตามอยู่ } from "@pms/shared/lib/dealerProspects";
+import { วันที่ไม่ได้ติดต่อ, ไม่ได้ติดต่อเกิน, วันไทยของเวลา } from "@pms/shared/lib/prospectJourney";
+import { หมดอายุแล้ว, packageLabel } from "@pms/shared/lib/dealerProposals";
 
 export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string };
 
@@ -36,10 +38,8 @@ function catalogAlerts(catalog: SolutionProduct[]): HQAlert[] {
   }));
 }
 
-const DAY_MS = 86_400_000;
-
-/** ลูกค้าเป้าหมายที่ยังไม่มีผู้รับผิดชอบ นานเกินเกณฑ์ของ "สาขาเจ้าของลูกค้าเป้าหมาย" — นับจากวันที่สร้างลูกค้าเป้าหมาย
- *  เกณฑ์ไม่ใช่ค่าเดียวทั้งเครืออีกแล้ว (ตัวแทนตั้งเอง) → ต้องถามเป็นรายใบด้วย dealerCode */
+/** ลูกค้าเป้าหมายของสาขาที่ยังไม่มีผู้รับผิดชอบ นานเกินเกณฑ์ของ "สาขาเจ้าของลูกค้าเป้าหมาย" — นับจากวันที่สร้าง
+ *  ไม่ได้ขึ้นกระดิ่ง HQ แล้ว — ยังใช้เป็นตัวกรองในหน้า /hq/leads */
 export function unassignedLeads(leads: LeadRow[], rulesOf: (dealerCode: string | undefined) => LeadRules): LeadRow[] {
   return leads.filter(l => {
     if (l.assigned?.trim()) return false;
@@ -49,219 +49,89 @@ export function unassignedLeads(leads: LeadRow[], rulesOf: (dealerCode: string |
   });
 }
 
-/** ลูกค้าเป้าหมายที่ยังไม่ปิด และไม่มีการติดต่อเกินเกณฑ์ (กฎ 7 วัน) */
-export function idleLeads(leads: LeadRow[], days: number): LeadRow[] {
-  return leads.filter(l => {
-    if (!isLeadOpen(l)) return false;
-    const d = daysSinceContact(l);
-    return d !== null && d > days; // ไม่มีวันติดต่อบันทึกไว้ = ไม่เดาว่าค้าง
-  });
+/** ห่างกันกี่วัน (วันที่ YYYY-MM-DD) */
+const ห่างกี่วัน = (จาก: string, ถึง: string) =>
+  Math.round((Date.parse(`${ถึง}T00:00:00Z`) - Date.parse(`${จาก}T00:00:00Z`)) / 86_400_000);
+
+/** ใบที่ส่งแล้วรอคำตอบมากี่วัน — นับจากวันที่เสนอในใบ · ไม่ได้กรอกวันที่เสนอ นับจากแก้ล่าสุด
+ *  (ส่งแล้วเนื้อหาถูกล็อก · 0172 — แก้ล่าสุดจึงเป็นตอนกดส่ง) · ไม่มีวันให้นับ = null ไม่เดา */
+export function ใบรอคำตอบมากี่วัน(p: Pick<DealerPackageProposal, "status" | "proposedDate" | "updatedAt">, วันนี้ISO: string): number | null {
+  if (p.status !== "sent") return null;
+  const ฐาน = p.proposedDate || (p.updatedAt ? วันไทยของเวลา(p.updatedAt) : null);
+  if (!ฐาน) return null;
+  const วัน = ห่างกี่วัน(ฐาน, วันนี้ISO);
+  return Number.isNaN(วัน) ? null : Math.max(0, วัน);
 }
 
-/** ใบเสนอราคาที่ส่งแล้วและจะหมดอายุภายใน N วัน (วันหมดอายุ = วันที่ออก + อายุใบตามนโยบาย HQ) */
-export function expiringQuotes(quotes: HQQuotation[], validityDays: number, withinDays: number) {
-  const out: { q: HQQuotation; daysLeft: number }[] = [];
-  for (const q of quotes) {
-    if (q.status !== "sent_to_client") continue; // ค้างอยู่เท่านั้น — ตอบรับ/ปฏิเสธ/หมดอายุแล้วไม่ต้องเตือน
-    const created = parseDate(q.createdAt);
-    if (!created) continue;
-    const daysLeft = Math.round((created.getTime() + validityDays * DAY_MS - APP_NOW.getTime()) / DAY_MS);
-    if (daysLeft >= 0 && daysLeft <= withinDays) out.push({ q, daysLeft });
-  }
-  return out.sort((a, b) => a.daysLeft - b.daysLeft);
-}
-
-/** ตัวแทนที่ไม่ออกใบเสนอราคาใหม่เกิน N วัน — ไม่เคยออกเลย = ไม่นับ (ไม่มีข้อมูลให้เทียบ) */
-export function idleDealers(dealers: DealerRow[], quotes: HQQuotation[], days: number) {
-  const latest = new Map<string, number>();
-  for (const q of quotes) {
-    const d = parseDate(q.createdAt);
-    if (!d) continue;
-    const prev = latest.get(q.dealerCode);
-    if (prev == null || d.getTime() > prev) latest.set(q.dealerCode, d.getTime());
-  }
-  const out: { d: DealerRow; idleDays: number }[] = [];
-  for (const d of dealers) {
-    const last = latest.get(d.code);
-    if (last == null) continue;
-    const idleDays = Math.floor((APP_NOW.getTime() - last) / DAY_MS);
-    if (idleDays > days) out.push({ d, idleDays });
-  }
-  return out.sort((a, b) => b.idleDays - a.idleDays);
-}
-
-/** ตัวแทนที่ทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี
- *  revenueOf = ยอดขายจริงของสาขา (จากใบที่ปิดการขายได้) — ห้ามอ่าน d.revenueActual
- *  เพราะคอลัมน์นั้นเป็นค่าเดโมที่ seed ไว้ จะทำให้เด้งแจ้งเตือน "ทำยอดถึงเป้า" ทั้งที่ยังไม่มียอดจริง */
-export function dealersAtTarget(dealers: DealerRow[], pct: number, revenueOf: (code: string) => number) {
-  return dealers
-    .filter(d => d.revenueTarget > 0)
-    .map(d => ({ d, actual: revenueOf(d.code), achieved: Math.round((revenueOf(d.code) / d.revenueTarget) * 100) }))
-    .filter(x => x.achieved >= pct)
-    .sort((a, b) => b.achieved - a.achieved);
-}
-
-/** อัตราปิดไม่สำเร็จของตัวแทน = ลูกค้าเป้าหมายที่ปิดไม่สำเร็จ ÷ ลูกค้าเป้าหมายที่ปิดแล้วทั้งหมด (ยังไม่ปิด = ไม่นับ)
- *  minClosed = กลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลูกค้าเป้าหมายใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
- *  (ก่อนมีเกณฑ์นี้ กฎเด้ง 10 จาก 10 ตัวแทนด้วยข้อความ "1 จาก 1 ลูกค้าเป้าหมาย" = เตือนทุกคนเท่ากับไม่เตือนใคร) */
-export function dealersHighLostRate(dealers: DealerRow[], leads: LeadRow[], pct: number, minClosed: number) {
-  // นับ ปิดไม่สำเร็จ/ปิดแล้ว ต่อสาขา "รอบเดียว" แทนการวน leads.filter ในลูป dealers (M10: O(n×m) → O(n+m))
-  const stat = new Map<string, { lost: number; closed: number }>();
-  for (const l of leads) {
-    if (l.status !== "CANCELLED" && l.status !== "PAID") continue; // นับเฉพาะลูกค้าเป้าหมายที่ปิดแล้ว
-    const key = dealerCodeOf(l);
-    const s = stat.get(key) ?? { lost: 0, closed: 0 };
-    if (l.status === "CANCELLED") s.lost += 1;
-    s.closed += 1;
-    stat.set(key, s);
-  }
-  const out: { d: DealerRow; rate: number; lost: number; closed: number }[] = [];
-  for (const d of dealers) {
-    const s = stat.get(d.code) ?? { lost: 0, closed: 0 };
-    if (s.closed < Math.max(1, minClosed)) continue; // ข้อมูลน้อยเกินกว่าจะสรุป
-    const rate = Math.round((s.lost / s.closed) * 100);
-    if (rate >= pct) out.push({ d, rate, lost: s.lost, closed: s.closed });
-  }
-  return out.sort((a, b) => b.rate - a.rate);
-}
-
-/** ประกอบการแจ้งเตือนจาก "ผู้สมัคร" ที่ DB คิดมาให้ (M9 Phase 4) — ตรรกะ/ข้อความเดียวกับ buildHQAlerts
- *  ต่างกันแค่ต้นทางข้อมูล: unassigned/idle/expiring/dealerLatest/lostRate มาจาก RPC แทนการวน array
- *  targetAchieved ยังคิด client จาก revenueOf (ยอดจริง) + ทะเบียนตัวแทน */
-export function assembleHQAlerts(data: HQAlertsData, input: {
-  dealers: DealerRow[];
-  rules: HQNotifRules;
-  revenueOf: (dealerCode: string) => number;
-  /** แคตตาล็อกแม่แบบ — undefined = ยังโหลดไม่เสร็จ (ไม่ใช่ "ไม่มีแม่แบบ") จึงยังไม่เตือน */
-  catalog?: SolutionProduct[];
-}): HQAlert[] {
-  const { dealers, rules, revenueOf } = input;
-  const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
-  const dOf = new Map(dealers.map(d => [d.code, d]));
-  const out: HQAlert[] = [];
-  // ต้องบอกด้วยว่าเป็นลูกค้าเป้าหมายของ "สาขาไหน" — ไม่งั้น HQ ไม่รู้ว่าต้องตามกับใคร
-  // และเลขลูกค้าเป้าหมาย (numId) ซ้ำกันได้ข้ามสาขา — ลิงก์จึงต้องพกรหัสสาขาไปด้วยเสมอ
-  const at = (code: string | null) => (code ? ` · สาขา ${code}` : "");
-  const leadHref = (numId: number, code: string | null) =>
-    `/hq/leads?open=${numId}${code ? `&dealer=${encodeURIComponent(code)}` : ""}`;
-  if (on("unassignedLead")) for (const l of data.unassigned) out.push({
-    key: "unassignedLead", title: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ",
-    body: `${l.company} · ${l.province} · ${l.value}${at(l.dealerCode)}`, href: leadHref(l.numId, l.dealerCode),
-  });
-  if (on("idleLead")) for (const l of data.idle) out.push({
-    key: "idleLead", title: "ลูกค้าเป้าหมายไม่มีการติดต่อ",
-    body: `${l.company} · ไม่ได้ติดต่อ ${l.idleDays} วัน · ผู้รับผิดชอบ ${l.assigned || "—"}${at(l.dealerCode)}`, href: leadHref(l.numId, l.dealerCode),
-  });
-  if (on("quoteExpiring")) for (const q of data.expiring) out.push({
-    key: "quoteExpiring", title: "ใบเสนอราคาใกล้หมดอายุ",
-    body: `${q.quoteNo} · ${q.customer} · ${fmtB(q.value)} · เหลือ ${q.daysLeft} วัน`, href: "/hq/quotations",
-  });
-  if (on("dealerIdle")) for (const r of [...data.dealerLatest].sort((a, b) => b.idleDays - a.idleDays)) {
-    const d = dOf.get(r.dealerCode);
-    if (d && r.idleDays > rules.dealerIdleDays) out.push({
-      key: "dealerIdle", title: "ตัวแทนไม่มีความเคลื่อนไหว",
-      body: `${d.code} · ${d.name} — ไม่ออกใบเสนอราคาใหม่ ${r.idleDays} วัน`, href: `/hq/dealers/${d.code}`,
-    });
-  }
-  if (on("targetAchieved")) for (const { d, actual, achieved } of dealersAtTarget(dealers, rules.targetAchievedPct, revenueOf)) out.push({
-    key: "targetAchieved", title: "ตัวแทนทำยอดถึงเป้า",
-    body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(actual)} จาก ${fmtB(d.revenueTarget)})`, href: `/hq/dealers/${d.code}`,
-  });
-  if (on("catalogNoPrice") && input.catalog) out.push(...catalogAlerts(input.catalog));
-  if (on("lostRate")) {
-    // type predicate แทน x.d && ... เฉย ๆ — ให้ TS แคบชนิด d: DealerRow|undefined → DealerRow ไม่ต้องพึ่ง !
-    const rows = data.lostRate
-      .map(r => ({ d: dOf.get(r.dealerCode), rate: r.closed ? Math.round((r.lost / r.closed) * 100) : 0, lost: r.lost, closed: r.closed }))
-      .filter((x): x is typeof x & { d: DealerRow } => !!x.d && x.closed >= Math.max(1, rules.lostRateMinClosed) && x.rate >= rules.lostRatePct)
-      .sort((a, b) => b.rate - a.rate);
-    for (const x of rows) out.push({
-      key: "lostRate", title: "อัตราปิดการขายไม่สำเร็จสูง",
-      body: `${x.d.code} · ${x.d.name} — ปิดไม่สำเร็จ ${x.rate}% (${x.lost} จาก ${x.closed} รายที่ปิดแล้ว)`, href: `/hq/dealers/${x.d.code}`,
-    });
-  }
-  return out;
-}
-
-/** รวมการแจ้งเตือนทุกข้อตามกฎที่เปิดไว้ (เฉพาะข้อที่ inapp = ขึ้นกระดิ่ง) */
+/** รวมการแจ้งเตือนทุกข้อตามกฎที่เปิดไว้ (เฉพาะข้อที่ inapp = ขึ้นกระดิ่ง)
+ *  prospects/proposals/catalog = undefined → ยังโหลดไม่เสร็จ ข้ามเรื่องนั้นไปก่อน (ไม่ใช่ "ไม่มีข้อมูล") */
 export function buildHQAlerts(input: {
-  leads: LeadRow[];
-  quotes: HQQuotation[];
-  dealers: DealerRow[];
   rules: HQNotifRules;
-  /** เกณฑ์รายสาขา — ตัวแทนแต่ละรายตั้งเอง จึงต้องถามด้วยรหัสสาขาของลูกค้าเป้าหมายใบนั้น */
-  rulesOf: (dealerCode: string | undefined) => LeadRules;
-  /** ยอดขายจริงรายสาขา (คำนวณจากใบที่ปิดได้) */
-  revenueOf: (dealerCode: string) => number;
-  validityDays: number;
-  /** แคตตาล็อกแม่แบบ — undefined = ยังโหลดไม่เสร็จ (ไม่ใช่ "ไม่มีแม่แบบ") จึงยังไม่เตือน */
+  prospects?: DealerProspect[];
+  proposals?: DealerPackageProposal[];
   catalog?: SolutionProduct[];
+  วันนี้ISO: string;
 }): HQAlert[] {
-  const { leads, quotes, dealers, rules, rulesOf, validityDays } = input;
+  const { rules, prospects, proposals, วันนี้ISO } = input;
   const on = (k: HQAlertKey) => rules.alerts[k]?.on && rules.alerts[k]?.inapp;
   const out: HQAlert[] = [];
+  const เปิดราย = (id: number) => `/hq/prospects?open=${id}`;
+  const ชื่อราย = new Map((prospects ?? []).map(p => [p.id, p.name]));
 
-  if (on("unassignedLead")) {
-    for (const l of unassignedLeads(leads, rulesOf)) {
+  if (prospects && on("prospectFollowUpDue")) {
+    // เลยนัดนานสุดขึ้นก่อน
+    for (const p of prospects.filter(x => ถึงกำหนดติดตาม(x, วันนี้ISO)).sort((a, b) => (a.followUp ?? "").localeCompare(b.followUp ?? ""))) {
+      const เลย = ห่างกี่วัน(p.followUp!, วันนี้ISO);
       out.push({
-        key: "unassignedLead",
-        title: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ",
-        body: `${l.company || l.name} · ${l.province} · ${l.value}`,
-        href: `/hq/leads?open=${l.numId}`,
+        key: "prospectFollowUpDue",
+        title: "ถึงกำหนดติดตามลูกค้าเป้าหมาย (HQ)",
+        body: `${p.name} · นัดติดตาม ${fmtISOToThai(p.followUp!)}${เลย > 0 ? ` (เลยมา ${เลย} วัน)` : " (วันนี้)"} · ผู้ดูแล ${p.assigned || "—"}`,
+        href: เปิดราย(p.id),
       });
     }
   }
-  if (on("idleLead")) {
-    // เกณฑ์ของ HQ (30 วัน) — คนละตัวกับกฎติดตามของแต่ละสาขาที่ตัวแทนตั้งเอง
-    // ลูกค้าเป้าหมายเงียบ 8 วันเป็นงานของตัวแทน · ที่ HQ ต้องเห็นคือรายที่เงียบจนกลายเป็นเงินที่กำลังละลาย
-    for (const l of idleLeads(leads, rules.leadIdleDays)) {
-      out.push({
-        key: "idleLead",
-        title: "ลูกค้าเป้าหมายไม่มีการติดต่อ",
-        body: `${l.company || l.name} · ไม่ได้ติดต่อ ${daysSinceContact(l)} วัน · ผู้รับผิดชอบ ${l.assigned || "—"}`,
-        href: `/hq/leads?open=${l.numId}`,
+  if (prospects && on("prospectIdle")) {
+    const วัน = เกณฑ์วันแจ้งเตือน(rules, "prospectIdle");
+    const rows = prospects
+      .filter(p => ไม่ได้ติดต่อเกิน(p, วัน, วันนี้ISO))
+      .map(p => ({ p, เงียบ: วันที่ไม่ได้ติดต่อ(p, วันนี้ISO) ?? 0 }))
+      .sort((a, b) => b.เงียบ - a.เงียบ);
+    for (const { p, เงียบ } of rows) out.push({
+      key: "prospectIdle",
+      title: "ลูกค้าเป้าหมาย (HQ) ไม่ได้ติดต่อนาน",
+      body: `${p.name} · ${p.lastContactAt ? `ไม่ได้ติดต่อ ${เงียบ} วัน` : `ยังไม่เคยบันทึกการติดต่อ (เพิ่มมา ${เงียบ} วัน)`} · ผู้ดูแล ${p.assigned || "—"}`,
+      href: เปิดราย(p.id),
+    });
+  }
+  if (proposals) {
+    // ลูกค้าเป้าหมายที่จบแล้ว (เป็นตัวแทน/ไม่สำเร็จ) ไม่ต้องตามใบของรายนั้นอีก
+    const จบแล้ว = new Set((prospects ?? []).filter(p => !ยังติดตามอยู่(p.status)).map(p => p.id));
+    const ใบค้าง = proposals.filter(q => q.status === "sent" && !จบแล้ว.has(q.prospectId));
+    const เลขใบ = (q: DealerPackageProposal) => `${q.proposalNo || "ใบเสนอแพ็กเกจ"} · ${ชื่อราย.get(q.prospectId) ?? "—"} · ${packageLabel[q.package] ?? q.package}`;
+    if (on("proposalExpired")) {
+      for (const q of ใบค้าง.filter(x => หมดอายุแล้ว(x, วันนี้ISO)).sort((a, b) => (a.validUntil ?? "").localeCompare(b.validUntil ?? ""))) out.push({
+        key: "proposalExpired",
+        title: "ใบเสนอแพ็กเกจเลยวันมีผล",
+        body: `${เลขใบ(q)} · มีผลถึง ${fmtISOToThai(q.validUntil!)} ยังไม่มีคำตอบ`,
+        href: เปิดราย(q.prospectId),
       });
     }
-  }
-  if (on("quoteExpiring")) {
-    for (const { q, daysLeft } of expiringQuotes(quotes, validityDays, rules.quoteExpiringDays)) {
-      out.push({
-        key: "quoteExpiring",
-        title: "ใบเสนอราคาใกล้หมดอายุ",
-        body: `${q.quoteNo} · ${q.customer} · ${fmtB(q.valueNum)} · เหลือ ${daysLeft} วัน`,
-        href: "/hq/quotations",
-      });
-    }
-  }
-  if (on("dealerIdle")) {
-    for (const { d, idleDays } of idleDealers(dealers, quotes, rules.dealerIdleDays)) {
-      out.push({
-        key: "dealerIdle",
-        title: "ตัวแทนไม่มีความเคลื่อนไหว",
-        body: `${d.code} · ${d.name} — ไม่ออกใบเสนอราคาใหม่ ${idleDays} วัน`,
-        href: `/hq/dealers/${d.code}`,
-      });
-    }
-  }
-  if (on("targetAchieved")) {
-    for (const { d, actual, achieved } of dealersAtTarget(dealers, rules.targetAchievedPct, input.revenueOf)) {
-      out.push({
-        key: "targetAchieved",
-        title: "ตัวแทนทำยอดถึงเป้า",
-        body: `${d.code} · ${d.name} — ทำได้ ${achieved}% ของเป้า (${fmtB(actual)} จาก ${fmtB(d.revenueTarget)})`,
-        href: `/hq/dealers/${d.code}`,
+    if (on("proposalAwaiting")) {
+      const วัน = เกณฑ์วันแจ้งเตือน(rules, "proposalAwaiting");
+      // ใบที่เลยวันมีผลแล้วอยู่เรื่องด้านบน — ไม่นับซ้ำสองกลุ่ม
+      const rows = ใบค้าง
+        .filter(q => !หมดอายุแล้ว(q, วันนี้ISO))
+        .map(q => ({ q, รอ: ใบรอคำตอบมากี่วัน(q, วันนี้ISO) }))
+        .filter((x): x is { q: DealerPackageProposal; รอ: number } => x.รอ != null && x.รอ >= วัน)
+        .sort((a, b) => b.รอ - a.รอ);
+      for (const { q, รอ } of rows) out.push({
+        key: "proposalAwaiting",
+        title: "ใบเสนอแพ็กเกจรอคำตอบ",
+        body: `${เลขใบ(q)} · ส่งแล้ว ${รอ} วัน ยังไม่ตอบรับหรือปฏิเสธ`,
+        href: เปิดราย(q.prospectId),
       });
     }
   }
   if (on("catalogNoPrice") && input.catalog) out.push(...catalogAlerts(input.catalog));
-  if (on("lostRate")) {
-    for (const { d, rate, lost, closed } of dealersHighLostRate(dealers, leads, rules.lostRatePct, rules.lostRateMinClosed)) {
-      out.push({
-        key: "lostRate",
-        title: "อัตราปิดการขายไม่สำเร็จสูง",
-        body: `${d.code} · ${d.name} — ปิดไม่สำเร็จ ${rate}% (${lost} จาก ${closed} รายที่ปิดแล้ว)`,
-        href: `/hq/dealers/${d.code}`,
-      });
-    }
-  }
   return out;
 }

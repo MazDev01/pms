@@ -13,7 +13,7 @@
  *     ตอนนำเข้า ไม่ใช่ลบทิ้ง — ไฟล์พวกนี้ใส่ในตารางไม่ได้ ดูแผ่น "ประวัติราคากลาง" ประกอบ
  */
 import {
-  HQ_ALERT_META, DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, dealerStatusLabel,
+  HQ_ALERT_META, เกณฑ์วันแจ้งเตือน, DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, dealerStatusLabel,
   type HQPolicy, type HQTargets, type HQNotifRules, type HQAlertKey, type HQAlertPref,
   type DealerRow, type DealerStatus, type SolutionProduct,
 } from "@pms/shared/lib/mock";
@@ -60,15 +60,8 @@ const หัวข้อเป้าหมาย: [keyof HQTargets, string][] = 
   ["winRateTarget", "เป้าอัตราปิดการขาย (%)"],
   ["onTimeTarget", "เป้าติดตามงานตรงเวลา (%)"],
 ];
-type เกณฑ์ = "leadIdleDays" | "quoteExpiringDays" | "dealerIdleDays" | "targetAchievedPct" | "lostRatePct" | "lostRateMinClosed";
-const หัวข้อเกณฑ์: [เกณฑ์, string][] = [
-  ["leadIdleDays", "ลูกค้าเป้าหมายเงียบเกินกี่วันถึงเตือน (วัน)"],
-  ["quoteExpiringDays", "เตือนก่อนใบเสนอราคาหมดอายุ (วัน)"],
-  ["dealerIdleDays", "ตัวแทนไม่มีใบเสนอราคาใหม่เกินกี่วัน (วัน)"],
-  ["targetAchievedPct", "เตือนเมื่อตัวแทนทำยอดถึงกี่ % ของเป้า (%)"],
-  ["lostRatePct", "เตือนเมื่ออัตราปิดไม่สำเร็จเกิน (%)"],
-  ["lostRateMinClosed", "เริ่มคิดอัตราเมื่อปิดแล้วอย่างน้อย (ใบ)"],
-];
+// เกณฑ์การแจ้งเตือน = เฉพาะเรื่องงานของสำนักงานใหญ่ที่มีจำนวนวัน (ชื่อหัวข้ออยู่ที่ HQ_ALERT_META[].เกณฑ์.ป้าย)
+const เรื่องที่มีเกณฑ์ = HQ_ALERT_META.filter(a => a.เกณฑ์);
 
 const เปิดปิด = (v: boolean) => (v ? "เปิด" : "ปิด");
 /** อ่านค่าเปิด/ปิดจากสิ่งที่คนพิมพ์ลงมาได้หลายแบบ — เปิด/ใช่/ทำ/yes/true/1 */
@@ -126,7 +119,7 @@ export function สร้างแผ่นงานสำรอง(d: ชุด
   if (d.notifRules) {
     const n = d.notifRules;
     out.push({ ชื่อ: แผ่น.เกณฑ์เตือน, หัวตาราง: หัวคู่,
-      แถว: หัวข้อเกณฑ์.map(([k, ป้าย]) => [ป้าย, Number(n[k] ?? 0)] as ช่อง[]) });
+      แถว: เรื่องที่มีเกณฑ์.map(a => [a.เกณฑ์!.ป้าย, เกณฑ์วันแจ้งเตือน(n, a.key)] as ช่อง[]) });
     out.push({ ชื่อ: แผ่น.หัวข้อเตือน, หัวตาราง: ["เรื่องที่แจ้งเตือน", "สถานะ", "คำอธิบาย"],
       แถว: HQ_ALERT_META.map(a => [a.label, เปิดปิด(n.alerts?.[a.key]?.on !== false), a.desc] as ช่อง[]) });
   }
@@ -213,7 +206,10 @@ export function อ่านแผ่นงานสำรอง(เล่ม: M
     };
     if (แผ่นเกณฑ์) {
       const m = เป็นแผนที่(แผ่นเกณฑ์);
-      for (const [k, ป้าย] of หัวข้อเกณฑ์) n[k] = อ่านตัวเลข(ดึง(m, ป้าย), n[k]);
+      for (const a of เรื่องที่มีเกณฑ์) {
+        const วัน = อ่านตัวเลข(ดึง(m, a.เกณฑ์!.ป้าย), เกณฑ์วันแจ้งเตือน(n, a.key));
+        n.alerts[a.key] = { ...(n.alerts[a.key] ?? { on: true, email: false, inapp: true }), days: วัน > 0 ? วัน : เกณฑ์วันแจ้งเตือน(n, a.key) };
+      }
     }
     if (แผ่นหัวข้อ) {
       const m = เป็นแผนที่(แผ่นหัวข้อ);   // คอลัมน์ 1 = ชื่อเรื่อง · คอลัมน์ 2 = เปิด/ปิด

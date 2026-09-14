@@ -12,7 +12,7 @@ import { accountRemote } from "../accountRemote";
 import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
 import { normalizeCustomer, normalizeDealer, leadToRow, rowToLead, quoteToRow, rowToQuote, apptToRow, rowToAppt } from "./rowMappers";
-import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, DEFAULT_LEAD_RULES, LOST_REASONS,
+import { DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, รวมกฎแจ้งเตือน, DEFAULT_LEAD_RULES, LOST_REASONS,
   LEAD_TASK_TEMPLATE, normalizeLeadTaskTemplate,
   DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS } from "@pms/shared/lib/mock";
 import { DEFAULT_DOC } from "@pms/shared/lib/quotationPrint";
@@ -450,13 +450,7 @@ export const SupabaseAdapter: DataAdapter = {
     //   โหมดในเครื่อง (loadHQNotifRules ใน mock.ts) รวมลึกไว้ถูกแล้ว — ฝั่งฐานข้อมูลตกหล่นไปที่เดียว
     getNotifRules: async () => {
       const r = await one<HQNotifRules>("hq_notif_rules");
-      if (!r) return DEFAULT_HQ_NOTIF_RULES;
-      return {
-        ...DEFAULT_HQ_NOTIF_RULES,
-        ...r,
-        alerts:   { ...DEFAULT_HQ_NOTIF_RULES.alerts,   ...(r.alerts   ?? {}) },
-        channels: { ...DEFAULT_HQ_NOTIF_RULES.channels, ...(r.channels ?? {}) },
-      };
+      return รวมกฎแจ้งเตือน(r);
     },
     savePolicy: (p) => must(sb().from("hq_policy").upsert({ id: 1, ...toSnake(p as unknown as Row) })),
     saveTargets: (t) => must(sb().from("hq_targets").upsert({ id: 1, ...toSnake(t as unknown as Row) })),

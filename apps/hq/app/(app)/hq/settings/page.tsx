@@ -12,7 +12,7 @@
 //
 // กติกาของหน้านี้: ทุกช่องตั้งค่าต้องมีโค้ดอ่านไปใช้จริง — ห้ามมีช่องที่กดแล้วไม่เกิดอะไร
 //   (เกณฑ์ 48 ชม. / 7 วัน ย้ายไปหน้าตั้งค่าของตัวแทนแล้ว — ตัวแทนตั้งเอง แยกรายสาขา)
-//   กฎแจ้งเตือน 6 ข้อ     → กระดิ่ง HQ (ผ่าน @pms/shared/lib/hqAlerts)
+//   กฎแจ้งเตือนงาน HQ    → กระดิ่ง HQ (ผ่าน @pms/shared/lib/hqAlerts)
 //   เหตุผลปิดไม่สำเร็จ     → ตัวเลือกตอนปิดดีลของตัวแทน (loadLostReasons)
 //   เป้าทั้งปี            → แดชบอร์ด HQ + แดชบอร์ดตัวแทน
 import {
@@ -41,7 +41,7 @@ import {
   DEFAULT_HQ_TARGETS,
   HQ_NOTIF_EVENTS, DEFAULT_HQ_NOTIFS, HQ_NOTIF_UPDATED_EVENT,
   DEFAULT_HQ_NOTIF_RULES,
-  HQ_ALERT_META, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE, LEAD_STATUS_ORDER,
+  HQ_ALERT_META, เกณฑ์วันแจ้งเตือน, leadStatusLabel, leadStatusColor, LEAD_TASK_TEMPLATE, LEAD_STATUS_ORDER,
   LOST_REASONS,
   type SolutionProduct,
   type HQPolicy, type HQTargets, type HQNotifChannels, type HQNotifRules,
@@ -476,7 +476,8 @@ function TargetsTab() {
 
 // ═══════════════════════ 7 · การแจ้งเตือน ═════════════════════════════════════
 // 2 การ์ด:
-//  1) กฎแจ้งเตือน 6 เรื่อง — คำนวณจากข้อมูลจริง แล้วขึ้นกระดิ่ง HQ (ดู @pms/shared/lib/hqAlerts)
+//  1) กฎแจ้งเตือนงานของสำนักงานใหญ่เอง (ลูกค้าเป้าหมาย HQ · ใบเสนอแพ็กเกจ · แม่แบบ) — ขึ้นกระดิ่ง HQ (ดู @pms/shared/lib/hqAlerts)
+//     งานขายของตัวแทนไม่อยู่ในนี้แล้ว (บอสสั่ง 14 ก.ย. 69 "ตั้งค่าในขอบเขต hq")
 //  2) บันทึกการใช้งาน — หมวดจาก Audit Log ที่กรองกระดิ่ง HQ (Topbar อ่าน hqAuditCategory + inapp)
 // ช่องทาง = "ในระบบ" (กระดิ่ง) อย่างเดียว
 // ⚠️ ช่อง "อีเมล" ถูกเอาออกตามที่บอสสั่ง 3 ก.ย. 69 — ระบบยังไม่มีตัวส่งอีเมลแจ้งเตือนจริง
@@ -487,17 +488,7 @@ type Notifs = Record<string, HQNotifChannels>;
 const CHANNELS: { k: keyof HQNotifChannels; label: string }[] = [
   { k: "inapp", label: "ในระบบ" },
 ];
-// เกณฑ์ของแต่ละกฎ (ถ้ามี) — "ผู้รับผิดชอบ" ใช้เกณฑ์จาก "เส้นทางการขาย" จึงไม่มีช่องกรอกซ้ำที่นี่
-// ลูกค้าเป้าหมายเงียบมีเกณฑ์ของ HQ เอง (คนละตัวกับกฎติดตาม 7 วันที่บังคับตัวแทน — ดู @pms/shared/lib/hqAlerts)
-type NumRuleKey = Exclude<keyof HQNotifRules, "alerts" | "channels">;
-const ALERT_THRESHOLD: Partial<Record<HQAlertKey, { field: NumRuleKey; unit: string }[]>> = {
-  idleLead:       [{ field: "leadIdleDays",      unit: "วัน" }],
-  quoteExpiring:  [{ field: "quoteExpiringDays", unit: "วัน" }],
-  dealerIdle:     [{ field: "dealerIdleDays",    unit: "วัน" }],
-  targetAchieved: [{ field: "targetAchievedPct", unit: "% ของเป้า" }],
-  // ต้องมีทั้ง % และกลุ่มตัวอย่างขั้นต่ำ — ตัวแทนที่ปิดลูกค้าเป้าหมายใบเดียวแล้วแพ้ได้ 100% ทันที ซึ่งไม่ได้แปลว่าแย่
-  lostRate:       [{ field: "lostRatePct",       unit: "%" }, { field: "lostRateMinClosed", unit: "รายขึ้นไป" }],
-};
+// เกณฑ์ (จำนวนวัน) ของแต่ละกฎอยู่ใน HQ_ALERT_META[].เกณฑ์ · ค่าที่ตั้งเก็บใน alerts[เรื่อง].days
 
 function NotificationsTab() {
   // ช่องทางแจ้งเตือน (อีเมล/ในระบบ) เก็บรวมกับ hq_notif_rules ใน DB แล้ว
@@ -520,13 +511,13 @@ function NotificationsTab() {
     reset: () => rules.reset(),
   }), [rules.dirty, saveAndBroadcast, rules.reset]));
 
-  const setAlert = (k: HQAlertKey, patch: Partial<{ on: boolean; email: boolean; inapp: boolean }>) =>
+  const setAlert = (k: HQAlertKey, patch: Partial<HQNotifRules["alerts"][HQAlertKey]>) =>
     rules.set(p => ({ ...p, alerts: { ...p.alerts, [k]: { ...p.alerts[k], ...patch } } }));
 
   return (
     <>
       <SectionCard icon={<Bell size={19} />} title="การแจ้งเตือนของสำนักงานใหญ่"
-        desc="6 เรื่องที่ระบบเฝ้าให้ — คำนวณจากข้อมูลจริงของเครือ แล้วขึ้นที่กระดิ่ง">
+        desc="งานของสำนักงานใหญ่เอง — ลูกค้าเป้าหมาย (HQ) · ใบเสนอแพ็กเกจตัวแทน · แม่แบบ คำนวณจากข้อมูลจริง แล้วขึ้นที่กระดิ่ง">
         {/* สวิตช์เดียว "เปิด" (บอสสั่ง 3 ก.ย. 69) — เดิมมีช่อง "ในระบบ" แยกไว้เลือกช่องทาง
             แต่พอเหลือช่องทางเดียว (กระดิ่ง) สองสวิตช์ให้ผลเหมือนกันทุกกรณี = ซ้ำซ้อนและชวนสับสน */}
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 4px 8px", fontSize: "0.68rem", fontWeight: 700, color: "#9ca3af" }}>
@@ -537,18 +528,15 @@ function NotificationsTab() {
             // กฎที่ยังไม่เคยถูกบันทึกลงฐานข้อมูล (หรือกฎใหม่ที่เพิ่มทีหลัง) จะไม่มีค่าในกล่องนี้
             // ต้องตกไปใช้ค่าเริ่มต้นเสมอ ไม่ใช่ปล่อยให้เป็นของว่างแล้วอ่านค่าจากมันจนหน้าพังทั้งหน้า
             const pref = rules.draft.alerts?.[a.key] ?? DEFAULT_HQ_NOTIF_RULES.alerts[a.key];
-            const th = ALERT_THRESHOLD[a.key];
             return (
               <div key={a.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderTop: i ? "1px solid #f1f5f9" : "none", flexWrap: "wrap" }}>
                 <div style={{ flex: "1 1 240px", minWidth: 0 }}>
                   <div style={{ fontSize: "0.84rem", fontWeight: 700, color: STEEL }}>{a.label}</div>
                   <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{a.desc}</div>
                 </div>
-                {/* ช่องเกณฑ์ + ช่องทาง — ปิดกฎแล้วจาง สื่อว่าไม่ถูกใช้ · บางกฎมีเกณฑ์มากกว่า 1 ช่อง จึงเรียงลง */}
+                {/* ช่องเกณฑ์ — ปิดกฎแล้วจาง สื่อว่าไม่ถูกใช้ · กฎที่ไม่มีเกณฑ์เว้นที่ไว้ให้สวิตช์ตรงแนวกัน */}
                 <div style={{ flex: "0 0 176px", display: "flex", flexDirection: "column", gap: 6, opacity: pref.on ? 1 : .4, pointerEvents: pref.on ? "auto" : "none", transition: "opacity .15s" }}>
-                  {th?.map(t => (
-                    <div key={t.field}>{numInput(rules.draft[t.field], n => rules.set(p => ({ ...p, [t.field]: n })), t.unit)}</div>
-                  ))}
+                  {a.เกณฑ์ && numInput(เกณฑ์วันแจ้งเตือน(rules.draft, a.key), n => setAlert(a.key, { days: n > 0 ? n : a.เกณฑ์!.ค่าเริ่มต้น }), a.เกณฑ์.หน่วย)}
                 </div>
                 {/* กดทีเดียวตั้งทั้งสองค่า — ตัวคำนวณเตือน (hqAlerts) เช็ก on && inapp
                     ถ้าตั้งแค่ on ค่าเก่าที่เคยปิด inapp ไว้จะทำให้กดเปิดแล้วไม่เตือน โดยไม่มีอะไรบอก */}

@@ -230,27 +230,38 @@ export const DEFAULT_LEAD_RULES: LeadRules = { followUpAlertDays: 7, unassignedA
 
 // ─── การแจ้งเตือนของสำนักงานใหญ่ — ตั้งที่ /hq/settings → "การแจ้งเตือน" ──
 // ทุกข้อคำนวณจากข้อมูลจริงและขึ้นกระดิ่ง HQ จริง (ดู @pms/shared/lib/hqAlerts + Topbar) — ไม่ใช่ toggle เปล่า
-// เกณฑ์ของ 2 ข้อแรกเป็นของแต่ละสาขา (ตัวแทนตั้งเองที่ /settings → การแจ้งเตือน) — ที่นี่คุมแค่ "เปิด/ปิด + ช่องทาง"
-export type HQAlertKey = "unassignedLead" | "idleLead" | "quoteExpiring" | "dealerIdle" | "targetAchieved" | "lostRate" | "catalogNoPrice";
-export type HQAlertPref = { on: boolean; email: boolean; inapp: boolean };
-export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string }[] = [
-  { key: "unassignedLead", label: "ลูกค้าเป้าหมายยังไม่มีผู้รับผิดชอบ", desc: "ลูกค้าเป้าหมายรายใหม่ยังไม่มีผู้รับผิดชอบเกินกำหนด (เกณฑ์อยู่ที่ “เส้นทางการขาย”)" },
-  { key: "idleLead",       label: "ลูกค้าเป้าหมายไม่มีการติดต่อ",     desc: "ลูกค้าเป้าหมายที่ยังไม่ปิด และไม่มีความเคลื่อนไหวเกินกำหนด (คนละเกณฑ์กับกฎติดตาม 7 วันของตัวแทน)" },
-  { key: "quoteExpiring",  label: "ใบเสนอราคาใกล้หมดอายุ",           desc: "ใบที่ส่งแล้วและจะหมดอายุภายในกำหนด" },
-  { key: "dealerIdle",     label: "ตัวแทนไม่มีความเคลื่อนไหว",        desc: "ตัวแทนไม่ออกใบเสนอราคาใหม่เกินกำหนด" },
-  { key: "targetAchieved", label: "ตัวแทนทำยอดถึงเป้า",              desc: "ตัวแทนทำยอดสะสมถึงสัดส่วนที่กำหนดของเป้าทั้งปี" },
-  { key: "lostRate",       label: "อัตราปิดการขายไม่สำเร็จสูง",       desc: "สัดส่วนลูกค้าเป้าหมายที่ปิดไม่สำเร็จของตัวแทนสูงเกินกำหนด" },
-  // เรื่องนี้ปิดกั้นงานขายทั้งเครือ ไม่ใช่แค่เตือนให้รู้ — ตัวแทนออกใบเสนอราคาไม่ได้จนกว่าจะมีราคา
-  { key: "catalogNoPrice", label: "แม่แบบยังไม่ได้ตั้งราคา",          desc: "แม่แบบที่ราคากลางยังเป็น 0 — ตัวแทนหยิบไปออกใบเสนอราคาแล้วยอดเป็น ฿0 บันทึกไม่ได้" },
+//
+// ขอบเขต = งานของสำนักงานใหญ่เองเท่านั้น (บอสสั่ง 14 ก.ย. 69: "การแจ้งเตือนของ hq แสดงแค่ในขอบเขตของ HQ อย่างเดียว"
+//   เลือก "งานของสำนักงานใหญ่เอง") → เอาเรื่องงานขายของตัวแทน 6 เรื่องออก (ลูกค้าเป้าหมายไม่มีผู้รับผิดชอบ/ไม่มีการติดต่อ
+//   ใบเสนอราคาใกล้หมดอายุ ตัวแทนเงียบ ทำยอดถึงเป้า อัตราปิดไม่สำเร็จ) — ห้ามเติมกลับ งานขายของตัวแทนดูที่หน้าในกลุ่ม "งานขายทั้งเครือ"
+// เกณฑ์ (จำนวนวัน) เก็บใน alerts[เรื่อง].days — ตาราง hq_notif_rules มีคอลัมน์เกณฑ์เก่าตายตัว ไม่ต้องเพิ่มคอลัมน์ใหม่
+export type HQAlertKey = "prospectFollowUpDue" | "prospectIdle" | "proposalAwaiting" | "proposalExpired" | "catalogNoPrice";
+export type HQAlertPref = { on: boolean; email: boolean; inapp: boolean; days?: number };
+export const HQ_ALERT_META: { key: HQAlertKey; label: string; desc: string; เกณฑ์?: { ป้าย: string; หน่วย: string; ค่าเริ่มต้น: number } }[] = [
+  { key: "prospectFollowUpDue", label: "ลูกค้าเป้าหมาย (HQ) ถึงกำหนดติดตาม", desc: "รายที่ยังติดตามอยู่ และวันนัดติดตามครั้งถัดไปมาถึงแล้ว" },
+  { key: "prospectIdle",        label: "ลูกค้าเป้าหมาย (HQ) ไม่ได้ติดต่อนาน", desc: "รายที่ยังติดตามอยู่ แต่ไม่มีบันทึกการติดต่อตั้งแต่จำนวนวันที่กำหนด",
+    เกณฑ์: { ป้าย: "ลูกค้าเป้าหมาย (HQ) ไม่ได้ติดต่อกี่วันถึงเตือน (วัน)", หน่วย: "วันขึ้นไป", ค่าเริ่มต้น: 14 } },
+  { key: "proposalAwaiting",    label: "ใบเสนอแพ็กเกจรอคำตอบ",            desc: "ใบที่ส่งแล้ว ยังไม่ตอบรับหรือปฏิเสธ นานเกินจำนวนวันที่กำหนด",
+    เกณฑ์: { ป้าย: "ใบเสนอแพ็กเกจรอคำตอบกี่วันถึงเตือน (วัน)", หน่วย: "วันขึ้นไป", ค่าเริ่มต้น: 7 } },
+  { key: "proposalExpired",     label: "ใบเสนอแพ็กเกจเลยวันมีผล",          desc: "ใบที่ส่งแล้วยังไม่มีคำตอบ แต่เลยวันที่ข้อเสนอมีผลไปแล้ว" },
+  // เรื่องนี้ปิดกั้นงานขายทั้งเครือ ไม่ใช่แค่เตือนให้รู้ — ตัวแทนออกใบเสนอราคาไม่ได้จนกว่า HQ จะตั้งราคา (งานของ HQ เอง)
+  { key: "catalogNoPrice",      label: "แม่แบบยังไม่ได้ตั้งราคา",          desc: "แม่แบบที่ราคากลางยังเป็น 0 — ตัวแทนหยิบไปออกใบเสนอราคาแล้วยอดเป็น ฿0 บันทึกไม่ได้" },
 ];
+/** เกณฑ์วันของเรื่องนั้น — ยังไม่เคยตั้ง = ค่าเริ่มต้น */
+export function เกณฑ์วันแจ้งเตือน(rules: Pick<HQNotifRules, "alerts">, key: HQAlertKey): number {
+  const d = rules.alerts?.[key]?.days;
+  return typeof d === "number" && Number.isFinite(d) && d > 0 ? d : (HQ_ALERT_META.find(m => m.key === key)?.เกณฑ์?.ค่าเริ่มต้น ?? 0);
+}
 export type HQNotifRules = {
   alerts: Record<HQAlertKey, HQAlertPref>;
-  leadIdleDays: number;       // ลูกค้าเป้าหมายเงียบเกินกี่วัน HQ ถึงจะเตือน
-  quoteExpiringDays: number;  // ใบเสนอราคาจะหมดอายุภายในกี่วัน
-  dealerIdleDays: number;     // ตัวแทนไม่มีใบเสนอราคาใหม่เกินกี่วัน
-  targetAchievedPct: number;  // ตัวแทนทำได้ถึงกี่ % ของเป้าทั้งปี
-  lostRatePct: number;        // ตัวแทนปิดไม่สำเร็จเกินกี่ % ของลูกค้าเป้าหมายที่ปิดแล้ว
-  lostRateMinClosed: number;  // ต้องปิดลูกค้าเป้าหมายอย่างน้อยกี่ใบถึงจะคิด % ได้ (กันตัวแทนที่ปิด 1 ใบแล้วแพ้ = 100%)
+  // ── เกณฑ์ของเรื่องงานขายตัวแทนชุดเดิม — ไม่ได้ใช้แล้ว (ตัดออกจากกระดิ่ง 14 ก.ย. 69)
+  //    คงไว้ในชนิดข้อมูลเพราะคอลัมน์ในฐานข้อมูลเป็น not null และตัวคำนวณ metrics.hqAlerts เดิมยังอ้างถึง
+  leadIdleDays: number;
+  quoteExpiringDays: number;
+  dealerIdleDays: number;
+  targetAchievedPct: number;
+  lostRatePct: number;
+  lostRateMinClosed: number;
   // ช่องทางแจ้งเตือนของแต่ละเรื่อง (อีเมล/ในระบบ) — ย้ายจาก localStorage คีย์ hq_notifications_v2
   // เดิมผู้ดูแลคนหนึ่งตั้งไว้ อีกคนไม่เห็น และล้างเบราว์เซอร์แล้วกลับไปค่าเริ่มต้น
   channels?: Record<string, HQNotifChannels>;
@@ -259,24 +270,31 @@ export const HQ_NOTIF_RULES_KEY = "hq_notif_rules_v2";
 const alertPref = (on: boolean, email: boolean): HQAlertPref => ({ on, email, inapp: true });
 export const DEFAULT_HQ_NOTIF_RULES: HQNotifRules = {
   alerts: {
-    unassignedLead: alertPref(true, true),
-    idleLead:       alertPref(true, false),
-    quoteExpiring:  alertPref(true, false),
-    dealerIdle:     alertPref(true, false),
-    targetAchieved: alertPref(true, false),
-    lostRate:       alertPref(true, true),
+    prospectFollowUpDue: alertPref(true, false),
+    prospectIdle:        { ...alertPref(true, false), days: 14 },
+    proposalAwaiting:    { ...alertPref(true, false), days: 7 },
+    proposalExpired:     alertPref(true, false),
     // เปิดทั้งสองช่องเป็นค่าเริ่มต้น — ถ้าไม่มีราคา ตัวแทนทำงานไม่ได้เลย ต้องเห็นทันที
-    catalogNoPrice: alertPref(true, true),
+    catalogNoPrice:      alertPref(true, true),
   },
   leadIdleDays: 30, quoteExpiringDays: 7, dealerIdleDays: 30, targetAchievedPct: 100,
   lostRatePct: 40, lostRateMinClosed: 5,
 };
+/** รวมค่าที่บันทึกไว้เข้ากับค่าเริ่มต้น "ทีละเรื่อง"
+ *  • เรื่องที่เพิ่มมาทีหลังยังไม่มีในค่าที่บันทึก → ได้ค่าเริ่มต้น (ไม่ใช่ของว่างจนหน้าตั้งค่าพัง)
+ *  • คีย์เรื่องชุดเก่าที่ตัดออกแล้ว (unassignedLead ฯลฯ) ยังค้างในฐานข้อมูล → ทิ้ง ไม่ส่งต่อ */
+export function รวมกฎแจ้งเตือน(r: Partial<HQNotifRules> | null | undefined): HQNotifRules {
+  if (!r) return { ...DEFAULT_HQ_NOTIF_RULES };
+  const saved = (r.alerts ?? {}) as Partial<Record<HQAlertKey, Partial<HQAlertPref>>>;
+  const alerts = {} as Record<HQAlertKey, HQAlertPref>;
+  for (const m of HQ_ALERT_META) alerts[m.key] = { ...DEFAULT_HQ_NOTIF_RULES.alerts[m.key], ...(saved[m.key] ?? {}) };
+  return { ...DEFAULT_HQ_NOTIF_RULES, ...r, alerts, channels: { ...DEFAULT_HQ_NOTIF_RULES.channels, ...(r.channels ?? {}) } };
+}
 export function loadHQNotifRules(): HQNotifRules {
   if (typeof window === "undefined") return { ...DEFAULT_HQ_NOTIF_RULES };
   try {
     const s = localStorage.getItem(HQ_NOTIF_RULES_KEY);
-    // merge "alerts" ทีละคีย์ — ค่าที่บันทึกไว้เก่าอาจไม่มีคีย์ที่เพิ่มมาทีหลัง
-    if (s) { const o = JSON.parse(s); return { ...DEFAULT_HQ_NOTIF_RULES, ...o, alerts: { ...DEFAULT_HQ_NOTIF_RULES.alerts, ...(o.alerts ?? {}) } }; }
+    if (s) return รวมกฎแจ้งเตือน(JSON.parse(s));
   } catch {}
   return { ...DEFAULT_HQ_NOTIF_RULES };
 }

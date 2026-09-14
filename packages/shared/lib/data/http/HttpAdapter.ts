@@ -30,7 +30,7 @@ import type {
 } from "../types";
 import type { DealerRollup, QuoteRangeRow, CustomerDeletionResult } from "../ports";
 import {
-  DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES,
+  DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, DEFAULT_HQ_POLICY, DEFAULT_HQ_TARGETS, DEFAULT_HQ_NOTIF_RULES, รวมกฎแจ้งเตือน,
   LOST_REASONS, LEAD_TASK_TEMPLATE, normalizeLeadTaskTemplate, DEFAULT_LEAD_RULES,
 } from "@pms/shared/lib/mock";
 import { DbError } from "@pms/shared/lib/friendlyError";
@@ -222,13 +222,7 @@ const settings: SettingsRepo = {
   getPolicy: async () => (await getOne<HQPolicy>("policy")) ?? DEFAULT_HQ_POLICY,
   getTargets: async () => (await getOne<HQTargets>("targets")) ?? DEFAULT_HQ_TARGETS,
   getNotifRules: async () => {
-    const r = await getOne<HQNotifRules>("notifRules");
-    if (!r) return DEFAULT_HQ_NOTIF_RULES;
-    return {
-      ...DEFAULT_HQ_NOTIF_RULES, ...r,
-      alerts:   { ...DEFAULT_HQ_NOTIF_RULES.alerts,   ...(r.alerts   ?? {}) },
-      channels: { ...DEFAULT_HQ_NOTIF_RULES.channels, ...(r.channels ?? {}) },
-    };
+    return รวมกฎแจ้งเตือน(await getOne<HQNotifRules>("notifRules"));
   },
   getLeadRulesMap: async () => {
     const rows = await apiFetch<({ dealerCode: string } & LeadRules)[]>("/settings?k=leadRules");

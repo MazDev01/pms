@@ -20,7 +20,7 @@ import { useRepoValue } from "@pms/shared/lib/useRepoState";
 import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
 import { useImpersonating } from "@pms/shared/lib/useImpersonating";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
-import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Search, Compass, History, UserX, Store, Target, TrendingDown, Tag } from "lucide-react";
+import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Search, Compass, History, Tag } from "lucide-react";
 import { PRIMARY, STEEL } from "@pms/shared/lib/theme";
 import { useAuditEntries, type AuditEntry } from "@pms/shared/lib/useAudit";
 import { confirmDiscard } from "@pms/shared/lib/useUnsavedGuard";
@@ -213,20 +213,18 @@ function buildHQNotifications(entries: AuditEntry[]): Notif[] {
 
 // ── การแจ้งเตือนตามกฎของ HQ (ตั้งที่ /hq/settings → การแจ้งเตือน) ──
 // เนื้อหาคำนวณจากข้อมูลจริงใน @pms/shared/lib/hqAlerts — ที่นี่แค่ใส่ไอคอน/สี
+// ขอบเขต = งานของสำนักงานใหญ่เอง (บอสสั่ง 14 ก.ย. 69) — ไม่มีเรื่องงานขายของตัวแทน
 const HQ_ALERT_ICON: Record<HQAlertKey, { el: React.ReactNode; bg: string; color: string }> = {
-  unassignedLead: { el: <UserX size={14} />,        bg: "#fdecec", color: "#dc2626" },
-  idleLead:       { el: <AlertTriangle size={14} />, bg: "#fff3cd", color: "#d97706" },
-  quoteExpiring:  { el: <FileText size={14} />,      bg: "#fff3cd", color: "#d97706" },
-  dealerIdle:     { el: <Store size={14} />,         bg: "#eef2f7", color: "#475569" },
-  targetAchieved: { el: <Target size={14} />,        bg: "#e5faf0", color: "#059669" },
-  lostRate:       { el: <TrendingDown size={14} />,  bg: "#fdecec", color: "#dc2626" },
+  prospectFollowUpDue: { el: <CalendarClock size={14} />, bg: "#fff3cd", color: "#d97706" },
+  prospectIdle:        { el: <AlertTriangle size={14} />, bg: "#fff3cd", color: "#d97706" },
+  proposalAwaiting:    { el: <FileText size={14} />,      bg: "#dce5f0", color: "#003366" },
+  proposalExpired:     { el: <FileText size={14} />,      bg: "#fdecec", color: "#dc2626" },
   // แดงเข้ม: เรื่องนี้ไม่ใช่ "ควรดู" แต่เป็น "ตัวแทนทำงานต่อไม่ได้จนกว่าจะแก้"
-  catalogNoPrice: { el: <Tag size={14} />,           bg: "#fdecec", color: "#dc2626" },
+  catalogNoPrice:      { el: <Tag size={14} />,           bg: "#fdecec", color: "#dc2626" },
 };
-// หน่วยนับของแต่ละกฎ — ใบเสนอราคานับเป็น "ใบ" ที่เหลือนับเป็น "ราย"
+// หน่วยนับของแต่ละกฎ — ใบเสนอแพ็กเกจนับเป็น "ใบ" ลูกค้าเป้าหมายนับเป็น "ราย"
 const HQ_ALERT_UNIT: Record<HQAlertKey, string> = {
-  unassignedLead: "ราย", idleLead: "ราย", quoteExpiring: "ใบ",
-  dealerIdle: "ราย", targetAchieved: "ราย", lostRate: "ราย", catalogNoPrice: "แม่แบบ",
+  prospectFollowUpDue: "ราย", prospectIdle: "ราย", proposalAwaiting: "ใบ", proposalExpired: "ใบ", catalogNoPrice: "แม่แบบ",
 };
 const ALERT_PREVIEW = 3; // โชว์ 3 บรรทัดแรกพอให้เห็นว่าใคร — ที่เหลือกดขยาย
 
@@ -360,8 +358,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // แสดงจริงแค่ไม่กี่รายการล่าสุด ลดเหลือ 200 (พอสำหรับฟีดกิจกรรมล่าสุด) — เบราส์ประวัติเต็มยังทำที่ /hq/audit
   // (พบจากผลตรวจสอบระบบรอบ 2, 31 ก.ค. 69)
   const auditEntries = useAuditEntries(200); // สำหรับ HQ — บันทึกการใช้งาน
-  // กฎแจ้งเตือนของทั้งเครือ — แหล่งเดียวกับการ์ด "ต้องดูด่วน" บนแดชบอร์ด HQ
-  const hqAlerts = useHQAlerts();
+  const [showNotifs, setShowNotifs]     = useState(false);
+  // กฎแจ้งเตือนงานของสำนักงานใหญ่เอง — ดึงเฉพาะบัญชี HQ · เปิดกระดิ่งทีไรดึงใหม่
+  const hqAlerts = useHQAlerts(isHQ, showNotifs);
   // HQ → บันทึกการใช้งาน (ใครทำอะไร) · Dealer → งานขายของตัวเอง
   // กฎแจ้งเตือนของ HQ ไม่ได้อยู่ในลิสต์นี้ — เป็น "สถานะปัจจุบันของเครือ" ไม่ใช่เหตุการณ์ในอดีต
   // จึงแสดงแยกเป็นกลุ่มไว้บนสุดของแผง (ดู alertGroups) ไม่ปนกับไทม์ไลน์วันนี้/เมื่อวาน
@@ -391,7 +390,6 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
 
   // ── states ──
   const [showSearch, setShowSearch]     = useState(false);
-  const [showNotifs, setShowNotifs]     = useState(false);
   const [showAllNotifs, setShowAllNotifs] = useState(false); // ขยายดูการแจ้งเตือนทั้งหมดในแผงเดียวกัน
   const [openGroup, setOpenGroup] = useState<HQAlertKey | null>(null); // กลุ่ม "ต้องดูด่วน" ที่กางอยู่
   const [showUser,   setShowUser]       = useState(false);
