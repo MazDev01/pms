@@ -31,8 +31,15 @@ const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
 /** รหัสของ "สำนักงานใหญ่" ในทะเบียนตัวแทน — ดูแลทุกภาคทุกจังหวัด และตรึงไว้บนสุดของตารางเสมอ */
 const HQ_CODE = "HQ";
-/** การ์ดต่อหน้า — 12 ใบ ลงตัวทั้งแถวละ 3 และ 4 ใบ */
+/** การ์ดต่อหน้า — 12 ใบ = แถวละ 4 ใบ 3 แถวเต็ม (จอเล็ก 2 ใบ / มือถือ 1 ใบ ก็ยังเต็มแถว) */
 const CARDS_PER_PAGE = 12;
+// แถวละ 4 ใบตายตัว (บอสสั่ง 14 ก.ย. 69: "ในแถวมีแค่ 4 การ์ด เอาใหญ่หน่อย ห้ามมีที่เหลือว่าง")
+//   เดิมใช้ auto-fill จอกว้างได้แถวละ 5 ใบ → 12 ใบเหลือแถวท้าย 2 ใบ ว่างครึ่งแถว
+const CARD_GRID_CSS = `
+.dealer-card-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1100px) { .dealer-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .dealer-card-grid { grid-template-columns: minmax(0, 1fr); } }
+`;
 /** ตัวย่อชื่อบนการ์ดที่ยังไม่มีรูป — ตัดคำนำหน้าบริษัท/คุณ ออกก่อน */
 const ตัวย่อ = (d: DealerRow) => d.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || d.code.slice(0, 2);
 
@@ -430,23 +437,25 @@ function HQDealersPageInner() {
         const หน้าการ์ด = Math.min(page, pageCountOf(filtered.length, CARDS_PER_PAGE) - 1);
         return (
           <div className="card" style={{ padding: 16 }}>
+            <style>{CARD_GRID_CSS}</style>
             {filtered.length === 0 ? (
               <div style={{ padding: 32, textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>{dealersLoaded ? "ไม่พบข้อมูล" : "กำลังโหลดข้อมูล…"}</div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 14 }}>
+              <div className="dealer-card-grid">
                 {pageSlice(filtered, หน้าการ์ด, CARDS_PER_PAGE).map(d => {
                   const รูป = รูปสาขา[d.code];
                   return (
                     <div key={d.id} role="button" tabIndex={0} aria-label={`เปิดรายละเอียดตัวแทน ${d.name}`}
                       onClick={() => setSelectedDealer(d)}
                       onKeyDown={ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setSelectedDealer(d); } }}
-                      style={{ background: "#fff", border: "1px solid #eef0f4", borderRadius: 12, padding: "20px 14px 14px", textAlign: "center", cursor: "pointer", position: "relative", opacity: dealerStatus(d) === "active" ? 1 : 0.55, boxShadow: "0 1px 4px rgba(15,23,42,.04)" }}>
-                      <span style={{ position: "absolute", top: 10, left: 12, fontSize: "0.68rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em" }}>{d.code}</span>
-                      <div style={{ width: 76, height: 76, borderRadius: "50%", margin: "4px auto 12px", overflow: "hidden", background: รูป ? "#fff" : "#eef3f8", border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#003366", fontWeight: 800, fontSize: "1.3rem" }}>
+                      style={{ background: "#fff", border: "1px solid #eef0f4", borderRadius: 14, padding: "30px 18px 18px", textAlign: "center", cursor: "pointer", position: "relative", opacity: dealerStatus(d) === "active" ? 1 : 0.55, boxShadow: "0 1px 4px rgba(15,23,42,.04)" }}>
+                      <span style={{ position: "absolute", top: 12, left: 14, fontSize: "0.72rem", fontWeight: 800, color: "#003366", letterSpacing: "0.05em" }}>{d.code}</span>
+                      {/* รูปสี่เหลี่ยมมุมมน ขนาดใหญ่ (บอสสั่ง 14 ก.ย. 69: "เอารูปสี่เหลี่ยม ... เอาใหญ่หน่อย") */}
+                      <div style={{ width: 132, height: 132, maxWidth: "100%", borderRadius: 18, margin: "4px auto 14px", overflow: "hidden", background: รูป ? "#fff" : "#eef3f8", border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#003366", fontWeight: 800, fontSize: "2.1rem" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element -- รูปเป็น data URL ที่ย่อแล้ว ไม่ผ่านตัวปรับรูปของ Next */}
                         {รูป ? <img src={รูป} alt={`รูปของ ${d.name}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : ตัวย่อ(d)}
                       </div>
-                      <div title={d.name} style={{ fontSize: "0.9rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div title={d.name} style={{ fontSize: "1rem", fontWeight: 700, color: "#2D2D2D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
                       <div title={d.province} style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {[d.province, d.region].filter(Boolean).join(" · ") || "—"}
                       </div>
