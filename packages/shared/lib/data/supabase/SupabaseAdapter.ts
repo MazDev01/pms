@@ -3,6 +3,8 @@
 // SupabaseAdapter — เชื่อม repository ทุกตัวเข้ากับตาราง Supabase (เฟส B)
 // map ตาราง ↔ type ตาม BACKEND-DESIGN.md · ขอบเขตข้อมูล (dealer_code) บังคับด้วย RLS ที่ DB
 // แปลง snake_case (DB) ↔ camelCase (type) ด้วย mappers.ts
+import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
+import type { DealerProspect } from "@pms/shared/lib/data/types";
 import { accountRemote } from "../accountRemote";
 import { getSupabase, hasStoredSession } from "./client";
 import { toCamel, toCamelList, toSnake, toSnakeList } from "./mappers";
@@ -562,6 +564,27 @@ export const SupabaseAdapter: DataAdapter = {
     create: (n) => insertRow<CustomerNote>("customer_notes", n as CustomerNote),
     update: (n) => updateRow<CustomerNote>("customer_notes", n.id, n),
     remove: (id) => must(sb().from("customer_notes").delete().eq("id", id)),
+  },
+  // ลูกค้าเป้าหมายของสำนักงานใหญ่ — RLS (0170): อ่าน = HQ · เขียน = ผู้ดูแลข้อมูลกลาง
+  //   จัดข้อมูลด้วย เตรียมบันทึก ก่อนเขียนเสมอ: ช่องวันที่ว่างต้องเป็น null (ส่ง "" ไปทั้งแถวถูกปฏิเสธ)
+  //   และห้ามส่ง id/created_at/updated_at ให้ฐานข้อมูล · อ่านทีละหน้าเสมอ (เพดาน 1,000 แถว/คำขอ)
+  prospects: {
+    list: async () => (await pageAll((from, to) =>
+      sb().from("dealer_prospects").select("*").order("id", { ascending: false }).range(from, to), "dealer_prospects"))
+      .map(r => toCamel<DealerProspect>(r)),
+    create: (p) => withNetworkRetry(async () => {
+      const { data, error } = await sb().from("dealer_prospects")
+        .insert(toSnake(เตรียมบันทึก(p) as unknown as Row)).select().single();
+      if (error) throw new DbError(error.message, error.code);
+      return toCamel<DealerProspect>(data as Row);
+    }),
+    update: (p) => withNetworkRetry(async () => {
+      const { data, error } = await sb().from("dealer_prospects")
+        .update(toSnake(เตรียมบันทึก(p) as unknown as Row)).eq("id", p.id).select().single();
+      if (error) throw new DbError(error.message, error.code);
+      return toCamel<DealerProspect>(data as Row);
+    }),
+    remove: (id) => must(sb().from("dealer_prospects").delete().eq("id", id)),
   },
   users: {
     list: async () => {

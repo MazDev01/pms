@@ -40,6 +40,11 @@ for (const file of ROOTS.flatMap(r => walk(r))) {
     const m = /key=\{([a-z])\.(id|numId|quoteNo)\}/.exec(lines[i]);
     if (!m) continue;
     const [, v] = m;
+    // ยกเว้นได้เฉพาะตารางที่ id "ไม่ซ้ำทั้งระบบ" จริง (identity เดียวทั้งตาราง ไม่ได้เดินแยกรายสาขา)
+    //   และ dealerCode ในแถวไม่ใช่สาขาเจ้าของ — ต้องเขียน "id ไม่ซ้ำทั้งระบบ" กำกับไว้ไม่เกิน 3 บรรทัดเหนือคีย์
+    //   ตัวอย่าง: ลูกค้าเป้าหมายของสำนักงานใหญ่ (dealer_prospects · dealerCode = ตัวแทนที่รายนั้นกลายมาเป็น)
+    //   ⚠️ ห้ามใช้คำนี้กับตารางงานขาย (leads/quotations/customers/…) — เลขที่ของพวกนั้นซ้ำข้ามสาขาจริง
+    if (/id ไม่ซ้ำทั้งระบบ/.test(lines.slice(Math.max(0, i - 3), i).join(" "))) continue;
     // แถวนี้เป็นข้อมูลรายสาขาหรือเปล่า — ดูจากการใช้ <ตัวแปร>.dealerCode ใน 25 บรรทัดถัดไป
     const body = lines.slice(i, Math.min(i + 25, lines.length)).join(" ");
     if (!new RegExp(`\\b${v}\\.dealerCode\\b`).test(body)) continue;   // ไม่ใช่ข้อมูลรายสาขา — ข้าม

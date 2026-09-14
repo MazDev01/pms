@@ -1,6 +1,7 @@
 // Ports — สัญญา (interface) ที่ทุก adapter ต้องมี
 // context/hook เรียกผ่าน repository เหล่านี้เท่านั้น · เบื้องหลังสลับ adapter ได้
 // ทุกเมธอดเป็น async ตั้งแต่แรก → ต่อ network (เฟส B) ไม่ต้องแก้ signature
+import type { DealerProspect } from "./types";
 import type {
   DealerRow, SolutionProduct, DealerFile, ResponsiblePerson,
   HQPolicy, HQTargets, HQNotifRules, LeadRules, DealerLeadRulesMap, LeadTaskDef,
@@ -86,6 +87,14 @@ export interface NotesRepo {
   list(scope?: Scope): Promise<CustomerNote[]>;
   create(n: Omit<CustomerNote, "id">): Promise<CustomerNote>;
   update(n: CustomerNote): Promise<CustomerNote>;
+  remove(id: number): Promise<void>;
+}
+
+// ── ลูกค้าเป้าหมายของสำนักงานใหญ่ (ผู้สนใจเป็นตัวแทนจำหน่าย) — อ่าน = HQ · เขียน = ผู้ดูแลข้อมูลกลาง (0170) ──
+export interface ProspectsRepo {
+  list(): Promise<DealerProspect[]>;
+  create(p: Omit<DealerProspect, "id">): Promise<DealerProspect>;
+  update(p: DealerProspect): Promise<DealerProspect>;
   remove(id: number): Promise<void>;
 }
 
@@ -565,4 +574,5 @@ export interface DataAdapter {
   quotations: QuotationsRepo;
   customers: CustomersRepo;
   appointments: AppointmentsRepo;
+  prospects: ProspectsRepo;
 }

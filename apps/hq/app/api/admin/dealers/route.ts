@@ -72,7 +72,7 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   // ── 2) ตรวจ payload ──
   const body = (await req.json().catch(() => null)) as null | {
     code?: string; name?: string; province?: string; region?: string; revenueTarget?: number;
-    email?: string; password?: string;
+    email?: string; password?: string; prospectId?: number;
   };
   if (!body) return bad(400, "รูปแบบข้อมูลไม่ถูกต้อง");
   const code = String(body.code ?? "").trim().toUpperCase();
@@ -95,6 +95,22 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     return bad(503, "ตรวจสอบรหัสตัวแทนไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
   if (dupe) return bad(409, `รหัส "${code}" มีอยู่แล้ว`);
+
+  // ── สร้างจากลูกค้าเป้าหมายของสำนักงานใหญ่ (บอสสั่ง 14 ก.ย. 69) ──
+  //   ตรวจ "ก่อน" สร้างบัญชี: รายนั้นต้องมีอยู่จริง และยังไม่เคยเป็นตัวแทน
+  //   ไม่งั้นกดซ้ำ (หรือสองคนกดพร้อมกัน) จะได้สาขาซ้อนสองสาขาจากคนคนเดียว
+  const prospectId = body.prospectId == null ? null : Number(body.prospectId);
+  if (prospectId !== null) {
+    if (!Number.isInteger(prospectId) || prospectId <= 0) return bad(400, "ไม่พบลูกค้าเป้าหมายที่อ้างถึง");
+    const { data: pr, error: prErr } = await admin.from("dealer_prospects")
+      .select("id, status, dealer_code").eq("id", prospectId).maybeSingle();
+    if (prErr) {
+      console.error("[create-dealer] ตรวจลูกค้าเป้าหมายไม่สำเร็จ", prErr);
+      return bad(503, "ตรวจข้อมูลลูกค้าเป้าหมายไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+    }
+    if (!pr) return bad(404, "ไม่พบลูกค้าเป้าหมายรายนี้แล้ว — อาจถูกลบไปก่อนหน้า");
+    if (pr.status === "won" && pr.dealer_code) return bad(409, `ลูกค้าเป้าหมายรายนี้เป็นตัวแทนแล้ว (รหัส ${pr.dealer_code})`);
+  }
 
   // ── อีเมล/รหัสผ่าน: HQ กรอกเองได้ (บอสสั่ง 20 ส.ค. 69) · ไม่กรอก = ระบบตั้งให้เหมือนเดิม ──
   //
@@ -162,8 +178,20 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
 
   await rememberSecret(admin, code, password, String(prof.name ?? ""));
   await auditLog(admin, prof, "สร้างตัวแทน", `${code} · ${name}`);
+
+  // ผูกลูกค้าเป้าหมายเข้ากับสาขาที่เพิ่งสร้าง — ล้มตรงนี้ "ไม่ย้อน" การสร้างสาขา
+  //   (บัญชีใช้งานได้แล้ว รหัสผ่านถูกตั้งแล้ว ย้อนทิ้งจะเสียหายกว่า) แต่ต้องบอกหน้าจอให้รู้ ไม่เงียบ
+  let prospectLinked: boolean | undefined;
+  if (prospectId !== null) {
+    const { error: linkErr } = await admin.from("dealer_prospects")
+      .update({ status: "won", dealer_code: code, converted_at: new Date().toISOString(), lost_reason: null })
+      .eq("id", prospectId);
+    prospectLinked = !linkErr;
+    if (linkErr) console.error(`[create-dealer] ผูกลูกค้าเป้าหมาย #${prospectId} กับสาขา ${code} ไม่สำเร็จ`, linkErr);
+    else await auditLog(admin, prof, "ลูกค้าเป้าหมายเป็นตัวแทนแล้ว", `#${prospectId} → ${code} · ${name}`);
+  }
   // คืนรหัสให้หน้าจอโชว์ให้ก๊อปไปแจ้งตัวแทน (และเก็บสำเนาเข้ารหัสไว้ให้ HQ เปิดดูภายหลังได้)
-  return NextResponse.json({ ok: true, email, password });
+  return NextResponse.json({ ok: true, email, password, prospectLinked });
 });
 
 // ── ออกรหัสผ่านใหม่ให้ตัวแทน (HQ เท่านั้นที่คุมรหัสผ่านของตัวแทนได้ — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตเอง) ──

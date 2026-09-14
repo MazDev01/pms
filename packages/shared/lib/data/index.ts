@@ -89,6 +89,8 @@ export const profile: ProfileRepo = {
 };
 export const hqCompany = adapter.hqCompany;
 export const notes = adapter.notes;
+// ลูกค้าเป้าหมายของสำนักงานใหญ่ (ผู้สนใจเป็นตัวแทน) — หน้าเดียวใช้ ไม่ต้องแคช
+export const prospects = adapter.prospects;
 export const users = adapter.users;
 // บัญชีเข้าระบบของตัวแทน (แก้อีเมล/รหัสผ่านเอง · โควตา 2 ครั้ง · เกินนั้นขออนุมัติ)
 export const account = adapter.account;

@@ -78,3 +78,28 @@ export type SystemUser = {
 // ขอบเขตข้อมูล — ส่งเข้าทุก query ที่ผูกกับสาขา
 // วันนี้ LocalAdapter ใช้ filter · เฟส B ส่งให้ RLS ที่ Supabase คุมแทน
 export type Scope = { dealerCode?: string; isHQ?: boolean };
+
+// ── ลูกค้าเป้าหมายของสำนักงานใหญ่ = ผู้สนใจเป็นตัวแทนจำหน่าย (บอสสั่ง 14 ก.ย. 69) ──
+//   คนละเรื่องกับ LeadRow (ลูกค้าที่จะซื้ออาคารของตัวแทน) — ดู migration 0170 · lib/dealerProspects.ts
+export type DealerProspectStatus = "new" | "contacted" | "profile_sent" | "meeting" | "considering" | "won" | "lost";
+export type DealerProspect = {
+  id: number;
+  name: string;                  // ชื่อผู้ติดต่อ / ชื่อบริษัท
+  social?: string | null;        // ชื่อบนโซเชียล (Facebook/LINE)
+  phone?: string | null;
+  email?: string | null;
+  province?: string | null;
+  businessType?: string | null;  // ประเภทธุรกิจ (คอลัมน์ Type ในไฟล์ของเบนจามิน)
+  channel?: string | null;       // ช่องทางที่เข้ามา
+  firstContact?: string | null;  // YYYY-MM-DD
+  followUp?: string | null;      // YYYY-MM-DD นัดติดตามครั้งถัดไป
+  note?: string | null;
+  status: DealerProspectStatus;
+  lostReason?: string | null;
+  assigned?: string | null;      // ผู้ดูแลฝั่งสำนักงานใหญ่ (ชื่อ ไม่ใช่บัญชีเข้าระบบ)
+  dealerCode?: string | null;    // ตัวแทนที่รายนี้กลายมาเป็น (ตั้งเมื่อสำเร็จ)
+  convertedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+

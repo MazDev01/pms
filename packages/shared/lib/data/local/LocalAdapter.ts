@@ -39,10 +39,12 @@ function fireProfile() {
 import { putLocalBlob, localBlobUrl, removeLocalBlob } from "./blobStore";
 import { accountLocal } from "./accountLocal";
 import type { DataAdapter } from "../ports";
-import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser } from "../types";
+import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect } from "../types";
+import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
 
 const HQ_COMPANY_KEY = "hq_company_profile";
 const NOTES_KEY = "customer_notes_v1";
+const PROSPECTS_KEY = "hq_dealer_prospects_v1";
 const HQ_USERS_KEY = "hq_users_v4";
 const EMPTY_HQ_COMPANY: HQCompany = { name: "", address: "", taxId: "", phone: "", email: "", website: "" };
 import { DEFAULT_ISSUER, DEFAULT_NOTIF_PREFS, ISSUER_KEY, NOTIF_PREFS_KEY, DEALER_PRICING_KEY } from "@pms/shared/lib/mock";
@@ -232,6 +234,26 @@ export const LocalAdapter: DataAdapter = {
     },
     remove: (id) => {
       writeKey(NOTES_KEY, readKey<CustomerNote[]>(NOTES_KEY, []).filter(x => x.id !== id));
+      return done();
+    },
+  },
+  // ลูกค้าเป้าหมายของสำนักงานใหญ่ (โหมดเดโม) — จัดข้อมูลแบบเดียวกับฐานข้อมูลจริง · รายใหม่ขึ้นก่อน
+  prospects: {
+    list: () => ok(readKey<DealerProspect[]>(PROSPECTS_KEY, [])),
+    create: (p) => {
+      const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+      const now = new Date().toISOString();
+      const row: DealerProspect = { ...เตรียมบันทึก(p), id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1, createdAt: now, updatedAt: now };
+      writeKey(PROSPECTS_KEY, [row, ...all]);
+      return ok(row);
+    },
+    update: (p) => {
+      const row: DealerProspect = { ...เตรียมบันทึก(p), id: p.id, createdAt: p.createdAt, updatedAt: new Date().toISOString() };
+      writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).map(x => x.id === p.id ? row : x));
+      return ok(row);
+    },
+    remove: (id) => {
+      writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(x => x.id !== id));
       return done();
     },
   },

@@ -12,6 +12,8 @@
 // ⚠️ ระยะนี้ backend ทำงาน "ในนามผู้ใช้" (ส่งใบผ่านของเขาต่อให้ DB) ไม่ได้ใช้ service_role
 //    RLS ทั้ง 72 กฎจึงยังบังคับเหมือนเดิม — ต่างแค่คำขอเดินผ่านเซิร์ฟเวอร์ของเราอีกทอด
 // ⚠️ ก่อนเปิดโหมดนี้บนของจริง ดูข้อจำกัดอายุสายอัปเดตสดใน server/v1/events.ts ก่อน
+import type { ProspectsRepo } from "../ports";
+import type { DealerProspect } from "../types";
 import { accountRemote } from "../accountRemote";
 import type {
   DataAdapter, DealersRepo, CatalogRepo, FilesRepo, PersonsRepo, SettingsRepo,
@@ -282,6 +284,13 @@ const notes: NotesRepo = {
   update: (n) => apiFetch<CustomerNote>("/notes", { method: "PUT", body: JSON.stringify(n) }),
   remove: async (id) => { await apiFetch(`/notes?id=${id}`, { method: "DELETE" }); },
 };
+// ลูกค้าเป้าหมายของสำนักงานใหญ่ — เซิร์ฟเวอร์จัดข้อมูล/ตรวจซ้ำเสมอ (server/v1/prospects.ts)
+const prospects: ProspectsRepo = {
+  list: () => apiFetch<DealerProspect[]>("/prospects"),
+  create: (p) => post<DealerProspect>("/prospects", p),
+  update: (p) => put<DealerProspect>("/prospects", p),
+  remove: async (id) => { await apiFetch(`/prospects?id=${id}`, { method: "DELETE" }); },
+};
 const users: UsersRepo = {
   list: () => apiFetch<SystemUser[]>("/users"),
   update: async (u) => { await apiFetch("/users", { method: "PUT", body: JSON.stringify(u) }); },
@@ -449,7 +458,7 @@ const realtime: RealtimePort = {
 
 export const HttpAdapter: DataAdapter = {
   storage, realtime, dealers, catalog, files, persons, settings, dealerSettings,
-  profile, hqCompany, notes, users, audit, metrics, leads, quotations, customers, appointments,
+  profile, hqCompany, notes, users, audit, metrics, leads, quotations, customers, appointments, prospects,
   // บัญชีเข้าระบบของตัวแทน — เปลี่ยนผ่าน API ของสำนักงานใหญ่ (คีย์ผู้ดูแลอยู่ที่นั่นที่เดียว)
   account: accountRemote,
 };

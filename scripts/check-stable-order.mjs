@@ -45,7 +45,11 @@ for (const file of ROOTS.flatMap(r => walk(r))) {
     if (!lines[i].includes(".range(")) continue;
     // คำสั่งหนึ่งชุดอาจเขียนคร่อมหลายบรรทัด — มองย้อนขึ้นไป 8 บรรทัดให้ครอบทั้ง .from() และ .order() ที่ต่อกันมา
     const chain = lines.slice(Math.max(0, i - 8), i + 1).join(" ");
-    const table = /\.from\(\s*["'`]([a-z_]+)["'`]/.exec(chain)?.[1] ?? "";
+    // ต้องเอา .from() ตัว "ใกล้ .range() ที่สุด" (ตัวสุดท้ายในช่วง) ไม่ใช่ตัวแรก (แก้ 14 ก.ย. 69)
+    //   ช่วง 8 บรรทัดมักกินคำสั่งของเมธอดข้างบนเข้ามาด้วย — เดิมหยิบตัวแรก จึงเคยฟ้องว่า
+    //   dealer_prospects (id ไม่ซ้ำทั้งระบบ) เป็น customer_notes ของเมธอด remove ที่อยู่บรรทัดก่อนหน้า
+    //   ตัวตรวจที่ฟ้องผิดตารางอันตรายพอกับไม่ฟ้อง เพราะคนจะเริ่มแก้โค้ดให้ "ผ่านตัวตรวจ" แทนที่จะแก้ของจริง
+    const table = [...chain.matchAll(/\.from\(\s*["'`]([a-z_]+)["'`]/g)].at(-1)?.[1] ?? "";
     if (!PER_DEALER_TABLES.includes(table)) continue; // ตารางที่ id ไม่ซ้ำทั้งระบบ — ไม่ต้องมีตัวตัดสินเพิ่ม
     const orders = [...chain.matchAll(/\.order\(\s*([^,)]+)/g)].map(m => m[1].trim());
     const tail = orders[orders.length - 1] ?? "(ไม่ได้สั่งเรียงเลย)";

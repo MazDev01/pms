@@ -31,9 +31,11 @@ export type CreateDealerInput = {
   code: string; name: string; province: string; region: string; revenueTarget: number;
   /** อีเมล/รหัสผ่านที่ HQ กรอกเอง — เว้นว่าง = ให้เซิร์ฟเวอร์ตั้งให้ (บอสสั่ง 20 ส.ค. 69) */
   email?: string; password?: string;
+  /** สร้างจากลูกค้าเป้าหมายของสำนักงานใหญ่ — เซิร์ฟเวอร์ผูกรายนั้นเป็น "เป็นตัวแทนแล้ว" ให้ในคำขอเดียวกัน */
+  prospectId?: number;
 };
 export type CreateDealerResult =
-  | { ok: true; email: string; password: string }
+  | { ok: true; email: string; password: string; prospectLinked?: boolean }
   | { ok: false; error: string };
 
 /** สร้างตัวแทน "พร้อมบัญชีเข้าระบบจริง" ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ (H5) */
@@ -51,9 +53,9 @@ export async function createDealerAccount(input: CreateDealerInput): Promise<Cre
       headers: authHeaders(token, true),
       body: JSON.stringify(input),
     });
-    const json = (await res.json().catch(() => ({}))) as { error?: string; email?: string; password?: string };
+    const json = (await res.json().catch(() => ({}))) as { error?: string; email?: string; password?: string; prospectLinked?: boolean };
     if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
-    return { ok: true, email: json.email ?? "", password: json.password ?? "" };
+    return { ok: true, email: json.email ?? "", password: json.password ?? "", prospectLinked: json.prospectLinked };
   } catch (e) {
     return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
   }
