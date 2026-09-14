@@ -14,7 +14,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { useRouter } from "next/navigation";
 import {
-  FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen,
+  FileText, Percent, Target, Trophy, Eye, X, Building2, Users, Coins, CalendarDays, FolderOpen, Search,
 } from "lucide-react";
 import { DealerQuotationPerformance, DealerQuotationTable } from "@pms/shared/components/hq/pipeline/DealerQuotationPerformance";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
@@ -405,9 +405,13 @@ export default function SalesAnalyticsPage() {
     { label: "เป้าหมายทั้งปี", value: dealerPerf.ready ? `${kpi.tpct}%` : "—", sub: `ยอดสะสม ${money(kpi.actual)} จาก ${fmtBaht(kpi.target)}`, Icon: Target, color: "#2563EB", bg: "#E8F0FE" },
   ];
 
+  // ตัวกรองทุกช่องกว้างเท่ากันและยืด/หดร่วมกันในแถวเดียว (บอสสั่ง 14 ก.ย. 69 "แก้" — ภาพแถบที่ขึ้น 2 แถว)
+  //   เดิม width:auto → ช่อง "ทุกตัวแทน" กว้างตามชื่อตัวแทนที่ยาวที่สุด ดันช่องอื่นตกไปแถวสอง
+  //   ป้ายยาว (เช่น ที่มาของประเภทอาคาร) ถูกตัดด้วย … ในช่อง — ชี้ค้างอ่านเต็มได้จาก title · ห้ามตัดคำบอกที่มาทิ้ง
   const sel = (v: string, on: (x: string) => void, caption: string, opts: { v: string; l: string }[]) => (
-    <select aria-label={caption} value={v} onChange={e => on(e.target.value)} className="form-input"
-      style={{ width: "auto", minWidth: 128, padding: "7px 10px", fontSize: "0.74rem", fontWeight: 600, cursor: "pointer" }}>
+    // ตัวเลือกแรกคือทั้งหมด — ป้าย "ทุก…" ของตัวกรองแต่ละช่อง
+    <select aria-label={caption} title={caption} value={v} onChange={e => on(e.target.value)} className="form-select"
+      style={{ flex: "1 1 130px", minWidth: 0, maxWidth: 210, cursor: "pointer", textOverflow: "ellipsis" }}>
       <option value={ALL}>{caption}</option>
       {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
     </select>
@@ -457,9 +461,13 @@ export default function SalesAnalyticsPage() {
       {/* ── SMART FILTER ── อยู่ใต้ KPI เหมือนหน้า HQ อื่น (ใบเสนอราคา/ลูกค้า/ตัวแทน)
           เดิมหน้านี้หน้าเดียวที่เอาตัวกรองไว้เหนือ KPI */}
       <div className="card hq-sticky-filter" style={{ marginBottom: "1.25rem" }}>
-        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 14, paddingBottom: 14 }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหารหัส ชื่อตัวแทน จังหวัด…"
-            className="form-input" style={{ width: 240, padding: "7px 11px", fontSize: "0.74rem" }} />
+        <div className="card-body" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 12, paddingBottom: 12 }}>
+          {/* ช่องค้นหาแบบเดียวกับทุกหน้า HQ (ไอคอน + ปุ่มล้าง) */}
+          <div className="search-bar" style={{ flex: "1.4 1 200px", minWidth: 180, maxWidth: 300 }}>
+            <Search size={14} color="#9ca3af" />
+            <input aria-label="ค้นหาตัวแทน" value={q} onChange={e => setQ(e.target.value)} placeholder="ค้นหารหัส ชื่อตัวแทน จังหวัด…" />
+            {q && <button aria-label="ล้างคำค้น" onClick={() => setQ("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", padding: 0 }}><X size={13} /></button>}
+          </div>
           {sel(dealerSel, setDealerSel, "ทุกตัวแทน", allDealers.map(d => ({ v: d.code, l: `${d.code} – ${d.name}` })))}
           {sel(regionSel, setRegionSel, "ทุกภูมิภาค", regionOpts.map(r => ({ v: r, l: regionDisplay(r) })))}
           {sel(provSel, setProvSel, "ทุกจังหวัด", provOpts.map(p => ({ v: p, l: p })))}
@@ -467,7 +475,7 @@ export default function SalesAnalyticsPage() {
           {sel(salesSel, setSalesSel, "ทุกช่วงยอดขาย", SALES_BANDS.map(b => ({ v: b.v, l: b.l })))}
           {anyFilter && (
             <button onClick={() => { setQ(""); setDealerSel(ALL); setRegionSel(ALL); setProvSel(ALL); setBtSel(ALL); setSalesSel(ALL); }}
-              className="btn btn-secondary btn-sm">ล้างตัวกรอง</button>
+              className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }}>ล้างตัวกรอง</button>
           )}
         </div>
       </div>
