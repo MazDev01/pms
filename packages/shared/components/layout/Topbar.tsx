@@ -258,6 +258,7 @@ const TITLE_MAP: { match: string; title: string }[] = [
   // ต้องตรงกับชื่อในเมนูข้าง — เดิมเมนูเรียก "ตัวแทนจำหน่าย" แต่หัวหน้าเพจเรียก "ตัวแทน"
   { match: "/hq/dealers",        title: "ตัวแทนจำหน่าย" },
   { match: "/hq/prospects",      title: "ลูกค้าเป้าหมาย (HQ)" },
+  { match: "/hq/proposals",      title: "ใบเสนอแพ็กเกจตัวแทน" },
   { match: "/hq/leads",          title: "ลูกค้าเป้าหมายทั้งเครือ" },
   { match: "/hq/customers",      title: "ลูกค้าทั้งเครือ" },
   { match: "/hq/quotations",     title: "ใบเสนอราคาทั้งเครือ" },
@@ -289,6 +290,7 @@ const HQ_PAGES: PageEntry[] = [
   { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  keywords: "แดชบอร์ด dashboard สำนักงานใหญ่ hq ภาพรวม สรุป หน้าแรก" },
   { label: "ตัวแทน",              href: "/hq/dealers",    keywords: "ตัวแทน dealer dealers จำหน่าย" },
   { label: "ลูกค้าเป้าหมาย (HQ)", href: "/hq/prospects", keywords: "ลูกค้าเป้าหมาย ผู้สนใจ สมัครตัวแทน prospect prospects dealer ใหม่ hq" },
+  { label: "ใบเสนอแพ็กเกจตัวแทน", href: "/hq/proposals", keywords: "ใบเสนอแพ็กเกจ แพ็กเกจตัวแทน ค่าแรกเข้า ระยะสัญญา proposal package dp hq" },
   { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",   keywords: "ลูกค้าเป้าหมาย lead leads ลีด ทั้งเครือ" },
   { label: "ลูกค้าทั้งเครือ",       href: "/hq/customers",  keywords: "ลูกค้า customer customers ทั้งเครือ" },
   { label: "ภาพรวมยอดขาย",        href: "/hq/pipeline",   keywords: "ภาพรวมยอดขาย pipeline ยอดขาย sales funnel" },

@@ -14,7 +14,7 @@
 //
 // สิทธิ์: ดูได้ทุกบทบาทฝั่งสำนักงานใหญ่ · เพิ่ม/แก้/ลบ/ตั้งเป็นตัวแทน = ผู้มีสิทธิ์จัดการตัวแทน (dealers:manage)
 //   RLS ของ 0170 บังคับซ้ำที่ฐานข้อมูล — การซ่อนปุ่มตรงนี้เป็นแค่ความสะดวก ไม่ใช่ด่านจริง
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   UserPlus, Users, AlarmClock, Store, Percent, Search, X, Trash2, Copy, Check,
@@ -100,6 +100,21 @@ export default function HQProspectsPage() {
     dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e));
   }, []);
   useEffect(() => { void โหลด(); โหลดตัวแทน(); }, [โหลด, โหลดตัวแทน]);
+
+  // ?open=ID → เปิดหน้าต่างรายนั้นหลังโหลดรายการเสร็จ (ลิงก์จากหน้าใบเสนอแพ็กเกจ) · ล้างพารามิเตอร์กันเปิดซ้ำตอนรีเฟรช
+  //   ไม่พบ = บอกตรง ๆ ไม่เงียบ (รายนั้นอาจถูกลบไปแล้ว)
+  const เปิดจากลิงก์แล้ว = useRef(false);
+  useEffect(() => {
+    if (!loaded || เปิดจากลิงก์แล้ว.current) return;
+    เปิดจากลิงก์แล้ว.current = true;
+    const รหัส = new URLSearchParams(window.location.search).get("open");
+    if (!รหัส) return;
+    window.history.replaceState(null, "", "/hq/prospects");
+    const ราย = list.find(x => String(x.id) === รหัส);
+    if (ราย) เปิดแก้(ราย);
+    else if (!loadErr) แจ้งพลาด("ไม่พบลูกค้าเป้าหมายรายนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ทำครั้งเดียวตอนโหลดเสร็จ ไม่ต้องทำซ้ำเมื่อรายการเปลี่ยน
+  }, [loaded]);
 
   const ชื่อตัวแทน = useMemo(() => new Map(dealers.map(d => [d.code, d.name])), [dealers]);
   const จังหวัดในข้อมูล = useMemo(

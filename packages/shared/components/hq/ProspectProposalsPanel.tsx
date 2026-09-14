@@ -7,7 +7,7 @@
 //   ต้องมีใบที่ส่งแล้วหรือตอบรับอย่างน้อย 1 ใบ ถึงจะสร้างตัวแทนใหม่จากรายนี้ได้ (หน้าแม่รับรายการผ่าน onChange)
 //
 // ส่งแล้วแก้เนื้อหา/ลบไม่ได้ — ฐานข้อมูลบังคับ (0172) หน้าจอแค่ไม่เปิดปุ่มให้กด
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Plus, Printer, Pencil, Trash2, X } from "lucide-react";
 import { proposals as proposalsRepo, hqCompany as hqCompanyRepo } from "@pms/shared/lib/data";
@@ -32,12 +32,14 @@ const MUTED = "#6b7280";
 // ร่างในฟอร์ม — มูลค่าเก็บเป็นข้อความที่มีลูกน้ำระหว่างพิมพ์ (บอสสั่ง 26 ส.ค. 69: ช่องเงินต้องเห็นลูกน้ำ)
 type ร่างใบ = Partial<DealerPackageProposal> & { มูลค่าที่พิมพ์: string; ระยะที่พิมพ์: string; เป้าที่พิมพ์: string };
 
-export function ProspectProposalsPanel({ prospect, editable, onChange }: {
+export function ProspectProposalsPanel({ prospect, editable, onChange, เปิดฟอร์มทันที = false }: {
   prospect: DealerProspect;
   /** ผู้มีสิทธิ์จัดการตัวแทน — ไม่มีสิทธิ์ = ดู/พิมพ์ได้อย่างเดียว */
   editable: boolean;
   /** แจ้งรายการใบล่าสุดให้หน้าแม่ (ใช้ตัดสินว่ากดสร้างตัวแทนใหม่ได้หรือยัง) */
   onChange?: (list: DealerPackageProposal[]) => void;
+  /** เปิดฟอร์มออกใบใหม่ให้ครั้งเดียวหลังโหลดรายการเสร็จ (หน้ารวมใบเสนอแพ็กเกจ /hq/proposals) */
+  เปิดฟอร์มทันที?: boolean;
 }) {
   const logAudit = useAuditLogger();
   const [list, setList] = useState<DealerPackageProposal[]>([]);
@@ -64,6 +66,15 @@ export function ProspectProposalsPanel({ prospect, editable, onChange }: {
     }
   }, [prospect.id, ตั้งรายการ]);
   useEffect(() => { void โหลด(); }, [โหลด]);
+
+  // รอรายการโหลดเสร็จก่อนค่อยเปิด — เปิดก่อนแล้วโหลดพังจะมีฟอร์มค้างทับข้อความผิดพลาด · เปิดแค่ครั้งเดียว ปิดแล้วไม่เด้งกลับ
+  const เปิดฟอร์มไปแล้ว = useRef(false);
+  useEffect(() => {
+    if (!เปิดฟอร์มทันที || !editable || !loaded || loadErr || เปิดฟอร์มไปแล้ว.current) return;
+    เปิดฟอร์มไปแล้ว.current = true;
+    เปิดออกใบใหม่();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- เปิดออกใบใหม่ อ่านแค่ prospect ที่ผูกกับแผงนี้ตลอดอายุแผง
+  }, [เปิดฟอร์มทันที, editable, loaded, loadErr]);
 
   function เปิดออกใบใหม่() {
     setFormErr("");

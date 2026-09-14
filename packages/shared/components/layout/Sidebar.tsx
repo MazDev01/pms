@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Store, Phone, Package,
   Settings, GitMerge, ScrollText, Users,
-  CalendarDays, FolderOpen, History, LogOut, Crown, ArrowLeft, UserPlus,
+  CalendarDays, FolderOpen, History, LogOut, Crown, ArrowLeft, UserPlus, FileText,
 } from "lucide-react";
 import { useRole } from "@pms/shared/context/RoleContext";
 import { roleLabelOf } from "@pms/shared/lib/mock";
@@ -55,6 +55,8 @@ const HQ_NAV: NavGroup[] = [
       { label: "แดชบอร์ดสำนักงานใหญ่", href: "/hq/dashboard",  icon: <LayoutDashboard size={16} /> },
       // ลูกค้าเป้าหมายของสำนักงานใหญ่ = ผู้สนใจเป็นตัวแทน · วางก่อน "ตัวแทนจำหน่าย" เพราะสำเร็จแล้วไหลไปเป็นตัวแทน (บอสสั่ง 14 ก.ย. 69)
       { label: "ลูกค้าเป้าหมาย (HQ)", href: "/hq/prospects", icon: <UserPlus size={16} /> },
+      // ใบเสนอแพ็กเกจของทุกราย รวมที่เดียว — อยู่ถัดจากลูกค้าเป้าหมาย (HQ) เพราะเป็นขั้นต่อจากกันก่อนตั้งเป็นตัวแทน (บอสสั่ง 14 ก.ย. 69)
+      { label: "ใบเสนอแพ็กเกจตัวแทน", href: "/hq/proposals", icon: <FileText size={16} /> },
       { label: "ตัวแทนจำหน่าย",     href: "/hq/dealers",    icon: <Store size={16} /> },
       { label: "ภาพรวมยอดขาย",     href: "/hq/pipeline",   icon: <GitMerge size={16} /> },
       { label: "ลูกค้าเป้าหมายทั้งเครือ", href: "/hq/leads",  icon: <Phone size={16} /> },
