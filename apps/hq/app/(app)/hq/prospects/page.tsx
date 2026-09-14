@@ -632,23 +632,26 @@ export default function HQProspectsPage() {
             {/* เพิ่ม/ลบคอลัมน์ต้องแก้ colgroup ด้วย (table-layout: fixed — ใส่ความกว้างที่ th ไม่มีผล)
                 minWidth รวม ~900px พอดีกรอบจอคอม · จอแคบให้เลื่อนซ้ายขวา ไม่บีบจนอ่านไม่ออก
                 "ติดต่อล่าสุด" มาแทน "ช่องทาง/ประเภทธุรกิจ" (ดูได้ในแผง) — สิ่งที่ทีมต้องเห็นทุกวันคือใครไม่ได้ติดต่อนานแล้ว */}
-            {/* "ช่องทาง" กลับมาอยู่ในตาราง (บอสสั่ง 14 ก.ย. 69: "แสดง ช่องทางที่เข้ามา ด้วย") · minWidth รวม ~950px ยังพอดีกรอบจอคอม */}
+            {/* "ช่องทาง" กลับมาอยู่ในตาราง (บอสสั่ง 14 ก.ย. 69: "แสดง ช่องทางที่เข้ามา ด้วย")
+                "ชื่อบนโซเชียล" แยกเป็นคอลัมน์ (บอสสั่ง 14 ก.ย. 69: "เพิ่มชื่อ ชื่อบนโซเชียล ในตาราง") — เดิมเขียนปนกับประเภทธุรกิจใต้ชื่อ อ่านไม่ออกว่าอันไหนคืออะไร
+                9 คอลัมน์ minWidth รวม ~958px ยังพอดีกรอบจอคอม (~968px) */}
             <colgroup>
-              <col style={{ width: "21%", minWidth: 180 }} />
-              <col style={{ width: "11%", minWidth: 108 }} />
-              <col style={{ width: "10%", minWidth: 90 }} />
-              <col style={{ width: "10%", minWidth: 96 }} />
-              <col style={{ width: "16%", minWidth: 150 }} />
-              <col style={{ width: "12%", minWidth: 108 }} />
-              <col style={{ width: "12%", minWidth: 106 }} />
-              <col style={{ width: "8%", minWidth: 66 }} />
+              <col style={{ width: "18%", minWidth: 170 }} />
+              <col style={{ width: "12%", minWidth: 110 }} />
+              <col style={{ width: "10%", minWidth: 104 }} />
+              <col style={{ width: "8%", minWidth: 84 }} />
+              <col style={{ width: "9%", minWidth: 90 }} />
+              <col style={{ width: "14%", minWidth: 140 }} />
+              <col style={{ width: "11%", minWidth: 100 }} />
+              <col style={{ width: "11%", minWidth: 100 }} />
+              <col style={{ width: "7%", minWidth: 60 }} />
             </colgroup>
             <thead>
-              <tr><th>ลูกค้าเป้าหมาย</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ช่องทาง</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
+              <tr><th>ชื่อ</th><th>ชื่อบนโซเชียล</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ช่องทาง</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
+                <tr><td colSpan={9} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
                   {!loaded ? "กำลังโหลด…" : list.length === 0 ? "ยังไม่มีลูกค้าเป้าหมาย" : "ไม่พบลูกค้าเป้าหมายตามตัวกรองที่เลือก"}
                 </td></tr>
               )}
@@ -667,15 +670,14 @@ export default function HQProspectsPage() {
                           {p.logo ? <img src={p.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (p.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || "—")}
                         </span>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                          {(p.businessType || (p.social && p.social !== p.name)) && (
-                            <div style={{ fontSize: "0.7rem", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {[p.businessType, p.social && p.social !== p.name ? p.social : ""].filter(Boolean).join(" · ")}
-                            </div>
+                          <div title={p.name} style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                          {p.businessType && (
+                            <div title={p.businessType} style={{ fontSize: "0.7rem", color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.businessType}</div>
                           )}
                         </div>
                       </div>
                     </td>
+                    <td title={p.social ?? undefined} style={{ fontSize: "0.8rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.social || "—"}</td>
                     <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{p.phone ? formatPhone(p.phone) || p.phone : "—"}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.province || "—"}</td>
                     <td title={p.channel ?? undefined} style={{ fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.channel || "—"}</td>
