@@ -44,6 +44,14 @@ export function ProspectActivityPanel({ prospect, activities, loaded, loadErr, e
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // เปิดฟอร์มแล้วเติมวันนัดติดตามที่ตั้งไว้ในแท็บภาพรวมให้เลย ไม่ต้องกรอกซ้ำ (บอสสั่ง 14 ก.ย. 69)
+  //   เติมเฉพาะวันที่ยังไม่เลย — วันที่เลยไปแล้วเติมมาก็บันทึกไม่ผ่าน (ห้ามนัดย้อนหลัง) ปล่อยว่างให้ตั้งใหม่
+  React.useEffect(() => {
+    if (!formOpen) return;
+    setNextFollowUp(prospect.followUp && prospect.followUp >= APP_NOW_ISO ? prospect.followUp : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- เติมตอนเปิดฟอร์มเท่านั้น ไม่ทับที่ผู้ใช้กำลังแก้
+  }, [formOpen, prospect.id]);
+
   async function บันทึก() {
     const row = เตรียมบันทึกการติดต่อ({ prospectId: prospect.id, channel, body, nextFollowUp });
     const ผิด = ตรวจบันทึกการติดต่อ(row, APP_NOW_ISO);
@@ -92,6 +100,9 @@ export function ProspectActivityPanel({ prospect, activities, loaded, loadErr, e
             <div>
               <label className="form-label" htmlFor="pc-next">นัดติดตามครั้งถัดไป</label>
               <input id="pc-next" className="form-input" type="date" min={APP_NOW_ISO} value={nextFollowUp} onChange={e => setNextFollowUp(e.target.value)} />
+              <div style={{ fontSize: "0.66rem", color: "#6b7280", marginTop: 3 }}>
+                {prospect.followUp && nextFollowUp === prospect.followUp ? "ใช้วันที่ตั้งไว้เดิม — แก้ได้ถ้านัดใหม่" : "ไม่บังคับ · ใส่แล้ววันนัดของรายนี้เปลี่ยนตาม"}
+              </div>
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <label className="form-label" htmlFor="pc-body">คุยอะไรไป *</label>

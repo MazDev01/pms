@@ -153,7 +153,7 @@ test("[func·hq] ตัวกรองไม่ได้ติดต่อ 7/14/
   const sb = await db(ADMIN);
   const name = `${NS}-เงียบ20วัน`;
   const ยี่สิบวันก่อน = new Date(Date.now() - 20 * 86_400_000).toISOString();
-  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name, status: "contacted", created_at: ยี่สิบวันก่อน }).select("id").single();
+  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name, status: "contacted", created_at: ยี่สิบวันก่อน, follow_up: "2027-01-15" }).select("id").single();
   expect(error).toBeNull();
   const id = (pr as { id: number }).id;
 
@@ -175,6 +175,8 @@ test("[func·hq] ตัวกรองไม่ได้ติดต่อ 7/14/
   await expect(แผง.getByRole("button", { name: /บันทึกการติดต่อ|ออกใบเสนอแพ็กเกจ/ }), "หัวแผงต้องไม่มีปุ่มลัดสองปุ่มนี้").toHaveCount(0);
   await แผง.getByRole("tab", { name: "บันทึกการติดต่อ" }).click();
   await แผง.getByRole("button", { name: "บันทึกการติดต่อ" }).first().click();
+  // วันนัดที่ตั้งไว้ในภาพรวมต้องเติมมาให้ ไม่ต้องกรอกซ้ำ (บอสสั่ง 14 ก.ย. 69)
+  await expect(แผง.locator("#pc-next"), "ต้องเติมวันนัดติดตามเดิมให้").toHaveValue("2027-01-15");
   await แผง.locator("#pc-channel").selectOption("Facebook");
   await แผง.locator("#pc-body").fill("ทักกลับมาถามค่าแรกเข้า");
   await แผง.getByRole("button", { name: "บันทึกการติดต่อ" }).last().click();

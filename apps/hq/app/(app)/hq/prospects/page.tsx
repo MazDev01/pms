@@ -506,8 +506,14 @@ export default function HQProspectsPage() {
         </div>
         <div>
           <label className="form-label" htmlFor="pr-channel">ช่องทางที่เข้ามา</label>
-          <input id="pr-channel" className="form-input" list="pr-channel-list" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value)} placeholder="เลือกหรือพิมพ์เอง" />
-          <datalist id="pr-channel-list">{ช่องทางแนะนำ.map(c => <option key={c} value={c} />)}</datalist>
+          {/* ดรอปดาวน์ (บอสสั่ง 14 ก.ย. 69: "ทำเป็นดรอปดาวน์ด้วย") — ค่าเดิมที่ไม่อยู่ในรายการ (พิมพ์เองสมัยก่อน/นำเข้า) ต้องยังเห็น ไม่หายเงียบ */}
+          <select id="pr-channel" className="form-select" value={ร่าง.channel ?? ""} onChange={e => ตั้งค่า("channel", e.target.value || null)} style={{ cursor: "pointer" }}>
+            <option value="">— ยังไม่ระบุ —</option>
+            {[...ช่องทางแนะนำ, "อื่น ๆ"].map(c => <option key={c} value={c}>{c}</option>)}
+            {ร่าง.channel && ![...ช่องทางแนะนำ, "อื่น ๆ"].includes(ร่าง.channel) && (
+              <option value={ร่าง.channel}>{ร่าง.channel} (ตามที่บันทึกไว้)</option>
+            )}
+          </select>
         </div>
         {/* ภาคมาก่อนจังหวัด — จังหวัดที่เลือกได้ขึ้นกับภาคที่เลือก (บอสสั่ง 14 ก.ย. 69) · "ทุกภาค" = ทั่วประเทศ */}
         <div>
