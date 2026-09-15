@@ -27,6 +27,10 @@ import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
 import { Search, X, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase, LayoutGrid, List } from "lucide-react";
 import { AccountRequestsCard } from "@pms/shared/components/hq/AccountRequestsCard";
+import { useRecruitSettings } from "@pms/shared/lib/useHQConfig";
+import { เป้าตามแพ็กเกจ } from "@pms/shared/lib/recruitSettings";
+import { PACKAGE_ORDER, packageLabel } from "@pms/shared/lib/dealerProposals";
+import type { DealerPackage } from "@pms/shared/lib/data/types";
 
 const CARD: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", boxShadow: "0 2px 14px rgba(0,51,102,.07)" };
 const REGIONS = ["เหนือ", "กลาง", "ตะวันออก", "ตะวันตก", "ใต้", "อีสาน"];
@@ -199,7 +203,10 @@ function HQDealersPageInner() {
   // Modals
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<DealerRow | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, status: "active" as "active" | "inactive" });
+  const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, package: "" as DealerPackage | "", status: "active" as "active" | "inactive" });
+  // เป้ายอดขายเชื่อมกับแพ็กเกจ (บอสสั่ง 15 ก.ย. 69) — แพ็กเกจที่ตั้งเป้าไว้ที่ ตั้งค่า › หาตัวแทน ใช้เป้านั้นเสมอ (ฐานข้อมูลบังคับ 0178)
+  const ค่าตั้งหาตัวแทน = useRecruitSettings();
+  const เป้าแพ็กเกจ = เป้าตามแพ็กเกจ(ค่าตั้งหาตัวแทน, form.package || null);
   const [formErr, setFormErr] = useState("");
   // สาขาที่ลบไม่ได้เพราะยังมีข้อมูล → เปิดกล่อง "ย้ายข้อมูลไปสาขาอื่น" ให้แทนที่จะจบแค่แจ้งเตือน
   const [moveFrom, setMoveFrom] = useState<DealerRow | null>(null);
@@ -246,7 +253,7 @@ function HQDealersPageInner() {
   const avgOnTime = avgOf(c => perfOf(c).onTimePct);
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
-  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, status: d.status }); setFormErr(""); setShowForm(true); }
+  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, package: d.package ?? "", status: d.status }); setFormErr(""); setShowForm(true); }
 
   // เปลี่ยนภาค: อัปเดตภาค
   //   และล้างจังหวัดทิ้งถ้ามันไม่ได้อยู่ในภาคใหม่ — กันข้อมูลขัดกันเอง (เช่น ภาค "ใต้" + จังหวัด "เชียงใหม่")
@@ -274,7 +281,10 @@ function HQDealersPageInner() {
     if (dupe) { setFormErr(`รหัส "${code}" มีอยู่แล้ว`); return; }
 
     if (editTarget) {
-      setDealers(prev => prev.map(d => d.id === editTarget.id ? { ...d, name: form.name.trim(), province: form.province.trim(), region: form.region, revenueTarget: form.revenueTarget, status: form.status } : d));
+      setDealers(prev => prev.map(d => d.id === editTarget.id ? {
+        ...d, name: form.name.trim(), province: form.province.trim(), region: form.region,
+        revenueTarget: เป้าแพ็กเกจ ?? form.revenueTarget, package: form.package || null, status: form.status,
+      } : d));
       logAudit("แก้ไขตัวแทน", `${code} · ${form.name.trim()}`);
       setShowForm(false);
       return;
@@ -674,15 +684,39 @@ function HQDealersPageInner() {
                   </select>
                 </InputField>
                 <div className="form-section">เป้าหมายและสถานะ</div>
+                <InputField label="แพ็กเกจ">
+                  <select aria-label="แพ็กเกจตัวแทน" value={form.package} onChange={e => setForm(f => ({ ...f, package: e.target.value as DealerPackage | "" }))}
+                    style={{ ...INPUT_STYLE, cursor: "pointer" }}>
+                    <option value="">— ยังไม่ระบุ —</option>
+                    {PACKAGE_ORDER.map(k => <option key={k} value={k}>{packageLabel[k]}</option>)}
+                  </select>
+                </InputField>
                 <InputField label="เป้ายอดขาย (บาท/ปี)">
                   {/* เป้ายอดขายติดลบไม่มีอยู่จริงในทางธุรกิจ และทำให้ตัวเลขอื่นเพี้ยนตามเป็นทอด ๆ:
                       เปอร์เซ็นต์ความสำเร็จของสาขา · เป้ารวมทั้งเครือบนหัวตาราง · กราฟเทียบเป้า
                       เดิมรับค่าติดลบตรง ๆ (พิมพ์ -5000000 แล้วบันทึกลงระบบได้จริง · พบ 6 ส.ค. 69) */}
                   {/* ช่องเงินใช้ text + ใส่ลูกน้ำเอง — type="number" ใส่ลูกน้ำไม่ได้ และหลักล้านอ่านยากมาก (บอสสั่ง 26 ส.ค. 69) */}
-                  <input type="text" inputMode="numeric" aria-label="เป้ายอดขายทั้งปี"
-                    value={form.revenueTarget ? formatMoneyInput(String(form.revenueTarget)) : ""}
-                    onChange={e => setForm(f => ({ ...f, revenueTarget: parseMoneyInput(e.target.value) }))}
-                    placeholder="0" style={INPUT_STYLE} />
+                  {เป้าแพ็กเกจ != null ? (
+                    <>
+                      <input type="text" aria-label="เป้ายอดขายทั้งปี" value={formatMoneyInput(String(เป้าแพ็กเกจ))} readOnly disabled
+                        style={{ ...INPUT_STYLE, background: "#f3f4f6", color: "#374151", fontWeight: 700, cursor: "not-allowed" }} />
+                      <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
+                        ตามแพ็กเกจ {packageLabel[form.package as DealerPackage]} · แก้ได้ที่ ตั้งค่า › หาตัวแทน
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <input type="text" inputMode="numeric" aria-label="เป้ายอดขายทั้งปี"
+                        value={form.revenueTarget ? formatMoneyInput(String(form.revenueTarget)) : ""}
+                        onChange={e => setForm(f => ({ ...f, revenueTarget: parseMoneyInput(e.target.value) }))}
+                        placeholder="0" style={INPUT_STYLE} />
+                      {form.package && (
+                        <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
+                          แพ็กเกจ {packageLabel[form.package]} ยังไม่ได้ตั้งเป้า — กรอกเองได้ หรือตั้งที่ ตั้งค่า › หาตัวแทน
+                        </div>
+                      )}
+                    </>
+                  )}
                 </InputField>
                 <InputField label="สถานะ">
                   {/* ต้องมีค่าเสมอ — ตัวแทนต้องเป็นเปิดหรือปิดใช้งานอย่างใดอย่างหนึ่ง ว่างไม่ได้ */}

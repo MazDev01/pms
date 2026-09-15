@@ -1,11 +1,27 @@
 // ค่าตั้ง "หาตัวแทน" ของสำนักงานใหญ่ (บอสสั่ง 14 ก.ย. 69)
 import { describe, it, expect } from "vitest";
+import { เป้าตามแพ็กเกจ, ใช้เป้าตามแพ็กเกจ } from "../../packages/shared/lib/recruitSettings";
 import {
   รวมค่าตั้งหาตัวแทน, DEFAULT_RECRUIT_SETTINGS, ช่องทางที่เข้ามาเริ่มต้น, ช่องทางติดต่อเริ่มต้น,
   จัดรายการ, ชื่องานที่ใช้, บวกวัน, ตัวเลือกพร้อมค่าเดิม, จำนวนรายการสูงสุด,
 } from "../../packages/shared/lib/recruitSettings";
 import { buildDealerProposalHTML } from "../../packages/shared/lib/dealerProposalPrint";
 import type { DealerPackageProposal, HQCompany } from "../../packages/shared/lib/data/types";
+
+describe("เป้ายอดขายตามแพ็กเกจ (0178)", () => {
+  const ค่าตั้ง = รวมค่าตั้งหาตัวแทน({ proposal: { packages: { standard: { annualTarget: 3_000_000 }, exclusive: { annualTarget: null } } } });
+  it("มีแพ็กเกจที่ตั้งเป้าไว้ = ใช้เป้าของแพ็กเกจ", () => {
+    expect(เป้าตามแพ็กเกจ(ค่าตั้ง, "standard")).toBe(3_000_000);
+    expect(ใช้เป้าตามแพ็กเกจ({ package: "standard", revenueTarget: 0 }, ค่าตั้ง).revenueTarget).toBe(3_000_000);
+  });
+  it("ไม่มีแพ็กเกจ หรือแพ็กเกจยังไม่ตั้งเป้า = คงเป้าที่กรอกเอง", () => {
+    expect(เป้าตามแพ็กเกจ(ค่าตั้ง, "exclusive")).toBeNull();
+    expect(เป้าตามแพ็กเกจ(ค่าตั้ง, null)).toBeNull();
+    const เอง = { package: null, revenueTarget: 1_500_000 };
+    expect(ใช้เป้าตามแพ็กเกจ(เอง, ค่าตั้ง)).toBe(เอง);
+    expect(ใช้เป้าตามแพ็กเกจ({ package: "exclusive" as const, revenueTarget: 9 }, ค่าตั้ง).revenueTarget).toBe(9);
+  });
+});
 
 describe("รวมค่าตั้งหาตัวแทน", () => {
   it("ยังไม่เคยตั้ง = ค่าเริ่มต้น · ช่องทางคงรายการเดิม · ประเภทธุรกิจ/เหตุผลว่าง (ไม่กุรายการให้)", () => {

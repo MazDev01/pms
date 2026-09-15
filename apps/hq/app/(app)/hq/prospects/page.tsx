@@ -450,6 +450,7 @@ export default function HQProspectsPage() {
         const แถวใหม่: DealerRow = {
           id: code, code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region,
           revenueTarget: ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด)?.annualTarget ?? 0, status: "active",
+          package: ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด)?.package ?? null,
           // ต้องมีอีเมลเข้าระบบ ไม่งั้นหน้าเข้าสู่ระบบแบบตัวอย่างหาสาขานี้ไม่เจอ (เดิมสร้างแล้วเข้าระบบไม่ได้)
           //   ไม่เก็บรหัสผ่าน (ดู DealerCredentials) — โหมดตัวอย่างเข้าด้วยรหัสกลาง DEMO_PASSWORD
           credentials: { email: อีเมลเดโม },

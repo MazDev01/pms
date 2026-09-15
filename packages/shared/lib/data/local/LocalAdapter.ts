@@ -41,7 +41,7 @@ import { accountLocal } from "./accountLocal";
 import type { DataAdapter } from "../ports";
 import type { LeadRow, QuotationMock, CustomerRow, AppointmentMock, Scope, DealerSettings, HQCompany, CustomerNote, SystemUser, DealerProspect, DealerPackageProposal, ProspectActivity, DealerProspectStatus } from "../types";
 import { เตรียมบันทึก } from "@pms/shared/lib/dealerProspects";
-import { รวมค่าตั้งหาตัวแทน } from "@pms/shared/lib/recruitSettings";
+import { รวมค่าตั้งหาตัวแทน, ใช้เป้าตามแพ็กเกจ } from "@pms/shared/lib/recruitSettings";
 import { เตรียมบันทึกใบ, ใบล็อกแล้ว, สถานะที่เปลี่ยนไปได้, มีใบเสนอที่ส่งแล้ว } from "@pms/shared/lib/dealerProposals";
 import {
   ตรวจเปลี่ยนขั้น, ข้อความเพิ่มราย, ข้อความเปลี่ยนขั้น, ข้อความใบเสนอ, ข้อความถอยเพราะใบถูกปฏิเสธ, ประวัติใหม่ก่อน,
@@ -64,6 +64,12 @@ const LOGO_KEY = "dealer_company_logo_v2";
 
 const ok = <T>(v: T): Promise<T> => Promise.resolve(v);
 const done = (): Promise<void> => Promise.resolve();
+
+function ค่าตั้งหาตัวแทนเดโม() {
+  let raw: unknown = null;
+  try { raw = JSON.parse(localStorage.getItem(RECRUIT_KEY) ?? "null"); } catch {}
+  return รวมค่าตั้งหาตัวแทน(raw);
+}
 
 // ── ประวัติลูกค้าเป้าหมาย HQ (โหมดเดโม) — เลียนแบบตัวดักของฐานข้อมูล 0174 ──
 function บันทึกประวัติเดโม(a: Omit<ProspectActivity, "id" | "actor" | "createdAt">): ProspectActivity {
@@ -158,7 +164,8 @@ export const LocalAdapter: DataAdapter = {
   realtime: { subscribeSales: () => () => {}, subscribeCatalog: () => () => {}, subscribeSettings: () => () => {}, subscribeNotes: () => () => {}, subscribeDealerSettings: () => () => {} },
   dealers: {
     list: () => ok(loadHQDealers()),
-    save: (all) => { writeKey(HQ_DEALERS_KEY, all); return done(); },
+    // เป้าตามแพ็กเกจ (แบบเดียวกับตัวดักฐานข้อมูล 0178)
+    save: (all) => { writeKey(HQ_DEALERS_KEY, all.map(d => ใช้เป้าตามแพ็กเกจ(d, ค่าตั้งหาตัวแทนเดโม()))); return done(); },
     remove: (code) => {
       writeKey(HQ_DEALERS_KEY, loadHQDealers().filter(d => d.code !== code));
       // ลบตัวแทนแล้ว ลูกค้าเป้าหมายต้นทางลบตามไปด้วย พร้อมใบเสนอและประวัติ (บอสสั่ง 15 ก.ย. 69: "ลบไปแล้วลบไปเลย")
@@ -223,12 +230,15 @@ export const LocalAdapter: DataAdapter = {
       fireSettings();
       return done();
     },
-    getRecruitSettings: () => {
-      let raw: unknown = null;
-      try { raw = JSON.parse(localStorage.getItem(RECRUIT_KEY) ?? "null"); } catch {}
-      return ok(รวมค่าตั้งหาตัวแทน(raw));
+    getRecruitSettings: () => ok(ค่าตั้งหาตัวแทนเดโม()),
+    saveRecruitSettings: (s) => {
+      const ค่าใหม่ = รวมค่าตั้งหาตัวแทน(s);
+      writeKey(RECRUIT_KEY, ค่าใหม่);
+      // แก้เป้าของแพ็กเกจ → ตัวแทนในแพ็กเกจนั้นเปลี่ยนตาม (แบบเดียวกับตัวดักฐานข้อมูล 0178)
+      writeKey(HQ_DEALERS_KEY, loadHQDealers().map(d => ใช้เป้าตามแพ็กเกจ(d, ค่าใหม่)));
+      fireSettings();
+      return done();
     },
-    saveRecruitSettings: (s) => { writeKey(RECRUIT_KEY, รวมค่าตั้งหาตัวแทน(s)); fireSettings(); return done(); },
     // ยิง event หลังบันทึก → หน้าอื่น (origin เดียวกัน) ที่ใช้ค่านโยบาย/เป้า อัปเดตทันที
     savePolicy: (p) => { writeKey(HQ_POLICY_KEY, p); fireSettings(); return done(); },
     saveTargets: (t) => { writeKey(HQ_TARGETS_KEY, t); fireSettings(); return done(); },

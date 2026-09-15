@@ -115,6 +115,21 @@ export function รวมค่าตั้งหาตัวแทน(raw: unkn
   };
 }
 
+/** เป้ายอดขายรายปีตามแพ็กเกจของตัวแทน (บอสสั่ง 15 ก.ย. 69) = "เป้ายอดซื้อต่อปี" ของแพ็กเกจนั้น
+ *  ไม่มีแพ็กเกจ / แพ็กเกจยังไม่ตั้งเป้า = null → ใช้เป้าที่กรอกเอง · กติกาเดียวกับตัวดักฐานข้อมูล 0178 */
+export function เป้าตามแพ็กเกจ(s: Pick<HQRecruitSettings, "proposal">, pkg?: DealerPackage | null): number | null {
+  if (pkg !== "standard" && pkg !== "exclusive") return null;
+  return s.proposal.packages[pkg]?.annualTarget ?? null;
+}
+
+/** ตัวแทนหนึ่งราย → เป้าตามแพ็กเกจ (ถ้ามี) · ไม่เข้าเงื่อนไข = คืนตัวเดิม */
+export function ใช้เป้าตามแพ็กเกจ<T extends { package?: DealerPackage | null; revenueTarget: number }>(
+  d: T, s: Pick<HQRecruitSettings, "proposal">,
+): T {
+  const t = เป้าตามแพ็กเกจ(s, d.package);
+  return t == null || t === d.revenueTarget ? d : { ...d, revenueTarget: t };
+}
+
 /** ชื่องานที่ใช้แสดง — ตั้งเองไว้ใช้ชื่อนั้น ไม่ได้ตั้งใช้ชื่อเดิม */
 export const ชื่องานที่ใช้ = (s: Pick<HQRecruitSettings, "taskLabels">, key: คีย์งานหาตัวแทน, เดิม: string) =>
   s.taskLabels[key]?.trim() || เดิม;

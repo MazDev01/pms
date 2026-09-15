@@ -110,6 +110,8 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   const prospectId = Number(body.prospectId);
   // ใบเสนอแพ็กเกจที่จะตั้งเป็น "ตอบรับ" หลังสร้างสาขาสำเร็จ (null = มีใบที่ตอบรับอยู่แล้ว ไม่ต้องแตะ)
   let ใบที่จะตอบรับ: number | null = null;
+  // แพ็กเกจของสาขา = แพ็กเกจของใบหลัก → เป้ายอดขายเชื่อมกับแพ็กเกจ (0178 · บอสสั่ง 15 ก.ย. 69)
+  let แพ็กเกจ: string | null = null;
   {
     if (!Number.isInteger(prospectId) || prospectId <= 0) return bad(400, "ไม่พบลูกค้าเป้าหมายที่อ้างถึง");
     const { data: pr, error: prErr } = await admin.from("dealer_prospects")
@@ -125,7 +127,7 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     //   กติกาเดียวกับฝั่งตัวแทนที่ปิดการขายไม่ได้ถ้ายังไม่มีใบเสนอราคาที่ส่งแล้ว (0145)
     //   ใบร่าง/ปฏิเสธไม่นับ · ตรวจก่อนสร้างบัญชี ไม่ทิ้งบัญชีกำพร้า
     const { data: ใบ, error: ใบErr } = await admin.from("dealer_package_proposals")
-      .select("id, status, annual_target").eq("prospect_id", prospectId).in("status", ["sent", "accepted"])
+      .select("id, status, annual_target, package").eq("prospect_id", prospectId).in("status", ["sent", "accepted"])
       .order("id", { ascending: false });
     if (ใบErr) {
       console.error("[create-dealer] ตรวจใบเสนอแพ็กเกจไม่สำเร็จ", ใบErr);
@@ -138,6 +140,7 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
     // เป้ายอดขายรายปีของสาขา = เป้ายอดซื้อต่อปีในใบหลัก (ตอบรับล่าสุด ไม่มีค่อยใช้ส่งแล้วล่าสุด)
     //   กติกาเดียวกับหน้าจอ (ใบหลักสำหรับตั้งตัวแทน) · ใบไม่ระบุ = ใช้ค่าที่ส่งมา (หน้าจอส่ง 0)
     const ใบหลัก = ใบ.find(x => x.status === "accepted") ?? ใบ[0];
+    แพ็กเกจ = ใบหลัก.package === "standard" || ใบหลัก.package === "exclusive" ? ใบหลัก.package : null;
     if (ใบหลัก.annual_target != null && Number.isFinite(Number(ใบหลัก.annual_target)) && Number(ใบหลัก.annual_target) >= 0) {
       revenueTarget = Number(ใบหลัก.annual_target);
     }
@@ -190,7 +193,7 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   // ── 4) ทะเบียนสาขา + โปรไฟล์ (ผูกกับบัญชีที่เพิ่งสร้าง) · ล้มเหลว = ย้อน auth user ──
   try {
     await must(admin.from("dealers").insert({
-      code, name, province, region, revenue_target: revenueTarget, status: "active",
+      code, name, province, region, revenue_target: revenueTarget, status: "active", package: แพ็กเกจ,
     }));
     // profiles.id → auth.users(id) · บทบาทตั้งต้นของหัวสาขา = DEALER_ADMIN
     await must(admin.from("profiles").upsert({
