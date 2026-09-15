@@ -17,6 +17,8 @@ import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import { HQ_ROLES } from "@pms/shared/lib/permissions";
 import { bad, authorizeAdmin, auditLog, withErrors, strongPassword, deleteAuthUserLoud } from "@pms/shared/lib/adminRoute";
 import type { UserRole } from "@pms/shared/lib/mock";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -29,6 +31,20 @@ const DENY = "ไม่มีสิทธิ์จัดการผู้ใช
 
 // บทบาทที่อนุญาตให้ "ตั้ง" ให้ผู้ใช้ HQ (ฝั่งสำนักงานใหญ่เท่านั้น — ไม่ออกบัญชีตัวแทนจากที่นี่)
 function isHQRole(r: string): r is UserRole { return (HQ_ROLES as readonly string[]).includes(r); }
+
+/** เก็บสำเนารหัสผ่าน (เข้ารหัส) ของผู้ใช้ HQ ให้เจ้าของบัญชีดูได้ที่หน้าโปรไฟล์ (/api/account/hq-secret)
+ *  ยังไม่ตั้งกุญแจ = ลบสำเนาเก่าทิ้ง (ห้ามปล่อยรหัสเก่าที่ใช้ไม่ได้ค้างไว้) · ล้มเหลวไม่ทำให้การตั้งรหัสพัง แต่ต้องมีร่องรอย */
+async function จำสำเนารหัสHQ(admin: SupabaseClient, userId: string, password: string) {
+  const secret = dealerSecretReady() ? encryptSecret(password) : null;
+  if (secret) {
+    const { error } = await admin.from("hq_login_secrets")
+      .upsert({ user_id: userId, secret, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (error) console.error(`[hq-user-secret] เก็บสำเนารหัสของ ${userId} ไม่สำเร็จ`, error);
+  } else {
+    const { error } = await admin.from("hq_login_secrets").delete().eq("user_id", userId);
+    if (error) console.error(`[hq-user-secret] ลบสำเนารหัสเก่าของ ${userId} ไม่สำเร็จ`, error);
+  }
+}
 
 async function must(p: PromiseLike<{ error: { message: string } | null }>) {
   const { error } = await p;
@@ -48,7 +64,7 @@ export const POST = withErrors("create-user", async (req: NextRequest) => {
 
   const body = (await req.json().catch(() => null)) as null | {
     name?: string; email?: string; phone?: string; role?: string; department?: string;
-    status?: string; avatar?: string;
+    status?: string; avatar?: string; password?: string;
   };
   if (!body) return bad(400, "รูปแบบข้อมูลไม่ถูกต้อง");
   const name = String(body.name ?? "").trim();
@@ -69,7 +85,12 @@ export const POST = withErrors("create-user", async (req: NextRequest) => {
     return bad(403, "ตั้งบัญชีใหม่เป็นแอดมินสูงสุดได้เฉพาะแอดมินสูงสุดเท่านั้น");
   }
 
-  const password = strongPassword("BJ-");
+  // รหัสผ่านชั่วคราวที่ผู้ดูแลกรอกในฟอร์ม (15 ก.ย. 69) — เดิมช่องนี้แสดงอยู่แต่ไม่ถูกส่งมาใช้
+  //   ไม่กรอก = สุ่มให้เหมือนเดิม · ตรวจกติกาเดียวกับทุกทาง (passwordRule.ts)
+  const typedPassword = String(body.password ?? "");
+  const ผิดกติกา = typedPassword ? ตรวจรหัสผ่านใหม่(typedPassword) : null;
+  if (ผิดกติกา) return bad(400, ผิดกติกา);
+  const password = typedPassword || strongPassword("BJ-");
 
   // สร้างบัญชี auth (ยืนยันอีเมลให้เลย เพราะเป็นบัญชีที่ HQ ออกให้)
   const { data: createdUser, error: createErr } = await admin.auth.admin.createUser({
@@ -101,7 +122,8 @@ export const POST = withErrors("create-user", async (req: NextRequest) => {
     return bad(503, "สร้างผู้ใช้ไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
 
-  // คืนรหัสให้หน้าจอโชว์ครั้งเดียว (แจ้งครั้งเดียว — ไม่เก็บไว้ที่ไหน)
+  // คืนรหัสให้หน้าจอโชว์ครั้งเดียว · เก็บสำเนาเข้ารหัสให้เจ้าของบัญชีดูรหัสตัวเองได้ (หน้าโปรไฟล์)
+  await จำสำเนารหัสHQ(admin, uid, password);
   await auditLog(admin, prof, "เพิ่มผู้ใช้ HQ", email);
   return NextResponse.json({ ok: true, id: uid, email, password });
 });
@@ -217,6 +239,9 @@ export const PATCH = withErrors("reset-hq-user-pw", async (req: NextRequest) => 
     console.error(`[reset-hq-user-pw] ตั้งรหัสผ่านใหม่ให้ ${id} ไม่สำเร็จ`, updateErr);
     return bad(503, "ตั้งรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
+
+  // สำเนาที่เจ้าของบัญชีเปิดดูได้ต้องเป็นรหัสใหม่ — เดิมไม่อัปเดต เจ้าของเปิดดูแล้วเห็นรหัสเก่าที่ใช้ไม่ได้
+  await จำสำเนารหัสHQ(admin, id, password);
 
   // บันทึกว่าเป็นรหัสที่ผู้ดูแลตั้งเองหรือระบบสุ่มให้ — ต่างกันตอนตรวจย้อนหลัง (ห้ามบันทึกตัวรหัส)
   await auditLog(admin, prof, "ตั้งรหัสผ่านใหม่ให้ผู้ใช้ HQ",

@@ -181,6 +181,36 @@ test("[api] ผูกกับตัวแทนที่มีอยู่แ�
   expect(โดนกัน.status, "ตัวแทนต้องผูกไม่ได้").toBe(403);
 });
 
+test("[func·hq] ผูกกับสาขาที่ยังไม่มีบัญชี → เตือนก่อนผูก · ผูกแล้วมีปุ่มไปตั้งอีเมล/รหัสผ่าน", async ({ page }) => {
+  test.skip(!ADMIN_SERVICE_ROLE_KEY, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
+  const errs = watchErrors(page);
+  const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const sb = await db(ADMIN);
+  // สาขาทดสอบไม่มีบัญชี (เทสต์ก่อนหน้าปิดใช้งานไว้) — เปิดใช้งานและปลดรายที่ผูกค้างก่อน
+  await admin.from("dealers").upsert({ code: NOACC_CODE, name: "ZZTEST สาขาไม่มีบัญชี", province: "ระยอง", region: "ตะวันออก", revenue_target: 0, status: "active" });
+  await admin.from("dealer_prospects").delete().eq("dealer_code", NOACC_CODE);
+  const name = `${NS}-ผูกผ่านหน้าจอไม่มีบัญชี`;
+  const { data: ins, error } = await sb.from("dealer_prospects").insert({ name, status: "meeting" }).select("id").single();
+  expect(error).toBeNull();
+  const id = (ins as { id: number }).id;
+
+  await loginUI(page, HQ_ORIGIN, `/hq/prospects?open=${id}`, ADMIN);
+  const แผง = page.getByRole("dialog", { name: "ข้อมูลลูกค้าเป้าหมาย" });
+  await แผง.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).first().click({ timeout: 30_000 });
+  const ตั้ง = page.getByRole("dialog", { name: "ตั้งเป็นตัวแทนจำหน่าย" });
+  await ตั้ง.getByLabel("ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว").check();
+  await ตั้ง.locator("#cv-existing").selectOption(NOACC_CODE);
+  await expect(ตั้ง.getByText(`ตัวแทน ${NOACC_CODE} ยังไม่มีบัญชีเข้าระบบ`), "ต้องเตือนก่อนกดผูก").toBeVisible({ timeout: 15_000 });
+  await ตั้ง.getByRole("button", { name: "ผูกกับตัวแทนนี้" }).click();
+
+  const เตือน = page.getByRole("dialog", { name: "ตัวแทนยังไม่มีบัญชีเข้าระบบ" });
+  await expect(เตือน, "ผูกแล้วต้องเตือนให้เห็นชัด").toBeVisible({ timeout: 20_000 });
+  await waitRow(sb, "dealer_prospects", { id, status: "won", dealer_code: NOACC_CODE });
+  await เตือน.getByRole("link", { name: "ไปตั้งอีเมล/รหัสผ่าน" }).click();
+  await page.waitForURL(new RegExp(`/hq/dealers/${NOACC_CODE}`), { timeout: 30_000 });
+  assertNoErrors(errs, "ผูกกับสาขาที่ไม่มีบัญชี");
+});
+
 test("[func·hq] ตั้งเป็นตัวแทนจำหน่ายใหม่ → ได้สาขาพร้อมบัญชี · กดซ้ำไม่ได้สาขาซ้อน", async ({ page }) => {
   const errs = watchErrors(page);
   const name = `${NS}-สาขาใหม่`;

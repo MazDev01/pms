@@ -137,6 +137,8 @@ export async function resetDealerSelfQuota(code: string): Promise<
 export type CreateHQUserInput = {
   name: string; email: string; phone: string; role: string; department: string;
   status: "active" | "inactive"; avatar?: string;
+  /** รหัสผ่านชั่วคราวที่กรอกในฟอร์ม · เว้นว่าง = เซิร์ฟเวอร์สุ่มให้ */
+  password?: string;
 };
 export type CreateHQUserResult =
   | { ok: true; id: string; email: string; password: string }

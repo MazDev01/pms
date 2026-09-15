@@ -111,7 +111,7 @@ function StatusDot({ status }: { status: UserStatus }) {
 
 // ── Add/Edit Dialog (modal กลาง) ─────────────────────────────────────────────────
 type UserForm = { firstName: string; lastName: string; email: string; phone: string; role: RoleKey; department: string; tempPassword: string; status: UserStatus; avatar?: string };
-function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">) => void; onClose: () => void; canEditPrivileges?: boolean }) {
+function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { initial?: AppUser; onSave: (u: Omit<AppUser, "id" | "createdAt">, tempPassword?: string) => void; onClose: () => void; canEditPrivileges?: boolean }) {
   // ล็อกบทบาท/สถานะตอน "แก้ไข" ถ้าไม่มีสิทธิ์ (HQ_MANAGEMENT) — RLS/trigger จะปฏิเสธการเปลี่ยนอยู่แล้ว
   // บทบาท/สถานะ = เรื่องสิทธิ์ ต้องเป็นผู้ดูแลระบบเท่านั้นถึงแต่งตั้งได้ ทั้งตอนเพิ่มและตอนแก้
   // (ฐานข้อมูลปฏิเสธอยู่แล้ว 0026/0064 — แต่หน้าจอต้องไม่หลอกให้กรอกแล้วค่อยไปเจอ error)
@@ -137,7 +137,7 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
   const แผนกตามบทบาท = f.role ? defaultDept(f.role) : "";
   const valid = f.firstName.trim() && /\S+@\S+\.\S+/.test(f.email) && !!f.role && !!แผนกตามบทบาท;
   const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: `1px solid ${BORDER}`, fontSize: "0.84rem", color: STEEL, background: "#fff", outline: "none", boxSizing: "border-box" };
-  const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: แผนกตามบทบาท, status: f.status, avatar: f.avatar }); onClose(); };
+  const submit = () => { if (!valid) return; onSave({ name: `${f.firstName.trim()} ${f.lastName.trim()}`.trim(), email: f.email.trim(), phone: f.phone.trim(), role: f.role, department: แผนกตามบทบาท, status: f.status, avatar: f.avatar }, initial ? undefined : f.tempPassword); onClose(); };
   const dialogRef = useModalA11y<HTMLDivElement>(onClose);   // Esc ปิด · Tab วนในกล่อง · คืนโฟกัสเดิม
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(45,45,45,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -167,7 +167,7 @@ function UserDialog({ initial, onSave, onClose, canEditPrivileges = true }: { in
           <div><label className="form-label">ชื่อ *</label><input style={inp} value={f.firstName} autoFocus onChange={e => setF({ ...f, firstName: e.target.value })} placeholder="ชื่อ" /></div>
           <div><label className="form-label">นามสกุล</label><input style={inp} value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} placeholder="นามสกุล" /></div>
           <div className="col-full"><label className="form-label">อีเมล (ใช้เข้าระบบ) *</label><input style={inp} value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="name@benjamin.co.th" /></div>
-          {!initial && <><div className="col-full"><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value.replace(/\s/g, "") })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ใช้เข้าระบบครั้งแรก ผู้ใช้ต้องเปลี่ยนเองหลังเข้าระบบ</div></div></>}
+          {!initial && <><div className="col-full"><label className="form-label">รหัสผ่านชั่วคราว</label><input style={{ ...inp, fontFamily: "monospace", fontWeight: 700 }} value={f.tempPassword} onChange={e => setF({ ...f, tempPassword: e.target.value.replace(/\s/g, "") })} /><div style={{ fontSize: "0.66rem", color: MUTED, marginTop: 4 }}>ใช้รหัสนี้เข้าระบบครั้งแรก · อย่างน้อย 8 ตัว ห้ามมีช่องว่าง · เว้นว่าง = ระบบสุ่มให้ · ผู้ใช้เปลี่ยนเองได้ที่หน้าโปรไฟล์</div></div></>}
           <div><label className="form-label">เบอร์โทร</label><input style={inp} inputMode="tel" value={f.phone} onChange={e => setF({ ...f, phone: formatPhone(e.target.value) })} placeholder="08x-xxx-xxxx" /></div>
           <div className="form-section">สิทธิ์การใช้งาน</div>
           <div><label className="form-label">บทบาท (Role) *{lockPriv && <span style={{ fontSize: "0.6rem", color: MUTED, fontWeight: 400 }}> · เฉพาะผู้ดูแลระบบ</span>}</label><select style={{ ...inp, ...(lockPriv ? { background: "#f3f4f6", cursor: "not-allowed", opacity: .7 } : {}) }} aria-label="บทบาท" disabled={lockPriv} value={f.role} onChange={e => setF({ ...f, role: e.target.value as RoleKey, department: defaultDept(e.target.value as RoleKey) })}><option value="">— ยังไม่ระบุ —</option>{ROLES.filter(r => r.key !== "SUPER_ADMIN" || canEditPrivileges).map(r => <option key={r.key} value={r.key}>{r.th}</option>)}</select></div>
@@ -333,7 +333,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       ...(patch.email !== undefined ? { email: next.email } : {}),
     }).catch(e => notify("บันทึกผู้ใช้ไม่สำเร็จ: " + friendlyError(e)));
   };
-  function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">) {
+  function saveUser(id: string | null, data: Omit<AppUser, "id" | "createdAt">, tempPassword?: string) {
     if (id !== null) {
       // เปลี่ยนบทบาท = ยกระดับ/ลดสิทธิ์ผู้ใช้ — เหตุการณ์อ่อนไหว ต้องบันทึกแยกให้เห็นการเปลี่ยนแปลงชัดเจน
       // (ไม่ปนกับ "แก้ไขผู้ใช้" ทั่วไปที่อาจแค่แก้ชื่อ/แผนก) — Phase 9 (Logging/Audit)
@@ -346,7 +346,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       return;
     }
     // โหมดจริง (supabase): สร้างบัญชีเข้าระบบจริงผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ (service_role)
-    if (REAL_BACKEND) { void createRemote(data); return; }
+    if (REAL_BACKEND) { void createRemote(data, tempPassword); return; }
     // โหมดเดโม (local): ไม่มีระบบยืนยันตัวตนจริง — เพิ่มไว้ในมุมมองพอให้ทดลอง UI
     if (!canCreate) {
       notify("เพิ่มผู้ใช้จากหน้านี้ไม่ได้ — บัญชีเข้าระบบถูกจัดการโดยระบบยืนยันตัวตน ต้องสร้างบัญชีที่นั่นก่อน แล้วชื่อจะขึ้นในหน้านี้เอง");
@@ -356,11 +356,13 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
     setUsers(prev => [{ id: nid, ...data, createdAt: MOCK_TODAY }, ...prev]);
     logAudit("เพิ่มผู้ใช้ HQ", data.email);
   }
-  // สร้างบัญชีเข้าระบบจริง — รหัสผ่านสุ่มที่เซิร์ฟเวอร์ กลับมาโชว์ครั้งเดียวใน modal
-  async function createRemote(data: Omit<AppUser, "id" | "createdAt">) {
+  // สร้างบัญชีเข้าระบบจริง — ใช้รหัสชั่วคราวที่กรอกในฟอร์ม (เว้นว่าง = เซิร์ฟเวอร์สุ่มให้) กลับมาโชว์ครั้งเดียวใน modal
+  //   เดิมช่อง "รหัสผ่านชั่วคราว" แสดงอยู่แต่ไม่ถูกส่งไป ผู้ใช้ได้รหัสคนละตัวกับที่เห็นในฟอร์ม (แก้ 15 ก.ย. 69)
+  async function createRemote(data: Omit<AppUser, "id" | "createdAt">, tempPassword?: string) {
     const res = await createHQUser({
       name: data.name, email: data.email, phone: data.phone, role: data.role,
       department: data.department, status: data.status, avatar: data.avatar,
+      password: tempPassword?.trim() || undefined,
     });
     if (!res.ok) { notify("เพิ่มผู้ใช้ไม่สำเร็จ: " + res.error); return; }
     // audit บันทึกที่ route (server-side · การันตี) แล้ว — ไม่ลง client ซ้ำ
@@ -547,7 +549,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       {detailUser && <UserDetailDrawer user={detailUser} onClose={() => setDetailUser(null)} onEdit={() => { setDialogUser(detailUser); setDetailUser(null); }} />}
-      {addOpen && <UserDialog canEditPrivileges={canEditPrivileges} onSave={data => saveUser(null, data)} onClose={() => setAddOpen(false)} />}
+      {addOpen && <UserDialog canEditPrivileges={canEditPrivileges} onSave={(data, tempPassword) => saveUser(null, data, tempPassword)} onClose={() => setAddOpen(false)} />}
       {dialogUser && <UserDialog initial={dialogUser} canEditPrivileges={canEditPrivileges} onSave={data => saveUser(dialogUser.id, data)} onClose={() => setDialogUser(null)} />}
 
       {/* ตั้งรหัสผ่านให้ตรง ๆ — ผู้ดูแลพิมพ์เองก็ได้ หรือให้ระบบสุ่มให้ (ไม่พึ่งอีเมลเลย) */}

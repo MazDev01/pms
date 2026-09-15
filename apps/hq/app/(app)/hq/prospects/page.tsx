@@ -38,6 +38,7 @@ import {
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
 import { createDealerAccount, linkProspectToDealer, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { DEMO_PASSWORD } from "@pms/shared/lib/auth";
 import { ProspectProposalsPanel } from "@pms/shared/components/hq/ProspectProposalsPanel";
 import { ProspectJourney } from "@pms/shared/components/hq/ProspectJourney";
 import { ProspectActivityPanel } from "@pms/shared/components/hq/ProspectActivityPanel";
@@ -441,9 +442,17 @@ export default function HQProspectsPage() {
       try {
         invalidateCache("dealers.list");
         const ทะเบียน = await dealersRepo.list();
+        const อีเมลเดโม = (อีเมล || `${code.toLowerCase()}@partner-agent.co.th`).toLowerCase();
+        if (ทะเบียน.some(d => d.credentials?.email?.toLowerCase() === อีเมลเดโม)) {
+          setConvErr(`อีเมล ${อีเมลเดโม} ถูกใช้กับตัวแทนรายอื่นแล้ว — ใช้อีเมลอื่น`);
+          return;
+        }
         const แถวใหม่: DealerRow = {
           id: code, code, name: ฟอร์ม.name.trim(), province: ฟอร์ม.province, region: ฟอร์ม.region,
           revenueTarget: ใบหลักสำหรับตั้งตัวแทน(ใบของรายที่เปิด)?.annualTarget ?? 0, status: "active",
+          // ต้องมีอีเมลเข้าระบบ ไม่งั้นหน้าเข้าสู่ระบบแบบตัวอย่างหาสาขานี้ไม่เจอ (เดิมสร้างแล้วเข้าระบบไม่ได้)
+          //   ไม่เก็บรหัสผ่าน (ดู DealerCredentials) — โหมดตัวอย่างเข้าด้วยรหัสกลาง DEMO_PASSWORD
+          credentials: { email: อีเมลเดโม },
         };
         await dealersRepo.save([...ทะเบียน, แถวใหม่]);
         const row = เตรียมบันทึก({ ...converting, status: "won", dealerCode: code, convertedAt: new Date().toISOString(), lostReason: null });
@@ -457,7 +466,7 @@ export default function HQProspectsPage() {
           if (ใบส่งแล้ว) await proposalsRepo.setStatus(ใบส่งแล้ว.id, "accepted");
         }
         logAudit("สร้างตัวแทน", `${code} · ${แถวใหม่.name} (จากลูกค้าเป้าหมาย #${saved.id})`);
-        แจ้งสำเร็จ(`สร้างตัวแทน ${code} แล้ว (โหมดเดโม — ไม่มีบัญชีเข้าระบบจริง)`);
+        setCreds({ name: แถวใหม่.name, code, email: อีเมลเดโม, password: DEMO_PASSWORD });
         setConverting(null); ปิดแผงทันที();
       } catch (e) {
         setConvErr(friendlyError(e, "สร้างตัวแทนไม่สำเร็จ"));
@@ -1086,6 +1095,11 @@ export default function HQProspectsPage() {
                 </div>
               </div>
             ))}
+            {!REAL_BACKEND && (
+              <div role="note" style={{ background: "#fff8e6", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", fontSize: "0.76rem", color: "#92400e", fontWeight: 600, lineHeight: 1.6 }}>
+                โหมดข้อมูลตัวอย่าง — ใช้อีเมลนี้กับรหัสกลางของชุดตัวอย่างเข้าระบบฝั่งตัวแทนได้ ไม่ใช่บัญชีจริง
+              </div>
+            )}
             <div style={{ fontSize: "0.72rem", color: MUTED, margin: "8px 0 14px", lineHeight: 1.6 }}>
               เปิดดูรหัสย้อนหลัง หรือแก้อีเมล/รหัสผ่านได้ที่หน้ารายละเอียดตัวแทน {creds.code} · ตัวแทนเปลี่ยนเองได้ 2 ครั้ง ครั้งต่อไปต้องขออนุมัติ
             </div>

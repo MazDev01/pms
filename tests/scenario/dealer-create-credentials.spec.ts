@@ -30,6 +30,7 @@ async function purge() {
     const { data: profs } = await admin.from("profiles").select("id").eq("dealer_code", code);
     for (const p of profs ?? []) await admin.auth.admin.deleteUser(String(p.id)).catch(() => {});
     await admin.from("dealer_login_secrets").delete().eq("dealer_code", code);
+    await admin.from("dealer_account_changes").delete().eq("dealer_code", code).then(() => {}, () => {});
     await admin.from("dealer_settings").delete().eq("dealer_code", code);
     await admin.from("dealers").delete().eq("code", code);
   }
@@ -202,4 +203,19 @@ test("[ui·hq] แก้อีเมล/รหัสผ่านผ่านห�
   const { error } = await sb.auth.signInWithPassword({ email: อีเมลใหม่, password: "ZZtest-UI-2569" });
   expect(error, `ต้องล็อกอินด้วยคู่ใหม่ที่แก้ผ่านหน้าจอได้ (${error?.message ?? ""})`).toBeNull();
   await sb.auth.signOut().catch(() => {});
+
+  // ── ปุ่ม "คืนสิทธิ์แก้เอง" (บอสสั่ง 15 ก.ย. 69) — ตัวแทนใช้สิทธิ์ครบ 2 ครั้ง → HQ กดคืน → เริ่มนับใหม่ ──
+  expect((await admin.from("dealer_account_changes").insert([
+    { dealer_code: CODE3, kind: "password", by_self: true }, { dealer_code: CODE3, kind: "password", by_self: true },
+  ])).error).toBeNull();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const สิทธิ์ = page.getByTestId("self-quota");
+  await expect(สิทธิ์, "HQ ต้องเห็นว่าตัวแทนใช้สิทธิ์ครบแล้ว").toContainText("2 / 2", { timeout: 30_000 });
+  await page.getByRole("button", { name: "คืนสิทธิ์แก้เอง" }).click();
+  await page.getByRole("button", { name: "คืนสิทธิ์", exact: true }).click();
+  await expect(สิทธิ์, "กดคืนแล้วต้องเริ่มนับใหม่").toContainText("0 / 2", { timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "คืนสิทธิ์แก้เอง" }), "ไม่มีสิทธิ์ที่ใช้ไป ปุ่มต้องกดไม่ได้").toBeDisabled();
+  const { count } = await admin.from("dealer_account_changes").select("id", { count: "exact", head: true })
+    .eq("dealer_code", CODE3).eq("by_self", true);
+  expect(count, "ประวัติการแก้เองเดิมต้องยังอยู่").toBe(2);
 });
