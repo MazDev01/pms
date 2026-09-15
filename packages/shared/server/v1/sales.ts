@@ -44,6 +44,11 @@ const body = <T,>(req: NextRequest) => req.json().catch(() => null) as Promise<T
  *  (hq/leads:407 และ hq/quotations:262 ส่ง limit = จำนวนแถวทั้งหมด) — ตั้งต่ำกว่านี้ = ส่งออกพัง
  *  ตัวเลขนี้จึงเผื่อการส่งออกไว้เต็มที่ แต่ยังกันคนขอทีละล้านแถวเพื่อถ่วงระบบ */
 const MAX_PAGE = 20000;
+/** เพดานจำนวน "สาขา" ต่อคำขอ (รายการรหัสสาขา / เกณฑ์รายสาขา)
+ *  ⚠️ เดิมตั้ง 100 — บั๊กจริงบนเว็บจริง 15 ก.ย. 69: เครือมีตัวแทน 155 สาขา หน้า /hq/leads ส่งเกณฑ์ติดตามครบทุกสาขา
+ *     ถูกปฏิเสธ 400 "perDealer มีได้ไม่เกิน 100 รายการ" → ตารางลูกค้าเป้าหมายโหลดไม่ขึ้น + แถบ "โหลดข้อมูลบางส่วนไม่สำเร็จ"
+ *  ตั้งเผื่อการขยายเครือไว้มาก แต่ยังกันคำขอขนาดผิดปกติ */
+export const MAX_DEALERS = 5000;
 const LEAD_STATUS = ["WAITING", "BULLET", "QUOTED", "FOLLOWUP", "NEGO", "PAID", "CANCELLED"] as const;
 const QUOTE_STATUS = ["draft", "sent_to_client", "won", "lost", "expired"] as const;
 
@@ -52,11 +57,11 @@ const QUOTE_STATUS = ["draft", "sent_to_client", "won", "lost", "expired"] as co
 const QUOTE_SORT_COLS = ["date", "id", "customer", "total_value", "status", "province", "dealer_code", "expiry"] as const;
 
 /** ตัวกรอง + แบ่งหน้าของรายการลูกค้าเป้าหมาย (RPC leads_page) */
-const LEAD_PAGE_SHAPE = {
+export const LEAD_PAGE_SHAPE = {
   limit:       num({ int: true, min: 1, max: MAX_PAGE, def: 50 }),
   offset:      num({ int: true, min: 0, max: 1_000_000, def: 0 }),
   status:      oneOf(LEAD_STATUS, { optional: true }),
-  dealerCodes: arrOf(str({ max: 20 }), { optional: true, max: 100 }),
+  dealerCodes: arrOf(str({ max: 20 }), { optional: true, max: MAX_DEALERS }),
   province:    str({ max: 100, optional: true }),
   product:     str({ max: 200, optional: true }),
   source:      str({ max: 100, optional: true }),
@@ -66,19 +71,19 @@ const LEAD_PAGE_SHAPE = {
   overdue:     bool(),
   asOf:        isoDate({ optional: true }),
   defaultDays: num({ int: true, min: 0, max: 3650, optional: true }),
-  perDealer:   mapOfNum({ optional: true, max: 100 }),
+  perDealer:   mapOfNum({ optional: true, max: MAX_DEALERS }),
   // -1 = ไม่ได้ส่งมา (ผู้เรียกยังไม่รู้จำนวนรวม) · >= 0 = รู้แล้ว ให้ข้ามการนับที่ฐานข้อมูล
   knownTotal:  num({ int: true, min: -1, max: 100_000_000, def: -1 }),
 } as const;
 
 /** ตัวกรอง + แบ่งหน้า + เรียงของรายการใบเสนอราคา */
-const QUOTE_PAGE_SHAPE = {
+export const QUOTE_PAGE_SHAPE = {
   limit:          num({ int: true, min: 1, max: MAX_PAGE, def: 50 }),
   offset:         num({ int: true, min: 0, max: 1_000_000, def: 0 }),
   status:         oneOf(QUOTE_STATUS, { optional: true }),
-  dealerCodes:    arrOf(str({ max: 20 }), { optional: true, max: 100 }),
+  dealerCodes:    arrOf(str({ max: 20 }), { optional: true, max: MAX_DEALERS }),
   productLines:   arrOf(str({ max: 200 }), { optional: true, max: 100 }),
-  searchDealers:  arrOf(str({ max: 20 }), { optional: true, max: 100 }),
+  searchDealers:  arrOf(str({ max: 20 }), { optional: true, max: MAX_DEALERS }),
   search:         str({ max: 200, optional: true }),
   dateStart:      isoDate({ optional: true }),
   dateEnd:        isoDate({ optional: true }),
@@ -384,7 +389,7 @@ export const customersPOST = handler("customers.write", async (req, sb) => {
       limit:       num({ int: true, min: 1, max: MAX_PAGE, def: 50 }),
       offset:      num({ int: true, min: 0, max: 1_000_000, def: 0 }),
       search:      str({ max: 200, optional: true }),
-      dealerCodes: arrOf(str({ max: 20 }), { optional: true, max: 100 }),
+      dealerCodes: arrOf(str({ max: 20 }), { optional: true, max: MAX_DEALERS }),
       knownTotal:  num({ int: true, min: -1, max: 100_000_000, def: -1 }),
     }, await body<unknown>(req));
     const { dealer, isHQ } = scopeOf(req);

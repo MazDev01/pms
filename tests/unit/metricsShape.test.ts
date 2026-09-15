@@ -25,3 +25,24 @@ describe("เส้นทาง api · สรุปใบเสนอราค�
     expect(out.byHour).toEqual([{ h: 14, quotes: 2, won: 1, wonVal: 2_500_000 }]);
   });
 });
+
+// ⚠️ บั๊กจริงบนเว็บจริง 15 ก.ย. 69: ใบ 0157 เพิ่ม won รายสาขา + quoted รายเดือน
+//    เส้นทาง supabase ส่งต่อแล้ว แต่เส้นทางนี้ไม่ส่ง → /hq/pipeline ขึ้น "NaN ราย / NaN ราย"
+describe("เส้นทาง api · สรุปลูกค้าเป้าหมาย", () => {
+  const shape = CALLS.leadSummary.shape as (d: unknown) => any;
+
+  it("ส่งต่อ won รายสาขา และ quoted รายเดือน เป็นตัวเลขเสมอ", () => {
+    const out = shape({
+      byDealer: [{ dealer_code: "HQ", leads: 155, quoted: 1, won: 0 }],
+      byMonth: [{ y: 2026, m: 5, new: 34, won: 0, lost: 1, quoted: 1 }],
+    });
+    expect(out.byDealer).toEqual([{ dealerCode: "HQ", leads: 155, quoted: 1, won: 0 }]);
+    expect(out.byMonth).toEqual([{ y: 2026, m: 5, created: 34, won: 0, lost: 1, quoted: 1 }]);
+  });
+
+  it("ฐานข้อมูลไม่ส่ง won/quoted มา ต้องได้ 0 ไม่ใช่ NaN", () => {
+    const out = shape({ byDealer: [{ dealer_code: "CNX", leads: 3, quoted: 1 }], byMonth: [{ y: 2026, m: 0, new: 2 }] });
+    expect(Number.isNaN(out.byDealer[0].leads - out.byDealer[0].won)).toBe(false);
+    expect(Number.isNaN(out.byMonth[0].quoted - out.byMonth[0].won)).toBe(false);
+  });
+});

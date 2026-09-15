@@ -49,8 +49,11 @@ export const CALLS: Record<string, { rpc: string; args: (a: Args) => Args; shape
         byProduct: (x.byProduct ?? []).map(r => ({ product: S(r.product), count: N(r.count) })),
         byProvince: (x.byProvince ?? []).map(r => ({ province: S(r.province), count: N(r.count) })),
         byLostReason: (x.byLostReason ?? []).map(r => ({ reason: S(r.reason), count: N(r.count), value: N(r.value) })),
-        byMonth: (x.byMonth ?? []).map(r => ({ y: N(r.y), m: N(r.m), created: N(r.new), won: N(r.won), lost: N(r.lost) })),
-        byDealer: (x.byDealer ?? []).map(r => ({ dealerCode: S(r.dealer_code), leads: N(r.leads), quoted: N(r.quoted) })),
+        // ⚠️ quoted รายเดือน + won รายสาขา (ใบ 0157) ต้องส่งต่อด้วย — ให้ตรงกับ SupabaseAdapter
+        //   บั๊กจริงบนเว็บจริง 15 ก.ย. 69: ลืมสองช่องนี้ → /hq/pipeline คิด leads - undefined = NaN
+        //   การ์ด "ลูกค้าเป้าหมาย เทียบ ที่ออกใบเสนอราคาแล้ว" ขึ้น "NaN ราย / NaN ราย"
+        byMonth: (x.byMonth ?? []).map(r => ({ y: N(r.y), m: N(r.m), created: N(r.new), won: N(r.won), lost: N(r.lost), quoted: N(r.quoted) })),
+        byDealer: (x.byDealer ?? []).map(r => ({ dealerCode: S(r.dealer_code), leads: N(r.leads), quoted: N(r.quoted), won: N(r.won) })),
       };
     },
   },
