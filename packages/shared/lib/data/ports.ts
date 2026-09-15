@@ -174,13 +174,15 @@ export type AccountState = {
   selfChangesLimit: number;
   /** คำขอที่ยังรอสำนักงานใหญ่อนุมัติ (มีได้ทีละใบ) */
   pending: AccountRequest | null;
+  /** คำขอล่าสุดที่ถูกปฏิเสธ (ยังไม่มีการเปลี่ยนบัญชีหลังจากนั้น) — ตัวแทนต้องรู้ผล ไม่ใช่คำขอหายเงียบ */
+  lastRejected?: { kind: AccountChangeKind; newEmail?: string; requestedAt: string; decidedAt: string; reason?: string } | null;
 };
 
 /** ผลของการกดบันทึก — applied = มีผลทันที · pending = ส่งคำขอรออนุมัติแล้ว */
 export type AccountChangeResult = { applied: boolean; pending: boolean; message: string };
 
-// ⚠️ ตัวแทน "ดูรหัสผ่านของตัวเองไม่ได้" (บอสสั่ง 28 ส.ค. 69) — ดูได้แค่อีเมลเข้าระบบ
-//    รหัสผ่านเปลี่ยนได้อย่างเดียว (ต้องยืนยันด้วยรหัสปัจจุบัน) · การเปิดดูสำเนารหัสเป็นสิทธิ์ของ HQ เท่านั้น
+// ตัวแทนเปลี่ยนอีเมล/รหัสผ่านเองได้ (ยืนยันด้วยรหัสปัจจุบัน) · ดูรหัสของตัวเองได้เมื่อยืนยันเลขทางอีเมล (ดูด้านล่าง)
+//   สำนักงานใหญ่เปิดดูสำเนารหัสของทุกสาขาได้ที่ /api/admin/dealers/secret
 export interface AccountRepo {
   /** สถานะบัญชีของสาขา (อีเมลปัจจุบัน · โควตาที่เหลือ · คำขอที่ค้าง) */
   state(dealerCode: string): Promise<AccountState>;

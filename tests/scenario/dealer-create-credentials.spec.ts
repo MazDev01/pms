@@ -79,6 +79,17 @@ test("[admin] รหัสผ่านสั้นเกินไป/อีเ�
   const เพี้ยน = await call({ email: "ไม่ใช่อีเมล" });
   expect(เพี้ยน.status(), "อีเมลผิดรูปแบบต้องถูกปฏิเสธ").toBe(400);
 
+  // รหัสมีช่องว่าง = ปฏิเสธที่เซิร์ฟเวอร์ (หน้าเข้าสู่ระบบตัดช่องว่างทิ้ง ตั้งไว้แล้วเจ้าของเข้าไม่ได้)
+  const เว้นวรรค = await call({ password: "ZZtest Pass 2569" });
+  expect(เว้นวรรค.status(), "รหัสมีช่องว่างต้องถูกปฏิเสธที่เซิร์ฟเวอร์").toBe(400);
+  expect((await เว้นวรรค.json() as { error?: string }).error ?? "").toMatch(/ช่องว่าง/);
+
+  // อีเมลที่มีบัญชีใช้อยู่แล้ว = บอกตรง ๆ ว่าซ้ำ ไม่ใช่ "ลองใหม่อีกครั้ง" (อีเมลเติมมาจากลูกค้าเป้าหมายได้)
+  const ผู้ดูแล = (await (await db(ADMIN)).auth.getUser()).data.user?.email ?? "";
+  const ซ้ำ = await call({ email: ผู้ดูแล, password: PASSWORD });
+  expect(ซ้ำ.status(), "อีเมลซ้ำต้องได้ 400 ที่แก้เองได้").toBe(400);
+  expect((await ซ้ำ.json() as { error?: string }).error ?? "").toMatch(/ถูกใช้ไปแล้ว/);
+
   // ต้องไม่มีสาขา/บัญชีตกค้างจากคำขอที่ถูกปฏิเสธ
   const { data: ตกค้าง } = await admin.from("dealers").select("code").eq("code", "ZTD");
   expect(ตกค้าง ?? [], "คำขอที่ถูกปฏิเสธต้องไม่ทิ้งสาขาไว้").toEqual([]);

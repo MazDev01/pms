@@ -17,6 +17,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import { auditLog, withErrors, อีเมลถูกใช้แล้ว } from "@pms/shared/lib/adminRoute";
 import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
+import { ตรวจรหัสผ่านใหม่ } from "@pms/shared/lib/passwordRule";
 
 export const runtime = "nodejs";
 
@@ -87,13 +88,28 @@ async function รหัสปัจจุบันถูกไหม(email: str
 class ยังไม่ได้ติดตั้ง extends Error {}
 
 async function สรุปสถานะ(admin: SupabaseClient, dealerCode: string, email: string) {
-  const [changes, pendingRes] = await Promise.all([
+  const [changes, pendingRes, rejectedRes, lastChangeRes] = await Promise.all([
     admin.from("dealer_account_changes")
       .select("id", { count: "exact", head: true }).eq("dealer_code", dealerCode).eq("by_self", true),
     admin.from("dealer_account_requests")
       .select("id, dealer_code, kind, new_email, status, requested_at")
       .eq("dealer_code", dealerCode).eq("status", "pending").maybeSingle(),
+    // คำขอล่าสุดที่ถูกปฏิเสธ — หน้าอนุมัติบอก HQ ว่า "ตัวแทนจะเห็นว่าถูกปฏิเสธ" จึงต้องส่งให้ตัวแทนเห็นจริง
+    admin.from("dealer_account_requests")
+      .select("kind, new_email, requested_at, decided_at, reason")
+      .eq("dealer_code", dealerCode).eq("status", "rejected")
+      .order("decided_at", { ascending: false }).limit(1).maybeSingle(),
+    admin.from("dealer_account_changes")
+      .select("changed_at").eq("dealer_code", dealerCode)
+      .order("changed_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+  // มีการเปลี่ยนบัญชีหลังถูกปฏิเสธแล้ว = เรื่องนั้นจบไปแล้ว ไม่ต้องขึ้นเตือนค้างไว้
+  const ปฏิเสธ = rejectedRes.data;
+  const เปลี่ยนล่าสุด = lastChangeRes.data?.changed_at ? String(lastChangeRes.data.changed_at) : "";
+  const lastRejected = ปฏิเสธ?.decided_at && (!เปลี่ยนล่าสุด || String(ปฏิเสธ.decided_at) > เปลี่ยนล่าสุด) ? {
+    kind: ปฏิเสธ.kind, newEmail: ปฏิเสธ.new_email ?? undefined,
+    requestedAt: String(ปฏิเสธ.requested_at), decidedAt: String(ปฏิเสธ.decided_at), reason: ปฏิเสธ.reason ?? undefined,
+  } : null;
   // ⚠️ ต้อง "ล้มแบบปิดประตู" เมื่อยืนยันโควตาไม่ได้ — ไม่ใช่ปล่อยผ่านเป็น 0 ครั้ง
   //    ยังไม่ได้ติดตั้งตาราง PostgREST คืน count = null โดยไม่มี error (ไม่ใช่ 42P01 เสมอไป)
   //    ถ้าถือว่า "ใช้ไป 0 ครั้ง" ตัวแทนจะแก้บัญชีได้ไม่จำกัด และไม่มีบันทึกให้สำนักงานใหญ่เห็นเลย
@@ -111,6 +127,7 @@ async function สรุปสถานะ(admin: SupabaseClient, dealerCode: st
       newEmail: pending.new_email ?? undefined, status: "pending" as const,
       requestedAt: String(pending.requested_at),
     } : null,
+    lastRejected,
   };
 }
 
@@ -121,8 +138,8 @@ export const GET = withErrors("dealer-account-state", async (req: NextRequest) =
   if (!who.ok) return who.res;
   const { admin, dealerCode, email } = who.who;
 
-  // ⚠️ ไม่มีทางให้ตัวแทน "เปิดดูรหัสผ่าน" ที่นี่ (บอสสั่ง 28 ส.ค. 69) — ดูได้แค่อีเมล
-  //    สำเนารหัสที่เก็บไว้เป็นของสำนักงานใหญ่เท่านั้น (ดู /api/admin/dealers/secret)
+  // เส้นทางนี้คืนแค่สถานะ (อีเมล · โควตา · คำขอค้าง · คำขอล่าสุดที่ถูกปฏิเสธ) ไม่คืนรหัสผ่าน
+  //   ตัวแทนดูรหัสของตัวเองได้ที่ /api/account/reveal (ต้องยืนยันเลขทางอีเมล · บอสสั่ง 1 ก.ย. 69)
 
   try {
     return json(req, await สรุปสถานะ(admin, dealerCode, email));
@@ -143,12 +160,18 @@ export const POST = withErrors("dealer-account-change", async (req: NextRequest)
   }
 
   const body = (await req.json().catch(() => null)) as null | { email?: string; password?: string; currentPassword?: string };
-  const อีเมลใหม่ = String(body?.email ?? "").trim().toLowerCase();
+  const อีเมลที่ส่ง = String(body?.email ?? "").trim().toLowerCase();
   const รหัสใหม่ = String(body?.password ?? "");
   const รหัสเดิม = String(body?.currentPassword ?? "");
+  // อีเมลใหม่ = อีเมลเดิม ไม่ใช่การเปลี่ยน — เดิมหน้าจอกันไว้อย่างเดียว ยิงตรงแล้วกินโควตาไป 1 ครั้งฟรี ๆ
+  const อีเมลเดิมเป๊ะ = !!อีเมลที่ส่ง && อีเมลที่ส่ง === อีเมลเดิม.trim().toLowerCase();
+  if (อีเมลเดิมเป๊ะ && !รหัสใหม่) return json(req, { error: "อีเมลนี้เป็นอีเมลเข้าระบบเดิมอยู่แล้ว" }, 400);
+  const อีเมลใหม่ = อีเมลเดิมเป๊ะ ? "" : อีเมลที่ส่ง;
   if (!อีเมลใหม่ && !รหัสใหม่) return json(req, { error: "ยังไม่ได้กรอกอีเมลหรือรหัสผ่านใหม่" }, 400);
   if (อีเมลใหม่ && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมลใหม่)) return json(req, { error: "รูปแบบอีเมลไม่ถูกต้อง" }, 400);
-  if (รหัสใหม่ && รหัสใหม่.length < 8) return json(req, { error: "รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร" }, 400);
+  // กติการหัสผ่านชุดเดียวทั้งระบบ (ยาว ≥ 8 · ห้ามช่องว่าง) — ใช้ทั้งตอนมีผลทันทีและตอนเก็บเป็นคำขอ
+  const ผิดกติกา = รหัสใหม่ ? ตรวจรหัสผ่านใหม่(รหัสใหม่) : null;
+  if (ผิดกติกา) return json(req, { error: ผิดกติกา }, 400);
   if (!รหัสเดิม) return json(req, { error: "ต้องกรอกรหัสผ่านปัจจุบันเพื่อยืนยันตัวตน" }, 400);
   if (!(await รหัสปัจจุบันถูกไหม(อีเมลเดิม, รหัสเดิม))) {
     return json(req, { error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" }, 400);
@@ -164,6 +187,13 @@ export const POST = withErrors("dealer-account-change", async (req: NextRequest)
   }
   if (สถานะ.pending) {
     return json(req, { error: "มีคำขอที่รอสำนักงานใหญ่อนุมัติอยู่แล้ว — รอผลก่อนส่งคำขอใหม่" }, 409);
+  }
+
+  // ถามก่อนว่าอีเมลใหม่มีคนใช้อยู่ไหม — ทั้งตอนมีผลทันทีและตอนจะเก็บเป็นคำขอ
+  //   เดิมตรวจเฉพาะตอนมีผลทันที: คำขอที่ใช้อีเมลซ้ำจึงรอสำนักงานใหญ่อนุมัติไปเปล่า ๆ แล้วค่อยพังตอนกดอนุมัติ
+  //   ระบบยืนยันตัวตนตอบกรณีซ้ำเป็น 500 เนื้อความว่าง ถ้าไม่ถามก่อนผู้ใช้จะได้ "ลองใหม่อีกครั้ง" ที่ลองกี่ครั้งก็ไม่สำเร็จ
+  if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, userId)) === true) {
+    return json(req, { error: `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบ — กรุณาใช้อีเมลอื่น` }, 400);
   }
 
   // ── เกินโควตา → เก็บเป็นคำขอ ยังไม่แตะบัญชีจริง ──

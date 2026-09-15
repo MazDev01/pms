@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import { bad, authorizeAdmin, auditLog, withErrors, findDealerAccount, อีเมลถูกใช้แล้ว } from "@pms/shared/lib/adminRoute";
 import { decryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
+import { ตรวจรหัสผ่านใหม่ } from "@pms/shared/lib/passwordRule";
 
 export const runtime = "nodejs";
 
@@ -87,8 +88,35 @@ export const PATCH = withErrors("decide-account-request", async (req: NextReques
 
   const code = String(ใบ.dealer_code);
   const อีเมลใหม่ = ใบ.new_email ? String(ใบ.new_email) : "";
+  const ผลตัดสิน = {
+    decided_at: new Date().toISOString(),
+    decided_by: prof?.name ?? "",
+    reason: reason || null,
+  };
 
-  if (action === "approve") {
+  // "จอง" คำขอก่อนทำอะไรกับบัญชี — อัปเดตเฉพาะแถวที่ยังรออยู่ ถ้าไม่ได้แถวคืน = มีคนตัดสินไปแล้ว
+  //   เดิมเปลี่ยนบัญชีก่อนแล้วค่อยปิดคำขอ: ถ้าปิดคำขอไม่สำเร็จ บัญชีเปลี่ยนแล้วแต่คำขอยังค้าง
+  //   ตัวแทนส่งคำขอใหม่ไม่ได้ (409) และ HQ กดอนุมัติซ้ำได้อีก · กดพร้อมกันสองคนก็เปลี่ยนซ้ำสองรอบ
+  async function จองคำขอ(status: "approved" | "rejected"): Promise<NextResponse | null> {
+    const { data: ได้, error } = await admin.from("dealer_account_requests")
+      .update({ status, ...ผลตัดสิน }).eq("id", id).eq("status", "pending").select("id");
+    if (error) {
+      console.error(`[account-requests] อัปเดตสถานะคำขอ ${id} ไม่สำเร็จ`, error);
+      return bad(503, "บันทึกผลไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
+    }
+    return ได้?.length ? null : bad(409, "คำขอนี้ถูกตัดสินไปแล้ว");
+  }
+  // รหัสผ่านที่ขอไว้ (เข้ารหัส) ไม่ต้องเก็บต่อหลังตัดสินแล้ว — อนุมัติแล้วสำเนาย้ายไปอยู่ dealer_login_secrets
+  async function ล้างรหัสในคำขอ() {
+    const { error } = await admin.from("dealer_account_requests").update({ secret: null }).eq("id", id);
+    if (error) console.error(`[account-requests] ล้างรหัสในคำขอ ${id} ไม่สำเร็จ`, error);
+  }
+
+  if (action === "reject") {
+    const ติด = await จองคำขอ("rejected");
+    if (ติด) return ติด;
+    await ล้างรหัสในคำขอ();
+  } else {
     const found = await findDealerAccount(admin, code);
     if (!found.ok) return found.res;
 
@@ -97,17 +125,31 @@ export const PATCH = withErrors("decide-account-request", async (req: NextReques
       if (!dealerSecretReady()) return bad(501, "ยังไม่ได้ตั้ง DEALER_SECRET_KEY ที่เซิร์ฟเวอร์ — อนุมัติคำขอเปลี่ยนรหัสผ่านไม่ได้");
       รหัสใหม่ = decryptSecret(String(ใบ.secret)) ?? "";
       if (!รหัสใหม่) return bad(500, "ถอดรหัสคำขอไม่สำเร็จ — ให้ตัวแทนส่งคำขอใหม่");
+      // คำขอเก่าที่ส่งมาก่อนมีกติกากลาง อาจมีรหัสที่ใช้เข้าระบบไม่ได้จริง (เช่น มีช่องว่าง)
+      const ผิดกติกา = ตรวจรหัสผ่านใหม่(รหัสใหม่);
+      if (ผิดกติกา) return bad(400, `รหัสผ่านในคำขอนี้ใช้ไม่ได้ (${ผิดกติกา}) — ปฏิเสธคำขอแล้วให้ตัวแทนส่งใหม่`);
     }
 
     // อีเมลซ้ำ = คำขอนี้อนุมัติไม่ได้ ต้องบอกให้ชัด (ระบบยืนยันตัวตนตอบ 500 เนื้อความว่าง จับจากข้อความไม่ได้)
     if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, found.id)) === true) {
       return bad(400, `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบ — ให้ตัวแทนส่งคำขอใหม่ด้วยอีเมลอื่น`);
     }
+    // อีเมลเดิมเก็บลงประวัติ (เหมือนตอนตัวแทนแก้เอง) — ประวัติจะได้ตอบได้ว่าเปลี่ยนจากอะไรเป็นอะไร
+    const { data: บัญชีเดิม } = await admin.auth.admin.getUserById(found.id);
+    const อีเมลเดิม = บัญชีเดิม?.user?.email ?? null;
+
+    const ติด = await จองคำขอ("approved");
+    if (ติด) return ติด;
+
     const { error: upErr } = await admin.auth.admin.updateUserById(found.id, {
       ...(รหัสใหม่ ? { password: รหัสใหม่ } : {}),
       ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),
     });
     if (upErr) {
+      // เปลี่ยนบัญชีไม่สำเร็จ = คืนคำขอเป็น "รออนุมัติ" ให้ตัดสินใหม่ได้ ไม่ใช่ค้างเป็นอนุมัติแล้วทั้งที่ไม่มีอะไรเปลี่ยน
+      const { error: คืนErr } = await admin.from("dealer_account_requests")
+        .update({ status: "pending", decided_at: null, decided_by: null, reason: null }).eq("id", id);
+      if (คืนErr) console.error(`[account-requests] คืนสถานะคำขอ ${id} เป็นรออนุมัติไม่สำเร็จ`, คืนErr);
       if (/already|registered|exists/i.test(upErr.message ?? "")) return bad(400, `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบ`);
       console.error(`[account-requests] อนุมัติคำขอของ ${code} ไม่สำเร็จ`, upErr);
       return bad(503, "อนุมัติไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
@@ -120,22 +162,12 @@ export const PATCH = withErrors("decide-account-request", async (req: NextReques
         .upsert({ dealer_code: code, secret, updated_at: new Date().toISOString(), updated_by: `${prof?.name ?? ""} (อนุมัติคำขอตัวแทน)` });
       if (error) console.error(`[account-requests] เก็บสำเนารหัสของ ${code} ไม่สำเร็จ`, error);
     }
+    await ล้างรหัสในคำขอ();
     // การเปลี่ยนที่ผ่านการอนุมัติ ไม่นับโควตาแก้เอง (by_self = false)
     const { error: logErr } = await admin.from("dealer_account_changes").insert({
-      dealer_code: code, kind: ใบ.kind, new_email: อีเมลใหม่ || null, by_self: false,
+      dealer_code: code, kind: ใบ.kind, old_email: อีเมลใหม่ ? อีเมลเดิม : null, new_email: อีเมลใหม่ || null, by_self: false,
     });
     if (logErr) console.error(`[account-requests] บันทึกการเปลี่ยนของ ${code} ไม่สำเร็จ`, logErr);
-  }
-
-  const { error: updErr } = await admin.from("dealer_account_requests").update({
-    status: action === "approve" ? "approved" : "rejected",
-    decided_at: new Date().toISOString(),
-    decided_by: prof?.name ?? "",
-    reason: reason || null,
-  }).eq("id", id);
-  if (updErr) {
-    console.error(`[account-requests] อัปเดตสถานะคำขอ ${id} ไม่สำเร็จ`, updErr);
-    return bad(503, "บันทึกผลไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
 
   await auditLog(admin, prof,

@@ -12,7 +12,7 @@
 //   4) บันทึก audit ทุกครั้งที่เปิดดู — ใครดูของสาขาไหน เมื่อไหร่
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
-import { bad, authorizeAdmin, auditLog, withErrors } from "@pms/shared/lib/adminRoute";
+import { bad, authorizeAdmin, auditLog, withErrors, findDealerAccount, รหัสผ่านยังเข้าระบบได้ } from "@pms/shared/lib/adminRoute";
 import { decryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 
 export const runtime = "nodejs";
@@ -44,14 +44,29 @@ export const GET = withErrors("view-dealer-secret", async (req: NextRequest) => 
     return bad(503, "อ่านรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
   if (!data) {
-    // ไม่ใช่ error — แค่ยังไม่เคยตั้ง/รีเซ็ตรหัสผ่านหลังเปิดฟีเจอร์นี้
-    return bad(404, `ยังไม่มีรหัสผ่านที่บันทึกไว้ของสาขา "${code}" — กด "รีเซ็ตรหัสผ่าน" เพื่อออกรหัสใหม่`);
+    // ไม่ใช่ error — ยังไม่เคยตั้งรหัสผ่านผ่านระบบ หรือตัวแทนตั้งรหัสใหม่ผ่านลิงก์อีเมล (สำเนาถูกลบโดยตั้งใจ)
+    //   ปุ่ม "รีเซ็ตรหัสผ่าน" ถูกถอดไปแล้ว (บอสสั่ง 20 ส.ค. 69) — ข้อความต้องชี้ปุ่มที่มีอยู่จริง
+    return bad(404, `ยังไม่มีรหัสผ่านที่บันทึกไว้ของสาขา "${code}" — กด "แก้อีเมล/รหัสผ่าน" แล้วตั้งรหัสใหม่ ระบบจะเก็บไว้ให้ดูได้`);
   }
 
   const password = decryptSecret(String(data.secret));
   if (!password) {
     console.error(`[view-dealer-secret] ถอดรหัสของ ${code} ไม่สำเร็จ — กุญแจอาจไม่ตรงกับตอนที่บันทึก`);
-    return bad(500, "ถอดรหัสไม่สำเร็จ — กุญแจเข้ารหัสอาจถูกเปลี่ยน กรุณารีเซ็ตรหัสผ่านใหม่");
+    return bad(500, "ถอดรหัสไม่สำเร็จ — กุญแจเข้ารหัสอาจถูกเปลี่ยน กด \"แก้อีเมล/รหัสผ่าน\" เพื่อตั้งรหัสใหม่");
+  }
+
+  // สำเนายังใช้เข้าระบบได้จริงไหม — ตัวแทนอาจตั้งรหัสใหม่ผ่านลิงก์อีเมลแล้วสำเนาเก่าไม่ถูกลบ (ดู รหัสผ่านยังเข้าระบบได้)
+  //   ใช้ไม่ได้แน่นอน = ลบสำเนาทิ้งแล้วบอกตรง ๆ · ตรวจไม่ได้ (ระบบขัดข้อง) = แสดงตามเดิม ไม่ลบของที่อาจยังถูกต้อง
+  const บัญชี = await findDealerAccount(admin, code);
+  if (บัญชี.ok) {
+    const { data: ผู้ใช้ } = await admin.auth.admin.getUserById(บัญชี.id);
+    const ยังใช้ได้ = ผู้ใช้?.user?.email ? await รหัสผ่านยังเข้าระบบได้(ผู้ใช้.user.email, password) : null;
+    if (ยังใช้ได้ === false) {
+      const { error: ลบErr } = await admin.from("dealer_login_secrets").delete().eq("dealer_code", code);
+      if (ลบErr) console.error(`[view-dealer-secret] ลบสำเนารหัสที่ใช้ไม่ได้แล้วของ ${code} ไม่สำเร็จ`, ลบErr);
+      await auditLog(admin, prof, "ลบสำเนารหัสผ่านตัวแทนที่ใช้เข้าระบบไม่ได้แล้ว", code);
+      return bad(404, `รหัสผ่านที่บันทึกไว้ของสาขา "${code}" ใช้เข้าระบบไม่ได้แล้ว (ตัวแทนอาจตั้งรหัสใหม่เอง) — กด "แก้อีเมล/รหัสผ่าน" เพื่อตั้งรหัสใหม่`);
+    }
   }
 
   // บันทึกก่อนคืนค่า — การเปิดดูต้องมีร่องรอยเสมอ แม้ผู้ดูจะเป็นผู้มีสิทธิ์

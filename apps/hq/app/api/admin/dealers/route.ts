@@ -20,6 +20,7 @@ import {
   อีเมลถูกใช้แล้ว,
 } from "@pms/shared/lib/adminRoute";
 import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
+import { ตรวจรหัสผ่านใหม่ } from "@pms/shared/lib/passwordRule";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
@@ -154,11 +155,18 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   if (อีเมลที่กรอก && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมลที่กรอก)) {
     return bad(400, "รูปแบบอีเมลไม่ถูกต้อง");
   }
-  if (รหัสที่กรอก && รหัสที่กรอก.length < 8) {
-    return bad(400, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
-  }
+  // กติการหัสผ่านชุดเดียวทั้งระบบ (ยาว ≥ 8 · ห้ามช่องว่าง) — ดู passwordRule.ts
+  const ผิดกติกา = รหัสที่กรอก ? ตรวจรหัสผ่านใหม่(รหัสที่กรอก) : null;
+  if (ผิดกติกา) return bad(400, ผิดกติกา);
   const email = อีเมลที่กรอก || `${code.toLowerCase()}@${DEALER_EMAIL_DOMAIN}`;
   const password = รหัสที่กรอก || strongPassword("PEB-");
+
+  // ถามระบบยืนยันตัวตนก่อนว่าอีเมลนี้ว่างไหม — อีเมลที่เติมมาจากลูกค้าเป้าหมายอาจเป็นของบัญชีอื่นอยู่แล้ว
+  //   ระบบยืนยันตัวตนตอบกรณีซ้ำเป็น 500 เนื้อความว่าง (ดู อีเมลถูกใช้แล้ว) → ถ้าไม่ถามก่อน ผู้ใช้จะได้
+  //   "สร้างไม่สำเร็จชั่วคราว — ลองใหม่" ซึ่งลองกี่ครั้งก็ไม่สำเร็จ (PATCH/อนุมัติคำขอ/ตัวแทนแก้เอง ถามก่อนอยู่แล้ว)
+  if ((await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, email)) === true) {
+    return bad(400, `อีเมล ${email} ถูกใช้ไปแล้วในระบบยืนยันตัวตน — ใช้อีเมลอื่น`);
+  }
 
   // ── 3) สร้างบัญชี auth (ยืนยันอีเมลให้เลย เพราะเป็นบัญชีที่ HQ ออกให้) ──
   const { data: createdUser, error: createErr } = await admin.auth.admin.createUser({
@@ -231,10 +239,10 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   return NextResponse.json({ ok: true, email, password, prospectLinked });
 });
 
-// ── ออกรหัสผ่านใหม่ให้ตัวแทน (HQ เท่านั้นที่คุมรหัสผ่านของตัวแทนได้ — ตัวแทนไม่มีสิทธิ์ตั้ง/ขอรีเซ็ตเอง) ──
-// เดิม: หน้า /hq/dealers มีปุ่ม "รีเซ็ตรหัสผ่าน" แต่โหมด supabase กดแล้วขึ้น alert บอกว่าทำจากหน้านี้ไม่ได้
-//   (รหัสผ่านตัวแทนถูก hash อยู่ใน Supabase Auth — ไม่มี route ฝั่งเซิร์ฟเวอร์รองรับมาก่อน)
-// รูปแบบเดียวกับ POST: รหัสใหม่สุ่มที่เซิร์ฟเวอร์เสมอ (ไม่ให้ HQ พิมพ์รหัสเองเพื่อกันรหัสอ่อน) คืนให้โชว์ครั้งเดียว
+// ── HQ แก้อีเมลเข้าระบบ / ตั้งรหัสผ่านใหม่ให้ตัวแทน (ปุ่ม "แก้อีเมล/รหัสผ่าน" หน้ารายละเอียดตัวแทน) ──
+// ตัวแทนแก้เองได้ด้วย (/api/account · 2 ครั้ง แล้วต้องขออนุมัติ) — ทางนี้คือทางของสำนักงานใหญ่ ไม่นับโควตาของตัวแทน
+// HQ พิมพ์รหัสเองได้ (บอสสั่ง 20 ส.ค. 69) · ไม่ส่งรหัสมา = สุ่มให้ · ตรวจกติกาเดียวกับทุกทาง (passwordRule.ts)
+// ทุกครั้งที่เปลี่ยน: เก็บสำเนารหัส (ถ้าเปลี่ยนรหัส) · บันทึกประวัติ dealer_account_changes (by_self=false) · audit
 export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   const authz = await authorizeAdmin(req, "dealers:manage", DENY, NOT_CONFIGURED);
   if (!authz.ok) return authz.res;
@@ -260,7 +268,8 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   const อีเมลใหม่ = String(แก้?.email ?? "").trim().toLowerCase();
   const รหัสที่กรอก = String(แก้?.password ?? "");
   if (อีเมลใหม่ && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(อีเมลใหม่)) return bad(400, "รูปแบบอีเมลไม่ถูกต้อง");
-  if (รหัสที่กรอก && รหัสที่กรอก.length < 8) return bad(400, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+  const ผิดกติกา = รหัสที่กรอก ? ตรวจรหัสผ่านใหม่(รหัสที่กรอก) : null;
+  if (ผิดกติกา) return bad(400, ผิดกติกา);
 
   // ขอแก้เฉพาะอีเมล = ห้ามเปลี่ยนรหัสผ่านทิ้งโดยไม่ได้ขอ (สาขาที่ใช้รหัสเดิมอยู่จะหลุดทันที)
   const แก้อีเมลอย่างเดียว = !!อีเมลใหม่ && !รหัสที่กรอก;
@@ -270,6 +279,9 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, found.id)) === true) {
     return bad(400, `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบยืนยันตัวตน — ใช้อีเมลอื่น`);
   }
+  // อีเมลเดิมไว้ลงประวัติ — ประวัติการเปลี่ยนบัญชีต้องครบทุกทาง (ตัวแทนแก้เอง/อนุมัติคำขอ/ลืมรหัส มีอยู่แล้ว ขาดทางนี้ทางเดียว)
+  const { data: บัญชีเดิม } = await admin.auth.admin.getUserById(found.id);
+  const อีเมลเดิม = บัญชีเดิม?.user?.email ?? null;
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, {
     ...(password ? { password } : {}),
     ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),
@@ -283,6 +295,16 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   }
 
   if (password) await rememberSecret(admin, code, password, String(prof.name ?? ""));
+  // ประวัติการเปลี่ยนบัญชี — by_self=false = ไม่นับโควตาแก้เองของตัวแทน (สำนักงานใหญ่เป็นคนเปลี่ยนให้)
+  {
+    const { error: logErr } = await admin.from("dealer_account_changes").insert({
+      dealer_code: code,
+      kind: อีเมลใหม่ && password ? "both" : อีเมลใหม่ ? "email" : "password",
+      old_email: อีเมลใหม่ ? อีเมลเดิม : null, new_email: อีเมลใหม่ || null, by_self: false,
+    });
+    // ยังไม่ได้ติดตั้งตาราง (0165) = ไม่มีที่ให้บันทึก ไม่ใช่ความผิดพลาดของการแก้บัญชี
+    if (logErr && logErr.code !== "42P01") console.error(`[reset-dealer-pw] บันทึกประวัติการเปลี่ยนบัญชีของ ${code} ไม่สำเร็จ`, logErr);
+  }
   await auditLog(admin, prof,
     อีเมลใหม่ ? (password ? "แก้อีเมลและรหัสผ่านตัวแทน" : "แก้อีเมลเข้าระบบตัวแทน") : "รีเซ็ตรหัสผ่านตัวแทน",
     อีเมลใหม่ ? `${code} · ${อีเมลใหม่}` : code);

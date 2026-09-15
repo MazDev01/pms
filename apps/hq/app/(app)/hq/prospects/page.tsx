@@ -1024,7 +1024,7 @@ export default function HQProspectsPage() {
               </div>
             ))}
             <div style={{ fontSize: "0.72rem", color: MUTED, margin: "8px 0 14px", lineHeight: 1.6 }}>
-              เปิดดูรหัสย้อนหลังหรือรีเซ็ตได้ที่หน้าตัวแทนจำหน่าย · ตัวแทนเปลี่ยนอีเมล/รหัสผ่านเองได้ภายหลัง
+              เปิดดูรหัสย้อนหลัง หรือแก้อีเมล/รหัสผ่านได้ที่หน้ารายละเอียดตัวแทน {creds.code} · ตัวแทนเปลี่ยนเองได้ 2 ครั้ง ครั้งต่อไปต้องขออนุมัติ
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <Link href={`/hq/dealers/${creds.code}`} className="btn btn-secondary btn-md">ไปที่ตัวแทน {creds.code}</Link>

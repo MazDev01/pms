@@ -18,7 +18,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
-import { auditLog, withErrors } from "@pms/shared/lib/adminRoute";
+import { auditLog, withErrors, รหัสผ่านยังเข้าระบบได้ } from "@pms/shared/lib/adminRoute";
 import { decryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 import { dealerCors, dealerJson, ตัวแทนที่เรียก, ปิดบางส่วนของอีเมล } from "@pms/shared/lib/dealerCaller";
 
@@ -51,7 +51,9 @@ export const POST = withErrors("dealer-reveal-password", async (req: NextRequest
     const { data: เก็บไว้ } = await admin.from("dealer_login_secrets").select("dealer_code").eq("dealer_code", dealerCode).maybeSingle();
     if (!เก็บไว้) {
       return dealerJson(req, {
-        error: "ระบบไม่มีสำเนารหัสผ่านของสาขานี้ (เคยตั้งรหัสใหม่ผ่านลิงก์ในอีเมล) — ดูย้อนหลังไม่ได้ ให้ตั้งรหัสใหม่แทน",
+        // ไม่มีสำเนาได้หลายสาเหตุ (ตั้งรหัสใหม่ผ่านลิงก์อีเมล / สำเนาเก่าใช้ไม่ได้แล้วถูกลบ / เซิร์ฟเวอร์เก็บไม่สำเร็จ)
+        //   — ห้ามเดาสาเหตุเดียวให้ผู้ใช้ บอกสิ่งที่ทำต่อได้แทน
+        error: "ระบบไม่มีสำเนารหัสผ่านล่าสุดของสาขานี้ — ดูย้อนหลังไม่ได้ ตั้งรหัสใหม่ด้านล่าง หรือแจ้งสำนักงานใหญ่",
       }, 404);
     }
     const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
@@ -116,7 +118,15 @@ export const POST = withErrors("dealer-reveal-password", async (req: NextRequest
     const password = row?.secret ? decryptSecret(String(row.secret)) : null;
     if (!password) {
       return dealerJson(req, {
-        error: "ระบบไม่มีสำเนารหัสผ่านของสาขานี้ — ตั้งรหัสใหม่แทนการดูย้อนหลัง",
+        error: "ระบบไม่มีสำเนารหัสผ่านล่าสุดของสาขานี้ — ตั้งรหัสใหม่แทนการดูย้อนหลัง",
+      }, 404);
+    }
+    // สำเนาเก่าที่ใช้เข้าระบบไม่ได้แล้ว (เช่น ตั้งรหัสใหม่ผ่านลิงก์อีเมลแล้วสำเนาไม่ถูกลบ) = ห้ามโชว์ ลบทิ้งแล้วบอกตรง ๆ
+    if ((await รหัสผ่านยังเข้าระบบได้(email, password)) === false) {
+      const { error: ลบErr } = await admin.from("dealer_login_secrets").delete().eq("dealer_code", dealerCode);
+      if (ลบErr) console.error(`[reveal] ลบสำเนารหัสที่ใช้ไม่ได้แล้วของ ${dealerCode} ไม่สำเร็จ`, ลบErr);
+      return dealerJson(req, {
+        error: "รหัสที่ระบบบันทึกไว้ใช้เข้าระบบไม่ได้แล้ว (อาจเคยตั้งรหัสใหม่ผ่านลิงก์ในอีเมล) — ตั้งรหัสใหม่แทนการดูย้อนหลัง",
       }, 404);
     }
     // เปิดดูรหัสต้องมีร่องรอยเสมอ — สำนักงานใหญ่เห็นว่าใครเปิดดูเมื่อไหร่ (เหมือนฝั่ง HQ กดดู)

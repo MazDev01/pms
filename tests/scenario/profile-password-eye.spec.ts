@@ -16,7 +16,8 @@ test("[ux·hq] ช่องรหัสผ่านในหน้าโปร�
   // ฟอร์มเปลี่ยนรหัสถูกยุบไว้ ต้องกดปุ่มกางก่อน (หน้าโปรไฟล์จัดใหม่ 2 ก.ย. 69)
   await page.getByRole("button", { name: "เปลี่ยนรหัสผ่าน" }).first().click();
 
-  const รหัสใหม่ = page.getByPlaceholder("อย่างน้อย 6 ตัวอักษร");
+  // ข้อความในช่องแก้เป็น 8 ตัวแล้ว (15 ก.ย. 69) — เดิมเขียน 6 ทั้งที่กติกาจริงบังคับ 8 (passwordRule.ts)
+  const รหัสใหม่ = page.getByPlaceholder("อย่างน้อย 8 ตัวอักษร");
   const ยืนยัน = page.getByPlaceholder("พิมพ์รหัสผ่านใหม่อีกครั้ง");
   await expect(รหัสใหม่).toBeVisible({ timeout: 20_000 });
   await รหัสใหม่.fill("Benjamin-2569");

@@ -7,8 +7,8 @@
 //   • ครั้งที่ 3 เป็นต้นไป กดบันทึกแล้วกลายเป็น "คำขอ" ที่ยังไม่มีผล จนกว่าสำนักงานใหญ่จะอนุมัติ
 //   • ทุกครั้งที่เปลี่ยน สำนักงานใหญ่เห็นในบันทึกการใช้งาน
 //
-// ⚠️ ตัวแทน "ดูรหัสผ่านของตัวเองไม่ได้" (บอสสั่ง 28 ส.ค. 69) — หน้าสรุปโชว์ได้แค่อีเมล
-//    รหัสผ่านมีทางเดียวคือ "ตั้งใหม่" โดยยืนยันด้วยรหัสปัจจุบัน
+// • ตัวแทนดูรหัสผ่านของตัวเองได้ เมื่อกรอกเลขยืนยันที่ส่งไปทางอีเมล (บอสสั่ง 1 ก.ย. 69 — ทับกติกา 28 ส.ค. ที่ห้ามดู)
+// • คำขอที่ถูกปฏิเสธต้องแสดงให้ตัวแทนเห็น (state.lastRejected) — ไม่ใช่คำขอหายเงียบ
 // ⚠️ การแก้ไม่อยู่ในหน้าตั้งค่ารวม — ต้องกดเข้าหน้าบัญชีแยก ให้เป็นการตั้งใจ ไม่ใช่เผลอแก้
 //    ระหว่างแก้ข้อมูลบริษัท และหน้าจอที่เปิดค้างไว้จะไม่มีช่องรหัสผ่านทิ้งไว้ให้ใครมากรอก
 
@@ -339,7 +339,7 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
 
   return (
     <>
-      {/* บัญชีที่ใช้อยู่ — อีเมลเท่านั้น (รหัสผ่านดูไม่ได้ เปลี่ยนได้อย่างเดียว) */}
+      {/* บัญชีที่ใช้อยู่ — อีเมล + ดูรหัสผ่านได้เมื่อยืนยันเลขทางอีเมล */}
       <div style={{ ...กล่อง, marginBottom: 14 }}>
         <div style={{ fontSize: "0.62rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
           บัญชีที่ใช้อยู่ตอนนี้
@@ -431,6 +431,20 @@ export function DealerAccountForm({ dealerCode, currentEmail, focus }: {
           <span>
             ส่งคำขอเปลี่ยนบัญชีให้สำนักงานใหญ่แล้ว ({fmtISOToThai(String(state?.pending?.requestedAt ?? "").slice(0, 10))})
             — รอผลอนุมัติ ยังใช้อีเมล/รหัสเดิมเข้าระบบได้ตามปกติ
+          </span>
+        </div>
+      )}
+
+      {/* คำขอล่าสุดถูกปฏิเสธ — ตัวแทนต้องรู้ผล ไม่ใช่คำขอหายไปเฉย ๆ (หน้าอนุมัติฝั่ง HQ บอกไว้ว่าตัวแทนจะเห็น) */}
+      {!มีคำขอค้าง && state?.lastRejected && (
+        <div role="status" style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#FEF2F2", border: "1px solid #FECACA",
+          borderRadius: 10, padding: "10px 12px", fontSize: "0.72rem", color: "#991B1B", marginBottom: 14 }}>
+          <ShieldCheck size={13} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>
+            คำขอเปลี่ยน{state.lastRejected.kind === "email" ? "อีเมลเข้าระบบ" : state.lastRejected.kind === "password" ? "รหัสผ่าน" : "อีเมลและรหัสผ่าน"}
+            {" "}ที่ส่งเมื่อ {fmtISOToThai(String(state.lastRejected.requestedAt).slice(0, 10))} ถูกสำนักงานใหญ่ปฏิเสธ
+            {state.lastRejected.reason ? ` — เหตุผล: ${state.lastRejected.reason}` : ""}
+            {" "}· บัญชียังเป็นแบบเดิม ส่งคำขอใหม่ได้
           </span>
         </div>
       )}

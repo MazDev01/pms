@@ -201,3 +201,27 @@ export async function อีเมลถูกใช้แล้ว(
     return null;
   }
 }
+
+// ── สำเนารหัสผ่านที่เก็บไว้ ยังใช้เข้าระบบได้จริงไหม ─────────────────────────────────
+//
+// ทำไมต้องตรวจตอนเปิดดู: ตัวแทนตั้งรหัสใหม่ผ่านลิงก์ "ลืมรหัสผ่าน" ได้ แล้วหน้าเว็บของตัวแทน
+//   ต้องแจ้งกลับมาให้ลบสำเนาเก่า — ถ้าการแจ้งนั้นไม่ถึง (ยังไม่ได้ตั้งที่อยู่แอป HQ / เน็ตหลุด)
+//   สำเนาเก่าจะค้าง แล้ว HQ เปิดดูเห็นรหัสที่ใช้ไม่ได้แล้ว เอาไปแจ้งตัวแทน = เข้าระบบไม่ได้
+//   (ข้อมูลผิดที่ดูเหมือนถูก อันตรายกว่าไม่มีข้อมูล) · ตรวจตอนเปิดดูจึงไม่ต้องพึ่งหน้าเว็บฝั่งตัวแทน
+//
+// คืน true = เข้าได้ · false = รหัสผิดแน่นอน · null = ตรวจไม่ได้ (ระบบขัดข้อง/ถูกจำกัดความถี่) ห้ามตีความว่าใช้ไม่ได้
+// ⚠️ ห้ามสั่งออกจากระบบหลังตรวจ — ค่าเริ่มต้นของ signOut คือยกเลิก "ทุกเครื่อง" ตัวแทนที่ใช้งานอยู่จะหลุดทันที
+export async function รหัสผ่านยังเข้าระบบได้(email: string, password: string): Promise<boolean | null> {
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  if (!SUPABASE_URL || !anon || !email || !password) return null;
+  try {
+    const sb = createClient(SUPABASE_URL, anon, { auth: { autoRefreshToken: false, persistSession: false } });
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (data?.session) return true;
+    if (error && /invalid login credentials/i.test(String(error.message ?? ""))) return false;
+    return null;
+  } catch (e) {
+    console.warn("[adminRoute] ตรวจสำเนารหัสผ่านไม่สำเร็จ — ไม่ถือว่าใช้ไม่ได้", e);
+    return null;
+  }
+}

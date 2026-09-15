@@ -18,6 +18,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
 import { auditLog, withErrors } from "@pms/shared/lib/adminRoute";
+import { ตรวจรหัสผ่านใหม่ } from "@pms/shared/lib/passwordRule";
 import { decryptSecret, encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 import { callerToken } from "@pms/shared/server/v1/_cookie";
 
@@ -78,7 +79,9 @@ export const POST = withErrors("hq-own-password", async (req: NextRequest) => {
   // ── 1) เก็บสำเนาหลังเปลี่ยนรหัสผ่านสำเร็จ ──
   if (op === "save") {
     const password = String(body?.password ?? "");
-    if (password.length < 6) return ตอบ({ error: "รหัสผ่านสั้นเกินไป" }, 400);
+    // กติกาเดียวกับทุกทางที่ตั้งรหัสผ่าน (เดิมรับ 6 ตัว ทั้งที่หน้าเปลี่ยนรหัสบังคับ 8)
+    const ผิดกติกา = ตรวจรหัสผ่านใหม่(password);
+    if (ผิดกติกา) return ตอบ({ error: ผิดกติกา }, 400);
     if (!dealerSecretReady()) {
       return ตอบ({ error: "ยังไม่ได้ตั้งกุญแจเข้ารหัสที่เซิร์ฟเวอร์ (DEALER_SECRET_KEY)" }, 501);
     }

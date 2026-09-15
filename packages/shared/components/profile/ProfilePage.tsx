@@ -384,7 +384,7 @@ export default function ProfilePage() {
               {เปิดฟอร์มรหัส && (<div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 16, paddingTop: 16 }}>
               {[
                 { k: "cur" as const, label: "รหัสผ่านปัจจุบัน", ph: "••••••••" },
-                { k: "next" as const, label: "รหัสผ่านใหม่", ph: "อย่างน้อย 6 ตัวอักษร" },
+                { k: "next" as const, label: "รหัสผ่านใหม่", ph: "อย่างน้อย 8 ตัวอักษร" },
                 { k: "confirm" as const, label: "ยืนยันรหัสผ่านใหม่", ph: "พิมพ์รหัสผ่านใหม่อีกครั้ง" },
               ].map(f => (
                 <div key={f.k} style={{ marginBottom: 14 }}>
@@ -425,14 +425,12 @@ export default function ProfilePage() {
                   <Lock size={16} color={PRIMARY} />
                 </span>
                 <div>
-                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL, marginBottom: 3 }}>รหัสผ่านจัดการโดยสำนักงานใหญ่</div>
+                  {/* ข้อความเดิม "ตัวแทนเปลี่ยนรหัสผ่านเองไม่ได้" ขัดกับระบบปัจจุบัน (ตัวแทนแก้เองได้ 2 ครั้ง · บอสสั่ง 28 ส.ค. 69) */}
+                  <div style={{ fontSize: "0.86rem", fontWeight: 700, color: STEEL, marginBottom: 3 }}>เปลี่ยนอีเมล/รหัสผ่านที่หน้าบัญชีเข้าสู่ระบบ</div>
                   <div style={{ fontSize: "0.72rem", color: MUTED, lineHeight: 1.6 }}>
-                    บัญชีตัวแทนถูกสร้างและตั้งรหัสผ่านโดยสำนักงานใหญ่ · หากต้องการรีเซ็ตรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบสำนักงานใหญ่
+                    ไปที่ ตั้งค่า › บัญชีเข้าสู่ระบบ · แก้เองได้ 2 ครั้ง ครั้งต่อไปต้องให้สำนักงานใหญ่อนุมัติ · ลืมรหัสผ่านใช้ปุ่ม “ลืมรหัสผ่าน?” ที่หน้าเข้าสู่ระบบ
                   </div>
                 </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: "0.65rem", color: "#9ca3af" }}>
-                <ShieldCheck size={11} /> เพื่อความปลอดภัย ตัวแทนไม่สามารถเปลี่ยนรหัสผ่านเองได้
               </div>
             </div>
           )}

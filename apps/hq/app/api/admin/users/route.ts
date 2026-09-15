@@ -20,6 +20,7 @@ import type { UserRole } from "@pms/shared/lib/mock";
 
 // รันบน Node เสมอ (ต้องใช้ service_role — ห้าม edge ที่อาจแคช env แปลก ๆ)
 export const runtime = "nodejs";
+import { ตรวจรหัสผ่านใหม่ } from "@pms/shared/lib/passwordRule";
 
 // ขั้นตอนตรวจ service_role → JWT → บทบาท → สิทธิ์ ย้ายไปอยู่ที่ adminRoute.ts (ใช้ร่วมกับ route อื่น)
 // permission "users:manage" ดู permissions.ts — แหล่งเดียวกับ RLS/ตัวแอป · SSOT
@@ -206,8 +207,10 @@ export const PATCH = withErrors("reset-hq-user-pw", async (req: NextRequest) => 
   //   ไม่ส่งอะไรมา = ให้เซิร์ฟเวอร์สุ่มให้เหมือนเดิม
   //   ความยาวขั้นต่ำ 8 = เกณฑ์เดียวกับตอนผู้ใช้เปลี่ยนรหัสตัวเอง (supabaseAuth.ts) ไม่ตั้งคนละมาตรฐาน
   const body = await req.json().catch(() => null) as { password?: string } | null;
-  const typed = (body?.password ?? "").trim();
-  if (typed && typed.length < 8) return bad(400, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+  // ไม่ตัดช่องว่างทิ้งเงียบ ๆ แล้ว — ปฏิเสธพร้อมบอกเหตุผล (กติกาเดียวกับทุกทางใน passwordRule.ts)
+  const typed = String(body?.password ?? "");
+  const ผิดกติกา = typed ? ตรวจรหัสผ่านใหม่(typed) : null;
+  if (ผิดกติกา) return bad(400, ผิดกติกา);
   const password = typed || strongPassword("BJ-");
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(id, { password });
   if (updateErr || !updated.user) {
