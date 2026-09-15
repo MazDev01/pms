@@ -11,6 +11,7 @@
 //     จนกว่าจะถึงเฟส B ที่ Supabase Auth ถือรหัสจริง (bcrypt)
 
 import { loadHQDealers, sessions, type MockSession, type UserRole } from "@pms/shared/lib/mock";
+import { DEMO_PASSWORD, localDealerEmail, localDealerSecret } from "@pms/shared/lib/data/local/accountLocal";
 
 export type AuthResult =
   | { ok: true; session: MockSession }
@@ -18,7 +19,16 @@ export type AuthResult =
 
 // รหัส demo สำหรับบัญชีที่ระบบยังไม่เก็บรหัสจริง (ผู้ใช้ HQ + บัญชีเดโม)
 // ตัวแทนใช้รหัสจริงจาก credentials ได้เลย (หรือรหัส demo นี้ก็ได้ในโหมดเดโม)
-export const DEMO_PASSWORD = "benjamin";
+// ค่าอยู่ที่ accountLocal ที่เดียว — หน้าบัญชีของตัวแทนใช้ยืนยันรหัสปัจจุบันด้วยค่าเดียวกัน
+export { DEMO_PASSWORD };
+
+/** รหัสของบัญชีตัวแทนในโหมดตัวอย่าง (แก้ 15 ก.ย. 69)
+ *  ตัวแทนเคยเปลี่ยนรหัสที่หน้าบัญชี = ใช้ได้เฉพาะรหัสใหม่ · ยังไม่เคยเปลี่ยน = รหัสใน credentials หรือรหัสกลาง
+ *  เดิมหน้าเข้าสู่ระบบไม่อ่านรหัส/อีเมลที่เปลี่ยนเลย → เปลี่ยนแล้วรหัสใหม่เข้าไม่ได้ รหัสเดิมยังเข้าได้ */
+function รหัสตัวแทนถูก(code: string, password: string, รหัสในทะเบียน?: string): boolean {
+  const ลับ = localDealerSecret(code);
+  return ลับ ? password === ลับ : (password === รหัสในทะเบียน || password === DEMO_PASSWORD);
+}
 
 // แม็พบทบาทภายในของ UsersPanel (5 คีย์) → UserRole ในระบบสิทธิ์ (permissions.ts)
 // ทุกบัญชี HQ = scopeAll (เห็นทั้งเครือ) ต่างกันที่ระดับสิทธิ์
@@ -78,21 +88,24 @@ export function authenticate(email: string, password: string): AuthResult {
   const e = email.trim().toLowerCase();
   if (!e || !password) return { ok: false, error: ERR_EMPTY };
 
-  // 1) บัญชีตัวแทน — ตรวจรหัสจริงจาก credentials
+  // 1) บัญชีตัวแทน — อีเมลปัจจุบัน (รวมที่เปลี่ยนที่หน้าบัญชี) · รหัสปัจจุบัน
   for (const d of loadHQDealers()) {
-    if (d.credentials?.email?.toLowerCase() === e) {
+    const อีเมล = localDealerEmail(d.code, d.credentials?.email ?? "").toLowerCase();
+    if (อีเมล && อีเมล === e) {
       if (d.status === "inactive") return { ok: false, error: ERR_INACTIVE };
-      if (password === d.credentials.password || password === DEMO_PASSWORD) {
+      if (รหัสตัวแทนถูก(d.code, password, d.credentials?.password)) {
         return { ok: true, session: dealerSession(d.name, d.code) };
       }
       return { ok: false, error: ERR_BAD_PASSWORD };
     }
   }
 
-  // 2) บัญชีเดโมในตัว (ผู้ดูแล HQ / ตัวแทน CNX)
-  const b = BUILT_IN.find(x => x.email === e);
+  // 2) บัญชีเดโมในตัว (ผู้ดูแล HQ / ตัวแทน CNX) — บัญชีตัวแทนในตัวก็ต้องอ่านอีเมล/รหัสที่เปลี่ยนแล้วด้วย
+  const b = BUILT_IN.find(x =>
+    (x.session.dealerCode ? localDealerEmail(x.session.dealerCode, x.email).toLowerCase() : x.email) === e);
   if (b) {
-    if (password === DEMO_PASSWORD) return { ok: true, session: b.session };
+    const ถูก = b.session.dealerCode ? รหัสตัวแทนถูก(b.session.dealerCode, password) : password === DEMO_PASSWORD;
+    if (ถูก) return { ok: true, session: b.session };
     return { ok: false, error: ERR_BAD_PASSWORD };
   }
 

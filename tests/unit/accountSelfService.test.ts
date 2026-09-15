@@ -23,7 +23,7 @@ const { accountLocal, SELF_CHANGE_LIMIT, localDealerPassword, localDealerEmail }
   await import("../../packages/shared/lib/data/local/accountLocal");
 
 const CODE = "TST";
-const เดิม = "demo1234";
+const เดิม = "benjamin";   // รหัสกลางของชุดตัวอย่าง — ต้องตรงกับหน้าเข้าสู่ระบบ (auth.ts)
 
 describe("บัญชีตัวแทนแก้เอง", () => {
   beforeEach(() => store.clear());

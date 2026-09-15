@@ -611,7 +611,7 @@ function HQDealersPageInner() {
                       {/* ปุ่มรูปกุญแจ (ดูรหัสเข้าระบบ/รีเซ็ตรหัสผ่าน) ย้ายไปหน้ารายละเอียดตัวแทนแล้ว (บอสสั่ง 13 ส.ค. 69)
                           เป็นงานราย "สาขา" ไม่ใช่งานที่ต้องทำรัวจากลิสต์ · ตารางนี้เคยมีปุ่มต่อแถวถึง 6 ปุ่มจนแน่น
                           เข้าถึงได้ที่ปุ่มรูปกราฟข้างบน → การ์ด "ข้อมูลเข้าระบบของตัวแทน" ในแท็บภาพรวม */}
-                      <button onClick={e => { e.stopPropagation(); openEdit(d); }} title="แก้ไข"
+                      <button onClick={e => { e.stopPropagation(); openEdit(d); }} title="แก้ไข" aria-label={`แก้ไขตัวแทน ${d.name}`}
                         style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 7, color: "#6b7280", cursor: "pointer" }}>
                         <Pencil size={12} />
                       </button>

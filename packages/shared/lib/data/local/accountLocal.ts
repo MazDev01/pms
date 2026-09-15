@@ -38,9 +38,18 @@ const requests = () => read<AccountRequest[]>(REQUESTS_KEY, []);
 const secrets = () => read<Record<string, string>>(SECRETS_KEY, {});
 const emails = () => read<Record<string, string>>(EMAILS_KEY, {});
 
-/** รหัสผ่านของสาขาในโหมดเดโม — ยังไม่เคยตั้ง = ค่าตั้งต้นเดโม (ตรงกับที่หน้าเข้าสู่ระบบใช้) */
+/** รหัสกลางของชุดข้อมูลตัวอย่าง — หน้าเข้าสู่ระบบ (auth.ts) กับหน้าบัญชีต้องใช้ค่าเดียวกัน
+ *  เดิมหน้าบัญชีใช้ "demo1234" แต่หน้าเข้าสู่ระบบใช้ "benjamin" → ยืนยันรหัสปัจจุบันไม่ผ่านทั้งที่เพิ่งเข้าระบบด้วยรหัสนั้น */
+export const DEMO_PASSWORD = "benjamin";
+
+/** รหัสที่ตัวแทนตั้งเอง/สำนักงานใหญ่อนุมัติไว้ในโหมดตัวอย่าง — ยังไม่เคยตั้ง = null */
+export function localDealerSecret(dealerCode: string): string | null {
+  return secrets()[dealerCode] ?? null;
+}
+
+/** รหัสผ่านของสาขาในโหมดเดโม — ยังไม่เคยตั้ง = รหัสกลาง (ตรงกับที่หน้าเข้าสู่ระบบใช้) */
 export function localDealerPassword(dealerCode: string): string {
-  return secrets()[dealerCode] ?? "demo1234";
+  return localDealerSecret(dealerCode) ?? DEMO_PASSWORD;
 }
 /** อีเมลเข้าระบบของสาขาในโหมดเดโม (ถ้าเคยเปลี่ยนไว้) */
 export function localDealerEmail(dealerCode: string, ค่าเดิม: string): string {

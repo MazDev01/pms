@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { ADMIN, skipReason } from "./supabaseEnv";
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
-import { db } from "./funcHelpers";
+import { db, loginUI, HQ_ORIGIN, watchErrors, assertNoErrors } from "./funcHelpers";
 
 test.skip(() => skipReason() !== "", skipReason() || "พร้อมรัน");
 test.describe.configure({ mode: "serial" });
@@ -93,4 +93,52 @@ test("[db] เป้ายอดขายตามแพ็กเกจ · แ�
   expect(await เป้าของ(STD), "ย้ายไปภาคที่ไม่ได้ตั้งแยก ต้องใช้เป้ากลางของแพ็กเกจ").toBe(3_600_000);
   await ตั้งเป้าแพ็กเกจ(3_600_000, 8_000_000, { standard: { ตะวันออก: 2_400_000, เหนือ: 1_800_000 } });
   expect(await เป้าของ(STD), "ตั้งเป้าภาคเหนือเพิ่ม ตัวแทนภาคเหนือต้องเปลี่ยนตาม").toBe(1_800_000);
+});
+
+test("[ui·hq] หน้าตัวแทน: เลือกแพ็กเกจแล้วเป้าล็อกตามแพ็กเกจ/ภาค · หน้าตั้งค่า: กรอกเป้าแยกภาคแล้วตัวแทนเปลี่ยนตาม", async ({ page }) => {
+  test.skip(!ADMIN_SERVICE_ROLE_KEY, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
+  test.setTimeout(180_000);
+  const errs = watchErrors(page);
+  await purge();
+  await ตั้งเป้าแพ็กเกจ(3_000_000, null, { standard: { ตะวันออก: 2_400_000 } });
+  const ชื่อ = "ZZTEST ฟอร์มแพ็กเกจ";
+  expect((await admin.from("dealers").insert({ code: STD, name: ชื่อ, province: "ระยอง", region: "ตะวันออก", revenue_target: 500_000, status: "active" })).error).toBeNull();
+
+  // ── หน้าตัวแทน › แก้ไข ──
+  await loginUI(page, HQ_ORIGIN, "/hq/dealers", ADMIN);
+  await page.getByPlaceholder("ค้นหาตัวแทน...").fill(STD);
+  await page.getByRole("button", { name: `แก้ไขตัวแทน ${ชื่อ}` }).first().click({ timeout: 30_000 });
+  const เป้า = page.getByLabel("เป้ายอดขายทั้งปี");
+  await expect(เป้า, "ยังไม่มีแพ็กเกจ ต้องกรอกเองได้").toBeEnabled();
+  await expect(เป้า).toHaveValue("500,000");
+
+  await page.getByLabel("แพ็กเกจตัวแทน").selectOption("standard");
+  await expect(เป้า, "เลือกแพ็กเกจที่ตั้งเป้าไว้ ช่องเป้าต้องล็อก").toBeDisabled();
+  await expect(เป้า, "ภาคตะวันออกตั้งเป้าแยกไว้ ต้องขึ้นเป้าของภาค").toHaveValue("2,400,000");
+  await expect(page.getByText("ตามแพ็กเกจ Standard · ตะวันออก")).toBeVisible();
+
+  // หน้าตัวแทนมีตัวกรอง "ภูมิภาค" อีกช่อง — เลือกเฉพาะในหน้าต่างแก้ไข
+  const ฟอร์ม = page.getByRole("dialog").filter({ has: page.getByLabel("แพ็กเกจตัวแทน") });
+  await ฟอร์ม.getByLabel("ภูมิภาค").selectOption("เหนือ");
+  await ฟอร์ม.getByLabel("จังหวัดที่ตั้ง").selectOption("เชียงใหม่");
+  await expect(เป้า, "ย้ายไปภาคที่ไม่ได้ตั้งแยก ต้องขึ้นค่ากลาง").toHaveValue("3,000,000");
+  await page.getByRole("button", { name: "บันทึกการแก้ไข" }).click();
+  await expect.poll(async () => (await admin.from("dealers").select("package, region, revenue_target").eq("code", STD).single()).data,
+    { timeout: 20_000, message: "บันทึกแล้วต้องได้แพ็กเกจ ภาค และเป้าตามค่ากลาง" })
+    .toEqual({ package: "standard", region: "เหนือ", revenue_target: 3_000_000 });
+
+  // ── ตั้งค่า › หาตัวแทน › เป้าแยกภาค ──
+  await page.waitForLoadState("networkidle");
+  await page.goto(`${HQ_ORIGIN}/hq/settings`);
+  await page.locator(".tab-bar").getByRole("button", { name: "หาตัวแทน" }).click({ timeout: 25_000 });
+  const ช่องเหนือ = page.locator("#rc-standard-target-เหนือ");
+  await expect(ช่องเหนือ, "ภาคที่ยังไม่ตั้งต้องว่าง (บอกค่ากลางไว้เป็นตัวอย่าง)").toHaveValue("");
+  await expect(page.locator("#rc-standard-target-ตะวันออก")).toHaveValue("2,400,000");
+  await ช่องเหนือ.fill("1800000");
+  await expect(ช่องเหนือ, "ช่องเงินต้องมีลูกน้ำ").toHaveValue("1,800,000");
+  await page.getByRole("button", { name: "บันทึก", exact: true }).click();
+  await expect.poll(async () => เป้าของ(STD), { timeout: 20_000, message: "กรอกเป้าภาคเหนือแล้ว ตัวแทนภาคเหนือต้องเปลี่ยนตาม" })
+    .toBe(1_800_000);
+  await page.waitForLoadState("networkidle");
+  assertNoErrors(errs, "หน้าตัวแทน + ตั้งค่า › หาตัวแทน (เป้าตามแพ็กเกจ)");
 });
