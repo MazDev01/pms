@@ -7,7 +7,7 @@
 //
 // ⚠️ ห้ามแยกเขียนฟอร์มนี้ซ้ำที่อื่น — กติกา (ช่องบังคับ/ช่องเงินมีลูกน้ำ/ภาคก่อนจังหวัด) ต้องเหมือนกันทุกหน้า
 //    วางที่ body (portal) เพราะบางหน้าเปิดจากในหน้าต่างอีกชั้น — คลิกฉากหลังต้องหยุดไม่ให้หน้าต่างแม่ปิดตาม
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRecruitSettings } from "@pms/shared/lib/useHQConfig";
 import { บวกวัน } from "@pms/shared/lib/recruitSettings";
 import { createPortal } from "react-dom";
@@ -49,7 +49,9 @@ function ร่างเริ่มต้น(editing: DealerPackageProposal | n
   };
 }
 
-export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved }: {
+export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved, แบบ = "popup" }: {
+  /** popup = หน้าต่างเด้ง (หน้ารวมใบเสนอ) · inline = เปิดในหน้าเดิม (แท็บใบเสนอของลูกค้าเป้าหมาย · บอสสั่ง 15 ก.ย. 69) */
+  แบบ?: "popup" | "inline";
   /** ออกใบให้รายนี้ (ล็อกไว้) — ไม่ส่ง = ให้เลือกในฟอร์มจาก choices */
   prospect?: DealerProspect | null;
   /** รายที่เลือกได้ (หน้ารวมใบเสนอ) — ควรส่งเฉพาะรายที่ยังติดตามอยู่ */
@@ -61,6 +63,11 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
 }) {
   const logAudit = useAuditLogger();
   const [ร่าง, setร่าง] = useState<ร่างใบ>(() => ร่างเริ่มต้น(editing, prospect));
+  // เปิดในหน้าเดิม: เลื่อนให้เห็นฟอร์มทันที (ปุ่มที่กดอาจอยู่ท้ายรายการยาว ๆ)
+  const ในหน้าRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (แบบ === "inline") ในหน้าRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [แบบ]);
   const [formErr, setFormErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -166,12 +173,27 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
     }
   }
 
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div onClick={e => { e.stopPropagation(); if (!busy) onClose(); }}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <ModalCard onClose={() => !busy && onClose()} label="ใบเสนอแพ็กเกจตัวแทน" className="modal-fit"
-        style={{ background: "#fff", borderRadius: 16, width: 560, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.3)" }}>
+  // เนื้อฟอร์มชุดเดียว — ห่อเป็นหน้าต่างเด้ง หรือวางในหน้าเดิม (กติกาช่องต่าง ๆ ต้องเหมือนกันทุกที่)
+  const ห่อ = (เนื้อ: React.ReactNode) => แบบ === "inline"
+    ? (
+      <section ref={ในหน้าRef} role="region" aria-label="ใบเสนอแพ็กเกจตัวแทน"
+        style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, boxShadow: "0 2px 10px rgba(0,51,102,.06)", scrollMarginTop: 12 }}>
+        {เนื้อ}
+      </section>
+    )
+    : typeof document === "undefined" ? null : createPortal(
+      <div onClick={e => { e.stopPropagation(); if (!busy) onClose(); }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+        <ModalCard onClose={() => !busy && onClose()} label="ใบเสนอแพ็กเกจตัวแทน" className="modal-fit"
+          style={{ background: "#fff", borderRadius: 16, width: 560, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.3)" }}>
+          {เนื้อ}
+        </ModalCard>
+      </div>,
+      document.body,
+    );
+
+  return ห่อ(
+    <>
         <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <h2 style={{ margin: 0, fontSize: "0.98rem", fontWeight: 800, color: "#2D2D2D" }}>
             {ร่าง.id ? `แก้ไขใบ ${ร่าง.proposalNo ?? ""}` : "ออกใบเสนอแพ็กเกจตัวแทน"}
@@ -264,8 +286,6 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
             </button>
           </div>
         </div>
-      </ModalCard>
-    </div>,
-    document.body,
+    </>,
   );
 }

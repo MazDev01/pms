@@ -81,7 +81,7 @@ export function ProspectProposalsPanel({ prospect, editable, onChange, เปิ
         <div style={{ fontWeight: 800, color: "#2D2D2D", fontSize: "0.88rem" }}>ใบเสนอแพ็กเกจตัวแทน</div>
         <span style={{ fontSize: "0.72rem", color: MUTED }}>{loaded ? `${list.length} ใบ` : ""}</span>
         <div style={{ flex: 1 }} />
-        {editable && (
+        {editable && !ฟอร์ม && (
           <button className="btn btn-secondary btn-sm" onClick={() => setฟอร์ม({ editing: null })}>
             <Plus size={13} /> ออกใบเสนอแพ็กเกจ
           </button>
@@ -91,6 +91,14 @@ export function ProspectProposalsPanel({ prospect, editable, onChange, เปิ
         สร้างตัวแทนใหม่จากรายนี้ได้ ต่อเมื่อมีใบที่ “ส่งแล้ว” หรือ “ตอบรับ” อย่างน้อย 1 ใบ · ส่งแล้วแก้เนื้อหาไม่ได้
       </div>
 
+      {/* ออก/แก้ใบ = เปิดฟอร์มในแท็บนี้เลย ไม่เด้งหน้าต่าง (บอสสั่ง 15 ก.ย. 69) · ยกเลิก/บันทึกแล้วกลับเป็นรายการ */}
+      {ฟอร์ม ? (
+        <ProposalFormModal แบบ="inline" prospect={prospect} editing={ฟอร์ม.editing} onClose={() => setฟอร์ม(null)}
+          onSaved={saved => {
+            ตั้งรายการ(ฟอร์ม.editing ? list.map(x => x.id === saved.id ? saved : x) : [saved, ...list]);
+            setฟอร์ม(null);
+          }} />
+      ) : <>
       {loadErr && (
         <div role="alert" style={{ fontSize: "0.78rem", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", display: "flex", gap: 8, alignItems: "center" }}>
           {loadErr}
@@ -154,14 +162,7 @@ export function ProspectProposalsPanel({ prospect, editable, onChange, เปิ
               })}
             </div>
           ))}
-
-      {ฟอร์ม && (
-        <ProposalFormModal prospect={prospect} editing={ฟอร์ม.editing} onClose={() => setฟอร์ม(null)}
-          onSaved={saved => {
-            ตั้งรายการ(ฟอร์ม.editing ? list.map(x => x.id === saved.id ? saved : x) : [saved, ...list]);
-            setฟอร์ม(null);
-          }} />
-      )}
+      </>}
     </div>
   );
 }

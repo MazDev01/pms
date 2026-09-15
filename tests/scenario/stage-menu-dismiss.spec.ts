@@ -41,8 +41,12 @@ test("[ui·dealer] เปิดเมนูเลือกขั้นแล้�
   await expect(menu, "กดป้ายขั้นแล้วเมนูต้องเปิด").toBeVisible({ timeout: 10_000 });
 
   // คลิกพื้นที่ว่างใต้ตาราง (นอกกล่องตาราง) — จุดที่ผู้ใช้กดแล้วเมนูเคยค้าง
+  //   ⚠️ ต้องอยู่ในจอเสมอ — หน้าลูกค้าเป้าหมายมีของเหนือตารางเพิ่มขึ้นจนตารางลงมาต่ำ (บนสุดที่ ~472px)
+  //   จุด "ใต้ตาราง 160px" เลยหลุดขอบล่างของจอ 720px → คลิกไม่โดนอะไรเลย เทสต์ตกทั้งที่เมนูทำงานถูก (ตรวจ 15 ก.ย. 69)
   const box = await page.locator("table").first().boundingBox();
-  await page.mouse.click((box?.x ?? 200) + 40, (box?.y ?? 200) + (box?.height ?? 100) + 160);
+  const จอสูง = page.viewportSize()?.height ?? 720;
+  const ใต้ตาราง = (box?.y ?? 200) + (box?.height ?? 100) + 160;
+  await page.mouse.click((box?.x ?? 200) + 40, Math.min(ใต้ตาราง, จอสูง - 12));
   await expect(menu, "คลิกที่ว่างนอกตารางแล้วเมนูต้องปิดเอง").toBeHidden({ timeout: 5_000 });
 });
 

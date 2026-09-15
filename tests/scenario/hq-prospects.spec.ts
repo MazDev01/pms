@@ -373,7 +373,11 @@ test("[func·hq] ออกใบเสนอแพ็กเกจ → ยัง�
   await แก้ไข.getByRole("tab", { name: /ใบเสนอแพ็กเกจ/ }).click();
   await แก้ไข.getByRole("button", { name: "ออกใบเสนอแพ็กเกจ" }).click();
 
-  const ใบ = page.getByRole("dialog", { name: "ใบเสนอแพ็กเกจตัวแทน" });
+  // ฟอร์มเปิดในแท็บเลย ไม่เด้งหน้าต่าง (บอสสั่ง 15 ก.ย. 69 "ไม่ต้องทำเป็นป็อบอัพ ทำเป็นเปิดในหน้านั้นเลย")
+  const ใบ = แก้ไข.getByRole("region", { name: "ใบเสนอแพ็กเกจตัวแทน" });
+  await expect(ใบ, "ฟอร์มต้องอยู่ในแท็บของหน้าต่างลูกค้าเป้าหมาย").toBeVisible();
+  await expect(page.getByRole("dialog", { name: "ใบเสนอแพ็กเกจตัวแทน" }), "ต้องไม่มีหน้าต่างเด้งซ้อน").toHaveCount(0);
+  await expect(แก้ไข.getByRole("button", { name: "ออกใบเสนอแพ็กเกจ" }), "เปิดฟอร์มแล้วซ่อนปุ่มออกใบซ้ำ").toHaveCount(0);
   await ใบ.getByRole("button", { name: "บันทึกใบ" }).click();
   await expect(ใบ.getByText(/ต้องเลือกแพ็กเกจ/), "ไม่เลือกแพ็กเกจ = บันทึกไม่ได้ (ห้ามเลือกให้เอง)").toBeVisible();
   await ใบ.locator("#pp-package").selectOption("exclusive");
@@ -392,6 +396,7 @@ test("[func·hq] ออกใบเสนอแพ็กเกจ → ยัง�
   expect(Number(แถวใบ.contract_months)).toBe(12);
   expect(Number(แถวใบ.annual_target)).toBe(2_000_000);
   await expect(แก้ไข.getByText(แถวใบ.proposal_no)).toBeVisible();
+  await expect(ใบ, "บันทึกแล้วฟอร์มปิด กลับเป็นรายการใบ").toHaveCount(0);
 
   // ยังเป็นร่าง → ปุ่มสร้างตัวแทนต้องกดไม่ได้ พร้อมบอกเหตุผล
   await แก้ไข.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).click();
