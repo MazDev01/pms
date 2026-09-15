@@ -13,6 +13,7 @@ import { useDealerPerformance, EMPTY_PERF } from "@pms/shared/lib/useDealerPerfo
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { useNetworkDealerDetail, useNetworkCustomersForDealer } from "@pms/shared/lib/useNetworkData";
 import { CountUp } from "@pms/shared/components/ui/CountUp";
+import { packageLabel } from "@pms/shared/lib/dealerProposals";
 import { DealerCredentialsCard } from "@pms/shared/components/hq/DealerCredentialsCard";
 import { TablePagination, pageSlice, pageCountOf } from "@pms/shared/components/ui/TablePagination";
 import { ArrowLeft, TrendingUp, TrendingDown, Users, Lock, ScrollText } from "lucide-react";
@@ -129,7 +130,8 @@ function OverviewTab({ dealer, detail }: { dealer: DealerRow; detail: DealerDeta
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
               <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>ยอดจริง</span>
-              <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>เป้า ฿{(dealer.revenueTarget / 1_000_000).toFixed(0)}M</span>
+              {/* ทศนิยม 1 ตำแหน่ง — เป้า Standard 1.6 ล้าน เดิมปัดขึ้น "฿2M" ไม่ตรงกับหน้าตัวแทน */}
+              <span style={{ fontSize: "0.65rem", color: "#6b7280" }}>เป้า ฿{(dealer.revenueTarget / 1_000_000).toFixed(1)}M{dealer.package ? ` · ${packageLabel[dealer.package]}` : ""}</span>
             </div>
             {isAtRisk && (
               <div style={{ marginTop: 10, padding: "6px 12px", background: "#fee2e2", borderRadius: 8, fontSize: "0.72rem", color: "#dc2626", fontWeight: 600 }}>
@@ -453,6 +455,12 @@ export default function DealerDrillDownPage({ params }: { params: Promise<{ deal
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <h2 style={{ marginBottom: 0 }}>{dealer.name}</h2>
             <span className="badge" style={BADGE("#f0f0f5", "#6b7280")}>{dealer.code}</span>
+            {/* แพ็กเกจของตัวแทน (บอสสั่ง 15 ก.ย. 69) — สีเดียวกับป้ายในหน้า /hq/dealers · ไม่มีแพ็กเกจ = ไม่แสดง */}
+            {dealer.package && (
+              <span className="badge" style={dealer.package === "exclusive" ? BADGE("#fdf3e1", "#b45309") : BADGE("#e8f0fe", "#1d4ed8")}>
+                แพ็กเกจ {packageLabel[dealer.package]}
+              </span>
+            )}
             {isAtRisk && <span className="badge" style={BADGE("#fee2e2", "#dc2626")}>🔴 ล้าหลังเป้า</span>}
             {isWarn   && <span className="badge" style={BADGE("#fef3cd", "#d97706")}>⚠ ระวัง</span>}
             {/* ป้าย/สี มาจาก @pms/shared/lib/mock แหล่งเดียว — ให้ตรงกับตารางหน้า /hq/dealers เป๊ะ */}

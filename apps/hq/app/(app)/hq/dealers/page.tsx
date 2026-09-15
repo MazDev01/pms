@@ -50,6 +50,13 @@ const CARD_GRID_CSS = `
 `;
 // สีจางไล่มุมล่างของการ์ด วนตามลำดับ (ตามภาพตัวอย่างที่บอสส่ง 14 ก.ย. 69) — แค่ตกแต่ง ไม่ได้สื่อความหมาย
 const สีการ์ด = ["#eaf2fd", "#e8f6ef", "#f0ecfb"];
+/** ป้ายแพ็กเกจของตัวแทน (บอสสั่ง 15 ก.ย. 69: "เอา Standard Exclusive ไปใช้แสดงข้อมูลของแต่ละดีลเลอร์ด้วย")
+ *  ไม่มีแพ็กเกจ = "—" ไม่เดาแพ็กเกจให้ */
+function ป้ายแพ็กเกจ({ p }: { p?: DealerPackage | null }) {
+  if (!p) return <span style={{ color: "#C0C0C0", fontSize: "0.8rem" }}>—</span>;
+  const สี = p === "exclusive" ? { background: "#fdf3e1", color: "#b45309" } : { background: "#e8f0fe", color: "#1d4ed8" };
+  return <span className="badge" style={สี}>{packageLabel[p]}</span>;
+}
 /** ตัวย่อชื่อบนการ์ดที่ยังไม่มีรูป — ตัดคำนำหน้าบริษัท/คุณ ออกก่อน */
 const ตัวย่อ = (d: DealerRow) => d.name.replace(/บจ\.|หจก\.|บริษัท|คุณ/g, "").trim().slice(0, 2) || d.code.slice(0, 2);
 
@@ -483,11 +490,12 @@ function HQDealersPageInner() {
                       <div title={d.province} style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {[d.province, d.region].filter(Boolean).join(" · ") || "—"}
                       </div>
-                      <div style={{ marginTop: 7 }}>
+                      <div style={{ marginTop: 7, display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.68rem", fontWeight: 700, color: สีสถานะ.color, background: สีสถานะ.bg, borderRadius: 99, padding: "2px 9px" }}>
                           <span style={{ width: 6, height: 6, borderRadius: "50%", background: สีสถานะ.color }} />
                           {dealerStatusLabel[สถานะ]}
                         </span>
+                        {d.package && <ป้ายแพ็กเกจ p={d.package} />}
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: canImpersonate ? "1fr auto auto" : "1fr 1fr", gap: 8, marginTop: 12 }} onClick={ev => ev.stopPropagation()}>
                         {canImpersonate && (
@@ -542,17 +550,19 @@ function HQDealersPageInner() {
                   จนดูเหมือนลำดับไม่เรียง (บอสทัก 7 ก.ย. 69) */}
               <col style={{ width: "6%", minWidth: 68 }} />{/* ลำดับ */}
               <col style={{ width: "6%", minWidth: 68 }} />{/* รหัส — ต้องอ่านครบ 3 ตัวอักษร ห้ามตัด */}
-              <col style={{ width: "11%", minWidth: 90 }} />{/* ชื่อตัวแทน — ยาวเกินตัดด้วยจุดไข่ปลา + tooltip (ยอมให้ตัดได้) */}
+              <col style={{ width: "9%", minWidth: 90 }} />{/* ชื่อตัวแทน — ยาวเกินตัดด้วยจุดไข่ปลา + tooltip (ยอมให้ตัดได้) */}
               <col style={{ width: "8%", minWidth: 78 }} />{/* จังหวัด — ยาวเกินตัด + tooltip เช่นกัน */}
               <col style={{ width: "8%", minWidth: 104 }} />{/* ภาค — ป้ายชื่อ ห้ามตัด (ยาวสุด "ตะวันออก" + ระยะขอบของป้าย) */}
-              <col style={{ width: "13%", minWidth: 148 }} />{/* ยอด / เป้า — เผื่อระยะขอบช่อง ไม่งั้นป้าย % โดนตัด */}
-              <col style={{ width: "8%", minWidth: 92 }} />{/* โอกาสขาย */}
+              {/* แพ็กเกจ (บอสสั่ง 15 ก.ย. 69) — ป้าย "Exclusive" + ระยะขอบของป้าย ห้ามตัด · minWidth รวมทั้งตาราง 1,228px */}
+              <col style={{ width: "7%", minWidth: 100 }} />
+              <col style={{ width: "12%", minWidth: 148 }} />{/* ยอด / เป้า — เผื่อระยะขอบช่อง ไม่งั้นป้าย % โดนตัด */}
+              <col style={{ width: "7%", minWidth: 92 }} />{/* โอกาสขาย */}
               <col style={{ width: "7%", minWidth: 80 }} />{/* ตรงเวลา — เนื้อหาเป็นป้าย % สั้น ๆ */}
-              <col style={{ width: "8%", minWidth: 108 }} />{/* สถานะ — ป้ายชื่อ ห้ามตัด ("เปิดใช้งาน" + ระยะขอบของป้ายเอง) */}
+              <col style={{ width: "7%", minWidth: 108 }} />{/* สถานะ — ป้ายชื่อ ห้ามตัด ("เปิดใช้งาน" + ระยะขอบของป้ายเอง) */}
               {/* คอลัมน์ปุ่ม: เข้าระบบ (~99px) + ไอคอน 5 ปุ่ม (28px × 5) + gap 4px × 5 ช่อง ≈ 259px
                   บวกระยะขอบช่อง 32px = 291px · ตั้ง 292px คือพอดีเนื้อหาจริงโดยไม่เผื่อทิ้งเปล่า
                   (เดิม 300px เผื่อไว้เกินจำเป็น ซึ่งไปเบียดพื้นที่คอลัมน์อื่นจนตารางล้นจอ) */}
-              <col style={{ width: "25%", minWidth: 292 }} />
+              <col style={{ width: "23%", minWidth: 292 }} />
             </colgroup>
             <thead>
               <tr>
@@ -562,14 +572,14 @@ function HQDealersPageInner() {
                     ที่จอ 1280 ตารางกว้าง 1120 แต่พื้นที่มีแค่ ~968 จึงต้องเลื่อนแนวนอน
                     เดิมปุ่มเลยหลุดออกนอกกรอบ ต้องเลื่อนก่อนถึงจะกดได้ (คนเห็นแล้วคิดว่าระบบพัง)
                     ตรึงไว้แบบนี้ ปุ่มอยู่ให้กดตลอดทุกความกว้างจอ โดยไม่ต้องตัดคอลัมน์ไหนทิ้ง */}
-                {["ลำดับ", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "ยอด / เป้า", "โอกาสขาย", "ตรงเวลา", "สถานะ", ""].map((h, i, arr) => (
+                {["ลำดับ", "รหัส", "ชื่อตัวแทน", "จังหวัด", "ภาค", "แพ็กเกจ", "ยอด / เป้า", "โอกาสขาย", "ตรงเวลา", "สถานะ", ""].map((h, i, arr) => (
                   <th key={i} style={i === arr.length - 1 ? ตรึงคอลัมน์ปุ่ม(true) : undefined}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>{dealersLoaded ? "ไม่พบข้อมูล" : "กำลังโหลดข้อมูล…"}</td></tr>
+                <tr><td colSpan={11} style={{ padding: "32px", textAlign: "center", fontSize: "0.8rem", color: "#6b7280" }}>{dealersLoaded ? "ไม่พบข้อมูล" : "กำลังโหลดข้อมูล…"}</td></tr>
               ) : pageSlice(filtered, Math.min(page, pageCountOf(filtered.length) - 1)).map((d, i) => (
                 <ClickableRow key={d.id} className="clickable" style={{ opacity: dealerStatus(d) === "active" ? 1 : 0.55 }}
                   onActivate={() => setSelectedDealer(d)} label={`เปิดรายละเอียดตัวแทน ${d.name}`}>
@@ -586,6 +596,7 @@ function HQDealersPageInner() {
                   <td>
                     <span className="badge" style={{ background: "#f0f0f5", color: "#6b7280" }}>{d.region}</span>
                   </td>
+                  <td><ป้ายแพ็กเกจ p={d.package} /></td>
                   <td><RevBar actual={perfOf(d.code).revenue} target={d.revenueTarget} /></td>
                   <td>
                     {perfOf(d.code).openLeads > 0
@@ -816,6 +827,7 @@ function HQDealersPageInner() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 900, fontSize: "0.8rem", color: "#003366", background: "#dce5f0", padding: "3px 10px", borderRadius: 8, letterSpacing: "0.06em" }}>{d.code}</span>
                     <StatusBadge status={dealerStatus(d)} />
+                    {d.package && <ป้ายแพ็กเกจ p={d.package} />}
                     <span className="badge" style={{ background: tier.bg, color: tier.color }}>{tier.label}</span>
                   </div>
                   <button onClick={() => setSelectedDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
