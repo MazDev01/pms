@@ -118,8 +118,9 @@ test("[func·hq] เพิ่มลูกค้าเป้าหมาย → �
   await ตั้ง.getByRole("button", { name: "ผูกกับตัวแทนนี้" }).click();
 
   await waitRow(sb, "dealer_prospects", { name, status: "won", dealer_code: "RYG" });
-  await expect(แถว).toContainText("เป็นตัวแทนแล้ว");
-  await expect(แถว).toContainText("RYG");
+  // เป็นตัวแทนแล้ว = ไปอยู่หน้าตัวแทนจำหน่าย ไม่แสดงในหน้าลูกค้าเป้าหมาย (บอสสั่ง 15 ก.ย. 69)
+  await expect(แถว, "เป็นตัวแทนแล้วต้องหายจากตารางลูกค้าเป้าหมาย").toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByLabel("กรองตามสถานะ").locator("option", { hasText: "เป็นตัวแทนแล้ว" }), "ไม่มีตัวกรองเป็นตัวแทนแล้ว").toHaveCount(0);
   assertNoErrors(errs, "หน้าลูกค้าเป้าหมาย (HQ)");
 });
 
@@ -148,6 +149,9 @@ test("[func·hq] ตั้งเป็นตัวแทนจำหน่าย
   await ตั้ง.getByRole("button", { name: "สร้างตัวแทนจำหน่าย" }).click();
 
   await expect(page.getByText("สร้างตัวแทนจำหน่ายสำเร็จ")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("link", { name: `ไปที่ตัวแทน ${NEW_CODE}` }), "มีทางไปหน้าตัวแทนที่เพิ่งสร้าง").toBeVisible();
+  await page.getByRole("button", { name: "เสร็จแล้ว" }).click();
+  await expect(page.getByRole("row", { name: new RegExp(name) }), "เป็นตัวแทนแล้วต้องหายจากตารางลูกค้าเป้าหมาย").toHaveCount(0, { timeout: 15_000 });
   await waitRow(sb, "dealers", { code: NEW_CODE });
   await waitRow(sb, "dealer_prospects", { id, status: "won", dealer_code: NEW_CODE });
   // เป้ายอดขายรายปีของสาขา = เป้ายอดซื้อต่อปีในใบ (บอสสั่ง "เอา 3 ช่อง") · ใบนั้นกลายเป็นตอบรับ

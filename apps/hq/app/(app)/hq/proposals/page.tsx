@@ -312,7 +312,10 @@ export default function HQProposalsPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                     {r && <button onClick={() => กดพิมพ์(p)} style={qa}><Printer size={13} /> พิมพ์ PDF</button>}
                     {จัดการได้ && !ล็อก && <button onClick={() => กดแก้ไข(p)} style={qa}><Pencil size={13} /> แก้ไข</button>}
-                    {r && <Link href={`/hq/prospects?open=${r.id}`} style={qa}><ExternalLink size={13} /> ลูกค้าเป้าหมาย</Link>}
+                    {/* เป็นตัวแทนแล้ว = ไม่อยู่หน้าลูกค้าเป้าหมายแล้ว (บอสสั่ง 15 ก.ย. 69) → ลิงก์ไปหน้าตัวแทนนั้นแทน */}
+                    {r && r.status === "won"
+                      ? r.dealerCode && <Link href={`/hq/dealers/${r.dealerCode}`} style={qa}><ExternalLink size={13} /> ตัวแทน {r.dealerCode}</Link>
+                      : r && <Link href={`/hq/prospects?open=${r.id}`} style={qa}><ExternalLink size={13} /> ลูกค้าเป้าหมาย</Link>}
                     {จัดการได้ && !ล็อก && <button onClick={() => void กดลบ(p)} title="ลบใบร่าง" aria-label="ลบใบร่าง" style={{ ...qa, width: 30, padding: 0, justifyContent: "center", color: "#fecaca" }}><Trash2 size={14} /></button>}
                     <button onClick={() => setดูรหัส(null)} title="ปิด" aria-label="ปิด" style={{ ...qa, width: 30, padding: 0, justifyContent: "center" }}><X size={15} /></button>
                   </div>

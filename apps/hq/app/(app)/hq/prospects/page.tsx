@@ -221,18 +221,26 @@ export default function HQProspectsPage() {
     if (!รหัส) return;
     window.history.replaceState(null, "", "/hq/prospects");
     const ราย = list.find(x => String(x.id) === รหัส);
-    if (ราย) เปิดแผง(ราย);
+    // เป็นตัวแทนแล้ว = ไม่อยู่หน้านี้ → พาไปหน้าตัวแทนนั้นแทน (ลิงก์เก่าจากกระดิ่ง/บันทึกการใช้งานยังใช้ได้)
+    if (ราย?.status === "won") {
+      if (ราย.dealerCode) window.location.assign(`/hq/dealers/${ราย.dealerCode}`);
+      else แจ้งพลาด(`“${ราย.name}” เป็นตัวแทนแล้ว แต่ไม่พบตัวแทนที่ผูกไว้ (อาจถูกลบไปแล้ว)`);
+    }
+    else if (ราย) เปิดแผง(ราย);
     else if (!loadErr) แจ้งพลาด("ไม่พบลูกค้าเป้าหมายรายนี้ — อาจถูกลบหรือลิงก์ไม่ถูกต้อง");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ทำครั้งเดียวตอนโหลดเสร็จ ไม่ต้องทำซ้ำเมื่อรายการเปลี่ยน
   }, [loaded]);
 
   const ชื่อตัวแทน = useMemo(() => new Map(dealers.map(d => [d.code, d.name])), [dealers]);
+  // เป็นตัวแทนแล้ว (ครบ 100%) = ไปอยู่หน้าตัวแทนจำหน่าย ไม่แสดงในหน้านี้ (บอสสั่ง 15 ก.ย. 69)
+  //   ตาราง · ตัวกรอง · ส่งออก · การ์ดตัวเลข ใช้รายการนี้ทั้งหมด — ข้อมูลยังอยู่ครบในฐานข้อมูล (ประวัติ/ใบเสนอไม่หาย)
+  const รายที่แสดงได้ = useMemo(() => list.filter(p => p.status !== "won"), [list]);
   const จังหวัดในข้อมูล = useMemo(
-    () => [...new Set(list.map(p => (p.province ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th")),
+    () => [...new Set(รายที่แสดงได้.map(p => (p.province ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "th")),
     [list],
   );
 
-  const filtered = useMemo(() => list.filter(p => {
+  const filtered = useMemo(() => รายที่แสดงได้.filter(p => {
     const ผ่านสถานะ =
       statusFilter === "all" ? true
       : statusFilter === "due" ? ถึงกำหนดติดตาม(p, APP_NOW_ISO)
@@ -241,10 +249,15 @@ export default function HQProspectsPage() {
       : statusFilter === "idle30" ? ไม่ได้ติดต่อเกิน(p, 30, APP_NOW_ISO)
       : p.status === statusFilter;
     return ผ่านสถานะ && (provinceFilter === "all" || (p.province ?? "").trim() === provinceFilter) && ตรงกับคำค้น(p, q);
-  }), [list, statusFilter, provinceFilter, q]);
+  }), [รายที่แสดงได้, statusFilter, provinceFilter, q]);
 
   // การ์ดตัวเลขคิดจาก "ผลที่กรองอยู่" — ตรงกับสิ่งที่ตารางแสดง (กติกาเดียวกับทุกหน้า HQ)
   const สรุป = useMemo(() => สรุปผู้สนใจ(filtered, APP_NOW_ISO), [filtered]);
+  // อัตราสำเร็จต้องนับรายที่เป็นตัวแทนแล้วด้วย — ซ่อนจากตาราง แต่ยังเป็นผลงานจริง (ตามจังหวัด/คำค้นที่เลือกอยู่)
+  const อัตราสำเร็จ = useMemo(() => สรุปผู้สนใจ(
+    list.filter(p => (provinceFilter === "all" || (p.province ?? "").trim() === provinceFilter) && ตรงกับคำค้น(p, q)),
+    APP_NOW_ISO,
+  ).อัตราสำเร็จ, [list, provinceFilter, q]);
 
   // ── เพิ่มรายใหม่ ──
   function เปิดเพิ่ม() {
@@ -376,7 +389,7 @@ export default function HQProspectsPage() {
         const saved = await prospectsRepo.update({ ...row, id: converting.id, createdAt: converting.createdAt });
         setList(l => l.map(x => x.id === saved.id ? saved : x));
         logAudit("ลูกค้าเป้าหมายเป็นตัวแทนแล้ว", `#${saved.id} → ${ฟอร์ม.existingCode} · ${saved.name}`);
-        แจ้งสำเร็จ(`ผูก “${saved.name}” กับตัวแทน ${ฟอร์ม.existingCode} แล้ว`);
+        แจ้งสำเร็จ(`ผูก “${saved.name}” กับตัวแทน ${ฟอร์ม.existingCode} แล้ว — ย้ายไปอยู่หน้าตัวแทนจำหน่าย`);
         setConverting(null); ปิดแผงทันที();
       } catch (e) {
         setConvErr(friendlyError(e, "บันทึกไม่สำเร็จ"));
@@ -607,9 +620,10 @@ export default function HQProspectsPage() {
       <div className="kpi-bar">
         <div className="kpi"><div className="kpi-icon kpi-navy"><Users size={16} /></div><div><div className="kpi-val">{สรุป.ทั้งหมด.toLocaleString()}</div><div className="kpi-label">ลูกค้าเป้าหมายที่แสดงอยู่</div></div></div>
         <div className="kpi"><div className="kpi-icon kpi-navy"><AlarmClock size={16} /></div><div><div className="kpi-val">{สรุป.ถึงกำหนด.toLocaleString()}</div><div className="kpi-label">ถึงกำหนดติดตาม</div></div></div>
-        <div className="kpi"><div className="kpi-icon kpi-green"><Store size={16} /></div><div><div className="kpi-val">{สรุป.เป็นตัวแทน.toLocaleString()}</div><div className="kpi-label">เป็นตัวแทนแล้ว</div></div></div>
-        {/* อัตราสำเร็จคิดจากรายที่จบแล้วเท่านั้น · ยังไม่มีรายที่จบ = "—" ไม่ใช่ 0% */}
-        <div className="kpi"><div className="kpi-icon kpi-green"><Percent size={16} /></div><div><div className="kpi-val">{สรุป.อัตราสำเร็จ === null ? "—" : `${สรุป.อัตราสำเร็จ}%`}</div><div className="kpi-label">อัตราสำเร็จ (จากรายที่จบแล้ว)</div></div></div>
+        {/* "เป็นตัวแทนแล้ว" ไม่อยู่หน้านี้แล้ว (บอสสั่ง 15 ก.ย. 69) → การ์ดใบที่ 3 นับรายที่ยังติดตามอยู่แทน */}
+        <div className="kpi"><div className="kpi-icon kpi-navy"><Store size={16} /></div><div><div className="kpi-val">{สรุป.กำลังติดตาม.toLocaleString()}</div><div className="kpi-label">กำลังติดตาม</div></div></div>
+        {/* อัตราสำเร็จคิดจากรายที่จบแล้วเท่านั้น (รวมรายที่เป็นตัวแทนแล้วซึ่งซ่อนจากตาราง) · ยังไม่มีรายที่จบ = "—" ไม่ใช่ 0% */}
+        <div className="kpi"><div className="kpi-icon kpi-green"><Percent size={16} /></div><div><div className="kpi-val">{อัตราสำเร็จ === null ? "—" : `${อัตราสำเร็จ}%`}</div><div className="kpi-label">อัตราสำเร็จ (จากรายที่จบแล้ว)</div></div></div>
       </div>
 
       {/* Toolbar */}
@@ -625,7 +639,7 @@ export default function HQProspectsPage() {
           <option value="due">ถึงกำหนดติดตาม</option>
           {/* ตัวกรองติดตามด่วน (สเปก: ไม่ได้ติดต่อ 7 / 14 / 30 วัน) — นับเฉพาะรายที่ยังติดตามอยู่ */}
           {เกณฑ์ไม่ได้ติดต่อ.map(ว => <option key={ว} value={`idle${ว}`}>ไม่ได้ติดต่อ {ว} วันขึ้นไป</option>)}
-          {PROSPECT_STATUS_ORDER.map(s => <option key={s} value={s}>{prospectStatusLabel[s]}</option>)}
+          {PROSPECT_STATUS_ORDER.filter(s => s !== "won").map(s => <option key={s} value={s}>{prospectStatusLabel[s]}</option>)}
         </select>
         <select aria-label="กรองตามจังหวัด" value={provinceFilter} onChange={e => { setProvinceFilter(e.target.value); setPage(0); }} className="form-select" style={{ width: "auto", cursor: "pointer" }}>
           <option value="all">ทุกจังหวัด</option>
