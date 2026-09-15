@@ -4,7 +4,7 @@
 // ขอบเขตข้อมูล: ลูกค้าเป้าหมายของตัวแทนรายนี้เท่านั้น (กติกาเดียวกับหน้า /leads และ /calendar)
 // S1: 4 KPI (ทั้งใบกดได้) · S2: 2 กราฟใหญ่ (แท่งคู่จำนวน + เส้นยอดขาย) · S3: ผลงาน + แม่แบบ + ขั้นตอนการขาย
 // S4: 4 การ์ดรายการ (ปิดท้ายด้วยกิจกรรมล่าสุด) · stack เดิม (SVG charts, ไม่ลง Recharts)
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Target, TrendingUp, PhoneCall, Activity, Building2, User,
@@ -34,7 +34,7 @@ import type { DealerRow } from "@pms/shared/lib/data/types";
 import { useCurrentDealer } from "@pms/shared/lib/useCurrentDealer";
 import {
   parseValue, isLeadOpen, needsFollowUp, daysSinceContact,
-  MOCK_TODAY, leadCreatedDate, leadLatestDate,
+  MOCK_TODAY, leadCreatedDate, leadEnteredInRange,
 } from "@pms/shared/lib/leadMetrics";
 import { useLeadRules } from "@pms/shared/lib/useHQRules";
 import { useHQTargets } from "@pms/shared/lib/useHQConfig";
@@ -79,13 +79,9 @@ export default function DealerDashboard() {
   );
 
   // ── ช่วงเวลา (ตัวเลือกบนแถบบน) ────────────────────────────────────────────
-  // ลูกค้าเป้าหมาย: เทียบ "วันที่กิจกรรมล่าสุด" — เกณฑ์เดียวกับตารางหน้า /leads
-  // (รายที่ยังไม่มีกิจกรรมไม่ถูกตัดออก) · ใบเสนอราคา: ใช้ passes() ตัวเดียวกับหน้า /quotations
-  const inTime = useCallback(
-    (d: Date | null) => !d || (d.getTime() >= timeRange.start.getTime() && d.getTime() <= timeRange.end.getTime()),
-    [timeRange],
-  );
-  const leadsIn = useMemo(() => myLeads.filter(l => inTime(leadLatestDate(l))), [myLeads, inTime]);
+  // ลูกค้าเป้าหมายในช่วง = นับตามวันที่ลูกค้าเข้ามา เกณฑ์เดียวกับหน้า /leads และฝั่งสำนักงานใหญ่ (บอสเลือก 15 ก.ย. 69)
+  //   (รายที่ไม่มีวันเข้ามาไม่ถูกตัดออก) · ใบเสนอราคา/นัดหมาย: ใช้ passes() ตัวเดียวกับหน้า /quotations
+  const leadsIn = useMemo(() => myLeads.filter(l => leadEnteredInRange(l, timeRange.start, timeRange.end)), [myLeads, timeRange]);
   const quotesIn = useMemo(() => quotations.filter(q => passes({ date: q.date })), [quotations, passes]);
   const apptsIn = useMemo(() => appointments.filter(a => passes({ date: a.date })), [appointments, passes]);
 
@@ -335,7 +331,7 @@ export default function DealerDashboard() {
 
   const kpis = [
     { label: "เป้าหมายยอดขาย", tip: "เป้าหมายยอดขายทั้งปีที่สำนักงานใหญ่กำหนด เทียบกับยอดปิดการขายสะสมตั้งแต่ต้นปี · การ์ดนี้เทียบทั้งปีเสมอ ไม่เปลี่ยนตามช่วงเวลาที่เลือก", Icon: Target, color: "#2563EB", bg: "#E8F0FE", href: "/quotations", ring: true },
-    { label: "โอกาสการขาย", tip: "มูลค่ารวมของดีลที่ยังเปิดอยู่ (ยังไม่ปิดการขาย และยังไม่ยกเลิก)", Icon: TrendingUp, color: SUCCESS, bg: "#E6F7EE", href: "/leads", value: baht(openValue), sub1: "รวมประเมินราคาของงานที่ยังเปิดอยู่", sub2: `${openLeads.length} ดีล` },
+    { label: "โอกาสการขาย", tip: "มูลค่ารวมของดีลที่ยังเปิดอยู่ (ยังไม่ปิดการขาย และยังไม่ยกเลิก)", Icon: TrendingUp, color: SUCCESS, bg: "#E6F7EE", href: "/leads", value: baht(openValue), sub1: "รวมประเมินราคาของงานที่ยังเปิดอยู่", sub2: `${openLeads.length} ดีลที่ยังเปิด (ทุกช่วงเวลา)` },
     { label: "ติดตามวันนี้", tip: "งานติดตาม/นัดหมายที่ต้องทำวันนี้", Icon: PhoneCall, color: "#EA580C", bg: "#FEF0E6", href: "/calendar", value: `${followUpToday}`, sub1: "รายการ" },
     // ตัวเลขหลัก = จำนวนดีลที่ปิดสำเร็จ · อัตราปิดการขาย (%) ลงมาเป็นบรรทัดรอง
     // ชื่อการ์ดต้องตรงกับหน่วยของตัวเลขที่โชว์ — "ปิดการขายได้" คู่กับ "50%" จะอ่านว่าปิดได้ 50 ดีล

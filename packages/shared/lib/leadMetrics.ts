@@ -40,6 +40,24 @@ export function leadCreatedDate(l: LeadRow): Date {
   return x;
 }
 
+/** วันที่ลูกค้าเป้าหมายเข้ามา (created_label/created_date ที่ฐานข้อมูล) — ไม่มีวัน = null
+ *  ⚠️ ห้ามใช้ leadCreatedDate() แทน: มันสังเคราะห์วันจาก numId เมื่อไม่มีวันจริง */
+export function leadEntryDate(l: LeadRow): Date | null {
+  return parseThaiDate(l.createdAt);
+}
+
+/** ลูกค้าเป้าหมายอยู่ในช่วงเวลาที่เลือกไหม — นับตาม "วันที่ลูกค้าเข้ามา" (บอสเลือก 15 ก.ย. 69)
+ *  เกณฑ์เดียวกับ RPC lead_summary / leads_page ของสำนักงานใหญ่: ไม่มีวันเข้ามา = นับรวม
+ *  เดิมฝั่งสาขานับตามวันติดต่อล่าสุด → เว็บจริงขึ้น 187 (สาขา) vs 155 (HQ) ในช่วงเดียวกัน */
+export function leadEnteredInRange(l: LeadRow, start: Date, end: Date): boolean {
+  const d = leadEntryDate(l);
+  if (!d) return true;
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+  return day >= s && day <= e;
+}
+
 // วันที่ติดต่อล่าสุดของลูกค้าเป้าหมาย (จากกิจกรรม · ไม่มีกิจกรรม → ใช้วันที่สร้าง)
 /** วันติดต่อล่าสุดของลูกค้าเป้าหมาย
  *  อ่านจาก lastContactAt ก่อน — ฐานข้อมูลคำนวณไว้ให้แล้วทุกครั้งที่บันทึก (trigger 0046)

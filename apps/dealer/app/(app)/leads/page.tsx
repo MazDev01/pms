@@ -59,7 +59,7 @@ import { dealers as dealersRepo } from "@pms/shared/lib/data";
 import type { DealerRow } from "@pms/shared/lib/data/types";
 import { persons as personsRepo, files as filesRepo, storage as fileStorage, leads as leadsRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
-import { lastContactLabel, leadLatestDate as leadLatestDateOf } from "@pms/shared/lib/leadMetrics";
+import { lastContactLabel, leadLatestDate as leadLatestDateOf, leadEnteredInRange } from "@pms/shared/lib/leadMetrics";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { reportRepoSaveError } from "@pms/shared/lib/useRepoState";
 import { ReportEditor } from "@pms/shared/components/ui/ReportEditor";
@@ -1277,8 +1277,8 @@ export default function LeadsPage() {
       || l.province.toLowerCase().includes(q)
       || l.id.toLowerCase().includes(q);
     const matchPerson = person === "all" || assignedHas(l.assigned, person);
-    const latest = leadLatestDate(l);
-    const matchTime = !latest || (latest.getTime() >= timeRange.start.getTime() && latest.getTime() <= timeRange.end.getTime());
+    // ช่วงเวลา = วันที่ลูกค้าเข้ามา เกณฑ์เดียวกับหน้าสำนักงานใหญ่ (บอสเลือก 15 ก.ย. 69 · เดิมใช้วันติดต่อล่าสุด)
+    const matchTime = leadEnteredInRange(l, timeRange.start, timeRange.end);
     const matchA = !fAssignee || assignedHas(l.assigned, fAssignee);
     const matchP = !fProvince || l.province === fProvince;
     const matchSrc = !fSource || (l.source ?? "") === fSource;
