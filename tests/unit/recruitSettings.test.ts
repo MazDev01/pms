@@ -34,6 +34,11 @@ describe("เป้ายอดขายตามแพ็กเกจ (0178)", 
     expect(เป้าตามแพ็กเกจ(s, "exclusive", "อีสาน"), "ไม่มีเป้าภาคและไม่มีค่ากลาง = กรอกเอง").toBeNull();
     expect(ใช้เป้าตามแพ็กเกจ({ package: "standard" as const, region: "เหนือ", revenueTarget: 0 }, s).revenueTarget).toBe(2_000_000);
   });
+  it("กำหนดเป้าเอง (0180): แพ็กเกจมีเป้าก็ไม่ทับ · ปิดสวิตช์แล้วกลับไปตามแพ็กเกจ", () => {
+    const เอง = { package: "standard" as const, revenueTarget: 5_000_000, targetManual: true };
+    expect(ใช้เป้าตามแพ็กเกจ(เอง, ค่าตั้ง)).toBe(เอง);
+    expect(ใช้เป้าตามแพ็กเกจ({ ...เอง, targetManual: false }, ค่าตั้ง).revenueTarget).toBe(3_000_000);
+  });
 });
 
 describe("รวมค่าตั้งหาตัวแทน", () => {

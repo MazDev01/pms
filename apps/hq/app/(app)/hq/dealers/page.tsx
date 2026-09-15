@@ -210,8 +210,9 @@ function HQDealersPageInner() {
   // Modals
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<DealerRow | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, package: "" as DealerPackage | "", status: "active" as "active" | "inactive" });
-  // เป้ายอดขายเชื่อมกับแพ็กเกจ (บอสสั่ง 15 ก.ย. 69) — แพ็กเกจที่ตั้งเป้าไว้ที่ ตั้งค่า › หาตัวแทน ใช้เป้านั้นเสมอ (ฐานข้อมูลบังคับ 0178)
+  const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, package: "" as DealerPackage | "", targetManual: false, status: "active" as "active" | "inactive" });
+  // เป้ายอดขายเชื่อมกับแพ็กเกจ (บอสสั่ง 15 ก.ย. 69) — แพ็กเกจที่ตั้งเป้าไว้ที่ ตั้งค่า › หาตัวแทน ใช้เป้านั้น (ฐานข้อมูลบังคับ 0178)
+  //   เว้นแต่ติ๊ก "กำหนดเป้าเอง" ให้ตัวแทนรายนั้น (0180 · บอสสั่ง "ให้สามารถแก้เองหรือแก้ในตั้งค่าก็ได้")
   const ค่าตั้งหาตัวแทน = useRecruitSettings();
   //   แยกตามภาค (0179): เป้าของแพ็กเกจในภาคของตัวแทน → เป้ากลางของแพ็กเกจ → กรอกเอง
   const เป้าแพ็กเกจ = เป้าตามแพ็กเกจ(ค่าตั้งหาตัวแทน, form.package || null, form.region);
@@ -261,7 +262,7 @@ function HQDealersPageInner() {
   const avgOnTime = avgOf(c => perfOf(c).onTimePct);
   const totalPct = totalTarget > 0 ? Math.round(totalRevenue / totalTarget * 100) : 0;
 
-  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, package: d.package ?? "", status: d.status }); setFormErr(""); setShowForm(true); }
+  function openEdit(d: DealerRow) { setEditTarget(d); setForm({ code: d.code, name: d.name, province: d.province, region: d.region, revenueTarget: d.revenueTarget, package: d.package ?? "", targetManual: d.targetManual ?? false, status: d.status }); setFormErr(""); setShowForm(true); }
 
   // เปลี่ยนภาค: อัปเดตภาค
   //   และล้างจังหวัดทิ้งถ้ามันไม่ได้อยู่ในภาคใหม่ — กันข้อมูลขัดกันเอง (เช่น ภาค "ใต้" + จังหวัด "เชียงใหม่")
@@ -291,7 +292,11 @@ function HQDealersPageInner() {
     if (editTarget) {
       setDealers(prev => prev.map(d => d.id === editTarget.id ? {
         ...d, name: form.name.trim(), province: form.province.trim(), region: form.region,
-        revenueTarget: เป้าแพ็กเกจ ?? form.revenueTarget, package: form.package || null, status: form.status,
+        // กำหนดเองได้เฉพาะเมื่อแพ็กเกจมีเป้า — ไม่มีเป้าแพ็กเกจ ช่องเป้าเป็นกรอกเองอยู่แล้ว ไม่ต้องเก็บสวิตช์
+        ...(() => { const เอง = เป้าแพ็กเกจ != null && form.targetManual; return {
+          revenueTarget: เป้าแพ็กเกจ != null && !เอง ? เป้าแพ็กเกจ : form.revenueTarget, targetManual: เอง,
+        }; })(),
+        package: form.package || null, status: form.status,
       } : d));
       logAudit("แก้ไขตัวแทน", `${code} · ${form.name.trim()}`);
       setShowForm(false);
@@ -710,10 +715,25 @@ function HQDealersPageInner() {
                   {/* ช่องเงินใช้ text + ใส่ลูกน้ำเอง — type="number" ใส่ลูกน้ำไม่ได้ และหลักล้านอ่านยากมาก (บอสสั่ง 26 ส.ค. 69) */}
                   {เป้าแพ็กเกจ != null ? (
                     <>
-                      <input type="text" aria-label="เป้ายอดขายทั้งปี" value={formatMoneyInput(String(เป้าแพ็กเกจ))} readOnly disabled
-                        style={{ ...INPUT_STYLE, background: "#f3f4f6", color: "#374151", fontWeight: 700, cursor: "not-allowed" }} />
+                      {form.targetManual ? (
+                        <input type="text" inputMode="numeric" aria-label="เป้ายอดขายทั้งปี"
+                          value={form.revenueTarget ? formatMoneyInput(String(form.revenueTarget)) : ""}
+                          onChange={e => setForm(f => ({ ...f, revenueTarget: parseMoneyInput(e.target.value) }))}
+                          placeholder="0" style={INPUT_STYLE} />
+                      ) : (
+                        <input type="text" aria-label="เป้ายอดขายทั้งปี" value={formatMoneyInput(String(เป้าแพ็กเกจ))} readOnly disabled
+                          style={{ ...INPUT_STYLE, background: "#f3f4f6", color: "#374151", fontWeight: 700, cursor: "not-allowed" }} />
+                      )}
+                      {/* สลับได้ 2 ทาง: ตามแพ็กเกจ (แก้ที่ตั้งค่า) หรือกำหนดเองรายตัวแทน — ติ๊กแล้วเริ่มจากเป้าแพ็กเกจเดิมให้แก้ต่อ */}
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "#374151", marginTop: 6, cursor: "pointer" }}>
+                        <input type="checkbox" aria-label="กำหนดเป้าเอง" checked={form.targetManual}
+                          onChange={e => { const on = e.target.checked; setForm(f => ({ ...f, targetManual: on, revenueTarget: on ? (f.revenueTarget || เป้าแพ็กเกจ) : f.revenueTarget })); }} />
+                        กำหนดเป้าเองสำหรับตัวแทนรายนี้
+                      </label>
                       <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
-                        ตามแพ็กเกจ {packageLabel[form.package as DealerPackage]}{form.region ? ` · ${form.region}` : ""} · แก้ได้ที่ ตั้งค่า › หาตัวแทน
+                        {form.targetManual
+                          ? `ไม่ตามแพ็กเกจ ${packageLabel[form.package as DealerPackage]} · แก้เป้าแพ็กเกจที่ตั้งค่าแล้วตัวแทนรายนี้ไม่เปลี่ยนตาม`
+                          : `ตามแพ็กเกจ ${packageLabel[form.package as DealerPackage]}${form.region ? ` · ${form.region}` : ""} · แก้ได้ที่ ตั้งค่า › หาตัวแทน`}
                       </div>
                     </>
                   ) : (

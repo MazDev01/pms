@@ -143,10 +143,12 @@ export function เป้าตามแพ็กเกจ(
   return ตามภาค ?? p.annualTarget ?? null;
 }
 
-/** ตัวแทนหนึ่งราย → เป้าตามแพ็กเกจและภาค (ถ้ามี) · ไม่เข้าเงื่อนไข = คืนตัวเดิม */
-export function ใช้เป้าตามแพ็กเกจ<T extends { package?: DealerPackage | null; region?: string | null; revenueTarget: number }>(
+/** ตัวแทนหนึ่งราย → เป้าตามแพ็กเกจและภาค (ถ้ามี) · ไม่เข้าเงื่อนไข = คืนตัวเดิม
+ *  กำหนดเป้าเอง (targetManual) = ไม่แตะเป้า — กติกาเดียวกับตัวดักฐานข้อมูล 0180 */
+export function ใช้เป้าตามแพ็กเกจ<T extends { package?: DealerPackage | null; region?: string | null; revenueTarget: number; targetManual?: boolean }>(
   d: T, s: Pick<HQRecruitSettings, "proposal">,
 ): T {
+  if (d.targetManual) return d;
   const t = เป้าตามแพ็กเกจ(s, d.package, d.region);
   return t == null || t === d.revenueTarget ? d : { ...d, revenueTarget: t };
 }

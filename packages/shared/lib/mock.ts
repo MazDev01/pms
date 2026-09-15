@@ -1246,6 +1246,8 @@ export type DealerRow = {
   revenueTarget: number;
   /** แพ็กเกจตัวแทน — ว่าง = ไม่ระบุ (เป้ากรอกเอง) */
   package?: "standard" | "exclusive" | null;
+  /** true = เป้ายอดขายกำหนดเองรายตัวแทน ไม่ตามแพ็กเกจ (0180 · บอสสั่ง 15 ก.ย. 69 "แก้เองหรือแก้ในตั้งค่าก็ได้") */
+  targetManual?: boolean;
   status: DealerStatus;
   // (revenueActual / winRate / activeProjects / onTimePct ถูกตัดออก — เป็นค่าที่ "คำนวณได้"
   //  จากใบเสนอราคา/ลูกค้าเป้าหมายจริง ไม่ใช่ค่าที่ใครกรอก · เก็บไว้ในตารางแล้วมันไม่ขยับตามข้อมูล

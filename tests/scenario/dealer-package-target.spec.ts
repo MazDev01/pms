@@ -93,6 +93,23 @@ test("[db] เป้ายอดขายตามแพ็กเกจ · แ�
   expect(await เป้าของ(STD), "ย้ายไปภาคที่ไม่ได้ตั้งแยก ต้องใช้เป้ากลางของแพ็กเกจ").toBe(3_600_000);
   await ตั้งเป้าแพ็กเกจ(3_600_000, 8_000_000, { standard: { ตะวันออก: 2_400_000, เหนือ: 1_800_000 } });
   expect(await เป้าของ(STD), "ตั้งเป้าภาคเหนือเพิ่ม ตัวแทนภาคเหนือต้องเปลี่ยนตาม").toBe(1_800_000);
+
+  // ── กำหนดเป้าเองรายตัวแทน (0180 · บอสสั่ง "ให้สามารถแก้เองหรือแก้ในตั้งค่าก็ได้") ──
+  const บันทึกเอง = (manual: boolean, target: number) => hq.rpc("save_dealers", { p_rows: [
+    { code: STD, name: "ZZTEST แพ็กเกจ Standard (แก้ชื่อ)", province: "เชียงใหม่", region: "เหนือ", status: "active", revenue_target: target, package: "standard", target_manual: manual },
+  ] });
+  expect((await บันทึกเอง(true, 4_444_000)).error).toBeNull();
+  expect(await เป้าของ(STD), "ติ๊กกำหนดเอง แม้มีแพ็กเกจที่ตั้งเป้า ต้องได้เป้าที่กรอก").toBe(4_444_000);
+  await ตั้งเป้าแพ็กเกจ(3_900_000, 8_000_000, { standard: { เหนือ: 1_900_000 } });
+  expect(await เป้าของ(STD), "แก้เป้าแพ็กเกจที่ตั้งค่า ตัวแทนที่กำหนดเองต้องไม่เปลี่ยน").toBe(4_444_000);
+  // ผู้เรียกเก่าที่ไม่ส่งคีย์ target_manual → โหมดเดิมไม่หาย
+  expect((await hq.rpc("save_dealers", { p_rows: [
+    { code: STD, name: "ZZTEST แพ็กเกจ Standard (แก้ชื่อ)", province: "เชียงใหม่", region: "เหนือ", status: "active", revenue_target: 4_444_000, package: "standard" },
+  ] })).error).toBeNull();
+  const { data: โหมด } = await hq.from("dealers_directory").select("target_manual, revenue_target").eq("code", STD).single();
+  expect(โหมด, "ไม่ส่งคีย์ target_manual ต้องคงโหมดกำหนดเอง").toEqual({ target_manual: true, revenue_target: 4_444_000 });
+  expect((await บันทึกเอง(false, 1)).error).toBeNull();
+  expect(await เป้าของ(STD), "ยกเลิกกำหนดเอง ต้องกลับไปตามเป้าแพ็กเกจของภาคทันที").toBe(1_900_000);
 });
 
 test("[ui·hq] หน้าตัวแทน: เลือกแพ็กเกจแล้วเป้าล็อกตามแพ็กเกจ/ภาค · หน้าตั้งค่า: กรอกเป้าแยกภาคแล้วตัวแทนเปลี่ยนตาม", async ({ page }) => {
