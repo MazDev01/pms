@@ -285,8 +285,12 @@ export const PATCH = withErrors("reset-dealer-pw", async (req: NextRequest) => {
   // อีเมลเดิมไว้ลงประวัติ — ประวัติการเปลี่ยนบัญชีต้องครบทุกทาง (ตัวแทนแก้เอง/อนุมัติคำขอ/ลืมรหัส มีอยู่แล้ว ขาดทางนี้ทางเดียว)
   const { data: บัญชีเดิม } = await admin.auth.admin.getUserById(found.id);
   const อีเมลเดิม = บัญชีเดิม?.user?.email ?? null;
+  // บัญชีที่ยังไม่เคยเข้าระบบเลย (เช่น ตัวแทน 154 รายที่เปิดบัญชีจากไฟล์) = ตัวแทน "ได้บัญชีครั้งแรก" ตอนนี้
+  //   ต้องตั้งรหัสของตัวเองก่อนใช้งาน ไม่นับสิทธิ์แก้เอง 2 ครั้ง (บอสสั่ง 15 ก.ย. 69) · เคยเข้าแล้ว = ไม่บังคับซ้ำ
+  const ได้บัญชีครั้งแรก = !!password && !!บัญชีเดิม?.user && !บัญชีเดิม.user.last_sign_in_at;
   const { data: updated, error: updateErr } = await admin.auth.admin.updateUserById(found.id, {
     ...(password ? { password } : {}),
+    ...(ได้บัญชีครั้งแรก ? { app_metadata: { ...(บัญชีเดิม?.user?.app_metadata ?? {}), must_change_password: true } } : {}),
     ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),
   });
   if (updateErr || !updated.user) {

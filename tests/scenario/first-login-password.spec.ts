@@ -103,3 +103,33 @@ test("[auth·dealer] เข้าระบบครั้งแรกต้อ�
   });
   expect(ซ้ำ.status(), "ตั้งรหัสครั้งแรกซ้ำไม่ได้ (ต้องไปใช้หน้าบัญชีแทน)").toBe(409);
 });
+
+test("[auth·dealer] ตัวแทนเดิมที่ยังไม่เคยเข้าระบบ: HQ ตั้งรหัสให้ครั้งแรก → ต้องตั้งรหัสใหม่ · เคยเข้าแล้วไม่บังคับซ้ำ", async ({ request }) => {
+  await purge();
+  const hq = (await (await db(ADMIN)).auth.getSession()).data.session?.access_token ?? "";
+  const hdr = { authorization: `Bearer ${hq}`, "content-type": "application/json" };
+  const สร้าง = await request.post(`${HQ_ORIGIN}/api/admin/dealers`, {
+    headers: hdr,
+    data: { code: CODE, name: "ZZTEST สาขาเดิมยังไม่เคยเข้า", province: "ระยอง", region: "ตะวันออก", revenueTarget: 0,
+            email: EMAIL, password: PASSWORD, prospectId: await ลูกค้าเป้าหมายรองรับสาขา(CODE) },
+  });
+  test.skip(สร้าง.status() === 501, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
+  expect(สร้าง.status(), await สร้าง.text()).toBe(200);
+  // จำลองบัญชีจากสคริปต์เปิดบัญชีตัวแทนเดิม: ไม่มีเครื่องหมาย และยังไม่เคยเข้าระบบ
+  const { data: profs } = await admin.from("profiles").select("id").eq("dealer_code", CODE);
+  const uid = String(profs?.[0]?.id ?? "");
+  await admin.auth.admin.updateUserById(uid, { app_metadata: { must_change_password: false } });
+  const เครื่องหมาย = async () => (await admin.auth.admin.getUserById(uid)).data.user?.app_metadata?.must_change_password;
+
+  const ตั้งให้ = await request.patch(`${HQ_ORIGIN}/api/admin/dealers?code=${CODE}`, { headers: hdr, data: { password: "ZZtest-Legacy-2569" } });
+  expect(ตั้งให้.status(), await ตั้งให้.text()).toBe(200);
+  expect(await เครื่องหมาย(), "ยังไม่เคยเข้าระบบ + HQ ตั้งรหัสให้ = ได้บัญชีครั้งแรก ต้องบังคับตั้งรหัสใหม่").toBe(true);
+
+  // เข้าระบบแล้ว (ปลดเครื่องหมายแทนการตั้งรหัสผ่านหน้าจอ) → HQ รีเซ็ตรหัสอีกครั้ง ต้องไม่บังคับซ้ำ
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+  expect((await sb.auth.signInWithPassword({ email: EMAIL, password: "ZZtest-Legacy-2569" })).error).toBeNull();
+  await admin.auth.admin.updateUserById(uid, { app_metadata: { must_change_password: false } });
+  const รีเซ็ต = await request.patch(`${HQ_ORIGIN}/api/admin/dealers?code=${CODE}`, { headers: hdr, data: { password: "ZZtest-Legacy2-2569" } });
+  expect(รีเซ็ต.status(), await รีเซ็ต.text()).toBe(200);
+  expect(await เครื่องหมาย(), "เคยเข้าระบบแล้ว ต้องไม่บังคับตั้งรหัสซ้ำ").toBe(false);
+});
