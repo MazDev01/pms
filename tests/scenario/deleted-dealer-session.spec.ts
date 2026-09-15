@@ -4,6 +4,7 @@ import { ADMIN, RYG, SUPABASE_URL, SUPABASE_ANON, skipReason } from "./supabaseE
 import { ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY } from "./adminEnv";
 import { HQ_ORIGIN, DEALER_ORIGIN, db, loginUI, watchErrors, assertNoErrors, ลูกค้าเป้าหมายรองรับสาขา } from "./funcHelpers";
 import { settle } from "./helpers";
+import { ข้ามตั้งรหัสครั้งแรก } from "./firstLogin";
 
 // ── ลบสาขาแล้ว บัญชีของสาขานั้นต้องใช้งานระบบต่อไม่ได้ (ผู้ใช้แจ้ง 14 ส.ค. 69) ──────
 //
@@ -59,6 +60,8 @@ test("[auth] ลบสาขาแล้ว หน้าที่เปิดค
   });
   expect(created.status(), `สร้างสาขาต้องผ่าน (ได้ ${created.status()} · ${await created.text()})`).toBe(200);
   const cred = await created.json() as { email: string; password: string };
+  // เทสต์นี้ไม่ได้ทดสอบหน้าตั้งรหัสครั้งแรก — ปลดไว้ ไม่งั้นทุกหน้าติดอยู่ที่หน้านั้น
+  await ข้ามตั้งรหัสครั้งแรก(cred.email);
 
   await loginUI(page, DEALER_ORIGIN, "/login", cred);
   expect(new URL(page.url()).pathname, "ล็อกอินแล้วต้องเข้าถึงหน้าในระบบได้ก่อน").not.toContain("/login");
@@ -68,6 +71,9 @@ test("[auth] ลบสาขาแล้ว หน้าที่เปิดค
     headers: { authorization: `Bearer ${await adminToken()}` },
   });
   expect(del.status(), `ลบสาขาต้องผ่าน (ได้ ${del.status()} · ${await del.text()})`).toBe(200);
+  // ลูกค้าเป้าหมายที่สร้างสาขานี้ขึ้นมาต้องหายไปด้วย ไม่ค้าง "เป็นตัวแทนแล้ว" แบบไม่มีสาขา (บอสสั่ง 15 ก.ย. 69)
+  const { data: ค้าง } = await admin.from("dealer_prospects").select("id").like("name", `%ผู้สนใจ-${CODE}`);
+  expect(ค้าง ?? [], "ลบสาขาแล้ว ลูกค้าเป้าหมายต้นทางต้องถูกลบตาม").toEqual([]);
 
   // เบราว์เซอร์ที่ยังถือใบผ่านใบเดิม — เปิดหน้าในระบบต้องถูกเด้งออก ไม่ใช่เข้าไปเจอหน้าจอเปล่า
   await page.goto(`${DEALER_ORIGIN}/settings`, { waitUntil: "domcontentloaded" });
@@ -102,6 +108,7 @@ test("[auth] ปิดใช้งานสาขา → ล็อกอิน�
     });
     expect(created.status(), `สร้างสาขาต้องผ่าน (${await created.text()})`).toBe(200);
     const cred = await created.json() as { email: string; password: string };
+    await ข้ามตั้งรหัสครั้งแรก(cred.email);
 
     await loginUI(page, DEALER_ORIGIN, "/login", cred);
     expect(new URL(page.url()).pathname, "ตอนยังเปิดใช้งานต้องเข้าได้ปกติ").not.toContain("/login");

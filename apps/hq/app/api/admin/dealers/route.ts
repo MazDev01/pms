@@ -171,6 +171,9 @@ export const POST = withErrors("create-dealer", async (req: NextRequest) => {
   // ── 3) สร้างบัญชี auth (ยืนยันอีเมลให้เลย เพราะเป็นบัญชีที่ HQ ออกให้) ──
   const { data: createdUser, error: createErr } = await admin.auth.admin.createUser({
     email, password, email_confirm: true,
+    // เข้าระบบครั้งแรกต้องตั้งรหัสผ่านใหม่ก่อนใช้งาน (บอสสั่ง 15 ก.ย. 69) — ครั้งนี้ไม่นับสิทธิ์แก้เอง 2 ครั้ง
+    //   เก็บที่บัญชีเข้าระบบ (app_metadata ผู้ใช้แก้เองไม่ได้) · ดู FirstPasswordGate + /api/account op=first-password
+    app_metadata: { must_change_password: true },
   });
   if (createErr || !createdUser.user) {
     const msg = createErr?.message ?? "สร้างบัญชีเข้าระบบไม่สำเร็จ";
@@ -341,6 +344,12 @@ export const DELETE = withErrors("delete-dealer", async (req: NextRequest) => {
   //
   // ตอนนี้ทั้งชุดอยู่ในฟังก์ชันเดียวที่ฐานข้อมูล = ธุรกรรมเดียว พังตรงไหนย้อนกลับให้หมดเอง
   // การลบ "บัญชีเข้าระบบ" ยังทำที่นี่ (SQL แตะสคีมา auth ไม่ได้) และทำหลังธุรกรรมสำเร็จเท่านั้น
+  // ลูกค้าเป้าหมายที่กลายมาเป็นสาขานี้ — ต้องจำไว้ "ก่อน" ลบ เพราะลบสาขาแล้ว dealer_code ในแถวนั้นจะถูกล้างเป็นว่าง (0170)
+  //   แล้วกลายเป็นรายที่ค้างสถานะ "เป็นตัวแทนแล้ว" แต่ไม่ผูกกับสาขาไหน (เจอจริงในฐานจริง: หฟก → SSS)
+  //   บอสสั่ง 15 ก.ย. 69: "ลบไปแล้วลบไปเลย" → ลบรายนั้นทิ้งด้วยหลังลบสาขาสำเร็จ (ใบเสนอ/ประวัติหายตาม cascade)
+  const { data: ต้นทาง, error: ต้นทางErr } = await admin.from("dealer_prospects").select("id, name").eq("dealer_code", code);
+  if (ต้นทางErr) console.error(`[delete-dealer] อ่านลูกค้าเป้าหมายต้นทางของ ${code} ไม่สำเร็จ`, ต้นทางErr);
+
   const { data: memberRows, error: delErr } = await admin.rpc("delete_dealer_atomic", { p_code: code });
   if (delErr) {
     const msg = delErr.message ?? "";
@@ -354,6 +363,13 @@ export const DELETE = withErrors("delete-dealer", async (req: NextRequest) => {
     return bad(503, "ลบตัวแทนไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง");
   }
   const members = (memberRows ?? []) as { member_id: string }[];
+
+  // ลบลูกค้าเป้าหมายต้นทางของสาขานี้ (จำรายชื่อไว้ก่อนลบสาขาแล้ว — ดูด้านบน) · ล้มตรงนี้ไม่ย้อนการลบสาขา แต่ต้องมีร่องรอย
+  if (ต้นทาง?.length) {
+    const { error: ลบต้นทางErr } = await admin.from("dealer_prospects").delete().in("id", ต้นทาง.map(p => p.id));
+    if (ลบต้นทางErr) console.error(`[delete-dealer] ลบลูกค้าเป้าหมายต้นทางของ ${code} ไม่สำเร็จ`, ลบต้นทางErr);
+    else await auditLog(admin, prof, "ลบลูกค้าเป้าหมายต้นทางของตัวแทนที่ถูกลบ", `${code} · ${ต้นทาง.map(p => p.name).join(", ")}`);
+  }
 
   // ── ล้างประวัติ/คำขอเปลี่ยนบัญชีของรหัสนี้ทิ้งด้วย ────────────────────────────────
   //

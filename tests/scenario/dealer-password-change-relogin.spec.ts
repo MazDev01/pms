@@ -44,6 +44,8 @@ test("[auth·dealer] เปลี่ยนรหัสผ่านตัวเ�
   });
   test.skip(สร้าง.status() === 501, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
   expect(สร้าง.status(), `ต้องสร้างสาขาทดสอบได้ (${await สร้าง.text()})`).toBe(200);
+  // เทสต์นี้ทดสอบการเปลี่ยนรหัสที่หน้าบัญชี ไม่ใช่หน้าตั้งรหัสครั้งแรก (มีเทสต์แยก) — ปลดไว้ก่อน
+  await (await import("./firstLogin")).ข้ามตั้งรหัสครั้งแรก(EMAIL);
 
   // เข้าระบบเป็นสาขานั้นแล้ววางใบผ่านไว้ในเครื่อง (วางหลังเปิดหน้าแล้ว ไม่ใช้ addInitScript)
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: false, autoRefreshToken: false } });

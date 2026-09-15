@@ -149,7 +149,18 @@ export const LocalAdapter: DataAdapter = {
   dealers: {
     list: () => ok(loadHQDealers()),
     save: (all) => { writeKey(HQ_DEALERS_KEY, all); return done(); },
-    remove: (code) => { writeKey(HQ_DEALERS_KEY, loadHQDealers().filter(d => d.code !== code)); return done(); },
+    remove: (code) => {
+      writeKey(HQ_DEALERS_KEY, loadHQDealers().filter(d => d.code !== code));
+      // ลบตัวแทนแล้ว ลูกค้าเป้าหมายต้นทางลบตามไปด้วย พร้อมใบเสนอและประวัติ (บอสสั่ง 15 ก.ย. 69: "ลบไปแล้วลบไปเลย")
+      //   แบบเดียวกับโหมดจริง (DELETE /api/admin/dealers)
+      const ต้นทาง = new Set(readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(p => p.dealerCode === code).map(p => p.id));
+      if (ต้นทาง.size) {
+        writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(p => !ต้นทาง.has(p.id)));
+        writeKey(PROPOSALS_KEY, readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []).filter(x => !ต้นทาง.has(x.prospectId)));
+        writeKey(PROSPECT_ACTIVITIES_KEY, readKey<ProspectActivity[]>(PROSPECT_ACTIVITIES_KEY, []).filter(x => !ต้นทาง.has(x.prospectId)));
+      }
+      return done();
+    },
   },
   catalog: {
     list: () => ok(loadMasterCatalog()),

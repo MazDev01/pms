@@ -2,6 +2,7 @@
 
 import { AuthGuard } from "@pms/shared/components/layout/AuthGuard";
 import { AppShell } from "@pms/shared/components/layout/AppShell";
+import { FirstPasswordGate } from "@pms/shared/components/ui/FirstPasswordGate";
 import { useRole } from "@pms/shared/context/RoleContext";
 
 // กันบัญชี HQ หลงเข้ามาใช้หน้าตัวแทน — ฝั่ง HQ มี HQLayout กันบัญชีตัวแทนอยู่แล้ว (apps/hq/app/(app)/hq/layout.tsx)
@@ -28,7 +29,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AuthGuard>
       {/* FilterProvider ถูกครอบต่อหน้าใน AppShell (แยกอิสระต่อ route) */}
       <DealerRoleGuard>
-        <AppShell>{children}</AppShell>
+        {/* เข้าระบบครั้งแรกต้องตั้งรหัสผ่านใหม่ก่อน (บอสสั่ง 15 ก.ย. 69) — ยังไม่ตั้ง = ไม่เห็นเมนูระบบเลย */}
+        <FirstPasswordGate>
+          <AppShell>{children}</AppShell>
+        </FirstPasswordGate>
       </DealerRoleGuard>
     </AuthGuard>
   );

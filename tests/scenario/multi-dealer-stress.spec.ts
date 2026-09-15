@@ -41,6 +41,8 @@ async function provisionDealer(token: string, code: string): Promise<Provisioned
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) { console.log(`[setup] สร้างตัวแทน ${code} ไม่สำเร็จ: ${JSON.stringify(json)}`); return null; }
+  // เทสต์นี้ไม่ได้ทดสอบหน้าตั้งรหัสครั้งแรก — ปลดไว้ ไม่งั้นทุกหน้าติดอยู่ที่หน้านั้น
+  await (await import("./firstLogin")).ข้ามตั้งรหัสครั้งแรก(json.email);
   return { code, email: json.email, password: json.password };
 }
 

@@ -176,6 +176,8 @@ export type AccountState = {
   pending: AccountRequest | null;
   /** คำขอล่าสุดที่ถูกปฏิเสธ (ยังไม่มีการเปลี่ยนบัญชีหลังจากนั้น) — ตัวแทนต้องรู้ผล ไม่ใช่คำขอหายเงียบ */
   lastRejected?: { kind: AccountChangeKind; newEmail?: string; requestedAt: string; decidedAt: string; reason?: string } | null;
+  /** ยังไม่ได้ตั้งรหัสผ่านของตัวเองตั้งแต่สำนักงานใหญ่สร้างบัญชี — ต้องตั้งก่อนใช้งาน (ไม่นับสิทธิ์แก้เอง) */
+  mustChangePassword?: boolean;
 };
 
 /** ผลของการกดบันทึก — applied = มีผลทันที · pending = ส่งคำขอรออนุมัติแล้ว */
@@ -197,6 +199,8 @@ export interface AccountRepo {
   listRequests(): Promise<AccountRequest[]>;
   /** ฝั่งสำนักงานใหญ่: อนุมัติ/ปฏิเสธคำขอ — อนุมัติแล้วระบบเปลี่ยนให้ทันที */
   decide(id: string, action: "approve" | "reject", reason?: string): Promise<void>;
+  /** ตัวแทนตั้งรหัสผ่านใหม่ตอนเข้าระบบครั้งแรก — ไม่นับสิทธิ์แก้เอง 2 ครั้ง (บอสสั่ง 15 ก.ย. 69) */
+  setFirstPassword(password: string): Promise<{ message: string }>;
 
   // ── ดูรหัสผ่านของตัวเอง โดยยืนยันด้วยเลขที่ส่งไปทางอีเมล (บอสสั่ง 1 ก.ย. 69) ──
   //

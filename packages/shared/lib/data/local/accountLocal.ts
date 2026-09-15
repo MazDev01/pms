@@ -104,6 +104,11 @@ export const accountLocal = {
     };
   },
 
+  // โหมดตัวอย่างไม่ได้สร้างบัญชีจริง จึงไม่มีบัญชีที่ต้องตั้งรหัสตอนเข้าครั้งแรก (state ไม่ส่ง mustChangePassword)
+  async setFirstPassword(): Promise<{ message: string }> {
+    throw new Error("โหมดข้อมูลตัวอย่างไม่มีการตั้งรหัสผ่านตอนเข้าระบบครั้งแรก");
+  },
+
   async listRequests(): Promise<AccountRequest[]> {
     return requests();
   },

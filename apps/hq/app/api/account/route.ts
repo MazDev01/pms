@@ -11,11 +11,12 @@
 //   2) ต้องกรอกรหัสผ่านปัจจุบันถูกต้อง (ยืนยันด้วยการล็อกอินซ้ำ) — กันคนที่มานั่งหน้าจอที่เปิดค้าง
 //   3) จำกัดความถี่ · บันทึก audit ทุกครั้ง (สำนักงานใหญ่ต้องรู้ว่าใครเปลี่ยนอะไรเมื่อไหร่)
 //   4) แก้เองได้ 2 ครั้งตลอดอายุบัญชี — ครั้งที่ 3 ขึ้นไปกลายเป็น "คำขอ" ที่ยังไม่มีผล
+//   5) เข้าระบบครั้งแรก (บัญชีที่ HQ สร้างให้) ต้องตั้งรหัสใหม่ก่อน — ครั้งนั้นไม่นับสิทธิ์ข้อ 4 (บอสสั่ง 15 ก.ย. 69)
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkRateLimit } from "@pms/shared/lib/rateLimit";
-import { auditLog, withErrors, อีเมลถูกใช้แล้ว } from "@pms/shared/lib/adminRoute";
+import { auditLog, withErrors, อีเมลถูกใช้แล้ว, รหัสผ่านยังเข้าระบบได้ } from "@pms/shared/lib/adminRoute";
 import { encryptSecret, dealerSecretReady } from "@pms/shared/lib/dealerSecret";
 import { ตรวจรหัสผ่านใหม่ } from "@pms/shared/lib/passwordRule";
 
@@ -45,7 +46,13 @@ export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
-type ผู้เรียก = { admin: SupabaseClient; userId: string; email: string; dealerCode: string; name: string };
+type ผู้เรียก = {
+  admin: SupabaseClient; userId: string; email: string; dealerCode: string; name: string;
+  /** app_metadata ของบัญชี (ผู้ใช้แก้เองไม่ได้) — ต้องพกของเดิมไปด้วยตอนอัปเดต ไม่งั้นค่าอื่นหาย */
+  appMeta: Record<string, unknown>;
+  /** บัญชีที่ HQ สร้างให้และยังไม่เคยตั้งรหัสของตัวเอง */
+  mustChangePassword: boolean;
+};
 
 /** ตรวจใบผ่าน → คืนบัญชี "ของสาขา" ที่เรียกมา · ไม่ใช่ตัวแทน = ปฏิเสธ */
 async function ตัวแทนที่เรียก(req: NextRequest): Promise<{ ok: true; who: ผู้เรียก } | { ok: false; res: NextResponse }> {
@@ -56,6 +63,7 @@ async function ตัวแทนที่เรียก(req: NextRequest): Pro
   if (!token) return { ok: false, res: json(req, { error: "unauthorized" }, 401) };
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+  // getUser ถามระบบยืนยันตัวตนสด ๆ — app_metadata ที่ได้เป็นค่าปัจจุบัน ไม่ใช่ค่าที่ฝังในใบผ่านตอนออก
   const { data: caller, error } = await admin.auth.getUser(token);
   if (error || !caller.user) return { ok: false, res: json(req, { error: "unauthorized" }, 401) };
 
@@ -72,7 +80,11 @@ async function ตัวแทนที่เรียก(req: NextRequest): Pro
   if (!dealerCode) {
     return { ok: false, res: json(req, { error: "บัญชีนี้ไม่ได้สังกัดสาขา — เปลี่ยนจากหน้านี้ไม่ได้" }, 403) };
   }
-  return { ok: true, who: { admin, userId: caller.user.id, email: caller.user.email ?? "", dealerCode, name: String(prof.name ?? "") } };
+  const appMeta = (caller.user.app_metadata ?? {}) as Record<string, unknown>;
+  return { ok: true, who: {
+    admin, userId: caller.user.id, email: caller.user.email ?? "", dealerCode, name: String(prof.name ?? ""),
+    appMeta, mustChangePassword: appMeta.must_change_password === true,
+  } };
 }
 
 /** ยืนยันรหัสผ่านปัจจุบันด้วยการล็อกอินซ้ำ (ไม่เก็บ session) */
@@ -131,23 +143,59 @@ async function สรุปสถานะ(admin: SupabaseClient, dealerCode: st
   };
 }
 
-// ── สถานะบัญชีของสาขาที่ล็อกอินอยู่ (อีเมล · โควตาที่เหลือ · คำขอที่ค้าง)
-//    ?reveal=1 = เปิดดู "รหัสล่าสุดที่ระบบบันทึกไว้" ของสาขาตัวเอง ──
+// ── สถานะบัญชีของสาขาที่ล็อกอินอยู่ (อีเมล · โควตาที่เหลือ · คำขอที่ค้าง · ต้องตั้งรหัสครั้งแรกไหม) ──
 export const GET = withErrors("dealer-account-state", async (req: NextRequest) => {
   const who = await ตัวแทนที่เรียก(req);
   if (!who.ok) return who.res;
-  const { admin, dealerCode, email } = who.who;
+  const { admin, dealerCode, email, mustChangePassword } = who.who;
 
   // เส้นทางนี้คืนแค่สถานะ (อีเมล · โควตา · คำขอค้าง · คำขอล่าสุดที่ถูกปฏิเสธ) ไม่คืนรหัสผ่าน
   //   ตัวแทนดูรหัสของตัวเองได้ที่ /api/account/reveal (ต้องยืนยันเลขทางอีเมล · บอสสั่ง 1 ก.ย. 69)
-
+  //   mustChangePassword ต้องมาก่อนเสมอ แม้ตารางโควตายังไม่ได้ติดตั้ง — หน้าตั้งรหัสครั้งแรกอ่านค่านี้
   try {
-    return json(req, await สรุปสถานะ(admin, dealerCode, email));
+    return json(req, { ...(await สรุปสถานะ(admin, dealerCode, email)), mustChangePassword });
   } catch (e) {
-    if (e instanceof ยังไม่ได้ติดตั้ง) return json(req, { error: e.message }, 501);
+    if (e instanceof ยังไม่ได้ติดตั้ง) return json(req, { error: e.message, mustChangePassword }, 501);
     throw e;
   }
 });
+
+// ── ตั้งรหัสผ่านใหม่ตอนเข้าระบบครั้งแรก (บอสสั่ง 15 ก.ย. 69: "เปลี่ยนฟรี ไม่รวม 2 ครั้งนั้น") ──
+//   ใช้ได้ครั้งเดียวต่อบัญชีที่ HQ สร้างให้ · ไม่ต้องกรอกรหัสปัจจุบัน (เพิ่งเข้าระบบด้วยรหัสนั้นมา)
+//   บันทึกประวัติแบบ by_self=false (ไม่นับสิทธิ์) · เก็บสำเนาให้ HQ ดูได้ · ปลดเครื่องหมายบังคับ
+async function ตั้งรหัสครั้งแรก(req: NextRequest, who: ผู้เรียก, รหัสใหม่: string): Promise<NextResponse> {
+  const { admin, userId, email, dealerCode, name, appMeta, mustChangePassword } = who;
+  if (!mustChangePassword) {
+    return json(req, { error: "บัญชีนี้ตั้งรหัสผ่านครั้งแรกไปแล้ว — เปลี่ยนรหัสได้ที่ ตั้งค่า › บัญชีเข้าสู่ระบบ" }, 409);
+  }
+  const ผิดกติกา = ตรวจรหัสผ่านใหม่(รหัสใหม่);
+  if (ผิดกติกา) return json(req, { error: ผิดกติกา }, 400);
+  // รหัสใหม่ต้องไม่ใช่รหัสที่ได้รับจาก HQ — ไม่งั้นการบังคับตั้งรหัสไม่มีความหมาย
+  if ((await รหัสผ่านยังเข้าระบบได้(email, รหัสใหม่)) === true) {
+    return json(req, { error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสที่ได้รับจากสำนักงานใหญ่" }, 400);
+  }
+  const { error: upErr } = await admin.auth.admin.updateUserById(userId, {
+    password: รหัสใหม่,
+    app_metadata: { ...appMeta, must_change_password: false },
+  });
+  if (upErr) {
+    console.error(`[account] ตั้งรหัสครั้งแรกของสาขา ${dealerCode} ไม่สำเร็จ`, upErr);
+    return json(req, { error: "ตั้งรหัสผ่านไม่สำเร็จชั่วคราว — ลองใหม่อีกครั้ง" }, 503);
+  }
+  if (dealerSecretReady()) {
+    const secret = encryptSecret(รหัสใหม่);
+    if (secret) {
+      const { error } = await admin.from("dealer_login_secrets")
+        .upsert({ dealer_code: dealerCode, secret, updated_at: new Date().toISOString(), updated_by: `${name} (ตั้งตอนเข้าระบบครั้งแรก)` });
+      if (error) console.error(`[account] เก็บสำเนารหัสครั้งแรกของ ${dealerCode} ไม่สำเร็จ`, error);
+    }
+  }
+  const { error: logErr } = await admin.from("dealer_account_changes")
+    .insert({ dealer_code: dealerCode, kind: "password", by_self: false });
+  if (logErr && logErr.code !== "42P01") console.error(`[account] บันทึกการตั้งรหัสครั้งแรกของ ${dealerCode} ไม่สำเร็จ`, logErr);
+  await auditLog(admin, { name, role: "DEALER" }, "ตัวแทนตั้งรหัสผ่านใหม่ตอนเข้าระบบครั้งแรก", dealerCode);
+  return json(req, { message: "ตั้งรหัสผ่านใหม่แล้ว — กำลังพาไปเข้าสู่ระบบด้วยรหัสใหม่" });
+}
 
 // ── ขอเปลี่ยนอีเมล/รหัสผ่านของตัวเอง ──
 export const POST = withErrors("dealer-account-change", async (req: NextRequest) => {
@@ -159,7 +207,9 @@ export const POST = withErrors("dealer-account-change", async (req: NextRequest)
     return json(req, { error: "เปลี่ยนบัญชีถี่เกินไป — รอสักครู่แล้วลองใหม่" }, 429);
   }
 
-  const body = (await req.json().catch(() => null)) as null | { email?: string; password?: string; currentPassword?: string };
+  const body = (await req.json().catch(() => null)) as null | { op?: string; email?: string; password?: string; currentPassword?: string };
+  if (body?.op === "first-password") return ตั้งรหัสครั้งแรก(req, who.who, String(body.password ?? ""));
+
   const อีเมลที่ส่ง = String(body?.email ?? "").trim().toLowerCase();
   const รหัสใหม่ = String(body?.password ?? "");
   const รหัสเดิม = String(body?.currentPassword ?? "");
@@ -217,12 +267,7 @@ export const POST = withErrors("dealer-account-change", async (req: NextRequest)
     });
   }
 
-  // ── ยังมีโควตา → เปลี่ยนให้ทันที ──
-  // ถามก่อนว่าอีเมลใหม่มีคนใช้อยู่ไหม — ระบบยืนยันตัวตนตอบกรณีนี้เป็น 500 เนื้อความว่าง
-  // ถ้าไม่ถามก่อน ผู้ใช้จะได้ข้อความ "ลองใหม่อีกครั้ง" ซึ่งลองกี่ครั้งก็ไม่สำเร็จ (ดู adminRoute.ts)
-  if (อีเมลใหม่ && (await อีเมลถูกใช้แล้ว(SUPABASE_URL, SERVICE_KEY, อีเมลใหม่, userId)) === true) {
-    return json(req, { error: `อีเมล ${อีเมลใหม่} ถูกใช้ไปแล้วในระบบ — กรุณาใช้อีเมลอื่น` }, 400);
-  }
+  // ── ยังมีโควตา → เปลี่ยนให้ทันที (อีเมลซ้ำตรวจไปแล้วด้านบน) ──
   const { error: upErr } = await admin.auth.admin.updateUserById(userId, {
     ...(รหัสใหม่ ? { password: รหัสใหม่ } : {}),
     ...(อีเมลใหม่ ? { email: อีเมลใหม่, email_confirm: true } : {}),

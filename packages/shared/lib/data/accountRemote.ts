@@ -73,6 +73,10 @@ export const accountRemote: AccountRepo = {
       body: JSON.stringify({ id, action, reason }),
     }).then(() => undefined),
 
+  // ตั้งรหัสผ่านใหม่ตอนเข้าระบบครั้งแรก — ไม่นับสิทธิ์แก้เอง 2 ครั้ง (บอสสั่ง 15 ก.ย. 69)
+  setFirstPassword: (password) =>
+    ยิง<{ message: string }>("/api/account", { method: "POST", body: JSON.stringify({ op: "first-password", password }) }),
+
   // ดูรหัสผ่านของตัวเอง: ขอเลขทางอีเมลก่อน แล้วเอาเลขนั้นมายืนยัน (บอสสั่ง 1 ก.ย. 69)
   sendRevealCode: () =>
     ยิง<{ sentTo: string }>("/api/account/reveal", { method: "POST", body: JSON.stringify({ op: "send" }) }),
