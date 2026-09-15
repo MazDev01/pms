@@ -44,7 +44,7 @@ import { เตรียมบันทึก } from "@pms/shared/lib/dealerPros
 import { รวมค่าตั้งหาตัวแทน } from "@pms/shared/lib/recruitSettings";
 import { เตรียมบันทึกใบ, ใบล็อกแล้ว, สถานะที่เปลี่ยนไปได้, มีใบเสนอที่ส่งแล้ว } from "@pms/shared/lib/dealerProposals";
 import {
-  ตรวจเปลี่ยนขั้น, ข้อความเพิ่มราย, ข้อความเปลี่ยนขั้น, ข้อความใบเสนอ, ประวัติใหม่ก่อน,
+  ตรวจเปลี่ยนขั้น, ข้อความเพิ่มราย, ข้อความเปลี่ยนขั้น, ข้อความใบเสนอ, ข้อความถอยเพราะใบถูกปฏิเสธ, ประวัติใหม่ก่อน,
   เตรียมบันทึกการติดต่อ, ตรวจบันทึกการติดต่อ, วันไทยของเวลา,
 } from "@pms/shared/lib/prospectJourney";
 
@@ -82,6 +82,16 @@ function เลื่อนเป็นรอตัดสินใจเดโ�
   if (!ราย || ราย.status !== "meeting") return;
   writeKey(PROSPECTS_KEY, all.map(x => x.id === prospectId ? { ...x, status: "considering" as const, updatedAt: new Date().toISOString() } : x));
   บันทึกประวัติเดโม({ prospectId, kind: "status", body: ข้อความเปลี่ยนขั้น("meeting", "considering", ราย), fromStatus: "meeting", toStatus: "considering" });
+}
+
+// ใบถูกปฏิเสธและไม่มีใบที่ส่งแล้ว/ตอบรับเหลือ: รอตัดสินใจ → นัดคุยแล้ว ให้เอง (แบบเดียวกับตัวดัก 0177)
+function ถอยเพราะใบถูกปฏิเสธเดโม(prospectId: number, เลขที่: string) {
+  if (มีใบส่งแล้วเดโม(prospectId)) return;
+  const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+  const ราย = all.find(x => x.id === prospectId);
+  if (!ราย || ราย.status !== "considering") return;
+  writeKey(PROSPECTS_KEY, all.map(x => x.id === prospectId ? { ...x, status: "meeting" as const, updatedAt: new Date().toISOString() } : x));
+  บันทึกประวัติเดโม({ prospectId, kind: "status", body: ข้อความถอยเพราะใบถูกปฏิเสธ(เลขที่), fromStatus: "considering", toStatus: "meeting" });
 }
 
 function writeKey(key: string, val: unknown) {
@@ -361,6 +371,7 @@ export const LocalAdapter: DataAdapter = {
       if (status !== เดิม.status) {
         บันทึกประวัติเดโม({ prospectId: row.prospectId, kind: "proposal", body: ข้อความใบเสนอ(row.proposalNo ?? "", status, false) });
         if (status === "sent") เลื่อนเป็นรอตัดสินใจเดโม(row.prospectId);
+        if (status === "rejected") ถอยเพราะใบถูกปฏิเสธเดโม(row.prospectId, row.proposalNo ?? "");
       }
       return ok(row);
     },

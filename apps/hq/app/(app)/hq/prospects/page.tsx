@@ -36,7 +36,7 @@ import {
   ความคืบหน้า, ขั้นก่อนไม่สำเร็จ, มีบันทึกการติดต่อ, เกณฑ์ไม่ได้ติดต่อ, ไม่ได้ติดต่อเกิน, ติดต่อล่าสุดอ่านง่าย,
 } from "@pms/shared/lib/prospectJourney";
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
-import { createDealerAccount } from "@pms/shared/lib/adminApi";
+import { createDealerAccount, linkProspectToDealer, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { ProspectProposalsPanel } from "@pms/shared/components/hq/ProspectProposalsPanel";
 import { ProspectJourney } from "@pms/shared/components/hq/ProspectJourney";
@@ -119,6 +119,10 @@ export default function HQProspectsPage() {
   const [ฟอร์ม, setฟอร์ม] = useState<ฟอร์มตัวแทน>({ code: "", name: "", region: "", province: "", email: "", password: "", existingCode: "" });
   const [convErr, setConvErr] = useState("");
   const [convBusy, setConvBusy] = useState(false);
+  // ผูกกับสาขาที่ยังไม่มีบัญชีเข้าระบบ — ผูกได้ แต่ต้องเตือนให้เห็นชัด พร้อมทางไปตั้งอีเมล/รหัสผ่าน
+  const [ผูกแล้วไม่มีบัญชี, setผูกแล้วไม่มีบัญชี] = useState<{ name: string; code: string } | null>(null);
+  // สาขาที่มีบัญชีเข้าระบบ (รหัส → อีเมล) — โหลดตอนเปิดหน้าต่างผูก · null = ยังไม่รู้ (ไม่เตือนมั่ว)
+  const [สาขามีบัญชี, setสาขามีบัญชี] = useState<Record<string, string> | null>(null);
   const [creds, setCreds] = useState<{ name: string; code: string; email: string; password: string } | null>(null);
   const [คัดลอกแล้ว, setคัดลอกแล้ว] = useState("");
   const รูปRef = useRef<HTMLInputElement>(null);
@@ -138,6 +142,14 @@ export default function HQProspectsPage() {
     dealersRepo.list().then(setDealers).catch(e => logRepoRead("dealers.list", e));
   }, []);
   useEffect(() => { void โหลด(); โหลดตัวแทน(); }, [โหลด, โหลดตัวแทน]);
+  // เปิดหน้าต่างผูก → ถามเซิร์ฟเวอร์ว่าสาขาไหนมีบัญชีเข้าระบบ (ห้ามเดาจากรหัสสาขา)
+  const เปิดผูกอยู่ = !!converting;
+  useEffect(() => {
+    if (!เปิดผูกอยู่) return;
+    let alive = true;
+    listDealerLoginEmails().then(m => { if (alive) setสาขามีบัญชี(m); }).catch(() => {});
+    return () => { alive = false; };
+  }, [เปิดผูกอยู่]);
   // ผู้ดูแล = ผู้ใช้งานสำนักงานใหญ่ที่เปิดใช้งานอยู่ (บอสสั่ง 14 ก.ย. 69: "ทำเป็นดรอปดาวน์ เอาจากผู้ใช้งานสำนักงานใหญ่")
   //   เก็บเป็นชื่อเหมือนเดิม (ช่อง assigned) — ไม่ต้องเปลี่ยนฐานข้อมูล · โหลดไม่ได้ = รายการว่าง ค่าเดิมยังแสดงอยู่
   useEffect(() => {
@@ -384,12 +396,23 @@ export default function HQProspectsPage() {
       });
       const ผิด = ตรวจผู้สนใจ(row);
       if (ผิด) { setConvErr(ผิด); return; }
+      const ผูกอยู่ = list.find(x => x.id !== converting.id && x.dealerCode === ฟอร์ม.existingCode);
+      if (ผูกอยู่) { setConvErr(`ตัวแทน ${ฟอร์ม.existingCode} ถูกผูกกับ “${ผูกอยู่.name}” อยู่แล้ว — หนึ่งสาขาผูกได้รายเดียว`); return; }
       setConvBusy(true);
       try {
-        const saved = await prospectsRepo.update({ ...row, id: converting.id, createdAt: converting.createdAt });
-        setList(l => l.map(x => x.id === saved.id ? saved : x));
-        logAudit("ลูกค้าเป้าหมายเป็นตัวแทนแล้ว", `#${saved.id} → ${ฟอร์ม.existingCode} · ${saved.name}`);
-        แจ้งสำเร็จ(`ผูก “${saved.name}” กับตัวแทน ${ฟอร์ม.existingCode} แล้ว — ย้ายไปอยู่หน้าตัวแทนจำหน่าย`);
+        const code = ฟอร์ม.existingCode;
+        if (REAL_BACKEND) {
+          // เซิร์ฟเวอร์ตรวจสาขามีจริง/เปิดใช้งาน/ยังไม่ถูกผูก และบันทึกการใช้งานให้เอง (บอสสั่ง 15 ก.ย. 69)
+          const res = await linkProspectToDealer(converting.id, code);
+          if (!res.ok) { setConvErr(res.error); return; }
+          setList(l => l.map(x => x.id === converting.id ? { ...x, status: "won", dealerCode: code } : x));
+          if (!res.hasAccount) setผูกแล้วไม่มีบัญชี({ name: converting.name, code });
+        } else {
+          const saved = await prospectsRepo.update({ ...row, id: converting.id, createdAt: converting.createdAt });
+          setList(l => l.map(x => x.id === saved.id ? saved : x));
+          logAudit("ลูกค้าเป้าหมายเป็นตัวแทนแล้ว", `#${saved.id} → ${code} · ${saved.name}`);
+        }
+        แจ้งสำเร็จ(`ผูก “${converting.name}” กับตัวแทน ${code} แล้ว — ย้ายไปอยู่หน้าตัวแทนจำหน่าย`);
         setConverting(null); ปิดแผงทันที();
       } catch (e) {
         setConvErr(friendlyError(e, "บันทึกไม่สำเร็จ"));
@@ -939,10 +962,25 @@ export default function HQProspectsPage() {
                 <div>
                   <label className="form-label" htmlFor="cv-existing">ตัวแทนจำหน่าย</label>
                   <select id="cv-existing" className="form-select" value={ฟอร์ม.existingCode} disabled={convBusy}
-                    onChange={e => setฟอร์ม(f => ({ ...f, existingCode: e.target.value }))} style={{ cursor: "pointer" }}>
+                    onChange={e => { setฟอร์ม(f => ({ ...f, existingCode: e.target.value })); setConvErr(""); }} style={{ cursor: "pointer" }}>
                     <option value="">— เลือกตัวแทนจำหน่าย —</option>
-                    {dealers.filter(d => d.code !== HQ_CODE).map(d => <option key={d.code} value={d.code}>{d.code} · {d.name}{d.province ? ` (${d.province})` : ""}</option>)}
+                    {/* ปิดใช้งาน / ผูกกับรายอื่นแล้ว = เลือกไม่ได้ (เซิร์ฟเวอร์ตรวจซ้ำเสมอ) */}
+                    {dealers.filter(d => d.code !== HQ_CODE).map(d => {
+                      const ผูกกับ = list.find(x => x.id !== converting.id && x.dealerCode === d.code);
+                      const ปิด = d.status === "inactive";
+                      return (
+                        <option key={d.code} value={d.code} disabled={ปิด || !!ผูกกับ}>
+                          {d.code} · {d.name}{d.province ? ` (${d.province})` : ""}{ปิด ? " · ปิดใช้งาน" : ผูกกับ ? " · ผูกกับรายอื่นแล้ว" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {ฟอร์ม.existingCode && สาขามีบัญชี && !สาขามีบัญชี[ฟอร์ม.existingCode] && (
+                    <div role="note" style={{ marginTop: 8, background: "#fff8e6", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", fontSize: "0.78rem", color: "#92400e", fontWeight: 600, lineHeight: 1.6 }}>
+                      ตัวแทน {ฟอร์ม.existingCode} ยังไม่มีบัญชีเข้าระบบ — ผูกได้ แต่ตัวแทนจะยังเข้าระบบไม่ได้
+                      จนกว่าจะตั้งอีเมล/รหัสผ่านที่หน้าตัวแทนจำหน่าย
+                    </div>
+                  )}
                 </div>
               ) : (
                 <fieldset disabled={convBusy} style={{ border: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
@@ -999,6 +1037,31 @@ export default function HQProspectsPage() {
                   style={convBusy ? { opacity: .6, cursor: "not-allowed" } : undefined}>
                   {convBusy ? "กำลังดำเนินการ…" : โหมดตั้ง === "new" ? "สร้างตัวแทนจำหน่าย" : "ผูกกับตัวแทนนี้"}
                 </button>
+              </div>
+            </div>
+          </ModalCard>
+        </div>
+      )}
+
+      {/* ── ผูกแล้ว แต่สาขายังไม่มีบัญชีเข้าระบบ — เตือนให้เห็นชัด พร้อมทางไปตั้งอีเมล/รหัสผ่าน ── */}
+      {ผูกแล้วไม่มีบัญชี && (
+        <div onClick={() => setผูกแล้วไม่มีบัญชี(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <ModalCard onClose={() => setผูกแล้วไม่มีบัญชี(null)} label="ตัวแทนยังไม่มีบัญชีเข้าระบบ"
+            style={{ background: "#fff", borderRadius: 16, width: 440, maxWidth: "100%", boxShadow: "0 24px 80px rgba(0,0,0,.3)" }}>
+            <div style={{ background: "#b45309", color: "#fff", padding: "14px 20px", fontWeight: 800, borderRadius: "16px 16px 0 0" }}>
+              ตัวแทน {ผูกแล้วไม่มีบัญชี.code} ยังไม่มีบัญชีเข้าระบบ
+            </div>
+            <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+              <p style={{ margin: 0, fontSize: "0.84rem", color: "#374151", lineHeight: 1.7 }}>
+                ผูก “{ผูกแล้วไม่มีบัญชี.name}” กับตัวแทน {ผูกแล้วไม่มีบัญชี.code} แล้ว
+                แต่สาขานี้ยังเข้าระบบไม่ได้ — ต้องตั้งอีเมลและรหัสผ่านให้ก่อน
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button className="btn btn-secondary btn-md" onClick={() => setผูกแล้วไม่มีบัญชี(null)}>ไว้ทีหลัง</button>
+                <Link className="btn btn-primary btn-md" href={`/hq/dealers/${encodeURIComponent(ผูกแล้วไม่มีบัญชี.code)}`}
+                  onClick={() => setผูกแล้วไม่มีบัญชี(null)}>
+                  ไปตั้งอีเมล/รหัสผ่าน
+                </Link>
               </div>
             </div>
           </ModalCard>

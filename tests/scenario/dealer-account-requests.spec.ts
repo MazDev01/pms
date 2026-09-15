@@ -111,4 +111,30 @@ test("[api] แก้เองตามกติกา → ครบโควต
   const { data: ใบสอง } = await admin.from("dealer_account_requests").select("secret").eq("id", ค้างสอง!.id).single();
   expect(ใบสอง?.secret ?? null, "ปฏิเสธแล้วต้องไม่เก็บรหัสที่ขอไว้ต่อ").toBeNull();
   expect((await dealerToken(รหัสใหม่)).error, "ปฏิเสธแล้วรหัสเดิมต้องยังใช้ได้").toBeNull();
+
+  // ── 5) คืนสิทธิ์แก้เอง (บอสสั่ง 15 ก.ย. 69) → เริ่มนับใหม่ · ประวัติเดิมยังอยู่ · ตัวแทนคืนเองไม่ได้ ──
+  const ดูสิทธิ์ = async () => (await request.get(`${HQ_ORIGIN}/api/admin/dealers/self-quota?code=${CODE}`,
+    { headers: { authorization: `Bearer ${hq}` } })).json() as Promise<{ used: number; limit: number }>;
+  expect((await ดูสิทธิ์()).used, "HQ ต้องเห็นว่าใช้สิทธิ์ครบแล้ว").toBe(2);
+  const ตัวแทนคืนเอง = await request.post(`${HQ_ORIGIN}/api/admin/dealers/self-quota?code=${CODE}`,
+    { headers: { authorization: `Bearer ${หลังอนุมัติ.token}` } });
+  expect(ตัวแทนคืนเอง.status(), "ตัวแทนต้องคืนสิทธิ์ให้ตัวเองไม่ได้").toBe(403);
+
+  const คืน = await request.post(`${HQ_ORIGIN}/api/admin/dealers/self-quota?code=${CODE}`, { headers: { authorization: `Bearer ${hq}` } });
+  expect(คืน.status(), await คืน.text()).toBe(200);
+  expect((await ดูสิทธิ์()).used, "คืนแล้วต้องเริ่มนับใหม่").toBe(0);
+  expect((await สถานะ(request, หลังอนุมัติ.token)).selfChangesUsed, "ฝั่งตัวแทนต้องเห็นสิทธิ์กลับมาด้วย").toBe(0);
+  const { count: ประวัติแก้เอง } = await admin.from("dealer_account_changes").select("id", { count: "exact", head: true })
+    .eq("dealer_code", CODE).eq("by_self", true);
+  expect(ประวัติแก้เอง, "ประวัติการแก้เองเดิมต้องยังอยู่").toBe(2);
+  const { data: บันทึก } = await admin.from("audit_log").select("action, target").eq("action", "คืนสิทธิ์แก้บัญชีเองให้ตัวแทน")
+    .like("target", `${CODE}%`).limit(1);
+  expect(บันทึก ?? [], "ต้องบันทึกว่าใครคืนสิทธิ์ให้สาขาไหน").toHaveLength(1);
+  expect((await request.post(`${HQ_ORIGIN}/api/admin/dealers/self-quota?code=${CODE}`, { headers: { authorization: `Bearer ${hq}` } })).status(),
+    "ไม่มีสิทธิ์ที่ใช้ไป คืนซ้ำได้ 409").toBe(409);
+
+  // คืนแล้วแก้เองมีผลทันที ไม่กลายเป็นคำขอ
+  const แก้หลังคืน = await ยิงบัญชี(request, หลังอนุมัติ.token, { currentPassword: รหัสใหม่, password: "ZZtest-AfterReset-2569" });
+  expect(แก้หลังคืน.status(), await แก้หลังคืน.text()).toBe(200);
+  expect((await แก้หลังคืน.json() as { applied: boolean }).applied, "คืนสิทธิ์แล้วต้องแก้เองได้ทันที").toBe(true);
 });

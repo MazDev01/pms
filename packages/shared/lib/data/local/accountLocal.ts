@@ -19,7 +19,9 @@ export const ACCOUNT_EVENT = "bpms-account-updated";
 /** เพดานจำนวนครั้งที่ตัวแทนแก้เองได้ — เกินนี้ต้องขออนุมัติทุกครั้ง */
 export const SELF_CHANGE_LIMIT = 2;
 
-type ChangeRow = { dealerCode: string; kind: AccountRequest["kind"]; at: string; bySelf: boolean; newEmail?: string };
+/** resetAt = สำนักงานใหญ่คืนสิทธิ์แล้ว — แถวยังอยู่เป็นประวัติ แต่ไม่นับโควตา */
+type ChangeRow = { dealerCode: string; kind: AccountRequest["kind"]; at: string; bySelf: boolean; newEmail?: string; resetAt?: string };
+const นับโควตา = (c: ChangeRow, dealerCode: string) => c.dealerCode === dealerCode && c.bySelf && !c.resetAt;
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -57,7 +59,7 @@ function ใช้ผล(dealerCode: string, email?: string, password?: string) 
 
 export const accountLocal = {
   async state(dealerCode: string, อีเมลปัจจุบัน = ""): Promise<AccountState> {
-    const ของสาขา = changes().filter(c => c.dealerCode === dealerCode && c.bySelf);
+    const ของสาขา = changes().filter(c => นับโควตา(c, dealerCode));
     const ค้าง = requests().find(r => r.dealerCode === dealerCode && r.status === "pending") ?? null;
     return {
       email: localDealerEmail(dealerCode, อีเมลปัจจุบัน),
@@ -78,7 +80,7 @@ export const accountLocal = {
     if (ค้างอยู่) throw new Error("มีคำขอที่รอสำนักงานใหญ่อนุมัติอยู่แล้ว — รอผลก่อนส่งคำขอใหม่");
 
     const kind = ชนิดของการแก้(email, password);
-    const ใช้ไป = changes().filter(c => c.dealerCode === dealerCode && c.bySelf).length;
+    const ใช้ไป = changes().filter(c => นับโควตา(c, dealerCode)).length;
     const at = new Date().toISOString();
 
     if (ใช้ไป < SELF_CHANGE_LIMIT) {
@@ -107,6 +109,18 @@ export const accountLocal = {
   // โหมดตัวอย่างไม่ได้สร้างบัญชีจริง จึงไม่มีบัญชีที่ต้องตั้งรหัสตอนเข้าครั้งแรก (state ไม่ส่ง mustChangePassword)
   async setFirstPassword(): Promise<{ message: string }> {
     throw new Error("โหมดข้อมูลตัวอย่างไม่มีการตั้งรหัสผ่านตอนเข้าระบบครั้งแรก");
+  },
+
+  /** สำนักงานใหญ่คืนสิทธิ์แก้เอง — ประวัติเดิมยังอยู่ แค่เริ่มนับใหม่ · คืนจำนวนครั้งที่คืนให้ */
+  resetSelfQuota(dealerCode: string): number {
+    const at = new Date().toISOString();
+    let คืน = 0;
+    write(CHANGES_KEY, changes().map(c => {
+      if (!นับโควตา(c, dealerCode)) return c;
+      คืน++;
+      return { ...c, resetAt: at };
+    }));
+    return คืน;
   },
 
   async listRequests(): Promise<AccountRequest[]> {

@@ -102,7 +102,8 @@ class ยังไม่ได้ติดตั้ง extends Error {}
 async function สรุปสถานะ(admin: SupabaseClient, dealerCode: string, email: string) {
   const [changes, pendingRes, rejectedRes, lastChangeRes] = await Promise.all([
     admin.from("dealer_account_changes")
-      .select("id", { count: "exact", head: true }).eq("dealer_code", dealerCode).eq("by_self", true),
+      // สำนักงานใหญ่คืนสิทธิ์แล้ว (quota_reset_at · 0177) = ไม่นับ แต่ประวัติยังอยู่
+      .select("id", { count: "exact", head: true }).eq("dealer_code", dealerCode).eq("by_self", true).is("quota_reset_at", null),
     admin.from("dealer_account_requests")
       .select("id, dealer_code, kind, new_email, status, requested_at")
       .eq("dealer_code", dealerCode).eq("status", "pending").maybeSingle(),

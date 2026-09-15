@@ -13,11 +13,11 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, Copy, Check, Key, X } from "lucide-react";
 import { ModalPortal } from "@pms/shared/components/ui/ModalPortal";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
-import { viewDealerPassword, resetDealerPassword, listDealerLoginEmails } from "@pms/shared/lib/adminApi";
+import { viewDealerPassword, resetDealerPassword, listDealerLoginEmails, getDealerSelfQuota, resetDealerSelfQuota } from "@pms/shared/lib/adminApi";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
 import { fmtISOToThai, type DealerRow } from "@pms/shared/lib/mock";
 import { useRole } from "@pms/shared/context/RoleContext";
-import { แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
+import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 
 /** ช่องคัดลอกค่า (ปิดบังได้) — ใช้ทั้งที่นี่และตอนสร้างตัวแทนใหม่ */
 export function CopyField({ label, value, secret = false, defaultShown = false }: {
@@ -126,6 +126,33 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
     return () => { alive = false; };
   }, [dealer.code]);
 
+  // สิทธิ์แก้อีเมล/รหัสผ่านเอง (2 ครั้ง) — HQ เห็นว่าใช้ไปเท่าไร และคืนสิทธิ์ได้ (บอสสั่ง 15 ก.ย. 69)
+  const [สิทธิ์, setสิทธิ์] = useState<{ used: number; limit: number } | null>(null);
+  const [กำลังคืน, setกำลังคืน] = useState(false);
+  const จัดการได้ = can("dealers:manage");
+  useEffect(() => {
+    if (!จัดการได้) return;
+    let alive = true;
+    getDealerSelfQuota(dealer.code).then(r => { if (alive && r.ok) setสิทธิ์({ used: r.used, limit: r.limit }); }).catch(() => {});
+    return () => { alive = false; };
+  }, [dealer.code, จัดการได้]);
+
+  async function คืนสิทธิ์() {
+    if (!สิทธิ์ || สิทธิ์.used === 0) return;
+    const ตกลง = await ยืนยัน({
+      หัวข้อ: `คืนสิทธิ์แก้อีเมล/รหัสผ่านเองให้ "${dealer.name}"?`,
+      รายละเอียด: `ประวัติการเปลี่ยนเดิมยังอยู่ แค่เริ่มนับใหม่ — ตัวแทนแก้เองได้อีก ${สิทธิ์.limit} ครั้ง`,
+      ปุ่มตกลง: "คืนสิทธิ์",
+    });
+    if (!ตกลง) return;
+    setกำลังคืน(true);
+    const r = await resetDealerSelfQuota(dealer.code);
+    setกำลังคืน(false);
+    if (!r.ok) { แจ้งพลาด(r.error); return; }
+    setสิทธิ์(s => s && { ...s, used: 0 });
+    แจ้งสำเร็จ(`คืนสิทธิ์แก้เองให้ "${dealer.name}" แล้ว — แก้เองได้อีก ${สิทธิ์.limit} ครั้ง`);
+  }
+
   // ⚠️ อีเมลของสาขาโหลดมาทีหลัง (ต้องถามเซิร์ฟเวอร์ ห้ามเดาจากรหัสสาขา)
   //    ถ้าผู้ใช้กดปุ่มแก้ "ก่อน" อีเมลมาถึง ช่องจะว่างเปล่าค้างอยู่แบบนั้นตลอด
   //    (บอสเจอจริง 20 ส.ค. 69 — การ์ดโชว์อีเมลอยู่ แต่ในโมดัลกลับว่าง)
@@ -185,6 +212,20 @@ export function DealerCredentialsCard({ dealer }: { dealer: DealerRow }) {
         </button>
         </div>
       </div>
+      {สิทธิ์ && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: "1px solid #eef1f5" }}>
+          <div style={{ fontSize: "0.74rem", color: "#374151" }} data-testid="self-quota">
+            ตัวแทนแก้อีเมล/รหัสผ่านเองไปแล้ว <b>{สิทธิ์.used} / {สิทธิ์.limit}</b> ครั้ง
+            {สิทธิ์.used >= สิทธิ์.limit && <span style={{ color: "#b45309", fontWeight: 700 }}> · ครบแล้ว ครั้งต่อไปต้องขออนุมัติ</span>}
+          </div>
+          <button onClick={() => void คืนสิทธิ์()} disabled={กำลังคืน || สิทธิ์.used === 0}
+            style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid #d5dbe4", background: "#fff", color: "#003366",
+              fontSize: "0.76rem", fontWeight: 700, fontFamily: "inherit",
+              cursor: กำลังคืน || สิทธิ์.used === 0 ? "not-allowed" : "pointer", opacity: กำลังคืน || สิทธิ์.used === 0 ? 0.6 : 1 }}>
+            {กำลังคืน ? "กำลังคืนสิทธิ์…" : "คืนสิทธิ์แก้เอง"}
+          </button>
+        </div>
+      )}
 
       {/* แก้บัญชีเข้าระบบเอง — เว้นช่องไหนไว้ = ไม่แตะของเดิมช่องนั้น
           (แก้อีเมลอย่างเดียวต้องไม่ไปเปลี่ยนรหัสผ่านทิ้ง ไม่งั้นสาขาหลุดจากระบบทันทีโดยไม่มีใครตั้งใจ) */}

@@ -85,6 +85,44 @@ test("[db] กติกาเลื่อนขั้น + บันทึกก
   expect(ข้อความ.some(t => /^ใบเสนอแพ็กเกจ DP-\d{4}-\d{4} · ส่งแล้ว$/.test(t))).toBe(true);
 });
 
+test("[db] ใบถูกปฏิเสธ → รอตัดสินใจถอยกลับนัดคุยแล้ว เฉพาะเมื่อไม่มีใบที่ส่งแล้วเหลือ (0177)", async () => {
+  const sb = await db(ADMIN);
+  const { data: pr, error } = await sb.from("dealer_prospects").insert({ name: `${NS}-ใบถูกปฏิเสธ`, status: "meeting" }).select("id").single();
+  expect(error).toBeNull();
+  const id = (pr as { id: number }).id;
+  const ขั้น = async () => ((await sb.from("dealer_prospects").select("status").eq("id", id).single()).data as { status: string }).status;
+  const ออกใบ = async () => ((await sb.from("dealer_package_proposals")
+    .insert({ prospect_id: id, package: "standard", proposed_date: "2026-09-15" }).select("id, proposal_no").single()).data as { id: number; proposal_no: string });
+  const ตั้ง = async (ใบId: number, status: string) =>
+    expect((await sb.from("dealer_package_proposals").update({ status }).eq("id", ใบId)).error).toBeNull();
+
+  const ใบ1 = await ออกใบ();
+  const ใบ2 = await ออกใบ();
+  await ตั้ง(ใบ1.id, "sent");
+  await ตั้ง(ใบ2.id, "sent");
+  expect(await ขั้น()).toBe("considering");
+
+  // ยังมีใบที่ส่งแล้วค้างอยู่อีกใบ → ไม่ถอย
+  await ตั้ง(ใบ1.id, "rejected");
+  expect(await ขั้น(), "ยังมีใบอื่นที่ส่งแล้ว ต้องยังรอตัดสินใจ").toBe("considering");
+
+  // ใบสุดท้ายถูกปฏิเสธ → ถอยกลับนัดคุยแล้ว พร้อมประวัติที่บอกเหตุผล
+  await ตั้ง(ใบ2.id, "rejected");
+  expect(await ขั้น(), "ไม่มีใบที่ส่งแล้วเหลือ ต้องถอยกลับนัดคุยแล้ว").toBe("meeting");
+  const { data: ประวัติ } = await sb.from("dealer_prospect_activities").select("kind, body, from_status, to_status")
+    .eq("prospect_id", id).eq("kind", "status");
+  const ถอย = (ประวัติ ?? []).find(a => (a as { to_status: string }).to_status === "meeting" && (a as { from_status: string }).from_status === "considering") as
+    { body: string } | undefined;
+  expect(ถอย?.body).toBe(`ใบเสนอแพ็กเกจ ${ใบ2.proposal_no} ถูกปฏิเสธ → กลับไปนัดคุยแล้ว`);
+
+  // ข้อความเหตุผลต้องไม่ติดไปกับการเปลี่ยนขั้นครั้งถัดไป
+  const ใบ3 = await ออกใบ();
+  await ตั้ง(ใบ3.id, "sent");
+  const { data: ล่าสุด } = await sb.from("dealer_prospect_activities").select("body")
+    .eq("prospect_id", id).eq("kind", "status").order("id", { ascending: false }).limit(1).single();
+  expect((ล่าสุด as { body: string }).body).toBe("นัดคุยแล้ว → รอตัดสินใจ");
+});
+
 test("[security] ประวัติ: เพิ่มได้แค่บันทึกการติดต่อ · แก้/ลบไม่ได้ · ตัวแทนไม่เห็น", async () => {
   const sb = await db(ADMIN);
   const { data: pr } = await sb.from("dealer_prospects").insert({ name: `${NS}-ประวัติลับ` }).select("id").single();

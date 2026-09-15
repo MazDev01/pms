@@ -65,6 +65,74 @@ export async function createDealerAccount(input: CreateDealerInput): Promise<Cre
 // ใบผ่านของผู้เรียก — โหมด cookie ไม่มีให้อ่าน (โดยตั้งใจ) จึงใช้ตัวช่วยกลางตัวเดียวกัน
 const callerToken = adminToken;
 
+/** ผูกลูกค้าเป้าหมายกับตัวแทนที่มีอยู่แล้ว — เซิร์ฟเวอร์ตรวจว่าสาขามีจริง/เปิดใช้งาน/ยังไม่ถูกผูกกับรายอื่น
+ *  hasAccount=false = ผูกแล้ว แต่สาขายังไม่มีบัญชีเข้าระบบ (หน้าจอต้องเตือน) · โหมดเดโมหน้าจอทำเอง */
+export async function linkProspectToDealer(prospectId: number, dealerCode: string): Promise<
+  { ok: true; hasAccount: boolean } | { ok: false; error: string }
+> {
+  if (!REAL_BACKEND) return { ok: false, error: "โหมดเดโม: ผูกผ่านเซิร์ฟเวอร์ไม่ได้" };
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch("/api/admin/dealers/link-prospect", { credentials: "same-origin",
+      method: "POST",
+      headers: authHeaders(token, true),
+      body: JSON.stringify({ prospectId, dealerCode }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; hasAccount?: boolean };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, hasAccount: json.hasAccount !== false };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
+
+/** สิทธิ์แก้อีเมล/รหัสผ่านเองของตัวแทน — ใช้ไปกี่ครั้ง (HQ ดู) */
+export async function getDealerSelfQuota(code: string): Promise<
+  { ok: true; used: number; limit: number } | { ok: false; error: string }
+> {
+  if (!REAL_BACKEND) {
+    const { accountLocal } = await import("./data/local/accountLocal");
+    const s = await accountLocal.state(code);
+    return { ok: true, used: s.selfChangesUsed, limit: s.selfChangesLimit };
+  }
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch(`/api/admin/dealers/self-quota?code=${encodeURIComponent(code)}`, { credentials: "same-origin",
+      headers: authHeaders(token),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; used?: number; limit?: number };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, used: json.used ?? 0, limit: json.limit ?? 2 };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
+
+/** คืนสิทธิ์แก้เอง — ประวัติการเปลี่ยนเดิมยังอยู่ แค่เริ่มนับใหม่ · เซิร์ฟเวอร์บันทึกว่าใครคืนให้สาขาไหน */
+export async function resetDealerSelfQuota(code: string): Promise<
+  { ok: true; reset: number } | { ok: false; error: string }
+> {
+  if (!REAL_BACKEND) {
+    const { accountLocal } = await import("./data/local/accountLocal");
+    return { ok: true, reset: accountLocal.resetSelfQuota(code) };
+  }
+  const token = await callerToken();
+  if (!token) return { ok: false, error: "ยังไม่ได้เข้าสู่ระบบ" };
+  try {
+    const res = await fetch(`/api/admin/dealers/self-quota?code=${encodeURIComponent(code)}`, { credentials: "same-origin",
+      method: "POST",
+      headers: authHeaders(token),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string; reset?: number };
+    if (!res.ok) return { ok: false, error: json.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}` };
+    return { ok: true, reset: json.reset ?? 0 };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้") };
+  }
+}
+
 // ── ผู้ใช้สำนักงานใหญ่ (HQ) — สร้าง/ลบ ผ่าน Route Handler ฝั่งเซิร์ฟเวอร์ ──
 export type CreateHQUserInput = {
   name: string; email: string; phone: string; role: string; department: string;

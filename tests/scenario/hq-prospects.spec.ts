@@ -20,6 +20,14 @@ test.describe.configure({ mode: "serial" });
 const NS = specNS("PROSPECT");
 const NEW_CODE = "ZZP";      // สร้างผ่านหน้าจอ
 const DUP_CODE = "ZZQ";      // รหัสที่ใช้ลองสร้างซ้อน — ต้องไม่ถูกสร้างจริง
+const NOACC_CODE = "ZZL";    // สาขาที่ไม่มีบัญชีเข้าระบบ (ลงทะเบียนตรง) — ใช้ทดสอบผูกกับตัวแทนที่มีอยู่แล้ว
+
+async function purgeNoAccountDealer() {
+  if (!ADMIN_SERVICE_ROLE_KEY) return;
+  const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  await admin.from("dealer_prospects").update({ dealer_code: null }).eq("dealer_code", NOACC_CODE).then(() => {}, () => {});
+  await admin.from("dealers").delete().eq("code", NOACC_CODE);
+}
 
 async function adminToken(): Promise<string> {
   const sb = await db(ADMIN);
@@ -47,11 +55,13 @@ async function cleanupProspects() {
 
 test.beforeAll(async () => {
   await cleanupProspects();
+  await purgeNoAccountDealer();
   await purgeDealer(NEW_CODE);
   await purgeDealer(DUP_CODE);
 });
 test.afterAll(async () => {
   await cleanupProspects();
+  await purgeNoAccountDealer();
   await purgeDealer(NEW_CODE);
   await purgeDealer(DUP_CODE);
 });
@@ -114,14 +124,61 @@ test("[func·hq] เพิ่มลูกค้าเป้าหมาย → �
   await แก้ไข.getByRole("button", { name: "ตั้งเป็นตัวแทนจำหน่าย" }).first().click();
   const ตั้ง = page.getByRole("dialog", { name: "ตั้งเป็นตัวแทนจำหน่าย" });
   await ตั้ง.getByLabel("ผูกกับตัวแทนจำหน่ายที่มีอยู่แล้ว").check();
-  await ตั้ง.locator("#cv-existing").selectOption("RYG");
+  // CNX ไม่ใช่ RYG — สเปกอื่นผูกลูกค้าเป้าหมายทดสอบกับ RYG อยู่ และหนึ่งสาขาผูกได้รายเดียว (บอสสั่ง 15 ก.ย. 69)
+  await ตั้ง.locator("#cv-existing").selectOption("CNX");
   await ตั้ง.getByRole("button", { name: "ผูกกับตัวแทนนี้" }).click();
 
-  await waitRow(sb, "dealer_prospects", { name, status: "won", dealer_code: "RYG" });
+  await waitRow(sb, "dealer_prospects", { name, status: "won", dealer_code: "CNX" });
   // เป็นตัวแทนแล้ว = ไปอยู่หน้าตัวแทนจำหน่าย ไม่แสดงในหน้าลูกค้าเป้าหมาย (บอสสั่ง 15 ก.ย. 69)
   await expect(แถว, "เป็นตัวแทนแล้วต้องหายจากตารางลูกค้าเป้าหมาย").toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByLabel("กรองตามสถานะ").locator("option", { hasText: "เป็นตัวแทนแล้ว" }), "ไม่มีตัวกรองเป็นตัวแทนแล้ว").toHaveCount(0);
   assertNoErrors(errs, "หน้าลูกค้าเป้าหมาย (HQ)");
+});
+
+test("[api] ผูกกับตัวแทนที่มีอยู่แล้ว: ตรวจที่เซิร์ฟเวอร์ · สาขาไม่มีบัญชีผูกได้แต่บอก · ผูกซ้ำ/ปิดใช้งานไม่ได้", async () => {
+  test.skip(!ADMIN_SERVICE_ROLE_KEY, "เครื่องนี้ยังไม่ได้ตั้ง service_role");
+  const admin = createClient(ADMIN_SUPABASE_URL, ADMIN_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const sb = await db(ADMIN);
+  const token = await adminToken();
+  const ผูก = (prospectId: number, dealerCode: string) => fetch(`${HQ_ORIGIN}/api/admin/dealers/link-prospect`, {
+    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ prospectId, dealerCode }),
+  });
+  const เพิ่มราย = async (ชื่อ: string) =>
+    ((await sb.from("dealer_prospects").insert({ name: `${NS}-${ชื่อ}`, status: "meeting" }).select("id").single()).data as { id: number }).id;
+
+  // สาขาทดสอบที่ไม่มีบัญชีเข้าระบบ (ลงทะเบียนตรง แบบรายชื่อตัวแทนเดิมจาก Excel)
+  expect((await admin.from("dealers").insert({ code: NOACC_CODE, name: "ZZTEST สาขาไม่มีบัญชี", province: "ระยอง", region: "ตะวันออก", revenue_target: 0, status: "active" })).error).toBeNull();
+
+  const ก = await เพิ่มราย("ผูกสาขาไม่มีบัญชี");
+  const ไม่มีสาขา = await ผูก(ก, "ZZX");
+  expect(ไม่มีสาขา.status, "สาขาที่ไม่มีอยู่จริงต้องผูกไม่ได้").toBe(404);
+
+  const ได้ = await ผูก(ก, NOACC_CODE);
+  expect(ได้.status, await ได้.clone().text()).toBe(200);
+  expect((await ได้.json() as { hasAccount: boolean }).hasAccount, "สาขาไม่มีบัญชีต้องผูกได้ แต่บอกหน้าจอ").toBe(false);
+  await waitRow(sb, "dealer_prospects", { id: ก, status: "won", dealer_code: NOACC_CODE });
+
+  const ข = await เพิ่มราย("ผูกซ้ำสาขาเดิม");
+  const ซ้ำ = await ผูก(ข, NOACC_CODE);
+  expect(ซ้ำ.status, "หนึ่งสาขาผูกได้รายเดียว").toBe(409);
+  expect(((await ซ้ำ.json()) as { error: string }).error).toMatch(/ผูกกับลูกค้าเป้าหมาย/);
+  expect(((await ผูก(ก, "CNX")).status), "รายที่เป็นตัวแทนแล้วผูกใหม่ไม่ได้").toBe(409);
+
+  // ปลดรายแรกออก แล้วปิดใช้งานสาขา → ผูกไม่ได้เพราะปิดใช้งาน
+  expect((await admin.from("dealer_prospects").delete().eq("id", ก)).error).toBeNull();
+  expect((await admin.from("dealers").update({ status: "inactive" }).eq("code", NOACC_CODE)).error).toBeNull();
+  const ปิด = await ผูก(ข, NOACC_CODE);
+  expect(ปิด.status, "สาขาที่ปิดใช้งานต้องผูกไม่ได้").toBe(409);
+  expect(((await ปิด.json()) as { error: string }).error).toMatch(/ปิดใช้งาน/);
+
+  // ผู้ใช้ตัวแทนยิงตรงต้องไม่ได้
+  const ตัวแทน = (await (await db(RYG)).auth.getSession()).data.session?.access_token ?? "";
+  const โดนกัน = await fetch(`${HQ_ORIGIN}/api/admin/dealers/link-prospect`, {
+    method: "POST", headers: { authorization: `Bearer ${ตัวแทน}`, "content-type": "application/json" },
+    body: JSON.stringify({ prospectId: ข, dealerCode: "RYG" }),
+  });
+  expect(โดนกัน.status, "ตัวแทนต้องผูกไม่ได้").toBe(403);
 });
 
 test("[func·hq] ตั้งเป็นตัวแทนจำหน่ายใหม่ → ได้สาขาพร้อมบัญชี · กดซ้ำไม่ได้สาขาซ้อน", async ({ page }) => {
