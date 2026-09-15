@@ -1,8 +1,8 @@
-// ── เมนูข้าง + ป้ายกลุ่มบนหัวหน้าเพจ — แหล่งเดียว ──────────────────────────────────────
+// ── เมนูข้าง — แหล่งเดียว ──────────────────────────────────────────────────────────
 //
 // UI รอบใหม่ (บอสสั่ง 14 ก.ย. 69: "รี ui ให้ออกแบบตามเว็บตัวอย่าง ยกเว้นสี เอาสีเดิม")
 //   • เมนูจัดกลุ่ม ชื่อไทย · หัวกลุ่มเป็นป้ายธรรมดา ไม่พับ/กาง (บอสสั่งเอาปุ่มพับออก) · แดชบอร์ดอยู่เดี่ยวบนสุด
-//   • ป้ายเล็กเหนือชื่อหน้า = ชื่อกลุ่มของเมนูนั้น (Topbar อ่านจาก eyebrowOf)
+//   • ไม่มีป้ายกลุ่มเหนือชื่อหน้าแล้ว — บอสสั่งเอาออกทุกหน้า 15 ก.ย. 69 (ชื่อกลุ่มใช้เป็นหัวกลุ่มในเมนูอย่างเดียว)
 //
 // ⚠️ ลำดับเมนูภายในยังเป็นลำดับเดิมที่บอสสั่งไว้ทุกข้อ — แค่จัดเข้ากลุ่ม ห้ามสลับลำดับเอง
 //    (ลูกค้าเป้าหมาย HQ ก่อนตัวแทนจำหน่าย · ภาพรวมยอดขายก่อนลูกค้าเป้าหมายทั้งเครือ ฯลฯ)
@@ -14,7 +14,7 @@ import {
 export type NavItem = { label: string; href: string; icon: React.ReactNode; badge?: number };
 export type NavGroup = {
   key: string;
-  /** ชื่อกลุ่ม — ขึ้นเป็นหัวกลุ่มในเมนู และป้ายเล็กเหนือชื่อหน้า */
+  /** ชื่อกลุ่ม — ขึ้นเป็นหัวกลุ่มในเมนู */
   group: string;
   icon?: React.ReactNode;
   /** กลุ่มเดี่ยว (แดชบอร์ด) — แสดงเป็นเมนูตรง ๆ ไม่มีป้ายหัวกลุ่ม */
@@ -69,17 +69,3 @@ export const HQ_NAV: NavGroup[] = [
 ];
 
 export const isActiveHref = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
-
-/** ป้ายเล็กเหนือชื่อหน้า = ชื่อกลุ่มของเมนูที่ตรงกับหน้านี้ (ตรงยาวสุดชนะ) · หน้านอกเมนู = ป้ายตามหมวด หรือว่าง */
-export function eyebrowOf(pathname: string, isHQ: boolean): string {
-  let best: { len: number; group: string } | null = null;
-  for (const g of isHQ ? HQ_NAV : DEALER_NAV) {
-    for (const it of g.items) {
-      if (isActiveHref(pathname, it.href) && (!best || it.href.length > best.len)) best = { len: it.href.length, group: g.group };
-    }
-  }
-  if (best) return best.group;
-  if (pathname.startsWith("/profile")) return "บัญชีผู้ใช้";
-  if (pathname.startsWith("/hq/users")) return "ระบบ";
-  return "";
-}

@@ -1523,7 +1523,6 @@ textarea:focus-visible {
   margin: 0 1.75rem; padding: 26px 0 18px; border-bottom: 1px solid var(--border);
 }
 .page-header-text { min-width: 0; }
-.page-eyebrow { font-size: .74rem; font-weight: 700; letter-spacing: .06em; color: var(--primary); margin-bottom: 4px; }
 .page-title { font-size: 1.9rem; font-weight: 800; line-height: 1.25; color: #0f172a; letter-spacing: -.01em; margin: 0; }
 .page-header .topbar-slot { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; padding-top: 0; }
 .page-header .topbar-slot:empty { display: none; }

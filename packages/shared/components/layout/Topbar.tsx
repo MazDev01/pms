@@ -31,7 +31,6 @@ import { useCurrentDealer, useDealerDisplayName } from "@pms/shared/lib/useCurre
 import { useReadNotifications } from "@pms/shared/lib/useReadNotifications";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
-import { eyebrowOf } from "./navConfig";
 
 // ── "วันนี้ของระบบ" (APP_NOW) — supabase=จริง / local=ตรึง · จัดกลุ่มการแจ้งเตือน วันนี้/เมื่อวาน ──
 const MOCK_TODAY = APP_NOW_ISO;
@@ -831,12 +830,12 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         </div>{/* /topbar-right */}
       </header>
 
-      {/* ── หัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ป้ายกลุ่มเมนู + ชื่อหน้าตัวใหญ่ · ปุ่มเฉพาะหน้าอยู่ขวา · เส้นคั่นล่าง ──
+      {/* ── หัวหน้าเพจ (UI รอบใหม่ 14 ก.ย. 69) — ชื่อหน้าตัวใหญ่ · ปุ่มเฉพาะหน้าอยู่ขวา · เส้นคั่นล่าง ──
           ไม่มีคำโปรยใต้ชื่อหน้า (บอสสั่ง 14 ส.ค. 69 · บอสยืนยันอีกครั้งตอนเลือกแบบ)
+          ไม่มีป้ายกลุ่มเมนูเหนือชื่อหน้า (เช่น "ภาพรวม" "งานขาย") — บอสสั่งเอาออกทุกหน้าทั้ง HQ และตัวแทน 15 ก.ย. 69 ห้ามเติมกลับ
           คลาส topbar-title คงไว้ที่ h1 — เทสต์และตัวช่วยเดิมยังหาชื่อหน้าจากคลาสนี้ */}
       <div className="page-header">
         <div className="page-header-text">
-          {eyebrowOf(pathname, isHQ) && <div className="page-eyebrow">{eyebrowOf(pathname, isHQ)}</div>}
           <h1 className="page-title topbar-title">{pageTitle(pathname)}</h1>
         </div>
         {/* แถวปุ่มเฉพาะหน้า (ช่วงวันที่ · ส่งออก · เพิ่ม) — TopbarActions ส่งเข้ามาที่ช่องนี้ · ว่าง = ยุบหาย */}

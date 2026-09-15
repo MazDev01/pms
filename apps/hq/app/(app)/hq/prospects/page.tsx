@@ -49,7 +49,7 @@ import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
-import { TablePagination, pageSlice } from "@pms/shared/components/ui/TablePagination";
+import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/shared/components/ui/TablePagination";
 import { ClickableRow } from "@pms/shared/components/ui/ClickableRow";
 import { ยืนยัน, แจ้งพลาด, แจ้งสำเร็จ } from "@pms/shared/components/ui/ConfirmToast";
 import { formatPhone } from "@pms/shared/lib/format";
@@ -696,28 +696,30 @@ export default function HQProspectsPage() {
                 "ติดต่อล่าสุด" มาแทน "ช่องทาง/ประเภทธุรกิจ" (ดูได้ในแผง) — สิ่งที่ทีมต้องเห็นทุกวันคือใครไม่ได้ติดต่อนานแล้ว */}
             {/* "ช่องทาง" กลับมาอยู่ในตาราง (บอสสั่ง 14 ก.ย. 69: "แสดง ช่องทางที่เข้ามา ด้วย")
                 "ชื่อบนโซเชียล" แยกเป็นคอลัมน์ (บอสสั่ง 14 ก.ย. 69: "เพิ่มชื่อ ชื่อบนโซเชียล ในตาราง") — เดิมเขียนปนกับประเภทธุรกิจใต้ชื่อ อ่านไม่ออกว่าอันไหนคืออะไร
-                9 คอลัมน์ minWidth รวม ~958px ยังพอดีกรอบจอคอม (~968px) */}
+                "ลำดับ" คอลัมน์แรก (บอสสั่ง 15 ก.ย. 69: "เพิ่มลำดับเข้าไป") — กว้างพอเลข 3 หลัก (ตอนนี้ 170 ราย) ไม่งั้นโดนตัดเป็น "1…"
+                10 คอลัมน์ minWidth รวม ~1,014px · % รวมต้องได้ 100 เสมอ */}
             <colgroup>
-              <col style={{ width: "18%", minWidth: 170 }} />
-              <col style={{ width: "12%", minWidth: 110 }} />
+              <col style={{ width: "5%", minWidth: 56 }} />{/* ลำดับ */}
+              <col style={{ width: "16%", minWidth: 170 }} />
+              <col style={{ width: "11%", minWidth: 110 }} />
               <col style={{ width: "10%", minWidth: 104 }} />
               <col style={{ width: "8%", minWidth: 84 }} />
               <col style={{ width: "9%", minWidth: 90 }} />
-              <col style={{ width: "14%", minWidth: 140 }} />
+              <col style={{ width: "13%", minWidth: 140 }} />
               <col style={{ width: "11%", minWidth: 100 }} />
-              <col style={{ width: "11%", minWidth: 100 }} />
+              <col style={{ width: "10%", minWidth: 100 }} />
               <col style={{ width: "7%", minWidth: 60 }} />
             </colgroup>
             <thead>
-              <tr><th>ชื่อ</th><th>ชื่อบนโซเชียล</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ช่องทาง</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
+              <tr><th>ลำดับ</th><th>ชื่อ</th><th>ชื่อบนโซเชียล</th><th>เบอร์โทร</th><th>จังหวัด</th><th>ช่องทาง</th><th>ขั้น · ความคืบหน้า</th><th>ติดต่อล่าสุด</th><th>นัดติดตาม</th><th>ตัวแทน</th></tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
+                <tr><td colSpan={10} style={{ textAlign: "center", padding: "36px 14px", color: "#9ca3af", fontSize: "0.8rem" }}>
                   {!loaded ? "กำลังโหลด…" : list.length === 0 ? "ยังไม่มีลูกค้าเป้าหมาย" : "ไม่พบลูกค้าเป้าหมายตามตัวกรองที่เลือก"}
                 </td></tr>
               )}
-              {pageSlice(filtered, page).map(p => {
+              {pageSlice(filtered, page).map((p, i) => {
                 const สี = prospectStatusColor[p.status];
                 const เลยกำหนด = ถึงกำหนดติดตาม(p, APP_NOW_ISO);
                 const ไม่ได้ติดต่อนาน = ไม่ได้ติดต่อเกิน(p, 7, APP_NOW_ISO);
@@ -726,6 +728,8 @@ export default function HQProspectsPage() {
                 return (
                   <ClickableRow key={p.id} onActivate={() => เปิดแผง(p)} label={`เปิดรายละเอียดลูกค้าเป้าหมาย ${p.name}`}
                     style={{ background: รายที่เปิด?.id === p.id ? "#f0f6ff" : undefined }}>
+                    {/* ลำดับต่อเนื่องข้ามหน้า — สูตรเดียวกับตารางตัวแทนจำหน่าย */}
+                    <td style={{ fontSize: "0.72rem", color: "#6b7280", fontWeight: 600 }}>{Math.min(page, pageCountOf(filtered.length) - 1) * ROWS_PER_PAGE + i + 1}</td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                         <span style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, overflow: "hidden", background: p.logo ? "#fff" : "#eef3f8", color: PRIMARY, fontSize: "0.68rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
