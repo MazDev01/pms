@@ -324,10 +324,12 @@ const ปุ่มไอคอน = (ปิด: boolean) => ({
   color: ปิด ? "#cbd5e1" : "#64748b", display: "flex", padding: 3,
 });
 
-function ListEditor({ label, items, onChange, placeholder, emptyNote, note }: {
+function ListEditor({ label, items, onChange, placeholder, emptyNote, note, noteLines = 1 }: {
   label: string; items: string[]; onChange: (next: string[]) => void; placeholder: string; emptyNote: string;
   /** บรรทัดหมายเหตุใต้ช่องเพิ่ม — ส่ง "" = เว้นบรรทัดไว้เปล่า ๆ ให้การ์ดคู่กันแถวตรงกัน · ไม่ส่ง = ไม่มีบรรทัดนี้ */
   note?: string;
+  /** จองความสูงหมายเหตุกี่บรรทัด — การ์ดคู่กันต้องจองเท่ากัน (หมายเหตุยาวตัดขึ้นบรรทัดใหม่แล้วช่องเพิ่มจะเหลื่อม) */
+  noteLines?: number;
 }) {
   const [text, setText] = useState("");
   const [hint, setHint] = useState("");
@@ -367,7 +369,7 @@ function ListEditor({ label, items, onChange, placeholder, emptyNote, note }: {
       </div>
       {hint && <div style={{ fontSize: "0.7rem", color: "#b45309", marginTop: 4 }}>{hint}</div>}
       {note != null && (
-        <div style={{ fontSize: "0.7rem", color: "#8a929c", marginTop: 8, minHeight: "1.5em" }}>{note}</div>
+        <div style={{ fontSize: "0.7rem", color: "#8a929c", marginTop: 8, lineHeight: 1.5, minHeight: `${noteLines * 1.5}em` }}>{note}</div>
       )}
     </div>
   );
@@ -412,16 +414,21 @@ function RecruitTab() {
         </SectionCard>
       </div>
 
-      <SectionCard icon={<Building2 size={19} />} title="ประเภทธุรกิจ">
-        <ListEditor label="ประเภทธุรกิจ" items={d.businessTypes} onChange={ตั้งรายการ("businessTypes")} placeholder="เช่น ผู้รับเหมา"
-          emptyNote="ยังไม่ได้ตั้ง — ช่องประเภทธุรกิจในฟอร์มยังพิมพ์เองได้" />
-      </SectionCard>
+      {/* ประเภทธุรกิจ + เหตุผลที่ไม่สำเร็จ แถวเดียวกัน (บอสสั่ง 15 ก.ย. 69) · จองหมายเหตุ 2 บรรทัดเท่ากันทั้งคู่
+          — หมายเหตุฝั่งเหตุผลตัดขึ้นบรรทัดใหม่ในการ์ดครึ่งจอ ถ้าจองไม่เท่ากันช่องเพิ่มจะเหลื่อม */}
+      <div className="row-2-eq">
+        <SectionCard fill icon={<Building2 size={19} />} title="ประเภทธุรกิจ">
+          <ListEditor label="ประเภทธุรกิจ" items={d.businessTypes} onChange={ตั้งรายการ("businessTypes")} placeholder="เช่น ผู้รับเหมา"
+            emptyNote="ยังไม่ได้ตั้ง — ช่องประเภทธุรกิจในฟอร์มยังพิมพ์เองได้"
+            note="" noteLines={2} />
+        </SectionCard>
 
-      <SectionCard icon={<X size={19} />} title="เหตุผลที่ไม่สำเร็จ (ลูกค้าเป้าหมาย HQ)">
-        <ListEditor label="เหตุผลที่ไม่สำเร็จ" items={d.lostReasons} onChange={ตั้งรายการ("lostReasons")} placeholder="เช่น เงินทุนไม่พอ"
-          emptyNote="ยังไม่ได้ตั้ง — ตอนปิดว่าไม่สำเร็จยังพิมพ์เหตุผลเองได้" />
-        <div style={หมายเหตุ}>ตั้งรายการแล้ว ตอนปิดว่าไม่สำเร็จจะมีตัวเลือก “อื่น ๆ (ระบุเอง)” ให้พิมพ์เองได้ด้วย · คนละรายการกับเหตุผลของตัวแทน</div>
-      </SectionCard>
+        <SectionCard fill icon={<X size={19} />} title="เหตุผลที่ไม่สำเร็จ (ลูกค้าเป้าหมาย HQ)">
+          <ListEditor label="เหตุผลที่ไม่สำเร็จ" items={d.lostReasons} onChange={ตั้งรายการ("lostReasons")} placeholder="เช่น เงินทุนไม่พอ"
+            emptyNote="ยังไม่ได้ตั้ง — ตอนปิดว่าไม่สำเร็จยังพิมพ์เหตุผลเองได้"
+            note="ตั้งรายการแล้ว มีตัวเลือก “อื่น ๆ (ระบุเอง)” ให้ด้วย · แยกจากเหตุผลของตัวแทน" noteLines={2} />
+        </SectionCard>
+      </div>
 
       <SectionCard icon={<GitMerge size={19} />} title="ชื่องานตามขั้น">
         <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 12, overflow: "hidden", marginTop: 6 }}>
