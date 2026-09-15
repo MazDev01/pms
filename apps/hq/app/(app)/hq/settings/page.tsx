@@ -35,6 +35,7 @@ import {
 import { งานมาตรฐาน } from "@pms/shared/lib/prospectJourney";
 import { prospectStatusLabel, prospectStatusColor } from "@pms/shared/lib/dealerProspects";
 import { PACKAGE_ORDER, packageLabel } from "@pms/shared/lib/dealerProposals";
+import { REGIONS, type Region } from "@pms/shared/lib/provinces";
 import { settings as settingsRepo, dealers as dealersRepo, hqCompany as hqCompanyRepo, catalog as catalogRepo } from "@pms/shared/lib/data";
 import { logRepoRead } from "@pms/shared/lib/repoLog";
 import { สร้างไฟล์Xlsx, ดาวน์โหลดไฟล์ } from "@pms/shared/lib/exportWorkbook";
@@ -394,6 +395,12 @@ function RecruitTab() {
   const ตั้งแพ็กเกจ = (k: DealerPackage, patch: Partial<ค่าตั้งแพ็กเกจ>) => rc.set(p => ({
     ...p, proposal: { ...p.proposal, packages: { ...p.proposal.packages, [k]: { ...p.proposal.packages[k], ...patch } } },
   }));
+  // เป้ายอดซื้อต่อปีแยกตามภาค (บอสสั่ง 15 ก.ย. 69) — เว้นว่าง = ลบคีย์ภาคนั้นทิ้ง (กลับไปใช้ค่ากลาง)
+  const ตั้งเป้าภาค = (k: DealerPackage, r: Region, n: number | null) => rc.set(p => {
+    const ตามภาค = { ...p.proposal.packages[k].targetsByRegion };
+    if (n == null) delete ตามภาค[r]; else ตามภาค[r] = n;
+    return { ...p, proposal: { ...p.proposal, packages: { ...p.proposal.packages, [k]: { ...p.proposal.packages[k], targetsByRegion: ตามภาค } } } };
+  });
   const หมายเหตุ = { fontSize: "0.7rem", color: "#8a929c", marginTop: 8 } as const;
 
   return (
@@ -490,16 +497,30 @@ function RecruitTab() {
                       onChange={e => { const t = e.target.value.replace(/\D/g, "").slice(0, 3); ตั้งแพ็กเกจ(k, { contractMonths: t ? Math.min(120, Number(t)) || null : null }); }} />
                   </div>
                   <div>
-                    <label className="form-label" htmlFor={`rc-${k}-target`}>เป้ายอดซื้อต่อปี (บาท)</label>
+                    <label className="form-label" htmlFor={`rc-${k}-target`}>เป้ายอดซื้อต่อปี · ค่ากลาง (บาท)</label>
                     <input id={`rc-${k}-target`} className="form-input" inputMode="numeric" value={เงินในช่อง(v.annualTarget)} placeholder="เว้นว่างได้"
                       onChange={e => ตั้งแพ็กเกจ(k, { annualTarget: เงินจากช่อง(e.target.value) })} />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", margin: "2px 0 6px" }}>เป้ายอดซื้อต่อปีแยกตามภาค (บาท) · เว้นว่าง = ใช้ค่ากลาง</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
+                      {REGIONS.map(r => (
+                        <div key={r}>
+                          <label className="form-label" htmlFor={`rc-${k}-target-${r}`}>{r}</label>
+                          <input id={`rc-${k}-target-${r}`} className="form-input" inputMode="numeric"
+                            value={เงินในช่อง(v.targetsByRegion[r] ?? null)}
+                            placeholder={v.annualTarget != null ? เงินในช่อง(v.annualTarget) : "เว้นว่างได้"}
+                            onChange={e => ตั้งเป้าภาค(k, r, เงินจากช่อง(e.target.value))} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
           <div style={หมายเหตุ}>เลือกแพ็กเกจในใบใหม่แล้วเติมตัวเลขให้ · แก้ในแต่ละใบได้ · ใบที่ออกไปแล้วไม่เปลี่ยนตาม</div>
-          <div style={หมายเหตุ}>เป้ายอดซื้อต่อปี = เป้ายอดขายของตัวแทนทุกรายในแพ็กเกจนั้นด้วย · แก้แล้วเป้าของตัวแทนเปลี่ยนตามทันที · เว้นว่าง = ตัวแทนใช้เป้าที่กรอกเอง</div>
+          <div style={หมายเหตุ}>เป้ายอดซื้อต่อปี = เป้ายอดขายของตัวแทนในแพ็กเกจนั้นด้วย (ภาคที่ตั้งแยกใช้เป้าของภาค ภาคอื่นใช้ค่ากลาง) · แก้แล้วเป้าของตัวแทนเปลี่ยนตามทันที · เว้นว่างทั้งหมด = ตัวแทนใช้เป้าที่กรอกเอง</div>
         </div>
       </SectionCard>
     </>

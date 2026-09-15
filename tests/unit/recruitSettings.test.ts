@@ -21,6 +21,19 @@ describe("เป้ายอดขายตามแพ็กเกจ (0178)", 
     expect(ใช้เป้าตามแพ็กเกจ(เอง, ค่าตั้ง)).toBe(เอง);
     expect(ใช้เป้าตามแพ็กเกจ({ package: "exclusive" as const, revenueTarget: 9 }, ค่าตั้ง).revenueTarget).toBe(9);
   });
+  it("แยกตามภาค (0179): ภาคที่ตั้งไว้ใช้เป้าของภาค · ภาคที่ไม่ได้ตั้ง/ทุกภาคใช้ค่ากลาง · ค่าเพี้ยนไม่เก็บ", () => {
+    const s = รวมค่าตั้งหาตัวแทน({ proposal: { packages: {
+      standard: { annualTarget: 3_000_000, targetsByRegion: { เหนือ: 2_000_000, ใต้: "abc", ดาวอังคาร: 9 } },
+      exclusive: { targetsByRegion: { กลาง: "8,000,000" } },
+    } } });
+    expect(s.proposal.packages.standard.targetsByRegion).toEqual({ เหนือ: 2_000_000 });
+    expect(เป้าตามแพ็กเกจ(s, "standard", "เหนือ")).toBe(2_000_000);
+    expect(เป้าตามแพ็กเกจ(s, "standard", "ใต้")).toBe(3_000_000);
+    expect(เป้าตามแพ็กเกจ(s, "standard", "ทุกภาค")).toBe(3_000_000);
+    expect(เป้าตามแพ็กเกจ(s, "exclusive", "กลาง")).toBe(8_000_000);
+    expect(เป้าตามแพ็กเกจ(s, "exclusive", "อีสาน"), "ไม่มีเป้าภาคและไม่มีค่ากลาง = กรอกเอง").toBeNull();
+    expect(ใช้เป้าตามแพ็กเกจ({ package: "standard" as const, region: "เหนือ", revenueTarget: 0 }, s).revenueTarget).toBe(2_000_000);
+  });
 });
 
 describe("รวมค่าตั้งหาตัวแทน", () => {
@@ -31,7 +44,7 @@ describe("รวมค่าตั้งหาตัวแทน", () => {
     expect(s.contactChannels).toEqual(ช่องทางติดต่อเริ่มต้น);
     expect(s.businessTypes).toEqual([]);
     expect(s.lostReasons).toEqual([]);
-    expect(s.proposal.packages.standard).toEqual({ amount: null, contractMonths: null, annualTarget: null });
+    expect(s.proposal.packages.standard).toEqual({ amount: null, contractMonths: null, annualTarget: null, targetsByRegion: {} });
   });
 
   it("รายการ: ตัดช่องว่าง · ทิ้งค่าว่าง/ซ้ำ/ไม่ใช่ข้อความ · จำกัดจำนวน", () => {
@@ -54,8 +67,8 @@ describe("รวมค่าตั้งหาตัวแทน", () => {
     } });
     expect(s.proposal.validityDays).toBeNull();
     expect(s.proposal.terms).toBe("ข้อหนึ่ง");
-    expect(s.proposal.packages.standard).toEqual({ amount: 150000, contractMonths: 12, annualTarget: null });
-    expect(s.proposal.packages.exclusive).toEqual({ amount: null, contractMonths: null, annualTarget: null });
+    expect(s.proposal.packages.standard).toEqual({ amount: 150000, contractMonths: 12, annualTarget: null, targetsByRegion: {} });
+    expect(s.proposal.packages.exclusive).toEqual({ amount: null, contractMonths: null, annualTarget: null, targetsByRegion: {} });
     expect(รวมค่าตั้งหาตัวแทน({ proposal: { validityDays: 30 } }).proposal.validityDays).toBe(30);
     expect(รวมค่าตั้งหาตัวแทน({ proposal: { validityDays: 0 } }).proposal.validityDays).toBeNull();
   });

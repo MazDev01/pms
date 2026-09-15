@@ -9,9 +9,16 @@
 //
 // ไฟล์นี้เป็นตรรกะล้วน (ไม่พึ่ง mock.ts) — ตัวเชื่อมข้อมูลทั้งสามแบบ หน้าจอ และเทสต์ใช้ชุดเดียวกัน
 import type { DealerPackage } from "./data/types";
+import { REGIONS, type Region } from "./provinces";
 
 export type คีย์งานหาตัวแทน = "contact" | "profile" | "meeting" | "proposal";
-export type ค่าตั้งแพ็กเกจ = { amount: number | null; contractMonths: number | null; annualTarget: number | null };
+export type ค่าตั้งแพ็กเกจ = {
+  amount: number | null; contractMonths: number | null;
+  /** เป้ายอดซื้อต่อปี "ค่ากลาง" — ใช้กับภาคที่ไม่ได้ตั้งแยก / ทุกภาค */
+  annualTarget: number | null;
+  /** เป้าต่อปีแยกตามภาค (บอสสั่ง 15 ก.ย. 69) — ไม่มีคีย์ = ใช้ค่ากลาง */
+  targetsByRegion: Partial<Record<Region, number>>;
+};
 
 export type HQRecruitSettings = {
   /** ช่องทางที่ผู้สนใจเข้ามา (ฟอร์มลูกค้าเป้าหมาย HQ) */
@@ -39,7 +46,7 @@ export type HQRecruitSettings = {
 export const ช่องทางที่เข้ามาเริ่มต้น = ["Facebook", "LINE OA", "LINE ส่วนตัว", "โทรเข้ามาเอง", "แนะนำต่อ"];
 export const ช่องทางติดต่อเริ่มต้น = ["โทรศัพท์", "LINE", "Facebook", "พบตัว", "อีเมล", "อื่น ๆ"];
 
-const แพ็กเกจว่าง = (): ค่าตั้งแพ็กเกจ => ({ amount: null, contractMonths: null, annualTarget: null });
+const แพ็กเกจว่าง = (): ค่าตั้งแพ็กเกจ => ({ amount: null, contractMonths: null, annualTarget: null, targetsByRegion: {} });
 
 export const DEFAULT_RECRUIT_SETTINGS: HQRecruitSettings = {
   channels: [...ช่องทางที่เข้ามาเริ่มต้น],
@@ -80,10 +87,18 @@ const ข้อความ = (v: unknown, ยาว: number) => (typeof v === "
 function จัดแพ็กเกจ(v: unknown): ค่าตั้งแพ็กเกจ {
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
   const เดือน = เลขหรือว่าง(o.contractMonths, 120, true);
+  // เก็บเฉพาะภาคที่รู้จักและเป็นตัวเลขใช้ได้ — ว่าง/เพี้ยน = ไม่มีคีย์ (ใช้ค่ากลาง)
+  const ภาคดิบ = (o.targetsByRegion && typeof o.targetsByRegion === "object" ? o.targetsByRegion : {}) as Record<string, unknown>;
+  const targetsByRegion: Partial<Record<Region, number>> = {};
+  for (const r of REGIONS) {
+    const n = เลขหรือว่าง(ภาคดิบ[r]);
+    if (n != null) targetsByRegion[r] = n;
+  }
   return {
     amount: เลขหรือว่าง(o.amount),
     contractMonths: เดือน != null && เดือน >= 1 ? เดือน : null,
     annualTarget: เลขหรือว่าง(o.annualTarget),
+    targetsByRegion,
   };
 }
 
@@ -115,18 +130,24 @@ export function รวมค่าตั้งหาตัวแทน(raw: unkn
   };
 }
 
-/** เป้ายอดขายรายปีตามแพ็กเกจของตัวแทน (บอสสั่ง 15 ก.ย. 69) = "เป้ายอดซื้อต่อปี" ของแพ็กเกจนั้น
- *  ไม่มีแพ็กเกจ / แพ็กเกจยังไม่ตั้งเป้า = null → ใช้เป้าที่กรอกเอง · กติกาเดียวกับตัวดักฐานข้อมูล 0178 */
-export function เป้าตามแพ็กเกจ(s: Pick<HQRecruitSettings, "proposal">, pkg?: DealerPackage | null): number | null {
+/** เป้ายอดขายรายปีตามแพ็กเกจของตัวแทน (บอสสั่ง 15 ก.ย. 69)
+ *  ลำดับ: เป้าของแพ็กเกจในภาคนั้น → เป้ากลางของแพ็กเกจ → null (ใช้เป้าที่กรอกเอง)
+ *  กติกาเดียวกับตัวดักฐานข้อมูล 0178/0179 */
+export function เป้าตามแพ็กเกจ(
+  s: Pick<HQRecruitSettings, "proposal">, pkg?: DealerPackage | null, region?: string | null,
+): number | null {
   if (pkg !== "standard" && pkg !== "exclusive") return null;
-  return s.proposal.packages[pkg]?.annualTarget ?? null;
+  const p = s.proposal.packages[pkg];
+  if (!p) return null;
+  const ตามภาค = region ? p.targetsByRegion?.[region as Region] : undefined;
+  return ตามภาค ?? p.annualTarget ?? null;
 }
 
-/** ตัวแทนหนึ่งราย → เป้าตามแพ็กเกจ (ถ้ามี) · ไม่เข้าเงื่อนไข = คืนตัวเดิม */
-export function ใช้เป้าตามแพ็กเกจ<T extends { package?: DealerPackage | null; revenueTarget: number }>(
+/** ตัวแทนหนึ่งราย → เป้าตามแพ็กเกจและภาค (ถ้ามี) · ไม่เข้าเงื่อนไข = คืนตัวเดิม */
+export function ใช้เป้าตามแพ็กเกจ<T extends { package?: DealerPackage | null; region?: string | null; revenueTarget: number }>(
   d: T, s: Pick<HQRecruitSettings, "proposal">,
 ): T {
-  const t = เป้าตามแพ็กเกจ(s, d.package);
+  const t = เป้าตามแพ็กเกจ(s, d.package, d.region);
   return t == null || t === d.revenueTarget ? d : { ...d, revenueTarget: t };
 }
 

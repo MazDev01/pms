@@ -206,7 +206,8 @@ function HQDealersPageInner() {
   const [form, setForm] = useState({ code: "", name: "", province: "", region: "", revenueTarget: 0, package: "" as DealerPackage | "", status: "active" as "active" | "inactive" });
   // เป้ายอดขายเชื่อมกับแพ็กเกจ (บอสสั่ง 15 ก.ย. 69) — แพ็กเกจที่ตั้งเป้าไว้ที่ ตั้งค่า › หาตัวแทน ใช้เป้านั้นเสมอ (ฐานข้อมูลบังคับ 0178)
   const ค่าตั้งหาตัวแทน = useRecruitSettings();
-  const เป้าแพ็กเกจ = เป้าตามแพ็กเกจ(ค่าตั้งหาตัวแทน, form.package || null);
+  //   แยกตามภาค (0179): เป้าของแพ็กเกจในภาคของตัวแทน → เป้ากลางของแพ็กเกจ → กรอกเอง
+  const เป้าแพ็กเกจ = เป้าตามแพ็กเกจ(ค่าตั้งหาตัวแทน, form.package || null, form.region);
   const [formErr, setFormErr] = useState("");
   // สาขาที่ลบไม่ได้เพราะยังมีข้อมูล → เปิดกล่อง "ย้ายข้อมูลไปสาขาอื่น" ให้แทนที่จะจบแค่แจ้งเตือน
   const [moveFrom, setMoveFrom] = useState<DealerRow | null>(null);
@@ -701,7 +702,7 @@ function HQDealersPageInner() {
                       <input type="text" aria-label="เป้ายอดขายทั้งปี" value={formatMoneyInput(String(เป้าแพ็กเกจ))} readOnly disabled
                         style={{ ...INPUT_STYLE, background: "#f3f4f6", color: "#374151", fontWeight: 700, cursor: "not-allowed" }} />
                       <div style={{ fontSize: "0.65rem", color: "#6b7280", marginTop: 3 }}>
-                        ตามแพ็กเกจ {packageLabel[form.package as DealerPackage]} · แก้ได้ที่ ตั้งค่า › หาตัวแทน
+                        ตามแพ็กเกจ {packageLabel[form.package as DealerPackage]}{form.region ? ` · ${form.region}` : ""} · แก้ได้ที่ ตั้งค่า › หาตัวแทน
                       </div>
                     </>
                   ) : (

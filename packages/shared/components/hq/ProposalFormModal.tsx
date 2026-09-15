@@ -16,6 +16,7 @@ import { proposals as proposalsRepo } from "@pms/shared/lib/data";
 import type { DealerPackage, DealerPackageProposal, DealerProspect } from "@pms/shared/lib/data/types";
 import { PACKAGE_ORDER, packageLabel, เตรียมบันทึกใบ, ตรวจใบเสนอ } from "@pms/shared/lib/dealerProposals";
 import { REGIONS, ALL_REGIONS, ALL_PROVINCES, provincesOfRegion, regionOf } from "@pms/shared/lib/provinces";
+import { เป้าตามแพ็กเกจ } from "@pms/shared/lib/recruitSettings";
 import { formatMoneyInput, parseMoneyInput } from "@pms/shared/lib/format";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { friendlyError } from "@pms/shared/lib/friendlyError";
@@ -67,12 +68,14 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
   //   เติมเฉพาะช่องที่ยังว่าง หรือช่องที่ยังเป็นค่าที่ระบบเติมให้ (ผู้ใช้แก้แล้ว = ไม่ทับ)
   //   ไม่ได้ตั้งไว้ = ไม่เติมอะไรเลย (ห้ามเดาตัวเลขให้)
   const ค่าตั้งใบ = useRecruitSettings().proposal;
-  const ตัวเลขของแพ็กเกจ = (k?: DealerPackage | null) => {
+  const ตัวเลขของแพ็กเกจ = (k?: DealerPackage | null, ภาค?: string | null) => {
     const d = k ? ค่าตั้งใบ.packages[k] : null;
+    // เป้ายอดซื้อต่อปีแยกตามภาค (บอสสั่ง 15 ก.ย. 69) — ภาคของใบตั้งเป้าไว้ใช้เป้านั้น ไม่งั้นใช้ค่ากลาง
+    const เป้า = k ? เป้าตามแพ็กเกจ({ proposal: ค่าตั้งใบ }, k, ภาค) : null;
     return {
       มูลค่า: d?.amount != null ? formatMoneyInput(String(d.amount)) : "",
       ระยะ: d?.contractMonths != null ? String(d.contractMonths) : "",
-      เป้า: d?.annualTarget != null ? formatMoneyInput(String(d.annualTarget)) : "",
+      เป้า: เป้า != null ? formatMoneyInput(String(เป้า)) : "",
     };
   };
   const วันมีผลตามอายุใบ = (วันเสนอ?: string | null) =>
@@ -88,7 +91,7 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
   }, [ค่าตั้งใบ]);
   const เลือกแพ็กเกจ = (k: DealerPackage | undefined) => setร่าง(r => {
     if (r.id) return { ...r, package: k };
-    const เดิม = ตัวเลขของแพ็กเกจ(r.package), ใหม่ = ตัวเลขของแพ็กเกจ(k);
+    const เดิม = ตัวเลขของแพ็กเกจ(r.package, r.region), ใหม่ = ตัวเลขของแพ็กเกจ(k, r.region);
     const แทน = (ตอนนี้: string, ของเดิม: string, ของใหม่: string) => (!ตอนนี้ || ตอนนี้ === ของเดิม ? ของใหม่ : ตอนนี้);
     return {
       ...r, package: k,
@@ -108,12 +111,18 @@ export function ProposalFormModal({ prospect, choices, editing, onClose, onSaved
   const รายของใบ = prospect ?? choices?.find(c => c.id === ร่าง.prospectId) ?? null;
 
   const ตั้งค่า = <K extends keyof ร่างใบ>(k: K, v: ร่างใบ[K]) => setร่าง(r => ({ ...r, [k]: v }));
-  const เปลี่ยนภาค = (region: string) => setร่าง(r => ({
-    ...r,
-    region: region || null,
-    province: region === ALL_REGIONS ? ALL_PROVINCES
-      : region && provincesOfRegion(region).includes(r.province ?? "") ? r.province : null,
-  }));
+  const เปลี่ยนภาค = (region: string) => setร่าง(r => {
+    const ภาคใหม่ = region || null;
+    const เป้าเดิม = ตัวเลขของแพ็กเกจ(r.package, r.region).เป้า, เป้าใหม่ = ตัวเลขของแพ็กเกจ(r.package, ภาคใหม่).เป้า;
+    return {
+      ...r,
+      region: ภาคใหม่,
+      province: region === ALL_REGIONS ? ALL_PROVINCES
+        : region && provincesOfRegion(region).includes(r.province ?? "") ? r.province : null,
+      // ใบใหม่ที่เป้ายังเป็นค่าที่ระบบเติมให้ → เปลี่ยนตามเป้าของภาคใหม่ · พิมพ์เองแล้วไม่ทับ
+      เป้าที่พิมพ์: !r.id && (!r.เป้าที่พิมพ์ || r.เป้าที่พิมพ์ === เป้าเดิม) ? เป้าใหม่ : r.เป้าที่พิมพ์,
+    };
+  });
   // เลือกลูกค้าเป้าหมาย → เติมพื้นที่ของรายนั้นให้ (เฉพาะช่องที่ยังว่าง ไม่ทับที่กรอกไว้)
   const เลือกราย = (id: string) => setร่าง(r => {
     const ราย = choices?.find(c => String(c.id) === id);

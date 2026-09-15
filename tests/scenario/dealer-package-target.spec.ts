@@ -31,11 +31,15 @@ test.afterAll(async () => {
   await admin.from("hq_recruit_settings").update({ config: ค่าตั้งเดิม }).eq("id", 1);
 });
 
-const ตั้งเป้าแพ็กเกจ = async (standard: number | null, exclusive: number | null) => {
+const ตั้งเป้าแพ็กเกจ = async (standard: number | null, exclusive: number | null,
+  ตามภาค: { standard?: Record<string, number>; exclusive?: Record<string, number> } = {}) => {
   const base = (ค่าตั้งเดิม && typeof ค่าตั้งเดิม === "object" ? ค่าตั้งเดิม : {}) as Record<string, unknown>;
   const proposal = (base.proposal && typeof base.proposal === "object" ? base.proposal : {}) as Record<string, unknown>;
   const { error } = await admin.from("hq_recruit_settings").update({
-    config: { ...base, proposal: { ...proposal, packages: { standard: { annualTarget: standard }, exclusive: { annualTarget: exclusive } } } },
+    config: { ...base, proposal: { ...proposal, packages: {
+      standard: { annualTarget: standard, targetsByRegion: ตามภาค.standard ?? {} },
+      exclusive: { annualTarget: exclusive, targetsByRegion: ตามภาค.exclusive ?? {} },
+    } } },
   }).eq("id", 1);
   expect(error).toBeNull();
 };
@@ -81,4 +85,12 @@ test("[db] เป้ายอดขายตามแพ็กเกจ · แ�
     { code: STD, package: "standard", revenue_target: 3_600_000 },
     { code: EXC, package: null, revenue_target: 2_222_000 },
   ]);
+
+  // ── แยกตามภาค (0179): ภาคของตัวแทนตั้งเป้าไว้ → ใช้เป้าของภาค · ภาคที่ไม่ได้ตั้ง → ค่ากลาง · ย้ายภาคแล้วเป้าเปลี่ยนตาม ──
+  await ตั้งเป้าแพ็กเกจ(3_600_000, 8_000_000, { standard: { ตะวันออก: 2_400_000 } });
+  expect(await เป้าของ(STD), "ภาคตะวันออกตั้งเป้าแยกไว้ ต้องได้เป้าของภาค").toBe(2_400_000);
+  expect((await admin.from("dealers").update({ region: "เหนือ", province: "เชียงใหม่" }).eq("code", STD)).error).toBeNull();
+  expect(await เป้าของ(STD), "ย้ายไปภาคที่ไม่ได้ตั้งแยก ต้องใช้เป้ากลางของแพ็กเกจ").toBe(3_600_000);
+  await ตั้งเป้าแพ็กเกจ(3_600_000, 8_000_000, { standard: { ตะวันออก: 2_400_000, เหนือ: 1_800_000 } });
+  expect(await เป้าของ(STD), "ตั้งเป้าภาคเหนือเพิ่ม ตัวแทนภาคเหนือต้องเปลี่ยนตาม").toBe(1_800_000);
 });
