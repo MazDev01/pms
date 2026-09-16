@@ -63,6 +63,24 @@ const dealers = [
   { code: "CNX", sb: await signIn(env.TEST_CNX_EMAIL, env.TEST_CNX_PASSWORD) },
 ];
 
+// ── ขยับตัวนับเลขที่ใบให้พ้นใบที่มีอยู่แล้วก่อนเริ่ม (16 ก.ย. 69) ─────────────────
+// ฐานทดสอบมีใบที่ใส่ตรง ๆ ตอนเตรียมข้อมูล โดยไม่ผ่าน create_quotation ตัวนับจึงตามหลังเลขจริง
+//   → ยิงพร้อมกันแล้วได้ "duplicate key quotations_pkey" 23/50 ครั้ง ซึ่งเป็นสภาพของข้อมูลทดสอบ
+//     ไม่ใช่การแย่งเลขกันของระบบ (ตัวนับใช้ UPDATE ... RETURNING แถวเดียว กันการแย่งกันอยู่แล้ว)
+// ⚠️ ห้ามข้ามขั้นนี้ ไม่งั้นผลทดสอบจะฟ้องบั๊กที่ไม่มีจริง แล้วบังตาบั๊กที่มีจริง
+async function ขยับตัวนับใบ(code) {
+  const { data } = await svc.from("quotations").select("id").eq("dealer_code", code);
+  const เลขสูงสุด = (data ?? []).reduce((m, q) => {
+    const n = Number(String(q.id).match(/(\d+)$/)?.[1] ?? 0);
+    return Number.isFinite(n) && n > m ? n : m;
+  }, 0);
+  const { data: cur } = await svc.from("quote_counters").select("next_no").eq("dealer_code", code).maybeSingle();
+  if (Number(cur?.next_no ?? 0) > เลขสูงสุด) return;
+  await svc.from("quote_counters").upsert({ dealer_code: code, next_no: เลขสูงสุด + 1 }, { onConflict: "dealer_code" });
+  console.log(`  ปรับตัวนับใบของ ${code} เป็น ${เลขสูงสุด + 1} (มีใบถึงเลข ${เลขสูงสุด} อยู่แล้ว)`);
+}
+for (const d of dealers) await ขยับตัวนับใบ(d.code);
+
 const lat = { lead: [], quote: [], won: [] };
 const fails = [];
 
