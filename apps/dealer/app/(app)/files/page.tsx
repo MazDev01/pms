@@ -1,8 +1,10 @@
 "use client";
 
 import { TopbarActions } from "@pms/shared/components/layout/TopbarActions";
+import { SortableTh } from "@pms/shared/components/ui/SortableTh";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
-import { validateUpload, humanFileSize, UPLOAD_ACCEPTED_EXT } from "@pms/shared/lib/uploadLimits";
+import { validateUpload, humanFileSize, UPLOAD_ACCEPTED_EXT, UPLOAD_MAX_BYTES } from "@pms/shared/lib/uploadLimits";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +24,15 @@ import { FilterSelect } from "@pms/shared/components/filters/FilterRow";
 import { EmptyState } from "@pms/shared/components/ui/EmptyState";
 import { Skeleton } from "@pms/shared/components/ui/Skeleton";
 import { APP_NOW_ISO } from "@pms/shared/context/FilterContext";
+
+type FileSortKey = "name" | "category" | "project" | "size" | "uploadedBy" | "uploadedAt";
+/** "2.4 MB" → ไบต์ · อ่านไม่ออก/"—" = -1 (ไปอยู่ท้ายเมื่อเรียงมากไปน้อย) */
+function sizeBytes(s: string): number {
+  const m = /^([\d.,]+)\s*(B|KB|MB|GB)$/i.exec((s ?? "").trim());
+  if (!m) return -1;
+  const n = parseFloat(m[1].replace(/,/g, ""));
+  return n * ({ B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 } as Record<string, number>)[m[2].toUpperCase()];
+}
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -231,7 +242,7 @@ function UploadModal({ onUpload, onClose }: { onUpload: (f: FileMock, blob: File
                   <div>
                     <Upload size={28} color={MUTED} style={{ margin: "0 auto 10px" }} />
                     <div style={{ fontSize: "0.8rem", color: MUTED }}>ลากไฟล์มาวาง หรือ <span style={{ color: PRIMARY, fontWeight: 700 }}>คลิกเลือกไฟล์</span></div>
-                    <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>PDF, Word, Excel, PowerPoint, CAD, รูปภาพ · ไม่เกิน 25 MB</div>
+                    <div style={{ fontSize: "0.65rem", color: "#9ca3af", marginTop: 4 }}>PDF, Word, Excel, PowerPoint, CAD, รูปภาพ · ไม่เกิน {humanFileSize(UPLOAD_MAX_BYTES)}</div>
                   </div>
                 )}
               </label>
@@ -444,13 +455,44 @@ export default function FilesPage() {
   // เปลี่ยนตัวกรอง/ค้นหา/มุมมอง → กลับไปหน้าแรก
   useEffect(() => { setPage(1); }, [query, catFilter, sourceFilter, projFilter, custFilter, view]);
 
+  // ── เรียงลำดับ: กดหัวคอลัมน์ได้ (บอสสั่ง 16 ก.ย. 69 "ตอนกดทำให้เรียงได้") ──────────────
+  //   ค่าเริ่มต้น = ไฟล์ใหม่สุดอยู่บนสุด (บอสสั่ง 16 ก.ย. 69 "ตอนเพิ่มข้อมูลทุกอันต้องอยู่อันแรกเสมอ")
+  //   ขนาดเก็บเป็นข้อความ ("2.4 MB") → แปลงเป็นไบต์ก่อนเทียบ ไม่งั้น "10 MB" มาก่อน "9 MB"
+  const [sortKey, setSortKey] = useState<FileSortKey>("uploadedAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const toggleSort = (k: FileSortKey) => {
+    if (sortKey === k) setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir(k === "uploadedAt" || k === "size" ? "desc" : "asc"); }
+  };
+  // เปลี่ยนการเรียง → กลับหน้าแรก (ไม่งั้นค้างอยู่หน้ากลางลิสต์)
+  useEffect(() => { setPage(1); }, [sortKey, sortDir]);
+  const sorted = useMemo(() => {
+    const ค่า = (f: DealerFile): string | number =>
+      sortKey === "size" ? sizeBytes(f.size) : String(f[sortKey] ?? "");
+    const คูณ = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const va = ค่า(a), vb = ค่า(b);
+      const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb), "th");
+      // เท่ากัน → ใหม่กว่าขึ้นก่อน (id เพิ่มตามลำดับที่เพิ่ม)
+      return cmp !== 0 ? cmp * คูณ : b.id - a.id;
+    });
+  }, [filtered, sortKey, sortDir]);
+  const หัวเรียง = (k: FileSortKey, label: string) => (
+    <SortableTh label={label} active={sortKey === k} dir={sortDir} onSort={() => toggleSort(k)}>
+      {label}
+      {sortKey === k
+        ? (sortDir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+        : <ChevronDown size={11} style={{ opacity: 0.3 }} />}
+    </SortableTh>
+  );
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // กันหน้าเกินเมื่อจำนวนรายการลดลง (เช่น ลบไฟล์)
   const curPage = Math.min(page, totalPages);
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
   const pageStart = (curPage - 1) * PAGE_SIZE;
-  const paged = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const paged = sorted.slice(pageStart, pageStart + PAGE_SIZE);
   const rangeFrom = filtered.length === 0 ? 0 : pageStart + 1;
   const rangeTo   = Math.min(pageStart + PAGE_SIZE, filtered.length);
 
@@ -553,12 +595,12 @@ export default function FilesPage() {
               </colgroup>
               <thead>
                 <tr>
-                  <th>ไฟล์</th>
-                  {showCol("category")   && <th>โฟลเดอร์</th>}
-                  {showCol("project")    && <th>โอกาสการขาย</th>}
-                  {showCol("size")       && <th>ขนาด</th>}
-                  {showCol("uploadedBy") && <th>อัปโหลดโดย</th>}
-                  {showCol("uploadedAt") && <th>วันที่</th>}
+                  {หัวเรียง("name", "ไฟล์")}
+                  {showCol("category")   && หัวเรียง("category", "โฟลเดอร์")}
+                  {showCol("project")    && หัวเรียง("project", "โอกาสการขาย")}
+                  {showCol("size")       && หัวเรียง("size", "ขนาด")}
+                  {showCol("uploadedBy") && หัวเรียง("uploadedBy", "อัปโหลดโดย")}
+                  {showCol("uploadedAt") && หัวเรียง("uploadedAt", "วันที่")}
                   <th></th>
                 </tr>
               </thead>

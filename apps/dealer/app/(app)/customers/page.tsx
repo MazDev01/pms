@@ -458,7 +458,8 @@ export default function CustomersPage(){
   // ตัวกรองจังหวัด/ผู้รับผิดชอบ — ตัวเลือกสร้างจากข้อมูลลูกค้าจริงที่มีอยู่ ไม่ใช่รายการตายตัว
   const [provFilter, setProvFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
-  const [sortKey, setSortKey]         = useState<SortKey>("company");
+  // ค่าเริ่มต้น = ไม่เลือกคอลัมน์ → ลูกค้าที่เพิ่มล่าสุด (id มากสุด) ขึ้นก่อน · บอสสั่ง 21 ก.ย. 69 ทุกตาราง
+  const [sortKey, setSortKey]         = useState<SortKey|null>(null);
   const [sortDir, setSortDir]         = useState<SortDir>("asc");
   const [selected, setSelected]       = useState<CustomerRow|null>(null);
   const [custTab, setCustTab]         = useState<"overview"|"deals"|"quotation"|"timeline">("overview"); // แท็บ detail
@@ -631,6 +632,7 @@ export default function CustomersPage(){
       const matchT=passes({date:lastActivityFor(c.id,c.joinDate,quotations)});
       return matchQ&&matchC&&matchP&&matchO&&matchT;
     });
+    if(sortKey===null) return [...rows].sort((a,b)=>b.id-a.id);
     const sortVal=(c:CustomerRow):string|number=>{
       switch(sortKey){
         case "lastActivity":   return lastActivityFor(c.id,c.joinDate,quotations);
@@ -711,15 +713,16 @@ export default function CustomersPage(){
   // ไม่รวมลูกค้าเป้าหมายที่ปิดการขายสำเร็จ (PAID) — กลายเป็นลูกค้ารายนี้ไปแล้ว ลิงก์จะวนกลับหน้าเดิม
   // "งานขายทั้งหมด" = ประวัติการปิดการขาย (ใบเสนอราคาที่ปิดการขาย) + โครงการที่กำลังทำ (ลูกค้าเป้าหมายที่ยังไม่ปิด)
   // เดิมทั้งสองการ์ดอ่านจากลูกค้าเป้าหมายชุดเดียวกัน → โชว์ตัวที่กำลังทำซ้ำบน-ล่าง ส่วนที่ซื้อแล้วไม่โผล่เลย (บอสทัก)
-  const wonProjects   = selected ? quotations.filter(q=>q.customerId===selected.id && q.status==="won") : [];
-  const activeDeals   = selected ? leads.filter(l=>(l.customerId===selected.id||l.company===selected.company) && l.status!=="PAID") : [];
+  // รายการในแผงรายละเอียด: ที่เพิ่มล่าสุดขึ้นก่อน (บอสสั่ง 21 ก.ย. 69)
+  const wonProjects   = selected ? quotations.filter(q=>q.customerId===selected.id && q.status==="won").sort((a,b)=>b.id.localeCompare(a.id,"en",{numeric:true})) : [];
+  const activeDeals   = selected ? leads.filter(l=>(l.customerId===selected.id||l.company===selected.company) && l.status!=="PAID").sort((a,b)=>b.numId-a.numId) : [];
   const projectCount  = wonProjects.length + activeDeals.length;
   // ลูกค้าเป้าหมายทุกสถานะของลูกค้ารายนี้ — ใช้ผูกใบเสนอราคากลับไปหาลูกค้าเป้าหมาย (คนละชุดกับการ์ด "งานขายทั้งหมด")
   const customerDeals = selected ? leads.filter(l=>l.customerId===selected.id||l.company===selected.company) : [];
-  const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company) : [];
+  const relatedAppointments = selected ? appointments.filter(a=>a.company===selected.company).sort((a,b)=>b.id-a.id) : [];
   // โน้ตของลูกค้ารายนี้ — จากตาราง customer_notes (ของสาขาตัวเอง)
   // เดิมไม่มีที่เก็บจริง จึงต้องปิดแท็บไว้ในโหมด supabase · ตอนนี้จดได้จริงและอยู่ข้ามเครื่อง
-  const relatedNotes        = selected ? customerNotes.notes.filter(n=>n.customerId===selected.id) : [];
+  const relatedNotes        = selected ? customerNotes.notes.filter(n=>n.customerId===selected.id).sort((a,b)=>b.id-a.id) : [];
 
   // บันทึกการแก้ไขในตัว (จากแท็บ "ข้อมูล" ของโมดัลรายละเอียด)
   function saveInline(form: CustomerForm){

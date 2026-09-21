@@ -471,10 +471,10 @@ export const DEALER_PRICING_KEY = "dealer_pricing";
 export const NOTIF_PREFS_EVENT = "bpms-notif-prefs-updated";
 export const DEFAULT_NOTIF_PREFS: NotifPrefs = { newLead: true, followUp: true, meeting: true, quoteExpiry: true, won: true, lost: true };
 export const NOTIF_META: { key: NotifCategory; label: string; desc: string }[] = [
-  { key: "newLead",     label: "ลูกค้าเป้าหมายรอดำเนินการ", desc: "ลูกค้าเป้าหมายรายใหม่ที่ติดต่อแล้วแต่ยังไม่คืบหน้า" },
+  { key: "newLead",     label: "ลูกค้าเป้าหมายรอดำเนินการ", desc: "ลูกค้าเป้าหมายขั้นติดต่อแล้ว ที่ไม่มีความเคลื่อนไหวเกินจำนวนวันที่ตั้งไว้" },
   { key: "followUp",    label: "เตือนติดตาม",              desc: "งานติดตาม/นัดติดตามที่ถึงกำหนด" },
   { key: "meeting",     label: "เตือนประชุม/นัดหมาย",       desc: "นัดพบ/นำเสนอที่กำลังจะถึง" },
-  { key: "quoteExpiry", label: "ใบเสนอราคาใกล้หมดอายุ",     desc: "ใบเสนอราคาที่ส่งแล้ว/ใกล้หมดอายุ" },
+  { key: "quoteExpiry", label: "ใบเสนอราคาใกล้หมดอายุ",     desc: "ใบที่ส่งแล้วรอลูกค้าตอบ และเหลือไม่เกิน 7 วันก่อนหมดอายุ (หรือเลยวันหมดอายุแล้ว)" },
   { key: "won",         label: "ปิดการขายสำเร็จ",             desc: "เมื่อปิดการขายสำเร็จ" },
   { key: "lost",        label: "เสียโอกาส",                desc: "เมื่อปิดการขายไม่สำเร็จ" },
 ];
@@ -1248,6 +1248,8 @@ export type DealerRow = {
   package?: "standard" | "exclusive" | null;
   /** true = เป้ายอดขายกำหนดเองรายตัวแทน ไม่ตามแพ็กเกจ (0180 · บอสสั่ง 15 ก.ย. 69 "แก้เองหรือแก้ในตั้งค่าก็ได้") */
   targetManual?: boolean;
+  /** เวลาที่เพิ่มตัวแทนเข้าระบบ (created_at ของ DB · อ่านอย่างเดียว ตอนบันทึกถูกตัดทิ้ง) — ไม่มีในโหมดข้อมูลตัวอย่าง */
+  createdAt?: string;
   status: DealerStatus;
   // (revenueActual / winRate / activeProjects / onTimePct ถูกตัดออก — เป็นค่าที่ "คำนวณได้"
   //  จากใบเสนอราคา/ลูกค้าเป้าหมายจริง ไม่ใช่ค่าที่ใครกรอก · เก็บไว้ในตารางแล้วมันไม่ขยับตามข้อมูล

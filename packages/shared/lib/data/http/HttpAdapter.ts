@@ -416,44 +416,31 @@ const appointments: AppointmentsRepo = {
   remove: async (id) => { await apiFetch(`/appointments?id=${id}`, { method: "DELETE" }); },
 };
 // ไฟล์จริงส่งเป็น multipart ไม่ใช่ JSON — จึงไม่ผ่าน apiFetch (ที่ตั้ง content-type เป็น json ตายตัว)
+// ── อัปโหลดไฟล์ตรงเข้าที่เก็บไฟล์ (16 ก.ย. 69) ─────────────────────────────────────
+// เดิมส่งตัวไฟล์ผ่าน /api/v1/storage → ติดเพดานคำขอของ Vercel ~4.5 MB (เว็บจริงอัปไฟล์ 6 MB ไม่ได้เลย)
+// ตอนนี้: ขอใบอนุญาตจากเซิร์ฟเวอร์ (ออกด้วยสิทธิ์ผู้ใช้ กฎแยกสาขายังคุม) → ส่งไฟล์ตรงไป Supabase Storage
+async function อัปโหลดตรง(bucket: "files" | "catalog", file: File, dealerCode?: string): Promise<string> {
+  const { path, token } = await apiFetch<{ path: string; token: string }>("/storage?op=sign", {
+    method: "POST",
+    body: JSON.stringify({ bucket: bucket === "catalog" ? "catalog" : undefined, dealerCode, name: file.name, stamp: Date.now() }),
+  });
+  const { getSupabase } = await import("@pms/shared/lib/data/supabase/client");
+  const { error } = await getSupabase().storage
+    .from(bucket === "catalog" ? "catalog-plans" : "dealer-files")
+    .uploadToSignedUrl(path, token, file);
+  if (error) {
+    const ใหญ่เกิน = /exceeded the maximum allowed size|too large|413/i.test(error.message);
+    throw new DbError(ใหญ่เกิน ? "ไฟล์ใหญ่เกินเพดานที่ระบบรับได้" : error.message);
+  }
+  return path;
+}
+
 const storage: StoragePort = {
-  upload: async (dealerCode, file) => {
-    const form = new FormData();
-    form.append("dealerCode", dealerCode);
-    form.append("file", file);
-    form.append("stamp", String(Date.now()));
-    const token = await tokenReady();
-    const res = await fetch(`${API_BASE}/storage`, {
-      method: "POST", body: form,
-      headers: token ? { authorization: `Bearer ${token}` } : undefined,
-    });
-    const b = (await res.json().catch(() => null)) as { error?: string; code?: string } | string | null;
-    if (!res.ok) {
-      const e = b && typeof b === "object" ? b : null;
-      throw new DbError(e?.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}`, e?.code);
-    }
-    return typeof b === "string" ? b : null;
-  },
+  upload: (dealerCode, file) => อัปโหลดตรง("files", file, dealerCode),
   signedUrl: (path) => apiFetch<string | null>(`/storage?path=${encodeURIComponent(path)}`),
   remove: async (path) => { await apiFetch(`/storage?path=${encodeURIComponent(path)}`, { method: "DELETE" }); },
   // ── แบบแปลนแม่แบบ → ถังของแคตตาล็อก (ส่ง bucket=catalog ให้เซิร์ฟเวอร์เลือกถังให้) ──
-  uploadCatalog: async (file) => {
-    const form = new FormData();
-    form.append("bucket", "catalog");
-    form.append("file", file);
-    form.append("stamp", String(Date.now()));
-    const token = await tokenReady();
-    const res = await fetch(`${API_BASE}/storage`, {
-      method: "POST", body: form,
-      headers: token ? { authorization: `Bearer ${token}` } : undefined,
-    });
-    const b = (await res.json().catch(() => null)) as { error?: string; code?: string } | string | null;
-    if (!res.ok) {
-      const e = b && typeof b === "object" ? b : null;
-      throw new DbError(e?.error ?? `เซิร์ฟเวอร์ตอบกลับ ${res.status}`, e?.code);
-    }
-    return typeof b === "string" ? b : null;
-  },
+  uploadCatalog: (file) => อัปโหลดตรง("catalog", file),
   // ถังของแคตตาล็อกอ่านสาธารณะ — ประกอบลิงก์ตรงได้ ไม่ต้องขอเซิร์ฟเวอร์ทีละครั้ง
   catalogUrl: (path) => `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/storage/v1/object/public/catalog-plans/${path}`,
   removeCatalog: async (path) => { await apiFetch(`/storage?bucket=catalog&path=${encodeURIComponent(path)}`, { method: "DELETE" }); },

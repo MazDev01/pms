@@ -18,7 +18,7 @@ import { useFilters, APP_NOW } from "@pms/shared/context/FilterContext";
 import { useNetworkQuotations, useNetworkLeads, useHQQuotationsSummary, useQuotationsPage, useLeadSummary, useQuotationSalesperson } from "@pms/shared/lib/useNetworkData";
 import {
   toQuoteRows, aggregate, sumAggs, groupBy, agingBucketOf, regionDisplay, dealerLookups,
-  STATUS_ORDER, type QuoteRow, type DealerAgg, type AgingBucket,
+  type QuoteRow, type DealerAgg, type AgingBucket,
 } from "@pms/shared/lib/hqQuotations";
 import { parseBaht } from "@pms/shared/lib/format";
 import { groupLostReasons } from "@pms/shared/lib/lostReasons";
@@ -114,11 +114,9 @@ export default function NetworkQuotationPage() {
     return l.createdAt ? inRange(l.createdAt) : true;
   }), [netLeads, filters.dealer, filters.region, filters.province, inRange]);
 
-  const tableRows = useMemo(() => [...rows].sort((a, b) => {
-    const so = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
-    if (so !== 0) return so;
-    return (b.createdDate?.getTime() ?? 0) - (a.createdDate?.getTime() ?? 0);
-  }), [rows]);
+  // ใบที่ออกล่าสุดขึ้นก่อน (บอสสั่ง 21 ก.ย. 69 — ตรงกับทางต่อฐานที่เรียง created_at) · เลขที่ใบรันตามลำดับที่ออก
+  const tableRows = useMemo(() => [...rows].sort((a, b) =>
+    b.quoteNo.localeCompare(a.quoteNo, "en", { numeric: true })), [rows]);
 
   // ── M9 Phase 2: resolve derived filter → คอลัมน์จริง ให้ DB รวมยอด/แบ่งหน้าได้ ──
   const nameOf = useMemo(() => new Map(ALL_DEALERS_FULL.map(d => [d.code, d.name])), [ALL_DEALERS_FULL]);
@@ -242,7 +240,7 @@ export default function NetworkQuotationPage() {
   const tableKey = JSON.stringify(qFilters);
   useEffect(() => { setTablePage(0); }, [tableKey]); // เปลี่ยนตัวกรอง → กลับหน้า 1
   const listOpts = useMemo<QuoteListOpts>(() => ({
-    limit: QPAGE_SIZE, offset: tablePage * QPAGE_SIZE, sort: { col: "date", dir: "desc" },
+    limit: QPAGE_SIZE, offset: tablePage * QPAGE_SIZE, sort: { col: "created_at", dir: "desc" }, // ใบที่สร้างล่าสุดก่อน (บอสสั่ง 21 ก.ย. 69) — date เปลี่ยนทุกครั้งที่ส่ง
     status, dealerCodes: resolvedDealerCodes, productLines: resolvedProductLines, search: search || undefined, searchDealers,
     dateStart: qFilters.dateStart, dateEnd: qFilters.dateEnd,
   }), [tablePage, tableKey]); // eslint-disable-line react-hooks/exhaustive-deps

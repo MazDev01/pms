@@ -440,7 +440,8 @@ export interface LeadsRepo {
 export interface QuoteListOpts {
   limit: number;
   offset: number;
-  sort?: { col: "date" | "total_value" | "status" | "id"; dir: "asc" | "desc" };
+  /** created_at = เวลาที่สร้างใบจริง (date ถูกตั้งใหม่ทุกครั้งที่กดส่ง ใช้เรียง "ใหม่ก่อน" ไม่ได้) */
+  sort?: { col: "date" | "total_value" | "status" | "id" | "created_at"; dir: "asc" | "desc" };
   status?: string;              // สถานะเดียว (เว้น = ทุกสถานะ)
   dealerCodes?: string[];       // dealer_code in (...) — จาก dealer/region/province/ค้นหาชื่อ
   productLines?: string[];      // product_line in (...) — จาก product filter (รวม mainTemplate ที่ resolve แล้ว)

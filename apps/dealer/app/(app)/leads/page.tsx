@@ -1157,7 +1157,8 @@ export default function LeadsPage() {
   const [hideEmpty, setHideEmpty] = useState(false); // ซ่อนคอลัมน์ที่ไม่มีการ์ด
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<LeadStatus|"ALL">("ALL");
-  const [sortKey, setSortKey] = useState<SortKey>("company");
+  // ค่าเริ่มต้น = ไม่เลือกคอลัมน์ → ลูกค้าเป้าหมายที่เพิ่มล่าสุดขึ้นก่อน (numId มากสุด) · บอสสั่ง 21 ก.ย. 69 ทุกตาราง
+  const [sortKey, setSortKey] = useState<SortKey|null>(null);
   const [sortDir, setSortDir] = useState<"asc"|"desc">("asc");
   const [followUpDays, setFollowUpDays] = useState(0); // Smart filter: 0=off · 7/14/30 = ขาดติดต่อเกินกี่วัน
   // quick filter chips ถูกลบตามที่บอสสั่ง — state นี้ไม่มีใครตั้งค่าได้แล้ว จึงลบทิ้ง
@@ -1298,6 +1299,7 @@ export default function LeadsPage() {
     });
 
     arr = [...arr].sort((a,b) => {
+      if (sortKey === null) return b.numId - a.numId;
       let av: string|number = 0, bv: string|number = 0;
       if (sortKey === "value") { av = parseValue(a.value); bv = parseValue(b.value); }
       else { av = (a[sortKey] as string) ?? ""; bv = (b[sortKey] as string) ?? ""; }
@@ -1456,7 +1458,7 @@ export default function LeadsPage() {
 
   // Files — ของลูกค้าเป้าหมายรายนี้ (ผูกด้วย numId) จากคลังไฟล์รวม
   const myFiles: DealerFile[] = current
-    ? dealerFiles.filter(f => f.source === "lead" && f.recordId === current.numId)
+    ? dealerFiles.filter(f => f.source === "lead" && f.recordId === current.numId).sort((a, b) => b.id - a.id)
     : [];
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f || !current) return;
@@ -1759,7 +1761,7 @@ export default function LeadsPage() {
                         style={key ? { cursor:"pointer", userSelect:"none" } : undefined}
                         onClick={key ? ()=>onSort(key) : undefined}>
                         <span style={{ display:"flex", alignItems:"center", gap:4, justifyContent: isNum ? "flex-end" : "flex-start" }}>
-                          {label} {key && <SortIcon field={key} sortKey={sortKey} sortDir={sortDir} />}
+                          {label} {key && <SortIcon field={key} sortKey={sortKey ?? ""} sortDir={sortDir} />}
                         </span>
                       </th>
                     );})}
@@ -2319,9 +2321,10 @@ export default function LeadsPage() {
               const t = Date.parse(String(x.date ?? ""));
               return Number.isFinite(t) ? t : 0;
             };
-            const ต่าง = เวลา(a) - เวลา(b);
-            // วันเดียวกัน/อ่านวันไม่ออก (ป้ายวันแบบไทย) → เรียงตามลำดับที่ถูกบันทึก (id)
-            return ต่าง !== 0 ? ต่าง : (Number((a as { id?: number }).id ?? 0) - Number((b as { id?: number }).id ?? 0));
+            // ล่าสุดขึ้นก่อน (บอสสั่ง 21 ก.ย. 69)
+            const ต่าง = เวลา(b) - เวลา(a);
+            // วันเดียวกัน/อ่านวันไม่ออก (ป้ายวันแบบไทย) → ที่บันทึกทีหลัง (id มากกว่า) ขึ้นก่อน
+            return ต่าง !== 0 ? ต่าง : (Number((b as { id?: number }).id ?? 0) - Number((a as { id?: number }).id ?? 0));
           });
         const drawerFiles = myFiles;
         // เป็นลูกค้าเมื่อปิดการขายสำเร็จ (WON) เท่านั้น — mock บางลูกค้าเป้าหมายมี customerId ผูกไว้แต่ยังไม่ WON จึงไม่นับ

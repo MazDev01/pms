@@ -379,9 +379,10 @@ export function useNetworkCustomersForDealer(code: string): HQCustomer[] {
     return () => { alive = false; clearTimeout(t); };
   }, [ready, code, salesVersion]);
   return useMemo(() => {
-    if (!rows) return local; // local mode หรือ supabase ระหว่างโหลด
+    // ลูกค้าที่เพิ่มล่าสุดขึ้นก่อน (บอสสั่ง 21 ก.ย. 69)
+    if (!rows) return local.slice().sort((a, b) => b.id - a.id); // local mode หรือ supabase ระหว่างโหลด
     // กรองซ้ำอีกชั้น — ถ้าชั้นล่างเปลี่ยนพฤติกรรมอีก หน้านี้ต้องไม่หลุดไปโชว์สาขาอื่น
-    return rows.filter(c => c.dealerCode === code).map(c => {
+    return rows.filter(c => c.dealerCode === code).sort((a, b) => b.id - a.id).map(c => {
       const dl = dealerInfoOf(c.dealerCode);
       return {
         id: 10000 + c.id, localId: c.id, name: c.company, dealerCode: dl.code, dealerName: dl.name,
@@ -423,8 +424,11 @@ export function useNetworkDealerDetail(code: string): DealerDetail {
       return dealerDetails[code] ?? { code, monthlySales: [], leads: [], projects: [], quotes: [] };
     }
     // supabase: จากที่ดึงตรง (fetched) · local: กรอง array ของ SalesContext (CNX = ลูกค้าเป้าหมาย/ใบไม่ระบุ dealerCode)
-    const mine = fetched ? fetched.leads : leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === code);
-    const myQuotes = fetched ? fetched.quotes : quotations.filter(q => (q.dealerCode ?? CURRENT_DEALER.code) === code);
+    // ที่เพิ่มล่าสุดขึ้นก่อนทุกแท็บ (บอสสั่ง 21 ก.ย. 69) — ลูกค้าเป้าหมาย = numId · ใบ = เลขที่ใบ (ออกเรียงกัน)
+    const mine = (fetched ? fetched.leads : leads.filter(l => (l.dealerCode ?? CURRENT_DEALER.code) === code))
+      .slice().sort((a, b) => b.numId - a.numId);
+    const myQuotes = (fetched ? fetched.quotes : quotations.filter(q => (q.dealerCode ?? CURRENT_DEALER.code) === code))
+      .slice().sort((a, b) => b.id.localeCompare(a.id, "en", { numeric: true }));
     const quotes: DealerQuoteItem[] = myQuotes.map(q => ({
       quoteNo: q.id, customer: q.customer, product: q.buildingType || q.project,
       valueNum: q.totalValue, status: q.status, date: fmtISOToThai(q.date),

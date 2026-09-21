@@ -54,7 +54,7 @@ const QUOTE_STATUS = ["draft", "sent_to_client", "won", "lost", "expired"] as co
 
 /** คอลัมน์ที่ยอมให้ใช้เรียงลำดับใบเสนอราคา — ชื่อคอลัมน์จากผู้เรียกวิ่งเข้า .order() ตรง ๆ
  *  ไม่จำกัดไว้ = ผู้เรียกสั่งเรียงด้วยคอลัมน์อะไรก็ได้ รวมถึงคอลัมน์ที่ไม่ได้ตั้งใจเปิด */
-const QUOTE_SORT_COLS = ["date", "id", "customer", "total_value", "status", "province", "dealer_code", "expiry"] as const;
+const QUOTE_SORT_COLS = ["date", "id", "customer", "total_value", "status", "province", "dealer_code", "expiry", "created_at"] as const;
 
 /** ตัวกรอง + แบ่งหน้าของรายการลูกค้าเป้าหมาย (RPC leads_page) */
 export const LEAD_PAGE_SHAPE = {

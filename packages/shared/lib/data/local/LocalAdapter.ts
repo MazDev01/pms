@@ -915,6 +915,8 @@ export const LocalAdapter: DataAdapter = {
       arr = [...arr].sort((a, b) => {
         let c: number;
         if (col === "total_value") c = (a.totalValue ?? 0) - (b.totalValue ?? 0);
+        // โหมดข้อมูลตัวอย่าง: savedAt = created_at · ใบตัวอย่างไม่มีค่านี้ → ใช้เลขที่ใบ (ออกเรียงกัน)
+        else if (col === "created_at") c = String(a.savedAt ?? "").localeCompare(String(b.savedAt ?? "")) || String(a.id).localeCompare(String(b.id), "en", { numeric: true });
         else c = String((a as unknown as Record<string, unknown>)[col] ?? "").localeCompare(String((b as unknown as Record<string, unknown>)[col] ?? ""));
         c = asc ? c : -c;
         if (c === 0) return String(a.id).localeCompare(String(b.id)); // secondary = id "ขึ้นเสมอ" (ตรง supabase order("id"))

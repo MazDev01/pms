@@ -521,7 +521,7 @@ function PersonsTab() {
       id: Math.max(0, ...persons.map(x => x.id)) + 1, name: newName.trim(), title: newTitle.trim() || "เจ้าหน้าที่ขาย",
       phone: newPhone.trim(), email: newEmail.trim(), active: true, avatar: newAvatar,
     };
-    save([...persons, p]);
+    save([p, ...persons]); // คนที่เพิ่มล่าสุดขึ้นบนสุด (บอสสั่ง 21 ก.ย. 69) — ลำดับที่บันทึก = ลำดับที่โหลดกลับมา
     setNewName(""); setNewTitle(""); setNewPhone(""); setNewEmail(""); setNewAvatar(undefined); setAdding(false);
   }
 

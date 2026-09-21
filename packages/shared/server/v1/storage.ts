@@ -19,7 +19,31 @@ const CATALOG_BUCKET = "catalog-plans";
 const bucketOf = (v: unknown) => (String(v ?? "") === "catalog" ? CATALOG_BUCKET : BUCKET);
 export { runtime } from "./_ctx";
 
+/** พาธของไฟล์ในถัง — ใช้ร่วมกันทั้งอัปโหลดผ่านเซิร์ฟเวอร์และออกลิงก์อัปโหลดตรง */
+function pathOf(bucket: string, dealer: string, stamp: number, name: string): string {
+  const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_") || "file";
+  return bucket === CATALOG_BUCKET ? `plans/${stamp}-${safe}` : `${dealer}/${stamp}-${safe}`;
+}
+
 export const POST = handler("storage.upload", async (req: NextRequest, sb) => {
+  // ── ออกลิงก์อัปโหลดตรงเข้าที่เก็บไฟล์ (16 ก.ย. 69) ────────────────────────────────
+  //   บั๊กจริงบนเว็บจริง: อัปโหลดแบบส่งไฟล์ผ่านเส้นทางนี้ติดเพดานคำขอของ Vercel ~4.5 MB
+  //   (ยิงจริง 6 MB ได้ 413 FUNCTION_PAYLOAD_TOO_LARGE) ทั้งที่หน้าจอบอกรับ 25 MB
+  //   ตอนนี้เซิร์ฟเวอร์แค่ออก "ใบอนุญาตอัปโหลด" (คำขอเล็ก) แล้วหน้าเว็บส่งไฟล์ตรงไปที่เก็บไฟล์
+  //   ⚠️ ออกด้วยสิทธิ์ของผู้ใช้คนนั้น — กฎของที่เก็บไฟล์ (แยกสาขา / เขียนแบบแปลนได้เฉพาะ HQ) ยังคุมเหมือนเดิม
+  //      และเพดานขนาดไฟล์ของถังบังคับตอนอัปโหลดจริง
+  if (new URL(req.url).searchParams.get("op") === "sign") {
+    const b = (await req.json().catch(() => null)) as { bucket?: string; dealerCode?: string; name?: string; stamp?: number } | null;
+    const bucket = bucketOf(b?.bucket);
+    const dealer = typeof b?.dealerCode === "string" ? b.dealerCode.trim() : "";
+    const name = String(b?.name ?? "").trim();
+    if (!name) return fail(400, "ต้องระบุไฟล์");
+    if (bucket === BUCKET && !dealer) return fail(400, "ต้องระบุสาขาและไฟล์");
+    const path = pathOf(bucket, dealer, Number(b?.stamp) || Date.now(), name);
+    const { data, error } = await sb.storage.from(bucket).createSignedUploadUrl(path);
+    if (error || !data) return dbFail("storage.sign", (error ?? { message: "ออกลิงก์อัปโหลดไม่สำเร็จ" }) as { message: string; code?: string });
+    return ok({ path, token: data.token });
+  }
   const form = await req.formData().catch(() => null);
   const bucket = bucketOf(form?.get("bucket"));
   const dealer = String(form?.get("dealerCode") ?? "").trim();
@@ -28,8 +52,7 @@ export const POST = handler("storage.upload", async (req: NextRequest, sb) => {
   if (!(file instanceof File)) return fail(400, "ต้องระบุไฟล์");
   if (bucket === BUCKET && !dealer) return fail(400, "ต้องระบุสาขาและไฟล์");
   const stamp = Number(form?.get("stamp")) || Date.now();
-  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_") || "file";
-  const path = bucket === CATALOG_BUCKET ? `plans/${stamp}-${safe}` : `${dealer}/${stamp}-${safe}`;
+  const path = pathOf(bucket, dealer, stamp, file.name);
   const { error } = await sb.storage.from(bucket).upload(path, file, { upsert: false });
   if (error) return dbFail("storage.upload", error as { message: string; code?: string });
   return ok(path);

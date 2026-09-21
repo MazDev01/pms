@@ -21,6 +21,7 @@ import { CountUp } from "@pms/shared/components/ui/CountUp";
 import { APP_NOW } from "@pms/shared/context/FilterContext";
 import { Search, Plus, Pencil, History, X, Check, Trash2, Building2, CalendarClock, ImagePlus, Layers, Tag, ChevronRight, FileText, Upload, Download, Paperclip } from "lucide-react";
 import { แจ้งพลาด } from "@pms/shared/components/ui/ConfirmToast";
+import { UPLOAD_MAX_BYTES } from "@pms/shared/lib/uploadLimits";
 
 const PRIMARY = "#003366";
 const STEEL   = "#2D2D2D";
@@ -67,7 +68,7 @@ const subInp: React.CSSProperties = { border: `1px solid ${BORDER}`, borderRadiu
 // ⚠️ อัปโหลดสำเร็จแล้วผู้ใช้ยังไม่กด "บันทึก" = ไฟล์ค้างในที่เก็บโดยไม่มีใครอ้างถึง
 //    ยอมให้ค้างดีกว่าลบผิดตัว — ถ้าลบตอนกดยกเลิก แล้วผู้ใช้กดยกเลิกหลังบันทึกไปแล้วรอบหนึ่ง
 //    ไฟล์ที่ใช้งานอยู่จริงจะหายไปด้วย (คนละกรณีกับกดถังขยะ ซึ่งลบทันทีถูกแล้ว)
-const PLAN_MAX = 25 * 1024 * 1024;   // เท่ากับเพดานไฟล์แนบของตัวแทน — ผู้ใช้จะได้ไม่ต้องจำสองตัวเลข
+const PLAN_MAX = UPLOAD_MAX_BYTES;   // เท่ากับเพดานไฟล์แนบของตัวแทน — ผู้ใช้จะได้ไม่ต้องจำสองตัวเลข
 
 function PlansEditor({ value, onChange }: { value: CatalogPlan[]; onChange: (next: CatalogPlan[]) => void }) {
   const [กำลังอัป, setกำลังอัป] = useState(false);
@@ -391,8 +392,10 @@ function HQMasterPageInner() {
   const [subForm, setSubForm] = useState<{ name: string; image: string; price: string; plans: CatalogPlan[] }>({ name: "", image: "", price: "", plans: [] });
   const [subErr, setSubErr] = useState("");
 
+  // แม่แบบที่เพิ่มล่าสุดขึ้นก่อน (บอสสั่ง 21 ก.ย. 69) — id เป็นข้อความ "tpl-N" ต้องเทียบแบบตัวเลข ไม่งั้น tpl-10 มาก่อน tpl-2
   const filtered = catalog.filter(p =>
-    !q || p.name.toLowerCase().includes(q.toLowerCase()) || p.spec.toLowerCase().includes(q.toLowerCase()));
+    !q || p.name.toLowerCase().includes(q.toLowerCase()) || p.spec.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => b.id.localeCompare(a.id, "en", { numeric: true }));
   const avgPrice = catalog.length ? Math.round(catalog.reduce((s, p) => s + p.price, 0) / catalog.length) : 0;
   const totalSub = catalog.reduce((s, p) => s + (p.subtypes?.length ?? 0), 0);
 

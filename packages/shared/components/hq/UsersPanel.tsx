@@ -275,7 +275,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const [roleF, setRoleF] = useState<RoleKey | "all">("all");
   const [deptF, setDeptF] = useState<string>("all");
   const [statusF, setStatusF] = useState<UserStatus | "all">("all");
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "createdAt", dir: "desc" }); // บัญชีที่สร้างล่าสุดขึ้นก่อน (บอสสั่ง 21 ก.ย. 69)
   const [page, setPage] = useState(1);
 
   const [dialogUser, setDialogUser] = useState<AppUser | null>(null);

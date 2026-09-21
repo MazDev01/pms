@@ -8,7 +8,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { useUserProfile } from "@pms/shared/lib/useUserProfile";
 import { useSales } from "@pms/shared/context/SalesContext";
 import {
-  apptTypeLabel,
+  apptTypeLabel, fmtISOToThai,
   notifCategoryOf,
   DEFAULT_HQ_NOTIFS, DEFAULT_HQ_NOTIF_RULES, hqAuditCategory, HQ_ALERT_META, DEFAULT_DEALER_CODE,
   type HQNotifRules,
@@ -31,6 +31,10 @@ import { useCurrentDealer, useDealerDisplayName } from "@pms/shared/lib/useCurre
 import { useReadNotifications } from "@pms/shared/lib/useReadNotifications";
 import { APP_NOW, APP_NOW_ISO } from "@pms/shared/context/FilterContext";
 import { REAL_BACKEND } from "@pms/shared/lib/data/config";
+import { quoteExpiryISO, daysUntilISO } from "@pms/shared/lib/quoteExpiry";
+import { useQuoteValidity } from "@pms/shared/lib/useQuoteValidity";
+import { useLeadRules } from "@pms/shared/lib/useHQRules";
+import { needsFollowUp, daysSinceContact } from "@pms/shared/lib/leadMetrics";
 
 // ── "วันนี้ของระบบ" (APP_NOW) — supabase=จริง / local=ตรึง · จัดกลุ่มการแจ้งเตือน วันนี้/เมื่อวาน ──
 const MOCK_TODAY = APP_NOW_ISO;
@@ -81,7 +85,12 @@ const BUCKET_ORDER: NotifBucket[] = ["today", "yesterday", "older"];
 // ── สร้างการแจ้งเตือนจาก mock (deterministic, mock วันนี้ = 2026-06-30) ──
 // ประเภท: ลูกค้าเป้าหมายใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายสำเร็จ · เสียโอกาส
 // รับ leads/quotations/appointments จาก SalesContext (ข้อมูลสดทั้งหมด)
-function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appointments: AppointmentMock[]): Notif[] {
+// ใบที่ส่งแล้วจะเตือน "ใกล้หมดอายุ" เมื่อเหลือไม่เกินกี่วัน
+const QUOTE_EXPIRY_WARN_DAYS = 7;
+function buildNotifications(
+  leads: LeadRow[], quotations: QuotationMock[], appointments: AppointmentMock[],
+  validityDays: number, followUpDays: number,
+): Notif[] {
   const out: Notif[] = [];
   let id = 1;
 
@@ -91,13 +100,15 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     out.push({ ...n, id: id++, bucket: bucketOf(n.sortDate) });
   };
 
-  // 1) ลูกค้าเป้าหมายรอดำเนินการ — leads ขั้น "ติดต่อแล้ว" (WAITING) ที่ยังไม่คืบหน้า
-  for (const l of leads.filter(l => l.status === "WAITING")) {
+  // 1) ลูกค้าเป้าหมายรอดำเนินการ — ขั้น "ติดต่อแล้ว" (WAITING) ที่ไม่มีความเคลื่อนไหวเกินเกณฑ์ของสาขา
+  //    (ตั้งค่า › การแจ้งเตือน · ตัวเดียวกับ "ต้องรีบติดตาม" หน้าลูกค้าเป้าหมาย)
+  //    เดิมเตือนทุกรายในขั้นนี้ รวมรายที่เพิ่งคุยเมื่อวาน — แก้ 21 ก.ย. 69 ให้ตรงกับชื่อ "ยังไม่คืบหน้า"
+  for (const l of leads.filter(l => l.status === "WAITING" && needsFollowUp(l, followUpDays))) {
     push({
       iconEl: <MessageSquare size={14} />, iconBg: "#eef2f7", iconColor: "#475569",
       title: "ลูกค้าเป้าหมายรอดำเนินการ",
       body: `${l.company} — ${l.contact} · ${l.province} · ${fmtLeadValue(l.value)}`,
-      time: `${l.source ?? "ช่องทางออนไลน์"} · ผู้รับผิดชอบ ${l.assigned}`,
+      time: `ไม่มีความเคลื่อนไหว ${daysSinceContact(l)} วัน · ผู้รับผิดชอบ ${l.assigned}`,
       href: `/leads?open=${l.numId}`,
       sortDate: MOCK_TODAY,
     });
@@ -138,15 +149,22 @@ function buildNotifications(leads: LeadRow[], quotations: QuotationMock[], appoi
     });
   }
 
-  // 4) ใบเสนอราคาใกล้หมดอายุ (Quotation Expiring) — expired + ส่งแล้วรอตอบรับ
-  for (const qt of quotations.filter(qt => qt.status === "expired" || qt.status === "sent_to_client")) {
+  // 4) ใบเสนอราคาใกล้หมดอายุ — ใบที่ส่งแล้วรอลูกค้าตอบ และเหลือไม่เกิน QUOTE_EXPIRY_WARN_DAYS วัน
+  //    เลยวันหมดอายุแล้วแต่ยังรอตอบ = "หมดอายุแล้ว" (ต้องตามลูกค้า/ออกใบใหม่)
+  //    เดิมเตือนทุกใบที่ส่งแล้ว + ทุกใบที่หมดอายุไปแล้ว ไม่ดูวันหมดอายุเลย (แก้ 21 ก.ย. 69)
+  //    วันหมดอายุใช้ตัวคำนวณเดียวกับหน้าใบเสนอราคา (quoteExpiryISO) จะได้ตรงกัน
+  for (const qt of quotations.filter(qt => qt.status === "sent_to_client")) {
+    const exp = quoteExpiryISO(qt, validityDays);
+    const left = exp ? daysUntilISO(exp, MOCK_TODAY) : null;
+    if (left === null || left > QUOTE_EXPIRY_WARN_DAYS) continue;
     push({
-      iconEl: <AlertTriangle size={14} />, iconBg: "#fef3cd", iconColor: "#d97706",
-      title: "ใบเสนอราคาใกล้หมดอายุ",
+      iconEl: <AlertTriangle size={14} />, iconBg: left < 0 ? "#fee2e2" : "#fef3cd", iconColor: left < 0 ? "#dc2626" : "#d97706",
+      title: left < 0 ? "ใบเสนอราคาหมดอายุแล้ว" : "ใบเสนอราคาใกล้หมดอายุ",
       body: `${qt.id} · ${qt.customer} — ${qt.total}`,
-      time: `ออกเมื่อ ${qt.date}`,
+      time: left < 0 ? `หมดอายุเมื่อ ${fmtISOToThai(exp)} · ลูกค้ายังไม่ตอบ`
+        : left === 0 ? "หมดอายุวันนี้" : `หมดอายุ ${fmtISOToThai(exp)} (อีก ${left} วัน)`,
       href: "/quotations",
-      sortDate: qt.date,
+      sortDate: MOCK_TODAY,
     });
   }
 
@@ -319,6 +337,9 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // อ่านผ่าน repo — เดิม loadNotifPrefs() อ่าน localStorage ตรง ๆ
   // (ยังฟัง NOTIF_PREFS_EVENT อยู่ เพราะหน้าตั้งค่ายิง event นี้ตอนกดบันทึก → กระดิ่งอัปเดตทันที)
   const dealerCfg = useDealerSettings();
+  // เกณฑ์ของกระดิ่งฝั่งตัวแทน — ตัวเดียวกับหน้าใบเสนอราคา/ลูกค้าเป้าหมาย (อายุใบ · ขาดการติดต่อเกินกี่วัน)
+  const quoteValidity = useQuoteValidity();
+  const { followUpAlertDays } = useLeadRules(currentDealer.code);
   const notifPrefs: NotifPrefs | null = dealerCfg.loaded ? dealerCfg.settings.notifPrefs : null;
 
   // ตั้งค่าการแจ้งเตือนของ HQ (หมวดจาก Audit Log) — กรองกระดิ่งฝั่ง HQ ตาม toggle "ในระบบ"
@@ -365,15 +386,19 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // จึงแสดงแยกเป็นกลุ่มไว้บนสุดของแผง (ดู alertGroups) ไม่ปนกับไทม์ไลน์วันนี้/เมื่อวาน
   const notifs = useMemo(() => {
     if (isHQ) {
+      // เฉพาะสิ่งที่คนของ HQ ทำ (บอสสั่ง 21 ก.ย. 69) — บันทึกการใช้งานเก็บงานขายของตัวแทนด้วย
+      //   (ตัวดักฐานข้อมูล 0150: สร้าง/ลบลูกค้าเป้าหมาย/ใบเสนอราคา ของสาขา) ซึ่งไม่ใช่เรื่องของกระดิ่ง HQ
+      //   ดูย้อนหลังทั้งหมดยังทำได้ที่ /hq/audit · แถวที่ไม่มีบทบาท (ระบบ) ยังแสดง
+      const ของHQ = auditEntries.filter(e => !String(e.role ?? "").startsWith("DEALER"));
       const shown = hqNotifPrefs
-        ? auditEntries.filter(e => hqNotifPrefs[hqAuditCategory(e.action)]?.inapp !== false)
-        : auditEntries;
+        ? ของHQ.filter(e => hqNotifPrefs[hqAuditCategory(e.action)]?.inapp !== false)
+        : ของHQ;
       return buildHQNotifications(shown);
     }
-    const all = buildNotifications(liveLeads, liveQuotations, liveAppointments);
+    const all = buildNotifications(liveLeads, liveQuotations, liveAppointments, quoteValidity, followUpAlertDays);
     if (!notifPrefs) return all;
     return all.filter(n => { const c = notifCategoryOf(n.title); return c ? notifPrefs[c] : true; });
-  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs]);
+  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs, quoteValidity, followUpAlertDays]);
 
   // จัดกลุ่มกฎแจ้งเตือนตามเรื่อง — 28 แถวรวดอ่านไม่ไหว · เรียงตามลำดับใน HQ_ALERT_META
   const alertGroups = useMemo(() => {

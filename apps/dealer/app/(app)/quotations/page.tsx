@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { quoteExpiryISO } from "@pms/shared/lib/quoteExpiry";
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { SortableTh } from "@pms/shared/components/ui/SortableTh";
 import { useRouter } from "next/navigation";
@@ -86,6 +87,12 @@ const COLS: Col[] = [
 
 // ── Types ─────────────────────────────────────────────────────
 type SortKey = "id"|"customer"|"project"|"totalValue"|"date"|"status";
+// ใบที่สร้างล่าสุดก่อน: เวลาบันทึกจริง (savedAt = created_at) → ถ้าไม่มี ใช้เลขที่ใบ (รันต่อกันตามลำดับที่ออก)
+function ใหม่ก่อน(a: QuotationMock, b: QuotationMock): number {
+  const ta = a.savedAt ? Date.parse(a.savedAt) : NaN, tb = b.savedAt ? Date.parse(b.savedAt) : NaN;
+  if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return tb - ta;
+  return b.id.localeCompare(a.id, "en", { numeric: true });
+}
 type SortDir = "asc"|"desc";
 type QForm = {
   customerId:number; customer:string;
@@ -125,13 +132,8 @@ function fmtDateShort(d:string){ if(!d||d==="—") return "—"; const [,m,day]=
 // ไม่ใช่การเดา — "อายุใบเสนอราคา" เป็นนโยบายจริงในหน้าตั้งค่า และเป็นกฎที่ใช้ตอนสร้างใบใหม่อยู่แล้ว
 // validityDays ส่งเข้ามาจากหน้าจอ (useQuoteValidity) — ห้ามอ่าน localStorage ตรงนี้
 // เพราะโหมด supabase ค่าจริงอยู่ใน DB ที่ HQ ตั้งไว้ ไม่ใช่ค่า default ในเครื่อง
-function expiryOf(q:{date:string;expiry?:string}, validityDays:number):string{
-  if(q.expiry) return q.expiry;
-  if(!q.date) return "";
-  const d=new Date(q.date); if(isNaN(d.getTime())) return "";
-  d.setDate(d.getDate()+validityDays);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-}
+// ตัวคำนวณย้ายไปที่ lib/quoteExpiry.ts — กระดิ่งแจ้งเตือนใช้ตัวเดียวกัน วันหมดอายุจะได้ตรงกันทุกจุด
+const expiryOf = quoteExpiryISO;
 // (nextQId ถูกลบ — เดิมแอปมีตัวออกเลขสองระบบที่ให้คำตอบคนละชุด:
 //  หน้านี้นับจากแถวที่โหลดมา + ค่าตั้งต้นใน localStorage → Q-2026-1101
 //  ส่วนแผงใบเสนอราคาในหน้าลูกค้าเป้าหมายใช้ newQuoteId() = RPC ของ DB → Q-2026-0001
@@ -427,7 +429,9 @@ function QuotationsPageInner(){
   const [provFilter, setProvFilter]   = useState("ALL");
   const [view, setView]             = useState<"list"|"card">("list");
   const savingQRef = useRef(false); // กันกดบันทึกใบซ้ำระหว่างรอเลขที่ใบจาก DB (H8)
-  const [sortKey, setSortKey]       = useState<SortKey>("date");
+  // ค่าเริ่มต้น = ไม่เลือกคอลัมน์ → ใบที่สร้างล่าสุดขึ้นก่อน · บอสสั่ง 21 ก.ย. 69 ทุกตาราง
+  // ⚠️ ห้ามเรียงด้วย date — ค่านี้ถูกตั้งใหม่ทุกครั้งที่กดส่ง ใบเก่าที่เพิ่งส่งจะเด้งขึ้นบนสุด
+  const [sortKey, setSortKey]       = useState<SortKey|null>(null);
   const [sortDir, setSortDir]       = useState<SortDir>("desc");
   const [page, setPage]             = useState(1);
   const [selected, setSelected]     = useState<QuotationMock|null>(null);
@@ -489,6 +493,7 @@ function QuotationsPageInner(){
       const matchGlobal=passes({ date:q.date, status:q.status, province:q.province });
       return matchQ&&matchS&&matchType&&matchOwner&&matchProv&&matchGlobal;
     });
+    if(sortKey===null) return [...rows].sort(ใหม่ก่อน);
     rows=[...rows].sort((a,b)=>{
       const va:string|number=a[sortKey] as string|number;
       const vb:string|number=b[sortKey] as string|number;

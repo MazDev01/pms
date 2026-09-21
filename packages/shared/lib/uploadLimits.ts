@@ -14,7 +14,7 @@
 export const UPLOAD_ACCEPTED_EXT = [
   ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".dwg", ".dxf", ".jpg", ".jpeg", ".png",
 ];
-export const UPLOAD_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024; // 50 MB — บอสเลือก 16 ก.ย. 69 (เดิม 25) · ต้องตรงกับ file_size_limit ของถัง (0181)
 
 /** นามสกุลไฟล์ตัวพิมพ์เล็กพร้อมจุดนำหน้า (".pdf") — ไม่มีนามสกุลคืน "" */
 export function uploadExtOf(name: string): string {
