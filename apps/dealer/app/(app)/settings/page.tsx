@@ -231,6 +231,7 @@ type DocumentSettings = {
    *  ตัวแทนยังเปิด/ปิดและแก้อัตรารายใบได้เสมอ (บอสสั่ง 28 ส.ค. 69) */
   whtPercent: number;
   validityDays: number;    // อายุใบเสนอราคา (วัน) → วันหมดอายุเริ่มต้น
+  expiryWarnDays: number;  // เตือน "ใกล้หมดอายุ" ในกระดิ่ง เมื่อเหลือไม่เกินกี่วัน (บอสสั่ง 21 ก.ย. 69)
   termsAndConditions: string;
   header: string;
   footer: string;
@@ -244,6 +245,7 @@ const DOC_DEFAULT: DocumentSettings = {
   vatPercent:          7,
   whtPercent:          3,
   validityDays:        30,
+  expiryWarnDays:      7,
   termsAndConditions:
     "ราคานี้มีผลภายใน 30 วัน นับจากวันที่ออกใบเสนอราคา\n" +
     "บริษัทขอสงวนสิทธิ์เปลี่ยนแปลงราคาโดยไม่แจ้งล่วงหน้า\n" +
@@ -387,11 +389,18 @@ function DocumentsTab() {
             </div>
           </div>
           {/* ค่าเริ่มต้น: อายุใบเสนอราคา (ตัวแทนตั้งได้เอง) */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 200px)", gap: 12, marginTop: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 200px))", gap: 12, marginTop: 14 }}>
             <div>
               <label className="form-label">อายุใบเสนอราคา (วัน)</label>
               <NumberInput ariaLabel="อายุใบเสนอราคา (วัน)" min={1} value={doc.validityDays}
                 onChange={n => set("validityDays", n)}
+                style={{ fontFamily: "monospace" }} />
+            </div>
+            {/* ใบเก่าที่บันทึกก่อนมีช่องนี้ไม่มีค่า → ขึ้นค่าเริ่มต้น 7 (ตรงกับที่กระดิ่งใช้) */}
+            <div>
+              <label className="form-label">เตือนก่อนหมดอายุ (วัน)</label>
+              <NumberInput ariaLabel="เตือนก่อนหมดอายุ (วัน)" min={1} value={doc.expiryWarnDays ?? 7}
+                onChange={n => set("expiryWarnDays", n)}
                 style={{ fontFamily: "monospace" }} />
             </div>
           </div>

@@ -17,7 +17,7 @@ import {
   roleLabelOf,
 } from "@pms/shared/lib/mock";
 import { useRepoValue } from "@pms/shared/lib/useRepoState";
-import { useDealerSettings } from "@pms/shared/lib/useDealerSettings";
+import { useDealerSettings, useQuoteExpiryWarnDays } from "@pms/shared/lib/useDealerSettings";
 import { useImpersonating } from "@pms/shared/lib/useImpersonating";
 import { dealers as dealersRepo, settings as settingsRepo } from "@pms/shared/lib/data";
 import { Bell, MessageSquare, CheckCircle2, AlertTriangle, UserCircle, Settings, Users, FileText, Sparkles, CalendarClock, LogOut, Menu, Search, Compass, History, Tag } from "lucide-react";
@@ -85,11 +85,9 @@ const BUCKET_ORDER: NotifBucket[] = ["today", "yesterday", "older"];
 // ── สร้างการแจ้งเตือนจาก mock (deterministic, mock วันนี้ = 2026-06-30) ──
 // ประเภท: ลูกค้าเป้าหมายใหม่ · เตือนติดตาม · เตือนประชุม · ใบเสนอราคาใกล้หมดอายุ · ปิดการขายสำเร็จ · เสียโอกาส
 // รับ leads/quotations/appointments จาก SalesContext (ข้อมูลสดทั้งหมด)
-// ใบที่ส่งแล้วจะเตือน "ใกล้หมดอายุ" เมื่อเหลือไม่เกินกี่วัน
-const QUOTE_EXPIRY_WARN_DAYS = 7;
 function buildNotifications(
   leads: LeadRow[], quotations: QuotationMock[], appointments: AppointmentMock[],
-  validityDays: number, followUpDays: number,
+  validityDays: number, followUpDays: number, expiryWarnDays: number,
 ): Notif[] {
   const out: Notif[] = [];
   let id = 1;
@@ -149,14 +147,14 @@ function buildNotifications(
     });
   }
 
-  // 4) ใบเสนอราคาใกล้หมดอายุ — ใบที่ส่งแล้วรอลูกค้าตอบ และเหลือไม่เกิน QUOTE_EXPIRY_WARN_DAYS วัน
+  // 4) ใบเสนอราคาใกล้หมดอายุ — ใบที่ส่งแล้วรอลูกค้าตอบ และเหลือไม่เกิน expiryWarnDays วัน (สาขาตั้งเองที่ ตั้งค่า › ใบเสนอราคา)
   //    เลยวันหมดอายุแล้วแต่ยังรอตอบ = "หมดอายุแล้ว" (ต้องตามลูกค้า/ออกใบใหม่)
   //    เดิมเตือนทุกใบที่ส่งแล้ว + ทุกใบที่หมดอายุไปแล้ว ไม่ดูวันหมดอายุเลย (แก้ 21 ก.ย. 69)
   //    วันหมดอายุใช้ตัวคำนวณเดียวกับหน้าใบเสนอราคา (quoteExpiryISO) จะได้ตรงกัน
   for (const qt of quotations.filter(qt => qt.status === "sent_to_client")) {
     const exp = quoteExpiryISO(qt, validityDays);
     const left = exp ? daysUntilISO(exp, MOCK_TODAY) : null;
-    if (left === null || left > QUOTE_EXPIRY_WARN_DAYS) continue;
+    if (left === null || left > expiryWarnDays) continue;
     push({
       iconEl: <AlertTriangle size={14} />, iconBg: left < 0 ? "#fee2e2" : "#fef3cd", iconColor: left < 0 ? "#dc2626" : "#d97706",
       title: left < 0 ? "ใบเสนอราคาหมดอายุแล้ว" : "ใบเสนอราคาใกล้หมดอายุ",
@@ -340,6 +338,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // เกณฑ์ของกระดิ่งฝั่งตัวแทน — ตัวเดียวกับหน้าใบเสนอราคา/ลูกค้าเป้าหมาย (อายุใบ · ขาดการติดต่อเกินกี่วัน)
   const quoteValidity = useQuoteValidity();
   const { followUpAlertDays } = useLeadRules(currentDealer.code);
+  const expiryWarnDays = useQuoteExpiryWarnDays();
   const notifPrefs: NotifPrefs | null = dealerCfg.loaded ? dealerCfg.settings.notifPrefs : null;
 
   // ตั้งค่าการแจ้งเตือนของ HQ (หมวดจาก Audit Log) — กรองกระดิ่งฝั่ง HQ ตาม toggle "ในระบบ"
@@ -395,10 +394,10 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
         : ของHQ;
       return buildHQNotifications(shown);
     }
-    const all = buildNotifications(liveLeads, liveQuotations, liveAppointments, quoteValidity, followUpAlertDays);
+    const all = buildNotifications(liveLeads, liveQuotations, liveAppointments, quoteValidity, followUpAlertDays, expiryWarnDays);
     if (!notifPrefs) return all;
     return all.filter(n => { const c = notifCategoryOf(n.title); return c ? notifPrefs[c] : true; });
-  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs, quoteValidity, followUpAlertDays]);
+  }, [isHQ, auditEntries, liveLeads, liveQuotations, liveAppointments, notifPrefs, hqNotifPrefs, quoteValidity, followUpAlertDays, expiryWarnDays]);
 
   // จัดกลุ่มกฎแจ้งเตือนตามเรื่อง — 28 แถวรวดอ่านไม่ไหว · เรียงตามลำดับใน HQ_ALERT_META
   const alertGroups = useMemo(() => {
