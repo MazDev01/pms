@@ -9,7 +9,7 @@ import { TablePagination, pageSlice, pageCountOf, ROWS_PER_PAGE } from "@pms/sha
 import { ModalCard } from "@pms/shared/components/ui/ModalCard";
 import { AdminGate } from "@pms/shared/components/layout/AdminGate";
 import {
-  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor,
+  DEFAULT_HQ_TARGETS, dealerStatusLabel, dealerStatusColor, fmtISOToThai,
   type DealerRow, type HQTargets, type DealerStatus,
 } from "@pms/shared/lib/mock";
 import { useRepoState, useRepoValue } from "@pms/shared/lib/useRepoState";
@@ -25,7 +25,7 @@ import { useRole } from "@pms/shared/context/RoleContext";
 import { useAuditLogger } from "@pms/shared/lib/useAudit";
 import { ExportMenu } from "@pms/shared/components/ui/ExportMenu";
 import { useRouter } from "next/navigation";
-import { Search, X, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, TrendingUp, Trophy, Target, Award, Clock, Store, Coins, Briefcase, LayoutGrid, List } from "lucide-react";
+import { Search, X, LogIn, Pencil, Trash2, EyeOff, Eye, AlertTriangle, BarChart2, Trophy, Target, Clock, Store, Coins, Briefcase, LayoutGrid, List, MapPin, Package, CalendarDays } from "lucide-react";
 import { AccountRequestsCard } from "@pms/shared/components/hq/AccountRequestsCard";
 import { useRecruitSettings } from "@pms/shared/lib/useHQConfig";
 import { เป้าตามแพ็กเกจ } from "@pms/shared/lib/recruitSettings";
@@ -825,135 +825,159 @@ function HQDealersPageInner() {
         </div>
       )}
 
-      {/* ── Dealer Detail Drawer ── */}
+      {/* ── Dealer Detail Drawer ──
+          ออกแบบใหม่ 22 ก.ย. 69 (บอสสั่ง "ให้เข้ากับการทำงานและการแสดงค่าปัจจุบัน"):
+          • แสดงค่าที่ระบบใช้จริงตอนนี้: แพ็กเกจ · ที่มาของเป้า (ตามแพ็กเกจ/กำหนดเอง/กรอกเอง) · จังหวัด+ภาค · วันเข้าระบบ
+          • ตัดข้อความคาดเดา ("คาดว่าปิดได้ครบก่อนสิ้นไตรมาส" — เป้าเป็นรายปี ระบบไม่ได้พยากรณ์) เหลือเฉพาะข้อเท็จจริง
+          • หัว/ท้ายแผงไม่หดตาม เนื้อหาเลื่อนอยู่ระหว่างกลาง (เดิมหัวแผงบังการ์ดยอดขาย) */}
       {selectedDealer && (() => {
         const d = selectedDealer;
         const dPerf = perfOf(d.code);
-        const revPct = d.revenueTarget > 0 ? Math.round(dPerf.revenue / d.revenueTarget * 100) : 0;
-        const revColor = revPct >= 100 ? "#059669" : revPct >= 75 ? "#003366" : revPct >= 50 ? "#f59e0b" : "#dc2626";
-        // ระดับผลงานตัดสินจาก % เป้า + อัตราปิดการขาย (ข้อมูลที่ระบบมีจริง)
-        // เดิมใช้ onTimePct = อัตราส่งมอบตรงเวลา ซึ่งเป็นตัวชี้วัดงานก่อสร้าง ไม่มีในระบบขายล้วนนี้
+        const มีเป้า = d.revenueTarget > 0;
+        const revPct = มีเป้า ? Math.round(dPerf.revenue / d.revenueTarget * 100) : 0;
+        const revColor = !มีเป้า ? "#6b7280" : revPct >= 100 ? "#059669" : revPct >= 75 ? "#003366" : revPct >= 50 ? "#f59e0b" : "#dc2626";
+        // ระดับผลงานตัดสินจาก % เป้า + อัตราปิดการขาย (ข้อมูลที่ระบบมีจริง) · ไม่มีเป้า = ไม่ติดป้าย
         const wr = dPerf.winRate ?? 0;
-        const tier = revPct >= 90 && wr >= 50
+        const tier = !มีเป้า ? null : revPct >= 90 && wr >= 50
           ? { label: "ตัวแทนดีเด่น", color: "#059669", bg: "#e5faf0" }
           : revPct >= 70 && wr >= 35
           ? { label: "ผลงานดี", color: "#003366", bg: "#dce5f0" }
           : revPct >= 50
           ? { label: "กำลังพัฒนา", color: "#f59e0b", bg: "#fef3cd" }
           : { label: "ต้องปรับปรุง", color: "#dc2626", bg: "#fee2e2" };
+        // ที่มาของเป้า — กติกาเดียวกับฟอร์มแก้ไข (ตัวดักฐานข้อมูล 0178/0180 เป็นผู้ตั้งค่าจริง)
+        const เป้าของแพ็กเกจ = เป้าตามแพ็กเกจ(ค่าตั้งหาตัวแทน, d.package ?? null, d.region);
+        const ที่มาเป้า = !มีเป้า ? "ยังไม่ได้ตั้งเป้า"
+          : d.targetManual ? "กำหนดเองรายตัวแทน"
+          : d.package && เป้าของแพ็กเกจ != null ? `ตามแพ็กเกจ ${packageLabel[d.package]}`
+          : "กรอกเอง";
+        const ขาดอีก = Math.max(0, d.revenueTarget - dPerf.revenue);
+        const บาท = (n: number) => n >= 1_000_000 ? `฿${(n / 1_000_000).toFixed(1)}M` : `฿${Math.round(n).toLocaleString("th-TH")}`;
+        const เข้าระบบเมื่อ = d.createdAt ? fmtISOToThai(d.createdAt.slice(0, 10)) : "—";
+        // เรื่องที่ควรดู — ข้อเท็จจริงจากตัวเลขเท่านั้น ไม่พยากรณ์
+        const ควรดู: { tone: "bad" | "warn" | "good"; text: string }[] = [];
+        if (dealerStatus(d) === "inactive") ควรดู.push({ tone: "warn", text: "ปิดใช้งานอยู่ — ตัวแทนเข้าระบบไม่ได้" });
+        if (!มีเป้า) ควรดู.push({ tone: "warn", text: d.package ? `แพ็กเกจ ${packageLabel[d.package]} ยังไม่ได้ตั้งเป้า — ตั้งที่ ตั้งค่า › หาตัวแทน` : "ยังไม่มีเป้ายอดขาย — กำหนดได้ที่ปุ่มแก้ไข" });
+        if (มีเป้า && revPct >= 100) ควรดู.push({ tone: "good", text: `ถึงเป้าทั้งปีแล้ว${revPct > 100 ? ` · เกินเป้า ${revPct - 100}%` : ""}` });
+        if (dPerf.winRate !== null && wr < targets.winRateTarget) ควรดู.push({ tone: wr < targets.winRateTarget - 15 ? "bad" : "warn", text: `อัตราปิดการขาย ${wr}% ต่ำกว่าเป้าเครือ ${targets.winRateTarget}%` });
+        if (dPerf.onTimePct !== null && dPerf.onTimePct < targets.onTimeTarget) ควรดู.push({ tone: dPerf.onTimePct < targets.onTimeTarget - 15 ? "bad" : "warn", text: `ติดตามตรงเวลา ${dPerf.onTimePct}% ต่ำกว่าเป้าเครือ ${targets.onTimeTarget}%` });
+        const สีโทน = { bad: "#dc2626", warn: "#b45309", good: "#059669" } as const;
+        const หัวข้อ: React.CSSProperties = { fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 };
+        const แถว = (ไอคอน: React.ReactNode, ป้าย: string, ค่า: React.ReactNode) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: "1px solid #f1f5f9", fontSize: "0.8rem" }}>
+            <span style={{ color: "#9ca3af", display: "flex" }}>{ไอคอน}</span>
+            <span style={{ color: "#6b7280", width: 92, flexShrink: 0 }}>{ป้าย}</span>
+            <span style={{ color: "#1f2937", fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{ค่า}</span>
+          </div>
+        );
+        const ตัวเลข = [
+          { v: dPerf.winRate === null ? "—" : `${wr}%`, l: "อัตราปิดการขาย", c: dPerf.winRate === null ? "#C0C0C0" : wr >= targets.winRateTarget ? "#059669" : wr >= targets.winRateTarget - 15 ? "#f59e0b" : "#dc2626" },
+          { v: dPerf.onTimePct === null ? "—" : `${dPerf.onTimePct}%`, l: "ติดตามตรงเวลา", c: dPerf.onTimePct === null ? "#C0C0C0" : dPerf.onTimePct >= targets.onTimeTarget ? "#059669" : dPerf.onTimePct >= targets.onTimeTarget - 15 ? "#f59e0b" : "#dc2626" },
+          { v: String(dPerf.openLeads), l: "โอกาสการขาย", c: "#003366" },
+        ];
         return (
           <>
             <div onClick={() => setSelectedDealer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 1040 }} />
-            <div className="modal-pop" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 460, maxWidth: "calc(100vw - 32px)", height: "min(680px, calc(100vh - 48px))", background: "#fff", zIndex: 1050, borderRadius: 18, boxShadow: "0 24px 80px rgba(0,0,0,.28)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div className="modal-pop" role="dialog" aria-label={`รายละเอียดตัวแทน ${d.name}`} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 920, maxWidth: "calc(100vw - 32px)", maxHeight: "calc(100vh - 48px)", background: "#fff", zIndex: 1050, borderRadius: 18, boxShadow: "0 24px 80px rgba(0,0,0,.28)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Header */}
-              <div style={{ padding: "20px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fb" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ padding: "18px 20px 16px", borderBottom: "1px solid #e5e7eb", background: "#f8f9fb", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 900, fontSize: "0.8rem", color: "#003366", background: "#dce5f0", padding: "3px 10px", borderRadius: 8, letterSpacing: "0.06em" }}>{d.code}</span>
                     <StatusBadge status={dealerStatus(d)} />
                     {d.package && <ป้ายแพ็กเกจ p={d.package} />}
-                    <span className="badge" style={{ background: tier.bg, color: tier.color }}>{tier.label}</span>
+                    {tier && <span className="badge" style={{ background: tier.bg, color: tier.color }}>{tier.label}</span>}
                   </div>
-                  <button onClick={() => setSelectedDealer(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
+                  <button onClick={() => setSelectedDealer(null)} aria-label="ปิด" style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280", display: "flex" }}><X size={18} /></button>
                 </div>
-                <div style={{ fontSize: "1rem", fontWeight: 800, color: "#2D2D2D", marginBottom: 2 }}>{d.name}</div>
-                <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>ภาค{d.region}</div>
+                <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#2D2D2D", marginBottom: 2 }}>{d.name}</div>
+                <div style={{ fontSize: "0.74rem", color: "#6b7280", display: "flex", alignItems: "center", gap: 5 }}>
+                  <MapPin size={12} /> {[d.province, d.region && `ภาค${d.region}`].filter(Boolean).join(" · ") || "—"}
+                </div>
               </div>
 
               {/* Scrollable content */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 20px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: 12, alignItems: "start" }}>
+                {/* แนวกว้าง (บอสสั่ง 22 ก.ย. 69): ซ้าย = ผลงาน · ขวา = ข้อมูลตัวแทน/เข้าระบบ · จอแคบเรียงเป็นคอลัมน์เดียว */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
 
-                {/* Revenue card */}
-                <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ยอดขายเทียบเป้าหมาย</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                    <span style={{ fontSize: "1.5rem", fontWeight: 800, color: revColor }}>฿{(dPerf.revenue / 1_000_000).toFixed(1)}M</span>
-                    <span style={{ fontSize: "0.72rem", color: "#6b7280" }}>เป้า ฿{(d.revenueTarget / 1_000_000).toFixed(1)}M</span>
+                {/* ยอดขายเทียบเป้าทั้งปี + ที่มาของเป้า */}
+                <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", flexShrink: 0 }}>
+                  <div style={{ ...หัวข้อ, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span>ยอดขายเทียบเป้าทั้งปี</span>
+                    <span style={{ textTransform: "none", letterSpacing: 0, color: d.targetManual ? "#b45309" : "#003366" }}>{ที่มาเป้า}</span>
                   </div>
-                  <div style={{ height: 8, background: "#e5e7eb", borderRadius: 99, overflow: "hidden", marginBottom: 5 }}>
-                    <div className="top5-bar" style={{ height: "100%", width: `${Math.min(revPct, 100)}%`, background: revColor, borderRadius: 99 }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: "1.5rem", fontWeight: 800, color: revColor, fontVariantNumeric: "tabular-nums" }}>{บาท(dPerf.revenue)}</span>
+                    <span style={{ fontSize: "0.74rem", color: "#6b7280" }}>เป้า {มีเป้า ? บาท(d.revenueTarget) : "—"}</span>
                   </div>
-                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: revColor }}>{revPct}% ของเป้าหมาย</div>
-                </div>
-
-                {/* 3 metrics */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
-                  <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: wr >= targets.winRateTarget ? "#059669" : wr >= targets.winRateTarget - 15 ? "#f59e0b" : "#dc2626" }}>{dPerf.winRate === null ? "—" : `${wr}%`}</div>
-                    <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>อัตราปิดการขาย</div>
+                  <div style={{ height: 8, background: "#e5e7eb", borderRadius: 99, overflow: "hidden", marginBottom: 6 }}>
+                    <div className="bar-grow" style={{ height: "100%", width: `${Math.min(revPct, 100)}%`, background: revColor, borderRadius: 99 }} />
                   </div>
-                  <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: dPerf.onTimePct === null ? "#C0C0C0" : dPerf.onTimePct >= targets.onTimeTarget ? "#059669" : dPerf.onTimePct >= targets.onTimeTarget - 15 ? "#f59e0b" : "#dc2626" }}>{dPerf.onTimePct === null ? "—" : `${dPerf.onTimePct}%`}</div>
-                    <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>ติดตามตรงเวลา</div>
-                  </div>
-                  <div style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#003366" }}>{dPerf.openLeads}</div>
-                    <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>โอกาสการขาย</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem" }}>
+                    <span style={{ fontWeight: 700, color: revColor }}>{มีเป้า ? `${revPct}% ของเป้า` : "ยังไม่ได้ตั้งเป้า"}</span>
+                    {มีเป้า && <span style={{ color: "#6b7280" }}>{ขาดอีก > 0 ? `ขาดอีก ${บาท(ขาดอีก)}` : "ถึงเป้าแล้ว"}</span>}
                   </div>
                 </div>
 
-                {/* Performance analysis */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>วิเคราะห์ผลงาน</div>
-                  {revPct < 50 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#dc2626" }}>
-                      <AlertTriangle size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ยอดขายต่ำกว่าเป้ามาก ควรติดตามโอกาสการขายและช่วยปิดการขายที่ค้าง</span>
+                {/* 3 ตัวเลขหลัก */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, flexShrink: 0 }}>
+                  {ตัวเลข.map(m => (
+                    <div key={m.l} style={{ background: "#f8f9fb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+                      <div style={{ fontSize: "1.15rem", fontWeight: 800, color: m.c, fontVariantNumeric: "tabular-nums" }}>{m.v}</div>
+                      <div style={{ fontSize: "0.65rem", color: "#6b7280", fontWeight: 600, marginTop: 3 }}>{m.l}</div>
                     </div>
-                  )}
-                  {revPct >= 50 && revPct < 75 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#f59e0b" }}>
-                      <BarChart2 size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ยอดขายอยู่ระดับกลาง — ยังมีช่องว่างถึงเป้าหมาย ควรเร่งลูกค้าเป้าหมายที่รอ</span>
+                  ))}
+                </div>
+
+                {/* ควรดู */}
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", flexShrink: 0 }}>
+                  <div style={หัวข้อ}>ควรดู</div>
+                  {ควรดู.length === 0 ? (
+                    <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>ไม่มีเรื่องที่ต้องดูตอนนี้</div>
+                  ) : ควรดู.map((x, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: i ? 8 : 0, fontSize: "0.8rem", color: สีโทน[x.tone] }}>
+                      {x.tone === "good" ? <Trophy size={14} style={{ flexShrink: 0, marginTop: 1 }} /> : <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />}
+                      <span>{x.text}</span>
                     </div>
-                  )}
-                  {revPct >= 75 && revPct < 100 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#003366" }}>
-                      <TrendingUp size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ยอดขายใกล้เป้าแล้ว — คาดว่าปิดได้ครบก่อนสิ้นไตรมาส</span>
-                    </div>
-                  )}
-                  {revPct >= 100 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#059669" }}>
-                      <Trophy size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ถึงเป้าหมายแล้ว! ยอดขายเกินเป้า {revPct - 100}%</span>
-                    </div>
-                  )}
-                  {dPerf.onTimePct !== null && dPerf.onTimePct < 70 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#dc2626" }}>
-                      <Clock size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>อัตราติดตามตรงเวลาต่ำ ควรตรวจสอบโอกาสการขายที่ค้างคา</span>
-                    </div>
-                  )}
-                  {wr < 25 && dPerf.winRate !== null && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8, fontSize: "0.8rem", color: "#f59e0b" }}>
-                      <Target size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>อัตราปิดการขายต่ำกว่าค่าเฉลี่ยเครือ — ควรพิจารณาฝึกสอนทีมขาย</span>
-                    </div>
-                  )}
-                  {revPct >= 88 && (dPerf.onTimePct ?? 0) >= 85 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "0.8rem", color: "#059669" }}>
-                      <Award size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} /><span>ตัวแทนผลงานดีเด่น — สามารถใช้เป็นต้นแบบให้ตัวแทนอื่นได้</span>
-                    </div>
-                  )}
+                  ))}
+                </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+                {/* ข้อมูลตัวแทน — ค่าปัจจุบันในทะเบียน */}
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px 8px", flexShrink: 0 }}>
+                  <div style={หัวข้อ}>ข้อมูลตัวแทน</div>
+                  {แถว(<Package size={14} />, "แพ็กเกจ", d.package ? packageLabel[d.package] : "—")}
+                  {แถว(<Target size={14} />, "เป้าทั้งปี", มีเป้า ? `฿${d.revenueTarget.toLocaleString("th-TH")} · ${ที่มาเป้า}` : "—")}
+                  {แถว(<MapPin size={14} />, "จังหวัด", d.province || "—")}
+                  {แถว(<Store size={14} />, "ภาค", d.region || "—")}
+                  {แถว(<CalendarDays size={14} />, "เข้าระบบเมื่อ", เข้าระบบเมื่อ)}
                 </div>
 
                 {/* Credentials */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px" }}>
-                  <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>ข้อมูลเข้าสู่ระบบ</div>
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", flexShrink: 0 }}>
+                  <div style={หัวข้อ}>ข้อมูลเข้าสู่ระบบ</div>
                   <CopyField label="อีเมล" value={loginEmailOf(d.code)} />
-                  {/* ช่องเดียวกับในหน้าต่าง "รหัสเข้าระบบ" — ต้องใช้ตัวเดียวกันทั้งสองที่
-                      เดิมจุดนี้ค้างเป็น CopyField ที่ขึ้น "—" เสมอ (รหัสจริงอยู่ใน Auth เป็น hash)
-                      พอเปิดฟีเจอร์ให้ HQ ดูรหัสได้แล้ว ยังลืมเปลี่ยนจุดนี้ HQ จึงเห็น "—" ที่แผงนี้
-                      แต่เห็นรหัสจริงในหน้าต่างอีกใบ — สับสนว่าตกลงระบบมีรหัสให้ดูหรือไม่ */}
+                  {/* ช่องเดียวกับในหน้าต่าง "รหัสเข้าระบบ" — ต้องใช้ตัวเดียวกันทั้งสองที่ (เดิมค้างเป็น "—" เสมอ) */}
                   <DealerPasswordField code={d.code} fallback={d.credentials?.password} />
+                </div>
                 </div>
               </div>
 
               {/* Footer */}
-              <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: 8 }}>
+              <div style={{ padding: "14px 20px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, flexShrink: 0 }}>
+                {/* แผงแนวกว้าง: ปุ่มชิดขวาขนาดตามข้อความ — เดิม flex:1 ยืดเต็มแถบ 920px ยาวเกินไป (บอสทัก 22 ก.ย. 69) */}
                 <button onClick={e => { e.stopPropagation(); router.push(`/hq/dealers/${d.code}`); }}
-                  className="btn btn-primary btn-md" style={{ flex: 1, justifyContent: "center" }}>
+                  className="btn btn-primary btn-md" style={{ justifyContent: "center", minWidth: 170 }}>
                   <BarChart2 size={14} /> ดูรายละเอียดเต็ม
                 </button>
-                <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id}
-                  className="btn btn-tint btn-md" style={{ cursor: entering === d.id ? "not-allowed" : "pointer", opacity: entering === d.id ? 0.7 : 1 }}>
-                  <LogIn size={14} /> {entering === d.id ? "กำลังเข้า..." : "เข้าระบบ"}
-                </button>
+                {canImpersonate && (
+                  <button onClick={e => { e.stopPropagation(); enterDealer(d); }} disabled={entering === d.id}
+                    className="btn btn-tint btn-md" style={{ cursor: entering === d.id ? "not-allowed" : "pointer", opacity: entering === d.id ? 0.7 : 1 }}>
+                    <LogIn size={14} /> {entering === d.id ? "กำลังเข้า..." : "เข้าระบบ"}
+                  </button>
+                )}
                 <button onClick={e => { e.stopPropagation(); setSelectedDealer(null); openEdit(d); }}
                   className="btn btn-tint btn-md">
                   <Pencil size={14} /> แก้ไข
