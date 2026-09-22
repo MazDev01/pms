@@ -62,10 +62,13 @@ const EMPTY_QF = {};
 // ปุ่มย่อกลับเป็น 5 อันดับแรกยังอยู่ เผื่ออยากดูเฉพาะหัวตาราง
 const TOP_N = 5;
 type HRow = { key: string; label: string; a: number; b: number; note?: string; onClick?: () => void };
-function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt }: {
+function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt, paged = false }: {
   rows: HRow[]; aLabel: string; bLabel: string; aColor?: string; bColor?: string; fmt: (v: number) => string;
+  /** แบ่งหน้าจากข้างนอกแล้ว (มีแถบเปลี่ยนหน้า) — แสดงทุกแถวที่ส่งมา ไม่มีปุ่มย่อ/ดูทั้งหมด (บอสสั่ง 22 ก.ย. 69) */
+  paged?: boolean;
 }) {
-  const [all, setAll] = useState(true);
+  const [allState, setAll] = useState(true);
+  const all = paged || allState;
   // max คิดจากทุกแถวเสมอ — ไม่งั้นพอกด "ดูทั้งหมด" ความยาวแท่งจะขยับ ทั้งที่ข้อมูลเท่าเดิม
   const max = Math.max(...rows.flatMap(r => [r.a, r.b]), 1);
   const shown = all ? rows : rows.slice(0, TOP_N);
@@ -105,7 +108,7 @@ function HBars({ rows, aLabel, bLabel, aColor = PRIMARY, bColor = "#C0C0C0", fmt
           ))}
         </div>
         {/* บอกจำนวนที่ซ่อนไว้เสมอ — ห้ามตัดเงียบ ไม่งั้นคนอ่านนึกว่าเห็นครบแล้ว */}
-        {(hidden > 0 || (all && rows.length > 5)) && (
+        {!paged && (hidden > 0 || (all && rows.length > 5)) && (
           <button type="button" onClick={() => setAll(v => !v)}
             style={{ marginTop: 10, flexShrink: 0, alignSelf: "flex-start", background: "none", border: "none", padding: 0,
               cursor: "pointer", fontFamily: "inherit", fontSize: "0.68rem", fontWeight: 700, color: PRIMARY }}>
@@ -378,8 +381,16 @@ export default function SalesAnalyticsPage() {
       label: tgView === "dealer" ? `${k} – ${DEALER_META.get(k)?.name ?? k}` : tgView === "region" ? regionDisplay(k) : k,
       note: v.b ? `${Math.round(v.a / v.b * 100)}% ของเป้า` : undefined,
       onClick: tgView === "dealer" ? () => router.push(`/hq/dealers/${k}`) : undefined,
-    })).sort((x, y) => y.a - x.a);
+    }))
+      // ยอดเท่ากัน (เช่นต้นปียัง ฿0 หมด) → % ของเป้า แล้วค่อยเป้าที่ใหญ่กว่า
+      .sort((x, y) => y.a - x.a || (y.b ? y.a / y.b : 0) - (x.b ? x.a / x.b : 0) || y.b - x.b);
   }, [tgView, dealers, DEALER_META, router]);
+  // แสดงหน้าละ 7 แถว + แถบเปลี่ยนหน้า (บอสสั่ง 22 ก.ย. 69 — เดิมเทรวดทุกตัวแทน 155 แถว ยาวเกินไป)
+  const TG_PAGE_SIZE = 7;
+  const [tgPage, setTgPage] = useState(0);
+  useEffect(() => { setTgPage(0); }, [tgView]);
+  const tgPageSafe = Math.min(tgPage, pageCountOf(targetVsActual.length, TG_PAGE_SIZE) - 1);
+  const tgRows = pageSlice(targetVsActual, tgPageSafe, TG_PAGE_SIZE);
 
   // เดิมมี regional / lostReasons / trend สำหรับกราฟ 4 ใบที่ถูกตัดออก (ข้อมูลซ้ำกับหน้าอื่น) — ลบทิ้งพร้อมกัน
 
@@ -523,7 +534,11 @@ export default function SalesAnalyticsPage() {
               .map(([v, l]) => viewTab(tgView, v, l, () => setTgView(v)))}
           </div>
         </div>
-        <HBars rows={targetVsActual} aLabel="ยอดขายสะสมทั้งปี" bLabel="เป้าหมายทั้งปี" fmt={fmtBaht} />
+        <div style={{ flex: 1 }}>
+          <HBars rows={tgRows} aLabel="ยอดขายสะสมทั้งปี" bLabel="เป้าหมายทั้งปี" fmt={fmtBaht} paged />
+        </div>
+        <TablePagination page={tgPageSafe} total={targetVsActual.length} onPage={setTgPage} size={TG_PAGE_SIZE}
+          unit={tgView === "dealer" ? "ตัวแทน" : tgView === "region" ? "ภูมิภาค" : "จังหวัด"} />
       </div>
       </div>
 
