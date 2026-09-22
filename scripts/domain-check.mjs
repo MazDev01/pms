@@ -4,8 +4,8 @@
 import { chromium } from "@playwright/test";
 
 const เว็บ = [
-  ["สำนักงานใหญ่ (ของจริง)", "https://benjamin-hq.vercel.app/hq/login"],
-  ["ตัวแทน (ของจริง)", "https://benjamin-dealer.vercel.app/login"],
+  ["สำนักงานใหญ่ (ของจริง)", "https://pms.benjaminpebsteel.com/hq/login"],
+  ["ตัวแทน (ของจริง)", "https://dealerpms.benjaminpebsteel.com/login"],
   ["สำนักงานใหญ่ (ตัวอย่าง)", "https://pms-demo-two.vercel.app/hq/login"],
   ["ตัวแทน (ตัวอย่าง)", "https://pms-demo-dealer.vercel.app/login"],
 ];

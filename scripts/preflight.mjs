@@ -59,7 +59,8 @@ add(hqMode === dealerMode, "สองแอปโหมดตรงกัน",
 // ⚠️ ค่าที่มีผลจริงตอนขึ้นระบบคือค่าบนเซิร์ฟเวอร์ (Vercel → Environment Variables)
 //    ไม่ใช่ไฟล์ในเครื่องนี้ ซึ่ง "ต้อง" เป็น localhost อยู่แล้วเพื่อให้พัฒนา/ทดสอบในเครื่องได้
 //    เดิมใบนี้ตกทุกครั้งเพราะไปอ่านไฟล์ในเครื่อง ทำให้ดูเหมือนยังไม่พร้อมทั้งที่ตั้งบนเซิร์ฟเวอร์ถูกแล้ว
-//    (ยืนยันจริง 13 ส.ค. 69: ค่าบน Vercel = https://benjamin-dealer.vercel.app ถูกต้อง)
+//    (ยืนยันจริง 13 ส.ค. 69: ค่าบน Vercel = https://benjamin-dealer.vercel.app ถูกต้อง
+//     · 22 ก.ย. 69 ย้ายเป็นโดเมนบริษัท https://dealerpms.benjaminpebsteel.com — บอสแก้บน Vercel แล้ว)
 //    ตรวจได้แค่ว่า "ตั้งไว้ไหม" — ส่วนค่าจริงต้องดูที่หน้าเซิร์ฟเวอร์ด้วยตา (`vercel env ls`)
 const dealerUrl = hq.NEXT_PUBLIC_DEALER_APP_URL ?? "";
 const isLocal = /localhost|127\.0\.0\.1/.test(dealerUrl);

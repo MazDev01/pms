@@ -169,8 +169,10 @@ curl https://<ที่อยู่ตัวแทน>/api/health
 
 | ที่อยู่ | โปรเจกต์บน Vercel | โฟลเดอร์ที่ build |
 |---|---|---|
-| https://benjamin-hq.vercel.app | `benjamin-hq` | `apps/hq` |
-| https://benjamin-dealer.vercel.app | `benjamin-dealer` | `apps/dealer` |
+| https://pms.benjaminpebsteel.com (เดิม https://benjamin-hq.vercel.app) | `benjamin-hq` | `apps/hq` |
+| https://dealerpms.benjaminpebsteel.com (เดิม https://benjamin-dealer.vercel.app) | `benjamin-dealer` | `apps/dealer` |
+
+> โดเมนบริษัทผูกเมื่อ 22 ก.ย. 69 · DNS อยู่ที่ Hostinger (CNAME) · เปลี่ยนโดเมนอีกต้องแก้ `NEXT_PUBLIC_DEALER_APP_URL` (HQ) · `NEXT_PUBLIC_HQ_ORIGIN` (ตัวแทน) · Supabase → Auth → URL Configuration แล้ว Redeploy ทั้งสองโปรเจกต์
 
 **ตั้งแต่ 1 ก.ย. 69 เชื่อม GitHub เข้ากับ Vercel แล้ว — push แล้วขึ้นเว็บจริงเอง**
 

@@ -12,8 +12,9 @@
 #   ใส่ไปจะเตือนผิดทุก 10 นาทีจนไม่มีใครอ่านอีกเลย
 #
 # เฝ้าเว็บใช้งานจริง 2 ตัว (ตั้งค่าเริ่มต้นไว้ในไฟล์นี้แล้ว ไม่ต้องตั้งอะไรเพิ่ม)
-#   สำนักงานใหญ่ : https://benjamin-hq.vercel.app
-#   ตัวแทน       : https://benjamin-dealer.vercel.app
+#   สำนักงานใหญ่ : https://pms.benjaminpebsteel.com
+#   ตัวแทน       : https://dealerpms.benjaminpebsteel.com
+#   (ย้ายมาโดเมนบริษัท 22 ก.ย. 69 · โดเมนเดิม *.vercel.app ยังเปิดอยู่)
 # ย้ายโดเมนเมื่อไหร่ ตั้งตัวแปรของ repo ทับได้ (Settings › Secrets and variables › Actions › Variables)
 #   HQ_HEALTH_URL / DEALER_HEALTH_URL
 name: เฝ้าระวังเว็บ
@@ -33,8 +34,8 @@ jobs:
         env:
           # ที่อยู่เว็บใช้งานจริง — ตั้งเป็นค่าเริ่มต้นไว้เลย จะได้เฝ้าได้ทันทีโดยไม่ต้องตั้งค่าอะไรก่อน
           # ถ้าย้ายโดเมน ให้ตั้งตัวแปรของ repo ทับ (Settings › Variables) ไม่ต้องแก้ไฟล์นี้
-          HQ: ${{ vars.HQ_HEALTH_URL || 'https://benjamin-hq.vercel.app/api/health' }}
-          DEALER: ${{ vars.DEALER_HEALTH_URL || 'https://benjamin-dealer.vercel.app/api/health' }}
+          HQ: ${{ vars.HQ_HEALTH_URL || 'https://pms.benjaminpebsteel.com/api/health' }}
+          DEALER: ${{ vars.DEALER_HEALTH_URL || 'https://dealerpms.benjaminpebsteel.com/api/health' }}
         run: |
           set -u
           # ⚠️ ชื่อตัวแปรต้องเป็นอังกฤษ — bash ใช้ชื่อตัวแปรภาษาไทยไม่ได้ (เจอจริง 26 ส.ค. 69)

@@ -90,8 +90,8 @@ Vercel มี **Monitoring → Alerts** ในตัว ตั้งให้ย
 
 | โปรเจกต์ | Root Directory | ที่อยู่ |
 |---|---|---|
-| `benjamin-hq` | `apps/hq` | https://benjamin-hq.vercel.app |
-| `benjamin-dealer` | `apps/dealer` | https://benjamin-dealer.vercel.app |
+| `benjamin-hq` | `apps/hq` | https://pms.benjaminpebsteel.com (เดิม https://benjamin-hq.vercel.app) |
+| `benjamin-dealer` | `apps/dealer` | https://dealerpms.benjaminpebsteel.com (เดิม https://benjamin-dealer.vercel.app) |
 
 ⚠️ **ต้องตั้ง Production Branch เป็น `monorepo` เองในหน้าเว็บ** — คำสั่งบรรทัดคำสั่งตั้งค่านี้ไม่ได้
 

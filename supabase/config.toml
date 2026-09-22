@@ -173,8 +173,10 @@ site_url = "http://localhost:3001"
 additional_redirect_urls = [
   "http://localhost:3001/**",                  # แอปตัวแทน (ในเครื่อง)
   "http://localhost:3002/**",                  # แอปสำนักงานใหญ่ (ในเครื่อง)
-  "https://benjamin-dealer.vercel.app/**",     # แอปตัวแทน (เว็บจริง)
-  "https://benjamin-hq.vercel.app/**",         # แอปสำนักงานใหญ่ (เว็บจริง)
+  "https://dealerpms.benjaminpebsteel.com/**",  # แอปตัวแทน (เว็บจริง · โดเมนบริษัท 22 ก.ย. 69)
+  "https://pms.benjaminpebsteel.com/**",        # แอปสำนักงานใหญ่ (เว็บจริง · โดเมนบริษัท 22 ก.ย. 69)
+  "https://benjamin-dealer.vercel.app/**",     # แอปตัวแทน (โดเมนเดิม ยังเปิดอยู่)
+  "https://benjamin-hq.vercel.app/**",         # แอปสำนักงานใหญ่ (โดเมนเดิม ยังเปิดอยู่)
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 #

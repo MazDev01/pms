@@ -21,8 +21,8 @@ function readEnvFile(file: string): Map<string, string> {
 const vars = readEnvFile(path.join(__dirname, "../.env.prod"));
 const get = (k: string) => process.env[k] ?? vars.get(k) ?? "";
 
-export const HQ_URL     = (get("PROD_HQ_URL")     || "https://benjamin-hq.vercel.app").replace(/\/$/, "");
-export const DEALER_URL = (get("PROD_DEALER_URL") || "https://benjamin-dealer.vercel.app").replace(/\/$/, "");
+export const HQ_URL     = (get("PROD_HQ_URL")     || "https://pms.benjaminpebsteel.com").replace(/\/$/, "");
+export const DEALER_URL = (get("PROD_DEALER_URL") || "https://dealerpms.benjaminpebsteel.com").replace(/\/$/, "");
 
 export const HQ_ACCOUNT     = { email: get("PROD_ADMIN_EMAIL"),  password: get("PROD_ADMIN_PASSWORD") };
 export const DEALER_ACCOUNT = { email: get("PROD_DEALER_EMAIL"), password: get("PROD_DEALER_PASSWORD") };

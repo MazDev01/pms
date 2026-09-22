@@ -18,8 +18,8 @@ const html = `<!doctype html><meta charset="utf-8">
 </div>
 <div class="arrow">▼</div>
 <div class="row">
-  <div class="box"><b>เว็บตัวแทน</b><span>benjamin-dealer.vercel.app<br>12 หน้า</span></div>
-  <div class="box"><b>เว็บสำนักงานใหญ่</b><span>benjamin-hq.vercel.app<br>13 หน้า</span></div>
+  <div class="box"><b>เว็บตัวแทน</b><span>dealerpms.benjaminpebsteel.com<br>12 หน้า</span></div>
+  <div class="box"><b>เว็บสำนักงานใหญ่</b><span>pms.benjaminpebsteel.com<br>13 หน้า</span></div>
 </div>
 <div class="arrow">▼ &nbsp; ทุกคำขอผ่านการตรวจสิทธิ์ &nbsp; ▼</div>
 <div class="row">

@@ -33,8 +33,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: ตรวจเว็บจริง
         env:
-          PROD_HQ_URL: ${{ vars.PROD_HQ_URL || 'https://benjamin-hq.vercel.app' }}
-          PROD_DEALER_URL: ${{ vars.PROD_DEALER_URL || 'https://benjamin-dealer.vercel.app' }}
+          PROD_HQ_URL: ${{ vars.PROD_HQ_URL || 'https://pms.benjaminpebsteel.com' }}
+          PROD_DEALER_URL: ${{ vars.PROD_DEALER_URL || 'https://dealerpms.benjaminpebsteel.com' }}
           PROD_ADMIN_EMAIL: ${{ secrets.PROD_ADMIN_EMAIL }}
           PROD_ADMIN_PASSWORD: ${{ secrets.PROD_ADMIN_PASSWORD }}
           PROD_DEALER_EMAIL: ${{ secrets.PROD_DEALER_EMAIL }}
