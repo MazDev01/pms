@@ -51,6 +51,7 @@ import {
 const HQ_COMPANY_KEY = "hq_company_profile";
 const NOTES_KEY = "customer_notes_v1";
 const PROSPECTS_KEY = "hq_dealer_prospects_v1";
+import { HQ_PROSPECTS_SEED } from "./hqProspectsSeed";
 const PROPOSALS_KEY = "hq_dealer_proposals_v1";
 const PROSPECT_ACTIVITIES_KEY = "hq_dealer_prospect_activities_v1";
 const HQ_USERS_KEY = "hq_users_v4";
@@ -83,7 +84,7 @@ function มีใบส่งแล้วเดโม(prospectId: number): bool
 }
 // ส่งใบแล้ว: นัดคุยแล้ว → รอตัดสินใจ ให้เอง (แบบเดียวกับตัวดักของใบเสนอ)
 function เลื่อนเป็นรอตัดสินใจเดโม(prospectId: number) {
-  const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+  const all = อ่านผู้สนใจเดโม();
   const ราย = all.find(x => x.id === prospectId);
   if (!ราย || ราย.status !== "meeting") return;
   writeKey(PROSPECTS_KEY, all.map(x => x.id === prospectId ? { ...x, status: "considering" as const, updatedAt: new Date().toISOString() } : x));
@@ -93,11 +94,24 @@ function เลื่อนเป็นรอตัดสินใจเดโ�
 // ใบถูกปฏิเสธและไม่มีใบที่ส่งแล้ว/ตอบรับเหลือ: รอตัดสินใจ → นัดคุยแล้ว ให้เอง (แบบเดียวกับตัวดัก 0177)
 function ถอยเพราะใบถูกปฏิเสธเดโม(prospectId: number, เลขที่: string) {
   if (มีใบส่งแล้วเดโม(prospectId)) return;
-  const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+  const all = อ่านผู้สนใจเดโม();
   const ราย = all.find(x => x.id === prospectId);
   if (!ราย || ราย.status !== "considering") return;
   writeKey(PROSPECTS_KEY, all.map(x => x.id === prospectId ? { ...x, status: "meeting" as const, updatedAt: new Date().toISOString() } : x));
   บันทึกประวัติเดโม({ prospectId, kind: "status", body: ข้อความถอยเพราะใบถูกปฏิเสธ(เลขที่), fromStatus: "considering", toStatus: "meeting" });
+}
+
+// ลูกค้าเป้าหมาย (HQ) ของเดโม — เครื่องที่ยังไม่เคยมีข้อมูล เริ่มจากรายชื่อตามเอกสาร Dealer BJM PEB (บอสสั่ง 22 ก.ย. 69)
+//   มีคีย์อยู่แล้ว (แม้เป็น [] เพราะลบหมดเอง) = ใช้ของเครื่องนั้น ไม่เติมกลับ
+function อ่านผู้สนใจเดโม(): DealerProspect[] {
+  if (typeof window === "undefined") return [];
+  try {
+    if (localStorage.getItem(PROSPECTS_KEY) == null) {
+      localStorage.setItem(PROSPECTS_KEY, JSON.stringify(HQ_PROSPECTS_SEED));
+      return HQ_PROSPECTS_SEED.map(x => ({ ...x }));
+    }
+  } catch {}
+  return readKey<DealerProspect[]>(PROSPECTS_KEY, []);
 }
 
 function writeKey(key: string, val: unknown) {
@@ -170,9 +184,9 @@ export const LocalAdapter: DataAdapter = {
       writeKey(HQ_DEALERS_KEY, loadHQDealers().filter(d => d.code !== code));
       // ลบตัวแทนแล้ว ลูกค้าเป้าหมายต้นทางลบตามไปด้วย พร้อมใบเสนอและประวัติ (บอสสั่ง 15 ก.ย. 69: "ลบไปแล้วลบไปเลย")
       //   แบบเดียวกับโหมดจริง (DELETE /api/admin/dealers)
-      const ต้นทาง = new Set(readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(p => p.dealerCode === code).map(p => p.id));
+      const ต้นทาง = new Set(อ่านผู้สนใจเดโม().filter(p => p.dealerCode === code).map(p => p.id));
       if (ต้นทาง.size) {
-        writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(p => !ต้นทาง.has(p.id)));
+        writeKey(PROSPECTS_KEY, อ่านผู้สนใจเดโม().filter(p => !ต้นทาง.has(p.id)));
         writeKey(PROPOSALS_KEY, readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []).filter(x => !ต้นทาง.has(x.prospectId)));
         writeKey(PROSPECT_ACTIVITIES_KEY, readKey<ProspectActivity[]>(PROSPECT_ACTIVITIES_KEY, []).filter(x => !ต้นทาง.has(x.prospectId)));
       }
@@ -307,9 +321,9 @@ export const LocalAdapter: DataAdapter = {
   // ลูกค้าเป้าหมายของสำนักงานใหญ่ (โหมดเดโม) — จัดข้อมูลแบบเดียวกับฐานข้อมูลจริง · รายใหม่ขึ้นก่อน
   //   กติกาเลื่อนขั้น + ประวัติ เลียนแบบตัวดักของฐานข้อมูล 0174 — เดโมต้องทำงานเหมือนของจริง
   prospects: {
-    list: () => ok(readKey<DealerProspect[]>(PROSPECTS_KEY, [])),
+    list: () => ok(อ่านผู้สนใจเดโม()),
     create: (p) => {
-      const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+      const all = อ่านผู้สนใจเดโม();
       const now = new Date().toISOString();
       const row: DealerProspect = { ...เตรียมบันทึก(p), id: all.reduce((m, x) => Math.max(m, x.id), 0) + 1, lastContactAt: null, createdAt: now, updatedAt: now };
       writeKey(PROSPECTS_KEY, [row, ...all]);
@@ -317,7 +331,7 @@ export const LocalAdapter: DataAdapter = {
       return ok(row);
     },
     update: (p) => {
-      const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+      const all = อ่านผู้สนใจเดโม();
       const เดิม = all.find(x => x.id === p.id);
       if (!เดิม) return Promise.reject(new Error("ไม่พบลูกค้าเป้าหมายรายนี้แล้ว"));
       // ติดต่อล่าสุดมาจากบันทึกการติดต่อทางเดียว — ห้ามทับด้วยค่าที่หน้าจอส่งกลับมา
@@ -331,7 +345,7 @@ export const LocalAdapter: DataAdapter = {
       return ok(row);
     },
     remove: (id) => {
-      writeKey(PROSPECTS_KEY, readKey<DealerProspect[]>(PROSPECTS_KEY, []).filter(x => x.id !== id));
+      writeKey(PROSPECTS_KEY, อ่านผู้สนใจเดโม().filter(x => x.id !== id));
       // ใบและประวัติของรายนั้นหายตามไปด้วย — แบบเดียวกับฐานข้อมูลจริง (on delete cascade)
       writeKey(PROPOSALS_KEY, readKey<DealerPackageProposal[]>(PROPOSALS_KEY, []).filter(x => x.prospectId !== id));
       writeKey(PROSPECT_ACTIVITIES_KEY, readKey<ProspectActivity[]>(PROSPECT_ACTIVITIES_KEY, []).filter(x => x.prospectId !== id));
@@ -401,7 +415,7 @@ export const LocalAdapter: DataAdapter = {
       const row = เตรียมบันทึกการติดต่อ(x);
       const ผิด = ตรวจบันทึกการติดต่อ(row);
       if (ผิด) return Promise.reject(new Error(ผิด));
-      const all = readKey<DealerProspect[]>(PROSPECTS_KEY, []);
+      const all = อ่านผู้สนใจเดโม();
       const ราย = all.find(p => p.id === row.prospectId);
       if (!ราย) return Promise.reject(new Error("ไม่พบลูกค้าเป้าหมายรายนี้แล้ว"));
       const บันทึก = บันทึกประวัติเดโม({ prospectId: ราย.id, kind: "contact", channel: row.channel, body: row.body, nextFollowUp: row.nextFollowUp ?? null });
