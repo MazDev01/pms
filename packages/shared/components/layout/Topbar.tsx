@@ -237,11 +237,16 @@ const HQ_ALERT_ICON: Record<HQAlertKey, { el: React.ReactNode; bg: string; color
   // แดงเข้ม: เรื่องนี้ไม่ใช่ "ควรดู" แต่เป็น "ตัวแทนทำงานต่อไม่ได้จนกว่าจะแก้"
   catalogNoPrice:      { el: <Tag size={14} />,           bg: "#fdecec", color: "#dc2626" },
 };
-// หน่วยนับของแต่ละกฎ — ใบเสนอแพ็กเกจนับเป็น "ใบ" ลูกค้าเป้าหมายนับเป็น "ราย"
-const HQ_ALERT_UNIT: Record<HQAlertKey, string> = {
-  prospectFollowUpDue: "ราย", prospectIdle: "ราย", proposalAwaiting: "ใบ", proposalExpired: "ใบ", catalogNoPrice: "แม่แบบ",
+// "ต้องดูด่วน" แสดงทีละรายการ (บอสสั่ง 22 ก.ย. 69 — เดิมจัดกลุ่มแล้วอัดข้อความยาวบรรทัดเดียว อ่านไม่รู้เรื่อง)
+//   แต่ละแถว: ป้ายเรื่อง (สีตามเรื่อง) → ชื่อสิ่งที่ต้องจัดการ (ตัวหนา) → เกิดอะไรขึ้น · กดแถว = ไปจัดการรายนั้น
+const ALERT_PREVIEW = 10;
+const HQ_ALERT_TAG: Record<HQAlertKey, string> = {
+  prospectFollowUpDue: "ถึงกำหนดติดตาม",
+  prospectIdle: "ไม่ได้ติดต่อนาน",
+  proposalAwaiting: "ใบเสนอแพ็กเกจรอคำตอบ",
+  proposalExpired: "ใบเสนอแพ็กเกจหมดอายุ",
+  catalogNoPrice: "แม่แบบยังไม่ตั้งราคา",
 };
-const ALERT_PREVIEW = 3; // โชว์ 3 บรรทัดแรกพอให้เห็นว่าใคร — ที่เหลือกดขยาย
 
 type SearchResult = { type: string; label: string; sub: string; href: string };
 
@@ -414,7 +419,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   // ── states ──
   const [showSearch, setShowSearch]     = useState(false);
   const [showAllNotifs, setShowAllNotifs] = useState(false); // ขยายดูการแจ้งเตือนทั้งหมดในแผงเดียวกัน
-  const [openGroup, setOpenGroup] = useState<HQAlertKey | null>(null); // กลุ่ม "ต้องดูด่วน" ที่กางอยู่
+  const [showAllAlerts, setShowAllAlerts] = useState(false); // "ต้องดูด่วน" เกิน ALERT_PREVIEW รายการ → กดดูที่เหลือ
   const [showUser,   setShowUser]       = useState(false);
   const [searchQ,    setSearchQ]        = useState("");
   // ค้นหาฝั่ง HQ — ดึงตรงจาก repo ตามคำค้น (M9 Phase 4) · dealer/local ใช้ array ของ SalesContext เหมือนเดิม
@@ -428,7 +433,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
   const userRef   = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const closeNotifs = useCallback(() => { setShowNotifs(false); setShowAllNotifs(false); }, []);
+  const closeNotifs = useCallback(() => { setShowNotifs(false); setShowAllNotifs(false); setShowAllAlerts(false); }, []);
   const closeUser   = useCallback(() => setShowUser(false),   []);
   useClickOutside(notifsRef, closeNotifs);
   useClickOutside(userRef,   closeUser);
@@ -689,37 +694,37 @@ export function Topbar({ onMenu }: { onMenu?: () => void } = {}) {
                       <span style={{ fontSize:"0.65rem", fontWeight:800, color:"#9ca3af", letterSpacing:"0.05em" }}>ต้องดูด่วน</span>
                       <span style={{ fontSize:"0.6rem", fontWeight:800, color:"#dc2626", background:"#fdecec", borderRadius:99, padding:"1px 6px", fontVariantNumeric:"tabular-nums" }}>{alertCount}</span>
                     </div>
-                    {alertGroupsUnread.map(g => {
-                      const ic = HQ_ALERT_ICON[g.key];
-                      const expanded = openGroup === g.key;
-                      const shown = expanded ? g.items : g.items.slice(0, ALERT_PREVIEW);
-                      return (
-                        <div key={g.key} style={{ padding:"9px 16px", borderBottom:`1px solid ${BG}` }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                            <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:26, height:26, borderRadius:8, background:ic.bg, color:ic.color, flexShrink:0 }}>{ic.el}</span>
-                            <span style={{ flex:1, minWidth:0, fontSize:"0.78rem", fontWeight:700, color:STEEL }}>{g.title}</span>
-                            <span style={{ fontSize:"0.9rem", fontWeight:800, color:ic.color, fontVariantNumeric:"tabular-nums" }}>{g.items.length}</span>
-                            <span style={{ fontSize:"0.62rem", color:"#9ca3af" }}>{HQ_ALERT_UNIT[g.key]}</span>
-                          </div>
-                          <div style={{ marginLeft:34, marginTop:3, display:"flex", flexDirection:"column" }}>
-                            {shown.map((a, i) => (
-                              <button key={`${a.href}-${i}`}
-                                onClick={async () => { if (!(await confirmDiscard())) return; setShowNotifs(false); router.push(a.href); }}
-                                style={{ display:"block", width:"100%", padding:"3px 0", border:"none", background:"none", cursor:"pointer", textAlign:"left",
-                                  fontSize:"0.68rem", color:"#6b7280", lineHeight:1.45 }}>
-                                {a.body}
-                              </button>
-                            ))}
-                            {g.items.length > ALERT_PREVIEW && (
-                              <button onClick={() => setOpenGroup(expanded ? null : g.key)}
-                                style={{ alignSelf:"flex-start", marginTop:2, padding:0, border:"none", background:"none", cursor:"pointer", fontSize:"0.64rem", fontWeight:700, color:PRIMARY }}>
-                                {expanded ? "ย่อ" : `ดูอีก ${g.items.length - ALERT_PREVIEW} รายการ`}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {(() => {
+                      // เรียงตามเรื่อง (ลำดับใน HQ_ALERT_META) แล้วตามความเร่งด่วนในเรื่องนั้น — แสดงทีละรายการ
+                      const ทั้งหมด = alertGroupsUnread.flatMap(g => g.items);
+                      const แสดง = showAllAlerts ? ทั้งหมด : ทั้งหมด.slice(0, ALERT_PREVIEW);
+                      return (<>
+                        {แสดง.map((a, i) => {
+                          const ic = HQ_ALERT_ICON[a.key];
+                          return (
+                            <button key={`${a.key}-${a.href}-${i}`}
+                              onClick={async () => { if (!(await confirmDiscard())) return; setShowNotifs(false); router.push(a.href); }}
+                              style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"10px 16px", border:"none",
+                                borderBottom:`1px solid ${BG}`, background:"#fff", cursor:"pointer", textAlign:"left" }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = BG; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; }}>
+                              <span style={{ display:"flex", alignItems:"center", justifyContent:"center", width:32, height:32, borderRadius:"50%", background:ic.bg, color:ic.color, flexShrink:0 }}>{ic.el}</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:"0.64rem", fontWeight:800, color:ic.color, marginBottom:1 }}>{HQ_ALERT_TAG[a.key]}</div>
+                                <div style={{ fontSize:"0.8rem", fontWeight:700, color:STEEL, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.subject ?? a.title}</div>
+                                <div style={{ fontSize:"0.7rem", color:"#6b7280", lineHeight:1.4, marginTop:1 }}>{a.detail ?? a.body}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                        {ทั้งหมด.length > ALERT_PREVIEW && (
+                          <button onClick={() => setShowAllAlerts(v => !v)}
+                            style={{ display:"block", width:"100%", padding:"8px 16px", border:"none", borderBottom:`1px solid ${BG}`, background:"#fafafa", cursor:"pointer", fontSize:"0.7rem", fontWeight:700, color:PRIMARY, textAlign:"center" }}>
+                            {showAllAlerts ? "แสดงน้อยลง" : `ดูอีก ${ทั้งหมด.length - ALERT_PREVIEW} รายการ`}
+                          </button>
+                        )}
+                      </>);
+                    })()}
                   </div>
                 )}
                 {notifs.length === 0 && alertGroupsUnread.length === 0 && (

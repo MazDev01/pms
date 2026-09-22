@@ -15,7 +15,10 @@ import { ถึงกำหนดติดตาม, ยังติดตาม
 import { วันที่ไม่ได้ติดต่อ, ไม่ได้ติดต่อเกิน, วันไทยของเวลา } from "@pms/shared/lib/prospectJourney";
 import { หมดอายุแล้ว, packageLabel } from "@pms/shared/lib/dealerProposals";
 
-export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string };
+/** subject = ชื่อสิ่งที่ต้องจัดการ (ลูกค้าเป้าหมาย/แม่แบบ) · detail = เกิดอะไรขึ้น สั้น ๆ บรรทัดเดียว
+ *  กระดิ่งแสดงทีละรายการ: เรื่อง → ใคร → เกิดอะไร (บอสสั่ง 22 ก.ย. 69 "แจ้งเตือนทีละอันแบบเข้าใจง่าย")
+ *  body = ข้อความเต็มบรรทัดเดียว (เดิม) ยังเก็บไว้ให้ที่อื่น/ชุดทดสอบใช้ */
+export type HQAlert = { key: HQAlertKey; title: string; body: string; href: string; subject?: string; detail?: string };
 
 /** แม่แบบไม่มี/ไม่มีราคา = ตัวแทนออกใบเสนอราคาไม่ได้เลย (พบจากการใช้งานจริง 19 ส.ค. 69)
  *
@@ -35,6 +38,8 @@ function catalogAlerts(catalog: SolutionProduct[]): HQAlert[] {
     title: "แม่แบบยังไม่ได้ตั้งราคา",
     body: `${name} — ตัวแทนหยิบไปออกใบเสนอราคาแล้วยอดเป็น ฿0 บันทึกไม่ได้`,
     href: "/hq/master",
+    subject: name,
+    detail: "ราคากลางยังเป็น ฿0 — ตัวแทนใช้แม่แบบนี้ออกใบเสนอราคาไม่ได้",
   }));
 }
 
@@ -87,6 +92,8 @@ export function buildHQAlerts(input: {
         title: "ถึงกำหนดติดตามลูกค้าเป้าหมาย (HQ)",
         body: `${p.name} · นัดติดตาม ${fmtISOToThai(p.followUp!)}${เลย > 0 ? ` (เลยมา ${เลย} วัน)` : " (วันนี้)"} · ผู้ดูแล ${p.assigned || "—"}`,
         href: เปิดราย(p.id),
+        subject: p.name,
+        detail: `${เลย > 0 ? `เลยนัดมา ${เลย} วัน` : "นัดไว้วันนี้"} (นัด ${fmtISOToThai(p.followUp!)})${p.assigned ? ` · ผู้ดูแล ${p.assigned}` : ""}`,
       });
     }
   }
@@ -101,6 +108,8 @@ export function buildHQAlerts(input: {
       title: "ลูกค้าเป้าหมาย (HQ) ไม่ได้ติดต่อนาน",
       body: `${p.name} · ${p.lastContactAt ? `ไม่ได้ติดต่อ ${เงียบ} วัน` : `ยังไม่เคยบันทึกการติดต่อ (เพิ่มมา ${เงียบ} วัน)`} · ผู้ดูแล ${p.assigned || "—"}`,
       href: เปิดราย(p.id),
+      subject: p.name,
+      detail: `${p.lastContactAt ? `ไม่ได้ติดต่อมา ${เงียบ} วัน` : `ยังไม่เคยบันทึกการติดต่อ · เพิ่มมา ${เงียบ} วัน`}${p.assigned ? ` · ผู้ดูแล ${p.assigned}` : ""}`,
     });
   }
   if (proposals) {
@@ -114,6 +123,8 @@ export function buildHQAlerts(input: {
         title: "ใบเสนอแพ็กเกจเลยวันมีผล",
         body: `${เลขใบ(q)} · มีผลถึง ${fmtISOToThai(q.validUntil!)} ยังไม่มีคำตอบ`,
         href: เปิดราย(q.prospectId),
+        subject: ชื่อราย.get(q.prospectId) ?? "—",
+        detail: `${q.proposalNo || "ใบเสนอแพ็กเกจ"} (${packageLabel[q.package] ?? q.package}) หมดอายุ ${fmtISOToThai(q.validUntil!)} ยังไม่ตอบ`,
       });
     }
     if (on("proposalAwaiting")) {
@@ -129,6 +140,8 @@ export function buildHQAlerts(input: {
         title: "ใบเสนอแพ็กเกจรอคำตอบ",
         body: `${เลขใบ(q)} · ส่งแล้ว ${รอ} วัน ยังไม่ตอบรับหรือปฏิเสธ`,
         href: เปิดราย(q.prospectId),
+        subject: ชื่อราย.get(q.prospectId) ?? "—",
+        detail: `${q.proposalNo || "ใบเสนอแพ็กเกจ"} (${packageLabel[q.package] ?? q.package}) ส่งไป ${รอ} วัน ยังไม่ตอบ`,
       });
     }
   }
