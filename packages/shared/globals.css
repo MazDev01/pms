@@ -696,7 +696,8 @@ body {
 .hq-cust-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-bottom: 24px; }
 @media (max-width: 1100px) { .hq-cust-charts { grid-template-columns: 1fr; } }
 /* แถบตัวกรองติดบน (หน้ารายการยาว ๆ ของ HQ) — รูปแบบเดียวกับ .cust-filter ในหน้าลูกค้า */
-.hq-sticky-filter { position: sticky; top: 8px; z-index: 20; }
+/* ⚠️ ต้องติดใต้แถบบน (sticky สูง --topbar-h) ไม่ใช่ขอบจอ — เดิม top:8px แถบตัวกรองมุดไปซ่อนใต้แถบบนตอนเลื่อน (บอสทัก 22 ก.ย. 69) */
+.hq-sticky-filter { position: sticky; top: calc(var(--topbar-h, 64px) + 8px); z-index: 20; }
 /* Dealer · ลูกค้า → แผงรายละเอียดโครงการ: ซ้าย = ภาพแม่แบบ · ขวา = ข้อมูลโครงการ */
 @media (max-width: 860px) {
   .proj-shell { grid-template-columns: 1fr !important; }
@@ -739,7 +740,7 @@ body {
 @media (max-width: 1280px) { .cust-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px)  { .cust-analytics { grid-template-columns: 1fr; } }
 /* ตัวกรองปักบนสุดเวลาเลื่อนตาราง */
-.cust-filter { position: sticky; top: 8px; z-index: 20; }
+.cust-filter { position: sticky; top: calc(var(--topbar-h, 64px) + 8px); z-index: 20; }
 /* แท่งการส่งมอบรายเดือน — โตจากฐาน */
 @keyframes bar-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .bar-grow-y { transform-origin: bottom; animation: bar-grow-y .7s cubic-bezier(.4,0,.2,1) both; }
@@ -1534,6 +1535,10 @@ textarea:focus-visible {
 .kpi { border-radius: 16px; }
 .form-input, .form-select, .form-textarea { border-radius: 12px; }
 .btn { border-radius: 10px; }
+
+/* ความสูงแถบบน — แถบตัวกรองติดหนึบใช้ค่านี้วางตัวใต้แถบบน (ต้องตรงกับ height ของ .erp-topbar) */
+:root { --topbar-h: 64px; }
+@media (max-width: 1024px) { :root { --topbar-h: 60px; } }
 
 @media (max-width: 1024px) {
   .erp-topbar { height: 60px; padding: 0 14px; }
